@@ -26,6 +26,7 @@ Standing rules across all eight:
   driver) that 3 through 7 inherit; it is not re-decided per feature.
 
 ## 1. tool/fs: grep, find, ls
+> done
 
 Deliverable: three named tools in the default set, next to bash, read, write,
 edit. Named tools with small schemas are what a local model reaches for;
