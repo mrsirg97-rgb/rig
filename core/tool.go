@@ -9,13 +9,15 @@ import (
 // to the tool; reflection-derived schemas drift from intent.
 type Tool interface {
 	Name() string
+	Description() string
 	Schema() json.RawMessage
 	Exec(ctx context.Context, args json.RawMessage) (string, error)
 }
 
-// ToolSpec is what a Request carries per tool: name plus schema, nothing
-// executable.
+// ToolSpec is what a Request carries per tool: name, description, and
+// schema; nothing executable.
 type ToolSpec struct {
-	Name   string
-	Schema json.RawMessage
+	Name        string
+	Description string
+	Schema      json.RawMessage
 }
