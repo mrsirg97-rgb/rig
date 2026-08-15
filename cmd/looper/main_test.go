@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
+	"io"
 	"regexp"
 	"testing"
+
+	"github.com/mrsirg97-rgb/looper/core"
 )
 
 // The initial version is fixed: anything else is a release decision, not a
@@ -18,6 +22,11 @@ func TestVersionIsTheInitialRelease(t *testing.T) {
 
 // The composition root must wire every seam explicitly: swapping a seam is a
 // registration change here and nowhere else.
+type nullFrontend struct{}
+
+func (nullFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
+func (nullFrontend) Notify(ev core.Event)                      {}
+
 func TestWireRegistersEverySeam(t *testing.T) {
 	k := wire(
 		"http://127.0.0.1:8080/v1",
@@ -25,6 +34,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 		"be terse",
 		[]string{"bash", "read", "write", "edit"},
 		3,
+		nullFrontend{},
+		func(next core.ToolExec) core.ToolExec { return next },
 	)
 	if k == nil {
 		t.Fatal("wire returned nil")
@@ -35,7 +46,7 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if got := k.SortedToolNames(); len(got) != 7 || got[0] != "bash" || got[6] != "write" {
 		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,read,write", got)
 	}
-	if len(k.Middleware) != 2 {
-		t.Fatalf("middleware = %d links, want the allow-list and the retry guard", len(k.Middleware))
+	if len(k.Middleware) != 3 {
+		t.Fatalf("middleware = %d links, want the allow-list, the bound, and the observation tap", len(k.Middleware))
 	}
 }

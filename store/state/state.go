@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/mrsirg97-rgb/looper/store"
@@ -62,9 +63,14 @@ func RecordToolCall(ctx context.Context, db store.DB, messageSeq int64, id, name
 
 func RecordToolResult(ctx context.Context, db store.DB, id, result string, failure *string) error {
 	return withTx(db, ctx, func(c context.Context) error {
-		tc, err := domain.NewToolCallDomain().GetToolCall(c, id).Row()
+		tc, err := safely(func() (*domain.ToolCall, error) {
+			return domain.NewToolCallDomain().GetToolCall(c, id).Row()
+		})
 		if err != nil {
 			return err
+		}
+		if tc == nil {
+			return fmt.Errorf("state: tool call %s: no such row", id)
 		}
 		tc.Result = &result
 		t := now()
@@ -112,9 +118,14 @@ func RecordFault(ctx context.Context, db store.DB, sessionID string, at time.Tim
 
 func CloseSession(ctx context.Context, db store.DB, id, exit string) error {
 	return withTx(db, ctx, func(c context.Context) error {
-		s, err := domain.NewSessionDomain().GetSession(c, id).Row()
+		s, err := safely(func() (*domain.Session, error) {
+			return domain.NewSessionDomain().GetSession(c, id).Row()
+		})
 		if err != nil {
 			return err
+		}
+		if s == nil {
+			return fmt.Errorf("state: session %s: no such row", id)
 		}
 		t := now()
 		s.EndedAt = &t
@@ -125,6 +136,18 @@ func CloseSession(ctx context.Context, db store.DB, id, exit string) error {
 }
 
 func now() time.Time { return time.Now().UTC() }
+
+// safely recovers the generated getters' empty-key panic at this boundary
+// into a loud error: they panic rather than erring, and a store never
+// panics.
+func safely[T any](fn func() (T, error)) (out T, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("state: %v", r)
+		}
+	}()
+	return fn()
+}
 
 // withTx runs fn inside the caller's bound transaction when one exists,
 // otherwise in a short transaction opened here: one event, one transaction,
