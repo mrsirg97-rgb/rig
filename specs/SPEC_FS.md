@@ -44,9 +44,10 @@ accordingly and is named in the PR.
   anything else globs the root-relative path.
 - Skips, unconditional: `.git` subtrees under a walked root; binary content
   (a NUL byte within the first 8 KiB). Unreadable entries (an unreadable
-  directory pruned, an unreadable file skipped) are counted and named in the
-  output as `[skipped: N unreadable]` — loud, never a silent abort and never
-  a silent swallow.
+  directory pruned, an unreadable file skipped — at walk time or at use
+  time) are counted and named in the output as `[skipped: N unreadable]`
+  — loud, never a silent abort and never a silent swallow. A missing or
+  unreadable ROOT is a loud error, not a search that found nothing.
 - Caps, hard and loud: `ls` 1000 entries, `find` 1000 paths, `grep` 500 match
   lines. Truncation is named in the output — `[truncated: N of M]` — never
   silent. Memory stays bounded: matches beyond the cap count, not
@@ -69,9 +70,10 @@ Named cases against the real filesystem in `t.TempDir()`:
   cap names its truncation.
 - find: nested globs including `**`; bare patterns (no `/`, no `**`) reaching
   nested files by name; missing pattern refused loud.
-- walk accounting: an unreadable directory's subtree reported as
-  `[skipped: N unreadable]`, readable matches still delivered (find and
-  grep alike); a cancelled context surfaces loudly from both.
+- walk accounting: an unreadable directory's subtree and an unreadable
+  file at use time reported as `[skipped: N unreadable]`, readable matches
+  still delivered (find and grep alike); a missing or unreadable root is a
+  loud error from both; a cancelled context surfaces loudly from both.
 - grep: the matched-line byte cap named by its marker.
 - grep: multi-file `path:line: text`; glob filter; `.git` and binary skips;
   the cap marker with true totals.
