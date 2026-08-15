@@ -1,5 +1,5 @@
 {
-  "name": "../../looper-wt-state/store/state",
+  "name": "../../looper/store/state",
   "module": "github.com/mrsirg97-rgb/looper/store/state",
   "runtime": "github.com/mrsirg97-rgb/looper/store",
   "packages": [

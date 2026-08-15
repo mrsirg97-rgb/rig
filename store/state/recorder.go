@@ -27,6 +27,7 @@ type Recorder struct {
 	version string
 	sid     string
 	buffer  strings.Builder
+	pending []core.ToolCall
 	lastSeq int64
 	ensured bool
 	mu      sync.Mutex
@@ -43,6 +44,8 @@ func (r *Recorder) Input(ctx context.Context) (string, error) {
 	if e := r.ensure(); e != nil {
 		r.loud("session row", e)
 	}
+	// transcript order: anything pending from before lands before the user row
+	_ = r.land()
 	text, err := r.inner.Input(ctx)
 	if err != nil {
 		return text, err
@@ -69,20 +72,11 @@ func (r *Recorder) observe(ev core.Event) {
 	case core.TextDelta:
 		r.buffer.WriteString(e.Text)
 	case core.ToolCallEvent:
-		seq, e2 := r.flush(&e.Call.ID)
-		if e2 != nil {
-			r.loud("assistant message", e2)
-		}
-		if seq > 0 {
-			if e3 := RecordToolCall(context.Background(), r.db, seq, e.Call.ID, e.Call.Name, string(e.Call.Args)); e3 != nil {
-				r.loud("tool call "+e.Call.ID, e3)
-			}
-		}
+		r.mu.Lock()
+		r.pending = append(r.pending, e.Call)
+		r.mu.Unlock()
 	case core.Done:
-		seq, e2 := r.flush(nil)
-		if e2 != nil {
-			r.loud("assistant message", e2)
-		}
+		seq := r.land()
 		if seq == 0 {
 			seq = r.lastSeq
 		}
@@ -97,7 +91,47 @@ func (r *Recorder) observe(ev core.Event) {
 		if _, e2 := RecordFault(context.Background(), r.db, r.sid, now(), e.Err.Error()); e2 != nil {
 			r.loud("fault", e2)
 		}
+		// the partial never lands: the session is preserved up to the last
+		// complete message
+		r.mu.Lock()
+		r.buffer.Reset()
+		r.pending = nil
+		r.mu.Unlock()
 	}
+}
+
+// land flushes the assembled text and the pending calls into one assistant
+// row — written even when its content is empty — and lands the calls
+// against it. The tool-ID marker names a single call; a multi-call turn
+// leaves it unset, the calls carrying their own attribution.
+func (r *Recorder) land() (seq int64) {
+	r.mu.Lock()
+	text := r.buffer.String()
+	calls := r.pending
+	r.buffer.Reset()
+	r.pending = nil
+	r.mu.Unlock()
+	if text == "" && len(calls) == 0 {
+		return 0
+	}
+	var toolID *string
+	if len(calls) == 1 {
+		id := calls[0].ID
+		toolID = &id
+	}
+	var e error
+	seq, e = RecordMessage(context.Background(), r.db, r.sid, "assistant", text, nil, toolID)
+	if e != nil {
+		r.loud("assistant message", e)
+		return 0
+	}
+	r.setLastSeq(seq)
+	for _, call := range calls {
+		if e2 := RecordToolCall(context.Background(), r.db, seq, call.ID, call.Name, string(call.Args)); e2 != nil {
+			r.loud("tool call "+call.ID, e2)
+		}
+	}
+	return seq
 }
 
 // Observe taps the tool-execution seam: the guarded result, named.
@@ -156,23 +190,6 @@ func (r *Recorder) ensure() error {
 		r.ensured = true
 	}
 	return e
-}
-
-// flush lands the assembled assistant text as one message, attributed to
-// the call that terminates it when one follows.
-func (r *Recorder) flush(toolID *string) (int64, error) {
-	r.mu.Lock()
-	text := r.buffer.String()
-	r.buffer.Reset()
-	r.mu.Unlock()
-	if text == "" {
-		return 0, nil
-	}
-	seq, err := RecordMessage(context.Background(), r.db, r.sid, "assistant", text, nil, toolID)
-	if err == nil {
-		r.setLastSeq(seq)
-	}
-	return seq, err
 }
 
 func (r *Recorder) setLastSeq(seq int64) {

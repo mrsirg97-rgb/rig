@@ -15,6 +15,8 @@ import (
 // named change; Open refuses mismatches loudly.
 const SchemaVersion = 1
 
+//go:generate GOGEN=$PWD; cd ../../../lift/cmd && go run main.go -config=$GOGEN/gen.json -source=$GOGEN/source.json
+
 // Statements is the store's schema in application order: the generated
 // DDL, then any extra.sql hand-written beside it. state has no extra.sql.
 func Statements() []string {
