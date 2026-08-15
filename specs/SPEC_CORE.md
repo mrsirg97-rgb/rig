@@ -237,6 +237,7 @@ extension type, lifecycle, or discovery mechanism.
 
 ```go
 type Session struct {
+	ID       string // minted at NewSession: ULID-style time-ordered; persistence attributes to it
 	Messages []Message
 	Files    map[string]FileState // path -> hash + mtime at last read
 }

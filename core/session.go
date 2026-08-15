@@ -3,10 +3,12 @@ package core
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"time"
 )
 
 // FileState pins what a file looked like at last read, so edit-after-
@@ -20,12 +22,23 @@ type FileState struct {
 // Session is the turn's state: the transcript plus file provenance.
 // In-memory for v1, JSON-serializable from day one.
 type Session struct {
+	ID       string // minted at NewSession: ULID-style, time-ordered; persistence attributes to it
 	Messages []Message
 	Files    map[string]FileState // path -> state at last read
 }
 
 func NewSession() *Session {
-	return &Session{Files: map[string]FileState{}}
+	return &Session{ID: mintSessionID(), Files: map[string]FileState{}}
+}
+
+// mintSessionID is the ULID-style identifier: a time-ordered prefix plus a
+// random suffix, stdlib crypto/rand only. Stable for the process.
+func mintSessionID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("core: session id: %v", err))
+	}
+	return fmt.Sprintf("%x%x", time.Now().UnixMilli(), b)
 }
 
 func (s *Session) Append(m Message) {
