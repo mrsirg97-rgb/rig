@@ -38,7 +38,7 @@ func wire(baseURL, model, system string, allow []string, retries int) *looper.Ke
 		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit()),
 		looper.WithMiddleware(
 			perm.Allowlist(allow...),
-			guard.Retry(retries),
+			guard.Bound(retries),
 		),
 	)
 }
