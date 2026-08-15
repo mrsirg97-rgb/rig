@@ -23,7 +23,6 @@ then talk. Configuration and verification: `docs/SETUP.md`.
 
 | doc                | what it is                                        |
 |--------------------|---------------------------------------------------|
-| `docs/SPEC.md`     | the governing specification: guarantees, constraints, non-goals |
 | `docs/DESIGN.md`   | architecture, the seams, turn semantics, extension guide |
 | `docs/SETUP.md`    | build, configuration, verification               |
 | `docs/USAGE.md`    | running a session; session and failure semantics |
