@@ -71,6 +71,10 @@ func Read() core.Tool { return &readTool{} }
 
 func (readTool) Name() string { return "read" }
 
+func (readTool) Description() string {
+	return "Read a file; remembers its disk state for drift-checked edits."
+}
+
 func (readTool) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
@@ -111,6 +115,10 @@ func Write() core.Tool { return &writeTool{} }
 
 func (writeTool) Name() string { return "write" }
 
+func (writeTool) Description() string {
+	return "Create or overwrite a file from scratch."
+}
+
 func (writeTool) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
@@ -147,6 +155,10 @@ type editTool struct{}
 func Edit() core.Tool { return &editTool{} }
 
 func (editTool) Name() string { return "edit" }
+
+func (editTool) Description() string {
+	return "Replace exactly one occurrence of an old string; refuses drift and ambiguity."
+}
 
 func (editTool) Schema() json.RawMessage {
 	return json.RawMessage(`{

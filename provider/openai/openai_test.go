@@ -318,13 +318,28 @@ func TestToolSchemaGoesOverTheWireAsAnObject(t *testing.T) {
 	p := openai.New(srv.URL, "local")
 	req := core.Request{
 		Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}},
-		Tools:    []core.ToolSpec{{Name: "bash", Schema: json.RawMessage(`{"type":"object"}`)}},
+		Tools:    []core.ToolSpec{{Name: "bash", Description: "runs commands", Schema: json.RawMessage(`{"type":"object"}`)}},
 	}
 	if _, err := drain(t, context.Background(), p, req); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
 	if len(captured) == 0 {
 		t.Fatal("no tool array captured")
+	}
+	var capturedTools []map[string]json.RawMessage
+	if err := json.Unmarshal(captured, &capturedTools); err != nil {
+		t.Fatalf("captured tools array: %v", err)
+	}
+	fnRaw, ok := capturedTools[0]["function"]
+	if !ok {
+		t.Fatal("captured tools[0] has no function key")
+	}
+	var capturedFn map[string]json.RawMessage
+	if err := json.Unmarshal(fnRaw, &capturedFn); err != nil {
+		t.Fatalf("captured function: %v", err)
+	}
+	if got, _ := json.Marshal(capturedFn["description"]); string(got) != `"runs commands"` {
+		t.Fatalf("function.description = %s, want %q", got, `"runs commands"`)
 	}
 }
 
