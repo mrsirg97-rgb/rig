@@ -37,7 +37,7 @@ func Bound(limit int) core.ToolMiddleware {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
 			key := keyOf(call)
 			if failures[key] >= limit {
-				msg := fmt.Sprintf("retry bound exhausted: %s has failed %d times; stop reissuing this call", call.Name, limit)
+				msg := fmt.Sprintf("bound exhausted: %s has failed %d times; stop reissuing this call", call.Name, limit)
 				return msg, errors.New(msg)
 			}
 			content, err := next(ctx, call)

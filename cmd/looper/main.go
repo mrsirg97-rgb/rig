@@ -64,7 +64,7 @@ func main() {
 	model := flag.String("model", envOr("LOOPER_MODEL", "local"), "model name")
 	system := flag.String("system", envOr("LOOPER_SYSTEM", defaultSystem), "system prompt")
 	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit"), "comma-separated allow-list of tool names")
-	retries := flag.Int("retries", envOrInt("LOOPER_RETRIES", 3), "per-call retry bound for fed-back failures")
+	retries := flag.Int("retries", envOrInt("LOOPER_RETRIES", 3), "repetition bound on identical failing calls (cleared on success)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
