@@ -128,6 +128,24 @@ func TestCancellationKillsTheProcess(t *testing.T) {
 	}
 }
 
+func TestBackgroundChildDoesNotHoldTheTurn(t *testing.T) {
+	tool := bash.New()
+	start := time.Now()
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "sleep 30 & echo started",
+	}))
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if !strings.Contains(got, "started") {
+		t.Fatalf("output = %q, want the foreground output", got)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("background child held the turn for %v, want a bounded exit", elapsed)
+	}
+}
+
 func TestOutputIsCapped(t *testing.T) {
 	tool := bash.New()
 	// ~1MiB of zeros; well over any sane bound

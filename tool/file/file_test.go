@@ -187,6 +187,40 @@ func TestEditAfterExternalChangeFailsLoud(t *testing.T) {
 	}
 }
 
+func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(oldWd) })
+
+	path := "code.txt" // relative spelling
+	if err := os.WriteFile(path, []byte("version one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	session := core.NewSession()
+	ctx := core.WithSession(context.Background(), session)
+
+	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("version two"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// external change happened; a differently-spelled path must not bypass
+	// the drift check
+	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": "." + string(os.PathSeparator) + "code.txt",
+		"old":  "version", "new": "draft",
+	})); err == nil || !strings.Contains(err.Error(), "drift") {
+		t.Fatalf("drift check bypassed by path spelling, got %v", err)
+	}
+}
+
 func TestEditWithoutPriorReadProceeds(t *testing.T) {
 	// no provenance baseline means nothing was observed; the edit goes
 	// through, loudly reported.

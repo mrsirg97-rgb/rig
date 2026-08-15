@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mrsirg97-rgb/looper/core"
@@ -34,6 +35,16 @@ func stateOf(ctx context.Context, path string) (core.FileState, bool) {
 	}
 	st, ok := s.Files[path]
 	return st, ok
+}
+
+// normalizePath canonicalizes at the boundary so a.go and ./a.go are the
+// same key: without it the drift check can be silently bypassed by path
+// spelling.
+func normalizePath(path string) string {
+	if abs, err := filepath.Abs(path); err == nil {
+		return abs
+	}
+	return path
 }
 
 func recordState(ctx context.Context, path string, data []byte) {
@@ -79,6 +90,7 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("read: args: %w", err)
 	}
+	a.Path = normalizePath(a.Path)
 	fileData, err := os.ReadFile(a.Path)
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
@@ -120,6 +132,7 @@ func (writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("write: args: %w", err)
 	}
+	a.Path = normalizePath(a.Path)
 	if err := os.WriteFile(a.Path, []byte(a.Content), 0o644); err != nil {
 		return "", fmt.Errorf("write: %w", err)
 	}
@@ -158,6 +171,7 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("edit: args: %w", err)
 	}
+	a.Path = normalizePath(a.Path)
 	if a.Old == "" {
 		return "", errors.New("edit: zero-width old string")
 	}

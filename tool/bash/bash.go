@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/mrsirg97-rgb/looper/core"
 )
@@ -52,6 +54,17 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	if a.Cwd != "" {
 		cmd.Dir = a.Cwd
 	}
+	// background children: bash exits but its descendants hold the pipes.
+	// WaitDelay bounds the pipe wait after exit; Setpgid + Cancel take the
+	// whole group down on cancellation.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.WaitDelay = time.Second
+	cmd.Cancel = func() error {
+		if cmd.Process != nil {
+			return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return nil
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -64,6 +77,11 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	if err != nil {
 		if ctx.Err() != nil {
 			return content, ctx.Err()
+		}
+		// WaitDelay expired after a clean exit: the foreground finished and
+		// only its background descendants were cut off with partial output.
+		if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+			return content, nil
 		}
 		return content, fmt.Errorf("bash: %w", err)
 	}
