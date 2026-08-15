@@ -110,6 +110,7 @@ func main() {
 	rec := state.NewRecorder(cli.New(os.Stdin, os.Stdout), sdb, cwd, *model, Version, session.ID)
 
 	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, rec.Observe)
+	k.Session = session // one identity: the loop's session is the transcript's
 
 	// Interrupt cancels the turn at its next boundary.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
