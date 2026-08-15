@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"github.com/mrsirg97-rgb/looper/store/lazy"
 	"github.com/mrsirg97-rgb/looper/store/sqlx"
@@ -91,8 +92,17 @@ func (d *usageDomain) GetUsageBatch(ctx context.Context, keys []int64) *lazy.Laz
 		l.FillAll(nil, nil)
 		return l
 	}
+	// one numbered placeholder per key: portable across database/sql
+	// drivers (postgres and sqlite alike); ANY($1) is postgres-only.
+	ph := "$1"
+	args := make([]any, len(keys))
+	args[0] = keys[0]
+	for i := 1; i < len(keys); i++ {
+		ph += ", $" + strconv.Itoa(i+1)
+		args[i] = keys[i]
+	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "message_seq", "cache_read", "cache_write", "completion", "prompt" FROM "usage" WHERE "message_seq" = ANY($1)`, keys)
+		`SELECT "message_seq", "cache_read", "cache_write", "completion", "prompt" FROM "usage" WHERE "message_seq" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l

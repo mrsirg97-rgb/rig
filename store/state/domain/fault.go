@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/mrsirg97-rgb/looper/store/lazy"
@@ -90,8 +91,17 @@ func (d *faultDomain) GetFaultBatch(ctx context.Context, keys []int64) *lazy.Laz
 		l.FillAll(nil, nil)
 		return l
 	}
+	// one numbered placeholder per key: portable across database/sql
+	// drivers (postgres and sqlite alike); ANY($1) is postgres-only.
+	ph := "$1"
+	args := make([]any, len(keys))
+	args[0] = keys[0]
+	for i := 1; i < len(keys); i++ {
+		ph += ", $" + strconv.Itoa(i+1)
+		args[i] = keys[i]
+	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "seq", "at", "message", "session_id" FROM "faults" WHERE "seq" = ANY($1)`, keys)
+		`SELECT "seq", "at", "message", "session_id" FROM "faults" WHERE "seq" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l

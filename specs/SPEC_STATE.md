@@ -298,10 +298,9 @@ pane's promptGuidelines, lowercase, terse.
   and todo's claim semantics attribute to it. This is the one `core/` change
   in this spec and is named as such in its PR (SPEC_CORE session section
   updated in the same PR).
-- **Generated getters panic or nil on empty keys.** A lift finding, filed
-  as a lift note rather than fixed in the camera today: state.go recovers
-  at its boundary into a named error (`state: …: no such row`). A store
-  never panics.
+- **Generated getters return `(nil, nil)` on absent keys** — lazy.go's
+  absent-read, by design; no panic. state.go additionally guards the nil
+  row at its boundary with a named error (`state: …: no such row`).
 
 ## testing
 
