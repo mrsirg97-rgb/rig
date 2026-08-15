@@ -21,6 +21,7 @@ import (
 	"github.com/mrsirg97-rgb/looper/provider/openai"
 	"github.com/mrsirg97-rgb/looper/tool/bash"
 	"github.com/mrsirg97-rgb/looper/tool/file"
+	"github.com/mrsirg97-rgb/looper/tool/fs"
 )
 
 // Version is the binary's release version; initial release per the stack.
@@ -35,7 +36,7 @@ func wire(baseURL, model, system string, allow []string, retries int) *looper.Ke
 		looper.WithProvider(openai.New(baseURL, model)),
 		looper.WithFrontend(cli.New(os.Stdin, os.Stdout)),
 		looper.WithPolicy(policy.Passthrough(system)),
-		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit()),
+		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep()),
 		looper.WithMiddleware(
 			perm.Allowlist(allow...),
 			guard.Bound(retries),
@@ -63,7 +64,7 @@ func main() {
 	baseURL := flag.String("base-url", envOr("LOOPER_BASE_URL", "http://127.0.0.1:8080/v1"), "OpenAI-compatible endpoint base URL")
 	model := flag.String("model", envOr("LOOPER_MODEL", "local"), "model name")
 	system := flag.String("system", envOr("LOOPER_SYSTEM", defaultSystem), "system prompt")
-	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit"), "comma-separated allow-list of tool names")
+	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep"), "comma-separated allow-list of tool names")
 	retries := flag.Int("retries", envOrInt("LOOPER_RETRIES", 3), "repetition bound on identical failing calls (cleared on success)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()

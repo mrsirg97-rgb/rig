@@ -216,7 +216,7 @@ func wireTools(specs []core.ToolSpec) []wireTool {
 	for _, s := range specs {
 		out = append(out, wireTool{
 			Type:     "function",
-			Function: wireToolFn{Name: s.Name, Parameters: s.Schema},
+			Function: wireToolFn{Name: s.Name, Description: s.Description, Parameters: s.Schema},
 		})
 	}
 	return out
@@ -226,8 +226,9 @@ func wireTools(specs []core.ToolSpec) []wireTool {
 // a quoted string: OpenAI-compat servers and llama.cpp templates take the
 // object shape.
 type wireToolFn struct {
-	Name       string          `json:"name"`
-	Parameters json.RawMessage `json:"parameters"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters"`
 }
 
 type wireMessage struct {

@@ -114,6 +114,8 @@ type scriptedTool struct {
 
 func (t *scriptedTool) Name() string { return t.name }
 
+func (t *scriptedTool) Description() string { return "scripted test tool" }
+
 func (t *scriptedTool) Schema() json.RawMessage {
 	return json.RawMessage(`{"type":"object"}`)
 }

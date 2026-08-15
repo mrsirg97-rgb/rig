@@ -27,6 +27,8 @@ type countingTool struct {
 
 func (t *countingTool) Name() string { return t.name }
 
+func (t *countingTool) Description() string { return "counting test tool" }
+
 func (t *countingTool) Schema() json.RawMessage {
 	return json.RawMessage(`{"type":"object"}`)
 }
