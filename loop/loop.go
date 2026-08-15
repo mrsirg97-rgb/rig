@@ -43,7 +43,11 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 	}
 
 	// The execution chain composes in listed order; first-listed is
-	// innermost, so a listed guard bounds what it wraps.
+	// innermost, so a listed guard bounds what it wraps. This inverts the
+	// http-Handler convention deliberately: the spec's wiring example pairs a
+	// denial innermost with a guard outermost, which is what lets the guard
+	// bound the repetition of denials. Read WithMiddleware(perm, guard) as
+	// guard(perm(...)), not perm(guard(...)).
 	var exec core.ToolExec = directExec(tools)
 	for _, mw := range k.Middleware {
 		exec = mw(exec)
@@ -75,7 +79,11 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 			// awaiting_model.
 			msgs, err := k.Policy.Assemble(ctx, session)
 			if err != nil {
-				return fmt.Errorf("loop: assemble: %w", err)
+				// treated like a transport fault: surfaced, turn aborted, session
+				// intact, back to awaiting_input. A failing policy must not be
+				// able to kill the REPL.
+				k.Frontend.Notify(core.Fault{Err: err})
+				break turn
 			}
 
 			events, err := k.Provider.Stream(ctx, core.Request{Messages: msgs, Tools: specs})

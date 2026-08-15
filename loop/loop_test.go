@@ -84,9 +84,17 @@ func (f *recorderFrontend) Notify(ev core.Event) {
 }
 
 // transcriptPolicy is the minimal seam fake for Assemble in these tests.
-type transcriptPolicy struct{ system string }
+type transcriptPolicy struct {
+	system  string
+	errOnce error // first Assemble returns this, then clears
+}
 
-func (p transcriptPolicy) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
+func (p *transcriptPolicy) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
+	if p.errOnce != nil {
+		err := p.errOnce
+		p.errOnce = nil
+		return nil, err
+	}
 	msgs := []core.Message{}
 	if p.system != "" {
 		msgs = append(msgs, core.Message{Role: core.RoleSystem, Content: p.system})
@@ -190,7 +198,7 @@ func TestTextOnlyTurnOrdering(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{system: "be terse"}),
+		looper.WithPolicy(&transcriptPolicy{system: "be terse"}),
 	)
 	k.Session = session
 
@@ -235,7 +243,7 @@ func TestToolRoundTripOrdering(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 		looper.WithTools(bash),
 	)
 	k.Session = session
@@ -275,7 +283,7 @@ func TestFaultMidStreamPreservesSession(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -317,7 +325,7 @@ func TestTransportErrorSurfacesAndContinues(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -354,7 +362,7 @@ func TestClosedStreamWithoutDoneFailsLoud(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -377,7 +385,7 @@ func TestCancellationMidStream(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -408,7 +416,7 @@ func TestCancellationBetweenToolCalls(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 		looper.WithTools(bash),
 	)
 	k.Session = session
@@ -439,7 +447,7 @@ func TestMalformedCallFedBackOnce(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 		looper.WithTools(bash),
 	)
 	k.Session = session
@@ -477,7 +485,7 @@ func TestOversizedToolResultStaysIntact(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 		looper.WithTools(bash),
 	)
 	k.Session = session
@@ -499,9 +507,79 @@ func TestOversizedToolResultStaysIntact(t *testing.T) {
 	}
 }
 
+func TestAssembleErrorAbortsTurnAndRecovers(t *testing.T) {
+	boom := errors.New("policy blew up")
+	p := &transcriptPolicy{errOnce: boom}
+	sp := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{textEv("recovered"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := looper.New(
+		looper.WithProvider(sp),
+		looper.WithFrontend(f),
+		looper.WithPolicy(p),
+	)
+	k.Session = session
+
+	f.inputs <- "one"
+	f.inputs <- "two"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("assemble failure must not take down the REPL, got %v", err)
+	}
+
+	var surfaced bool
+	for _, ev := range f.events {
+		if ft, ok := ev.(core.Fault); ok && errors.Is(ft.Err, boom) {
+			surfaced = true
+		}
+	}
+	if !surfaced {
+		t.Fatal("assemble failure never surfaced through Notify")
+	}
+	wantTranscript(t, session,
+		core.Message{Role: core.RoleUser, Content: "one"},
+		core.Message{Role: core.RoleUser, Content: "two"},
+		core.Message{Role: core.RoleAssistant, Content: "recovered"},
+	)
+}
+
+func TestUnknownToolNameFedBackOnce(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{
+			callEv(core.ToolCall{ID: "c1", Name: "nope"}),
+			doneEv(),
+		}},
+		{events: []core.Event{textEv("understood"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := looper.New(
+		looper.WithProvider(p),
+		looper.WithFrontend(f),
+		looper.WithPolicy(&transcriptPolicy{}),
+	)
+	k.Session = session
+
+	f.inputs <- "go"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	want := []core.Message{
+		{Role: core.RoleUser, Content: "go"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "nope"}}},
+		{Role: core.RoleTool, ToolID: "c1", Content: "unknown tool: nope"},
+		{Role: core.RoleAssistant, Content: "understood"},
+	}
+	wantTranscript(t, session, want...)
+}
+
 func TestMissingSeamsFailLoud(t *testing.T) {
 	f := &recorderFrontend{inputs: make(chan string, 8)}
-	k := looper.New(looper.WithFrontend(f), looper.WithPolicy(transcriptPolicy{}))
+	k := looper.New(looper.WithFrontend(f), looper.WithPolicy(&transcriptPolicy{}))
 	err := loop.Run(context.Background(), k)
 	if err == nil || !strings.Contains(err.Error(), "provider") {
 		t.Fatalf("kernel without a provider must fail loudly naming the seam, got %v", err)
