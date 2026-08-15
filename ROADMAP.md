@@ -1,11 +1,11 @@
 # looper: roadmap
 
-Eight deliverables, in order. Each is one feature, one PR stack, and one
+Ten deliverables, in order. Each is one feature, one PR stack, and one
 spec first: `specs/SPEC_{FEATURE}.md`, in the format of `specs/SPEC_CORE.md`
 (goals, non-goals, layout, interfaces, decisions, testing, scope), written
 and agreed before code. `SPEC_CORE.md` itself changes only when a
 deliverable changes core/ or the loop, and that change is named in the PR.
-CLI-only through 7: the frontend is last because a TUI on an unfinished
+CLI-only through 9: the frontend is last because a TUI on an unfinished
 runtime is a TUI you rewrite. Harden the backend, then draw it.
 
 The reference for taste is `~/Projects/pane` (README.md, AGENTS.template.md,
@@ -14,7 +14,7 @@ stays `~/Projects/lift/engine`. Same design, different runtime: a port keeps
 pane's tool surface, schema, error voice, and promptGuidelines; it changes
 only what the language and the seams force.
 
-Standing rules across all eight:
+Standing rules across all ten:
 
 - The design test holds: a feature is leaf packages plus registration lines
   in the root. A loop change is named as such in the PR and made once.
@@ -22,8 +22,8 @@ Standing rules across all eight:
 - Errors teach: every refusal names what was wrong and what would be right.
 - Loud truncation, fail closed, no silent retries. Unchanged from `specs/SPEC_CORE.md`.
 - Deps: stdlib only in core/ and loop/. A leaf dep is justified in its
-  feature spec first. Deliverable 3 makes the one dep decision (the sqlite
-  driver) that 3 through 7 inherit; it is not re-decided per feature.
+  feature spec first. Storage is decided once, off-roadmap, in
+  `specs/SPEC_STATE.md`; deliverables 5 through 9 inherit it.
 
 ## 1. tool/fs: grep, find, ls
 > done
@@ -87,20 +87,93 @@ Done when: `specs/SPEC_CORE.md` documents each new event and seam, every named f
 cancellation case still passes, and a Frontend can render pane's status
 glyphs from events alone with no access to loop internals.
 
-## 3. tool/todo: the concurrent job queue
+## 3. policy/compact: compaction as a ContextPolicy
+
+Deliverable: the first real `ContextPolicy` beyond passthrough. Today there
+is none: passthrough replays the whole transcript, and a worker on a 64k
+window simply hits the wall. This is the load-bearing seam for local models
+and the first hard problem the runtime meets; it lands before any tool that
+would hide it.
+
+- One package, `policy/compact`, implementing `core.ContextPolicy`. Wraps
+  passthrough: below the trigger it is passthrough; at the trigger it
+  summarizes the older transcript through the same `core.Provider` and
+  returns system + summary + kept tail. The loop is untouched; the policy
+  owns when and how.
+- The trigger is window-relative and per-model: compact when
+  `estimated(context) > window - reserve`, where `window` and `reserve` are
+  the model's, not a global. This is the pi bug seen on 2026-08-15 (global
+  reserve larger than the workers' window fires compaction every turn,
+  including headless `-p`); looper does not inherit it. Requires a models
+  table at the root (id, window, maxTokens, reserve, keepRecent), which the
+  `models` command in 4 reads.
+- Keep-recent is a token budget, cut at a message boundary, never inside a
+  tool-call/tool-result pair. The summary request's `max_tokens` is clamped
+  to what the window actually has left.
+- Estimation is stdlib: bytes/4 with the provider's last reported prompt
+  usage as the correction when present. Named as approximate in the spec.
+- The compacted prefix invalidates the server-side prompt cache; the policy
+  logs the reprocess cost (tokens dropped, tokens kept) through `Notify` as
+  a named event so the operator can see it in a footer later. On DeltaNet
+  hybrids the rollback is bounded by the server's checkpoints, not by
+  looper; note it, do not design around it.
+- Overflow recovery: a provider fault that names context length triggers
+  one compact-and-retry, once, then surfaces. Never a silent loop.
+- Headless: `-p` workers get the same policy with the same per-model
+  numbers; a job that would compact every turn is a config error surfaced
+  at start, not a slow death.
+- Tests: scripted provider, fixture transcripts at known sizes; trigger
+  math by name for a 64k model and a 262k model with one shared config;
+  pair-boundary cut; overflow-recovery once; the summary call's clamped
+  max_tokens.
+
+Done when: a scripted 64k-window run past the trigger compacts exactly
+when the math says, keeps the tail intact, and passthrough behaviour below
+the trigger is byte-identical.
+
+## 4. user commands and tools
+
+Deliverable: a user-facing command seam and the first commands, so the
+human has verbs of their own, not only prompts. In the CLI they are typed
+lines with a prefix; in the TUI (10) they become `/` commands over the same
+seam. Same glass, both sides: where a command has an agent-side tool, it is
+the same tool.
+
+- One mechanism: `core.Command{Name, Description, Run(ctx, args, k) (string,
+  error)}` registered at the root like tools (`WithCommands(...)`). The
+  Frontend recognizes the prefix and dispatches before `Input` returns to the
+  loop; the loop never sees a command. This is Frontend-side plumbing, not a
+  loop change; if it needs the loop, 2 was incomplete.
+- Runtime commands: `compact` (force the policy from 3 now, report dropped
+  and kept), `new` (close the session, mint a fresh id, keep the process),
+  `sessions` (list, show, resume from the state store in SPEC_STATE), `models`
+  (list the models table from 3, switch the active model for the next turn,
+  show window/reserve/effort), `steer` (queue a message for delivery at the
+  next boundary of the running turn, the deliverable 2 path made a verb).
+- Tool-backed commands: `todo` and `scheduler` are the same tools the agent
+  gets, exposed to the human on the same seam. The user reads and edits the
+  queue the model works from; the user schedules the job the model would
+  have. No parallel implementation, no goal or loop verb: the queue is the
+  plan. These attach as their tools land (5 and 8); the seam is built here
+  and proven with the runtime commands.
+- Rendering stays plain in the CLI (greppable lines); the render kit is 10.
+- Tests: dispatch by prefix with the loop never invoked; each runtime
+  command by name against a scripted kernel; `steer` delivered at the
+  boundary and not before.
+
+Done when: `compact`, `new`, `sessions`, `models`, `steer` work in the CLI
+over `WithCommands`, and adding a command is one file plus one registration
+line.
+
+## 5. tool/todo: the concurrent job queue
 
 Deliverable: pane's todo, same design, ported. Reference: `pane/TODO_SPEC.md`,
 `pane/docs/TASK_TREE_SPEC.md`, `pane/extensions/todo.ts`, `todo.types.ts`.
 
-- The sqlite decision, made once here, the way lift already made it:
-  `database/sql` is the seam (stdlib), `modernc.org/sqlite` is the driver
-  (pure Go, no cgo, static binary kept, FTS5 built in for rem; the same
-  driver lift vendors). `store/` mirrors `~/Projects/lift/sqlx`: a
-  `DB{*sql.DB}` wrapper, `Tx`/`TxReadOnly` opening the serializable
-  transaction and landing it on the ctx under a typed key, `TxFrom` failing
-  closed on an unbound request. Tool packages read `*sql.Tx` off the ctx and
-  never import the driver; only `store/` does, registered once at the root.
-  Justified in `specs/SPEC_TODO.md`.
+- Storage is `specs/SPEC_STATE.md`: lift-generated stores over
+  `database/sql` + `modernc.org/sqlite`, the `sqlx` transaction seam on the
+  ctx, one transaction per tool call. This deliverable is the first tool
+  adapter over that substrate; it does not re-decide storage.
 - Enforced FSM (pending -> in_progress -> done | failed; failed -> retry),
   minted ids, several tasks in flight, batched transitions serialized against
   fresh state, illegal transitions returning errors that teach the protocol.
@@ -114,7 +187,7 @@ Deliverable: pane's todo, same design, ported. Reference: `pane/TODO_SPEC.md`,
 
 Done when: the pane test suite's cases have Go equivalents by name and pass.
 
-## 4. tool/python: the persistent kernel
+## 6. tool/python: the persistent kernel
 
 Deliverable: pane's python, ported. Reference: `pane/extensions/python-kernel.ts`,
 `python-kernel.types.ts`.
@@ -129,7 +202,7 @@ Deliverable: pane's python, ported. Reference: `pane/extensions/python-kernel.ts
 Done when: state persistence, timeout semantics, and death announcement are
 named tests against a real kernel.
 
-## 5. tool/rem: memory
+## 7. tool/rem: memory
 
 Deliverable: pane's rem, ported. Reference: `pane/docs/REM_SPEC.md`,
 `pane/extensions/rem.ts`, `rem.types.ts`, `sqlite.ts`.
@@ -140,13 +213,13 @@ Deliverable: pane's rem, ported. Reference: `pane/docs/REM_SPEC.md`,
   prune (strength decay, remove/reduce).
 - Hybrid single-file store topology, corruption quarantined aside and never
   deleted, effective strength at recall with a checkpointed pass at prune.
-- Uses `store/` from deliverable 3; FTS5 and trigram bookkeeping pinned as
+- Uses `store/` from SPEC_STATE; FTS5 and trigram bookkeeping pinned as
   in the spec.
 
 Done when: recall quality on pane's fixture set matches, and quarantine is a
 named test.
 
-## 6. tool/scheduler: background jobs
+## 8. tool/scheduler: background jobs
 
 Deliverable: pane's scheduler, ported. Reference: `pane/docs/SCHEDULER_SPEC.md`,
 `pane/extensions/scheduler/` (core, store, crontab, cron, runner), and the
@@ -160,12 +233,12 @@ among live jobs only, never kill ambiguous processes).
   alias normalization, own-slot-loaded short-circuit, fail closed when
   unreachable, run records and log rotation.
 - The job runtime is looper itself in `-p` mode from deliverable 2. Reports
-  back through rem from deliverable 5.
+  back through rem from deliverable 7.
 
 Done when: the scheduler runner tests have Go equivalents by name, and a
 job fires from a cold shell with only cron-env.
 
-## 7. tool/web: search and fetch
+## 9. tool/web: search and fetch
 
 Deliverable: pane's web_search and web_fetch, ported. Reference:
 `pane/extensions/web-search.ts`, `web-fetch.ts`, `web-fetch.types.ts`.
@@ -180,7 +253,7 @@ Deliverable: pane's web_search and web_fetch, ported. Reference:
 Done when: private-space refusal, redirect re-check, and cap markers are
 named tests against `httptest` servers.
 
-## 8. frontend/tui
+## 10. frontend/tui
 
 Deliverable: pane's glass, on the Frontend seam. Reference: `pane/README.md`,
 `pane/extensions/builtin-restyle.ts`, `footer.ts`, `input.ts`,
@@ -192,10 +265,10 @@ Deliverable: pane's glass, on the Frontend seam. Reference: `pane/README.md`,
 - Footer: throughput and cache above the input, model · thinking · context
   (colored past 70/90%) below. Built for phone width.
 - Prompt glyph carries state: `❯` your turn, `◐` agent streaming, typing
-  queues or steers via the deliverable 2 path.
+  queues or steers via the deliverable 2 path and the `steer` command of 4.
 - Terminal handling in stdlib or a single justified leaf dep for raw mode;
   the render kit ports as plain Go.
 
 Done when: the TUI is a Frontend registration and nothing else, and the loop
 is byte-identical to the end of deliverable 2. If the TUI needs a loop
-change, deliverable 2 was incomplete and is reopened first.
+change, deliverable 2 or 4 was incomplete and is reopened first.
