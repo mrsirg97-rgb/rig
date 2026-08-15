@@ -25,6 +25,10 @@ func New() core.Tool { return &tool{} }
 
 func (tool) Name() string { return "bash" }
 
+func (tool) Description() string {
+	return "run a bash(1) command; captures combined output (capped)"
+}
+
 func (tool) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",

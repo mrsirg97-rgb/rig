@@ -32,8 +32,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	if got := k.SortedToolNames(); len(got) != 4 || got[0] != "bash" || got[3] != "write" {
-		t.Fatalf("registered tools = %v, want bash,edit,read,write", got)
+	if got := k.SortedToolNames(); len(got) != 7 || got[0] != "bash" || got[6] != "write" {
+		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,read,write", got)
 	}
 	if len(k.Middleware) != 2 {
 		t.Fatalf("middleware = %d links, want the allow-list and the retry guard", len(k.Middleware))

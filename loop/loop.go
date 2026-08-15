@@ -39,7 +39,7 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 	specs := make([]core.ToolSpec, 0, len(k.Tools))
 	for _, t := range k.Tools {
 		tools[t.Name()] = t
-		specs = append(specs, core.ToolSpec{Name: t.Name(), Schema: t.Schema()})
+		specs = append(specs, core.ToolSpec{Name: t.Name(), Description: t.Description(), Schema: t.Schema()})
 	}
 
 	// The execution chain composes in listed order; first-listed is
