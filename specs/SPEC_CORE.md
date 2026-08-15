@@ -46,6 +46,7 @@ looper/
   tool/
     bash/
     file/        read, write, edit
+    fs/          ls, find, grep
   frontend/
     cli/         stdin/stdout REPL
   cmd/
@@ -120,7 +121,7 @@ type Provider interface {
 
 type Request struct {
 	Messages []Message
-	Tools    []ToolSpec // name + schema only; execution stays in the kernel
+	Tools    []ToolSpec // name, description, schema; execution stays in the kernel
 }
 ```
 
@@ -132,6 +133,7 @@ stream. Per-model tool-call formats are the adapter's problem, not the loop's.
 ```go
 type Tool interface {
 	Name() string
+	Description() string // model-facing, terse; reaches the wire as function.description
 	Schema() json.RawMessage // hand-written JSON Schema, no reflection
 	Exec(ctx context.Context, args json.RawMessage) (string, error)
 }

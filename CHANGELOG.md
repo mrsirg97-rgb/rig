@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+- **tool/fs** (roadmap deliverable 1): named `ls`, `find`, `grep` beside
+  bash/read/write/edit. Stdlib only; `.git` and binary skips; unreadable
+  entries counted and named (`[skipped: N unreadable]`), an unreadable root
+  stays a loud error; result caps named in the output, matched-line text
+  capped at 512 bytes; bare find patterns match by name, the find -name
+  reading; ctx honored at the walk boundary.
+- **`Description` on the wire**: `core.Tool.Description()` +
+  `ToolSpec.Description`, carried by the OpenAI adapter as
+  `function.description`; descriptions take the house voice. The default
+  allow-list grows to the seven-tool set.
+
 ## [0.1.0] — initial release
 
 Shipped through the stacked-review process: each slice landed on its parent,

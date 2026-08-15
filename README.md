@@ -37,7 +37,7 @@ kernel.go       the composition kernel
 policy/         ContextPolicy implementations (passthrough)
 middleware/     ToolMiddleware: perm (deny by default), guard.Bound (the bound)
 provider/       Provider implementations (the openai-compatible SSE adapter)
-tool/           Tool implementations: bash(1); file read/write/edit
+tool/           Tool implementations: bash(1); file read/write/edit; fs ls/find/grep
 frontend/       Frontend implementations (the cli REPL)
 ```
 
