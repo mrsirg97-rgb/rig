@@ -18,6 +18,11 @@ func exec(t *testing.T, tool core.Tool, args string) (string, error) {
 	return tool.Exec(context.Background(), json.RawMessage(args))
 }
 
+func execCtx(t *testing.T, tool core.Tool, ctx context.Context, args string) (string, error) {
+	t.Helper()
+	return tool.Exec(ctx, json.RawMessage(args))
+}
+
 func mk(t *testing.T, root string, files map[string]string, dirs []string) {
 	t.Helper()
 	for _, d := range dirs {
@@ -89,22 +94,22 @@ func TestLSNamesItsTruncation(t *testing.T) {
 	}
 }
 
-func TestFindMatchesNestedGlobs(t *testing.T) {
+func TestFindBarePatternsReachNestedFiles(t *testing.T) {
 	root := t.TempDir()
 	mk(t, root, map[string]string{"a/b/c.txt": "x", "top.txt": "y"}, nil)
+	bare, err := exec(t, fs.Find(), fmt.Sprintf(`{"pattern":"*.txt","root":%q}`, root))
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if !strings.Contains(bare, "top.txt") || !strings.Contains(bare, "a/b/c.txt") {
+		t.Errorf("bare pattern *.txt must reach nested files by name:\n%s", bare)
+	}
 	nested, err := exec(t, fs.Find(), fmt.Sprintf(`{"pattern":"**/c.txt","root":%q}`, root))
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
 	if nested != "a/b/c.txt" {
 		t.Errorf("find **/c.txt = %q, want %q", nested, "a/b/c.txt")
-	}
-	toplevel, err := exec(t, fs.Find(), fmt.Sprintf(`{"pattern":"*.txt","root":%q}`, root))
-	if err != nil {
-		t.Fatalf("find: %v", err)
-	}
-	if toplevel != "top.txt" {
-		t.Errorf("find *.txt = %q, want %q", toplevel, "top.txt")
 	}
 	span, err := exec(t, fs.Find(), fmt.Sprintf(`{"pattern":"a/**","root":%q}`, root))
 	if err != nil {
@@ -180,6 +185,92 @@ func TestDescriptionsArePresent(t *testing.T) {
 	for _, tool := range []core.Tool{fs.LS(), fs.Find(), fs.Grep()} {
 		if tool.Name() == "" || tool.Description() == "" || len(tool.Schema()) == 0 {
 			t.Errorf("tool %q missing name, description, or schema", tool.Name())
+		}
+	}
+}
+
+func TestGrepSkipsAndNamesUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses mode bits")
+	}
+	root := t.TempDir()
+	mk(t, root, map[string]string{"a.txt": "needle\n", "sealed/inner.txt": "needle\n"}, nil)
+	sealed := filepath.Join(root, "sealed")
+	if err := os.Chmod(sealed, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(sealed, 0o755)
+	content, err := exec(t, fs.Grep(), fmt.Sprintf(`{"pattern":"needle","root":%q}`, root))
+	if err != nil {
+		t.Fatalf("grep: %v", err)
+	}
+	if !strings.Contains(content, "a.txt:1: needle") {
+		t.Errorf("readable match not reported:\n%s", content)
+	}
+	if strings.Contains(content, "sealed/") {
+		t.Errorf("unreadable subtree not skipped:\n%s", content)
+	}
+	if !strings.Contains(content, "[skipped: 1 unreadable]") {
+		t.Errorf("skip not named:\n%s", content)
+	}
+}
+
+func TestFindSkipsAndNamesUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses mode bits")
+	}
+	root := t.TempDir()
+	mk(t, root, map[string]string{"a.txt": "x", "sealed/inner.txt": "x"}, nil)
+	sealed := filepath.Join(root, "sealed")
+	if err := os.Chmod(sealed, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(sealed, 0o755)
+	content, err := exec(t, fs.Find(), fmt.Sprintf(`{"pattern":"**","root":%q}`, root))
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if !strings.Contains(content, "a.txt") {
+		t.Errorf("readable match not reported:\n%s", content)
+	}
+	if strings.Contains(content, "sealed/") {
+		t.Errorf("unreadable subtree not skipped:\n%s", content)
+	}
+	if !strings.Contains(content, "[skipped: 1 unreadable]") {
+		t.Errorf("skip not named:\n%s", content)
+	}
+}
+
+func TestGrepCapsMatchedLineBytes(t *testing.T) {
+	root := t.TempDir()
+	mk(t, root, map[string]string{"big.txt": "head\n" + strings.Repeat("x", 5000) + "\n"}, nil)
+	content, err := exec(t, fs.Grep(), fmt.Sprintf(`{"pattern":"x","root":%q}`, root))
+	if err != nil {
+		t.Fatalf("grep: %v", err)
+	}
+	if !strings.Contains(content, "[line truncated]") {
+		t.Errorf("line cap not named:\n%q", tail(content))
+	}
+	first := strings.SplitN(content, "\n", 2)[0]
+	if got := len(first); got > len("big.txt:2: ")+512+len(" [line truncated]") {
+		t.Errorf("matched line = %d bytes, want bounded", got)
+	}
+}
+
+func TestExecutionsRespectContextCancellation(t *testing.T) {
+	root := t.TempDir()
+	mk(t, root, map[string]string{"a.txt": "x"}, nil)
+	for _, tc := range []struct {
+		tool core.Tool
+		args string
+	}{
+		{fs.Find(), fmt.Sprintf(`{"pattern":"**","root":%q}`, root)},
+		{fs.Grep(), fmt.Sprintf(`{"pattern":"x","root":%q}`, root)},
+	} {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := execCtx(t, tc.tool, ctx, tc.args); err == nil {
+			t.Errorf("%s: cancelled context not surfaced", tc.tool.Name())
 		}
 	}
 }

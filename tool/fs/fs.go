@@ -27,6 +27,7 @@ const (
 	lsCap   = 1000 // entries
 	findCap = 1000 // paths
 	grepCap = 500  // match lines
+	lineCap = 512  // result bytes per matched line
 )
 
 const binaryPeek = 8 << 10 // a NUL byte within the first 8 KiB marks binary
@@ -72,7 +73,7 @@ func (t *tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 func LS() core.Tool {
 	return &tool{
 		name:        "ls",
-		description: "List one level of a directory: kind, name, and size.",
+		description: "list one level of a directory: kind, name, and size",
 		schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"directory to list (default .)"},"hidden":{"type":"boolean","description":"include dot-entries"}}}`),
 		exec:        lsExec,
 	}
@@ -82,8 +83,8 @@ func LS() core.Tool {
 func Find() core.Tool {
 	return &tool{
 		name:        "find",
-		description: "Find files by glob name under a root; ** spans directories.",
-		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"glob name; ** spans directories"},"root":{"type":"string","description":"root to search (default .)"}},"required":["pattern"]}`),
+		description: "find files by name or path glob under a root; bare patterns match the name, ** spans directories",
+		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"a name glob (matches the file name) or a path glob with / (** spans directories)"},"root":{"type":"string","description":"root to search (default .)"}},"required":["pattern"]}`),
 		exec:        findExec,
 	}
 }
@@ -92,8 +93,8 @@ func Find() core.Tool {
 func Grep() core.Tool {
 	return &tool{
 		name:        "grep",
-		description: "Search file lines under a root with a Go regexp; prints path:line: text.",
-		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Go regexp matched per line"},"root":{"type":"string","description":"root to search (default .)"}},"required":["pattern"]}`),
+		description: "search file lines under a root with a Go regexp; prints path:line: text",
+		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Go regexp matched per line"},"root":{"type":"string","description":"root to search (default .)"},"glob":{"type":"string","description":"restrict matches to a path glob"}},"required":["pattern"]}`),
 		exec:        grepExec,
 	}
 }
@@ -133,7 +134,7 @@ func lsExec(_ context.Context, data json.RawMessage) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-func findExec(_ context.Context, data json.RawMessage) (string, error) {
+func findExec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a findArgs
 	if err := strictDecode(data, &a); err != nil {
 		return "", err
@@ -146,29 +147,36 @@ func findExec(_ context.Context, data json.RawMessage) (string, error) {
 		return "", err
 	}
 	var matched []string
-	total := 0
-	if err := walk(root, func(rel string, d fs.DirEntry) error {
-		if !d.IsDir() && globMatch(rel, a.Pattern) {
+	total, skipped := 0, 0
+	skipped, err = walk(root, func(rel string, d fs.DirEntry) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if !d.IsDir() && findMatch(rel, a.Pattern) {
 			total++
 			if len(matched) < findCap {
 				matched = append(matched, rel)
 			}
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return "", fmt.Errorf("find: %v", err)
 	}
-	if total == 0 {
-		return "(no matches)", nil
-	}
 	out := matched
+	if total == 0 {
+		out = []string{"(no matches)"}
+	}
 	if total > findCap {
 		out = append(out, fmt.Sprintf("[truncated: %d of %d]", findCap, total))
+	}
+	if skipped > 0 {
+		out = append(out, fmt.Sprintf("[skipped: %d unreadable]", skipped))
 	}
 	return strings.Join(out, "\n"), nil
 }
 
-func grepExec(_ context.Context, data json.RawMessage) (string, error) {
+func grepExec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a grepArgs
 	if err := strictDecode(data, &a); err != nil {
 		return "", err
@@ -185,8 +193,11 @@ func grepExec(_ context.Context, data json.RawMessage) (string, error) {
 		return "", err
 	}
 	var lines []string
-	total := 0
-	if err := walk(root, func(rel string, d fs.DirEntry) error {
+	total, skipped := 0, 0
+	skipped, err = walk(root, func(rel string, d fs.DirEntry) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if d.IsDir() || !d.Type().IsRegular() {
 			return nil
 		}
@@ -217,7 +228,11 @@ func grepExec(_ context.Context, data json.RawMessage) (string, error) {
 				if re.MatchString(text) {
 					total++
 					if len(lines) < grepCap {
-						lines = append(lines, fmt.Sprintf("%s:%d: %s", rel, ln, text))
+						shown := text
+						if len(shown) > lineCap {
+							shown = shown[:lineCap] + " [line truncated]"
+						}
+						lines = append(lines, fmt.Sprintf("%s:%d: %s", rel, ln, shown))
 					}
 				}
 			}
@@ -229,15 +244,19 @@ func grepExec(_ context.Context, data json.RawMessage) (string, error) {
 			}
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return "", err
 	}
-	if total == 0 {
-		return "(no matches)", nil
-	}
 	out := lines
+	if total == 0 {
+		out = []string{"(no matches)"}
+	}
 	if total > grepCap {
 		out = append(out, fmt.Sprintf("[truncated: %d of %d]", grepCap, total))
+	}
+	if skipped > 0 {
+		out = append(out, fmt.Sprintf("[skipped: %d unreadable]", skipped))
 	}
 	return strings.Join(out, "\n"), nil
 }
@@ -265,23 +284,41 @@ func (a grepArgs) pathOr(def string) string {
 
 // walk visits every entry under root, root-relative and slash-separated,
 // pruning .git subtrees. WalkDir does not follow symlinks.
-func walk(root string, visit func(rel string, d fs.DirEntry) error) error {
-	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err // loud: unreadable trees are surfaced, not guessed past
+// walk visits every entry under root, root-relative and slash-separated,
+// pruning .git subtrees. Unreadable entries are skipped, counted, and named
+// in the result as [skipped: N unreadable]; WalkDir does not follow symlinks.
+func walk(root string, visit func(rel string, d fs.DirEntry) error) (skipped int, err error) {
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			skipped++
+			if d != nil && d.IsDir() {
+				return fs.SkipDir // unreadable tree: counted, pruned
+			}
+			return nil // unreadable entry: counted, walk continues
 		}
 		if d.IsDir() && d.Name() == ".git" {
 			return fs.SkipDir
 		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
+		rel, rerr := filepath.Rel(root, path)
+		if rerr != nil {
+			return rerr
 		}
 		if rel == "." {
 			return nil
 		}
 		return visit(filepath.ToSlash(rel), d)
 	})
+	return
+}
+
+// findMatch: a bare pattern (no / and no **) names the file name itself, the
+// find -name reading; anything else globs the root-relative path.
+func findMatch(rel, pattern string) bool {
+	if !strings.Contains(pattern, "/") && !strings.Contains(pattern, "**") {
+		ok, _ := filepath.Match(pattern, filepath.Base(rel))
+		return ok
+	}
+	return globMatch(rel, pattern)
 }
 
 // globMatch reports whether the slash-separated relative path rel matches
