@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/mrsirg97-rgb/looper/store/lazy"
@@ -98,8 +99,17 @@ func (d *toolCallDomain) GetToolCallBatch(ctx context.Context, keys []string) *l
 		l.FillAll(nil, nil)
 		return l
 	}
+	// one numbered placeholder per key: portable across database/sql
+	// drivers (postgres and sqlite alike); ANY($1) is postgres-only.
+	ph := "$1"
+	args := make([]any, len(keys))
+	args[0] = keys[0]
+	for i := 1; i < len(keys); i++ {
+		ph += ", $" + strconv.Itoa(i+1)
+		args[i] = keys[i]
+	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at" FROM "tool_calls" WHERE "id" = ANY($1)`, keys)
+		`SELECT "id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at" FROM "tool_calls" WHERE "id" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
