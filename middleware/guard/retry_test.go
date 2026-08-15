@@ -30,7 +30,7 @@ func TestRepetitionIsBoundedWithoutSilentRetry(t *testing.T) {
 		var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 			return e.Exec(ctx, call)
 		}
-		exec = guard.Retry(limit)(exec)
+		exec = guard.Bound(limit)(exec)
 
 		call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"flaky"}`)}
 		var lastErr error
@@ -61,7 +61,7 @@ func TestSuccessfulReissuanceStaysUnbounded(t *testing.T) {
 		return "ok", nil
 	}
 	var exec core.ToolExec = ok
-	exec = guard.Retry(2)(exec)
+	exec = guard.Bound(2)(exec)
 
 	call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"poll"}`)}
 	for i := 0; i < 10; i++ {
@@ -74,12 +74,39 @@ func TestSuccessfulReissuanceStaysUnbounded(t *testing.T) {
 	}
 }
 
+func TestSuccessfulReissuanceResetsTheCount(t *testing.T) {
+	// fail, fail, SUCCESS, fail: the success clears the count, so the fourth
+	// issuance executes instead of being refused.
+	var total int
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		total++
+		if total == 3 {
+			return "ok", nil // the success in the middle
+		}
+		return "fed back", errors.New("synthetic failure")
+	}
+	exec = guard.Bound(3)(exec)
+
+	call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"flaky"}`)}
+	var last string
+	for i := 0; i < 4; i++ {
+		content, _ := exec(context.Background(), call)
+		last = content
+	}
+	if !strings.Contains(last, "fed back") {
+		t.Fatalf("the fourth issuance must execute (the success resets the count), got %q", last)
+	}
+	if total != 4 {
+		t.Fatalf("total executions %d, want 4 (the success resets the count)", total)
+	}
+}
+
 func TestDistinctCallsAreCountedSeparately(t *testing.T) {
 	e := &failingExec{calls: map[string]int{}}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
-	exec = guard.Retry(2)(exec)
+	exec = guard.Bound(2)(exec)
 
 	a := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"a"}`)}
 	b := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"b"}`)}

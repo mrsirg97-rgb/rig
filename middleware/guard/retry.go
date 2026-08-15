@@ -16,9 +16,9 @@ import (
 	"github.com/mrsirg97-rgb/looper/core"
 )
 
-// Retry bounds the repetition of failing calls, keyed by name plus args
-// digest.
-func Retry(limit int) core.ToolMiddleware {
+// Bound caps the repetition of failing calls, keyed by name plus args
+// digest. Named for what it does: it bounds, never retries.
+func Bound(limit int) core.ToolMiddleware {
 	if limit < 1 {
 		limit = 1
 	}
@@ -43,6 +43,8 @@ func Retry(limit int) core.ToolMiddleware {
 			content, err := next(ctx, call)
 			if err != nil {
 				failures[key]++
+			} else {
+				delete(failures, key) // success clears the count: the bound tracks streaks, not history
 			}
 			return content, err
 		}

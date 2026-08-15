@@ -57,7 +57,7 @@ func TestDenialIsFedBackAndBounded(t *testing.T) {
 		looper.WithTools(bash),
 		looper.WithMiddleware(
 			perm.Allowlist("read"), // bash is not listed: denied
-			guard.Retry(3),
+			guard.Bound(3),
 		),
 	)
 	k.Session = session
@@ -104,7 +104,7 @@ func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
 		looper.WithTools(bash),
 		looper.WithMiddleware(
 			perm.Allowlist("bash"),
-			guard.Retry(3),
+			guard.Bound(3),
 		),
 	)
 	k.Session = session
