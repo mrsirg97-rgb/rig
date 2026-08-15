@@ -2,6 +2,7 @@ package openai_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -279,6 +280,51 @@ func TestUsageWhenPresent(t *testing.T) {
 	done := events[len(events)-1].(core.Done)
 	if done.Usage.Prompt != 3 || done.Usage.Completion != 7 {
 		t.Fatalf("usage = %+v, want prompt=3 completion=7", done.Usage)
+	}
+}
+
+func TestToolSchemaGoesOverTheWireAsAnObject(t *testing.T) {
+	var captured json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		var tools []map[string]json.RawMessage
+		if err := json.Unmarshal(req["tools"], &tools); err != nil {
+			t.Fatalf("tools is not an object array: %v", err)
+		}
+		if len(tools) != 1 {
+			t.Fatalf("tools = %d entries, want 1", len(tools))
+		}
+		var fnObj map[string]json.RawMessage
+		if err := json.Unmarshal(tools[0]["function"], &fnObj); err != nil {
+			t.Fatalf("tools[0].function is not an object: %v", err)
+		}
+		var paramsObj map[string]json.RawMessage
+		if err := json.Unmarshal(fnObj["parameters"], &paramsObj); err != nil {
+			t.Fatalf("tools[0].function.parameters must be a JSON object, not a quoted string: %v", err)
+		}
+		var tStr string
+		if err := json.Unmarshal(paramsObj["type"], &tStr); err != nil || tStr != "object" {
+			t.Fatalf("parameters.type = %s, want \"object\"", paramsObj["type"])
+		}
+		captured = req["tools"]
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	req := core.Request{
+		Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}},
+		Tools:    []core.ToolSpec{{Name: "bash", Schema: json.RawMessage(`{"type":"object"}`)}},
+	}
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if len(captured) == 0 {
+		t.Fatal("no tool array captured")
 	}
 }
 
