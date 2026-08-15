@@ -51,8 +51,8 @@ Reference for the schemas: `~/Projects/pane/TODO_SPEC.md`,
 ```
 looper/
   store/
-    sqlx/          the transaction seam (copied from lift/sqlx, see decisions)
-    lazy/          the lazy accessor runtime (copied from lift/lazy)
+    sqlx/          the transaction seam, copied verbatim from lift/sqlx
+    lazy/          the lazy accessor runtime, copied verbatim from lift/lazy
     open.go        Open(path) -> sqlx.DB: driver, WAL, busy_timeout, foreign_keys,
                    ddl + extra.sql applied, schema_version checked
     state/         session transcript store
@@ -81,7 +81,8 @@ go run main.go -config=$LOOPER/store/todo/gen.json -source=$LOOPER/store/todo/so
 ```
 
 `gen.json` `"name"` is the absolute output root (`$LOOPER/store/todo`),
-`"module"` is `github.com/mrsirg97-rgb/looper/store/todo`; `source.json`
+`"module"` is `github.com/mrsirg97-rgb/looper/store/todo`, `"runtime"` is
+`github.com/mrsirg97-rgb/looper/store` (see decisions); `source.json`
 `"sourceDirectory"` is `$LOOPER/store/todo`, `"name"` is `metadata`. Both
 external paths are verified to work with the current engine (2026-08-15):
 generated files land under the store, generated imports resolve to looper's
@@ -252,21 +253,17 @@ pane's promptGuidelines, lowercase, terse.
   Go, no cgo, static binary, FTS5 compiled in, and it is what lift already
   vendors and tests against. Justified once here; the roadmap's deliverable
   3 note defers to this spec.
-- **The runtime import.** `domain.template` hardcodes
-  `github.com/mrsirg97-rgb/lift/lazy` and `github.com/mrsirg97-rgb/lift/sqlx`
-  (lines 33-34). Two options, decide before the first generate:
-  A. looper `require`s lift (private module; GOPRIVATE plus ssh). One source
-     of truth for the ~400-line runtime; looper's go.mod gains one private
-     require and builds only where lift is reachable.
-  B. lift gains a `"runtime"` config field (default: lift's own path) that
-     the domain camera uses for those two imports; looper copies `lazy` and
-     `sqlx` into `store/` once. looper stays self-contained; the runtime is
-     405 lines owned in two places.
-  Recommendation: B. It is a small engine change in lift (config field plus
-  the two template lines), it keeps looper's dependency story honest, and it
-  unblocks generating into any future project. If B, the lift PR lands
-  first and this spec's layout is as drawn; if A, drop `store/sqlx` and
-  `store/lazy` from the layout.
+- **The runtime import: decided, B.** `domain.template` used to hardcode
+  `github.com/mrsirg97-rgb/lift/lazy` and `.../lift/sqlx`. lift now takes a
+  `"runtime"` field in the engine config (landed 2026-08-15; defaults to
+  lift's own module, so every existing project generates byte-identically)
+  and the camera writes `{{ .Runtime }}/lazy` and `{{ .Runtime }}/sqlx`.
+  looper copies `lift/lazy` (two files) and `lift/sqlx/sqlx.go` into
+  `store/lazy` and `store/sqlx` once, unchanged, and every store's
+  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/looper/store"`.
+  looper stays self-contained: no lift require, and lift has no git remote
+  to require it from anyway. The copied runtime is ~400 lines owned in two
+  places; a change to it in lift is a named re-copy here, not a drift.
 - **What the DDL camera does not emit** (AUTOINCREMENT, CHECK, DEFAULT
   expressions, indexes, foreign key actions, virtual tables, triggers) is
   not added to the camera. Indexes, FTS, and triggers go in `extra.sql` /
@@ -308,14 +305,13 @@ pane's promptGuidelines, lowercase, terse.
   the session row is closed with `exit=cancelled` on the clean path.
 - Corruption: a truncated file at Open is quarantined and named; FTS5
   absence at Open is a loud refusal.
-- Runtime import decision: whichever of A or B is taken, `go build ./...`
-  from a clean clone of looper is a test.
+- `go build ./...` from a clean clone of looper is a test: no lift import
+  survives generation.
 
 ## scope
 
 Four stores, four metadata packages, generated domain/ddl (plus sqliteread
 where a tool reads trees), one seam, one driver, four thin tool adapters,
-and one `core/` change (session id). Order of work: the runtime-import
-decision (lift PR if B), then `store/sqlx`+`open.go`, then `state` (the
+and one `core/` change (session id). Order of work: `store/sqlx`+`store/lazy`+`open.go`, then `state` (the
 workers need it), then todo, rem, scheduler in roadmap order. The loop is
 byte-identical throughout.
