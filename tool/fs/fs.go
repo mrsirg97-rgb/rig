@@ -148,7 +148,7 @@ func findExec(ctx context.Context, data json.RawMessage) (string, error) {
 	}
 	var matched []string
 	total, skipped := 0, 0
-	skipped, err = walk(root, func(rel string, d fs.DirEntry) error {
+	skipped, err = walk(root, func(rel string, d fs.DirEntry, sk *int) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
@@ -194,7 +194,7 @@ func grepExec(ctx context.Context, data json.RawMessage) (string, error) {
 	}
 	var lines []string
 	total, skipped := 0, 0
-	skipped, err = walk(root, func(rel string, d fs.DirEntry) error {
+	skipped, err = walk(root, func(rel string, d fs.DirEntry, sk *int) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
@@ -206,7 +206,8 @@ func grepExec(ctx context.Context, data json.RawMessage) (string, error) {
 		}
 		f, err := os.Open(filepath.Join(root, filepath.FromSlash(rel)))
 		if err != nil {
-			return nil // unreadable: skipped, walk continues
+			*sk += 1 // unreadable at use: counted with the walk's skips
+			return nil
 		}
 		defer f.Close()
 		peek := make([]byte, binaryPeek)
@@ -287,9 +288,12 @@ func (a grepArgs) pathOr(def string) string {
 // walk visits every entry under root, root-relative and slash-separated,
 // pruning .git subtrees. Unreadable entries are skipped, counted, and named
 // in the result as [skipped: N unreadable]; WalkDir does not follow symlinks.
-func walk(root string, visit func(rel string, d fs.DirEntry) error) (skipped int, err error) {
+func walk(root string, visit func(rel string, d fs.DirEntry, skipped *int) error) (skipped int, err error) {
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, werr error) error {
 		if werr != nil {
+			if path == root {
+				return werr // a missing or unreadable root stays loud
+			}
 			skipped++
 			if d != nil && d.IsDir() {
 				return fs.SkipDir // unreadable tree: counted, pruned
@@ -306,7 +310,7 @@ func walk(root string, visit func(rel string, d fs.DirEntry) error) (skipped int
 		if rel == "." {
 			return nil
 		}
-		return visit(filepath.ToSlash(rel), d)
+		return visit(filepath.ToSlash(rel), d, &skipped)
 	})
 	return
 }

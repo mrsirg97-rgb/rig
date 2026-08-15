@@ -275,6 +275,44 @@ func TestExecutionsRespectContextCancellation(t *testing.T) {
 	}
 }
 
+func TestMissingRootsStayLoud(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope")
+	for _, tc := range []struct {
+		tool core.Tool
+		args string
+	}{
+		{fs.Find(), fmt.Sprintf(`{"pattern":"**","root":%q}`, missing)},
+		{fs.Grep(), fmt.Sprintf(`{"pattern":"x","root":%q}`, missing)},
+	} {
+		if _, err := exec(t, tc.tool, tc.args); err == nil {
+			t.Errorf("%s: missing root not surfaced", tc.tool.Name())
+		}
+	}
+}
+
+func TestGrepCountsUnreadableFiles(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses mode bits")
+	}
+	root := t.TempDir()
+	mk(t, root, map[string]string{"open.txt": "needle\n", "sealed.txt": "needle\n"}, nil)
+	p := filepath.Join(root, "sealed.txt")
+	if err := os.Chmod(p, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(p, 0o644)
+	content, err := exec(t, fs.Grep(), fmt.Sprintf(`{"pattern":"needle","root":%q}`, root))
+	if err != nil {
+		t.Fatalf("grep: %v", err)
+	}
+	if !strings.Contains(content, "open.txt:1: needle") {
+		t.Errorf("readable match not reported:\n%s", content)
+	}
+	if !strings.Contains(content, "[skipped: 1 unreadable]") {
+		t.Errorf("unreadable file not counted:\n%s", content)
+	}
+}
+
 func tail(s string) string {
 	if len(s) > 200 {
 		return "..." + s[len(s)-200:]
