@@ -26,7 +26,7 @@ func New() core.Tool { return &tool{} }
 func (tool) Name() string { return "bash" }
 
 func (tool) Description() string {
-	return "Run a bash(1) command; streams combined output (capped)."
+	return "run a bash(1) command; captures combined output (capped)"
 }
 
 func (tool) Schema() json.RawMessage {

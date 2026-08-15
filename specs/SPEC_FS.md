@@ -39,17 +39,27 @@ accordingly and is named in the PR.
 ## decisions
 
 - Stdlib only: `filepath.WalkDir`, `regexp`, `path/filepath.Match`, plus a
-  hand-rolled `**` segment matcher on top of `path.Match`.
+  hand-rolled `**` segment matcher on top of `path.Match`; a bare pattern (no
+  `/` and no `**`) names the file name itself — the find -name reading —
+  anything else globs the root-relative path.
 - Skips, unconditional: `.git` subtrees under a walked root; binary content
-  (a NUL byte within the first 8 KiB).
+  (a NUL byte within the first 8 KiB). Unreadable entries (an unreadable
+  directory pruned, an unreadable file skipped) are counted and named in the
+  output as `[skipped: N unreadable]` — loud, never a silent abort and never
+  a silent swallow.
 - Caps, hard and loud: `ls` 1000 entries, `find` 1000 paths, `grep` 500 match
   lines. Truncation is named in the output — `[truncated: N of M]` — never
-  silent. Memory stays bounded: matches beyond the cap count, not accumulate.
+  silent. Memory stays bounded: matches beyond the cap count, not
+  accumulate. A matched line's text is capped at 512 bytes with a
+  `[line truncated]` marker, so one match cannot carry a minified bundle.
 - Paths in results are relative to the walked root, slash-separated; results
   sorted by path then line number.
 - `ls` sorts within its level (ReadDir order); an empty directory prints
   `(empty)`; missing or non-directory paths are loud errors.
-- `grep` long lines: reader-based line iteration, no fixed line-length cap.
+- `grep` long lines: reader-based line iteration; matched-line text capped
+  as above.
+- Cancellation: `ctx` checked at the walk boundary; a cancelled walk
+  surfaces the context error, never a partial result.
 
 ## testing
 
@@ -57,7 +67,12 @@ Named cases against the real filesystem in `t.TempDir()`:
 
 - ls: kind/size rendering; hidden excluded by default, included on ask; the
   cap names its truncation.
-- find: nested globs including `**`; missing pattern refused loud.
+- find: nested globs including `**`; bare patterns (no `/`, no `**`) reaching
+  nested files by name; missing pattern refused loud.
+- walk accounting: an unreadable directory's subtree reported as
+  `[skipped: N unreadable]`, readable matches still delivered (find and
+  grep alike); a cancelled context surfaces loudly from both.
+- grep: the matched-line byte cap named by its marker.
 - grep: multi-file `path:line: text`; glob filter; `.git` and binary skips;
   the cap marker with true totals.
 - Description: present on every fs tool (asserted); the adapter's spec→wire
