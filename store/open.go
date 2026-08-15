@@ -12,6 +12,9 @@ import (
 	"github.com/mrsirg97-rgb/looper/store/sqlx"
 )
 
+// DB is the store handle every store package names its context with.
+type DB = sqlx.DB
+
 // pragmas applied to every store file at Open; the cross-process posture
 // (a runner writing while a session reads) is WAL plus busy_timeout.
 var pragmas = []string{
