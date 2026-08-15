@@ -53,7 +53,7 @@ func TestDenialIsFedBackAndBounded(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 		looper.WithTools(bash),
 		looper.WithMiddleware(
 			perm.Allowlist("read"), // bash is not listed: denied
@@ -87,12 +87,12 @@ func TestDenialIsFedBackAndBounded(t *testing.T) {
 }
 
 func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
-	bash := &countingTool{name: "bash", fail: 9}
+	bash := &countingTool{name: "bash", fail: 999}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
-			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
-			doneEv(),
-		}},
+		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
 		{events: []core.Event{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
@@ -100,7 +100,7 @@ func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
 	k := looper.New(
 		looper.WithProvider(p),
 		looper.WithFrontend(f),
-		looper.WithPolicy(transcriptPolicy{}),
+		looper.WithPolicy(&transcriptPolicy{}),
 		looper.WithTools(bash),
 		looper.WithMiddleware(
 			perm.Allowlist("bash"),
@@ -115,19 +115,21 @@ func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
+	// each of the model's identical failing issuances executes exactly once;
+	// the fourth is refused without executing.
 	if bash.calls != 3 {
-		t.Fatalf("failing call executed %d times, want exactly the bound of 3", bash.calls)
+		t.Fatalf("failing call executed %d times across re-issuance, want exactly the bound of 3", bash.calls)
 	}
-	var result string
+	var sawExhaustion bool
 	for _, m := range session.Messages {
-		if m.Role == core.RoleTool {
-			result = m.Content
+		if m.Role == core.RoleTool && strings.Contains(m.Content, "stop reissuing") {
+			sawExhaustion = true
 		}
 	}
-	if result != "tool failed" {
-		t.Fatalf("exhaustion must surface the fed-back string, got %q", result)
+	if !sawExhaustion {
+		t.Fatalf("exhaustion must refuse the over-bound issuance, naming the bound:\n%s", dump(session))
 	}
-	if len(session.Messages) != 4 || !strings.Contains(session.Messages[3].Content, "recovered") {
+	if len(session.Messages) != 10 || !strings.Contains(session.Messages[9].Content, "recovered") {
 		t.Fatalf("the model must get to recover after bounded exhaustion:\n%s", dump(session))
 	}
 }

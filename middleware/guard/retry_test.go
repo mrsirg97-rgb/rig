@@ -4,85 +4,93 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/looper/core"
 	"github.com/mrsirg97-rgb/looper/middleware/guard"
 )
 
-type exec struct {
-	calls    int
-	failures int // first N calls error
-	content  string
+// failingExec always fails, counting executions per distinct args.
+type failingExec struct {
+	calls map[string]int
+	total int
 }
 
-func (e *exec) Exec(ctx context.Context, call core.ToolCall) (string, error) {
-	e.calls++
-	if e.calls <= e.failures {
-		return "fed back", errors.New("synthetic failure")
-	}
-	return e.content, nil
+func (e *failingExec) Exec(ctx context.Context, call core.ToolCall) (string, error) {
+	key := string(call.Args)
+	e.calls[key]++
+	e.total++
+	return "fed back", errors.New("synthetic failure")
 }
 
-// The bounded-repetition invariant, table-driven: executions must equal the
-// smaller of the failures offered and the limit.
-func TestBoundsRepetition(t *testing.T) {
-	cases := []struct {
-		limit     int
-		failures  int
-		wantCalls int
-		wantErr   bool
-	}{
-		{3, 0, 1, false},
-		{3, 1, 2, false},
-		{3, 3, 3, true}, // exhausted exactly at the bound
-		{3, 9, 3, true}, // beyond the bound: bounded anyway
-		{1, 5, 1, true},
-		{5, 5, 5, true},
-		{5, 4, 5, false},
-	}
-	for _, tc := range cases {
-		e := &exec{failures: tc.failures, content: "ok"}
-		var next core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+func TestRepetitionIsBoundedWithoutSilentRetry(t *testing.T) {
+	for _, limit := range []int{1, 3, 5} {
+		e := &failingExec{calls: map[string]int{}}
+		var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 			return e.Exec(ctx, call)
 		}
-		next = guard.Retry(tc.limit)(next)
-		_, err := next(context.Background(), core.ToolCall{Name: "bash", Args: json.RawMessage(`{}`)})
-		if e.calls != tc.wantCalls {
-			t.Fatalf("limit=%d failures=%d: %d executions, want %d",
-				tc.limit, tc.failures, e.calls, tc.wantCalls)
+		exec = guard.Retry(limit)(exec)
+
+		call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"flaky"}`)}
+		var lastErr error
+		for i := 0; i <= limit; i++ {
+			// each issuance executes at most once; the (limit+1)th is refused
+			if _, lastErr = exec(context.Background(), call); i == limit {
+				break
+			}
 		}
-		if gotErr := err != nil; gotErr != tc.wantErr {
-			t.Fatalf("limit=%d failures=%d: err=%v, want err=%v", tc.limit, tc.failures, err, tc.wantErr)
+
+		if e.calls[string(call.Args)] != limit {
+			t.Fatalf("limit=%d: identical failing call executed %d times across issuances, want exactly %d (once each)",
+				limit, e.calls[string(call.Args)], limit)
+		}
+		if e.total != limit {
+			t.Fatalf("limit=%d: total executions %d, want %d", limit, e.total, limit)
+		}
+		if lastErr == nil || !strings.Contains(lastErr.Error(), "stop reissuing") {
+			t.Fatalf("limit=%d: exhaustion must name the bound and tell the model to stop, got %v", limit, lastErr)
 		}
 	}
 }
 
-func TestExhaustionSurfacesTheLastAttempt(t *testing.T) {
-	e := &exec{failures: 3, content: ""}
-	var next core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
-		return e.Exec(ctx, call)
+func TestSuccessfulReissuanceStaysUnbounded(t *testing.T) {
+	total := 0
+	ok := func(ctx context.Context, call core.ToolCall) (string, error) {
+		total++
+		return "ok", nil
 	}
-	next = guard.Retry(3)(next)
-	content, err := next(context.Background(), core.ToolCall{Name: "bash"})
-	if err == nil {
-		t.Fatal("exhaustion must surface the final failure")
+	var exec core.ToolExec = ok
+	exec = guard.Retry(2)(exec)
+
+	call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"poll"}`)}
+	for i := 0; i < 10; i++ {
+		if _, err := exec(context.Background(), call); err != nil {
+			t.Fatalf("successful re-issuance %d must not count toward the bound: %v", i, err)
+		}
 	}
-	if content != "fed back" {
-		t.Fatalf("exhaustion must surface the fed-back string for the model, got %q", content)
+	if total != 10 {
+		t.Fatalf("polling executed %d times, want 10 (unbounded)", total)
 	}
 }
 
-func TestLimitBelowOneClampsToOne(t *testing.T) {
-	e := &exec{failures: 9, content: ""}
-	var next core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+func TestDistinctCallsAreCountedSeparately(t *testing.T) {
+	e := &failingExec{calls: map[string]int{}}
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
-	next = guard.Retry(0)(next)
-	if _, err := next(context.Background(), core.ToolCall{}); err == nil {
-		t.Fatal("degenerate limit must still execute exactly once and surface the failure")
+	exec = guard.Retry(2)(exec)
+
+	a := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"a"}`)}
+	b := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"b"}`)}
+	for i := 0; i < 3; i++ {
+		exec(context.Background(), a)
+		exec(context.Background(), b)
 	}
-	if e.calls != 1 {
-		t.Fatalf("degenerate limit executed %d times, want 1", e.calls)
+	if e.calls[`{"command":"a"}`] != 2 || e.calls[`{"command":"b"}`] != 2 {
+		t.Fatalf("distinct calls must keep separate budgets, got %+v", e.calls)
+	}
+	if e.total != 4 {
+		t.Fatalf("total executions %d, want 4", e.total)
 	}
 }
