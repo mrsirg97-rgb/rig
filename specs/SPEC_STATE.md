@@ -119,7 +119,12 @@ func TxFrom(ctx context.Context) (*sql.Tx, error)                               
 
 Metadata is written by hand in lift's four-tag grammar (`primary`, `alias`,
 `link`, `dictionary`) with `// table:"..."` on the struct. Copy the syntax
-from `lift/cmd/rem/metadata/*.go`. Column names and types below are pane's;
+from `lift/cmd/rem/metadata/*.go`. Every link pairs with a plain alias on
+the same column: the domain camera skips `HasLink` properties in the
+column list and expects the paired alias to carry it — an unpaired link
+silently drops the FK from the generated INSERT. It is lift working as
+designed, and the pairing is how every dbmeta-generated metadata file is
+shaped. Column names and types below are pane's;
 where pane's SQL carries a constraint the DDL camera does not emit, it moves
 to `extra.sql` (indexes) or to Go in the store package (CHECK-style
 invariants, which pane also enforces in code).
@@ -146,7 +151,12 @@ The session transcript as rows. One file per session under
 - `usage`: message_seq (primary, link messages), prompt, completion,
   cache_read, cache_write.
 - `files`: session_id + path (primary), hash, mtime. `Session.Files`
-  persisted, so a resumed session keeps its drift checks.
+  persisted, so a resumed session keeps its drift checks. `files` pairs its
+  composite primary with `session_id` directly and carries no Session link
+  while its siblings do — harmless (no FK is emitted) but named for
+  consistency. Tool results live on `tool_calls`, not as role=tool rows;
+  deliverable 4's session resume projects `[]core.Message` back from the
+  transcript rows, so no schema change is owed later.
 - `faults`: seq (primary), session_id, at, message.
 
 The recorder is a leaf that receives what the loop already emits: it wraps
@@ -288,6 +298,9 @@ pane's promptGuidelines, lowercase, terse.
   and todo's claim semantics attribute to it. This is the one `core/` change
   in this spec and is named as such in its PR (SPEC_CORE session section
   updated in the same PR).
+- **Generated getters return `(nil, nil)` on absent keys** — lazy.go's
+  absent-read, by design; no panic. state.go additionally guards the nil
+  row at its boundary with a named error (`state: …: no such row`).
 
 ## testing
 

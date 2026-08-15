@@ -1,0 +1,10 @@
+{
+  "name": "../../looper/store/state",
+  "module": "github.com/mrsirg97-rgb/looper/store/state",
+  "runtime": "github.com/mrsirg97-rgb/looper/store",
+  "packages": [
+    { "name": "domain", "template": "templates/domain.template", "packageType": "flat", "fileType": "go" },
+    { "name": "ddl", "template": "templates/ddl.template", "packageType": "graph", "fileType": "go" }
+  ],
+  "debug": false
+}

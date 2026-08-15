@@ -101,3 +101,17 @@ func TestSessionThreadingRoundTrips(t *testing.T) {
 		t.Fatal("session must thread into ctx and back, by identity")
 	}
 }
+
+func TestSessionIDMintedUnique(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 100; i++ {
+		id := core.NewSession().ID
+		if id == "" {
+			t.Fatal("empty session id minted")
+		}
+		if seen[id] {
+			t.Fatalf("duplicate session id: %q", id)
+		}
+		seen[id] = true
+	}
+}
