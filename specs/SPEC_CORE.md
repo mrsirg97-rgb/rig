@@ -39,6 +39,7 @@ looper/
     policy.go
     frontend.go
     session.go
+    interrupt.go // WithInterrupt / InterruptFrom: the turn's cancel rides the ctx
   loop/          the concrete turn loop
     loop.go
   provider/
@@ -110,7 +111,15 @@ type Done struct {
 }
 type Fault struct{ Err error }
 
-// loop events (the loop emits them around execution; SPEC_HARDENING L4):
+type TurnReason string
+
+const (
+	TurnOver      TurnReason = "over"      // the turn completed
+	TurnFault     TurnReason = "fault"     // a Fault or transport error crossed it
+	TurnInterrupt TurnReason = "interrupt" // the turn context died (steering)
+)
+
+// loop events (the loop emits them around execution; SPEC_HARDENING L4, L7):
 type ToolStart struct{ Call ToolCall }
 type ToolResult struct {
 	ID       string
@@ -122,6 +131,8 @@ type ToolResult struct {
 // TestEvent is a documented test seam: the compat rule's subject (below).
 type TestEvent struct{ Name string }
 
+type TurnEnd struct{ Reason TurnReason } // closes every turn inside the run
+
 type Usage struct {
 	Prompt     int
 	Completion int
@@ -132,7 +143,12 @@ type Usage struct {
 
 Provider-stream events (`TextDelta`, `ReasoningDelta`, `ToolCallEvent`,
 `Done`, `Fault`) are emitted by the adapter in stream order. Loop events
-(`ToolStart`, `ToolResult`) bracket execution and are emitted by the loop.
+(`ToolStart`, `ToolResult`, `TurnEnd`) bracket execution and close the
+turn; they are emitted by the loop. `TurnEnd` fires at every turn exit
+(`over` / `fault` / `interrupt`), after the turn's last other event; a
+run-context cancel ends the run, not a turn, and does not emit it. The
+recorder's rule (SPEC_HARDENING 4): an unlanded partial at any `TurnEnd`
+is a partial and is discarded.
 
 `Fault` terminates the stream. A provider closes the channel after `Done` or
 `Fault`; the loop treats a closed channel without either as a provider bug and
@@ -239,13 +255,17 @@ Blocking pull for input, fire-and-forget observation of the turn stream. The
 CLI implements it over stdin/stdout. The TUI, a test driver, or a
 programmatic caller implement the same two methods later.
 
-**Steering (deliverable 7).** The ctx passed to `Input` is the turn's ctx.
-A Frontend may hold it: cancelling it interrupts the running turn (the loop
-breaks the turn and re-enters `awaiting_input`). A Frontend may hold one
-queued message (a slot, latest wins, not a mailbox) and must return it before
-blocking; it is delivered on the next `Input`, whether the previous turn
-ended naturally or was interrupted. `Notify` events are additive: a Frontend
-ignores any `Event` it does not recognize (the default), per the compat rule.
+**Steering (deliverable 7).** The loop threads the turn's cancel onto the
+ctx it passes to `Input` (`core.WithInterrupt`; `core.InterruptFrom`
+recovers it, the `WithSession` pattern). A Frontend holds that CancelFunc
+as the interrupt handle: cancelling it interrupts the running turn (the
+loop breaks the turn and re-enters `awaiting_input`). A Frontend may hold
+one queued message (a slot, latest wins, not a mailbox) and must return it
+before blocking; it is delivered on the next `Input`, whether the previous
+turn ended naturally or was interrupted. Turn boundaries are explicit:
+the loop emits `TurnEnd{Reason}` at every turn exit. `Notify` events are
+additive: a Frontend ignores any `Event` it does not recognize (the
+default), per the compat rule.
 
 ## the loop
 
@@ -287,13 +307,17 @@ loop never retries silently.
 
 Cancellation and steering: the run context threads through every await and
 its cancel ends the session at the boundary, clean. Each turn also carries a
-per-turn context (child of the run's), passed to `Input`, `Assemble`,
-`Stream`, and every execution, and cancelled on every turn exit. A dead turn
-context with a live run context is an interrupt: at the prompt the loop
-re-enters `awaiting_input` (no `Fault`), mid-stream it breaks the turn. The
-Frontend cancels the ctx it was given to steer; it holds one queued message
-and delivers it on the next `Input`. No mailbox; the slot is the Frontend's
-business.
+per-turn context (child of the run's), passed to `Assemble`, `Stream`, and
+every execution, and cancelled on every turn exit; the loop threads the
+turn's cancel onto the ctx it hands to `Input` (`core.WithInterrupt` /
+`core.InterruptFrom`, the `WithSession` pattern), which is the Frontend's
+interrupt handle. A dead turn context with a live run context is an
+interrupt: at the prompt the loop re-enters `awaiting_input` (no `Fault`),
+mid-stream it breaks the turn. The Frontend cancels the handle it was
+given to steer; it holds one queued message and delivers it on the next
+`Input`. No mailbox; the slot is the Frontend's business. Every turn exit
+emits `TurnEnd{Reason}` (`over` / `fault` / `interrupt`), the recorder's
+discard signal and the Frontend's boundary signal.
 
 ## kernel and wiring
 
@@ -350,13 +374,15 @@ justified in this file first.
 - Boundary cases by name: empty transcript, zero tools, tool result at the
   context edge, cancellation between tool calls.
 - Deliverable 7 (SPEC_HARDENING): the tool-event bracket order and the
-  guarded refusal riding `ToolResult`; reasoning accumulation in both
-  assistant branches; steering (a dead turn context breaks the turn and the
-  run continues; the slot delivers on the next `Input`; latest wins); the
-  guard's name keying, per-turn clear, and bound-th note; the compat rule
-  (`TestEvent` forwarded untouched by the loop, ignored by the frontends);
-  the resume projection (full transcript, dangling calls kept, unknown id
-  loud).
+  guarded refusal riding `ToolResult`; `TurnEnd` at every turn exit with
+  its reason; reasoning accumulation in both assistant branches; steering
+  (the `InterruptFrom` handle cancels the turn and the run continues; the
+  slot delivers on the next `Input`; latest wins; the recorder discards
+  the unlanded partial at `TurnEnd`; a mid-tool interrupt keeps the
+  batch's results with the exec's error string); the guard's name keying,
+  per-turn clear, and bound-th note; the compat rule (`TestEvent`
+  forwarded untouched by the loop, ignored by the frontends); the resume
+  projection (full transcript, dangling calls kept, unknown id loud).
 
 ## v1 scope
 

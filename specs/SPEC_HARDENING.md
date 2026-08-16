@@ -56,11 +56,12 @@ one fan-out call at the turn boundary.
 No new packages. The change lands in:
 
 ```
-core/           Event vocabulary +2 loop events, +1 provider event;
-                Message.Reasoning; Usage +cache fields; ToolMiddleware
-                widened (function -> interface) with two optional
-                capabilities; TestEvent test seam
-loop/loop.go    the named changes L1-L6 below, nothing else
+core/           Event vocabulary +3 loop events (incl. TurnEnd), +1
+                provider event; Message.Reasoning; Usage +cache fields;
+                ToolMiddleware widened (function -> interface) with two
+                optional capabilities; interrupt.go (WithInterrupt /
+                InterruptFrom, the WithSession pattern); TestEvent test seam
+loop/loop.go    the named changes L1-L7 below, nothing else
 provider/openai reasoning round-trip, cache usage fields
 middleware/guard name keying, per-turn clear, the retry note
 frontend/cli    the steering slot, the execution bracket, the usage line
@@ -83,7 +84,13 @@ The state machine is unchanged. The changes:
   `Assemble`, `Stream`, and every `exec`. `turnCancel()` is called on every
   turn exit path (fault, turn over, turn death, and the two clean returns).
   The run context keeps its meaning: a run-context cancel ends the session
-  at the boundary, clean, as today.
+  at the boundary, clean, as today. The loop threads the turn's cancel onto
+  the ctx it hands to `Input` under a typed key, `core.WithInterrupt(ctx,
+  cancel)` / `core.InterruptFrom(ctx)` (new `core/interrupt.go`, the
+  `WithSession` pattern already in core): a Frontend cannot cancel a parent
+  from a child reference, so the CancelFunc is the interrupt handle, not
+  the context. The `Frontend` interface stays frozen-shaped (same two
+  methods); the handle rides the ctx, exactly as the session does.
 - **L2, turn death at the prompt.** `Input` returns an error, the run
   context is alive, and `turnCtx` is dead: this is an interrupt at the
   prompt, not a fault. The loop re-enters awaiting_input (no `Fault`
@@ -106,6 +113,13 @@ The state machine is unchanged. The changes:
 - **L6, the turn fan-out.** After the user message is appended and before
   the first `Assemble`, the loop calls `TurnStart(ctx, session)` on every
   registered middleware that implements it.
+- **L7, the turn-exit event.** The loop emits `TurnEnd{Reason}` on every
+  turn exit inside the run: `over` (the turn completed), `fault` (a Fault
+  or transport error crossed it), `interrupt` (the turn context died).
+  It is forwarded to `Frontend.Notify` after the turn's last other event.
+  A run-context cancel ends the run, not a turn, and does not emit it.
+  The recorder's rule follows (decision 4): an unlanded partial at any
+  `TurnEnd` is a partial and is discarded.
 
 `directExec`, the fault paths, the boundary checks, and the duplicate-name
 panic are unchanged.
@@ -125,9 +139,25 @@ type ToolResult struct {
 ```
 
 Both are `Event`s, emitted by the loop (not the provider) and forwarded to
-`Frontend.Notify` like the model's stream. Event order for a tool turn:
-`TextDelta* / ReasoningDelta* / ToolCallEvent* / Done`, then per call, in
-order: `ToolStart / ToolResult`, then the next model call's events.
+`Frontend.Notify` like the model's stream. The vocabulary's third loop
+event, `TurnEnd{Reason}`, closes every turn (L7):
+
+```go
+type TurnReason string
+
+const (
+    TurnOver      TurnReason = "over"      // the turn completed
+    TurnFault     TurnReason = "fault"     // a Fault or transport error crossed it
+    TurnInterrupt TurnReason = "interrupt" // the turn context died (steering)
+)
+
+type TurnEnd struct{ Reason TurnReason }
+```
+
+Event order for a tool turn: `TextDelta* / ReasoningDelta* /
+ToolCallEvent* / Done`, then per call, in order: `ToolStart / ToolResult`,
+then the next model call's events. A turn closes with `TurnEnd` after its
+last other event, whatever that last event was.
 
 Why a loop event and not a provider event: the provider announces a call
 (`ToolCallEvent`, during the stream); the loop executes it. The execution
@@ -209,10 +239,14 @@ recorder writes the existing `usage.cache_read/cache_write` columns (it
 passes 0, 0 today).
 
 Per-turn totals are the Frontend's: it sums the `Done.Usage` it observes
-(pane's `collectUsage` pattern) and the CLI prints one line at the turn
-boundary (on `Input`, the boundary the Frontend crosses):
+(pane's `collectUsage` pattern) and the CLI prints one line at `TurnEnd`
+(the explicit turn boundary, L7):
 `↑P ↓C · cache R{r} {hit}%`, pane's `formatTokens` shaping (raw under
-1000, one-decimal k under 10k, rounded k under 1M, else M). The hit-rate
+1000, one-decimal k under 10k, rounded k under 1M, else M). One known
+shape to read: the reasoning round-trip (decision 2) grows the prompt
+prefix, so the first model call after a thinking turn reprocesses the
+thinking block and that turn's hit rate dips. That is the point of the
+round-trip (the thinking is preserved), not a footer regression. The hit-rate
 formula is named: `hit = CacheRead / Prompt`, because the OpenAI-style wire
 reports cached tokens as a subset of prompt (grounded: 918 of 922). Pane's
 additive formula (`cacheRead / (input + cacheRead + cacheWrite)`) assumes
@@ -223,12 +257,17 @@ would read the rate low. Named as a known shape, not silently mixed.
 
 The contract, in three parts:
 
-1. **The turn context (loop, L1).** The Frontend receives the turn's ctx
-   from `Input`. Holding it is the interrupt handle: cancelling it breaks
-   the running turn (L2/L3) and the loop re-enters awaiting_input. The
-   loop cancels the turn ctx on turn end, so a Frontend can also observe
-   `ctx.Err()` as the turn-over signal (pane's `agent_end`, without the
-   hook).
+1. **The interrupt handle (loop, L1).** The loop threads the turn's cancel
+   onto the ctx it passes to `Input`: `core.WithInterrupt(ctx, cancel)`
+   (new `core/interrupt.go`, the `WithSession` pattern: the session already
+   rides its ctx the same way). A Frontend recovers it with
+   `core.InterruptFrom(ctx)` and holds it; cancelling it breaks the running
+   turn (L2/L3) and the loop re-enters awaiting_input. The `Frontend`
+   interface stays frozen-shaped: the handle rides the ctx, exactly as the
+   session does. The turn-over signal is explicit: the loop emits
+   `TurnEnd{Reason}` at every turn exit (L7), so a Frontend sees the
+   boundary as an event (pane's `agent_end`, without the hook) instead of
+   inferring it from `Done` or `ctx.Err()`.
 2. **The slot (Frontend).** A Frontend may hold one queued message;
    `Input` must return it before blocking. One slot, latest wins: not a
    mailbox.
@@ -261,8 +300,33 @@ CLI minimal version (the shape, proven before the TUI inherits it):
 
 Why the interrupt is a Frontend action and not a new loop entry: the loop
 already treats a dead turn context as "back to awaiting_input" (L2/L3);
-the Frontend only cancels a context it was given. No new method, no
+the Frontend only cancels the handle the loop handed it. No new method, no
 mailbox, no loop state.
+
+**The recorder rule (with L7).** Today the recorder discards its partial
+assistant buffer only on `Fault`; its `Input` path lands anything pending
+before the user row. Under this spec an interrupted mid-stream turn has no
+`Fault`, so the partial would persist when the queued message arrives: the
+"PARTIAL fresh" bug reversed. The rule: an unlanded partial at any
+`TurnEnd` is a partial; the recorder discards it (subsuming the current
+Fault-time discard; the fault row still lands on `Fault`). `TurnEnd` is
+what makes the interrupt observable to every streaming consumer, not just
+the recorder.
+
+**The transcript shape after an interrupt, both cases named.**
+
+- Mid-stream (during a model call): the partial text never lands (the
+  assistant row is written on `Done`, which did not come). The transcript
+  ends at the last complete message, as on a fault.
+- Mid-tool (during execution): the loop runs the batch's remaining calls
+  (each sees the dead turn ctx and returns its ctx error as the fed-back
+  content), appends one tool message per call, and the turn dies at the
+  next model call (L3). The transcript therefore keeps the assistant
+  message with all its calls and a result for each (the cancelled calls
+  carry the exec's error string). Both are defensible; both are the
+  template-legal shape (every call has a response, or the turn ends at the
+  last complete message), and resume (decision 5) reproduces whichever the
+  rows show, faithfully, as-is.
 
 ### 5. Session resume
 
@@ -435,6 +499,10 @@ rule is written down, not invented.
 The contract: every existing named case passes byte-for-byte, or its
 change is named above.
 
+The existing event-order assertions count only the kinds they name
+(`delta,delta,done` and the like), so the additive `TurnEnd` appended at
+the turn's end does not disturb them; the cases below are new.
+
 **Unchanged, byte-for-byte** (loop): `TestTextOnlyTurnOrdering`,
 `TestToolRoundTripOrdering`, `TestFaultMidStreamPreservesSession`,
 `TestTransportErrorSurfacesAndContinues`,
@@ -480,6 +548,20 @@ asserted, and hold).
   live turn cancels the turn and is delivered on the re-entry; a line
   between turns is delivered without a cancel; the slot is single, latest
   wins).
+- The interrupt mechanism: a Frontend recovers the cancel with
+  `core.InterruptFrom` from the `Input` ctx and cancels it to steer (the
+  handle the loop threaded with `core.WithInterrupt`); a Frontend without
+  the capability is unaffected (the assertion returns false).
+- `TurnEnd`: fires at every turn exit with the right reason (`over` after
+  a completed turn, `fault` after a Fault, `interrupt` after a turn-ctx
+  death) and after the turn's last other event; it is absent on a
+  run-context end; the existing event-order assertions (which count only
+  the kinds they name) still hold with it appended.
+- The recorder rule: an interrupted mid-stream turn does not persist its
+  partial text (the unlanded partial is discarded at `TurnEnd`, the
+  "PARTIAL fresh" bug reversed); a mid-tool interrupt keeps the batch's
+  results (each cancelled call's row carries the exec's error string) with
+  the assistant message and its calls intact.
 - Resume: the projection rebuilds a full transcript (user, assistant +
   calls + results, reasoning, files) byte-identical to what the loop built;
   a dangling call survives; an unknown id fails loud naming the id; the
@@ -507,11 +589,14 @@ incomplete and is reopened first, per the roadmap.
 
 The SPEC_CORE diff this spec implies (PR A carries it): the streaming
 events section gains `ReasoningDelta`, `ToolStart`, `ToolResult`,
-`TestEvent`, and the compat rule; the wire types gain `Message.Reasoning`;
-`Usage` gains the cache fields; the ToolMiddleware section is the widened
-seam; the Frontend section gains the steering contract and unknown-event
-tolerance; the loop section gains L1-L6; the root's chain drops the recorder's
-`Observe` tap (SPEC_CORE's wiring example already shows only perm + guard,
-so it stays); the testing section gains the named cases above.
+`TurnEnd` + `TurnReason`, `TestEvent`, and the compat rule; the wire
+types gain `Message.Reasoning`; `Usage` gains the cache fields; the
+ToolMiddleware section is the widened seam; the Frontend section gains the
+steering contract (the `InterruptFrom` handle, the slot, `TurnEnd` as the
+boundary signal) and unknown-event tolerance; the loop section gains
+L1-L7; the layout gains `core/interrupt.go`; the root's chain drops the
+recorder's `Observe` tap (SPEC_CORE's wiring example already shows only
+perm + guard, so it stays); the testing section gains the named cases
+above, including the recorder rule and the interrupt transcript shape.
 SPEC_STATE is already in future tense about this deliverable ("the
 recorder switches sources; its schema does not change") and owes no diff.
