@@ -35,7 +35,7 @@ type Task struct {
 	ID           string `primary:"true" alias:"name=id,nullable=false"`
 	Text         string `alias:"name=text,nullable=false"`
 	Status       string `alias:"name=status,nullable=false"`
-	Pos          int    `alias:"name=pos,nullable=false"`
+	Pos          int64  `alias:"name=pos,nullable=false"`
 	CreatedSeq   int64  `alias:"name=created_seq,nullable=false"`
 	CreatedEvent Event  `link:"from=Event,on=seq,many=false"`
 	UpdatedSeq   int64  `alias:"name=updated_seq,nullable=false"`
