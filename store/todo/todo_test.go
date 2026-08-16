@@ -1344,3 +1344,48 @@ func needMove(t *testing.T, ctx context.Context, db store.DB, id string, pos int
 	t.Helper()
 	return todostore.Move(ctx, db, id, pos, "s1")
 }
+
+// --- dependency resolution: pane's rule ---
+
+// A minted id must not shadow a matching text: existing ids resolve
+// id-first, batch-internal references resolve by text only.
+func TestMintedIdDoesNotShadowMatchingText(t *testing.T) {
+	db := newDB(t)
+	d := func(s string) *string { return &s }
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "x"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Create(ctx, db, []item{{Text: "t3"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	// beta mints t3; the dep must land on the existing task by text, not on
+	// beta's own fresh id (a self-cycle).
+	if _, err := todostore.Create(ctx, db, []item{{Text: "beta", DependsOn: d("t3")}}, "s1"); err != nil {
+		t.Fatalf("text match shadowed by the minted id: %v", err)
+	}
+	if dep := projDep(t, db, "beta"); dep != "t2" {
+		t.Fatalf("beta's dep = %q, want t2 (the text match)", dep)
+	}
+}
+
+// Three-node cycles within one batch refuse with the path, atomically.
+func TestThreeNodeCyclesRefuseWithPath(t *testing.T) {
+	db := newDB(t)
+	d := func(s string) *string { return &s }
+	before := eventCount(t, db)
+	_, err := todostore.Create(context.Background(), db, []item{
+		{Text: "a", DependsOn: d("c")},
+		{Text: "b", DependsOn: d("a")},
+		{Text: "c", DependsOn: d("b")},
+	}, "s1")
+	if err == nil {
+		t.Fatal("expected refusal")
+	}
+	if !strings.Contains(err.Error(), "cycle") || !strings.Contains(err.Error(), "->") {
+		t.Errorf("cycle path voice: %v", err)
+	}
+	if got := eventCount(t, db); got != before {
+		t.Errorf("batch rejected atomically: %d -> %d events", before, got)
+	}
+}

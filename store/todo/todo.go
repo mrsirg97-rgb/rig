@@ -180,6 +180,8 @@ func (f *folded) applyCreate(e eventRow) {
 	}
 	var refs []pendingRef
 	seen := map[string]bool{}
+	preIDs := depPreIDs(f) // ids existing before this batch: the id-first stage
+	batchTexts := map[string]*taskState{}
 	for _, item := range items {
 		if item.text == "" || seen[item.text] {
 			continue // first occurrence wins
@@ -199,7 +201,9 @@ func (f *folded) applyCreate(e eventRow) {
 		ts.id = f.mintID()
 		ts.pos = f.nextPos()
 		f.tasks[ts.id] = ts
-		if item.hasDep {
+		batchTexts[item.text] = ts
+		if item.
+			hasDep {
 			refs = append(refs, pendingRef{ts: ts, clear: item.depNull, ref: item.dep})
 		}
 	}
@@ -211,31 +215,38 @@ func (f *folded) applyCreate(e eventRow) {
 			pr.ts.dep = ""
 			continue
 		}
-		if ref := resolveRef(f, pr.ref); ref != "" {
+		if ref := resolveDep(preIDs, batchTexts, f, pr.ref); ref != "" {
 			pr.ts.dep = ref
 		}
 	}
 }
 
-// resolveRef: id against existing tasks, exact text batch-internal or
-// existing. Batch-internal by text only — a minted id cannot be known in
-// advance, and id-first against the fold would shadow a task whose text
-// looks like an id.
-func resolveRef(f *folded, raw string) string {
-	if ts, ok := f.tasks[raw]; ok && ts.status != "" && !looksLikeBatchText(f, raw) {
+// depPreIDs: the ids that existed before the batch — the only ids the
+// id-first stage may see.
+func depPreIDs(f *folded) map[string]bool {
+	out := map[string]bool{}
+	for id := range f.tasks {
+		out[id] = true
+	}
+	return out
+}
+
+// resolveDep: existing ids resolve id-first; batch-internal references
+// resolve by text only — a minted id cannot be known in advance, and
+// an id-first rule against fresh ids would shadow a task whose text
+// looks like an id with the caller's own fresh id (pane's rule). Id match
+// wins over text match; the text stage includes the batch.
+func resolveDep(preIDs map[string]bool, batchTexts map[string]*taskState, f *folded, raw string) string {
+	if preIDs[raw] {
 		return raw
+	}
+	if ts, ok := batchTexts[raw]; ok {
+		return ts.id
 	}
 	if ts := f.byText(raw); ts != nil {
 		return ts.id
 	}
 	return ""
-}
-
-func looksLikeBatchText(f *folded, raw string) bool {
-	// conservative: an id-shaped value that names no task falls through to
-	// the text rule, which is how batch-internal links land.
-	_, ok := f.tasks[raw]
-	return !ok
 }
 
 func (f *folded) applyVerb(e eventRow) {
@@ -289,6 +300,7 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems 
 	}
 	var refs []depRef
 	seen := map[string]bool{}
+	preIDs := depPreIDs(f) // ids existing before this batch: the id-first stage
 	for _, item := range items {
 		raw := item.raw()
 		if raw.text == "" || seen[raw.text] {
@@ -324,7 +336,7 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems 
 			addOnce(&problems, fmt.Sprintf("'%s' cannot depend on itself", dr.text))
 			continue
 		}
-		if resolved := resolveRef(f, dr.dep); resolved != "" {
+		if resolved := resolveDep(preIDs, planned, f, dr.dep); resolved != "" {
 			dr.ts.dep = resolved
 			modified = append(modified, dr.ts)
 		} else {
