@@ -7,7 +7,10 @@
 // into the generated INSERT.
 package metadata
 
-import _ "embed"
+import (
+	_ "embed"
+	"strings"
+)
 
 // table:"meta"
 type Meta struct {
@@ -57,3 +60,23 @@ type TaskDep struct {
 //
 //go:embed extra.sql
 var extraSQL []byte
+
+// ExtraStatements: the embedded extra.sql as individual statements — the
+// natural-key unique index and the ordering spine, what the camera cannot
+// emit. Comment-only fragments drop; order is preserved.
+func ExtraStatements() []string {
+	var out []string
+	for _, stmt := range strings.Split(string(extraSQL), ";") {
+		var lines []string
+		for _, l := range strings.Split(stmt, "\n") {
+			if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "--") {
+				continue
+			}
+			lines = append(lines, l)
+		}
+		if len(lines) > 0 {
+			out = append(out, strings.Join(lines, "\n"))
+		}
+	}
+	return out
+}

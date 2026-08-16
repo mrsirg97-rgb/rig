@@ -26,7 +26,7 @@ import (
 	"github.com/mrsirg97-rgb/looper/provider/openai"
 	"github.com/mrsirg97-rgb/looper/store"
 	"github.com/mrsirg97-rgb/looper/store/state"
-	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
+	todostore "github.com/mrsirg97-rgb/looper/store/todo"
 	"github.com/mrsirg97-rgb/looper/tool/bash"
 	"github.com/mrsirg97-rgb/looper/tool/file"
 	"github.com/mrsirg97-rgb/looper/tool/fs"
@@ -111,7 +111,7 @@ func main() {
 	// The task queue: workspace-keyed, opened once, loud on corruption.
 	// (SPEC_STATE's paths, digest prefix twelve.)
 	todoPath := filepath.Join(cfgDir, "looper", "todo", hex.EncodeToString(digest[:12])+".sqlite")
-	tdb, todoQuarantined, todoErr := store.Open(todoPath, tododdl.Statements(), 1)
+	tdb, todoQuarantined, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion)
 	if todoErr != nil {
 		fmt.Fprintln(os.Stderr, "looper: todo store:", todoErr)
 		os.Exit(1)

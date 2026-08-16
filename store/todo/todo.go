@@ -21,11 +21,24 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/looper/store"
+	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
 	tododomain "github.com/mrsirg97-rgb/looper/store/todo/domain"
+	todometa "github.com/mrsirg97-rgb/looper/store/todo/metadata"
 )
 
 // SchemaVersion is applied at Open; mismatches are refused loudly.
 const SchemaVersion = 1
+
+// DDL: the generated statements alone (the drift diff's left side).
+func DDL() []string { return tododdl.Statements() }
+
+// Statements: the store's schema in application order: the generated
+// DDL, then the hand-written extra.sql (the natural-key unique index and
+// the ordering spine) — what the camera cannot emit.
+func Statements() []string {
+	out := tododdl.Statements()
+	return append(out, todometa.ExtraStatements()...)
+}
 
 const anon = "anon"
 
