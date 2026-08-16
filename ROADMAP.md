@@ -166,6 +166,7 @@ over `WithCommands`, and adding a command is one file plus one registration
 line.
 
 ## 5. tool/todo: the concurrent job queue
+> done
 
 Deliverable: pane's todo, same design, ported. Reference: `pane/TODO_SPEC.md`,
 `pane/docs/TASK_TREE_SPEC.md`, `pane/extensions/todo.ts`, `todo.types.ts`.
