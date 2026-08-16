@@ -22,9 +22,9 @@ const defaultModel = "qwen3.8-workers"
 
 // description is pane's voice verbatim.
 const description = "Background jobs on the user's crontab, bound to the worker GPU. " +
-	"create schedules a headless pi worker session (5-field vixie cron 'M H D Mo DOW', " +
+	"create schedules a headless worker session (5-field vixie cron 'M H D Mo DOW', " +
 	"or cron:'once' + at:<ISO> for one-shot; the line self-deletes after one fire, no " +
-	"retry). Jobs run under flock via runner.sh, skip when another model holds the GPU " +
+	"retry). Jobs run under flock via the run-job verb, skip when another model holds the GPU " +
 	"(busy:'skip' default; 'force' evicts), and log to the scheduler home (runs/). " +
 	"list shows jobs in both scopes with drift between store and crontab. " +
 	"pause/resume/remove manage jobs; runs gives the audit trail (n last, default 5). " +
@@ -36,7 +36,7 @@ const description = "Background jobs on the user's crontab, bound to the worker 
 // description in Description() since looper's tool surface carries no
 // separate guidelines channel.
 const guidelines = "Guidelines: " +
-	"recurring/one-shot background work -> scheduler create; the job runs a headless pi session on the worker model. " +
+	"recurring/one-shot background work -> scheduler create; the job runs a headless worker session on the worker model. " +
 	"default scope is cwd; scope:'global' for machine-wide jobs. ids jN are per scope: copy from list, never invent. " +
 	"busy:'skip' (default) skips a fire while another model holds the GPU; 'force' evicts it - only when the user wants the GPU now. " +
 	"cron is 5-field 'M H D Mo DOW'; 'once' + at:<ISO> fires at that minute and self-deletes; a failed once job is done-with-fail, re-create to retry. " +
