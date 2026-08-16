@@ -22,7 +22,7 @@ func run(t *testing.T, mw core.ToolMiddleware, name string) (calls int, content 
 		calls++
 		return "executed", nil
 	}
-	exec = mw(exec)
+	exec = mw.Wrap(exec)
 	content, err = exec(context.Background(), core.ToolCall{
 		ID:   "c1",
 		Name: name,

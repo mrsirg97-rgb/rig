@@ -104,7 +104,7 @@ func TestWireRegistersEverySeam(t *testing.T) {
 		[]string{"bash", "read", "write", "edit"},
 		3,
 		nullFrontend{},
-		func(next core.ToolExec) core.ToolExec { return next },
+		core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec { return next }),
 		fakeTodo{},
 		fakeRem{},
 		fakeSched{},
