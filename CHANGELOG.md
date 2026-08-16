@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+- **tool/python** (roadmap deliverable 5): pane's persistent IPython
+  kernel, ported. One kernel per session; state (variables, imports, defs)
+  survives across calls. Stdlib only: `os/exec` and the kernel's
+  JSON-lines protocol over stdio, no third-party client; the host is
+  pane's `kernel_host.py` verbatim, embedded and materialised on demand
+  (pane's installed path preferred for interop, the choice logged at
+  startup). Interpreter is pane's shared venv; the lazy bootstrap
+  (single-flight, re-tryable, verbatim voice) is the default path's
+  policy — `LOOPER_PYTHON` is the operator's explicit interpreter and the
+  `NewWith` seam's contract is no bootstrap. Timeout kills the whole
+  kernel and says so (pane's voice, half-up rounding); an unexpected death
+  is announced on the next call once, with exit description and stderr
+  tail; a deliberate restart leaves no note. Protocol state is per process
+  (no stale buffer, no stderr leak); first-writer-wins delivery; EPIPE
+  fails fast; `Setpgid`/`WaitDelay`/group kill. Pane's 21 named cases pass
+  against a real kernel in pane's order; the suite skips cleanly on a bare
+  box.
 - **tool/scheduler** (roadmap deliverable 4): background jobs on the
   user's crontab, ported from pane. Two stores (global, per-workspace) with
   the event-log spine and `jN` ids never reused; crontab as the scheduling

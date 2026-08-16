@@ -120,6 +120,7 @@ Done when: the scheduler runner tests have Go equivalents by name, and a
 job fires from a cold shell with only cron-env.
 
 ## 5. tool/python: the persistent kernel
+> done
 
 Deliverable: pane's python, ported. Reference: `pane/extensions/python-kernel.ts`,
 `python-kernel.types.ts`.
