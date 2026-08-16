@@ -24,8 +24,8 @@ const logName = "2026-08-15T12-00-00-000Z.log"
 
 // pane's MODELS fixture: catalog ids with llama-swap aliases.
 var modelsFixture = []struct {
-	ID    string
-	Alias []string
+	ID     string
+	Alias  []string
 	Status string
 }{
 	{ID: "qwen3.8-27b", Alias: []string{"qwen3.8"}},
@@ -33,11 +33,15 @@ var modelsFixture = []struct {
 }
 
 func modelsJSON(statuses map[string]string) string {
-	type alias struct{ Aliases []string `json:"aliases"` }
+	type alias struct {
+		Aliases []string `json:"aliases"`
+	}
 	type meta struct {
 		LLamaSwap alias `json:"llamaswap"`
 	}
-	type status struct{ Value string `json:"value"` }
+	type status struct {
+		Value string `json:"value"`
+	}
 	type model struct {
 		ID     string `json:"id"`
 		Meta   meta   `json:"meta"`
@@ -56,7 +60,9 @@ func modelsJSON(statuses map[string]string) string {
 }
 
 func runningJSON(models ...string) string {
-	type entry struct{ Model string `json:"model"` }
+	type entry struct {
+		Model string `json:"model"`
+	}
 	var rs []entry
 	for _, m := range models {
 		rs = append(rs, entry{Model: m})

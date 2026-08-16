@@ -362,8 +362,8 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 
 	var models struct {
 		Data []struct {
-			ID     string `json:"id"`
-			Meta   struct {
+			ID   string `json:"id"`
+			Meta struct {
 				LLamaSwap struct {
 					Aliases []string `json:"aliases"`
 				} `json:"llamaswap"`

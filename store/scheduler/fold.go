@@ -21,21 +21,21 @@ import (
 
 // jobState is one job's folded state (pane's StoredJob).
 type jobState struct {
-	ID         string
-	Name       string
-	Prompt     string
-	Cron       string
-	At         string
-	Cwd        string
-	Model      string
-	Busy       string
-	State      string
-	LastStatus string
-	LastTs     string
-	LastExit   int64
+	ID          string
+	Name        string
+	Prompt      string
+	Cron        string
+	At          string
+	Cwd         string
+	Model       string
+	Busy        string
+	State       string
+	LastStatus  string
+	LastTs      string
+	LastExit    int64
 	LastExitSet bool
-	CreatedSeq int64
-	UpdatedSeq int64
+	CreatedSeq  int64
+	UpdatedSeq  int64
 }
 
 type fold struct {
@@ -49,7 +49,12 @@ func newFold() *fold {
 }
 
 // jobState's nullable fields as pointers for the substrate rows.
-func (j *jobState) atPtr() *string     { if j.At != "" { return &j.At }; return nil }
+func (j *jobState) atPtr() *string {
+	if j.At != "" {
+		return &j.At
+	}
+	return nil
+}
 func (j *jobState) lastStatusPtr() *string {
 	if j.LastStatus == "" {
 		return nil
@@ -157,10 +162,10 @@ func busyOf(b string) string {
 
 func (f *fold) applyVerb(e eventRow) {
 	var a struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
+		ID     string   `json:"id"`
+		Status string   `json:"status"`
 		Exit   *float64 `json:"exit"`
-		Reason string `json:"reason"`
+		Reason string   `json:"reason"`
 	}
 	if json.Unmarshal([]byte(e.args), &a) != nil || a.ID == "" {
 		return
