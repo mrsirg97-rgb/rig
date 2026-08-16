@@ -187,7 +187,13 @@ func RunJob(key string, opts RunOpts) error {
 		}
 		workerCmd = []string{exe}
 	}
-	argv := append(append([]string{}, workerCmd...), "-p", job.Prompt+ReportBack, "-model", job.Model)
+	// the worker's model endpoint is the runner's swap, plus the job's
+	// model: two defaults for the same server is how the worker faults
+	// every tick while the busy check (on the swap) passes.
+	argv := append(append([]string{}, workerCmd...),
+		"-p", job.Prompt+ReportBack,
+		"-base-url", opts.SwapURL+"/v1",
+		"-model", job.Model)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	startedTime := opts.Now().UTC()

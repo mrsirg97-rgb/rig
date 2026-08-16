@@ -242,6 +242,18 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 	if len(tail) != 2 || tail[0] != "-model" || tail[1] != "qwen3.8-workers" {
 		t.Fatalf("argv tail %v", tail)
 	}
+	// the worker's endpoint is the runner's swap (+/v1), not another
+	// default: two defaults for the same server is how the worker
+	// faults every tick while the busy check passes.
+	baseIdx := -1
+	for i, a := range c.Argv {
+		if a == "-base-url" {
+			baseIdx = i
+		}
+	}
+	if baseIdx < 0 || baseIdx+1 >= len(c.Argv) || c.Argv[baseIdx+1] != "http://127.0.0.1:8090/v1" {
+		t.Fatalf("argv missing the worker's swap endpoint: %v", c.Argv)
+	}
 	if c.Cwd != "/ws/r1" {
 		t.Fatalf("cwd %q", c.Cwd)
 	}
