@@ -296,7 +296,15 @@ CLI minimal version (the shape, proven before the TUI inherits it):
   only; delivered on the next `Input`.
 - Ctrl-C (the root's `signal.NotifyContext`) keeps today's meaning: the
   session ends, clean. Steering is the typed-line path; the signal path is
-  the exit path. Named, so the two are not conflated.
+  the exit path. Named, so the two are not conflated. One named lag (the
+  current behavior, kept): the process stays alive until the in-flight step
+  unwinds. A mid-tool turn unwinds quickly (the tool's process group is
+  killed, the next model call sees the dead context). A mid-stream turn
+  waits for the server's stream to close, because the response-body read is
+  not interrupted by ctx cancellation while the server holds the connection
+  (verified against the live swap: the loop sits in the event channel until
+  the stream ends). The first signal is the exit; a second Ctrl-C is
+  ignored (the signal has already fired).
 
 Why the interrupt is a Frontend action and not a new loop entry: the loop
 already treats a dead turn context as "back to awaiting_input" (L2/L3);
