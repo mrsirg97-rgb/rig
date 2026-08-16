@@ -92,14 +92,23 @@ type Tool struct{ k *kernel }
 var _ core.Tool = (*Tool)(nil) // the seam is compile-time enforced
 
 // New returns the tool with pane's defaults: the shared venv interpreter
-// and the host at pane's path, falling back to the embedded host.
-func New() *Tool { return NewWith(defaultInterpreter(), defaultHost()) }
+// and the host at pane's path, falling back to the embedded host. The
+// default path keeps the lazy venv bootstrap; the seam does not.
+func New() *Tool {
+	return &Tool{k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1)}}
+}
 
 // NewWith is the injection seam (pane's constructor opts): an explicit
-// interpreter and host.
+// interpreter and host, and the default-venv bootstrap is skipped — the
+// seam provides everything; the bootstrap is the default path's policy,
+// not the seam's. New() is the default path.
 func NewWith(python, host string) *Tool {
-	return &Tool{k: &kernel{python: python, host: host, queue: make(chan struct{}, 1)}}
+	return &Tool{k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true}}
 }
+
+// Host reports the resolved host path, for the root's startup log and for
+// debugging which host (pane's or the embedded) a session runs on.
+func (t *Tool) Host() string { return t.k.host }
 
 // Name implements core.Tool.
 func (t *Tool) Name() string { return "python" }
@@ -173,6 +182,8 @@ type kernel struct {
 	queue chan struct{} // one dispatch at a time (pane's promise chain)
 
 	seq atomic.Int64
+
+	noBootstrap bool // the seam's contract: the default venv is not our business
 
 	mu        sync.Mutex // guards proc and lastDeath
 	proc      *proc
@@ -367,9 +378,11 @@ func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, e
 	var note *string
 	if p == nil {
 		note = k.takeDeathNote()
-		if err := ensureKernel(ctx); err != nil {
-			msg := err.Error()
-			return Reply{ID: nil, Ok: false, Error: &msg, Note: note}, nil
+		if !k.noBootstrap {
+			if err := ensureKernel(ctx); err != nil {
+				msg := err.Error()
+				return Reply{ID: nil, Ok: false, Error: &msg, Note: note}, nil
+			}
 		}
 		var err error
 		k.mu.Lock()
@@ -573,10 +586,11 @@ func defaultInterpreter() string {
 	return filepath.Join(homeDir(), ".pi", "agent", "kernel-venv", "bin", "python")
 }
 
-// defaultHost resolves pane's order: pane's installed path first (interop),
+// DefaultHost resolves pane's order: pane's installed path first (interop),
 // else the embedded host materialised into looper's config home
-// (idempotent; temp+rename).
-func defaultHost() string {
+// (idempotent; temp+rename). Exported so the root can name an explicit
+// interpreter (LOOPER_PYTHON) with the default host.
+func DefaultHost() string {
 	local := filepath.Join(homeDir(), ".pi", "agent", "kernel", "kernel_host.py")
 	if _, err := os.Stat(local); err == nil {
 		return local

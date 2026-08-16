@@ -53,14 +53,18 @@ lifecycle method the root calls on the way out — pane's
 
 ```go
 type Tool struct{ /* owns one kernel */ }
-func New() *Tool                      // pane's defaults: venv interpreter, host
-func NewWith(python, host string) *Tool  // the injection seam (pane's constructor opts)
+func New() *Tool                      // pane's defaults: venv interpreter, host, lazy bootstrap
+func NewWith(python, host string) *Tool  // the injection seam (pane's constructor opts): no bootstrap
+func DefaultHost() string             // the host resolution, named (LOOPER_PYTHON pairs with it)
+func (t *Tool) Host() string          // which host a session runs on; the root logs it
 func (t *Tool) Close()                // teardown: group kill, bounded wait
 ```
 
 `NewWith` is what pane's constructor options are for: tests drive it with
 fake hosts, and any composer that wants a different interpreter or host
-registers one without touching the kernel.
+registers one without touching the kernel. The seam provides everything,
+so it does not drag in the default venv's lazy bootstrap; `New()` is the
+default path and keeps it.
 
 ## decisions
 
@@ -74,7 +78,10 @@ registers one without touching the kernel.
   installed path `~/.pi/agent/kernel/kernel_host.py` if present (interop),
   else the embedded source written to `cfgDir/looper/kernel/kernel_host.py`
   (idempotent, temp+rename). The binary stays single-file; the host stays
-  a file the operator can read and the process can be seen running.
+  a file the operator can read and the process can be seen running. The
+  root logs the choice to stderr at startup (`looper: python kernel
+  host: ...`), one line, so pane's and looper's hosts cannot drift
+  silently.
 - **The interpreter is pane's shared venv.**
   `~/.pi/agent/kernel-venv/bin/python` — numpy and pandas live there. If it
   is missing, the first call bootstraps it lazily, single-flight:
@@ -82,6 +89,11 @@ registers one without touching the kernel.
   the failure re-tryable on the next call (pane clears its bootstrap
   promise on failure), voice `kernel bootstrap failed (needs python3 +
   network): ...` verbatim. Stdlib only: it is `os/exec`, not a Go dep.
+  The bootstrap is the default path's policy, not the seam's: a silent
+  pip-install on first use wants an explicit out, so `main` reads
+  `LOOPER_PYTHON` and passes the operator's interpreter to `NewWith` —
+  an explicit choice is an explicit choice, and the bootstrap is
+  skipped with it.
 - **Queue, then dispatch.** One dispatch at a time (pane's promise chain).
   The timeout timer starts only after the slot is taken, so queue time is
   never charged to the cell's own timeout (pane's named case).
@@ -152,19 +164,21 @@ suite kernel, so the order-dependent state cases hold as in pane's file):
 - a dirty death leaves no stale buffer that swallows the next kernel's reply
 - a dead kernel's stderr does not leak into the next kernel's death message
 - timeout message describes the lazy restart accurately
+- NewWith skips the default-venv bootstrap; the default path keeps it
 
 The skip gate: the real-kernel cases skip cleanly when neither the venv
 interpreter nor `python3` on PATH can import IPython, numpy, and pandas,
 so the suite stays green on a bare box. The fake-host cases (injection
 seam, unwritable stdin, dirty death, stderr leak) drive stdlib-only
-stand-in hosts through the same seam; they skip only when there is no
-python3 at all. One pane-kept side effect is named: `ensureKernel` runs
-on every dispatch, so a first call on a box without the shared venv
-bootstraps it (python3 + network) before the host starts — pane's
-module-level bootstrap, not a looper invention.
+stand-in hosts through the same seam and skip only when there is no
+python3 at all. The bootstrap is a named default-path behaviour (pane's
+ensureKernel, ported): a first `New()` dispatch on a box without the
+shared venv bootstraps it (python3 + network) before the host starts;
+`NewWith` and, with it, `LOOPER_PYTHON` are exempt.
 
 ## scope
 
 One leaf package, one registration line at the root, the allow-list
-default growing by `python`, one `Close()` deferred in `main`. The loop is
+default growing by `python`, one `Close()` deferred in `main`, one
+`LOOPER_PYTHON` read in `main`, one startup log line. The loop is
 byte-identical.
