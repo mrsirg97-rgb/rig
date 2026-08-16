@@ -1,4 +1,4 @@
-package core_test
+package oneshot_test
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/looper/frontend/oneshot"
 )
 
 func TestOneShotFeedsExactlyOnePromptThenEOFs(t *testing.T) {
-	o := &core.OneShot{Prompt: "do the thing"}
+	o := &oneshot.OneShot{Prompt: "do the thing"}
 	p, err := o.Input(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -26,20 +27,20 @@ func TestOneShotFeedsExactlyOnePromptThenEOFs(t *testing.T) {
 }
 
 func TestOneShotErrPromptNamesTheEmptyConstruction(t *testing.T) {
-	if err := core.ErrPrompt(""); !errors.Is(err, core.ErrOneShot) {
+	if err := oneshot.ErrPrompt(""); !errors.Is(err, oneshot.ErrOneShot) {
 		t.Fatalf("ErrPrompt(\"\") %v", err)
 	}
-	if err := core.ErrPrompt("  \n"); !errors.Is(err, core.ErrOneShot) {
+	if err := oneshot.ErrPrompt("  \n"); !errors.Is(err, oneshot.ErrOneShot) {
 		t.Fatalf("ErrPrompt(blank) %v", err)
 	}
-	if err := core.ErrPrompt("real"); err != nil {
+	if err := oneshot.ErrPrompt("real"); err != nil {
 		t.Fatalf("ErrPrompt(real) %v", err)
 	}
 }
 
 func TestOneShotNotifyRendersAssistantTextAndFaultsLoud(t *testing.T) {
 	var sb strings.Builder
-	o := &core.OneShot{Out: &sb}
+	o := &oneshot.OneShot{Out: &sb}
 	o.Notify(core.TextDelta{Text: "hel"})
 	o.Notify(core.ToolCallEvent{Call: core.ToolCall{Name: "bash"}}) // not the report
 	o.Notify(core.TextDelta{Text: "lo"})
@@ -49,7 +50,7 @@ func TestOneShotNotifyRendersAssistantTextAndFaultsLoud(t *testing.T) {
 		t.Fatalf("rendered %q, want %q", sb.String(), want)
 	}
 	var fb strings.Builder
-	o = &core.OneShot{Out: &fb}
+	o = &oneshot.OneShot{Out: &fb}
 	o.Notify(core.Fault{Err: errors.New("boom")})
 	if !strings.Contains(fb.String(), "boom") {
 		t.Fatalf("fault voice lost: %q", fb.String())
@@ -57,7 +58,7 @@ func TestOneShotNotifyRendersAssistantTextAndFaultsLoud(t *testing.T) {
 	if !o.Faulted() {
 		t.Fatal("fault did not mark the session")
 	}
-	o2 := &core.OneShot{Out: &fb}
+	o2 := &oneshot.OneShot{Out: &fb}
 	if o2.Faulted() {
 		t.Fatal("a fresh session reports faulted")
 	}

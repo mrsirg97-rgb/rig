@@ -1,10 +1,12 @@
-package core
+package oneshot
 
 import (
 	"context"
 	"errors"
 	"io"
 	"strings"
+
+	"github.com/mrsirg97-rgb/looper/core"
 )
 
 // OneShot is the single-prompt Frontend: the first Input yields the prompt,
@@ -36,16 +38,16 @@ func (o *OneShot) Input(ctx context.Context) (string, error) {
 // Notify implements Frontend: assistant text straight through, faults
 // loud. Tool events stay out of the worker's stdout (their results are
 // the turn's substance, not its report).
-func (o *OneShot) Notify(ev Event) {
+func (o *OneShot) Notify(ev core.Event) {
 	if o.Out == nil {
 		return
 	}
 	switch e := ev.(type) {
-	case TextDelta:
+	case core.TextDelta:
 		io.WriteString(o.Out, e.Text)
-	case Done:
+	case core.Done:
 		io.WriteString(o.Out, "\n")
-	case Fault:
+	case core.Fault:
 		o.faulted = true
 		io.WriteString(o.Out, "\nlooper: fault: "+e.Err.Error()+"\n")
 	}
