@@ -56,7 +56,7 @@ func wire(baseURL, model, system string, allow []string, retries int, fe core.Fr
 		looper.WithMiddleware(
 			perm.Allowlist(allow...),
 			guard.Bound(retries),
-			observe, // observation outermost: it sees the guarded result
+			core.ToolMiddlewareFunc(observe), // observation outermost: it sees the guarded result
 		),
 	)
 }

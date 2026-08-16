@@ -30,7 +30,7 @@ func TestRepetitionIsBoundedWithoutSilentRetry(t *testing.T) {
 		var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 			return e.Exec(ctx, call)
 		}
-		exec = guard.Bound(limit)(exec)
+		exec = guard.Bound(limit).Wrap(exec)
 
 		call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"flaky"}`)}
 		var lastErr error
@@ -61,7 +61,7 @@ func TestSuccessfulReissuanceStaysUnbounded(t *testing.T) {
 		return "ok", nil
 	}
 	var exec core.ToolExec = ok
-	exec = guard.Bound(2)(exec)
+	exec = guard.Bound(2).Wrap(exec)
 
 	call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"poll"}`)}
 	for i := 0; i < 10; i++ {
@@ -85,7 +85,7 @@ func TestSuccessfulReissuanceResetsTheCount(t *testing.T) {
 		}
 		return "fed back", errors.New("synthetic failure")
 	}
-	exec = guard.Bound(3)(exec)
+	exec = guard.Bound(3).Wrap(exec)
 
 	call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"flaky"}`)}
 	var last string
@@ -101,23 +101,6 @@ func TestSuccessfulReissuanceResetsTheCount(t *testing.T) {
 	}
 }
 
-func TestDistinctCallsAreCountedSeparately(t *testing.T) {
-	e := &failingExec{calls: map[string]int{}}
-	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
-		return e.Exec(ctx, call)
-	}
-	exec = guard.Bound(2)(exec)
-
-	a := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"a"}`)}
-	b := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"b"}`)}
-	for i := 0; i < 3; i++ {
-		exec(context.Background(), a)
-		exec(context.Background(), b)
-	}
-	if e.calls[`{"command":"a"}`] != 2 || e.calls[`{"command":"b"}`] != 2 {
-		t.Fatalf("distinct calls must keep separate budgets, got %+v", e.calls)
-	}
-	if e.total != 4 {
-		t.Fatalf("total executions %d, want 4", e.total)
-	}
-}
+// TestDistinctCallsAreCountedSeparately (the old args-digest keying) is
+// inverted by SPEC_HARDENING decision 7 into TestDriftingArgsShareOneBound:
+// drifting args of one tool share the budget.
