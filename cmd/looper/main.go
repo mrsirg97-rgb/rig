@@ -116,9 +116,16 @@ func main() {
 	}
 	// The python kernel: one persistent IPython session for the process
 	// (looper runs one session per process); the root owns its teardown —
-	// pane's session_shutdown hook, without the hook.
+	// pane's session_shutdown hook, without the hook. LOOPER_PYTHON is the
+	// operator's interpreter (and the seam's contract: no lazy venv
+	// bootstrap); the host choice is logged so pane's and looper's hosts
+	// cannot drift silently.
 	py := pythontool.New()
+	if v := os.Getenv("LOOPER_PYTHON"); v != "" {
+		py = pythontool.NewWith(v, pythontool.DefaultHost())
+	}
 	defer py.Close()
+	fmt.Fprintf(os.Stderr, "looper: python kernel host: %s\n", py.Host())
 
 	sessionsPath := filepath.Join(cfgDir, "looper", "sessions", hex.EncodeToString(digest[:6])+".sqlite")
 	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0o755); err != nil {

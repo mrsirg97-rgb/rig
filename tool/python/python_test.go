@@ -2,8 +2,8 @@
 // against the real kernel. The file-level tests share one kernel, exactly
 // as pane's test file shares one; the order-dependent state cases hold
 // because of that. The fake-host cases drive stdlib-only stand-ins through
-// the NewWith seam and skip only when there is no python3 at all (a first
-// dispatch may still bootstrap the shared venv: pane's ensureKernel).
+// the NewWith seam and skip only when there is no python3 at all: the seam
+// provides everything and does not bootstrap the shared venv.
 package python
 
 import (
@@ -369,7 +369,7 @@ func TestUnexpectedMidCallDeathIsAnnouncedToTheDyingCallAndTheNextCall(t *testin
 
 func TestQuiescentDeathBetweenCallsIsAnnouncedOnTheNextCallOnce(t *testing.T) {
 	py := requireKernel(t)
-	kt := NewWith(py, defaultHost())
+	kt := NewWith(py, DefaultHost())
 	defer kt.Close()
 
 	seed, err := call(t, kt, map[string]any{"code": "seed = 1", "timeoutMs": 5000})
@@ -542,4 +542,31 @@ func TestTimeoutMessageDescribesTheLazyRestartAccurately(t *testing.T) {
 		t.Fatalf("hung cell succeeded: %s", text)
 	}
 	matches(t, `will be restarted on the next call; all variables are gone`, text)
+}
+
+// The looper-side named case: the seam's contract. An explicit interpreter
+// and host (what NewWith is, what LOOPER_PYTHON at the root selects) must
+// not drag in the default venv's lazy bootstrap; the default path keeps
+// it.
+func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) {
+	seam := NewWith("/opt/operator/python3", "/tmp/whatever/kernel_host.py")
+	if seam.k.python != "/opt/operator/python3" {
+		t.Fatalf("interpreter = %q, want the explicit one", seam.k.python)
+	}
+	if !seam.k.noBootstrap {
+		t.Fatal("the seam must skip the default-venv bootstrap")
+	}
+
+	def := New()
+	defer def.Close()
+	if def.k.python != defaultInterpreter() {
+		t.Fatalf("default interpreter = %q, want pane's venv", def.k.python)
+	}
+	if def.k.noBootstrap {
+		t.Fatal("the default path keeps the lazy bootstrap")
+	}
+
+	if seam.Host() != "/tmp/whatever/kernel_host.py" {
+		t.Fatalf("Host() = %q, want the explicit host", seam.Host())
+	}
 }
