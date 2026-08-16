@@ -210,13 +210,17 @@ deliverable 4, out of scope here) or plain `sqlite3`.
   named test).
 - `fts.sql`: `memory_fts` FTS5 virtual table with `porter unicode61`, and
   the insert/update/delete triggers pinned in REM_SPEC E. FTS5 is compiled
-  into modernc's sqlite; the store checks for it at Open and refuses loudly
-  if absent.
+  into modernc's sqlite; recall's shipped policy on capability absence
+  degrades to fuzzy-only (REM_SPEC's named case), and a driver without
+  the table fails loudly at schema application — unreachable under the
+  bundled driver.
 - Recall stays two arms plus reciprocal rank fusion, project-first
   global-fill, effective strength at recall, checkpointed decay at prune.
   These are Go over the generated substrate plus the two raw arms
   (`memory_fts` MATCH and the trigram join), which are the only raw queries
   the store owns and are named as such.
+- `AutoReflect` ships in the store with no caller yet; compaction wires
+  it (roadmap deliverable 3).
 - lift's `cmd/rem` is a different design (postgres, mesh, episodes and
   associations). Its recall projection and testkit are worth reading; its
   schema is not the one being ported. pane's rem is.
