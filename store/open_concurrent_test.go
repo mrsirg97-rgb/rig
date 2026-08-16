@@ -29,31 +29,40 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 		}
 		dbs = append(dbs, db)
 	}
-	const per = 20
+	// true parallelism: several goroutines per DB, each driving its own
+	// pooled connections — a pragma applied to one connection must not be
+	// the only one holding it.
+	const (
+		perDB = 40
+		gor   = 10
+		slice = perDB / gor
+	)
 	var (
 		wg   sync.WaitGroup
 		mu   sync.Mutex
 		errs []error
 	)
 	for wi, db := range dbs {
-		wg.Add(1)
-		go func(wi int, db store.DB) {
-			defer wg.Done()
-			for i := 0; i < per; i++ {
-				_, err := todostore.Create(context.Background(), db,
-					[]todostore.CreateItem{{Text: fmt.Sprintf("w%d-%d", wi, i)}},
-					fmt.Sprintf("s%d", wi))
-				if err != nil {
-					mu.Lock()
-					errs = append(errs, err)
-					mu.Unlock()
+		for g := 0; g < gor; g++ {
+			wg.Add(1)
+			go func(wi, g int, db store.DB) {
+				defer wg.Done()
+				for i := 0; i < slice; i++ {
+					_, err := todostore.Create(context.Background(), db,
+						[]todostore.CreateItem{{Text: fmt.Sprintf("w%d-g%d-%d", wi, g, i)}},
+						fmt.Sprintf("s%dg%d", wi, g))
+					if err != nil {
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
+					}
 				}
-			}
-		}(wi, db)
+			}(wi, g, db)
+		}
 	}
 	wg.Wait()
 	if len(errs) > 0 {
-		t.Fatalf("%d of %d concurrent creates failed: %v", len(errs), per*len(dbs), errs[0])
+		t.Fatalf("%d of %d concurrent creates failed: %v", len(errs), perDB*len(dbs), errs[0])
 	}
 	for wi, db := range dbs {
 		reply, err := todostore.Read(context.Background(), db, "")
@@ -61,7 +70,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 			t.Fatalf("read %d: %v", wi, err)
 		}
 		head := strings.Split(reply, "\n")[0]
-		if want := fmt.Sprintf("0/%d done", per*len(dbs)); !strings.Contains(head, want) {
+		if want := fmt.Sprintf("0/%d done", perDB*len(dbs)); !strings.Contains(head, want) {
 			t.Fatalf("read %d: head %q, want %s", wi, head, want)
 		}
 	}
@@ -83,31 +92,38 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open two: %v", err)
 	}
+	// true parallelism within each store, as the creates probe.
+	const (
+		gor   = 10
+		slice = 2
+	)
 	var (
 		wg   sync.WaitGroup
 		mu   sync.Mutex
 		errs []error
 	)
 	for wi, db := range []store.DB{d1, d2} {
-		wg.Add(1)
-		go func(wi int, db store.DB) {
-			defer wg.Done()
-			for i := 0; i < 20; i++ {
-				id := fmt.Sprintf("t%d", wi*20+i+1)
-				sess := fmt.Sprintf("s%d", wi)
-				if _, err := todostore.Start(context.Background(), db, id, sess); err != nil {
-					mu.Lock()
-					errs = append(errs, err)
-					mu.Unlock()
-					continue
+		for g := 0; g < gor; g++ {
+			wg.Add(1)
+			go func(wi, g int, db store.DB) {
+				defer wg.Done()
+				for i := 0; i < slice; i++ {
+					id := fmt.Sprintf("t%d", wi*20+g*slice+i+1)
+					sess := fmt.Sprintf("s%dg%d", wi, g)
+					if _, err := todostore.Start(context.Background(), db, id, sess); err != nil {
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
+						continue
+					}
+					if _, err := todostore.Complete(context.Background(), db, id, sess); err != nil {
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
+					}
 				}
-				if _, err := todostore.Complete(context.Background(), db, id, sess); err != nil {
-					mu.Lock()
-					errs = append(errs, err)
-					mu.Unlock()
-				}
-			}
-		}(wi, db)
+			}(wi, g, db)
+		}
 	}
 	wg.Wait()
 	if len(errs) > 0 {
