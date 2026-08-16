@@ -51,6 +51,7 @@ looper/
     rem/         memory
     scheduler/   background jobs
     python/      the persistent IPython kernel
+    web/         web_search, web_fetch
   frontend/
     cli/         stdin/stdout REPL
   cmd/

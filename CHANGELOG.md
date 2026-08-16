@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+- **tool/web** (roadmap deliverable 6): pane's web_search and web_fetch,
+  ported. web_search: SearXNG JSON over net/http (the web-tools compose
+  on loopback :8888; LOOPER_SEARXNG_URL to point elsewhere), results
+  mapped to title/url/snippet (tags stripped, 300-char cap),
+  maxResults 1..20 default 5, the 15s budget, "no results" loud.
+  web_fetch: the guarded fetch — http(s) only, DNS refuses private and
+  link-local space before any connection, every redirect hop re-guarded,
+  hop cap, textual content types, declared-and-streamed 5 MiB byte cap
+  with the loud marker, the 20 000-char cap with pane's elision marker,
+  the 30s whole-fetch timeout, egress through the compose's tinyproxy
+  (:8889; LOOPER_WEB_FETCH_PROXY, set empty = direct), and the
+  unreachable-proxy fix-it voice. Extraction: trafilatura as a
+  documented external (shared venv, then PATH; LOOPER_TRAFILATURA
+  explicit, empty = off), degrading to pane's stdlib text pass — and
+  announcing it in the content, where pane is silent. Stdlib only.
+  Pane's 24 named cases plus 5 looper-side cases green against httptest
+  servers; the suite is green on a bare box with the trafilatura-present
+  arms skipping.
 - **tool/python** (roadmap deliverable 5): pane's persistent IPython
   kernel, ported. One kernel per session; state (variables, imports, defs)
   survives across calls. Stdlib only: `os/exec` and the kernel's

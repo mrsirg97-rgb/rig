@@ -38,7 +38,8 @@ policy/         ContextPolicy implementations (passthrough)
 middleware/     ToolMiddleware: perm (deny by default), guard.Bound (the bound)
 provider/       Provider implementations (the openai-compatible SSE adapter)
 tool/           Tool implementations: bash(1); file read/write/edit; fs ls/find/grep;
-                todo the job queue; rem memory; scheduler background jobs; python the persistent IPython kernel
+                todo the job queue; rem memory; scheduler background jobs; python the
+                persistent IPython kernel; web search and fetch (the web-tools compose)
 frontend/       Frontend implementations (the cli REPL)
 ```
 

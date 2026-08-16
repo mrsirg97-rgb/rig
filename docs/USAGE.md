@@ -65,8 +65,8 @@ looper --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits all eleven built-in tools;
-narrowing is always available and compose-order-agnostic.
+refusal goes back to the model. The default permits all thirteen built-in
+tools; narrowing is always available and compose-order-agnostic.
 
 ## working-directory discipline
 

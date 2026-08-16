@@ -136,6 +136,7 @@ Done when: state persistence, timeout semantics, and death announcement are
 named tests against a real kernel.
 
 ## 6. tool/web: search and fetch
+> done
 
 Deliverable: pane's web_search and web_fetch, ported. Reference:
 `pane/extensions/web-search.ts`, `web-fetch.ts`, `web-fetch.types.ts`.
