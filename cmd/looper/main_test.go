@@ -49,6 +49,17 @@ func (fakeRem) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	return "", nil
 }
 
+type fakeSched struct{}
+
+func (fakeSched) Name() string { return "scheduler" }
+func (fakeSched) Description() string {
+	return "fake scheduler surface"
+}
+func (fakeSched) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (fakeSched) Exec(ctx context.Context, args json.RawMessage) (string, error) {
+	return "", nil
+}
+
 func (nullFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
 func (nullFrontend) Notify(ev core.Event)                      {}
 
@@ -63,6 +74,7 @@ func TestWireRegistersEverySeam(t *testing.T) {
 		func(next core.ToolExec) core.ToolExec { return next },
 		fakeTodo{},
 		fakeRem{},
+		fakeSched{},
 	)
 	if k == nil {
 		t.Fatal("wire returned nil")
@@ -70,8 +82,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	if got := k.SortedToolNames(); len(got) != 9 || got[0] != "bash" || got[6] != "rem" || got[7] != "todo" || got[8] != "write" {
-		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,read,rem,todo,write", got)
+	if got := k.SortedToolNames(); len(got) != 10 || got[0] != "bash" || got[6] != "rem" || got[7] != "scheduler" || got[8] != "todo" || got[9] != "write" {
+		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,read,rem,scheduler,todo,write", got)
 	}
 	if len(k.Middleware) != 3 {
 		t.Fatalf("middleware = %d links, want the allow-list, the bound, and the observation tap", len(k.Middleware))
