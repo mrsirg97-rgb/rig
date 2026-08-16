@@ -55,7 +55,7 @@ type failingCrontab struct {
 }
 
 func (f failingCrontab) List() (string, error) { return "", f.listErr }
-func (f failingCrontab) Install(string) error   { return f.installErr }
+func (f failingCrontab) Install(string) error  { return f.installErr }
 
 type harness struct {
 	home    string
@@ -227,7 +227,7 @@ func TestCreateGlobalScopeUsesTheGlobalStoreAndABareKey(t *testing.T) {
 func TestCreateRefusesDuplicateNamePerScopeNothingWritten(t *testing.T) {
 	h := newHarness(t, "/ws/b")
 	if _, err := h.create(sched.CreateInput{Name: "nightly", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 	before := h.ct.text
 	_, err := h.create(sched.CreateInput{Name: "nightly", Prompt: "q", Cron: "1 0 * * *"})
@@ -247,7 +247,7 @@ func TestCreateRefusesDuplicateNamePerScopeNothingWritten(t *testing.T) {
 func TestDuplicateNameAcrossScopesIsFine(t *testing.T) {
 	h := newHarness(t, "/ws/c")
 	if _, err := h.create(sched.CreateInput{Name: "shared", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 	_, err := h.create(sched.CreateInput{Name: "shared", Prompt: "p", Cron: "1 0 * * *", Scope: "global"})
 	mustOK(t, err)
@@ -328,10 +328,10 @@ func TestCreateOnceTranslatesToCronFieldsMissingAtRefuses(t *testing.T) {
 func TestListRendersBothScopesCleanJobsHaveNullDrift(t *testing.T) {
 	h := newHarness(t, "/ws/f")
 	if _, err := h.create(sched.CreateInput{Name: "cw", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 	if _, err := h.create(sched.CreateInput{Name: "gl", Prompt: "p", Cron: "0 1 * * *", Scope: "global"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 	list, _ := h.list()
 	contains(t, list, "global:")
@@ -342,10 +342,10 @@ func TestListRendersBothScopesCleanJobsHaveNullDrift(t *testing.T) {
 func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 	h := newHarness(t, "/ws/g")
 	if _, err := h.create(sched.CreateInput{Name: "one", Prompt: "p", Cron: "0 0 * * *", Scope: "global"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 	if _, err := h.create(sched.CreateInput{Name: "two", Prompt: "p", Cron: "0 2 * * *"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// missing line
@@ -377,7 +377,7 @@ func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 func TestListMarksAJobRunningWhenItsLockIsHeld(t *testing.T) {
 	h := newHarness(t, "/ws/h")
 	if _, err := h.create(sched.CreateInput{Name: "locked", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 	list, err := sched.List(context.Background(), h.st, h.ct, h.sessCwd, func(key string) bool {
 		return strings.HasSuffix(key, ":j1") || key == "j1"
@@ -441,7 +441,7 @@ func TestPauseCommentsTheLineAndResumeRestoresByteIdentical(t *testing.T) {
 func TestPauseOnPausedRefusesResumeOnActiveRefuses(t *testing.T) {
 	h := newHarness(t, "/ws/j")
 	if _, err := h.create(sched.CreateInput{Name: "p", Prompt: "p", Cron: "0 4 * * *"}); err != nil {
-	t.Fatal(err)
+		t.Fatal(err)
 	}
 	_, err := sched.Resume(context.Background(), h.st, h.ct, "j1", "", h.sessCwd, "sess-core")
 	mustErr(t, err, `not paused`)
