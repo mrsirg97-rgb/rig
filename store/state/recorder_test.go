@@ -49,7 +49,7 @@ func TestRecorderLandsTheTranscript(t *testing.T) {
 	}
 	sid := "rec-transcript"
 	inner := &scripted{inputs: []string{"do it"}}
-	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", sid)
+	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", sid, core.NewSession())
 
 	ctx := context.Background()
 	text, err := rec.Input(ctx)
@@ -60,13 +60,8 @@ func TestRecorderLandsTheTranscript(t *testing.T) {
 	rec.Notify(core.TextDelta{Text: "bash"})
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}})
 	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 5, Completion: 2}})
-	// execution lands after the stream completes
-	exec := func(ctx context.Context, call core.ToolCall) (string, error) {
-		return "out-1", nil
-	}
-	if _, err := rec.Observe(exec)(ctx, core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}); err != nil {
-		t.Fatalf("observed execution: %v", err)
-	}
+	// execution lands after the stream completes, from the loop's event
+	rec.Notify(core.ToolResult{ID: "c1", Content: "out-1", Err: nil})
 	if err := rec.Close("ok"); err != nil {
 		t.Fatalf("close: %v", err)
 	}
@@ -110,7 +105,7 @@ func TestRecorderForwardsIntact(t *testing.T) {
 		t.Fatal(err)
 	}
 	inner := &scripted{}
-	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-fwd")
+	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-fwd", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "a"})
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c9", Name: "bash", Args: json.RawMessage(`{}`)}})
 	rec.Notify(core.Done{StopReason: "end_turn"})
@@ -130,7 +125,7 @@ func TestRecorderFaultLands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-fault")
+	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-fault", core.NewSession())
 	if err := state.RecordSession(context.Background(), db, "rec-fault", "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +147,7 @@ func TestRecorderObservationErrorsStayLoud(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-loud")
+	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-loud", core.NewSession())
 	_ = state.RecordSession(context.Background(), db, "rec-loud", "/tmp/wt", "model-x", "0.1.0")
 	if err := db.DB.Close(); err != nil {
 		t.Fatal(err)
@@ -163,15 +158,12 @@ func TestRecorderObservationErrorsStayLoud(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stderr = w
-	result, err := rec.Observe(func(ctx context.Context, call core.ToolCall) (string, error) {
-		return "out", nil
-	})(context.Background(), core.ToolCall{ID: "cx", Name: "bash", Args: json.RawMessage(`{}`)})
+	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)}})
+	rec.Notify(core.Done{StopReason: "end_turn"})
+	rec.Notify(core.ToolResult{ID: "cx", Content: "out"})
 	w.Close()
 	os.Stderr = old
 	out, _ := io.ReadAll(r)
-	if err != nil || result != "out" {
-		t.Fatalf("observed execution disturbed: %q %v", result, err)
-	}
 	if !strings.Contains(string(out), "rec-loud") || !strings.Contains(string(out), "cx") {
 		t.Errorf("observation failure not surfaced loudly: %q", out)
 	}
@@ -182,7 +174,7 @@ func TestRecorderLandsToolOnlyTurns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", "rec-toolonly")
+	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", "rec-toolonly", core.NewSession())
 	ctx := context.Background()
 	if _, err := rec.Input(ctx); err != nil {
 		t.Fatal(err)
@@ -199,14 +191,11 @@ func TestRecorderLandsToolOnlyTurns(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stderr = w
-	res1, err1 := rec.Observe(func(ctx context.Context, call core.ToolCall) (string, error) { return "out-1", nil })(ctx, core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)})
-	res2, err2 := rec.Observe(func(ctx context.Context, call core.ToolCall) (string, error) { return "out-2", nil })(ctx, core.ToolCall{ID: "c2", Name: "ls", Args: json.RawMessage(`{}`)})
+	rec.Notify(core.ToolResult{ID: "c1", Content: "out-1"})
+	rec.Notify(core.ToolResult{ID: "c2", Content: "out-2"})
 	w.Close()
 	os.Stderr = old
 	stderrOut, _ := io.ReadAll(r)
-	if err1 != nil || res1 != "out-1" || err2 != nil || res2 != "out-2" {
-		t.Fatalf("observed executions disturbed: %q/%v %q/%v", res1, err1, res2, err2)
-	}
 	if stderrOut != nil && len(stderrOut) > 0 {
 		t.Errorf("stderr spammed on landed results: %q", stderrOut)
 	}
@@ -245,7 +234,7 @@ func TestRecorderFaultDiscardsPartialText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-discard")
+	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-discard", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "PARTIAL "})
 	rec.Notify(core.Fault{Err: errors.New("stream torn")})
 	rec.Notify(core.TextDelta{Text: "fresh"})
