@@ -7,7 +7,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
+
+	"github.com/mrsirg97-rgb/looper/store"
+	todo "github.com/mrsirg97-rgb/looper/store/todo"
 )
 
 // SPEC_STATE's generation-drift guard: regenerate into a temp root against
@@ -127,4 +131,34 @@ func listFiles(t *testing.T, root string) map[string][]byte {
 		t.Fatalf("walk %s: %v", root, err)
 	}
 	return out
+}
+
+// extra.sql is applied: the combined Statements() carries the additional
+// statements, and a fresh open leaves both indexes behind.
+func TestExtraStatementsAreApplied(t *testing.T) {
+	statements := todo.Statements()
+	if len(statements) <= len(todo.DDL()) {
+		t.Fatalf("Statements() = %d statements, want the generated DDL plus the extra", len(statements))
+	}
+	var joined string
+	for _, s := range statements {
+		joined += s + "\n"
+	}
+	for _, want := range []string{"tasks_text_unique", "tasks_pos_seq"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("extra.sql absent from the applied statements (%s)", want)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "x.sqlite")
+	db, _, err := store.Open(path, statements, todo.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	var got int
+	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name IN ('tasks_text_unique','tasks_pos_seq')").Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != 2 {
+		t.Fatalf("indexes after open = %d, want 2", got)
+	}
 }
