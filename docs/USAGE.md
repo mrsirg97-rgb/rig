@@ -51,8 +51,11 @@ drwxr-xr-x 3 you you 4096 ... .
 
 ## interruption and failure semantics
 
-- **Ctrl-C** cancels the current step at its next boundary (mid-stream, mid-
-  exec) and the REPL continues; teardown surfaces cleanly.
+- **Ctrl-C** ends the session once the in-flight step unwinds: a mid-tool
+  turn unwinds quickly (the tool's process group is killed), a mid-stream
+  turn waits for the server's stream to close (the process stays alive in
+  the meantime, and a second Ctrl-C is ignored: the first signal is the
+  exit). Teardown surfaces cleanly (exit 0, session closed).
 - A provider that closes the stream without a Done or Fault marker makes
   `looper` exit non-zero with a loud error. Silent termination is impossible by
   construction.

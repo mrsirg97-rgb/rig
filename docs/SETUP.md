@@ -68,7 +68,7 @@ dead agent; narrow with `--allow read` or similar.
 ./looper --base-url $YOUR_EPIT --model $NAME --system "be terse"
 ```
 
-then type a prompt, Ctrl-C to interrupt (the turn cancels at its next boundary
-and the REPL survives), Ctrl-D to exit. If nothing streams, check the endpoint
+then type a prompt, Ctrl-C to interrupt (the session ends once the in-flight
+step unwinds), Ctrl-D to exit at the prompt. If nothing streams, check the endpoint
 first — looper surfaces provider faults verbatim and loudly; it does not hide
 them.
