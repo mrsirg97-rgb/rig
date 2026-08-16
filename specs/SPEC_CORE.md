@@ -47,6 +47,10 @@ looper/
     bash/
     file/        read, write, edit
     fs/          ls, find, grep
+    todo/        the concurrent job queue
+    rem/         memory
+    scheduler/   background jobs
+    python/      the persistent IPython kernel
   frontend/
     cli/         stdin/stdout REPL
   cmd/
