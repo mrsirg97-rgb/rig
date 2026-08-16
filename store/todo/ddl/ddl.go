@@ -26,7 +26,7 @@ func Statements() []string {
 		`CREATE TABLE IF NOT EXISTS "tasks" (
   "id" TEXT NOT NULL,
   "created_seq" INTEGER NOT NULL,
-  "pos" TEXT NOT NULL,
+  "pos" INTEGER NOT NULL,
   "status" TEXT NOT NULL,
   "text" TEXT NOT NULL,
   "updated_seq" INTEGER NOT NULL,

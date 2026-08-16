@@ -14,7 +14,7 @@ import (
 type Task struct {
 	Id         string `db:"id"`
 	CreatedSeq int64  `db:"created_seq"`
-	Pos        int    `db:"pos"`
+	Pos        int64  `db:"pos"`
 	Status     string `db:"status"`
 	Text       string `db:"text"`
 	UpdatedSeq int64  `db:"updated_seq"`
