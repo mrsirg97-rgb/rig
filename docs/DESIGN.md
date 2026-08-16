@@ -21,7 +21,7 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
                                    └─ perm.Allowlist → guard.Bound (first-listed = innermost)
                                         │
                                         ▼
-                                 tool/bash · tool/file · tool/fs
+                                 tool/bash · tool/file · tool/fs · tool/todo
 
  cmd/looper (composition root): wires every seam once at startup; flags and env only.
 ```

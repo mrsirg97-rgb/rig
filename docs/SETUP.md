@@ -39,7 +39,7 @@ flags win over env, env wins over built-in defaults:
 | endpoint   | `--base-url`| `LOOPER_BASE_URL`| `http://127.0.0.1:8080/v1`           | OpenAI-compatible base URL                |
 | model      | `--model`   | `LOOPER_MODEL`   | `local`                              | model name sent per request               |
 | system     | `--system`  | `LOOPER_SYSTEM`  | looper's default system prompt       | context-policy seed                       |
-| allow-list | `--allow`   | `LOOPER_ALLOW`   | `bash,read,write,edit,ls,find,grep`               | tools permitted to execute                |
+| allow-list | `--allow`   | `LOOPER_ALLOW`   | `bash,read,write,edit,ls,find,grep,todo`          | tools permitted to execute                |
 | bound      | `--retries` | `LOOPER_RETRIES` | `3`                                  | repetition bound on identical failing calls (see below) |
 
 **On `LOOPER_RETRIES`** — read before tuning: the value does **not** permit

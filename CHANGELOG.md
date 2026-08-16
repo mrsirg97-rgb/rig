@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- **tool/todo** (roadmap deliverable 5): the task-queue store — pane's
+  semantics, Go over the generated substrate. Claim semantics (start
+  claims, foreign complete/start refuses and names the claimer, fail
+  frees); completion gated by dependencies with the blocker named, cycles
+  refused with the path, blocked tasks skipped by next; move via
+  minted-position events; auto-compaction past the threshold, the
+  snapshot first; the stale footer; workspace isolation per working
+  directory. Concurrent writers serialize at the database level:
+  up-front write locks and per-connection pragmas carried in the DSN. The
+  generated domain/DDL runs under the drift guard; extra.sql applied via
+  `Statements() = DDL + the extra`.
+
 - **tool/fs** (roadmap deliverable 1): named `ls`, `find`, `grep` beside
   bash/read/write/edit. Stdlib only; `.git` and binary skips; unreadable
   entries counted and named (`[skipped: N unreadable]`), an unreadable root
