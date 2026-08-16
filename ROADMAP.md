@@ -8,6 +8,14 @@ deliverable changes core/ or the loop, and that change is named in the PR.
 CLI-only through 9: the frontend is last because a TUI on an unfinished
 runtime is a TUI you rewrite. Harden the backend, then draw it.
 
+The runtime is 0.x until the end of 9 and v1.0.0 after it: seams, events,
+commands, and stores complete, and everything that could ask for a loop
+change has already asked. From then on core/ and loop/ are open to
+extension and closed to modification (models are sensitive to the loop; a
+frozen loop is a controlled variable). 10 is the first consumer of the
+frozen runtime, in its own module on its own version line, and is the
+freeze's first test: if the TUI needs loop.go, 1.0 was premature.
+
 The reference for taste is `~/Projects/pane` (README.md, AGENTS.template.md,
 the per-tool specs under docs/ and at the root). The reference for Go style
 stays `~/Projects/lift/engine`. Same design, different runtime: a port keeps
