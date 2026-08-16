@@ -37,6 +37,7 @@ import (
 	remapi "github.com/mrsirg97-rgb/looper/tool/rem"
 	schedapi "github.com/mrsirg97-rgb/looper/tool/scheduler"
 	todoapi "github.com/mrsirg97-rgb/looper/tool/todo"
+	webtool "github.com/mrsirg97-rgb/looper/tool/web"
 )
 
 // Version is the binary's release version; initial release per the stack.
@@ -46,12 +47,12 @@ const defaultSystem = "You are looper, a minimal coding agent. Use the provided 
 
 // wire assembles the kernel's dependencies. Swapping a seam is a change
 // here and nowhere else.
-func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, observe func(core.ToolExec) core.ToolExec, todoTool, remTool, schedTool, pyTool core.Tool) *looper.Kernel {
+func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, observe func(core.ToolExec) core.ToolExec, todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool core.Tool) *looper.Kernel {
 	return looper.New(
 		looper.WithProvider(openai.New(baseURL, model)),
 		looper.WithFrontend(fe),
 		looper.WithPolicy(policy.Passthrough(system)),
-		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool, remTool, schedTool, pyTool),
+		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool),
 		looper.WithMiddleware(
 			perm.Allowlist(allow...),
 			guard.Bound(retries),
@@ -83,7 +84,7 @@ func main() {
 	baseURL := flag.String("base-url", envOr("LOOPER_BASE_URL", "http://127.0.0.1:8090/v1"), "OpenAI-compatible endpoint base URL (the worker swap)")
 	model := flag.String("model", envOr("LOOPER_MODEL", "local"), "model name")
 	system := flag.String("system", envOr("LOOPER_SYSTEM", defaultSystem), "system prompt")
-	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep,todo,rem,scheduler,python"), "comma-separated allow-list of tool names")
+	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep,todo,rem,scheduler,python,web_search,web_fetch"), "comma-separated allow-list of tool names")
 	retries := flag.Int("retries", envOrInt("LOOPER_RETRIES", 3), "repetition bound on identical failing calls (cleared on success)")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -126,6 +127,26 @@ func main() {
 	}
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "looper: python kernel host: %s\n", py.Host())
+
+	// The web tools: pane's web_search and web_fetch, one leaf package.
+	// The env knobs are read here, the way flags and env live at the root:
+	// LOOPER_SEARXNG_URL is the SearXNG instance (the web-tools compose
+	// publishes one on loopback); LOOPER_WEB_FETCH_PROXY is the egress
+	// proxy (pane's test semantics: set empty = direct); LOOPER_TRAFILATURA
+	// is an explicit extraction binary (empty = the stdlib pass carries).
+	webSearch := webtool.Search()
+	if v := os.Getenv("LOOPER_SEARXNG_URL"); v != "" {
+		webSearch = webtool.NewSearch(webtool.SearchConfig{BaseURL: v})
+	}
+	proxy := webtool.DefaultProxy
+	if v, ok := os.LookupEnv("LOOPER_WEB_FETCH_PROXY"); ok {
+		proxy = v
+	}
+	var traf *string
+	if v, ok := os.LookupEnv("LOOPER_TRAFILATURA"); ok {
+		traf = &v
+	}
+	webFetch := webtool.NewFetch(webtool.FetchConfig{Proxy: proxy, Trafilatura: traf})
 
 	sessionsPath := filepath.Join(cfgDir, "looper", "sessions", hex.EncodeToString(digest[:6])+".sqlite")
 	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0o755); err != nil {
@@ -222,7 +243,7 @@ func main() {
 	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID)
 
 	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, rec.Observe, todoapi.New(tdb), remapi.New(rdb),
-		schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"), py)
+		schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"), py, webSearch, webFetch)
 	k.Session = session // one identity: the loop's session is the transcript's
 
 	// Interrupt cancels the turn at its next boundary.
