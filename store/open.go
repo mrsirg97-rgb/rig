@@ -15,8 +15,15 @@ import (
 // DB is the store handle every store package names its context with.
 type DB = sqlx.DB
 
-// pragmas applied to every store file at Open; the cross-process posture
-// (a runner writing while a session reads) is WAL plus busy_timeout.
+// pragmas ride the DSN (_pragma=…), applied by the driver at connection
+// init — a pragma Exec'd against one pooled connection leaves every other
+// connection the pool opens without it, and writers meeting each other
+// there refuse instantly. Carried in the DSN they reach every connection:
+// the cross-process posture (a runner writing while a session reads) is
+// WAL plus busy_timeout plus up-front write locks (_txlock=immediate:
+// every transaction takes the RESERVED lock at begin and waits the
+// timeout window, so concurrent writers serialize instead of refusing
+// each other at the deferred read-to-write upgrade).
 var pragmas = []string{
 	"PRAGMA journal_mode=WAL",
 	"PRAGMA busy_timeout=5000",
@@ -34,7 +41,7 @@ func Open(path string, statements []string, wantVersion int) (sqlx.DB, string, e
 	existing, _ := fileSize(path)
 	var quarantined string
 	for attempt := 0; attempt < 2; attempt++ {
-		raw, err := sql.Open("sqlite", path)
+		raw, err := sql.Open("sqlite", path+"?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)")
 		if err != nil {
 			return sqlx.DB{}, quarantined, err
 		}

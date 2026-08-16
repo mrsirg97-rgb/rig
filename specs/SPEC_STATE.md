@@ -190,6 +190,9 @@ deliverable 4, out of scope here) or plain `sqlite3`.
   boundary, cycles refused, completion gated, blocked skipped by `next`.
 - The FSM lives in `store/todo/todo.go` as Go, errors in pane's teaching
   voice; the generated domain is only the substrate it writes through.
+  Two raw arms are owned and named as such: the event scan that rebuilds
+  the fold (no ordered scan accessor is generated) and the projection
+  rewrite (no bulk-replace accessor is generated).
 
 ### rem (port; REM_SPEC.md D, E, F, G)
 
@@ -253,7 +256,8 @@ type MemoryDomain interface {
 
 The tool adapter is the only hand-written surface the model sees, and it
 is pane's tool surface verbatim: `todo {create|start|complete|fail|retry|
-move|read|next}`, `rem {learn|recall|reflect|prune}`, `scheduler {create|
+move|read}` (`next` is not a verb: its semantics ride the render's next
+pointer, blocked-skipping), `rem {learn|recall|reflect|prune}`, `scheduler {create|
 list|pause|resume|remove|runs}`. Descriptions and schema property text are
 pane's promptGuidelines, lowercase, terse.
 
