@@ -42,8 +42,10 @@ func DDL() []string { return remdd.Statements() }
 
 // Statements: the store's schema in application order — the generated
 // DDL, then extra.sql (pane's indexes), then fts.sql (the FTS5 virtual
-// table). An fts-less driver is refused loudly at open, because this set
-// is applied at open.
+// table). A driver that cannot create the table fails loudly here;
+// recall's shipped policy on capability absence is the fuzzy-only
+// degradation (REM_SPEC's named case) — unreachable under the bundled
+// pure-Go driver, which always ships FTS5.
 func Statements() []string {
 	out := remdd.Statements()
 	out = append(out, remmeta.ExtraStatements()...)
