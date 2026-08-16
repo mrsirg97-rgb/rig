@@ -1389,3 +1389,135 @@ func TestThreeNodeCyclesRefuseWithPath(t *testing.T) {
 		t.Errorf("batch rejected atomically: %d -> %d events", before, got)
 	}
 }
+
+// --- lifecycle voices and workspace isolation: pane's named cases ---
+
+// Done tasks never report a blocker: the status gate lands first.
+func TestDoneTasksNeverReportABlocker(t *testing.T) {
+	db := newDB(t)
+	d := func(s string) *string { return &s }
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "dep"}, {Text: "outer", DependsOn: d("dep")}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	// both done through the claim path
+	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Complete(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Start(ctx, db, "t2", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Complete(ctx, db, "t2", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	// now dep points at a pending task, via the recreate's link update
+	if _, err := todostore.Create(ctx, db, []item{{Text: "c"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Create(ctx, db, []item{{Text: "dep", DependsOn: d("c")}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := todostore.Complete(ctx, db, "t1", "s1")
+	if err == nil {
+		t.Fatal("expected refusal")
+	}
+	voice := err.Error()
+	if !strings.Contains(voice, "done; read-only") {
+		t.Fatalf("voice: %v", err)
+	}
+	if strings.Contains(voice, "blocked by") {
+		t.Fatalf("done task reported a blocker: %v", err)
+	}
+}
+
+// pending -> in_progress -> done; done is read-only for complete and start.
+func TestLifecycleDoneIsReadOnly(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "lc"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, "t1", "s1"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if got := projStatus(t, db, "lc"); got != "done" {
+		t.Fatalf("status = %q, want done", got)
+	}
+	for _, verb := range []func() error{
+		func() error { _, err := todostore.Complete(ctx, db, "t1", "s1"); return err },
+		func() error { _, err := todostore.Start(ctx, db, "t1", "s1"); return err },
+	} {
+		err := verb()
+		if err == nil || !strings.Contains(err.Error(), "done; read-only") {
+			t.Fatalf("read-only voice: %v", err)
+		}
+	}
+}
+
+// failed -> retry -> started again: the chain walks back and completes.
+func TestFailedToRetryToStartedAgain(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "fc"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Fail(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := projStatus(t, db, "fc"); got != "failed" {
+		t.Fatalf("status = %q, want failed", got)
+	}
+	if _, err := todostore.Retry(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := projStatus(t, db, "fc"); got != "pending" {
+		t.Fatalf("status = %q, want pending", got)
+	}
+	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Complete(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := projStatus(t, db, "fc"); got != "done" {
+		t.Fatalf("status = %q, want done", got)
+	}
+}
+
+// Workspace lists are isolated per working directory: one file per
+// workspace, and a workspace's read never sees another's tasks.
+func TestWorkspaceListsAreIsolated(t *testing.T) {
+	a := filepath.Join(t.TempDir(), "ws-a.sqlite")
+	b := filepath.Join(t.TempDir(), "ws-b.sqlite")
+	dba, _, err := store.Open(a, todostore.Statements(), todostore.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbb, _, err := store.Open(b, todostore.Statements(), todostore.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, dba, []item{{Text: "only in workspace a"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := todostore.Read(ctx, dbb, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(reply, "only in workspace a") {
+		t.Fatalf("workspace b saw workspace a's tasks:\n%s", reply)
+	}
+	if !strings.Contains(reply, "(no tasks)") {
+		t.Fatalf("workspace b's render must be empty:\n%s", reply)
+	}
+}
