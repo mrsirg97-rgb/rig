@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"regexp"
 	"testing"
@@ -24,6 +25,19 @@ func TestVersionIsTheInitialRelease(t *testing.T) {
 // registration change here and nowhere else.
 type nullFrontend struct{}
 
+// fakeTodo stands in for the todo surface so the seam's registration is
+// testable without a store file.
+type fakeTodo struct{}
+
+func (fakeTodo) Name() string { return "todo" }
+func (fakeTodo) Description() string {
+	return "fake todo surface"
+}
+func (fakeTodo) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (fakeTodo) Exec(ctx context.Context, args json.RawMessage) (string, error) {
+	return "", nil
+}
+
 func (nullFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
 func (nullFrontend) Notify(ev core.Event)                      {}
 
@@ -36,6 +50,7 @@ func TestWireRegistersEverySeam(t *testing.T) {
 		3,
 		nullFrontend{},
 		func(next core.ToolExec) core.ToolExec { return next },
+		fakeTodo{},
 	)
 	if k == nil {
 		t.Fatal("wire returned nil")
@@ -43,8 +58,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	if got := k.SortedToolNames(); len(got) != 7 || got[0] != "bash" || got[6] != "write" {
-		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,read,write", got)
+	if got := k.SortedToolNames(); len(got) != 8 || got[0] != "bash" || got[6] != "todo" || got[7] != "write" {
+		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,read,todo,write", got)
 	}
 	if len(k.Middleware) != 3 {
 		t.Fatalf("middleware = %d links, want the allow-list, the bound, and the observation tap", len(k.Middleware))
