@@ -26,9 +26,11 @@ import (
 	"github.com/mrsirg97-rgb/looper/provider/openai"
 	"github.com/mrsirg97-rgb/looper/store"
 	"github.com/mrsirg97-rgb/looper/store/state"
+	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
 	"github.com/mrsirg97-rgb/looper/tool/bash"
 	"github.com/mrsirg97-rgb/looper/tool/file"
 	"github.com/mrsirg97-rgb/looper/tool/fs"
+	todoapi "github.com/mrsirg97-rgb/looper/tool/todo"
 )
 
 // Version is the binary's release version; initial release per the stack.
@@ -38,12 +40,12 @@ const defaultSystem = "You are looper, a minimal coding agent. Use the provided 
 
 // wire assembles the kernel's dependencies. Swapping a seam is a change
 // here and nowhere else.
-func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, observe func(core.ToolExec) core.ToolExec) *looper.Kernel {
+func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, observe func(core.ToolExec) core.ToolExec, todoTool core.Tool) *looper.Kernel {
 	return looper.New(
 		looper.WithProvider(openai.New(baseURL, model)),
 		looper.WithFrontend(fe),
 		looper.WithPolicy(policy.Passthrough(system)),
-		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep()),
+		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool),
 		looper.WithMiddleware(
 			perm.Allowlist(allow...),
 			guard.Bound(retries),
@@ -72,7 +74,7 @@ func main() {
 	baseURL := flag.String("base-url", envOr("LOOPER_BASE_URL", "http://127.0.0.1:8080/v1"), "OpenAI-compatible endpoint base URL")
 	model := flag.String("model", envOr("LOOPER_MODEL", "local"), "model name")
 	system := flag.String("system", envOr("LOOPER_SYSTEM", defaultSystem), "system prompt")
-	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep"), "comma-separated allow-list of tool names")
+	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep,todo"), "comma-separated allow-list of tool names")
 	retries := flag.Int("retries", envOrInt("LOOPER_RETRIES", 3), "repetition bound on identical failing calls (cleared on success)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -106,10 +108,23 @@ func main() {
 	}
 	defer sdb.DB.Close()
 
+	// The task queue: workspace-keyed, opened once, loud on corruption.
+	// (SPEC_STATE's paths, digest prefix twelve.)
+	todoPath := filepath.Join(cfgDir, "looper", "todo", hex.EncodeToString(digest[:12])+".sqlite")
+	tdb, todoQuarantined, todoErr := store.Open(todoPath, tododdl.Statements(), 1)
+	if todoErr != nil {
+		fmt.Fprintln(os.Stderr, "looper: todo store:", todoErr)
+		os.Exit(1)
+	}
+	if todoQuarantined != "" {
+		fmt.Fprintf(os.Stderr, "looper: quarantined corrupt todo file: %s\n", todoQuarantined)
+	}
+	defer tdb.DB.Close()
+
 	session := core.NewSession()
 	rec := state.NewRecorder(cli.New(os.Stdin, os.Stdout), sdb, cwd, *model, Version, session.ID)
 
-	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, rec.Observe)
+	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, rec.Observe, todoapi.New(tdb))
 	k.Session = session // one identity: the loop's session is the transcript's
 
 	// Interrupt cancels the turn at its next boundary.
