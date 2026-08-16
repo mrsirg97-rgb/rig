@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/looper/store"
 	todostore "github.com/mrsirg97-rgb/looper/store/todo"
@@ -31,13 +33,9 @@ func newDB(t *testing.T) store.DB {
 
 func rawQuery(t *testing.T, db store.DB, q string, args ...any) *sql.Rows {
 	t.Helper()
-	ctx := context.Background()
-	_, tx, err := db.Tx(ctx)
-	if err != nil {
-		t.Fatalf("tx: %v", err)
-	}
-	defer tx.Rollback()
-	rows, err := tx.Query(q, args...)
+	// reads ride the pool: a rolled-back transaction invalidates its rows
+	// before the caller can consume them, so no transaction here
+	rows, err := db.Query(q, args...)
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
@@ -51,9 +49,12 @@ func rawExec(t *testing.T, db store.DB, q string, args ...any) {
 	if err != nil {
 		t.Fatalf("tx: %v", err)
 	}
-	defer tx.Rollback()
 	if _, err := tx.Exec(q, args...); err != nil {
+		tx.Rollback()
 		t.Fatalf("exec: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
 	}
 }
 
@@ -396,7 +397,7 @@ func TestDanglingDependencyFromACorruptCreateEventDropsOnReplay(t *testing.T) {
 	})
 	rawExec(t, db, "INSERT INTO events (ts, op, args, session) VALUES (?, ?, ?, ?)",
 		"2026-01-01T00:00:00Z", "create", string(args), nil)
-	reply, err := todostore.Read(context.Background(), db)
+	reply, err := todostore.Read(context.Background(), db, "s1")
 	if err != nil {
 		t.Fatalf("replay never throws: %v", err)
 	}
@@ -412,7 +413,7 @@ func TestProjectionTamperingSelfHealsOnRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawExec(t, db, "UPDATE tasks SET status='done' WHERE id='t1'")
-	reply, err := todostore.Read(ctx, db)
+	reply, err := todostore.Read(ctx, db, "s1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,7 +433,7 @@ func TestEveryMutationAppendsExactlyOneEvent(t *testing.T) {
 		t.Errorf("%d -> %d", before, got)
 	}
 	replyBefore := eventCount(t, db)
-	if _, err := todostore.Read(ctx, db); err != nil {
+	if _, err := todostore.Read(ctx, db, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	if got := eventCount(t, db); got != replyBefore {
@@ -463,3 +464,883 @@ func TestEventArgsMirrorTheCall(t *testing.T) {
 }
 
 var _ = fmt.Sprintf
+
+// --- TD3b: pane's rev 2 named cases (move, claim, compaction) + TASK_TREE
+// gating and presence. Voices asserted verbatim from pane.
+
+const (
+	sessA = "sess-a"
+	sessB = "sess-b"
+)
+
+// projTextOrder reads the projection in queue order, as an operator would.
+func projTextOrder(t *testing.T, db store.DB) []string {
+	t.Helper()
+	rows := rawQuery(t, db, "SELECT text FROM tasks ORDER BY pos, created_seq")
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		out = append(out, s)
+	}
+	rows.Close()
+	return out
+}
+
+func projStatus(t *testing.T, db store.DB, text string) string {
+	t.Helper()
+	rows := rawQuery(t, db, "SELECT status FROM tasks WHERE text = ?", text)
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatalf("no task %q", text)
+	}
+	var s string
+	if err := rows.Scan(&s); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// projDep resolves a task's dependency through task_deps (looper's
+// substrate carries links there, not in tasks).
+func projDep(t *testing.T, db store.DB, text string) string {
+	t.Helper()
+	rows := rawQuery(t, db, "SELECT depends_on FROM task_deps WHERE task_id = (SELECT id FROM tasks WHERE text = ?)", text)
+	defer rows.Close()
+	if !rows.Next() {
+		return ""
+	}
+	var dep sql.NullString
+	if err := rows.Scan(&dep); err != nil {
+		t.Fatal(err)
+	}
+	return dep.String
+}
+
+// taskIDText resolves the minted id of the task line carrying exact text,
+// by scanning a reply the way an operator would (pane's idOf).
+func taskIDText(t *testing.T, reply, text string) string {
+	t.Helper()
+	re := regexp.MustCompile(`\bt(\d+)\b \[[~x! ]\] ` + regexp.QuoteMeta(text))
+	if mm := re.FindStringSubmatch(reply); mm != nil {
+		return "t" + mm[1]
+	}
+	t.Fatalf("no task %q in:\n%s", text, reply)
+	return ""
+}
+
+// age appends n ghost start events (replay no-ops) to push the seq forward,
+// pane's deterministic aging: synthetic events, not sleeps.
+func age(t *testing.T, db store.DB, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		rawExec(t, db, "INSERT INTO events (ts, op, args, session) VALUES (?, 'start', ?, NULL)",
+			time.Now().UTC().Format(time.RFC3339), `{"id":"t999"}`)
+	}
+}
+
+func compactRow(t *testing.T, db store.DB) (args, session string) {
+	t.Helper()
+	rows := rawQuery(t, db, "SELECT args, session FROM events WHERE op='compact' ORDER BY seq DESC LIMIT 1")
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("no compact event")
+	}
+	var sess sql.NullString
+	if err := rows.Scan(&args, &sess); err != nil {
+		t.Fatal(err)
+	}
+	return args, sess.String
+}
+
+func compactTasks(t *testing.T, db store.DB) []map[string]any {
+	t.Helper()
+	args, _ := compactRow(t, db)
+	var payload struct {
+		Tasks []map[string]any `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(args), &payload); err != nil {
+		t.Fatalf("snapshot args: %v", err)
+	}
+	return payload.Tasks
+}
+
+// --- move: reordering ---
+
+func TestMoveRenumbersDeterministically(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	c := taskIDText(t, reply, "c")
+	if _, err := todostore.Move(ctx, db, c, 1, "s1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"c", "a", "b"}) {
+		t.Fatalf("dense renumbering = %v", got)
+	}
+	reply, _ = todostore.Read(ctx, db, "s1")
+	if !strings.Contains(reply, "next: "+c) {
+		t.Errorf("next follows the moved order:\n%s", reply)
+	}
+}
+
+func TestMoveToMiddleInsertsBeforeOccupant(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	a := taskIDText(t, reply, "a")
+	if _, err := todostore.Move(ctx, db, a, 2, "s1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"b", "a", "c"}) {
+		t.Fatalf("middle insert = %v", got)
+	}
+}
+
+func TestMoveToLastAppendsAtBack(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	a := taskIDText(t, reply, "a")
+	if _, err := needMove(t, ctx, db, a, 3); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"b", "c", "a"}) {
+		t.Fatalf("back append = %v", got)
+	}
+}
+
+func TestMoveToCurrentPositionIsANoOp(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	b := taskIDText(t, reply, "b")
+	if _, err := todostore.Move(ctx, db, b, 2, "s1"); err != nil {
+		t.Fatalf("no-op move: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"a", "b"}) {
+		t.Fatalf("no-op changed the order: %v", got)
+	}
+}
+
+func TestMoveWorksOnDoneAndFailedTasks(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "done one"}, {Text: "fail one"}, {Text: "keep"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	doneID, failID := taskIDText(t, reply, "done one"), taskIDText(t, reply, "fail one")
+	for _, c := range []func() error{
+		func() error { _, e := todostore.Start(ctx, db, doneID, "s1"); return e },
+		func() error { _, e := todostore.Complete(ctx, db, doneID, "s1"); return e },
+		func() error { _, e := todostore.Start(ctx, db, failID, "s1"); return e },
+		func() error { _, e := todostore.Fail(ctx, db, failID, "s1"); return e },
+	} {
+		if e := c(); e != nil {
+			t.Fatalf("setup: %v", e)
+		}
+	}
+	if _, err := todostore.Move(ctx, db, doneID, 3, "s1"); err != nil {
+		t.Fatalf("move of done task: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"fail one", "keep", "done one"}) {
+		t.Fatalf("done/failed move = %v", got)
+	}
+	if got := projStatus(t, db, "done one"); got != "done" {
+		t.Errorf("status lost: %v", got)
+	}
+}
+
+func TestMoveOutOfRangePositionRefusesLoudly(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	a := taskIDText(t, reply, "a")
+	for _, pos := range []int{0, 3} {
+		if _, err := todostore.Move(ctx, db, a, pos, "s1"); err == nil {
+			t.Fatalf("move pos=%d succeeded", pos)
+		} else if !strings.Contains(err.Error(), "between 1 and 2") {
+			t.Errorf("range voice (pos=%d): %v", pos, err)
+		}
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"a", "b"}) {
+		t.Errorf("refused move landed: %v", got)
+	}
+}
+
+func TestMoveUnknownIdRefusesLoudly(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "a"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := todostore.Move(ctx, db, "nope", 1, "s1"); err == nil {
+		t.Fatal("move of missing task succeeded")
+	} else if !strings.Contains(err.Error(), "no task") {
+		t.Errorf("missing-task voice: %v", err)
+	}
+}
+
+func TestMoveAppendsOneMoveEventWithArgsAsGiven(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	b := taskIDText(t, reply, "b")
+	if _, err := todostore.Move(ctx, db, b, 1, "s1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if got := eventCount(t, db); got != 2 {
+		t.Fatalf("events = %d; want create+move", got)
+	}
+	rows := rawQuery(t, db, "SELECT op, args FROM events WHERE seq = 2")
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("no move event")
+	}
+	var op, args string
+	if err := rows.Scan(&op, &args); err != nil {
+		t.Fatal(err)
+	}
+	if op != "move" {
+		t.Fatalf("op = %q", op)
+	}
+	var given struct {
+		ID  string `json:"id"`
+		Pos int    `json:"pos"`
+	}
+	if err := json.Unmarshal([]byte(args), &given); err != nil {
+		t.Fatalf("args: %v", err)
+	}
+	if given.ID != b || given.Pos != 1 {
+		t.Errorf("args = %+v", given)
+	}
+}
+
+func TestMovedOrderSurvivesProjectionTamper(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	c := taskIDText(t, reply, "c")
+	if _, err := todostore.Move(ctx, db, c, 1, "s1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	rawExec(t, db, "DELETE FROM tasks")
+	if _, err := todostore.Read(ctx, db, "s1"); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"c", "a", "b"}) {
+		t.Errorf("rebuilt order = %v", got)
+	}
+}
+
+func TestSequentialMovesComposeDeterministically(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}, {Text: "d"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	a, d := taskIDText(t, reply, "a"), taskIDText(t, reply, "d")
+	if _, err := todostore.Move(ctx, db, d, 1, "s1"); err != nil {
+		t.Fatalf("move d: %v", err)
+	}
+	if _, err := todostore.Move(ctx, db, a, 4, "s1"); err != nil {
+		t.Fatalf("move a: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"d", "b", "c", "a"}) {
+		t.Fatalf("composed order = %v", got)
+	}
+	rawExec(t, db, "DELETE FROM tasks")
+	if _, err := todostore.Read(ctx, db, "s1"); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"d", "b", "c", "a"}) {
+		t.Errorf("replay order = %v", got)
+	}
+}
+
+// --- claim semantics ---
+
+func TestEveryMutationEventRecordsTheSession(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	a := taskIDText(t, reply, "a")
+	if _, err := todostore.Start(ctx, db, a, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	rows := rawQuery(t, db, "SELECT session FROM events ORDER BY seq")
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var s sql.NullString
+		if err := rows.Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, s.String)
+	}
+	if got[0] != sessA || got[1] != sessA {
+		t.Errorf("sessions = %v", got)
+	}
+}
+
+func TestAnonymousCallsRecordAnonAndNeverClaimLock(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "anon work"}}, "")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "anon work")
+	if _, err := todostore.Start(ctx, db, id, ""); err != nil {
+		t.Fatalf("anon start: %v", err)
+	}
+	rows := rawQuery(t, db, "SELECT session FROM events WHERE seq = 2")
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("no start event")
+	}
+	var s sql.NullString
+	if err := rows.Scan(&s); err != nil {
+		t.Fatal(err)
+	}
+	if s.String != "anon" {
+		t.Errorf("anon event session = %q", s.String)
+	}
+	if _, err := todostore.Complete(ctx, db, id, ""); err != nil {
+		t.Errorf("anon completing anon-started work: %v", err)
+	}
+}
+
+func TestCompleteByForeignSessionRefusesWithClaimer(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "owned"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "owned")
+	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, id, sessB); err == nil {
+		t.Fatal("foreign complete succeeded")
+	} else if !strings.Contains(err.Error(), "is claimed by "+sessA+"; fail it first to take over") {
+		t.Errorf("claim voice: %v", err)
+	}
+}
+
+func TestStartByForeignSessionRefusesAndNamesClaimer(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "owned"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "owned")
+	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Start(ctx, db, id, sessB); err == nil {
+		t.Fatal("foreign start succeeded")
+	} else if !strings.Contains(err.Error(), "is already in progress") || !strings.Contains(err.Error(), "claimed by "+sessA) {
+		t.Errorf("claim voice: %v", err)
+	}
+}
+
+func TestFailIsTheTakeoverPath(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "bail"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "bail")
+	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	reply, err = todostore.Fail(ctx, db, id, sessB)
+	if err != nil {
+		t.Fatalf("free fail: %v", err)
+	}
+	if !strings.Contains(reply, "failed (released from "+sessA+")") {
+		t.Errorf("release voice:\n%s", reply)
+	}
+	if _, err := todostore.Retry(ctx, db, id, sessB); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if _, err := todostore.Start(ctx, db, id, sessB); err != nil {
+		t.Fatalf("takeover start: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, id, sessB); err != nil {
+		t.Errorf("takeover complete: %v", err)
+	}
+}
+
+func TestOwnerIsDerivedFromLogNotProjection(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "ownership"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "ownership")
+	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	rawExec(t, db, "DELETE FROM tasks")
+	if _, err := todostore.Read(ctx, db, sessB); err != nil {
+		t.Fatalf("read rebuilds: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, id, sessB); err == nil {
+		t.Fatal("foreign complete succeeded")
+	} else if !strings.Contains(err.Error(), "claimed by "+sessA) {
+		t.Errorf("claim survived the rebuild: %v", err)
+	}
+}
+
+func TestFailedTasksCarryNoOwnerAnySessionMayRetry(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "bail"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "bail")
+	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Fail(ctx, db, id, sessB); err != nil {
+		t.Fatalf("fail: %v", err)
+	}
+	for _, c := range []func() error{
+		func() error { _, e := todostore.Retry(ctx, db, id, sessB); return e },
+		func() error { _, e := todostore.Start(ctx, db, id, sessB); return e },
+		func() error { _, e := todostore.Complete(ctx, db, id, sessB); return e },
+	} {
+		if e := c(); e != nil {
+			t.Fatalf("takeover path: %v", e)
+		}
+	}
+}
+
+func TestForeignClaimsShowInRenders(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "watched"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "watched")
+	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	foreign, err := todostore.Read(ctx, db, sessB)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(foreign, "claimed by "+sessA) {
+		t.Errorf("foreign claim not labeled:\n%s", foreign)
+	}
+	own, _ := todostore.Read(ctx, db, sessA)
+	if strings.Contains(own, "claimed by") {
+		t.Errorf("own claim labeled:\n%s", own)
+	}
+}
+
+func TestStartReplyAlreadyCarriesTheClaim(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "instant"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "instant")
+	started, err := todostore.Start(ctx, db, id, sessA)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if strings.Contains(started, "claimed by") {
+		t.Errorf("own claim labeled in start reply:\n%s", started)
+	}
+}
+
+// --- compaction ---
+
+func TestMutationPastThresholdCompacts(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "alpha"}, {Text: "beta"}}, "")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	b := taskIDText(t, reply, "beta")
+	age(t, db, 1010)
+	if _, err := todostore.Start(ctx, db, b, ""); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if got := eventCount(t, db); got != 2 {
+		t.Fatalf("events = %d; want bounded compact+mutation", got)
+	}
+	rows := rawQuery(t, db, "SELECT op, session FROM events ORDER BY seq")
+	defer rows.Close()
+	var ops, sess []string
+	for rows.Next() {
+		var op, s sql.NullString
+		if err := rows.Scan(&op, &s); err != nil {
+			t.Fatal(err)
+		}
+		ops = append(ops, op.String)
+		sess = append(sess, s.String)
+	}
+	if ops[0] != "compact" || ops[1] != "start" {
+		t.Fatalf("ops = %v", ops)
+	}
+	if sess[0] != "anon" {
+		t.Errorf("compact attributed to %q", sess[0])
+	}
+	if got := projStatus(t, db, "beta"); got != "in_progress" {
+		t.Errorf("beta = %v", got)
+	}
+}
+
+func TestCompactSnapshotIsFullPreMutationCapture(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "alpha"}, {Text: "beta"}}, "")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	b := taskIDText(t, reply, "beta")
+	age(t, db, 1010)
+	if _, err := todostore.Start(ctx, db, b, ""); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	tasks := compactTasks(t, db)
+	if len(tasks) != 2 {
+		t.Fatalf("snapshot = %d tasks", len(tasks))
+	}
+	byText := func(s string) map[string]any {
+		for _, tk := range tasks {
+			if tk["text"] == s {
+				return tk
+			}
+		}
+		t.Fatalf("snapshot missing %q", s)
+		return nil
+	}
+	if byText("alpha")["status"] != "pending" || byText("beta")["status"] != "pending" {
+		t.Errorf("snapshot carries post-mutation state: %v", tasks)
+	}
+	if byText("alpha")["pos"] != float64(0) || byText("beta")["pos"] != float64(1) {
+		t.Errorf("snapshot positions = %v", tasks)
+	}
+	for _, tk := range tasks {
+		if tk["owner"] != nil {
+			t.Errorf("snapshot owner = %v", tk)
+		}
+	}
+}
+
+func TestReplayReproducesQueueAfterCompaction(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "alpha"}, {Text: "beta"}}, "")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	b := taskIDText(t, reply, "beta")
+	age(t, db, 1010)
+	if _, err := todostore.Start(ctx, db, b, ""); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	rawExec(t, db, "UPDATE tasks SET pos = 99 - pos")
+	rawExec(t, db, "DELETE FROM tasks WHERE text = 'beta'")
+	if _, err := todostore.Read(ctx, db, ""); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"alpha", "beta"}) {
+		t.Errorf("tamper self-heal order = %v", got)
+	}
+	if got := projStatus(t, db, "beta"); got != "in_progress" {
+		t.Errorf("tamper self-heal status = %v", got)
+	}
+}
+
+func TestClaimsSurviveCompaction(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "claimed"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "claimed")
+	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	age(t, db, 1010) // the start event will be compacted away
+	if _, err := todostore.Complete(ctx, db, id, sessB); err == nil {
+		t.Fatal("foreign complete succeeded")
+	} else if !strings.Contains(err.Error(), "claimed by "+sessA) {
+		t.Errorf("claim survived the snapshot: %v", err)
+	}
+}
+
+func TestMovesAndDependenciesSurviveCompaction(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{
+		{Text: "root"},
+		{Text: "leaf", DependsOn: ptrTo("root")},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	leaf := taskIDText(t, reply, "leaf")
+	if _, err := todostore.Move(ctx, db, leaf, 1, "s1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	age(t, db, 1010)
+	if _, err := todostore.Read(ctx, db, "s1"); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"leaf", "root"}) {
+		t.Errorf("order after age = %v", got)
+	}
+	rootID := taskIDText(t, reply, "root")
+	if got := projDep(t, db, "leaf"); got != rootID {
+		t.Errorf("dependency = %q", got)
+	}
+}
+
+func TestStalenessEpochResetsAfterCompaction(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "ancient"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "ancient")
+	age(t, db, 1010)
+	if _, err := todostore.Start(ctx, db, id, "s1"); err != nil { // triggers the compaction
+		t.Fatalf("start: %v", err)
+	}
+	age(t, db, 210)
+	stale, _ := todostore.Read(ctx, db, "s1")
+	if !strings.Contains(stale, "1 unresolved since") {
+		t.Errorf("stale footer after epoch reset:\n%s", stale)
+	}
+}
+
+func TestReadNeverCompacts(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "quiet"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	age(t, db, 1010)
+	if _, err := todostore.Read(ctx, db, "s1"); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got := eventCount(t, db); got != 1011 {
+		t.Errorf("read touched the log: %d events", got)
+	}
+}
+
+// --- stale footer ---
+
+func TestStaleTasksAppendFooterFreshOmit(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "ancient"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	fresh, _ := todostore.Read(ctx, db, "s1")
+	if strings.Contains(fresh, "unresolved since") {
+		t.Errorf("fresh queue footered:\n%s", fresh)
+	}
+	age(t, db, 210)
+	stale, _ := todostore.Read(ctx, db, "s1")
+	if !strings.Contains(stale, "1 unresolved since") {
+		t.Errorf("stale footer missing:\n%s", stale)
+	}
+}
+
+// --- completion gating ---
+
+func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{
+		{Text: "gate"},
+		{Text: "work", DependsOn: ptrTo("gate")},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	gate, work := taskIDText(t, reply, "gate"), taskIDText(t, reply, "work")
+	if _, err := todostore.Start(ctx, db, work, "s1"); err != nil {
+		t.Fatalf("start work: %v", err)
+	}
+	want := func(hint string) string {
+		return "'" + work + "' is blocked by '" + gate + "' (" + hint + ")"
+	}
+	if _, err := todostore.Complete(ctx, db, work, "s1"); err == nil {
+		t.Fatal("blocked complete (pending) succeeded")
+	} else if got := err.Error(); got != want("pending; start it first") {
+		t.Fatalf("blocked voice (pending):\n%q\nwant\n%q", got, want("pending; start it first"))
+	}
+	if _, err := todostore.Start(ctx, db, gate, "s1"); err != nil {
+		t.Fatalf("start gate: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, work, "s1"); err == nil {
+		t.Fatal("blocked complete (in_progress) succeeded")
+	} else if got := err.Error(); got != want("in_progress") {
+		t.Fatalf("blocked voice (in_progress):\n%q", got)
+	}
+	if _, err := todostore.Fail(ctx, db, gate, "s1"); err != nil {
+		t.Fatalf("fail gate: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, work, "s1"); err == nil {
+		t.Fatal("blocked complete (failed) succeeded")
+	} else if got := err.Error(); got != want("failed; retry it first") {
+		t.Fatalf("blocked voice (failed):\n%q", got)
+	}
+	// retry -> start -> complete unblocks the dependent
+	if _, err := todostore.Retry(ctx, db, gate, "s1"); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if _, err := todostore.Start(ctx, db, gate, "s1"); err != nil {
+		t.Fatalf("start gate: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, gate, "s1"); err != nil {
+		t.Fatalf("complete gate: %v", err)
+	}
+	done, err := todostore.Complete(ctx, db, work, "s1")
+	if err != nil {
+		t.Fatalf("unblocked complete: %v", err)
+	}
+	if !strings.Contains(done, "[x] work") {
+		t.Errorf("done marker:\n%s", done)
+	}
+}
+
+func TestStartOnBlockedTaskIsLegal(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{
+		{Text: "prereq"},
+		{Text: "later", DependsOn: ptrTo("prereq")},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	later := taskIDText(t, reply, "later")
+	started, err := todostore.Start(ctx, db, later, "s1")
+	if err != nil {
+		t.Fatalf("start on blocked task: %v", err)
+	}
+	if !strings.Contains(started, "[~] later") {
+		t.Errorf("started marker:\n%s", started)
+	}
+}
+
+// --- next: presence ---
+
+func TestNextSkipsBlockedTasks(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{
+		{Text: "dep-a"},
+		{Text: "dep-b"},
+		{Text: "leaf", DependsOn: ptrTo("dep-b")},
+		{Text: "free"},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	depA, depB := taskIDText(t, reply, "dep-a"), taskIDText(t, reply, "dep-b")
+	if !strings.Contains(reply, "waits on "+depB) {
+		t.Errorf("waits-on suffix:\n%s", reply)
+	}
+	if !strings.Contains(reply, "next: "+depA) {
+		t.Errorf("next skips the blocked leaf:\n%s", reply)
+	}
+}
+
+func TestAllBlockedQueueShowsNoNext(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{
+		{Text: "prereq"},
+		{Text: "dependent", DependsOn: ptrTo("prereq")},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	prereq := taskIDText(t, reply, "prereq")
+	if _, err := todostore.Start(ctx, db, prereq, "s1"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Fail(ctx, db, prereq, "s1"); err != nil {
+		t.Fatalf("fail: %v", err)
+	}
+	read, _ := todostore.Read(ctx, db, "s1")
+	if strings.Contains(read, "next: ") {
+		t.Errorf("blocked-only queue shows a next:\n%s", read)
+	}
+	if !strings.Contains(read, "waits on ") {
+		t.Errorf("waits-on suffix:\n%s", read)
+	}
+}
+
+func eqStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func ptrTo(s string) *string {
+	q := s
+	return &q
+}
+
+// needMove is a thin indirection so move-order assertions share one choke point.
+func needMove(t *testing.T, ctx context.Context, db store.DB, id string, pos int) (string, error) {
+	t.Helper()
+	return todostore.Move(ctx, db, id, pos, "s1")
+}

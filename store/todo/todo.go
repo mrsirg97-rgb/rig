@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,13 +61,15 @@ type taskState struct {
 	owner      string
 	createdSeq int64
 	updatedSeq int64
+	updatedTs  string
 }
 
 type folded struct {
-	tasks    map[string]*taskState
-	maxSeq   int64
-	maxPos   int
-	maxIdNum int
+	compactSeq int64
+	tasks      map[string]*taskState
+	maxSeq     int64
+	maxPos     int
+	maxIdNum   int
 }
 
 func newFolded() *folded {
@@ -102,6 +105,7 @@ type eventRow struct {
 	op      string
 	args    string
 	session string
+	ts      string
 }
 
 func attrOf(e eventRow) string {
@@ -122,8 +126,10 @@ func (f *folded) apply(e eventRow) {
 		f.applyCreate(e)
 	case "start", "complete", "fail", "retry":
 		f.applyVerb(e)
-	case "move", "compact":
-		// TD3b: renumbering and snapshot replay land here.
+	case "move":
+		f.applyMoveEvent(e)
+	case "compact":
+		f.applyCompactEvent(e)
 	}
 }
 
@@ -188,7 +194,7 @@ func (f *folded) applyCreate(e eventRow) {
 		}
 		ts := &taskState{
 			text: item.text, status: statusPending,
-			createdSeq: e.seq, updatedSeq: e.seq,
+			createdSeq: e.seq, updatedSeq: e.seq, updatedTs: e.ts,
 		}
 		ts.id = f.mintID()
 		ts.pos = f.nextPos()
@@ -265,6 +271,7 @@ func (f *folded) applyVerb(e eventRow) {
 		}
 	}
 	ts.updatedSeq = e.seq
+	ts.updatedTs = e.ts
 }
 
 // --- planning (create, at the boundary) ---
@@ -401,8 +408,10 @@ const (
 
 func marker(status string) string {
 	switch status {
-	case statusDone, statusFailed:
+	case statusDone:
 		return "[x]"
+	case statusFailed:
+		return "[!]"
 	case statusActive:
 		return "[~]"
 	default:
@@ -410,39 +419,130 @@ func marker(status string) string {
 	}
 }
 
-func render(f *folded) string {
-	var order []string
-	for id := range f.tasks {
-		order = append(order, id)
+// orderedTaskStates is the queue order: position first, creation seq as
+// the deterministic tie-break (pane's ordering spine).
+func orderedTaskStates(f *folded) []*taskState {
+	out := make([]*taskState, 0, len(f.tasks))
+	for _, ts := range f.tasks {
+		out = append(out, ts)
 	}
-	sort.Slice(order, func(i, j int) bool {
-		a, b := f.tasks[order[i]], f.tasks[order[j]]
-		if a.pos != b.pos {
-			return a.pos < b.pos
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].pos != out[j].pos {
+			return out[i].pos < out[j].pos
 		}
-		return a.createdSeq < b.createdSeq
+		return out[i].createdSeq < out[j].createdSeq
 	})
-	done := 0
-	for _, id := range order {
-		if st := f.tasks[id].status; st == statusDone || st == statusFailed {
+	return out
+}
+
+// blockedBy is the dependency id when this unresolved task's dependency is
+// not done; empty otherwise (pane's TASK_TREE presence).
+func blockedBy(f *folded, ts *taskState) string {
+	if ts.status != statusPending && ts.status != statusActive {
+		return ""
+	}
+	if ts.dep == "" {
+		return ""
+	}
+	dep := f.tasks[ts.dep]
+	if dep == nil || dep.status == statusDone {
+		return ""
+	}
+	return ts.dep
+}
+
+// blockHint is the per-status teaching voice of a blocker.
+func blockHint(f *folded, depID string) string {
+	switch f.tasks[depID].status {
+	case statusPending:
+		return "pending; start it first"
+	case statusFailed:
+		return "failed; retry it first"
+	default:
+		return "in_progress"
+	}
+}
+
+// claimSuffix labels a foreign claim in render; own claims stay unlabeled
+// (pane's render trust model).
+func claimSuffix(ts *taskState, session string) string {
+	if ts.status != statusActive || ts.owner == "" || ts.owner == session {
+		return ""
+	}
+	owner := ts.owner
+	if len(owner) > 8 {
+		owner = owner[:8]
+	}
+	return " \u00b7 claimed by " + owner
+}
+
+// staleFooter is the presence footer: unresolved history older than the
+// threshold behind the latest seq. Pure over the fold; pane's voice.
+func staleFooter(f *folded) string {
+	if f.maxSeq <= STALE_THRESHOLD_SEQ {
+		return ""
+	}
+	n := 0
+	latest := ""
+	for _, ts := range f.tasks {
+		if ts.status != statusPending && ts.status != statusActive {
+			continue
+		}
+		if ts.updatedSeq > f.maxSeq-STALE_THRESHOLD_SEQ {
+			continue
+		}
+		n++
+		if ts.updatedTs > latest {
+			latest = ts.updatedTs
+		}
+	}
+	if n == 0 {
+		return ""
+	}
+	if len(latest) > 10 {
+		latest = latest[:10]
+	}
+	return fmt.Sprintf("\u00b7 %d unresolved since %s (recovered from log)", n, latest)
+}
+
+// render is pane's render: counts, the next pointer (blocked-skipping),
+// the rows with waits-on and claim labels.
+func render(f *folded, session string) string {
+	ordered := orderedTaskStates(f)
+	if len(ordered) == 0 {
+		return "(no tasks)"
+	}
+	done, failed := 0, 0
+	nextID := ""
+	for _, ts := range ordered {
+		switch ts.status {
+		case statusDone:
 			done++
+		case statusFailed:
+			failed++
+		}
+	}
+	for _, ts := range ordered {
+		if ts.status == statusPending && blockedBy(f, ts) == "" {
+			nextID = ts.id
+			break
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d/%d done", done, len(order))
-	var lines []string
-	for _, id := range order {
-		ts := f.tasks[id]
-		line := fmt.Sprintf("%s %s %s", ts.id, marker(ts.status), ts.text)
-		if ts.dep != "" && ts.status != statusDone && ts.status != statusFailed {
-			if dep := f.tasks[ts.dep]; dep != nil && dep.status != statusDone {
-				line += fmt.Sprintf(" \u00b7 waits on %s", ts.dep)
-			}
-		}
-		lines = append(lines, line)
+	fmt.Fprintf(&b, "%d/%d done", done, len(ordered))
+	if nextID != "" {
+		fmt.Fprintf(&b, " \u00b7 next: %s", nextID)
 	}
-	if len(lines) != 0 {
-		b.WriteString("\n" + strings.Join(lines, "\n"))
+	if failed != 0 {
+		fmt.Fprintf(&b, " \u00b7 %d failed", failed)
+	}
+	for _, ts := range ordered {
+		line := fmt.Sprintf("  %s %s %s", ts.id, marker(ts.status), ts.text)
+		if blocker := blockedBy(f, ts); blocker != "" {
+			line += fmt.Sprintf(" \u00b7 waits on %s", blocker)
+		}
+		line += claimSuffix(ts, session)
+		b.WriteString("\n" + line)
 	}
 	return b.String()
 }
@@ -453,14 +553,22 @@ func render(f *folded) string {
 // the problem when planning finds one, otherwise append the event as given
 // and persist the projection. One transaction, serializable.
 func Create(ctx context.Context, db store.DB, items []CreateItem, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := maybeCompact(bound, tx, f, session); e != nil {
+			return "", e
+		}
 		modified, problems := planCreate(f, items)
 		if len(problems) != 0 {
 			sort.Strings(problems)
 			return "", fmt.Errorf("todo: %s", strings.Join(problems, "; "))
 		}
+		note := "queue replaced with " + strconv.Itoa(len(items)) + " tasks"
 		if len(items) == 0 {
 			f.tasks = map[string]*taskState{} // clear: the only destructive verb
+			note = "queue cleared"
 		}
 		args, _ := json.Marshal(map[string]any{"tasks": asGiven(items)})
 		seq, e := appendEvent(bound, f.maxSeq+1, "create", string(args), session)
@@ -469,76 +577,160 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 		}
 		for _, ts := range modified {
 			ts.updatedSeq = seq
+			ts.updatedTs = nowRFC3339()
 		}
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return render(f), nil
+		return replyText(f, session, note), nil
 	})
 }
 
 // Start/Complete/Fail/Retry: pane's FSM. Claim checks and completion gating
 // land in TD3b; the transitions and the voice are pane's now.
 func Start(ctx context.Context, db store.DB, id, session string) (string, error) {
-	return verb(ctx, db, session, id, func(ts *taskState) (ok bool, voice string) {
+	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		switch ts.status {
 		case statusPending:
 			return true, ""
 		case statusActive:
-			return false, "'" + id + "' is already in_progress"
+			voice := "'" + id + "' is already in progress"
+			if ts.owner != "" {
+				voice += " (claimed by " + ts.owner + ")"
+			}
+			return false, voice
 		case statusDone:
-			return false, "'" + id + "' is done (read-only)"
+			return false, "'" + id + "' is done; read-only"
 		default:
-			return false, "'" + id + "' is failed; retry it first"
+			return false, "'" + id + "' failed; retry it first"
 		}
-	}, "start", "in_progress")
+	}, "start", statusActive, "'"+id+"' started")
 }
 
 func Complete(ctx context.Context, db store.DB, id, session string) (string, error) {
-	return verb(ctx, db, session, id, func(ts *taskState) (ok bool, voice string) {
+	if session == "" {
+		session = anon
+	}
+	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		switch ts.status {
-		case statusActive:
-			return true, ""
 		case statusPending:
 			return false, "'" + id + "' is pending; start it first"
 		case statusDone:
-			return false, "'" + id + "' is done (read-only)"
-		default:
-			return false, "'" + id + "' is failed"
+			return false, "'" + id + "' is done; read-only"
+		case statusFailed:
+			return false, "'" + id + "' failed; retry it first"
 		}
-	}, "complete", "done")
+		if ts.owner != "" && ts.owner != session {
+			return false, "'" + id + "' is claimed by " + ts.owner + "; fail it first to take over"
+		}
+		if blocker := blockedBy(f, ts); blocker != "" {
+			return false, "'" + id + "' is blocked by '" + blocker + "' (" + blockHint(f, blocker) + ")"
+		}
+		return true, ""
+	}, "complete", statusDone, "'"+id+"' completed")
 }
 
 func Fail(ctx context.Context, db store.DB, id, session string) (string, error) {
-	return verb(ctx, db, session, id, func(ts *taskState) (ok bool, voice string) {
-		switch ts.status {
-		case statusActive:
-			return true, ""
-		case statusPending:
-			return false, "'" + id + "' is pending; start it first"
-		case statusDone:
-			return false, "'" + id + "' is done (read-only)"
-		default:
-			return false, "'" + id + "' is already failed"
+	if session == "" {
+		session = anon
+	}
+	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := maybeCompact(bound, tx, f, session); e != nil {
+			return "", e
 		}
-	}, "fail", "failed")
+		ts, ok := f.tasks[id]
+		if !ok {
+			return "", fmt.Errorf("no task '%s'", id)
+		}
+		var voice string
+		switch ts.status {
+		case statusPending:
+			voice = "'" + id + "' is pending; start it first"
+		case statusDone:
+			voice = "'" + id + "' is done; read-only"
+		case statusFailed:
+			voice = "'" + id + "' is already failed"
+		}
+		if voice != "" {
+			return "", fmt.Errorf("%s", voice)
+		}
+		released := ""
+		if ts.owner != "" && ts.owner != session {
+			released = ts.owner
+		}
+		note := "'" + id + "' failed"
+		if released != "" {
+			note += " (released from " + released + ")"
+		}
+		args, _ := json.Marshal(map[string]any{"id": id})
+		seq, e := appendEvent(bound, f.maxSeq+1, "fail", string(args), session)
+		if e != nil {
+			return "", e
+		}
+		ts.status = statusFailed
+		ts.owner = ""
+		ts.updatedSeq = seq
+		ts.updatedTs = nowRFC3339()
+		if e := rewrite(tx, f); e != nil {
+			return "", e
+		}
+		return replyText(f, session, note), nil
+	})
 }
 
 func Retry(ctx context.Context, db store.DB, id, session string) (string, error) {
-	return verb(ctx, db, session, id, func(ts *taskState) (ok bool, voice string) {
+	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		if ts.status == statusFailed {
 			return true, ""
 		}
-		return false, "'" + id + "' is not failed"
-	}, "retry", "pending")
+		return false, "'" + id + "' is not failed; nothing to retry"
+	}, "retry", statusPending, "'"+id+"' back to pending")
 }
 
-func Read(ctx context.Context, db store.DB) (string, error) {
+// Move reorders the queue: the event records intent as given; replay
+// renumbers densely around the moved task, a deterministic pure function
+// of the pre-state. Call-time validation refuses out-of-range positions
+// loudly; replay skips them. Any status may be moved.
+func Move(ctx context.Context, db store.DB, id string, pos int, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
+	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := maybeCompact(bound, tx, f, session); e != nil {
+			return "", e
+		}
+		ts, ok := f.tasks[id]
+		if !ok {
+			return "", fmt.Errorf("no task '%s'", id)
+		}
+		if pos < 1 || pos > len(f.tasks) {
+			return "", fmt.Errorf("move position for '%s' must be between 1 and %d, got %d", id, len(f.tasks), pos)
+		}
+		args, _ := json.Marshal(map[string]any{"id": id, "pos": pos})
+		seq, e := appendEvent(bound, f.maxSeq+1, "move", string(args), session)
+		if e != nil {
+			return "", e
+		}
+		if appliedMove(f, ts, pos) {
+			ts.updatedSeq = seq
+			ts.updatedTs = nowRFC3339()
+		}
+		if e := rewrite(tx, f); e != nil {
+			return "", e
+		}
+		return replyText(f, session, "'"+id+"' moved to position "+strconv.Itoa(pos)), nil
+	})
+}
+
+func Read(ctx context.Context, db store.DB, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return render(f), nil
+		return replyText(f, session, ""), nil
 	})
 }
 
@@ -546,15 +738,21 @@ func verb(
 	ctx context.Context,
 	db store.DB,
 	session, id string,
-	check func(*taskState) (ok bool, voice string),
-	op, toStatus string,
+	check func(f *folded, ts *taskState) (ok bool, voice string),
+	op, toStatus, note string,
 ) (string, error) {
+	if session == "" {
+		session = anon
+	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := maybeCompact(bound, tx, f, session); e != nil {
+			return "", e
+		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", fmt.Errorf("no such task '%s'", id)
+			return "", fmt.Errorf("no task '%s'", id)
 		}
-		ok, voice := check(ts)
+		ok, voice := check(f, ts)
 		if !ok {
 			return "", fmt.Errorf("%s", voice)
 		}
@@ -565,6 +763,7 @@ func verb(
 		}
 		ts.status = toStatus
 		ts.updatedSeq = seq
+		ts.updatedTs = nowRFC3339()
 		if toStatus == statusActive {
 			if session == "" {
 				ts.owner = anon
@@ -577,8 +776,182 @@ func verb(
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return render(f), nil
+		return replyText(f, session, note), nil
 	})
+}
+
+// --- reply shaping, auto-compaction, fold-side move/compact ---
+
+// replyText is pane's reply: the note line, the full queue, the stale
+// footer. Reads carry no note.
+func replyText(f *folded, session, note string) string {
+	var b strings.Builder
+	if note != "" {
+		fmt.Fprintf(&b, "\u2192 %s\n", note)
+	}
+	b.WriteString(render(f, session))
+	if foot := staleFooter(f); foot != "" {
+		b.WriteString("\n" + foot)
+	}
+	return b.String()
+}
+
+// STALE_THRESHOLD_SEQ and COMPACT_THRESHOLD_EVENTS are pane's thresholds:
+// deterministic, boundary-testable, exported.
+const (
+	STALE_THRESHOLD_SEQ      = 200
+	COMPACT_THRESHOLD_EVENTS = 1000
+)
+
+// maybeCompact is pane's auto-compaction: a mutation past the threshold
+// lands the full-state snapshot first, rewrites the anchors to the
+// snapshot's epoch, and deletes the older log. Reads never reach this.
+func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) error {
+	if f.maxSeq-f.compactSeq < COMPACT_THRESHOLD_EVENTS {
+		return nil
+	}
+	args, _ := json.Marshal(map[string]any{"tasks": snapshotOf(f)})
+	seq, e := appendEvent(bound, f.maxSeq+1, "compact", string(args), session)
+	if e != nil {
+		return e
+	}
+	f.compactSeq = seq
+	f.maxSeq = seq
+	tsStr := nowRFC3339()
+	for _, ts := range f.tasks {
+		ts.createdSeq, ts.updatedSeq, ts.updatedTs = seq, seq, tsStr
+	}
+	if _, e := tx.Exec("DELETE FROM events WHERE seq < ?", seq); e != nil {
+		return fmt.Errorf("todo: compact: %w", e)
+	}
+	return nil
+}
+
+// snapshotOf is the compact payload in pane's shape: positions as pane
+// carries them (zero-based), links and claims as given.
+func snapshotOf(f *folded) []any {
+	var out []any
+	for _, ts := range f.tasks {
+		link := any(nil)
+		if ts.dep != "" {
+			link = ts.dep
+		}
+		owner := any(nil)
+		if ts.owner != "" {
+			owner = ts.owner
+		}
+		out = append(out, map[string]any{
+			"id": ts.id, "text": ts.text, "status": ts.status,
+			"pos": ts.pos - 1, "dependsOn": link, "owner": owner,
+		})
+	}
+	return out
+}
+
+// appliedMove is pane's splice: remove at the current position, insert at
+// the target, renumber densely, no gaps. False when the move is a no-op or
+// inapplicable.
+func appliedMove(f *folded, ts *taskState, pos int) bool {
+	if pos < 1 || pos > len(f.tasks) {
+		return false
+	}
+	ordered := orderedTaskStates(f)
+	idx := -1
+	for i, ot := range ordered {
+		if ot == ts {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 || idx == pos-1 {
+		return false
+	}
+	removed := make([]*taskState, 0, len(ordered))
+	removed = append(removed, ordered[:idx]...)
+	removed = append(removed, ordered[idx+1:]...)
+	rest := make([]*taskState, 0, len(removed)+1)
+	rest = append(rest, removed[:pos-1]...)
+	rest = append(rest, ts)
+	rest = append(rest, removed[pos-1:]...)
+	for i, ot := range rest {
+		ot.pos = i + 1
+	}
+	return true
+}
+
+// applyMoveEvent folds one move event: total. Missing tasks, out-of-range
+// positions, and no-ops skip; the splice itself is pane's.
+func (f *folded) applyMoveEvent(e eventRow) {
+	var payload struct {
+		ID  string `json:"id"`
+		Pos int    `json:"pos"`
+	}
+	if json.Unmarshal([]byte(e.args), &payload) != nil || payload.ID == "" {
+		return
+	}
+	ts, ok := f.tasks[payload.ID]
+	if !ok {
+		return
+	}
+	if !appliedMove(f, ts, payload.Pos) {
+		return
+	}
+	ts.updatedSeq = e.seq
+	ts.updatedTs = e.ts
+}
+
+// applyCompactEvent folds a snapshot: the map is cleared and rebuilt from
+// the capture. A malformed snapshot reads as an empty queue; replay never
+// throws.
+func (f *folded) applyCompactEvent(e eventRow) {
+	tasks := map[string]*taskState{}
+	var payload struct {
+		Tasks []struct {
+			ID        string  `json:"id"`
+			Text      string  `json:"text"`
+			Status    string  `json:"status"`
+			DependsOn *string `json:"dependsOn"`
+			Pos       int     `json:"pos"`
+			Owner     string  `json:"owner"`
+		} `json:"tasks"`
+	}
+	if json.Unmarshal([]byte(e.args), &payload) == nil {
+		for _, r := range payload.Tasks {
+			if r.ID == "" || r.Text == "" {
+				continue
+			}
+			status := r.Status
+			switch status {
+			case statusPending, statusActive, statusDone, statusFailed:
+			default:
+				status = statusPending
+			}
+			pos := r.Pos + 1
+			if pos < 1 {
+				pos = 1
+			}
+			var dep string
+			if r.DependsOn != nil {
+				dep = *r.DependsOn
+			}
+			tasks[r.ID] = &taskState{
+				id: r.ID, text: r.Text, status: status,
+				pos: pos, dep: dep, owner: r.Owner,
+			}
+		}
+		for _, ts := range tasks {
+			if ts.dep != "" && tasks[ts.dep] == nil {
+				ts.dep = ""
+			}
+		}
+	}
+	for _, ts := range tasks {
+		ts.createdSeq = e.seq
+		ts.updatedSeq = e.seq
+		ts.updatedTs = e.ts
+	}
+	f.tasks = tasks
+	f.compactSeq = e.seq
 }
 
 // --- plumbing ---
@@ -604,7 +977,7 @@ func mutate(ctx context.Context, db store.DB, act func(bound context.Context, tx
 }
 
 func eventsOf(tx *sql.Tx) (*folded, error) {
-	rows, err := tx.Query("SELECT seq, op, args, session FROM events ORDER BY seq")
+	rows, err := tx.Query("SELECT seq, op, args, session, ts FROM events ORDER BY seq")
 	if err != nil {
 		return nil, fmt.Errorf("todo: event log: %w", err)
 	}
@@ -613,7 +986,7 @@ func eventsOf(tx *sql.Tx) (*folded, error) {
 	for rows.Next() {
 		var e eventRow
 		var session sql.NullString
-		if err := rows.Scan(&e.seq, &e.op, &e.args, &session); err != nil {
+		if err := rows.Scan(&e.seq, &e.op, &e.args, &session, &e.ts); err != nil {
 			return nil, fmt.Errorf("todo: event log: %w", err)
 		}
 		e.session = session.String
@@ -629,11 +1002,11 @@ func eventsOf(tx *sql.Tx) (*folded, error) {
 // minted seq. seq is omitted from the INSERT (rowid semantics): strictly
 // increasing by construction, no mint query owned.
 func appendEvent(bound context.Context, seq int64, op, args, session string) (int64, error) {
-	var sess *string
-	if session != "" {
-		s := session
-		sess = &s
+	if session == "" {
+		session = anon
 	}
+	s := session
+	sess := &s
 	ev, err := tododomain.NewEventDomain().InsertEvent(bound, tododomain.Event{
 		Seq: seq, Ts: nowRFC3339(), Op: op, Args: args, Session: sess,
 	})
@@ -690,8 +1063,11 @@ func asGiven(items []CreateItem) []any {
 	var out []any
 	for _, it := range items {
 		m := map[string]any{"text": it.Text}
-		if it.DependsOn != nil {
+		switch {
+		case it.DependsOn != nil:
 			m["dependsOn"] = *it.DependsOn
+		case it.DepNull:
+			m["dependsOn"] = nil
 		}
 		out = append(out, m)
 	}
