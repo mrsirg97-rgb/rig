@@ -1001,6 +1001,9 @@ func mutate(ctx context.Context, db store.DB, act func(bound context.Context, tx
 	return reply, nil
 }
 
+// eventsOf: the event scan that rebuilds the fold. Raw SQL on purpose:
+// no ordered event-log scan accessor is generated — the fold reads the
+// spine in seq order — the store's one raw read, named as such.
 func eventsOf(tx *sql.Tx) (*folded, error) {
 	rows, err := tx.Query("SELECT seq, op, args, session, ts FROM events ORDER BY seq")
 	if err != nil {
@@ -1023,9 +1026,9 @@ func eventsOf(tx *sql.Tx) (*folded, error) {
 	return f, nil
 }
 
-// appendEvent lands one event through the generated domain and returns the
-// minted seq. seq is omitted from the INSERT (rowid semantics): strictly
-// increasing by construction, no mint query owned.
+// appendEvent lands one event through the generated domain and returns
+// the seq. seq is passed explicitly (maxSeq+1 over the caller's fold):
+// strictly increasing by construction, no mint query owned.
 func appendEvent(bound context.Context, seq int64, op, args, session string) (int64, error) {
 	if session == "" {
 		session = anon
@@ -1041,6 +1044,10 @@ func appendEvent(bound context.Context, seq int64, op, args, session string) (in
 	return ev.Seq, nil
 }
 
+// rewrite: the projection's reconstruction. Raw SQL on purpose: no
+// bulk-replace accessor is generated, and the projection is replaced
+// whole inside the caller's transaction — the store's one raw write,
+// named as such.
 func rewrite(tx *sql.Tx, f *folded) error {
 	if _, err := tx.Exec("DELETE FROM task_deps"); err != nil {
 		return fmt.Errorf("todo: rewrite: %w", err)
