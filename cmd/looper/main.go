@@ -19,6 +19,7 @@ import (
 	"github.com/mrsirg97-rgb/looper"
 	"github.com/mrsirg97-rgb/looper/core"
 	"github.com/mrsirg97-rgb/looper/frontend/cli"
+	"github.com/mrsirg97-rgb/looper/frontend/oneshot"
 	"github.com/mrsirg97-rgb/looper/loop"
 	"github.com/mrsirg97-rgb/looper/middleware/guard"
 	"github.com/mrsirg97-rgb/looper/middleware/perm"
@@ -75,7 +76,10 @@ func envOrInt(key string, def int) int {
 }
 
 func main() {
-	baseURL := flag.String("base-url", envOr("LOOPER_BASE_URL", "http://127.0.0.1:8080/v1"), "OpenAI-compatible endpoint base URL")
+	// the default endpoint is the worker swap itself: two defaults for the
+	// same server is how the runner's busy check (on the swap) passes while
+	// the worker (on another) faults every tick.
+	baseURL := flag.String("base-url", envOr("LOOPER_BASE_URL", "http://127.0.0.1:8090/v1"), "OpenAI-compatible endpoint base URL (the worker swap)")
 	model := flag.String("model", envOr("LOOPER_MODEL", "local"), "model name")
 	system := flag.String("system", envOr("LOOPER_SYSTEM", defaultSystem), "system prompt")
 	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep,todo,rem,scheduler"), "comma-separated allow-list of tool names")
@@ -195,11 +199,11 @@ func main() {
 	// seam). Everything downstream of the swap is shared.
 	var fe core.Frontend = cli.New(os.Stdin, os.Stdout)
 	if *prompt != "" {
-		if err := core.ErrPrompt(*prompt); err != nil {
+		if err := oneshot.ErrPrompt(*prompt); err != nil {
 			fmt.Fprintln(os.Stderr, "looper:", err)
 			os.Exit(1)
 		}
-		fe = &core.OneShot{Prompt: *prompt, Out: os.Stdout}
+		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout}
 	}
 	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID)
 
@@ -221,7 +225,7 @@ func main() {
 	// faulted worker that exited ok would log a false success. The REPL
 	// keeps its continue-on-fault semantics: its faults never reach this
 	// branch.
-	oneShot, oneShotOK := fe.(*core.OneShot)
+	oneShot, oneShotOK := fe.(*oneshot.OneShot)
 	faulted := oneShotOK && oneShot.Faulted()
 
 	// the session row closes with what the run was
