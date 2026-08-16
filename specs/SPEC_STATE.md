@@ -8,8 +8,8 @@ that describes each schema and the thin `core.Tool` adapter over each
 generated service. Everything between is projected, never typed by hand.
 
 This is off the roadmap on purpose: it is not one deliverable, it is the
-substrate roadmap deliverables 4, 5, 7, and 8 stand on (sessions, todo, rem,
-scheduler), plus the session store the headless workers need first. It is
+substrate roadmap deliverables 2, 3, 4, and 9 stand on (todo, rem,
+scheduler, sessions), plus the session store the headless workers need first. It is
 mostly data modelling and porting.
 
 Reference for the compiler: `~/Projects/lift/DESIGN.md` (the four tags,
@@ -63,7 +63,7 @@ looper/
       gen.json     lift engine config for this store
       source.json  lift source config for this store
       state.go     minting, projection helpers, the recorder the loop feeds
-    todo/          same shape; plus sqliteread/ (GENERATED) for tree reads
+    todo/          same shape (tree reads fold in Go; no sqliteread camera needed)
     rem/           same shape; plus fts.sql (FTS5 virtual table, triggers)
     scheduler/     same shape
   tool/
@@ -143,7 +143,7 @@ The session transcript as rows. One file per session under
 - `sessions`: id (primary, minted, stable for the process), cwd, model,
   started_at, ended_at, exit (ok|fault|cancelled), version.
 - `messages`: seq (primary), session_id (link sessions), role, content,
-  reasoning (nullable; deliverable 2 fills it), tool_id (nullable),
+  reasoning (nullable; deliverable 7 fills it), tool_id (nullable),
   created_at.
 - `tool_calls`: id (primary; the provider's call id), message_seq (link
   messages), name, args (TEXT json), result (TEXT, nullable until it lands),
@@ -155,7 +155,7 @@ The session transcript as rows. One file per session under
   composite primary with `session_id` directly and carries no Session link
   while its siblings do — harmless (no FK is emitted) but named for
   consistency. Tool results live on `tool_calls`, not as role=tool rows;
-  deliverable 4's session resume projects `[]core.Message` back from the
+  deliverable 9's session resume projects `[]core.Message` back from the
   transcript rows, so no schema change is owed later.
 - `faults`: seq (primary), session_id, at, message.
 
@@ -164,11 +164,11 @@ The recorder is a leaf that receives what the loop already emits: it wraps
 the middleware seam (`ToolStart`/`ToolResult` are visible there today as the
 call and its result). It appends a row per event inside its own short
 transaction, so a kill leaves every completed row readable. No loop change.
-When deliverable 2 lands tool events and reasoning, the recorder switches
+When deliverable 7 lands tool events and reasoning, the recorder switches
 sources; its schema does not change.
 
 `-p` workers get their autopsy from this: the `sessions` command (roadmap
-deliverable 4, out of scope here) or plain `sqlite3`.
+deliverable 9, out of scope here) or plain `sqlite3`.
 
 ### todo (port; TODO_SPEC.md A, Rev 2, TASK_TREE_SPEC.md A)
 
@@ -220,7 +220,7 @@ deliverable 4, out of scope here) or plain `sqlite3`.
   (`memory_fts` MATCH and the trigram join), which are the only raw queries
   the store owns and are named as such.
 - `AutoReflect` ships in the store with no caller yet; compaction wires
-  it (roadmap deliverable 3).
+  it (roadmap deliverable 8).
 - lift's `cmd/rem` is a different design (postgres, mesh, episodes and
   associations). Its recall projection and testkit are worth reading; its
   schema is not the one being ported. pane's rem is.
@@ -242,7 +242,7 @@ post-merge corrections)
 - Crontab remains the scheduling truth (tagged lines, surgical rewrites,
   written before the store commit; drift surfaced in `list`). The runner is
   a small Go binary or the looper binary itself with a `run-job` verb; it
-  needs `-p` one-shot mode from roadmap deliverable 2 and llama-swap's
+  needs `-p` one-shot mode (landed with the scheduler) and llama-swap's
   `/running` and `/v1/models` for the busy policy, unchanged.
 
 ## interfaces
@@ -295,7 +295,7 @@ pane's promptGuidelines, lowercase, terse.
   function in the store package is the implementer's choice per store;
   either way it is one function, tested by replaying pane's fixture logs.
 - **The state store is a recorder, not a dependency of the loop.** It hangs
-  off `Frontend.Notify` and the middleware seam. When deliverable 2 adds tool
+  off `Frontend.Notify` and the middleware seam. When deliverable 7 adds tool
   events, the recorder moves its taps; the schema is designed for that day
   now (tool_calls has started_at/ended_at, messages has reasoning).
 - **One transaction per tool call, serializable, opened in the adapter.**

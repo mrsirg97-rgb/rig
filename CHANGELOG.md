@@ -2,7 +2,48 @@
 
 ## [Unreleased]
 
-- **tool/todo** (roadmap deliverable 5): the task-queue store — pane's
+- **tool/scheduler** (roadmap deliverable 4): background jobs on the
+  user's crontab, ported from pane. Two stores (global, per-workspace) with
+  the event-log spine and `jN` ids never reused; crontab as the scheduling
+  truth (tagged lines, surgical rewrites, foreign lines byte-identical,
+  written before the store commit, drift surfaced in `list`); 5-field
+  vixie validation and `once` + `at`; the `runs` container as the audit
+  read. The runner is looper's own `run-job <key>` verb: flock per key,
+  busy policy against llama-swap (`skip` | `force`, own-slot-loaded runs,
+  unreachable fails closed), spawn under a timeout with process-group kill,
+  run records and logs (newest 20), a once job consumed after its fire.
+  Workers are `looper -p` with the swap endpoint passed explicitly; the
+  default `-base-url` now matches the swap (8090).
+- **`-p` one-shot mode** (`frontend/oneshot`): one prompt in, the response
+  on stdout, faults propagate to a non-zero exit so a run record cannot
+  log false success. Borrowed from roadmap deliverable 7 to give the
+  scheduler its worker.
+- **tool/rem** (roadmap deliverable 3): memory, ported from pane. learn
+  (idempotent on scope + content md5), recall (FTS5 and trigram arms fused
+  by reciprocal rank at k=60, effective strength at read, project-first
+  with global fill, live-hit budget), reflect (distilled memory with its
+  raw source), prune (consolidate as the checkpointed pass, remove/reduce
+  by selection). Ids minted from a meta counter, never reused;
+  supersession SET NULL cleared by prune in the same transaction; FTS and
+  trigram rows written in code, no orphans; `AutoReflect` shipped for
+  compaction to wire. `memories.source` defaults to the calling session id,
+  free text allowed.
+- **store/state** (SPEC_STATE): the session transcript as rows. `sessions`,
+  `messages`, `tool_calls`, `usage`, `files`, `faults` in a workspace-shared
+  sqlite file; a recorder on the Frontend and middleware seams lands every
+  completed row inside its own short transaction, so a killed worker leaves
+  its autopsy. `core.Session.ID` minted at `NewSession` and shared by the
+  loop and the transcript.
+- **store/**: the substrate under all of the above. lift-generated domain
+  and DDL from hand-written four-tag metadata (`gen.json` with the runtime
+  field; lift gained it, and portable `IN`-list batch getters, in the
+  process), `sqlx` and `lazy` copied verbatim, `Open` with pragmas riding
+  the DSN (`_txlock=immediate`, WAL, busy_timeout, foreign_keys on every
+  pooled connection), schema version check, corruption quarantined aside,
+  a generation-drift test per store. `modernc.org/sqlite` is the one
+  require line.
+
+- **tool/todo** (roadmap deliverable 2): the task-queue store — pane's
   semantics, Go over the generated substrate. Claim semantics (start
   claims, foreign complete/start refuses and names the claimer, fail
   frees); completion gated by dependencies with the blocker named, cycles
