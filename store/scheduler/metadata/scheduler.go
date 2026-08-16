@@ -34,22 +34,22 @@ type Event struct {
 // minted forward over them and names are never reused. created_seq and
 // updated_seq pair their links, exactly as the todo tasks shape.
 type Job struct {
-	ID           string `primary:"true" alias:"name=id,nullable=false"`
-	Name         string `alias:"name=name,nullable=false"`
-	Prompt       string `alias:"name=prompt,nullable=false"`
-	Cron         string `alias:"name=cron,nullable=false"`
+	ID           string  `primary:"true" alias:"name=id,nullable=false"`
+	Name         string  `alias:"name=name,nullable=false"`
+	Prompt       string  `alias:"name=prompt,nullable=false"`
+	Cron         string  `alias:"name=cron,nullable=false"`
 	At           *string `alias:"name=at,nullable=true"`
-	Cwd          string `alias:"name=cwd,nullable=false"`
-	Model        string `alias:"name=model,nullable=false"`
-	Busy         string `alias:"name=busy,nullable=false"`
-	State        string `alias:"name=state,nullable=false"`
+	Cwd          string  `alias:"name=cwd,nullable=false"`
+	Model        string  `alias:"name=model,nullable=false"`
+	Busy         string  `alias:"name=busy,nullable=false"`
+	State        string  `alias:"name=state,nullable=false"`
 	LastStatus   *string `alias:"name=last_status,nullable=true"`
 	LastTs       *string `alias:"name=last_ts,nullable=true"`
 	LastExit     *int64  `alias:"name=last_exit,nullable=true"`
-	CreatedSeq   int64  `alias:"name=created_seq,nullable=false"`
-	CreatedEvent Event  `link:"from=Event,on=seq,many=false"`
-	UpdatedSeq   int64  `alias:"name=updated_seq,nullable=false"`
-	UpdatedEvent Event  `link:"from=Event,on=seq,many=false"`
+	CreatedSeq   int64   `alias:"name=created_seq,nullable=false"`
+	CreatedEvent Event   `link:"from=Event,on=seq,many=false"`
+	UpdatedSeq   int64   `alias:"name=updated_seq,nullable=false"`
+	UpdatedEvent Event   `link:"from=Event,on=seq,many=false"`
 }
 
 // table:"runs"

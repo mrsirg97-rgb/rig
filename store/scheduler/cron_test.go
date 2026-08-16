@@ -23,7 +23,7 @@ func TestValidateCronAcceptsStandardExpressions(t *testing.T) {
 		"30 14 15 8 *",
 		"1,2,3 0 * * *",
 		"1-30/2 0 1 * *",
-		"0 0 * * 7", // 7 == Sunday
+		"0 0 * * 7",       // 7 == Sunday
 		"  0   * * * *  ", // surrounding/multi whitespace
 		"* * * * *",
 	} {
