@@ -190,6 +190,9 @@ deliverable 4, out of scope here) or plain `sqlite3`.
   boundary, cycles refused, completion gated, blocked skipped by `next`.
 - The FSM lives in `store/todo/todo.go` as Go, errors in pane's teaching
   voice; the generated domain is only the substrate it writes through.
+  Two raw arms are owned and named as such: the event scan that rebuilds
+  the fold (no ordered scan accessor is generated) and the projection
+  rewrite (no bulk-replace accessor is generated).
 
 ### rem (port; REM_SPEC.md D, E, F, G)
 
