@@ -33,6 +33,7 @@ import (
 	"github.com/mrsirg97-rgb/looper/tool/bash"
 	"github.com/mrsirg97-rgb/looper/tool/file"
 	"github.com/mrsirg97-rgb/looper/tool/fs"
+	pythontool "github.com/mrsirg97-rgb/looper/tool/python"
 	remapi "github.com/mrsirg97-rgb/looper/tool/rem"
 	schedapi "github.com/mrsirg97-rgb/looper/tool/scheduler"
 	todoapi "github.com/mrsirg97-rgb/looper/tool/todo"
@@ -45,12 +46,12 @@ const defaultSystem = "You are looper, a minimal coding agent. Use the provided 
 
 // wire assembles the kernel's dependencies. Swapping a seam is a change
 // here and nowhere else.
-func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, observe func(core.ToolExec) core.ToolExec, todoTool, remTool, schedTool core.Tool) *looper.Kernel {
+func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, observe func(core.ToolExec) core.ToolExec, todoTool, remTool, schedTool, pyTool core.Tool) *looper.Kernel {
 	return looper.New(
 		looper.WithProvider(openai.New(baseURL, model)),
 		looper.WithFrontend(fe),
 		looper.WithPolicy(policy.Passthrough(system)),
-		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool, remTool, schedTool),
+		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool, remTool, schedTool, pyTool),
 		looper.WithMiddleware(
 			perm.Allowlist(allow...),
 			guard.Bound(retries),
@@ -82,7 +83,7 @@ func main() {
 	baseURL := flag.String("base-url", envOr("LOOPER_BASE_URL", "http://127.0.0.1:8090/v1"), "OpenAI-compatible endpoint base URL (the worker swap)")
 	model := flag.String("model", envOr("LOOPER_MODEL", "local"), "model name")
 	system := flag.String("system", envOr("LOOPER_SYSTEM", defaultSystem), "system prompt")
-	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep,todo,rem,scheduler"), "comma-separated allow-list of tool names")
+	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep,todo,rem,scheduler,python"), "comma-separated allow-list of tool names")
 	retries := flag.Int("retries", envOrInt("LOOPER_RETRIES", 3), "repetition bound on identical failing calls (cleared on success)")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -113,6 +114,19 @@ func main() {
 		fmt.Fprintln(os.Stderr, "looper:", err)
 		os.Exit(1)
 	}
+	// The python kernel: one persistent IPython session for the process
+	// (looper runs one session per process); the root owns its teardown —
+	// pane's session_shutdown hook, without the hook. LOOPER_PYTHON is the
+	// operator's interpreter (and the seam's contract: no lazy venv
+	// bootstrap); the host choice is logged so pane's and looper's hosts
+	// cannot drift silently.
+	py := pythontool.New()
+	if v := os.Getenv("LOOPER_PYTHON"); v != "" {
+		py = pythontool.NewWith(v, pythontool.DefaultHost())
+	}
+	defer py.Close()
+	fmt.Fprintf(os.Stderr, "looper: python kernel host: %s\n", py.Host())
+
 	sessionsPath := filepath.Join(cfgDir, "looper", "sessions", hex.EncodeToString(digest[:6])+".sqlite")
 	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "looper:", err)
@@ -208,7 +222,7 @@ func main() {
 	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID)
 
 	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, rec.Observe, todoapi.New(tdb), remapi.New(rdb),
-		schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"))
+		schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"), py)
 	k.Session = session // one identity: the loop's session is the transcript's
 
 	// Interrupt cancels the turn at its next boundary.
