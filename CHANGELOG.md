@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **openai adapter: truncated tool calls** (fix surfaced by the compaction
+  live e2e): a stream cut off by `max_tokens` can cut a tool call's
+  `arguments` mid-JSON while still reporting `finish_reason: "length"`. The
+  adapter now checks the accumulated args with `json.Valid` before emitting
+  the `ToolCallEvent`; invalid args fault with the truncation and the finish
+  reason named, no partial call in the transcript, no `Done`. Empty args
+  (a no-arg call) stay legal. Named test
+  `TestLengthFinishedTruncatedToolCallArgsFault`, complement
+  `TestNoArgToolCallStillEmitted`; the invariant is recorded in the event
+  contract (`specs/SPEC_CORE.md`).
+
 - renamed looper -> rig
 
 - **compaction** (roadmap deliverable 8, `specs/SPEC_COMPACT.md`): the

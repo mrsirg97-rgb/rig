@@ -161,7 +161,15 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 			return
 		}
 		for _, idx := range sortedPending(pending) {
-			if !emit(core.ToolCallEvent{Call: *pending[idx]}) {
+			call := pending[idx]
+			if len(call.Args) > 0 && !json.Valid(call.Args) {
+				// A length-capped stream can cut a call's args mid-JSON.
+				// Executing or re-sending half-args poisons the transcript,
+				// so drop the call and fault with the cause named.
+				fault(fmt.Errorf("openai: tool call %q truncated mid-args (finish_reason %q); raise MaxTokens or the reserve", call.Name, finishing))
+				return
+			}
+			if !emit(core.ToolCallEvent{Call: *call}) {
 				return
 			}
 		}

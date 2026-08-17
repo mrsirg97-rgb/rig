@@ -135,6 +135,76 @@ func TestAccumulatesSplitToolCallArgs(t *testing.T) {
 	}
 }
 
+func TestLengthFinishedTruncatedToolCallArgsFault(t *testing.T) {
+	// The live failure: max_tokens cut the stream mid-args, the server
+	// still reports finish_reason "length", and the half-JSON args would
+	// otherwise be executed and re-sent as broken data.
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"bash","arguments":"{\"command\": \"cat /tmp/longfile"}}]}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"length"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if got := kinds(events); !strings.HasSuffix(got, "fault") {
+		t.Fatalf("truncated tool call args (finish length) must Fault, got %s", got)
+	}
+	for _, ev := range events {
+		if _, ok := ev.(core.ToolCallEvent); ok {
+			t.Fatal("a truncated tool call must not be emitted into the transcript")
+		}
+		if _, ok := ev.(core.Done); ok {
+			t.Fatal("no Done after a truncated tool call")
+		}
+	}
+	msg := lastFault(t, events).Err.Error()
+	if !strings.Contains(msg, "bash") || !strings.Contains(msg, "truncated") {
+		t.Fatalf("fault must name the call and the cause, got %q", msg)
+	}
+}
+
+func TestNoArgToolCallStillEmitted(t *testing.T) {
+	// Complement of the truncation rule: empty args are legal (a no-arg
+	// call), so the validity check must not fault them.
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"ping"}}]}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	var calls []core.ToolCall
+	for _, ev := range events {
+		if c, ok := ev.(core.ToolCallEvent); ok {
+			calls = append(calls, c.Call)
+		}
+	}
+	if len(calls) != 1 {
+		t.Fatalf("no-arg tool call must still be emitted, got %d calls (%s)", len(calls), kinds(events))
+	}
+	if len(calls[0].Args) != 0 {
+		t.Fatalf("no-arg call args = %s, want empty", calls[0].Args)
+	}
+}
+
 func TestMalformedJSONLineFaults(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"content":"half "}}]}`,
