@@ -39,10 +39,11 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 	}
 
 	body, err := json.Marshal(wireRequest{
-		Model:    p.model,
-		Messages: wireMessages(req.Messages),
-		Tools:    wireTools(req.Tools),
-		Stream:   true,
+		Model:         p.model,
+		Messages:      wireMessages(req.Messages),
+		Tools:         wireTools(req.Tools),
+		Stream:        true,
+		StreamOptions: &wireStreamOptions{IncludeUsage: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("openai: encode request: %w", err)
@@ -200,10 +201,18 @@ func sortedPending(pending map[int]*core.ToolCall) []int {
 // wire shapes. Named types so a field typo fails at compile time.
 
 type wireRequest struct {
-	Model    string        `json:"model"`
-	Messages []wireMessage `json:"messages"`
-	Tools    []wireTool    `json:"tools,omitempty"`
-	Stream   bool          `json:"stream"`
+	Model         string             `json:"model"`
+	Messages      []wireMessage      `json:"messages"`
+	Tools         []wireTool         `json:"tools,omitempty"`
+	Stream        bool               `json:"stream"`
+	StreamOptions *wireStreamOptions `json:"stream_options,omitempty"`
+}
+
+// wireStreamOptions asks the server to include the usage chunk on the
+// stream. OpenAI and llama.cpp both emit usage only when this is set;
+// without it Done.Usage is all zeros and the cache-hit line reads zero.
+type wireStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 func wireMessages(msgs []core.Message) []wireMessage {

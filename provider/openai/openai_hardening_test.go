@@ -206,3 +206,39 @@ func stringOrError(raw json.RawMessage) (string, bool) {
 	}
 	return s, true
 }
+
+// The adapter must request the usage chunk on the stream: OpenAI and
+// llama.cpp emit usage only when stream_options.include_usage is set —
+// without it Done.Usage is all zeros and the cache line reads zero
+// (verified live against the swap). Assert the field goes over the wire,
+// the way the shape test asserts parameters is an object.
+func TestStreamRequestsUsageOnTheWire(t *testing.T) {
+	var captured json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		captured = req["stream_options"]
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n")
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	if _, err := drain(t, context.Background(), p, userReq()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if len(captured) == 0 {
+		t.Fatal("request body has no stream_options — the server will not send a usage chunk")
+	}
+	var opts struct {
+		IncludeUsage bool `json:"include_usage"`
+	}
+	if err := json.Unmarshal(captured, &opts); err != nil {
+		t.Fatalf("stream_options is not an object: %v", err)
+	}
+	if !opts.IncludeUsage {
+		t.Fatalf("stream_options.include_usage = %v, want true", opts.IncludeUsage)
+	}
+}
