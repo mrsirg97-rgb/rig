@@ -34,6 +34,7 @@ type Recorder struct {
 	reason  strings.Builder
 	pending []core.ToolCall
 	lastSeq int64
+	relandN int // the re-landing id suffix counter (SPEC_COMPACT 5)
 	ensured bool
 	mu      sync.Mutex
 }
@@ -112,6 +113,13 @@ func (r *Recorder) observe(ev core.Event) {
 			}
 		}
 		r.upsertFiles() // turn boundary: the session's files snapshot
+	case core.Compacted:
+		// SPEC_COMPACT 5: the summary lands as a marked user row plus a
+		// usage row, and the kept tail is re-landed after it (fresh seqs,
+		// fresh call ids) so the resume projection — which starts from the
+		// last [compaction] row — rebuilds the compacted shape, not the
+		// full history.
+		r.landCompacted(e)
 	case core.Fault:
 		if _, e2 := RecordFault(context.Background(), r.db, r.sid, now(), e.Err.Error()); e2 != nil {
 			r.loud("fault", e2)
@@ -172,6 +180,89 @@ func (r *Recorder) land() (seq int64) {
 		}
 	}
 	return seq
+}
+
+// landCompacted lands a compaction (SPEC_COMPACT 5): the summary as a
+// marked user row plus a usage row, then re-lands the kept tail after it.
+func (r *Recorder) landCompacted(ev core.Compacted) {
+	seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", ev.Summary, nil, nil)
+	if e != nil {
+		r.loud("summary row", e)
+		return
+	}
+	r.setLastSeq(seq)
+	if e2 := RecordUsage(context.Background(), r.db, seq, int64(ev.Usage.Prompt), int64(ev.Usage.Completion), int64(ev.Usage.CacheRead), int64(ev.Usage.CacheWrite)); e2 != nil {
+		r.loud("summary usage", e2)
+	}
+	r.relandTail()
+}
+
+// relandTail re-lands the kept tail after the summary row (SPEC_COMPACT
+// 5): at the Compacted moment the root's session is exactly [summary row]
+// + tail, so the tail is the session's messages after the first. Fresh
+// rows (fresh seqs); the assistant calls carry recorder-minted fresh ids
+// (the tool_calls.id primary key), name/args/result verbatim, so the
+// call/result pair stays consistent within the copy; the earlier rows
+// stay in the store as the autopsy. Duplicates bounded by the tail
+// (KeepRecent + one batch). A dangling result whose call is not in the
+// tail has nothing fresh to attach to — the original row is the autopsy.
+func (r *Recorder) relandTail() {
+	if r.session == nil {
+		return
+	}
+	r.mu.Lock()
+	msgs := append([]core.Message(nil), r.session.Messages...)
+	r.mu.Unlock()
+	if len(msgs) <= 1 {
+		return
+	}
+	tail := msgs[1:]
+	r.mu.Lock()
+	r.relandN++
+	suffix := fmt.Sprintf("-r%d", r.relandN)
+	r.mu.Unlock()
+	idMap := map[string]string{}
+	for _, m := range tail {
+		switch m.Role {
+		case core.RoleUser:
+			if seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", m.Content, nil, nil); e != nil {
+				r.loud("re-landed user", e)
+			} else {
+				r.setLastSeq(seq)
+			}
+		case core.RoleAssistant:
+			var toolID *string
+			if len(m.ToolCalls) == 1 {
+				id := m.ToolCalls[0].ID
+				toolID = &id
+			}
+			var reasoning *string
+			if m.Reasoning != "" {
+				reasoning = &m.Reasoning
+			}
+			seq, e := RecordMessage(context.Background(), r.db, r.sid, "assistant", m.Content, reasoning, toolID)
+			if e != nil {
+				r.loud("re-landed assistant", e)
+				continue
+			}
+			r.setLastSeq(seq)
+			for _, call := range m.ToolCalls {
+				fresh := call.ID + suffix
+				idMap[call.ID] = fresh
+				if e2 := RecordToolCall(context.Background(), r.db, seq, fresh, call.Name, string(call.Args)); e2 != nil {
+					r.loud("re-landed call", e2)
+				}
+			}
+		case core.RoleTool:
+			fresh, ok := idMap[m.ToolID]
+			if !ok {
+				continue // a dangling result: nothing fresh to attach to
+			}
+			if e2 := RecordToolResult(context.Background(), r.db, fresh, m.Content, nil); e2 != nil {
+				r.loud("re-landed result", e2)
+			}
+		}
+	}
 }
 
 // upsertFiles snapshots the session's file provenance at the turn

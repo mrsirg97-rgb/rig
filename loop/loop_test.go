@@ -283,6 +283,103 @@ func TestToolRoundTripOrdering(t *testing.T) {
 	}
 }
 
+// TestLoopStampsContextTokens (SPEC_COMPACT 4, L8): the loop stamps the
+// assistant message it appends with Done.Usage's prompt+completion as
+// ContextTokens in both branches (the plain and the tool-call); a Done
+// reporting zero usage leaves it 0.
+func TestLoopStampsContextTokens(t *testing.T) {
+	t.Run("plain answer stamps prompt+completion", func(t *testing.T) {
+		p := &scriptedProvider{turns: []scriptedTurn{{
+			events: []core.Event{textEv("answer"), core.Done{Usage: core.Usage{Prompt: 900, Completion: 100}}},
+		}}}
+		f := &recorderFrontend{inputs: make(chan string, 8)}
+		session := core.NewSession()
+		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
+		k.Session = session
+		f.inputs <- "hi"
+		close(f.inputs)
+		if err := loop.Run(context.Background(), k); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		last := session.Messages[len(session.Messages)-1]
+		if last.Role != core.RoleAssistant || last.ContextTokens != 1000 {
+			t.Fatalf("stamp = %+v, want ContextTokens 1000 (Prompt 900 + Completion 100)", last)
+		}
+	})
+
+	t.Run("tool-call branch stamps prompt+completion", func(t *testing.T) {
+		bash := &scriptedTool{name: "bash", result: "42"}
+		p := &scriptedProvider{turns: []scriptedTurn{
+			{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)}), core.Done{Usage: core.Usage{Prompt: 200, Completion: 10}}}},
+			{events: []core.Event{textEv("ok"), core.Done{Usage: core.Usage{Prompt: 300, Completion: 5}}}},
+		}}
+		f := &recorderFrontend{inputs: make(chan string, 8)}
+		session := core.NewSession()
+		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash))
+		k.Session = session
+		f.inputs <- "go"
+		close(f.inputs)
+		if err := loop.Run(context.Background(), k); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		assistant := session.Messages[1]
+		if assistant.Role != core.RoleAssistant || assistant.ContextTokens != 210 {
+			t.Fatalf("tool-call stamp = %+v, want ContextTokens 210 (Prompt 200 + Completion 10)", assistant)
+		}
+		last := session.Messages[len(session.Messages)-1]
+		if last.Role != core.RoleAssistant || last.ContextTokens != 305 {
+			t.Fatalf("answer stamp = %+v, want ContextTokens 305 (Prompt 300 + Completion 5)", last)
+		}
+	})
+
+	t.Run("a Done reporting zero usage leaves it 0", func(t *testing.T) {
+		p := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("x"), doneEv()}}}}
+		f := &recorderFrontend{inputs: make(chan string, 8)}
+		session := core.NewSession()
+		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
+		k.Session = session
+		f.inputs <- "hi"
+		close(f.inputs)
+		if err := loop.Run(context.Background(), k); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		last := session.Messages[len(session.Messages)-1]
+		if last.ContextTokens != 0 {
+			t.Fatalf("stamp = %+v, want 0 when unreported", last)
+		}
+	})
+}
+
+// TestLoopForwardsCompactedUntouched (SPEC_COMPACT 5, the TestEvent
+// precedent): a Compacted between stream events forwards untouched, and
+// the existing loop cases stay byte-identical.
+func TestLoopForwardsCompactedUntouched(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{{
+		events: []core.Event{textEv("a"), core.Compacted{Summary: "s", Dropped: 1, Kept: 2}, textEv("b"), doneEv()},
+	}}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
+	f.inputs <- "hi"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var kinds []string
+	for _, ev := range f.events {
+		switch ev.(type) {
+		case core.TextDelta:
+			kinds = append(kinds, "delta")
+		case core.Compacted:
+			kinds = append(kinds, "compacted")
+		case core.Done:
+			kinds = append(kinds, "done")
+		}
+	}
+	if strings.Join(kinds, ",") != "delta,compacted,delta,done" {
+		t.Fatalf("notify order = %v, want delta,compacted,delta,done", kinds)
+	}
+}
+
 func TestFaultMidStreamPreservesSession(t *testing.T) {
 	boom := errors.New("mid-stream fault")
 	p := &scriptedProvider{turns: []scriptedTurn{{

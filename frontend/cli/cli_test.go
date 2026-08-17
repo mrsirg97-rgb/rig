@@ -247,6 +247,17 @@ func TestTurnEndPrintsTheUsageLine(t *testing.T) {
 	}
 }
 
+// TestNotifyRendersCompactionOneLine (SPEC_COMPACT 5): a Compacted
+// renders as one greppable line, the numbers shaped by pane's
+// formatTokens — the CLI's one line, the TUI styles it later (10).
+func TestNotifyRendersCompactionOneLine(t *testing.T) {
+	r := build(t)
+	r.fe.Notify(core.Compacted{Summary: "[compaction] s", Dropped: 800, Kept: 1200, Usage: core.Usage{Prompt: 812, Completion: 640}})
+	if got := r.out.String(); got != "⧉ compact: -800 kept 1.2k · summary ↑812 ↓640\n" {
+		t.Fatalf("compaction line = %q", got)
+	}
+}
+
 func TestUsageTotalsAccumulateAcrossTheTurn(t *testing.T) {
 	r := build(t)
 	// two model calls in the turn: the Frontend sums what it observes
