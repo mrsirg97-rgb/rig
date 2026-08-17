@@ -27,11 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	remdd "github.com/mrsirg97-rgb/looper/store/rem/ddl"
-	remdom "github.com/mrsirg97-rgb/looper/store/rem/domain"
-	remmeta "github.com/mrsirg97-rgb/looper/store/rem/metadata"
-	"github.com/mrsirg97-rgb/looper/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/store"
+	remdd "github.com/mrsirg97-rgb/rig/store/rem/ddl"
+	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
+	remmeta "github.com/mrsirg97-rgb/rig/store/rem/metadata"
+	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
 // SchemaVersion is applied at Open; mismatches are refused loudly.

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	todostore "github.com/mrsirg97-rgb/looper/store/todo"
-	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
+	"github.com/mrsirg97-rgb/rig/store"
+	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
 )
 
 // Pane's named cases, ported by name (SPEC_STATE, testing): fold, create
@@ -504,7 +504,7 @@ func projStatus(t *testing.T, db store.DB, text string) string {
 	return s
 }
 
-// projDep resolves a task's dependency through task_deps (looper's
+// projDep resolves a task's dependency through task_deps (rig's
 // substrate carries links there, not in tasks).
 func projDep(t *testing.T, db store.DB, text string) string {
 	t.Helper()

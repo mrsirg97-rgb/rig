@@ -1,13 +1,13 @@
-// Package looper is the composition root of the dependency bag. Every
+// Package rig is the composition root of the dependency bag. Every
 // dependency is explicit in the New call; swapping happens at registration
 // with zero consumer changes. Fields are written through options only.
-package looper
+package rig
 
 import (
 	"fmt"
 	"sort"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // Kernel carries the loop's dependencies: interfaces and slices only, so
@@ -38,7 +38,7 @@ func New(opts ...Option) *Kernel {
 	seen := map[string]int{}
 	for i, t := range k.Tools {
 		if j, dup := seen[t.Name()]; dup {
-			panic(fmt.Sprintf("looper: duplicate tool name %q (positions %d and %d)", t.Name(), j, i))
+			panic(fmt.Sprintf("rig: duplicate tool name %q (positions %d and %d)", t.Name(), j, i))
 		}
 		seen[t.Name()] = i
 	}

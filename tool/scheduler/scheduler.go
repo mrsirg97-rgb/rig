@@ -1,4 +1,4 @@
-// Package scheduler adapts pane's scheduler surface to looper's tool
+// Package scheduler adapts pane's scheduler surface to rig's tool
 // seam: pane's description, guidelines, schema, and runtime voices
 // verbatim; the Execute mapping onto the store's verbs with the
 // threaded session attribution (the adapter consumes opened seams).
@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	sched "github.com/mrsirg97-rgb/looper/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/core"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
 // defaultModel is pane's worker-model default, interpolated where pane's
@@ -33,7 +33,7 @@ const description = "Background jobs on the user's crontab, bound to the worker 
 	"Default model: " + defaultModel + "."
 
 // guidelines is pane's operational voice verbatim; folded after the
-// description in Description() since looper's tool surface carries no
+// description in Description() since rig's tool surface carries no
 // separate guidelines channel.
 const guidelines = "Guidelines: " +
 	"recurring/one-shot background work -> scheduler create; the job runs a headless worker session on the worker model. " +
@@ -124,7 +124,7 @@ func New(st sched.Stores, ct sched.Crontab, runnerCmd string) core.Tool {
 func (a adapter) Name() string { return "scheduler" }
 
 // Description implements core.Tool: pane's voice verbatim, guidelines
-// folded (looper's surface has no separate channel).
+// folded (rig's surface has no separate channel).
 func (a adapter) Description() string { return description + "\n\n" + guidelines }
 
 // Guidelines is pane's operational voice verbatim, for composers that keep

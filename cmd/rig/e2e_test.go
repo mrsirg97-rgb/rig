@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	sched "github.com/mrsirg97-rgb/looper/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/store"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
 // --- scripted seams ---
@@ -133,8 +133,8 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	workDir := t.TempDir()
 	spool := filepath.Join(scratch, "spool")
 
-	bin := filepath.Join(binDir, "looper")
-	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "looper")).CombinedOutput(); err != nil {
+	bin := filepath.Join(binDir, "rig")
+	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	writeFakeCrontab(t, binDir, spool)
@@ -143,7 +143,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 
 	// the job: created in-process through the real verb with scripted
 	// seams, exactly as the agent-side tool would create it.
-	home := filepath.Join(scratch, "looper", "scheduler")
+	home := filepath.Join(scratch, "rig", "scheduler")
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, "/ws/e2e")
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
@@ -168,8 +168,8 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
-		"LOOPER_SWAP_URL="+swap.URL,
-		"LOOPER_BASE_URL=http://127.0.0.1:1/v1", // dead endpoint: the worker faults
+		"RIG_SWAP_URL="+swap.URL,
+		"RIG_BASE_URL=http://127.0.0.1:1/v1", // dead endpoint: the worker faults
 	)
 	out, runErr := cmd.CombinedOutput()
 	if runErr != nil {
@@ -202,7 +202,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"== stdout ==", "looper: fault:", "key=cwd-"} {
+	for _, want := range []string{"== stdout ==", "rig: fault:", "key=cwd-"} {
 		if !containsStr(string(log), want) {
 			t.Fatalf("run log missing %q:\n%s", want, log)
 		}

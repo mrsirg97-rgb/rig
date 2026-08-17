@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	remdd "github.com/mrsirg97-rgb/looper/store/rem/ddl"
-	remmeta "github.com/mrsirg97-rgb/looper/store/rem/metadata"
-	remapi "github.com/mrsirg97-rgb/looper/tool/rem"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	remdd "github.com/mrsirg97-rgb/rig/store/rem/ddl"
+	remmeta "github.com/mrsirg97-rgb/rig/store/rem/metadata"
+	remapi "github.com/mrsirg97-rgb/rig/tool/rem"
 )
 
 func newDB(t *testing.T) store.DB {

@@ -23,7 +23,7 @@ const (
 const searchDescription = "Search the web via SearXNG instance. Returns compact JSON: title, url, snippet per result."
 
 // searchGuidelines is pane's promptGuidelines, verbatim; folded after the
-// description since looper's tool surface carries no separate guidelines
+// description since rig's tool surface carries no separate guidelines
 // channel (the python/scheduler house fold).
 const searchGuidelines = "Guidelines: " +
 	"current or external info -> web_search; never for code already in the workspace."

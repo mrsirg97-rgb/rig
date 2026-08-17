@@ -24,7 +24,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 //go:embed kernel_host.py
@@ -43,7 +43,7 @@ const description = "Run Python in a persistent IPython session. Variables, impo
 	"namespace, action='reset' clears it."
 
 // guidelines is pane's promptGuidelines, verbatim; folded after the
-// description in Description() since looper's tool surface carries no
+// description in Description() since rig's tool surface carries no
 // separate guidelines channel.
 const guidelines = "Guidelines: " +
 	"arithmetic, data shaping, parsing, bulk text -> compute in python, don't estimate. " +
@@ -84,7 +84,7 @@ type given struct {
 	TimeoutMs *int    `json:"timeoutMs"`
 }
 
-// Tool owns one persistent kernel. looper runs one session per process and
+// Tool owns one persistent kernel. rig runs one session per process and
 // the root wires one tool per process, so per-instance ownership is pane's
 // one-kernel-per-session with no shared package state.
 type Tool struct{ k *kernel }
@@ -114,7 +114,7 @@ func (t *Tool) Host() string { return t.k.host }
 func (t *Tool) Name() string { return "python" }
 
 // Description implements core.Tool: pane's voice verbatim, guidelines
-// folded (looper's surface has no separate channel).
+// folded (rig's surface has no separate channel).
 func (t *Tool) Description() string { return description + "\n\n" + guidelines }
 
 // Guidelines is pane's operational voice, verbatim, for composers that keep
@@ -587,9 +587,9 @@ func defaultInterpreter() string {
 }
 
 // DefaultHost resolves pane's order: pane's installed path first (interop),
-// else the embedded host materialised into looper's config home
+// else the embedded host materialised into rig's config home
 // (idempotent; temp+rename). Exported so the root can name an explicit
-// interpreter (LOOPER_PYTHON) with the default host.
+// interpreter (RIG_PYTHON) with the default host.
 func DefaultHost() string {
 	local := filepath.Join(homeDir(), ".pi", "agent", "kernel", "kernel_host.py")
 	if _, err := os.Stat(local); err == nil {
@@ -599,7 +599,7 @@ func DefaultHost() string {
 	if err != nil || cfg == "" {
 		cfg = filepath.Join(homeDir(), ".config")
 	}
-	dir := filepath.Join(cfg, "looper", "kernel")
+	dir := filepath.Join(cfg, "rig", "kernel")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		dir = os.TempDir()
 	}

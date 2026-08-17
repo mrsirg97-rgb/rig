@@ -12,15 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	sched "github.com/mrsirg97-rgb/looper/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/store"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
 // pane's scheduler-core cases, by name. Deterministic now: the fixed
 // instant pane pins (Sat 2026-08-15 12:00Z), UTC-pinned package-wide.
 var nowFixed = time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
 
-const runnerCmd = "/x/looper run-job"
+const runnerCmd = "/x/rig run-job"
 
 // fakeCrontab is pane's in-memory crontab: tests never touch a live spool.
 type fakeCrontab struct {

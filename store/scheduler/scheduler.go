@@ -15,8 +15,8 @@
 package scheduler
 
 import (
-	"github.com/mrsirg97-rgb/looper/store"
-	schedddl "github.com/mrsirg97-rgb/looper/store/scheduler/ddl"
+	"github.com/mrsirg97-rgb/rig/store"
+	schedddl "github.com/mrsirg97-rgb/rig/store/scheduler/ddl"
 )
 
 // SchemaVersion is applied at Open; mismatches are refused loudly.

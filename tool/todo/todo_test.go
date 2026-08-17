@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
-	todoapi "github.com/mrsirg97-rgb/looper/tool/todo"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
+	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
 )
 
 func newDB(t *testing.T) store.DB {

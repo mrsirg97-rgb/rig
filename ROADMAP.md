@@ -1,4 +1,4 @@
-# looper: roadmap
+# rig: roadmap
 
 Ten deliverables, in execution order (reordered 2026-08-16: the leaf ports
 run before the loop change, so the runtime hardening gets the slowest
@@ -113,7 +113,7 @@ among live jobs only, never kill ambiguous processes).
 - Runner: flock per key, busy policy against llama-swap `/running` with
   alias normalization, own-slot-loaded short-circuit, fail closed when
   unreachable, run records and log rotation.
-- The job runtime is looper itself in `-p` mode (landed). Reports
+- The job runtime is rig itself in `-p` mode (landed). Reports
   back through rem (landed).
 
 Done when: the scheduler runner tests have Go equivalents by name, and a
@@ -210,7 +210,7 @@ would hide it.
   `estimated(context) > window - reserve`, where `window` and `reserve` are
   the model's, not a global. This is the pi bug seen on 2026-08-15 (global
   reserve larger than the workers' window fires compaction every turn,
-  including headless `-p`); looper does not inherit it. Requires a models
+  including headless `-p`); rig does not inherit it. Requires a models
   table at the root (id, window, maxTokens, reserve, keepRecent), which the
   `models` command in 9 reads.
 - Keep-recent is a token budget, cut at a message boundary, never inside a
@@ -222,7 +222,7 @@ would hide it.
   logs the reprocess cost (tokens dropped, tokens kept) through `Notify` as
   a named event so the operator can see it in a footer later. On DeltaNet
   hybrids the rollback is bounded by the server's checkpoints, not by
-  looper; note it, do not design around it.
+  rig; note it, do not design around it.
 - Overflow recovery: a provider fault that names context length triggers
   one compact-and-retry, once, then surfaces. Never a silent loop.
 - The compaction summary is handed to rem's `AutoReflect` (already in

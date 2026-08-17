@@ -10,7 +10,7 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
 ## goals
 
 - web_search: SearXNG JSON over net/http; endpoint from env
-  (LOOPER_SEARXNG_URL, default pane's http://127.0.0.1:8888); results
+  (RIG_SEARXNG_URL, default pane's http://127.0.0.1:8888); results
   mapped to title/url/snippet with the 300-char snippet cap and the
   maxResults slice (1..20, default 5), loud "no results".
 - web_fetch: pane's guarded fetch verbatim — http(s) only, DNS resolution
@@ -22,7 +22,7 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
   web-tools compose's tinyproxy) with the unreachable-proxy fix-it voice.
 - Extraction: trafilatura as a documented external (pane's own mechanism),
   resolved from the shared agent venv then PATH, overridable by
-  LOOPER_TRAFILATURA; absent or failing degrades to pane's stdlib text
+  RIG_TRAFILATURA; absent or failing degrades to pane's stdlib text
   pass and says so in the content.
 - Pane's surface verbatim: descriptions, promptGuidelines, schemas, and
   every runtime voice.
@@ -34,7 +34,7 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
 - No loop change: no new events, no middleware, no hooks.
 - No caching, no cookie jar, no TLS pinning, no streaming to the model —
   fetch returns one capped text blob, as pane's does.
-- No bundled trafilatura: no venv looper owns, no pip install. Extraction
+- No bundled trafilatura: no venv rig owns, no pip install. Extraction
   is a soft dependency and degrades loudly instead of bootstrapping.
 - No live-network tests: every case runs against httptest servers and
   injected seams; the suite is green on a box with no SearXNG and no
@@ -50,7 +50,7 @@ tool/web/
               trafilatura resolution (shared venv -> PATH)
   search.go   web_search: the SearXNG call, the result mapping, the schema
   fetch.go    web_fetch: the guarded fetch, extraction, caps, the schema
-  web_test.go pane's named cases in pane's order + the looper-side cases
+  web_test.go pane's named cases in pane's order + the rig-side cases
 ```
 
 `core/`, `loop/`, `middleware/`, `policy/`, `provider/`: untouched.
@@ -94,7 +94,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) // pan
 func IPisPrivate(ip string) bool            // pane's ipIsPrivate, same tables
 func HtmlToText(html string) string         // pane's htmlToText (the RE2 port)
 func CapChars(text string, max int) string  // pane's capChars
-func ExtractReadable(html string, trafilatura *string) (string, string) // + the looper announcement footer
+func ExtractReadable(html string, trafilatura *string) (string, string) // + the rig announcement footer
 func DefaultTrafilatura() string            // shared venv -> PATH, "" when absent
 ```
 
@@ -106,7 +106,7 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
 ## decisions
 
 - **One leaf package, two tools.** pane ships the pair as two
-  extensions; looper's design test wants one leaf package per
+  extensions; rig's design test wants one leaf package per
   capability family plus registration lines at the root. tool/file's
   three tools set the precedent.
 - **Extraction: the documented external, not a bundled dependency.**
@@ -119,12 +119,12 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
   *quality*. Resolution: the shared agent venv's
   `~/.pi/agent/kernel-venv/bin/trafilatura` first (interop with pane,
   the same venv the python kernel prefers), then `trafilatura` on PATH.
-  `LOOPER_TRAFILATURA` is the operator's explicit choice (a path, or
-  empty to disable) — the LOOPER_PYTHON pattern. Pane's
+  `RIG_TRAFILATURA` is the operator's explicit choice (a path, or
+  empty to disable) — the RIG_PYTHON pattern. Pane's
   `string | null | undefined` opts map onto `*string` exactly: nil =
   default resolution, non-nil = explicit (empty = off).
-- **The fallback says so (looper over pane).** pane falls back to
-  htmlToText silently; looper appends a named footer
+- **The fallback says so (rig over pane).** pane falls back to
+  htmlToText silently; rig appends a named footer
   (`[trafilatura unavailable; stdlib text pass used]` and the
   failed/empty variants) because a quiet quality change is exactly the
   kind of silent behaviour the house rules refuse. The success path
@@ -196,11 +196,11 @@ search (pane's web-search.test.mjs order):
 - SearXNG being down surfaces as a loud error
 - schema requires query and bounds maxResults
 
-looper-side named cases (the port's own surface):
+rig-side named cases (the port's own surface):
 
 - the egress proxy is used when set (the proxy sees the request)
 - an unreachable proxy names itself and the fix
-- the trafilatura fallback is announced in the content (looper over pane)
+- the trafilatura fallback is announced in the content (rig over pane)
 - trafilatura resolution: shared venv first, then PATH, explicit wins
 - the search URL is built in pane's key order
 - the search respects the caller ctx (the transport seam sees the
@@ -214,5 +214,5 @@ beyond loopback httptest servers, so the suite is green on a bare box.
 
 One leaf package (three files, two tools), two registration lines at the
 root, the allow-list default growing by `web_search,web_fetch`, three env
-knobs read in main (LOOPER_SEARXNG_URL, LOOPER_WEB_FETCH_PROXY,
-LOOPER_TRAFILATURA). The loop is byte-identical.
+knobs read in main (RIG_SEARXNG_URL, RIG_WEB_FETCH_PROXY,
+RIG_TRAFILATURA). The loop is byte-identical.

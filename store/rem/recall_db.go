@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	remdom "github.com/mrsirg97-rgb/looper/store/rem/domain"
-	"github.com/mrsirg97-rgb/looper/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/store"
+	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
+	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
 // Hit is one surfaced memory: the record plus the reaching arm and the

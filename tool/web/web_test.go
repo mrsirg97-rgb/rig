@@ -1,6 +1,6 @@
 // The port's contract: pane's web_search and web_fetch named cases, in
 // pane's order (web-fetch.test.mjs, then web-search.test.mjs), plus the
-// looper-side cases. Every case runs against httptest servers and
+// rig-side cases. Every case runs against httptest servers and
 // injected seams; no live SearXNG, no live proxy, no required trafilatura.
 package web_test
 
@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/tool/web"
+	"github.com/mrsirg97-rgb/rig/tool/web"
 )
 
 // ---- seams and small fakes -------------------------------------------
@@ -538,7 +538,7 @@ func TestSchemaRequiresQueryAndBoundsMaxResults(t *testing.T) {
 	}
 }
 
-// ---- the looper-side named cases ---------------------------------------
+// ---- the rig-side named cases ---------------------------------------
 
 func TestTheEgressProxyIsUsedWhenSet(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

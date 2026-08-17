@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	sched "github.com/mrsirg97-rgb/looper/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
 // pane's scheduler-runner cases, by name, over this runtime's seams:
@@ -145,7 +145,7 @@ func runOpts(h *harness, running []string, spawn *fakeSpawn, extra fetchOpts) sc
 		Crontab:   h.ct,
 		Fetch:     fakeFetch(running, extra),
 		Spawn:     spawn.spawn,
-		WorkerCmd: []string{"/x/looper"},
+		WorkerCmd: []string{"/x/rig"},
 		SwapURL:   "http://127.0.0.1:8090",
 		Now:       func() time.Time { return runnerNow },
 	}
@@ -225,7 +225,7 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 	mustOK(t, err)
 
 	c := spawn.calls[0]
-	if len(c.Argv) < 5 || c.Argv[0] != "/x/looper" || c.Argv[1] != "-p" {
+	if len(c.Argv) < 5 || c.Argv[0] != "/x/rig" || c.Argv[1] != "-p" {
 		t.Fatalf("argv prefix %v", c.Argv)
 	}
 	prompt := c.Argv[2]
@@ -586,7 +586,7 @@ func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
 		Crontab:   fc,
 		Fetch:     fakeFetch(nil, fetchOpts{}),
 		Spawn:     (&fakeSpawn{}).spawn,
-		WorkerCmd: []string{"/x/looper"},
+		WorkerCmd: []string{"/x/rig"},
 		SwapURL:   "http://127.0.0.1:8090",
 		Now:       func() time.Time { return runnerNow },
 	})

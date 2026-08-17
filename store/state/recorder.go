@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	"github.com/mrsirg97-rgb/looper/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
 // Recorder is the observing Frontend: it forwards every Input/Notify call
@@ -265,5 +265,5 @@ func (r *Recorder) setLastSeq(seq int64) {
 }
 
 func (r *Recorder) loud(what string, err error) {
-	fmt.Fprintf(os.Stderr, "looper state: session %s: %s: %v\n", r.sid, what, err)
+	fmt.Fprintf(os.Stderr, "rig state: session %s: %s: %v\n", r.sid, what, err)
 }

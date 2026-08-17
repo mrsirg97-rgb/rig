@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/frontend/cli"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/frontend/cli"
 )
 
 // lineReader serves whole lines from a channel; close = EOF.

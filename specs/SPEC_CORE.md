@@ -1,4 +1,4 @@
-# looper: minimum agent runtime
+# rig: minimum agent runtime
 
 A single-binary agent harness in Go. One sequential turn loop, a small set of
 interfaces around it, everything else registered on top. The loop is the spec
@@ -30,7 +30,7 @@ registration line. If it touches the loop, the interfaces are wrong.
 ## layout
 
 ```
-looper/
+rig/
   core/          interfaces + wire types, stdlib only
     message.go
     provider.go
@@ -56,7 +56,7 @@ looper/
   frontend/
     cli/         stdin/stdout REPL
   cmd/
-    looper/      main.go, the composition root
+    rig/      main.go, the composition root
 ```
 
 One concept per file, interfaces in `core`, concrete types unexported with
@@ -322,12 +322,12 @@ discard signal and the Frontend's boundary signal.
 ## kernel and wiring
 
 ```go
-k := looper.New(
-	looper.WithProvider(openai.New(baseURL, model)),
-	looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit()),
-	looper.WithMiddleware(perm.Allowlist(rules), guard.Bound(3)),
-	looper.WithPolicy(policy.Passthrough(systemPrompt)),
-	looper.WithFrontend(cli.New(os.Stdin, os.Stdout)),
+k := rig.New(
+	rig.WithProvider(openai.New(baseURL, model)),
+	rig.WithTools(bash.New(), file.Read(), file.Write(), file.Edit()),
+	rig.WithMiddleware(perm.Allowlist(rules), guard.Bound(3)),
+	rig.WithPolicy(policy.Passthrough(systemPrompt)),
+	rig.WithFrontend(cli.New(os.Stdin, os.Stdout)),
 )
 err := loop.Run(ctx, k)
 ```

@@ -1,4 +1,4 @@
-# looper
+# rig
 
 A minimal agent loop machine. It executes the agent loop faithfully — assemble
 context, stream the model's output, execute what it asks for, feed results
@@ -14,8 +14,8 @@ Status: initial release, version `0.1.0`.
 ## quickstart
 
 ```sh
-go build ./cmd/looper
-./looper --base-url $ENDPOINT --model $NAME
+go build ./cmd/rig
+./rig --base-url $ENDPOINT --model $NAME
 ```
 
 then talk. Configuration and verification: `docs/SETUP.md`.
@@ -31,7 +31,7 @@ then talk. Configuration and verification: `docs/SETUP.md`.
 ## layout
 
 ```
-cmd/looper      composition root — wires every seam once; flags and env only
+cmd/rig      composition root — wires every seam once; flags and env only
 core            the seams, wire types, and the streaming-event vocabulary
 loop            the concrete turn runtime (fault/cancel-aware)
 kernel.go       the composition kernel

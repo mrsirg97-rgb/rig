@@ -1,6 +1,6 @@
-# looper design
+# rig design
 
-looper is a minimal agent loop machine: it executes the agent loop against the
+rig is a minimal agent loop machine: it executes the agent loop against the
 seams you wire in, exactly once, faithfully. It is not a framework. What it is
 a machine for, in one sentence: a faithful turn loop — assemble context, stream
 the provider's output, execute what it asks for, feed it back, repeat — with
@@ -23,7 +23,7 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
                                         ▼
              tool/bash · tool/file · tool/fs · tool/todo · tool/rem · tool/scheduler · tool/python · tool/web
 
- cmd/looper (composition root): wires every seam once at startup; flags and env only.
+ cmd/rig (composition root): wires every seam once at startup; flags and env only.
  store/state: the recorder wraps the Frontend — it sources its rows from the
               loop's events, and -resume rebuilds a session from the state store.
 ```
@@ -45,7 +45,7 @@ prose) are assertion-checked capabilities, not required methods: the loop
 fans out `TurnStart` once per turn, and the root collects `Guidelines` into
 the system prompt before the policy is built. One mechanism, not a second.
 
-The loop names none of the concrete types: `loop.Run(ctx, k *looper.Kernel)` takes
+The loop names none of the concrete types: `loop.Run(ctx, k *rig.Kernel)` takes
 the kernel interface and resolves seams at runtime. Swapping any dependency is a
 change at the composition root and nowhere else.
 
@@ -121,7 +121,7 @@ events — transcript, tool calls and their guarded results, usage with the
 cache fields, reasoning — appending per event in short transactions, so a
 kill leaves every completed row readable. A `TurnEnd` discards the unlanded
 partial of a turned turn (the old Fault-time discard, subsumed), and each turn
-boundary upserts the file provenance. `looper --resume <id>` projects the
+boundary upserts the file provenance. `rig --resume <id>` projects the
 session back from the store in one read-only transaction — transcript in seq
 order, assistant reasoning and calls (row order), landed results, dangling
 calls kept, files rebuilt — and the recorder adopts the existing row, so one
@@ -148,7 +148,7 @@ middleware is **one file plus one registration line** at the composition root,
 and the loop never names a concrete type.
 
 1. **A tool** — implement `core.Tool` in `tool/<name>/<name>.go` (stdlib-
-   agnostic exec; loud at the boundary); register in `cmd/looper`'s
+   agnostic exec; loud at the boundary); register in `cmd/rig`'s
    `WithTools(...)`, and in the default allow-list if it should be permitted.
 2. **A provider** — implement `core.Provider` (every stream ends in Done or
    Fault, ctx teardown excepted); `WithProvider(...)`.

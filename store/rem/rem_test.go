@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	remdom "github.com/mrsirg97-rgb/looper/store/rem/domain"
+	"github.com/mrsirg97-rgb/rig/store"
+	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
 )
 
 // --- helpers ---
@@ -1178,7 +1178,7 @@ func TestGeneratedMatchesCommitted(t *testing.T) {
 	}
 	regen()
 
-	regenCmd := "cd <lift>/cmd && go run main.go -config=$LOOPER/store/rem/gen.json -source=$LOOPER/store/rem/source.json"
+	regenCmd := "cd <lift>/cmd && go run main.go -config=$RIG/store/rem/gen.json -source=$RIG/store/rem/source.json"
 	for _, pkg := range []string{"domain", "ddl"} {
 		committed := listFiles(t, filepath.Join(workDir, pkg))
 		got := listFiles(t, filepath.Join(tmp, pkg))

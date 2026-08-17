@@ -14,15 +14,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	scheddomain "github.com/mrsirg97-rgb/looper/store/scheduler/domain"
+	"github.com/mrsirg97-rgb/rig/store"
+	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
 // --- run-job: the fire engine cron invokes ---
 //
 // Pane's runner.mjs, ported. Every outcome is recorded; only unexpected
 // errors come back loud (the verb maps that to exit non-zero). The job
-// runtime is looper itself in -p mode (roadmap deliverable 2, borrowed
+// runtime is rig itself in -p mode (roadmap deliverable 2, borrowed
 // minimally by this PR); the report-back instruction is pane's standing
 // directive, verbatim.
 
@@ -213,7 +213,7 @@ func RunJob(key string, opts RunOpts) error {
 		return fmt.Errorf("run-job: log dir: %w", err)
 	}
 	content := fmt.Sprintf(
-		"# looper-scheduler run\nkey=%s\nstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
+		"# rig-scheduler run\nkey=%s\nstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
 		key, started, res.Exit, durationMs, res.Stdout, res.Stderr)
 	if err := os.WriteFile(filepath.Join(dir, logName), []byte(content), 0o644); err != nil {
 		return fmt.Errorf("run-job: log write: %w", err)

@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // bound is the retry guard's per-turn state: consecutive failures per tool

@@ -13,7 +13,7 @@ import (
 // production shim fails closed against a temp spool, never a live
 // crontab.
 
-const RUNNER = "/x/looper run-job"
+const RUNNER = "/x/rig run-job"
 
 // A crontab full of foreign lines that must survive byte-identical.
 var foreign = strings.Join([]string{
@@ -28,10 +28,10 @@ var foreign = strings.Join([]string{
 }, "\n")
 
 func TestLineForBuildsTheExactTaggedFormat(t *testing.T) {
-	if got := LineFor("j1", "0 */4 * * *", RUNNER); got != `0 */4 * * * /x/looper run-job j1  # pane-scheduler:j1` {
+	if got := LineFor("j1", "0 */4 * * *", RUNNER); got != `0 */4 * * * /x/rig run-job j1  # pane-scheduler:j1` {
 		t.Fatalf("LineFor(j1) = %q", got)
 	}
-	if got := LineFor("cwd-abc123def456:j2", "5 4 * * *", RUNNER); got != `5 4 * * * /x/looper run-job cwd-abc123def456:j2  # pane-scheduler:cwd-abc123def456:j2` {
+	if got := LineFor("cwd-abc123def456:j2", "5 4 * * *", RUNNER); got != `5 4 * * * /x/rig run-job cwd-abc123def456:j2  # pane-scheduler:cwd-abc123def456:j2` {
 		t.Fatalf("LineFor(cwd) = %q", got)
 	}
 }
@@ -51,7 +51,7 @@ func TestUpsertAppendsATaggedLineForeignLinesSurviveByteIdentical(t *testing.T) 
 			t.Fatalf("foreign line %d drifted: %q", i, lines[i])
 		}
 	}
-	const tagged = `0 */4 * * * /x/looper run-job j1  # pane-scheduler:j1`
+	const tagged = `0 */4 * * * /x/rig run-job j1  # pane-scheduler:j1`
 	if last := lines[len(lines)-1]; last != tagged {
 		t.Fatalf("last line %q", last)
 	}
@@ -62,14 +62,14 @@ func TestUpsertAppendsATaggedLineForeignLinesSurviveByteIdentical(t *testing.T) 
 
 func TestUpsertOnAnEmptyCrontabYieldsExactlyOneLine(t *testing.T) {
 	text, added := UpsertLine("", "j1", "0 0 * * *", RUNNER)
-	const want = `0 0 * * * /x/looper run-job j1  # pane-scheduler:j1` + "\n"
+	const want = `0 0 * * * /x/rig run-job j1  # pane-scheduler:j1` + "\n"
 	if !added || text != want {
 		t.Fatalf("text %q added %v", text, added)
 	}
 }
 
 func TestUpsertReplacesAnExistingKeyInPlace(t *testing.T) {
-	seeded := foreign + "\n0 0 * * * /x/looper run-job j9  # pane-scheduler:j9\n"
+	seeded := foreign + "\n0 0 * * * /x/rig run-job j9  # pane-scheduler:j9\n"
 	text, added := UpsertLine(seeded, "j9", "30 1 * * *", RUNNER)
 	if added {
 		t.Fatal("existing key must replace, not append")
@@ -84,7 +84,7 @@ func TestUpsertReplacesAnExistingKeyInPlace(t *testing.T) {
 	if len(found) != 1 {
 		t.Fatalf("j9 lines = %d, want 1", len(found))
 	}
-	if found[0] != `30 1 * * * /x/looper run-job j9  # pane-scheduler:j9` {
+	if found[0] != `30 1 * * * /x/rig run-job j9  # pane-scheduler:j9` {
 		t.Fatalf("replaced line %q", found[0])
 	}
 	idx := -1
@@ -99,7 +99,7 @@ func TestUpsertReplacesAnExistingKeyInPlace(t *testing.T) {
 }
 
 func TestSetPausedCommentsTheLineTagStaysDiscoverable(t *testing.T) {
-	seeded := foreign + "\n0 0 * * * /x/looper run-job j1  # pane-scheduler:j1\n"
+	seeded := foreign + "\n0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
 	text, found := SetPaused(seeded, "j1", true)
 	if !found {
 		t.Fatal("must find the line")
@@ -111,7 +111,7 @@ func TestSetPausedCommentsTheLineTagStaysDiscoverable(t *testing.T) {
 			t.Fatalf("foreign line %d drifted", i)
 		}
 	}
-	if last := lines[len(lines)-1]; last != `# 0 0 * * * /x/looper run-job j1  # pane-scheduler:j1` {
+	if last := lines[len(lines)-1]; last != `# 0 0 * * * /x/rig run-job j1  # pane-scheduler:j1` {
 		t.Fatalf("last line %q", last)
 	}
 	scanned := Scan(text)
@@ -127,7 +127,7 @@ func TestSetPausedCommentsTheLineTagStaysDiscoverable(t *testing.T) {
 }
 
 func TestSetPausedIsIdempotent(t *testing.T) {
-	paused := foreign + "\n# 0 0 * * * /x/looper run-job j1  # pane-scheduler:j1\n"
+	paused := foreign + "\n# 0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
 	text, found := SetPaused(paused, "j1", true)
 	if !found || text != paused {
 		t.Fatalf("idempotent pause drifted: %q", text)
@@ -145,7 +145,7 @@ func TestSetPausedOfAMissingKeyChangesNothing(t *testing.T) {
 }
 
 func TestResumeStripsExactlyThePrefixByteIdenticalToTheActiveLine(t *testing.T) {
-	active := `0 0 * * * /x/looper run-job j1  # pane-scheduler:j1`
+	active := `0 0 * * * /x/rig run-job j1  # pane-scheduler:j1`
 	paused := foreign + "\n# " + active + "\n"
 	text, found := SetPaused(paused, "j1", false)
 	if !found {
@@ -158,7 +158,7 @@ func TestResumeStripsExactlyThePrefixByteIdenticalToTheActiveLine(t *testing.T) 
 }
 
 func TestRemoveDeletesTheLineAndLeavesNoTrace(t *testing.T) {
-	active := foreign + "\n0 0 * * * /x/looper run-job j1  # pane-scheduler:j1\n"
+	active := foreign + "\n0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
 	text, found := RemoveLine(active, "j1")
 	if !found || strings.Contains(text, "pane-scheduler:j1") {
 		t.Fatalf("active remove: found %v text %q", found, text)
@@ -166,7 +166,7 @@ func TestRemoveDeletesTheLineAndLeavesNoTrace(t *testing.T) {
 	if text != foreign+"\n" {
 		t.Fatalf("active remove text %q", text)
 	}
-	pausedLine := foreign + "\n# 0 0 * * * /x/looper run-job j1  # pane-scheduler:j1\n"
+	pausedLine := foreign + "\n# 0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
 	text, found = RemoveLine(pausedLine, "j1")
 	if !found || strings.Contains(text, "pane-scheduler:j1") {
 		t.Fatalf("paused remove: found %v text %q", found, text)
@@ -181,8 +181,8 @@ func TestRemoveOfAMissingKeyReportsNotFound(t *testing.T) {
 
 func TestScanFindsTaggedLinesAndExtractsCronFields(t *testing.T) {
 	text := foreign +
-		"\n0 */4 * * * /x/looper run-job j1  # pane-scheduler:j1" +
-		"\n# 5 4 * * * /x/looper run-job cwd-abc123def456:j2  # pane-scheduler:cwd-abc123def456:j2"
+		"\n0 */4 * * * /x/rig run-job j1  # pane-scheduler:j1" +
+		"\n# 5 4 * * * /x/rig run-job cwd-abc123def456:j2  # pane-scheduler:cwd-abc123def456:j2"
 	found := Scan(text)
 	var j1, j2 *TaggedLine
 	for i := range found {
@@ -206,7 +206,7 @@ func TestScanIgnoresLookalikes(t *testing.T) {
 		"# prose about pane-scheduler and friends",
 		"30 6 * * * echo hi # pane-scheduler:NOTOURS  # tag not trailing",
 		"# pane-scheduler:standalone",
-		`0 0 * * * /x/looper run-job j1  # pane-scheduler:j1`,
+		`0 0 * * * /x/rig run-job j1  # pane-scheduler:j1`,
 	}, "\n")
 	found := Scan(text)
 	if len(found) != 1 || found[0].Key != "j1" {

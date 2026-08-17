@@ -1,7 +1,7 @@
 {
-  "name": "../../looper/store/state",
-  "module": "github.com/mrsirg97-rgb/looper/store/state",
-  "runtime": "github.com/mrsirg97-rgb/looper/store",
+  "name": "../../rig/store/state",
+  "module": "github.com/mrsirg97-rgb/rig/store/state",
+  "runtime": "github.com/mrsirg97-rgb/rig/store",
   "packages": [
     { "name": "domain", "template": "templates/domain.template", "packageType": "flat", "fileType": "go" },
     { "name": "ddl", "template": "templates/ddl.template", "packageType": "graph", "fileType": "go" }

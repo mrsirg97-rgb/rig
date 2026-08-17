@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper"
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/loop"
-	"github.com/mrsirg97-rgb/looper/middleware/guard"
-	"github.com/mrsirg97-rgb/looper/middleware/perm"
+	"github.com/mrsirg97-rgb/rig"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/loop"
+	"github.com/mrsirg97-rgb/rig/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/middleware/perm"
 )
 
 func reasonEv(s string) core.Event { return core.ReasoningDelta{Text: s} }
@@ -54,11 +54,11 @@ func TestToolEventBracketOrderAndContent(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
 	)
 	k.Session = session
 
@@ -123,12 +123,12 @@ func TestToolResultCarriesTheGuardedRefusal(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
-		looper.WithMiddleware(
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+		rig.WithMiddleware(
 			perm.Allowlist("bash"),
 			guard.Bound(1),
 		),
@@ -169,10 +169,10 @@ func TestTurnEndClosesEveryTurnWithTheRightReason(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -217,10 +217,10 @@ func TestTurnEndAbsentOnRunContextEnd(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -245,10 +245,10 @@ func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -287,11 +287,11 @@ func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 	}}
 	f2 := &recorderFrontend{inputs: make(chan string, 8)}
 	session2 := core.NewSession()
-	k2 := looper.New(
-		looper.WithProvider(p2),
-		looper.WithFrontend(f2),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
+	k2 := rig.New(
+		rig.WithProvider(p2),
+		rig.WithFrontend(f2),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
 	)
 	k2.Session = session2
 
@@ -364,10 +364,10 @@ func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 	}}
 	f := &steeringFrontend{inputs: []string{"speak", "steer"}, mode: "delta"}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -418,10 +418,10 @@ func TestSteeringAtThePromptReentersWithoutFault(t *testing.T) {
 	}}}
 	f := &steeringFrontend{inputs: []string{"real"}, mode: "prompt"}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -492,10 +492,10 @@ func (p *ctxCheckingProvider) Stream(ctx context.Context, req core.Request) (<-c
 func TestPreStreamAssembleFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("second turn"), doneEv()}}}}
 	f := &steerFrontend{recorderFrontend: &recorderFrontend{inputs: make(chan string, 8)}, steer: "first"}
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&ctxCheckingPolicy{transcriptPolicy: &transcriptPolicy{}}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&ctxCheckingPolicy{transcriptPolicy: &transcriptPolicy{}}),
 	)
 	k.Session = core.NewSession()
 
@@ -523,10 +523,10 @@ func TestPreStreamAssembleFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 func TestPreStreamCallFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 	inner := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("second turn"), doneEv()}}}}
 	f := &steerFrontend{recorderFrontend: &recorderFrontend{inputs: make(chan string, 8)}, steer: "first"}
-	k := looper.New(
-		looper.WithProvider(&ctxCheckingProvider{inner}),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(&ctxCheckingProvider{inner}),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = core.NewSession()
 
@@ -569,12 +569,12 @@ func TestTurnStartFansOutOncePerTurn(t *testing.T) {
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
 	obs := &countingObserver{ToolMiddlewareFunc: func(next core.ToolExec) core.ToolExec { return next }}
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
-		looper.WithMiddleware(obs),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+		rig.WithMiddleware(obs),
 	)
 	k.Session = session
 
@@ -597,10 +597,10 @@ func TestTestEventForwardsUntouched(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/policy"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/policy"
 )
 
 func TestAssemblesSystemPlusTranscriptVerbatim(t *testing.T) {

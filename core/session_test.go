@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // The session must survive a JSON round trip byte-for-byte in meaning:
