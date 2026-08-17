@@ -7,4 +7,5 @@ errors and their fixes), open threads, and what was tried and failed.
 This summary will be handed back to the session as framing between turns;
 the recent work is still visible to it and must not be re-listed.
 If an earlier summary is present in the older part, fold it: keep what
-is still true, drop what is done. Answer with the summary only.
+is still true, drop what is done. Answer with the summary only: prose,
+no tool calls.

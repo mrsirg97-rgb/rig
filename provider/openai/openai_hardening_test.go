@@ -293,9 +293,13 @@ func TestMaxTokensWireShape(t *testing.T) {
 }
 
 // TestReasoningEffortWireShape (SPEC_COMPACT 3): the summary request's
-// reasoning effort maps to reasoning_effort on the wire — present when
-// set, absent when empty (the server's default). A provider that does not
-// know it ignores the field.
+// reasoning effort goes over the wire in both shapes the server families
+// read — the top-level reasoning_effort (OpenAI-shaped servers) and
+// chat_template_kwargs.reasoning_effort (llama.cpp, whose Qwen3 template
+// ignores the top-level field: measured on the swap, only the kwargs
+// entry changes the think length) — present in both when set, absent in
+// both when empty (the server's default). A server that knows neither
+// ignores both.
 func TestReasoningEffortWireShape(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -304,12 +308,22 @@ func TestReasoningEffortWireShape(t *testing.T) {
 			t.Fatalf("request body is not JSON: %v", err)
 		}
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
-		var effort string
-		if err := json.Unmarshal(req["reasoning_effort"], &effort); err != nil {
+		// both fields present, both carrying the effort
+		var top string
+		if err := json.Unmarshal(req["reasoning_effort"], &top); err != nil {
 			t.Fatalf("reasoning_effort is not a string: %v", err)
 		}
-		if effort != "medium" {
-			t.Fatalf("reasoning_effort = %q, want medium", effort)
+		if top != "medium" {
+			t.Fatalf("reasoning_effort = %q, want medium", top)
+		}
+		var kwargs struct {
+			ReasoningEffort string `json:"reasoning_effort"`
+		}
+		if err := json.Unmarshal(req["chat_template_kwargs"], &kwargs); err != nil {
+			t.Fatalf("chat_template_kwargs is not an object: %v", err)
+		}
+		if kwargs.ReasoningEffort != "medium" {
+			t.Fatalf("chat_template_kwargs.reasoning_effort = %q, want medium", kwargs.ReasoningEffort)
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -320,21 +334,25 @@ func TestReasoningEffortWireShape(t *testing.T) {
 		t.Fatalf("stream: %v", err)
 	}
 
-	// empty = the server's default: reasoning_effort must be absent.
-	var saw bool
+	// empty = the server's default: both fields must be absent.
+	var sawTop, sawKwargs bool
 	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var req map[string]json.RawMessage
 		_ = json.Unmarshal(body, &req)
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
-		_, saw = req["reasoning_effort"]
+		_, sawTop = req["reasoning_effort"]
+		_, sawKwargs = req["chat_template_kwargs"]
 	}))
 	t.Cleanup(srv2.Close)
 	p2 := openai.New(srv2.URL, "local")
 	if _, err := drain(t, context.Background(), p2, userReq()); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
-	if saw {
+	if sawTop {
 		t.Fatal("reasoning_effort must be absent when empty (the server's default)")
+	}
+	if sawKwargs {
+		t.Fatal("chat_template_kwargs must be absent when empty (the server's default)")
 	}
 }

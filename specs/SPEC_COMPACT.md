@@ -296,7 +296,13 @@ The older prefix is summarized in one provider call:
 summary request carries a lower reasoning effort (`"medium"`) where the
 provider supports it — it is the one call whose thinking nobody reads, and
 inheriting the model's max effort spends tokens the fold does not use (a
-provider that does not know the field ignores it). The summary prompt is
+provider that does not know the field ignores it). The effort goes over the
+wire in both shapes the server families read: top-level
+`reasoning_effort` (OpenAI-shaped servers) and
+`chat_template_kwargs.reasoning_effort` (llama.cpp, whose Qwen3 template
+ignores the top-level field — measured on the swap, only the kwargs entry
+changes the think length); present in both when set, absent in both when
+empty, the wire-shape test asserts both. The summary prompt is
 one file, not an inline string:
 `policy/compact/summary_prompt.txt`, embedded with `go:embed` (stdlib),
 reviewed and diffed as one document. Its contract: a compact factual
@@ -305,7 +311,9 @@ why, files touched and what changed, the tool results that matter (test
 outcomes, errors and their fixes), open threads and what was tried and
 failed — written in the third person ("the session fixed X and its
 tests"), so the marked user row (5) reads as framing, not instruction
-(one line in `summary_prompt.txt`). The tail may legally start with a
+(one line in `summary_prompt.txt`); prose only, no tool calls — the
+call passes no tools, but a max-effort model might still answer with
+one, so the prompt forbids it (one line in `summary_prompt.txt`). The tail may legally start with a
 user message, so the transcript can carry consecutive user rows: fine on
 Qwen's template, named. And, when an earlier summary is present, a fold:
 keep what is still true, drop what is done — the multi-compaction
