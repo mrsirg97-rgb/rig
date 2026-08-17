@@ -152,6 +152,7 @@ Done when: private-space refusal, redirect re-check, and cap markers are
 named tests against `httptest` servers.
 
 ## 7. runtime hardening: the plumbing pane needs
+> done
 
 Deliverable: the seams and events required for everything after this to be
 leaf work. No user-visible feature; this is the loop change made once,

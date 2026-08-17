@@ -1,7 +1,9 @@
 # looper setup
 
-looper has **zero third-party dependencies** (`go.mod` carries no require
-lines); everything is Go standard library. Setup is fetch, configure, build.
+looper's core is **stdlib-only**: `core/`, `loop/`, the provider, the tools,
+and the frontends carry no dependencies. The one leaf dependency is
+`modernc.org/sqlite` (pure-Go driver) for the stores, justified in
+`specs/SPEC_STATE.md`. Setup is fetch, configure, build.
 
 ## prerequisites
 
@@ -40,7 +42,8 @@ flags win over env, env wins over built-in defaults:
 | model      | `--model`   | `LOOPER_MODEL`   | `local`                              | model name sent per request               |
 | system     | `--system`  | `LOOPER_SYSTEM`  | looper's default system prompt       | context-policy seed                       |
 | allow-list | `--allow`   | `LOOPER_ALLOW`   | `bash,read,write,edit,ls,find,grep,todo,rem,scheduler,python,web_search,web_fetch` | tools permitted to execute                |
-| bound      | `--retries` | `LOOPER_RETRIES` | `3`                                  | repetition bound on identical failing calls (see below) |
+| bound      | `--retries` | `LOOPER_RETRIES` | `3`                                  | repetition bound on a failing tool, per turn (see below) |
+| resume     | `--resume <id>` | —              | fresh session                        | continue an earlier session by id; refuses with `-p` (one-shot stays one-shot) |
 | python kernel |           | `LOOPER_PYTHON`  | pane's shared venv (the default interpreter) | interpreter for the python kernel; an explicit choice skips the lazy venv bootstrap |
 | web search |           | `LOOPER_SEARXNG_URL` | `http://127.0.0.1:8888`        | the SearXNG instance (the web-tools compose) |
 | web fetch  |           | `LOOPER_WEB_FETCH_PROXY` | `http://127.0.0.1:8889`    | egress proxy for web_fetch; set empty = direct |
@@ -53,8 +56,20 @@ default. Presence is the signal, the value is the choice.
 
 **On `LOOPER_RETRIES`** — read before tuning: the value does **not** permit
 silent re-execution. Every tool call executes exactly once; the value bounds
-the *model's* re-issuance of an identical failing call (counted across turns,
-cleared on success). It is a brake on repetition, not a retry allowance.
+the *model's* re-issuance of a failing *tool* — keyed by tool name, so
+drifting arguments do not dodge it, and cleared at the start of every turn.
+The limit-th consecutive failure of a tool carries a note telling the model
+to read the error and change the call or stop calling the tool; the next
+re-issuance is refused without executing, naming the bound. A successful call
+clears the count: the bound tracks streaks within a turn, not history. It is
+a brake on repetition, not a retry allowance.
+
+**On `--resume`** — it rebuilds the session from the state store (the
+transcript in order, assistant reasoning, the tool calls, the file
+provenance, the identity) in one read-only transaction; dangling tool calls
+are kept, an unknown id is loud, and the recorder adopts the existing row so
+one identity serves todo's claims and rem's sources. The per-process state
+starts fresh: the guard's counts and the steering slot are not persisted.
 
 **On the allow-list** — it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
@@ -68,7 +83,8 @@ dead agent; narrow with `--allow read` or similar.
 ./looper --base-url $YOUR_EPIT --model $NAME --system "be terse"
 ```
 
-then type a prompt, Ctrl-C to interrupt (the session ends once the in-flight
-step unwinds), Ctrl-D to exit at the prompt. If nothing streams, check the endpoint
-first — looper surfaces provider faults verbatim and loudly; it does not hide
-them.
+then type a prompt. A line typed while a turn is live steers (it interrupts
+the turn and is delivered at the next prompt; latest wins); Ctrl-C ends the
+session once the in-flight step unwinds; Ctrl-D exits at the prompt. If
+nothing streams, check the endpoint first — looper surfaces provider faults
+verbatim and loudly; it does not hide them.
