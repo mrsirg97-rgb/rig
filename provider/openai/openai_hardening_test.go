@@ -45,9 +45,9 @@ func TestReasoningContentStreamsAsReasoningDelta(t *testing.T) {
 		t.Fatalf("stream: %v", err)
 	}
 	var (
-		out   []string
-		reas  string
-		text  string
+		out  []string
+		reas string
+		text string
 	)
 	for _, ev := range events {
 		switch e := ev.(type) {
