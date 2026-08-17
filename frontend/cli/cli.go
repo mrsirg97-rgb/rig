@@ -169,6 +169,12 @@ func (c *cli) Notify(ev core.Event) {
 		c.prompt += e.Usage.Prompt
 		c.completion += e.Usage.Completion
 		c.cacheRead += e.Usage.CacheRead
+	case core.Compacted:
+		// SPEC_COMPACT 5: compaction is a transcript event — one line, the
+		// numbers as pane's formatTokens shapes; the TUI styles it (10).
+		fmt.Fprintf(c.out, "⧉ compact: -%s kept %s · summary ↑%s ↓%s\n",
+			formatTokens(e.Dropped), formatTokens(e.Kept),
+			formatTokens(e.Usage.Prompt), formatTokens(e.Usage.Completion))
 	case core.Fault:
 		fmt.Fprintf(c.out, "\n[fault] %v\n", e.Err)
 	case core.TurnEnd:

@@ -21,6 +21,7 @@ var (
 	_ Event = ToolResult{}
 	_ Event = TurnEnd{}
 	_ Event = TestEvent{}
+	_ Event = Compacted{}
 )
 
 // TextDelta is an incremental fragment of assistant text.
@@ -108,6 +109,24 @@ type TestEvent struct{ Name string }
 
 func (TestEvent) event() {}
 
+// Compacted announces a policy-side compaction (SPEC_COMPACT 5): the older
+// transcript was rewritten into the summary it carries. Emitted at
+// Assemble time (the trigger path) or on-stream between the swallowed
+// fault and the retry's first event (the overflow decorator); the loop
+// forwards it in its existing default. Summary is the summary row's
+// content, as the transcript carries it (the marker is in it); Dropped
+// and Kept are calibrated estimates in the trigger's units, so the
+// operator reads them against the window; Usage is the server's own count
+// for the summary call.
+type Compacted struct {
+	Summary string
+	Dropped int
+	Kept    int
+	Usage   Usage
+}
+
+func (Compacted) event() {}
+
 // Provider streams one model turn. One method: cancellation is ctx; per-
 // model tool-call wire formats are the adapter's problem, not the loop's.
 type Provider interface {
@@ -119,4 +138,15 @@ type Provider interface {
 type Request struct {
 	Messages []Message
 	Tools    []ToolSpec
+
+	// MaxTokens is the response budget the root clamps per row (SPEC_COMPACT
+	// 8's request-side reserve); 0 = the provider's default (additive — a
+	// provider that does not know it ignores it).
+	MaxTokens int
+
+	// ReasoningEffort is the reasoning budget the caller asks for; empty = the
+	// provider's default (additive — a provider that does not know it ignores
+	// it). The compact summary call sets "medium" (SPEC_COMPACT 3): it is the
+	// one call whose thinking nobody reads.
+	ReasoningEffort string
 }

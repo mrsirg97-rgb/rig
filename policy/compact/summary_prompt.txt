@@ -1,0 +1,11 @@
+You are compacting the older part of a coding session so the session can
+continue within its context window. Write a compact factual summary of
+the work so far, in the third person ("the session fixed X and its
+tests"): the task and its current state, decisions and why, files
+touched and what changed, the tool results that matter (test outcomes,
+errors and their fixes), open threads, and what was tried and failed.
+This summary will be handed back to the session as framing between turns;
+the recent work is still visible to it and must not be re-listed.
+If an earlier summary is present in the older part, fold it: keep what
+is still true, drop what is done. Answer with the summary only: prose,
+no tool calls.

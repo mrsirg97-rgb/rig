@@ -13,6 +13,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/store"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
@@ -125,6 +126,10 @@ func TestWireRegistersEverySeam(t *testing.T) {
 		[]string{"bash", "read", "write", "edit"},
 		3,
 		nullFrontend{},
+		core.NewSession(),
+		defaultRow(),
+		store.DB{}, // no rem store: the AutoReflect seam stays off
+		"",
 		fakeTodo{},
 		fakeRem{},
 		fakeSched{},
@@ -182,6 +187,10 @@ func TestWireSystemPromptCarriesTheBase(t *testing.T) {
 		[]string{"bash"},
 		3,
 		nullFrontend{},
+		core.NewSession(),
+		defaultRow(),
+		store.DB{},
+		"",
 		fakeTodo{}, fakeRem{}, fakeSched{}, fakePython{}, fakeWebSearch{}, fakeWebFetch{},
 	)
 	msgs, err := k.Policy.Assemble(context.Background(), core.NewSession())
@@ -277,6 +286,11 @@ func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 	if s == nil || s.Id != sid || s.Exit != "ok" {
 		t.Fatalf("one identity, closed: %+v", s)
 	}
+}
+
+// defaultRow is the spec's worker row, for the wiring tests.
+func defaultRow() models.Model {
+	return models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384}
 }
 
 func mustRead(t *testing.T, db store.DB, fn func(context.Context) (any, error)) any {

@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/mrsirg97-rgb/rig/policy/compact"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/store"
@@ -86,7 +89,26 @@ func resumeIn(ctx context.Context, tx *sql.Tx, sessionID string) (*core.Session,
 	}
 	rows.Close()
 
+	// SPEC_COMPACT 5: the marker is the projection interface. After a
+	// compaction the store holds the full history, the original tail rows,
+	// the summary row, the re-landed tail, and the post-compaction rows; a
+	// naive seq-order projection would rebuild the whole pre-compaction
+	// transcript plus a summary that lands after the tail it summarizes —
+	// over the trigger on the first Assemble, re-summarizing what was
+	// already summarized. Start from the last [compaction] row when one
+	// exists (the window is the summary row and everything after it); with
+	// none, the full history as before.
+	start := int64(0)
 	for _, m := range ms {
+		if m.role == "user" && strings.HasPrefix(m.content, compact.SummaryMarker) {
+			start = m.seq
+		}
+	}
+
+	for _, m := range ms {
+		if m.seq < start {
+			continue
+		}
 		switch m.role {
 		case "user":
 			sess.Append(core.Message{Role: core.RoleUser, Content: m.content})

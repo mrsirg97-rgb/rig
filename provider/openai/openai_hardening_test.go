@@ -242,3 +242,117 @@ func TestStreamRequestsUsageOnTheWire(t *testing.T) {
 		t.Fatalf("stream_options.include_usage = %v, want true", opts.IncludeUsage)
 	}
 }
+
+// TestMaxTokensWireShape (SPEC_COMPACT 8): the request-side reserve maps
+// to max_tokens on the wire — present when non-zero, absent when 0 (the
+// server's default). The shape test asserts both directions.
+func TestMaxTokensWireShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		if _, ok := req["max_tokens"]; !ok {
+			t.Fatal("max_tokens is absent on the wire")
+		}
+		var mt int
+		if err := json.Unmarshal(req["max_tokens"], &mt); err != nil {
+			t.Fatalf("max_tokens is not an integer: %v", err)
+		}
+		if mt != 8192 {
+			t.Fatalf("max_tokens = %d, want 8192", mt)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	p := openai.New(srv.URL, "local")
+	req := userReq()
+	req.MaxTokens = 8192
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+
+	// zero = the provider's default: max_tokens must be absent.
+	var saw bool
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		_ = json.Unmarshal(body, &req)
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		_, saw = req["max_tokens"]
+	}))
+	t.Cleanup(srv2.Close)
+	p2 := openai.New(srv2.URL, "local")
+	if _, err := drain(t, context.Background(), p2, userReq()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if saw {
+		t.Fatal("max_tokens must be absent when 0 (the provider's default)")
+	}
+}
+
+// TestReasoningEffortWireShape (SPEC_COMPACT 3): the summary request's
+// reasoning effort goes over the wire in both shapes the server families
+// read — the top-level reasoning_effort (OpenAI-shaped servers) and
+// chat_template_kwargs.reasoning_effort (llama.cpp, whose Qwen3 template
+// ignores the top-level field: measured on the swap, only the kwargs
+// entry changes the think length) — present in both when set, absent in
+// both when empty (the server's default). A server that knows neither
+// ignores both.
+func TestReasoningEffortWireShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		// both fields present, both carrying the effort
+		var top string
+		if err := json.Unmarshal(req["reasoning_effort"], &top); err != nil {
+			t.Fatalf("reasoning_effort is not a string: %v", err)
+		}
+		if top != "medium" {
+			t.Fatalf("reasoning_effort = %q, want medium", top)
+		}
+		var kwargs struct {
+			ReasoningEffort string `json:"reasoning_effort"`
+		}
+		if err := json.Unmarshal(req["chat_template_kwargs"], &kwargs); err != nil {
+			t.Fatalf("chat_template_kwargs is not an object: %v", err)
+		}
+		if kwargs.ReasoningEffort != "medium" {
+			t.Fatalf("chat_template_kwargs.reasoning_effort = %q, want medium", kwargs.ReasoningEffort)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	p := openai.New(srv.URL, "local")
+	req := userReq()
+	req.ReasoningEffort = "medium"
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+
+	// empty = the server's default: both fields must be absent.
+	var sawTop, sawKwargs bool
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		_ = json.Unmarshal(body, &req)
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		_, sawTop = req["reasoning_effort"]
+		_, sawKwargs = req["chat_template_kwargs"]
+	}))
+	t.Cleanup(srv2.Close)
+	p2 := openai.New(srv2.URL, "local")
+	if _, err := drain(t, context.Background(), p2, userReq()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if sawTop {
+		t.Fatal("reasoning_effort must be absent when empty (the server's default)")
+	}
+	if sawKwargs {
+		t.Fatal("chat_template_kwargs must be absent when empty (the server's default)")
+	}
+}

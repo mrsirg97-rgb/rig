@@ -38,12 +38,19 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		return nil, fmt.Errorf("openai: empty message list")
 	}
 
+	var kwargs *wireChatTemplateKwargs // set only when the effort is set
+	if req.ReasoningEffort != "" {
+		kwargs = &wireChatTemplateKwargs{ReasoningEffort: req.ReasoningEffort}
+	}
 	body, err := json.Marshal(wireRequest{
-		Model:         p.model,
-		Messages:      wireMessages(req.Messages),
-		Tools:         wireTools(req.Tools),
-		Stream:        true,
-		StreamOptions: &wireStreamOptions{IncludeUsage: true},
+		Model:              p.model,
+		Messages:           wireMessages(req.Messages),
+		Tools:              wireTools(req.Tools),
+		MaxTokens:          req.MaxTokens,
+		ReasoningEffort:    req.ReasoningEffort,
+		ChatTemplateKwargs: kwargs,
+		Stream:             true,
+		StreamOptions:      &wireStreamOptions{IncludeUsage: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("openai: encode request: %w", err)
@@ -201,11 +208,25 @@ func sortedPending(pending map[int]*core.ToolCall) []int {
 // wire shapes. Named types so a field typo fails at compile time.
 
 type wireRequest struct {
-	Model         string             `json:"model"`
-	Messages      []wireMessage      `json:"messages"`
-	Tools         []wireTool         `json:"tools,omitempty"`
-	Stream        bool               `json:"stream"`
-	StreamOptions *wireStreamOptions `json:"stream_options,omitempty"`
+	Model              string                  `json:"model"`
+	Messages           []wireMessage           `json:"messages"`
+	Tools              []wireTool              `json:"tools,omitempty"`
+	MaxTokens          int                     `json:"max_tokens,omitempty"`       // SPEC_COMPACT 8's request-side reserve; 0 = omitted (the server default)
+	ReasoningEffort    string                  `json:"reasoning_effort,omitempty"` // SPEC_COMPACT 3's summary effort; empty = the server default
+	ChatTemplateKwargs *wireChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
+	Stream             bool                    `json:"stream"`
+	StreamOptions      *wireStreamOptions      `json:"stream_options,omitempty"`
+}
+
+// wireChatTemplateKwargs carries the reasoning effort to the chat template.
+// Both shapes go over the wire when the effort is set, because the two
+// server families read two different fields: OpenAI-shaped servers read
+// the top-level reasoning_effort; llama.cpp (the worker swap) ignores it
+// and its Qwen3 template takes it only as a chat_template_kwargs entry —
+// measured on the swap: only chat_template_kwargs.reasoning_effort
+// changes the think length. A server that knows neither ignores both.
+type wireChatTemplateKwargs struct {
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
 // wireStreamOptions asks the server to include the usage chunk on the
