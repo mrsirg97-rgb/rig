@@ -239,10 +239,16 @@ The embedded layer is the 0.2.0 value moved out of code (the
 value, or to its documented no-default (`trafilatura`: auto), when the
 operator set nothing.
 
-**"Set" is defined once, per key.** For every key except two, set
-means **non-empty / non-zero** at that layer — an empty string or zero
-descends, exactly as 0.2.0's `envOr` behaves today. Two keys are
-**presence-aware**: `webFetchProxy` and `trafilatura`. For them the
+**"Set" is defined once, per layer and key.** For **flags**, set means
+**passed** (`flag.Visit` reports exactly which were): a flag the
+operator typed always wins, whatever its value — `-system ""` runs with
+an empty system prompt and `-retries 0` reaches the guard's floor
+(clamped to 1), exactly as 0.2.0 behaves. Flags are inherently
+presence-aware; defining them by value would silently change both.
+For **env and file**, set means **non-empty / non-zero** at that layer
+— an empty string or zero descends, exactly as 0.2.0's `envOr` behaves
+today — except for two keys that are **presence-aware at every layer**:
+`webFetchProxy` and `trafilatura`. For them the
 empty value is itself the choice — direct egress, the stdlib text pass —
 and 0.2.0 already documents it ("set empty means the variable is
 present but empty … presence is the signal, the value is the choice").
@@ -250,7 +256,8 @@ For these two, set means **present at that layer** (env: `os.LookupEnv`
 ok, even empty; file: the key exists in the JSON, even `""`). This
 extends the documented 0.2.0 env semantics to the file layer; the other
 keys keep the 0.2.0 env semantics. No key changes meaning between 0.2.0
-and this spec.
+and this spec — the flag-presence rule above is what preserves that for
+explicitly-empty flags.
 
 The rule is tested at every boundary, not re-stated per key (testing):
 file-over-embedded in `config`, env-over-file and flag-over-env at the
@@ -347,6 +354,11 @@ table row by row**, keyed by `id`:
   `interactive`; `effort` defaults to `""`.
 - an **embedded row the user file does not list**: kept. The file is an
   overlay, not a replacement.
+- the overlay's zero-means-unset has one named cost: a zero value for a
+  numeric field is unreachable by overlay on an embedded id (`Check`
+  allows `Reserve: 0`, but a `"reserve": 0` descends). A new row can
+  carry it; an embedded id cannot. Named as the cost of the rule, not
+  worth presence-aware row fields.
 - the merged table is then built through `models.New` (each row
   checked, duplicates refused) — a violation refuses with the voice
   above.
@@ -378,7 +390,9 @@ qwen3.8-workers  worker       window 65536  max 8192  reserve 8192  keep 16384  
 ```
 
 File rows list like any others — same columns, same switch, same
-refusal voice for unknown ids.
+refusal voice for unknown ids. The listing order is stable: sorted by
+id (the table's `Known()` order), so the golden lines do not depend on
+merge order.
 
 ### 5. settings.json: the existing knobs, flat, by their env names
 
@@ -650,6 +664,10 @@ case names one, the built binary for the e2e.
 - `TestPrecedenceFlagOverEnvOverFileOverEmbedded` — one key
   (`system`), four runs: each layer wins when the layers above are
   absent (2's rule, tested at every boundary).
+- `TestFlagPresenceWins` — `-system ""` runs with the empty system
+  prompt (not the embedded default); `-retries 0` reaches the guard's
+  floor (the clamp to 1, not the embedded 3): a passed flag wins,
+  whatever its value (2's flag rule, the 0.2.0 semantics preserved).
 - `TestPrecedencePresenceKeyEnvEmptyBeatsFile` —
   `RIG_WEB_FETCH_PROXY=""` + a file value: direct wins (2).
 - `TestRunJobSwapUrlChain` — the file's `swapUrl` reaches the busy
