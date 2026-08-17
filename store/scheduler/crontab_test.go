@@ -8,10 +8,9 @@ import (
 	"testing"
 )
 
-// pane's scheduler-crontab cases, by name: tagged-line surgery is
-// surgical — foreign lines byte-identical before and after — and the
-// production shim fails closed against a temp spool, never a live
-// crontab.
+// Tagged-line surgery is surgical — foreign lines byte-identical before
+// and after — and the production shim fails closed against a temp spool,
+// never a live crontab.
 
 const RUNNER = "/x/rig run-job"
 

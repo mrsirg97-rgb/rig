@@ -1,7 +1,6 @@
-// Package python is pane's persistent IPython kernel, ported: one kernel
-// per session, state across calls, the JSON-lines wire protocol over stdio,
-// no third-party client. The surface (description, guidelines, schema) and
-// every runtime voice are pane's verbatim.
+// Package python is the persistent IPython kernel tool: one kernel per
+// session, state across calls, the JSON-lines wire protocol over stdio,
+// no third-party client.
 package python
 
 import (
@@ -31,25 +30,22 @@ import (
 var kernelHostSrc string
 
 const (
-	defaultTimeoutMs = 120_000 // pane's DEFAULT_TIMEOUT_MS
-	stderrTailLen    = 4096    // pane's STDERR_TAIL
+	defaultTimeoutMs = 120_000
+	stderrTailLen    = 4096
 	waitDelay        = 2 * time.Second
 )
 
-// description is pane's voice, verbatim.
 const description = "Run Python in a persistent IPython session. Variables, imports and definitions " +
 	"persist across calls, so build state up incrementally. numpy and pandas are " +
 	"available; IPython magics (%timeit, %run) work. action='vars' lists the current " +
 	"namespace, action='reset' clears it."
 
-// guidelines is pane's promptGuidelines, verbatim; folded after the
-// description in Description() since rig's tool surface carries no
-// separate guidelines channel.
+// guidelines is folded after the description in Description() since
+// rig's tool surface carries no separate guidelines channel.
 const guidelines = "Guidelines: " +
 	"arithmetic, data shaping, parsing, bulk text -> compute in python, don't estimate. " +
 	"state persists; compute once, query it in later calls."
 
-// schemaJSON is pane's parameters, verbatim.
 const schemaJSON = `{
 	"type": "object",
 	"properties": {
@@ -59,7 +55,7 @@ const schemaJSON = `{
 	}
 }`
 
-// Reply is pane's python-kernel.types.ts, verbatim.
+// Reply is one wire reply from the host.
 type Reply struct {
 	ID     *string `json:"id"`
 	Ok     bool    `json:"ok"`
@@ -70,7 +66,7 @@ type Reply struct {
 	Note   *string `json:"note"`
 }
 
-// request is one wire line: pane's payload plus the routed id.
+// request is one wire line: the payload plus the routed id.
 type request struct {
 	Code *string `json:"code,omitempty"`
 	Cmd  *string `json:"cmd,omitempty"`
@@ -85,20 +81,20 @@ type given struct {
 }
 
 // Tool owns one persistent kernel. rig runs one session per process and
-// the root wires one tool per process, so per-instance ownership is pane's
+// the root wires one tool per process, so per-instance ownership is
 // one-kernel-per-session with no shared package state.
 type Tool struct{ k *kernel }
 
 var _ core.Tool = (*Tool)(nil) // the seam is compile-time enforced
 
-// New returns the tool with pane's defaults: the shared venv interpreter
-// and the host at pane's path, falling back to the embedded host. The
-// default path keeps the lazy venv bootstrap; the seam does not.
+// New returns the tool with the defaults: the shared venv interpreter and
+// the host resolved by DefaultHost. The default path keeps the lazy venv
+// bootstrap; the seam does not.
 func New() *Tool {
 	return &Tool{k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1)}}
 }
 
-// NewWith is the injection seam (pane's constructor opts): an explicit
+// NewWith is the injection seam: an explicit
 // interpreter and host, and the default-venv bootstrap is skipped — the
 // seam provides everything; the bootstrap is the default path's policy,
 // not the seam's. New() is the default path.
@@ -107,25 +103,26 @@ func NewWith(python, host string) *Tool {
 }
 
 // Host reports the resolved host path, for the root's startup log and for
-// debugging which host (pane's or the embedded) a session runs on.
+// debugging which host (the shared agent path or the embedded) a session
+// runs on.
 func (t *Tool) Host() string { return t.k.host }
 
 // Name implements core.Tool.
 func (t *Tool) Name() string { return "python" }
 
-// Description implements core.Tool: pane's voice verbatim, guidelines
-// folded (rig's surface has no separate channel).
+// Description implements core.Tool: description with guidelines folded
+// (rig's surface has no separate channel).
 func (t *Tool) Description() string { return description + "\n\n" + guidelines }
 
-// Guidelines is pane's operational voice, verbatim, for composers that keep
+// Guidelines is the operational guidance alone, for composers that keep
 // the channels separate.
 func Guidelines() string { return guidelines }
 
-// Schema implements core.Tool: pane's parameters, verbatim.
+// Schema implements core.Tool.
 func (t *Tool) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
-// Exec is pane's execute, verbatim: the "no code supplied" refusal, the
-// payload choice (action vs code), the timeout, and the rendered reply.
+// Exec implements core.Tool: the "no code supplied" refusal, the payload
+// choice (action vs code), the timeout, and the rendered reply.
 func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a given
 	if err := json.Unmarshal(data, &a); err != nil {
@@ -160,9 +157,8 @@ func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	return text, errors.New(text)
 }
 
-// Close is pane's session_shutdown hook, ported to the root's teardown
-// line: kill the whole process group and wait briefly for the death to be
-// processed.
+// Close is the root's teardown line: kill the whole process group and
+// wait briefly for the death to be processed.
 func (t *Tool) Close() {
 	p := t.k.shutdown()
 	if p != nil {
@@ -179,7 +175,7 @@ type kernel struct {
 	python string
 	host   string
 
-	queue chan struct{} // one dispatch at a time (pane's promise chain)
+	queue chan struct{} // one dispatch at a time
 
 	seq atomic.Int64
 
@@ -290,7 +286,7 @@ func (p *proc) deliver(raw string) {
 	}
 }
 
-// drainStderr keeps the last STDERR_TAIL chars, pane's tail.
+// drainStderr keeps the last stderrTailLen bytes.
 func (p *proc) drainStderr(r io.Reader) {
 	buf := make([]byte, 32*1024)
 	for {
@@ -316,7 +312,7 @@ func (p *proc) stderrTail() string {
 }
 
 // waitLoop reaps the process, flushes any final reply, then claims the
-// death if it is still the current one (pane's isCurrent trick).
+// death if it is still the current one.
 func (k *kernel) waitLoop(p *proc) {
 	waitErr := p.cmd.Wait()
 	<-p.readDone
@@ -345,8 +341,8 @@ func (k *kernel) onDeath(p *proc, _ error) {
 	p.failAll(msg)
 }
 
-// failAll resolves every pending call with the message, pane's voice
-// shape { id: null, ok: false, error }.
+// failAll resolves every pending call with the message, in the shape
+// { id: null, ok: false, error }.
 func (p *proc) failAll(msg string) {
 	p.mu.Lock()
 	chs := make([]chan Reply, 0, len(p.pending))
@@ -363,7 +359,7 @@ func (p *proc) failAll(msg string) {
 	}
 }
 
-// send is pane's Kernel.send: queue, then dispatch. The timeout starts
+// send: queue, then dispatch. The timeout starts
 // only after the slot is taken, so queue time is never charged to the
 // cell's own timeout.
 func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, error) {
@@ -442,7 +438,7 @@ func (p *proc) forget(id string) {
 	p.mu.Unlock()
 }
 
-// takeDeathNote is pane's verbatim: the one-shot note for the next call.
+// takeDeathNote is the one-shot note for the next call.
 func (k *kernel) takeDeathNote() *string {
 	k.mu.Lock()
 	d := k.lastDeath
@@ -458,7 +454,7 @@ func (k *kernel) takeDeathNote() *string {
 	return strPtr(s)
 }
 
-// restart is pane's timeout path; shutdown is the root teardown. Both
+// restart is the timeout path; shutdown is the root teardown. Both
 // null the current process before killing, so the deliberate death leaves
 // no death note.
 func (k *kernel) restart() { k.teardown("kernel was restarted; all variables are gone") }
@@ -481,12 +477,12 @@ func (k *kernel) teardown(msg string) *proc {
 	return p
 }
 
-// roundSeconds is pane's Math.round(ms / 1000): half-up (1500ms reads 2s).
+// roundSeconds rounds ms to seconds half-up (1500ms reads 2s).
 func roundSeconds(ms int) int {
 	return (ms + 500) / 1000
 }
 
-// render is pane's render, verbatim: note, out, [stderr], [error], then
+// render: note, out, [stderr], [error], then
 // the result only if the out does not already contain it.
 func render(r Reply) string {
 	var parts []string
@@ -516,7 +512,7 @@ func render(r Reply) string {
 
 func strPtr(s string) *string { return &s }
 
-// exitDescription is pane's "signal SIGX" / "code N" voice.
+// exitDescription reads "signal SIGX" or "code N".
 func exitDescription(st *os.ProcessState) string {
 	if st == nil {
 		return "code 1"
@@ -581,13 +577,13 @@ func homeDir() string {
 	return os.Getenv("HOME")
 }
 
-// defaultInterpreter is pane's KERNEL_PYTHON: the shared agent venv.
+// defaultInterpreter is the shared agent venv's python.
 func defaultInterpreter() string {
 	return filepath.Join(homeDir(), ".pi", "agent", "kernel-venv", "bin", "python")
 }
 
-// DefaultHost resolves pane's order: pane's installed path first (interop),
-// else the embedded host materialised into rig's config home
+// DefaultHost resolves the host: the shared agent path first (interop with
+// the shared venv), else the embedded host materialised into rig's config home
 // (idempotent; temp+rename). Exported so the root can name an explicit
 // interpreter (RIG_PYTHON) with the default host.
 func DefaultHost() string {
@@ -623,9 +619,9 @@ type bootCall struct {
 	err  error
 }
 
-// ensureKernel is pane's lazy bootstrap: the shared venv, created once if
+// ensureKernel is the lazy bootstrap: the shared venv, created once if
 // missing (python3 + network). Single-flight; a failed bootstrap is
-// re-attempted on the next call (pane clears its promise on failure).
+// re-attempted on the next call.
 func ensureKernel(ctx context.Context) error {
 	if _, err := os.Stat(defaultInterpreter()); err == nil {
 		return nil
@@ -658,7 +654,7 @@ func ensureKernel(ctx context.Context) error {
 	return err
 }
 
-// runStep is pane's bootstrap step runner: 300s, stderr-tailed voice.
+// runStep runs one bootstrap step: 300s budget, stderr-tailed error.
 func runStep(ctx context.Context, command string, args []string) error {
 	stepCtx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()

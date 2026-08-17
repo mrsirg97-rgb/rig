@@ -1,7 +1,7 @@
-// Package scheduler adapts pane's scheduler surface to rig's tool
-// seam: pane's description, guidelines, schema, and runtime voices
-// verbatim; the Execute mapping onto the store's verbs with the
-// threaded session attribution (the adapter consumes opened seams).
+// Package scheduler adapts the scheduler store to rig's tool seam: the
+// description, guidelines, schema, and runtime voices; the Exec mapping
+// onto the store's verbs with the threaded session attribution (the
+// adapter consumes opened seams).
 package scheduler
 
 import (
@@ -16,11 +16,11 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// defaultModel is pane's worker-model default, interpolated where pane's
-// surface interpolates it.
+// defaultModel is the worker-model default, interpolated into the
+// description.
 const defaultModel = "qwen3.8-workers"
 
-// description is pane's voice verbatim.
+// description is the tool's description.
 const description = "Background jobs on the user's crontab, bound to the worker GPU. " +
 	"create schedules a headless worker session (5-field vixie cron 'M H D Mo DOW', " +
 	"or cron:'once' + at:<ISO> for one-shot; the line self-deletes after one fire, no " +
@@ -32,7 +32,7 @@ const description = "Background jobs on the user's crontab, bound to the worker 
 	"are minted per scope, never reused - copy them from list, never invent. " +
 	"Default model: " + defaultModel + "."
 
-// guidelines is pane's operational voice verbatim; folded after the
+// guidelines is the operational guidance; folded after the
 // description in Description() since rig's tool surface carries no
 // separate guidelines channel.
 const guidelines = "Guidelines: " +
@@ -123,20 +123,20 @@ func New(st sched.Stores, ct sched.Crontab, runnerCmd string) core.Tool {
 // Name implements core.Tool.
 func (a adapter) Name() string { return "scheduler" }
 
-// Description implements core.Tool: pane's voice verbatim, guidelines
+// Description implements core.Tool: the description with guidelines
 // folded (rig's surface has no separate channel).
 func (a adapter) Description() string { return description + "\n\n" + guidelines }
 
-// Guidelines is pane's operational voice verbatim, for composers that keep
+// Guidelines is the operational guidance alone, for composers that keep
 // the channels separate.
 func Guidelines() string { return guidelines }
 
-// Schema implements core.Tool: pane's parameters verbatim.
+// Schema implements core.Tool.
 func (a adapter) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
-// Exec maps the call onto the store's verbs. Shape voices are pane's; the
-// store's own refusals pass through. Session attribution from the
-// threaded session, anon when unthreaded.
+// Exec maps the call onto the store's verbs; the store's own refusals
+// pass through. Session attribution from the threaded session, anon when
+// unthreaded.
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
 	if err := json.Unmarshal(args, &g); err != nil {
@@ -150,7 +150,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("scheduler: %v", err)
 	}
-	// scope validates before any action voice (pane's ordering): a
+	// scope validates before any action voice: a
 	// malformed scope is the answer even when the action would refuse.
 	scope, err := scopeCheck(g.Scope)
 	if err != nil {
@@ -209,7 +209,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	}
 }
 
-// scopeCheck enforces pane's scope voice; empty passes through as the
+// scopeCheck enforces the scope voice; empty passes through as the
 // caller's default scope.
 func scopeCheck(scope string) (string, error) {
 	if scope == "" || scope == "global" || scope == "cwd" {

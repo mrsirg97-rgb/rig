@@ -1,17 +1,16 @@
-// Package rem is the memory store: pane's REM_SPEC semantics, Go over the
-// generated substrate. SPEC_STATE's "### rem" section is the spec; pane's
-// REM_SPEC carries the voice and the named cases.
+// Package rem is the memory store, Go over the generated substrate.
+// SPEC_STATE's "### rem" section is the spec.
 //
 // Writes land through the generated accessors inside one serializable
 // transaction per operation; the store owns a small named raw surface,
 // each statement commented as such: the natural-key dedup seek, the
 // recall arms (FTS MATCH, the trigram overlap) and the browse ordering,
 // the prune selection predicate, the supersession-clearing UPDATE (the
-// runtime behaviour of REM_SPEC's ON DELETE SET NULL — the camera emits
-// no foreign keys at all), and the fts rowid bookkeeping (the virtual
-// table is not a container the grammar speaks). Ids are minted from a
-// meta counter inside the caller's transaction: strictly increasing,
-// never reused — REM_SPEC's AUTOINCREMENT rule, kept by minting.
+// runtime behaviour of ON DELETE SET NULL — the camera emits no foreign
+// keys at all), and the fts rowid bookkeeping (the virtual table is not
+// a container the grammar speaks). Ids are minted from a meta counter
+// inside the caller's transaction: strictly increasing, never reused —
+// the AUTOINCREMENT rule, kept by minting.
 package rem
 
 import (
@@ -41,11 +40,11 @@ const SchemaVersion = 1
 func DDL() []string { return remdd.Statements() }
 
 // Statements: the store's schema in application order — the generated
-// DDL, then extra.sql (pane's indexes), then fts.sql (the FTS5 virtual
+// DDL, then extra.sql (the seek indexes), then fts.sql (the FTS5 virtual
 // table). A driver that cannot create the table fails loudly here;
 // recall's shipped policy on capability absence is the fuzzy-only
-// degradation (REM_SPEC's named case) — unreachable under the bundled
-// pure-Go driver, which always ships FTS5.
+// degradation — unreachable under the bundled pure-Go driver, which
+// always ships FTS5.
 func Statements() []string {
 	out := remdd.Statements()
 	out = append(out, remmeta.ExtraStatements()...)
@@ -54,8 +53,8 @@ func Statements() []string {
 
 // --- fts capability: production rides the schema application (fts.sql
 // created the table at open, so a live handle implies the capability);
-// the seam simulates an absent build for REM_SPEC's named degradation
-// cases and gates the semantic arm's statements out — prepare included.
+// the seam simulates an absent build for the degradation cases and gates
+// the semantic arm's statements out — prepare included.
 var (
 	ftsOverrideSet atomic.Bool
 	ftsOverride    atomic.Bool
@@ -80,13 +79,13 @@ func ftsEnabled() bool {
 
 // --- scope ---
 
-// shortHash: the scope key of a workspace — sha1(cwd)[:12], pane's.
+// shortHash: the scope key of a workspace — sha1(cwd)[:12].
 func shortHash(cwd string) string {
 	d := sha1.Sum([]byte(cwd))
 	return hex.EncodeToString(d[:])[:12]
 }
 
-// writeScope: the write-side scope shaping. pane's voice verbatim.
+// writeScope: the write-side scope shaping.
 func writeScope(scope, cwd string) (key, label string, err error) {
 	if scope == "global" {
 		return "global", "global", nil
@@ -146,7 +145,7 @@ func transact[T any](ctx context.Context, db store.DB, act func(bound context.Co
 	return out, nil
 }
 
-// --- id minting: the meta counter, REM_SPEC's AUTOINCREMENT rule ---
+// --- id minting: the meta counter, the AUTOINCREMENT rule ---
 
 const idCounterKey = "memory_id_seq"
 
@@ -181,7 +180,7 @@ func mintID(bound context.Context) (int64, error) {
 
 // --- supersedes ---
 
-// applySupersedes: pane's trust-chain update through the generated
+// applySupersedes: the trust-chain update through the generated
 // surface. Missing targets refuse loudly — a typo must never silently
 // corrupt the chain. Self-supersedes are filtered: re-superseding one's
 // own id is a no-op, never a self-demotion.
@@ -241,7 +240,7 @@ type writeResult struct {
 
 // Learn commits a fact idempotently on (scope, md5(content)) — the
 // natural key. Existing rows accept importance and supersedes updates;
-// content is untouched. Pane's reply voices verbatim.
+// content is untouched.
 func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string, *remdom.Memory, bool, error) {
 	if in.Content == "" {
 		return "", nil, false, fmt.Errorf("rem: action 'learn' requires content")
@@ -312,7 +311,7 @@ func Reflect(ctx context.Context, db store.DB, cwd string, in ReflectInput) (str
 	return res.reply, res.mem, res.existing, nil
 }
 
-// AutoReflect is the compaction-entry path (pane's session_compact): the
+// AutoReflect is the compaction-entry path: the
 // distilled summary as a low-importance reflection, scoped to the
 // workspace, deduped by content. Blank summaries are inert. The caller
 // is fire-and-forget: a store failure never crashes the session.
@@ -339,7 +338,7 @@ type writeShape struct {
 	supersedes    []int64
 }
 
-// storeOrTouch: pane's write path — natural-key find-or-create, trigram
+// storeOrTouch: the write path — natural-key find-or-create, trigram
 // bookkeeping, gated fts bookkeeping, supersedes. One transaction.
 func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Memory, bool, error) {
 	scopeKey, scopeLabel, err := writeScope(sh.scope, cwd)
@@ -348,7 +347,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 	}
 	digest := md5hex(sh.content)
 
-	// Natural-key dedup seek — pane's find-or-create predicate; no
+	// Natural-key dedup seek — the find-or-create predicate; no
 	// generated accessor spans a non-primary predicate. Named.
 	tx, err := sqlx.TxFrom(bound)
 	if err != nil {
@@ -433,9 +432,8 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 		return nil, false, err
 	}
 	if ftsEnabled() {
-		// Pane's gated FTS bookkeeping (REM_SPEC E): keyed by rowid,
-		// suppressed entirely — prepare included — when the capability
-		// is absent. Named.
+		// Gated FTS bookkeeping: keyed by rowid, suppressed entirely —
+		// prepare included — when the capability is absent. Named.
 		if _, err := tx.ExecContext(bound, `INSERT INTO memory_fts (rowid, content) VALUES ($1, $2)`, id, sh.content); err != nil {
 			return nil, false, fmt.Errorf("rem: fts insert: %w", err)
 		}
@@ -473,7 +471,7 @@ type PruneInput struct {
 
 // Prune: consolidate persists the decay pass (idempotent by
 // construction); remove/reduce are bounded by a selection and report
-// actual effects. Pane's voices verbatim.
+// actual effects.
 type pruneResult struct {
 	reply string
 	count int
@@ -535,7 +533,7 @@ func candidatesOf(bound context.Context, in PruneInput, cwd string, whole bool) 
 		if !whole {
 			return nil, fmt.Errorf("rem: prune needs ids or criteria (kind/older_than_days/scope)")
 		}
-		// Whole-store candidate enumeration — pane's consolidate default.
+		// Whole-store candidate enumeration — consolidate's default.
 		// Named: no generated accessor spans an unkeyed scan.
 		tx, err := sqlx.TxFrom(bound)
 		if err != nil {
@@ -560,8 +558,8 @@ func candidatesOf(bound context.Context, in PruneInput, cwd string, whole bool) 
 	if err != nil {
 		return nil, err
 	}
-	// The prune selection predicate — pane's own statement shape; no
-	// generated accessor spans it. Named.
+	// The prune selection predicate; no generated accessor spans it.
+	// Named.
 	clauses := []string{"scope IN (" + placeholders(len(scopes)) + ")"}
 	args := make([]any, 0, len(scopes)+2)
 	for _, s := range scopes {
@@ -624,7 +622,7 @@ func placeholders(n int) string {
 	return b.String()
 }
 
-// consolidatePass: pane's decay pass — effective-at-recall equals what
+// consolidatePass: the decay pass — effective-at-recall equals what
 // this persists; a replay with no elapsed time and no new accesses is a
 // no-op, so the pass is idempotent by construction.
 func consolidatePass(bound context.Context, in PruneInput, cwd string) (int, error) {
@@ -654,7 +652,7 @@ func consolidatePass(bound context.Context, in PruneInput, cwd string) (int, err
 }
 
 // daysSince: elapsed days since an ISO timestamp; unparseable or future
-// timestamps read as zero (pane's daysBetween).
+// timestamps read as zero.
 func daysSince(older string, now time.Time) float64 {
 	if older == "" {
 		return 0
@@ -666,9 +664,8 @@ func daysSince(older string, now time.Time) float64 {
 	return now.Sub(t).Hours() / 24
 }
 
-// removeMemories: the prune's bookkeeping, pane's statement shapes, all
-// inside the caller's transaction. Missing ids count zero, never phantom
-// deletions.
+// removeMemories: the prune's bookkeeping, all inside the caller's
+// transaction. Missing ids count zero, never phantom deletions.
 func removeMemories(bound context.Context, in PruneInput, cwd string) (int, error) {
 	tx, err := sqlx.TxFrom(bound)
 	if err != nil {
@@ -680,7 +677,7 @@ func removeMemories(bound context.Context, in PruneInput, cwd string) (int, erro
 	}
 	removed := 0
 	for _, id := range ids {
-		// REM_SPEC's ON DELETE SET NULL, runtime behaviour: removing the
+		// ON DELETE SET NULL, runtime behaviour: removing the
 		// superseding memory unsupersedes the older one, whose content is
 		// then the best surviving record. The camera emits no foreign keys
 		// at all, so the store clears the pointers itself, same
@@ -688,14 +685,13 @@ func removeMemories(bound context.Context, in PruneInput, cwd string) (int, erro
 		if _, err := tx.ExecContext(bound, `UPDATE memories SET superseded_by = NULL WHERE superseded_by = $1`, id); err != nil {
 			return removed, fmt.Errorf("rem: remove: %w", err)
 		}
-		// Pane's defense-in-depth trigram cleanup (REM_SPEC E). Named.
+		// Defense-in-depth trigram cleanup. Named.
 		if _, err := tx.ExecContext(bound, `DELETE FROM trigrams WHERE memory_id = $1`, id); err != nil {
 			return removed, fmt.Errorf("rem: remove: %w", err)
 		}
 		if ftsEnabled() {
-			// Pane's gated FTS bookkeeping (REM_SPEC E), keyed by rowid —
-			// an fts-less build must not even compile the statement.
-			// Named.
+			// Gated FTS bookkeeping, keyed by rowid — an fts-less build
+			// must not even compile the statement. Named.
 			if _, err := tx.ExecContext(bound, `DELETE FROM memory_fts WHERE rowid = $1`, id); err != nil {
 				return removed, fmt.Errorf("rem: remove: %w", err)
 			}
@@ -710,8 +706,8 @@ func removeMemories(bound context.Context, in PruneInput, cwd string) (int, erro
 }
 
 // reduceImportance: lowers importance over the selection; reports
-// actual effects. Selection precedes the importance check — pane's
-// execute-time order, so the selection voice wins on bare calls.
+// actual effects. Selection precedes the importance check, so the
+// selection voice wins on bare calls.
 func reduceImportance(bound context.Context, in PruneInput, cwd string) (int, error) {
 	ids, err := candidatesOf(bound, in, cwd, false)
 	if err != nil {
@@ -738,9 +734,9 @@ func reduceImportance(bound context.Context, in PruneInput, cwd string) (int, er
 	return reduced, nil
 }
 
-// --- reply render: pane's shaping verbatim ---
+// --- reply render ---
+// indent: two-space per line.
 
-// indent: two-space per line, pane's _render-kit convention.
 func indent(text string) string {
 	lines := strings.Split(text, "\n")
 	for i := range lines {

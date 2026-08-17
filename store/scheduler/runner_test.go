@@ -14,15 +14,14 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// pane's scheduler-runner cases, by name, over this runtime's seams:
-// RunJob(key, opts) with fake fetch/spawn/crontab. TZ is UTC-pinned
+// RunJob(key, opts) over fake fetch/spawn/crontab seams. TZ is UTC-pinned
 // package-wide.
 
 var runnerNow = time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
 
 const logName = "2026-08-15T12-00-00-000Z.log"
 
-// pane's MODELS fixture: catalog ids with llama-swap aliases.
+// modelsFixture: catalog ids with llama-swap aliases.
 var modelsFixture = []struct {
 	ID     string
 	Alias  []string
@@ -71,7 +70,7 @@ func runningJSON(models ...string) string {
 	return string(b)
 }
 
-// fakeFetch mirrors pane's fakeSwap: payloads by URL suffix.
+// fakeFetch: payloads by URL suffix.
 type fetchOpts struct {
 	failing  string
 	statuses map[string]string
@@ -98,7 +97,7 @@ func (e jsonErr) Error() string { return string(e) }
 
 func jsonError(s string) error { return jsonErr(s) }
 
-// fakeSpawn records calls and replays the pinned result (pane's fakeSpawn).
+// fakeSpawn records calls and replays the pinned result.
 type fakeSpawn struct {
 	calls  []fakeCall
 	result sched.SpawnResult
@@ -115,8 +114,7 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched
 	return f.result, f.err
 }
 
-// setupJob mirrors pane's setup: a job created in a scratch home, its key
-// derived.
+// setupJob: a job created in a scratch home, its key derived.
 func setupJob(t *testing.T, cwd, scope string, mutate func(in *sched.CreateInput)) (h *harness, key string) {
 	t.Helper()
 	h = newHarness(t, cwd)
@@ -151,7 +149,7 @@ func runOpts(h *harness, running []string, spawn *fakeSpawn, extra fetchOpts) sc
 	}
 }
 
-// runEvents: the op='run' events, oldest first (pane's events(dbPath,"run")).
+// runEvents: the op='run' events, oldest first.
 func runEvents(t *testing.T, h *harness, scope string) []struct {
 	TS      string
 	Args    map[string]any

@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// pane's scheduler-cron cases, by name. Deterministic dates: pin UTC
-// before any time arithmetic (this runtime's equivalent of pane's
-// process.env.TZ = "UTC"; Go reads it lazily on first local-time use).
+// Deterministic dates: pin UTC before any time arithmetic (Go reads TZ
+// lazily on first local-time use).
 func init() { os.Setenv("TZ", "UTC") }
 
 // --- ValidateCron: acceptance ---
@@ -255,8 +254,8 @@ func ints(lo, hi int) []int {
 	return out
 }
 
-// ut: a UTC instant, carried as local (pinned UTC by init) — pane's Date
-// constructor shape with defaulted seconds, deterministic under the pin.
+// ut: a UTC instant, carried as local (pinned UTC by init), seconds
+// defaulted; deterministic under the pin.
 func ut(y int, mo time.Month, d, h, mi int, s ...int) time.Time {
 	sec := 0
 	if len(s) > 0 {

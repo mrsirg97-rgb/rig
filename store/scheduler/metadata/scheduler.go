@@ -5,8 +5,8 @@
 // Source of truth; domain and ddl are generated from it, never typed by
 // hand. Nullable columns are pointers. Every link pairs with a plain
 // alias sharing its column (lift's association shape) so the FK survives
-// into the generated INSERT. Pane's CHECK-style invariants are not
-// expressible here and are enforced in Go where pane also enforces them.
+// into the generated INSERT. CHECK-style invariants are not expressible
+// here and are enforced in Go.
 package metadata
 
 // table:"meta"
@@ -54,11 +54,11 @@ type Job struct {
 
 // table:"runs"
 //
-// Structured run records: SPEC_STATE's deviation from pane's run-events-as-
-// the-only-record. Runs reads become a chain read over this container and
-// survive compaction, which pane's event-args shape would have dropped.
-// Pane's full record shape is kept: status, exit, duration, reason, log
-// path. Seq pairs the record with its run event (the event's seq).
+// Structured run records (SPEC_STATE's deviation from run-events-as-the-
+// only-record). Runs reads become a chain read over this container and
+// survive compaction, which an event-args-only shape would have dropped.
+// The full record shape is kept: status, exit, duration, reason, log path.
+// Seq pairs the record with its run event (the event's seq).
 type Run struct {
 	Seq        int64   `primary:"true" alias:"name=seq,nullable=false"`
 	JobID      string  `alias:"name=job_id,nullable=false"`

@@ -10,7 +10,7 @@ import (
 
 // 5-field vixie cron. Fields in order: minute, hour, day-of-month,
 // month, day-of-week (0 and 7 are both Sunday). No names, no @-macros, no
-// wrap. Voice is pane's: every refusal names the field and the problem.
+// wrap. Every refusal names the field and the problem.
 
 type fieldSpec struct {
 	name string

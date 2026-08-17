@@ -16,13 +16,13 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// pane's scheduler-core cases, by name. Deterministic now: the fixed
-// instant pane pins (Sat 2026-08-15 12:00Z), UTC-pinned package-wide.
+// Deterministic now: a fixed instant (Sat 2026-08-15 12:00Z), UTC-pinned
+// package-wide.
 var nowFixed = time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
 
 const runnerCmd = "/x/rig run-job"
 
-// fakeCrontab is pane's in-memory crontab: tests never touch a live spool.
+// fakeCrontab is an in-memory crontab: tests never touch a live spool.
 type fakeCrontab struct {
 	mu   sync.Mutex
 	text string
@@ -65,7 +65,7 @@ type harness struct {
 }
 
 // newHarness wires a scratch scheduler home with both stores opened and an
-// in-memory crontab — pane's makeCore seam, this runtime's shape.
+// in-memory crontab.
 func newHarness(t *testing.T, sessionCwd string) *harness {
 	t.Helper()
 	home := t.TempDir()
@@ -96,7 +96,7 @@ func (h *harness) runs(id, scope string, n int) (string, error) {
 	return sched.Runs(context.Background(), h.st, id, scope, n)
 }
 
-// --- inspection: pane's direct-store asserts ---
+// --- inspection: direct-store asserts ---
 
 func jobsRow(t *testing.T, h *harness, scope, id string) map[string]any {
 	t.Helper()
@@ -202,9 +202,9 @@ func TestCreateCwdScopeMintsJ1WritesStoreAndTaggedLineForeignIntact(t *testing.T
 	if _, err := os.Stat(filepath.Join(h.home, sched.CwdHash("/ws/a")+".sqlite")); err != nil {
 		t.Fatal("cwd store file missing")
 	}
-	// untouched = no events landed in the global store (this runtime's
-	// root opens both store files eagerly; pane's lazy-open case is the
-	// semantic one: the cwd-scope create writes nothing global)
+	// untouched = no events landed in the global store (the root opens
+	// both store files eagerly, so the file exists; the cwd-scope create
+	// writes nothing global)
 	var gn int
 	if err := h.st.Global.DB.QueryRow(`SELECT count(*) FROM events`).Scan(&gn); err != nil {
 		t.Fatal(err)
@@ -253,8 +253,8 @@ func TestDuplicateNameAcrossScopesIsFine(t *testing.T) {
 	mustOK(t, err)
 }
 
-// pane bc5ed84: the job's run directory is independent of the store key, in
-// both scopes; a job always has a working directory.
+// The job's run directory is independent of the store key, in both
+// scopes; a job always has a working directory.
 func TestCreateJobCwdIsIndependentOfTheStoreKey(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	reply, err := h.create(sched.CreateInput{Name: "gw", Prompt: "p", Cron: "0 0 * * *", Scope: "global"})

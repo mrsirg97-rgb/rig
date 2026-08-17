@@ -1,13 +1,12 @@
-// Package todo is the task-queue store: pane's semantics, Go over the
-// generated substrate. SPEC_STATE's "### todo" section is the spec; pane's
-// TODO_SPEC rev 2 and TASK_TREE_SPEC carry the voice and the named cases.
+// Package todo is the task-queue store, Go over the generated substrate.
+// SPEC_STATE's "### todo" section is the spec.
 //
 // The event log is the spine. tasks/task_deps are a disposable projection,
 // rebuilt from the log inside every transaction and never trusted. Replay
 // is total: malformed or inapplicable rows are skipped, never thrown.
 // Positions are minted, never mutated in place; moves are events. Create
 // is the only dependency mutation point; the DAG is validated there, at the
-// boundary, and refused loudly with the problem in pane's teaching voice.
+// boundary, and refused loudly with the problem in a teaching voice.
 package todo
 
 import (
@@ -43,7 +42,7 @@ func Statements() []string {
 const anon = "anon"
 
 // CreateItem is one entry of a create payload. DependsOn is id, exact text,
-// null (clears), or omitted (keeps) — pane's TASK_TREE contract.
+// null (clears), or omitted (keeps).
 type CreateItem struct {
 	Text      string
 	DependsOn *string
@@ -247,7 +246,7 @@ func depPreIDs(f *folded) map[string]bool {
 // resolveDep: existing ids resolve id-first; batch-internal references
 // resolve by text only — a minted id cannot be known in advance, and
 // an id-first rule against fresh ids would shadow a task whose text
-// looks like an id with the caller's own fresh id (pane's rule). Id match
+// looks like an id with the caller's own fresh id. Id match
 // wins over text match; the text stage includes the batch.
 func resolveDep(preIDs map[string]bool, batchTexts map[string]*taskState, f *folded, raw string) string {
 	if preIDs[raw] {
@@ -445,7 +444,7 @@ func marker(status string) string {
 }
 
 // orderedTaskStates is the queue order: position first, creation seq as
-// the deterministic tie-break (pane's ordering spine).
+// the deterministic tie-break.
 func orderedTaskStates(f *folded) []*taskState {
 	out := make([]*taskState, 0, len(f.tasks))
 	for _, ts := range f.tasks {
@@ -461,7 +460,7 @@ func orderedTaskStates(f *folded) []*taskState {
 }
 
 // blockedBy is the dependency id when this unresolved task's dependency is
-// not done; empty otherwise (pane's TASK_TREE presence).
+// not done; empty otherwise.
 func blockedBy(f *folded, ts *taskState) string {
 	if ts.status != statusPending && ts.status != statusActive {
 		return ""
@@ -488,8 +487,7 @@ func blockHint(f *folded, depID string) string {
 	}
 }
 
-// claimSuffix labels a foreign claim in render; own claims stay unlabeled
-// (pane's render trust model).
+// claimSuffix labels a foreign claim in render; own claims stay unlabeled.
 func claimSuffix(ts *taskState, session string) string {
 	if ts.status != statusActive || ts.owner == "" || ts.owner == session {
 		return ""
@@ -502,7 +500,7 @@ func claimSuffix(ts *taskState, session string) string {
 }
 
 // staleFooter is the presence footer: unresolved history older than the
-// threshold behind the latest seq. Pure over the fold; pane's voice.
+// threshold behind the latest seq. Pure over the fold.
 func staleFooter(f *folded) string {
 	if f.maxSeq <= STALE_THRESHOLD_SEQ {
 		return ""
@@ -530,8 +528,8 @@ func staleFooter(f *folded) string {
 	return fmt.Sprintf("\u00b7 %d unresolved since %s (recovered from log)", n, latest)
 }
 
-// render is pane's render: counts, the next pointer (blocked-skipping),
-// the rows with waits-on and claim labels.
+// render: counts, the next pointer (blocked-skipping), the rows with
+// waits-on and claim labels.
 func render(f *folded, session string) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
@@ -611,8 +609,8 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 	})
 }
 
-// Start/Complete/Fail/Retry: pane's FSM. Claim checks and completion gating
-// land in TD3b; the transitions and the voice are pane's now.
+// Start/Complete/Fail/Retry: the task FSM, with claim checks and
+// completion gating.
 func Start(ctx context.Context, db store.DB, id, session string) (string, error) {
 	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		switch ts.status {
@@ -807,7 +805,7 @@ func verb(
 
 // --- reply shaping, auto-compaction, fold-side move/compact ---
 
-// replyText is pane's reply: the note line, the full queue, the stale
+// replyText is the reply: the note line, the full queue, the stale
 // footer. Reads carry no note.
 func replyText(f *folded, session, note string) string {
 	var b strings.Builder
@@ -821,14 +819,14 @@ func replyText(f *folded, session, note string) string {
 	return b.String()
 }
 
-// STALE_THRESHOLD_SEQ and COMPACT_THRESHOLD_EVENTS are pane's thresholds:
-// deterministic, boundary-testable, exported.
+// STALE_THRESHOLD_SEQ and COMPACT_THRESHOLD_EVENTS: deterministic,
+// boundary-testable, exported.
 const (
 	STALE_THRESHOLD_SEQ      = 200
 	COMPACT_THRESHOLD_EVENTS = 1000
 )
 
-// maybeCompact is pane's auto-compaction: a mutation past the threshold
+// maybeCompact is the auto-compaction: a mutation past the threshold
 // lands the full-state snapshot first, rewrites the anchors to the
 // snapshot's epoch, and deletes the older log. Reads never reach this.
 func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) error {
@@ -852,8 +850,8 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) 
 	return nil
 }
 
-// snapshotOf is the compact payload in pane's shape: positions as pane
-// carries them (zero-based), links and claims as given.
+// snapshotOf is the compact payload: positions zero-based, links and
+// claims as given.
 func snapshotOf(f *folded) []any {
 	var out []any
 	for _, ts := range f.tasks {
@@ -873,7 +871,7 @@ func snapshotOf(f *folded) []any {
 	return out
 }
 
-// appliedMove is pane's splice: remove at the current position, insert at
+// appliedMove is the splice: remove at the current position, insert at
 // the target, renumber densely, no gaps. False when the move is a no-op or
 // inapplicable.
 func appliedMove(f *folded, ts *taskState, pos int) bool {
@@ -905,7 +903,7 @@ func appliedMove(f *folded, ts *taskState, pos int) bool {
 }
 
 // applyMoveEvent folds one move event: total. Missing tasks, out-of-range
-// positions, and no-ops skip; the splice itself is pane's.
+// positions, and no-ops skip.
 func (f *folded) applyMoveEvent(e eventRow) {
 	var payload struct {
 		ID  string `json:"id"`

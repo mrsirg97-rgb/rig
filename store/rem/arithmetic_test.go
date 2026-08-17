@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// REM_SPEC G: effective strength at recall, checkpointed decay at prune.
+// Effective strength at recall, checkpointed decay at prune.
 // The pure arithmetic is the load-bearing math — pinned by name, no I/O.
 
 func TestDecayIsIdentityAtZeroElapsed(t *testing.T) {
@@ -42,7 +42,7 @@ func TestConsolidateClampsToUnitInterval(t *testing.T) {
 	}
 }
 
-// pane: a replay with no elapsed time and no new accesses is a no-op, so
+// a replay with no elapsed time and no new accesses is a no-op, so
 // the pass is idempotent by construction.
 func TestConsolidateReplayWithNoElapsedIsNoOp(t *testing.T) {
 	once := consolidate(0.4, 0, 0, 0.7)
@@ -52,7 +52,7 @@ func TestConsolidateReplayWithNoElapsedIsNoOp(t *testing.T) {
 	}
 }
 
-// pane's named case: a decayed memory loses to a fresh one, decay
+// a decayed memory loses to a fresh one, decay
 // observable without consolidate.
 func TestEffectiveAgedLosesToFresh(t *testing.T) {
 	aged := consolidate(0.5, 40, 0, 0.5)
@@ -78,7 +78,7 @@ func TestTokenizeLowercasesAndSplits(t *testing.T) {
 	}
 }
 
-// pane's pg_trgm convention: two-space padding, per-word grams.
+// the pg_trgm convention: two-space padding, per-word grams.
 func TestGramsOfWordArePaddedTrigrams(t *testing.T) {
 	got := gramsOfWord("abc")
 	want := []string{"  a", " ab", "abc", "bc ", "c  "}
