@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] — the feature-complete runtime
 
 - **user commands** (roadmap deliverable 9, `specs/SPEC_COMMANDS.md`): the
   command seam and the first seven commands — the human's own verbs, over

@@ -153,13 +153,17 @@ and the loop never names a concrete type.
 2. **A provider** — implement `core.Provider` (every stream ends in Done or
    Fault, ctx teardown excepted); `WithProvider(...)`.
 3. **A context policy** — implement `core.ContextPolicy`; `WithPolicy(...)`.
-   Day-one is passthrough; compaction is the planned upgrade (session JSON
-   already carries the transcript).
+   Passthrough and the compaction policy (`policy/compact`, per-model
+   trigger) both ship; the policy may rewrite the session transcript — the
+   one named mutation the seam carries.
 4. **A frontend** — implement `core.Frontend`'s two methods (a TUI can sit
    beside the CLI); `WithFrontend(...)`.
 5. **A tool middleware** — implement `core.ToolMiddleware` (or adapt a plain
    `func(core.ToolExec) core.ToolExec` with `ToolMiddlewareFunc`), registered
    in listing order with its intended position (first-listed innermost).
+6. **A command** — implement `core.Command` (a user verb, dispatched by the
+   Frontend before the loop sees the line); `WithCommands(...)`. One file in
+   `command/` plus one registration line.
    Optionally implement the assertion-checked capabilities: `TurnStart`
    (observe the turn boundary; the guard clears its counts here) and
    `Guidelines` (contribute system-prompt prose; the root collects it).
