@@ -2,6 +2,7 @@ package compact_test
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -82,17 +83,26 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 	})
 
 	t.Run("the single-call pair is atomic", func(t *testing.T) {
-		row := models.Model{ID: "local", Window: 726, MaxTokens: 500, Reserve: 100, KeepRecent: 60}
+		// the window is the summary input's estimate (the prompt file plus
+		// the older prefix, 550) plus a margin of budget, and still over
+		// the transcript's trigger estimate (726 > window - reserve): both
+		// margins hold as the prompt file grows, because the input's size
+		// is computed from the file the test sits beside, not a constant.
+		prompt, err := os.ReadFile("summary_prompt.txt")
+		if err != nil {
+			t.Fatalf("read the prompt file: %v", err)
+		}
+		row := models.Model{ID: "local", Window: (len(prompt)+3)/4 + 550 + 71, MaxTokens: 500, Reserve: 100, KeepRecent: 120}
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)}) // 500
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})  // 50
-		s.Append(core.Message{                                                          // 50
-			Role: core.RoleAssistant, Content: strings.Repeat("a", 100),
+		s.Append(core.Message{                                                          // 75
+			Role: core.RoleAssistant, Content: strings.Repeat("a", 300),
 			ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{}`)}},
 		})
-		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 200)}) // 50
-		// the budget (60) takes the result (50) but not the assistant:
-		// the pair stays whole.
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)}) // 100
+		// the budget (120) takes the result (100) but not the assistant
+		// (75): the pair stays whole.
 		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {

@@ -26,8 +26,13 @@
   (a `Fault`, so `-p` exits non-zero) instead of the floor-1 one-token
   answer that logs success — a kept batch larger than the model can hold.
   The summary call carries a lower reasoning effort (`medium`) where the
-  provider supports it (`Request.ReasoningEffort`, `reasoning_effort` on
-  the wire): it is the one call whose thinking nobody reads.
+  provider supports it (`Request.ReasoningEffort` on the wire in both
+  shapes: top-level `reasoning_effort` for OpenAI-shaped servers and
+  `chat_template_kwargs.reasoning_effort` for llama.cpp — measured on the
+  swap, only the kwargs entry changes the think length): it is the one
+  call whose thinking nobody reads. The summary prompt also says prose
+  only, no tool calls, so a max-effort model can't answer the summary
+  with a call.
 
 - **runtime hardening** (roadmap deliverable 7, `specs/SPEC_HARDENING.md`):
   the seams and events everything after this needed, in one named loop
