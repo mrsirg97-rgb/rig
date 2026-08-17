@@ -315,6 +315,25 @@ func (r *Recorder) Close(exit string) error {
 	return CloseSession(context.Background(), r.db, r.sid, exit)
 }
 
+// Ensure is the exported lazy session-row creation (SPEC_COMMANDS 4's
+// handoff, step 2): the row exists before any row lands under the id.
+// Idempotent: a pre-existing row is adopted, never re-inserted.
+func (r *Recorder) Ensure() error {
+	return r.ensure()
+}
+
+// Retarget re-points the retiring recorder (SPEC_COMMANDS 4's handoff,
+// step 3): the swap re-points the retiring recorder before it completes
+// — its in-flight Input lands the user row (and the files snapshot)
+// under the new session's id, then retires. The new recorder is already
+// built over the new session; this is the in-flight row's adoption.
+func (r *Recorder) Retarget(sid string, session *core.Session) {
+	r.mu.Lock()
+	r.sid = sid
+	r.session = session
+	r.mu.Unlock()
+}
+
 // ensure lands the session row before any observation appends to it —
 // lazily, once, inside its own short transaction.
 func (r *Recorder) ensure() error {

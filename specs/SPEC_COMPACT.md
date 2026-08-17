@@ -873,7 +873,8 @@ What 8 is not:
   table and switches by rebuilding the policy pair at the root (2);
   `compact` forces the compact action — a small exported seam on the
   policy (`Compact(ctx) (core.Compacted, bool, error)` over the same
-  internal action), added then, no shape change owed now.
+  internal action). The seam landed with 9 (SPEC_COMMANDS 3): the shape
+  as promised, the caller owning delivery.
 - Deliverable 10's footer renders `Compacted` — the context-used bar the
   event already carries (`Dropped`/`Kept` against the window).
 - Chunked summarization (3's rejection), a tokenizer dependency (the

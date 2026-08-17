@@ -17,13 +17,19 @@ import (
 	"github.com/mrsirg97-rgb/rig/store"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/tool/bash"
+	"github.com/mrsirg97-rgb/rig/tool/file"
+	"github.com/mrsirg97-rgb/rig/tool/fs"
 )
 
-// The initial version is fixed: anything else is a release decision, not a
-// code change.
-func TestVersionIsTheInitialRelease(t *testing.T) {
-	if Version != "0.1.0" {
-		t.Fatalf("Version = %q, want the initial release 0.1.0", Version)
+// The 1.0 freeze (roadmap 9) is fixed: anything else is a release
+// decision, not a code change.
+func TestVersionIsTheFreeze(t *testing.T) {
+	// 0.2.0: the runtime is feature-complete and the freeze discipline
+	// holds; the 1.0 tag waits for lived use (a worker soak, the TUI
+	// field-tested as the daily driver).
+	if Version != "0.2.0" {
+		t.Fatalf("Version = %q, want 0.2.0 (the feature-complete runtime)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)
@@ -118,25 +124,40 @@ func (f *oneLineFrontend) Input(ctx context.Context) (string, error) {
 }
 func (*oneLineFrontend) Notify(ev core.Event) {}
 
+// testTools is the wiring test's tool set: the real builtins, fakes at
+// the injected seams.
+func testTools() map[string]core.Tool {
+	return map[string]core.Tool{
+		"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
+		"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
+		"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "python": fakePython{},
+		"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
+	}
+}
+
+func testRoot(fe core.Frontend) *root {
+	sess := core.NewSession()
+	r := &root{
+		baseURL:  "http://127.0.0.1:8080/v1",
+		system:   "be terse",
+		allow:    []string{"bash", "read", "write", "edit"},
+		retries:  3,
+		fe:       fe,
+		sdb:      store.DB{}, // no state store: the recorder's rows stay pending
+		remDB:    store.DB{}, // no rem store: the AutoReflect seam stays off
+		cwd:      "",
+		activeID: "local",
+		row:      defaultRow(),
+		runtime:  models.Defaults,
+		session:  sess,
+		tools:    testTools(),
+	}
+	r.rec = state.NewRecorder(fe, store.DB{}, "", "local", Version, sess.ID, sess)
+	return r
+}
+
 func TestWireRegistersEverySeam(t *testing.T) {
-	k := wire(
-		"http://127.0.0.1:8080/v1",
-		"local",
-		"be terse",
-		[]string{"bash", "read", "write", "edit"},
-		3,
-		nullFrontend{},
-		core.NewSession(),
-		defaultRow(),
-		store.DB{}, // no rem store: the AutoReflect seam stays off
-		"",
-		fakeTodo{},
-		fakeRem{},
-		fakeSched{},
-		fakePython{},
-		fakeWebSearch{},
-		fakeWebFetch{},
-	)
+	k := wire(testRoot(nullFrontend{}))
 	if k == nil {
 		t.Fatal("wire returned nil")
 	}
@@ -180,19 +201,7 @@ func TestGuidelinesAreCollectedIntoTheSystemPrompt(t *testing.T) {
 }
 
 func TestWireSystemPromptCarriesTheBase(t *testing.T) {
-	k := wire(
-		"http://127.0.0.1:8080/v1",
-		"local",
-		"be terse",
-		[]string{"bash"},
-		3,
-		nullFrontend{},
-		core.NewSession(),
-		defaultRow(),
-		store.DB{},
-		"",
-		fakeTodo{}, fakeRem{}, fakeSched{}, fakePython{}, fakeWebSearch{}, fakeWebFetch{},
-	)
+	k := wire(testRoot(nullFrontend{}))
 	msgs, err := k.Policy.Assemble(context.Background(), core.NewSession())
 	if err != nil {
 		t.Fatal(err)

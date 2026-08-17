@@ -183,8 +183,22 @@ recorder-minted fresh ids (the `tool_calls.id` primary key), name/args/
 result verbatim, the earlier rows staying as the autopsy. No schema
 change: the marker is the contract, and the rows are existing shapes.
 
+Deliverable 9 (SPEC_COMMANDS) reads this store from the `sessions`
+command, one owed read landed there: `ListSessions` — the workspace's
+session rows, newest first, capped at 50 (a glance, not an archive),
+each with the turns count defined as the session's `role = 'user'` rows
+minus the `[compaction] ` summary rows (transcript machinery, not
+prompts), an unclosed row (`ended_at` NULL) rendered as `exit open` —
+the one place that word appears; the store's exit vocabulary stays
+`ok | fault | cancelled`. And two small recorder additions for the
+`new` / `sessions resume` handoff (SPEC_COMMANDS 4): `Ensure` (the
+session row exists before any row lands under the id, idempotent) and
+`Retarget` (the retiring recorder is re-pointed before its in-flight
+`Input` completes, so that row lands under the new session). No schema
+change: the rows are existing shapes.
+
 `-p` workers get their autopsy from this: the `sessions` command (roadmap
-deliverable 9, out of scope here) or plain `sqlite3`.
+deliverable 9) or plain `sqlite3`.
 
 ### todo (port; TODO_SPEC.md A, Rev 2, TASK_TREE_SPEC.md A)
 

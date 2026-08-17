@@ -40,6 +40,7 @@ rig/
     frontend.go
     session.go
     interrupt.go // WithInterrupt / InterruptFrom: the turn's cancel rides the ctx
+    command.go   // Command: the user-command seam (deliverable 9, SPEC_COMMANDS)
   loop/          the concrete turn loop
     loop.go
   provider/
@@ -55,6 +56,8 @@ rig/
     web/         web_search, web_fetch
   frontend/
     cli/         stdin/stdout REPL
+  command/       the user-command leaf (deliverable 9, SPEC_COMMANDS): the
+                 prefix rule, the Env the root builds, one file per command
   cmd/
     rig/      main.go, the composition root
 ```
@@ -299,6 +302,18 @@ the loop emits `TurnEnd{Reason}` at every turn exit. `Notify` events are
 additive: a Frontend ignores any `Event` it does not recognize (the
 default), per the compat rule.
 
+**User commands (deliverable 9, SPEC_COMMANDS).** A Frontend may dispatch
+commands: a line that starts with `/` is checked against the registered
+set before `Input` returns it to the loop, and a dispatch consumes the
+line — the loop never sees a command. `//` escapes the prefix (one slash
+consumed, the rest is a prompt), and a `/` line that is not a known
+command is a loud refusal naming the known set, never a silent prompt.
+Dispatching is optional: a Frontend without it (one-shot, the test
+drivers) never dispatches, its `/` lines stay prompts, and nothing is
+hijacked from it. The command's output is the Frontend's stdout; no new
+`Event` is needed for any command. The loop is untouched — dispatch is
+the Frontend's business, exactly as the steering slot is.
+
 ## the loop
 
 The loop is a concrete function, not an interface. It is the one place turn
@@ -366,6 +381,7 @@ k := rig.New(
 	rig.WithMiddleware(perm.Allowlist(rules), guard.Bound(3)),
 	rig.WithPolicy(policy.Passthrough(systemPrompt)),
 	rig.WithFrontend(cli.New(os.Stdin, os.Stdout)),
+	rig.WithCommands(command.All()...),
 )
 err := loop.Run(ctx, k)
 ```
@@ -373,8 +389,12 @@ err := loop.Run(ctx, k)
 Functional options over a plain struct. Every dependency is explicit in the
 constructor call; swapping happens at registration with zero consumer
 changes. An extension is anything registered by an option (a tool, a
-provider, a middleware participant); there is no extension type, lifecycle,
-or discovery mechanism.
+provider, a middleware participant, a command); there is no extension
+type, lifecycle, or discovery mechanism. `WithCommands` registers the
+user commands (deliverable 9, SPEC_COMMANDS) on the same seam: the loop
+ignores the registry — dispatch is the Frontend's, and a kernel without
+`WithCommands` is byte-identical (the compat rule). Duplicate command
+names are a wiring error, refused at construction like duplicate tools.
 
 ## session
 
@@ -430,6 +450,17 @@ justified in this file first.
   mid-turn; the clamp's refuse-loud below its minimum (a kept batch larger
   than the window, not the floor-1 slow death); `Request.ReasoningEffort`
   semantics.
+- Deliverable 9 (SPEC_COMMANDS): dispatch by prefix with a scripted kernel
+  proving the loop never ran; a frontend without commands byte-identical;
+  each command by name against the root's closures, refusals included
+  (the live-turn refusals through a fake `Steerer`); `steer` live-turn vs
+  between-turns and the empty-steer interrupt; `new` closing the old row
+  and landing the next prompt in the fresh session with per-process state
+  intact; `sessions` resume's validate-before-mutate order; `models`
+  switch taking effect on the next turn's request and the runtime table
+  including the env-synthesized row; the todo/scheduler round-trips over
+  the same tool instances the model gets; one-shot with a command-shaped
+  prompt.
 
 ## v1 scope
 
