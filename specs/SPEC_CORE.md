@@ -85,6 +85,10 @@ type Message struct {
 	Reasoning string     // assistant turns only; the model's thinking, round-tripped
 	ToolCalls []ToolCall // assistant turns only
 	ToolID    string     // tool result turns only
+
+	ContextTokens int // assistant turns only; the server-reported
+			// prompt+completion at the moment this message completed (L8);
+			// 0 when unreported. Never rides the wire.
 }
 
 type ToolCall struct {
@@ -131,6 +135,16 @@ type ToolResult struct {
 // TestEvent is a documented test seam: the compat rule's subject (below).
 type TestEvent struct{ Name string }
 
+// policy event (SPEC_COMPACT 5): emitted at Assemble time or on-stream by
+// the policy's overflow decorator; the loop forwards it in its existing
+// default.
+type Compacted struct {
+	Summary string
+	Dropped int
+	Kept    int
+	Usage   Usage
+}
+
 type TurnEnd struct{ Reason TurnReason } // closes every turn inside the run
 
 type Usage struct {
@@ -144,7 +158,10 @@ type Usage struct {
 Provider-stream events (`TextDelta`, `ReasoningDelta`, `ToolCallEvent`,
 `Done`, `Fault`) are emitted by the adapter in stream order. Loop events
 (`ToolStart`, `ToolResult`, `TurnEnd`) bracket execution and close the
-turn; they are emitted by the loop. `TurnEnd` fires at every turn exit
+turn; they are emitted by the loop. Policy events (`Compacted`,
+SPEC_COMPACT) are emitted at `Assemble` or on-stream by the policy's
+decorator — the third emitter category; the loop forwards them in its
+existing default, and the recorder lands them (SPEC_STATE). `TurnEnd` fires at every turn exit
 (`over` / `fault` / `interrupt`), after the turn's last other event; a
 run-context cancel ends the run, not a turn, and does not emit it. The
 recorder's rule (SPEC_HARDENING 4): an unlanded partial at any `TurnEnd`
@@ -175,8 +192,12 @@ type Provider interface {
 }
 
 type Request struct {
-	Messages []Message
-	Tools    []ToolSpec // name, description, schema; execution stays in the kernel
+	Messages  []Message
+	Tools     []ToolSpec // name, description, schema; execution stays in the kernel
+	MaxTokens int        // 0 = the provider's default (additive; a provider that
+				// does not know it ignores it — SPEC_COMPACT 8's request-side reserve)
+	ReasoningEffort string // the reasoning budget asked for; empty = the provider's
+				// default (additive — SPEC_COMPACT 3's summary effort, "medium")
 }
 ```
 
@@ -240,7 +261,11 @@ type ContextPolicy interface {
 Prompt assembly and, later, compaction. This is the load-bearing seam for
 local models; it is an interface from day one so the passthrough can be
 replaced without touching anything. v1 passthrough: system prompt plus
-transcript, verbatim.
+transcript, verbatim. Deliverable 8 (SPEC_COMPACT) lands the first
+non-passthrough policy: at its trigger the policy rewrites the session
+transcript (the one named mutation the seam carries; the passthrough
+stays pure), and the loop is untouched but for L8 (the loop section,
+above).
 
 ### Frontend
 
@@ -292,6 +317,12 @@ argument):
 7. Tool calls: for each, in order: emit `ToolStart`, execute through the
    middleware chain, emit `ToolResult` (with duration), append one tool
    message, then goto 3.
+
+L8 (SPEC_COMPACT 4): the loop stamps the assistant message it appends —
+in both the no-calls and the tool-calls branch — with `Done.Usage`'s
+prompt+completion as `Message.ContextTokens` (0 when the `Done` reported
+none). A named line with its own loop test; it is the anchor the
+compaction trigger reads. No other loop change.
 
 State machine per turn: `awaiting_input -> awaiting_model -> executing_tools
 -> awaiting_model -> ... -> done`. Deliverable 7 leaves it unchanged; its
@@ -383,6 +414,15 @@ justified in this file first.
   per-turn clear, and bound-th note; the compat rule (`TestEvent`
   forwarded untouched by the loop, ignored by the frontends); the resume
   projection (full transcript, dangling calls kept, unknown id loud).
+- Deliverable 8 (SPEC_COMPACT): the row invariants by name; the trigger
+  boundary at exactly `Window - Reserve` (anchored, 4); the pair-boundary
+  cut; the once recovery and the surfaced second fault; `Compacted` compat
+  (forwarded untouched by the loop, rendered one line by the CLI, ignored
+  by one-shot); the L8 stamp in both assistant branches; the
+  resume-after-compaction shape; the `-p` run crossing the trigger
+  mid-turn; the clamp's refuse-loud below its minimum (a kept batch larger
+  than the window, not the floor-1 slow death); `Request.ReasoningEffort`
+  semantics.
 
 ## v1 scope
 

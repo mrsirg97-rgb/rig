@@ -8,7 +8,8 @@ any tool that would hide it (the roadmap's order).
 The policy wraps the passthrough: below the trigger it is the passthrough,
 byte-identical; at the trigger it rewrites the older transcript into a
 summary through the same `core.Provider` and returns system + summary +
-kept tail. The loop is byte-identical; the policy owns when and how.
+kept tail. The loop is untouched but for L8 (4's anchor stamp); the
+policy owns when and how.
 
 The reference for what this should feel like from the transcript side is
 pane's `session_compact` hook: compaction is not a user-facing feature, it
@@ -26,8 +27,8 @@ the model's own window, and the case is impossible by construction
 ## goals
 
 - Compaction as a leaf: `policy/compact` plus a `models` table, registered
-  at the root. The design test holds at the seams; the loop is
-  byte-identical.
+  at the root. The design test holds at the seams; the loop is untouched
+  but for L8 (4's anchor stamp).
 - A window-relative, per-model trigger from a root-owned table
   (id, window, maxTokens, reserve, keepRecent) that deliverable 9's
   `models` command reads.
@@ -35,7 +36,7 @@ the model's own window, and the case is impossible by construction
   boundary, never inside a tool-call/tool-result pair.
 - A named event (`Compacted`) the CLI renders as one line and the TUI (10)
   can show; the recorder lands the summary as a message row; the loop is
-  byte-identical.
+  untouched but for L8 (4).
 - The compaction summary becomes a deduped low-importance reflection in
   rem, scoped to the cwd (pane's `session_compact`, wired).
 - Overflow recovery: a provider fault that names context length triggers
@@ -45,8 +46,10 @@ the model's own window, and the case is impossible by construction
 
 ## non-goals
 
-- No loop change. If one turns out to be needed, 7 is reopened first (the
-  roadmap's rule) and decision 7 is rewritten — that is the stop condition.
+- No loop change beyond L8 (the `ContextTokens` stamp, 4 — a named line
+  with its SPEC_CORE line and its loop test). Anything else reopens 7
+  first (the roadmap's rule) and decision 7 is rewritten — that is the
+  stop condition.
 - No TUI, no footer: the CLI prints one line; 10 renders it.
 - No chunked (multi-pass) summarization: an old prefix that does not fit
   the summary window is a loud failure (decision 3's boundary), not an
@@ -74,6 +77,7 @@ policy/compact/     NEW, stdlib only
   decorator.go      the overflow decorator: the classifier, the once budget
   summary_prompt.txt  the summary instructions (go:embed)
   compact_test.go, split_test.go, estimate_test.go, decorator_test.go
+core/message.go     +Message.ContextTokens (the anchor, 4; named)
 core/provider.go    +Compacted event, +Request.MaxTokens (named)
 core/policy.go      the ContextPolicy doc: compaction landed, named
 provider/openai     +max_tokens wire mapping (named)
@@ -83,7 +87,8 @@ store/state/resume.go    +the marker restart of the projection (named)
 frontend/cli        +Compacted one line (named)
 frontend/oneshot    unchanged: Compacted ignored per the compat rule (named)
 cmd/rig/main.go     the row resolution (loud), the wiring, the env (named)
-loop/               byte-identical, no diff
+loop/               +L8: the ContextTokens stamp on both assistant appends
+                    (4; named); no other diff
 ```
 
 The design test holds at the seams: compact is a policy plus a provider
@@ -129,6 +134,11 @@ func WithAutoReflect(fn func(ctx context.Context, summary string) error) Option
                                        // decision 6; absent = the seam off
 
 // core, additive (the SPEC_CORE diff at the end):
+type Message struct {
+    ...
+    ContextTokens int // 4's anchor (L8 stamps it); 0 when unreported
+}
+
 type Compacted struct {
     Summary string // the summary row's content, as the transcript carries it
     Dropped int    // estimated tokens removed from the transcript
@@ -160,8 +170,15 @@ passthrough output on the new transcript:
    a fault in it surfaces as an `Assemble` error and never recursively
    compacts;
 3. rewrite the session transcript to `[summary message] + tail`;
-4. emit `Compacted` (5); fire `AutoReflect` (6);
+4. return `Compacted` (5) and fire `AutoReflect` (6);
 5. return system + the new transcript.
+
+The compact action returns the event; the caller owns the delivery, so a
+compaction emits exactly once (5): `Assemble` (the trigger path) delivers
+it to the frontend the policy holds — the recorder — before the model
+call; the overflow decorator (7) delivers the same returned event onto
+its stream, which the loop forwards untouched. The action itself never
+emits: the same event rides one path only.
 
 Why the transcript is rewritten, not just the returned slice: a compact
 that only shortens the return value re-summarizes the same older prefix at
@@ -257,7 +274,11 @@ Keep-recent is a token budget, not a message count: the largest suffix of
 the transcript whose calibrated estimate is within `KeepRecent`, never
 empty (at least the last message — the budget is a ceiling, not a floor;
 a single oversized last message means the older prefix is empty and the
-compact is skipped, the passthrough returned, named).
+compact is skipped, the passthrough returned, named). The tail's budget
+is the calibrated estimate of the tail's own messages (the raw estimate
+times the factor, 4) — the anchor is not used here: it counts the
+history the tail does not include, and a tail sized by it would shrink
+with the transcript's age.
 
 The cut is at a message boundary and never inside a
 tool-call/tool-result pair. The rule in one sentence: the tail's first
@@ -271,8 +292,12 @@ start the tail: there is no pair to keep whole, and the template reads
 the shape as legal.
 
 The older prefix is summarized in one provider call:
-`[system: the summary prompt, older prefix verbatim]`, no tools. The
-summary prompt is one file, not an inline string:
+`[system: the summary prompt, older prefix verbatim]`, no tools, and the
+summary request carries a lower reasoning effort (`"medium"`) where the
+provider supports it — it is the one call whose thinking nobody reads, and
+inheriting the model's max effort spends tokens the fold does not use (a
+provider that does not know the field ignores it). The summary prompt is
+one file, not an inline string:
 `policy/compact/summary_prompt.txt`, embedded with `go:embed` (stdlib),
 reviewed and diffed as one document. Its contract: a compact factual
 summary of the work so far — the task and its current state, decisions and
@@ -289,16 +314,19 @@ compaction folds the previous summary into the new one; the prompt names
 the shape and the test asserts the fold (tests).
 
 The summary request's `max_tokens` is clamped to what the window actually
-has left for this request: `min(MaxTokens, Window - est(prompt + older))`
-— nothing follows in the summary call, so `Window - est` is the honest
-budget, and the reserve is not subtracted twice (the main-call clamp in 8
-is the same shape). If the budget is <= 0 — the input alone does not fit
-the window (a single oversized message, or a calibration miss) — the
-compact fails loud, naming the id, window, and the input's estimate: no
-invented chunking in 8 (non-goal), and the overflow decorator (7) is the
-recovery if the call still faults. The next call's fit (system + summary
-+ tail in the usable window) is a separate bound: the fold (above) and
-the recovery (7) carry it, layer by layer.
+has left for this request: `min(MaxTokens, Window - est(prompt + older)
+* factor)` — the calibrated estimate (4); nothing follows in the summary
+call, so `Window - est` is the honest budget, and the reserve is not
+subtracted twice (the main-call clamp in 8 is the same shape). If the budget is <= 0 — the input alone does not fit
+the window (a single oversized message, a calibration miss, or an older
+prefix that itself exceeds the summary window when the transcript is far
+past the trigger — `KeepRecent < Window - Reserve` guarantees the
+post-compact fit, not the summary-call fit) — the compact fails loud,
+naming the id, window, and the input's estimate: no invented chunking in
+8 (non-goal), and the overflow decorator (7) is the recovery if the call
+still faults. The next call's fit (system + summary + tail in the usable
+window) is a separate bound: the fold (above) and the recovery (7) carry
+it, layer by layer.
 
 Why one call and no chunking: a map-reduce summary is a second algorithm
 with its own cost and its own failure shapes; the boundary it rescues is
@@ -306,49 +334,63 @@ the oversized-message case, which the structural checks (2) and the loud
 failure (here) already name. If it is needed, it is a named extension
 with its own tests.
 
-### 4. Estimation is stdlib, corrected by the provider's reported usage
+### 4. The trigger anchors on the server's own count; the estimate covers only the delta
+
+The anchor (L8): `core.Message` gains `ContextTokens` — the
+server-reported prompt+completion at the moment this assistant message
+completed (0 when unreported). The loop stamps it on both assistant-
+append branches from `Done.Usage` — a named loop line (L8, with its
+SPEC_CORE line and its loop test), the only loop change. The anchor
+absorbs what the server already counted: the system prompt, the tool
+specs, and the whole transcript up to and including that message — exact,
+none of it estimated.
+
+The trigger: `anchor + factor*estimate(delta) > Window - Reserve`, where
+the anchor is the last transcript message with `ContextTokens > 0` (by
+construction an assistant message — only the loop's append stamps it) and
+the delta is the messages after it: the tool results and new turns the
+server has not counted. No anchored message (a fresh session, or a
+resumed one — the store has no such column, no schema change, 5), the
+anchor is 0 and the delta is the whole system+transcript, estimated as
+before; the first `Done` re-anchors through L8, and the overflow recovery
+(7) is the safety net either way. Named, not hidden. Strict inequality,
+a named boundary: a fixture at exactly `Window - Reserve` is passthrough;
+one over compacts.
 
 The estimate is stdlib: for each message, the bytes of `Content` plus
-`Reasoning` plus each tool call's name and args, divided by 4, rounded up.
-Named approximate: it is a trigger, not an accounting.
+`Reasoning` plus each tool call's name and args, divided by 4, rounded
+up. Named approximate: it is a trigger, not an accounting.
 
-The correction is the provider's last reported usage — the number the
-server actually counted rides `Done.Usage`, already in the event
-vocabulary (SPEC_HARDENING decision 3): the same wire, no new channel. The policy
-carries a calibration factor, 1.0 until the first report: on every
-`Done` the decorator relays (the main call's, whose `Prompt` the server
-counted), `factor <- clamp(reported / estimated(request), 0.5, 4.0)`, and
-every later estimate — trigger, budget, clamps — is the raw estimate times
-the factor. The clamp is a guard against a server that reports a total
-where a prompt is expected, not a belief about tokenizers.
-
-The wire also carries the tool specs, which the transcript estimate does
-not see — so the calibration estimate includes them: the decorator sees
-`Request.Tools`, and the denominator is `estimate(messages) +
-estimate(specs)` (the specs' names, descriptions, and schema bytes, /4,
-same stdlib). The constant then rides both sides of the ratio and
-cancels: the factor calibrates the tokenizer, not the tokenizer plus a
-constant. Without this, a spec that is dense in tokens but cheap in bytes
-inflates the factor on every short call — one number, learned at 10k,
-stays 1.5 at 200k, and the brain compacts ~30% early; the clamp
-[0.5, 4.0] does not catch it, because the inflation is honest arithmetic
-on the wrong denominator. Named bias that remains: the factor is one
-number for the whole transcript, so a tokenizer that is dense on JSON and
-sparse on prose is read as its average — small next to the uncalibrated
-case (bytes/4 off by 2x or more on CJK-heavy or code-heavy transcripts),
-and the calibration is what lets one bytes/4 stay honest on a 64k worker
-and a 262k brain with different tokenizers, from one shared config
-(decision 2's case). The trigger itself does not see the specs (the loop
-owns them), so the trigger estimate is spec-free and its error is in the
-safe direction: slightly late, recovered by 7, never early and wasted.
+The calibration is the provider's reported usage, applied only to the
+delta: the number the server actually counted rides `Done.Usage`, already
+in the event vocabulary (SPEC_HARDENING decision 3) — the same wire, no
+new channel. On every `Done` the decorator relays (the main call's), if
+the request carries an anchor and a non-empty delta,
+`factor <- clamp((reported - anchor) / estimate(delta), 0.5, 4.0)`; a
+request with no anchor (the session's first call) leaves the factor as it
+is — the whole-request ratio carries the system+spec constant, the bug
+this decision exists to remove, and staying at 1.0 beats learning a
+constant. The anchor absorbs that call's system+spec, and those are the
+session's constant between calls, so `reported - anchor` isolates the
+delta exactly: the specs never enter the ratio (a 5k spec on a 10k call
+cannot inflate the learned factor, which the old whole-request
+denominator could — one number learned at 10k stays 1.5 at 200k, and the
+brain compacts ~30% early), and the factor calibrates the delta's
+tokenizer, nothing else. The clamp is a guard against a server that
+reports a total where a prompt is expected, not a belief about
+tokenizers. Named bias that remains: the factor is one number for all
+deltas, so a tokenizer that is dense on JSON and sparse on prose is read
+as its average — small next to the uncalibrated case (bytes/4 off by 2x
+or more on CJK-heavy or code-heavy transcripts), and the anchor is what
+lets one estimator stay honest on a 64k worker and a 262k brain with
+different tokenizers, from one shared config (decision 2's case).
 
 Where the calibration lives, named: the decorator is the only place that
 sees both sides of a main call — the assembled request and the reported
 `Done`. The state (the factor, the compact budget key) sits in the
 policy, written by the decorator's relay goroutine and read by `Assemble`
 on the loop's goroutine: two goroutines, so a mutex guards the two
-fields, and the loop's byte-identity is untouched (the lock is inside a
-leaf).
+fields, and L8 is the only loop change (the lock is inside a leaf).
 
 ### 5. The Compacted event; one line in the CLI; the summary is a marked row
 
@@ -381,10 +423,11 @@ Emission is exactly once per compaction, in order, by path:
   loop is byte-identical).
 
 Both paths deliver it to the recorder, which lands it (below). The CLI
-renders one line, pane's `formatTokens` shaping:
+renders one line, pane's `formatTokens` shaping (the exact digits follow
+`formatTokens`' rounding — the example's numbers are illustrative):
 
 ```
-⧉ compact: -12.4k kept 16.0k · summary ↑812 ↓640
+⧉ compact: -12k kept 16k · summary ↑812 ↓640
 ```
 
 One-shot ignores it (its `Notify` switch has no default — the compat
@@ -497,10 +540,11 @@ rig.WithPolicy(pol),
 
 The decorator relays the stream untouched (no buffering — incremental
 rendering is preserved) and, on a classifiable fault with budget left:
-runs the compact action (1 — rewrite, event, reflection), reassembles,
-re-issues the same request shape (same tools) exactly once, and relays
-the retry's stream. A non-classifiable fault, or an exhausted budget,
-surfaces the fault as-is.
+runs the compact action (1 — rewrite, reflection), delivers its returned
+`Compacted` onto the stream (5 — the overflow path, between the swallowed
+fault and the retry's first event), reassembles, re-issues the same
+request shape (same tools) exactly once, and relays the retry's stream. A
+non-classifiable fault, or an exhausted budget, surfaces the fault as-is.
 
 The classification is a wordlist over the fault text, stdlib
 `strings` (case-folded), the common phrasings of OpenAI, llama.cpp, and
@@ -518,8 +562,8 @@ transcript has grown since: a second context-length fault against the same
 transcript is no new information (there is nothing to drop) — it surfaces,
 the once budget is spent. A new user message grows the transcript and owes
 one more recovery. No clock, no per-turn clear to forget, no loop line to clear it
-— the loop is byte-identical, and "never a silent loop" falls out of the
-key, not of a retry limit that could be raised into one.
+— the loop is untouched but for L8 (4), and "never a silent loop" falls
+out of the key, not of a retry limit that could be raised into one.
 
 The loop property this depends on, named: the loop does not read or write
 `Session` while ranging a stream — only after the channel closes (the
@@ -587,14 +631,24 @@ first tick, not as a worker that compacts every turn and logs false
 successes.
 
 The request-side reserve: the decorator also clamps the main call's
-`MaxTokens` to the window minus the request: `min(row.MaxTokens, Window
-- est(request))`, floor 1. The trigger already guarantees
-`est <= Window - Reserve` below it, so `Window - est >= Reserve` — the
-clamp hands the response exactly its reserve, and the reserve is not
-subtracted twice (the wrong formula, `Window - Reserve - est`, gives a
-request sitting just under the trigger `max_tokens` = floor 1: a
-one-token answer at the moment the model has a full reserve of room — a
-named test). The reserve becomes a request-side guarantee: the response
+`MaxTokens` to the window minus the request's anchor size (4):
+`min(row.MaxTokens, Window - size(request))`. The trigger already
+guarantees `size <= Window - Reserve` below it, so `Window - size >=`
+Reserve — the clamp hands the response exactly its reserve, and the
+reserve is not subtracted twice (the wrong formula,
+`Window - Reserve - size`, gives a request sitting just under the trigger
+`max_tokens` = floor 1: a one-token answer at the moment the model has a
+full reserve of room — a named test). **Below a sane minimum — the
+smaller of `Reserve/4` and a fixed 256 — the clamp refuses loud, not
+floor 1**: a request that still does not fit the window after
+compaction (the kept batch, e.g. an oversized tool result larger than the
+model can hold) would otherwise get `max_tokens` = 1, emit a one-token
+garbage answer, and a `-p` worker would log it as ok — the slow death
+that logs success. Surfaced as a `Fault` (a pre-stream error on the main
+call, or the recovery's refusal after the compact), the worker exits
+non-zero and the run record says fail. The longer-term fix is tool caps
+that know the model's window; that is a deliverable 9/10 conversation,
+not this PR. The reserve becomes a request-side guarantee: the response
 budget is explicit — at least the reserve, not the server's default —
 and the worker is protected both against a server whose default
 max_tokens walks into the wall and against one whose default `n_predict`
@@ -602,12 +656,13 @@ is small. A truncated answer (a `Done` with finish `length`) is read as
 normal — a legal finish, no recovery; the estimate is approximate, the
 clamp is best-effort, and the overflow recovery is the safety net.
 
-The loop change, named: none. `Assemble`, the `Provider` seam, the loop's
-default event forwarding, and the pre-stream error path all exist; the
-decorator is a provider, and the design test counts a new provider as one
-file and one registration line. If the implementation needs a loop line,
-that reopens 7 (the roadmap's rule) and this spec's 7 is rewritten. That
-is the stop condition.
+The loop change, named: L8 (4's anchor stamp) — nothing else.
+`Assemble`, the `Provider` seam, the loop's default event forwarding, and
+the pre-stream error path all exist; the decorator is a provider, and the
+design test counts a new provider as one file and one registration line.
+If the implementation needs another loop line, that reopens 7 (the
+roadmap's rule) and this spec's 7 is rewritten. That is the stop
+condition.
 
 ## tests
 
@@ -628,9 +683,10 @@ in `t.TempDir()` where a case names it.
 `policy/compact`:
 
 - `TestBelowTriggerIsPassthroughByteIdentical` — the output deep-equals
-  `policy.Passthrough(system)` on the same session, at `est == Window -
-  Reserve` (the boundary: no compact) — and at `est == Window - Reserve +
-  1` the same fixture compacts (the trigger is strict).
+  `policy.Passthrough(system)` on the same session, at `size == Window -
+  Reserve` (the boundary: no compact) — and at `size == Window - Reserve +
+  1` the same fixture compacts (the trigger is strict). Both the anchored
+  shape (4) and the anchorless fresh-session shape, named.
 - `TestTriggerMathPerModelOneConfig` — one table, one root: the 64k worker
   row and the 262k brain row; a fixture transcript over the worker's
   trigger and under the brain's — the worker compacts, the brain passes
@@ -662,17 +718,28 @@ in `t.TempDir()` where a case names it.
   right (the `Summary` equals the transcript's summary content;
   `Dropped`/`Kept` are the calibrated estimates; the `Usage` is the
   summary call's reported usage).
-- `TestCalibrationShiftsTheTrigger` — a scripted `Done` reporting 2x the
-  estimate: the next trigger decision uses the corrected estimate (a
-  transcript under the raw trigger compacts; the inverse, named); a
-  reported ratio outside `[0.5, 4.0]` is clamped; a call carrying a large
-  tool spec does not inflate the factor beyond the tokenizer ratio — the
-  denominator includes the spec (4): a factor learned at 10k with a 5k
-  spec stays ~1.0 at 200k, not 1.5.
+- `TestCalibrationShiftsTheTrigger` — a scripted `Done` reporting
+  `anchor + 2*estimate(delta)`: the next trigger decision doubles only the
+  delta (a transcript under the raw trigger compacts; the inverse, a
+  reported 0.5x, named); a reported ratio outside `[0.5, 4.0]` is
+  clamped; a request with no anchor leaves the factor at 1.0 (the
+  whole-request ratio carries the system+spec constant, 4); a call
+  carrying a large tool spec keeps the factor at the delta ratio —
+  `reported - anchor` excludes the spec (4): a factor learned at 10k with
+  a 5k spec stays ~1.0 at 200k, not 1.5.
 - `TestMainCallMaxTokensClamped` — the pass-through stream's request
   carries the clamped `MaxTokens` (the request-side reserve, 8); a
-  request just under the trigger (`est == Window - Reserve`) gets
-  `MaxTokens == Reserve`, not the floor 1 (the wrong-formula case).
+  request just under the trigger (`size == Window - Reserve`, anchored,
+  4) gets `MaxTokens == Reserve`, not the floor 1 (the wrong-formula
+  case); a request that still does not fit (`Window - size` below the
+  clamp's minimum) refuses loud, naming the window gap and the minimum
+  (8's refuse-loud, not the floor-1 slow death).
+- `TestRecoveryKeptBatchOverrunsWindow` — the main call fits the clamp
+  and faults with context length; the recovery compacts, but the kept
+  batch (plus the large summary) still does not fit the window, so the
+  retry's clamp refuses loud: the frontend sees `Compacted` then the
+  surfaced `Fault`, the inner provider is never re-reached, and a `-p`
+  worker would exit non-zero (the reviewer's 11.7k-token-result shape).
 - `TestSecondCompactionFoldsTheFirst` — a long scripted session: the
   second compact's older prefix contains the first summary row; the
   transcript after equals `[new summary] + tail2`; the reflection dedupes
@@ -691,6 +758,9 @@ in `t.TempDir()` where a case names it.
 - `TestLoopForwardsCompactedUntouched` — the loop's compat: a `Compacted`
   between stream events forwards untouched (the `TestEvent` precedent),
   and the existing loop cases stay byte-identical.
+- `TestLoopStampsContextTokens` — L8 (4): both assistant-append branches
+  (the plain and the tool-call) carry `ContextTokens == Done.Usage.Prompt
+  + Completion`; a `Done` reporting zero usage leaves it 0; named.
 
 `store/state`:
 
@@ -732,6 +802,10 @@ in `t.TempDir()` where a case names it.
 
 PR A carries this spec file only; the diff below lands with PR B.
 
+- `core/message.go`: `Message` gains `ContextTokens int` (the
+  server-reported prompt+completion at the moment this assistant message
+  completed; 0 when unreported — 4's anchor; additive, never rides the
+  wire, a provider that does not know it ignores it).
 - `core/provider.go`: the sealed event vocabulary gains `Compacted`
   (additive, compat rule — a Frontend must tolerate it, the default is to
   ignore it); `Request` gains `MaxTokens int` (0 = the provider's default;
@@ -740,9 +814,13 @@ PR A carries this spec file only; the diff below lands with PR B.
   category after providers and the loop (a policy event, emitted at
   `Assemble` or on the stream by the decorator), and the loop forwarding
   it through its existing default — byte-identical.
+- The loop section: L8 — the loop stamps the assistant message it
+  appends with `Done.Usage`'s prompt+completion as `ContextTokens` (0
+  when unreported; SPEC_COMPACT 4's anchor); a named line with its own
+  test, no other loop change.
 - The loop section: the named property the decorator depends on (7) — the
   loop does not touch `Session` while ranging a stream; a documented
-  invariant, zero behavior change.
+  invariant (L8's stamp is in the post-close append, consistent).
 - The Provider section: `Request.MaxTokens` semantics.
 - The ContextPolicy section: compaction landed; the policy may rewrite the
   session transcript (the one named mutation the seam carries; the
@@ -774,6 +852,6 @@ What 8 is not:
   non-goal), and parallel tool execution (a loop change, and a different
   deliverable).
 
-The loop at the end of 8 is the loop of the end of 7, byte-identical. 9
-and 10 inherit it, per the roadmap: if one of them needs a loop change, 7
-was incomplete and is reopened first.
+The loop at the end of 8 is the loop of the end of 7, plus L8 (4's anchor
+stamp). 9 and 10 inherit it, per the roadmap: if one of them needs a loop
+change, 7 was incomplete and is reopened first.
