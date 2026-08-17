@@ -143,7 +143,7 @@ The session transcript as rows. One file per session under
 - `sessions`: id (primary, minted, stable for the process), cwd, model,
   started_at, ended_at, exit (ok|fault|cancelled), version.
 - `messages`: seq (primary), session_id (link sessions), role, content,
-  reasoning (nullable; deliverable 7 fills it), tool_id (nullable),
+  reasoning (nullable; filled by the recorder, deliverable 7), tool_id (nullable),
   created_at.
 - `tool_calls`: id (primary; the provider's call id), message_seq (link
   messages), name, args (TEXT json), result (TEXT, nullable until it lands),
@@ -154,18 +154,22 @@ The session transcript as rows. One file per session under
   persisted, so a resumed session keeps its drift checks. `files` pairs its
   composite primary with `session_id` directly and carries no Session link
   while its siblings do — harmless (no FK is emitted) but named for
-  consistency. Tool results live on `tool_calls`, not as role=tool rows;
-  deliverable 9's session resume projects `[]core.Message` back from the
-  transcript rows, so no schema change is owed later.
+  consistency. Tool results live on `tool_calls`, not as role=tool rows.
+  Session resume (deliverable 7's `state.Resume`, the root's `-resume`)
+  projects `[]core.Message` back from the transcript rows — no schema
+  change was owed, and none was taken; deliverable 9's `sessions` command
+  reads the same rows.
 - `faults`: seq (primary), session_id, at, message.
 
 The recorder is a leaf that receives what the loop already emits: it wraps
-`Frontend.Notify` (an observing Frontend that forwards to the real one) and
-the middleware seam (`ToolStart`/`ToolResult` are visible there today as the
-call and its result). It appends a row per event inside its own short
-transaction, so a kill leaves every completed row readable. No loop change.
-When deliverable 7 lands tool events and reasoning, the recorder switches
-sources; its schema does not change.
+the `Frontend` (an observing Frontend that forwards to the real one) and
+sources its rows from the loop's events — the transcript, `ToolStart`/
+`ToolResult` (the guarded result, as the loop appends it), reasoning, usage
+with the cache fields. It appends a row per event inside its own short
+transaction, so a kill leaves every completed row readable. A `TurnEnd`
+discards the unlanded partial of a turned turn; each turn boundary upserts
+the file provenance. No loop change — and, with the middleware tap retired
+(deliverable 7), the schema did not change either.
 
 `-p` workers get their autopsy from this: the `sessions` command (roadmap
 deliverable 9, out of scope here) or plain `sqlite3`.
@@ -295,9 +299,10 @@ pane's promptGuidelines, lowercase, terse.
   function in the store package is the implementer's choice per store;
   either way it is one function, tested by replaying pane's fixture logs.
 - **The state store is a recorder, not a dependency of the loop.** It hangs
-  off `Frontend.Notify` and the middleware seam. When deliverable 7 adds tool
-  events, the recorder moves its taps; the schema is designed for that day
-  now (tool_calls has started_at/ended_at, messages has reasoning).
+  off `Frontend.Notify`; with deliverable 7's loop events the tool rows are
+  event-sourced and the middleware tap is retired — the schema had already
+  been designed for that day (tool_calls has started_at/ended_at, messages
+  has reasoning), so nothing in the store changed.
 - **One transaction per tool call, serializable, opened in the adapter.**
   Not per turn, not per process. Cross-process safety (scheduler runner
   writing while a session reads) is WAL plus busy_timeout, as in pane.

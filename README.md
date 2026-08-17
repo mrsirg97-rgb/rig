@@ -5,8 +5,9 @@ context, stream the model's output, execute what it asks for, feed results
 back, repeat — with every dependency held at a typed seam and every induced
 work bounded. Not a framework: a machine for one thing, built closed.
 
-**Zero third-party dependencies.** `go.mod` carries no require lines; Go
-standard library only.
+**Stdlib-only core.** `core/` and `loop/` carry no dependencies; the one
+leaf dependency is `modernc.org/sqlite` (pure-Go driver) for the stores —
+justified in `specs/SPEC_STATE.md`.
 
 Status: initial release, version `0.1.0`.
 
@@ -37,10 +38,13 @@ kernel.go       the composition kernel
 policy/         ContextPolicy implementations (passthrough)
 middleware/     ToolMiddleware: perm (deny by default), guard.Bound (the bound)
 provider/       Provider implementations (the openai-compatible SSE adapter)
+store/          the SQLite stores (state, todo, rem, scheduler) and the state
+                recorder; -resume projects a session back from the state rows
 tool/           Tool implementations: bash(1); file read/write/edit; fs ls/find/grep;
                 todo the job queue; rem memory; scheduler background jobs; python the
                 persistent IPython kernel; web search and fetch (the web-tools compose)
-frontend/       Frontend implementations (the cli REPL)
+frontend/       Frontend implementations (the cli REPL, the oneshot -p worker)
+specs/          the specs, written and agreed before the code (SPEC_CORE first)
 ```
 
 ## extending

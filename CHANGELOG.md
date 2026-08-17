@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+- **runtime hardening** (roadmap deliverable 7, `specs/SPEC_HARDENING.md`):
+  the seams and events everything after this needed, in one named loop
+  change (L1–L7). **Tool events**: `ToolStart{Call}` and
+  `ToolResult{ID, Content, Err, Duration}` bracket each execution in the
+  Event vocabulary (the bracket wraps the whole middleware chain, so the
+  result carries the guarded verdict); the CLI renders `● name` and
+  `name ✓|✕ duration` and the old `[call]` line is gone; the recorder's
+  middleware tap is retired — it sources its rows from the loop's events,
+  and the root's chain is `[perm, guard]`. **Reasoning round-trip**:
+  `ReasoningDelta` streams (thinking precedes speech), `Message.Reasoning`
+  accumulates in both assistant branches and rides the wire back as
+  `reasoning_content` (the `messages.reasoning` column lands); the CLI
+  renders it verbatim, one-shot ignores it. **Usage cache fields**:
+  `CacheRead`/`CacheWrite` on `Usage`, mapped from
+  `prompt_tokens_details` (absent → zero); the adapter now requests the
+  stream's usage chunk (`stream_options.include_usage`, wire-shape asserted)
+  — without it OpenAI and llama.cpp emit no usage at all; the CLI sums per
+  turn and prints `↑P ↓C · cache R hit%` at the turn's end (pane's
+  `formatTokens`). **Steering**: the turn's cancel rides the Input ctx as
+  the interrupt handle (`core.WithInterrupt`/`InterruptFrom`); a line typed
+  during a live turn interrupts the turn and is delivered on re-entry (one
+  slot, latest wins); between turns it is served directly. Ctrl-C keeps its
+  meaning: the session ends once the in-flight step unwinds. **Session
+  resume**: `state.Resume(ctx, db, id)` rebuilds the session from the state
+  rows in one read-only transaction (transcript in seq order, dangling calls
+  kept, files rebuilt; unknown id loud); `-resume <id>` at the root, `-p`
+  and `-resume` refuse at construction; the recorder upserts the files
+  snapshot at each turn boundary, closing the `RecordFile` gap. **One
+  extension mechanism**: `ToolMiddleware` widens from a function type to
+  an interface (`ToolMiddlewareFunc` adapts; the `perm` wrap-only shape is
+  unchanged), with assertion-checked `TurnObserver` and
+  `GuidelineContributor` capabilities; the loop fans out `TurnStart` once
+  per turn (L6) and the root collects guidelines into the system prompt
+  before the policy is built. **Guard alignment**: the bound is keyed by
+  tool name, cleared at every turn start (pane's retry-guard semantics),
+  the limit-th failure carries pane's note verbatim (appended, never
+  replacing), and the bound refusal is kept. **Turn boundaries**:
+  `TurnEnd{over|fault|interrupt}` closes every turn inside the run and is
+  absent on run-context end; a dead turn ctx at the pre-stream seam
+  (Assemble, the Stream call) reads as an interrupt, not a fault. All 15
+  existing named loop cases pass byte-for-byte; `-p` and `run-job` are
+  unchanged.
 - **tool/web** (roadmap deliverable 6): pane's web_search and web_fetch,
   ported. web_search: SearXNG JSON over net/http (the web-tools compose
   on loopback :8888; LOOPER_SEARXNG_URL to point elsewhere), results
