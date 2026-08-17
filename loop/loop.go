@@ -107,6 +107,13 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 			// awaiting_model.
 			msgs, err := k.Policy.Assemble(turnCtx, session)
 			if err != nil {
+				if turnCtx.Err() != nil {
+					// a dead turn ctx at the seam is the user's interrupt (or
+					// the session's end), not a provider fault: no Fault row —
+					// the model never started — and the run re-prompts.
+					reason = core.TurnInterrupt
+					break turn
+				}
 				// treated like a transport fault: surfaced, turn aborted, session
 				// intact, back to awaiting_input. A failing policy must not be
 				// able to kill the REPL.
@@ -117,6 +124,13 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 
 			events, err := k.Provider.Stream(turnCtx, core.Request{Messages: msgs, Tools: specs})
 			if err != nil {
+				if turnCtx.Err() != nil {
+					// the stream's own error on a dead turn ctx reads the same:
+					// a provider that checks its context at call time reports
+					// the steer, not a fault.
+					reason = core.TurnInterrupt
+					break turn
+				}
 				// transport error: surfaced, turn aborted, session intact.
 				k.Frontend.Notify(core.Fault{Err: err})
 				reason = core.TurnFault

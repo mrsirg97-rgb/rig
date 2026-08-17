@@ -101,6 +101,13 @@ The state machine is unchanged. The changes:
   error. Under L1 it is also how an interrupted teardown reads, so the loop
   breaks the turn (re-enters awaiting_input) when `turnCtx` is dead, and
   still fails loudly when both contexts are alive.
+- **Pre-stream seam, dead turn ctx.** `Assemble` or the `Stream` call
+  itself returns an error, the run context is alive, and `turnCtx` is dead
+  (a policy or provider that checks its context at call time reports it;
+  the steer's own cancellation can land in that window). The loop reads it
+  the same way the stream-loop's fault case does: `TurnEnd{interrupt}`, no
+  `Fault` — the model never started — and the run re-prompts. A dead run
+  ctx still ends the session cleanly at the boundary, as today.
 - **L4, tool-exec events.** Around each `exec` call the loop emits
   `ToolStart{Call}` before and `ToolResult{ID, Content, Err, Duration}`
   after, forwarding both to `Frontend.Notify`. The bracket wraps the whole
@@ -229,12 +236,17 @@ type Usage struct {
 }
 ```
 
-Adapter wire mapping, grounded live: cache-read is
-`usage.prompt_tokens_details.cached_tokens` (measured cold 0, warm 918 of
-922 prompt tokens); cache-write is
-`usage.prompt_tokens_details.cache_write_tokens` when the server reports
-it, else 0. `total_tokens` is read and ignored (Prompt + Completion
-suffice; named). `Done` keeps its shape: the fields ride the struct. The
+Adapter wire mapping: cache-read is
+`usage.prompt_tokens_details.cached_tokens` (grounded live against the
+swap in a non-streaming call: cold 0, warm 918 of 922 prompt tokens);
+cache-write is `usage.prompt_tokens_details.cache_write_tokens` when the
+server reports it, else 0. `total_tokens` is read and ignored (Prompt +
+Completion suffice; named). Grounded too: OpenAI and llama.cpp emit the
+usage chunk on a stream only when the request carries
+`stream_options: {"include_usage": true}` — the adapter sends it on every
+streaming request, and the wire-shape test asserts it the way it asserts
+`parameters` is an object. Without it, `Done.Usage` is all zeros and the
+per-turn line reads zero. `Done` keeps its shape: the fields ride the struct. The
 recorder writes the existing `usage.cache_read/cache_write` columns (it
 passes 0, 0 today).
 

@@ -442,6 +442,114 @@ func TestSteeringAtThePromptReentersWithoutFault(t *testing.T) {
 	}
 }
 
+// the pre-stream seam (L1): a dead turn ctx at the Assemble or Stream call
+// is the user's interrupt (or the session's end), not a provider fault —
+// no Fault row, no re-entry; the turn re-prompts like L2. The real shape
+// of that interleaving: the frontend serves the steer line and cancels
+// the turn's interrupt handle in the same Input — by the time the loop
+// reaches the first seam of the turn, the turn ctx is already dead.
+
+// steerFrontend delivers one named line with the interrupt: it cancels
+// the turn's handle (from the Input ctx) as it serves it.
+type steerFrontend struct {
+	*recorderFrontend
+	steer string
+}
+
+func (f *steerFrontend) Input(ctx context.Context) (string, error) {
+	line, err := f.recorderFrontend.Input(ctx)
+	if err == nil && line == f.steer && f.steer != "" {
+		f.steer = "" // once
+		if cancel, ok := core.InterruptFrom(ctx); ok {
+			cancel()
+		}
+	}
+	return line, err
+}
+
+// ctxCheckingPolicy fails Assemble at call time when the context is dead
+// — the "or a policy that does" case of the pre-stream seam.
+type ctxCheckingPolicy struct{ *transcriptPolicy }
+
+func (p *ctxCheckingPolicy) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return p.transcriptPolicy.Assemble(ctx, s)
+}
+
+// ctxCheckingProvider fails at call time when its context is already dead
+// — the "a different Provider would" case of the pre-stream seam.
+type ctxCheckingProvider struct{ *scriptedProvider }
+
+func (p *ctxCheckingProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return p.scriptedProvider.Stream(ctx, req)
+}
+
+func TestPreStreamAssembleFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("second turn"), doneEv()}}}}
+	f := &steerFrontend{recorderFrontend: &recorderFrontend{inputs: make(chan string, 8)}, steer: "first"}
+	k := looper.New(
+		looper.WithProvider(p),
+		looper.WithFrontend(f),
+		looper.WithPolicy(&ctxCheckingPolicy{transcriptPolicy: &transcriptPolicy{}}),
+	)
+	k.Session = core.NewSession()
+
+	f.inputs <- "first"
+	f.inputs <- "second"
+	close(f.inputs)
+
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// turn 1 died at Assemble: exactly one TurnEnd{interrupt}, no Fault,
+	// no Done, and the provider was never called. Turn 2 is clean.
+	if len(f.events) != 4 {
+		t.Fatalf("events = %v, want TurnEnd, TextDelta, Done, TurnEnd", f.events)
+	}
+	te, ok := f.events[0].(core.TurnEnd)
+	if !ok || te.Reason != core.TurnInterrupt {
+		t.Fatalf("event 0 = %+v, want TurnEnd{interrupt} — no Fault: the model never started", f.events[0])
+	}
+	if p.calls != 1 {
+		t.Fatalf("provider streamed %d times, want exactly 1 (turn 2 only)", p.calls)
+	}
+}
+
+func TestPreStreamCallFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
+	inner := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("second turn"), doneEv()}}}}
+	f := &steerFrontend{recorderFrontend: &recorderFrontend{inputs: make(chan string, 8)}, steer: "first"}
+	k := looper.New(
+		looper.WithProvider(&ctxCheckingProvider{inner}),
+		looper.WithFrontend(f),
+		looper.WithPolicy(&transcriptPolicy{}),
+	)
+	k.Session = core.NewSession()
+
+	f.inputs <- "first"
+	f.inputs <- "second"
+	close(f.inputs)
+
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// turn 1 died at the Stream call: same shape — interrupt, no Fault.
+	if len(f.events) != 4 {
+		t.Fatalf("events = %v, want TurnEnd, TextDelta, Done, TurnEnd", f.events)
+	}
+	te, ok := f.events[0].(core.TurnEnd)
+	if !ok || te.Reason != core.TurnInterrupt {
+		t.Fatalf("event 0 = %+v, want TurnEnd{interrupt} — no Fault at the Stream seam either", f.events[0])
+	}
+	if inner.calls != 1 {
+		t.Fatalf("provider streamed %d times, want exactly 1 (turn 2 only)", inner.calls)
+	}
+}
+
 // L6: the turn fan-out fires once per user turn, before the first Assemble
 // — not per model call.
 type countingObserver struct {
