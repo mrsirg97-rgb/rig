@@ -38,6 +38,23 @@ func TestOneShotErrPromptNamesTheEmptyConstruction(t *testing.T) {
 	}
 }
 
+// The worker's stdout is the answer: the new events (the reasoning block,
+// the execution bracket, the turn boundary, unknown events) stay out of
+// it. The one-shot's Notify switch has no default case; this is the proof.
+func TestOneShotIgnoresTheNewEvents(t *testing.T) {
+	var sb strings.Builder
+	o := &oneshot.OneShot{Out: &sb}
+	o.Notify(core.ReasoningDelta{Text: "thinking "})
+	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
+	o.Notify(core.ToolResult{ID: "c1", Content: "out", Err: errors.New("boom")})
+	o.Notify(core.TextDelta{Text: "hello"})
+	o.Notify(core.TurnEnd{Reason: core.TurnOver})
+	o.Notify(core.TestEvent{Name: "x"})
+	if sb.String() != "hello" {
+		t.Fatalf("the worker's stdout is the answer, got %q", sb.String())
+	}
+}
+
 func TestOneShotNotifyRendersAssistantTextAndFaultsLoud(t *testing.T) {
 	var sb strings.Builder
 	o := &oneshot.OneShot{Out: &sb}

@@ -39,10 +39,11 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 	}
 
 	body, err := json.Marshal(wireRequest{
-		Model:    p.model,
-		Messages: wireMessages(req.Messages),
-		Tools:    wireTools(req.Tools),
-		Stream:   true,
+		Model:         p.model,
+		Messages:      wireMessages(req.Messages),
+		Tools:         wireTools(req.Tools),
+		Stream:        true,
+		StreamOptions: &wireStreamOptions{IncludeUsage: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("openai: encode request: %w", err)
@@ -114,9 +115,20 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 				return
 			}
 			if chunk.Usage != nil {
-				usage = core.Usage{Prompt: chunk.Usage.PromptTokens, Completion: chunk.Usage.CompletionTokens}
+				// cached tokens are a subset of prompt on this wire (grounded
+				// live: 918 of 922 warm); total_tokens is read and ignored
+				usage = core.Usage{
+					Prompt:     chunk.Usage.PromptTokens,
+					Completion: chunk.Usage.CompletionTokens,
+					CacheRead:  chunk.Usage.PromptTokensDetails.CachedTokens,
+					CacheWrite: chunk.Usage.PromptTokensDetails.CacheWriteTokens,
+				}
 			}
 			for _, choice := range chunk.Choices {
+				// thinking precedes speech, within a unit and across the stream
+				if choice.Delta.ReasoningContent != "" && !emit(core.ReasoningDelta{Text: choice.Delta.ReasoningContent}) {
+					return
+				}
 				if choice.Delta.Content != "" && !emit(core.TextDelta{Text: choice.Delta.Content}) {
 					return
 				}
@@ -189,16 +201,24 @@ func sortedPending(pending map[int]*core.ToolCall) []int {
 // wire shapes. Named types so a field typo fails at compile time.
 
 type wireRequest struct {
-	Model    string        `json:"model"`
-	Messages []wireMessage `json:"messages"`
-	Tools    []wireTool    `json:"tools,omitempty"`
-	Stream   bool          `json:"stream"`
+	Model         string             `json:"model"`
+	Messages      []wireMessage      `json:"messages"`
+	Tools         []wireTool         `json:"tools,omitempty"`
+	Stream        bool               `json:"stream"`
+	StreamOptions *wireStreamOptions `json:"stream_options,omitempty"`
+}
+
+// wireStreamOptions asks the server to include the usage chunk on the
+// stream. OpenAI and llama.cpp both emit usage only when this is set;
+// without it Done.Usage is all zeros and the cache-hit line reads zero.
+type wireStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 func wireMessages(msgs []core.Message) []wireMessage {
 	out := make([]wireMessage, 0, len(msgs))
 	for _, m := range msgs {
-		wm := wireMessage{Role: string(m.Role), Content: m.Content, ToolID: m.ToolID}
+		wm := wireMessage{Role: string(m.Role), Content: m.Content, ReasoningContent: m.Reasoning, ToolID: m.ToolID}
 		for _, c := range m.ToolCalls {
 			wm.ToolCalls = append(wm.ToolCalls, wireCall{
 				ID:       c.ID,
@@ -232,10 +252,11 @@ type wireToolFn struct {
 }
 
 type wireMessage struct {
-	Role      string     `json:"role"`
-	Content   string     `json:"content"`
-	ToolCalls []wireCall `json:"tool_calls,omitempty"`
-	ToolID    string     `json:"tool_call_id,omitempty"`
+	Role             string     `json:"role"`
+	Content          string     `json:"content"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []wireCall `json:"tool_calls,omitempty"`
+	ToolID           string     `json:"tool_call_id,omitempty"`
 }
 
 type wireCall struct {
@@ -265,8 +286,9 @@ type wireChoice struct {
 }
 
 type wireDelta struct {
-	Content   string          `json:"content"`
-	ToolCalls []wireDeltaCall `json:"tool_calls"`
+	Content          string          `json:"content"`
+	ReasoningContent string          `json:"reasoning_content"`
+	ToolCalls        []wireDeltaCall `json:"tool_calls"`
 }
 
 type wireDeltaCall struct {
@@ -276,6 +298,12 @@ type wireDeltaCall struct {
 }
 
 type wireUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
+	PromptTokens        int                     `json:"prompt_tokens"`
+	CompletionTokens    int                     `json:"completion_tokens"`
+	PromptTokensDetails wirePromptTokensDetails `json:"prompt_tokens_details"`
+}
+
+type wirePromptTokensDetails struct {
+	CachedTokens     int `json:"cached_tokens"`
+	CacheWriteTokens int `json:"cache_write_tokens"`
 }

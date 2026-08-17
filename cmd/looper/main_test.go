@@ -3,11 +3,19 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/looper/middleware/perm"
+	"github.com/mrsirg97-rgb/looper/store"
+	"github.com/mrsirg97-rgb/looper/store/state"
+	"github.com/mrsirg97-rgb/looper/store/state/domain"
 )
 
 // The initial version is fixed: anything else is a release decision, not a
@@ -96,6 +104,19 @@ func (fakeWebFetch) Exec(ctx context.Context, args json.RawMessage) (string, err
 func (nullFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
 func (nullFrontend) Notify(ev core.Event)                      {}
 
+// oneLineFrontend serves exactly one input line, then EOFs.
+type oneLineFrontend struct{ line string }
+
+func (f *oneLineFrontend) Input(ctx context.Context) (string, error) {
+	if f.line == "" {
+		return "", io.EOF
+	}
+	l := f.line
+	f.line = ""
+	return l, nil
+}
+func (*oneLineFrontend) Notify(ev core.Event) {}
+
 func TestWireRegistersEverySeam(t *testing.T) {
 	k := wire(
 		"http://127.0.0.1:8080/v1",
@@ -104,7 +125,6 @@ func TestWireRegistersEverySeam(t *testing.T) {
 		[]string{"bash", "read", "write", "edit"},
 		3,
 		nullFrontend{},
-		func(next core.ToolExec) core.ToolExec { return next },
 		fakeTodo{},
 		fakeRem{},
 		fakeSched{},
@@ -121,7 +141,168 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if got := k.SortedToolNames(); len(got) != 13 || got[0] != "bash" || got[5] != "python" || got[7] != "rem" || got[8] != "scheduler" || got[9] != "todo" || got[10] != "web_fetch" || got[11] != "web_search" || got[12] != "write" {
 		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
 	}
-	if len(k.Middleware) != 3 {
-		t.Fatalf("middleware = %d links, want the allow-list, the bound, and the observation tap", len(k.Middleware))
+	if len(k.Middleware) != 2 {
+		t.Fatalf("middleware = %d links, want the allow-list and the bound (the observation tap is retired: the loop's events are the source)", len(k.Middleware))
 	}
+}
+
+// decision 6: the root collects Guidelines() into the system prompt before
+// it builds the policy — prompt assembly belongs to the prompt, and the
+// prompt string is the root's; zero loop change.
+type guidelineMW struct {
+	core.ToolMiddlewareFunc
+	text string
+}
+
+func (g guidelineMW) Guidelines() string { return g.text }
+
+func TestGuidelinesAreCollectedIntoTheSystemPrompt(t *testing.T) {
+	gw := guidelineMW{ToolMiddlewareFunc: func(next core.ToolExec) core.ToolExec { return next }, text: "a tool that keeps failing in a turn is refused at the bound; read its error."}
+	plain := core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec { return next })
+
+	got := guidelinesOf([]core.ToolMiddleware{perm.Allowlist("bash"), gw, plain})
+	if got != gw.text {
+		t.Fatalf("the contributor's prose must land verbatim: %q", got)
+	}
+	if got := guidelinesOf([]core.ToolMiddleware{perm.Allowlist("bash"), plain}); got != "" {
+		t.Fatalf("no contributors: the collection must be empty, got %q", got)
+	}
+	a := guidelineMW{ToolMiddlewareFunc: func(next core.ToolExec) core.ToolExec { return next }, text: "one"}
+	b := guidelineMW{ToolMiddlewareFunc: func(next core.ToolExec) core.ToolExec { return next }, text: "two"}
+	if got := guidelinesOf([]core.ToolMiddleware{a, b}); got != "one\n\ntwo" {
+		t.Fatalf("multiple contributors must join in listed order: %q", got)
+	}
+}
+
+func TestWireSystemPromptCarriesTheBase(t *testing.T) {
+	k := wire(
+		"http://127.0.0.1:8080/v1",
+		"local",
+		"be terse",
+		[]string{"bash"},
+		3,
+		nullFrontend{},
+		fakeTodo{}, fakeRem{}, fakeSched{}, fakePython{}, fakeWebSearch{}, fakeWebFetch{},
+	)
+	msgs, err := k.Policy.Assemble(context.Background(), core.NewSession())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || msgs[0].Content != "be terse" {
+		t.Fatalf("the base system prompt must ride the policy verbatim: %+v", msgs)
+	}
+}
+
+// decision 5: -p with -resume is a construction error: one-shot stays
+// one-shot. A resumed session keeps its identity.
+func TestOneShotAndResumeRefuseAtConstruction(t *testing.T) {
+	if err := checkOneShot("", ""); err != nil {
+		t.Fatalf("the bare REPL must pass: %v", err)
+	}
+	if err := checkOneShot("prompt", ""); err != nil {
+		t.Fatalf("one-shot alone must pass: %v", err)
+	}
+	if err := checkOneShot("", "res-1"); err != nil {
+		t.Fatalf("resume alone must pass: %v", err)
+	}
+	err := checkOneShot("prompt", "res-1")
+	if !errors.Is(err, ErrResumeWithPrompt) {
+		t.Fatalf("-p and -resume must refuse at construction, got %v", err)
+	}
+}
+
+func TestSessionForResumesOrStartsFresh(t *testing.T) {
+	fresh, err := sessionFor("", nil)
+	if err != nil || fresh.ID == "" {
+		t.Fatalf("no -resume: a fresh session with a minted id, got %v %v", fresh, err)
+	}
+	resume := func(id string) (*core.Session, error) {
+		if id != "res-1" {
+			return nil, errors.New("the wrong id was requested")
+		}
+		return &core.Session{ID: id, Files: map[string]core.FileState{}}, nil
+	}
+	resumed, err := sessionFor("res-1", resume)
+	if err != nil || resumed.ID != "res-1" {
+		t.Fatalf("the resumed session must keep its identity, got %v %v", resumed, err)
+	}
+	_, err = sessionFor("nope", func(id string) (*core.Session, error) {
+		return nil, fmt.Errorf("resume: no such session: %s", id)
+	})
+	if err == nil || !strings.Contains(err.Error(), "no such session") {
+		t.Fatalf("an unknown id must fail loud naming the gap, got %v", err)
+	}
+}
+
+// decision 5: the root -resume path — the resumed session is adopted by
+// the recorder (one identity for todo's claims and rem's sources), and
+// the transcript continues after the seeded rows.
+func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
+	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ctx := context.Background()
+	sid := "adopt-me"
+	if e := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := state.RecordMessage(ctx, db, sid, "user", "before the kill", nil, nil); e != nil {
+		t.Fatal(e)
+	}
+	sess, err := state.Resume(ctx, db, sid)
+	if err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	// the recorder adopts the existing row and the session keeps its id
+	rec := state.NewRecorder(&oneLineFrontend{line: "resumed"}, db, "/tmp/wt", "model-x", Version, sess.ID, sess)
+	if text, err := rec.Input(ctx); err != nil || text != "resumed" {
+		t.Fatalf("input on the resumed session: %q %v", text, err)
+	}
+	if e := rec.Close("ok"); e != nil {
+		t.Fatal(e)
+	}
+	// the seeded row is intact, the new user row follows it in seq order
+	first := mustReadMsg(t, db, 1)
+	if first.Role != "user" || first.Content != "before the kill" {
+		t.Fatalf("the seeded transcript must survive the adoption: %+v", first)
+	}
+	second := mustReadMsg(t, db, 2)
+	if second.Role != "user" {
+		t.Fatalf("the resumed turn must append after the seeded rows: %+v", second)
+	}
+	s := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewSessionDomain().GetSession(c, sid).Row()
+	}).(*domain.Session)
+	if s == nil || s.Id != sid || s.Exit != "ok" {
+		t.Fatalf("one identity, closed: %+v", s)
+	}
+}
+
+func mustRead(t *testing.T, db store.DB, fn func(context.Context) (any, error)) any {
+	t.Helper()
+	c, tx, err := db.Tx(context.Background())
+	if err != nil {
+		t.Fatalf("read tx: %v", err)
+	}
+	defer tx.Rollback()
+	out, err := fn(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func mustReadMsg(t *testing.T, db store.DB, seq int64) domain.Message {
+	t.Helper()
+	c, tx, err := db.Tx(context.Background())
+	if err != nil {
+		t.Fatalf("read tx: %v", err)
+	}
+	defer tx.Rollback()
+	m, err := domain.NewMessageDomain().GetMessage(c, seq).Row()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return *m
 }

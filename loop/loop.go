@@ -4,7 +4,15 @@
 //	-> awaiting_model -> ... -> done
 //
 // Faults abort the turn and return to awaiting_input; the loop never
-// retries silently, and cancellation is ctx at every await.
+// retries silently. Cancellation is ctx at every await: a run-context
+// cancel ends the session at the boundary, clean. Each turn also carries a
+// per-turn context (child of the run's), cancelled on every turn exit and
+// threaded onto the Input ctx as the interrupt handle
+// (core.WithInterrupt/core.InterruptFrom): a dead turn context with a live
+// run context is an interrupt — at the prompt the loop re-enters
+// awaiting_input (no Fault), mid-stream it breaks the turn. Every turn
+// exit emits TurnEnd{Reason}; the compat rule (events are added, never
+// changed) makes unknown events noise, not a misread.
 package loop
 
 import (
@@ -13,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/mrsirg97-rgb/looper"
 	"github.com/mrsirg97-rgb/looper/core"
@@ -50,7 +59,7 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 	// guard(perm(...)), not perm(guard(...)).
 	var exec core.ToolExec = directExec(tools)
 	for _, mw := range k.Middleware {
-		exec = mw(exec)
+		exec = mw.Wrap(exec)
 	}
 
 	for {
@@ -58,52 +67,92 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 			return nil // cancellation at the boundary is clean
 		}
 
+		// L1: the per-turn context, and the interrupt handle threaded onto
+		// the Input ctx under a typed key.
+		turnCtx, turnCancel := context.WithCancel(ctx)
+
 		// awaiting_input: the frontend blocks for one user message.
-		userMsg, err := k.Frontend.Input(ctx)
+		userMsg, err := k.Frontend.Input(core.WithInterrupt(turnCtx, turnCancel))
 		if err != nil {
+			turnCancel()
 			if ctx.Err() != nil || errors.Is(err, io.EOF) {
 				return nil
+			}
+			// L2: turn death at the prompt is an interrupt, not a fault:
+			// the loop re-enters awaiting_input.
+			if turnCtx.Err() != nil {
+				continue
 			}
 			k.Frontend.Notify(core.Fault{Err: err})
 			return err
 		}
 		if strings.TrimSpace(userMsg) == "" {
+			turnCancel()
 			continue // never pollute the transcript with empties
 		}
 
 		session := k.Session
 		session.Append(core.Message{Role: core.RoleUser, Content: userMsg})
 
+		// L6: the turn fan-out, before the first Assemble.
+		for _, mw := range k.Middleware {
+			if obs, ok := mw.(core.TurnObserver); ok {
+				obs.TurnStart(turnCtx, session)
+			}
+		}
+
+		reason := core.TurnOver
 	turn:
 		for {
 			// awaiting_model.
-			msgs, err := k.Policy.Assemble(ctx, session)
+			msgs, err := k.Policy.Assemble(turnCtx, session)
 			if err != nil {
+				if turnCtx.Err() != nil {
+					// a dead turn ctx at the seam is the user's interrupt (or
+					// the session's end), not a provider fault: no Fault row —
+					// the model never started — and the run re-prompts.
+					reason = core.TurnInterrupt
+					break turn
+				}
 				// treated like a transport fault: surfaced, turn aborted, session
 				// intact, back to awaiting_input. A failing policy must not be
 				// able to kill the REPL.
 				k.Frontend.Notify(core.Fault{Err: err})
+				reason = core.TurnFault
 				break turn
 			}
 
-			events, err := k.Provider.Stream(ctx, core.Request{Messages: msgs, Tools: specs})
+			events, err := k.Provider.Stream(turnCtx, core.Request{Messages: msgs, Tools: specs})
 			if err != nil {
+				if turnCtx.Err() != nil {
+					// the stream's own error on a dead turn ctx reads the same:
+					// a provider that checks its context at call time reports
+					// the steer, not a fault.
+					reason = core.TurnInterrupt
+					break turn
+				}
 				// transport error: surfaced, turn aborted, session intact.
 				k.Frontend.Notify(core.Fault{Err: err})
+				reason = core.TurnFault
 				break turn
 			}
 
 			var (
-				text    strings.Builder
-				calls   []core.ToolCall
-				done    bool
-				faulted bool
+				text      strings.Builder
+				reasoning strings.Builder
+				calls     []core.ToolCall
+				done      bool
+				faulted   bool
 			)
 			for ev := range events {
 				switch e := ev.(type) {
 				case core.TextDelta:
 					k.Frontend.Notify(ev)
 					text.WriteString(e.Text)
+				case core.ReasoningDelta:
+					// L5: forwarded and accumulated.
+					k.Frontend.Notify(ev)
+					reasoning.WriteString(e.Text)
 				case core.ToolCallEvent:
 					k.Frontend.Notify(ev)
 					calls = append(calls, e.Call)
@@ -113,6 +162,17 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 				case core.Fault:
 					k.Frontend.Notify(ev)
 					faulted = true
+					if turnCtx.Err() != nil {
+						// a cancelled turn reads the fault the same way:
+						// the steering cancel is what tore the stream down.
+						reason = core.TurnInterrupt
+					} else {
+						reason = core.TurnFault
+					}
+				default:
+					// the compat rule: events the loop does not name forward
+					// untouched; the Frontend tolerates what it does not know.
+					k.Frontend.Notify(ev)
 				}
 			}
 
@@ -123,25 +183,44 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 				break turn
 			case !done:
 				if ctx.Err() != nil {
-					return nil // cancelled teardown, clean
+					turnCancel()
+					return nil // run-context teardown, clean: not a turn
 				}
+				if turnCtx.Err() != nil {
+					// L3: an interrupted teardown reads the same and breaks
+					// the turn; the run continues.
+					reason = core.TurnInterrupt
+					break turn
+				}
+				// both contexts alive: a provider bug, loud, as before —
+				// and the turn it ended is a fault.
+				k.Frontend.Notify(core.Fault{Err: errors.New("loop: provider closed the stream without Done or Fault")})
+				turnCancel()
+				k.Frontend.Notify(core.TurnEnd{Reason: core.TurnFault})
 				return errors.New("loop: provider closed the stream without Done or Fault")
 			case len(calls) == 0:
-				// turn over.
-				session.Append(core.Message{Role: core.RoleAssistant, Content: text.String()})
+				// turn over; the thinking that led to the answer survives.
+				session.Append(core.Message{Role: core.RoleAssistant, Content: text.String(), Reasoning: reasoning.String()})
 				break turn
 			default:
 				// executing_tools: sequential, in order, through the chain.
 				session.Append(core.Message{
 					Role:      core.RoleAssistant,
 					Content:   text.String(),
+					Reasoning: reasoning.String(),
 					ToolCalls: calls,
 				})
 				for _, call := range calls {
-					content, execErr := exec(core.WithSession(ctx, session), call)
+					// L4: the bracket wraps the whole middleware chain; the
+					// ToolResult carries the guarded result, exactly what the
+					// session gets, and the loop measures the duration.
+					k.Frontend.Notify(core.ToolStart{Call: call})
+					start := time.Now()
+					content, execErr := exec(core.WithSession(turnCtx, session), call)
 					if execErr != nil && content == "" {
 						content = execErr.Error()
 					}
+					k.Frontend.Notify(core.ToolResult{ID: call.ID, Content: content, Err: execErr, Duration: time.Since(start)})
 					session.Append(core.Message{
 						Role:    core.RoleTool,
 						ToolID:  call.ID,
@@ -151,6 +230,11 @@ func Run(ctx context.Context, k *looper.Kernel) error {
 				continue // back to awaiting_model with the result transcript
 			}
 		}
+
+		// L1: cancelled on every turn exit. L7: the boundary event, after
+		// the turn's last other event.
+		turnCancel()
+		k.Frontend.Notify(core.TurnEnd{Reason: reason})
 	}
 }
 

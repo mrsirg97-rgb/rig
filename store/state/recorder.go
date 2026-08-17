@@ -12,13 +12,16 @@ import (
 	"github.com/mrsirg97-rgb/looper/store/state/domain"
 )
 
-// Recorder is the observing Frontend and ToolExec tap: it forwards every
-// Input/Notify call untouched to the inner frontend, and appends state
-// rows for what the loop already emits — user messages, assistant text
-// assembled per message, tool calls with their results, usage, faults, and
-// session closure. Each row lands inside its own short transaction, so a
-// kill leaves every completed row readable. Observation failures surface
-// loudly and never disturb the turn.
+// Recorder is the observing Frontend: it forwards every Input/Notify call
+// untouched to the inner frontend, and appends state rows for what the
+// loop already emits — user messages, assistant text and reasoning
+// assembled per message, tool calls with their results (the loop's
+// ToolResult event, the Observe tap retired), usage with the cache
+// columns, the files snapshot at the turn boundary, faults, and session
+// closure. Each row lands inside its own short transaction, so a kill
+// leaves every completed row readable. Observation failures surface
+// loudly and never disturb the turn. The rule (SPEC_HARDENING decision
+// 4): an unlanded partial at any TurnEnd is a partial and is discarded.
 type Recorder struct {
 	inner   core.Frontend
 	db      store.DB
@@ -26,17 +29,19 @@ type Recorder struct {
 	model   string
 	version string
 	sid     string
+	session *core.Session // root-owned; the files snapshot reads it at the boundary
 	buffer  strings.Builder
+	reason  strings.Builder
 	pending []core.ToolCall
 	lastSeq int64
 	ensured bool
 	mu      sync.Mutex
 }
 
-func NewRecorder(inner core.Frontend, db store.DB, cwd, model, version, sid string) *Recorder {
+func NewRecorder(inner core.Frontend, db store.DB, cwd, model, version, sid string, session *core.Session) *Recorder {
 	return &Recorder{
 		inner: inner, db: db, cwd: cwd, model: model,
-		version: version, sid: sid,
+		version: version, sid: sid, session: session,
 	}
 }
 
@@ -56,6 +61,7 @@ func (r *Recorder) Input(ctx context.Context) (string, error) {
 	} else {
 		r.setLastSeq(seq)
 	}
+	r.upsertFiles() // turn boundary: the session's files snapshot, as it stands
 	return text, err
 }
 
@@ -70,48 +76,78 @@ func (r *Recorder) observe(ev core.Event) {
 	}
 	switch e := ev.(type) {
 	case core.TextDelta:
+		r.mu.Lock()
 		r.buffer.WriteString(e.Text)
+		r.mu.Unlock()
+	case core.ReasoningDelta:
+		r.mu.Lock()
+		r.reason.WriteString(e.Text)
+		r.mu.Unlock()
 	case core.ToolCallEvent:
 		r.mu.Lock()
 		r.pending = append(r.pending, e.Call)
 		r.mu.Unlock()
+	case core.ToolResult:
+		// the loop's event carries the guarded result, named: the Observe
+		// tap in the chain is retired (SPEC_HARDENING decision 1).
+		if e := r.ensure(); e != nil {
+			r.loud("session row", e)
+		}
+		var failure *string
+		if e.Err != nil {
+			f := e.Err.Error()
+			failure = &f
+		}
+		if e2 := RecordToolResult(context.Background(), r.db, e.ID, e.Content, failure); e2 != nil {
+			r.loud("tool result "+e.ID, e2)
+		}
 	case core.Done:
 		seq := r.land()
 		if seq == 0 {
 			seq = r.lastSeq
 		}
 		if seq > 0 {
-			// cache columns ride at zero until the transport reports them;
-			// the schema is designed for that day already
-			if e2 := RecordUsage(context.Background(), r.db, seq, int64(e.Usage.Prompt), int64(e.Usage.Completion), 0, 0); e2 != nil {
+			if e2 := RecordUsage(context.Background(), r.db, seq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite)); e2 != nil {
 				r.loud("usage", e2)
 			}
 		}
+		r.upsertFiles() // turn boundary: the session's files snapshot
 	case core.Fault:
 		if _, e2 := RecordFault(context.Background(), r.db, r.sid, now(), e.Err.Error()); e2 != nil {
 			r.loud("fault", e2)
 		}
-		// the partial never lands: the session is preserved up to the last
-		// complete message
-		r.mu.Lock()
-		r.buffer.Reset()
-		r.pending = nil
-		r.mu.Unlock()
+		r.discardPartial()
+	case core.TurnEnd:
+		// the rule: an unlanded partial at any TurnEnd is a partial and is
+		// discarded — subsuming the Fault-time discard, and covering the
+		// interrupt, which has no Fault (the "PARTIAL fresh" bug reversed).
+		r.discardPartial()
 	}
 }
 
-// land flushes the assembled text and the pending calls into one assistant
-// row — written even when its content is empty — and lands the calls
-// against it. The tool-ID marker names a single call; a multi-call turn
-// leaves it unset, the calls carrying their own attribution.
+func (r *Recorder) discardPartial() {
+	r.mu.Lock()
+	r.buffer.Reset()
+	r.reason.Reset()
+	r.pending = nil
+	r.mu.Unlock()
+}
+
+// land flushes the assembled text, reasoning, and the pending calls into
+// one assistant row — written even when its content is empty — and lands
+// the calls against it. The tool-ID marker names a single call; a
+// multi-call turn leaves it unset, the calls carrying their own
+// attribution.
 func (r *Recorder) land() (seq int64) {
 	r.mu.Lock()
 	text := r.buffer.String()
+	reason := r.reason.String()
 	calls := r.pending
 	r.buffer.Reset()
+	r.reason.Reset()
 	r.pending = nil
 	r.mu.Unlock()
-	if text == "" && len(calls) == 0 {
+	if text == "" && len(calls) == 0 && reason == "" {
 		return 0
 	}
 	var toolID *string
@@ -119,8 +155,12 @@ func (r *Recorder) land() (seq int64) {
 		id := calls[0].ID
 		toolID = &id
 	}
+	var reasoning *string
+	if reason != "" {
+		reasoning = &reason
+	}
 	var e error
-	seq, e = RecordMessage(context.Background(), r.db, r.sid, "assistant", text, nil, toolID)
+	seq, e = RecordMessage(context.Background(), r.db, r.sid, "assistant", text, reasoning, toolID)
 	if e != nil {
 		r.loud("assistant message", e)
 		return 0
@@ -134,22 +174,48 @@ func (r *Recorder) land() (seq int64) {
 	return seq
 }
 
-// Observe taps the tool-execution seam: the guarded result, named.
-func (r *Recorder) Observe(next core.ToolExec) core.ToolExec {
-	return func(ctx context.Context, call core.ToolCall) (string, error) {
-		if e := r.ensure(); e != nil {
-			r.loud("session row", e)
+// upsertFiles snapshots the session's file provenance at the turn
+// boundary: a drifted row is replaced, a new path inserted (the files
+// table is keyed by session + path). Without this, RecordFile has no
+// production caller and SPEC_STATE's "a resumed session keeps its drift
+// checks" is owed by the schema and unmet by the writer (SPEC_HARDENING
+// decision 5 names the gap and closes it).
+func (r *Recorder) upsertFiles() {
+	if r.session == nil {
+		return
+	}
+	r.mu.Lock()
+	files := make(map[string]core.FileState, len(r.session.Files))
+	for p, st := range r.session.Files {
+		files[p] = st
+	}
+	r.mu.Unlock()
+	if len(files) == 0 {
+		return
+	}
+	err := withTx(r.db, context.Background(), func(c context.Context) error {
+		for path, st := range files {
+			existing, err := safely(func() (*domain.File, error) {
+				return domain.NewFileDomain().GetFile(c, r.sid, path).Row()
+			})
+			if err != nil {
+				return err
+			}
+			row := domain.File{SessionId: r.sid, Path: path, Hash: st.Hash, Mtime: st.Mtime}
+			if existing != nil {
+				if _, err := domain.NewFileDomain().UpdateFile(c, row); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := domain.NewFileDomain().InsertFile(c, row); err != nil {
+				return err
+			}
 		}
-		result, err := next(ctx, call)
-		var failure *string
-		if err != nil {
-			f := err.Error()
-			failure = &f
-		}
-		if e := RecordToolResult(ctx, r.db, call.ID, result, failure); e != nil {
-			r.loud("tool result "+call.ID, e)
-		}
-		return result, err
+		return nil
+	})
+	if err != nil {
+		r.loud("files", err)
 	}
 }
 

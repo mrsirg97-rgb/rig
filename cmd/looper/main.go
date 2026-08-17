@@ -5,6 +5,7 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"path/filepath"
 
 	"context"
@@ -47,18 +48,77 @@ const defaultSystem = "You are looper, a minimal coding agent. Use the provided 
 
 // wire assembles the kernel's dependencies. Swapping a seam is a change
 // here and nowhere else.
-func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, observe func(core.ToolExec) core.ToolExec, todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool core.Tool) *looper.Kernel {
+func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool core.Tool) *looper.Kernel {
+	mw := []core.ToolMiddleware{
+		perm.Allowlist(allow...),
+		guard.Bound(retries),
+	}
+	// the root's chain is [perm, guard]: the observation tap is retired —
+	// the recorder now sources its rows from the loop's events.
+	// The guidelines ride the system prompt, not the chain (decision 6):
+	// prompt assembly belongs to the prompt, and the prompt string is the
+	// root's — zero loop change.
+	fullSystem := system
+	if g := guidelinesOf(mw); g != "" {
+		fullSystem = system + "\n\n" + g
+	}
 	return looper.New(
 		looper.WithProvider(openai.New(baseURL, model)),
 		looper.WithFrontend(fe),
-		looper.WithPolicy(policy.Passthrough(system)),
+		looper.WithPolicy(policy.Passthrough(fullSystem)),
 		looper.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool),
-		looper.WithMiddleware(
-			perm.Allowlist(allow...),
-			guard.Bound(retries),
-			observe, // observation outermost: it sees the guarded result
-		),
+		looper.WithMiddleware(mw...),
 	)
+}
+
+// guidelinesOf collects the system-prompt prose of the participants that
+// contribute it (SPEC_HARDENING decision 6): assertion-checked, in listed
+// order, joined with a blank line. Wrap-only participants contribute
+// nothing.
+func guidelinesOf(ms []core.ToolMiddleware) string {
+	var b strings.Builder
+	for _, mw := range ms {
+		if gc, ok := mw.(core.GuidelineContributor); ok {
+			if b.Len() > 0 {
+				b.WriteString("\n\n")
+			}
+			b.WriteString(gc.Guidelines())
+		}
+	}
+	return b.String()
+}
+
+// ErrResumeWithPrompt is the root's construction refusal: one-shot stays
+// one-shot — the worker's stdout is the answer, a resumed transcript is
+// the REPL's.
+var ErrResumeWithPrompt = errors.New("looper: -resume is not available with -p (one-shot stays one-shot)")
+
+// checkOneShot is the -p/-resume construction check, loud before any
+// store is opened or a seam wired.
+func checkOneShot(prompt, resumeID string) error {
+	if prompt != "" && resumeID != "" {
+		return ErrResumeWithPrompt
+	}
+	return nil
+}
+
+// sessionFor is the root's session construction: fresh by default,
+// resumed by -resume. A resumed session keeps its identity (the recorder
+// adopts the existing row — todo's claims and rem's sources attribute to
+// it — and the per-process state, the guard's counters and the slot,
+// starts fresh, named by SPEC_HARDENING decision 5).
+func sessionFor(resumeID string, resume func(id string) (*core.Session, error)) (*core.Session, error) {
+	if resumeID == "" {
+		return core.NewSession(), nil
+	}
+	s, err := resume(resumeID)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil || s.ID == "" {
+		return nil, errors.New("resume: the projection returned no session")
+	}
+	return s, nil
 }
 
 func envOr(key, def string) string {
@@ -87,6 +147,7 @@ func main() {
 	allow := flag.String("allow", envOr("LOOPER_ALLOW", "bash,read,write,edit,ls,find,grep,todo,rem,scheduler,python,web_search,web_fetch"), "comma-separated allow-list of tool names")
 	retries := flag.Int("retries", envOrInt("LOOPER_RETRIES", 3), "repetition bound on identical failing calls (cleared on success)")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
+	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
@@ -100,6 +161,13 @@ func main() {
 	// the REPL's closure order.
 	if len(os.Args) > 1 && os.Args[1] == "run-job" {
 		os.Exit(runJob(os.Args[2:]))
+	}
+
+	// The -p/-resume conflict is a construction error: it is refused
+	// before any store is opened or a seam wired.
+	if err := checkOneShot(*prompt, *resumeID); err != nil {
+		fmt.Fprintln(os.Stderr, "looper:", err)
+		os.Exit(2)
 	}
 
 	// The transcript: workspace-shared sqlite under the user config
@@ -229,7 +297,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	session := core.NewSession()
 	// The frontend: the REPL by default; one-shot under -p (deliverable 2's
 	// seam). Everything downstream of the swap is shared.
 	var fe core.Frontend = cli.New(os.Stdin, os.Stdout)
@@ -240,9 +307,19 @@ func main() {
 		}
 		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout}
 	}
-	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID)
 
-	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, rec.Observe, todoapi.New(tdb), remapi.New(rdb),
+	// The session: fresh by default; -resume rebuilds the transcript, the
+	// file provenance, and the identity from the state rows (decision 5).
+	session, err := sessionFor(*resumeID, func(id string) (*core.Session, error) {
+		return state.Resume(context.Background(), sdb, id)
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "looper:", err)
+		os.Exit(1)
+	}
+	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID, session)
+
+	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, todoapi.New(tdb), remapi.New(rdb),
 		schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"), py, webSearch, webFetch)
 	k.Session = session // one identity: the loop's session is the transcript's
 
