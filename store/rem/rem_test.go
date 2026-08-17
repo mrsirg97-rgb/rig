@@ -1,11 +1,10 @@
 package rem
 
-// Pane's REM_SPEC named cases, ported by name against the real sqlite
-// store: scope isolation, recall-quality fixtures (llamaswap / UD IQ1S /
-// n-cpu-moe), supersession (SET NULL), id reuse, effective strength,
-// prune semantics, the fts-less degradation seam, corruption quarantine,
-// concurrent serialization. Two workspace dirs stand for the two scopes
-// pane's suite drove with chdir.
+// The named cases against the real sqlite store: scope isolation,
+// recall-quality fixtures (llamaswap / UD IQ1S / n-cpu-moe), supersession
+// (SET NULL), id reuse, effective strength, prune semantics, the fts-less
+// degradation seam, corruption quarantine, concurrent serialization. Two
+// workspace dirs stand for the two scopes.
 
 import (
 	"context"
@@ -21,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	remdom "github.com/mrsirg97-rgb/looper/store/rem/domain"
+	"github.com/mrsirg97-rgb/rig/store"
+	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
 )
 
 // --- helpers ---
@@ -184,7 +183,7 @@ func ageCreated(t *testing.T, db store.DB, id int64, daysAgo int) {
 
 // --- named cases ---
 
-// pane: corrupt store quarantines (renamed, never deleted) and reads empty.
+// corrupt store quarantines (renamed, never deleted) and reads empty.
 func TestCorruptStoreQuarantinesAndReadsEmpty(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "rem.sqlite")
@@ -229,7 +228,7 @@ func mustReadDir(t *testing.T, dir string) []string {
 	return out
 }
 
-// pane: learn stores content with scope, kind, importance; mints m1, and
+// learn stores content with scope, kind, importance; mints m1, and
 // the bookkeeping (fts row, grams) lands with it.
 func TestLearnStoresContentWithScopeKindImportance(t *testing.T) {
 	db := newDB(t)
@@ -255,7 +254,7 @@ func TestLearnStoresContentWithScopeKindImportance(t *testing.T) {
 			t.Errorf("row %+v", got)
 		}
 		// Store-level source semantics: no explicit source rides NULL
-		// (the adapter-level deviation attributes the calling session).
+		// (the adapter attributes the calling session).
 		if got.Source != nil {
 			t.Errorf("source %v, want NULL without an explicit source", got.Source)
 		}
@@ -268,7 +267,7 @@ func TestLearnStoresContentWithScopeKindImportance(t *testing.T) {
 	}
 }
 
-// pane: learn is idempotent on (scope, content): same id, never duplicated.
+// learn is idempotent on (scope, content): same id, never duplicated.
 func TestLearnIsIdempotentOnScopeContent(t *testing.T) {
 	db := newDB(t)
 	cwd := "/ws1"
@@ -286,7 +285,7 @@ func TestLearnIsIdempotentOnScopeContent(t *testing.T) {
 	}
 }
 
-// pane: re-learn accepts importance updates on the existing row; content
+// re-learn accepts importance updates on the existing row; content
 // and strength untouched.
 func TestReLearnAcceptsImportanceUpdate(t *testing.T) {
 	db := newDB(t)
@@ -308,7 +307,7 @@ func TestReLearnAcceptsImportanceUpdate(t *testing.T) {
 	}
 }
 
-// pane: supersedes references an existing memory; missing targets refuse
+// supersedes references an existing memory; missing targets refuse
 // loudly.
 func TestLearnSupersedesRefusesMissingTarget(t *testing.T) {
 	db := newDB(t)
@@ -334,7 +333,7 @@ func TestLearnSupersedesRefusesMissingTarget(t *testing.T) {
 	}
 }
 
-// pane: scope=global stores in the global scope with label 'global'.
+// scope=global stores in the global scope with label 'global'.
 func TestLearnScopeGlobal(t *testing.T) {
 	db := newDB(t)
 	_, mem, _ := learn(t, db, "/ws2", "global fact about agents", map[string]any{"scope": "global"})
@@ -343,7 +342,7 @@ func TestLearnScopeGlobal(t *testing.T) {
 	}
 }
 
-// pane: scope=all at the write side refuses loudly at execute.
+// scope=all at the write side refuses loudly at execute.
 func TestLearnRefusesScopeAllAtExecute(t *testing.T) {
 	db := newDB(t)
 	if _, _, _, err := Learn(context.Background(), db, "/ws1", LearnInput{Content: "x", Scope: "all"}); err == nil {
@@ -354,7 +353,7 @@ func TestLearnRefusesScopeAllAtExecute(t *testing.T) {
 }
 
 // Explicit source semantics at the store level: what the caller passes
-// lands verbatim; the session-attribution deviation rides the adapter.
+// lands verbatim; session attribution rides the adapter.
 func TestExplicitSourceLandsVerbatim(t *testing.T) {
 	db := newDB(t)
 	if _, mem, _ := learn(t, db, "/ws1", "attributed source", map[string]any{"source": "log: explicit"}); mem == nil {
@@ -365,7 +364,7 @@ func TestExplicitSourceLandsVerbatim(t *testing.T) {
 	}
 }
 
-// pane: per-project memories are isolated by cwd scope.
+// per-project memories are isolated by cwd scope.
 func TestPerProjectMemoriesIsolatedByCwdScope(t *testing.T) {
 	db := newDB(t)
 	_, m1, _ := learn(t, db, "/ws1", "only ws1", nil)
@@ -380,7 +379,7 @@ func TestPerProjectMemoriesIsolatedByCwdScope(t *testing.T) {
 
 func we() map[string]any { return map[string]any{} }
 
-// pane: re-learn with supersedes including its own id is a no-op (no
+// re-learn with supersedes including its own id is a no-op (no
 // self-demotion).
 func TestSelfSupersedesIsNoOp(t *testing.T) {
 	db := newDB(t)
@@ -399,7 +398,7 @@ func TestSelfSupersedesIsNoOp(t *testing.T) {
 
 // --- recall ---
 
-// pane: prose intent finds the memory, both arms reach.
+// prose intent finds the memory, both arms reach.
 func TestRecallProseIntentBothArms(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "the api returns 429 when the token expires", nil)
@@ -415,7 +414,7 @@ func TestRecallProseIntentBothArms(t *testing.T) {
 	}
 }
 
-// pane: reserved FTS operators do not break the query grammar.
+// reserved FTS operators do not break the query grammar.
 func TestReservedFtsOperatorsDoNotBreakGrammar(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "to be or not to be", nil)
@@ -438,7 +437,7 @@ func hasContent(t *testing.T, hits []Hit, content string) bool {
 	return false
 }
 
-// pane: no match renders '(no memories)', never an error.
+// no match renders '(no memories)', never an error.
 func TestNoMatchRendersEmpty(t *testing.T) {
 	db := newDB(t)
 	reply, hits, err := Recall(context.Background(), db, "/ws1", RecallInput{Query: "zzzznope", K: 10})
@@ -450,7 +449,7 @@ func TestNoMatchRendersEmpty(t *testing.T) {
 	}
 }
 
-// pane's identifier corpus — recall-quality fixtures.
+// the identifier corpus — recall-quality fixtures.
 func TestIdentifierCorpusLlamaswapFuzzy(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "llama-swap on :8090 OOMs at depth", map[string]any{"kind": "solution"})
@@ -503,7 +502,7 @@ func TestIdentifierCorpusNCpuMoeBoth(t *testing.T) {
 	}
 }
 
-// pane: an fts-less build disables only the semantic arm; fuzzy fallback
+// an fts-less build disables only the semantic arm; fuzzy fallback
 // still serves, learns still land.
 func TestFtsLessBuildServesFuzzyFallback(t *testing.T) {
 	db := newDB(t)
@@ -536,7 +535,7 @@ func TestFtsLessBuildServesFuzzyFallback(t *testing.T) {
 	}
 }
 
-// pane: the stemming path reaches an inflected memory.
+// the stemming path reaches an inflected memory.
 func TestStemmingPathReachesInflectedMemory(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "running fast", nil)
@@ -549,7 +548,7 @@ func TestStemmingPathReachesInflectedMemory(t *testing.T) {
 	}
 }
 
-// pane: recall k caps live hits.
+// recall k caps live hits.
 func TestRecallKCapsLiveHits(t *testing.T) {
 	db := newDB(t)
 	for i := 1; i <= 5; i++ {
@@ -564,7 +563,7 @@ func TestRecallKCapsLiveHits(t *testing.T) {
 	}
 }
 
-// pane: an aged memory loses to a fresh one; stored strength untouched,
+// an aged memory loses to a fresh one; stored strength untouched,
 // recall touches the access counters only.
 func TestAgedMemoryLosesToFresh(t *testing.T) {
 	db := newDB(t)
@@ -595,7 +594,7 @@ func TestAgedMemoryLosesToFresh(t *testing.T) {
 	}
 }
 
-// pane: superseded drop by default; include_superseded fills the unused
+// superseded drop by default; include_superseded fills the unused
 // budget.
 func TestSupersededDropByDefaultIncludeFills(t *testing.T) {
 	db := newDB(t)
@@ -617,7 +616,7 @@ func TestSupersededDropByDefaultIncludeFills(t *testing.T) {
 	}
 }
 
-// pane: hybrid scope — project hits first, global fills the unused budget.
+// hybrid scope — project hits first, global fills the unused budget.
 func TestHybridScopeProjectFirstGlobalFill(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws2", "global widget lore", map[string]any{"scope": "global"})
@@ -646,7 +645,7 @@ func TestHybridScopeProjectFirstGlobalFill(t *testing.T) {
 	}
 }
 
-// pane: scope=all interleaves scopes; scope=global excludes project.
+// scope=all interleaves scopes; scope=global excludes project.
 func TestScopeAllInterleavesScopes(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "widget local", nil)
@@ -675,7 +674,7 @@ func TestScopeAllInterleavesScopes(t *testing.T) {
 	}
 }
 
-// pane: the kind filter narrows recall.
+// the kind filter narrows recall.
 func TestKindFilterNarrowsRecall(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "widget is blue", map[string]any{"kind": "constraint"})
@@ -692,7 +691,7 @@ func TestKindFilterNarrowsRecall(t *testing.T) {
 	}
 }
 
-// pane: an empty query browses latest by effective strength.
+// an empty query browses latest by effective strength.
 func TestEmptyQueryBrowsesLatestByEffectiveStrength(t *testing.T) {
 	db := newDB(t)
 	for i := 1; i <= 3; i++ {
@@ -717,7 +716,7 @@ func TestEmptyQueryBrowsesLatestByEffectiveStrength(t *testing.T) {
 
 // --- reflect ---
 
-// pane: reflect stores a distilled memory with source; kind defaults to
+// reflect stores a distilled memory with source; kind defaults to
 // reflection.
 func TestReflectStoresDistilledWithSource(t *testing.T) {
 	db := newDB(t)
@@ -744,7 +743,7 @@ func TestReflectStoresDistilledWithSource(t *testing.T) {
 	}
 }
 
-// pane: reflect is idempotent on the memory.
+// reflect is idempotent on the memory.
 func TestReflectIsIdempotent(t *testing.T) {
 	db := newDB(t)
 	_, m1, _ := reflectIn(t, db, "/ws1", "repeatable reflection", 0.7)
@@ -772,7 +771,7 @@ func reflectIn(t *testing.T, db store.DB, cwd, content string, importance float6
 	return reply, mem, existing
 }
 
-// pane: the compaction hook stores a deduped reflection scoped to the
+// the compaction hook stores a deduped reflection scoped to the
 // workspace; bad events never crash.
 func TestAutoReflectDedupesAndIgnoresBadEvents(t *testing.T) {
 	db := newDB(t)
@@ -818,7 +817,7 @@ func TestAutoReflectDedupesAndIgnoresBadEvents(t *testing.T) {
 
 // --- prune ---
 
-// pane: consolidate decays aged strength, resets the window, and is
+// consolidate decays aged strength, resets the window, and is
 // idempotent on replay.
 func TestPruneConsolidateIdempotentDecaysAged(t *testing.T) {
 	db := newDB(t)
@@ -848,7 +847,7 @@ func TestPruneConsolidateIdempotentDecaysAged(t *testing.T) {
 	}
 }
 
-// pane: consolidate reinforces accessed memories and no-ops on fresh ones.
+// consolidate reinforces accessed memories and no-ops on fresh ones.
 func TestConsolidateReinforcesAccessedNoOpsFresh(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "fresh target", nil)
@@ -864,7 +863,7 @@ func TestConsolidateReinforcesAccessedNoOpsFresh(t *testing.T) {
 	}
 }
 
-// pane: prune remove deletes memory + fts row + trigrams, no orphans.
+// prune remove deletes memory + fts row + trigrams, no orphans.
 func TestPruneRemoveNoOrphans(t *testing.T) {
 	db := newDB(t)
 	_, mem, _ := learn(t, db, "/ws1", "doomed memory", nil)
@@ -886,7 +885,7 @@ func TestPruneRemoveNoOrphans(t *testing.T) {
 	}
 }
 
-// pane: prune remove by criteria — kind, older_than_days, scope.
+// prune remove by criteria — kind, older_than_days, scope.
 func TestPruneRemoveByCriteria(t *testing.T) {
 	db := newDB(t)
 	_, constraint, _ := learn(t, db, "/ws1", "old constraint", map[string]any{"kind": "constraint"})
@@ -917,7 +916,7 @@ func TestPruneRemoveByCriteria(t *testing.T) {
 	}
 }
 
-// pane: prune remove counts actual deletions; missing ids report zero.
+// prune remove counts actual deletions; missing ids report zero.
 func TestPruneRemoveMissingIdsReportZero(t *testing.T) {
 	db := newDB(t)
 	reply, count, err := Prune(context.Background(), db, "/ws1",
@@ -930,7 +929,7 @@ func TestPruneRemoveMissingIdsReportZero(t *testing.T) {
 	}
 }
 
-// pane: consolidate honors a selection; none means the whole store.
+// consolidate honors a selection; none means the whole store.
 func TestPruneConsolidateHonorsSelection(t *testing.T) {
 	db := newDB(t)
 	_, victim, _ := learn(t, db, "/ws1", "narrow victim", nil)
@@ -953,7 +952,7 @@ func TestPruneConsolidateHonorsSelection(t *testing.T) {
 	}
 }
 
-// pane: prune remove on a genuinely fts-less store never touches memory_fts.
+// prune remove on a genuinely fts-less store never touches memory_fts.
 func TestPruneRemoveFtsLessNeverTouchesFts(t *testing.T) {
 	db := newDB(t)
 	if _, err := db.Exec(`DROP TABLE IF EXISTS memory_fts`); err != nil {
@@ -979,7 +978,7 @@ func TestPruneRemoveFtsLessNeverTouchesFts(t *testing.T) {
 	}
 }
 
-// pane: prune remove/reduce with no selection refuse loudly.
+// prune remove/reduce with no selection refuse loudly.
 func TestPruneNoSelectionRefuses(t *testing.T) {
 	db := newDB(t)
 	for _, verb := range []string{"remove", "reduce"} {
@@ -991,7 +990,7 @@ func TestPruneNoSelectionRefuses(t *testing.T) {
 	}
 }
 
-// pane: reduce lowers importance; a missing target importance refuses
+// reduce lowers importance; a missing target importance refuses
 // loudly.
 func TestPruneReduceRequiresImportance(t *testing.T) {
 	db := newDB(t)
@@ -1016,7 +1015,7 @@ func TestPruneReduceRequiresImportance(t *testing.T) {
 	}
 }
 
-// pane: removing the superseding memory unsupersedes the older (SET NULL),
+// removing the superseding memory unsupersedes the older (SET NULL),
 // and the legacy resurfaces.
 func TestRemovingSupersedingUnsupersedesLegacy(t *testing.T) {
 	db := newDB(t)
@@ -1036,7 +1035,7 @@ func TestRemovingSupersedingUnsupersedesLegacy(t *testing.T) {
 	}
 }
 
-// pane: pruned ids are never reused by later learns (the AUTOINCREMENT
+// pruned ids are never reused by later learns (the AUTOINCREMENT
 // rule, kept by the meta counter).
 func TestPrunedIdsNeverReused(t *testing.T) {
 	db := newDB(t)
@@ -1051,7 +1050,7 @@ func TestPrunedIdsNeverReused(t *testing.T) {
 	}
 }
 
-// pane: prune remove by ids ignores scope — the ids are the selection.
+// prune remove by ids ignores scope — the ids are the selection.
 func TestPruneRemoveByIdsIgnoresScope(t *testing.T) {
 	db := newDB(t)
 	_, glo, _ := learn(t, db, "/ws2", "global doomed", map[string]any{"scope": "global"})
@@ -1068,12 +1067,12 @@ func TestPruneRemoveByIdsIgnoresScope(t *testing.T) {
 	}
 }
 
-// pane: concurrent calls serialize — ported in the shape this runtime
-// guarantees: no lost updates, database-layer serialization. Ordering
+// concurrent calls serialize: no lost updates, database-layer
+// serialization. Ordering
 // between true-parallel goroutines is not asserted (the database layer
 // does not promise it); completeness is.
 func TestConcurrentCallsSerialize(t *testing.T) {
-	// two handles on one workspace file, as pane's case drives.
+	// two handles on one workspace file.
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
 	db1, _, err := store.Open(path, Statements(), SchemaVersion)
 	if err != nil {
@@ -1178,7 +1177,7 @@ func TestGeneratedMatchesCommitted(t *testing.T) {
 	}
 	regen()
 
-	regenCmd := "cd <lift>/cmd && go run main.go -config=$LOOPER/store/rem/gen.json -source=$LOOPER/store/rem/source.json"
+	regenCmd := "cd <lift>/cmd && go run main.go -config=$RIG/store/rem/gen.json -source=$RIG/store/rem/source.json"
 	for _, pkg := range []string{"domain", "ddl"} {
 		committed := listFiles(t, filepath.Join(workDir, pkg))
 		got := listFiles(t, filepath.Join(tmp, pkg))

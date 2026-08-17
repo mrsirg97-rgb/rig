@@ -15,7 +15,8 @@ import (
 //
 // paused = the same line prefixed with "# ". Only lines carrying the
 // trailing tag are ever rewritten; every other byte passes through
-// untouched. Voice is pane's.
+// untouched. The tag text is kept for compatibility with existing crontab
+// lines.
 
 var tagRe = regexp.MustCompile(`^(?P<lead>\S.*?)\s+#\s*pane-scheduler:(?P<key>\S+)$`)
 
@@ -178,7 +179,7 @@ func (r realCrontab) List() (string, error) {
 			}
 			return "", fmt.Errorf("crontab list failed (exit %d): %s", exit.ExitCode(), stderrOf(stderr, err))
 		}
-		// the binary never resolved: pane's ENOENT voice
+		// the binary never resolved
 		return "", errors.New("crontab: binary not found")
 	}
 	return string(out), nil
@@ -194,7 +195,7 @@ func (r realCrontab) Install(text string) error {
 		if errors.As(err, &exit) {
 			return fmt.Errorf("crontab install failed (exit %d): %s", exit.ExitCode(), stderrOf(strings.TrimSpace(stderr.String()), err))
 		}
-		// the binary never resolved: pane's ENOENT voice
+		// the binary never resolved
 		return errors.New("crontab: binary not found")
 	}
 	return nil

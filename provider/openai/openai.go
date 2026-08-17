@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 type provider struct {
@@ -115,8 +115,8 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 				return
 			}
 			if chunk.Usage != nil {
-				// cached tokens are a subset of prompt on this wire (grounded
-				// live: 918 of 922 warm); total_tokens is read and ignored
+				// cached tokens are a subset of prompt on this wire;
+				// total_tokens is read and ignored
 				usage = core.Usage{
 					Prompt:     chunk.Usage.PromptTokens,
 					Completion: chunk.Usage.CompletionTokens,

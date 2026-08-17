@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-// --- reply shaping (pane's renderers, themeless) and List ---
+// --- reply shaping (themeless renderers) and List ---
 //
-// Voices and shapes are pane's; ANSI/theme tokens drop to plain text, as
-// this runtime's other store replies do.
+// ANSI/theme tokens drop to plain text, as this runtime's other store
+// replies do.
 
-// nextText is the head-line's scheduling bit (pane's nextText).
+// nextText is the head-line's scheduling bit.
 func nextText(j *jobState, now func() time.Time) string {
 	if j.State != "active" {
 		return ""
@@ -41,7 +41,7 @@ func mustParse(cron string) ParsedCron {
 	return p
 }
 
-// lastText is the head-line's audit bit (pane's lastText).
+// lastText is the head-line's audit bit.
 func lastText(j *jobState) string {
 	if j.LastStatus == "" {
 		return ""
@@ -56,7 +56,7 @@ func lastText(j *jobState) string {
 	return strings.Join(bits, " ")
 }
 
-// driftOf computes the store/crontab mismatch note (pane's view() drift).
+// driftOf computes the store/crontab mismatch note.
 func driftOf(j *jobState, line *TaggedLine) string {
 	if j.State == "removed" {
 		return ""
@@ -77,7 +77,7 @@ func driftOf(j *jobState, line *TaggedLine) string {
 	return strings.Join(notes, "; ")
 }
 
-// jobLines is one job's rendered lines (pane's jobLines, themeless).
+// jobLines is one job's rendered lines.
 func jobLines(j *jobState, scope string, line *TaggedLine, running bool, now func() time.Time) []string {
 	head := fmt.Sprintf("%s %s %s", j.ID, j.Name, j.State)
 	if s := nextText(j, now); s != "" {
@@ -112,7 +112,7 @@ func jobLines(j *jobState, scope string, line *TaggedLine, running bool, now fun
 	return lines
 }
 
-// renderJobs is pane's sectioned listing: global first, then cwd.
+// renderJobs is the sectioned listing: global first, then cwd.
 func renderJobs(global, cwd []jobLineSet) string {
 	section := func(scope string, jobs []jobLineSet) string {
 		if len(jobs) == 0 {
@@ -135,9 +135,8 @@ type jobLineSet struct {
 	lines []string
 }
 
-// List renders both scopes with drift and running probes (pane's
-// core.list). Probe nil means "not held"; now nil means "do not compute
-// next fires". Voice is pane's.
+// List renders both scopes with drift and running probes. Probe nil
+// means "not held"; now nil means "do not compute next fires".
 func List(ctx context.Context, st Stores, ct Crontab, sessionCwd string, probe func(key string) bool, now func() time.Time) (string, error) {
 	var lines map[string]TaggedLine
 	if text, err := ct.List(); err == nil {
@@ -199,7 +198,7 @@ func List(ctx context.Context, st Stores, ct Crontab, sessionCwd string, probe f
 		return "", err
 	}
 	// drift is computed against the job's own scope store above; an
-	// unreadable crontab flags every job with pane's voice
+	// unreadable crontab flags every job
 	if lines == nil {
 		reflag := func(jobs []jobLineSet) []jobLineSet {
 			for i := range jobs {

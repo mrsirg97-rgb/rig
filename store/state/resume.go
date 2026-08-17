@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	"github.com/mrsirg97-rgb/looper/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
 // Resume is the read-side projection (SPEC_HARDENING decision 5,

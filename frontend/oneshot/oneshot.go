@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // OneShot is the single-prompt Frontend: the first Input yields the prompt,
@@ -49,7 +49,7 @@ func (o *OneShot) Notify(ev core.Event) {
 		io.WriteString(o.Out, "\n")
 	case core.Fault:
 		o.faulted = true
-		io.WriteString(o.Out, "\nlooper: fault: "+e.Err.Error()+"\n")
+		io.WriteString(o.Out, "\nrig: fault: "+e.Err.Error()+"\n")
 	}
 }
 

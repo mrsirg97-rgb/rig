@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper"
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/loop"
-	"github.com/mrsirg97-rgb/looper/middleware/guard"
-	"github.com/mrsirg97-rgb/looper/middleware/perm"
+	"github.com/mrsirg97-rgb/rig"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/loop"
+	"github.com/mrsirg97-rgb/rig/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/middleware/perm"
 )
 
 // countingTool fails for its first calls, counting every execution.
@@ -52,12 +52,12 @@ func TestDenialIsFedBackAndBounded(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
-		looper.WithMiddleware(
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+		rig.WithMiddleware(
 			perm.Allowlist("read"), // bash is not listed: denied
 			guard.Bound(3),
 		),
@@ -99,12 +99,12 @@ func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
-		looper.WithMiddleware(
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+		rig.WithMiddleware(
 			perm.Allowlist("bash"),
 			guard.Bound(3),
 		),

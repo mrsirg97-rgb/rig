@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	scheddomain "github.com/mrsirg97-rgb/looper/store/scheduler/domain"
+	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
 // --- scope and identity plumbing ---
@@ -25,9 +25,8 @@ type Stores struct {
 }
 
 // JobKey is a parsed scheduling key: scope plus id, the hash locating the
-// cwd-scope store. Pane's key grammar: one token subsumes <scope> <id>,
-// because a cwd-scope id alone cannot address its store (the post-merge
-// decoupling).
+// cwd-scope store. One token subsumes <scope> <id>, because a cwd-scope id
+// alone cannot address its store.
 type JobKey struct {
 	Scope string // "global" | "cwd"
 	Hash  string // "" for global; 12-hex for cwd
@@ -51,7 +50,7 @@ func KeyOf(scope, hash, id string) (string, error) {
 	return fmt.Sprintf("cwd-%s:%s", hash, id), nil
 }
 
-// ParseKey decomposes a scheduling key. Garbage refuses with pane's voice.
+// ParseKey decomposes a scheduling key. Garbage refuses.
 func ParseKey(key string) (JobKey, error) {
 	var out JobKey
 	if m := keyRe.FindStringSubmatch(key); m != nil {
@@ -82,7 +81,7 @@ func ScopeDir(key JobKey) string {
 }
 
 // CwdHash is the workspace digest prefix: the first twelve hex digits of
-// sha1(cwd) — the store file's locator (pane's cwdHash).
+// sha1(cwd) — the store file's locator.
 func CwdHash(cwd string) string {
 	sum := sha1.Sum([]byte(cwd))
 	return hex.EncodeToString(sum[:])[:12]
@@ -111,8 +110,7 @@ func scopeHash(scope, sessionCwd string) string {
 
 // --- create ---
 
-// CreateInput is one create payload (pane's CreateInput; scope "" is the
-// cwd scope).
+// CreateInput is one create payload (scope "" is the cwd scope).
 type CreateInput struct {
 	Name   string
 	Prompt string
@@ -126,13 +124,13 @@ type CreateInput struct {
 
 const defaultModel = "qwen3.8-workers"
 
-// schedErr shapes the store voice: pane's "scheduler: ..." prefix.
+// schedErr shapes the store voice: the "scheduler: ..." prefix.
 func schedErr(format string, a ...any) error {
 	return fmt.Errorf("scheduler: "+format, a...)
 }
 
 // Create schedules one job: crontab first (the visible failure mode is a
-// line with no row), then the store mutation. Voice is pane's.
+// line with no row), then the store mutation.
 func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionCwd, session, runnerCmd string, now func() time.Time) (string, error) {
 	if now == nil {
 		now = time.Now
@@ -212,7 +210,7 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 		return "", err
 	}
 
-	// crontab first (plan B): the visible failure mode is a line with no row
+	// crontab first: the visible failure mode is a line with no row
 	text, err := ct.List()
 	if err != nil {
 		return "", err
@@ -270,9 +268,9 @@ func createdRow(f *fold, seq int64) *jobState {
 
 // --- state actions (pause / resume / remove) ---
 
-// Pause/Resume/Remove: pane's stateAction. The crontab write lands before
-// the store mutation; a drift (line missing) still changes the store
-// state — list flags it afterward. Voice is pane's.
+// Pause/Resume/Remove: the crontab write lands before the store mutation;
+// a drift (line missing) still changes the store state — list flags it
+// afterward.
 func Pause(ctx context.Context, st Stores, ct Crontab, id, scope, sessionCwd, session string) (string, error) {
 	return stateAction(ctx, st, ct, id, scope, sessionCwd, session, "pause")
 }
@@ -384,8 +382,8 @@ func jobScopeOf(st Stores, db DB) string {
 
 // --- runs ---
 
-// RunRecordInput is one run record (pane's RunArgs shape, plus the runs
-// container's started/ended pair).
+// RunRecordInput is one run record, including the runs container's
+// started/ended pair.
 type RunRecordInput struct {
 	ID       string
 	Status   string
@@ -484,7 +482,7 @@ type runRecord struct {
 }
 
 // Runs is the audit trail: the last n records, oldest first, a chain read
-// over the runs container (SPEC_STATE's deviation). Voice is pane's.
+// over the runs container (SPEC_STATE's deviation).
 func Runs(ctx context.Context, st Stores, id, scope string, n int) (string, error) {
 	if n <= 0 {
 		n = 5
@@ -580,8 +578,7 @@ func resolveJob(ctx context.Context, st Stores, id, scope string) (DB, *jobState
 			db    DB
 		}{{"cwd", st.Cwd}}
 	default:
-		// no scope: global first, then cwd (pane's order); both present
-		// is ambiguous
+		// no scope: global first, then cwd; both present is ambiguous
 		dbs = []struct {
 			scope string
 			db    DB

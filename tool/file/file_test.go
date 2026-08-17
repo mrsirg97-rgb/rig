@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/tool/file"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/tool/file"
 )
 
 func argsJSON(t *testing.T, args map[string]any) json.RawMessage {

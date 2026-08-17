@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	sched "github.com/mrsirg97-rgb/looper/store/scheduler"
-	adapter "github.com/mrsirg97-rgb/looper/tool/scheduler"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	adapter "github.com/mrsirg97-rgb/rig/tool/scheduler"
 )
 
 // fakeCrontab: the surgical seam, mutex-guarded (the adapter tests drive
@@ -68,7 +68,7 @@ func newHarness(t *testing.T, cwd string) *harness {
 	}
 	st := sched.Stores{Global: gd, Cwd: cd}
 	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
-	tool := adapter.New(st, ct, "/x/looper run-job")
+	tool := adapter.New(st, ct, "/x/rig run-job")
 	return &harness{st: st, ct: ct, tool: tool}
 }
 
@@ -81,7 +81,7 @@ func exec(t *testing.T, h *harness, args map[string]any) (string, error) {
 	return h.tool.Exec(context.Background(), raw)
 }
 
-func TestDescriptionCarriesPanesVoicesVerbatim(t *testing.T) {
+func TestDescriptionCarriesTheVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	d := h.tool.Description()
 	for _, want := range []string{
@@ -93,12 +93,12 @@ func TestDescriptionCarriesPanesVoicesVerbatim(t *testing.T) {
 		"re-create to retry",
 	} {
 		if !strings.Contains(d, want) {
-			t.Fatalf("description missing pane voice fragment: %q", want)
+			t.Fatalf("description missing voice fragment: %q", want)
 		}
 	}
 }
 
-func TestSchemaCarriesThePaneParameterVoices(t *testing.T) {
+func TestSchemaCarriesTheParameterVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	var schema struct {
 		Type       string         `json:"type"`
@@ -127,7 +127,7 @@ func TestSchemaCarriesThePaneParameterVoices(t *testing.T) {
 	}
 }
 
-func TestExecVoicesArePanes(t *testing.T) {
+func TestExecVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	if _, err := exec(t, h, map[string]any{}); err == nil || !strings.Contains(err.Error(), "scheduler: unknown action ''") {
 		t.Fatalf("missing-action voice: %v", err)
@@ -161,7 +161,7 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 	if !strings.HasPrefix(reply, "created j1 'surface' (cwd)") {
 		t.Fatalf("create reply %q", reply)
 	}
-	if !strings.Contains(h.ct.text, "0 3 * * * /x/looper run-job") {
+	if !strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job") {
 		t.Fatalf("crontab line missing: %q", h.ct.text)
 	}
 	list, err := exec(t, h, map[string]any{"action": "list"})

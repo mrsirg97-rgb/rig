@@ -1,6 +1,5 @@
-// Package tests: the todo surface over store/todo. Pane's named cases,
-// ported at the adapter level: schema voices, session attribution, reply
-// shaping pass-through.
+// Package tests: the todo surface over store/todo at the adapter level:
+// schema voices, session attribution, reply shaping pass-through.
 package todo_test
 
 import (
@@ -11,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
-	todoapi "github.com/mrsirg97-rgb/looper/tool/todo"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
+	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
 )
 
 func newDB(t *testing.T) store.DB {
@@ -159,7 +158,7 @@ func TestAnonymousExecutivesRecordAnon(t *testing.T) {
 	}
 }
 
-func TestExecSurfacesPaneReplies(t *testing.T) {
+func TestExecSurfacesTheReplies(t *testing.T) {
 	tool := todoapi.New(newDB(t))
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)

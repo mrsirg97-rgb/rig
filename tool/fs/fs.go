@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // Hard result caps. Truncation is named in the output, never silent;

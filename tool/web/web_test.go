@@ -1,6 +1,5 @@
-// The port's contract: pane's web_search and web_fetch named cases, in
-// pane's order (web-fetch.test.mjs, then web-search.test.mjs), plus the
-// looper-side cases. Every case runs against httptest servers and
+// The web_search and web_fetch named cases plus the rig-side cases.
+// Every case runs against httptest servers and
 // injected seams; no live SearXNG, no live proxy, no required trafilatura.
 package web_test
 
@@ -19,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/tool/web"
+	"github.com/mrsirg97-rgb/rig/tool/web"
 )
 
 // ---- seams and small fakes -------------------------------------------
@@ -28,7 +27,7 @@ func ptr[T any](v T) *T { return &v }
 
 func off() *string { var s string = ""; return &s }
 
-// httpResp is a hand-built response for the Do seam (pane's fetchImpl).
+// httpResp is a hand-built response for the Do seam.
 func httpResp(status int, headers map[string]string, body string) *http.Response {
 	h := http.Header{}
 	for k, v := range headers {
@@ -75,7 +74,7 @@ func has(t *testing.T, s string, sub string) {
 	}
 }
 
-// ---- pane's web-fetch named cases, in pane's order ---------------------
+// ---- web-fetch named cases --------------------------------------------
 
 func TestIPisPrivateV4Table(t *testing.T) {
 	priv := []string{
@@ -374,7 +373,7 @@ func TestToolRegistrationNameRequiredURLGuidelinesExist(t *testing.T) {
 	has(t, f.Description(), "search finds, fetch reads")
 }
 
-// ---- pane's web-search named cases, in pane's order --------------------
+// ---- web-search named cases -------------------------------------------
 
 func TestQueryIsEncodedAndSentToLocalSearXNGJSONAPI(t *testing.T) {
 	var seen *http.Request
@@ -510,7 +509,7 @@ func TestSearXNGBeingDownSurfacesAsALoudError(t *testing.T) {
 		t.Fatalf("want the 502 voice, got %v", err)
 	}
 
-	// a refused connection stays loud (Go's voice, not Node's ECONNREFUSED)
+	// a refused connection stays loud
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -538,7 +537,7 @@ func TestSchemaRequiresQueryAndBoundsMaxResults(t *testing.T) {
 	}
 }
 
-// ---- the looper-side named cases ---------------------------------------
+// ---- the rig-side named cases ---------------------------------------
 
 func TestTheEgressProxyIsUsedWhenSet(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -614,7 +613,7 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 		t.Fatalf("the fallback is not announced: %q", content)
 	}
 
-	// a present binary: the content is pane's, no announcement
+	// a present binary: the content is trafilatura's, no announcement
 	if web.DefaultTrafilatura() == "" {
 		t.Skip("no trafilatura on this box")
 	}
