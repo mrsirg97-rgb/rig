@@ -45,7 +45,7 @@ import (
 
 // Version is the binary's release version: the 1.0 freeze (roadmap 9)
 // — commands complete, the runtime the TUI consumes.
-const Version = "1.0.0"
+const Version = "0.2.0"
 
 const defaultSystem = "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done."
 

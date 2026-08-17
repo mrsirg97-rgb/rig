@@ -137,10 +137,17 @@ func (c *cli) readLoop() {
 			c.lines <- s
 			continue
 		}
-		c.mu.Lock()
-		if live {
-			c.steeredLive = true
+		if !live {
+			// no turn is live and Input is not parked (startup, a paste
+			// burst, the window between turns): the line is ordinary input,
+			// delivered in order on the next Input. The slot's latest-wins
+			// is steering semantics and would silently drop all but the
+			// last line here.
+			c.lines <- s
+			continue
 		}
+		c.mu.Lock()
+		c.steeredLive = true
 		c.mu.Unlock()
 		c.steer(s)
 	}

@@ -21,7 +21,8 @@
   (queue-and-interrupt, latest wins); `todo` and `scheduler` parse the line
   into the same tool instances the model gets and print the reply verbatim.
   One-shot and `run-job` never dispatch: a command-shaped prompt is a
-  prompt. The runtime is the 1.0 freeze (Version 1.0.0); the loop is
+  prompt. The runtime is feature-complete (Version 0.2.0; the freeze
+  discipline holds, the 1.0 tag waits for lived use); the loop is
   byte-identical through 9.
 
 - **openai adapter: truncated tool calls** (fix surfaced by the compaction
