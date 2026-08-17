@@ -114,6 +114,21 @@ func (p *policy) Assemble(ctx context.Context, s *core.Session) ([]core.Message,
 	return p.assemble(s), nil
 }
 
+// Compact is the forced seam (SPEC_COMMANDS 3; the scope promise 8's
+// owed): the same internal action as the trigger path — split, summarize,
+// rewrite, reflect — with the trigger bypassed on purpose: the trigger is
+// the model's window math, the verb is the user's judgment. It spends the
+// once budget as the trigger path does, so the next context-length fault
+// on the un-grown transcript surfaces without recovery. The action never
+// emits (decision 5) — the caller owns delivery, exactly once.
+func (p *policy) Compact(ctx context.Context) (core.Compacted, bool, error) {
+	ev, compacted, err := p.compact(ctx)
+	if compacted {
+		p.spendBudget()
+	}
+	return ev, compacted, err
+}
+
 // assemble is the passthrough: the system prompt (when set) plus the
 // transcript, verbatim.
 func (p *policy) assemble(s *core.Session) []core.Message {
