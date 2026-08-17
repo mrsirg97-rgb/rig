@@ -25,8 +25,11 @@ import (
 // The 1.0 freeze (roadmap 9) is fixed: anything else is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	if Version != "1.0.0" {
-		t.Fatalf("Version = %q, want the 1.0 freeze", Version)
+	// 0.2.0: the runtime is feature-complete and the freeze discipline
+	// holds; the 1.0 tag waits for lived use (a worker soak, the TUI
+	// field-tested as the daily driver).
+	if Version != "0.2.0" {
+		t.Fatalf("Version = %q, want 0.2.0 (the feature-complete runtime)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	rigpkg "github.com/mrsirg97-rgb/rig"
 	"github.com/mrsirg97-rgb/rig/command"
@@ -363,3 +364,38 @@ func TestLiveTurnIsStructurallyFalseAtDispatch(t *testing.T) {
 }
 
 func errorsIsEOF(err error) bool { return err == io.EOF }
+
+// A burst of lines that arrives while Input is not parked (a pipe, a
+// paste, the window between turns) must deliver every line in order —
+// the steering slot's latest-wins is live-turn semantics only. Red
+// against the old readLoop fallback, which dropped all but the last.
+func TestBurstInputDeliversEveryLineInOrder(t *testing.T) {
+	out := &bytes.Buffer{}
+	fe := cli.New(strings.NewReader("/one\n/two\n/three\n"), out,
+		cli.WithCommands(command.All(), commandsEnv()))
+	time.Sleep(50 * time.Millisecond) // let the reader race ahead of Input, the bug's shape
+	if _, err := fe.Input(context.Background()); err != io.EOF {
+		t.Fatalf("input: want io.EOF after the burst dispatches, got %v", err)
+	}
+	got := out.String()
+	i1, i2, i3 := strings.Index(got, "unknown command: one"), strings.Index(got, "unknown command: two"), strings.Index(got, "unknown command: three")
+	if i1 < 0 || i2 < 0 || i3 < 0 || !(i1 < i2 && i2 < i3) {
+		t.Fatalf("burst must dispatch every line in order, got:\n%s", got)
+	}
+}
+
+// The same burst shape for prompts: two pasted lines are two prompts,
+// in order, not one surviving steer.
+func TestPastedPromptsAreDeliveredInOrder(t *testing.T) {
+	fe := cli.New(strings.NewReader("one\ntwo\n"), &bytes.Buffer{})
+	time.Sleep(50 * time.Millisecond)
+	ctx := context.Background()
+	a, err := fe.Input(ctx)
+	if err != nil || a != "one" {
+		t.Fatalf("first pasted prompt = %q, %v; want \"one\"", a, err)
+	}
+	b, err := fe.Input(ctx)
+	if err != nil || b != "two" {
+		t.Fatalf("second pasted prompt = %q, %v; want \"two\"", b, err)
+	}
+}
