@@ -23,13 +23,18 @@ type Kernel struct {
 	// off it, and Run borrows it for the turn. Nil Run starts a fresh
 	// in-memory session.
 	Session *core.Session
+
+	// Commands is the user-command registry (SPEC_COMMANDS 1): the loop
+	// ignores it — dispatch is the Frontend's business, exactly as the
+	// steering slot is.
+	Commands []core.Command
 }
 
 // Option configures the Kernel at construction.
 type Option func(*Kernel)
 
-// New assembles the kernel from options. Duplicate tool names are a wiring
-// error and panic at startup, loud and early.
+// New assembles the kernel from options. Duplicate tool names or command
+// names are a wiring error and panic at startup, loud and early.
 func New(opts ...Option) *Kernel {
 	k := &Kernel{}
 	for _, opt := range opts {
@@ -41,6 +46,13 @@ func New(opts ...Option) *Kernel {
 			panic(fmt.Sprintf("rig: duplicate tool name %q (positions %d and %d)", t.Name(), j, i))
 		}
 		seen[t.Name()] = i
+	}
+	seenCmd := map[string]int{}
+	for i, c := range k.Commands {
+		if j, dup := seenCmd[c.Name()]; dup {
+			panic(fmt.Sprintf("rig: duplicate command name %q (positions %d and %d)", c.Name(), j, i))
+		}
+		seenCmd[c.Name()] = i
 	}
 	return k
 }
@@ -65,6 +77,14 @@ func WithPolicy(p core.ContextPolicy) Option {
 // boundary: the model then answers in plain text only.
 func WithTools(tools ...core.Tool) Option {
 	return func(k *Kernel) { k.Tools = append(k.Tools, tools...) }
+}
+
+// WithCommands registers the user commands (SPEC_COMMANDS 1): the human's
+// verbs, dispatched Frontend-side by prefix before Input returns to the
+// loop. Zero commands is the compat boundary: a kernel without them is
+// byte-identical (10), the loop does not read the registry.
+func WithCommands(cmds ...core.Command) Option {
+	return func(k *Kernel) { k.Commands = append(k.Commands, cmds...) }
 }
 
 // WithMiddleware registers the execution chain in listed order;

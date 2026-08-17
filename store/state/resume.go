@@ -56,7 +56,7 @@ func resumeIn(ctx context.Context, tx *sql.Tx, sessionID string) (*core.Session,
 		return nil, err
 	}
 	if s == nil {
-		return nil, fmt.Errorf("resume: no such session: %s", sessionID)
+		return nil, fmt.Errorf("resume: %w: %s", ErrNoSuchSession, sessionID)
 	}
 
 	sess := &core.Session{ID: sessionID, Files: map[string]core.FileState{}}

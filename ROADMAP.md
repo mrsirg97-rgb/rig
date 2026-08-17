@@ -241,6 +241,7 @@ when the math says, keeps the tail intact, and passthrough behaviour below
 the trigger is byte-identical.
 
 ## 9. user commands and tools
+> done
 
 Deliverable: a user-facing command seam and the first commands, so the
 human has verbs of their own, not only prompts. In the CLI they are typed

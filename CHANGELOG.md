@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+- **user commands** (roadmap deliverable 9, `specs/SPEC_COMMANDS.md`): the
+  command seam and the first seven commands — the human's own verbs, over
+  the same `core.Command` registration as the tools (`WithCommands`),
+  dispatched Frontend-side by the `/` prefix before `Input` returns to the
+  loop (zero loop change; a frontend without dispatch stays byte-identical,
+  `//` escapes the prefix, an unknown command is a loud refusal). `compact`
+  forces the compaction policy's exported `Compact(ctx)` seam (the caller
+  owns the `Compacted` delivery); `new` closes the session row `ok`, mints
+  a fresh session and recorder, and re-targets the retiring recorder before
+  its in-flight `Input` completes (the handoff); `sessions` lists (newest
+  first, capped, turns = user rows minus `[compaction]` rows, unclosed rows
+  render `exit open`), shows (the `-resume` projection, rendered plain),
+  and resumes (validate-before-mutate over the real store); `models` lists
+  the runtime table (the env-synthesized row included) and switches the
+  active model by rebuilding the provider+policy pair at the root, effective
+  on the next turn's request; `steer` is the deliverable 7 slot made a verb
+  (queue-and-interrupt, latest wins); `todo` and `scheduler` parse the line
+  into the same tool instances the model gets and print the reply verbatim.
+  One-shot and `run-job` never dispatch: a command-shaped prompt is a
+  prompt. The runtime is the 1.0 freeze (Version 1.0.0); the loop is
+  byte-identical through 9.
+
 - **openai adapter: truncated tool calls** (fix surfaced by the compaction
   live e2e): a stream cut off by `max_tokens` can cut a tool call's
   `arguments` mid-JSON while still reporting `finish_reason: "length"`. The
