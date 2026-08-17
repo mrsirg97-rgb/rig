@@ -1,5 +1,4 @@
-// Package todo adapts store/todo to the loop's tool surface: pane's
-// description, schema shape, and action voices verbatim; session
+// Package todo adapts store/todo to the loop's tool surface: session
 // attribution from the threaded ctx; replies exactly as the store
 // shapes them.
 package todo
@@ -14,9 +13,8 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
-// schemaJSON is pane's parameters shape verbatim: action required, tasks
-// for create (text plus the dependsOn union), id for the verbs, pos for
-// move.
+// schemaJSON: action required, tasks for create (text plus the
+// dependsOn union), id for the verbs, pos for move.
 const schemaJSON = `{
 	"type": "object",
 	"required": ["action"],
@@ -55,7 +53,7 @@ const schemaJSON = `{
 	}
 }`
 
-// description is pane's voice verbatim: lowercase, terse.
+// description: lowercase, terse.
 const description = "Task queue per working directory. action REQUIRED. create replaces the queue (tasks: [{text}]); " +
 	"start/complete/fail/retry transition one task by id; read prints it. " +
 	"pending -> in_progress -> done (read-only) or failed; failed -> retry -> pending. " +
@@ -93,7 +91,7 @@ type given struct {
 }
 
 // Exec maps the call onto the store's verbs with the threaded session.
-// Runtime voices are pane's; the store's own refusals pass through.
+// The store's own refusals pass through.
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
 	if err := json.Unmarshal(args, &g); err != nil {

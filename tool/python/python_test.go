@@ -1,6 +1,5 @@
-// Package python tests: pane's named cases, ported in pane's order
-// against the real kernel. The file-level tests share one kernel, exactly
-// as pane's test file shares one; the order-dependent state cases hold
+// Package python tests: the named cases against the real kernel. The
+// file-level tests share one kernel; the order-dependent state cases hold
 // because of that. The fake-host cases drive stdlib-only stand-ins through
 // the NewWith seam and skip only when there is no python3 at all: the seam
 // provides everything and does not bootstrap the shared venv.
@@ -48,7 +47,7 @@ func pythonAvailable(t *testing.T) string {
 // requireKernel is pythonAvailable plus the real-kernel gate: IPython,
 // numpy, and pandas must be importable, or the suite skips cleanly on a
 // bare box. On a box with no venv but a working python3 the suite kernel
-// bootstraps the venv on first use (pane's ensureKernel); the importability
+// bootstraps the venv on first use (ensureKernel); the importability
 // of the system interpreter is the availability signal for that path.
 func requireKernel(t *testing.T) string {
 	t.Helper()
@@ -73,8 +72,8 @@ func mustRun(t *testing.T, params map[string]any) (string, bool) {
 	return text, ok
 }
 
-// call returns the fed-back text and the error voice (pane's reply.error;
-// pane's tests assert on the error field, not the rendered text).
+// call returns the fed-back text and the error (the reply's error field,
+// which the death cases assert on rather than the rendered text).
 func call(t *testing.T, tl *Tool, params map[string]any) (string, error) {
 	t.Helper()
 	payload, _ := json.Marshal(params)
@@ -97,7 +96,7 @@ func writeHost(t *testing.T, path, src string) {
 	}
 }
 
-// --- pane's named cases, in pane's order ---
+// --- the named cases ---
 
 func TestExecutesCodeAndReportsTheResult(t *testing.T) {
 	requireKernel(t)
@@ -449,8 +448,8 @@ func TestConstructorOptionsSelectInterpreterAndHostInjectionSeam(t *testing.T) {
 	}
 }
 
-// fakeHostSrc is pane's env-steered protocol host, ported: deterministic
-// dirty-death scenarios with a per-spawn counter, no sleeps.
+// fakeHostSrc is an env-steered protocol host: deterministic dirty-death
+// scenarios with a per-spawn counter, no sleeps.
 const fakeHostSrc = `
 import json, os, sys
 state = os.environ.get('RIG_FAKE_STATE_DIR')
@@ -502,8 +501,8 @@ func TestDirtyDeathLeavesNoStaleBufferThatSwallowsTheNextKernelReply(t *testing.
 	}
 	matches(t, `kernel exited \(code 0\)`, first)
 
-	// pane asserts second.ok and second.out == "fake-ok": the reply landed
-	// (the one-shot note may prefix the render, it is not a failure)
+	// the reply landed: ok, and out carries "fake-ok" (the one-shot note
+	// may prefix the render, it is not a failure)
 	second, err := call(t, kt, map[string]any{"code": "b", "timeoutMs": 3000})
 	if err != nil {
 		t.Fatalf("stale buffer swallowed the reply: %s (%v)", second, err)
@@ -523,8 +522,8 @@ func TestDeadKernelStderrDoesNotLeakIntoTheNextKernelDeathMessage(t *testing.T) 
 	matches(t, `kernel exited \(code 4\)`, err.Error())
 	matches(t, `old-error`, err.Error())
 
-	// pane asserts on second.error (the error voice), not the render: the
-	// one-shot note legitimately carries the first death's stderr
+	// assert on the error, not the render: the one-shot note legitimately
+	// carries the first death's stderr
 	_, err = call(t, kt, map[string]any{"code": "b", "timeoutMs": 5000})
 	if err == nil {
 		t.Fatal("second call succeeded")
@@ -560,7 +559,7 @@ func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) 
 	def := New()
 	defer def.Close()
 	if def.k.python != defaultInterpreter() {
-		t.Fatalf("default interpreter = %q, want pane's venv", def.k.python)
+		t.Fatalf("default interpreter = %q, want the shared venv", def.k.python)
 	}
 	if def.k.noBootstrap {
 		t.Fatal("the default path keeps the lazy bootstrap")

@@ -1,8 +1,6 @@
 package guard_test
 
-// The pane-aligned cases (SPEC_HARDENING decision 7): name keying, the
-// per-turn clear, and the note at the bound — failing first against the
-// old args-digest keying that had no turn awareness at all.
+// Name keying, the per-turn clear, and the note at the bound.
 
 import (
 	"context"
@@ -80,8 +78,8 @@ func TestBudgetClearsAtTheTurnBoundary(t *testing.T) {
 	}
 }
 
-// The limit-th failure of a tool in a turn carries pane's note, verbatim,
-// appended to the fed-back content.
+// The limit-th failure of a tool in a turn carries the note, appended to
+// the fed-back content.
 func TestBoundFailureCarriesTheNoteVerbatim(t *testing.T) {
 	var exec core.ToolExec = guard.Bound(3).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "tool failed", errors.New("synthetic failure")

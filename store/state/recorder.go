@@ -176,10 +176,8 @@ func (r *Recorder) land() (seq int64) {
 
 // upsertFiles snapshots the session's file provenance at the turn
 // boundary: a drifted row is replaced, a new path inserted (the files
-// table is keyed by session + path). Without this, RecordFile has no
-// production caller and SPEC_STATE's "a resumed session keeps its drift
-// checks" is owed by the schema and unmet by the writer (SPEC_HARDENING
-// decision 5 names the gap and closes it).
+// table is keyed by session + path). This is what lets a resumed session
+// keep its drift checks.
 func (r *Recorder) upsertFiles() {
 	if r.session == nil {
 		return

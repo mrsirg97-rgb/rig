@@ -81,7 +81,7 @@ func exec(t *testing.T, h *harness, args map[string]any) (string, error) {
 	return h.tool.Exec(context.Background(), raw)
 }
 
-func TestDescriptionCarriesPanesVoicesVerbatim(t *testing.T) {
+func TestDescriptionCarriesTheVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	d := h.tool.Description()
 	for _, want := range []string{
@@ -93,12 +93,12 @@ func TestDescriptionCarriesPanesVoicesVerbatim(t *testing.T) {
 		"re-create to retry",
 	} {
 		if !strings.Contains(d, want) {
-			t.Fatalf("description missing pane voice fragment: %q", want)
+			t.Fatalf("description missing voice fragment: %q", want)
 		}
 	}
 }
 
-func TestSchemaCarriesThePaneParameterVoices(t *testing.T) {
+func TestSchemaCarriesTheParameterVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	var schema struct {
 		Type       string         `json:"type"`
@@ -127,7 +127,7 @@ func TestSchemaCarriesThePaneParameterVoices(t *testing.T) {
 	}
 }
 
-func TestExecVoicesArePanes(t *testing.T) {
+func TestExecVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	if _, err := exec(t, h, map[string]any{}); err == nil || !strings.Contains(err.Error(), "scheduler: unknown action ''") {
 		t.Fatalf("missing-action voice: %v", err)

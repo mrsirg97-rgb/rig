@@ -35,8 +35,8 @@ type cli struct {
 	reading bool               // Input is in flight: lines deliver direct, not to the slot
 	cancel  context.CancelFunc // the interrupt handle from the last Input ctx
 
-	// per-turn usage totals, summed across the turn's model calls
-	// (pane's collectUsage pattern) and printed at TurnEnd.
+	// per-turn usage totals, summed across the turn's model calls and
+	// printed at TurnEnd.
 	prompt     int
 	completion int
 	cacheRead  int
@@ -172,9 +172,9 @@ func (c *cli) Notify(ev core.Event) {
 	case core.Fault:
 		fmt.Fprintf(c.out, "\n[fault] %v\n", e.Err)
 	case core.TurnEnd:
-		// the explicit turn boundary: one usage line, pane's shaping.
-		// hit = CacheRead / Prompt: the OpenAI-style wire reports cached
-		// tokens as a subset of prompt (grounded: 918 of 922 warm).
+		// the explicit turn boundary: one usage line. hit = CacheRead /
+		// Prompt: the OpenAI-style wire reports cached tokens as a subset
+		// of prompt.
 		hit := 0
 		if c.prompt > 0 {
 			hit = c.cacheRead * 100 / c.prompt
@@ -185,8 +185,8 @@ func (c *cli) Notify(ev core.Event) {
 	}
 }
 
-// formatTokens is pane's footer shaping: raw under 1000, one-decimal k
-// under 10k, rounded k under 1M, else M.
+// formatTokens: raw under 1000, one-decimal k under 10k, rounded k under
+// 1M, else M.
 func formatTokens(n int) string {
 	switch {
 	case n < 1000:

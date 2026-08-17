@@ -184,11 +184,10 @@ func main() {
 		os.Exit(1)
 	}
 	// The python kernel: one persistent IPython session for the process
-	// (rig runs one session per process); the root owns its teardown —
-	// pane's session_shutdown hook, without the hook. RIG_PYTHON is the
-	// operator's interpreter (and the seam's contract: no lazy venv
-	// bootstrap); the host choice is logged so pane's and rig's hosts
-	// cannot drift silently.
+	// (rig runs one session per process); the root owns its teardown.
+	// RIG_PYTHON is the operator's interpreter (and the seam's contract:
+	// no lazy venv bootstrap); the host choice is logged so an installed
+	// host and the embedded one cannot drift silently.
 	py := pythontool.New()
 	if v := os.Getenv("RIG_PYTHON"); v != "" {
 		py = pythontool.NewWith(v, pythontool.DefaultHost())
@@ -196,12 +195,12 @@ func main() {
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
 
-	// The web tools: pane's web_search and web_fetch, one leaf package.
-	// The env knobs are read here, the way flags and env live at the root:
+	// The web tools: web_search and web_fetch, one leaf package. The env
+	// knobs are read here, the way flags and env live at the root:
 	// RIG_SEARXNG_URL is the SearXNG instance (the web-tools compose
 	// publishes one on loopback); RIG_WEB_FETCH_PROXY is the egress
-	// proxy (pane's test semantics: set empty = direct); RIG_TRAFILATURA
-	// is an explicit extraction binary (empty = the stdlib pass carries).
+	// proxy (set empty = direct); RIG_TRAFILATURA is an explicit
+	// extraction binary (empty = the stdlib pass carries).
 	webSearch := webtool.Search()
 	if v := os.Getenv("RIG_SEARXNG_URL"); v != "" {
 		webSearch = webtool.NewSearch(webtool.SearchConfig{BaseURL: v})
@@ -248,7 +247,7 @@ func main() {
 	}
 	defer tdb.DB.Close()
 
-	// The memory store: the hybrid single file, pane's convention under
+	// The memory store: one hybrid file (global and project scopes) under
 	// the user config directory; opened once, loud on corruption.
 	remPath := filepath.Join(cfgDir, "rig", "rem", "rem.sqlite")
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {

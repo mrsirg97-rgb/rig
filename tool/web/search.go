@@ -14,22 +14,19 @@ import (
 )
 
 const (
-	searchTimeout = 15 * time.Second // pane's AbortSignal.timeout(15_000)
-	snippetCap    = 300              // pane's snippet .slice(0, 300)
-	searchBodyCap = 1 << 20          // 1 MiB: enough for 20 results, bounded work
+	searchTimeout = 15 * time.Second
+	snippetCap    = 300
+	searchBodyCap = 1 << 20 // 1 MiB: enough for 20 results, bounded work
 )
 
-// description is pane's voice, verbatim.
 const searchDescription = "Search the web via SearXNG instance. Returns compact JSON: title, url, snippet per result."
 
-// searchGuidelines is pane's promptGuidelines, verbatim; folded after the
-// description since rig's tool surface carries no separate guidelines
-// channel (the python/scheduler house fold).
+// searchGuidelines is folded after the description since rig's tool
+// surface carries no separate guidelines channel.
 const searchGuidelines = "Guidelines: " +
 	"current or external info -> web_search; never for code already in the workspace."
 
-// searchSchema is pane's parameters, verbatim (required: query; the
-// maxResults bounds 1..20).
+// searchSchema: required: query; maxResults bounds 1..20.
 const searchSchema = `{
 	"type": "object",
 	"properties": {
@@ -40,27 +37,27 @@ const searchSchema = `{
 }`
 
 var (
-	searchTag = regexp.MustCompile(`<[^>]+>`) // pane's .replace(/<[^>]+>/g, " ")
-	searchWS  = regexp.MustCompile(`\s+`)     // pane's .replace(/\s+/g, " ")
+	searchTag = regexp.MustCompile(`<[^>]+>`)
+	searchWS  = regexp.MustCompile(`\s+`)
 )
 
 // SearchConfig is the search tool's configuration: the SearXNG instance
-// root (pane's PI_SEARXNG_URL shape — /search is appended, as pane's is)
+// root (/search is appended)
 // and a transport seam for tests and composers.
 type SearchConfig struct {
 	BaseURL string
 	Do      func(*http.Request) (*http.Response, error)
 }
 
-// search is the web_search tool: one SearXNG JSON call, the result map,
-// pane's voices. Concrete type unexported with named constructors, the
-// core/tool.go house shape.
+// search is the web_search tool: one SearXNG JSON call, then the result
+// map. Concrete type unexported with named constructors, the core/tool.go
+// house shape.
 type search struct {
 	searchURL string
 	do        func(*http.Request) (*http.Response, error)
 }
 
-// Search is pane's default: the web-tools compose on loopback.
+// Search is the default: the web-tools compose on loopback.
 func Search() *search { return NewSearch(SearchConfig{}) }
 
 func NewSearch(cfg SearchConfig) *search {
@@ -80,21 +77,22 @@ func NewSearch(cfg SearchConfig) *search {
 // Name implements core.Tool.
 func (s *search) Name() string { return "web_search" }
 
-// Description implements core.Tool: pane's voice verbatim, guidelines
-// folded (the house convention).
+// Description implements core.Tool: description with guidelines folded
+// (the house convention).
 func (s *search) Description() string { return searchDescription + "\n\n" + searchGuidelines }
 
-// Schema implements core.Tool: pane's parameters, hand-written.
+// Schema implements core.Tool.
 func (s *search) Schema() json.RawMessage { return json.RawMessage(searchSchema) }
 
-// searxngResult is the wire shape; pointers for pane's ?? "" semantics.
+// searxngResult is the wire shape; pointers so null and absent both read
+// as "".
 type searxngResult struct {
 	Title   *string `json:"title"`
 	URL     *string `json:"url"`
 	Content *string `json:"content"`
 }
 
-// result is pane's mapped shape: {title, url, snippet}.
+// result is the mapped shape: {title, url, snippet}.
 type result struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
@@ -113,7 +111,7 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if p.Query == "" {
 		return "", errors.New("web_search: no query supplied")
 	}
-	n := 5 // pane's ?? 5
+	n := 5
 	if p.MaxResults != nil {
 		n = *p.MaxResults
 	}
@@ -121,10 +119,9 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	cctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
 
-	// The query string is built by hand in pane's key order
+	// The query string is built by hand in a fixed key order
 	// (?q=...&format=json), not url.Values, which would sort the keys.
-	// Spaces go to %20, pane's encodeURIComponent, not the form-encoding
-	// "+" that QueryEscape emits.
+	// Spaces go to %20, not the form-encoding "+" that QueryEscape emits.
 	q := strings.ReplaceAll(url.QueryEscape(p.Query), "+", "%20")
 	req, err := http.NewRequestWithContext(cctx, http.MethodGet,
 		s.searchURL+"?q="+q+"&format=json", nil)
@@ -138,7 +135,7 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
-		return "", err // pane's raw voice: the dial error, loud
+		return "", err // the raw dial error, loud
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
@@ -155,7 +152,7 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		return "", fmt.Errorf("web_search: SearXNG did not return JSON: %v", err)
 	}
 
-	out := make([]result, 0, n) // pane's .slice(0, n)
+	out := make([]result, 0, n)
 	for i := range data.Results {
 		if i >= n {
 			break
@@ -170,14 +167,14 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if len(out) == 0 {
 		return "no results", nil
 	}
-	b, err := json.MarshalIndent(out, "", " ") // pane's JSON.stringify(results, null, 1)
+	b, err := json.MarshalIndent(out, "", " ")
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
 }
 
-// snippet is pane's mapping: tags stripped, whitespace collapsed,
+// snippet: tags stripped, whitespace collapsed,
 // 300-char cap. Rune-capped, not byte-capped, so multibyte text cannot
 // be cut mid-rune.
 func snippet(s string) string {
