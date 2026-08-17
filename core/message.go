@@ -17,6 +17,7 @@ const (
 type Message struct {
 	Role      Role
 	Content   string
+	Reasoning string     // assistant turns only; empty when the model did not think (SPEC_HARDENING decision 2)
 	ToolCalls []ToolCall // assistant turns only
 	ToolID    string     // tool result turns only
 }

@@ -16,10 +16,11 @@ import (
 // --- DI-seam fakes ---------------------------------------------------------
 // scriptedProvider replays canned event streams, one per model call.
 type scriptedTurn struct {
-	events  []core.Event
-	err     error // transport error at call time
-	holdCtx bool  // block until ctx cancels, then close without Done (teardown)
-	bare    bool  // close without Done or Fault (provider bug)
+	events    []core.Event
+	err       error // transport error at call time
+	holdCtx   bool  // block until ctx cancels, then close without Done (teardown)
+	bare      bool  // close without Done or Fault (provider bug)
+	holdAfter bool  // deliver events, then block until ctx cancels and close (mid-stream teardown)
 }
 
 type scriptedProvider struct {
@@ -47,15 +48,24 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 		return ch, nil
 	}
 	out := make(chan core.Event)
-	if !turn.bare {
+	switch {
+	case turn.holdAfter:
+		go func() {
+			for _, ev := range turn.events {
+				out <- ev
+			}
+			<-ctx.Done() // torn down mid-stream by the steering cancel
+			close(out)
+		}()
+	case turn.bare:
+		close(out)
+	default:
 		go func() {
 			for _, ev := range turn.events {
 				out <- ev
 			}
 			close(out)
 		}()
-	} else {
-		close(out)
 	}
 	return out, nil
 }

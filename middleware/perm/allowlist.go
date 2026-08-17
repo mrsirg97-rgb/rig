@@ -17,13 +17,14 @@ type allowlist struct {
 }
 
 // Allowlist permits exactly the listed tool names; everything else is
-// denied.
+// denied. A wrap-only participant: it adapts through ToolMiddlewareFunc
+// and carries neither optional capability.
 func Allowlist(names ...string) core.ToolMiddleware {
 	allowed := make(map[string]bool, len(names))
 	for _, n := range names {
 		allowed[n] = true
 	}
-	return func(next core.ToolExec) core.ToolExec {
+	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
 			if !allowed[call.Name] {
 				msg := fmt.Sprintf("permission denied: %s is not in the allow-list", call.Name)
@@ -31,5 +32,5 @@ func Allowlist(names ...string) core.ToolMiddleware {
 			}
 			return next(ctx, call)
 		}
-	}
+	})
 }
