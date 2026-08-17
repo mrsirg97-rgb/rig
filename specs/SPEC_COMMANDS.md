@@ -102,7 +102,7 @@ type Steerer interface {
 	                  // reports whether the interrupt landed
 	Interrupt() bool       // interrupt a live turn only; reports the same
 	ClearSlot()            // drop the queued intent (a new session does not inherit it)
-	LiveTurn() bool        // a turn is live right now (new / sessions resume refuse on it)
+	LiveTurn() bool        // a turn is live right now (compact / new / sessions resume refuse on it)
 }
 
 type SessionRow struct {
@@ -314,6 +314,13 @@ return the event. The command's output contract:
 - refused: the action's error, verbatim
   (`compact: local: the summary input alone does not fit the window:
   window 65536, estimate 71000`).
+- a turn live (the dispatcher's `LiveTurn`, nil-safe as in 2):
+  `compact: a turn is live; steer or interrupt first`. The action
+  rewrites `Session.Messages`; a mid-turn rewrite races the loop's own
+  read of the transcript, and the channel-ordering property that makes
+  the decorator's rewrite safe (SPEC_COMPACT 7's named loop property)
+  does not hold on the command path. Structural in the CLI (dispatch is
+  inside `Input`); the TUI's mid-turn keypress is the case.
 - args: none. `compact extra` → `compact: usage: compact`.
 
 The summary is handed to rem's `AutoReflect` on this path exactly as on
@@ -384,6 +391,10 @@ session marked:
 01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12
 01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1
 ```
+
+`exit open` is the render of a row not yet closed (`ended_at` NULL) —
+the one place the word appears; the store's exit vocabulary stays
+`ok | fault | cancelled`.
 
 `turns` is defined, not counted by feel: a turn starts with a user
 prompt, so turns = the session's `role = 'user'` rows minus the
@@ -491,6 +502,20 @@ swap is legal), so the next `Assemble` is the new policy with the new
 row's math (trigger, keep budget, the clamp), and the next `Stream` is
 the new model on the wire. The per-process state (guard, python
 kernel) survives, as with `new`.
+
+Mid-turn, named (no refusal needed): the swap is safe against a live
+turn because the in-flight turn holds its stream channel and the old
+decorator finishes its own relay — including an overflow recovery
+against the old pair — while the loop reads `k.Provider` / `k.Policy`
+fresh at the next turn start. The switch is next-turn by construction,
+not by guard.
+
+The session row's `model` column stays the model the session started
+with — a historical record, named in 4's contract; the switch is not
+recorded per-message. A `[models] switched to <id>` breadcrumb row was
+considered and rejected: it would put transcript machinery in the
+model's context for a fact the operator can read from the command's own
+output and the store's usage rows.
 
 Output: `models: active is now <id>`. Usage: `models` with two or more
 args → `models: usage: models [<id>]`.
@@ -676,6 +701,8 @@ crontab spool for the scheduler (the e2e's existing pattern).
   window and the estimate.
 - `TestCompactUsageRefusal` — `compact extra` → `compact: usage:
   compact`.
+- `TestCompactRefusesLiveTurn` — a dispatcher reporting `LiveTurn`
+  true: the refusal, the transcript untouched, no event, no row.
 
 **new:**
 
