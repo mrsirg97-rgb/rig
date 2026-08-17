@@ -34,7 +34,7 @@ const description = "Fetch a public http(s) URL and return its readable text (ar
 	"addresses are refused. Output is capped; a loud [TRUNCATED] marker states the full size."
 
 // guidelines is pane's promptGuidelines, verbatim; folded after the
-// description since looper's tool surface carries no separate guidelines
+// description since rig's tool surface carries no separate guidelines
 // channel (the python/scheduler house fold).
 const guidelines = "Guidelines: " +
 	"search finds, fetch reads; snippets are not the page. " +
@@ -525,10 +525,10 @@ func runTrafilatura(bin, html string) (string, error) {
 	return stdout.String(), nil
 }
 
-// ExtractReadable is pane's extractReadable with the looper
+// ExtractReadable is pane's extractReadable with the rig
 // announcement: the second return is a footer naming the fallback (""
 // means trafilatura worked and the content is pane's). Pane fell back
-// silently; looper says so — a quiet quality change is the kind of
+// silently; rig says so — a quiet quality change is the kind of
 // silent behaviour the house rules refuse.
 func ExtractReadable(html string, trafilatura *string) (string, string) {
 	bin := DefaultTrafilatura()

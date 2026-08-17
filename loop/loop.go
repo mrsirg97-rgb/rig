@@ -23,14 +23,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper"
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // Run drives turns until the frontend dries up or ctx cancels. It is a
 // concrete function by design: making the loop pluggable would make
 // ordering emergent and undebuggable.
-func Run(ctx context.Context, k *looper.Kernel) error {
+func Run(ctx context.Context, k *rig.Kernel) error {
 	if k.Provider == nil {
 		return errors.New("loop: kernel has no provider registered")
 	}

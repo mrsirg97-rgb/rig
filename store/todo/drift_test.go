@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	todo "github.com/mrsirg97-rgb/looper/store/todo"
+	"github.com/mrsirg97-rgb/rig/store"
+	todo "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
 // SPEC_STATE's generation-drift guard: regenerate into a temp root against
@@ -63,7 +63,7 @@ func TestGeneratedMatchesCommitted(t *testing.T) {
 	}
 	regenerate()
 
-	regenCmd := "cd <lift>/cmd && go run main.go -config=$LOOPER/store/todo/gen.json -source=$LOOPER/store/todo/source.json"
+	regenCmd := "cd <lift>/cmd && go run main.go -config=$RIG/store/todo/gen.json -source=$RIG/store/todo/source.json"
 	for _, pkg := range []string{"domain", "ddl"} {
 		committed := listFiles(t, filepath.Join(workDir, pkg))
 		got := listFiles(t, filepath.Join(tmp, pkg))

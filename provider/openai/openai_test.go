@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/provider/openai"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/provider/openai"
 )
 
 // drain runs one Stream and collects until close.

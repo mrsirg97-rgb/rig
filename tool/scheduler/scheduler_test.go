@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	sched "github.com/mrsirg97-rgb/looper/store/scheduler"
-	adapter "github.com/mrsirg97-rgb/looper/tool/scheduler"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	adapter "github.com/mrsirg97-rgb/rig/tool/scheduler"
 )
 
 // fakeCrontab: the surgical seam, mutex-guarded (the adapter tests drive
@@ -68,7 +68,7 @@ func newHarness(t *testing.T, cwd string) *harness {
 	}
 	st := sched.Stores{Global: gd, Cwd: cd}
 	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
-	tool := adapter.New(st, ct, "/x/looper run-job")
+	tool := adapter.New(st, ct, "/x/rig run-job")
 	return &harness{st: st, ct: ct, tool: tool}
 }
 
@@ -161,7 +161,7 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 	if !strings.HasPrefix(reply, "created j1 'surface' (cwd)") {
 		t.Fatalf("create reply %q", reply)
 	}
-	if !strings.Contains(h.ct.text, "0 3 * * * /x/looper run-job") {
+	if !strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job") {
 		t.Fatalf("crontab line missing: %q", h.ct.text)
 	}
 	list, err := exec(t, h, map[string]any{"action": "list"})

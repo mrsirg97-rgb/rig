@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 type provider struct {

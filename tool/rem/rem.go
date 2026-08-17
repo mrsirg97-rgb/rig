@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	remstore "github.com/mrsirg97-rgb/looper/store/rem"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 )
 
 // schemaJSON is pane's parameters shape: action required, the flat

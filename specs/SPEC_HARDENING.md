@@ -1,4 +1,4 @@
-# looper: runtime hardening (roadmap deliverable 7)
+# rig: runtime hardening (roadmap deliverable 7)
 
 The seams and events required for everything after this to be leaf work. The
 loop change made once, deliberately, while the runtime is still the focus.
@@ -68,7 +68,7 @@ frontend/cli    the steering slot, the execution bracket, the usage line
 store/state     recorder taps move to the loop's events; files upsert;
                 the Resume projection
 kernel.go       Kernel.Middleware type follows the seam
-cmd/looper      wire() drops the observe tap; -resume flag; guidelines
+cmd/rig      wire() drops the observe tap; -resume flag; guidelines
                 collected into the system prompt
 ```
 
@@ -455,7 +455,7 @@ Why this and not `core.Hooks`:
 Rejected, named: `core.Hooks` (a second slice; splits the guard; inverts
 dataflow for result mutation).
 
-### 7. Guard alignment: pane's semantics, looper's bound kept
+### 7. Guard alignment: pane's semantics, rig's bound kept
 
 `middleware/guard` re-keys and re-scopes:
 
@@ -467,13 +467,13 @@ dataflow for result mutation).
   pane's `turn_start`). A new user message is a new budget. Today the
   counter persists across turns.
 - **Consecutive**: a success clears the tool's count (both systems agree;
-  looper already does this).
+  rig already does this).
 - **At the bound, the note** (pane's voice, verbatim): the limit-th failure
   of a tool in a turn gets its fed-back content extended with
   `[retry-guard] <tool> failed <n>× in a row this turn. The error is
   above; read it and change the call, or stop calling this tool. Do not
   retry blindly.`
-- **The bound refusal is kept** (looper's hard stop, which pane lacks):
+- **The bound refusal is kept** (rig's hard stop, which pane lacks):
   the next issuance of that tool in the turn is refused without executing,
   in today's voice: `bound exhausted: <tool> has failed <n> times; stop
   reissuing this call`. Named and justified: it preserves

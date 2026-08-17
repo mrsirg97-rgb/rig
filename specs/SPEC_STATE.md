@@ -1,9 +1,9 @@
 # state: generated stores for session, todo, rem, scheduler
 
-looper's persistent state is four small schemas. lift (`~/Projects/lift`)
+rig's persistent state is four small schemas. lift (`~/Projects/lift`)
 compiles a schema into its service layer: domain types, static row scanners,
 `Get`/`Insert`/`Update`/`Delete` accessors over a serializable transaction,
-sqlite DDL, and seek-and-fold read chains. looper hand-writes the metadata
+sqlite DDL, and seek-and-fold read chains. rig hand-writes the metadata
 that describes each schema and the thin `core.Tool` adapter over each
 generated service. Everything between is projected, never typed by hand.
 
@@ -49,7 +49,7 @@ Reference for the schemas: `~/Projects/pane/TODO_SPEC.md`,
 ## layout
 
 ```
-looper/
+rig/
   store/
     sqlx/          the transaction seam, copied verbatim from lift/sqlx
     lazy/          the lazy accessor runtime, copied verbatim from lift/lazy
@@ -73,19 +73,19 @@ looper/
     scheduler/
 ```
 
-Generation runs from `~/Projects/lift/cmd` and points at looper:
+Generation runs from `~/Projects/lift/cmd` and points at rig:
 
 ```
 cd ~/Projects/lift/cmd
-go run main.go -config=$LOOPER/store/todo/gen.json -source=$LOOPER/store/todo/source.json
+go run main.go -config=$RIG/store/todo/gen.json -source=$RIG/store/todo/source.json
 ```
 
-`gen.json` `"name"` is the absolute output root (`$LOOPER/store/todo`),
-`"module"` is `github.com/mrsirg97-rgb/looper/store/todo`, `"runtime"` is
-`github.com/mrsirg97-rgb/looper/store` (see decisions); `source.json`
-`"sourceDirectory"` is `$LOOPER/store/todo`, `"name"` is `metadata`. Both
+`gen.json` `"name"` is the absolute output root (`$RIG/store/todo`),
+`"module"` is `github.com/mrsirg97-rgb/rig/store/todo`, `"runtime"` is
+`github.com/mrsirg97-rgb/rig/store` (see decisions); `source.json`
+`"sourceDirectory"` is `$RIG/store/todo`, `"name"` is `metadata`. Both
 external paths are verified to work with the current engine (2026-08-15):
-generated files land under the store, generated imports resolve to looper's
+generated files land under the store, generated imports resolve to rig's
 module. A `go generate` line per store pins the command.
 
 ## the seam
@@ -245,7 +245,7 @@ post-merge corrections)
   `runs {id, n}` a chain read instead of a log scan.
 - Crontab remains the scheduling truth (tagged lines, surgical rewrites,
   written before the store commit; drift surfaced in `list`). The runner is
-  a small Go binary or the looper binary itself with a `run-job` verb; it
+  a small Go binary or the rig binary itself with a `run-job` verb; it
   needs `-p` one-shot mode (landed with the scheduler) and llama-swap's
   `/running` and `/v1/models` for the busy policy, unchanged.
 
@@ -280,10 +280,10 @@ pane's promptGuidelines, lowercase, terse.
   `"runtime"` field in the engine config (landed 2026-08-15; defaults to
   lift's own module, so every existing project generates byte-identically)
   and the camera writes `{{ .Runtime }}/lazy` and `{{ .Runtime }}/sqlx`.
-  looper copies `lift/lazy` (two files) and `lift/sqlx/sqlx.go` into
+  rig copies `lift/lazy` (two files) and `lift/sqlx/sqlx.go` into
   `store/lazy` and `store/sqlx` once, unchanged, and every store's
-  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/looper/store"`.
-  looper stays self-contained: no lift require, and lift has no git remote
+  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/rig/store"`.
+  rig stays self-contained: no lift require, and lift has no git remote
   to require it from anyway. The copied runtime is ~400 lines owned in two
   places; a change to it in lift is a named re-copy here, not a drift.
 - **What the DDL camera does not emit** (AUTOINCREMENT, CHECK, DEFAULT
@@ -291,7 +291,7 @@ pane's promptGuidelines, lowercase, terse.
   not added to the camera. Indexes, FTS, and triggers go in `extra.sql` /
   `fts.sql`; invariants go in Go where pane also enforces them; id
   minting replaces AUTOINCREMENT. lift's grammar rule ("do not add grammar
-  the basis already spans") applies to looper's use of it.
+  the basis already spans") applies to rig's use of it.
 - **Event log first, projection second.** For todo and scheduler the
   `events` container is the fact and `tasks`/`jobs` are the projection,
   exactly as pane. The projection is rebuilt from the log inside the same
@@ -331,7 +331,7 @@ pane's promptGuidelines, lowercase, terse.
   the session row is closed with `exit=cancelled` on the clean path.
 - Corruption: a truncated file at Open is quarantined and named; FTS5
   absence at Open is a loud refusal.
-- `go build ./...` from a clean clone of looper is a test: no lift import
+- `go build ./...` from a clean clone of rig is a test: no lift import
   survives generation.
 
 ## scope

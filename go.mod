@@ -1,4 +1,4 @@
-module github.com/mrsirg97-rgb/looper
+module github.com/mrsirg97-rgb/rig
 
 go 1.26.6
 

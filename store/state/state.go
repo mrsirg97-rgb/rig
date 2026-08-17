@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	"github.com/mrsirg97-rgb/looper/store/sqlx"
-	"github.com/mrsirg97-rgb/looper/store/state/ddl"
-	"github.com/mrsirg97-rgb/looper/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/store/state/ddl"
+	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
 // SchemaVersion is the schema version this build applies. A bump is a

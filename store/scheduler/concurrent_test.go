@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	sched "github.com/mrsirg97-rgb/looper/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
 // Concurrent writers against one store file must serialize inside the

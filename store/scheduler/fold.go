@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	scheddomain "github.com/mrsirg97-rgb/looper/store/scheduler/domain"
+	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
 // --- fold (the pure replay) ---

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/middleware/guard"
 )
 
 // Drifting args of one tool share the budget: a model failing `edit` with

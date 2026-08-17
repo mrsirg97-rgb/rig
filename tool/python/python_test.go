@@ -453,8 +453,8 @@ func TestConstructorOptionsSelectInterpreterAndHostInjectionSeam(t *testing.T) {
 // dirty-death scenarios with a per-spawn counter, no sleeps.
 const fakeHostSrc = `
 import json, os, sys
-state = os.environ.get('LOOPER_FAKE_STATE_DIR')
-mode = os.environ.get('LOOPER_FAKE_MODE', 'normal')
+state = os.environ.get('RIG_FAKE_STATE_DIR')
+mode = os.environ.get('RIG_FAKE_MODE', 'normal')
 count = 0
 if state:
     p = os.path.join(state, 'count')
@@ -486,8 +486,8 @@ func fakeKernel(t *testing.T, mode string) *Tool {
 	dir := t.TempDir()
 	host := filepath.Join(dir, "fake-host.py")
 	writeHost(t, host, fakeHostSrc)
-	t.Setenv("LOOPER_FAKE_STATE_DIR", dir)
-	t.Setenv("LOOPER_FAKE_MODE", mode)
+	t.Setenv("RIG_FAKE_STATE_DIR", dir)
+	t.Setenv("RIG_FAKE_MODE", mode)
 	kt := NewWith(py, host)
 	t.Cleanup(kt.Close)
 	return kt
@@ -544,8 +544,8 @@ func TestTimeoutMessageDescribesTheLazyRestartAccurately(t *testing.T) {
 	matches(t, `will be restarted on the next call; all variables are gone`, text)
 }
 
-// The looper-side named case: the seam's contract. An explicit interpreter
-// and host (what NewWith is, what LOOPER_PYTHON at the root selects) must
+// The rig-side named case: the seam's contract. An explicit interpreter
+// and host (what NewWith is, what RIG_PYTHON at the root selects) must
 // not drag in the default venv's lazy bootstrap; the default path keeps
 // it.
 func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) {

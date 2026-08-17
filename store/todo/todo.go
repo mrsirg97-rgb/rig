@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
-	tododomain "github.com/mrsirg97-rgb/looper/store/todo/domain"
-	todometa "github.com/mrsirg97-rgb/looper/store/todo/metadata"
+	"github.com/mrsirg97-rgb/rig/store"
+	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
+	tododomain "github.com/mrsirg97-rgb/rig/store/todo/domain"
+	todometa "github.com/mrsirg97-rgb/rig/store/todo/metadata"
 )
 
 // SchemaVersion is applied at Open; mismatches are refused loudly.

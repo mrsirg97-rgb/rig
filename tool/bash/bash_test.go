@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/tool/bash"
+	"github.com/mrsirg97-rgb/rig/tool/bash"
 )
 
 func argsJSON(t *testing.T, args map[string]any) json.RawMessage {

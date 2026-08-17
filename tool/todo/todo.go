@@ -9,9 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	todostore "github.com/mrsirg97-rgb/looper/store/todo"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
 // schemaJSON is pane's parameters shape verbatim: action required, tasks

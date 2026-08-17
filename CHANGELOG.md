@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- renamed looper -> rig
+
 - **runtime hardening** (roadmap deliverable 7, `specs/SPEC_HARDENING.md`):
   the seams and events everything after this needed, in one named loop
   change (L1–L7). **Tool events**: `ToolStart{Call}` and
