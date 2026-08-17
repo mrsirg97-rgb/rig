@@ -39,11 +39,13 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 	}
 
 	body, err := json.Marshal(wireRequest{
-		Model:         p.model,
-		Messages:      wireMessages(req.Messages),
-		Tools:         wireTools(req.Tools),
-		Stream:        true,
-		StreamOptions: &wireStreamOptions{IncludeUsage: true},
+		Model:           p.model,
+		Messages:        wireMessages(req.Messages),
+		Tools:           wireTools(req.Tools),
+		MaxTokens:       req.MaxTokens,
+		ReasoningEffort: req.ReasoningEffort,
+		Stream:          true,
+		StreamOptions:   &wireStreamOptions{IncludeUsage: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("openai: encode request: %w", err)
@@ -201,11 +203,13 @@ func sortedPending(pending map[int]*core.ToolCall) []int {
 // wire shapes. Named types so a field typo fails at compile time.
 
 type wireRequest struct {
-	Model         string             `json:"model"`
-	Messages      []wireMessage      `json:"messages"`
-	Tools         []wireTool         `json:"tools,omitempty"`
-	Stream        bool               `json:"stream"`
-	StreamOptions *wireStreamOptions `json:"stream_options,omitempty"`
+	Model           string             `json:"model"`
+	Messages        []wireMessage      `json:"messages"`
+	Tools           []wireTool         `json:"tools,omitempty"`
+	MaxTokens       int                `json:"max_tokens,omitempty"`       // SPEC_COMPACT 8's request-side reserve; 0 = omitted (the server default)
+	ReasoningEffort string             `json:"reasoning_effort,omitempty"` // SPEC_COMPACT 3's summary effort; empty = the server default
+	Stream          bool               `json:"stream"`
+	StreamOptions   *wireStreamOptions `json:"stream_options,omitempty"`
 }
 
 // wireStreamOptions asks the server to include the usage chunk on the

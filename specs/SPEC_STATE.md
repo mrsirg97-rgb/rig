@@ -158,7 +158,11 @@ The session transcript as rows. One file per session under
   Session resume (deliverable 7's `state.Resume`, the root's `-resume`)
   projects `[]core.Message` back from the transcript rows — no schema
   change was owed, and none was taken; deliverable 9's `sessions` command
-  reads the same rows.
+  reads the same rows. After a compaction (SPEC_COMPACT 5) the marker is
+  the projection interface: resume starts from the last `[compaction]`
+  row when one exists — the window is the summary row and everything
+  after it — so the compacted shape rebuilds, not the full history with a
+  summary after the tail it summarizes.
 - `faults`: seq (primary), session_id, at, message.
 
 The recorder is a leaf that receives what the loop already emits: it wraps
@@ -170,6 +174,14 @@ transaction, so a kill leaves every completed row readable. A `TurnEnd`
 discards the unlanded partial of a turned turn; each turn boundary upserts
 the file provenance. No loop change — and, with the middleware tap retired
 (deliverable 7), the schema did not change either.
+
+SPEC_COMPACT 5: a `Compacted` event lands the summary as a marked user
+row (`role = "user"`, the content verbatim with the `[compaction] `
+marker) plus a usage row against that row's seq, then re-lands the kept
+tail after it — fresh rows (fresh seqs), the assistant calls with
+recorder-minted fresh ids (the `tool_calls.id` primary key), name/args/
+result verbatim, the earlier rows staying as the autopsy. No schema
+change: the marker is the contract, and the rows are existing shapes.
 
 `-p` workers get their autopsy from this: the `sessions` command (roadmap
 deliverable 9, out of scope here) or plain `sqlite3`.

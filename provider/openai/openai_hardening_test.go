@@ -242,3 +242,99 @@ func TestStreamRequestsUsageOnTheWire(t *testing.T) {
 		t.Fatalf("stream_options.include_usage = %v, want true", opts.IncludeUsage)
 	}
 }
+
+// TestMaxTokensWireShape (SPEC_COMPACT 8): the request-side reserve maps
+// to max_tokens on the wire — present when non-zero, absent when 0 (the
+// server's default). The shape test asserts both directions.
+func TestMaxTokensWireShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		if _, ok := req["max_tokens"]; !ok {
+			t.Fatal("max_tokens is absent on the wire")
+		}
+		var mt int
+		if err := json.Unmarshal(req["max_tokens"], &mt); err != nil {
+			t.Fatalf("max_tokens is not an integer: %v", err)
+		}
+		if mt != 8192 {
+			t.Fatalf("max_tokens = %d, want 8192", mt)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	p := openai.New(srv.URL, "local")
+	req := userReq()
+	req.MaxTokens = 8192
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+
+	// zero = the provider's default: max_tokens must be absent.
+	var saw bool
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		_ = json.Unmarshal(body, &req)
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		_, saw = req["max_tokens"]
+	}))
+	t.Cleanup(srv2.Close)
+	p2 := openai.New(srv2.URL, "local")
+	if _, err := drain(t, context.Background(), p2, userReq()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if saw {
+		t.Fatal("max_tokens must be absent when 0 (the provider's default)")
+	}
+}
+
+// TestReasoningEffortWireShape (SPEC_COMPACT 3): the summary request's
+// reasoning effort maps to reasoning_effort on the wire — present when
+// set, absent when empty (the server's default). A provider that does not
+// know it ignores the field.
+func TestReasoningEffortWireShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		var effort string
+		if err := json.Unmarshal(req["reasoning_effort"], &effort); err != nil {
+			t.Fatalf("reasoning_effort is not a string: %v", err)
+		}
+		if effort != "medium" {
+			t.Fatalf("reasoning_effort = %q, want medium", effort)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	p := openai.New(srv.URL, "local")
+	req := userReq()
+	req.ReasoningEffort = "medium"
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+
+	// empty = the server's default: reasoning_effort must be absent.
+	var saw bool
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]json.RawMessage
+		_ = json.Unmarshal(body, &req)
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
+		_, saw = req["reasoning_effort"]
+	}))
+	t.Cleanup(srv2.Close)
+	p2 := openai.New(srv2.URL, "local")
+	if _, err := drain(t, context.Background(), p2, userReq()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if saw {
+		t.Fatal("reasoning_effort must be absent when empty (the server's default)")
+	}
+}

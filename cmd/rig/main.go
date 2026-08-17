@@ -24,7 +24,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
-	"github.com/mrsirg97-rgb/rig/policy"
+	"github.com/mrsirg97-rgb/rig/models"
+	"github.com/mrsirg97-rgb/rig/policy/compact"
 	"github.com/mrsirg97-rgb/rig/provider/openai"
 	"github.com/mrsirg97-rgb/rig/store"
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
@@ -47,8 +48,11 @@ const Version = "0.1.0"
 const defaultSystem = "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done."
 
 // wire assembles the kernel's dependencies. Swapping a seam is a change
-// here and nowhere else.
-func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool core.Tool) *rig.Kernel {
+// here and nowhere else. Deliverable 8 (SPEC_COMPACT): the first
+// non-passthrough policy — the compact policy wraps the shared inner
+// instance, the overflow decorator wraps the same inner, and the root
+// wires the AutoReflect seam (decision 6) from the rem store it owns.
+func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, s *core.Session, row models.Model, rdb store.DB, cwd string, todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool core.Tool) *rig.Kernel {
 	mw := []core.ToolMiddleware{
 		perm.Allowlist(allow...),
 		guard.Bound(retries),
@@ -62,10 +66,22 @@ func wire(baseURL, model, system string, allow []string, retries int, fe core.Fr
 	if g := guidelinesOf(mw); g != "" {
 		fullSystem = system + "\n\n" + g
 	}
+	inner := openai.New(baseURL, model)
+	opts := []compact.Option{}
+	if rdb.DB != nil && cwd != "" {
+		opts = append(opts, compact.WithAutoReflect(func(ctx context.Context, summary string) error {
+			_, err := remstore.AutoReflect(ctx, rdb, cwd, summary)
+			return err
+		}))
+	}
+	pol, err := compact.New(inner, fe, s, fullSystem, row, opts...)
+	if err != nil {
+		panic("rig: wire: " + err.Error()) // a violating row is refused at construction
+	}
 	return rig.New(
-		rig.WithProvider(openai.New(baseURL, model)),
+		rig.WithProvider(compact.Decorator(inner, pol)),
 		rig.WithFrontend(fe),
-		rig.WithPolicy(policy.Passthrough(fullSystem)),
+		rig.WithPolicy(pol),
 		rig.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool),
 		rig.WithMiddleware(mw...),
 	)
@@ -100,6 +116,19 @@ func checkOneShot(prompt, resumeID string) error {
 		return ErrResumeWithPrompt
 	}
 	return nil
+}
+
+// resolveModel is the compaction row resolution (SPEC_COMPACT 2, 8), loud
+// before any store is opened: the table row for the active id, else an env
+// synthesis from RIG_MODEL_*, else a refusal naming the id, the known ids,
+// and the env. A row that violates the invariants is refused at start.
+func resolveModel(id string) models.Model {
+	m, err := models.Resolve(models.Defaults, id, os.LookupEnv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	return m
 }
 
 // sessionFor is the root's session construction: fresh by default,
@@ -169,6 +198,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(2)
 	}
+
+	// The compaction row (SPEC_COMPACT 2, 8): resolved loud before any
+	// store is opened — a job whose window minus reserve leaves too little
+	// to work with fails at start, not as a worker that compacts every
+	// turn and logs false successes.
+	row := resolveModel(*model)
 
 	// The transcript: workspace-shared sqlite under the user config
 	// directory; one store, opened once, loud on corruption.
@@ -318,7 +353,7 @@ func main() {
 	}
 	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID, session)
 
-	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, todoapi.New(tdb), remapi.New(rdb),
+	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, session, row, rdb, cwd, todoapi.New(tdb), remapi.New(rdb),
 		schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"), py, webSearch, webFetch)
 	k.Session = session // one identity: the loop's session is the transcript's
 

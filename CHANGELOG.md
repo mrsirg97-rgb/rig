@@ -4,6 +4,31 @@
 
 - renamed looper -> rig
 
+- **compaction** (roadmap deliverable 8, `specs/SPEC_COMPACT.md`): the
+  first non-passthrough `ContextPolicy` — `policy/compact` wraps the
+  passthrough (byte-identical below the trigger) and, at a window-relative
+  per-model trigger, rewrites the older transcript into a summary through
+  the same `core.Provider`, keeping a whole recent tail (`models` table:
+  `local` and `qwen3.8-workers`, `RIG_MODEL_WINDOW`/`RESERVE`/`KEEP_RECENT`
+  env synthesis, loud refusal at start). The trigger anchors on the
+  server's own count (`Message.ContextTokens`, loop L8 stamps
+  `Done.Usage`'s prompt+completion), calibrating only the delta. Overflow
+  recovery: a provider decorator classifies a context-length fault and
+  compacts-and-retries exactly once, never a silent loop. The summary is a
+  marked user row (`[compaction] `) the CLI renders as one line, the
+  recorder lands it plus its usage row and re-lands the kept tail
+  (fresh seqs, fresh call ids), `-resume` projects from the last summary
+  row, and the summary is handed to rem's `AutoReflect` (deduped,
+  low-importance, scoped to the cwd). `-p` workers get the same wire and
+  numbers; `Request.MaxTokens` carries the request-side reserve on the
+  wire. **Refuse-loud clamp**: when `Window - est(request)` is below the
+  minimum (the smaller of `Reserve/4` and 256) the decorator fails loud
+  (a `Fault`, so `-p` exits non-zero) instead of the floor-1 one-token
+  answer that logs success — a kept batch larger than the model can hold.
+  The summary call carries a lower reasoning effort (`medium`) where the
+  provider supports it (`Request.ReasoningEffort`, `reasoning_effort` on
+  the wire): it is the one call whose thinking nobody reads.
+
 - **runtime hardening** (roadmap deliverable 7, `specs/SPEC_HARDENING.md`):
   the seams and events everything after this needed, in one named loop
   change (L1–L7). **Tool events**: `ToolStart{Call}` and

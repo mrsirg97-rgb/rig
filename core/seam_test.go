@@ -85,6 +85,7 @@ func TestHardeningVocabulary(t *testing.T) {
 		_ core.Event = core.ToolResult{ID: "c1", Content: "out"}
 		_ core.Event = core.TurnEnd{Reason: core.TurnOver}
 		_ core.Event = core.TestEvent{Name: "x"}
+		_ core.Event = core.Compacted{Summary: "s"} // SPEC_COMPACT 5: additive, the compat rule holds
 	)
 	if core.TurnOver != "over" || core.TurnFault != "fault" || core.TurnInterrupt != "interrupt" {
 		t.Fatalf("turn reasons = %q/%q/%q, want over/fault/interrupt", core.TurnOver, core.TurnFault, core.TurnInterrupt)
@@ -108,5 +109,29 @@ func TestMessageCarriesReasoning(t *testing.T) {
 	m := core.Message{Role: core.RoleAssistant, Content: "answer", Reasoning: "thought"}
 	if m.Reasoning != "thought" || m.Content != "answer" {
 		t.Fatalf("message shape drifted: %+v", m)
+	}
+}
+
+// Message carries the anchor (SPEC_COMPACT 4, L8): the server-reported
+// prompt+completion on an assistant message; 0 when unreported.
+func TestMessageCarriesContextTokens(t *testing.T) {
+	m := core.Message{Role: core.RoleAssistant, Content: "answer", ContextTokens: 1234}
+	if m.ContextTokens != 1234 {
+		t.Fatalf("message shape drifted: %+v", m)
+	}
+	if (core.Message{}).ContextTokens != 0 {
+		t.Fatal("an unreported count must be zero")
+	}
+}
+
+// Request carries MaxTokens (SPEC_COMPACT 8): 0 = the provider's default;
+// a provider that does not know it ignores it.
+func TestRequestCarriesMaxTokens(t *testing.T) {
+	r := core.Request{MaxTokens: 8192}
+	if r.MaxTokens != 8192 {
+		t.Fatalf("request shape drifted: %+v", r)
+	}
+	if (core.Request{}).MaxTokens != 0 {
+		t.Fatal("an unset budget must be zero (the provider's default)")
 	}
 }

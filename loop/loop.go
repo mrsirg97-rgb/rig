@@ -143,6 +143,7 @@ func Run(ctx context.Context, k *rig.Kernel) error {
 				calls     []core.ToolCall
 				done      bool
 				faulted   bool
+				usage     core.Usage // L8: the stamp's source (SPEC_COMPACT 4)
 			)
 			for ev := range events {
 				switch e := ev.(type) {
@@ -159,6 +160,7 @@ func Run(ctx context.Context, k *rig.Kernel) error {
 				case core.Done:
 					k.Frontend.Notify(ev)
 					done = true
+					usage = e.Usage
 				case core.Fault:
 					k.Frontend.Notify(ev)
 					faulted = true
@@ -199,16 +201,21 @@ func Run(ctx context.Context, k *rig.Kernel) error {
 				k.Frontend.Notify(core.TurnEnd{Reason: core.TurnFault})
 				return errors.New("loop: provider closed the stream without Done or Fault")
 			case len(calls) == 0:
-				// turn over; the thinking that led to the answer survives.
-				session.Append(core.Message{Role: core.RoleAssistant, Content: text.String(), Reasoning: reasoning.String()})
+				// turn over; the thinking that led to the answer survives. L8:
+				// the ContextTokens stamp (SPEC_COMPACT 4's anchor) rides
+				// Done.Usage's prompt+completion — the server's own count at
+				// the moment this message completed; 0 when unreported.
+				session.Append(core.Message{Role: core.RoleAssistant, Content: text.String(), Reasoning: reasoning.String(), ContextTokens: usage.Prompt + usage.Completion})
 				break turn
 			default:
-				// executing_tools: sequential, in order, through the chain.
+				// executing_tools: sequential, in order, through the chain. L8:
+				// the same ContextTokens stamp as the no-calls branch.
 				session.Append(core.Message{
-					Role:      core.RoleAssistant,
-					Content:   text.String(),
-					Reasoning: reasoning.String(),
-					ToolCalls: calls,
+					Role:          core.RoleAssistant,
+					Content:       text.String(),
+					Reasoning:     reasoning.String(),
+					ToolCalls:     calls,
+					ContextTokens: usage.Prompt + usage.Completion,
 				})
 				for _, call := range calls {
 					// L4: the bracket wraps the whole middleware chain; the

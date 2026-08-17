@@ -9,6 +9,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,6 +20,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/store/state"
 
 	"github.com/mrsirg97-rgb/rig/store"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
@@ -206,5 +210,138 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 		if !containsStr(string(log), want) {
 			t.Fatalf("run log missing %q:\n%s", want, log)
 		}
+	}
+}
+
+// TestRowResolutionRefusalIsLoudBeforeStores (SPEC_COMPACT 2, 8): an
+// unknown model id with no env is refused at start — loud, naming the id
+// and the known ids, before any store is opened.
+func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binDir := t.TempDir()
+	bin := filepath.Join(binDir, "rig")
+	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	cmd := exec.Command(bin, "-p", "hi", "-model", "nope")
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
+	out, runErr := cmd.CombinedOutput()
+	if runErr == nil {
+		t.Fatalf("an unknown model with no env must refuse: %q", out)
+	}
+	if !strings.Contains(string(out), `no row for "nope"`) || !strings.Contains(string(out), "known: local, qwen3.8-workers") {
+		t.Fatalf("the refusal must name the id and the known ids: %q", out)
+	}
+}
+
+// TestOneShotCompactsAndRecoversMidTurn (SPEC_COMPACT, named): a -p run
+// that crosses the trigger mid-turn — a large prompt that fits the
+// window, then a large tool result that pushes the transcript past it;
+// the next model call faults, the recovery compacts the older prefix, and
+// the retry succeeds. The worker stdout is the final assistant text only;
+// the state store carries the summary row + usage row + a session closed
+// ok; exit 0.
+func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratch := t.TempDir()
+	binDir := t.TempDir()
+	workDir := t.TempDir()
+	bin := filepath.Join(binDir, "rig")
+	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+
+	// the scripted swap: the main call returns a bash tool call; the call
+	// carrying a tool result faults with context length; the summary call
+	// (the compacting system prompt) returns the summary; the retry (a
+	// [compaction] row present) returns the final answer.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.Unmarshal(body, &req)
+		var sys, hasSummary string
+		hasTool := false
+		for _, m := range req.Messages {
+			switch {
+			case m.Role == "system":
+				sys = m.Content
+			case m.Role == "tool":
+				hasTool = true
+			case m.Role == "user" && strings.HasPrefix(m.Content, "[compaction] "):
+				hasSummary = m.Content
+			}
+		}
+		switch {
+		case strings.HasPrefix(sys, "You are compacting"):
+			io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"SUM\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n")
+		case hasSummary != "":
+			io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"the answer\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1}}\n")
+		case hasTool:
+			w.WriteHeader(400)
+			io.WriteString(w, `{"error":{"message":"prompt is too long: context length exceeded"}}`)
+		default:
+			io.WriteString(w, `data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","type":"function","function":{"name":"bash","arguments":"{\"command\":\"head -c 3200 /dev/zero\"}"}}]},"finish_reason":"tool_calls"}]}`+"\n")
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cmd := exec.Command(bin, "-p", strings.Repeat("p", 6000), "-model", "e2e", "-base-url", srv.URL+"/v1")
+	cmd.Dir = workDir
+	cmd.Env = append(os.Environ(),
+		"HOME="+scratch,
+		"XDG_CONFIG_HOME="+scratch,
+		"RIG_MODEL_WINDOW=4000",
+		"RIG_MODEL_RESERVE=100",
+		"RIG_MODEL_KEEP_RECENT=1000",
+		"RIG_MODEL_MAX_TOKENS=500",
+	)
+	out, runErr := cmd.CombinedOutput()
+	if runErr != nil {
+		t.Fatalf("one-shot must exit 0 after the recovery: %v\n%s", runErr, out)
+	}
+	if !strings.Contains(string(out), "the answer") {
+		t.Fatalf("the worker stdout must be the final answer only: %q", out)
+	}
+	if strings.Contains(string(out), "fault") {
+		t.Fatalf("the swallowed fault must never reach stdout: %q", out)
+	}
+
+	// the state store: the summary row + its usage row + a session closed ok.
+	glob, _ := filepath.Glob(filepath.Join(scratch, "rig", "sessions", "*.sqlite"))
+	if len(glob) != 1 {
+		t.Fatalf("sessions store = %v, want one", glob)
+	}
+	db, _, err := store.Open(glob[0], state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.DB.Close()
+	var n int
+	if err := db.DB.QueryRow(`SELECT count(*) FROM messages WHERE role = 'user' AND content LIKE '[compaction] %'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("summary row = %d (%v), want 1", n, err)
+	}
+	var sumSeq int64
+	if err := db.DB.QueryRow(`SELECT seq FROM messages WHERE content LIKE '[compaction] %'`).Scan(&sumSeq); err != nil {
+		t.Fatal(err)
+	}
+	var u int
+	if err := db.DB.QueryRow(`SELECT count(*) FROM usage WHERE message_seq = $1`, sumSeq).Scan(&u); err != nil || u != 1 {
+		t.Fatalf("summary usage = %d (%v), want 1", u, err)
+	}
+	var exit string
+	if err := db.DB.QueryRow(`SELECT exit FROM sessions`).Scan(&exit); err != nil || exit != "ok" {
+		t.Fatalf("session exit = %q (%v), want ok", exit, err)
 	}
 }
