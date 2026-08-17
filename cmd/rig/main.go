@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/mrsirg97-rgb/rig"
+	"github.com/mrsirg97-rgb/rig/command"
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/frontend/cli"
 	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
@@ -42,49 +43,246 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-// Version is the binary's release version; initial release per the stack.
-const Version = "0.1.0"
+// Version is the binary's release version: the 1.0 freeze (roadmap 9)
+// — commands complete, the runtime the TUI consumes.
+const Version = "1.0.0"
 
 const defaultSystem = "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done."
+
+// root is the process's mutable wiring state (SPEC_COMMANDS 2): the
+// active model, the row, the recorder, the session — the state the
+// command's closures read and rewrite at call time, so a swap (new, a
+// resume, a model switch) is visible to every closure with no re-wiring.
+// The closures are the root's; the command package sees core and models
+// and nothing else.
+type root struct {
+	baseURL string
+	system  string // the raw flag/env system prompt
+	allow   []string
+	retries int
+
+	fe    core.Frontend // the raw frontend (cli or oneshot) — the recorder wraps it
+	sdb   store.DB      // the state store
+	remDB store.DB      // the rem store (the AutoReflect seam)
+	cwd   string
+
+	activeID string       // the active model id — the root's one mutable string every closure reads
+	row      models.Model // the active row (the root's own resolution)
+	runtime  models.Table // Defaults plus, when startup synthesized one, that row (6)
+
+	session *core.Session
+	rec     *state.Recorder
+	tools   map[string]core.Tool // the same live instances the kernel executes
+
+	fullSystem string // system + the middleware guidelines (computed in wire)
+	k          *rig.Kernel
+	// the forced seam (3): the current policy's Compact, as a method value —
+	// set on every pair build, so a rebuilt pair carries its own seam.
+	compactFn func(ctx context.Context) (core.Compacted, bool, error)
+}
 
 // wire assembles the kernel's dependencies. Swapping a seam is a change
 // here and nowhere else. Deliverable 8 (SPEC_COMPACT): the first
 // non-passthrough policy — the compact policy wraps the shared inner
 // instance, the overflow decorator wraps the same inner, and the root
 // wires the AutoReflect seam (decision 6) from the rem store it owns.
-func wire(baseURL, model, system string, allow []string, retries int, fe core.Frontend, s *core.Session, row models.Model, rdb store.DB, cwd string, todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool core.Tool) *rig.Kernel {
+// Deliverable 9 (SPEC_COMMANDS): the mutable state is named once (root),
+// the pair rebuild is the one function the model switch and /new share,
+// and the command's closures read it at call time.
+func wire(r *root) *rig.Kernel {
 	mw := []core.ToolMiddleware{
-		perm.Allowlist(allow...),
-		guard.Bound(retries),
+		perm.Allowlist(r.allow...),
+		guard.Bound(r.retries),
 	}
 	// the root's chain is [perm, guard]: the observation tap is retired —
 	// the recorder now sources its rows from the loop's events.
 	// The guidelines ride the system prompt, not the chain (decision 6):
 	// prompt assembly belongs to the prompt, and the prompt string is the
 	// root's — zero loop change.
-	fullSystem := system
+	r.fullSystem = r.system
 	if g := guidelinesOf(mw); g != "" {
-		fullSystem = system + "\n\n" + g
+		r.fullSystem = r.system + "\n\n" + g
 	}
-	inner := openai.New(baseURL, model)
+	provider, pol := r.buildPair()
+	k := rig.New(
+		rig.WithProvider(provider),
+		rig.WithFrontend(r.rec),
+		rig.WithPolicy(pol),
+		rig.WithTools(r.tools["bash"], r.tools["read"], r.tools["write"], r.tools["edit"], r.tools["ls"], r.tools["find"], r.tools["grep"],
+			r.tools["todo"], r.tools["rem"], r.tools["scheduler"], r.tools["python"], r.tools["web_search"], r.tools["web_fetch"]),
+		rig.WithMiddleware(mw...),
+	)
+	k.Session = r.session // one identity: the loop's session is the transcript's
+	r.k = k
+	return k
+}
+
+// buildPair is the provider+policy pair rebuild (SPEC_COMMANDS 4, 6):
+// the fresh inner on the active id, the fresh compact policy over the
+// current recorder, session, and row, and the overflow decorator over
+// the same inner. The loop reads k.Provider / k.Policy fresh at each
+// turn start, so the rebuilt pair takes effect on the next turn's
+// request by construction — the switch is next-turn, not by guard.
+func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
+	inner := openai.New(r.baseURL, r.activeID)
 	opts := []compact.Option{}
-	if rdb.DB != nil && cwd != "" {
+	if r.remDB.DB != nil && r.cwd != "" {
 		opts = append(opts, compact.WithAutoReflect(func(ctx context.Context, summary string) error {
-			_, err := remstore.AutoReflect(ctx, rdb, cwd, summary)
+			_, err := remstore.AutoReflect(ctx, r.remDB, r.cwd, summary)
 			return err
 		}))
 	}
-	pol, err := compact.New(inner, fe, s, fullSystem, row, opts...)
+	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row, opts...)
 	if err != nil {
 		panic("rig: wire: " + err.Error()) // a violating row is refused at construction
 	}
-	return rig.New(
-		rig.WithProvider(compact.Decorator(inner, pol)),
-		rig.WithFrontend(fe),
-		rig.WithPolicy(pol),
-		rig.WithTools(bash.New(), file.Read(), file.Write(), file.Edit(), fs.LS(), fs.Find(), fs.Grep(), todoTool, remTool, schedTool, pyTool, webSearchTool, webFetchTool),
-		rig.WithMiddleware(mw...),
-	)
+	r.compactFn = pol.Compact // the rebuilt pair carries its own forced seam
+	return compact.Decorator(inner, pol), pol
+}
+
+// swapIn is the handoff's tail (SPEC_COMMANDS 4): the retiring recorder
+// is re-pointed first — its in-flight Input lands the next user row
+// (and the files snapshot) under the new session, then retires — and
+// then the kernel's frontend and session are the new ones and the pair
+// is rebuilt on (recorder, session, the active row). Same goroutine, no
+// locks: the loop reads k.Session after Input returns, so the prompt it
+// appends is already on the new session.
+func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
+	r.rec.Retarget(s.ID, s)
+	r.rec = rec2
+	r.session = s
+	r.k.Frontend = rec2
+	r.k.Session = s
+	provider, pol := r.buildPair()
+	r.k.Provider = provider
+	r.k.Policy = pol
+}
+
+// compactNow is the compact command's root closure (SPEC_COMMANDS 3):
+// run the policy's forced seam over the same internal action the trigger
+// path runs; on success deliver the event to the current recorder — the
+// recorder lands the summary row plus its usage row, re-lands the kept
+// tail, and forwards to the CLI. The ⧉ line is the command's output,
+// exactly once (the command prints no second line).
+func (r *root) compactNow(ctx context.Context) (core.Compacted, bool, error) {
+	ev, compacted, err := r.compactFn(ctx)
+	if err != nil || !compacted {
+		return ev, compacted, err
+	}
+	r.rec.Notify(ev)
+	return ev, true, nil
+}
+
+// newSession is the new command's root closure (SPEC_COMMANDS 4): close
+// the current row ok, mint the fresh session and recorder, Ensure the
+// new row before any row lands under it, and swap. A refused close is
+// loud and the swap does not happen: the current session continues.
+func (r *root) newSession(ctx context.Context) (string, error) {
+	if err := r.rec.Close("ok"); err != nil {
+		return "", fmt.Errorf("new: %v", err)
+	}
+	s2 := core.NewSession()
+	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2)
+	if err := rec2.Ensure(); err != nil {
+		return "", fmt.Errorf("new: %v", err)
+	}
+	r.swapIn(s2, rec2)
+	return s2.ID, nil
+}
+
+// sessionList is the sessions command's list read (SPEC_COMMANDS 5): the
+// store's rows (newest first, capped) with the live session marked.
+func (r *root) sessionList(ctx context.Context) ([]command.SessionRow, error) {
+	rows, err := state.ListSessions(ctx, r.sdb)
+	if err != nil {
+		return nil, fmt.Errorf("sessions: %v", err)
+	}
+	out := make([]command.SessionRow, len(rows))
+	for i, row := range rows {
+		out[i] = command.SessionRow{ID: row.ID, Started: row.Started, Exit: row.Exit, Turns: row.Turns, Current: row.ID == r.session.ID}
+	}
+	return out, nil
+}
+
+// sessionShow is the sessions show projection (SPEC_COMMANDS 5): the same
+// state.Resume function -resume uses — one projection, one truth —
+// rendered plain by the command package.
+func (r *root) sessionShow(ctx context.Context, id string) (string, error) {
+	s, err := state.Resume(ctx, r.sdb, id)
+	if err != nil {
+		if errors.Is(err, state.ErrNoSuchSession) {
+			return "", fmt.Errorf("sessions: no such session: %s", id)
+		}
+		return "", fmt.Errorf("sessions: %v", err)
+	}
+	return command.RenderShow(s), nil
+}
+
+// sessionResume is the sessions resume root closure (SPEC_COMMANDS 5):
+// validate before mutate — the projection exists (the unknown id is loud
+// here, before the current row is touched) — and then the same handoff
+// as new, over the resumed session: the recorder adopts the existing row
+// (7's -resume semantics), so the claims and the sources attribute to
+// it and its file provenance is the projection's.
+func (r *root) sessionResume(ctx context.Context, id string) error {
+	s, err := state.Resume(ctx, r.sdb, id)
+	if err != nil {
+		if errors.Is(err, state.ErrNoSuchSession) {
+			return fmt.Errorf("sessions: no such session: %s", id)
+		}
+		return fmt.Errorf("sessions: %v", err)
+	}
+	if err := r.rec.Close("ok"); err != nil {
+		return fmt.Errorf("sessions: %v", err)
+	}
+	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s.ID, s)
+	if err := rec2.Ensure(); err != nil {
+		return fmt.Errorf("sessions: %v", err)
+	}
+	r.swapIn(s, rec2)
+	return nil
+}
+
+// switchModel is the models switch root closure (SPEC_COMMANDS 6): the
+// row must exist in the runtime table (unknown id names the known), then
+// the pair rebuilds on the current recorder and session with the new
+// row — the transcript, the session row, and the recorder are untouched:
+// the switch is not a new session, and the row keeps the model the
+// session started with (a historical record; the switch is not
+// retroactive).
+func (r *root) switchModel(ctx context.Context, id string) error {
+	row, ok := r.runtime.Get(id)
+	if !ok {
+		return fmt.Errorf("models: no row for %q (known: %s)", id, strings.Join(r.runtime.Known(), ", "))
+	}
+	r.row = row
+	r.activeID = id
+	provider, pol := r.buildPair()
+	r.k.Provider = provider
+	r.k.Policy = pol
+	return nil
+}
+
+// runtimeTable is the models command's table (SPEC_COMMANDS 6): 8's
+// Defaults plus, when startup synthesized a row from RIG_MODEL_WINDOW (8's
+// Resolve), that row — added to the table at the root, so it lists and
+// models <id> can switch back to it. A table the operator cannot see is
+// a table the operator cannot use.
+func runtimeTable(active string, resolved models.Model) models.Table {
+	if _, ok := models.Defaults.Get(active); ok {
+		return models.Defaults
+	}
+	rows := make([]models.Model, 0, len(models.Defaults.Known())+1)
+	for _, id := range models.Defaults.Known() {
+		m, _ := models.Defaults.Get(id)
+		rows = append(rows, m)
+	}
+	rows = append(rows, resolved)
+	t, err := models.New(rows...)
+	if err != nil {
+		panic("rig: runtime table: " + err.Error())
+	}
+	return t
 }
 
 // guidelinesOf collects the system-prompt prose of the participants that
@@ -331,15 +529,60 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The root (SPEC_COMMANDS 2): the process's mutable wiring state, named
+	// once. The command's closures read it at call time, so a swap (new, a
+	// resume, a model switch) is visible to every closure with no
+	// re-wiring; the closures are the root's, and the command package sees
+	// core and models and nothing else.
+	r := &root{
+		baseURL:  *baseURL,
+		system:   *system,
+		allow:    splitCSV(*allow),
+		retries:  *retries,
+		sdb:      sdb,
+		remDB:    rdb,
+		cwd:      cwd,
+		activeID: *model,
+		row:      row,
+		runtime:  runtimeTable(*model, row),
+		tools: map[string]core.Tool{
+			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
+			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
+			"todo": todoapi.New(tdb), "rem": remapi.New(rdb),
+			"scheduler": schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"),
+			"python":    py, "web_search": webSearch, "web_fetch": webFetch,
+		},
+	}
+
+	// The command's env (SPEC_COMMANDS 2): closures, not handles. The
+	// Steer seam is the frontend's — the dispatcher fills it in its
+	// WithCommands; the env built here carries everything else.
+	env := &command.Env{
+		Session:       func() *core.Session { return r.session },
+		Compact:       r.compactNow,
+		NewSession:    r.newSession,
+		SessionList:   r.sessionList,
+		SessionShow:   r.sessionShow,
+		SessionResume: r.sessionResume,
+		Models:        func() models.Table { return r.runtime },
+		ActiveModel:   func() string { return r.activeID },
+		SwitchModel:   r.switchModel,
+		Tools:         r.tools,
+	}
+
 	// The frontend: the REPL by default; one-shot under -p (deliverable 2's
-	// seam). Everything downstream of the swap is shared.
-	var fe core.Frontend = cli.New(os.Stdin, os.Stdout)
+	// seam). The REPL is the only frontend that dispatches (SPEC_COMMANDS
+	// 9, 10): the one-shot takes no commands — a command-shaped prompt is
+	// a prompt, and nothing is hijacked from it.
+	var fe core.Frontend
 	if *prompt != "" {
 		if err := oneshot.ErrPrompt(*prompt); err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
 		}
 		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout}
+	} else {
+		fe = cli.New(os.Stdin, os.Stdout, cli.WithCommands(command.All(), env))
 	}
 
 	// The session: fresh by default; -resume rebuilds the transcript, the
@@ -351,11 +594,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
+	r.session = session
+	r.fe = fe // the handoff builds the fresh recorder over the same inner frontend
 	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID, session)
+	r.rec = rec
 
-	k := wire(*baseURL, *model, *system, splitCSV(*allow), *retries, rec, session, row, rdb, cwd, todoapi.New(tdb), remapi.New(rdb),
-		schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"), py, webSearch, webFetch)
-	k.Session = session // one identity: the loop's session is the transcript's
+	k := wire(r)
 
 	// Interrupt cancels the turn at its next boundary.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
