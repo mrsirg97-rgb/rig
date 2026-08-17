@@ -77,7 +77,9 @@ policy/compact/     NEW, stdlib only
 core/provider.go    +Compacted event, +Request.MaxTokens (named)
 core/policy.go      the ContextPolicy doc: compaction landed, named
 provider/openai     +max_tokens wire mapping (named)
-store/state/recorder.go  +Compacted case: the summary row + usage row (named)
+store/state/recorder.go  +Compacted case: the summary row + usage row,
+                    the tail re-landed (named)
+store/state/resume.go    +the marker restart of the projection (named)
 frontend/cli        +Compacted one line (named)
 frontend/oneshot    unchanged: Compacted ignored per the compat rule (named)
 cmd/rig/main.go     the row resolution (loud), the wiring, the env (named)
@@ -166,8 +168,11 @@ that only shortens the return value re-summarizes the same older prefix at
 every `Assemble` (a fresh provider call per model phase — the pi bug in a
 new form), and the recorder and resume see nothing. The rewrite makes the
 compaction a fact of the transcript: later assemblies are below the trigger
-and passthrough; the recorder's row (5) is the evidence; resume rebuilds
-the compacted shape. The rewrite touches `Session.Messages` only;
+and passthrough; the recorder's rows (5) are the evidence; resume rebuilds
+the compacted shape (5: the re-landing plus the marker restart — the
+store is append-only, and the naive projection would rebuild the full
+history with the summary after the tail it summarizes). The rewrite
+touches `Session.Messages` only;
 `Session.Files` is untouched, so drift checks survive compaction.
 
 The policy is impure by design, named: below the trigger pure, as
@@ -273,19 +278,27 @@ reviewed and diffed as one document. Its contract: a compact factual
 summary of the work so far — the task and its current state, decisions and
 why, files touched and what changed, the tool results that matter (test
 outcomes, errors and their fixes), open threads and what was tried and
-failed — and, when an earlier summary is present, a fold: keep what is
-still true, drop what is done. That last sentence is the
-multi-compaction boundary: a long session compacts repeatedly, and each
+failed — written in the third person ("the session fixed X and its
+tests"), so the marked user row (5) reads as framing, not instruction
+(one line in `summary_prompt.txt`). The tail may legally start with a
+user message, so the transcript can carry consecutive user rows: fine on
+Qwen's template, named. And, when an earlier summary is present, a fold:
+keep what is still true, drop what is done — the multi-compaction
+boundary: a long session compacts repeatedly, and each
 compaction folds the previous summary into the new one; the prompt names
 the shape and the test asserts the fold (tests).
 
 The summary request's `max_tokens` is clamped to what the window actually
-has left: `min(MaxTokens, Window - Reserve - est(prompt + older))`. If the
-budget is <= 0 — the older prefix alone does not fit the usable window
-(a single oversized message, or a calibration miss) — the compact fails
-loud, naming the id, window, reserve, and the prefix's estimate: no
+has left for this request: `min(MaxTokens, Window - est(prompt + older))`
+— nothing follows in the summary call, so `Window - est` is the honest
+budget, and the reserve is not subtracted twice (the main-call clamp in 8
+is the same shape). If the budget is <= 0 — the input alone does not fit
+the window (a single oversized message, or a calibration miss) — the
+compact fails loud, naming the id, window, and the input's estimate: no
 invented chunking in 8 (non-goal), and the overflow decorator (7) is the
-recovery if the call still faults.
+recovery if the call still faults. The next call's fit (system + summary
++ tail in the usable window) is a separate bound: the fold (above) and
+the recovery (7) carry it, layer by layer.
 
 Why one call and no chunking: a map-reduce summary is a second algorithm
 with its own cost and its own failure shapes; the boundary it rescues is
@@ -309,15 +322,25 @@ every later estimate — trigger, budget, clamps — is the raw estimate times
 the factor. The clamp is a guard against a server that reports a total
 where a prompt is expected, not a belief about tokenizers.
 
-Two named biases: the wire also carries the tool specs, which the
-estimate does not see — a per-request constant that rides into the factor
-(the clamp bounds it); and the factor is one number for the whole
-transcript, so a tokenizer that is dense on JSON and sparse on prose is
-read as its average. Both are small next to the uncalibrated case —
-bytes/4 can be off by 2x or more on CJK-heavy or code-heavy transcripts —
+The wire also carries the tool specs, which the transcript estimate does
+not see — so the calibration estimate includes them: the decorator sees
+`Request.Tools`, and the denominator is `estimate(messages) +
+estimate(specs)` (the specs' names, descriptions, and schema bytes, /4,
+same stdlib). The constant then rides both sides of the ratio and
+cancels: the factor calibrates the tokenizer, not the tokenizer plus a
+constant. Without this, a spec that is dense in tokens but cheap in bytes
+inflates the factor on every short call — one number, learned at 10k,
+stays 1.5 at 200k, and the brain compacts ~30% early; the clamp
+[0.5, 4.0] does not catch it, because the inflation is honest arithmetic
+on the wrong denominator. Named bias that remains: the factor is one
+number for the whole transcript, so a tokenizer that is dense on JSON and
+sparse on prose is read as its average — small next to the uncalibrated
+case (bytes/4 off by 2x or more on CJK-heavy or code-heavy transcripts),
 and the calibration is what lets one bytes/4 stay honest on a 64k worker
 and a 262k brain with different tokenizers, from one shared config
-(decision 2's case).
+(decision 2's case). The trigger itself does not see the specs (the loop
+owns them), so the trigger estimate is spec-free and its error is in the
+safe direction: slightly late, recovered by 7, never early and wasted.
 
 Where the calibration lives, named: the decorator is the only place that
 sees both sides of a main call — the assembled request and the reported
@@ -391,6 +414,42 @@ it, the split treats the summary row as an ordinary message (a legal
 boundary start), and the second compaction folds it (3). One shape, no
 special cases.
 
+**Resume after compaction — the marker is the second interface.** The
+recorder appends rows and never drops: after a compaction, the store
+holds the full history, the original tail rows (recorded before the
+compaction, their seq before the summary row's), the summary row, and the
+post-compaction rows. A naive seq-order projection (SPEC_STATE's resume)
+would rebuild the entire pre-compaction transcript plus a summary that
+lands after the tail it summarizes — over the trigger on the first
+`Assemble`, re-summarizing what was already summarized. Two schema-free
+fixes, both keyed on the marker:
+
+- the recorder, on `Compacted`, lands the summary row and re-lands the
+  kept tail after it: the tail's user rows and assistant rows as fresh
+  rows (fresh seqs), the assistant calls with their results folded into
+  the call rows, as the projection sources them. Duplicates bounded by
+  the tail (KeepRecent + one batch, 3); the earlier rows stay in the
+  store as the autopsy — the store is append-only, and the duplicates
+  are its shape. The re-landing reads the root's session (the recorder
+  already holds it): at the `Compacted` moment, `Session.Messages` is
+  exactly `[summary] + tail`, and the same loop property as 7's rewrite
+  orders the read against the loop's next append.
+- `Resume` starts from the last `[compaction]` row when one exists —
+  the projection window is the summary row and everything after it; with
+  none, the full history as today. The marker is thus the grep interface
+  and the projection interface, one contract.
+
+One named constraint from the schema: `tool_calls.id` is the sole primary
+key (the provider's call id), so the tail's call rows cannot be
+re-inserted under the same id — the re-landed copies carry fresh ids
+(recorder-minted suffix on the original; the grep-able prefix is
+preserved). The id is opaque to the model and the call/result pair stays
+consistent within the copy, so the projected shape is faithful; the
+alternative (widening the PK) is a schema change that reopens
+SPEC_STATE — rejected here. The `err` and timing columns of re-landed
+calls are copied from the original row where present (the projection
+reads only id, name, args, result — faithful either way).
+
 ### 6. The summary is handed to rem's AutoReflect: pane's session_compact, wired
 
 `store/rem.AutoReflect` already exists and is tested: the summary as a
@@ -462,6 +521,17 @@ one more recovery. No clock, no per-turn clear to forget, no loop line to clear 
 — the loop is byte-identical, and "never a silent loop" falls out of the
 key, not of a retry limit that could be raised into one.
 
+The loop property this depends on, named: the loop does not read or write
+`Session` while ranging a stream — only after the channel closes (the
+post-range append and the execs). The retry's rewrite runs in the relay
+goroutine while the loop is ranging, and the ordering is the channel's:
+the rewrite happens-before the `Compacted` event and the retry's events,
+and the loop's next `session.Append` happens-after the close. A future
+loop change that makes the loop peek at the session mid-stream (a
+mid-stream steer reading `Files` is the candidate) races the rewrite —
+that is where this breaks, and the change must name it. (SPEC_CORE names
+it in the loop section; behavior unchanged.)
+
 Why the decorator, and the two candidates rejected, named:
 
 - **A Fault-time hook on the widened middleware seam.** The seam wraps
@@ -517,15 +587,20 @@ first tick, not as a worker that compacts every turn and logs false
 successes.
 
 The request-side reserve: the decorator also clamps the main call's
-`MaxTokens` to the same budget as the summary call (3):
-`min(row.MaxTokens, Window - Reserve - est(request))`, floor 1 (a
-degenerate request is legal; the trigger should have compacted first —
-named). The reserve becomes a request-side guarantee: the response fits
-the headroom, and a 64k worker whose server defaults to a 32k max_tokens
-cannot walk into the wall on a mid-size prompt. A truncated answer (a
-`Done` with finish `length`) is read as normal — a legal finish, no
-recovery; the estimate is approximate, the clamp is best-effort, and the
-overflow recovery is the safety net.
+`MaxTokens` to the window minus the request: `min(row.MaxTokens, Window
+- est(request))`, floor 1. The trigger already guarantees
+`est <= Window - Reserve` below it, so `Window - est >= Reserve` — the
+clamp hands the response exactly its reserve, and the reserve is not
+subtracted twice (the wrong formula, `Window - Reserve - est`, gives a
+request sitting just under the trigger `max_tokens` = floor 1: a
+one-token answer at the moment the model has a full reserve of room — a
+named test). The reserve becomes a request-side guarantee: the response
+budget is explicit — at least the reserve, not the server's default —
+and the worker is protected both against a server whose default
+max_tokens walks into the wall and against one whose default `n_predict`
+is small. A truncated answer (a `Done` with finish `length`) is read as
+normal — a legal finish, no recovery; the estimate is approximate, the
+clamp is best-effort, and the overflow recovery is the safety net.
 
 The loop change, named: none. `Assemble`, the `Provider` seam, the loop's
 default event forwarding, and the pre-stream error path all exist; the
@@ -568,8 +643,9 @@ in `t.TempDir()` where a case names it.
   last message) — the older prefix is empty, the compact is skipped, the
   passthrough is returned.
 - `TestSummaryMaxTokensClamped` — the scripted provider captures the
-  summary request: `MaxTokens == min(row.MaxTokens, Window - Reserve -
-  est(input))`; a budget <= 0 fails loud, naming the row's numbers.
+  summary request: `MaxTokens == min(row.MaxTokens, Window - est(input))`
+  (3's honest budget — the reserve not subtracted twice); a budget <= 0
+  fails loud, naming the row's numbers.
 - `TestOverflowRecoversOnce` — a pre-stream context-length fault
   (wordlist phrasing), then a healthy stream: the frontend's order is
   `Compacted, TextDelta*, Done`; the first `Fault` never surfaces; the
@@ -589,9 +665,14 @@ in `t.TempDir()` where a case names it.
 - `TestCalibrationShiftsTheTrigger` — a scripted `Done` reporting 2x the
   estimate: the next trigger decision uses the corrected estimate (a
   transcript under the raw trigger compacts; the inverse, named); a
-  reported ratio outside `[0.5, 4.0]` is clamped.
+  reported ratio outside `[0.5, 4.0]` is clamped; a call carrying a large
+  tool spec does not inflate the factor beyond the tokenizer ratio — the
+  denominator includes the spec (4): a factor learned at 10k with a 5k
+  spec stays ~1.0 at 200k, not 1.5.
 - `TestMainCallMaxTokensClamped` — the pass-through stream's request
-  carries the clamped `MaxTokens` (the request-side reserve, 8).
+  carries the clamped `MaxTokens` (the request-side reserve, 8); a
+  request just under the trigger (`est == Window - Reserve`) gets
+  `MaxTokens == Reserve`, not the floor 1 (the wrong-formula case).
 - `TestSecondCompactionFoldsTheFirst` — a long scripted session: the
   second compact's older prefix contains the first summary row; the
   transcript after equals `[new summary] + tail2`; the reflection dedupes
@@ -603,6 +684,10 @@ in `t.TempDir()` where a case names it.
 - `TestSteerDuringRetry` — the turn ctx dies in the retry window: the
   decorator returns an error (not a `Fault`), and the loop reads it as the
   existing pre-stream interrupt path.
+- `TestRecoveryRewriteRaceFree` — a full `loop.Run` through the decorator
+  (first call faults with context length, second succeeds), run under
+  `-race` (the gate): the rewrite and the loop's append are ordered by
+  the channel (7's named loop property), and the transcript shape holds.
 - `TestLoopForwardsCompactedUntouched` — the loop's compat: a `Compacted`
   between stream events forwards untouched (the `TestEvent` precedent),
   and the existing loop cases stay byte-identical.
@@ -613,6 +698,17 @@ in `t.TempDir()` where a case names it.
   message row (`role = "user"`, the content verbatim with the marker) plus
   a usage row (the event's `Usage`), seq before the assistant row the next
   `Done` lands.
+- `TestRecorderRelandsTheKeptTail` — the `Compacted` case re-lands the
+  kept tail after the summary row (5): fresh seqs, the assistant calls
+  with fresh ids (the `tool_calls.id` PK), name/args/result verbatim, the
+  original rows intact as the autopsy, the duplicates bounded by the
+  tail.
+- `TestResumeAfterCompactionRebuildsTheCompactedShape` — a session that
+  compacted: the store holds the full history, the original tail rows,
+  the summary, the re-landed tail, and the post-compaction rows; `Resume`
+  rebuilds exactly `[summary] + tail + post-compaction` (call/result pairs
+  consistent under the fresh ids), not the full history; a session that
+  never compacted projects the full history, as today.
 
 `frontend`:
 
@@ -644,6 +740,9 @@ PR A carries this spec file only; the diff below lands with PR B.
   category after providers and the loop (a policy event, emitted at
   `Assemble` or on the stream by the decorator), and the loop forwarding
   it through its existing default — byte-identical.
+- The loop section: the named property the decorator depends on (7) — the
+  loop does not touch `Session` while ranging a stream; a documented
+  invariant, zero behavior change.
 - The Provider section: `Request.MaxTokens` semantics.
 - The ContextPolicy section: compaction landed; the policy may rewrite the
   session transcript (the one named mutation the seam carries; the
@@ -654,9 +753,11 @@ PR A carries this spec file only; the diff below lands with PR B.
 - SPEC_HARDENING owes no diff: its scope already says compaction consumes
   nothing new here but the provider seam — true, the decorator is a
   provider.
-- SPEC_STATE owes no diff: the recorder appends rows per event as it
-  already does, over existing `messages` + `usage` shapes; no schema
-  change.
+- SPEC_STATE owes one diff (named): the recorder's `Compacted` case
+  re-lands the kept tail after the summary row (5), and the `Resume`
+  projection starts from the last `[compaction]` row when one exists (5).
+  No schema change: the marker is the contract, and the rows are
+  existing shapes.
 
 ## scope
 
