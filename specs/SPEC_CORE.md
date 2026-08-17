@@ -172,6 +172,13 @@ is a partial and is discarded.
 fails loudly (a cancelled turn reads the same and breaks the turn instead, per
 the loop section).
 
+A `ToolCallEvent` is emitted only for a call whose accumulated args are valid
+JSON (empty args stay legal: a no-arg call). A stream cut off by length can
+cut the args mid-JSON; executing or re-sending the half of a call would poison
+the transcript, so the adapter faults with the truncation named instead of
+emitting the partial call (provider/openai enforces this; the named test is
+`TestLengthFinishedTruncatedToolCallArgsFault`).
+
 **The compat rule (additive).** Events are added, never changed. A Frontend
 must tolerate an `Event` it does not recognize; the default is to ignore it.
 The loop forwards the kinds it names and ignores the rest. This is what lets
