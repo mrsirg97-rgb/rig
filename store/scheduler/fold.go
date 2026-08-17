@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	scheddomain "github.com/mrsirg97-rgb/looper/store/scheduler/domain"
+	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
 // --- fold (the pure replay) ---
@@ -17,9 +17,9 @@ import (
 // jobs is a replayable projection of the event log. Removed jobs stay as
 // tombstones: ids mint forward over them, names are never reused, remove
 // survives compaction. Replay is total: malformed or inapplicable rows
-// skip, never throw. Pane's StoredJob shape, field for field.
+// skip, never throw.
 
-// jobState is one job's folded state (pane's StoredJob).
+// jobState is one job's folded state.
 type jobState struct {
 	ID          string
 	Name        string
@@ -104,7 +104,7 @@ func (f *fold) mintID() string {
 }
 
 // apply folds one event. Total: unknown ids, malformed args, and
-// inapplicable transitions skip. State gates are pane's.
+// inapplicable transitions skip.
 func (f *fold) apply(e eventRow) {
 	if e.seq > f.maxSeq {
 		f.maxSeq = e.seq
@@ -205,8 +205,8 @@ func (f *fold) applyVerb(e eventRow) {
 	j.UpdatedSeq = e.seq
 }
 
-// compactArgs is the snapshot shape (pane's CompactArgs; last* fields
-// included — the jobs state survives compaction with them).
+// compactJob is the snapshot shape (last* fields included — the jobs
+// state survives compaction with them).
 type compactJob struct {
 	ID         string  `json:"id"`
 	Name       string  `json:"name"`
@@ -271,13 +271,13 @@ func (f *fold) applyCompact(e eventRow) {
 
 // --- plumbing ---
 
-// COMPACT_THRESHOLD_EVENTS is pane's: past this many events a mutation
+// COMPACT_THRESHOLD_EVENTS: past this many events a mutation
 // snapshots the jobs state (tombstones included) and deletes the older log.
 const COMPACT_THRESHOLD_EVENTS = 1000
 
 func nowRFC3339() string {
-	// pane's strftime('%Y-%m-%dT%H:%M:%fZ') shape: millisecond precision,
-	// sub-second distinctness keeps same-second records ordered.
+	// millisecond precision: sub-second distinctness keeps same-second
+	// records ordered.
 	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 }
 
@@ -324,11 +324,11 @@ func appendEvent(bound context.Context, seq int64, op, args, session string) (in
 	return ev.Seq, nil
 }
 
-// maybeCompact is pane's auto-compaction: past the threshold a mutation
+// maybeCompact is the auto-compaction: past the threshold a mutation
 // lands the full-state snapshot first (tombstones and last* included),
 // rewires the anchors to the snapshot's epoch, and deletes the older log.
 // Run history older than the snapshot moves to the runs container and stays
-// there; the event copy is dropped by design (as in pane).
+// there; the event copy is dropped by design.
 func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) error {
 	var count int
 	if err := tx.QueryRow(`SELECT count(*) FROM events`).Scan(&count); err != nil {
@@ -417,7 +417,7 @@ func nullInt64(set bool, v int64) any {
 	return v
 }
 
-// replyText is pane's reply shape: the note line, then the job's lines.
+// replyText is the reply shape: the note line, then the job's lines.
 func replyText(note string, lines []string) string {
 	var b strings.Builder
 	if note != "" {

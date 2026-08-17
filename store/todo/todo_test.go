@@ -11,14 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	todostore "github.com/mrsirg97-rgb/looper/store/todo"
-	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
+	"github.com/mrsirg97-rgb/rig/store"
+	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
 )
 
-// Pane's named cases, ported by name (SPEC_STATE, testing): fold, create
-// upsert, DAG planning, replay integrity. Refusals loud, in pane's
-// teaching voice.
+// The named cases (SPEC_STATE, testing): fold, create upsert, DAG
+// planning, replay integrity. Refusals loud, in a teaching voice.
 
 type item = todostore.CreateItem
 
@@ -465,8 +464,8 @@ func TestEventArgsMirrorTheCall(t *testing.T) {
 
 var _ = fmt.Sprintf
 
-// --- TD3b: pane's rev 2 named cases (move, claim, compaction) + TASK_TREE
-// gating and presence. Voices asserted verbatim from pane.
+// --- move, claim, compaction, dependency gating and presence. Voices
+// asserted verbatim.
 
 const (
 	sessA = "sess-a"
@@ -504,7 +503,7 @@ func projStatus(t *testing.T, db store.DB, text string) string {
 	return s
 }
 
-// projDep resolves a task's dependency through task_deps (looper's
+// projDep resolves a task's dependency through task_deps (rig's
 // substrate carries links there, not in tasks).
 func projDep(t *testing.T, db store.DB, text string) string {
 	t.Helper()
@@ -521,7 +520,7 @@ func projDep(t *testing.T, db store.DB, text string) string {
 }
 
 // taskIDText resolves the minted id of the task line carrying exact text,
-// by scanning a reply the way an operator would (pane's idOf).
+// by scanning a reply the way an operator would.
 func taskIDText(t *testing.T, reply, text string) string {
 	t.Helper()
 	re := regexp.MustCompile(`\bt(\d+)\b \[[~x! ]\] ` + regexp.QuoteMeta(text))
@@ -532,8 +531,8 @@ func taskIDText(t *testing.T, reply, text string) string {
 	return ""
 }
 
-// age appends n ghost start events (replay no-ops) to push the seq forward,
-// pane's deterministic aging: synthetic events, not sleeps.
+// age appends n ghost start events (replay no-ops) to push the seq forward:
+// deterministic aging, synthetic events, not sleeps.
 func age(t *testing.T, db store.DB, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
@@ -1345,7 +1344,7 @@ func needMove(t *testing.T, ctx context.Context, db store.DB, id string, pos int
 	return todostore.Move(ctx, db, id, pos, "s1")
 }
 
-// --- dependency resolution: pane's rule ---
+// --- dependency resolution ---
 
 // A minted id must not shadow a matching text: existing ids resolve
 // id-first, batch-internal references resolve by text only.
@@ -1390,7 +1389,7 @@ func TestThreeNodeCyclesRefuseWithPath(t *testing.T) {
 	}
 }
 
-// --- lifecycle voices and workspace isolation: pane's named cases ---
+// --- lifecycle voices and workspace isolation ---
 
 // Done tasks never report a blocker: the status gate lands first.
 func TestDoneTasksNeverReportABlocker(t *testing.T) {

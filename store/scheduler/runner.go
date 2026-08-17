@@ -14,17 +14,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	scheddomain "github.com/mrsirg97-rgb/looper/store/scheduler/domain"
+	"github.com/mrsirg97-rgb/rig/store"
+	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
 // --- run-job: the fire engine cron invokes ---
 //
-// Pane's runner.mjs, ported. Every outcome is recorded; only unexpected
-// errors come back loud (the verb maps that to exit non-zero). The job
-// runtime is looper itself in -p mode (roadmap deliverable 2, borrowed
-// minimally by this PR); the report-back instruction is pane's standing
-// directive, verbatim.
+// Every outcome is recorded; only unexpected errors come back loud (the
+// verb maps that to exit non-zero). The job runtime is rig itself in -p
+// mode; the report-back instruction is appended to every prompt.
 
 // Fetch is the busy-check transport seam.
 type Fetch func(url string) (json.RawMessage, error)
@@ -48,18 +46,18 @@ type RunOpts struct {
 	Fetch     Fetch
 	Spawn     Spawn
 	WorkerCmd []string // nil: the process's own executable
-	SwapURL   string   // empty: pane's default swap endpoint
+	SwapURL   string   // empty: the default llama-swap endpoint
 	Timeout   time.Duration
 	Now       func() time.Time
 }
 
-// DefaultRunTimeout bounds one worker run (pane's default).
+// DefaultRunTimeout bounds one worker run.
 const DefaultRunTimeout = 30 * time.Minute
 
-// defaultSwapURL is pane's llama-swap default endpoint.
+// defaultSwapURL is the default llama-swap endpoint.
 const defaultSwapURL = "http://127.0.0.1:8090"
 
-// ReportBack is pane's standing report-back directive, appended to every
+// ReportBack is the standing report-back directive, appended to every
 // job prompt: findings persist through rem, scoped to the job's cwd.
 const ReportBack = "\n\nReport back: when you finish, persist durable findings with the rem tool (project scope: this job's cwd) and end your reply with a short summary of what you found and did."
 
@@ -213,7 +211,7 @@ func RunJob(key string, opts RunOpts) error {
 		return fmt.Errorf("run-job: log dir: %w", err)
 	}
 	content := fmt.Sprintf(
-		"# looper-scheduler run\nkey=%s\nstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
+		"# rig-scheduler run\nkey=%s\nstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
 		key, started, res.Exit, durationMs, res.Stdout, res.Stderr)
 	if err := os.WriteFile(filepath.Join(dir, logName), []byte(content), 0o644); err != nil {
 		return fmt.Errorf("run-job: log write: %w", err)
@@ -319,7 +317,7 @@ func hasLine(text, key string) bool {
 	return false
 }
 
-// pruneLogs keeps the newest keep names in dir (pane's prune).
+// pruneLogs keeps the newest keep names in dir.
 func pruneLogs(dir string, keep int) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -345,14 +343,14 @@ func pruneLogs(dir string, keep int) error {
 
 // --- busy policy ---
 
-// busyResult is one busy-state verdict (pane's busyState shape).
+// busyResult is one busy-state verdict.
 type busyResult struct {
 	kind   string // run | busy | error
 	names  string
 	reason string
 }
 
-// busyState is pane's busy check, verbatim in semantics: normalize names
+// busyState is the busy check: normalize names
 // through the swap's alias map, short-circuit on own-slot loaded (concurrent
 // slots are safe, no eviction), then resident-size decides. Fetch failure
 // fails closed.

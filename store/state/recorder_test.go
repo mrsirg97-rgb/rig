@@ -12,10 +12,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	"github.com/mrsirg97-rgb/looper/store/state"
-	"github.com/mrsirg97-rgb/looper/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/store/state"
+	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
 // scripted is a capturing inner frontend: queued inputs, recorded notifies.

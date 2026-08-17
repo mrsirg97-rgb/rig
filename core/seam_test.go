@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // The widened seam: a plain function adapts and wraps exactly as before.

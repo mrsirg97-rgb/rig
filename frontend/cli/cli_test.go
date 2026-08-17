@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/frontend/cli"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/frontend/cli"
 )
 
 // lineReader serves whole lines from a channel; close = EOF.
@@ -234,8 +234,8 @@ func TestNotifyRendersReasoningVerbatim(t *testing.T) {
 	}
 }
 
-// decision 3: one line at the explicit turn boundary, pane's shaping;
-// totals accumulate across the turn's model calls and reset per turn.
+// One usage line at the explicit turn boundary; totals accumulate across
+// the turn's model calls and reset per turn.
 func TestTurnEndPrintsTheUsageLine(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 922, Completion: 10, CacheRead: 918}})

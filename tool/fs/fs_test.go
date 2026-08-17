@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/tool/fs"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/tool/fs"
 )
 
 func exec(t *testing.T, tool core.Tool, args string) (string, error) {

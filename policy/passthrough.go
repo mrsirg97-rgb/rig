@@ -5,7 +5,7 @@ package policy
 import (
 	"context"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 type passthrough struct{ system string }

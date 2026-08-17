@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/provider/openai"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/provider/openai"
 )
 
 func sseServer(t *testing.T, body string) *httptest.Server {

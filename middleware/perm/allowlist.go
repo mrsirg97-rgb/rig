@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 type allowlist struct {

@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/mrsirg97-rgb/looper/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
 // DB is the store handle every store package names its context with.

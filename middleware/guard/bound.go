@@ -1,11 +1,11 @@
-// Package guard bounds the repetition of fed-back failures. Per the spec
-// (SPEC_HARDENING decision 7, pane's tool-retry-guard aligned): every call
+// Package guard bounds the repetition of fed-back failures. Every call
 // executes exactly once, always; what is bounded is the model's
 // re-issuance of a failing tool, keyed by tool name, per turn. After
 // `limit` failures of one tool in a turn, the next issuance of that tool
 // is refused without executing, naming the bound. The limit-th failure
-// carries pane's note, verbatim. Successful re-issuance (polling) never
-// counts and stays unbounded. Sequential delivery means no locking.
+// carries a note telling the model to change the call. Successful
+// re-issuance (polling) never counts and stays unbounded. Sequential
+// delivery means no locking.
 package guard
 
 import (
@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // bound is the retry guard's per-turn state: consecutive failures per tool
@@ -46,8 +46,8 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 		if err != nil {
 			g.counts[call.Name]++
 			if g.counts[call.Name] == g.limit {
-				// pane's note, verbatim: the bound teaches instead of
-				// merely stopping. The tool's own content stays above it.
+				// the note: the bound teaches instead of merely stopping.
+				// The tool's own content stays above it.
 				note := fmt.Sprintf("[retry-guard] %s failed %d× in a row this turn. The error is above; read it and change the call, or stop calling this tool. Do not retry blindly.", call.Name, g.limit)
 				if strings.TrimSpace(content) == "" {
 					content = note

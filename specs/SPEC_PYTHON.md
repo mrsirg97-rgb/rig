@@ -55,7 +55,7 @@ lifecycle method the root calls on the way out — pane's
 type Tool struct{ /* owns one kernel */ }
 func New() *Tool                      // pane's defaults: venv interpreter, host, lazy bootstrap
 func NewWith(python, host string) *Tool  // the injection seam (pane's constructor opts): no bootstrap
-func DefaultHost() string             // the host resolution, named (LOOPER_PYTHON pairs with it)
+func DefaultHost() string             // the host resolution, named (RIG_PYTHON pairs with it)
 func (t *Tool) Host() string          // which host a session runs on; the root logs it
 func (t *Tool) Close()                // teardown: group kill, bounded wait
 ```
@@ -68,7 +68,7 @@ default path and keeps it.
 
 ## decisions
 
-- **One kernel per tool instance, not a registry.** looper runs one session
+- **One kernel per tool instance, not a registry.** rig runs one session
   per process (`main`, the `-p` worker), and the root wires one tool per
   process, so per-instance ownership is exactly pane's one-kernel-per-
   session with no shared package state. A registry would be shared mutable
@@ -76,11 +76,11 @@ default path and keeps it.
 - **The host is embedded and materialised.** `kernel_host.py` ships inside
   the binary (`//go:embed`); `New()` resolves pane's order — pane's
   installed path `~/.pi/agent/kernel/kernel_host.py` if present (interop),
-  else the embedded source written to `cfgDir/looper/kernel/kernel_host.py`
+  else the embedded source written to `cfgDir/rig/kernel/kernel_host.py`
   (idempotent, temp+rename). The binary stays single-file; the host stays
   a file the operator can read and the process can be seen running. The
-  root logs the choice to stderr at startup (`looper: python kernel
-  host: ...`), one line, so pane's and looper's hosts cannot drift
+  root logs the choice to stderr at startup (`rig: python kernel
+  host: ...`), one line, so pane's and rig's hosts cannot drift
   silently.
 - **The interpreter is pane's shared venv.**
   `~/.pi/agent/kernel-venv/bin/python` — numpy and pandas live there. If it
@@ -91,7 +91,7 @@ default path and keeps it.
   network): ...` verbatim. Stdlib only: it is `os/exec`, not a Go dep.
   The bootstrap is the default path's policy, not the seam's: a silent
   pip-install on first use wants an explicit out, so `main` reads
-  `LOOPER_PYTHON` and passes the operator's interpreter to `NewWith` —
+  `RIG_PYTHON` and passes the operator's interpreter to `NewWith` —
   an explicit choice is an explicit choice, and the bootstrap is
   skipped with it.
 - **Queue, then dispatch.** One dispatch at a time (pane's promise chain).
@@ -174,11 +174,11 @@ stand-in hosts through the same seam and skip only when there is no
 python3 at all. The bootstrap is a named default-path behaviour (pane's
 ensureKernel, ported): a first `New()` dispatch on a box without the
 shared venv bootstraps it (python3 + network) before the host starts;
-`NewWith` and, with it, `LOOPER_PYTHON` are exempt.
+`NewWith` and, with it, `RIG_PYTHON` are exempt.
 
 ## scope
 
 One leaf package, one registration line at the root, the allow-list
 default growing by `python`, one `Close()` deferred in `main`, one
-`LOOPER_PYTHON` read in `main`, one startup log line. The loop is
+`RIG_PYTHON` read in `main`, one startup log line. The loop is
 byte-identical.

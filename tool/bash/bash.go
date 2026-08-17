@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/core"
+	"github.com/mrsirg97-rgb/rig/core"
 )
 
 // outputCap bounds the work one call can induce on the transcript.

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/frontend/oneshot"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
 )
 
 func TestOneShotFeedsExactlyOnePromptThenEOFs(t *testing.T) {

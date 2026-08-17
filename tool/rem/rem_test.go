@@ -1,9 +1,8 @@
 package rem_test
 
-// The rem surface over store/rem: pane's shape/voice named cases, ported
-// at the adapter level — runtime shape refusals, the scope enum, the
-// source-attribution deviation (threaded session id, anon when
-// unthreaded, free text when passed), reply pass-through.
+// The rem surface over store/rem at the adapter level — runtime shape
+// refusals, the scope enum, source attribution (threaded session id,
+// anon when unthreaded, free text when passed), reply pass-through.
 
 import (
 	"context"
@@ -12,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	remdd "github.com/mrsirg97-rgb/looper/store/rem/ddl"
-	remmeta "github.com/mrsirg97-rgb/looper/store/rem/metadata"
-	remapi "github.com/mrsirg97-rgb/looper/tool/rem"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	remdd "github.com/mrsirg97-rgb/rig/store/rem/ddl"
+	remmeta "github.com/mrsirg97-rgb/rig/store/rem/metadata"
+	remapi "github.com/mrsirg97-rgb/rig/tool/rem"
 )
 
 func newDB(t *testing.T) store.DB {
@@ -173,9 +172,8 @@ func TestPruneVerbVoices(t *testing.T) {
 	}
 }
 
-// The named deviation: memories.source defaults to the calling session
-// id (anon when unthreaded), and accepts free text when the caller
-// passes one.
+// memories.source defaults to the calling session id (anon when
+// unthreaded), and accepts free text when the caller passes one.
 func TestSourceAttributionThreadedSession(t *testing.T) {
 	db := newDB(t)
 	tool := remapi.New(db)
@@ -215,7 +213,7 @@ func TestSourceExplicitRidesVerbatim(t *testing.T) {
 	}
 }
 
-// Reply shaping passes through pane's voices unaltered.
+// Reply shaping passes through the store's voices unaltered.
 func TestReplyVoicesPassThrough(t *testing.T) {
 	db := newDB(t)
 	tool := remapi.New(db)

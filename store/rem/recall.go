@@ -1,4 +1,4 @@
-// recall's pure core: the consolidation arithmetic (REM_SPEC G), the
+// recall's pure core: the consolidation arithmetic, the
 // lexical shapes of the two arms, and reciprocal rank fusion (lift's RRF,
 // k = 60). Zero I/O — the load-bearing math, testable by name.
 package rem
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Constants, named one comment each (REM_SPEC G).
+// Constants, named one comment each.
 const (
 	// decayRate: exponential decay per day; strength halves over
 	// roughly 35 days of neglect (exp(-0.02*35) ~ 0.5).
@@ -32,7 +32,7 @@ const (
 	armCapFactor = 2
 	// recallKMax: the live-hit budget ceiling.
 	recallKMax = 50
-	// importanceDefault / reflectionImportance: pane's defaults.
+	// importanceDefault / reflectionImportance: the write-side defaults.
 	importanceDefault    = 0.5
 	reflectionImportance = 0.3
 	// autoReflectionImportance: the compaction-entry reflection.
@@ -118,7 +118,7 @@ func gramsOf(text string) []string {
 
 var reservedFTS = regexp.MustCompile(`^(and|or|not)$`)
 
-// ftsQuery: pane's query grammar — reserved FTS operators quoted, terms
+// ftsQuery: the query grammar — reserved FTS operators quoted, terms
 // AND-ed.
 func ftsQuery(tokens []string) string {
 	parts := make([]string, len(tokens))

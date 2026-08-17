@@ -1,9 +1,8 @@
-// Package rem adapts store/rem to the loop's tool surface: pane's
-// description, schema shape, and action voices verbatim; runtime
+// Package rem adapts store/rem to the loop's tool surface: runtime
 // shape checks loud at execute; session attribution from the threaded
-// ctx (the named deviation: memories.source defaults to the calling
-// session id, anon when unthreaded, and accepts free text when the
-// caller passes one); replies exactly as the store shapes them.
+// ctx (memories.source defaults to the calling session id, anon when
+// unthreaded, and accepts free text when the caller passes one);
+// replies exactly as the store shapes them.
 package rem
 
 import (
@@ -12,13 +11,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/store"
-	remstore "github.com/mrsirg97-rgb/looper/store/rem"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/store"
+	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 )
 
-// schemaJSON is pane's parameters shape: action required, the flat
-// optional surface with pane's description strings.
+// schemaJSON: action required, the flat optional surface.
 const schemaJSON = `{
 	"type": "object",
 	"required": ["action"],
@@ -83,7 +81,7 @@ const schemaJSON = `{
 	}
 }`
 
-// description is pane's voice verbatim: lowercase, terse.
+// description: lowercase, terse.
 const description = "Memory tool: learn commits facts and constraints idempotently; recall fetches past " +
 	"solutions by intent (fuzzy/semantic search, project-scoped first with global fill); " +
 	"reflect stores a distilled memory with its raw source; prune consolidates the strength " +
@@ -123,8 +121,7 @@ type given struct {
 }
 
 // Exec maps the call onto the store's verbs with the threaded session.
-// Runtime shape voices are pane's; the store's own refusals pass
-// through.
+// The store's own refusals pass through.
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
 	if err := json.Unmarshal(args, &g); err != nil {
@@ -257,8 +254,8 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	}
 }
 
-// attributedSource is the named deviation: an explicit source rides
-// verbatim; absent, the calling session id (anon when unthreaded).
+// attributedSource: an explicit source rides verbatim; absent, the
+// calling session id (anon when unthreaded).
 func attributedSource(explicit *string, ctx context.Context) string {
 	if explicit != nil && *explicit != "" {
 		return *explicit
@@ -276,7 +273,7 @@ func scopeOf(s *string) string {
 	return ""
 }
 
-// scopeCheck: pane's scope enum, loud at execute — unknown scopes
+// scopeCheck: the scope enum, loud at execute — unknown scopes
 // refuse rather than silently default.
 func scopeCheck(s *string) error {
 	if s == nil || *s == "" || *s == "project" || *s == "global" || *s == "all" {

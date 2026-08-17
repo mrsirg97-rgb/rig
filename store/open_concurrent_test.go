@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper/store"
-	todostore "github.com/mrsirg97-rgb/looper/store/todo"
-	tododdl "github.com/mrsirg97-rgb/looper/store/todo/ddl"
+	"github.com/mrsirg97-rgb/rig/store"
+	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
 )
 
 // Concurrent writers against one workspace file must serialize inside the

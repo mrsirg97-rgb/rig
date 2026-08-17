@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mrsirg97-rgb/looper/store/lazy"
-	"github.com/mrsirg97-rgb/looper/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/store/lazy"
+	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
 type Session struct {

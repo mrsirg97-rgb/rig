@@ -1,13 +1,13 @@
-# looper usage
+# rig usage
 
-looper is a terminal REPL: you type, the model answers, and when the model
+rig is a terminal REPL: you type, the model answers, and when the model
 asks for work the tools execute it in your working directory. Build and
 configure per `docs/SETUP.md`; this file covers running it.
 
 ## starting a session
 
 ```sh
-looper --base-url http://127.0.0.1:8080/v1 --model your-model --system "be terse"
+rig --base-url http://127.0.0.1:8080/v1 --model your-model --system "be terse"
 ```
 
 Then just talk. There are no subcommands and no commands to memorize — the
@@ -19,7 +19,7 @@ the transcript, the file provenance, and the identity are rebuilt from the
 state store in one read-only transaction (dangling tool calls are kept; an
 unknown id is loud). The per-process state — the guard's counts, the steering
 slot — starts fresh, and the session's id is the one to look up in the
-`sessions` table of the state store (`looper/sessions/*.sqlite` under the
+`sessions` table of the state store (`rig/sessions/*.sqlite` under the
 config dir). `-p` one-shot and `--resume` refuse at construction: one-shot
 stays one-shot.
 
@@ -80,14 +80,14 @@ bash ✓ 12ms
   the meantime, and a second Ctrl-C is ignored: the first signal is the
   exit). Teardown surfaces cleanly (exit 0, session closed).
 - A provider that closes the stream without a Done or Fault marker makes
-  `looper` exit non-zero with a loud error. Silent termination is impossible by
+  `rig` exit non-zero with a loud error. Silent termination is impossible by
   construction.
 
 ## narrowing what may execute
 
 ```sh
-looper --allow read                 # inspection only: bash/write/edit denied
-looper --allow bash,read            # run things, inspect things, change nothing
+rig --allow read                 # inspection only: bash/write/edit denied
+rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the

@@ -59,7 +59,7 @@ func TestGeneratedMatchesCommitted(t *testing.T) {
 	}
 	regenerate()
 
-	regenCmd := "cd <lift>/cmd && go run main.go -config=$LOOPER/store/state/gen.json -source=$LOOPER/store/state/source.json"
+	regenCmd := "cd <lift>/cmd && go run main.go -config=$RIG/store/state/gen.json -source=$RIG/store/state/source.json"
 	for _, pkg := range []string{"domain", "ddl"} {
 		committed := listFiles(t, filepath.Join(workDir, pkg))
 		got := listFiles(t, filepath.Join(tmp, pkg))

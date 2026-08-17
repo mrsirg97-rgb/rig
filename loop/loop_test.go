@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/looper"
-	"github.com/mrsirg97-rgb/looper/core"
-	"github.com/mrsirg97-rgb/looper/loop"
+	"github.com/mrsirg97-rgb/rig"
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/loop"
 )
 
 // --- DI-seam fakes ---------------------------------------------------------
@@ -207,10 +207,10 @@ func TestTextOnlyTurnOrdering(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{system: "be terse"}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{system: "be terse"}),
 	)
 	k.Session = session
 
@@ -252,11 +252,11 @@ func TestToolRoundTripOrdering(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
 	)
 	k.Session = session
 
@@ -292,10 +292,10 @@ func TestFaultMidStreamPreservesSession(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -334,10 +334,10 @@ func TestTransportErrorSurfacesAndContinues(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -371,10 +371,10 @@ func TestClosedStreamWithoutDoneFailsLoud(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -394,10 +394,10 @@ func TestCancellationMidStream(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -425,11 +425,11 @@ func TestCancellationBetweenToolCalls(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
 	)
 	k.Session = session
 
@@ -456,11 +456,11 @@ func TestMalformedCallFedBackOnce(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
 	)
 	k.Session = session
 
@@ -494,11 +494,11 @@ func TestOversizedToolResultStaysIntact(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
-		looper.WithTools(bash),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
 	)
 	k.Session = session
 
@@ -527,10 +527,10 @@ func TestAssembleErrorAbortsTurnAndRecovers(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(sp),
-		looper.WithFrontend(f),
-		looper.WithPolicy(p),
+	k := rig.New(
+		rig.WithProvider(sp),
+		rig.WithFrontend(f),
+		rig.WithPolicy(p),
 	)
 	k.Session = session
 
@@ -567,10 +567,10 @@ func TestUnknownToolNameFedBackOnce(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := looper.New(
-		looper.WithProvider(p),
-		looper.WithFrontend(f),
-		looper.WithPolicy(&transcriptPolicy{}),
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
 	)
 	k.Session = session
 
@@ -591,7 +591,7 @@ func TestUnknownToolNameFedBackOnce(t *testing.T) {
 
 func TestMissingSeamsFailLoud(t *testing.T) {
 	f := &recorderFrontend{inputs: make(chan string, 8)}
-	k := looper.New(looper.WithFrontend(f), looper.WithPolicy(&transcriptPolicy{}))
+	k := rig.New(rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
 	err := loop.Run(context.Background(), k)
 	if err == nil || !strings.Contains(err.Error(), "provider") {
 		t.Fatalf("kernel without a provider must fail loudly naming the seam, got %v", err)
@@ -606,5 +606,5 @@ func TestDuplicateToolNamesPanic(t *testing.T) {
 			t.Fatal("duplicate tool names must panic at wiring time")
 		}
 	}()
-	looper.New(looper.WithTools(a, b))
+	rig.New(rig.WithTools(a, b))
 }
