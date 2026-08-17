@@ -260,7 +260,7 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 
 	// the scripted swap: the main call returns a bash tool call; the call
 	// carrying a tool result faults with context length; the summary call
-	// (the compacting system prompt) returns the summary; the retry (a
+	// (the short summary role) returns the summary; the retry (a
 	// [compaction] row present) returns the final answer.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -284,7 +284,7 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 			}
 		}
 		switch {
-		case strings.HasPrefix(sys, "You are compacting"):
+		case strings.HasPrefix(sys, "You write summaries of agent transcripts"):
 			io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"SUM\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n")
 		case hasSummary != "":
 			io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"the answer\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1}}\n")
