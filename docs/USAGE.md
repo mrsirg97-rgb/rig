@@ -7,12 +7,12 @@ configure per `docs/SETUP.md`; this file covers running it.
 ## starting a session
 
 ```sh
-rig --base-url http://127.0.0.1:8080/v1 --model your-model --system "be terse"
+rig --base-url http://127.0.0.1:8090/v1 --model your-model --system "be terse"
 ```
 
-Then just talk. There are no subcommands and no commands to memorize — the
-boundary is plain text in, plain text out. Blank lines are no-ops; EOF (Ctrl-D)
-ends the session.
+Then just talk. The boundary is plain text in, plain text out. Blank lines
+are no-ops; EOF (Ctrl-D) ends the session. A line starting with `/` is a
+command (below); `//` escapes it back into a prompt.
 
 A session outlives the process. `--resume <id>` continues an earlier one:
 the transcript, the file provenance, and the identity are rebuilt from the
@@ -22,6 +22,27 @@ slot — starts fresh, and the session's id is the one to look up in the
 `sessions` table of the state store (`rig/sessions/*.sqlite` under the
 config dir). `-p` one-shot and `--resume` refuse at construction: one-shot
 stays one-shot.
+
+## commands
+
+Typed lines with a `/` prefix; the loop never sees them. An unknown command
+is a loud line naming the known set, never silently a prompt.
+
+- `/compact` — force a compaction now (the `⧉` line reports dropped/kept),
+  or `compact: nothing to drop`.
+- `/new` — close the session row ok, mint a fresh session, same process.
+- `/sessions` — list; `show <id>` renders a transcript; `resume <id>` swaps
+  to it in-process.
+- `/models` — the per-model table with the active row marked; `/models <id>`
+  switches for the next turn.
+- `/steer <text>` — queue for the next boundary (interrupts a live turn);
+  bare `/steer` interrupts only.
+- `/todo`, `/scheduler` — the same tools the model gets, same queue, same
+  store; the tool's own refusals teach the shape.
+
+Context compacts automatically at the active model's own trigger (the
+models table); the `⧉` line reports it and the summary lands in the
+transcript and in rem.
 
 ## what you see
 

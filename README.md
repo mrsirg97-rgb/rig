@@ -9,7 +9,9 @@ work bounded. Not a framework: a machine for one thing, built closed.
 leaf dependency is `modernc.org/sqlite` (pure-Go driver) for the stores —
 justified in `specs/SPEC_STATE.md`.
 
-Status: initial release, version `0.1.0`.
+Status: feature-complete runtime, version `0.2.0`. The freeze discipline
+holds on `core/` and `loop/`; the 1.0 tag waits for lived use (a worker
+soak, the TUI field-tested as the daily driver).
 
 ## quickstart
 

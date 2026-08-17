@@ -196,6 +196,7 @@ cancellation case still passes, and a Frontend can render pane's status
 glyphs from events alone with no access to loop internals.
 
 ## 8. policy/compact: compaction as a ContextPolicy
+> done
 
 Deliverable: the first real `ContextPolicy` beyond passthrough. Today there
 is none: passthrough replays the whole transcript, and a worker on a 64k

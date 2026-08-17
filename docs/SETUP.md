@@ -20,7 +20,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.1.0
+./rig --version        # rig 0.2.0
 ```
 
 Contributors: the gate before any change is
@@ -48,11 +48,19 @@ flags win over env, env wins over built-in defaults:
 | web search |           | `RIG_SEARXNG_URL` | `http://127.0.0.1:8888`        | the SearXNG instance (the web-tools compose) |
 | web fetch  |           | `RIG_WEB_FETCH_PROXY` | `http://127.0.0.1:8889`    | egress proxy for web_fetch; set empty = direct |
 | extraction |           | `RIG_TRAFILATURA` | shared venv, then PATH      | the trafilatura binary; a path, or empty = the stdlib text pass carries |
+| model row  |           | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | the built-in table | synthesizes a compaction row for a model the table does not know |
 
 **On `RIG_WEB_FETCH_PROXY` and `RIG_TRAFILATURA`** — "set empty" means
 the variable is present but empty: that is an explicit choice (direct
 egress / no trafilatura), while an unset variable takes the compose
 default. Presence is the signal, the value is the choice.
+
+**On the model row** — compaction is per-model: the active model must
+resolve to a row (window, max tokens, reserve, keep-recent). A known id
+uses the built-in table; an unknown id with `RIG_MODEL_WINDOW` set gets a
+synthesized row (absent fields take named defaults, then validate); an
+unknown id with no env is a loud refusal at start naming the known ids.
+`/models` lists the runtime table and switches the active model.
 
 **On `RIG_RETRIES`** — read before tuning: the value does **not** permit
 silent re-execution. Every tool call executes exactly once; the value bounds
@@ -79,8 +87,8 @@ dead agent; narrow with `--allow read` or similar.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.1.0
-./rig --base-url $YOUR_EPIT --model $NAME --system "be terse"
+./rig --version                 # prints: rig 0.2.0
+./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
 then type a prompt. A line typed while a turn is live steers (it interrupts
