@@ -143,9 +143,7 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	if len(older) == 0 {
 		return core.Compacted{}, false, nil // nothing to drop
 	}
-	input := make([]core.Message, 0, len(older)+1)
-	input = append(input, core.Message{Role: core.RoleSystem, Content: summaryPrompt})
-	input = append(input, older...)
+	input := SummaryInput(older)
 	p.mu.Lock()
 	factor = p.factor
 	p.mu.Unlock()
@@ -180,11 +178,14 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	return ev, true, nil
 }
 
-// summarize runs the one summary call (3): [system: the prompt, older
-// verbatim], no tools; the MaxTokens clamp is 3's honest budget, and the
-// reasoning effort is medium — the one call whose thinking nobody reads
-// (a lower effort where the provider supports it; a provider that does
-// not know it ignores the field).
+// summarize runs the one summary call (3): the short system role plus
+// one user message carrying the older prefix as quoted transcript data
+// and the prompt's instruction — data, not a live conversation, so the
+// model summarizes it rather than continuing it (3). No tools; the
+// MaxTokens clamp is 3's honest budget, and the reasoning effort is
+// medium — the one call whose thinking nobody reads (a lower effort
+// where the provider supports it; a provider that does not know it
+// ignores the field).
 func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens int) (string, core.Usage, error) {
 	ch, err := p.provider.Stream(ctx, core.Request{Messages: input, MaxTokens: maxTokens, ReasoningEffort: "medium"})
 	if err != nil {

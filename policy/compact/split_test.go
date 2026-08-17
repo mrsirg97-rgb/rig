@@ -70,15 +70,27 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 		if c.Dropped != 627 {
 			t.Fatalf("Dropped = %d, want the older prefix's estimate (500 + 50 + 27 + 50)", c.Dropped)
 		}
-		// the older prefix ends before the batch: the summary's input
-		// carries up to the first pair's result, not the batch.
+		// the older prefix ends before the batch: the quoted transcript
+		// (the 3 shape's user message) carries up to the first pair's
+		// result, not the batch.
 		reqs := prov.reqs()
 		if len(reqs) != 1 {
 			t.Fatalf("summary calls = %d, want 1", len(reqs))
 		}
-		last := reqs[0].Messages[len(reqs[0].Messages)-1]
-		if last.Role != core.RoleTool || last.ToolID != "c1" {
-			t.Fatalf("the older prefix must end at c1's result: %+v", last)
+		msgs := reqs[0].Messages
+		if len(msgs) != 2 {
+			t.Fatalf("the summary request = %d messages, want the 3 shape (two)", len(msgs))
+		}
+		tag := strings.Index(msgs[1].Content, "</transcript>")
+		if tag < 0 {
+			t.Fatal("the quoted block must be closed")
+		}
+		body := strings.TrimSuffix(msgs[1].Content[:tag], "\n")
+		if last := strings.Split(body, "\n")[len(strings.Split(body, "\n"))-1]; last != "tool: "+strings.Repeat("r", 200) {
+			t.Fatalf("the older prefix must end at c1's result; the block's last line is %q...", last[:40])
+		}
+		if strings.Contains(body, strings.Repeat("b", 100)) {
+			t.Fatal("the quoted block must not carry the batch (its assistant line is in the kept tail)")
 		}
 	})
 

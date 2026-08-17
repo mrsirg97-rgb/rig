@@ -291,10 +291,18 @@ call is not in the transcript (the resume shape, SPEC_HARDENING 5) may
 start the tail: there is no pair to keep whole, and the template reads
 the shape as legal.
 
-The older prefix is summarized in one provider call:
-`[system: the summary prompt, older prefix verbatim]`, no tools, and the
-summary request carries a lower reasoning effort (`"medium"`) where the
-provider supports it — it is the one call whose thinking nobody reads, and
+The older prefix is summarized in one provider call: a short system
+message ("you write summaries of agent transcripts"), then ONE user
+message containing the older prefix rendered as quoted text — a
+`<transcript>` block, one line per message, role prefixed, tool calls
+and results included — followed by the `summary_prompt.txt`
+instruction. The prefix is data inside the user message, not live
+messages: the model summarizes the block instead of continuing the
+conversation it quotes — a last "reply with only X" or a bare tool call
+stays inside the block (named test: the summary describes the request
+and the call, never X or a tool call). No tools, and the summary
+request carries a lower reasoning effort (`"medium"`) where the provider
+supports it — it is the one call whose thinking nobody reads, and
 inheriting the model's max effort spends tokens the fold does not use (a
 provider that does not know the field ignores it). The effort goes over the
 wire in both shapes the server families read: top-level
@@ -710,6 +718,18 @@ in `t.TempDir()` where a case names it.
   summary request: `MaxTokens == min(row.MaxTokens, Window - est(input))`
   (3's honest budget — the reserve not subtracted twice); a budget <= 0
   fails loud, naming the row's numbers.
+- `TestSummarySummarizesRatherThanContinues` — 3's request shape: an
+  older prefix whose last user message says "reply with only X" and
+  whose last assistant message is a tool call. The summary request is
+  exactly two messages — the short system role, and one user message
+  opening the `<transcript>` block, the prefix rendered as quoted lines
+  (the call and its result included, the trap instruction as a line, not
+  a live message), the instruction following the closing tag, no tools,
+  no live tool calls, the kept tail not in the block; the summary
+  describes the request and the call, never X or a tool call.
+- `TestRenderTranscriptRendersRolesCallsAndResults` — the renderer's
+  exact line shape: multi-line content keeps its lines, the assistant's
+  content precedes its `[calls]` line, the result is its tool line.
 - `TestOverflowRecoversOnce` — a pre-stream context-length fault
   (wordlist phrasing), then a healthy stream: the frontend's order is
   `Compacted, TextDelta*, Done`; the first `Fault` never surfaces; the

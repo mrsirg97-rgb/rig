@@ -219,13 +219,14 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 		if len(reqs) != 1 {
 			t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
 		}
-		// the summary input is [the summary prompt, the older prefix
-		// (500)]: the clamp is Window - est(input), bounded by MaxTokens —
-		// 3's honest budget, the reserve not subtracted twice. est is the
-		// same stdlib rule as the policy's: per message, bytes/4 rounded
-		// up, over the prompt file the test sits beside.
-		prompt := reqs[0].Messages[0].Content
-		est := (len(prompt)+3)/4 + 500
+		// the summary input is the 3 shape: the short system role plus one
+		// user message carrying the older prefix (500) as quoted transcript
+		// data and the prompt's instruction. The clamp is Window -
+		// est(input), bounded by MaxTokens — 3's honest budget, the reserve
+		// not subtracted twice. est is the same stdlib rule as the
+		// policy's: per message, bytes/4 rounded up, over the request's
+		// actual messages.
+		est := compact.Estimate(reqs[0].Messages)
 		want := row.Window - est
 		if want > row.MaxTokens {
 			want = row.MaxTokens
@@ -248,15 +249,12 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 		if err == nil {
 			t.Fatal("Assemble = ok, want the loud failure")
 		}
-		// the input (the prompt + the 1250-token prefix) does not fit the
-		// 1000-token window: the refusal names the row's numbers, with
-		// the input's estimate computed the policy's way (the prompt is
-		// the one file the test sits beside).
-		prompt, perr := os.ReadFile("summary_prompt.txt")
-		if perr != nil {
-			t.Fatalf("read the prompt file: %v", perr)
-		}
-		wantEst := (len(prompt)+3)/4 + 1250
+		// the input (the 3 shape over the 1250-token prefix) does not fit
+		// the 1000-token window: the refusal names the row's numbers, with
+		// the input's estimate computed the policy's way — over the exact
+		// message list the policy would have sent.
+		older := []core.Message{{Role: core.RoleUser, Content: strings.Repeat("p", 5000)}}
+		wantEst := compact.Estimate(compact.SummaryInput(older))
 		msg := err.Error()
 		for _, want := range []string{"local", "1000", fmt.Sprint(wantEst)} {
 			if !strings.Contains(msg, want) {
@@ -264,6 +262,161 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestRenderTranscriptRendersRolesCallsAndResults (named): one line per
+// message, role prefixed — a multi-line user message keeps its lines,
+// an assistant's content precedes its [calls] line, a result is its
+// tool line.
+func TestRenderTranscriptRendersRolesCallsAndResults(t *testing.T) {
+	older := []core.Message{
+		{Role: core.RoleUser, Content: "line one\nline two"},
+		{Role: core.RoleAssistant, Content: "checking", ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{"command":"ls"}`)}}},
+		{Role: core.RoleTool, ToolID: "c1", Content: "out"},
+	}
+	got := compact.RenderTranscript(older)
+	want := "user: line one\nline two\n" +
+		"assistant: checking\n" +
+		"assistant: [calls bash] {\"command\":\"ls\"}\n" +
+		"tool: out\n"
+	if got != want {
+		t.Fatalf("render = %q, want %q", got, want)
+	}
+}
+
+// TestSummarySummarizesRatherThanContinues (named, decision 3): an older
+// prefix whose last user message says "reply with only X" and whose last
+// assistant message is a tool call must be summarized as data — the
+// request is the short system role plus one user message carrying the
+// prefix inside a quoted <transcript> block (the call and its result
+// rendered as lines, the trap instruction as a line, not a live
+// message), followed by the prompt's instruction, no tools, no live tool
+// calls; and the summary describes the request and the call, never X or
+// a tool call.
+func TestSummarySummarizesRatherThanContinues(t *testing.T) {
+	row := models.Model{ID: "local", Window: 1900, MaxTokens: 500, Reserve: 100, KeepRecent: 10}
+	s := core.NewSession()
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 120)})
+	s.Append(core.Message{Role: core.RoleUser, Content: "Set up the build."})
+	s.Append(core.Message{
+		Role:      core.RoleAssistant,
+		ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{"command":"make build"}`)}},
+	})
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: "ok"})
+	s.Append(core.Message{Role: core.RoleUser, Content: "reply with only X"})
+	s.Append(core.Message{
+		Role: core.RoleAssistant, ContextTokens: 1800, // the L8 anchor: size 1800 + est(tail) 1 = 1801 > 1800
+		ToolCalls: []core.ToolCall{{ID: "c2", Name: "bash", Args: []byte(`{"command":"echo X"}`)}},
+	})
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: "X"}) // the tail (KeepRecent 10)
+	// the scripted summary plays the model's answer under the 3 shape:
+	// it describes the request and the call, instead of continuing them.
+	const summary = "The session set up the build: the model called bash with make build (it printed ok); the user then asked to reply with only X."
+	prov := &scriptedProvider{turns: []scriptedTurn{{
+		events: []core.Event{core.TextDelta{Text: summary}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 5}}},
+	}}}
+	fe := &captureFrontend{}
+	pol, err := compact.New(prov, fe, s, "S", row)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := pol.Assemble(context.Background(), s); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	reqs := prov.reqs()
+	if len(reqs) != 1 {
+		t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
+	}
+	msgs := reqs[0].Messages
+	if len(msgs) != 2 {
+		t.Fatalf("the summary request = %d messages, want exactly two (the role; the transcript plus the instruction)", len(msgs))
+	}
+	if msgs[0].Role != core.RoleSystem || msgs[0].Content != compact.SummarySystem {
+		t.Fatalf("message 0 = %+v, want the short system role %q", msgs[0], compact.SummarySystem)
+	}
+	if msgs[1].Role != core.RoleUser {
+		t.Fatalf("message 1 = role %s, want user (one message carrying the transcript)", msgs[1].Role)
+	}
+	c := msgs[1].Content
+	if !strings.HasPrefix(c, "<transcript>\n") {
+		t.Fatalf("the user message must open the quoted block, got %q...", c[:30])
+	}
+	for _, want := range []string{
+		"user: Set up the build.",
+		"assistant: [calls bash] {\"command\":\"make build\"}",
+		"tool: ok",
+		"user: reply with only X", // the trap instruction, as a quoted line
+	} {
+		if !strings.Contains(c, want) {
+			t.Fatalf("the quoted transcript must render %q", want)
+		}
+	}
+	// the prompt's instruction follows the closing tag — never before
+	// it — and the kept tail is not in the block at all.
+	prompt, perr := os.ReadFile("summary_prompt.txt")
+	if perr != nil {
+		t.Fatalf("read the prompt file: %v", perr)
+	}
+	if !strings.Contains(c, string(prompt)) {
+		t.Fatal("the user message must carry the summary_prompt.txt instruction")
+	}
+	tag := strings.Index(c, "</transcript>")
+	if tag < 0 {
+		t.Fatal("the quoted block must be closed")
+	}
+	if p := strings.Index(c, string(prompt[:40])); p < 0 || p < tag {
+		t.Fatalf("the instruction must follow the closing tag (tag %d, prompt %d)", tag, p)
+	}
+	if strings.Contains(c[:tag], "echo X") {
+		t.Fatalf("the quoted block must not carry the kept tail: %q", c[:tag])
+	}
+	for i, m := range msgs {
+		if len(m.ToolCalls) != 0 {
+			t.Fatalf("message %d carries live tool calls %+v — the prefix is data, not a conversation", i, m.ToolCalls)
+		}
+		if m.Content == "reply with only X" {
+			t.Fatalf("message %d is the trap instruction as a live message — it must be a quoted line", i)
+		}
+	}
+	if reqs[0].ReasoningEffort != "medium" {
+		t.Fatalf("ReasoningEffort = %q, want medium (the one call whose thinking nobody reads)", reqs[0].ReasoningEffort)
+	}
+
+	// the rewrite: [summary row] + the kept tail, whole.
+	if len(s.Messages) != 3 {
+		t.Fatalf("transcript = %d messages, want the summary + the kept tail", len(s.Messages))
+	}
+	if s.Messages[0].Role != core.RoleUser || s.Messages[0].Content != compact.SummaryMarker+summary {
+		t.Fatalf("the rewritten transcript must start with the marked summary row: %+v", s.Messages[0])
+	}
+	if s.Messages[1].ToolCalls[0].ID != "c2" || s.Messages[2].Role != core.RoleTool {
+		t.Fatalf("the kept tail must be the pair, whole: %+v", s.Messages[1:])
+	}
+	// the summary describes the request and the call; it is never X and
+	// never a tool call.
+	if s.Messages[0].Content == compact.SummaryMarker+"X" {
+		t.Fatal("the summary is the trap instruction's answer")
+	}
+	for _, want := range []string{"reply with only X", "bash", "make build"} {
+		if !strings.Contains(s.Messages[0].Content, want) {
+			t.Fatalf("the summary must describe %q: %q", want, s.Messages[0].Content)
+		}
+	}
+	if strings.Contains(s.Messages[0].Content, `{"command"`) {
+		t.Fatalf("the summary must not be a tool call: %q", s.Messages[0].Content)
+	}
+	evs := fe.snapshot()
+	if len(evs) != 1 {
+		t.Fatalf("frontend events = %v, want exactly one Compacted", evs)
+	}
+	cEv, ok := evs[0].(core.Compacted)
+	if !ok {
+		t.Fatalf("event 0 = %T, want Compacted", evs[0])
+	}
+	if cEv.Kept != 7 {
+		t.Fatalf("Kept = %d, want the tail's estimate (7)", cEv.Kept)
+	}
 }
 
 // TestCompactedEventBeforeTheNextCall (named): the trigger path emits

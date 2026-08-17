@@ -32,7 +32,12 @@
   swap, only the kwargs entry changes the think length): it is the one
   call whose thinking nobody reads. The summary prompt also says prose
   only, no tool calls, so a max-effort model can't answer the summary
-  with a call.
+  with a call. **The summary request is two messages**: a short system
+  role, and one user message carrying the older prefix as a quoted
+  `<transcript>` block (role-prefixed lines, tool calls and results
+  included) followed by the prompt's instruction — the prefix is data,
+  not a live conversation, so the model summarizes it instead of
+  continuing it (a last "reply with only X" stays inside the block).
 
 - **runtime hardening** (roadmap deliverable 7, `specs/SPEC_HARDENING.md`):
   the seams and events everything after this needed, in one named loop

@@ -332,6 +332,10 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 	}
 
 	t.Run("a 2x report doubles only the delta", func(t *testing.T) {
+		// a wider window than the shared row: the 3 shape's summary input
+		// (the quoted transcript plus the prompt) must still fit the
+		// window at the doubled factor.
+		row := models.Model{ID: "local", Window: 1050, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 		s := base()
 		prov := &scriptedProvider{turns: []scriptedTurn{
 			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 2*100, Completion: 10}}}},
@@ -347,8 +351,8 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		}
 		for range out {
 		}
-		// grow the delta to est 250: raw (factor 1) size = 750 <= 900
-		// (under the raw trigger); calibrated (factor 2) = 1000 > 900.
+		// grow the delta to est 250: raw (factor 1) size = 750 <= 950
+		// (under the raw trigger); calibrated (factor 2) = 1000 > 950.
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: strings.Repeat("r", 600)}) // +150
 		prov.turns = append(prov.turns, summaryTurn("S2", core.Usage{Prompt: 5, Completion: 5}))
 		if _, err := pol.Assemble(context.Background(), s); err != nil {
