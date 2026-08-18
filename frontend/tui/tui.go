@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -19,11 +20,12 @@ import (
 )
 
 // tui is the terminal Frontend (SPEC_TUI): the reader goroutine, the
-// command dispatch, and the banner reprint triggers, over the pure
-// renderers (decisions 3, 5, 6) and the live-region protocol (decision
-// 2). The runtime contract is the CLI's: one slot, latest wins; the
-// steering and Ctrl-C semantics unchanged (decision 9); the loop's
-// contract "Input returns one message" a prompt, never a command.
+// command dispatch, and the status line's refresh points, over the
+// pure renderers (decisions 3, 5, 6) and the live-region protocol
+// (decision 2). The runtime contract is the CLI's: one slot, latest
+// wins; the steering and Ctrl-C semantics unchanged (decision 9); the
+// loop's contract "Input returns one message" a prompt, never a
+// command.
 type tui struct {
 	theme Theme
 	in    io.Reader
@@ -54,7 +56,7 @@ type tui struct {
 	slot            string
 	hasSlot         bool
 	steeredLive     bool
-	bannered        bool
+	started         bool // the session start (the startup block) has committed
 	quit            bool
 	rawOld          *term.State
 	// per-turn usage totals (Done accumulates, TurnEnd commits them):
@@ -69,11 +71,27 @@ type tui struct {
 	toolName string
 	toolArgs []byte
 
-	bannerIn func(context.Context) BannerIn
+	statusIn func(context.Context) StatusIn
 	news     func(context.Context) string
 	commands map[string]core.Command
 	known    []string
 	env      any
+
+	// the completion menu (decision 9, amended): the current
+	// candidates, the selection, and the Esc-closed flag (the close
+	// lives until the input changes).
+	menuCands []menuCand
+	menuSel   int
+	menuDead  bool
+	// the status line (decision 3): the snapshot from the root's
+	// closure (the banner's old door, refreshed at its reprint points)
+	// and the used number from the usage events (the last Done's
+	// Prompt + Completion, or the compact's Kept).
+	statusModel   string
+	statusEffort  string
+	statusWindow  int
+	statusUsed    int
+	statusHasUsed bool
 
 	// reader-owned: the line state and the byte-stream parser.
 	ed editor
@@ -101,10 +119,12 @@ func WithTheme(t Theme) Option { return func(tu *tui) { tu.theme = t } }
 // size at start; the tests name it).
 func WithWidth(w int) Option { return func(t *tui) { t.width = w } }
 
-// WithBanner is the banner's numbers (decision 3): the root computes
-// them at call time (the session start, and every reprint trigger).
-func WithBanner(f func(context.Context) BannerIn) Option {
-	return func(t *tui) { t.bannerIn = f }
+// WithStatus is the status line's and the startup block's numbers
+// (decision 3, amended): the root computes them at call time (the
+// session start, and the refresh points: new, sessions resume, a
+// models switch) — a store read, never per repaint.
+func WithStatus(f func(context.Context) StatusIn) Option {
+	return func(t *tui) { t.statusIn = f }
 }
 
 // WithNews is the scheduler's session-start line (decision 6): one dim
@@ -117,7 +137,9 @@ func WithNews(f func(context.Context) string) Option {
 
 // WithCommands registers the user commands (SPEC_COMMANDS 1): the
 // prefix dispatch inside Input, before a line becomes a prompt. The
-// Steer seam is the frontend's, filled here (as the CLI's).
+// Steer seam is the frontend's, filled here (as the CLI's); the
+// models' Sub() hints take their names from the Env here too (the
+// menu is the TUI's, the hints the command package's).
 func WithCommands(cmds []core.Command, env any) Option {
 	return func(t *tui) {
 		t.commands = make(map[string]core.Command, len(cmds))
@@ -130,6 +152,7 @@ func WithCommands(cmds []core.Command, env any) Option {
 		t.env = env
 		if e, ok := env.(*command.Env); ok {
 			e.Steer = t
+			command.ModelHints(cmds, e)
 		}
 	}
 }
@@ -330,16 +353,81 @@ func (t *tui) onKey(k key, r rune) {
 		t.mu.Lock()
 		t.showReasoning = !t.showReasoning
 		t.mu.Unlock()
+	case keyEsc:
+		// Esc's precedence (decision 9, amended): the pager first
+		// (pagerKey above), then the menu (the input keeps its text),
+		// then the prompt clear.
+		if t.closeMenu() {
+			return
+		}
+		t.ed.apply(keyEsc, 0)
+		t.mu.Lock()
+		t.menuSyncLocked()
+		t.mu.Unlock()
+		t.paintInput()
 	case keyTab:
-		// tab completes a command name against the known set (decision
-		// 9's hint): to the longest common prefix, plus the trailing
-		// space when the match is unique. Anywhere else, ignored.
-		t.completeCommand()
+		// Tab (decision 9, amended): the menu's selection steps down
+		// while it is open; a single candidate is completed with its
+		// trailing space; anywhere else, a no-op.
+		t.mu.Lock()
+		next, changed := t.tabTextLocked()
+		t.mu.Unlock()
+		if changed {
+			t.ed.setText(next)
+			t.mu.Lock()
+			t.menuSyncLocked()
+			t.mu.Unlock()
+		}
+		t.paintInput()
+	case keyShiftTab:
+		// Shift-Tab (CSI Z): the menu's selection steps up.
+		t.mu.Lock()
+		if t.menuOpenLocked() {
+			n := len(t.menuCands)
+			t.menuSel = (t.menuSel - 1 + n) % n
+		}
+		t.mu.Unlock()
 		t.paintInput()
 	default:
+		before := t.ed.text()
 		t.ed.apply(k, r)
+		if t.ed.text() != before {
+			t.mu.Lock()
+			t.menuSyncLocked()
+			t.mu.Unlock()
+		}
 		t.paintInput()
 	}
+}
+
+// menuSyncLocked refreshes the completion for the input's current text
+// (under mu; decision 9, amended): a new text resets the selection and
+// reopens the menu (Esc's close lives until the text changes).
+func (t *tui) menuSyncLocked() {
+	t.menuCands, _, _ = t.completionLocked()
+	t.menuSel = 0
+	t.menuDead = false
+}
+
+// menuOpenLocked: the menu is showing (two or more candidates, not
+// Esc-closed).
+func (t *tui) menuOpenLocked() bool {
+	return len(t.menuCands) >= 2 && !t.menuDead
+}
+
+// closeMenu closes the menu if it is open (Esc's middle rung) and
+// reports whether it was.
+func (t *tui) closeMenu() bool {
+	t.mu.Lock()
+	open := t.menuOpenLocked()
+	if open {
+		t.menuDead = true
+	}
+	t.mu.Unlock()
+	if open {
+		t.paintInput()
+	}
+	return open
 }
 
 // pagerKey routes a key while the pager is open (the copy-mode's
@@ -411,21 +499,90 @@ func (t *tui) exitPagerLocked() {
 	t.live.resume()
 }
 
-// paintInput rewrites the input row in place and parks the terminal
-// cursor at the edit column (the edit op, live.go).
+// paintInput rewrites the input row and parks the terminal cursor at
+// the edit column (the edit op, live.go). The menu rows and the status
+// row (decision 2's layout) are live lines: while their shape stands,
+// the edit op's in-place rewrite leaves them where they are; a shape
+// change (the menu opens, closes, or its selection moves) re-lays the
+// whole region (the editFull op).
 func (t *tui) paintInput() {
 	t.mu.Lock()
 	t.inputText = t.ed.text()
 	t.editPos = t.ed.pos
 	line, col := t.inputLineAndColLocked()
-	t.live.edit(line, col)
+	status := t.statusLineLocked()
+	lines := t.liveLinesLocked()
+	if !t.regionStableLocked(lines, status) {
+		t.live.editFull(lines, col, status)
+	} else {
+		t.live.edit(line, col, status)
+	}
 	t.mu.Unlock()
+}
+
+// regionStableLocked: the region's non-input rows (the activity, the
+// pending line, the menu rows, and the status row's presence) are the
+// same the last paint left on screen (under mu), and the input row's
+// terminal row count stands — the edit op's in-place rewrite covers
+// this keystroke. A row count change would push the status row (the
+// region's last) to a new row, which only the full re-layout (the
+// editFull op) places.
+func (t *tui) regionStableLocked(lines []string, status string) bool {
+	old := t.live.lines
+	oldOffset := 0
+	if t.live.status != "" {
+		oldOffset = 1
+	}
+	if len(old) < 1+oldOffset || (status != "") != (oldOffset != 0) {
+		return false
+	}
+	oldIn := old[len(old)-1-oldOffset]
+	newIn := lines[len(lines)-1]
+	if t.live.visualRows(oldIn) != t.live.visualRows(newIn) {
+		return false
+	}
+	oldPart := old[:len(old)-1-oldOffset]
+	newPart := lines[:len(lines)-1]
+	if len(oldPart) != len(newPart) {
+		return false
+	}
+	for i := range oldPart {
+		if oldPart[i] != newPart[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // onEnter submits the line (the editor consumes it): the Enter path
 // (live.go) freezes it, and the routing is the CLI's — a live turn
 // takes the slot and the interrupt; a quiet prompt delivers in order.
 func (t *tui) onEnter() {
+	t.mu.Lock()
+	// the menu's accept (decision 9, amended): the selection fills the
+	// input — the typed prefix replaced by the candidate plus a
+	// trailing space — and never dispatches.
+	if t.menuOpenLocked() {
+		accept := t.menuAcceptLocked()
+		t.mu.Unlock()
+		t.ed.setText(accept)
+		t.mu.Lock()
+		t.menuSyncLocked()
+		t.mu.Unlock()
+		t.paintInput()
+		return
+	}
+	// the ghost's Enter (decision 9, amended): a single candidate's
+	// remainder is showing, so the visible line is the intent — the
+	// completion lands first (Tab's text), and the Enter submits it.
+	// The typed prefix alone would dispatch as an unknown command
+	// while the row promised the completion.
+	if next, ok := t.tabTextLocked(); ok {
+		t.mu.Unlock()
+		t.ed.setText(next)
+		t.mu.Lock()
+	}
+	t.mu.Unlock()
 	line, submitted := t.ed.apply(keyEnter, 0)
 	if !submitted || strings.TrimSpace(line) == "" {
 		return // a blank line is a no-op, consumed (the CLI's rule)
@@ -435,6 +592,7 @@ func (t *tui) onEnter() {
 		t.theme.Paint(SlotText, " "+displayInput(line))
 	t.inputText = ""
 	t.editPos = 0
+	t.menuSyncLocked()
 	wasLive := t.turnLive
 	established := t.turnEstablished
 	isCmd := t.commands != nil && command.IsCommandLine(line)
@@ -450,7 +608,7 @@ func (t *tui) onEnter() {
 	}
 	// a steering line: the turn stays live (unwinding), the activity
 	// row above is left standing.
-	t.live.enter(full, "", t.inputLineLocked())
+	t.live.enter(full, "", t.inputLineLocked(), t.statusLineLocked())
 	t.mu.Unlock()
 	if isCmd {
 		t.pending <- line
@@ -533,18 +691,19 @@ func (t *tui) Input(ctx context.Context) (string, error) {
 	// reader pushed before the quit (the CLI's final-line rule) must
 	// deliver before the EOF, whatever the race's order (the CLI
 	// reference: the line is sent before the close, always first).
-	if !t.bannered {
-		// the session start: the banner and the news line, committed
-		// exactly once (decision 3's other triggers reprint from
-		// dispatch and the Compacted event).
-		t.bannered = true
+	if !t.started {
+		// the session start: the startup block, committed exactly once
+		// (decision 3, amended: the refresh points are dispatch, and
+		// the status row takes the usage events).
+		t.started = true
 		committed := t.sessionStartLocked()
-		t.live.draw(committed, t.liveLinesLocked())
+		t.live.draw(committed, t.liveLinesLocked(), t.statusLineLocked())
 	}
 	t.mu.Unlock()
 	// the reader paints the live region, which the first draw above
 	// established: it starts here (not at New), so a byte that lands
-	// before the first Input (a pipe) cannot paint ahead of the banner.
+	// before the first Input (a pipe) cannot paint ahead of the startup
+	// block.
 	t.readerOnce.Do(func() { go t.readLoop() })
 	defer func() {
 		t.mu.Lock()
@@ -637,7 +796,7 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.frame = 0
 	t.toolName = ""
 	t.toolArgs = nil
-	t.live.insertActivity(t.activityLineLocked(), t.inputLineLocked())
+	t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
 }
 
@@ -657,9 +816,10 @@ func (t *tui) takeSlot() (string, bool) {
 // Notify observes one stream event and renders it (decision 2's commit
 // points, exactly): the deltas as they arrive (reasoning dim, text
 // normal), the tool block on ToolResult, the newline guarantee on
-// Done, the fault line, the compact line plus the banner reprint, and
-// the usage line on the explicit turn boundary. Events the TUI does
-// not name are ignored (the compat rule; the CLI's discipline).
+// Done, the fault line, the compact line (and the status line's used
+// taking the Kept), and the usage line on the explicit turn boundary.
+// Events the TUI does not name are ignored (the compat rule; the
+// CLI's discipline).
 func (t *tui) Notify(ev core.Event) {
 	switch ev.(type) {
 	case core.ReasoningDelta, core.TextDelta, core.ToolStart, core.ToolResult,
@@ -710,11 +870,17 @@ func (t *tui) Notify(ev core.Event) {
 	case core.Done:
 		// the CLI's newline, unconditional (the TUI adds, never changes,
 		// the CLI's bytes): it closes the pending line, or stands as a
-		// blank one where the text already ended on a line.
+		// blank one where the text already ended on a line. The status
+		// row takes the usage (decision 3, amended): the last
+		// assistant message's context anchor, exactly.
 		t.mu.Lock()
 		t.prompt += e.Usage.Prompt
 		t.completion += e.Usage.Completion
 		t.cacheRead += e.Usage.CacheRead
+		if e.Usage.Prompt > 0 || e.Usage.Completion > 0 {
+			t.statusUsed = e.Usage.Prompt + e.Usage.Completion
+			t.statusHasUsed = true
+		}
 		t.mu.Unlock()
 		t.flow("", "\n")
 	case core.Fault:
@@ -734,27 +900,29 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Lock()
 		t.phase = "compacting"
 		t.frame = 0
-		if t.turnLive {
-			if len(t.live.lines) >= 2 {
-				t.live.setActivity(t.activityLineLocked())
-			}
-		} else {
+		if !t.turnLive {
 			t.compacting = true
-			t.live.insertActivity(t.activityLineLocked(), t.inputLineLocked())
+		}
+		// the region repaint (the TUI owns the layout; the activity row
+		// sits wherever liveLinesLocked places it).
+		if len(t.live.lines) > 0 {
+			t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 		}
 		t.mu.Unlock()
 	case core.Compacted:
-		// the compact line commits, then the banner reprints (decision
-		// 3: the one moment the context number jumps). The verb's
-		// loader row leaves with the commit (liveLines drops it).
+		// the compact line commits, and the status row takes the
+		// compact's Kept (decision 3, amended: the banner's reprint is
+		// the status line's update, no block at all). The verb's loader
+		// row leaves with the commit (liveLines drops it).
 		t.mu.Lock()
 		t.compacting = false
 		if t.turnLive {
 			t.phase = "thinking"
 		}
 		chunk := RenderCompacted(t.theme, e) + "\n"
-		if t.bannerIn != nil {
-			chunk += RenderBanner(t.theme, t.bannerIn(context.Background()), t.width)
+		if e.Kept > 0 {
+			t.statusUsed = e.Kept
+			t.statusHasUsed = true
 		}
 		t.mu.Unlock()
 		t.commit(chunk)
@@ -789,36 +957,56 @@ func (t *tui) Notify(ev core.Event) {
 // it (the draw op, live.go) — the shared door for every committed byte.
 func (t *tui) commit(chunk string) {
 	t.mu.Lock()
-	t.live.draw(chunk, t.liveLinesLocked())
+	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
 }
 
-// liveLinesLocked is the live region's current content (under mu):
-// the activity row, the pending line when one is open, and the input
-// row while a turn is live (decision 1's at-most-three lines, decision
-// 2's layout); the input row alone otherwise — including the TurnEnd
-// reset, where the bookkeeping still carries the turn's rows but the
-// new set is the input alone.
+// liveLinesLocked is the live region's current content, above the
+// status row (under mu; decision 2's layout, amended): the activity
+// row, the pending line when one is open, the completion menu when it
+// is showing (decision 9, amended), and the input row — the status
+// row is the region's last row, passed to the ops separately.
 func (t *tui) liveLinesLocked() []string {
+	var lines []string
 	if t.turnLive || t.compacting {
-		lines := []string{t.activityLineLocked()}
+		// the pending line first, the activity row under it (decision
+		// 2, amended): the loader locks above the input; streamed text
+		// flows into scrollback above the loader, never under it.
 		if pl := paintSegs(t.theme, t.pend); pl != "" {
 			lines = append(lines, pl)
 		}
-		return append(lines, t.inputLineLocked())
+		lines = append(lines, t.activityLineLocked())
 	}
-	return []string{t.inputLineLocked()}
+	if ml := t.menuLinesLocked(); len(ml) > 0 {
+		lines = append(lines, ml...)
+	}
+	return append(lines, t.inputLineLocked())
 }
 
-// sessionStartLocked is the banner and the news line (under mu): the
-// session-start reprint trigger (decision 3).
+// statusLineLocked is the status row (under mu; decision 3): the
+// model, and used over the window once a turn has run.
+func (t *tui) statusLineLocked() string {
+	return RenderStatusLine(t.theme, t.statusModel, t.statusUsed, t.statusWindow, t.statusHasUsed)
+}
+
+// sessionStartLocked is the startup block and the status line's
+// snapshot (under mu): the session start (decision 3, amended).
 func (t *tui) sessionStartLocked() string {
 	var b strings.Builder
-	if t.bannerIn != nil {
-		b.WriteString(RenderBanner(t.theme, t.bannerIn(context.Background()), t.width))
+	if t.statusIn != nil {
+		in := t.statusIn(context.Background())
+		t.statusModel = in.Model
+		t.statusEffort = in.Effort
+		t.statusWindow = in.Window
+		t.statusUsed = 0
+		t.statusHasUsed = false
+		b.WriteString(RenderStatus(t.theme, in))
 	}
 	if t.news != nil {
 		if line := t.news(context.Background()); line != "" {
+			if b.Len() > 0 {
+				b.WriteString("\n")
+			}
 			b.WriteString(t.theme.Paint(SlotDim, line))
 		}
 	}
@@ -828,8 +1016,9 @@ func (t *tui) sessionStartLocked() string {
 // dispatch consumes one command line (SPEC_COMMANDS 1, as the CLI's):
 // the echo dim, the output committed as the CLI's bytes restyled by
 // theme color (decision 5), an unknown command loud and naming the
-// known set. The banner reprint triggers (decision 3) fire on success,
-// exactly once: new, sessions resume, models switch.
+// known set. The status line's refresh points (decision 3, amended —
+// the banner's old reprint triggers) fire on success, exactly once:
+// new, sessions resume, models switch.
 func (t *tui) dispatch(ctx context.Context, line string) {
 	// no separate echo: the committed prompt line is the echo (decision 5)
 	name, args := command.Parse(line) // args: the raw remainder, the CLI's
@@ -848,29 +1037,42 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		// opening line.
 		opening := t.commandOpeningLocked(name, args)
 		if name == "todo" {
-			t.live.draw(RenderTodoBlock(t.theme, opening, out), t.liveLinesLocked())
+			t.live.draw(RenderTodoBlock(t.theme, opening, out), t.liveLinesLocked(), t.statusLineLocked())
 		} else {
-			t.live.draw(RenderSchedulerBlock(t.theme, opening, out), t.liveLinesLocked())
+			t.live.draw(RenderSchedulerBlock(t.theme, opening, out), t.liveLinesLocked(), t.statusLineLocked())
 		}
 		return
 	case err != nil:
-		t.live.draw(t.theme.Paint(SlotError, err.Error()), t.liveLinesLocked())
+		t.live.draw(t.theme.Paint(SlotError, err.Error()), t.liveLinesLocked(), t.statusLineLocked())
 		return
 	}
-	reprint := false
+	refresh := false
+	fresh := false
 	switch {
 	case name == "new":
-		reprint = true
+		refresh, fresh = true, true
 	case name == "sessions" && strings.HasPrefix(args, "resume"):
-		reprint = true
+		refresh, fresh = true, true
 	case name == "models" && args != "":
-		reprint = true
+		refresh = true // the same context under a new window: the used number stands
 	}
 	if out != "" {
-		t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked())
+		t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
 	}
-	if reprint && t.bannerIn != nil {
-		t.live.draw(RenderBanner(t.theme, t.bannerIn(context.Background()), t.width), t.liveLinesLocked())
+	if refresh && t.statusIn != nil {
+		// the snapshot refresh (decision 3, amended): the banner's
+		// reprint trigger, now the live row's data update; new and
+		// resume start fresh contexts, the used number resets with
+		// the session.
+		in := t.statusIn(context.Background())
+		t.statusModel = in.Model
+		t.statusEffort = in.Effort
+		t.statusWindow = in.Window
+		if fresh {
+			t.statusUsed = 0
+			t.statusHasUsed = false
+		}
+		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
 }
 
@@ -962,12 +1164,143 @@ func (t *tui) activityLineLocked() string {
 	return line
 }
 
-// hintLocked is the inline hint for a command line being typed
-// (decision 9): fish-style ghost text after the cursor, display only,
-// never part of the buffer. While the name is being typed: the first
-// match's remainder as a ghost, plus the other candidates dim. After a
-// known name and a space: the command's description, dim. Empty when
-// the line is not a command shape (plain prompts, the // escape).
+// menuCand is one completion candidate (decision 9, amended): the
+// name the operator can type, and its description (the menu row's
+// second half).
+type menuCand struct {
+	name string
+	desc string
+}
+
+// completionLocked is the current completion (under mu; decision 9,
+// amended): the candidates for the input — the known command names
+// with the typed prefix while the name is being typed, and, after a
+// complete name and a space, the command's Sub() hints with the
+// argument prefix — and the accept prefix: what a candidate is
+// prepended to on accept. Nothing for plain prompts and the //
+// escape.
+func (t *tui) completionLocked() (cands []menuCand, accept string, ok bool) {
+	text := t.ed.text()
+	if t.commands == nil || !strings.HasPrefix(text, "/") || strings.HasPrefix(text, "//") {
+		return nil, "", false
+	}
+	rest := text[1:]
+	if sp := strings.IndexAny(rest, " \t"); sp >= 0 {
+		name := rest[:sp]
+		cmd, found := t.commands[name]
+		if !found {
+			return nil, "", false
+		}
+		subber, has := cmd.(command.Subber)
+		if !has {
+			return nil, "", false
+		}
+		for _, s := range subber.Sub() {
+			if strings.HasPrefix(s.Name, rest[sp+1:]) {
+				cands = append(cands, menuCand{name: s.Name, desc: s.Desc})
+			}
+		}
+		return cands, "/" + name + " ", true
+	}
+	for _, name := range t.known {
+		if strings.HasPrefix(name, rest) {
+			cands = append(cands, menuCand{name: name, desc: t.commands[name].Description()})
+		}
+	}
+	return cands, "/", true
+}
+
+// menuLinesLocked is the completion menu's rows (under mu; decision 2
+// the cap, decision 9 the render): the visible candidate window — at
+// most six rows, following the selection — and the dim "… N more"
+// tail when the candidates run past six. Nil when the menu is closed.
+func (t *tui) menuLinesLocked() []string {
+	if !t.menuOpenLocked() {
+		return nil
+	}
+	const cap = 6
+	n := len(t.menuCands)
+	start := t.menuSel - (cap - 1)
+	if start < 0 {
+		start = 0
+	}
+	if max := n - cap; start > max {
+		start = max
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := start + cap
+	if end > n {
+		end = n
+	}
+	var rows []string
+	for i := start; i < end; i++ {
+		c := t.menuCands[i]
+		row := t.theme.Paint(SlotAccent, c.name)
+		if c.desc != "" {
+			// a menu row is one terminal row (decision 10: the live
+			// region is measured): the description takes what the
+			// width leaves after the name, dotted when it overflows.
+			room := t.width - displayWidth(c.name) - 3
+			desc := c.desc
+			if room <= 1 {
+				desc = ""
+			} else if displayWidth(desc) > room {
+				desc = truncateWidth(t.theme, desc, room)
+			}
+			if desc != "" {
+				row += t.theme.Paint(SlotText, "  "+desc)
+			}
+		}
+		if i == t.menuSel {
+			row = t.theme.Invert(row)
+		}
+		rows = append(rows, row)
+	}
+	if n > cap {
+		rows = append(rows, t.theme.Paint(SlotDim, "… "+strconv.Itoa(n-cap)+" more"))
+	}
+	return rows
+}
+
+// tabTextLocked is the Tab key (under mu; decision 9, amended): while
+// the menu is open, the selection steps down (the text stands); a
+// single candidate is completed with its trailing space; otherwise a
+// no-op. It reports the text to set and whether it changed.
+func (t *tui) tabTextLocked() (string, bool) {
+	if t.menuOpenLocked() {
+		n := len(t.menuCands)
+		t.menuSel = (t.menuSel + 1) % n
+		return "", false
+	}
+	if len(t.menuCands) == 1 {
+		_, accept, ok := t.completionLocked()
+		if ok {
+			next := accept + t.menuCands[0].name + " "
+			if next != t.ed.text() {
+				return next, true
+			}
+		}
+	}
+	return "", false
+}
+
+// menuAcceptLocked is the text the menu's selection replaces the
+// input with (under mu; decision 9, amended): the candidate plus a
+// trailing space, over the typed prefix (the name phase) or the
+// command name and space (the argument phase).
+func (t *tui) menuAcceptLocked() string {
+	_, accept, _ := t.completionLocked()
+	return accept + t.menuCands[t.menuSel].name + " "
+}
+
+// hintLocked is the inline ghost (under mu; decision 9, amended): the
+// single candidate's remainder while it is being typed — a name or a
+// sub — and, after a known name and a space, the command's
+// description when it has no Sub() hints. Two or more candidates show
+// the menu instead (menuLinesLocked); nothing for plain prompts and
+// the // escape.
 func (t *tui) hintLocked() string {
 	text := t.inputText
 	if t.commands == nil || !strings.HasPrefix(text, "/") || strings.HasPrefix(text, "//") {
@@ -976,63 +1309,39 @@ func (t *tui) hintLocked() string {
 	rest := text[1:]
 	if sp := strings.IndexAny(rest, " \t"); sp >= 0 {
 		name := rest[:sp]
-		if cmd, ok := t.commands[name]; ok {
-			return cmd.Description()
+		cmd, ok := t.commands[name]
+		if !ok {
+			return ""
 		}
-		return ""
+		if subber, ok := cmd.(command.Subber); ok {
+			// a single sub: the ghost; two or more: the menu
+			// (menuLinesLocked) — never both.
+			var match string
+			for _, s := range subber.Sub() {
+				if strings.HasPrefix(s.Name, rest[sp+1:]) {
+					if match != "" {
+						return ""
+					}
+					match = s.Name
+				}
+			}
+			if match != "" {
+				return strings.TrimPrefix(match, rest[sp+1:])
+			}
+			return ""
+		}
+		return cmd.Description()
 	}
-	matches := t.matchesLocked(rest)
-	if len(matches) == 0 {
-		return ""
-	}
-	ghost := strings.TrimPrefix(matches[0], rest)
-	if len(matches) == 1 {
-		return ghost
-	}
-	return ghost + "  · " + strings.Join(matches, " ")
-}
-
-// matchesLocked: the known command names with the prefix, sorted (the
-// known list already is).
-func (t *tui) matchesLocked(prefix string) []string {
-	var out []string
+	var matches []string
 	for _, name := range t.known {
-		if strings.HasPrefix(name, prefix) {
-			out = append(out, name)
+		if strings.HasPrefix(name, rest) {
+			matches = append(matches, name)
 		}
 	}
-	return out
-}
-
-// completeCommand lands the tab (decision 9): the buffer becomes the
-// longest common prefix of the matches, plus the trailing space when
-// unique. A non-command line, no matches, or no progress: a no-op.
-func (t *tui) completeCommand() {
-	t.mu.Lock()
-	text := t.ed.text()
-	if t.commands == nil || !strings.HasPrefix(text, "/") || strings.HasPrefix(text, "//") || strings.ContainsAny(text, " \t") {
-		t.mu.Unlock()
-		return
-	}
-	matches := t.matchesLocked(text[1:])
-	t.mu.Unlock()
-	if len(matches) == 0 {
-		return
-	}
-	lcp := matches[0]
-	for _, m := range matches[1:] {
-		for !strings.HasPrefix(m, lcp) {
-			lcp = lcp[:len(lcp)-1]
-		}
-	}
-	next := "/" + lcp
 	if len(matches) == 1 {
-		next += " "
+		return strings.TrimPrefix(matches[0], rest)
 	}
-	if next == text {
-		return
-	}
-	t.ed.setText(next)
+	return ""
 }
 
 // inputLineLocked is the painted input row (under mu).
@@ -1221,7 +1530,7 @@ func (t *tui) flow(slot, text string) {
 	if len(lines) > 0 {
 		chunk = strings.Join(lines, "\n") + "\n"
 	}
-	t.live.draw(chunk, t.liveLinesLocked())
+	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
 }
 
@@ -1253,9 +1562,9 @@ func (t *tui) takeClosedLinesLocked() []string {
 // --- the dynamic loops ------------------------------------------------
 
 // tickLoop advances the spinner's frame and rewrites the activity row
-// in place (the setActivity op) — while a turn is live and the
-// activity row is the bookkeeping's first (the steering window, where
-// it is not, ticks nothing).
+// in place (the setActivity op) — while a turn is live (the activity
+// row is the bookkeeping's first by construction, the rest of the
+// region — the menu, the input, the status row — standing).
 func (t *tui) tickLoop() {
 	for {
 		select {
@@ -1263,9 +1572,9 @@ func (t *tui) tickLoop() {
 			return
 		case <-t.ticks:
 			t.mu.Lock()
-			if (t.turnLive || t.compacting) && len(t.live.lines) == 2 {
+			if (t.turnLive || t.compacting) && len(t.live.lines) > 0 {
 				t.frame++
-				t.live.setActivity(t.activityLineLocked())
+				t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 			}
 			t.mu.Unlock()
 		}
@@ -1293,7 +1602,7 @@ func (t *tui) winchLoop() {
 				t.pg.clamp()
 				t.pg.render(t.live.w, t.theme)
 			} else if len(t.live.lines) > 0 {
-				t.live.draw("", t.liveLinesLocked())
+				t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 			}
 			t.mu.Unlock()
 		}

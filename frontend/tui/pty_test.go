@@ -98,7 +98,7 @@ func TestPTYResize(t *testing.T) {
 	winch := make(chan struct{}, 1)
 	out := &lockBuf{}
 	fe := New(slave, out, WithTheme(th),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithWinch(winch), WithTicks(make(chan time.Time))).(*tui)
 	defer fe.Close()
 
@@ -110,9 +110,9 @@ func TestPTYResize(t *testing.T) {
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		fe.mu.Lock()
-		bannered := fe.bannered
+		started := fe.started
 		fe.mu.Unlock()
-		if bannered || time.Now().After(deadline) {
+		if started || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(time.Millisecond)
