@@ -94,4 +94,10 @@ func displayWidth(s string) int {
 	return runeWidthSum(s)
 }
 
+// RemoveColor strips every SGR sequence — the tests and the width math
+// read the bare text; the stream itself is never re-shrunk.
+func RemoveColor(s string) string {
+	return sgrRe.ReplaceAllString(s, "")
+}
+
 var _ = strings.TrimSpace
