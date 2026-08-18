@@ -79,6 +79,12 @@ func toCol(c int) string {
 // ClearLine wipes the whole line under or before the cursor.
 const clearLine = ESC + "2K"
 
+// Bracketed paste mode (decision 9): on at raw mode, off at Close.
+const (
+	pasteOn  = ESC + "?2004h"
+	pasteOff = ESC + "?2004l"
+)
+
 // truncateWidth cuts s to at most w display columns (runewidth), adding
 // the ellipsis glyph when it overflows. The live region is measured
 // (decision 10); committed prose is never (decision 8).

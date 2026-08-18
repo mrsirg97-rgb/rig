@@ -166,6 +166,12 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		opt(t)
 	}
 	t.live = newLive(out, t.width)
+	if t.rawOld != nil {
+		// bracketed paste (decision 9): a paste arrives as one input,
+		// its newlines text; only a real tty gets the mode (and Close
+		// puts it back).
+		io.WriteString(out, pasteOn)
+	}
 	if t.ticks == nil {
 		t.ticker = time.NewTicker(120 * time.Millisecond)
 		t.ticks = t.ticker.C
@@ -224,6 +230,7 @@ func (t *tui) Close() {
 		t.ticker.Stop()
 	}
 	if t.rawOld != nil {
+		io.WriteString(t.live.w, pasteOff)
 		term.Restore(t.fdi, t.rawOld)
 	}
 }
@@ -237,18 +244,50 @@ func (t *tui) Close() {
 // turns delivers in order (the burst rule, the slot's latest-wins
 // would silently drop all but the last line of a paste).
 func (t *tui) readLoop() {
-	br := bufio.NewReader(t.in)
-	for {
-		b, err := br.ReadByte()
-		if err != nil {
-			t.onInputEOF()
-			return
+	// the pump: the blocking reads in their own goroutine, so the loop
+	// can time out on a half-open escape. The close is the EOF, and the
+	// buffered bytes drain before it delivers.
+	bytes := make(chan byte, 64)
+	go func() {
+		br := bufio.NewReader(t.in)
+		for {
+			b, err := br.ReadByte()
+			if err != nil {
+				close(bytes)
+				return
+			}
+			bytes <- b
 		}
-		if k, r := t.kp.next(b); k != keyNone {
-			t.onKey(k, r)
+	}()
+	for {
+		// a lone Esc: the escape families arrive as one burst, so an
+		// ESC with nothing behind it inside the grace window is the key
+		// itself, not a sequence opening (readline's disambiguation; the
+		// parser cannot name it byte-at-a-time).
+		var esc <-chan time.Time
+		if t.kp.state == stEsc {
+			esc = time.After(escDelay)
+		}
+		select {
+		case b, ok := <-bytes:
+			if !ok {
+				t.onInputEOF()
+				return
+			}
+			if k, r := t.kp.next(b); k != keyNone {
+				t.onKey(k, r)
+			}
+		case <-esc:
+			t.kp.state = stTop
+			t.onKey(keyEsc, 0)
 		}
 	}
 }
+
+// escDelay is the lone-Esc grace window: a sequence's bytes arrive
+// together (the terminal writes them in one burst), so a silent gap
+// after an ESC is the key itself.
+const escDelay = 30 * time.Millisecond
 
 // onKey applies one parsed key to the line (the editor) and repaints;
 // the named control keys do their thing (decision 9).
@@ -304,7 +343,7 @@ func (t *tui) onEnter() {
 	}
 	t.mu.Lock()
 	full := t.theme.Paint(SlotAccent, t.theme.Glyph(GlyphPrompt)) +
-		t.theme.Paint(SlotText, " "+line)
+		t.theme.Paint(SlotText, " "+displayInput(line))
 	t.inputText = ""
 	t.editPos = 0
 	wasLive := t.turnLive
@@ -904,7 +943,7 @@ const maxInputRows = 5
 func (t *tui) inputLineAndColLocked() (string, int) {
 	glyph := t.theme.Glyph(GlyphPrompt)
 	prefixCols := displayWidth(glyph) + 1
-	text := t.inputText
+	text := displayInput(t.inputText)
 	runes := []rune(text)
 	width := t.width
 	if width < 2 {
@@ -971,6 +1010,26 @@ func (t *tui) inputLineAndColLocked() (string, int) {
 		line = t.theme.Paint(SlotText, win)
 	}
 	return line, cursorCol - scroll*width
+}
+
+// displayInput maps a pasted control rune to its one-cell input-row
+// marker: the buffer keeps the real rune (the Enter commits it), the
+// row shows the mark. The rune count is unchanged, so the edit
+// position indexes both alike.
+func displayInput(s string) string {
+	if !strings.ContainsAny(s, "\n\t") {
+		return s
+	}
+	r := []rune(s)
+	for i, c := range r {
+		switch c {
+		case '\n':
+			r[i] = '⏎'
+		case '\t':
+			r[i] = ' '
+		}
+	}
+	return string(r)
 }
 
 // sliceCols is the display-column window [start, end) of s: the runes
