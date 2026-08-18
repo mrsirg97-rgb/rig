@@ -197,12 +197,18 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 // one user message carrying the older prefix as quoted transcript data
 // and the prompt's instruction — data, not a live conversation, so the
 // model summarizes it rather than continuing it (3). No tools; the
-// MaxTokens clamp is 3's honest budget, and the reasoning effort is
-// medium — the one call whose thinking nobody reads (a lower effort
-// where the provider supports it; a provider that does not know it
-// ignores the field).
+// MaxTokens clamp is 3's honest budget. The reasoning effort is the
+// row's Effort — the one call whose thinking nobody reads takes the
+// row's budget where the operator set one (SPEC_CONFIG 4) — with
+// "medium" the field's default: the 0.2.0 behavior, now the default a
+// row constructed without one carries (a provider that does not know
+// the field ignores it).
 func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens int) (string, core.Usage, error) {
-	ch, err := p.provider.Stream(ctx, core.Request{Messages: input, MaxTokens: maxTokens, ReasoningEffort: "medium"})
+	effort := p.row.Effort
+	if effort == "" {
+		effort = "medium"
+	}
+	ch, err := p.provider.Stream(ctx, core.Request{Messages: input, MaxTokens: maxTokens, ReasoningEffort: effort})
 	if err != nil {
 		return "", core.Usage{}, fmt.Errorf("compact: summary call: %w", err)
 	}

@@ -20,7 +20,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.2.0
+./rig --version        # rig 0.3.0
 ```
 
 Contributors: the gate before any change is
@@ -33,34 +33,65 @@ gofmt -l .
 
 ## configure
 
-There are no config files. Every knob is a flag or an environment variable;
-flags win over env, env wins over built-in defaults:
+Every knob is a four-layer resolution, per key:
+**flag > env > file > embedded default** (`specs/SPEC_CONFIG.md`). A key
+set at any layer beats the layers below; an unset layer descends. A flag
+you typed always wins, whatever its value; an empty env or file value
+descends, except the two presence keys (below). No file present is the
+0.2.0 behavior, exactly — the embedded layer is the 0.2.0 values moved
+out of code.
 
-| knob       | flag        | env              | default                              | meaning                                   |
-|------------|-------------|------------------|--------------------------------------|-------------------------------------------|
-| endpoint   | `--base-url`| `RIG_BASE_URL`| `http://127.0.0.1:8090/v1`           | OpenAI-compatible base URL (the worker swap) |
-| model      | `--model`   | `RIG_MODEL`   | `local`                              | model name sent per request               |
-| system     | `--system`  | `RIG_SYSTEM`  | rig's default system prompt       | context-policy seed                       |
-| allow-list | `--allow`   | `RIG_ALLOW`   | `bash,read,write,edit,ls,find,grep,todo,rem,scheduler,python,web_search,web_fetch` | tools permitted to execute                |
-| bound      | `--retries` | `RIG_RETRIES` | `3`                                  | repetition bound on a failing tool, per turn (see below) |
-| resume     | `--resume <id>` | —              | fresh session                        | continue an earlier session by id; refuses with `-p` (one-shot stays one-shot) |
-| python kernel |           | `RIG_PYTHON`  | pane's shared venv (the default interpreter) | interpreter for the python kernel; an explicit choice skips the lazy venv bootstrap |
-| web search |           | `RIG_SEARXNG_URL` | `http://127.0.0.1:8888`        | the SearXNG instance (the web-tools compose) |
-| web fetch  |           | `RIG_WEB_FETCH_PROXY` | `http://127.0.0.1:8889`    | egress proxy for web_fetch; set empty = direct |
-| extraction |           | `RIG_TRAFILATURA` | shared venv, then PATH      | the trafilatura binary; a path, or empty = the stdlib text pass carries |
-| model row  |           | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | the built-in table | synthesizes a compaction row for a model the table does not know |
+The files live in the config home, `~/.config/rig/` — the same directory
+the stores use. Every file is optional; a present-but-malformed file is
+a loud refusal at start naming the file and the field (exit 1, before
+any store is opened), and an absent one is silent. Unknown keys refuse:
+the file is a contract, not a filter.
 
-**On `RIG_WEB_FETCH_PROXY` and `RIG_TRAFILATURA`** — "set empty" means
-the variable is present but empty: that is an explicit choice (direct
-egress / no trafilatura), while an unset variable takes the compose
-default. Presence is the signal, the value is the choice.
+| file              | purpose                                                                 |
+|-------------------|-------------------------------------------------------------------------|
+| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix) |
+| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`) and `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) |
+| `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
+| `theme.json`      | reserved for the TUI (deliverable 10): must be well-formed JSON if present; the TUI owns the schema |
+
+`<cwd>/AGENTS.md` is read from the working directory: the REPL's cwd, or,
+for a scheduled worker, the job's cwd — the job inherits its own working
+directory's project file, not the creating session's.
+
+| knob          | flag           | env                    | file key        | embedded default |
+|---------------|----------------|------------------------|-----------------|------------------|
+| endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
+| model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
+| system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 13 built-in tools |
+| bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
+| resume        | `--resume <id>`| —                      | —               | fresh session (refuses with `-p`; one-shot stays one-shot) |
+| python kernel |                | `RIG_PYTHON`           | `python`        | the default interpreter |
+| web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
+| web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
+| extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
+| scheduler job |                | —                      | `defaultJobModel` | `qwen3.8-workers`; a job's explicit `model` arg beats it |
+| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the two-row table |
+
+**On the presence keys** — `RIG_WEB_FETCH_PROXY` and `RIG_TRAFILATURA`
+are presence-aware at every layer: "set empty" means present but empty,
+an explicit choice (direct egress / the stdlib text pass), while an
+unset value descends to the next layer. Presence is the signal, the
+value is the choice.
 
 **On the model row** — compaction is per-model: the active model must
-resolve to a row (window, max tokens, reserve, keep-recent). A known id
-uses the built-in table; an unknown id with `RIG_MODEL_WINDOW` set gets a
-synthesized row (absent fields take named defaults, then validate); an
-unknown id with no env is a loud refusal at start naming the known ids.
-`/models` lists the runtime table and switches the active model.
+resolve to a row (window, max tokens, reserve, keep-recent). The table
+is the embedded rows overlaid by `models.json`, merged by id: fields you
+set replace the embedded row's, fields you leave unset keep it, a new id
+is added (numeric fields required), and a row you do not list stays.
+`RIG_MODEL_*` overlays the active id's fields, set beats the row, and
+synthesizes a row for an id the table does not know (a loud refusal
+naming the known ids otherwise). `/models` lists the runtime table with
+its role column and switches the active model.
+
+**On the `models.json` zero edge** — zero means unset at the overlay
+layer, so a zero numeric field on an embedded id is unreachable (a new
+row can carry it, an embedded id cannot): the named cost of the rule.
 
 **On `RIG_RETRIES`** — read before tuning: the value does **not** permit
 silent re-execution. Every tool call executes exactly once; the value bounds
@@ -87,7 +118,7 @@ dead agent; narrow with `--allow read` or similar.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.2.0
+./rig --version                 # prints: rig 0.3.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

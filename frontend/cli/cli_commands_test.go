@@ -37,9 +37,22 @@ func buildWithCommands(t *testing.T, env *command.Env, lines ...string) *cmdRig 
 	return &cmdRig{fe: fe, out: out, in: in}
 }
 
+// defaultTable is the 0.2.0 rows (SPEC_CONFIG 4: the table leaves code;
+// the test harnesses construct the same rows).
+func defaultTable() models.Table {
+	tbl, err := models.New(
+		models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
+		models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
+	)
+	if err != nil {
+		panic("cli: defaultTable: " + err.Error())
+	}
+	return tbl
+}
+
 func commandsEnv() *command.Env {
 	return &command.Env{
-		Models:      func() models.Table { return models.Defaults },
+		Models:      func() models.Table { return defaultTable() },
 		ActiveModel: func() string { return "local" },
 	}
 }
@@ -89,7 +102,7 @@ func TestDispatchByPrefixLoopNeverSeesCommand(t *testing.T) {
 	env := &command.Env{
 		Models: func() models.Table {
 			modelsCalls++
-			return models.Defaults
+			return defaultTable()
 		},
 		ActiveModel: func() string { return "local" },
 	}

@@ -19,7 +19,7 @@ import (
 // passthrough returned.
 func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 	t.Run("budget inside a multi-call batch slides to the batch's assistant", func(t *testing.T) {
-		row := models.Model{ID: "local", Window: 850, MaxTokens: 500, Reserve: 100, KeepRecent: 120}
+		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 850, MaxTokens: 500, Reserve: 100, KeepRecent: 120}
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)}) // 500, the older bulk
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})  // 50
@@ -104,7 +104,7 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read the prompt file: %v", err)
 		}
-		row := models.Model{ID: "local", Window: (len(prompt)+3)/4 + 550 + 71, MaxTokens: 500, Reserve: 100, KeepRecent: 120}
+		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: (len(prompt)+3)/4 + 550 + 71, MaxTokens: 500, Reserve: 100, KeepRecent: 120}
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)}) // 500
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})  // 50
@@ -133,7 +133,7 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 	})
 
 	t.Run("a single oversized last message skips the compact", func(t *testing.T) {
-		row := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 8000)}) // 2000
 		// the tail is the last message alone: the older prefix is empty,

@@ -320,7 +320,7 @@ func TestOverflowClassifier(t *testing.T) {
 // large tool spec keeps the factor at the delta ratio (reported - anchor
 // excludes the spec).
 func TestCalibrationShiftsTheTrigger(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	const anchor = 500
 	// an anchored transcript with a delta of est 100 after the anchor
 	base := func() *core.Session {
@@ -335,7 +335,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		// a wider window than the shared row: the 3 shape's summary input
 		// (the quoted transcript plus the prompt) must still fit the
 		// window at the doubled factor.
-		row := models.Model{ID: "local", Window: 1050, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1050, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 		s := base()
 		prov := &scriptedProvider{turns: []scriptedTurn{
 			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 2*100, Completion: 10}}}},
@@ -518,7 +518,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 // the trigger (size == Window - Reserve) gets MaxTokens == Reserve, not
 // the floor 1 (the wrong-formula case).
 func TestMainCallMaxTokensClamped(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 800, Reserve: 100, KeepRecent: 100}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 800, Reserve: 100, KeepRecent: 100}
 
 	t.Run("anchored clamp", func(t *testing.T) {
 		s := core.NewSession()
@@ -624,7 +624,7 @@ func TestMainCallMaxTokensClamped(t *testing.T) {
 // surfaced (so -p exits non-zero and the run record says fail), not a
 // floor-1 one-token answer that logs success.
 func TestRecoveryKeptBatchOverrunsWindow(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)}) // 100, the older prefix
 	prov := &scriptedProvider{turns: []scriptedTurn{
@@ -720,7 +720,7 @@ func (f *steerFrontend) snapshot() []core.Event {
 // existing interrupt path: no Fault, the turn breaks as an interrupt,
 // the run continues.
 func TestSteerDuringRetry(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1200)}) // 300
 	s.Append(core.Message{                                                          // 200
@@ -785,7 +785,7 @@ func TestSteerDuringRetry(t *testing.T) {
 // shape holds — the summary row, the tail kept whole, the loop's answer
 // appended after the close.
 func TestRecoveryRewriteRaceFree(t *testing.T) {
-	row := models.Model{ID: "local", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 600}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 600}
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)}) // 500, the older prefix
 	s.Append(core.Message{
