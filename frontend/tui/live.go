@@ -65,6 +65,11 @@ type live struct {
 	// flushed to the terminal as a single write at the op's end.
 	frame strings.Builder
 
+	// lastBlank: the last committed line was blank (decision 2's
+	// spacing rule: the transcript never carries two blank rows in a
+	// row — a model's run of trailing newlines collapses to one).
+	lastBlank bool
+
 	// the status row (decision 3): the region's last row, when
 	// present — the ops' role math (the input row is the one before
 	// it) reads it from here.
@@ -84,6 +89,24 @@ func (l *live) record(lines []string) {
 	if l.suspended {
 		l.pend = append(l.pend, lines...)
 	}
+}
+
+// collapseBlanks drops a blank line that would follow a blank one
+// (decision 2's spacing rule), across chunks: the transcript keeps at
+// most one blank row between blocks, whatever run of newlines the
+// model or the CLI's boundary bytes produced. A blank is a paint-free
+// empty line.
+func (l *live) collapseBlanks(lines []string) []string {
+	out := lines[:0:0]
+	for _, line := range lines {
+		blank := WidthOf(line) == 0
+		if blank && l.lastBlank {
+			continue
+		}
+		out = append(out, line)
+		l.lastBlank = blank
+	}
+	return out
 }
 
 // suspend freezes the screen for the pager: the rows on it are
@@ -244,6 +267,13 @@ func (l *live) replaceRegion(rows []string) {
 	}
 	for i, line := range rows {
 		l.wf(toCol(1))
+		if i == len(rows)-1 {
+			// the last row: a shorter region than the old one leaves
+			// cleared rows below it (the clear visited them) — erase
+			// from here to the end of the screen first, then write the
+			// row, so nothing stands under the region.
+			l.wf(clearBelow)
+		}
 		l.wf(line)
 		if i < len(rows)-1 {
 			l.wf(lineEnd)
@@ -270,6 +300,7 @@ func (l *live) draw(committed string, newLines []string, status string) {
 		if cs[len(cs)-1] == "" {
 			cs = cs[:len(cs)-1]
 		}
+		cs = l.collapseBlanks(cs)
 		l.record(cs)
 		all = append(all, cs...)
 	}
@@ -289,6 +320,7 @@ func (l *live) draw(committed string, newLines []string, status string) {
 // status row (decision 3) is re-emitted last, when present.
 func (l *live) enter(fullLine, activity, inputLine, status string) {
 	l.record([]string{fullLine})
+	l.lastBlank = false // the prompt line is never blank
 	l.norm()
 	// the input row (the bookkeeping's last line, the status row below
 	// it when present, however many terminal rows it wrapped to) is

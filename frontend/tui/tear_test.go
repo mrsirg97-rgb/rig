@@ -159,6 +159,18 @@ func (v *vtFlush) feedBytes(b []byte) {
 				}
 				v.ensureRow(v.r)
 				v.rows[v.r] = ""
+			case 'J':
+				// erase from the cursor to the end of the screen (0J).
+				if params != "0" && params != "" {
+					v.fail("an unknown erase mode: 0J only")
+					return
+				}
+				v.ensureRow(v.r)
+				rr := []rune(v.rows[v.r])
+				if v.c < len(rr) {
+					v.rows[v.r] = string(rr[:v.c])
+				}
+				v.rows = v.rows[:v.r+1]
 			case 'm':
 			default:
 				v.fail("an escape outside the vocabulary: " + string(term))

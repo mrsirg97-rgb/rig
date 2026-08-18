@@ -70,6 +70,12 @@ type tui struct {
 	// the current ToolStart: the block's detail line (decision 4).
 	toolName string
 	toolArgs []byte
+	// lastSlot: the slot of the last streamed text (decision 2's
+	// spacing rule): a reasoning block that ends and text or a tool
+	// that begins get one blank row between them, whether or not the
+	// model emitted a newline there; and after a tool block, whatever
+	// streams next starts a fresh paragraph (slotAfterTool).
+	lastSlot string
 
 	statusIn func(context.Context) StatusIn
 	news     func(context.Context) string
@@ -92,8 +98,9 @@ type tui struct {
 	statusWindow  int
 	statusUsed    int
 	statusHasUsed bool
-	// the session's usage totals (the status's second row): the
-	// snapshot's numbers at the refresh points, then each Done adds.
+	// the status's second row: the last turn's usage (TurnEnd sets it
+	// from the turn's totals); the session's totals from the snapshot
+	// before the first turn.
 	statusUp, statusDown, statusCache int
 
 	// reader-owned: the line state and the byte-stream parser.
@@ -861,13 +868,16 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Unlock()
 		// the CLI's boundary byte: a newline before the row — it closes
 		// the pending line, or stands as a blank line where none is open.
-		t.flow("", "\n")
+		// The slot is text (a paint-free newline): the reasoning
+		// boundary rule sees a tool as "something else".
+		t.flow(SlotText, "\n")
 	case core.ToolResult:
 		t.mu.Lock()
 		block := RenderToolBlock(t.theme, t.toolName, t.toolArgs, e.Content, e.Err != nil, e.Duration)
 		t.phase = "thinking"
 		t.toolName = ""
 		t.toolArgs = nil
+		t.lastSlot = slotAfterTool // the next stream starts a fresh paragraph
 		t.mu.Unlock()
 		t.commit(block)
 	case core.Done:
@@ -884,9 +894,6 @@ func (t *tui) Notify(ev core.Event) {
 			t.statusUsed = e.Usage.Prompt + e.Usage.Completion
 			t.statusHasUsed = true
 		}
-		t.statusUp += e.Usage.Prompt
-		t.statusDown += e.Usage.Completion
-		t.statusCache += e.Usage.CacheRead
 		t.mu.Unlock()
 		t.flow("", "\n")
 	case core.Fault:
@@ -938,13 +945,17 @@ func (t *tui) Notify(ev core.Event) {
 		// usage line commits and the live region resets to the input
 		// row alone.
 		t.mu.Lock()
+		t.lastSlot = ""
 		pending := len(t.pend) > 0
 		t.mu.Unlock()
 		if pending {
 			t.flow("", "\n")
 		}
 		t.mu.Lock()
-		line := RenderUsage(t.theme, t.prompt, t.completion, t.cacheRead)
+		// the turn's usage goes to the status's second row (decision 3,
+		// amended: no committed usage line — the numbers live under
+		// the input, once, not in the scrollback per turn).
+		t.statusUp, t.statusDown, t.statusCache = t.prompt, t.completion, t.cacheRead
 		t.prompt, t.completion, t.cacheRead = 0, 0, 0
 		t.turnLive = false
 		t.phase = "thinking"
@@ -953,7 +964,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.toolName = ""
 		t.toolArgs = nil
 		t.mu.Unlock()
-		t.commit(line)
+		t.commit("")
 	default:
 		// an unknown event: ignored (the compat rule), never misread.
 	}
@@ -1527,8 +1538,28 @@ func paintSegs(t Theme, segs []seg) string {
 // newline (the CLI's boundaries: ToolStart, Done, Fault) closes the
 // pending line, or commits a blank one where the line is empty — the
 // CLI's bytes, kept verbatim.
+// slotAfterTool is lastSlot's sentinel after a tool block: the next
+// streamed text of any slot gets the boundary blank (the spacing rule).
+const slotAfterTool = "\x00after-tool"
+
 func (t *tui) flow(slot, text string) {
 	t.mu.Lock()
+	// the reasoning boundary (decision 2's spacing rule): reasoning
+	// closes and something else begins — close the pending line if it
+	// is open, and put one blank row between (the collapse keeps it to
+	// exactly one, whatever the model's own newlines did).
+	boundary := (slot != "" && slot != SlotReasoning && t.lastSlot == SlotReasoning) ||
+		(slot != "" && t.lastSlot == slotAfterTool)
+	if boundary {
+		sep := "\n"
+		if len(t.pend) > 0 {
+			sep = "\n\n"
+		}
+		t.pend = append(t.pend, seg{slot: slot, text: sep})
+	}
+	if slot != "" {
+		t.lastSlot = slot
+	}
 	t.pend = append(t.pend, seg{slot: slot, text: text})
 	lines := t.takeClosedLinesLocked()
 	chunk := ""

@@ -89,6 +89,11 @@ func toCol(c int) string {
 // ClearLine wipes the whole line under or before the cursor.
 const clearLine = ESC + "2K"
 
+// clearBelow erases from the cursor to the end of the screen (CSI 0J):
+// a shrinking live region's freed rows go with it, so no cleared row
+// stands under the region.
+const clearBelow = ESC + "0J"
+
 // Bracketed paste mode (decision 9): on at raw mode, off at Close.
 const (
 	pasteOn  = ESC + "?2004h"

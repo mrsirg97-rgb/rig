@@ -142,6 +142,19 @@ func (v *vt) feed(b []byte) {
 				}
 				v.ensureRow(v.r)
 				v.rows[v.r] = ""
+			case 'J':
+				// erase from the cursor to the end of the screen (0J):
+				// the current row from the column, every row below gone.
+				if params != "0" && params != "" {
+					v.fail("an unknown erase mode: 0J only")
+					return
+				}
+				v.ensureRow(v.r)
+				rr := []rune(v.rows[v.r])
+				if v.c < len(rr) {
+					v.rows[v.r] = string(rr[:v.c])
+				}
+				v.rows = v.rows[:v.r+1]
 			case 'm':
 				// the SGR paint: a no-op here, the content model is paint-free.
 			default:
@@ -439,10 +452,7 @@ func TestLiveRegionMenuRows(t *testing.T) {
 	}
 	want := []string{
 		"❯ ",
-		"huihui3.8", // the status row stands
-		"",          // the menu's old rows, cleared and left standing
-		"",
-		"",
+		"huihui3.8", // the status row stands; the menu's freed rows are erased below it
 	}
 	if len(v.rows) != len(want) {
 		t.Fatalf("the screen has %d rows, want %d:\n%q", len(v.rows), len(want), v.rows)

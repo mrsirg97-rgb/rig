@@ -98,7 +98,7 @@ var Shipped = map[string]map[string]string{
 		SlotError:     "#e06c75",
 		SlotWarn:      "#e5c07b",
 		SlotRule:      "#3c3c3c",
-		SlotReasoning: "#9a86c8",
+		SlotReasoning: "#8a8a8a",
 		SlotEmber:     "#e8a86b",
 	},
 	"paper": {
@@ -109,7 +109,7 @@ var Shipped = map[string]map[string]string{
 		SlotError:     "#cf222e",
 		SlotWarn:      "#9a6700",
 		SlotRule:      "#d0d7de",
-		SlotReasoning: "#6f42c1",
+		SlotReasoning: "#8c959f",
 		SlotEmber:     "#bc4c00",
 	},
 	"p1": {
