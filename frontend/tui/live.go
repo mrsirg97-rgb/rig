@@ -42,9 +42,20 @@ import (
 // The caller serializes (the Frontend's mutex); the ops never block on
 // the writer beyond the write itself.
 type live struct {
-	w     io.Writer
-	lines []string // the bookkeeping lines (painted, the rows we own)
-	width int      // the terminal's width: the wrap model's constant
+	w      io.Writer
+	lines  []string // the bookkeeping lines (painted, the rows we own)
+	width  int      // the terminal's width: the wrap model's constant
+	parked int      // rows the cursor sits above the region's last row (edit's mid-line park)
+}
+
+// norm returns the cursor to the region's last row: the edit op parks
+// it at the edit column, which on a wrapped input line is rows above
+// the bottom; every other op's arithmetic starts from the last row.
+func (l *live) norm() {
+	if l.parked > 0 {
+		l.wf(cursorDown(l.parked))
+		l.parked = 0
+	}
 }
 
 func newLive(w io.Writer, width int) *live {
@@ -95,6 +106,7 @@ func (l *live) wf(s string) { io.WriteString(l.w, s) }
 // clearRegion clears the old bookkeeping's terminal rows, top to
 // bottom, and leaves the cursor on its last row at column 1.
 func (l *live) clearRegion() {
+	l.norm()
 	old := l.regionRows()
 	if old == 0 {
 		return
@@ -166,6 +178,7 @@ func (l *live) draw(committed string, newLines []string) {
 // already live) leaves the activity row above untouched. The frozen
 // row's terminal rows are cleared first, whatever they wrapped to.
 func (l *live) enter(fullLine, activity, inputLine string) {
+	l.norm()
 	// the input row (the bookkeeping's last line, however many terminal
 	// rows it wrapped to) is cleared and rewritten as its full text; the
 	// rows above it (the activity row, the pending line) stand where they
@@ -233,6 +246,7 @@ func (l *live) edit(inputLine string, cursorCol int) {
 	if len(l.lines) == 0 {
 		return
 	}
+	l.norm()
 	idx := len(l.lines) - 1
 	// the input row is the bookkeeping's last line, and the cursor is on
 	// its last terminal row: its top is its own height minus one rows up.
@@ -259,6 +273,7 @@ func (l *live) edit(inputLine string, cursorCol int) {
 	col := (cursorCol-1)%l.width + 1
 	if up := newRows - 1 - row; up > 0 {
 		l.wf(cursorUp(up))
+		l.parked = up
 	}
 	l.wf(toCol(col))
 	l.lines[idx] = inputLine

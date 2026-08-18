@@ -34,6 +34,7 @@ type tui struct {
 	live          *live
 	inputText     string // the line's text, rendered under mu
 	editPos       int    // the edit position, mirrored under mu
+	inputScroll   int    // the input window's top row (a >5-row text scrolls with the cursor)
 	phase         string // the activity line's label: thinking, or a tool
 	frame         int    // the spinner's frame (|/-\)
 	showReasoning bool
@@ -889,61 +890,117 @@ func (t *tui) inputLineLocked() string {
 	return line
 }
 
+// maxInputRows is the input's visible height: the logical line wraps
+// across up to five terminal rows (the terminal wraps, live.edit's
+// row math places the cursor); a longer text scrolls a five-row
+// window that follows the cursor. The Enter always commits the full
+// text (the terminal wraps committed prose, decision 8).
+const maxInputRows = 5
+
 // inputLineAndColLocked is the painted input row (under mu) and the
-// edit column over it. The line's budget leaves one column of headroom
-// under the width (the cursor's, the right edge's); the budget is the
-// text's, after the prompt and its space. A line longer than the
-// budget (a paste, a shrunken width) shows its prefix plus the dot —
-// the Enter commits the full text (the terminal wraps committed prose,
-// decision 8).
+// edit column over it. The painted line carries one trailing space —
+// the cursor's cell, so the end-of-text cursor has a column (and, on
+// a row-exact line, a row) inside the region's row count.
 func (t *tui) inputLineAndColLocked() (string, int) {
 	glyph := t.theme.Glyph(GlyphPrompt)
 	prefixCols := displayWidth(glyph) + 1
 	text := t.inputText
-	budget := t.width - 3
-	if budget < 1 {
-		budget = 1
+	runes := []rune(text)
+	width := t.width
+	if width < 2 {
+		width = 2
 	}
-	visible := text
-	if displayWidth(text) > budget {
-		visible = truncateWidth(t.theme, text, budget)
+	cursorCol := prefixCols + runeWidthSum(string(runes[:t.editPos])) + 1
+	// the cursor's cell: a row-exact line leaves the end-of-text cursor
+	// one column past the region's rows; the pad gives it a cell (and a
+	// row) of its own. Any other line has the headroom already.
+	lineCols := prefixCols + displayWidth(text)
+	pad := ""
+	if lineCols%width == 0 {
+		pad = " "
 	}
-	line := t.theme.Paint(SlotAccent, glyph) +
-		t.theme.Paint(SlotText, " "+visible)
-	// the inline hint (decision 9): ghost text after the typed text, dim,
-	// display only. Only when the text fits (a truncated line has no
-	// room) and the cursor sits at the end (mid-line edits keep the row
-	// clean); truncated to what the width leaves.
-	if t.editPos == len([]rune(text)) && visible == text {
-		if hint := t.hintLocked(); hint != "" {
-			room := t.width - prefixCols - displayWidth(text) - 2
-			if room > 1 {
-				if displayWidth(hint) > room {
-					hint = truncateWidth(t.theme, hint, room)
+	totalCols := lineCols + len(pad)
+	totalRows := (totalCols + width - 1) / width
+	if totalRows <= maxInputRows {
+		t.inputScroll = 0
+		line := t.theme.Paint(SlotAccent, glyph) +
+			t.theme.Paint(SlotText, " "+text+pad)
+		// the inline hint (decision 9): ghost text after the typed text,
+		// dim, display only. Single-row inputs only, cursor at the end
+		// (mid-line edits keep the row clean); truncated to what the
+		// width leaves.
+		if totalRows == 1 && t.editPos == len(runes) {
+			if hint := t.hintLocked(); hint != "" {
+				room := width - lineCols - 2
+				if room > 1 {
+					if displayWidth(hint) > room {
+						hint = truncateWidth(t.theme, hint, room)
+					}
+					line += t.theme.Paint(SlotDim, hint)
 				}
-				line += t.theme.Paint(SlotDim, hint)
 			}
 		}
+		return line, cursorCol
 	}
-	col := prefixCols + visiblePrefixWidth(text, t.editPos, budget) + 1
-	return line, col
+	// the window: maxInputRows rows over the wrapped line, scrolled so
+	// the cursor's row stays visible. The slice is cut at the full
+	// layout's row boundaries, so the windowed line wraps to the same
+	// columns and live.edit's linear math holds shifted.
+	cursorRow := (cursorCol - 1) / width
+	scroll := t.inputScroll
+	if max := totalRows - maxInputRows; scroll > max {
+		scroll = max
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	if cursorRow < scroll {
+		scroll = cursorRow
+	}
+	if cursorRow > scroll+maxInputRows-1 {
+		scroll = cursorRow - maxInputRows + 1
+	}
+	t.inputScroll = scroll
+	logical := glyph + " " + text + pad
+	win := sliceCols(logical, scroll*width, (scroll+maxInputRows)*width)
+	var line string
+	if scroll == 0 {
+		line = t.theme.Paint(SlotAccent, glyph) +
+			t.theme.Paint(SlotText, strings.TrimPrefix(win, glyph))
+	} else {
+		line = t.theme.Paint(SlotText, win)
+	}
+	return line, cursorCol - scroll*width
 }
 
-// visiblePrefixWidth is the display width of the text's prefix up to
-// pos, capped at the visible budget (the edit position past the
-// visible prefix parks the cursor at the visible line's end).
-func visiblePrefixWidth(s string, pos, cap int) int {
-	w := 0
-	for i, r := range s {
-		if i >= pos {
+// sliceCols is the display-column window [start, end) of s: the runes
+// whose cells fall inside it. A wide rune straddling the start renders
+// as a space (the column alignment holds); one straddling the end is
+// dropped (the row runs a cell short).
+func sliceCols(s string, start, end int) string {
+	var b strings.Builder
+	col := 0
+	for _, r := range s {
+		w := runeWidth(r)
+		if col+w <= start {
+			col += w
+			continue
+		}
+		if col >= end {
 			break
 		}
-		w += runeWidth(r)
-		if w > cap {
-			return cap
+		if col < start {
+			b.WriteString(" ")
+			col += w
+			continue
 		}
+		if col+w > end {
+			break
+		}
+		b.WriteRune(r)
+		col += w
 	}
-	return w
+	return b.String()
 }
 
 // paintLines paints a multi-line text per line (the walk's chunk
