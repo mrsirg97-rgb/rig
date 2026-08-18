@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/models"
 )
 
@@ -13,7 +14,45 @@ import (
 // next turn (decision 6): the switch rebuilds the provider+policy pair
 // at the root — the loop reads k.Provider / k.Policy fresh at each turn
 // start, so the effect is the next turn's request.
-type modelsCmd struct{}
+type modelsCmd struct {
+	// subs is the TUI's hint source (SPEC_TUI 9, amended): the
+	// table's known ids with their roles, read at call time. nil = no
+	// hints (a set that never wired them).
+	subs func() []Sub
+}
+
+// Sub is the TUI's argument hints (SPEC_TUI 9, amended): the known
+// model names from the Env, their roles the descriptions.
+func (m modelsCmd) Sub() []Sub {
+	if m.subs == nil {
+		return nil
+	}
+	return m.subs()
+}
+
+// ModelHints wires the models command's Sub() (SPEC_TUI 9, amended):
+// the table's known ids with their roles, read at call time. The TUI's
+// door calls it once, over the set it registered.
+func ModelHints(cmds []core.Command, e *Env) {
+	if e == nil || e.Models == nil {
+		return
+	}
+	for _, c := range cmds {
+		m, ok := c.(*modelsCmd)
+		if !ok {
+			continue
+		}
+		m.subs = func() []Sub {
+			t := e.Models()
+			var out []Sub
+			for _, id := range t.Known() {
+				row, _ := t.Get(id)
+				out = append(out, Sub{Name: id, Desc: row.Role})
+			}
+			return out
+		}
+	}
+}
 
 func (modelsCmd) Name() string { return "models" }
 

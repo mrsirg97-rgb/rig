@@ -60,6 +60,15 @@ type live struct {
 	pend         []string
 	frozen       []string // the rows physically on screen at suspend
 	frozenParked int
+
+	// the frame (decision 2's one op, one write): the op's bytes,
+	// flushed to the terminal as a single write at the op's end.
+	frame strings.Builder
+
+	// the status row (decision 3): the region's last row, when
+	// present — the ops' role math (the input row is the one before
+	// it) reads it from here.
+	status string
 }
 
 // histCap bounds the pager's document (the oldest lines drop).
@@ -101,6 +110,7 @@ func (l *live) resume() {
 	all := append(append([]string(nil), pend...), cur...)
 	l.replaceRegion(all)
 	l.lines = cur
+	l.flush()
 }
 
 // norm returns the cursor to the region's last row: the edit op parks
@@ -156,13 +166,42 @@ func (l *live) regionRows() int {
 // phantom blank line.
 var lineEnd = toCol(1) + "\n"
 
-// wf is the single write gate: a suspended region (the pager's screen)
-// keeps its bookkeeping and writes nothing.
+// wf is the single write gate (decision 2's one op, one write): the
+// op's bytes accumulate in the frame, and the terminal sees each op
+// whole — no partial frame between the clear and the reprint, and no
+// row left ending exactly at the last column across a write boundary
+// (the pending wrap a terminal's flush may resolve, decision 2's tear).
+// A suspended region (the pager's screen) keeps its bookkeeping and
+// writes nothing.
 func (l *live) wf(s string) {
 	if l.suspended {
 		return
 	}
-	io.WriteString(l.w, s)
+	l.frame.WriteString(s)
+}
+
+// flush writes the frame to the terminal in one write and resets it:
+// the op's boundary. A suspended region's frame is dropped (its bytes
+// would land on the pager's screen).
+func (l *live) flush() {
+	if l.suspended || l.frame.Len() == 0 {
+		return
+	}
+	io.WriteString(l.w, l.frame.String())
+	l.frame.Reset()
+}
+
+// guardWrap cancels a pending wrap at the frame's end: the frame's
+// last row ending exactly at the last column would leave the
+// terminal's deferred wrap pending at the write boundary, and a
+// terminal that resolves the wrap at the flush shifts the cursor a
+// row (decision 2's tear). toCol(1) is a no-op under the pure
+// deferred model.
+func (l *live) guardWrap(line string) {
+	w := WidthOf(line)
+	if w > 0 && l.width > 0 && w%l.width == 0 {
+		l.wf(toCol(1))
+	}
 }
 
 // clearRegion clears the old bookkeeping's terminal rows, top to
@@ -196,7 +235,8 @@ func (l *live) redraw(newLines []string) {
 // replaceRegion clears the old region's terminal rows and writes rows
 // from the top of the old region (the write half of the redraw; the
 // bookkeeping is the caller's — draw's chunk rows are committed
-// scrollback, not the region).
+// scrollback, not the region). The frame ends with the last row
+// guarded (guardWrap): no pending wrap at the write boundary.
 func (l *live) replaceRegion(rows []string) {
 	l.clearRegion()
 	if old := l.regionRows(); old > 0 {
@@ -209,17 +249,21 @@ func (l *live) replaceRegion(rows []string) {
 			l.wf(lineEnd)
 		}
 	}
+	if len(rows) > 0 {
+		l.guardWrap(rows[len(rows)-1])
+	}
 }
 
 // draw commits the committed chunk (if any) and re-emits the live
-// region as newLines (the redraw, chunk prefixed).
+// region as newLines (the redraw, chunk prefixed), the status row
+// (decision 3) last, when present.
 //
 // Chunk contract: the chunk is split on newlines into the walk's lines,
 // so a painted fragment must never span one — a paint's SGR and reset
 // are no-ops to the terminal, but to the walk a reset landing on its
 // own split piece is a phantom line. The callers paint per line
 // (paintLines); the renderers already emit whole painted lines.
-func (l *live) draw(committed string, newLines []string) {
+func (l *live) draw(committed string, newLines []string, status string) {
 	var all []string
 	if committed != "" {
 		cs := strings.Split(committed, "\n")
@@ -229,9 +273,11 @@ func (l *live) draw(committed string, newLines []string) {
 		l.record(cs)
 		all = append(all, cs...)
 	}
-	all = append(all, newLines...)
+	all = append(all, withStatus(newLines, status)...)
 	l.replaceRegion(all)
-	l.lines = newLines
+	l.lines = withStatus(newLines, status)
+	l.status = status
+	l.flush()
 }
 
 // enter freezes the current input row — its full text, so a width
@@ -239,19 +285,27 @@ func (l *live) draw(committed string, newLines []string) {
 // new input row below it, the fresh activity row between them when
 // this line starts a turn (a quiet Enter); a steering Enter (the turn
 // already live) leaves the activity row above untouched. The frozen
-// row's terminal rows are cleared first, whatever they wrapped to.
-func (l *live) enter(fullLine, activity, inputLine string) {
+// row's terminal rows are cleared first, whatever they wrapped to. The
+// status row (decision 3) is re-emitted last, when present.
+func (l *live) enter(fullLine, activity, inputLine, status string) {
 	l.record([]string{fullLine})
 	l.norm()
-	// the input row (the bookkeeping's last line, however many terminal
-	// rows it wrapped to) is cleared and rewritten as its full text; the
-	// rows above it (the activity row, the pending line) stand where they
-	// are and become scrollback. The cursor is on the input row's last
-	// terminal row, so its top is its own height minus one rows up.
+	// the input row (the bookkeeping's last line, the status row below
+	// it when present, however many terminal rows it wrapped to) is
+	// cleared and rewritten as its full text; the rows above it (the
+	// activity row, the pending line) stand where they are and become
+	// scrollback. The cursor is on the region's last row, so the input
+	// row's top is its own height minus one, plus the status row, up.
+	oldStatus := 0
+	if l.status != "" {
+		oldStatus = 1
+	}
 	if len(l.lines) > 0 {
-		in := l.visualRows(l.lines[len(l.lines)-1])
-		if in > 1 {
-			l.wf(cursorUp(in - 1))
+		idx := len(l.lines) - 1 - oldStatus
+		in := l.visualRows(l.lines[idx])
+		upTop := in - 1 + oldStatus
+		if upTop > 0 {
+			l.wf(cursorUp(upTop))
 		}
 		for r := 0; r < in; r++ {
 			l.wf(clearLine)
@@ -272,24 +326,42 @@ func (l *live) enter(fullLine, activity, inputLine string) {
 		l.wf(lineEnd)
 	}
 	l.wf(inputLine)
+	if status != "" {
+		l.wf(lineEnd)
+		l.wf(status)
+	}
 	if activity != "" {
 		l.lines = []string{activity, inputLine}
 	} else {
 		l.lines = []string{inputLine}
 	}
+	if status != "" {
+		l.lines = append(l.lines, status)
+	}
+	l.status = status
+	if status != "" {
+		l.guardWrap(status)
+	} else {
+		l.guardWrap(inputLine)
+	}
+	l.flush()
 }
 
 // insertActivity puts a fresh activity row above the current input row
 // (the turn start: the line's delivery, where the reader's enter left
 // the input row alone) and re-emits the input row below it. The
 // committed rows above are untouched.
-func (l *live) insertActivity(activity, inputLine string) {
-	l.redraw([]string{activity, inputLine})
+func (l *live) insertActivity(activity string) {
+	rest := make([]string, 0, len(l.lines)+1)
+	rest = append(rest, activity)
+	rest = append(rest, l.lines...)
+	l.redraw(rest)
+	l.flush()
 }
 
 // setActivity rewrites the activity row in place (the spinner tick,
 // the phase switch): the redraw with the rest of the region standing;
-// the cursor lands on the input row at column 1, and the next edit
+// the cursor lands on the region's last row, and the next edit
 // restores the edit column.
 func (l *live) setActivity(activity string) {
 	if len(l.lines) < 2 {
@@ -299,24 +371,33 @@ func (l *live) setActivity(activity string) {
 	rest = append(rest, activity)
 	rest = append(rest, l.lines[1:]...)
 	l.redraw(rest)
+	l.flush()
 }
 
 // edit rewrites the input row in place and parks the terminal cursor
 // at the edit column (one-based, over the painted line's display
 // width, wrapping with the line). The input row is the bookkeeping's
-// last line; its terminal rows are cleared and rewritten, and the
-// cursor lands on the edit column's own row.
-func (l *live) edit(inputLine string, cursorCol int) {
+// last line, the status row (decision 3) below it when present; its
+// terminal rows are cleared and rewritten, and the cursor lands on
+// the edit column's own row — parked above the region's last row,
+// which is the status row when one stands there.
+func (l *live) edit(inputLine string, cursorCol int, status string) {
 	if len(l.lines) == 0 {
 		return
 	}
 	l.norm()
-	idx := len(l.lines) - 1
-	// the input row is the bookkeeping's last line, and the cursor is on
-	// its last terminal row: its top is its own height minus one rows up.
+	oldStatus := 0
+	if l.status != "" {
+		oldStatus = 1
+	}
+	idx := len(l.lines) - 1 - oldStatus
+	// the input row's terminal rows: the cursor is on the region's last
+	// row (the status row when present), so the input row's top is its
+	// own height minus one, plus the status row, up.
 	old := l.visualRows(l.lines[idx])
-	if old > 1 {
-		l.wf(cursorUp(old - 1))
+	upTop := old - 1 + oldStatus
+	if upTop > 0 {
+		l.wf(cursorUp(upTop))
 	}
 	for r := 0; r < old; r++ {
 		l.wf(clearLine)
@@ -330,15 +411,61 @@ func (l *live) edit(inputLine string, cursorCol int) {
 	}
 	l.wf(toCol(1))
 	l.wf(inputLine)
+	l.guardWrap(inputLine)
+	// the cursor is on the input row's last row now (the region's last
+	// row only when the status row is absent): the park from there.
+	l.parkAt(inputLine, cursorCol, status, false)
+	l.lines[idx] = inputLine
+	l.status = status
+	l.flush()
+}
+
+// parkAt moves the cursor to the edit column of inputLine (one-based,
+// over the painted line's display width, wrapping with the line) and
+// records the park. fromStatusRow says the cursor stands on the
+// region's last row — the status row, one below the input row's last
+// row, when present (a full redraw); otherwise it stands on the input
+// row's last row (the edit op's own write).
+func (l *live) parkAt(inputLine string, cursorCol int, status string, fromStatusRow bool) {
 	// the edit column is linear over the painted line: its row and
 	// column within the wrapped line.
 	newRows := l.visualRows(inputLine)
 	row := (cursorCol - 1) / l.width
 	col := (cursorCol-1)%l.width + 1
-	if up := newRows - 1 - row; up > 0 {
-		l.wf(cursorUp(up))
-		l.parked = up
+	up := newRows - 1 - row
+	park := up
+	if status != "" {
+		park++ // the region's last row is the status row, below the input row
+		if fromStatusRow {
+			up++ // the cursor stands there
+		}
 	}
+	if up > 0 {
+		l.wf(cursorUp(up))
+	}
+	l.parked = park
 	l.wf(toCol(col))
-	l.lines[idx] = inputLine
+}
+
+// editFull re-lays the whole region (the shape changed: the menu rows
+// opened, closed, or moved) and parks the cursor at the edit column —
+// the keystroke path where the edit op's in-place rewrite no longer
+// covers the region. newLines is the region's rows, input row last.
+func (l *live) editFull(newLines []string, cursorCol int, status string) {
+	rows := withStatus(newLines, status)
+	l.replaceRegion(rows)
+	l.lines = rows
+	l.status = status
+	l.parkAt(newLines[len(newLines)-1], cursorCol, status, true)
+	l.flush()
+}
+
+// withStatus appends the status row, when present, to the region's
+// rows.
+func withStatus(newLines []string, status string) []string {
+	lines := append([]string(nil), newLines...)
+	if status != "" {
+		lines = append(lines, status)
+	}
+	return lines
 }

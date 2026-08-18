@@ -67,7 +67,6 @@ func TestKeyParserTable(t *testing.T) {
 		{"page up", []byte{0x1b, '[', '5', '~'}, []key{keyPgUp}},
 		{"page down", []byte{0x1b, '[', '6', '~'}, []key{keyPgDn}},
 		{"unrecognized tilde", []byte{0x1b, '[', '1', '5', '~'}, []key{}},
-		{"unrecognized shift tab", []byte{0x1b, '[', 'Z'}, []key{}},
 		{"two byte escape", []byte{0x1b, '(', 'B'}, []key{}},
 		// a byte after the two-byte mode selection is its own content:
 		// the parser consumes the mode, the text stands.
@@ -78,6 +77,7 @@ func TestKeyParserTable(t *testing.T) {
 		{"osc title", []byte{0x1b, ']', '0', ';', 'r', 'i', 'g', 0x07}, []key{}},
 		{"osc string terminator", []byte{0x1b, ']', '0', ';', 'x', 0x1b, '\\'}, []key{}},
 		{"tab control", []byte{0x09}, []key{keyTab}},
+		{"shift tab csi z", []byte{0x1b, '[', 'Z'}, []key{keyShiftTab}},
 		{"ctrl u kill to start", []byte{0x15}, []key{keyKillToStart}},
 		{"ctrl k kill to end", []byte{0x0b}, []key{keyKillToEnd}},
 		{"ctrl w word back", []byte{0x17}, []key{keyWordBack}},

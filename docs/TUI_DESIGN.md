@@ -8,26 +8,46 @@ tests assert on the exact bytes.
 
 Every renderer is a pure function: state in, bytes out, no I/O. `theme.go`
 (palette and glyph tables, theme.json decode, the 256 downconvert),
-`banner.go`, `commit.go`, and `tools_render.go` hold the renderers.
+`status.go`, `commit.go`, and `tools_render.go` hold the renderers.
 `live.go` turns (old live lines, committed chunk, new live lines) into the
 escape stream. `input.go` is the key parser and line editor over a byte
 stream. `tui.go` is the shell: the Frontend, the reader goroutine, the
-command dispatch, and the reprint triggers. Tests drive the pure core
-directly for the goldens and the TUI for the protocol.
+command dispatch, the completion menu, and the status line's refresh
+points. Tests drive the pure core directly for the goldens and the TUI for
+the protocol; `tear_test.go` pins the live-region tear from three doors.
 
 ## the live region protocol
 
-Invariant: the live region is the last written lines (at most two: the
-activity line and the input line) and the cursor is on the last live line
-after its content. To commit a chunk and redraw: cursor up to the first
-live line, to column 1, write the committed chunk (it overwrites the old
-live lines as it flows), then write the new live lines. The old live
-content is exactly the overwrite buffer, so a committed byte is never
-rewritten and the only cursor arithmetic is up, column, and clear-line,
-over at most the two live lines. Single-line edits (typing, the spinner
-tick) are a clear-line and rewrite of the input or activity line in place.
-The input line is truncated with runewidth to the terminal width so it
-never wraps and the cursor invariant holds.
+Invariant: everything above the live region is committed and is never
+touched again. The live region is the last written rows, top to bottom:
+the completion menu's rows when one is open (decision 9), the activity
+line and the pending prose line during a turn, the input line (itself up
+to five terminal rows as it wraps, a five-row window that follows the
+cursor beyond that), and the status line (decision 3) which is always the
+region's last row. The terminal cursor is parked on the region's last row
+(the status row's, or the input row's when none stands there) after every
+op, or at the edit column of a wrapped input (the `parked` tally,
+un-parked by a cursor-down, the `norm` step, before any other op's
+arithmetic).
+
+To commit a chunk and redraw: clear the old region's terminal rows (the
+count is the rows the old lines wrapped to, `visualRows`), cursor up to
+its top, write the committed chunk, then the new live lines. Committed
+bytes are never rewritten. The only cursor arithmetic is up, down,
+set-column, and clear-line, over at most the cap (decision 2's amended
+at-most-three). Single-line edits (typing, the spinner tick) clear and
+rewrite the input or activity line in place; a shape change (the menu
+opens, closes, or moves) re-lays the whole region (`editFull`).
+
+The wrap model is the deferred one (xterm's, the common case): a
+character written at the last column stays on the row until the next write
+or cursor move, and the protocol's `lineEnd` (`toCol(1)` then LF) is built
+for it. Each op is one write (the write gate, `live.go`): its escapes and
+rows buffer and flush as a single write, so the terminal sees every
+repaint whole and no row ends exactly at the last column across a write
+boundary: the one whose pending wrap a terminal may resolve at the
+flush, shifting the cursor a row and taking the next op's cursor tally off by
+a row (the tear, `tear_test.go`).
 
 ## the event map
 
@@ -35,24 +55,29 @@ The commit points are the events, exactly (SPEC_TUI decision 2):
 ReasoningDelta and TextDelta stream as they arrive (reasoning dim and
 only while the toggle is on), ToolStart switches the activity line to the
 tool name, ToolResult commits the whole tool block, Done guarantees a
-trailing newline, TurnEnd commits the usage line and resets the live
-region to the input line, Compacted commits the compact line and reprints
-the banner, Fault commits the fault line, unknown events are ignored.
-The activity label is the phase: thinking before and between tools, the
-tool name while one runs. The spinner is state (a frame index), not
-time; a ticker goroutine advances it, and tests pin the frame.
+trailing newline and the status line's used takes its Usage, TurnEnd
+commits the usage line and resets the live region to the input line,
+Compacted commits the compact line and the status line's used takes the
+compact's Kept (no block reprint), Fault commits the fault line, unknown
+events are ignored. The activity label is the phase: thinking before and
+between tools, the tool name while one runs. The spinner is state (a frame
+index), not time; a ticker goroutine advances it, and tests pin the frame.
 
-## the banner and news seams
+## the status line and news seams
 
-The TUI renders; the root computes. `tui.WithBanner(fn)` supplies the
-banner numbers (model, effort, used over window, session up/down/cache);
+The TUI renders; the root computes. `tui.WithStatus(fn)` supplies the
+status line's and the startup block's numbers (model, effort, window,
+session up/down/cache): one committed startup block at session start
+(decision 3, the banner's identity and session rows without the dotted
+rules), and the live status row's snapshot at the refresh
+points (session start, `/new`, `sessions resume`, and a `models` switch),
+never per repaint (the closure is a store read; a live row repaints on every
+keystroke). The used number is the frontend's own arithmetic over the
+usage events (the last Done's Prompt+Completion, then the compact's
+Kept); `new` and `resume` reset it with the session.
 `tui.WithNews(fn)` supplies the session-start news line (empty = nothing).
-The root computes used as the last ContextTokens anchor plus
-`compact.Estimate` of the messages after it, the compaction trigger's own
-math over the assembled session. Session totals are one narrow join over
-the state store's usage and messages rows. News is the latest run since
-the previous session in this cwd that failed or is the job's first
-successful completion, one dim line, read-only.
+News is the latest run since the previous session in this cwd that failed
+or is the job's first successful completion, one dim line, read-only.
 
 ## settings.theme
 
@@ -67,14 +92,20 @@ names and names the known.
 
 ## the key table
 
-Enter submits (steers when a turn is live: the slot plus the interrupt),
-Ctrl-C ends the session (interrupting a live turn first), Ctrl-D is delete
-with text and session end at an empty prompt, Ctrl-T toggles subsequent
-reasoning, arrows and home/end move the cursor, backspace and CSI-3~
-delete, up/down walk the in-memory history, bracketed paste is stripped to
-a plain byte stream so pasted newlines become ordered prompts (the burst
-rule), and every unrecognized control or CSI sequence is consumed and
-ignored.
+Enter submits (steers when a turn is live: the slot plus the interrupt;
+accepts the menu's selection into the input when the menu is open, never
+dispatching), Ctrl-C ends the session (interrupting a live turn first),
+Ctrl-D is delete with text and session end at an empty prompt, Ctrl-T
+toggles subsequent reasoning, Tab cycles the completion menu's selection
+down (and completes a single candidate plus its trailing space), Shift-Tab
+(CSI Z) steps it up, arrows and home/end move the cursor, backspace and
+CSI-3~ delete, up/down walk the in-memory history, bracketed paste is
+stripped to a plain byte stream so pasted newlines become ordered prompts
+(the burst rule), and every unrecognized control or CSI sequence is
+consumed and ignored. Esc, outermost first: a pager open closes the pager;
+else a menu open closes the menu (the input keeps its text); else Esc
+cancels the prompt whole (the reader names a lone Esc by the grace
+window, a sequence's bytes arriving in one burst).
 
 ## the block formats
 

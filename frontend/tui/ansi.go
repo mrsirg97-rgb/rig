@@ -49,6 +49,16 @@ func (t Theme) Paint(slot, s string) string {
 	return seq + s + Reset
 }
 
+// Invert is reverse video (SGR 7): the menu's selected row (decision 9,
+// amended). A mode, not a slot: the downconvert and the palette do not
+// touch it, and the width walk's SGR filter already skips it.
+func (t Theme) Invert(s string) string {
+	if s == "" {
+		return s
+	}
+	return ESC + "7m" + s + ESC + "27m"
+}
+
 // Cursor up n lines (the live region's only upward move; n is at most
 // the live region's height, decision 2's "at most three lines").
 func cursorUp(n int) string {
