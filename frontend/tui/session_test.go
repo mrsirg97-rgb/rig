@@ -684,10 +684,12 @@ func TestSteerSeam(t *testing.T) {
 
 // TestTextFlowsAsTheCLIDoes is the streaming-text rule made a test
 // (decision 2: "committed as flowed: the terminal wraps, rig never
-// hand-wraps committed prose"; the spec's testing section: the TUI
-// adds, never changes, the CLI's bytes): a delta that does not end on
-// a line does not close it — the next delta, whatever its slot,
-// continues on the same line, and only a newline commits.
+// hand-wraps committed prose"): a delta that does not end on a line
+// does not close it — the next delta of the same kind continues on
+// the same line, and only a newline commits. The one departure from
+// the CLI's bytes is the spacing rule (decision 2, amended): a
+// reasoning block that ends and text that begins get one blank row
+// between them, whether or not the model emitted a newline there.
 func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
@@ -707,8 +709,9 @@ func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 	// line's close.
 	s.fe.Notify(core.TextDelta{Text: "hel"})
 	s.fe.Notify(core.TextDelta{Text: "lo\n"})
-	// a mixed line: reasoning butts against text the way the CLI's raw
-	// bytes do (the CLI has no line of its own; the bytes are the line).
+	// reasoning, then text with no newline between from the model: the
+	// spacing rule closes the reasoning line and puts one blank row
+	// before the text (the CLI would butt them: "rt").
 	s.fe.Notify(core.ReasoningDelta{Text: "r"})
 	s.fe.Notify(core.TextDelta{Text: "t\n"})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
@@ -726,15 +729,18 @@ func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 		}
 		return -1
 	}
-	goIdx, helloIdx, rtIdx, usageIdx := idx("❯ go"), idx("hello"), idx("rt"), idx("up 0 down 0 · cache r 0 0%")
+	goIdx, helloIdx, rIdx, tIdx, usageIdx := idx("❯ go"), idx("hello"), idx("r"), idx("t"), idx("up 0 down 0 · cache r 0 0%")
 	if helloIdx < 0 {
 		t.Fatalf("the deltas did not flow into one line (the CLI's bytes):\n%q", v.rows)
 	}
-	if rtIdx < 0 {
-		t.Fatalf("the mixed reasoning/text line did not flow as the CLI's bytes:\n%q", v.rows)
+	if rIdx < 0 || tIdx < 0 {
+		t.Fatalf("the reasoning and the text must land on their own lines (the spacing rule):\n%q", v.rows)
 	}
-	if !(goIdx >= 0 && goIdx < helloIdx && helloIdx < rtIdx && rtIdx < usageIdx) {
-		t.Fatalf("the committed lines are out of order (go, hello, rt, usage):\n%q", v.rows)
+	if tIdx != rIdx+2 || v.rows[rIdx+1] != "" {
+		t.Fatalf("exactly one blank row between the reasoning and the text (r at %d, t at %d):\n%q", rIdx, tIdx, v.rows)
+	}
+	if !(goIdx >= 0 && goIdx < helloIdx && helloIdx < rIdx && tIdx < usageIdx) {
+		t.Fatalf("the committed lines are out of order (go, hello, r, t, usage):\n%q", v.rows)
 	}
 }
 
@@ -784,14 +790,12 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 		"aaaa",
 		"bb",
 		"", // the CLI's Done newline: unconditional, so a blank line
-		"up 10 down 2 · cache",
-		" r 0 0%",
 		"❯ ",
 		"huihui3.8 · 12/262k", // the status's first row, fed by the Done's usage
-		// the second: the session totals (the snapshot's + the Done's),
+		// the second: the turn's usage (no committed usage line),
 		// wrapping at 20 like everything else here.
-		"up 214k down 18k · c",
-		"ache r 187k 87%",
+		"up 10 down 2 · cache",
+		" r 0 0%",
 	}
 	if len(v.rows) != len(want) {
 		t.Fatalf("%d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
@@ -806,8 +810,10 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 // TestDoneNewlineIsTheCLIs is the boundary parity made a test: the
 // CLI's Done newline is unconditional, and so is its ToolStart
 // separator — the TUI adds, it does not remove (a text turn that ends
-// on a line still gets the blank line before the usage line; a
-// tool-first turn gets the separator before the block).
+// on a line still gets the blank line after it, before the input; a
+// tool-first turn gets the separator before the block). The turn's
+// usage is the status's second row (decision 3, amended), not a
+// committed line.
 func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
@@ -830,18 +836,20 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	if v.err != "" {
 		t.Fatalf("harness: %s\nstream:\n%s", v.err, s.out.String())
 	}
+	// the turn's usage: the status's second row, the screen's last.
 	usage := "up 10 down 2 · cache r 0 0%"
-	idx := -1
+	if last := v.rows[len(v.rows)-1]; last != usage {
+		t.Fatalf("the status's second row must carry the turn's usage: %q\n%q", last, v.rows)
+	}
+	// the Done newline: the blank row after "done", before the input.
+	doneIdx := -1
 	for i, l := range v.rows {
-		if l == usage {
-			idx = i
+		if l == "done" {
+			doneIdx = i
 		}
 	}
-	if idx < 0 {
-		t.Fatalf("the usage line is missing:\n%q", v.rows)
-	}
-	if idx == 0 || v.rows[idx-1] != "" {
-		t.Fatalf("the CLI's Done newline did not land as a blank line before the usage line:\n%q", v.rows)
+	if doneIdx < 0 || v.rows[doneIdx+1] != "" || !strings.HasPrefix(v.rows[doneIdx+2], "❯") {
+		t.Fatalf("the CLI's Done newline did not land as a blank line after the text, before the input:\n%q", v.rows)
 	}
 
 	// the tool-first turn: the separator line stands before the block.
@@ -1298,4 +1306,70 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	// directly above the input.
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
 	s.awaitScreen(50, 9, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+}
+
+// TestSpacingRule (decision 2, amended): the transcript never carries
+// two blank rows in a row — a model's run of trailing newlines
+// collapses to one — and a reasoning block that ends gets exactly one
+// blank row before the text or the tool that follows, whether or not
+// the model emitted a newline there. Reasoning is grey (decision 7).
+func TestSpacingRule(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	// reasoning with a run of trailing newlines, then a tool: one
+	// blank row between the reasoning and the block, not four.
+	s.fe.Notify(core.ReasoningDelta{Text: "let me look\n\n\n\n"})
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash", Args: []byte(`{"command":"ls"}`)}})
+	s.fe.Notify(core.ToolResult{ID: "c1", Content: "a\n", Duration: 0})
+	// text right after the tool, then reasoning butting straight into
+	// text with no newline: one blank row between them.
+	s.fe.Notify(core.ReasoningDelta{Text: "so then"})
+	s.fe.Notify(core.TextDelta{Text: "the answer\n"})
+	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.await("the answer")
+
+	rows := screenLines(t, s, 60)
+	// no two consecutive blank rows anywhere on the screen.
+	for i := 1; i < len(rows); i++ {
+		if rows[i] == "" && rows[i-1] == "" {
+			t.Fatalf("two blank rows in a row at %d:\n%q", i, rows)
+		}
+	}
+	// "let me look" then exactly one blank, then the tool block opens.
+	find := func(prefix string) int {
+		for i, r := range rows {
+			if strings.HasPrefix(r, prefix) {
+				return i
+			}
+		}
+		return -1
+	}
+	look, block := find("let me look"), find("● bash")
+	if look < 0 || block < 0 || block != look+2 || rows[look+1] != "" {
+		t.Fatalf("reasoning -> one blank -> tool block (look %d, block %d):\n%q", look, block, rows)
+	}
+	// "so then" then exactly one blank, then "the answer".
+	then, ans := find("so then"), find("the answer")
+	if then < 0 || ans < 0 || ans != then+2 || rows[then+1] != "" {
+		t.Fatalf("reasoning -> one blank -> text (then %d, ans %d):\n%q", then, ans, rows)
+	}
+	// the tool block's close, then exactly one blank, then the
+	// reasoning that follows (the after-tool boundary).
+	closeIdx := find("bash ")
+	if closeIdx < 0 || then != closeIdx+2 || rows[closeIdx+1] != "" {
+		t.Fatalf("tool close -> one blank -> next stream (close %d, then %d):\n%q", closeIdx, then, rows)
+	}
+	// reasoning is grey: the oled slot.
+	if !strings.Contains(s.out.String(), th.Paint(SlotReasoning, "so then")) {
+		t.Fatalf("reasoning must paint in the reasoning slot")
+	}
+	if got := th.SGR(SlotReasoning); !strings.Contains(got, "138;138;138") {
+		t.Fatalf("oled's reasoning slot must be the grey: %q", got)
+	}
 }

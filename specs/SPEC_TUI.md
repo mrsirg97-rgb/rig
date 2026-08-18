@@ -149,6 +149,20 @@ rows, the menu's tail row when the candidates run past six, the input
 rows: repainted in place, never committed — the wf suspension gate
 keeps them off the pager's screen, like every other live row.
 
+The spacing rule (amended): the transcript never carries two blank
+rows in a row — a model's run of trailing newlines, or the CLI's
+boundary bytes landing on an already-blank line, collapse to one — and
+a reasoning block that ends gets exactly one blank row before the text
+or the tool that follows, and a tool block's close gets exactly one
+before whatever streams next, whether or not the model emitted a
+newline there. This is the TUI's one departure from the CLI's bytes, named:
+the CLI is the piped reference and keeps every byte; the TUI is read
+by a person, and the model's whitespace is not information (decision
+8). The per-turn usage line is gone from the transcript: the turn's
+usage is the status's second row (decision 3). A shrinking live region
+erases the rows it frees (CSI 0J before its last row), so nothing
+stands under the status.
+
 The commit points are the events, exactly:
 
 - `ReasoningDelta` / `TextDelta`: streamed as they arrive (reasoning
@@ -231,9 +245,10 @@ up 214k down 18.2k · cache r 187k 92%
 
 The live status is two rows: the model with used over the window (the
 model alone before the first usage; the context part colored at the
-70/90 marks), and the session's usage totals with the cache-read hit
-rate — the snapshot's numbers at the refresh points, then each `Done`
-adds. The live region's status is one string of newline-joined rows;
+70/90 marks), and the usage row — the last turn's up, down, and
+cache-read hit rate (`TurnEnd` sets it from the turn's totals; before
+the first turn, the session's totals from the snapshot). No usage line
+commits per turn any more: the numbers live under the input, once. The live region's status is one string of newline-joined rows;
 the region splits and measures them (a wrapping usage row on a narrow
 terminal counts by its terminal rows, like every live row).
 
@@ -347,7 +362,10 @@ The palette is a table of named slots, four shipped:
   the glyph hierarchy survives without hue.
 
 Slots (the schema's vocabulary, fixed here): `text`, `dim`, `accent`,
-`success`, `error`, `warn`, `rule`, `reasoning`, `ember`. The ember
+`success`, `error`, `warn`, `rule`, `reasoning`, `ember`. Reasoning
+is grey (amended: `#8a8a8a` on oled, `#8c959f` on paper — it reads as
+the model's margin notes, not a second accent; the phosphors keep
+their dim step). The ember
 (added, amended) is the greeting's and every loader's color — the
 spinner and its label, whatever the phase (thinking, compacting, a
 tool): a pale, neutral orange on the dark themes (`#e8a86b` on oled),
