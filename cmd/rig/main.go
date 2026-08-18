@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig"
 	"github.com/mrsirg97-rgb/rig/command"
@@ -25,6 +26,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/frontend/cli"
 	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
+	"github.com/mrsirg97-rgb/rig/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
@@ -355,6 +357,70 @@ func resolveModel(id string, table models.Table) models.Model {
 	return m
 }
 
+// tuiTrueColor is the theme's color mode (SPEC_TUI 7: named, automatic,
+// not configurable): the terminal reports 24-bit, else the downconvert.
+func tuiTrueColor() bool {
+	ct := os.Getenv("COLORTERM")
+	return ct == "truecolor" || ct == "24bit"
+}
+
+// tuiBannerIn is the TUI banner's data at call time (SPEC_TUI 3): the
+// model, the window, and the session's usage from the state rows.
+// The read is the root's (the store is its); the TUI renders.
+func tuiBannerIn(r *root, db store.DB) func(context.Context) tui.BannerIn {
+	return func(ctx context.Context) tui.BannerIn {
+		b := tui.BannerIn{Model: r.activeID, Effort: r.row.Effort, Window: r.row.Window}
+		if r.session == nil {
+			return b
+		}
+		if err := db.QueryRowContext(ctx,
+			`SELECT COALESCE(SUM(u.prompt), 0), COALESCE(SUM(u.completion), 0), COALESCE(SUM(u.cache_read), 0)
+			 FROM usage u JOIN messages m ON m.seq = u.message_seq
+			 WHERE m.session_id = ?`, r.session.ID).Scan(&b.Up, &b.Down, &b.CacheRead); err != nil {
+			return b
+		}
+		var used int
+		if err := db.QueryRowContext(ctx,
+			`SELECT u.prompt FROM usage u JOIN messages m ON m.seq = u.message_seq
+			 WHERE m.session_id = ? ORDER BY u.message_seq DESC LIMIT 1`, r.session.ID).Scan(&used); err == nil {
+			b.Used = used
+		}
+		return b
+	}
+}
+
+// tuiNews is the TUI news line (SPEC_TUI 4): the latest run of the
+// scheduler's jobs for this cwd, when it postdates the last session's
+// end here; nothing otherwise. The read is the root's.
+func tuiNews(stateDB, schedDB store.DB, cwd string) func(context.Context) string {
+	return func(ctx context.Context) string {
+		var last any
+		if err := stateDB.QueryRowContext(ctx,
+			`SELECT MAX(ended_at) FROM sessions WHERE cwd = ? AND ended_at IS NOT NULL`, cwd).Scan(&last); err != nil {
+			return ""
+		}
+		cutoff := ""
+		switch v := last.(type) {
+		case time.Time:
+			cutoff = v.UTC().Format(time.RFC3339)
+		case string:
+			cutoff = v
+		}
+		var name, status, ended string
+		if err := schedDB.QueryRowContext(ctx,
+			`SELECT j.name, r.status, r.ended_at
+			 FROM runs r JOIN jobs j ON j.id = r.job_id
+			 WHERE r.ended_at > ? ORDER BY r.seq DESC LIMIT 1`, cutoff).Scan(&name, &status, &ended); err != nil {
+			return ""
+		}
+		at := ended
+		if t, err := time.Parse(time.RFC3339, ended); err == nil {
+			at = t.UTC().Format("15:04")
+		}
+		return fmt.Sprintf("· %s %s %s · scheduler runs %s", name, status, at, name)
+	}
+}
+
 // sessionFor is the root's session construction: fresh by default,
 // resumed by -resume. A resumed session keeps its identity (the recorder
 // adopts the existing row — todo's claims and rem's sources attribute to
@@ -387,6 +453,7 @@ func main() {
 	retries := flag.Int("retries", 0, "repetition bound on identical failing calls (cleared on success); precedence: flag > RIG_RETRIES > settings.json retries > the embedded default")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
 	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows)")
+	tuiMode := flag.String("tui", "auto", "the terminal frontend: auto (default; when stdout is a terminal), true (force it), false (the piped CLI)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
@@ -648,6 +715,25 @@ func main() {
 			os.Exit(1)
 		}
 		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout}
+	} else if *tuiMode == "true" || (*tuiMode == "auto" && tui.IsTerminal(os.Stdout.Fd())) {
+		// the terminal frontend (SPEC_TUI): the same REPL semantics
+		// (the commands, the seam, the exits) in the themed stream;
+		// the theme is the file's document, the TUI owns the schema.
+		th, terr := tui.ResolveTheme("", cfg.Theme, tuiTrueColor())
+		if terr != nil {
+			fmt.Fprintln(os.Stderr, "rig:", terr)
+			os.Exit(1)
+		}
+		fe = tui.New(os.Stdin, os.Stdout,
+			tui.WithTheme(th),
+			tui.WithBanner(tuiBannerIn(r, sdb)),
+			tui.WithNews(tuiNews(sdb, scdb, cwd)),
+			tui.WithCommands(command.All(), env),
+		)
+		// the TUI owns the terminal's mode; put it back on the way out.
+		if c, ok := fe.(interface{ Close() }); ok {
+			defer c.Close()
+		}
 	} else {
 		fe = cli.New(os.Stdin, os.Stdout, cli.WithCommands(command.All(), env))
 	}
