@@ -108,6 +108,12 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 			if line == "" {
 				continue
 			}
+			if strings.HasPrefix(line, ":") {
+				// an SSE comment (the spec's keep-alive): the server
+				// heartbeats through a long prefill; ignored, never a
+				// fault.
+				continue
+			}
 			payload, ok := sseData(line)
 			if !ok {
 				fault(fmt.Errorf("openai: unrecognized stream line: %q", line))

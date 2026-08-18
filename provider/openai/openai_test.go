@@ -443,3 +443,31 @@ func TestBaseURLJoining(t *testing.T) {
 		}
 	}
 }
+
+// TestStreamIgnoresSSEComments: a line starting with ":" is an SSE
+// comment (the spec's keep-alive) — llama.cpp heartbeats through a
+// long prefill. Ignored, never a fault (the field fault: a compaction
+// summary call at deep context died on ":").
+func TestStreamIgnoresSSEComments(t *testing.T) {
+	body := strings.Join([]string{
+		`: ping`,
+		`data: {"choices":[{"delta":{"content":"hello"}}]}`,
+		`:`,
+		`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if got := kinds(events); got != "delta,done" {
+		t.Fatalf("event order = %s, want delta,done (the comments invisible)", got)
+	}
+}
