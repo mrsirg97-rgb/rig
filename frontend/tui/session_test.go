@@ -878,3 +878,69 @@ func TestTabCompletesCommandNames(t *testing.T) {
 	s.si.feed("d\t") // unique: models + trailing space
 	s.await(th.Paint(SlotText, " /models "))
 }
+
+// TestInputWrapsAndScrolls (decision 9's five-row input): the input
+// wraps across terminal rows as it grows; past maxInputRows a window
+// scrolls with the cursor (end shows the tail, home the head with the
+// prompt glyph); a wrapped-row edit parks the cursor mid-region and
+// the next repaint still lands clean (live's norm), and the Enter
+// commits the full text.
+func TestInputWrapsAndScrolls(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(10),
+		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithTicks(make(chan time.Time)))
+	in := make(chan string, 1)
+	go func() { l, _ := s.input(); in <- l }()
+	s.await(promptMark(th))
+	screenLast := func(n int) []string {
+		t.Helper()
+		v := newVT(10)
+		v.feed(s.out.Bytes())
+		if v.err != "" {
+			t.Fatalf("harness: %s", v.err)
+		}
+		if len(v.rows) < n {
+			t.Fatalf("%d rows on the screen, want at least %d:\n%q", len(v.rows), n, v.rows)
+		}
+		return v.rows[len(v.rows)-n:]
+	}
+	// the text is digits with a unique tail: the digit run alone is
+	// 10-periodic, and an await marker that repeats across windows
+	// races the snapshot against the keystrokes still in flight.
+	digits := strings.Repeat("0123456789", 5) + "01234567XY"
+
+	// 17 runes at width 10: the input wraps to two terminal rows.
+	s.si.feed(digits[:17])
+	s.await(th.Paint(SlotText, " "+digits[:17]))
+	rows := screenLast(2)
+	if rows[0] != "❯ 01234567" || rows[1] != "890123456" {
+		t.Fatalf("wrapped input rows = %q", rows)
+	}
+
+	// 60 runes: seven logical rows; the five-row window follows the
+	// cursor to the tail, the prompt glyph scrolled off.
+	s.si.feed(digits[17:])
+	s.await(th.Paint(SlotText, digits[18:]))
+	rows = screenLast(5)
+	if rows[0] != "8901234567" || rows[4] != "XY" {
+		t.Fatalf("tail window rows = %q", rows)
+	}
+
+	// home: the window scrolls back to the head, the glyph visible.
+	s.si.feed("\x01")
+	s.await(th.Paint(SlotText, " "+digits[:48]))
+	rows = screenLast(5)
+	if rows[0] != "❯ 01234567" {
+		t.Fatalf("head window row = %q, want the prompt row", rows[0])
+	}
+
+	// the park: the cursor sits rows above the region's bottom; typing
+	// there repaints clean, and the Enter commits the full text.
+	s.si.feed("Z")
+	s.await(th.Paint(SlotText, " Z"+digits[:47]))
+	s.si.feed("\n")
+	if line := <-in; line != "Z"+digits {
+		t.Fatalf("the committed line = %q, want the full text", line)
+	}
+}

@@ -58,6 +58,16 @@ func cursorUp(n int) string {
 	return ESC + strconv.Itoa(n) + "A"
 }
 
+// Cursor down n lines (the edit op's un-park: the cursor returns to
+// the region's last row before the next op's arithmetic; CSI B never
+// scrolls, and the target rows are the region's own).
+func cursorDown(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return ESC + strconv.Itoa(n) + "B"
+}
+
 // To column 1 (0-based ANSI column 0 is column 1).
 func toCol(c int) string {
 	if c <= 0 {

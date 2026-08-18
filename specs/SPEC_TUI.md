@@ -314,9 +314,13 @@ decision 10), both built to fit 50 columns.
 
 ### 9. Input
 
-v1 is deliberately small: single-line editing (cursor left/right,
-home/end, backspace/delete across the line), history (up/down, in
-memory, session-scoped), and exactly the existing semantics for
+v1 is deliberately small: one logical line, edited with cursor
+left/right, home/end, backspace/delete across the line. The line wraps
+across up to five terminal rows as it grows (the terminal wraps, the
+live region's row math places the cursor); a longer text scrolls a
+five-row window that follows the cursor, and the Enter always commits
+the full text. History (up/down, in memory, session-scoped), and
+exactly the existing semantics for
 everything else: typing during a turn steers (the slot, the interrupt);
 pasted lines are separate ordered prompts (the burst rule); `/` is the
 command prefix with `//` the escape; Ctrl-C ends the session; Ctrl-D
