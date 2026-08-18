@@ -195,8 +195,9 @@ it (the reading-band fact behind the no-MTP brain). A keystroke
 committed history is immutable (decision 1). The transcript and the
 wire are untouched either way: this is display only.
 
-Command lines echo dim (`/models`), their output commits as a plain
-block, exactly the CLI's bytes: SPEC_COMMANDS' output contracts are
+The committed prompt line is a command's only echo (a separate dim
+copy was built and removed: it doubled the line); the output commits
+as a plain block, exactly the CLI's bytes: SPEC_COMMANDS' output contracts are
 the render, restyled only by theme color. The scheduler session-start
 line (decision 6) and the banner are the only unprompted blocks.
 
@@ -321,8 +322,17 @@ pasted lines are separate ordered prompts (the burst rule); `/` is the
 command prefix with `//` the escape; Ctrl-C ends the session; Ctrl-D
 at an empty prompt exits; Ctrl-T toggles reasoning (decision 5).
 
-Raw mode via `x/term`; the key parser covers the named keys and
-ignores unrecognized sequences (never crash on an exotic terminal).
+Command lines get inline help while being typed: fish-style ghost
+text on the input row, dim, display only — the first match's remainder
+plus the other candidates while the name is typed, the command's
+description after a known name and a space; nothing for plain prompts
+and the `//` escape; drawn only when the cursor is at the end and the
+line fits. Tab completes: the longest common prefix of the matches,
+plus the trailing space when unique; a no-op anywhere else.
+
+Raw mode via `x/term`; the key parser covers the named keys (Tab
+included) and ignores unrecognized sequences (never crash on an exotic
+terminal).
 Named gaps, deliberate: no multiline composer, no history persistence,
 no completion. Each is a later extension inside `input.go`; none
 touches a seam.
@@ -374,7 +384,10 @@ where the CI box allows and skip cleanly where not.
 - input: the key parser table (arrows, home/end, backspace across a
   wide glyph, an unrecognized CSI ignored); history up/down; paste of
   three lines becomes three prompts in order (the burst rule, through
-  the TUI's reader); Ctrl-T toggles subsequent reasoning only.
+  the TUI's reader); Ctrl-T toggles subsequent reasoning only; the
+  inline hint (ghost + candidates while typing, the description after
+  a known name, nothing for plain prompts) and Tab completion (the
+  common prefix; the trailing space when unique).
 - themes: theme.json schema cases (unknown base, unknown slot, bad
   hex, glyphs value), the file-wins-over-settings rule, the 256
   downconvert (a known hex to a known index); the p1 ramp renders
