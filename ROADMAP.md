@@ -9,15 +9,16 @@ deliverable changes core/ or the loop, and that change is named in the PR.
 CLI-only through 9: the frontend is last because a TUI on an unfinished
 runtime is a TUI you rewrite. Harden the backend, then draw it.
 
-The runtime is 0.2.0 at the end of 9: seams, events, commands, and stores
-complete, and everything that could ask for a loop change has already
-asked. From then on core/ and loop/ are open to extension and closed to
+The runtime is feature-complete (0.3.0 with config loading): seams,
+events, commands, stores, and config, and everything that could ask for a
+loop change has already asked. From then on core/ and loop/ are open to extension and closed to
 modification as a discipline (models are sensitive to the loop; a frozen
 loop is a controlled variable); the v1.0.0 tag waits for lived use — a
 worker soak on 0.2.x and the TUI (10) field-tested as the daily driver.
-10 is the first consumer of the frozen runtime, in its own module on its
-own version line, and is the freeze's first test: if the TUI needs
-loop.go, the freeze was premature.
+10 is the first consumer of the frozen runtime and the freeze's first
+test: if the TUI needs loop.go, the freeze was premature. (It lives in
+the main module as frontend/tui; SPEC_TUI decision 10 names why the
+own-module idea was dropped.)
 
 The reference for taste is `~/Projects/pane` (README.md, AGENTS.template.md,
 the per-tool specs under docs/ and at the root). The reference for Go style
@@ -280,20 +281,19 @@ line.
 
 ## 10. frontend/tui
 
-Deliverable: pane's glass, on the Frontend seam. Reference: `pane/README.md`,
-`pane/extensions/builtin-restyle.ts`, `footer.ts`, `input.ts`,
-`_render-kit.mjs`, `themes/`.
+Deliverable: the glass, specced in `specs/SPEC_TUI.md` (this section is
+the summary; the spec is the contract). Scrollback-native, alt-screen
+rejected; committed blocks on event boundaries; the two-row banner
+(identity + accounting) replacing a persistent footer; one renderer for
+todo/scheduler used by both the tool path and the command path; four
+shipped themes (oled, paper, p1, p3) plus theme.json (the schema the
+spec owns) and an ascii glyph set; retro as texture, never information;
+single-line input with history, existing steering and Ctrl-C semantics
+unchanged; `-tui` defaulting to auto (TUI at a terminal, plain CLI when
+piped). Two leaf deps, named: x/term, go-runewidth.
 
-- One visual language, both directions: `○ ◐ ● ✕` on tool rows, the todo
-  queue, and the prompt. `● tool · detail` headers, head/tail previews with
-  expand hints, durations, write previews content, edit previews its diff.
-- Footer: throughput and cache above the input, model · thinking · context
-  (colored past 70/90%) below. Built for phone width.
-- Prompt glyph carries state: `❯` your turn, `◐` agent streaming, typing
-  queues or steers via the deliverable 7 path and the `steer` command of 9.
-- Terminal handling in stdlib or a single justified leaf dep for raw mode;
-  the render kit ports as plain Go.
-
-Done when: the TUI is a Frontend registration and nothing else, and the loop
-is byte-identical to the end of deliverable 7. If the TUI needs a loop
-change, deliverable 7 or 9 was incomplete and is reopened first.
+Done when: `frontend/tui` implements the Frontend and dispatches
+commands, the diff outside it (plus cmd/rig, docs, go.mod) is empty,
+and every CLI golden still passes: the CLI remains the piped mode and
+the reference bytes. If the TUI needs a loop change, 7 or 9 was
+incomplete and is reopened first.
