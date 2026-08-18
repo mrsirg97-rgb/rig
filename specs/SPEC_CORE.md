@@ -58,6 +58,9 @@ rig/
     cli/         stdin/stdout REPL
   command/       the user-command leaf (deliverable 9, SPEC_COMMANDS): the
                  prefix rule, the Env the root builds, one file per command
+  config/        the config leaf (SPEC_CONFIG): one load for every entry
+                 mode; the embedded settings.json and models.json are the
+                 0.2.0 defaults moved out of code
   cmd/
     rig/      main.go, the composition root
 ```

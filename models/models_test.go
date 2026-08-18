@@ -8,7 +8,20 @@ import (
 )
 
 // legalRow is the worker profile from the spec (decision 2).
-var legal = models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384}
+var legal = models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive}
+
+// table is the 0.2.0 rows (SPEC_CONFIG 4: the table leaves code for the
+// embedded config/models.json; the test harnesses construct the same rows).
+func table() models.Table {
+	t, err := models.New(
+		models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
+		models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
+	)
+	if err != nil {
+		panic("models: table: " + err.Error())
+	}
+	return t
+}
 
 // The row invariants by name (SPEC_COMPACT 2): each refused, the id and
 // the field named in the error.
@@ -51,28 +64,88 @@ func TestCheckNamesTheRowInvariants(t *testing.T) {
 	}
 }
 
-// Defaults carries the worker profile under rig's default id and the
-// scheduler's worker id, with the spec's numbers (decision 2).
-func TestDefaultsCarriesTheWorkerRows(t *testing.T) {
-	for _, id := range []string{"local", "qwen3.8-workers"} {
-		m, ok := models.Defaults.Get(id)
-		if !ok {
-			t.Fatalf("Defaults has no row for %q", id)
+// The role vocabulary (SPEC_CONFIG 4): the two values pass, anything
+// else refuses naming the allowed set. The default is the caller's (the
+// merge and the synthesis path set it); Check refuses the unset field.
+func TestCheckRoleVocabulary(t *testing.T) {
+	for _, role := range []string{models.RoleInteractive, models.RoleWorker} {
+		m := legal
+		m.Role = role
+		if err := m.Check(); err != nil {
+			t.Fatalf("role %q must pass: %v", role, err)
 		}
-		if m.Window != 65536 || m.MaxTokens != 8192 || m.Reserve != 8192 || m.KeepRecent != 16384 {
-			t.Fatalf("row %q = %+v, want Window 65536 MaxTokens 8192 Reserve 8192 KeepRecent 16384", id, m)
+	}
+	for _, role := range []string{"", "boss"} {
+		m := legal
+		m.Role = role
+		err := m.Check()
+		if err == nil {
+			t.Fatalf("role %q must refuse", role)
+		}
+		if !strings.Contains(err.Error(), "interactive, worker") {
+			t.Fatalf("the refusal must name the allowed set: %v", err)
+		}
+		if role != "" && !strings.Contains(err.Error(), "boss") {
+			t.Fatalf("the refusal must name the given value: %v", err)
 		}
 	}
 }
 
-// Resolve: a known row comes back as-is (SPEC_COMPACT 2).
+// Resolve: a known row comes back as-is when the env sets nothing
+// (SPEC_COMPACT 2).
 func TestResolveReturnsTheKnownRow(t *testing.T) {
-	m, err := models.Resolve(models.Defaults, "local", func(string) (string, bool) { return "", false })
+	m, err := models.Resolve(table(), "local", func(string) (string, bool) { return "", false })
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
 	if m != legal {
 		t.Fatalf("Resolve = %+v, want the table row %+v", m, legal)
+	}
+}
+
+// Resolve: for the active id, the RIG_MODEL_* env overlays the row's
+// fields — set beats the row, per field (SPEC_CONFIG 4): the precedence
+// chain applied to the row's fields. 0.2.0 consulted the env only for
+// ids the table did not know; this makes the env win for a known id too.
+func TestResolveEnvOverlaysTheActiveRow(t *testing.T) {
+	env := map[string]string{"RIG_MODEL_WINDOW": "32768"}
+	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
+	m, err := models.Resolve(table(), "local", lookup)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	want := legal
+	want.Window = 32768
+	if m != want {
+		t.Fatalf("Resolve = %+v, want the row with the env's window only (+%d)", m, want.Window-legal.Window)
+	}
+
+	// all four fields: each set env beats its field
+	env = map[string]string{
+		"RIG_MODEL_WINDOW": "40000", "RIG_MODEL_MAX_TOKENS": "10000",
+		"RIG_MODEL_RESERVE": "5000", "RIG_MODEL_KEEP_RECENT": "10000",
+	}
+	lookup = func(k string) (string, bool) { v, ok := env[k]; return v, ok }
+	m, err = models.Resolve(table(), "local", lookup)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if m.Window != 40000 || m.MaxTokens != 10000 || m.Reserve != 5000 || m.KeepRecent != 10000 {
+		t.Fatalf("Resolve = %+v, want every field the env's", m)
+	}
+
+	// an overlay that breaks the invariants is refused, loud
+	env = map[string]string{"RIG_MODEL_RESERVE": "999999"}
+	lookup = func(k string) (string, bool) { v, ok := env[k]; return v, ok }
+	if _, err := models.Resolve(table(), "local", lookup); err == nil {
+		t.Fatal("an overlay that breaks Reserve < Window must refuse")
+	}
+
+	// a malformed number is refused too
+	env = map[string]string{"RIG_MODEL_WINDOW": "big"}
+	lookup = func(k string) (string, bool) { v, ok := env[k]; return v, ok }
+	if _, err := models.Resolve(table(), "local", lookup); err == nil {
+		t.Fatal("a malformed env number must refuse")
 	}
 }
 
@@ -85,7 +158,7 @@ func TestResolveSynthesizesFromEnv(t *testing.T) {
 	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
 
 	// absent fields: the named defaults
-	m, err := models.Resolve(models.Defaults, "brain", lookup)
+	m, err := models.Resolve(table(), "brain", lookup)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -103,13 +176,30 @@ func TestResolveSynthesizesFromEnv(t *testing.T) {
 		"RIG_MODEL_RESERVE": "16384", "RIG_MODEL_KEEP_RECENT": "32768",
 	}
 	lookup = func(k string) (string, bool) { v, ok := env[k]; return v, ok }
-	m, err = models.Resolve(models.Defaults, "brain", lookup)
+	m, err = models.Resolve(table(), "brain", lookup)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	want := models.Model{ID: "brain", Window: 262144, MaxTokens: 16384, Reserve: 16384, KeepRecent: 32768}
+	// the synthesized row carries its role (SPEC_CONFIG 4): the env path
+	// has no file to borrow one from, and the default is interactive.
+	want := models.Model{ID: "brain", Window: 262144, MaxTokens: 16384, Reserve: 16384, KeepRecent: 32768, Role: models.RoleInteractive}
 	if m != want {
 		t.Fatalf("row = %+v, want %+v", m, want)
+	}
+}
+
+// Resolve: the unknown-id synthesis path names the role (SPEC_CONFIG 4,
+// named): the env path has no file to borrow one from, and the default
+// is interactive; effort is empty — the policy's medium default.
+func TestResolveSynthesizedRowCarriesInteractive(t *testing.T) {
+	env := map[string]string{"RIG_MODEL_WINDOW": "65536"}
+	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
+	m, err := models.Resolve(table(), "synth", lookup)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if m.Role != models.RoleInteractive || m.Effort != "" {
+		t.Fatalf("synthesized row = Role %q Effort %q, want interactive / \"\" (the policy's medium default)", m.Role, m.Effort)
 	}
 }
 
@@ -126,7 +216,7 @@ func TestResolveRefusesBadSynthesis(t *testing.T) {
 	for name, env := range cases {
 		t.Run(name, func(t *testing.T) {
 			lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
-			_, err := models.Resolve(models.Defaults, "brain", lookup)
+			_, err := models.Resolve(table(), "brain", lookup)
 			if err == nil {
 				t.Fatalf("Resolve = ok, want a loud refusal")
 			}
@@ -137,7 +227,7 @@ func TestResolveRefusesBadSynthesis(t *testing.T) {
 // Resolve: an unknown id with no env — the refusal names the id, the
 // table's known ids, and the env (decision 2's voice, quoted).
 func TestResolveRefusalNamesTheKnownIdsAndEnv(t *testing.T) {
-	_, err := models.Resolve(models.Defaults, "ghost", func(string) (string, bool) { return "", false })
+	_, err := models.Resolve(table(), "ghost", func(string) (string, bool) { return "", false })
 	if err == nil {
 		t.Fatal("Resolve = ok, want a refusal")
 	}
@@ -152,8 +242,8 @@ func TestResolveRefusalNamesTheKnownIdsAndEnv(t *testing.T) {
 // Known: stable order for the refusal voice.
 func TestKnownIsStable(t *testing.T) {
 	tbl, err := models.New(
-		models.Model{ID: "zeta", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
-		models.Model{ID: "alpha", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
+		models.Model{ID: "zeta", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
+		models.Model{ID: "alpha", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
 	)
 	if err != nil {
 		t.Fatalf("New: %v", err)

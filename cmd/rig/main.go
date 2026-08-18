@@ -1,5 +1,7 @@
 // Command rig is the composition root: every dependency explicit in one
-// call, wired once at startup. Flags and env only; no config files.
+// call, wired once at startup. Flags, env, and config files (SPEC_CONFIG):
+// the knobs are a four-layer resolution — flags > env > file > embedded
+// defaults — and the models table lives in the embedded config file.
 package main
 
 import (
@@ -19,6 +21,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig"
 	"github.com/mrsirg97-rgb/rig/command"
+	"github.com/mrsirg97-rgb/rig/config"
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/frontend/cli"
 	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
@@ -45,9 +48,7 @@ import (
 
 // Version is the binary's release version: the 1.0 freeze (roadmap 9)
 // — commands complete, the runtime the TUI consumes.
-const Version = "0.2.0"
-
-const defaultSystem = "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done."
+const Version = "0.3.0"
 
 // root is the process's mutable wiring state (SPEC_COMMANDS 2): the
 // active model, the row, the recorder, the session — the state the
@@ -57,9 +58,14 @@ const defaultSystem = "You are rig, a minimal coding agent. Use the provided too
 // and nothing else.
 type root struct {
 	baseURL string
-	system  string // the raw flag/env system prompt
+	system  string // the resolved system prompt (the chain's result)
+	agents  string // the assembled AGENTS.md pair (SPEC_CONFIG 6)
 	allow   []string
 	retries int
+
+	// middleware is the root's chain; nil = the default [perm, guard]
+	// (the tests set it to name a guideline participant, SPEC_CONFIG 6).
+	middleware []core.ToolMiddleware
 
 	fe    core.Frontend // the raw frontend (cli or oneshot) — the recorder wraps it
 	sdb   store.DB      // the state store
@@ -68,7 +74,7 @@ type root struct {
 
 	activeID string       // the active model id — the root's one mutable string every closure reads
 	row      models.Model // the active row (the root's own resolution)
-	runtime  models.Table // Defaults plus, when startup synthesized one, that row (6)
+	runtime  models.Table // the merged table plus, when the resolution overlaid or synthesized the active row, that row (6)
 
 	session *core.Session
 	rec     *state.Recorder
@@ -90,19 +96,33 @@ type root struct {
 // the pair rebuild is the one function the model switch and /new share,
 // and the command's closures read it at call time.
 func wire(r *root) *rig.Kernel {
-	mw := []core.ToolMiddleware{
-		perm.Allowlist(r.allow...),
-		guard.Bound(r.retries),
+	mw := r.middleware
+	if mw == nil {
+		// the root's chain is [perm, guard]: the observation tap is retired
+		// — the recorder now sources its rows from the loop's events.
+		mw = []core.ToolMiddleware{
+			perm.Allowlist(r.allow...),
+			guard.Bound(r.retries),
+		}
 	}
-	// the root's chain is [perm, guard]: the observation tap is retired —
-	// the recorder now sources its rows from the loop's events.
 	// The guidelines ride the system prompt, not the chain (decision 6):
 	// prompt assembly belongs to the prompt, and the prompt string is the
-	// root's — zero loop change.
-	r.fullSystem = r.system
-	if g := guidelinesOf(mw); g != "" {
-		r.fullSystem = r.system + "\n\n" + g
+	// root's — zero loop change. AGENTS.md sits between the system prompt
+	// and the participant guidelines (SPEC_CONFIG 6): descending
+	// proximity — the operator's identity prompt, then the user's project
+	// contract, then the participants' operational prose. Empty segments
+	// are skipped, so no AGENTS.md is 0.2.0's bytes exactly.
+	parts := make([]string, 0, 3)
+	if r.system != "" {
+		parts = append(parts, r.system)
 	}
+	if r.agents != "" {
+		parts = append(parts, r.agents)
+	}
+	if g := guidelinesOf(mw); g != "" {
+		parts = append(parts, g)
+	}
+	r.fullSystem = strings.Join(parts, "\n\n")
 	provider, pol := r.buildPair()
 	k := rig.New(
 		rig.WithProvider(provider),
@@ -263,26 +283,30 @@ func (r *root) switchModel(ctx context.Context, id string) error {
 	return nil
 }
 
-// runtimeTable is the models command's table (SPEC_COMMANDS 6): 8's
-// Defaults plus, when startup synthesized a row from RIG_MODEL_WINDOW (8's
-// Resolve), that row — added to the table at the root, so it lists and
-// models <id> can switch back to it. A table the operator cannot see is
-// a table the operator cannot use.
-func runtimeTable(active string, resolved models.Model) models.Table {
-	if _, ok := models.Defaults.Get(active); ok {
-		return models.Defaults
+// runtimeTable is the models command's table (SPEC_COMMANDS 6;
+// SPEC_CONFIG 4): the merged table, with the active row replaced by the
+// resolved row when the resolution overlaid or synthesized it — so
+// /models shows what is in effect, and models <id> can switch back to
+// it. A table the operator cannot see is a table the operator cannot
+// use.
+func runtimeTable(t models.Table, active string, resolved models.Model) models.Table {
+	if base, ok := t.Get(active); ok && base == resolved {
+		return t
 	}
-	rows := make([]models.Model, 0, len(models.Defaults.Known())+1)
-	for _, id := range models.Defaults.Known() {
-		m, _ := models.Defaults.Get(id)
+	rows := make([]models.Model, 0, len(t.Known())+1)
+	for _, id := range t.Known() {
+		if id == active {
+			continue
+		}
+		m, _ := t.Get(id)
 		rows = append(rows, m)
 	}
 	rows = append(rows, resolved)
-	t, err := models.New(rows...)
+	t2, err := models.New(rows...)
 	if err != nil {
 		panic("rig: runtime table: " + err.Error())
 	}
-	return t
+	return t2
 }
 
 // guidelinesOf collects the system-prompt prose of the participants that
@@ -316,12 +340,14 @@ func checkOneShot(prompt, resumeID string) error {
 	return nil
 }
 
-// resolveModel is the compaction row resolution (SPEC_COMPACT 2, 8), loud
-// before any store is opened: the table row for the active id, else an env
-// synthesis from RIG_MODEL_*, else a refusal naming the id, the known ids,
-// and the env. A row that violates the invariants is refused at start.
-func resolveModel(id string) models.Model {
-	m, err := models.Resolve(models.Defaults, id, os.LookupEnv)
+// resolveModel is the compaction row resolution (SPEC_COMPACT 2, 8;
+// SPEC_CONFIG 4), loud before any store is opened: the table row for the
+// active id, with the RIG_MODEL_* env overlaid on its fields, else an env
+// synthesis from RIG_MODEL_*, else a refusal naming the id, the known
+// ids, and the env. A row that violates the invariants is refused at
+// start.
+func resolveModel(id string, table models.Table) models.Model {
+	m, err := models.Resolve(table, id, os.LookupEnv)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -348,31 +374,17 @@ func sessionFor(resumeID string, resume func(id string) (*core.Session, error)) 
 	return s, nil
 }
 
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
-func envOrInt(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	return def
-}
-
 func main() {
-	// the default endpoint is the worker swap itself: two defaults for the
-	// same server is how the runner's busy check (on the swap) passes while
-	// the worker (on another) faults every tick.
-	baseURL := flag.String("base-url", envOr("RIG_BASE_URL", "http://127.0.0.1:8090/v1"), "OpenAI-compatible endpoint base URL (the worker swap)")
-	model := flag.String("model", envOr("RIG_MODEL", "local"), "model name")
-	system := flag.String("system", envOr("RIG_SYSTEM", defaultSystem), "system prompt")
-	allow := flag.String("allow", envOr("RIG_ALLOW", "bash,read,write,edit,ls,find,grep,todo,rem,scheduler,python,web_search,web_fetch"), "comma-separated allow-list of tool names")
-	retries := flag.Int("retries", envOrInt("RIG_RETRIES", 3), "repetition bound on identical failing calls (cleared on success)")
+	// The flags carry no defaults (SPEC_CONFIG 2, 5): the defaults live in
+	// the embedded config file, and the chain — flags > env > file >
+	// embedded — resolves each key. A passed flag always wins, whatever
+	// its value (flag.Visit reports exactly which were passed); the
+	// default endpoint is the worker swap itself, in the embedded file.
+	baseURL := flag.String("base-url", "", "OpenAI-compatible endpoint base URL (the worker swap); precedence: flag > RIG_BASE_URL > settings.json baseUrl > the embedded default")
+	model := flag.String("model", "", "model name; precedence: flag > RIG_MODEL > settings.json model > the embedded default")
+	system := flag.String("system", "", "system prompt; precedence: flag > RIG_SYSTEM > settings.json system > the embedded default")
+	allow := flag.String("allow", "", "comma-separated allow-list of tool names; precedence: flag > RIG_ALLOW > settings.json allow > the embedded default")
+	retries := flag.Int("retries", 0, "repetition bound on identical failing calls (cleared on success); precedence: flag > RIG_RETRIES > settings.json retries > the embedded default")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
 	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -397,14 +409,10 @@ func main() {
 		os.Exit(2)
 	}
 
-	// The compaction row (SPEC_COMPACT 2, 8): resolved loud before any
-	// store is opened — a job whose window minus reserve leaves too little
-	// to work with fails at start, not as a worker that compacts every
-	// turn and logs false successes.
-	row := resolveModel(*model)
-
-	// The transcript: workspace-shared sqlite under the user config
-	// directory; one store, opened once, loud on corruption.
+	// The config load (SPEC_CONFIG 1): after flag parse, before any store
+	// is opened — the same position resolveModel's refusal holds today
+	// (loud before the stores). One load function, three entry modes; the
+	// run-job path above runs the same load in its own cwd.
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
@@ -416,33 +424,88 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
+	cfg, err := config.Load(filepath.Join(cfgDir, "rig"), cwd)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+
+	// The per-key chain (SPEC_CONFIG 2): flag (if passed) > env (if set)
+	// > file (if the key is set) > embedded. cfg.Settings is the
+	// file-over-embedded resolution Load returned; the env is the 0.2.0
+	// empty=unset semantics, except the two presence-aware keys, for which
+	// present is set — even empty.
+	passed := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { passed[f.Name] = true })
+	envOr := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+	baseURLV := envOr("RIG_BASE_URL", cfg.Settings.BaseURL)
+	if passed["base-url"] {
+		baseURLV = *baseURL
+	}
+	modelID := envOr("RIG_MODEL", cfg.Settings.Model)
+	if passed["model"] {
+		modelID = *model
+	}
+	systemPrompt := envOr("RIG_SYSTEM", cfg.Settings.System)
+	if passed["system"] {
+		systemPrompt = *system
+	}
+	allowList := cfg.Settings.Allow
+	if v := os.Getenv("RIG_ALLOW"); v != "" {
+		allowList = splitCSV(v)
+	}
+	if passed["allow"] {
+		allowList = splitCSV(*allow)
+	}
+	retriesN := cfg.Settings.Retries
+	if v := os.Getenv("RIG_RETRIES"); v != "" {
+		if n, aerr := strconv.Atoi(v); aerr == nil {
+			retriesN = n
+		}
+	}
+	if passed["retries"] {
+		retriesN = *retries
+	}
+
+	// The compaction row (SPEC_COMPACT 2, 8; SPEC_CONFIG 4): resolved loud
+	// before any store is opened — a job whose window minus reserve leaves
+	// too little to work with fails at start, not as a worker that compacts
+	// every turn and logs false successes.
+	row := resolveModel(modelID, cfg.Models)
 	// The python kernel: one persistent IPython session for the process
 	// (rig runs one session per process); the root owns its teardown.
-	// RIG_PYTHON is the operator's interpreter (and the seam's contract:
-	// no lazy venv bootstrap); the host choice is logged so an installed
-	// host and the embedded one cannot drift silently.
+	// The interpreter is the chain's — RIG_PYTHON over settings.json
+	// python over the embedded none (and the seam's contract: no lazy venv
+	// bootstrap); the host choice is logged so an installed host and the
+	// embedded one cannot drift silently.
 	py := pythontool.New()
-	if v := os.Getenv("RIG_PYTHON"); v != "" {
-		py = pythontool.NewWith(v, pythontool.DefaultHost())
+	if python := envOr("RIG_PYTHON", cfg.Settings.Python); python != "" {
+		py = pythontool.NewWith(python, pythontool.DefaultHost())
 	}
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
 
-	// The web tools: web_search and web_fetch, one leaf package. The env
-	// knobs are read here, the way flags and env live at the root:
-	// RIG_SEARXNG_URL is the SearXNG instance (the web-tools compose
-	// publishes one on loopback); RIG_WEB_FETCH_PROXY is the egress
-	// proxy (set empty = direct); RIG_TRAFILATURA is an explicit
-	// extraction binary (empty = the stdlib pass carries).
-	webSearch := webtool.Search()
-	if v := os.Getenv("RIG_SEARXNG_URL"); v != "" {
-		webSearch = webtool.NewSearch(webtool.SearchConfig{BaseURL: v})
+	// The web tools: web_search and web_fetch, one leaf package. The knobs
+	// are the chain's: RIG_SEARXNG_URL over the file's over the embedded is
+	// the SearXNG instance (the web-tools compose publishes one on
+	// loopback); RIG_WEB_FETCH_PROXY over the file's over the embedded is
+	// the egress proxy (set empty = direct, presence-aware at every layer);
+	// RIG_TRAFILATURA over the file's over the embedded none is the
+	// extraction binary (empty = the stdlib pass carries, presence-aware).
+	webSearch := webtool.NewSearch(webtool.SearchConfig{BaseURL: envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)})
+	proxy := ""
+	if cfg.Settings.WebFetchProxy != nil {
+		proxy = *cfg.Settings.WebFetchProxy
 	}
-	proxy := webtool.DefaultProxy
 	if v, ok := os.LookupEnv("RIG_WEB_FETCH_PROXY"); ok {
 		proxy = v
 	}
-	var traf *string
+	traf := cfg.Settings.Trafilatura
 	if v, ok := os.LookupEnv("RIG_TRAFILATURA"); ok {
 		traf = &v
 	}
@@ -535,21 +598,25 @@ func main() {
 	// re-wiring; the closures are the root's, and the command package sees
 	// core and models and nothing else.
 	r := &root{
-		baseURL:  *baseURL,
-		system:   *system,
-		allow:    splitCSV(*allow),
-		retries:  *retries,
+		baseURL:  baseURLV,
+		system:   systemPrompt,
+		agents:   cfg.Agents, // global then project, the load's assembly (6)
+		allow:    allowList,
+		retries:  retriesN,
 		sdb:      sdb,
 		remDB:    rdb,
 		cwd:      cwd,
-		activeID: *model,
+		activeID: modelID,
 		row:      row,
-		runtime:  runtimeTable(*model, row),
+		runtime:  runtimeTable(cfg.Models, modelID, row),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": todoapi.New(tdb), "rem": remapi.New(rdb),
-			"scheduler": schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job"),
+			// the scheduler's default job model is the chain's (SPEC_CONFIG 5):
+			// the file's defaultJobModel over the embedded, resolved by Load;
+			// the tool's description and schema are built from it.
+			"scheduler": schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job", cfg.Settings.DefaultJobModel),
 			"python":    py, "web_search": webSearch, "web_fetch": webFetch,
 		},
 	}
@@ -645,7 +712,9 @@ func main() {
 
 // runJob is the scheduler verb's cold-shell path: argv supplies the key,
 // RunJob opens its own stores, fires under the busy policy, and records
-// the outcome. Recorded outcomes exit 0; loud refusals exit non-zero.
+// the outcome. Recorded outcomes exit 0; loud refusals exit non-zero. The
+// swapUrl is the chain's (SPEC_CONFIG 5): RIG_SWAP_URL over the file's
+// swapUrl over the embedded — the same load as every entry mode.
 func runJob(args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "rig: usage: run-job <key>")
@@ -655,6 +724,20 @@ func runJob(args []string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		return 1
+	}
+	cfg, err := config.Load(filepath.Join(cfgDir, "rig"), cwd)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		return 1
+	}
+	swapURL := cfg.Settings.SwapURL
+	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
+		swapURL = v
 	}
 	self, err := os.Executable()
 	if err != nil {
@@ -672,7 +755,7 @@ func runJob(args []string) int {
 		Fetch:     sched.RealFetch(0),
 		Spawn:     sched.RealSpawn,
 		WorkerCmd: []string{self},
-		SwapURL:   envOr("RIG_SWAP_URL", ""),
+		SwapURL:   swapURL,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1

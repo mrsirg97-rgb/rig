@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/rig/config"
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/models"
@@ -25,11 +27,11 @@ import (
 // The 1.0 freeze (roadmap 9) is fixed: anything else is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 0.2.0: the runtime is feature-complete and the freeze discipline
-	// holds; the 1.0 tag waits for lived use (a worker soak, the TUI
-	// field-tested as the daily driver).
-	if Version != "0.2.0" {
-		t.Fatalf("Version = %q, want 0.2.0 (the feature-complete runtime)", Version)
+	// 0.3.0: config loading as a first-class component (SPEC_CONFIG); the
+	// 1.0 tag waits for lived use (a worker soak, the TUI field-tested as
+	// the daily driver).
+	if Version != "0.3.0" {
+		t.Fatalf("Version = %q, want 0.3.0 (the feature-complete runtime)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)
@@ -148,7 +150,7 @@ func testRoot(fe core.Frontend) *root {
 		cwd:      "",
 		activeID: "local",
 		row:      defaultRow(),
-		runtime:  models.Defaults,
+		runtime:  defaultsTableValue(),
 		session:  sess,
 		tools:    testTools(),
 	}
@@ -299,7 +301,29 @@ func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 
 // defaultRow is the spec's worker row, for the wiring tests.
 func defaultRow() models.Model {
-	return models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384}
+	return models.Model{Role: models.RoleInteractive, ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384}
+}
+
+// defaultsTable is the 0.2.0 rows from the embedded config file
+// (SPEC_CONFIG 4: the table leaves code; the test harnesses construct
+// it from the same rows).
+func defaultsTable(t *testing.T) models.Table {
+	t.Helper()
+	cfg, err := config.Load(t.TempDir(), t.TempDir())
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	return cfg.Models
+}
+
+// defaultsTableValue is the same rows for constructors without a t.
+func defaultsTableValue() models.Table {
+	dir := filepath.Join(os.TempDir(), "rig-test-nodir")
+	cfg, err := config.Load(dir, dir)
+	if err != nil {
+		panic("rig: defaultsTableValue: " + err.Error())
+	}
+	return cfg.Models
 }
 
 func mustRead(t *testing.T, db store.DB, fn func(context.Context) (any, error)) any {
