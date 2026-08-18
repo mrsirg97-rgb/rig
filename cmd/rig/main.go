@@ -364,12 +364,14 @@ func tuiTrueColor() bool {
 	return ct == "truecolor" || ct == "24bit"
 }
 
-// tuiBannerIn is the TUI banner's data at call time (SPEC_TUI 3): the
-// model, the window, and the session's usage from the state rows.
-// The read is the root's (the store is its); the TUI renders.
-func tuiBannerIn(r *root, db store.DB) func(context.Context) tui.BannerIn {
-	return func(ctx context.Context) tui.BannerIn {
-		b := tui.BannerIn{Model: r.activeID, Effort: r.row.Effort, Window: r.row.Window}
+// tuiStatusIn is the TUI status line's and the startup block's data at
+// call time (SPEC_TUI 3, amended): the model, the window, and the
+// session's usage totals from the state rows. The used number is the
+// frontend's own (the Done and Compacted events); the read here is the
+// root's (the store is its), at the refresh points only.
+func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
+	return func(ctx context.Context) tui.StatusIn {
+		b := tui.StatusIn{Model: r.activeID, Effort: r.row.Effort, Window: r.row.Window}
 		if r.session == nil {
 			return b
 		}
@@ -378,12 +380,6 @@ func tuiBannerIn(r *root, db store.DB) func(context.Context) tui.BannerIn {
 			 FROM usage u JOIN messages m ON m.seq = u.message_seq
 			 WHERE m.session_id = ?`, r.session.ID).Scan(&b.Up, &b.Down, &b.CacheRead); err != nil {
 			return b
-		}
-		var used int
-		if err := db.QueryRowContext(ctx,
-			`SELECT u.prompt FROM usage u JOIN messages m ON m.seq = u.message_seq
-			 WHERE m.session_id = ? ORDER BY u.message_seq DESC LIMIT 1`, r.session.ID).Scan(&used); err == nil {
-			b.Used = used
 		}
 		return b
 	}
@@ -726,7 +722,7 @@ func main() {
 		}
 		fe = tui.New(os.Stdin, os.Stdout,
 			tui.WithTheme(th),
-			tui.WithBanner(tuiBannerIn(r, sdb)),
+			tui.WithStatus(tuiStatusIn(r, sdb)),
 			tui.WithNews(tuiNews(sdb, scdb, cwd)),
 			tui.WithCommands(command.All(), env),
 		)

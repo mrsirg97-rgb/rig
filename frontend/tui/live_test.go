@@ -10,8 +10,9 @@ import (
 
 // vt is the escape-capture harness (SPEC_TUI's testing section): a
 // minimal terminal model that speaks the TUI's exact escape vocabulary
-// — text, LF, cursor-up (nA), set-column (nG), clear-line (2K), and
-// SGR (m, the paint, a no-op here) — and asserts the cursor's bounds
+// — text, LF, cursor-up (nA), cursor-down (nB, the norm's un-park),
+// set-column (nG), clear-line (2K), and SGR (m, the paint and the
+// inverse, no-ops here) — and asserts the cursor's bounds
 // on every byte: the cursor never escapes the rows it has been given
 // (no move past the top, no landing below the deepest row). The
 // live region's logical lines are at most three (the activity row, the
@@ -111,6 +112,18 @@ func (v *vt) feed(b []byte) {
 					return
 				}
 				v.r -= n
+			case 'B':
+				// the cursor down: the norm's un-park.
+				n, aerr := atoi(params)
+				if aerr != nil || n <= 0 {
+					v.fail("cursor-down with n = " + params)
+					return
+				}
+				v.r += n
+				v.ensureRow(v.r)
+				if v.r > v.bottom {
+					v.bottom = v.r
+				}
 			case 'G':
 				n, aerr := atoi(params)
 				if aerr != nil || n < 1 {
@@ -166,7 +179,7 @@ func TestLiveWalkPaintedLines(t *testing.T) {
 	}, "\n")
 	var out strings.Builder
 	l := newLive(&out, 40)
-	l.draw(chunk, []string{"tail"})
+	l.draw(chunk, []string{"tail"}, "")
 	v := newVT(40)
 	v.feed([]byte(out.String()))
 	if v.err != "" {
@@ -199,11 +212,11 @@ func TestLiveRegionProtocol(t *testing.T) {
 	activity := th.Paint(SlotDim, "| thinking")
 	inSteer := prompt + th.Paint(SlotText, " fix the retry")
 
-	banner := RenderBanner(th, BannerIn{
-		Model: "huihui3.8", Effort: "xhigh", Used: 84300, Window: 262144,
+	block := RenderStatus(th, StatusIn{
+		Model: "huihui3.8", Effort: "xhigh", Window: 262144,
 		Up: 214000, Down: 18200, CacheRead: 187000,
-	}, 50)
-	bannerLines := strings.Split(strings.TrimSuffix(banner, "\n"), "\n")
+	})
+	blockLines := strings.Split(strings.TrimSuffix(block, "\n"), "\n")
 	usage := RenderUsage(th, 3200, 136, 918)
 	toolBlock := strings.Join([]string{
 		"bash · $ go test ./x",
@@ -214,29 +227,29 @@ func TestLiveRegionProtocol(t *testing.T) {
 	var out strings.Builder
 	l := newLive(&out, 50)
 
-	// session start: the banner plus the prompt (the first draw).
-	l.draw(banner, []string{inEmpty})
+	// session start: the startup block plus the prompt (the first draw).
+	l.draw(block, []string{inEmpty}, "")
 	// typing: the input row rewritten in place, the cursor parked.
-	l.edit(prompt+th.Paint(SlotText, " hello"), 7)
+	l.edit(prompt+th.Paint(SlotText, " hello"), 7, "")
 	// Enter at the quiet prompt: the line freezes, the activity row and
 	// the fresh input land below.
-	l.enter("hello", activity, inEmpty)
+	l.enter("hello", activity, inEmpty, "")
 	// the turn's stream: reasoning, a partial text delta, a complete
 	// one, the tool round trip.
-	l.draw(th.Paint(SlotReasoning, "thinking..."), []string{activity, inEmpty})
-	l.draw(th.Paint(SlotText, "hel"), []string{activity, inEmpty})
-	l.draw(paintLines(th, SlotText, "lo\n"), []string{activity, inEmpty})
-	l.draw(toolBlock, []string{activity, inEmpty})
+	l.draw(th.Paint(SlotReasoning, "thinking..."), []string{activity, inEmpty}, "")
+	l.draw(th.Paint(SlotText, "hel"), []string{activity, inEmpty}, "")
+	l.draw(paintLines(th, SlotText, "lo\n"), []string{activity, inEmpty}, "")
+	l.draw(toolBlock, []string{activity, inEmpty}, "")
 	// a steering Enter mid-turn: the input row freezes, the activity
 	// row above is left standing.
-	l.edit(inSteer, 15)
-	l.enter(inSteer, "", inEmpty)
+	l.edit(inSteer, 15, "")
+	l.enter(inSteer, "", inEmpty, "")
 	// the interrupted turn's end: the usage line commits, the live
 	// region resets to the input row alone.
-	l.draw(usage, []string{inEmpty})
+	l.draw(usage, []string{inEmpty}, "")
 	// the next turn starts on the delivered steer line: the activity
 	// row is put above the input row.
-	l.insertActivity(activity, inEmpty)
+	l.insertActivity(activity)
 	// a tick and a phase switch (the in-place rewrites).
 	l.setActivity(th.Paint(SlotDim, "/") + th.Paint(SlotAccent, " bash"))
 	l.setActivity(activity)
@@ -248,8 +261,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	}
 
 	want := []string{
-		paintFree(bannerLines[0]), paintFree(bannerLines[1]),
-		paintFree(bannerLines[2]), paintFree(bannerLines[3]),
+		paintFree(blockLines[0]), paintFree(blockLines[1]),
 		"hello",
 		"thinking...",
 		"hel",
@@ -273,7 +285,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	}
 }
 
-// TestLiveRegionWidthExact is the wrap-safety edge: the banner rule is
+// TestLiveRegionWidthExact is the wrap-safety edge: a committed line
 // written to exactly the terminal width, and the lineEnd sequence
 // (toCol then LF) must not leave a phantom blank line under the
 // deferred-wrap model. Two exact-width rules in a row, then the input
@@ -286,7 +298,7 @@ func TestLiveRegionWidthExact(t *testing.T) {
 	rule := th.Paint(SlotRule, strings.Repeat(th.Glyph(GlyphDot), 12))
 	var out strings.Builder
 	l := newLive(&out, 12)
-	l.draw(rule+"\n"+rule, []string{"x"})
+	l.draw(rule+"\n"+rule, []string{"x"}, "")
 	v := newVT(12)
 	v.feed([]byte(out.String()))
 	if v.err != "" {
@@ -322,10 +334,10 @@ func TestLiveRegionImmutability(t *testing.T) {
 
 	var out strings.Builder
 	l := newLive(&out, 30)
-	l.draw("first committed line", []string{in})
+	l.draw("first committed line", []string{in}, "")
 	for i := 0; i < 50; i++ {
-		l.edit(prompt+th.Paint(SlotText, " draft "+strconv.Itoa(i)), 4)
-		l.draw("committed "+strconv.Itoa(i), []string{in})
+		l.edit(prompt+th.Paint(SlotText, " draft "+strconv.Itoa(i)), 4, "")
+		l.draw("committed "+strconv.Itoa(i), []string{in}, "")
 	}
 	v := newVT(30)
 	v.feed([]byte(out.String()))
@@ -342,5 +354,117 @@ func TestLiveRegionImmutability(t *testing.T) {
 	}
 	if want := paintFree(in); v.rows[51] != want {
 		t.Fatalf("the final input row = %q, want %q", v.rows[51], want)
+	}
+}
+
+// TestLiveRegionStatusRow is the amended layout (decision 3, the live
+// region's last row): the status row stands below the input row, the
+// whole script re-lays and re-parks over it, and the in-place rewrites
+// (the tick, the edit) leave it standing.
+func TestLiveRegionStatusRow(t *testing.T) {
+	th, err := ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
+	inEmpty := prompt + th.Paint(SlotText, " ")
+	activity := th.Paint(SlotDim, "| thinking")
+	status := th.Paint(SlotDim, "huihui3.8")
+
+	var out strings.Builder
+	l := newLive(&out, 50)
+	l.draw("", []string{inEmpty}, status)
+	l.edit(prompt+th.Paint(SlotText, " hi"), 4, status)
+	l.enter("hi", activity, inEmpty, status)
+	l.draw(th.Paint(SlotText, "hel"), []string{activity, inEmpty}, status)
+	l.setActivity(th.Paint(SlotDim, "/") + th.Paint(SlotAccent, " bash"))
+	l.setActivity(activity)
+	// the turn's end: the usage commits, the region resets, the status
+	// row stands.
+	l.draw(th.Paint(SlotDim, "up 1.2k down 220 · cache r 0 0%"), []string{inEmpty}, status)
+
+	v := newVT(50)
+	v.feed([]byte(out.String()))
+	if v.err != "" {
+		t.Fatalf("harness: %s\nstream:\n%q", v.err, out.String())
+	}
+	want := []string{
+		"hi",
+		"hel",
+		"up 1.2k down 220 · cache r 0 0%", // the turn end: the region resets, the activity row (a live row) goes with it
+		"❯ ",
+		paintFree(status),
+	}
+	if len(v.rows) != len(want) {
+		t.Fatalf("the screen has %d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
+	}
+	for i := range want {
+		if v.rows[i] != want[i] {
+			t.Fatalf("row %d = %q, want %q", i, v.rows[i], want[i])
+		}
+	}
+}
+
+// TestLiveRegionMenuRows is the amended layout's menu (decision 9):
+// the rows stand above the input row, the selection row is inverted,
+// and the editFull op re-lays the region when the shape changes.
+func TestLiveRegionMenuRows(t *testing.T) {
+	th, err := ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
+	inEmpty := prompt + th.Paint(SlotText, " ")
+	inCmd := prompt + th.Paint(SlotText, " /s")
+	menuA := th.Paint(SlotAccent, "scheduler") + th.Paint(SlotText, "  the scheduler's jobs")
+	menuB := th.Paint(SlotAccent, "sessions") + th.Paint(SlotText, "  the session's store")
+	menuC := th.Paint(SlotAccent, "steer") + th.Paint(SlotText, "  a note into the queue")
+	status := th.Paint(SlotDim, "huihui3.8")
+
+	var out strings.Builder
+	l := newLive(&out, 50)
+	l.draw("", []string{inEmpty}, status)
+	l.edit(inCmd, 3, status)
+	// the menu opens: the shape changes, the whole region re-lays.
+	l.editFull([]string{th.Invert(menuA), menuB, menuC, inCmd}, 3, status)
+	// a keystroke with the shape standing: the input row in place.
+	l.edit(prompt+th.Paint(SlotText, " /sc"), 4, status)
+	// the menu closes: the shape changes again.
+	l.editFull([]string{inEmpty}, 3, status)
+
+	v := newVT(50)
+	v.feed([]byte(out.String()))
+	if v.err != "" {
+		t.Fatalf("harness: %s\nstream:\n%q", v.err, out.String())
+	}
+	want := []string{
+		"❯ ",
+		"huihui3.8", // the status row stands
+		"",          // the menu's old rows, cleared and left standing
+		"",
+		"",
+	}
+	if len(v.rows) != len(want) {
+		t.Fatalf("the screen has %d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
+	}
+	for i := range want {
+		if v.rows[i] != want[i] {
+			t.Fatalf("row %d = %q, want %q", i, v.rows[i], want[i])
+		}
+	}
+	// the menu frame laid the rows menu, input, status — in order in
+	// the stream (the screen at that moment).
+	frame := out.String()
+	if iMenu := strings.Index(frame, th.Invert(menuA)); iMenu < 0 {
+		t.Fatal("the inverted selection row is not in the stream")
+	} else {
+		rest := frame[iMenu:]
+		iB := strings.Index(rest, menuB)
+		iC := strings.Index(rest, menuC)
+		iIn := strings.Index(rest, inCmd)
+		iSt := strings.Index(rest, status)
+		if !(iB > 0 && iC > iB && iIn > iC && iSt > iIn) {
+			t.Fatalf("the menu frame's row order broke: b=%d c=%d in=%d st=%d", iB, iC, iIn, iSt)
+		}
 	}
 }

@@ -24,7 +24,8 @@ const (
 	keyCtrlD
 	keyCtrlT
 	keyTab
-	keyEsc         // a lone escape: clears the prompt (the reader names it, not the parser)
+	keyShiftTab // CSI Z: the menu cycles up (decision 9, amended)
+	keyEsc      // a lone escape: clears the prompt (the reader names it, not the parser)
 	keyKillToStart // Ctrl-U
 	keyKillToEnd   // Ctrl-K
 	keyWordBack    // Ctrl-W
@@ -212,6 +213,8 @@ func csiKey(params string, term byte) key {
 		return keyHome
 	case term == 'F':
 		return keyEnd
+	case term == 'Z':
+		return keyShiftTab
 	case term == '~':
 		switch params {
 		case "1", "7":

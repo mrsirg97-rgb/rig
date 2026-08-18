@@ -53,11 +53,11 @@ func TestLiveSuspendResume(t *testing.T) {
 	var buf bytes.Buffer
 	l := newLive(&buf, 20)
 	l.redraw([]string{"input"})
-	l.draw("before", []string{"input"})
+	l.draw("before", []string{"input"}, "")
 	l.suspend()
 	pre := buf.Len()
-	l.draw("during", []string{"input2"})
-	l.edit("input2x", 3)
+	l.draw("during", []string{"input2"}, "")
+	l.edit("input2x", 3, "")
 	if buf.Len() != pre {
 		t.Fatalf("the suspended region wrote %q", buf.String()[pre:])
 	}
