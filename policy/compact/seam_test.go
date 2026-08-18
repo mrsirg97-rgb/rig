@@ -152,7 +152,7 @@ func TestPolicyCompactSpendsTheBudget(t *testing.T) {
 // TestPolicyCompactSummaryInputDoesNotFit (SPEC_COMMANDS 3): the
 // action's loud refusal, the numbers named.
 func TestPolicyCompactSummaryInputDoesNotFit(t *testing.T) {
-	small := models.Model{ID: "local", Window: 300, MaxTokens: 100, Reserve: 50, KeepRecent: 50}
+	small := models.Model{Role: models.RoleInteractive, ID: "local", Window: 300, MaxTokens: 100, Reserve: 50, KeepRecent: 50}
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
 	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 200)})

@@ -37,8 +37,11 @@ touch core (one interface) and the last before the loop freezes for good.
 - No commands that need the loop (pausing mid-execution, injecting into a
   running turn, ordering against a tool call): that is a loop change and
   reopens 7 first (decision 1's stop condition).
-- No config: the commands are code plus one registration line; the models
-  table stays 8's (code plus env at the root).
+- No config: the commands are code plus one registration line. Reversed,
+  named (SPEC_CONFIG): the models table's source is the merged table
+  (the embedded `config/models.json` overlaid by the user's `models.json`,
+  SPEC_CONFIG 4) plus the resolved active row — the command's surface
+  unchanged except the one named exception below: the role column.
 - No steering mailbox: the slot is 7's, latest wins, unchanged.
 - No change to `-p` one-shot or `run-job` semantics: commands are
   interactive-only (decision 9); the worker's stdout stays the answer.
@@ -465,17 +468,23 @@ marked, the raw token counts (greppable; `formatTokens` is the event
 shaping, not the table's):
 
 ```
-local            window 65536  max 8192  reserve 8192  keep 16384  trigger 57344  *
-qwen3.8-workers  window 65536  max 8192  reserve 8192  keep 16384  trigger 57344
+local            interactive  window 65536  max 8192  reserve 8192  keep 16384  trigger 57344  *
+qwen3.8-workers  worker       window 65536  max 8192  reserve 8192  keep 16384  trigger 57344
 ```
 
 The columns are the row's own fields (8's invariants make each
 self-contained) plus `trigger = Window - Reserve` — the boundary the
-operator watches. The rows come from the **runtime table**: 8's
-`models.Defaults` plus, when startup synthesized a row from
-`RIG_MODEL_WINDOW` (8's `Resolve`), that row — added to the table at
-the root, so it lists and `models <id>` can switch back to it. A table
-the operator cannot see is a table the operator cannot use.
+operator watches — and the **role column** after the id (SPEC_CONFIG 4,
+the named exception of this spec's 6): `interactive` or `worker`,
+validated at parse. The rows come from the **runtime table**: the merged
+table (the embedded `config/models.json` overlaid by the user's
+`models.json`, SPEC_CONFIG 4) with the active row replaced by the
+resolved row when resolution overlaid or synthesized it — so it lists
+and `models <id>` can switch back to it. A table the operator cannot
+see is a table the operator cannot use. File rows list like any others —
+same columns, same switch, same refusal voice for unknown ids; the
+listing order is the table's `Known()` order (sorted by id), so the
+lines do not depend on merge order.
 
 **`models <id>`** — switch the active model for the **next turn**, by
 rebuilding the provider+policy pair at the root — the seam 8 named

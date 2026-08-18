@@ -46,15 +46,21 @@ func (modelsCmd) Run(ctx context.Context, args string, env any) (string, error) 
 }
 
 // renderTable is the plain table (decision 6): one line per row, the
-// active row marked, the raw token counts (greppable — formatTokens is
-// the event shaping, not the table's), plus trigger = Window - Reserve,
-// the boundary the operator watches.
+// role after the id (SPEC_CONFIG 4), the active row marked, the raw
+// token counts (greppable — formatTokens is the event shaping, not the
+// table's), plus trigger = Window - Reserve, the boundary the operator
+// watches. The listing order is stable: sorted by id (the table's
+// Known() order), so the golden lines do not depend on merge order.
 func renderTable(t models.Table, active string) string {
 	ids := t.Known()
-	w := 0
+	wID, wRole := 0, 0
 	for _, id := range ids {
-		if len(id) > w {
-			w = len(id)
+		m, _ := t.Get(id)
+		if len(id) > wID {
+			wID = len(id)
+		}
+		if len(m.Role) > wRole {
+			wRole = len(m.Role)
 		}
 	}
 	var b strings.Builder
@@ -64,8 +70,10 @@ func renderTable(t models.Table, active string) string {
 		if id == active {
 			mark = "  *"
 		}
-		fmt.Fprintf(&b, "%-*s window %d  max %d  reserve %d  keep %d  trigger %d%s\n",
-			w+1, id, m.Window, m.MaxTokens, m.Reserve, m.KeepRecent, m.Window-m.Reserve, mark)
+		// the +2 column width is the separator (the spec's sample: the
+		// role column's own padding is the gap before the numbers).
+		fmt.Fprintf(&b, "%-*s%-*swindow %d  max %d  reserve %d  keep %d  trigger %d%s\n",
+			wID+2, id, wRole+2, m.Role, m.Window, m.MaxTokens, m.Reserve, m.KeepRecent, m.Window-m.Reserve, mark)
 	}
 	return b.String()
 }

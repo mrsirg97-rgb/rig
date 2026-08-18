@@ -22,7 +22,7 @@ import (
 
 // testRow is the spec's worker profile scaled to fixture sizes
 // (decision 2's shape; the numbers are the test's).
-var testRow = models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
+var testRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 
 // TestBelowTriggerIsPassthroughByteIdentical (SPEC_COMPACT, named): at
 // exactly Window - Reserve the output deep-equals policy.Passthrough on
@@ -136,8 +136,8 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 // and under the brain's — the worker compacts, the brain passes through
 // byte-identically. The pi shape (Reserve >= Window) cannot exist.
 func TestTriggerMathPerModelOneConfig(t *testing.T) {
-	worker := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
-	brain := models.Model{ID: "brain", Window: 4000, MaxTokens: 500, Reserve: 200, KeepRecent: 500}
+	worker := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+	brain := models.Model{Role: models.RoleInteractive, ID: "brain", Window: 4000, MaxTokens: 500, Reserve: 200, KeepRecent: 500}
 	table, err := models.New(worker, brain)
 	if err != nil {
 		t.Fatalf("one table carrying both rows: %v", err)
@@ -189,7 +189,7 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 	}
 
 	// the named pi case (2026-08-15): a global-reserve shape cannot exist.
-	piShape := models.Model{ID: "pi", Window: 100, MaxTokens: 10, Reserve: 100}
+	piShape := models.Model{Role: models.RoleInteractive, ID: "pi", Window: 100, MaxTokens: 10, Reserve: 100}
 	if err := piShape.Check(); err == nil {
 		t.Fatal("Reserve >= Window must be refused at construction (the pi shape)")
 	}
@@ -201,7 +201,7 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 // reserve not subtracted twice; a budget <= 0 fails loud, naming the
 // row's numbers.
 func TestSummaryMaxTokensClamped(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 
 	t.Run("honest budget", func(t *testing.T) {
 		s := core.NewSession()
@@ -294,7 +294,7 @@ func TestRenderTranscriptRendersRolesCallsAndResults(t *testing.T) {
 // calls; and the summary describes the request and the call, never X or
 // a tool call.
 func TestSummarySummarizesRatherThanContinues(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1900, MaxTokens: 500, Reserve: 100, KeepRecent: 10}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1900, MaxTokens: 500, Reserve: 100, KeepRecent: 10}
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 120)})
 	s.Append(core.Message{Role: core.RoleUser, Content: "Set up the build."})
@@ -483,7 +483,7 @@ func TestCompactedEventBeforeTheNextCall(t *testing.T) {
 // prefix contains the first summary row; the transcript after equals
 // [new summary] + tail; the seam is called with each new body.
 func TestSecondCompactionFoldsTheFirst(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)}) // 500
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)}) // 500, the tail
@@ -544,7 +544,7 @@ func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 // "session compaction"); a store failure (a closed db) leaves Assemble
 // successful; the absent seam skips the call and changes nothing else.
 func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 	cwd := t.TempDir()
 
 	t.Run("the reflection lands with pane's session_compact shape", func(t *testing.T) {
@@ -671,6 +671,60 @@ func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 		}
 		if evs := fe.snapshot(); len(evs) != 1 {
 			t.Fatalf("the event must happen without the seam: %v", evs)
+		}
+	})
+}
+
+// TestSummaryEffortIsTheRow (SPEC_CONFIG 4, named): the summary call's
+// reasoning effort is the row's Effort — the one call whose thinking
+// nobody reads takes the row's budget where the operator set one; the
+// policy keeps "medium" as the field's default (the 0.2.0 behavior, now
+// the field's default).
+func TestSummaryEffortIsTheRow(t *testing.T) {
+	compactFixture := func(row models.Model) (*scriptedProvider, *core.Session) {
+		s := core.NewSession()
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)}) // 500, the older prefix
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)}) // 500, the tail
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
+		return prov, s
+	}
+	base := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200, Role: models.RoleInteractive}
+
+	t.Run("the row's effort rides the summary call", func(t *testing.T) {
+		row := base
+		row.Effort = "low"
+		prov, s := compactFixture(row)
+		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if _, err := pol.Assemble(context.Background(), s); err != nil {
+			t.Fatalf("Assemble: %v", err)
+		}
+		reqs := prov.reqs()
+		if len(reqs) != 1 {
+			t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
+		}
+		if reqs[0].ReasoningEffort != "low" {
+			t.Fatalf("ReasoningEffort = %q, want the row's low", reqs[0].ReasoningEffort)
+		}
+	})
+	t.Run("an empty field keeps the policy's medium", func(t *testing.T) {
+		row := base // Effort ""
+		prov, s := compactFixture(row)
+		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if _, err := pol.Assemble(context.Background(), s); err != nil {
+			t.Fatalf("Assemble: %v", err)
+		}
+		reqs := prov.reqs()
+		if len(reqs) != 1 {
+			t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
+		}
+		if reqs[0].ReasoningEffort != "medium" {
+			t.Fatalf("ReasoningEffort = %q, want the field's default medium", reqs[0].ReasoningEffort)
 		}
 	})
 }

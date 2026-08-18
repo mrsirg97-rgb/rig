@@ -291,7 +291,7 @@ func (h *harness) userRows(sid string) []string {
 // projection carries only its own prompt; the model never saw a prompt
 // cross the boundary.
 func TestNewClosesOldRowAndNextTurnLandsInFreshOne(t *testing.T) {
-	h := newHarness(t, defaultRow(), "local", models.Defaults)
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	s1 := h.r.session.ID
 	done := h.startRun()
 	h.in <- "one\n"
@@ -371,7 +371,7 @@ func (h *harness) sessionRowsByID(id string) (r struct {
 // state survives (SPEC_PYTHON's one kernel per process, the guard's
 // per-turn budget).
 func TestNewKeepsPerProcessState(t *testing.T) {
-	h := newHarness(t, defaultRow(), "local", models.Defaults)
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	beforeTools := append([]core.Tool(nil), h.r.k.Tools...)
 	beforeMW := append([]core.ToolMiddleware(nil), h.r.k.Middleware...)
 	done := h.startRun()
@@ -434,9 +434,9 @@ func TestCompactForcesTheAction(t *testing.T) {
 	// below the trigger (estimate 800 <= 900 = Window - Reserve), but the
 	// provider says the request does not fit — the fault the recovery
 	// classifies.
-	row := models.Model{ID: "local", Window: 1000, MaxTokens: 200, Reserve: 100, KeepRecent: 700}
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 200, Reserve: 100, KeepRecent: 700}
 	u1, a1, u2 := strings.Repeat("u", 1200), strings.Repeat("a", 1200), strings.Repeat("u", 800)
-	h := newHarness(t, row, "local", models.Defaults)
+	h := newHarness(t, row, "local", defaultsTable(t))
 	h.s.fault = true
 	sid := h.r.session.ID
 	h.r.session.Append(core.Message{Role: core.RoleUser, Content: u1})
@@ -523,7 +523,7 @@ func TestCompactForcesTheAction(t *testing.T) {
 // plus the new row, the files provenance restored.
 func TestSessionsResume(t *testing.T) {
 	// the current-id refusal (the current row is still open when it lands).
-	h := newHarness(t, defaultRow(), "local", models.Defaults)
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	sid := h.r.session.ID
 	done := h.startRun()
 	h.in <- "/sessions resume " + sid + "\n"
@@ -534,7 +534,7 @@ func TestSessionsResume(t *testing.T) {
 	h.finish(done)
 
 	// the unknown-id refusal, before the current row is touched.
-	h = newHarness(t, defaultRow(), "local", models.Defaults)
+	h = newHarness(t, defaultRow(), "local", defaultsTable(t))
 	sid = h.r.session.ID
 	done = h.startRun()
 	h.in <- "/sessions resume nope\n"
@@ -545,7 +545,7 @@ func TestSessionsResume(t *testing.T) {
 	h.finish(done)
 
 	// the happy path.
-	h = newHarness(t, defaultRow(), "local", models.Defaults)
+	h = newHarness(t, defaultRow(), "local", defaultsTable(t))
 	ctx := context.Background()
 	if e := state.RecordSession(ctx, h.db, "sess-2", h.r.cwd, "local", Version); e != nil {
 		t.Fatal(e)
@@ -593,7 +593,7 @@ func TestSessionsResume(t *testing.T) {
 // field), and only it; ActiveModel reports the new id; the root's row is
 // the new row's (the next clamp/trigger math is the new row's).
 func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
-	h := newHarness(t, defaultRow(), "local", models.Defaults)
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	done := h.startRun()
 	h.in <- "one\n"
 	h.waitCount("pong", 1)
@@ -625,7 +625,7 @@ func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 	if h.r.activeID != "qwen3.8-workers" {
 		t.Fatalf("ActiveModel reports the new id: %q", h.r.activeID)
 	}
-	row, ok := models.Defaults.Get("qwen3.8-workers")
+	row, ok := defaultsTable(t).Get("qwen3.8-workers")
 	if !ok || h.r.row != row {
 		t.Fatalf("the new policy is built with the new row: %+v (want %+v)", h.r.row, row)
 	}
@@ -635,11 +635,11 @@ func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 // a row synthesized from env at startup lists (marked active) and can be
 // switched to and back — the root's table, not just 8's Defaults.
 func TestModelsRuntimeTableIncludesSynthesizedRow(t *testing.T) {
-	row := models.Model{ID: "e2e", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 1000}
+	row := models.Model{Role: models.RoleInteractive, ID: "e2e", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 1000}
 	if err := row.Check(); err != nil {
 		t.Fatal(err)
 	}
-	runtime := runtimeTable("e2e", row)
+	runtime := runtimeTable(defaultsTable(t), "e2e", row)
 	h := newHarness(t, row, "e2e", runtime)
 	done := h.startRun()
 	h.in <- "/models\n"
@@ -692,7 +692,7 @@ func TestOneShotCommandShapedPromptIsAPrompt(t *testing.T) {
 		cwd:      dir,
 		activeID: "local",
 		row:      defaultRow(),
-		runtime:  models.Defaults,
+		runtime:  defaultsTable(t),
 		tools:    testTools(),
 	}
 	r.session = core.NewSession()

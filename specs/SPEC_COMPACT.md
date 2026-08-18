@@ -67,8 +67,11 @@ the model's own window, and the case is impossible by construction
 
 ```
 models/             NEW, stdlib only
-  models.go         Model, Table, Check, Defaults, Resolve
+  models.go         Model, Table, Check, Resolve (SPEC_CONFIG 4: the row
+                    gains role / effort; the table's source is config)
   models_test.go    the row invariants by name
+config/             SPEC_CONFIG: the leaf load; config/models.json is the
+                    embedded table — the 0.2.0 rows out of code (SPEC_CONFIG 4)
 policy/compact/     NEW, stdlib only
   compact.go        the policy: the Assemble path, the compact action,
                     the calibration state
@@ -104,6 +107,8 @@ type Model struct {
     MaxTokens  int // max output tokens per request
     Reserve    int // tokens held back for the response
     KeepRecent int // token budget for the kept tail
+    Role       string // interactive | worker (SPEC_CONFIG 4); /models lists it
+    Effort     string // the summary call's reasoning effort (3); "" = medium
 }
 func (m Model) Check() error // the row invariants, loud (decision 2)
 
@@ -111,8 +116,11 @@ type Table struct{ ... }
 func (t Table) Get(id string) (Model, bool)
 func (t Table) Known() []string // stable order, for the refusal voice
 func Resolve(t Table, id string, env func(string) (string, bool)) (Model, error)
-                                    // root's row resolution (decision 2)
-var Defaults Table // the built-in rows (decision 2)
+                                    // root's row resolution (decision 2);
+                                    // the env overlays the active row's
+                                    // fields, set beats the row (SPEC_CONFIG 4)
+// the built-in rows are the embedded config/models.json (SPEC_CONFIG 4):
+// the 0.2.0 rows out of code, the user file overlays them row by row.
 
 // policy/compact: the policy, the decorator, the marker.
 const SummaryMarker = "[compaction] " // the transcript marker (decision 5)
@@ -212,15 +220,22 @@ Strict inequality, a named boundary: a fixture at exactly `Window -
 Reserve` is passthrough; one over compacts.
 
 The numbers are the model's, from a root-owned table (the new `models`
-package): `Model{ID, Window, MaxTokens, Reserve, KeepRecent}`, a `Table`
-with lookup, `Defaults`, and `Resolve` — the root's row resolution at
-start, before any store is opened:
+package): `Model{ID, Window, MaxTokens, Reserve, KeepRecent, Role,
+Effort}`, a `Table` with lookup and `Resolve` — the root's row
+resolution at start, before any store is opened. The table is the
+embedded `config/models.json` overlaid by the user's `models.json`,
+merged row by row (SPEC_CONFIG 4):
 
-- the table row for the active id (`-model` / `RIG_MODEL`);
+- the table row for the active id (`-model` / `RIG_MODEL`), with the
+  `RIG_MODEL_WINDOW` / `_MAX_TOKENS` / `_RESERVE` / `_KEEP_RECENT` env
+  overlaid on its fields, set beats the row (SPEC_CONFIG 2's chain for
+  the row's fields — new behavior, 0.2.0 consulted the env only for
+  unknown ids);
 - else, if `RIG_MODEL_WINDOW` is set: a synthesized row for the active id
   from `RIG_MODEL_WINDOW` / `RIG_MODEL_MAX_TOKENS` / `RIG_MODEL_RESERVE` /
   `RIG_MODEL_KEEP_RECENT`, absent fields falling back to named defaults
-  (MaxTokens 8192, Reserve Window/8, KeepRecent Window/4), then validated;
+  (MaxTokens 8192, Reserve Window/8, KeepRecent Window/4), `Role` the
+  default `interactive` (SPEC_CONFIG 4), then validated;
 - else a loud refusal naming the id, the table's known ids, and the env:
   `models: no row for "X" (known: local, qwen3.8-workers; set
   RIG_MODEL_WINDOW to define one)`.
@@ -229,12 +244,12 @@ start, before any store is opened:
 start, not a slow death on the first turn. This is how a new model on the
 swap gets a row without a code change (flags and env only, SPEC_CORE).
 
-`Defaults` ships the worker profile under rig's default id and the
-scheduler's worker id — `local` and `qwen3.8-workers`, both
-Window 65536, MaxTokens 8192, Reserve 8192, KeepRecent 16384 — and the
-262k brain row is one table entry (Window 262144, MaxTokens 16384,
-Reserve 16384, KeepRecent 32768), added for the deployment's alias or
-carried by env.
+The embedded `config/models.json` ships the worker profile under rig's
+default id and the scheduler's worker id — `local` (interactive) and
+`qwen3.8-workers` (worker), both Window 65536, MaxTokens 8192, Reserve
+8192, KeepRecent 16384 — and the 262k brain row is one table entry
+(Window 262144, MaxTokens 16384, Reserve 16384, KeepRecent 32768),
+added to `models.json` or carried by env.
 
 Row invariants, checked once, loud, naming the id and the fields:
 
@@ -301,10 +316,11 @@ messages: the model summarizes the block instead of continuing the
 conversation it quotes — a last "reply with only X" or a bare tool call
 stays inside the block (named test: the summary describes the request
 and the call, never X or a tool call). No tools, and the summary
-request carries a lower reasoning effort (`"medium"`) where the provider
-supports it — it is the one call whose thinking nobody reads, and
-inheriting the model's max effort spends tokens the fold does not use (a
-provider that does not know the field ignores it). The effort goes over the
+request carries the row's `Effort` — the 0.2.0 lower reasoning effort
+(`"medium"` is the field's default, `policy/compact` keeps the fallback
+line) where the provider supports it — it is the one call whose thinking
+nobody reads, and inheriting the model's max effort spends tokens the
+fold does not use (a provider that does not know the field ignores it). The effort goes over the
 wire in both shapes the server families read: top-level
 `reasoning_effort` (OpenAI-shaped servers) and
 `chat_template_kwargs.reasoning_effort` (llama.cpp, whose Qwen3 template
@@ -692,9 +708,17 @@ in `t.TempDir()` where a case names it.
 - the row invariants by name: empty id, `Window <= 0`, `MaxTokens <= 0`,
   `Reserve >= Window` (the pi shape), `KeepRecent >= Window - Reserve` —
   each refused, the id and the fields named in the error.
+- `TestCheckRoleVocabulary` — `"boss"` refuses (the voice naming the
+  allowed set); `interactive` / `worker` pass; `""` refuses (the default
+  is the caller's, SPEC_CONFIG 4).
 - `Resolve`: a known row; an env synthesis (absent fields take the named
   defaults, then validate); an unknown id with no env — the refusal names
   the known ids and the env.
+- `TestResolveEnvOverlaysTheActiveRow` — a table row plus
+  `RIG_MODEL_WINDOW`: the window is the env's, the rest the row's
+  (SPEC_CONFIG 4's rule — new behavior, named).
+- `TestResolveSynthesizedRowCarriesInteractive` — the unknown-id + env
+  path: `Role: interactive`, `Effort: ""` (SPEC_CONFIG 4).
 
 `policy/compact`:
 
@@ -714,6 +738,10 @@ in `t.TempDir()` where a case names it.
   bounded by one batch; a tail of the last message alone (single oversized
   last message) — the older prefix is empty, the compact is skipped, the
   passthrough is returned.
+- `TestSummaryEffortIsTheRow` — a row with `Effort: "low"`: the summary
+  request carries `low` (both wire shapes, the adapter test's
+  assertion); a row with `Effort: ""`: `medium` (the 0.2.0 bytes)
+  (SPEC_CONFIG 4, 3).
 - `TestSummaryMaxTokensClamped` — the scripted provider captures the
   summary request: `MaxTokens == min(row.MaxTokens, Window - est(input))`
   (3's honest budget — the reserve not subtracted twice); a budget <= 0

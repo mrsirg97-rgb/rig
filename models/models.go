@@ -12,16 +12,27 @@ import (
 	"strings"
 )
 
+// Role is the row's fleet identity (SPEC_CONFIG 4): which side of the
+// two-model fleet the row belongs to. Display and identity in this
+// release — the /models column; validated at parse and stored here.
+const (
+	RoleInteractive = "interactive"
+	RoleWorker      = "worker"
+)
+
 // Model is one row: the model's own window math. The row invariants make
 // the pi bug (a global reserve larger than the worker's window fires
 // compaction every turn) impossible by construction: the reserve is
 // per-row, checked against its own row's window.
 type Model struct {
 	ID         string
-	Window     int // context window, tokens
-	MaxTokens  int // max output tokens per request
-	Reserve    int // tokens held back for the response
-	KeepRecent int // token budget for the kept tail
+	Window     int    // context window, tokens
+	MaxTokens  int    // max output tokens per request
+	Reserve    int    // tokens held back for the response
+	KeepRecent int    // token budget for the kept tail
+	Role       string // RoleInteractive or RoleWorker (SPEC_CONFIG 4)
+	Effort     string // the compaction summary call's request effort;
+	// "" = the policy's "medium" (SPEC_CONFIG 4)
 }
 
 // Check is the row's invariants, loud, naming the id and the fields
@@ -46,6 +57,9 @@ func (m Model) Check() error {
 	if m.KeepRecent < 0 || m.KeepRecent >= m.Window-m.Reserve {
 		return fmt.Errorf("models: %s: KeepRecent %d must be in [0, Window-Reserve %d): the usable window must leave room for the summary beside the tail",
 			m.ID, m.KeepRecent, m.Window-m.Reserve)
+	}
+	if m.Role != RoleInteractive && m.Role != RoleWorker {
+		return fmt.Errorf("models: %s: role: %q (allowed: interactive, worker)", m.ID, m.Role)
 	}
 	return nil
 }
@@ -86,47 +100,14 @@ func (t Table) Known() []string {
 	return out
 }
 
-// Defaults ships the worker profile under rig's default id and the
-// scheduler's worker id (SPEC_COMPACT 2). The 262k brain row is one
-// table entry, added by the deployment's alias or carried by env
-// (Resolve).
-var Defaults Table = mustNew(
-	Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
-	Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
-)
-
-func mustNew(rows ...Model) Table {
-	t, err := New(rows...)
-	if err != nil {
-		panic("models: Defaults: " + err.Error())
-	}
-	return t
-}
-
-// Resolve is the root's row resolution at start, before any store is
-// opened (SPEC_COMPACT 2): the table row for the active id; else, if
-// RIG_MODEL_WINDOW is set, a synthesized row for the active id from
-// RIG_MODEL_WINDOW / RIG_MODEL_MAX_TOKENS / RIG_MODEL_RESERVE /
-// RIG_MODEL_KEEP_RECENT — absent fields take the named defaults
-// (MaxTokens 8192, Reserve Window/8, KeepRecent Window/4) — then
-// validated; else a loud refusal naming the id, the table's known ids,
-// and the env. env is the lookup seam (os.LookupEnv at the root; a map in
-// tests).
-func Resolve(t Table, id string, env func(string) (string, bool)) (Model, error) {
-	if m, ok := t.Get(id); ok {
-		return m, nil
-	}
-	raw, ok := env("RIG_MODEL_WINDOW")
-	if !ok || raw == "" {
-		return Model{}, fmt.Errorf("models: no row for %q (known: %s; set RIG_MODEL_WINDOW to define one)",
-			id, strings.Join(t.Known(), ", "))
-	}
-	window, err := strconv.Atoi(raw)
-	if err != nil {
-		return Model{}, fmt.Errorf("models: RIG_MODEL_WINDOW %q: %v", raw, err)
-	}
-	m := Model{ID: id, Window: window, MaxTokens: 8192, Reserve: window / 8, KeepRecent: window / 4}
+// overlay applies the RIG_MODEL_* env onto the row's fields: per field,
+// set (present and non-empty) beats the row's value (SPEC_CONFIG 4 — the
+// precedence chain applied to the row's fields: env over file over
+// embedded). 0.2.0 consulted the env only for ids the table did not
+// know; the overlay makes the env win for a known id too.
+func overlay(m Model, env func(string) (string, bool)) (Model, error) {
 	for key, set := range map[string]func(int){
+		"RIG_MODEL_WINDOW":      func(n int) { m.Window = n },
 		"RIG_MODEL_MAX_TOKENS":  func(n int) { m.MaxTokens = n },
 		"RIG_MODEL_RESERVE":     func(n int) { m.Reserve = n },
 		"RIG_MODEL_KEEP_RECENT": func(n int) { m.KeepRecent = n },
@@ -140,6 +121,45 @@ func Resolve(t Table, id string, env func(string) (string, bool)) (Model, error)
 			return Model{}, fmt.Errorf("models: %s %q: %v", key, raw, err)
 		}
 		set(n)
+	}
+	return m, nil
+}
+
+// Resolve is the root's row resolution at start, before any store is
+// opened (SPEC_COMPACT 2; SPEC_CONFIG 4): the table row for the active
+// id, with the RIG_MODEL_* env overlaid on its fields; else, if
+// RIG_MODEL_WINDOW is set, a synthesized row for the active id from
+// RIG_MODEL_WINDOW / RIG_MODEL_MAX_TOKENS / RIG_MODEL_RESERVE /
+// RIG_MODEL_KEEP_RECENT — absent fields take the named defaults
+// (MaxTokens 8192, Reserve Window/8, KeepRecent Window/4) — then
+// validated; else a loud refusal naming the id, the table's known ids,
+// and the env. env is the lookup seam (os.LookupEnv at the root; a map in
+// tests).
+func Resolve(t Table, id string, env func(string) (string, bool)) (Model, error) {
+	if m, ok := t.Get(id); ok {
+		overlaid, err := overlay(m, env)
+		if err != nil {
+			return Model{}, err
+		}
+		if err := overlaid.Check(); err != nil {
+			return Model{}, err
+		}
+		return overlaid, nil
+	}
+	raw, ok := env("RIG_MODEL_WINDOW")
+	if !ok || raw == "" {
+		return Model{}, fmt.Errorf("models: no row for %q (known: %s; set RIG_MODEL_WINDOW to define one)",
+			id, strings.Join(t.Known(), ", "))
+	}
+	window, err := strconv.Atoi(raw)
+	if err != nil {
+		return Model{}, fmt.Errorf("models: RIG_MODEL_WINDOW %q: %v", raw, err)
+	}
+	// the synthesized row carries its role (SPEC_CONFIG 4): the default is
+	// the caller's, and here there is no file to borrow one from.
+	m := Model{ID: id, Window: window, MaxTokens: 8192, Reserve: window / 8, KeepRecent: window / 4, Role: RoleInteractive}
+	if m, err = overlay(m, env); err != nil {
+		return Model{}, err
 	}
 	if err := m.Check(); err != nil {
 		return Model{}, err

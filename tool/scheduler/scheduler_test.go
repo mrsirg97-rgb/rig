@@ -41,6 +41,12 @@ type harness struct {
 }
 
 func newHarness(t *testing.T, cwd string) *harness {
+	return newHarnessModel(t, cwd, "qwen3.8-workers")
+}
+
+// newHarnessModel is the harness with an explicit default job model:
+// the constructor's parameter the root passes (SPEC_CONFIG 5).
+func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 	t.Helper()
 	home := t.TempDir()
 	globalPath := filepath.Join(home, "global.sqlite")
@@ -68,7 +74,7 @@ func newHarness(t *testing.T, cwd string) *harness {
 	}
 	st := sched.Stores{Global: gd, Cwd: cd}
 	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
-	tool := adapter.New(st, ct, "/x/rig run-job")
+	tool := adapter.New(st, ct, "/x/rig run-job", defModel)
 	return &harness{st: st, ct: ct, tool: tool}
 }
 
@@ -177,6 +183,58 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 	}
 	if !strings.Contains(paused, "paused") {
 		t.Fatalf("pause reply %q", paused)
+	}
+}
+
+// TestDefaultJobModelRidesTheSurface (SPEC_CONFIG 5, named): the
+// default job model is the constructor's parameter — the description,
+// the schema text, and the job the tool creates are all built from the
+// passed value (the file's defaultJobModel at the root); an explicit
+// model arg beats it, as 0.2.0.
+func TestDefaultJobModelRidesTheSurface(t *testing.T) {
+	h := newHarnessModel(t, "/ws/sa-model", "brain")
+	d := h.tool.Description()
+	if !strings.Contains(d, "Default model: brain") {
+		t.Fatalf("description = %q, want the passed default named", d)
+	}
+	var schema struct {
+		Properties map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal(h.tool.Schema(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	model, _ := schema.Properties["model"].(map[string]any)
+	if got, _ := model["description"].(string); got != "pi model id (default brain)." {
+		t.Fatalf("schema model description %q, want the passed default named", got)
+	}
+	// create with no model: the job row carries the passed default
+	reply, err := exec(t, h, map[string]any{
+		"action": "create", "name": "defaulted", "prompt": "p",
+		"cron": "0 5 * * *", "scope": "cwd",
+	})
+	if err != nil {
+		t.Fatalf("create: %v (%s)", err, reply)
+	}
+	var m string
+	if err := h.st.Cwd.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
+		t.Fatal(err)
+	}
+	if m != "brain" {
+		t.Fatalf("the job's model = %q, want the passed default brain", m)
+	}
+	// an explicit model still beats it
+	reply, err = exec(t, h, map[string]any{
+		"action": "create", "name": "explicit", "prompt": "p",
+		"cron": "0 6 * * *", "scope": "cwd", "model": "qwen3.8-workers",
+	})
+	if err != nil {
+		t.Fatalf("create: %v (%s)", err, reply)
+	}
+	if err := h.st.Cwd.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j2'`).Scan(&m); err != nil {
+		t.Fatal(err)
+	}
+	if m != "qwen3.8-workers" {
+		t.Fatalf("the explicit model must beat the default: %q", m)
 	}
 }
 

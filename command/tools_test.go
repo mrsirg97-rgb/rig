@@ -160,7 +160,7 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 	}
 	ct := newFakeCron()
 	st := schedStores(t, home, cwd)
-	tool := schedapi.New(st, ct, "/bin/true run-job")
+	tool := schedapi.New(st, ct, "/bin/true run-job", "qwen3.8-workers")
 	env := &command.Env{
 		Session: func() *core.Session { return core.NewSession() },
 		Tools:   map[string]core.Tool{"scheduler": tool},

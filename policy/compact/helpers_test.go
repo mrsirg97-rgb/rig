@@ -107,7 +107,7 @@ func (f *captureFrontend) snapshot() []core.Event {
 // summary window when a fault-driven compact runs on a transcript far
 // over the trigger. KeepRecent 200 keeps the split's tail at the last
 // message, the atomic pair kept whole in TestKeepRecentCutsAtPairBoundary.
-var overflowRow = models.Model{ID: "local", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
+var overflowRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 
 // compactFixture is a transcript over the trigger of the test row, with
 // an older prefix that is worth summarizing.
