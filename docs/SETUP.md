@@ -52,7 +52,7 @@ the file is a contract, not a filter.
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix) |
 | `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`) and `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
-| `theme.json`      | reserved for the TUI (deliverable 10): must be well-formed JSON if present; the TUI owns the schema |
+| `theme.json`      | the terminal frontend's theme (`specs/SPEC_TUI.md` 7): `base` (one of `oled`, `paper`, `p1`, `p3`, required), optional `slots` (the eight slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema |
 
 `<cwd>/AGENTS.md` is read from the working directory: the REPL's cwd, or,
 for a scheduled worker, the job's cwd — the job inherits its own working
@@ -66,6 +66,7 @@ directory's project file, not the creating session's.
 | allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 13 built-in tools |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | resume        | `--resume <id>`| —                      | —               | fresh session (refuses with `-p`; one-shot stays one-shot) |
+| terminal      | `--tui` (auto/true/false) | — | — | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
 | python kernel |                | `RIG_PYTHON`           | `python`        | the default interpreter |
 | web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
@@ -115,6 +116,41 @@ refused at the boundary and the refusal is fed back to the model. The default
 permits the thirteen built-in tools because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar.
 
+## terminal
+
+The default REPL is the terminal frontend (`specs/SPEC_TUI.md`): the
+same session, the same commands, the same exits — themed, with the
+banner (model, effort, context, session usage), the live region (the
+activity row and the input line, redrawn in place), the todo and
+scheduler blocks, and the usage line at every turn's end. The piped CLI
+is unchanged and is the reference: pipe, `-p`, and `--tui=false` all
+speak the CLI's bytes.
+
+- `--tui auto` (the default) picks by the terminal: stdout a terminal
+  → the TUI; piped or redirected → the CLI. `--tui=true` forces the
+  TUI (a pty, `tmux capture-pane`); `--tui=false` forces the CLI.
+- **Theme** — `~/.config/rig/theme.json`, three keys: `base` (the
+  shipped palette: `oled`, `paper`, `p1`, `p3`), `slots` (any of the
+  eight — `accent`, `dim`, `error`, `reasoning`, `rule`, `success`,
+  `text`, `warn` — mapped to a `#rrggbb` color), `glyphs` (`unicode`,
+  the default, or `ascii` for the bracket/`>`/`#` set). Color depth is
+  the terminal's, not yours: `COLORTERM` 24-bit → truecolor, else the
+  nearest 256 index. A malformed file refuses at start, naming the
+  file and the key.
+- **Input** — the line's arrows and Home/End move the cursor;
+  Backspace and Delete cross a wide glyph whole; Up/Down walk the
+  session's history (in memory, the draft preserved around a trip).
+  **Ctrl-T** toggles the rendering of reasoning for the rest of the
+  session (committed history is untouched). A line typed while a turn
+  is live steers (it interrupts the turn and delivers at the next
+  prompt, latest wins); pasted lines are separate prompts, in order.
+  **Ctrl-C** ends the session (interrupting a live turn first);
+  **Ctrl-D** exits at the empty prompt (a non-blank line is kept).
+  A `/` line is a command (`/models`, `/new`, `/todo` …); `//` escapes
+  the slash into a prompt. Raw mode is on while the session runs and
+  restored at exit; a resize repaints the live region at the terminal's
+  new width (history is the terminal's, as usual).
+
 ## verify
 
 ```sh
@@ -127,3 +163,9 @@ the turn and is delivered at the next prompt; latest wins); Ctrl-C ends the
 session once the in-flight step unwinds; Ctrl-D exits at the prompt. If
 nothing streams, check the endpoint first — rig surfaces provider faults
 verbatim and loudly; it does not hide them.
+
+The terminal's verify: the banner's two rows (model and context), a
+streaming turn with its activity row, a tool line with its glyph and
+duration, the usage line at the turn's end, and a clean Ctrl-D exit.
+`--tui=true` under `tmux` gives the same session to `capture-pane`
+(piped `--tui=false` stays the byte reference).
