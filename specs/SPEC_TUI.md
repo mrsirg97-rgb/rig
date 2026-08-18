@@ -1,0 +1,403 @@
+# rig: the TUI (roadmap deliverable 10)
+
+The glass. A terminal frontend over the frozen runtime: the same events,
+the same commands, the same tools, rendered in pane's design language
+with fewer parts. The runtime is 0.3.0 and closed; this deliverable is
+its first consumer and the freeze's first test: if the TUI needs a
+`loop/` or `core/` line, the freeze was premature and 7 or 9 is
+reopened first, per the roadmap. The done-when is structural: `frontend/
+tui` implements `core.Frontend`, dispatches `core.Command`, and the
+diff outside it is a registration path and two justified dependencies.
+
+The design was settled by brainstorm before this spec; the decisions
+below record it. The reference for taste is pane (`~/Projects/pane`:
+builtin-restyle, footer, input, themes); the reference for what exists
+to render is the event vocabulary (SPEC_HARDENING, SPEC_COMPACT) and
+the command surface (SPEC_COMMANDS). Nothing here invents information;
+every number and glyph is a reading of what the runtime already emits.
+
+## goals
+
+- Scrollback-native: the terminal owns history; rig decorates a small
+  live tail. No alternate screen, ever (decision 1).
+- Committed blocks on event boundaries: tool rows with glyphs and
+  durations, dim reasoning, command output, the banner (decisions 2-5).
+- The banner: two rows, top of session and reprinted on change, model
+  identity and accounting (decision 3).
+- One renderer per tool for todo and scheduler, used byte-identically
+  by the tool-result path and the command path (decision 6).
+- Four shipped themes (`oled`, `paper`, `p1`, `p3`), a glyph table with
+  an `ascii` set, and `theme.json` as a user palette: this spec owns
+  the schema SPEC_CONFIG reserved (decision 7).
+- Retro as texture, never information (decision 8).
+- Input: single-line editing with history, the existing steering and
+  Ctrl-C semantics unchanged (decision 9).
+- Two dependencies, named and capped: `golang.org/x/term` and
+  `github.com/mattn/go-runewidth` (decision 10).
+
+## non-goals
+
+- No alternate screen, no cell grid, no owned scrollback, no scroll
+  physics, no copy mode, no mouse: the terminal and tmux already do
+  these (decision 1's rejection).
+- No fonts and no painted backgrounds: the terminal owns both; the
+  docs recommend a setup (decision 7).
+- No pinned header: the banner is committed, not pinned. A pinned
+  variant is named future work, not built (decision 3).
+- No multiline editor: pasted lines are separate prompts (the 0.2.0
+  burst rule); a heredoc-style composer is a later extension on the
+  same seam.
+- No scanlines, flicker, ANSI-art banners, or any retro effect that
+  costs legibility (decision 8's rule).
+- No scrollback search, no tabs or windows, no images, no progress
+  animations beyond the spinner.
+- No new events, no new commands, no loop line, no core line: the
+  vocabulary is closed; the TUI reads it.
+- No config beyond `settings.theme` and `theme.json` (SPEC_CONFIG's
+  seam): no TUI-specific settings file.
+
+## layout
+
+```
+frontend/tui/         NEW package, main module (decision 10 names the
+                      module question and the rejection)
+  tui.go              the Frontend: Input, Notify, the dispatcher
+  live.go             the live region: spinner line + input line,
+                      cursor-up redraw, width handling
+  commit.go           committed blocks: turn text, reasoning, tool
+                      rows, command output, the usage line
+  banner.go           the two-row banner and its reprint triggers
+  tools_render.go     the todo and scheduler block renderers (one
+                      renderer, both doors)
+  input.go            raw mode, the key parser, single-line editing,
+                      history
+  theme.go            the palette table (oled, paper, p1, p3), the
+                      glyph table (unicode, ascii), theme.json schema
+                      and merge
+  ansi.go             escape helpers: color, cursor, clear-line
+  *_test.go           golden blocks per theme at 50 and 100 columns,
+                      escape-capture live-region cases, both-doors
+                      byte-equality, theme.json schema cases
+cmd/rig/main.go       the -tui flag (default: auto: TUI when stdout is
+                      a terminal, plain CLI when piped); the theme
+                      resolution from settings + theme.json
+docs/SETUP.md         the recommended terminal setup (fonts, an
+                      OLED-black profile) and the theme keys
+```
+
+## decisions
+
+### 1. Scrollback-native; the alternate screen rejected
+
+The terminal owns history. rig prints committed blocks into normal
+scrollback and redraws only a live region of at most three lines at
+the bottom (decision 2). Scrolling is the terminal's and tmux's;
+resize costs nothing for history; phone-over-ssh behaves; `tmux
+capture-pane` and copy-mode keep working; a crashed TUI leaves a
+readable transcript in the terminal.
+
+Rejected, named: the alternate screen (bubbletea/tcell family). It
+buys in-place editing of old output and pays for it with owned
+scrollback, scroll physics, copy mode, resize repaints, and a
+render-loop framework that would fight the runtime's own event loop
+(`Notify` already is the loop). The one cost of scrollback-native is
+accepted and named: committed output is immutable; an expanded tool
+preview is reprinted below, never edited in place.
+
+### 2. The live region and the commit points
+
+Everything above the live region is immutable printed history.
+Everything dynamic lives in the last lines:
+
+- during a turn: one activity line (the spinner, then the current
+  phase: `- thinking`, `| bash`), then the input line (typing steers,
+  as today);
+- between turns: the input line alone.
+
+The commit points are the events, exactly:
+
+- `ReasoningDelta` / `TextDelta`: streamed as they arrive (reasoning
+  dim, text normal), committed as flowed: the terminal wraps, rig
+  never hand-wraps committed prose (decision 8's sinkhole rule);
+- `ToolStart`: the activity line switches to the tool; `ToolResult`:
+  the tool row commits with glyph, detail, outcome, duration
+  (decision 4);
+- `Done`: the turn's text is complete; `TurnEnd`: the usage line
+  commits (`up 3.2k down 136 · cache r 918 92%`, pane's shaping) and
+  the live region resets;
+- `Compacted`: the compact line commits, then the banner reprints
+  (decision 3);
+- unknown events: ignored (the compat rule; the CLI's discipline).
+
+The live region redraw is cursor-up, clear-line, reprint: the only
+cursor arithmetic in the program, over at most three lines. Committed
+lines are `fmt.Fprint` and the terminal's own wrapping. On resize only
+the live region repaints (SIGWINCH; history is the terminal's
+problem, already solved).
+
+### 3. The banner: two rows, committed, reprinted on change
+
+```
+huihui3.8 · xhigh · 84k/262k 32%
+up 214k down 18.2k · cache r 187k 92%
+```
+
+Row 1: model id, effort, context used over the window with percent,
+colored at 70/90 (the models row's numbers; context used is the last
+assistant message's `ContextTokens` plus the estimate of what
+followed, the compaction trigger's own math). Row 2: session totals:
+prompt up, completion down, cache read and hit rate, `formatTokens`
+shaping. Enclosed in dotted rules (decision 8), lowercase.
+
+Reprint triggers, exactly: session start, `/new`, `/sessions resume`,
+`/models` switch, and after a `Compacted` (the one moment the context
+number jumps). Between banners, the per-turn usage line keeps the
+running numbers in the scrollback where they happened.
+
+The banner replaces pane's persistent footer: there is no
+always-visible info region. Named cost: no live mid-turn context
+number; the activity line and the turn-end usage line carry the need.
+A pinned one-line header via scroll region is named future work
+(`-pin-header`), not built: inside a margin region most terminals
+drop scrolled lines from scrollback, which trades away decision 1.
+
+### 4. Tool rows
+
+One committed block per execution, pane's vocabulary:
+
+```
+● bash · $ go test ./middleware/
+  ok  	rig/middleware/guard	0.4s
+bash ✓ 0.4s
+```
+
+- `ToolStart` opens the row: accent glyph, tool name, the detail;
+- the result body renders head/tail: first N and last M lines with a
+  dim `· k lines elided ·` between (N=6, M=2 at v1; the caps are the
+  TUI's, the runtime's own output caps still apply first);
+- `ToolResult` closes it: name, `✓`/`✕`, duration; a fed-back failure
+  (`Err` non-nil) renders `✕` and the content stays visible: the
+  refusal is the interesting part.
+
+The detail line per tool is a table in `tools_render.go`, one line
+each: bash the command, read/write/edit the path, ls/find/grep the
+pattern or path, python the first line of code, web_search the query,
+web_fetch the url, todo/scheduler the action (their blocks are
+decision 6's). Unknown tools (a future registration) render name-only:
+the table is a nicety, not a contract.
+
+### 5. Reasoning and command output
+
+Reasoning streams dim and commits dim, visible by default: at this
+fleet's decode speeds the thinking is the show, and the operator reads
+it (the reading-band fact behind the no-MTP brain). A keystroke
+(Ctrl-T, pane's binding) toggles rendering of subsequent reasoning;
+committed history is immutable (decision 1). The transcript and the
+wire are untouched either way: this is display only.
+
+Command lines echo dim (`/models`), their output commits as a plain
+block, exactly the CLI's bytes: SPEC_COMMANDS' output contracts are
+the render, restyled only by theme color. The scheduler session-start
+line (decision 6) and the banner are the only unprompted blocks.
+
+### 6. todo and scheduler: one renderer, both doors
+
+The differentiating rule, testable: tool render blocks for todo and
+scheduler are owned by `tools_render.go` and used by both the
+tool-result path (the model called the tool) and the command path (the
+operator typed `/todo ...`). A rendering that differs between the two
+is a bug; the golden tests assert byte equality minus the opening line
+(`● todo · start t3` vs `/todo · start t3`).
+
+The blocks are pane's:
+
+```
+● todo · start t3
+  ▰▰▰▱▱ 2/5 · next t4
+  ● t1 wire the models table
+  ◐ t3 the switch seam
+  ○ t4 steer verb · waits on t3
+```
+
+- the progress head, then one row per task: status glyph, id, text,
+  `· waits on tN` dim when blocked, `· claimed by <sid8>` dim only
+  when the claim is foreign (another session);
+- scheduler `list`: `●`/`○`/`✕` per job state with cron, last, next,
+  and drift named; `runs`: the run lines with tail previews.
+
+The renderers parse the tools' own reply text (the queue the reply
+already carries): no new tool surface, no reaching into stores from
+the render path. If parsing fails (a future voice change), the raw
+reply commits as-is: degrade to the CLI, never hide.
+
+One ambient line, only one: at session start, after the banner, if
+the workspace scheduler store has news since the last session in this
+cwd (a failed or first-completed run), one dim line:
+`· j5 failed 14:30 · scheduler runs j5`. Absent news, nothing. This
+is a read of the store the root already opens, the exact analog of
+todo's stale footer; it is the only place the TUI reads a store, and
+it is read-only.
+
+### 7. Themes: the palette table, the glyph table, theme.json
+
+No fonts, no painted backgrounds: the terminal owns both, and painting
+backgrounds in scrollback-native produces seams. Deep black is the
+operator's terminal profile; `docs/SETUP.md` gains a recommended
+setup: an OLED-black profile and a font shortlist (Berkeley Mono,
+Departure Mono, Terminus, IBM 3270). rig's palettes are tuned to pop
+on true black.
+
+The palette is a table of named slots, four shipped:
+
+- `oled` (default dark): pane's hues re-tuned for `#000`: dims lifted,
+  accents brightened;
+- `paper` (light): ink on near-white, each hue picked for paper, not
+  mathematically inverted;
+- `p1` (green phosphor) and `p3` (amber): monochrome ramps, four
+  brightnesses of one hue; the deepest retro and a standing test that
+  the glyph hierarchy survives without hue.
+
+Slots (the schema's vocabulary, fixed here): `text`, `dim`, `accent`,
+`success`, `error`, `warn`, `rule`, `reasoning`. Colors are truecolor
+hex; when the terminal reports no truecolor (`COLORTERM` absent), rig
+downconverts to the nearest 256-color index: named, automatic, not
+configurable.
+
+The glyph table has two sets: `unicode` (`○ ◐ ● ✕ ⧉ ❯ ▰ ▱ ·`) and
+`ascii` (`[ ] [~] [*] [x] = > # - .`): the deepest-retro look and the
+compatibility fallback, one mechanism.
+
+Selection and override:
+
+- `settings.theme`: one of the shipped names (SPEC_CONFIG's key;
+  unknown refuses loud at start naming the known);
+- `theme.json` (the file SPEC_CONFIG reads raw and this spec owns):
+
+```json
+{
+  "base": "oled",
+  "slots": { "accent": "#ff9e64", "reasoning": "#5a5a5a" },
+  "glyphs": "ascii"
+}
+```
+
+  `base` names a shipped theme (required; unknown refuses); `slots`
+  overrides named slots (unknown slot names refuse, naming the
+  vocabulary; values must parse as `#rrggbb`); `glyphs` selects the
+  set. `theme.json` present with `settings.theme` also set: the file
+  wins (it is the more specific intent); named. Malformed refuses at
+  start in SPEC_CONFIG's voice.
+
+### 8. Retro is texture, never information
+
+The governing sentence: color and glyphs carry state exactly as the
+design language defines; the retro layer touches case, rules, the
+spinner, and palette only. The rules:
+
+- all lowercase, everywhere: headers, refusals, the banner (the house
+  voice, committed to);
+- rules are dotted (`·`) lines, banner-enclosing; no box drawing
+  beyond them;
+- the spinner is `|/-\`, four frames, on the activity line only;
+- durations and counts stay plain (`0.4s`, `12k`): nothing humanized,
+  nothing animated;
+- rejected by the rule, named: scanline effects, deliberate flicker,
+  ANSI-art banners, gradient text. Each would cost legibility to
+  decorate it.
+
+Wrapping, the second sinkhole rule: committed lines are wrapped by the
+terminal (print and flow); rig truncates only tool previews and does
+so loudly (`· k lines elided ·`). The TUI never measures committed
+prose; it measures only the live region and the banner (runewidth,
+decision 10), both built to fit 50 columns.
+
+### 9. Input
+
+v1 is deliberately small: single-line editing (cursor left/right,
+home/end, backspace/delete across the line), history (up/down, in
+memory, session-scoped), and exactly the existing semantics for
+everything else: typing during a turn steers (the slot, the interrupt);
+pasted lines are separate ordered prompts (the burst rule); `/` is the
+command prefix with `//` the escape; Ctrl-C ends the session; Ctrl-D
+at an empty prompt exits; Ctrl-T toggles reasoning (decision 5).
+
+Raw mode via `x/term`; the key parser covers the named keys and
+ignores unrecognized sequences (never crash on an exotic terminal).
+Named gaps, deliberate: no multiline composer, no history persistence,
+no completion. Each is a later extension inside `input.go`; none
+touches a seam.
+
+### 10. Placement and dependencies
+
+`frontend/tui` lives in the main module, and the roadmap's "own
+module, own version line" sentence is amended by this spec, named: a
+separate module must either duplicate the root's wiring (a second
+`main` that rebuilds stores, config, recorder, commands) or force the
+root's wiring into an exported package, a refactor the freeze exists
+to avoid. The TUI is a Frontend like `frontend/cli`; it belongs where
+that one lives. The version line stays the runtime's; the TUI's
+maturity is tracked by the roadmap, not a second module version.
+
+The two dependencies, justified once: `golang.org/x/term` (raw mode
+and size; the quasi-stdlib), `github.com/mattn/go-runewidth` (glyph
+and CJK width for the live region and previews; hand-rolling width
+tables is the known wrong move). Both are leaf deps of `frontend/tui`
+only. Rejected, named: bubbletea, lipgloss, tcell (decision 1's
+frameworks); a color-conversion dep (the 256 downconvert is thirty
+lines).
+
+Entry: `-tui` on the root, default `auto`: the TUI when stdout is a
+terminal, the plain CLI when piped or redirected (`-tui=false` forces
+plain; scripts and the e2e keep the CLI bytes). `-p` and `run-job`
+never engage the TUI. The CLI frontend remains, untouched: it is the
+piped mode and the reference rendering.
+
+## testing
+
+Named cases, failing first. The renderer is pure (events in, bytes
+out) wherever possible; raw-mode and resize cases run behind a pty
+where the CI box allows and skip cleanly where not.
+
+- golden committed blocks: a scripted event stream (text, reasoning,
+  a tool round trip, a compaction, a turn end) rendered at 50 and 100
+  columns, in `oled` and in `ascii`+`p1`: the exact bytes. The same
+  stream through the plain CLI still matches the CLI's goldens (the
+  TUI adds, never changes, the CLI).
+- the banner: content from a scripted session (the two rows' exact
+  bytes); every reprint trigger fires it exactly once (start, new,
+  resume, switch, compacted); no other event reprints it.
+- both doors: the todo and scheduler blocks byte-equal between the
+  tool-result path and the command path, minus the opening line.
+- the live region: an escape-capture harness asserts the redraw is
+  cursor-up/clear/reprint over at most three lines, and that committed
+  bytes are never rewritten (the immutability invariant, decision 1).
+- input: the key parser table (arrows, home/end, backspace across a
+  wide glyph, an unrecognized CSI ignored); history up/down; paste of
+  three lines becomes three prompts in order (the burst rule, through
+  the TUI's reader); Ctrl-T toggles subsequent reasoning only.
+- themes: theme.json schema cases (unknown base, unknown slot, bad
+  hex, glyphs value), the file-wins-over-settings rule, the 256
+  downconvert (a known hex to a known index); the p1 ramp renders
+  every state distinctly (the monochrome legibility test, asserted on
+  distinct SGR sequences, not by eye).
+- the scheduler news line: news since last session renders one dim
+  line; no news renders nothing; the read is read-only (no store
+  mutation; asserted on the store file's bytes).
+- the freeze gate: the PR's diff outside `frontend/tui`, `cmd/rig`,
+  `docs/`, and `go.mod`/`go.sum` is empty; `core/` and `loop/` are
+  byte-identical; the full suite including every CLI golden is green.
+
+## scope
+
+What 10 is not: a rewrite of the CLI (it stays, as the piped mode and
+the reference bytes); a place for new verbs or events (the vocabulary
+is closed; anything the glass wants and cannot render from existing
+events is a finding to bring back to the roadmap, not to patch in); a
+notification system, a dashboard, or a second store reader beyond the
+one named line; a config surface beyond `settings.theme` and
+`theme.json`.
+
+After 10: the field test. The version stays 0.x until rig is the
+daily driver and the TUI has survived real use on the phone; the 1.0
+tag is earned by soak, not by shipping the glass (the roadmap's
+criterion, unchanged).
