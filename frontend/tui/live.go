@@ -296,14 +296,15 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	// activity row, the pending line) stand where they are and become
 	// scrollback. The cursor is on the region's last row, so the input
 	// row's top is its own height minus one, plus the status row, up.
-	oldStatus := 0
-	if l.status != "" {
-		oldStatus = 1
+	oldStatusRows := statusRows(l.status)
+	oldStatusHeight := 0
+	for _, sr := range oldStatusRows {
+		oldStatusHeight += l.visualRows(sr)
 	}
 	if len(l.lines) > 0 {
-		idx := len(l.lines) - 1 - oldStatus
+		idx := len(l.lines) - 1 - len(oldStatusRows)
 		in := l.visualRows(l.lines[idx])
-		upTop := in - 1 + oldStatus
+		upTop := in - 1 + oldStatusHeight
 		if upTop > 0 {
 			l.wf(cursorUp(upTop))
 		}
@@ -326,21 +327,20 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 		l.wf(lineEnd)
 	}
 	l.wf(inputLine)
-	if status != "" {
+	srows := statusRows(status)
+	for _, sr := range srows {
 		l.wf(lineEnd)
-		l.wf(status)
+		l.wf(sr)
 	}
 	if activity != "" {
 		l.lines = []string{activity, inputLine}
 	} else {
 		l.lines = []string{inputLine}
 	}
-	if status != "" {
-		l.lines = append(l.lines, status)
-	}
+	l.lines = append(l.lines, srows...)
 	l.status = status
-	if status != "" {
-		l.guardWrap(status)
+	if len(srows) > 0 {
+		l.guardWrap(srows[len(srows)-1])
 	} else {
 		l.guardWrap(inputLine)
 	}
@@ -387,13 +387,13 @@ func (l *live) edit(inputLine string, cursorCol int, status string) {
 	}
 	l.norm()
 	oldStatus := 0
-	if l.status != "" {
-		oldStatus = 1
+	for _, sr := range statusRows(l.status) {
+		oldStatus += l.visualRows(sr)
 	}
-	idx := len(l.lines) - 1 - oldStatus
+	idx := len(l.lines) - 1 - len(statusRows(l.status))
 	// the input row's terminal rows: the cursor is on the region's last
-	// row (the status row when present), so the input row's top is its
-	// own height minus one, plus the status row, up.
+	// row (the status rows' last when present), so the input row's top
+	// is its own height minus one, plus the status rows, up.
 	old := l.visualRows(l.lines[idx])
 	upTop := old - 1 + oldStatus
 	if upTop > 0 {
@@ -434,10 +434,16 @@ func (l *live) parkAt(inputLine string, cursorCol int, status string, fromStatus
 	col := (cursorCol-1)%l.width + 1
 	up := newRows - 1 - row
 	park := up
-	if status != "" {
-		park++ // the region's last row is the status row, below the input row
+	if srows := statusRows(status); len(srows) > 0 {
+		// the region's last row is the status rows' last, below the
+		// input row: their terminal height.
+		h := 0
+		for _, sr := range srows {
+			h += l.visualRows(sr)
+		}
+		park += h
 		if fromStatusRow {
-			up++ // the cursor stands there
+			up += h // the cursor stands there
 		}
 	}
 	if up > 0 {
@@ -460,12 +466,19 @@ func (l *live) editFull(newLines []string, cursorCol int, status string) {
 	l.flush()
 }
 
-// withStatus appends the status row, when present, to the region's
+// statusRows is the status as the region's rows: the status string
+// is one or more logical rows joined by newlines (decision 3: the
+// model row and the usage row); empty is no rows.
+func statusRows(status string) []string {
+	if status == "" {
+		return nil
+	}
+	return strings.Split(status, "\n")
+}
+
+// withStatus appends the status rows, when present, to the region's
 // rows.
 func withStatus(newLines []string, status string) []string {
 	lines := append([]string(nil), newLines...)
-	if status != "" {
-		lines = append(lines, status)
-	}
-	return lines
+	return append(lines, statusRows(status)...)
 }

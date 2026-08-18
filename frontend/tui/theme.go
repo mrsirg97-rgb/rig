@@ -31,10 +31,11 @@ const (
 	SlotWarn      = "warn"
 	SlotRule      = "rule"
 	SlotReasoning = "reasoning"
+	SlotEmber     = "ember" // the greeting and the loaders: a pale, neutral orange
 )
 
 // slotVocabulary is the sorted slot list the refusals name (7).
-var slotVocabulary = []string{SlotAccent, SlotDim, SlotError, SlotReasoning, SlotRule, SlotSuccess, SlotText, SlotWarn}
+var slotVocabulary = []string{SlotAccent, SlotDim, SlotEmber, SlotError, SlotReasoning, SlotRule, SlotSuccess, SlotText, SlotWarn}
 
 // The glyph slots, in both sets.
 const (
@@ -98,6 +99,7 @@ var Shipped = map[string]map[string]string{
 		SlotWarn:      "#e5c07b",
 		SlotRule:      "#3c3c3c",
 		SlotReasoning: "#9a86c8",
+		SlotEmber:     "#e8a86b",
 	},
 	"paper": {
 		SlotText:      "#24292f",
@@ -108,6 +110,7 @@ var Shipped = map[string]map[string]string{
 		SlotWarn:      "#9a6700",
 		SlotRule:      "#d0d7de",
 		SlotReasoning: "#6f42c1",
+		SlotEmber:     "#bc4c00",
 	},
 	"p1": {
 		SlotText:      "#aaffc2",
@@ -118,6 +121,7 @@ var Shipped = map[string]map[string]string{
 		SlotReasoning: "#2aa050",
 		SlotDim:       "#156b33",
 		SlotRule:      "#156b33",
+		SlotEmber:     "#8fe8a8",
 	},
 	"p3": {
 		SlotText:      "#ffd28a",
@@ -128,6 +132,7 @@ var Shipped = map[string]map[string]string{
 		SlotReasoning: "#b07820",
 		SlotDim:       "#7a5215",
 		SlotRule:      "#7a5215",
+		SlotEmber:     "#f0b860",
 	},
 }
 

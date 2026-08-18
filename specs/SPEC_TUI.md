@@ -214,20 +214,28 @@ repaints on every keystroke.
 
 The committed half is the startup block (the choice, named: one
 committed block at session start, not deleted): the greeting in the
-accent, the session id under it (its first twelve characters, git's
-short-hash habit; `/sessions` lists the full ids), then the banner's
-identity row
-without its context part, its usage row, and the scheduler news line
-(decision 6) when there is one — dim, no dotted rules (they enclosed
-the banner, and the banner is gone):
+ember (decision 7), the session id under it (its first twelve
+characters, git's short-hash habit; `/sessions` lists the full ids),
+and the scheduler news line (decision 6) when there is one — no
+dotted rules (they enclosed the banner, and the banner is gone). The
+model and usage rows are the live status now, under the input:
 
 ```
 welcome to rig
 session 2f9a1c0e77b3
-huihui3.8 · xhigh
-up 214k down 18.2k · cache r 187k 92%
 · j5 failed 14:30 · scheduler runs j5
+❯
+huihui3.8 · 41.2k/262k
+up 214k down 18.2k · cache r 187k 92%
 ```
+
+The live status is two rows: the model with used over the window (the
+model alone before the first usage; the context part colored at the
+70/90 marks), and the session's usage totals with the cache-read hit
+rate — the snapshot's numbers at the refresh points, then each `Done`
+adds. The live region's status is one string of newline-joined rows;
+the region splits and measures them (a wrapping usage row on a narrow
+terminal counts by its terminal rows, like every live row).
 
 The reprint triggers are amended to match: `/new`, `sessions resume`,
 and a `models` switch refresh the status line's snapshot (and reset
@@ -339,7 +347,12 @@ The palette is a table of named slots, four shipped:
   the glyph hierarchy survives without hue.
 
 Slots (the schema's vocabulary, fixed here): `text`, `dim`, `accent`,
-`success`, `error`, `warn`, `rule`, `reasoning`. Colors are truecolor
+`success`, `error`, `warn`, `rule`, `reasoning`, `ember`. The ember
+(added, amended) is the greeting's and every loader's color — the
+spinner and its label, whatever the phase (thinking, compacting, a
+tool): a pale, neutral orange on the dark themes (`#e8a86b` on oled),
+a burnt orange on paper, and on the phosphors a warmer step of the
+one hue (retro stays texture, decision 8). Colors are truecolor
 hex; when the terminal reports no truecolor (`COLORTERM` absent), rig
 downconverts to the nearest 256-color index: named, automatic, not
 configurable.

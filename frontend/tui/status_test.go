@@ -27,10 +27,8 @@ func TestStatusBlockExactBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderStatus(th, statusInput())
-	want := th.Paint("accent", "welcome to rig") + "\n" +
-		th.Paint("dim", "session 2f9a1c0e77b3") + "\n" + // the first twelve
-		th.Paint("dim", "huihui3.8") + th.Paint("dim", " · ") + th.Paint("dim", "xhigh") + "\n" +
-		th.Paint("dim", "up 214k down 3.2k · cache r 187k 87%") + "\n"
+	want := th.Paint("ember", "welcome to rig") + "\n" +
+		th.Paint("dim", "session 2f9a1c0e77b3") + "\n" // the first twelve
 	if got != want {
 		t.Fatalf("the startup block:\ngot  %q\nwant %q", got, want)
 	}
@@ -54,15 +52,17 @@ func TestStatusBlockRowsFitTheWidth(t *testing.T) {
 }
 
 func TestStatusBlockNoEffortOmitsTheSegment(t *testing.T) {
+	// the block carries no model row now (the status line does); the
+	// case is the block without a session: the greeting alone, one row.
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	b := statusInput()
-	b.Model, b.Effort = "local", ""
+	b.Session = ""
 	got := tui.RenderStatus(th, b)
-	if strings.Count(got, " · ") < 1 || strings.Contains(got, " ·  · ") {
-		t.Fatalf("an empty effort must omit its segment without doubling the dot:\n%s", got)
+	if got != th.Paint("ember", "welcome to rig")+"\n" {
+		t.Fatalf("no session: the greeting alone:\n%q", got)
 	}
 }
 
@@ -71,9 +71,10 @@ func TestStatusLineModelAloneBeforeFirstUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", 0, 262144, false)
-	if got != th.Paint("dim", "huihui3.8") {
-		t.Fatalf("before the first usage the row is the model alone: %q", got)
+	got := tui.RenderStatusLine(th, "huihui3.8", 0, 262144, false, 0, 0, 0)
+	want := th.Paint("dim", "huihui3.8") + "\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
+	if got != want {
+		t.Fatalf("before the first usage the first row is the model alone, the second the zero totals:\ngot  %q\nwant %q", got, want)
 	}
 }
 
@@ -91,13 +92,17 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		{180000, "error"}, // 90%: the error tier
 	}
 	for _, c := range cases {
-		got := tui.RenderStatusLine(th, "huihui3.8", c.used, 200000, true)
+		got := tui.RenderStatusLine(th, "huihui3.8", c.used, 200000, true, 214000, 3200, 187000)
 		part := fmtTokens(c.used) + "/" + fmtTokens(200000)
 		if !strings.Contains(got, th.Paint(c.want, part)) {
 			t.Errorf("used=%d: the context part is not painted %s:\n%s", c.used, c.want, got)
 		}
 		if !strings.HasPrefix(got, th.Paint("dim", "huihui3.8 · ")) {
 			t.Errorf("used=%d: the model part is not dim:\n%s", c.used, got)
+		}
+		// the second row: the session's totals and the hit rate.
+		if !strings.HasSuffix(got, "\n"+th.Paint("dim", "up 214k down 3.2k · cache r 187k 87%")) {
+			t.Errorf("used=%d: the usage row is not the second row:\n%s", c.used, got)
 		}
 	}
 }
@@ -107,7 +112,7 @@ func TestStatusLineEmptyModelIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := tui.RenderStatusLine(th, "", 100, 1000, true); got != "" {
+	if got := tui.RenderStatusLine(th, "", 100, 1000, true, 1, 1, 1); got != "" {
 		t.Fatalf("no model, no row: %q", got)
 	}
 }

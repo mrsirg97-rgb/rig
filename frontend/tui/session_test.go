@@ -49,7 +49,8 @@ func oledTheme(t *testing.T) Theme {
 func statusFixture() StatusIn {
 	return StatusIn{
 		Model: "huihui3.8", Effort: "xhigh", Window: 262144,
-		Up: 214000, Down: 18200, CacheRead: 187000,
+		Session: "2f9a1c0e77b34455",
+		Up:      214000, Down: 18200, CacheRead: 187000,
 	}
 }
 
@@ -135,7 +136,9 @@ func (s *scriptedSession) prompt(marker, feed string) string {
 // models switch) re-snapshot the row — never the block.
 func TestStatusLineRefresh(t *testing.T) {
 	th := oledTheme(t)
-	blockRow := strings.Split(RenderStatus(th, statusFixture()), "\n")[1]
+	// the block's greeting row: the block's marker (it commits at the
+	// session start and the fresh refresh points, never per turn).
+	blockRow := strings.Split(RenderStatus(th, statusFixture()), "\n")[0]
 	// the status line's door: the first call (the session start) takes
 	// the s1 numbers; every later call (a refresh point) returns the
 	// s2 context — a different model, so a refresh is visible in the
@@ -456,12 +459,12 @@ func TestSchedulerNewsLine(t *testing.T) {
 	if got := strings.Count(out, th.Paint(SlotDim, news)); got != 1 {
 		t.Fatalf("the news line occurs %d times, want exactly one, dim", got)
 	}
-	// after the banner: the news line follows the banner (its model
-	// line precedes it in the stream).
-	if iM := strings.Index(out, "huihui3.8"); iM < 0 {
-		t.Fatalf("the banner is not in the stream")
+	// after the block: the news line follows the startup block (its
+	// greeting precedes it in the stream).
+	if iM := strings.Index(out, "welcome to rig"); iM < 0 {
+		t.Fatalf("the block is not in the stream")
 	} else if iN := strings.Index(out, news); iN < iM {
-		t.Fatalf("the news line is before the banner")
+		t.Fatalf("the news line is before the block")
 	}
 
 	noNews := newScriptedSession(t, WithTheme(th), WithWidth(50),
@@ -775,9 +778,7 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 	}
 	want := []string{
 		"welcome to rig",
-		"huihui3.8 · xhigh", // the wide startup-block lines wrap at 20 too
-		"up 214k down 18k · c",
-		"ache r 187k 87%",
+		"session 2f9a1c0e77b3",
 		"❯ go",
 		"aaaaaaaaaaaaaaaaaaaa",
 		"aaaa",
@@ -786,7 +787,11 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 		"up 10 down 2 · cache",
 		" r 0 0%",
 		"❯ ",
-		"huihui3.8 · 12/262k", // the status row, fed by the Done's usage
+		"huihui3.8 · 12/262k", // the status's first row, fed by the Done's usage
+		// the second: the session totals (the snapshot's + the Done's),
+		// wrapping at 20 like everything else here.
+		"up 214k down 18k · c",
+		"ache r 187k 87%",
 	}
 	if len(v.rows) != len(want) {
 		t.Fatalf("%d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
@@ -958,29 +963,30 @@ func TestCompletionMenu(t *testing.T) {
 		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
 	}
 	status := "huihui3.8"
+	usage := "up 214k down 18k · cache r 187k 87%"
 
 	// two candidates: the menu shows, the selection inverted, first.
 	// the screen: the block's two rows, the two menu rows, the input,
 	// the status row.
 	s.si.feed("/mo")
-	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
+	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status, usage})
 	s.await(th.Invert(row("models", "the per-model table")))
 	// Tab steps the selection down; Shift-Tab (CSI Z) steps it up.
 	s.si.feed("\t")
 	s.await(th.Invert(row("move", "move a thing")))
 	s.si.feed("\x1b[Z")
-	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
+	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status, usage})
 	// Esc closes the menu; the input keeps its text. The lone Esc's
 	// grace window must settle before the next keystroke (the screen
 	// says when it has: the menu's rows are gone, the row count down).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 5, []string{"❯ /mo", status})
+	s.awaitScreen(50, 5, []string{"❯ /mo", status, usage})
 	// a single candidate: the ghost — its remainder.
 	s.si.feed("d")
 	s.await(th.Paint(SlotDim, "els"))
 	// Esc again: the prompt clears (the menu is already closed).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 5, []string{"❯ ", status})
+	s.awaitScreen(50, 5, []string{"❯ ", status, usage})
 
 	// the Sub() hints (the argument phase): the menu over the verbs.
 	s.si.feed("/todo ")
@@ -988,7 +994,7 @@ func TestCompletionMenu(t *testing.T) {
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
-		"❯ /todo ", status,
+		"❯ /todo ", status, usage,
 	})
 	// Tab to create, Shift-Tab twice wraps to done (the cycle).
 	s.si.feed("\t")
@@ -997,7 +1003,7 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("done", "a task's id")))
 	// Enter accepts the selection into the input — never dispatching.
 	s.si.feed("\n")
-	s.awaitScreen(50, 5, []string{"❯ /todo done ", status})
+	s.awaitScreen(50, 5, []string{"❯ /todo done ", status, usage})
 	if strings.Contains(s.out.String(), "queue reply") {
 		t.Fatal("the accepted line dispatched (Enter accepts, it does not run)")
 	}
@@ -1040,14 +1046,25 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// races the snapshot against the keystrokes still in flight.
 	digits := strings.Repeat("0123456789", 5) + "01234567XY"
 
-	// the status row stands below the input rows (the region's last
-	// row): the screen's tail is the input rows, then the status.
-	statusRow := "huihui3.8"
+	// the status rows stand below the input rows (the region's last
+	// rows): the screen's tail is the input rows, then the status. Its
+	// height at this width is the renderer's business; the test
+	// measures it and slices above.
+	statusRows := 0
+	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", 0, 262144, false,
+		214000, 18200, 187000)), "\n") {
+		statusRows += (displayWidth(r) + 9) / 10
+	}
+	above := func(n int) []string {
+		t.Helper()
+		all := screenLast(n + statusRows)
+		return all[:n]
+	}
 	// 17 runes at width 10: the input wraps to two terminal rows.
 	s.si.feed(digits[:17])
 	s.await(th.Paint(SlotText, " "+digits[:17]))
-	rows := screenLast(3)
-	if rows[0] != "❯ 01234567" || rows[1] != "890123456" || rows[2] != statusRow {
+	rows := above(2)
+	if rows[0] != "❯ 01234567" || rows[1] != "890123456" {
 		t.Fatalf("wrapped input rows = %q", rows)
 	}
 
@@ -1055,16 +1072,16 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// cursor to the tail, the prompt glyph scrolled off.
 	s.si.feed(digits[17:])
 	s.await(th.Paint(SlotText, digits[18:]))
-	rows = screenLast(6)
-	if rows[0] != "8901234567" || rows[4] != "XY" || rows[5] != statusRow {
+	rows = above(5)
+	if rows[0] != "8901234567" || rows[4] != "XY" {
 		t.Fatalf("tail window rows = %q", rows)
 	}
 
 	// home: the window scrolls back to the head, the glyph visible.
 	s.si.feed("\x01")
 	s.await(th.Paint(SlotText, " "+digits[:48]))
-	rows = screenLast(6)
-	if rows[0] != "❯ 01234567" || rows[5] != statusRow {
+	rows = above(5)
+	if rows[0] != "❯ 01234567" {
 		t.Fatalf("head window rows = %q, want the prompt row first", rows)
 	}
 
@@ -1224,11 +1241,12 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	s.si.feed("/mo")
-	// the block's three rows at this width + two menu rows + input +
-	// status = 7: the long menu row did not wrap into an eighth.
-	s.awaitScreen(30, 8, []string{"move  short", "❯ /mo", "huihui3.8"})
+	// the block's two rows + two menu rows + input + the status's three
+	// rows at this width = 8: the long menu row did not wrap into a
+	// ninth.
+	s.awaitScreen(30, 8, []string{"move  short", "❯ /mo", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
 	rows := screenLines(t, s, 30)
-	menuRow := rows[len(rows)-4]
+	menuRow := rows[len(rows)-6]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
 		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
 	}
@@ -1275,9 +1293,9 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	// pending, then the loader, then the input, then the status.
-	s.awaitScreen(50, 8, []string{"streaming text", "| thinking", "❯ ", "huihui3.8"})
+	s.awaitScreen(50, 8, []string{"streaming text", "| thinking", "❯ ", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 	// the pending line closes into scrollback above; the loader stays
 	// directly above the input.
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
-	s.awaitScreen(50, 9, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8"})
+	s.awaitScreen(50, 9, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 }
