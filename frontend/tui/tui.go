@@ -92,6 +92,9 @@ type tui struct {
 	statusWindow  int
 	statusUsed    int
 	statusHasUsed bool
+	// the session's usage totals (the status's second row): the
+	// snapshot's numbers at the refresh points, then each Done adds.
+	statusUp, statusDown, statusCache int
 
 	// reader-owned: the line state and the byte-stream parser.
 	ed editor
@@ -881,6 +884,9 @@ func (t *tui) Notify(ev core.Event) {
 			t.statusUsed = e.Usage.Prompt + e.Usage.Completion
 			t.statusHasUsed = true
 		}
+		t.statusUp += e.Usage.Prompt
+		t.statusDown += e.Usage.Completion
+		t.statusCache += e.Usage.CacheRead
 		t.mu.Unlock()
 		t.flow("", "\n")
 	case core.Fault:
@@ -986,7 +992,8 @@ func (t *tui) liveLinesLocked() []string {
 // statusLineLocked is the status row (under mu; decision 3): the
 // model, and used over the window once a turn has run.
 func (t *tui) statusLineLocked() string {
-	return RenderStatusLine(t.theme, t.statusModel, t.statusUsed, t.statusWindow, t.statusHasUsed)
+	return RenderStatusLine(t.theme, t.statusModel, t.statusUsed, t.statusWindow, t.statusHasUsed,
+		t.statusUp, t.statusDown, t.statusCache)
 }
 
 // sessionStartLocked is the startup block and the status line's
@@ -1000,6 +1007,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusWindow = in.Window
 		t.statusUsed = 0
 		t.statusHasUsed = false
+		t.statusUp, t.statusDown, t.statusCache = in.Up, in.Down, in.CacheRead
 		b.WriteString(RenderStatus(t.theme, in))
 	}
 	if t.news != nil {
@@ -1072,6 +1080,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 			t.statusUsed = 0
 			t.statusHasUsed = false
 		}
+		t.statusUp, t.statusDown, t.statusCache = in.Up, in.Down, in.CacheRead
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
 }
@@ -1155,13 +1164,9 @@ func (t *tui) activityLineLocked() string {
 	if label == "" {
 		label = "thinking"
 	}
-	line := t.theme.Paint(SlotDim, string(frame))
-	if label == "thinking" {
-		line += t.theme.Paint(SlotDim, " thinking")
-	} else {
-		line += t.theme.Paint(SlotDim, " ") + t.theme.Paint(SlotAccent, label)
-	}
-	return line
+	// the loader is the ember (decision 7, amended): the spinner and
+	// its label, whatever the phase (thinking, compacting, a tool).
+	return t.theme.Paint(SlotEmber, string(frame)+" "+label)
 }
 
 // menuCand is one completion candidate (decision 9, amended): the
