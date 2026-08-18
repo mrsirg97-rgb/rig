@@ -144,7 +144,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		want    string
 	}{
 		{"retries type", `{"retries": "three"}`, `retries: expected an integer, got "three"`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, searxngUrl, swapUrl, system, trafilatura, webFetchProxy)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 	}
@@ -171,6 +171,18 @@ func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 	}
 	if cfg.Settings.Model != "local" {
 		t.Fatalf("model = %q, want the embedded local (empty descends)", cfg.Settings.Model)
+	}
+}
+
+// TestSettingsThemeIsAKnownKey (SPEC_CONFIG 5): theme is a settings
+// key; the value is a name the TUI validates (ResolveTheme owns the
+// vocabulary), the file layer just carries it.
+func TestSettingsThemeIsAKnownKey(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"theme": "paper"}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.Theme != "paper" {
+		t.Fatalf("theme = %q, want paper", cfg.Settings.Theme)
 	}
 }
 

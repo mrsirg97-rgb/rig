@@ -29,11 +29,12 @@ type Settings struct {
 	Trafilatura     *string // nil = auto (shared venv, then PATH)
 	SwapURL         string
 	DefaultJobModel string
+	Theme           string // shipped theme name; "" = the TUI's default
 }
 
 // knownSettings is the known key set, sorted: the unknown-key refusal
 // names the sorted list (3).
-var knownSettings = []string{"allow", "baseUrl", "defaultJobModel", "model", "python", "retries", "searxngUrl", "swapUrl", "system", "trafilatura", "webFetchProxy"}
+var knownSettings = []string{"allow", "baseUrl", "defaultJobModel", "model", "python", "retries", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -107,6 +108,9 @@ func mergeSettings(base, file Settings) Settings {
 	if file.DefaultJobModel != "" {
 		out.DefaultJobModel = file.DefaultJobModel
 	}
+	if file.Theme != "" {
+		out.Theme = file.Theme
+	}
 	return out
 }
 
@@ -177,6 +181,11 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		return Settings{}, err
 	} else if ok && v != "" {
 		s.DefaultJobModel = v
+	}
+	if v, ok, err := str("theme"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		s.Theme = v
 	}
 	if raw, ok := keys["allow"]; ok {
 		v, err := jsonAllow(raw)

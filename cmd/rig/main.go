@@ -719,7 +719,7 @@ func main() {
 		// the terminal frontend (SPEC_TUI): the same REPL semantics
 		// (the commands, the seam, the exits) in the themed stream;
 		// the theme is the file's document, the TUI owns the schema.
-		th, terr := tui.ResolveTheme("", cfg.Theme, tuiTrueColor())
+		th, terr := tui.ResolveTheme(cfg.Settings.Theme, cfg.Theme, tuiTrueColor())
 		if terr != nil {
 			fmt.Fprintln(os.Stderr, "rig:", terr)
 			os.Exit(1)
