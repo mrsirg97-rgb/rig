@@ -75,7 +75,7 @@ func TestKeyParserTable(t *testing.T) {
 		{"lone escape", []byte{0x1b}, []key{}},
 		{"osc title", []byte{0x1b, ']', '0', ';', 'r', 'i', 'g', 0x07}, []key{}},
 		{"osc string terminator", []byte{0x1b, ']', '0', ';', 'x', 0x1b, '\\'}, []key{}},
-		{"tab control", []byte{0x09}, []key{}},
+		{"tab control", []byte{0x09}, []key{keyTab}},
 		{"orphan continuation", []byte{0x61, 0x80}, []key{keyText}},
 	}
 	for _, tc := range cases {

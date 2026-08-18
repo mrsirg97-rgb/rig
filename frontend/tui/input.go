@@ -23,6 +23,7 @@ const (
 	keyCtrlC
 	keyCtrlD
 	keyCtrlT
+	keyTab
 )
 
 // The parser states: top, the escape families (CSI, the SS3 cursor
@@ -132,6 +133,8 @@ func (p *keyParser) next(b byte) (key, rune) {
 			return keyCtrlD, 0
 		case b == 0x14:
 			return keyCtrlT, 0
+		case b == 0x09:
+			return keyTab, 0
 		case b == 0x01:
 			return keyHome, 0
 		case b == 0x05:
@@ -291,6 +294,13 @@ func (e *editor) apply(k key, r rune) (string, bool) {
 // text is the line's content; cursorCol is the one-based terminal
 // column of the edit position, over the painted line's prefix (the
 // prompt and its space, prefixCols wide).
+// setText replaces the buffer (tab completion's landing) and parks the
+// cursor at the end.
+func (e *editor) setText(t string) {
+	e.buf = []rune(t)
+	e.pos = len(e.buf)
+}
+
 func (e *editor) text() string { return string(e.buf) }
 
 func (e *editor) cursorCol(prefixCols int) int {
