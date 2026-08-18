@@ -41,6 +41,7 @@ const (
 	GlyphActive  = "active"  // ◐ / [~]
 	GlyphDone    = "done"    // ● / [*]
 	GlyphFail    = "fail"    // ✕ / [x]
+	GlyphOK      = "ok"      // ✓ / v (the close line's success mark, 4)
 	GlyphCompact = "compact" // ⧉ / =
 	GlyphPrompt  = "prompt"  // ❯ / >
 	GlyphBarOn   = "bar"     // ▰ / #
@@ -50,11 +51,11 @@ const (
 
 var (
 	glyphsUnicode = map[string]string{
-		GlyphPending: "○", GlyphActive: "◐", GlyphDone: "●", GlyphFail: "✕",
+		GlyphPending: "○", GlyphActive: "◐", GlyphDone: "●", GlyphFail: "✕", GlyphOK: "✓",
 		GlyphCompact: "⧉", GlyphPrompt: "❯", GlyphBarOn: "▰", GlyphBarOff: "▱", GlyphDot: "·",
 	}
 	glyphsASCII = map[string]string{
-		GlyphPending: "[ ]", GlyphActive: "[~]", GlyphDone: "[*]", GlyphFail: "[x]",
+		GlyphPending: "[ ]", GlyphActive: "[~]", GlyphDone: "[*]", GlyphFail: "[x]", GlyphOK: "v",
 		GlyphCompact: "=", GlyphPrompt: ">", GlyphBarOn: "#", GlyphBarOff: "-", GlyphDot: ".",
 	}
 )
