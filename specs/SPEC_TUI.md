@@ -213,12 +213,17 @@ and never per repaint: the closure is a store read, and a live row
 repaints on every keystroke.
 
 The committed half is the startup block (the choice, named: one
-committed block at session start, not deleted): the banner's
-identity row without its context part, its session row, and the
-scheduler news line (decision 6) when there is one — dim, no dotted
-rules (they enclosed the banner, and the banner is gone):
+committed block at session start, not deleted): the greeting in the
+accent, the session id under it (its first twelve characters, git's
+short-hash habit; `/sessions` lists the full ids), then the banner's
+identity row
+without its context part, its usage row, and the scheduler news line
+(decision 6) when there is one — dim, no dotted rules (they enclosed
+the banner, and the banner is gone):
 
 ```
+welcome to rig
+session 2f9a1c0e77b3
 huihui3.8 · xhigh
 up 214k down 18.2k · cache r 187k 92%
 · j5 failed 14:30 · scheduler runs j5

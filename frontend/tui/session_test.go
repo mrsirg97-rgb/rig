@@ -774,6 +774,7 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 		t.Fatalf("harness: %s\nstream:\n%q", v.err, s.out.String())
 	}
 	want := []string{
+		"welcome to rig",
 		"huihui3.8 · xhigh", // the wide startup-block lines wrap at 20 too
 		"up 214k down 18k · c",
 		"ache r 187k 87%",
@@ -962,28 +963,28 @@ func TestCompletionMenu(t *testing.T) {
 	// the screen: the block's two rows, the two menu rows, the input,
 	// the status row.
 	s.si.feed("/mo")
-	s.awaitScreen(50, 6, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
+	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
 	s.await(th.Invert(row("models", "the per-model table")))
 	// Tab steps the selection down; Shift-Tab (CSI Z) steps it up.
 	s.si.feed("\t")
 	s.await(th.Invert(row("move", "move a thing")))
 	s.si.feed("\x1b[Z")
-	s.awaitScreen(50, 6, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
+	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
 	// Esc closes the menu; the input keeps its text. The lone Esc's
 	// grace window must settle before the next keystroke (the screen
 	// says when it has: the menu's rows are gone, the row count down).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 4, []string{"❯ /mo", status})
+	s.awaitScreen(50, 5, []string{"❯ /mo", status})
 	// a single candidate: the ghost — its remainder.
 	s.si.feed("d")
 	s.await(th.Paint(SlotDim, "els"))
 	// Esc again: the prompt clears (the menu is already closed).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 4, []string{"❯ ", status})
+	s.awaitScreen(50, 5, []string{"❯ ", status})
 
 	// the Sub() hints (the argument phase): the menu over the verbs.
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 7, []string{
+	s.awaitScreen(50, 8, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
@@ -996,7 +997,7 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("done", "a task's id")))
 	// Enter accepts the selection into the input — never dispatching.
 	s.si.feed("\n")
-	s.awaitScreen(50, 4, []string{"❯ /todo done ", status})
+	s.awaitScreen(50, 5, []string{"❯ /todo done ", status})
 	if strings.Contains(s.out.String(), "queue reply") {
 		t.Fatal("the accepted line dispatched (Enter accepts, it does not run)")
 	}
@@ -1225,7 +1226,7 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	s.si.feed("/mo")
 	// the block's three rows at this width + two menu rows + input +
 	// status = 7: the long menu row did not wrap into an eighth.
-	s.awaitScreen(30, 7, []string{"move  short", "❯ /mo", "huihui3.8"})
+	s.awaitScreen(30, 8, []string{"move  short", "❯ /mo", "huihui3.8"})
 	rows := screenLines(t, s, 30)
 	menuRow := rows[len(rows)-4]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
@@ -1274,9 +1275,9 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	// pending, then the loader, then the input, then the status.
-	s.awaitScreen(50, 7, []string{"streaming text", "| thinking", "❯ ", "huihui3.8"})
+	s.awaitScreen(50, 8, []string{"streaming text", "| thinking", "❯ ", "huihui3.8"})
 	// the pending line closes into scrollback above; the loader stays
 	// directly above the input.
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
-	s.awaitScreen(50, 8, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8"})
+	s.awaitScreen(50, 9, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8"})
 }
