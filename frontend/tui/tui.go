@@ -270,6 +270,12 @@ func (t *tui) onKey(k key, r rune) {
 		t.mu.Lock()
 		t.showReasoning = !t.showReasoning
 		t.mu.Unlock()
+	case keyTab:
+		// tab completes a command name against the known set (decision
+		// 9's hint): to the longest common prefix, plus the trailing
+		// space when the match is unique. Anywhere else, ignored.
+		t.completeCommand()
+		t.paintInput()
 	default:
 		t.ed.apply(k, r)
 		t.paintInput()
@@ -673,8 +679,8 @@ func (t *tui) sessionStartLocked() string {
 // known set. The banner reprint triggers (decision 3) fire on success,
 // exactly once: new, sessions resume, models switch.
 func (t *tui) dispatch(ctx context.Context, line string) {
-	t.commit(t.theme.Paint(SlotDim, line)) // the echo (decision 5)
-	name, args := command.Parse(line)      // args: the raw remainder, the CLI's
+	// no separate echo: the committed prompt line is the echo (decision 5)
+	name, args := command.Parse(line) // args: the raw remainder, the CLI's
 	cmd, ok := t.commands[name]
 	if !ok {
 		t.commit(t.theme.Paint(SlotDim,
@@ -804,6 +810,79 @@ func (t *tui) activityLineLocked() string {
 	return line
 }
 
+// hintLocked is the inline hint for a command line being typed
+// (decision 9): fish-style ghost text after the cursor, display only,
+// never part of the buffer. While the name is being typed: the first
+// match's remainder as a ghost, plus the other candidates dim. After a
+// known name and a space: the command's description, dim. Empty when
+// the line is not a command shape (plain prompts, the // escape).
+func (t *tui) hintLocked() string {
+	text := t.inputText
+	if t.commands == nil || !strings.HasPrefix(text, "/") || strings.HasPrefix(text, "//") {
+		return ""
+	}
+	rest := text[1:]
+	if sp := strings.IndexAny(rest, " \t"); sp >= 0 {
+		name := rest[:sp]
+		if cmd, ok := t.commands[name]; ok {
+			return cmd.Description()
+		}
+		return ""
+	}
+	matches := t.matchesLocked(rest)
+	if len(matches) == 0 {
+		return ""
+	}
+	ghost := strings.TrimPrefix(matches[0], rest)
+	if len(matches) == 1 {
+		return ghost
+	}
+	return ghost + "  · " + strings.Join(matches, " ")
+}
+
+// matchesLocked: the known command names with the prefix, sorted (the
+// known list already is).
+func (t *tui) matchesLocked(prefix string) []string {
+	var out []string
+	for _, name := range t.known {
+		if strings.HasPrefix(name, prefix) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// completeCommand lands the tab (decision 9): the buffer becomes the
+// longest common prefix of the matches, plus the trailing space when
+// unique. A non-command line, no matches, or no progress: a no-op.
+func (t *tui) completeCommand() {
+	t.mu.Lock()
+	text := t.ed.text()
+	if t.commands == nil || !strings.HasPrefix(text, "/") || strings.HasPrefix(text, "//") || strings.ContainsAny(text, " \t") {
+		t.mu.Unlock()
+		return
+	}
+	matches := t.matchesLocked(text[1:])
+	t.mu.Unlock()
+	if len(matches) == 0 {
+		return
+	}
+	lcp := matches[0]
+	for _, m := range matches[1:] {
+		for !strings.HasPrefix(m, lcp) {
+			lcp = lcp[:len(lcp)-1]
+		}
+	}
+	next := "/" + lcp
+	if len(matches) == 1 {
+		next += " "
+	}
+	if next == text {
+		return
+	}
+	t.ed.setText(next)
+}
+
 // inputLineLocked is the painted input row (under mu).
 func (t *tui) inputLineLocked() string {
 	line, _ := t.inputLineAndColLocked()
@@ -831,6 +910,21 @@ func (t *tui) inputLineAndColLocked() (string, int) {
 	}
 	line := t.theme.Paint(SlotAccent, glyph) +
 		t.theme.Paint(SlotText, " "+visible)
+	// the inline hint (decision 9): ghost text after the typed text, dim,
+	// display only. Only when the text fits (a truncated line has no
+	// room) and the cursor sits at the end (mid-line edits keep the row
+	// clean); truncated to what the width leaves.
+	if t.editPos == len([]rune(text)) && visible == text {
+		if hint := t.hintLocked(); hint != "" {
+			room := t.width - prefixCols - displayWidth(text) - 2
+			if room > 1 {
+				if displayWidth(hint) > room {
+					hint = truncateWidth(t.theme, hint, room)
+				}
+				line += t.theme.Paint(SlotDim, hint)
+			}
+		}
+	}
 	col := prefixCols + visiblePrefixWidth(text, t.editPos, budget) + 1
 	return line, col
 }
