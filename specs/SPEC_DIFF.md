@@ -37,7 +37,9 @@ Schema, Exec), two verbs in one schema, selected by a required `mode`
 - `files`: the working tree against HEAD (or `ref`, optional). The tool
   shells out to `git diff --no-color -U3` in the session's cwd (the
   process's cwd; the tool takes no cwd argument) and says so in its
-  description. A non-git cwd refuses loud, naming the reason. Optional
+  description; with `ref` the form is `git diff --no-color -U3
+  <ref>`, the one-dot ref-vs-working-tree diff, never `ref..HEAD`. A
+  non-git cwd refuses loud, naming the reason. Optional
   `paths` restricts the diff. This is git being honest, not rig
   reinventing it.
 - `last`: the previous result of the same tool call vs the newest. Args
@@ -77,7 +79,10 @@ Rejected, named:
   loudly. Over the cap: the first N-1 lines are
   kept and the tail is the marker `… K more lines`, K the count of
   elided lines. Head kept: the first hunk is where the "did my change
-  apply" answer lives; the model re-asks with `n` if it wants the end.
+  apply" answer lives; the model re-reads the tool directly if it
+  wants the end (a fresh observation, and `identical` confirms the
+  output held). `n` is not the escape hatch: it picks an older
+  observation, it does not page the diff.
 - An empty diff is the word `identical`, not an empty string (both
   verbs).
 - `files`: the body is git's own output (its `--- a/...` / `+++ b/...`
@@ -96,7 +101,7 @@ Rejected, named:
 - ANSI in the reply: the model reads bytes; the TUI preview already
   styles what it shows (decision 6).
 - A tail-keeping cap: the head is where the first hunk names the
-  change; the tail is what the model re-asks for.
+  change; the tail is what the model re-reads directly.
 
 ### 3. CANONICALIZATION
 
@@ -122,7 +127,10 @@ the point.
 
 Edge named: an args string that fails to decode at write time (it
 should not; the provider sends JSON) lands raw, and the recorder says
-so loud: the row always lands (the autopsy is total), and the row is
+so through its existing loud voice: one stderr line
+(`rig state: session <sid>: tool call <id>: <err>`), not a new
+channel, and not a Fault (the row landed, and the turn is never
+disturbed). The row always lands (the autopsy is total); it is
 simply not findable by a canonical query.
 
 Rejected, named:
@@ -412,7 +420,8 @@ files:
 - a dirty tree's body is capped at 100 lines, the `… K more lines`
   marker exact, K counting the elided lines
 - a non-git cwd refuses loud, naming the reason (the cwd in the voice)
-- a ref is honored (the diff is against the named ref, not HEAD)
+- a ref is honored: the one-dot form `git diff <ref>` (ref vs
+  working tree), not `ref..HEAD`
 - paths are honored (the diff is restricted to them)
 - a git failure (an unknown ref) passes the stderr line through,
   prefixed
