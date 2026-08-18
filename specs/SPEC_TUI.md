@@ -322,9 +322,22 @@ five-row window that follows the cursor, and the Enter always commits
 the full text. History (up/down, in memory, session-scoped), and
 exactly the existing semantics for
 everything else: typing during a turn steers (the slot, the interrupt);
-pasted lines are separate ordered prompts (the burst rule); `/` is the
-command prefix with `//` the escape; Ctrl-C ends the session; Ctrl-D
-at an empty prompt exits; Ctrl-T toggles reasoning (decision 5).
+`/` is the command prefix with `//` the escape; Ctrl-C ends the
+session; Ctrl-D at an empty prompt exits; Ctrl-T toggles reasoning
+(decision 5).
+
+Bracketed paste: the TUI turns the mode on with raw mode (and off at
+Close), and a paste is ONE input — its newlines are text, shown as the
+return mark on the row and committed as real newlines; its control
+bytes are inert; a CRLF folds to one newline. Only the typed Enter
+submits. A terminal without the mode keeps the burst rule (pasted
+lines as separate ordered prompts — the CLI's, and the CLI keeps it
+everywhere).
+
+The kill keybinds, readline's: Esc cancels the prompt whole (the
+history draft with it; the reader names a lone Esc by the grace
+window, since a sequence's bytes arrive in one burst); Ctrl-U kills to
+the start, Ctrl-K to the end, Ctrl-W the word before the cursor.
 
 Command lines get inline help while being typed: fish-style ghost
 text on the input row, dim, display only — the first match's remainder

@@ -24,6 +24,12 @@ const (
 	keyCtrlD
 	keyCtrlT
 	keyTab
+	keyEsc         // a lone escape: clears the prompt (the reader names it, not the parser)
+	keyKillToStart // Ctrl-U
+	keyKillToEnd   // Ctrl-K
+	keyWordBack    // Ctrl-W
+	keyPasteStart  // CSI 200~: the bracketed paste opens (parser-internal)
+	keyPasteEnd    // CSI 201~: the bracketed paste closes (parser-internal)
 )
 
 // The parser states: top, the escape families (CSI, the SS3 cursor
@@ -48,6 +54,8 @@ type keyParser struct {
 	state   int
 	csi     []byte
 	utf8buf []byte
+	paste   bool // inside a bracketed paste: newlines are text, controls inert
+	cr      bool // the last paste byte was CR (a CRLF folds to one newline)
 }
 
 // next feeds one byte and reports the key it completed, if any. A text
@@ -90,7 +98,16 @@ func (p *keyParser) next(b byte) (key, rune) {
 	case stCSI:
 		if b >= 0x40 && b <= 0x7e { // the terminating byte
 			p.state = stTop
-			return csiKey(string(p.csi), b), 0
+			switch k := csiKey(string(p.csi), b); k {
+			case keyPasteStart:
+				p.paste = true
+				return keyNone, 0
+			case keyPasteEnd:
+				p.paste, p.cr = false, false
+				return keyNone, 0
+			default:
+				return k, 0
+			}
 		}
 		if b >= 0x20 && b <= 0x3f && len(p.csi) < 32 {
 			p.csi = append(p.csi, b) // a parameter (0x30-0x3f) or intermediate (0x20-0x2f) byte
@@ -122,23 +139,25 @@ func (p *keyParser) next(b byte) (key, rune) {
 			return p.next(b)
 		}
 	case stTop:
+		wasCR := p.cr
+		p.cr = false
 		switch {
 		case b == '\n' || b == '\r':
+			// inside a bracketed paste, a newline is text (the paste is
+			// one input); a CRLF folds to one. Typed, it is the Enter.
+			if p.paste {
+				if b == '\n' && wasCR {
+					return keyNone, 0
+				}
+				p.cr = b == '\r'
+				return keyText, '\n'
+			}
 			return keyEnter, 0
-		case b == 0x7f || b == 0x08:
-			return keyBackspace, 0
-		case b == 0x03:
-			return keyCtrlC, 0
-		case b == 0x04:
-			return keyCtrlD, 0
-		case b == 0x14:
-			return keyCtrlT, 0
 		case b == 0x09:
+			if p.paste {
+				return keyText, '\t'
+			}
 			return keyTab, 0
-		case b == 0x01:
-			return keyHome, 0
-		case b == 0x05:
-			return keyEnd, 0
 		case b == 0x1b:
 			p.state = stEsc
 		case b >= 0x20 && b < 0x7f:
@@ -148,6 +167,26 @@ func (p *keyParser) next(b byte) (key, rune) {
 		case b >= 0xc0:
 			p.utf8buf = []byte{b}
 			p.state = stUTF8
+		case p.paste:
+			// a pasted control byte: consumed, never an action.
+		case b == 0x7f || b == 0x08:
+			return keyBackspace, 0
+		case b == 0x03:
+			return keyCtrlC, 0
+		case b == 0x04:
+			return keyCtrlD, 0
+		case b == 0x14:
+			return keyCtrlT, 0
+		case b == 0x01:
+			return keyHome, 0
+		case b == 0x05:
+			return keyEnd, 0
+		case b == 0x15:
+			return keyKillToStart, 0
+		case b == 0x0b:
+			return keyKillToEnd, 0
+		case b == 0x17:
+			return keyWordBack, 0
 		}
 		return keyNone, 0
 	}
@@ -179,6 +218,10 @@ func csiKey(params string, term byte) key {
 			return keyEnd
 		case "3":
 			return keyDelete
+		case "200":
+			return keyPasteStart
+		case "201":
+			return keyPasteEnd
 		}
 	}
 	return keyNone
@@ -249,6 +292,29 @@ func (e *editor) apply(k key, r rune) (string, bool) {
 		e.pos = 0
 	case keyEnd:
 		e.pos = len(e.buf)
+	case keyEsc:
+		// cancels the prompt: the line is dropped, the history trip
+		// abandoned (the draft with it — the Esc is the discard).
+		e.buf, e.pos = nil, 0
+		e.histPos = -1
+		e.draft = ""
+	case keyKillToStart:
+		e.buf = append([]rune{}, e.buf[e.pos:]...)
+		e.pos = 0
+	case keyKillToEnd:
+		e.buf = e.buf[:e.pos]
+	case keyWordBack:
+		// the word before the cursor: trailing spaces, then the run of
+		// non-spaces (readline's unix-word-rubout).
+		i := e.pos
+		for i > 0 && e.buf[i-1] == ' ' {
+			i--
+		}
+		for i > 0 && e.buf[i-1] != ' ' {
+			i--
+		}
+		e.buf = append(e.buf[:i], e.buf[e.pos:]...)
+		e.pos = i
 	case keyUp:
 		// the newest entry first (the last submitted), then older —
 		// the editor's history order.

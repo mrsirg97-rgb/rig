@@ -76,6 +76,17 @@ func TestKeyParserTable(t *testing.T) {
 		{"osc title", []byte{0x1b, ']', '0', ';', 'r', 'i', 'g', 0x07}, []key{}},
 		{"osc string terminator", []byte{0x1b, ']', '0', ';', 'x', 0x1b, '\\'}, []key{}},
 		{"tab control", []byte{0x09}, []key{keyTab}},
+		{"ctrl u kill to start", []byte{0x15}, []key{keyKillToStart}},
+		{"ctrl k kill to end", []byte{0x0b}, []key{keyKillToEnd}},
+		{"ctrl w word back", []byte{0x17}, []key{keyWordBack}},
+		{"paste newlines are text", []byte("\x1b[200~a\nb\x1b[201~\n"),
+			[]key{keyText, keyText, keyText, keyEnter}},
+		{"paste crlf folds", []byte("\x1b[200~a\r\nb\x1b[201~"),
+			[]key{keyText, keyText, keyText}},
+		{"paste controls inert", []byte("\x1b[200~a\x03\x7f\x1b[201~"),
+			[]key{keyText}},
+		{"paste tab is text", []byte("\x1b[200~\ta\x1b[201~"),
+			[]key{keyText, keyText}},
 		{"orphan continuation", []byte{0x61, 0x80}, []key{keyText}},
 	}
 	for _, tc := range cases {
@@ -190,5 +201,43 @@ func TestEditorHistoryUpDown(t *testing.T) {
 	}
 	if len(e.hist) != 3 {
 		t.Fatalf("the blank line was recorded: %v", e.hist)
+	}
+}
+
+// TestEditorKillOps (decision 9's keybinds): Ctrl-U to the start,
+// Ctrl-K to the end, Ctrl-W the word before the cursor, Esc the whole
+// prompt (the history draft with it).
+func TestEditorKillOps(t *testing.T) {
+	e := newEditor()
+	feed := func(s string) {
+		for _, r := range s {
+			e.apply(keyText, r)
+		}
+	}
+	feed("alpha beta  gamma")
+	e.apply(keyWordBack, 0)
+	if got := e.text(); got != "alpha beta  " {
+		t.Fatalf("after ^W = %q, want the last word gone", got)
+	}
+	e.apply(keyWordBack, 0)
+	if got := e.text(); got != "alpha " {
+		t.Fatalf("after ^W ^W = %q, want the spaces then the word gone", got)
+	}
+	e.apply(keyKillToStart, 0)
+	if got := e.text(); got != "" || e.pos != 0 {
+		t.Fatalf("after ^U = %q pos %d, want empty at 0", got, e.pos)
+	}
+	feed("keep tail")
+	e.apply(keyHome, 0)
+	for i := 0; i < 4; i++ {
+		e.apply(keyRight, 0)
+	}
+	e.apply(keyKillToEnd, 0)
+	if got := e.text(); got != "keep" {
+		t.Fatalf("after ^K = %q, want keep", got)
+	}
+	e.apply(keyEsc, 0)
+	if got := e.text(); got != "" || e.pos != 0 {
+		t.Fatalf("after Esc = %q pos %d, want the prompt cancelled", got, e.pos)
 	}
 }

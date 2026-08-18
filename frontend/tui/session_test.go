@@ -944,3 +944,52 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 		t.Fatalf("the committed line = %q, want the full text", line)
 	}
 }
+
+// TestPasteAndEscKeybinds (decision 9's bracketed paste and Esc): a
+// bracketed paste is ONE input — its newlines are text, shown as the
+// return mark on the row and committed as real newlines — and Esc
+// cancels the prompt whole. Un-bracketed input keeps the burst rule.
+func TestPasteAndEscKeybinds(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithTicks(make(chan time.Time)))
+	in := make(chan string, 1)
+	go func() { l, _ := s.input(); in <- l }()
+	s.await(promptMark(th))
+
+	// a paste with a blank line and a numbered block: one row, marks.
+	s.si.feed("\x1b[200~do the thing\n\n1) first\x1b[201~")
+	s.await(th.Paint(SlotText, " do the thing⏎⏎1) first"))
+
+	// Esc cancels it whole; what follows is a fresh prompt. The clear
+	// lands after the grace window (the lone-Esc debounce), so the test
+	// awaits the cancelled state before typing — bytes on the Esc's
+	// heels would read as a sequence, exactly as at a real terminal.
+	s.si.feed("\x1b")
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s.fe.mu.Lock()
+		cleared := s.fe.inputText == ""
+		s.fe.mu.Unlock()
+		if cleared {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out awaiting the Esc clear")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	s.si.feed("ok\n")
+	if line := <-in; line != "ok" {
+		t.Fatalf("after Esc the line = %q, want ok (the paste cancelled)", line)
+	}
+
+	// a pasted Enter submits nothing; the typed Enter after it commits
+	// the real newlines.
+	go func() { l, _ := s.input(); in <- l }()
+	s.si.feed("\x1b[200~two\nlines\x1b[201~\n")
+	if line := <-in; line != "two\nlines" {
+		t.Fatalf("the pasted line = %q, want the newline kept", line)
+	}
+}
