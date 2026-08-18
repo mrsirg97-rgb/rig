@@ -2,13 +2,14 @@
 // (SPEC_TUI): the same events, the same commands, the same tools,
 // rendered in pane's design language with fewer parts. The terminal
 // owns scrollback (decision 1); the TUI commits blocks on event
-// boundaries and redraws a live region of at most two lines.
+// boundaries and redraws a live region capped at decision 2's rows
+// (the menu's, the input's, the status).
 //
-// The split: theme.go, banner.go, commit.go, and tools_render.go are
+// The split: theme.go, status.go, commit.go, and tools_render.go are
 // pure renderers (state in, bytes out); live.go turns them into the
 // escape stream; input.go is the key parser and line editor; tui.go is
 // the Frontend shell (the reader goroutine, the command dispatch, the
-// banner reprint triggers).
+// completion menu, the status line's refresh points).
 package tui
 
 import (

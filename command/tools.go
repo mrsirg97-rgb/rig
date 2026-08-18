@@ -28,6 +28,20 @@ func (t toolCmd) Description() string {
 	return "over the same " + t.name + " tool the model gets: the line is parsed into the tool's args, the reply printed verbatim"
 }
 
+// Sub is the TUI's argument hints (SPEC_TUI 9, amended): the todo
+// verbs, the menu's rows. The scheduler's line has no such hints
+// (its syntax is the name, the prompt, and the cron).
+func (t toolCmd) Sub() []Sub {
+	if t.name != "todo" {
+		return nil
+	}
+	return []Sub{
+		{Name: "read", Desc: "the queue"},
+		{Name: "create", Desc: "the queue, the task's text"},
+		{Name: "done", Desc: "a task's id"},
+	}
+}
+
 func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	e, err := EnvOf(env)
 	if err != nil {
@@ -74,8 +88,12 @@ func todoArgs(args string) (json.RawMessage, error) {
 			"action": "create",
 			"tasks":  []map[string]any{{"text": text}},
 		})
-	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "fail" || fields[0] == "retry") && len(fields) == 2:
-		return json.Marshal(map[string]any{"action": fields[0], "id": fields[1]})
+	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "retry") && len(fields) == 2:
+		action := fields[0]
+		if action == "done" {
+			action = "complete" // the menu's spelling (SPEC_TUI 9), the tool's verb
+		}
+		return json.Marshal(map[string]any{"action": action, "id": fields[1]})
 	case fields[0] == "move" && len(fields) == 3:
 		pos, err := strconv.Atoi(fields[2])
 		if err != nil {
@@ -90,7 +108,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return nil, errors.New("todo: read takes no args (todo read)")
 	case fields[0] == "create":
 		return nil, errors.New("todo: create needs text (todo create <text…>)")
-	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "fail" || fields[0] == "retry":
+	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "retry":
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":
 		return nil, errors.New("todo: move takes an id and a position (todo move <id> <pos>)")

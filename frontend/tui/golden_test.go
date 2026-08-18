@@ -7,7 +7,6 @@ import (
 	"flag"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,16 +46,35 @@ func (s *scriptInput) close() { close(s.ch) }
 // Notify for the turn's events, EOF at the end. The out buffer is the
 // whole byte stream of the session — the golden's subject.
 // lockBuf is the harness's out buffer: the frontend's goroutines write
-// it and the test's goroutine reads it, so both sides lock.
+// it and the test's goroutine reads it, so both sides lock. writes
+// records each Write's size — the write boundaries the tty delivers —
+// so the harness can feed the stream write by write.
 type lockBuf struct {
-	mu sync.Mutex
-	b  bytes.Buffer
+	mu      sync.Mutex
+	b       bytes.Buffer
+	writes  []int
 }
 
 func (l *lockBuf) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.writes = append(l.writes, len(p))
 	return l.b.Write(p)
+}
+
+// writeChunks splits the buffer into its Write chunks (the tty's
+// delivery boundaries, in order).
+func (l *lockBuf) writeChunks() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	all := l.b.String()
+	var out []string
+	off := 0
+	for _, n := range l.writes {
+		out = append(out, all[off:off+n])
+		off += n
+	}
+	return out
 }
 
 func (l *lockBuf) Bytes() []byte {
@@ -144,9 +162,9 @@ func goldenStream(t *testing.T, th Theme, width int, news string) string {
 	s := newScriptedSession(t,
 		WithTheme(th),
 		WithWidth(width),
-		WithBanner(func(ctx context.Context) BannerIn {
-			return BannerIn{
-				Model: "huihui3.8", Effort: "xhigh", Used: 84300, Window: 262144,
+		WithStatus(func(ctx context.Context) StatusIn {
+			return StatusIn{
+				Model: "huihui3.8", Effort: "xhigh", Window: 262144,
 				Up: 214000, Down: 18200, CacheRead: 187000,
 			}
 		}),
@@ -163,7 +181,9 @@ func goldenStream(t *testing.T, th Theme, width int, news string) string {
 		}
 		in <- line
 	}()
-	s.await(th.Paint(SlotRule, strings.Repeat(th.Glyph(GlyphDot), width)))
+	// the startup block's settled state: its last row (the session
+	// totals) stands on the stream before the first prompt lands.
+	s.await(th.Paint(SlotDim, "up 214k down 18k · cache r 187k 87%"))
 	s.si.feed("hello\n")
 	if line := <-in; line != "hello" {
 		s.t.Fatalf("the first prompt = %q, want hello", line)

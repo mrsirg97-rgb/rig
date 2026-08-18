@@ -21,17 +21,21 @@ every number and glyph is a reading of what the runtime already emits.
 - Scrollback-native: the terminal owns history; rig decorates a small
   live tail. No alternate screen, ever (decision 1).
 - Committed blocks on event boundaries: tool rows with glyphs and
-  durations, dim reasoning, command output, the banner (decisions 2-5).
-- The banner: two rows, top of session and reprinted on change, model
-  identity and accounting (decision 3).
+  durations, dim reasoning, command output, the startup block
+  (decisions 2-5).
+- The status line: one dim live row under the input, the model and
+  the context used over the window, updated from the usage events;
+  the banner's other content commits once, at session start
+  (decision 3, amended).
 - One renderer per tool for todo and scheduler, used byte-identically
   by the tool-result path and the command path (decision 6).
 - Four shipped themes (`oled`, `paper`, `p1`, `p3`), a glyph table with
   an `ascii` set, and `theme.json` as a user palette: this spec owns
   the schema SPEC_CONFIG reserved (decision 7).
 - Retro as texture, never information (decision 8).
-- Input: single-line editing with history, the existing steering and
-  Ctrl-C semantics unchanged (decision 9).
+- Input: single-line editing with history, a completion menu over the
+  command names and their argument hints, the existing steering and
+  Ctrl-C semantics unchanged (decision 9, amended).
 - Two dependencies, named and capped: `golang.org/x/term` and
   `github.com/mattn/go-runewidth` (decision 10).
 
@@ -42,8 +46,9 @@ every number and glyph is a reading of what the runtime already emits.
   these (decision 1's rejection).
 - No fonts and no painted backgrounds: the terminal owns both; the
   docs recommend a setup (decision 7).
-- No pinned header: the banner is committed, not pinned. A pinned
-  variant is named future work, not built (decision 3).
+- No pinned header: the status line is live, not pinned, and the
+  startup block is committed, not pinned. A pinned variant is named
+  future work, not built (decision 3).
 - No multiline editor: pasted lines are separate prompts (the 0.2.0
   burst rule); a heredoc-style composer is a later extension on the
   same seam.
@@ -62,15 +67,18 @@ every number and glyph is a reading of what the runtime already emits.
 frontend/tui/         NEW package, main module (decision 10 names the
                       module question and the rejection)
   tui.go              the Frontend: Input, Notify, the dispatcher
-  live.go             the live region: spinner line + input line,
-                      cursor-up redraw, width handling
+  live.go             the live region: the menu, activity, pending,
+                      input, and status rows; cursor-up redraw, width
+                      handling, the one-op-one-write frame
   commit.go           committed blocks: turn text, reasoning, tool
                       rows, command output, the usage line
-  banner.go           the two-row banner and its reprint triggers
+  status.go           the status line, the startup block, and the
+                      snapshot's refresh points
   tools_render.go     the todo and scheduler block renderers (one
                       renderer, both doors)
-  input.go            raw mode, the key parser, single-line editing,
-                      history
+  input.go            raw mode, the key parser (Tab and Shift-Tab),
+                      single-line editing, history, the completion
+                      menu's state
   theme.go            the palette table (oled, paper, p1, p3), the
                       glyph table (unicode, ascii), theme.json schema
                       and merge
@@ -90,8 +98,9 @@ docs/SETUP.md         the recommended terminal setup (fonts, an
 ### 1. Scrollback-native; the alternate screen rejected
 
 The terminal owns history. rig prints committed blocks into normal
-scrollback and redraws only a live region of at most three lines at
-the bottom (decision 2). Scrolling is the terminal's and tmux's;
+scrollback and redraws only a live region at the bottom (the cap,
+decision 2: the menu's rows, the input's up to five rows, and the
+status row). Scrolling is the terminal's and tmux's;
 resize costs nothing for history; phone-over-ssh behaves; `tmux
 capture-pane` and copy-mode keep working; a crashed TUI leaves a
 readable transcript in the terminal.
@@ -119,12 +128,26 @@ alternate screen.
 ### 2. The live region and the commit points
 
 Everything above the live region is immutable printed history.
-Everything dynamic lives in the last lines:
+Everything dynamic lives in the last lines, top to bottom: the
+pending prose line while one is open, the activity line during a turn
+(the spinner, then the current phase: `- thinking`, `| bash`), the
+completion menu when one is open (decision 9: its candidate rows,
+then its tail row), the input line (typing steers, as today), and the
+status line (decision 3) — always the region's last row. The activity
+line locks directly above the menu and input: streamed text flows
+into scrollback above the loader, never under it (the amended order;
+the first order put the loader above the pending line, and a wrapping
+stream grew under it).
 
-- during a turn: one activity line (the spinner, then the current
-  phase: `- thinking`, `| bash`), then the input line (typing steers,
-  as today);
-- between turns: the input line alone.
+- during a turn: the pending line while it is open, the activity line
+  under it, the input line under that;
+- between turns: the input line, the status line under it.
+
+The cap, amended over decision 1's at-most-three: up to six menu
+rows, the menu's tail row when the candidates run past six, the input
+(itself up to five rows), and the status row. The menu rows are live
+rows: repainted in place, never committed — the wf suspension gate
+keeps them off the pager's screen, like every other live row.
 
 The commit points are the events, exactly:
 
@@ -134,41 +157,80 @@ The commit points are the events, exactly:
 - `ToolStart`: the activity line switches to the tool; `ToolResult`:
   the tool row commits with glyph, detail, outcome, duration
   (decision 4);
-- `Done`: the turn's text is complete; `TurnEnd`: the usage line
-  commits (`up 3.2k down 136 · cache r 918 92%`, pane's shaping) and
-  the live region resets;
-- `Compacted`: the compact line commits, then the banner reprints
-  (decision 3);
+- `Done`: the turn's text is complete, and the status line's used
+  takes its `Usage` (decision 3);
+- `TurnEnd`: the usage line commits (`up 3.2k down 136 · cache r 918
+  92%`, pane's shaping) and the live region resets;
+- `Compacted`: the compact line commits, and the status line's used
+  takes the compact's `Kept` (decision 3);
 - unknown events: ignored (the compat rule; the CLI's discipline).
 
 The live region redraw is cursor-up, clear-line, reprint: the only
-cursor arithmetic in the program, over at most three lines. Committed
+cursor arithmetic in the program, over at most the cap. Committed
 lines are `fmt.Fprint` and the terminal's own wrapping. On resize only
 the live region repaints (SIGWINCH; history is the terminal's
 problem, already solved).
 
-### 3. The banner: two rows, committed, reprinted on change
+One op, one write (the write gate, `live.go`): an op's escapes and
+rows are buffered and flushed to the terminal as a single write, so
+the terminal sees every repaint whole — no partial frame between the
+clear and the reprint, and no row left ending exactly at the last
+column across a write boundary. The tear this names: a repaint was
+many small writes, and a row written to exactly the width leaves the
+terminal's deferred wrap pending at the write boundary; a terminal
+that resolves the wrap at the flush shifts the cursor a row, and the
+next op's cursor-up tally is off by a row — the clear misses the top
+row (the indicator) and it lands between committed text.
+
+### 3. The status line: one live row, a one-shot startup block
+
+The two-row banner is deleted; its content gets the two homes
+named here.
+
+The live half is the status line: the region's last row (decision 2),
+dim, `model · used/window` —
 
 ```
-huihui3.8 · xhigh · 84k/262k 32%
+huihui3.8 · 41.2k/262k
+```
+
+— before the first usage, the model alone. The context part keeps
+the banner's 70/90 coloring (dim under 70, warn at 70, error at 90;
+`formatTokens` shaping). This is the always-visible info region the
+banner gave up on, and the named cost inverts: the mid-turn context
+number is now live, and the identity row is read once, at start.
+
+`used` is the frontend's own arithmetic over the usage events it
+already receives (the seam does not move): the last `Done`'s
+`Usage.Prompt + Usage.Completion` — exactly the `ContextTokens` the
+loop stamps on the last assistant message, the compaction trigger's
+anchor — and, after a `Compacted`, the compact's `Kept` (the
+trigger's own estimate of the kept tail). The model identity and the
+window come from the root's closure (the banner's old door),
+refreshed at the call points the banner reprint used to fire —
+session start, `/new`, `sessions resume`, and a `models` switch —
+and never per repaint: the closure is a store read, and a live row
+repaints on every keystroke.
+
+The committed half is the startup block (the choice, named: one
+committed block at session start, not deleted): the banner's
+identity row without its context part, its session row, and the
+scheduler news line (decision 6) when there is one — dim, no dotted
+rules (they enclosed the banner, and the banner is gone):
+
+```
+huihui3.8 · xhigh
 up 214k down 18.2k · cache r 187k 92%
+· j5 failed 14:30 · scheduler runs j5
 ```
 
-Row 1: model id, effort, context used over the window with percent,
-colored at 70/90 (the models row's numbers; context used is the last
-assistant message's `ContextTokens` plus the estimate of what
-followed, the compaction trigger's own math). Row 2: session totals:
-prompt up, completion down, cache read and hit rate, `formatTokens`
-shaping. Enclosed in dotted rules (decision 8), lowercase.
+The reprint triggers are amended to match: `/new`, `sessions resume`,
+and a `models` switch refresh the status line's snapshot (and reset
+its used number where the session did: `new`, `resume`); a
+`Compacted` no longer reprints a block at all. Between refreshes the
+per-turn usage line keeps the running numbers in the scrollback where
+they happened (decision 2, unchanged).
 
-Reprint triggers, exactly: session start, `/new`, `/sessions resume`,
-`/models` switch, and after a `Compacted` (the one moment the context
-number jumps). Between banners, the per-turn usage line keeps the
-running numbers in the scrollback where they happened.
-
-The banner replaces pane's persistent footer: there is no
-always-visible info region. Named cost: no live mid-turn context
-number; the activity line and the turn-end usage line carry the need.
 A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
 drop scrolled lines from scrollback, which trades away decision 1.
@@ -211,7 +273,8 @@ The committed prompt line is a command's only echo (a separate dim
 copy was built and removed: it doubled the line); the output commits
 as a plain block, exactly the CLI's bytes: SPEC_COMMANDS' output contracts are
 the render, restyled only by theme color. The scheduler session-start
-line (decision 6) and the banner are the only unprompted blocks.
+line (decision 6) and the startup block (decision 3) are the only
+unprompted blocks.
 
 ### 6. todo and scheduler: one renderer, both doors
 
@@ -243,9 +306,9 @@ already carries): no new tool surface, no reaching into stores from
 the render path. If parsing fails (a future voice change), the raw
 reply commits as-is: degrade to the CLI, never hide.
 
-One ambient line, only one: at session start, after the banner, if
-the workspace scheduler store has news since the last session in this
-cwd (a failed or first-completed run), one dim line:
+One ambient line, only one: at session start, in the startup block
+(decision 3), if the workspace scheduler store has news since the last
+session in this cwd (a failed or first-completed run), one dim line:
 `· j5 failed 14:30 · scheduler runs j5`. Absent news, nothing. This
 is a read of the store the root already opens, the exact analog of
 todo's stale footer; it is the only place the TUI reads a store, and
@@ -307,10 +370,10 @@ The governing sentence: color and glyphs carry state exactly as the
 design language defines; the retro layer touches case, rules, the
 spinner, and palette only. The rules:
 
-- all lowercase, everywhere: headers, refusals, the banner (the house
-  voice, committed to);
-- rules are dotted (`·`) lines, banner-enclosing; no box drawing
-  beyond them;
+- all lowercase, everywhere: headers, refusals, the status line and
+  the startup block (the house voice, committed to);
+- rules are dotted (`·`) lines — they enclosed the deleted banner
+  (decision 3), and no block draws one now; no box drawing at all;
 - the spinner is `|/-\`, four frames, on the activity line only;
 - durations and counts stay plain (`0.4s`, `12k`): nothing humanized,
   nothing animated;
@@ -321,8 +384,9 @@ spinner, and palette only. The rules:
 Wrapping, the second sinkhole rule: committed lines are wrapped by the
 terminal (print and flow); rig truncates only tool previews and does
 so loudly (`· k lines elided ·`). The TUI never measures committed
-prose; it measures only the live region and the banner (runewidth,
-decision 10), both built to fit 50 columns.
+prose; it measures only the live region (menu rows included, decision
+9) and the startup block (runewidth, decision 10), both built to fit
+50 columns.
 
 ### 9. Input
 
@@ -350,21 +414,49 @@ The kill keybinds, readline's: Esc cancels the prompt whole (the
 history draft with it; the reader names a lone Esc by the grace
 window, since a sequence's bytes arrive in one burst); Ctrl-U kills to
 the start, Ctrl-K to the end, Ctrl-W the word before the cursor.
+Esc precedence, outermost first, amended: a pager up closes the
+pager; else a menu open closes the menu (the input keeps its text);
+else Esc cancels the prompt whole, as before.
 
-Command lines get inline help while being typed: fish-style ghost
-text on the input row, dim, display only — the first match's remainder
-plus the other candidates while the name is typed, the command's
-description after a known name and a space; nothing for plain prompts
-and the `//` escape; drawn only when the cursor is at the end and the
-line fits. Tab completes: the longest common prefix of the matches,
-plus the trailing space when unique; a no-op anywhere else.
+Command lines get completion while being typed, one machinery for the
+name and its arguments. The candidates are the known command names
+with the typed prefix while the name is being typed, and, after a
+complete name and a space, the command's argument hints — an
+additive, optional interface in `command` (`Sub() []Sub`,
+`Sub{Name, Desc string}`): the verb commands implement it (`/todo`
+its actions, `/models` the table's known names from the Env, their
+roles the descriptions). A command without hints keeps today's
+behavior: its `Description()` as the ghost. Frontend-only: the seam
+does not move, and the CLI never sees the menu.
 
-Raw mode via `x/term`; the key parser covers the named keys (Tab
-included) and ignores unrecognized sequences (never crash on an exotic
-terminal).
-Named gaps, deliberate: no multiline composer, no history persistence,
-no completion. Each is a later extension inside `input.go`; none
-touches a seam.
+- two or more candidates: the menu, above the input, inside the live
+  region (decision 2's cap): one row per candidate, `name  desc`, the
+  name in the accent, the description in text, the selected row
+  inverted. A menu row is one terminal row (decision 10: the live
+  region is measured): the description takes what the width leaves
+  after the name and is dotted when it overflows, never wrapped. At
+  most six rows show; the window follows the selection like the
+  input's five-row window does, and a dim `… N more` tail counts the
+  candidates past the window. Tab cycles the selection down, Shift-Tab
+  up (CSI Z, added to the parser), Enter accepts the selection into
+  the input — the typed prefix replaced by the candidate, a trailing
+  space, never dispatching — and Esc closes the menu until the input
+  changes.
+- exactly one candidate: the ghost, today's rule — the remainder, dim,
+  display only, drawn only when the cursor is at the end and the line
+  fits — and Tab completes it, plus the trailing space. Enter over a
+  showing ghost completes first and then submits: the row promised the
+  completion, and the typed prefix alone would dispatch as an unknown
+  command (`/m⏎` runs `models`).
+- the phases never mix: name candidates while the name is typed,
+  argument candidates after the name and a space, nothing for plain
+  prompts and the `//` escape.
+
+Raw mode via `x/term`; the key parser covers the named keys (Tab and
+Shift-Tab included) and ignores unrecognized sequences (never crash on
+an exotic terminal).
+Named gaps, deliberate: no multiline composer, no history persistence.
+Each is a later extension inside `input.go`; none touches a seam.
 
 ### 10. Placement and dependencies
 
@@ -402,21 +494,45 @@ where the CI box allows and skip cleanly where not.
   columns, in `oled` and in `ascii`+`p1`: the exact bytes. The same
   stream through the plain CLI still matches the CLI's goldens (the
   TUI adds, never changes, the CLI).
-- the banner: content from a scripted session (the two rows' exact
-  bytes); every reprint trigger fires it exactly once (start, new,
-  resume, switch, compacted); no other event reprints it.
+- the startup block and the status line: the block's exact bytes from
+  a scripted session (the identity row, the session row, the news line
+  when there is one), committed exactly once at start and by no other
+  event or command; the status row is the model alone before the
+  first usage, `model · used/window` after a `Done` (its
+  Prompt + Completion), and the compact's `Kept` after a `Compacted`;
+  the snapshot (model, window) refreshes on `new` / `sessions
+  resume` / a `models` switch and the root's closure is read at those
+  points only.
 - both doors: the todo and scheduler blocks byte-equal between the
   tool-result path and the command path, minus the opening line.
 - the live region: an escape-capture harness asserts the redraw is
-  cursor-up/clear/reprint over at most three lines, and that committed
-  bytes are never rewritten (the immutability invariant, decision 1).
+  cursor-up/clear/reprint over at most the region's cap (decision 2),
+  and that committed bytes are never rewritten (the immutability
+  invariant, decision 1); one op is one write to the terminal (the
+  write gate, decision 2).
+- the tear: a stream of multi-line wrapped reasoning, replayed write
+  by write through a flush-aware vt (a pending wrap resolves at a
+  write boundary, the way a terminal's flush may), lands no indicator
+  row between committed lines and the screen's rows exact; the same
+  stream through the plain deferred-wrap vt stays exact (both models
+  named, decision 2).
 - input: the key parser table (arrows, home/end, backspace across a
-  wide glyph, an unrecognized CSI ignored); history up/down; paste of
-  three lines becomes three prompts in order (the burst rule, through
-  the TUI's reader); Ctrl-T toggles subsequent reasoning only; the
-  inline hint (ghost + candidates while typing, the description after
-  a known name, nothing for plain prompts) and Tab completion (the
-  common prefix; the trailing space when unique).
+  wide glyph, Shift-Tab as CSI Z, an unrecognized CSI ignored);
+  history up/down; paste of three lines becomes three prompts in
+  order (the burst rule, through the TUI's reader); Ctrl-T toggles
+  subsequent reasoning only; the completion menu (the rows' exact
+  bytes — the name in the accent, the selected row inverted — the
+  six-row cap with the `… N more` tail, the window following the
+  selection, Tab down and Shift-Tab up cycling, Enter accepting the
+  selection without dispatching, Esc closing the menu and the
+  precedence pager > menu > prompt-clear, the menu reopening when the
+  input changes) — and live-row behavior: the menu repaints in place
+  and never commits, and stays off the pager's screen while it is up;
+  the argument hints (`/todo`'s actions, `/models`' known names and
+  roles, the unique-candidate ghost and Tab completing it with the
+  trailing space, a command without hints keeping its description
+  ghost); a unique command name keeps today's completion (the full
+  name, the trailing space).
 - themes: theme.json schema cases (unknown base, unknown slot, bad
   hex, glyphs value), the file-wins-over-settings rule, the 256
   downconvert (a known hex to a known index); the p1 ramp renders

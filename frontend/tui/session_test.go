@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/command"
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
@@ -45,9 +46,9 @@ func oledTheme(t *testing.T) Theme {
 	return th
 }
 
-func bannerFixture() BannerIn {
-	return BannerIn{
-		Model: "huihui3.8", Effort: "xhigh", Used: 84300, Window: 262144,
+func statusFixture() StatusIn {
+	return StatusIn{
+		Model: "huihui3.8", Effort: "xhigh", Window: 262144,
 		Up: 214000, Down: 18200, CacheRead: 187000,
 	}
 }
@@ -127,9 +128,30 @@ func (s *scriptedSession) prompt(marker, feed string) string {
 // TestBannerReprintTriggers is the named banner case: the triggers fire
 // it exactly once — start, new, sessions resume, models switch, and
 // the Compacted event — and no other event reprints it.
-func TestBannerReprintTriggers(t *testing.T) {
+// TestStatusLineRefresh is decision 3's contract through the frontend:
+// the startup block commits exactly once (the session start), the
+// events move the status line's numbers (the last Done's usage, the
+// compact's Kept), and the refresh points (new, sessions resume, a
+// models switch) re-snapshot the row — never the block.
+func TestStatusLineRefresh(t *testing.T) {
 	th := oledTheme(t)
-	row1Line := strings.Split(RenderBanner(th, bannerFixture(), 50), "\n")[1]
+	blockRow := strings.Split(RenderStatus(th, statusFixture()), "\n")[1]
+	// the status line's door: the first call (the session start) takes
+	// the s1 numbers; every later call (a refresh point) returns the
+	// s2 context — a different model, so a refresh is visible in the
+	// stream and the call count is the door's.
+	model, window := "huihui3.8", 262144
+	calls := 0
+	statusIn := func(ctx context.Context) StatusIn {
+		calls++
+		if calls == 1 {
+			return StatusIn{
+				Model: model, Effort: "xhigh", Window: window,
+				Up: 214000, Down: 18200, CacheRead: 187000,
+			}
+		}
+		return StatusIn{Model: "model2", Effort: "low", Window: 131072}
+	}
 
 	newC := &fakeCmd{name: "new", out: "new session: s2"}
 	sessC := &fakeCmd{name: "sessions", out: "resumed s3"}
@@ -137,38 +159,41 @@ func TestBannerReprintTriggers(t *testing.T) {
 	compactC := &fakeCmd{name: "compact", out: "nothing to drop"}
 	s := newScriptedSession(t,
 		WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(statusIn),
 		WithCommands([]core.Command{newC, sessC, modelsC, compactC}, nil),
 		WithTicks(make(chan time.Time)),
 	)
-	count := func() int { return bytes.Count(s.out.Bytes(), []byte(row1Line)) }
+	blockCount := func() int { return bytes.Count(s.out.Bytes(), []byte(blockRow)) }
 
-	// the session start: exactly once.
+	// the session start: the block exactly once.
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt one = %q, want go", got)
 	}
-	if got := count(); got != 1 {
-		t.Fatalf("the session start reprinted the banner %d times, want 1", got)
+	if got := blockCount(); got != 1 {
+		t.Fatalf("the session start committed the block %d times, want 1", got)
 	}
 
-	// a plain event stream: no reprint.
+	// a plain event stream: no block; the status line takes the Done's
+	// usage.
 	s.fe.Notify(core.TextDelta{Text: "hi\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10}})
-	if got := count(); got != 1 {
-		t.Fatalf("a plain turn reprinted the banner: %d, want 1", got)
+	s.await(th.Paint(SlotDim, "huihui3.8 · ") + th.Paint(SlotDim, "10/262k"))
+	if got := blockCount(); got != 1 {
+		t.Fatalf("a plain turn reprinted the block: %d, want 1", got)
 	}
-	// the Compacted event: one more.
-	s.fe.Notify(core.Compacted{Dropped: 100, Kept: 10})
-	s.awaitCount(row1Line, 2)
-	if got := count(); got != 2 {
-		t.Fatalf("the Compacted event reprinted %d times, want 1 more (2 total)", got)
+	// the Compacted event: the compact line commits, the status line
+	// takes the Kept — the block stands.
+	s.fe.Notify(core.Compacted{Dropped: 100, Kept: 3400})
+	s.await("3.4k/262k")
+	if got := blockCount(); got != 1 {
+		t.Fatalf("the Compacted event reprinted the block: %d, want 1", got)
 	}
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	if got := count(); got != 2 {
-		t.Fatalf("the turn end reprinted the banner: %d, want 2", got)
+	if got := calls; got != 1 {
+		t.Fatalf("a turn moved the status door: %d calls, want 1", got)
 	}
 
-	// the command triggers, each exactly once. The dispatch runs inside
+	// the refresh points, each exactly once. The dispatch runs inside
 	// the Input that keeps pulling after each command.
 	in := make(chan string, 1)
 	go func() {
@@ -180,17 +205,26 @@ func TestBannerReprintTriggers(t *testing.T) {
 	}()
 	s.await(promptMark(th))
 	s.si.feed("/new\n")
-	s.awaitCount(row1Line, 3)
+	s.await("model2")
+	if got := calls; got != 2 {
+		t.Fatalf("/new refreshed %d times, want 2 total", got)
+	}
 	s.si.feed("/sessions resume s3\n")
-	s.awaitCount(row1Line, 4)
+	s.await("resumed s3")
+	if got := calls; got != 3 {
+		t.Fatalf("/sessions resume refreshed %d times, want 3 total", got)
+	}
 	s.si.feed("/models m2\n")
-	s.awaitCount(row1Line, 5)
-	// the compact command is not a trigger (its event would be): its
-	// output commits, the banner must not.
+	s.await("switched")
+	if got := calls; got != 4 {
+		t.Fatalf("/models m2 refreshed %d times, want 4 total", got)
+	}
+	// the compact command is not a refresh point (its event would
+	// move the row's number): its output commits, the door does not.
 	s.si.feed("/compact\n")
 	s.await("nothing to drop")
-	if got := count(); got != 5 {
-		t.Fatalf("the compact command reprinted the banner: %d, want 5", got)
+	if got := calls; got != 4 {
+		t.Fatalf("the compact command refreshed the status: %d, want 4", got)
 	}
 	// a models list (no args) is not a switch.
 	s.si.feed("/models\n")
@@ -202,10 +236,11 @@ func TestBannerReprintTriggers(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if got := count(); got != 5 {
-		t.Fatalf("the models list reprinted the banner: %d, want 5", got)
+	if got := calls; got != 4 {
+		t.Fatalf("the models list refreshed the status: %d, want 4", got)
 	}
-	// the turn after the commands.
+	// the turn after the commands: the fresh context's row takes the
+	// new Done's usage.
 	s.si.feed("go2\n")
 	select {
 	case l := <-in:
@@ -215,8 +250,13 @@ func TestBannerReprintTriggers(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out on go2")
 	}
-	if got := count(); got != 5 {
-		t.Fatalf("the banner count at the end = %d, want 5", got)
+	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 20}})
+	s.await(th.Paint(SlotDim, "model2 · ") + th.Paint(SlotDim, "20/131k"))
+	if got := blockCount(); got != 1 {
+		t.Fatalf("the block count at the end = %d, want 1", got)
+	}
+	if got := calls; got != 4 {
+		t.Fatalf("the status door moved at the end: %d calls, want 4", got)
 	}
 }
 
@@ -261,7 +301,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 
 	// the tool-result door.
 	tool := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	if got := tool.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q, want go", got)
@@ -277,7 +317,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 	// the command door.
 	todo := &fakeCmd{name: "todo", out: reply}
 	cmdS := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{todo}, nil),
 		WithTicks(make(chan time.Time)))
 	in := make(chan string, 1)
@@ -324,7 +364,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 func TestPasteBurstThreePrompts(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	mark := promptMark(th)
 
@@ -373,7 +413,7 @@ func TestPasteBurstThreePrompts(t *testing.T) {
 func TestCtrlTogglesReasoning(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q, want go", got)
@@ -408,7 +448,7 @@ func TestSchedulerNewsLine(t *testing.T) {
 	news := "· j5 failed 14:30 · scheduler runs j5"
 
 	withNews := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithNews(func(ctx context.Context) string { return news }),
 		WithTicks(make(chan time.Time)))
 	withNews.prompt(promptMark(th), "go\n")
@@ -425,7 +465,7 @@ func TestSchedulerNewsLine(t *testing.T) {
 	}
 
 	noNews := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithNews(func(ctx context.Context) string { return "" }),
 		WithTicks(make(chan time.Time)))
 	noNews.prompt(promptMark(th), "go\n")
@@ -439,7 +479,7 @@ func TestSchedulerNewsLine(t *testing.T) {
 func TestCtrlCEndSession(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	ctx, interrupt := context.WithCancel(context.Background())
 	ctx = core.WithInterrupt(ctx, interrupt)
@@ -465,7 +505,7 @@ func TestCtrlCEndSession(t *testing.T) {
 func TestCtrlDEmptyExits(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q, want go", got)
@@ -485,7 +525,7 @@ func TestCtrlDEmptyExits(t *testing.T) {
 func TestCtrlDNonBlankKept(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	if got := s.prompt(promptMark(th), "keep me\x04\n"); got != "keep me" {
 		t.Fatalf("Ctrl-D on a non-blank line = %q, want keep me (kept)", got)
@@ -500,7 +540,7 @@ func TestDispatchVoice(t *testing.T) {
 	th := oledTheme(t)
 	newC := &fakeCmd{name: "new", out: "new session: s2"}
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{newC}, nil),
 		WithTicks(make(chan time.Time)))
 	in := make(chan string, 1)
@@ -548,7 +588,7 @@ func TestDispatchVoice(t *testing.T) {
 func TestSteerSeam(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	fe, ok := interface{}(s.fe).(interface {
 		Steer(string) bool
@@ -648,7 +688,7 @@ func TestSteerSeam(t *testing.T) {
 func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	in := make(chan string, 1)
 	go func() {
@@ -706,7 +746,7 @@ func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 func TestWidePendingLineWrapsClean(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(20),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	in := make(chan string, 1)
 	go func() {
@@ -733,14 +773,10 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 	if v.err != "" {
 		t.Fatalf("harness: %s\nstream:\n%q", v.err, s.out.String())
 	}
-	rule := strings.Repeat(th.Glyph(GlyphDot), 20)
 	want := []string{
-		rule,
-		"huihui3.8 · xhigh · ", // the wide banner lines wrap at 20 too
-		"84k/262k 32%",
+		"huihui3.8 · xhigh", // the wide startup-block lines wrap at 20 too
 		"up 214k down 18k · c",
 		"ache r 187k 87%",
-		rule,
 		"❯ go",
 		"aaaaaaaaaaaaaaaaaaaa",
 		"aaaa",
@@ -749,6 +785,7 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 		"up 10 down 2 · cache",
 		" r 0 0%",
 		"❯ ",
+		"huihui3.8 · 12/262k", // the status row, fed by the Done's usage
 	}
 	if len(v.rows) != len(want) {
 		t.Fatalf("%d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
@@ -768,7 +805,7 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	in := make(chan string, 1)
 	go func() {
@@ -803,7 +840,7 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 
 	// the tool-first turn: the separator line stands before the block.
 	s2 := newScriptedSession(t, WithTheme(th), WithWidth(100),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	in2 := make(chan string, 1)
 	go func() {
@@ -838,45 +875,137 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	}
 }
 
-// The inline hint (decision 9): fish-style ghost text on the input row.
-// Typing a command prefix shows the first match's remainder plus the
-// candidates; a known name plus a space shows its description; plain
-// prompts and the // escape show nothing.
-func TestInlineHintForCommands(t *testing.T) {
+// subCmd is the Subber door on the fake set: a command with argument
+// hints (the todo verbs).
+type subCmd struct {
+	fakeCmd
+}
+
+func (subCmd) Sub() []command.Sub {
+	return []command.Sub{
+		{Name: "read", Desc: "the queue"},
+		{Name: "create", Desc: "the queue, the task's text"},
+		{Name: "done", Desc: "a task's id"},
+	}
+}
+
+// screenLines is the vt harness's replay of the stream (paint-free),
+// with the trailing cleared rows trimmed (the harness's buffer grows
+// but never shrinks; the screen's bottom is the last non-blank row).
+func screenLines(t *testing.T, s *scriptedSession, width int) []string {
+	t.Helper()
+	v := newVT(width)
+	v.feed(s.out.Bytes())
+	if v.err != "" {
+		t.Fatalf("harness: %s", v.err)
+	}
+	rows := v.rows
+	for len(rows) > 0 && rows[len(rows)-1] == "" {
+		rows = rows[:len(rows)-1]
+	}
+	return rows
+}
+
+// awaitScreen blocks until the screen is exactly total rows and its
+// last len(want) equal want (the reader and the paint are async; a
+// lone Esc's grace window must expire before the next keystroke, so
+// the test orders on the settled screen, not the byte it just fed).
+func (s *scriptedSession) awaitScreen(width int, total int, want []string) {
+	s.t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		rows := screenLines(s.t, s, width)
+		if len(rows) == total && len(rows) >= len(want) {
+			tail := rows[len(rows)-len(want):]
+			same := true
+			for i := range want {
+				if tail[i] != want[i] {
+					same = false
+					break
+				}
+			}
+			if same {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			s.t.Fatalf("timed out awaiting %d screen rows ending %q:\n%q", total, want, rows)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// TestCompletionMenu is the amended decision 9: two or more candidates
+// show the menu (the ghost does not) with the selection inverted; Tab
+// steps it down, Shift-Tab up; Enter accepts the selection into the
+// input, never dispatching; Esc closes the menu (the input keeps its
+// text); a single candidate shows the ghost's remainder — a name or a
+// sub — and a known name plus a space shows the description when the
+// command has no Sub() hints.
+func TestCompletionMenu(t *testing.T) {
 	th := oledTheme(t)
 	models := &fakeCmd{name: "models", desc: "the per-model table"}
 	moveC := &fakeCmd{name: "move", desc: "move a thing"}
+	todo := &subCmd{fakeCmd: fakeCmd{name: "todo", out: "queue reply"}}
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
-		WithCommands([]core.Command{models, moveC}, nil),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{models, moveC, todo}, nil),
 		WithTicks(make(chan time.Time)))
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
+	row := func(name, desc string) string {
+		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
+	}
+	status := "huihui3.8"
+
+	// two candidates: the menu shows, the selection inverted, first.
+	// the screen: the block's two rows, the two menu rows, the input,
+	// the status row.
 	s.si.feed("/mo")
-	s.await(th.Paint(SlotDim, "dels  · models move"))
+	s.awaitScreen(50, 6, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
+	s.await(th.Invert(row("models", "the per-model table")))
+	// Tab steps the selection down; Shift-Tab (CSI Z) steps it up.
+	s.si.feed("\t")
+	s.await(th.Invert(row("move", "move a thing")))
+	s.si.feed("\x1b[Z")
+	s.awaitScreen(50, 6, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status})
+	// Esc closes the menu; the input keeps its text. The lone Esc's
+	// grace window must settle before the next keystroke (the screen
+	// says when it has: the menu's rows are gone, the row count down).
+	s.si.feed("\x1b")
+	s.awaitScreen(50, 4, []string{"❯ /mo", status})
+	// a single candidate: the ghost — its remainder.
 	s.si.feed("d")
 	s.await(th.Paint(SlotDim, "els"))
-	// a known name + space: the description
-	s.si.feed("els ")
-	s.await(th.Paint(SlotDim, "the per-model table"))
-}
+	// Esc again: the prompt clears (the menu is already closed).
+	s.si.feed("\x1b")
+	s.awaitScreen(50, 4, []string{"❯ ", status})
 
-// Tab completion (decision 9): the longest common prefix, the trailing
-// space when unique; a no-op on plain prompts.
-func TestTabCompletesCommandNames(t *testing.T) {
-	th := oledTheme(t)
-	models := &fakeCmd{name: "models", desc: ""}
-	moveC := &fakeCmd{name: "move", desc: ""}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
-		WithCommands([]core.Command{models, moveC}, nil),
-		WithTicks(make(chan time.Time)))
-	go func() { _, _ = s.input() }()
-	s.await(promptMark(th))
-	s.si.feed("/m\t") // lcp of models/move: "mo"
-	s.await(th.Paint(SlotText, " /mo"))
-	s.si.feed("d\t") // unique: models + trailing space
-	s.await(th.Paint(SlotText, " /models "))
+	// the Sub() hints (the argument phase): the menu over the verbs.
+	s.si.feed("/todo ")
+	s.awaitScreen(50, 7, []string{
+		"read  the queue",
+		"create  the queue, the task's text",
+		"done  a task's id",
+		"❯ /todo ", status,
+	})
+	// Tab to create, Shift-Tab twice wraps to done (the cycle).
+	s.si.feed("\t")
+	s.await(th.Invert(row("create", "the queue, the task's text")))
+	s.si.feed("\x1b[Z\x1b[Z")
+	s.await(th.Invert(row("done", "a task's id")))
+	// Enter accepts the selection into the input — never dispatching.
+	s.si.feed("\n")
+	s.awaitScreen(50, 4, []string{"❯ /todo done ", status})
+	if strings.Contains(s.out.String(), "queue reply") {
+		t.Fatal("the accepted line dispatched (Enter accepts, it does not run)")
+	}
+	// a unique sub: the ghost — its remainder.
+	for i := 0; i < 5; i++ {
+		s.si.feed("\x7f")
+	}
+	s.si.feed("d")
+	s.await(th.Paint(SlotDim, "one"))
 }
 
 // TestInputWrapsAndScrolls (decision 9's five-row input): the input
@@ -888,7 +1017,7 @@ func TestTabCompletesCommandNames(t *testing.T) {
 func TestInputWrapsAndScrolls(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(10),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
@@ -910,11 +1039,14 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// races the snapshot against the keystrokes still in flight.
 	digits := strings.Repeat("0123456789", 5) + "01234567XY"
 
+	// the status row stands below the input rows (the region's last
+	// row): the screen's tail is the input rows, then the status.
+	statusRow := "huihui3.8"
 	// 17 runes at width 10: the input wraps to two terminal rows.
 	s.si.feed(digits[:17])
 	s.await(th.Paint(SlotText, " "+digits[:17]))
-	rows := screenLast(2)
-	if rows[0] != "❯ 01234567" || rows[1] != "890123456" {
+	rows := screenLast(3)
+	if rows[0] != "❯ 01234567" || rows[1] != "890123456" || rows[2] != statusRow {
 		t.Fatalf("wrapped input rows = %q", rows)
 	}
 
@@ -922,17 +1054,17 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// cursor to the tail, the prompt glyph scrolled off.
 	s.si.feed(digits[17:])
 	s.await(th.Paint(SlotText, digits[18:]))
-	rows = screenLast(5)
-	if rows[0] != "8901234567" || rows[4] != "XY" {
+	rows = screenLast(6)
+	if rows[0] != "8901234567" || rows[4] != "XY" || rows[5] != statusRow {
 		t.Fatalf("tail window rows = %q", rows)
 	}
 
 	// home: the window scrolls back to the head, the glyph visible.
 	s.si.feed("\x01")
 	s.await(th.Paint(SlotText, " "+digits[:48]))
-	rows = screenLast(5)
-	if rows[0] != "❯ 01234567" {
-		t.Fatalf("head window row = %q, want the prompt row", rows[0])
+	rows = screenLast(6)
+	if rows[0] != "❯ 01234567" || rows[5] != statusRow {
+		t.Fatalf("head window rows = %q, want the prompt row first", rows)
 	}
 
 	// the park: the cursor sits rows above the region's bottom; typing
@@ -952,7 +1084,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 func TestPasteAndEscKeybinds(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
@@ -1000,7 +1132,7 @@ func TestPasteAndEscKeybinds(t *testing.T) {
 func TestPagerCopyMode(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
@@ -1037,7 +1169,7 @@ func TestPagerCopyMode(t *testing.T) {
 func TestCompactingLoader(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
-		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
@@ -1074,4 +1206,77 @@ func TestCompactingLoader(t *testing.T) {
 			t.Fatalf("the loader row must leave with the commit: %q", rows)
 		}
 	}
+}
+
+// TestMenuRowsFitTheWidth (decision 10: the live region is measured):
+// a menu row is one terminal row — a long description is dotted to
+// what the width leaves after the name, never wrapped, so the six-row
+// cap is six terminal rows.
+func TestMenuRowsFitTheWidth(t *testing.T) {
+	th := oledTheme(t)
+	long := &fakeCmd{name: "models", desc: strings.Repeat("a long description ", 6)}
+	moveC := &fakeCmd{name: "move", desc: "short"}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(30),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{long, moveC}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	s.si.feed("/mo")
+	// the block's three rows at this width + two menu rows + input +
+	// status = 7: the long menu row did not wrap into an eighth.
+	s.awaitScreen(30, 7, []string{"move  short", "❯ /mo", "huihui3.8"})
+	rows := screenLines(t, s, 30)
+	menuRow := rows[len(rows)-4]
+	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
+		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
+	}
+	if displayWidth(menuRow) > 30 {
+		t.Fatalf("the menu row overflows the width: %d cols", displayWidth(menuRow))
+	}
+}
+
+// TestGhostEnterCompletes (decision 9, amended): Enter over a single
+// candidate's ghost submits the completed name — the row promised it —
+// not the typed prefix as an unknown command.
+func TestGhostEnterCompletes(t *testing.T) {
+	th := oledTheme(t)
+	models := &fakeCmd{name: "models", out: "the table"}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{models}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	s.si.feed("/m")
+	s.await(th.Paint(SlotDim, "odels"))
+	s.si.feed("\n")
+	s.await("the table")
+	if models.calls != 1 {
+		t.Fatalf("models ran %d times, want 1 (the ghost's Enter completes and dispatches)", models.calls)
+	}
+	if strings.Contains(s.out.String(), "unknown command") {
+		t.Fatalf("the typed prefix must not dispatch as unknown:\n%s", s.out.String())
+	}
+}
+
+// TestLoaderLocksAboveTheInput (decision 2, amended): the activity row
+// sits directly above the input; the pending line streams above the
+// activity row, so text flows into scrollback over the loader, never
+// under it.
+func TestLoaderLocksAboveTheInput(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	s.fe.Notify(core.TextDelta{Text: "streaming text"})
+	// pending, then the loader, then the input, then the status.
+	s.awaitScreen(50, 7, []string{"streaming text", "| thinking", "❯ ", "huihui3.8"})
+	// the pending line closes into scrollback above; the loader stays
+	// directly above the input.
+	s.fe.Notify(core.TextDelta{Text: "\nmore"})
+	s.awaitScreen(50, 8, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8"})
 }
