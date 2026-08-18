@@ -466,8 +466,13 @@ func TestCompactForcesTheAction(t *testing.T) {
 	if summary != 1 || main != 1 {
 		t.Fatalf("summary calls = %d, main calls = %d — want exactly the forced summary plus the faulted main", summary, main)
 	}
-	if got := strings.Count(h.out.String(), "⧉"); got != 1 {
-		t.Fatalf("the CLI renders the one ⧉ line, got %d:\n%s", got, h.out.String())
+	// one compact line, and one loader cue before it (SPEC_COMPACT 5,
+	// amended): the verb's door shows the loader too.
+	if got := strings.Count(h.out.String(), "⧉ compact:"); got != 1 {
+		t.Fatalf("the CLI renders the one compact line, got %d:\n%s", got, h.out.String())
+	}
+	if got := strings.Count(h.out.String(), "⧉ compacting"); got != 1 {
+		t.Fatalf("the CLI renders the one compacting cue, got %d:\n%s", got, h.out.String())
 	}
 	if !strings.Contains(h.out.String(), "context length") {
 		t.Fatalf("the fault must surface: %q", h.out.String())

@@ -466,6 +466,20 @@ One-shot ignores it (its `Notify` switch has no default — the compat
 rule), so the worker's stdout stays the answer, byte-identical in shape
 (SPEC_HARDENING non-goal kept).
 
+Amended (the field): a second additive event, `Compacting struct{}`, is
+the loader's cue. At deep context the summary call's prefill can run
+minutes (a cold prefix at 160k), and a silent gap reads as a hang. The
+compact action itself emits the cue to the frontend it holds, once,
+just before the summary call, on both doors (the trigger path and the
+forced verb) — the exactly-once rule above governs `Compacted`, the
+transcript event; the cue is progress, not transcript, and the recorder
+ignores it. The CLI prints one line (`⧉ compacting…`); the TUI shows a
+`compacting` phase in the activity row (placed for the duration on the
+verb's door, where no turn is live) and drops it with the `Compacted`
+commit or a `Fault`; one-shot ignores it. Named test:
+`TestCompactingCueOrder` (the cue precedes `Compacted`; the passthrough
+emits neither).
+
 The recorder lands the summary as a message row: `role = "user"`,
 `content` = the event's `Summary` verbatim (the marker is in the content),
 plus a usage row against that row's seq carrying the event's `Usage`. The

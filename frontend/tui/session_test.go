@@ -1029,3 +1029,49 @@ func TestPagerCopyMode(t *testing.T) {
 	s.await(altOff)
 	s.await("while paging")
 }
+
+// TestCompactingLoader (SPEC_COMPACT 5, amended): the Compacting cue
+// places the loader. During a live turn the phase changes; on the
+// verb's door (no turn) an activity row appears for the duration and
+// leaves with the Compacted commit.
+func TestCompactingLoader(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+
+	// the verb door: no live turn. The cue places the loader row.
+	s.fe.Notify(core.Compacting{})
+	s.await("compacting")
+	screen := func() []string {
+		t.Helper()
+		v := newVT(50)
+		v.feed(s.out.Bytes())
+		if v.err != "" {
+			t.Fatalf("harness: %s", v.err)
+		}
+		return v.rows
+	}
+	rows := screen()
+	found := false
+	for _, r := range rows {
+		if strings.Contains(r, "compacting") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the loader row must be on screen: %q", rows)
+	}
+
+	// the Compacted commit removes the loader (liveLines drops it).
+	s.fe.Notify(core.Compacted{Summary: "s", Dropped: 100, Kept: 10})
+	s.await("compact:")
+	rows = screen()
+	for _, r := range rows {
+		if strings.Contains(r, "compacting") {
+			t.Fatalf("the loader row must leave with the commit: %q", rows)
+		}
+	}
+}

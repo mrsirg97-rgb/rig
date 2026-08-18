@@ -168,6 +168,11 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 			p.row.ID, p.row.Window, est)
 	}
 
+	// the loader's cue (SPEC_COMPACT 5, amended): the summary call at
+	// deep context can prefill for minutes, and a silent gap reads as a
+	// hang. Progress, not transcript: the exactly-once rule (5) governs
+	// Compacted; this cue goes to the frontend directly, on both doors.
+	p.fe.Notify(core.Compacting{})
 	summary, usage, err := p.summarize(ctx, input, minInt(p.row.MaxTokens, p.row.Window-est))
 	if err != nil {
 		return core.Compacted{}, false, err

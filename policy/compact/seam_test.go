@@ -55,9 +55,15 @@ func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
 	if ev.Summary == "" || ev.Usage.Prompt != 812 {
 		t.Fatalf("the event must carry the summary and the usage: %+v", ev)
 	}
-	// the caller owns delivery: the frontend got nothing (decision 5)
-	if n := len(fe.snapshot()); n != 0 {
-		t.Fatalf("the action must never emit (the caller delivers), got %d events", n)
+	// the caller owns Compacted's delivery (decision 5); the Compacting
+	// cue is the action's own (5, amended) - the verb door needs the
+	// loader too, and the cue is progress, not transcript.
+	evs := fe.snapshot()
+	if len(evs) != 1 {
+		t.Fatalf("the action emits exactly the cue (the caller delivers Compacted), got %v", evs)
+	}
+	if _, ok := evs[0].(core.Compacting); !ok {
+		t.Fatalf("event 0 = %T, want the Compacting cue", evs[0])
 	}
 	if reflected != 1 {
 		t.Fatalf("a forced compaction is a compaction: AutoReflect must be called once, got %d", reflected)

@@ -41,6 +41,7 @@ type tui struct {
 	frame         int    // the spinner's frame (|/-\)
 	showReasoning bool
 	turnLive      bool
+	compacting    bool // the summary call is running outside a live turn (the verb's loader)
 	// turnEstablished: the live turn has produced an event (the
 	// burst/steer boundary, decision 9's "pasted lines are separate
 	// ordered prompts" vs "typing during a turn steers"): a line that
@@ -718,16 +719,39 @@ func (t *tui) Notify(ev core.Event) {
 		t.flow("", "\n")
 	case core.Fault:
 		// the CLI's leading newline, then the fault line (its trailing
-		// newline closes the line).
+		// newline closes the line). A failed summary must not strand
+		// the verb's loader row.
 		t.mu.Lock()
+		t.compacting = false
 		fault := RenderFault(t.theme, e.Err)
 		t.mu.Unlock()
 		t.flow("", "\n")
 		t.commit(fault)
+	case core.Compacting:
+		// the loader (SPEC_COMPACT 5, amended): the summary call may
+		// prefill for minutes. In a live turn the phase changes; on the
+		// verb's door the activity row is placed for the duration.
+		t.mu.Lock()
+		t.phase = "compacting"
+		t.frame = 0
+		if t.turnLive {
+			if len(t.live.lines) >= 2 {
+				t.live.setActivity(t.activityLineLocked())
+			}
+		} else {
+			t.compacting = true
+			t.live.insertActivity(t.activityLineLocked(), t.inputLineLocked())
+		}
+		t.mu.Unlock()
 	case core.Compacted:
 		// the compact line commits, then the banner reprints (decision
-		// 3: the one moment the context number jumps).
+		// 3: the one moment the context number jumps). The verb's
+		// loader row leaves with the commit (liveLines drops it).
 		t.mu.Lock()
+		t.compacting = false
+		if t.turnLive {
+			t.phase = "thinking"
+		}
 		chunk := RenderCompacted(t.theme, e) + "\n"
 		if t.bannerIn != nil {
 			chunk += RenderBanner(t.theme, t.bannerIn(context.Background()), t.width)
@@ -776,7 +800,7 @@ func (t *tui) commit(chunk string) {
 // reset, where the bookkeeping still carries the turn's rows but the
 // new set is the input alone.
 func (t *tui) liveLinesLocked() []string {
-	if t.turnLive {
+	if t.turnLive || t.compacting {
 		lines := []string{t.activityLineLocked()}
 		if pl := paintSegs(t.theme, t.pend); pl != "" {
 			lines = append(lines, pl)
@@ -1239,7 +1263,7 @@ func (t *tui) tickLoop() {
 			return
 		case <-t.ticks:
 			t.mu.Lock()
-			if t.turnLive && len(t.live.lines) == 2 {
+			if (t.turnLive || t.compacting) && len(t.live.lines) == 2 {
 				t.frame++
 				t.live.setActivity(t.activityLineLocked())
 			}
