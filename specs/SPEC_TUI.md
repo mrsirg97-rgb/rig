@@ -129,14 +129,18 @@ alternate screen.
 
 Everything above the live region is immutable printed history.
 Everything dynamic lives in the last lines, top to bottom: the
+pending prose line while one is open, the activity line during a turn
+(the spinner, then the current phase: `- thinking`, `| bash`), the
 completion menu when one is open (decision 9: its candidate rows,
-then its tail row), the activity line during a turn (the spinner,
-then the current phase: `- thinking`, `| bash`), the pending prose
-line while one is open, the input line (typing steers, as today),
-and the status line (decision 3) — always the region's last row.
+then its tail row), the input line (typing steers, as today), and the
+status line (decision 3) — always the region's last row. The activity
+line locks directly above the menu and input: streamed text flows
+into scrollback above the loader, never under it (the amended order;
+the first order put the loader above the pending line, and a wrapping
+stream grew under it).
 
-- during a turn: the activity line and the input line (as today),
-  with the pending line between them while it is open;
+- during a turn: the pending line while it is open, the activity line
+  under it, the input line under that;
 - between turns: the input line, the status line under it.
 
 The cap, amended over decision 1's at-most-three: up to six menu
@@ -428,16 +432,22 @@ does not move, and the CLI never sees the menu.
 - two or more candidates: the menu, above the input, inside the live
   region (decision 2's cap): one row per candidate, `name  desc`, the
   name in the accent, the description in text, the selected row
-  inverted. At most six rows show; the window follows the selection
-  like the input's five-row window does, and a dim `… N more` tail
-  counts the candidates past the window. Tab cycles the selection
-  down, Shift-Tab up (CSI Z, added to the parser), Enter accepts the
-  selection into the input — the typed prefix replaced by the
-  candidate, a trailing space, never dispatching — and Esc closes the
-  menu until the input changes.
+  inverted. A menu row is one terminal row (decision 10: the live
+  region is measured): the description takes what the width leaves
+  after the name and is dotted when it overflows, never wrapped. At
+  most six rows show; the window follows the selection like the
+  input's five-row window does, and a dim `… N more` tail counts the
+  candidates past the window. Tab cycles the selection down, Shift-Tab
+  up (CSI Z, added to the parser), Enter accepts the selection into
+  the input — the typed prefix replaced by the candidate, a trailing
+  space, never dispatching — and Esc closes the menu until the input
+  changes.
 - exactly one candidate: the ghost, today's rule — the remainder, dim,
   display only, drawn only when the cursor is at the end and the line
-  fits — and Tab completes it, plus the trailing space.
+  fits — and Tab completes it, plus the trailing space. Enter over a
+  showing ghost completes first and then submits: the row promised the
+  completion, and the typed prefix alone would dispatch as an unknown
+  command (`/m⏎` runs `models`).
 - the phases never mix: name candidates while the name is typed,
   argument candidates after the name and a space, nothing for plain
   prompts and the `//` escape.
