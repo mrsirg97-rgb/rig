@@ -16,21 +16,21 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// defaultModel is the worker-model default, interpolated into the
-// description.
-const defaultModel = "qwen3.8-workers"
-
-// description is the tool's description.
-const description = "Background jobs on the user's crontab, bound to the worker GPU. " +
-	"create schedules a headless worker session (5-field vixie cron 'M H D Mo DOW', " +
-	"or cron:'once' + at:<ISO> for one-shot; the line self-deletes after one fire, no " +
-	"retry). Jobs run under flock via the run-job verb, skip when another model holds the GPU " +
-	"(busy:'skip' default; 'force' evicts), and log to the scheduler home (runs/). " +
-	"list shows jobs in both scopes with drift between store and crontab. " +
-	"pause/resume/remove manage jobs; runs gives the audit trail (n last, default 5). " +
-	"Two stores: scope 'global' (this user) and 'cwd' (this working directory); ids jN " +
-	"are minted per scope, never reused - copy them from list, never invent. " +
-	"Default model: " + defaultModel + "."
+// description is the tool's description, built from the default job
+// model (SPEC_CONFIG 5: the constant leaves code for the settings' file
+// layer; the root passes the resolved value).
+func description(defModel string) string {
+	return "Background jobs on the user's crontab, bound to the worker GPU. " +
+		"create schedules a headless worker session (5-field vixie cron 'M H D Mo DOW', " +
+		"or cron:'once' + at:<ISO> for one-shot; the line self-deletes after one fire, no " +
+		"retry). Jobs run under flock via the run-job verb, skip when another model holds the GPU " +
+		"(busy:'skip' default; 'force' evicts), and log to the scheduler home (runs/). " +
+		"list shows jobs in both scopes with drift between store and crontab. " +
+		"pause/resume/remove manage jobs; runs gives the audit trail (n last, default 5). " +
+		"Two stores: scope 'global' (this user) and 'cwd' (this working directory); ids jN " +
+		"are minted per scope, never reused - copy them from list, never invent. " +
+		"Default model: " + defModel + "."
+}
 
 // guidelines is the operational guidance; folded after the
 // description in Description() since rig's tool surface carries no
@@ -42,7 +42,10 @@ const guidelines = "Guidelines: " +
 	"cron is 5-field 'M H D Mo DOW'; 'once' + at:<ISO> fires at that minute and self-deletes; a failed once job is done-with-fail, re-create to retry. " +
 	"list flags drift (store vs crontab): a drifting job is not trustworthy until the drift note is gone."
 
-const schemaJSON = `{
+// schemaJSON is the tool's schema, built from the default job model
+// (SPEC_CONFIG 5: the parameter's voice is the passed value).
+func schemaJSON(defModel string) string {
+	return `{
 	"type": "object",
 	"properties": {
 		"action": {
@@ -71,7 +74,7 @@ const schemaJSON = `{
 		},
 		"model": {
 			"type": "string",
-			"description": "pi model id (default qwen3.8-workers)."
+			"description": "pi model id (default ` + defModel + `)."
 		},
 		"busy": {
 			"type": "string",
@@ -93,6 +96,7 @@ const schemaJSON = `{
 		}
 	}
 }`
+}
 
 type given struct {
 	Action string `json:"action"`
@@ -112,12 +116,15 @@ type adapter struct {
 	st        sched.Stores
 	ct        sched.Crontab
 	runnerCmd string
+	defModel  string // the default job model (the settings' defaultJobModel)
 }
 
-// New consumes the opened seams: both-scope stores, the crontab shim, and
-// the runner command the crontab lines embed.
-func New(st sched.Stores, ct sched.Crontab, runnerCmd string) core.Tool {
-	return adapter{st: st, ct: ct, runnerCmd: runnerCmd}
+// New consumes the opened seams: both-scope stores, the crontab shim,
+// the runner command the crontab lines embed, and the default job model
+// (SPEC_CONFIG 5) — the description, the schema text, and the job a
+// create without a model are all built from it.
+func New(st sched.Stores, ct sched.Crontab, runnerCmd, defModel string) core.Tool {
+	return adapter{st: st, ct: ct, runnerCmd: runnerCmd, defModel: defModel}
 }
 
 // Name implements core.Tool.
@@ -125,14 +132,14 @@ func (a adapter) Name() string { return "scheduler" }
 
 // Description implements core.Tool: the description with guidelines
 // folded (rig's surface has no separate channel).
-func (a adapter) Description() string { return description + "\n\n" + guidelines }
+func (a adapter) Description() string { return description(a.defModel) + "\n\n" + guidelines }
 
 // Guidelines is the operational guidance alone, for composers that keep
 // the channels separate.
 func Guidelines() string { return guidelines }
 
 // Schema implements core.Tool.
-func (a adapter) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
+func (a adapter) Schema() json.RawMessage { return json.RawMessage(schemaJSON(a.defModel)) }
 
 // Exec maps the call onto the store's verbs; the store's own refusals
 // pass through. Session attribution from the threaded session, anon when
@@ -169,7 +176,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if strings.TrimSpace(g.Cron) == "" {
 			return "", fmt.Errorf("scheduler: create requires 'cron' (5-field or 'once' + 'at')")
 		}
-		model := defaultModel
+		model := a.defModel
 		if g.Model != "" {
 			model = g.Model
 		}

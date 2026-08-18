@@ -274,6 +274,11 @@ post-merge corrections)
   a small Go binary or the rig binary itself with a `run-job` verb; it
   needs `-p` one-shot mode (landed with the scheduler) and llama-swap's
   `/running` and `/v1/models` for the busy policy, unchanged.
+- The `defaultModel` fallback constant stays in the store, named (SPEC_CONFIG
+  5, 8): the tool's default job model moved to the config chain (the file's
+  `defaultJobModel` over the embedded value), and the tool always passes a
+  non-empty model — the constant is the direct-`Create` path's safety net,
+  not a second source. No schema change, no path change.
 
 ## interfaces
 

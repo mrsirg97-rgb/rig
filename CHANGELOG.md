@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.3.0] — config as a first-class runtime component
+
+- **config loading** (the pre-10 runtime component, `specs/SPEC_CONFIG.md`):
+  flags, env, and constants become a four-layer resolution per key —
+  **flags > env > file > embedded defaults** — with the defaults moved out
+  of code into the embedded `config/settings.json` and
+  `config/models.json`. `config/` is a new stdlib leaf that parses; the
+  root (`cmd/rig`) consumes; one `config.Load(dir, cwd)` per process,
+  after flag parse and before any store is opened, on every entry mode
+  (REPL, `-p`, `run-job` — the worker inherits its own job-cwd's
+  `AGENTS.md`, not the creating session's). The user files under
+  `~/.config/rig/`: `settings.json` (the existing knobs, flat, by their
+  env names; `allow` a JSON array there, CSV in the env), `models.json`
+  (the table out of code: `models.Defaults` removed, the user file merges
+  over the embedded row by row — set fields replace, unset fields keep,
+  new ids added with required numerics; rows gain `role`
+  (interactive/worker, the `/models` column) and `effort` (the
+  compaction summary call's reasoning effort, `""` = the policy's
+  `medium`)), `AGENTS.md` (global then `<cwd>/AGENTS.md`, placed between
+  the system prompt and the participants' guidelines), and `theme.json`
+  (reserved for the TUI: the loader reads it raw, well-formedness only).
+  Malformed or unreadable files refuse at start, naming the file and the
+  field (the operator's JSON spelling); absent files are silent; unknown
+  keys refuse. The two presence keys (`webFetchProxy`, `trafilatura`)
+  keep the 0.2.0 set-empty semantics at every layer; `RIG_MODEL_*` now
+  overlays the active id's row fields, set beats the row; the scheduler's
+  default job model moves to the settings (`defaultJobModel`, file over
+  embedded; the store keeps its constant as the direct-`Create` safety
+  net). **The invariant**: with no user files, every entry mode is the
+  0.2.0 bytes — pinned against golden request-body fixtures captured from
+  the 0.2.0 build (the named exception: the `/models` role column).
+  Version 0.3.0; `core/` and `loop/` zero diff.
+
 ## [0.2.0] — the feature-complete runtime
 
 - **user commands** (roadmap deliverable 9, `specs/SPEC_COMMANDS.md`): the

@@ -430,7 +430,11 @@ type GuidelineContributor interface {
 observes (decision 7). The loop fans out `TurnStart` (L6); the root
 collects `Guidelines()` into the system prompt before it builds the policy
 (named root change, zero loop change: prompt assembly belongs to the
-prompt, and the prompt string is the root's).
+prompt, and the prompt string is the root's). The collection's placement
+is named against SPEC_CONFIG 6: the root assembles
+`system → AGENTS.md (global then project) → Guidelines`, joining non-empty
+segments with a blank line — descending proximity, the operator's prompt,
+then the user's contract, then the participants' prose.
 
 Why this and not `core.Hooks`:
 
