@@ -375,6 +375,7 @@ func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 		if r.session == nil {
 			return b
 		}
+		b.Session = r.session.ID
 		if err := db.QueryRowContext(ctx,
 			`SELECT COALESCE(SUM(u.prompt), 0), COALESCE(SUM(u.completion), 0), COALESCE(SUM(u.cache_read), 0)
 			 FROM usage u JOIN messages m ON m.seq = u.message_seq

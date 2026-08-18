@@ -15,8 +15,9 @@ import (
 func statusInput() tui.StatusIn {
 	return tui.StatusIn{
 		Model: "huihui3.8", Effort: "xhigh",
-		Window: 262144,
-		Up: 214000, Down: 3200, CacheRead: 187000,
+		Window:  262144,
+		Session: "2f9a1c0e77b34455deadbeef",
+		Up:      214000, Down: 3200, CacheRead: 187000,
 	}
 }
 
@@ -26,7 +27,9 @@ func TestStatusBlockExactBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderStatus(th, statusInput())
-	want := th.Paint("dim", "huihui3.8") + th.Paint("dim", " · ") + th.Paint("dim", "xhigh") + "\n" +
+	want := th.Paint("accent", "welcome to rig") + "\n" +
+		th.Paint("dim", "session 2f9a1c0e77b3") + "\n" + // the first twelve
+		th.Paint("dim", "huihui3.8") + th.Paint("dim", " · ") + th.Paint("dim", "xhigh") + "\n" +
 		th.Paint("dim", "up 214k down 3.2k · cache r 187k 87%") + "\n"
 	if got != want {
 		t.Fatalf("the startup block:\ngot  %q\nwant %q", got, want)
@@ -83,8 +86,8 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		used int
 		want string // the slot the context part is painted with
 	}{
-		{84000, "dim"},   // 32%: quiet
-		{140000, "warn"}, // 70%: the warn tier
+		{84000, "dim"},    // 32%: quiet
+		{140000, "warn"},  // 70%: the warn tier
 		{180000, "error"}, // 90%: the error tier
 	}
 	for _, c := range cases {

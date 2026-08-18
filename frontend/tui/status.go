@@ -12,27 +12,42 @@ type StatusIn struct {
 	Model     string
 	Effort    string
 	Window    int
-	Up        int // session prompt total
-	Down      int // session completion total
-	CacheRead int // session cache-read total
+	Session   string // the session id (the startup block's second row)
+	Up        int    // session prompt total
+	Down      int    // session completion total
+	CacheRead int    // session cache-read total
 }
 
 // RenderStatus is the startup block (decision 3, amended): the
-// banner's identity row without its context part, and its session
-// row — dim, no dotted rules (they enclosed the banner, and the
-// banner is gone).
+// greeting in the accent, the session row under it, then the
+// banner's identity row without its context part, and its usage row
+// — dim, no dotted rules (they enclosed the banner, and the banner is
+// gone). Committed once at the session start and at the refresh
+// points (new, sessions resume).
 func RenderStatus(t Theme, in StatusIn) string {
-	row1 := t.Paint(SlotDim, in.Model)
-	if in.Effort != "" {
-		row1 += t.Paint(SlotDim, " · ") + t.Paint(SlotDim, in.Effort)
+	var b string
+	b += t.Paint(SlotAccent, "welcome to rig") + "\n"
+	if in.Session != "" {
+		// the id's short form (a hash's first twelve, git's habit): the
+		// row is a glance, /sessions is the full list.
+		id := in.Session
+		if len(id) > 12 {
+			id = id[:12]
+		}
+		b += t.Paint(SlotDim, "session "+id) + "\n"
 	}
+	row := t.Paint(SlotDim, in.Model)
+	if in.Effort != "" {
+		row += t.Paint(SlotDim, " · ") + t.Paint(SlotDim, in.Effort)
+	}
+	b += row + "\n"
 	hit := 0
 	if in.Up > 0 {
 		hit = in.CacheRead * 100 / in.Up
 	}
-	row2 := t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
-		formatTokens(in.Up), formatTokens(in.Down), formatTokens(in.CacheRead), hit))
-	return row1 + "\n" + row2 + "\n"
+	b += t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
+		formatTokens(in.Up), formatTokens(in.Down), formatTokens(in.CacheRead), hit)) + "\n"
+	return b
 }
 
 // RenderStatusLine is the live status row (decision 3): the model,
