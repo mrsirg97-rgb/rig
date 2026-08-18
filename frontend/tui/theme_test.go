@@ -43,7 +43,7 @@ func TestGlyphSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	for slot, want := range map[string]string{
-		"pending": "○", "active": "◐", "done": "●", "fail": "✕",
+		"pending": "○", "active": "◐", "done": "●", "fail": "✕", "ok": "✓",
 		"compact": "⧉", "prompt": "❯", "bar": "▰", "baroff": "▱", "dot": "·",
 	} {
 		if got := un.Glyph(slot); got != want {
@@ -56,7 +56,7 @@ func TestGlyphSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	for slot, want := range map[string]string{
-		"pending": "[ ]", "active": "[~]", "done": "[*]", "fail": "[x]",
+		"pending": "[ ]", "active": "[~]", "done": "[*]", "fail": "[x]", "ok": "v",
 		"compact": "=", "prompt": ">", "bar": "#", "baroff": "-", "dot": ".",
 	} {
 		if got := as.Glyph(slot); got != want {
