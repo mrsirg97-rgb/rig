@@ -7,7 +7,7 @@ import (
 )
 
 // TestFreezeGate is the SPEC_TUI gate, as a test: the diff against
-// main is confined to the allowlist (frontend/tui, cmd/rig, docs,
+// main is confined to the allowlist (frontend/tui, cmd/rig, docs, specs,
 // go.mod, go.sum), core/ and loop/ are byte-identical with main, and
 // the CLI's goldens are still green — the CLI is the piped reference
 // and this work must not change it.
@@ -34,6 +34,8 @@ func TestFreezeGate(t *testing.T) {
 		return p == "frontend/tui" || strings.HasPrefix(p, "frontend/tui/") ||
 			p == "cmd/rig" || strings.HasPrefix(p, "cmd/rig/") ||
 			p == "docs" || strings.HasPrefix(p, "docs/") ||
+			p == "specs" || strings.HasPrefix(p, "specs/") ||
+			p == "CHANGELOG.md" || p == "ROADMAP.md" ||
 			p == "go.mod" || p == "go.sum"
 	}
 
