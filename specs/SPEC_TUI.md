@@ -104,6 +104,18 @@ render-loop framework that would fight the runtime's own event loop
 accepted and named: committed output is immutable; an expanded tool
 preview is reprinted below, never edited in place.
 
+The one modal exception, named: the pager (copy-mode). Some terminals
+give the operator no way up the scrollback (a web tty, a phone), so
+PgUp opens a bottom-anchored view of the committed history on the
+alternate screen, the way less borrows it: PgUp/PgDn page, the arrows
+step a line (an emulator's wheel arrives as arrows on the alt screen),
+Home/End jump, and q, Esc, or Enter restore the main screen exactly.
+The document is the live region's own record of committed lines
+(painted, ring-capped at 5000); while the pager is up the live region
+suspends — its bookkeeping runs, its writes stop, and commits queue —
+and the return replays the queue. The main UI itself never enters the
+alternate screen.
+
 ### 2. The live region and the commit points
 
 Everything above the live region is immutable printed history.

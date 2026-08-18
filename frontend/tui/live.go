@@ -46,6 +46,61 @@ type live struct {
 	lines  []string // the bookkeeping lines (painted, the rows we own)
 	width  int      // the terminal's width: the wrap model's constant
 	parked int      // rows the cursor sits above the region's last row (edit's mid-line park)
+
+	// the committed history (the pager's document): every line that
+	// crossed into scrollback, painted, ring-capped. The terminal owns
+	// the real scrollback (decision 1); this is the copy the pager
+	// shows where the emulator gives the operator no way up.
+	hist []string
+
+	// the suspension (the pager's screen): ops keep their bookkeeping
+	// (l.lines stays true) but write nothing — wf is the single gate —
+	// and committed lines queue in pend. resume replays them.
+	suspended    bool
+	pend         []string
+	frozen       []string // the rows physically on screen at suspend
+	frozenParked int
+}
+
+// histCap bounds the pager's document (the oldest lines drop).
+const histCap = 5000
+
+// record captures committed lines: the history always, the pend queue
+// while suspended (they have not reached the screen).
+func (l *live) record(lines []string) {
+	l.hist = append(l.hist, lines...)
+	if len(l.hist) > histCap {
+		l.hist = append([]string(nil), l.hist[len(l.hist)-histCap:]...)
+	}
+	if l.suspended {
+		l.pend = append(l.pend, lines...)
+	}
+}
+
+// suspend freezes the screen for the pager: the rows on it are
+// remembered, and every op from here is bookkeeping-only.
+func (l *live) suspend() {
+	l.frozen = append([]string(nil), l.lines...)
+	l.frozenParked = l.parked
+	l.suspended = true
+}
+
+// resume puts the main screen back: the frozen rows are what the
+// terminal still shows, so the redraw clears them, commits what queued
+// during the suspension, and re-emits the current region.
+func (l *live) resume() {
+	l.suspended = false
+	cur := l.lines
+	l.lines = l.frozen
+	l.parked = l.frozenParked
+	l.frozen = nil
+	pend := l.pend
+	l.pend = nil
+	// draw's body without its record: the pend lines were recorded when
+	// they queued.
+	all := append(append([]string(nil), pend...), cur...)
+	l.replaceRegion(all)
+	l.lines = cur
 }
 
 // norm returns the cursor to the region's last row: the edit op parks
@@ -101,7 +156,14 @@ func (l *live) regionRows() int {
 // phantom blank line.
 var lineEnd = toCol(1) + "\n"
 
-func (l *live) wf(s string) { io.WriteString(l.w, s) }
+// wf is the single write gate: a suspended region (the pager's screen)
+// keeps its bookkeeping and writes nothing.
+func (l *live) wf(s string) {
+	if l.suspended {
+		return
+	}
+	io.WriteString(l.w, s)
+}
 
 // clearRegion clears the old bookkeeping's terminal rows, top to
 // bottom, and leaves the cursor on its last row at column 1.
@@ -164,6 +226,7 @@ func (l *live) draw(committed string, newLines []string) {
 		if cs[len(cs)-1] == "" {
 			cs = cs[:len(cs)-1]
 		}
+		l.record(cs)
 		all = append(all, cs...)
 	}
 	all = append(all, newLines...)
@@ -178,6 +241,7 @@ func (l *live) draw(committed string, newLines []string) {
 // already live) leaves the activity row above untouched. The frozen
 // row's terminal rows are cleared first, whatever they wrapped to.
 func (l *live) enter(fullLine, activity, inputLine string) {
+	l.record([]string{fullLine})
 	l.norm()
 	// the input row (the bookkeeping's last line, however many terminal
 	// rows it wrapped to) is cleared and rewritten as its full text; the

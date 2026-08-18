@@ -993,3 +993,39 @@ func TestPasteAndEscKeybinds(t *testing.T) {
 		t.Fatalf("the pasted line = %q, want the newline kept", line)
 	}
 }
+
+// TestPagerCopyMode (the copy-mode): PgUp opens the alt screen over
+// the committed history; events while it is up stay off the screen
+// (their bytes queue); q closes it and the queue replays.
+func TestPagerCopyMode(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	s.fe.Notify(core.TextDelta{Text: "the early content\n"})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.await("the early content")
+
+	base := len(s.out.String())
+	s.si.feed("\x1b[5~")
+	s.await(altOn)
+	if after := s.out.String()[base:]; !strings.Contains(after, "the early content") {
+		t.Fatalf("the pager frame must render the history: %q", after)
+	}
+
+	// an event during the pager: bookkept, not written.
+	mark := len(s.out.String())
+	s.fe.Notify(core.TextDelta{Text: "while paging\n"})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	if got := s.out.String()[mark:]; strings.Contains(got, "while paging") {
+		t.Fatalf("an event reached the pager's screen: %q", got)
+	}
+
+	// q returns: the alt screen closes, the queued commit replays.
+	s.si.feed("q")
+	s.await(altOff)
+	s.await("while paging")
+}
