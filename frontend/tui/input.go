@@ -30,6 +30,8 @@ const (
 	keyWordBack    // Ctrl-W
 	keyPasteStart  // CSI 200~: the bracketed paste opens (parser-internal)
 	keyPasteEnd    // CSI 201~: the bracketed paste closes (parser-internal)
+	keyPgUp        // opens the pager; pages inside it
+	keyPgDn        // pages inside the pager
 )
 
 // The parser states: top, the escape families (CSI, the SS3 cursor
@@ -218,6 +220,10 @@ func csiKey(params string, term byte) key {
 			return keyEnd
 		case "3":
 			return keyDelete
+		case "5":
+			return keyPgUp
+		case "6":
+			return keyPgDn
 		case "200":
 			return keyPasteStart
 		case "201":

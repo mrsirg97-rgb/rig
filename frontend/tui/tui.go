@@ -31,6 +31,8 @@ type tui struct {
 
 	mu            sync.Mutex
 	width         int
+	height        int // the terminal's height: the pager's budget
+	pg            *pager
 	live          *live
 	inputText     string // the line's text, rendered under mu
 	editPos       int    // the edit position, mirrored under mu
@@ -147,6 +149,7 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		theme:         defaultTheme(),
 		in:            in,
 		width:         80,
+		height:        24,
 		showReasoning: true,
 		ed:            newEditor(),
 		pending:       make(chan string, 16),
@@ -155,8 +158,9 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 	}
 	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 		t.fdi = int(f.Fd())
-		if w, _, err := term.GetSize(t.fdi); err == nil && w > 0 {
+		if w, h, err := term.GetSize(t.fdi); err == nil && w > 0 {
 			t.width = w
+			t.height = h
 		}
 		if old, err := term.MakeRaw(t.fdi); err == nil {
 			t.rawOld = old
@@ -229,6 +233,15 @@ func (t *tui) Close() {
 	if t.ticker != nil {
 		t.ticker.Stop()
 	}
+	t.mu.Lock()
+	if t.pg != nil {
+		// a pager left open would strand the terminal on the alt
+		// screen; the way out closes it (the resume repaint is moot —
+		// the process is leaving).
+		t.pg = nil
+		io.WriteString(t.live.w, altOff)
+	}
+	t.mu.Unlock()
 	if t.rawOld != nil {
 		io.WriteString(t.live.w, pasteOff)
 		term.Restore(t.fdi, t.rawOld)
@@ -290,9 +303,15 @@ func (t *tui) readLoop() {
 const escDelay = 30 * time.Millisecond
 
 // onKey applies one parsed key to the line (the editor) and repaints;
-// the named control keys do their thing (decision 9).
+// the named control keys do their thing (decision 9). Inside the
+// pager, the keys are the pager's.
 func (t *tui) onKey(k key, r rune) {
+	if t.pagerKey(k, r) {
+		return
+	}
 	switch k {
+	case keyPgUp:
+		t.enterPager()
 	case keyEnter:
 		t.onEnter()
 	case keyCtrlC:
@@ -320,6 +339,75 @@ func (t *tui) onKey(k key, r rune) {
 		t.ed.apply(k, r)
 		t.paintInput()
 	}
+}
+
+// pagerKey routes a key while the pager is open (the copy-mode's
+// vocabulary); it reports whether the key was the pager's. Every key
+// it does not name is consumed too — the editor must not move under a
+// modal screen.
+func (t *tui) pagerKey(k key, r rune) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.pg == nil {
+		return false
+	}
+	moved := false
+	switch {
+	case k == keyEsc || k == keyEnter || (k == keyText && (r == 'q' || r == 'Q')):
+		t.exitPagerLocked()
+		return true
+	case k == keyPgUp:
+		moved = t.pg.move(t.pg.page())
+	case k == keyPgDn:
+		moved = t.pg.move(-t.pg.page())
+	case k == keyUp:
+		moved = t.pg.move(1)
+	case k == keyDown:
+		moved = t.pg.move(-1)
+	case k == keyHome:
+		moved = t.pg.move(len(t.pg.lines))
+	case k == keyEnd:
+		moved = t.pg.move(-len(t.pg.lines))
+	case k == keyCtrlC:
+		// the session end works from anywhere; the pager closes first
+		// so the terminal is sane on the way out.
+		t.exitPagerLocked()
+		t.mu.Unlock()
+		t.quitSession()
+		t.mu.Lock()
+		return true
+	}
+	if moved {
+		t.pg.render(t.live.w, t.theme)
+	}
+	return true
+}
+
+// enterPager opens the copy-mode: the live region suspends (its
+// bookkeeping runs on, its writes stop), the alt screen opens, the
+// history renders.
+func (t *tui) enterPager() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.pg != nil {
+		return
+	}
+	t.pg = newPager(t.live.hist, t.width, t.height)
+	t.live.suspend()
+	io.WriteString(t.live.w, altOn)
+	t.pg.render(t.live.w, t.theme)
+}
+
+// exitPagerLocked closes the copy-mode: the alt screen closes (the
+// terminal restores the main screen itself), and the live region
+// resumes — replaying what committed while the pager was up.
+func (t *tui) exitPagerLocked() {
+	if t.pg == nil {
+		return
+	}
+	t.pg = nil
+	io.WriteString(t.live.w, altOff)
+	t.live.resume()
 }
 
 // paintInput rewrites the input row in place and parks the terminal
@@ -1170,12 +1258,17 @@ func (t *tui) winchLoop() {
 		case <-t.winch:
 			t.mu.Lock()
 			if t.fdi != 0 {
-				if w, _, err := term.GetSize(t.fdi); err == nil && w > 0 {
+				if w, h, err := term.GetSize(t.fdi); err == nil && w > 0 {
 					t.width = w
+					t.height = h
 					t.live.setWidth(w)
 				}
 			}
-			if len(t.live.lines) > 0 {
+			if t.pg != nil {
+				t.pg.width, t.pg.height = t.width, t.height
+				t.pg.clamp()
+				t.pg.render(t.live.w, t.theme)
+			} else if len(t.live.lines) > 0 {
 				t.live.draw("", t.liveLinesLocked())
 			}
 			t.mu.Unlock()

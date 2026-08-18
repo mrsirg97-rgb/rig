@@ -64,7 +64,9 @@ func TestKeyParserTable(t *testing.T) {
 		{"end tilde 8", []byte{0x1b, '[', '8', '~'}, []key{keyEnd}},
 		{"delete tilde", []byte{0x1b, '[', '3', '~'}, []key{keyDelete}},
 		// the unrecognized set: consumed, ignored, the line untouched.
-		{"unrecognized tilde", []byte{0x1b, '[', '5', '~'}, []key{}},
+		{"page up", []byte{0x1b, '[', '5', '~'}, []key{keyPgUp}},
+		{"page down", []byte{0x1b, '[', '6', '~'}, []key{keyPgDn}},
+		{"unrecognized tilde", []byte{0x1b, '[', '1', '5', '~'}, []key{}},
 		{"unrecognized shift tab", []byte{0x1b, '[', 'Z'}, []key{}},
 		{"two byte escape", []byte{0x1b, '(', 'B'}, []key{}},
 		// a byte after the two-byte mode selection is its own content:

@@ -85,6 +85,15 @@ const (
 	pasteOff = ESC + "?2004l"
 )
 
+// The alternate screen (the pager's, decision 2's one exception: the
+// main UI never enters it), and its canvas ops.
+const (
+	altOn      = ESC + "?1049h"
+	altOff     = ESC + "?1049l"
+	clearAll   = ESC + "2J"
+	cursorHome = ESC + "H"
+)
+
 // truncateWidth cuts s to at most w display columns (runewidth), adding
 // the ellipsis glyph when it overflows. The live region is measured
 // (decision 10); committed prose is never (decision 8).
