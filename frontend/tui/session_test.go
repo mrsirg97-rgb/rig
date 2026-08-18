@@ -1207,3 +1207,76 @@ func TestCompactingLoader(t *testing.T) {
 		}
 	}
 }
+
+// TestMenuRowsFitTheWidth (decision 10: the live region is measured):
+// a menu row is one terminal row — a long description is dotted to
+// what the width leaves after the name, never wrapped, so the six-row
+// cap is six terminal rows.
+func TestMenuRowsFitTheWidth(t *testing.T) {
+	th := oledTheme(t)
+	long := &fakeCmd{name: "models", desc: strings.Repeat("a long description ", 6)}
+	moveC := &fakeCmd{name: "move", desc: "short"}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(30),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{long, moveC}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	s.si.feed("/mo")
+	// the block's three rows at this width + two menu rows + input +
+	// status = 7: the long menu row did not wrap into an eighth.
+	s.awaitScreen(30, 7, []string{"move  short", "❯ /mo", "huihui3.8"})
+	rows := screenLines(t, s, 30)
+	menuRow := rows[len(rows)-4]
+	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
+		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
+	}
+	if displayWidth(menuRow) > 30 {
+		t.Fatalf("the menu row overflows the width: %d cols", displayWidth(menuRow))
+	}
+}
+
+// TestGhostEnterCompletes (decision 9, amended): Enter over a single
+// candidate's ghost submits the completed name — the row promised it —
+// not the typed prefix as an unknown command.
+func TestGhostEnterCompletes(t *testing.T) {
+	th := oledTheme(t)
+	models := &fakeCmd{name: "models", out: "the table"}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{models}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	s.si.feed("/m")
+	s.await(th.Paint(SlotDim, "odels"))
+	s.si.feed("\n")
+	s.await("the table")
+	if models.calls != 1 {
+		t.Fatalf("models ran %d times, want 1 (the ghost's Enter completes and dispatches)", models.calls)
+	}
+	if strings.Contains(s.out.String(), "unknown command") {
+		t.Fatalf("the typed prefix must not dispatch as unknown:\n%s", s.out.String())
+	}
+}
+
+// TestLoaderLocksAboveTheInput (decision 2, amended): the activity row
+// sits directly above the input; the pending line streams above the
+// activity row, so text flows into scrollback over the loader, never
+// under it.
+func TestLoaderLocksAboveTheInput(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	s.fe.Notify(core.TextDelta{Text: "streaming text"})
+	// pending, then the loader, then the input, then the status.
+	s.awaitScreen(50, 7, []string{"streaming text", "| thinking", "❯ ", "huihui3.8"})
+	// the pending line closes into scrollback above; the loader stays
+	// directly above the input.
+	s.fe.Notify(core.TextDelta{Text: "\nmore"})
+	s.awaitScreen(50, 8, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8"})
+}

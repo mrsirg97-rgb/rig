@@ -572,6 +572,16 @@ func (t *tui) onEnter() {
 		t.paintInput()
 		return
 	}
+	// the ghost's Enter (decision 9, amended): a single candidate's
+	// remainder is showing, so the visible line is the intent — the
+	// completion lands first (Tab's text), and the Enter submits it.
+	// The typed prefix alone would dispatch as an unknown command
+	// while the row promised the completion.
+	if next, ok := t.tabTextLocked(); ok {
+		t.mu.Unlock()
+		t.ed.setText(next)
+		t.mu.Lock()
+	}
 	t.mu.Unlock()
 	line, submitted := t.ed.apply(keyEnter, 0)
 	if !submitted || strings.TrimSpace(line) == "" {
@@ -786,7 +796,7 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.frame = 0
 	t.toolName = ""
 	t.toolArgs = nil
-	t.live.insertActivity(t.activityLineLocked())
+	t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
 }
 
@@ -890,13 +900,13 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Lock()
 		t.phase = "compacting"
 		t.frame = 0
-		if t.turnLive {
-			if len(t.live.lines) >= 2 {
-				t.live.setActivity(t.activityLineLocked())
-			}
-		} else {
+		if !t.turnLive {
 			t.compacting = true
-			t.live.insertActivity(t.activityLineLocked())
+		}
+		// the region repaint (the TUI owns the layout; the activity row
+		// sits wherever liveLinesLocked places it).
+		if len(t.live.lines) > 0 {
+			t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 		}
 		t.mu.Unlock()
 	case core.Compacted:
@@ -959,10 +969,13 @@ func (t *tui) commit(chunk string) {
 func (t *tui) liveLinesLocked() []string {
 	var lines []string
 	if t.turnLive || t.compacting {
-		lines = append(lines, t.activityLineLocked())
+		// the pending line first, the activity row under it (decision
+		// 2, amended): the loader locks above the input; streamed text
+		// flows into scrollback above the loader, never under it.
 		if pl := paintSegs(t.theme, t.pend); pl != "" {
 			lines = append(lines, pl)
 		}
+		lines = append(lines, t.activityLineLocked())
 	}
 	if ml := t.menuLinesLocked(); len(ml) > 0 {
 		lines = append(lines, ml...)
@@ -1226,7 +1239,19 @@ func (t *tui) menuLinesLocked() []string {
 		c := t.menuCands[i]
 		row := t.theme.Paint(SlotAccent, c.name)
 		if c.desc != "" {
-			row += t.theme.Paint(SlotText, "  "+c.desc)
+			// a menu row is one terminal row (decision 10: the live
+			// region is measured): the description takes what the
+			// width leaves after the name, dotted when it overflows.
+			room := t.width - displayWidth(c.name) - 3
+			desc := c.desc
+			if room <= 1 {
+				desc = ""
+			} else if displayWidth(desc) > room {
+				desc = truncateWidth(t.theme, desc, room)
+			}
+			if desc != "" {
+				row += t.theme.Paint(SlotText, "  "+desc)
+			}
 		}
 		if i == t.menuSel {
 			row = t.theme.Invert(row)
@@ -1547,9 +1572,9 @@ func (t *tui) tickLoop() {
 			return
 		case <-t.ticks:
 			t.mu.Lock()
-			if (t.turnLive || t.compacting) && len(t.live.lines) >= 2 {
+			if (t.turnLive || t.compacting) && len(t.live.lines) > 0 {
 				t.frame++
-				t.live.setActivity(t.activityLineLocked())
+				t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 			}
 			t.mu.Unlock()
 		}
