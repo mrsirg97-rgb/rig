@@ -17,13 +17,19 @@ import (
 // with a call counter.
 type fakeCmd struct {
 	name  string
+	desc  string
 	out   string
 	err   error
 	calls int
 }
 
-func (f *fakeCmd) Name() string            { return f.name }
-func (f *fakeCmd) Description() string     { return "test" }
+func (f *fakeCmd) Name() string { return f.name }
+func (f *fakeCmd) Description() string {
+	if f.desc != "" {
+		return f.desc
+	}
+	return "test"
+}
 func (f *fakeCmd) Schema() json.RawMessage { return []byte(`{}`) }
 func (f *fakeCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	f.calls++
@@ -486,9 +492,10 @@ func TestCtrlDNonBlankKept(t *testing.T) {
 	}
 }
 
-// TestDispatchVoice is the command path's voice (decision 5): the echo
-// dim, the output the CLI's bytes, the unknown command loud and naming
-// the known set, and the // escape the prompt's.
+// TestDispatchVoice is the command path's voice (decision 5): no
+// separate dim echo (the committed prompt line is the echo), the
+// output the CLI's bytes, the unknown command loud and naming the
+// known set, and the // escape the prompt's.
 func TestDispatchVoice(t *testing.T) {
 	th := oledTheme(t)
 	newC := &fakeCmd{name: "new", out: "new session: s2"}
@@ -505,18 +512,19 @@ func TestDispatchVoice(t *testing.T) {
 		in <- l
 	}()
 	s.await(promptMark(th))
-	// the unknown command: the echo, then the loud refusal.
+	// the unknown command: the loud refusal; the committed prompt line
+	// is the only echo (no separate dim copy of the line).
 	s.si.feed("/nope\n")
 	s.await("unknown command: nope")
 	out := s.out.String()
-	if !strings.Contains(out, th.Paint(SlotDim, "/nope")) {
-		t.Fatalf("the command line did not echo dim")
+	if strings.Contains(out, th.Paint(SlotDim, "/nope")) {
+		t.Fatalf("the command line must not echo a second dim copy")
 	}
 	if !strings.Contains(out, th.Paint(SlotDim, "unknown command: nope (known: new)")) {
 		t.Fatalf("the unknown command is not loud with the known set:\n%s", out)
 	}
-	// the known command: the echo, then the output (its banner trigger
-	// follows the output in the dispatch).
+	// the known command: the output (its banner trigger follows the
+	// output in the dispatch).
 	s.si.feed("/new\n")
 	s.await(th.Paint(SlotText, "new session: s2"))
 	if !strings.Contains(s.out.String(), th.Paint(SlotText, "new session: s2")) {
@@ -828,4 +836,45 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	if v2.rows[idx2-1] != "" {
 		t.Fatalf("the CLI's ToolStart separator did not land before the block:\n%q", v2.rows)
 	}
+}
+
+// The inline hint (decision 9): fish-style ghost text on the input row.
+// Typing a command prefix shows the first match's remainder plus the
+// candidates; a known name plus a space shows its description; plain
+// prompts and the // escape show nothing.
+func TestInlineHintForCommands(t *testing.T) {
+	th := oledTheme(t)
+	models := &fakeCmd{name: "models", desc: "the per-model table"}
+	moveC := &fakeCmd{name: "move", desc: "move a thing"}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithCommands([]core.Command{models, moveC}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	s.si.feed("/mo")
+	s.await(th.Paint(SlotDim, "dels  · models move"))
+	s.si.feed("d")
+	s.await(th.Paint(SlotDim, "els"))
+	// a known name + space: the description
+	s.si.feed("els ")
+	s.await(th.Paint(SlotDim, "the per-model table"))
+}
+
+// Tab completion (decision 9): the longest common prefix, the trailing
+// space when unique; a no-op on plain prompts.
+func TestTabCompletesCommandNames(t *testing.T) {
+	th := oledTheme(t)
+	models := &fakeCmd{name: "models", desc: ""}
+	moveC := &fakeCmd{name: "move", desc: ""}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithBanner(func(ctx context.Context) BannerIn { return bannerFixture() }),
+		WithCommands([]core.Command{models, moveC}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	s.si.feed("/m\t") // lcp of models/move: "mo"
+	s.await(th.Paint(SlotText, " /mo"))
+	s.si.feed("d\t") // unique: models + trailing space
+	s.await(th.Paint(SlotText, " /models "))
 }
