@@ -333,8 +333,10 @@ func TestFlagPresenceWins(t *testing.T) {
 		s := &bodySrv{}
 		srv := newBodySrv(t, s)
 		bin := buildBin(t, t.TempDir())
-		out, err := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-system", "").
-			CombinedOutput()
+		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-system", "")
+		cmd.Dir = t.TempDir()
+		cmd.Env = rigEnv(t.TempDir(), "")
+		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
 		}
@@ -379,8 +381,10 @@ func TestFlagPresenceWins(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 		bin := buildBin(t, t.TempDir())
-		out, err := exec.Command(bin, "-p", "run the probe", "-base-url", srv.URL+"/v1", "-retries", "0").
-			CombinedOutput()
+		cmd := exec.Command(bin, "-p", "run the probe", "-base-url", srv.URL+"/v1", "-retries", "0")
+		cmd.Dir = t.TempDir()
+		cmd.Env = rigEnv(t.TempDir(), "")
+		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
 		}

@@ -35,7 +35,9 @@ TDD.
 - The existing knobs by their env names, flat: `baseUrl`, `model`,
   `system`, `allow`, `retries`, `python`, `searxngUrl`,
   `webFetchProxy`, `trafilatura`, `swapUrl` — plus `defaultJobModel`,
-  the scheduler's job-model default moved by the sweep (5, 8).
+  the scheduler's job-model default moved by the sweep (5, 8), and
+  `theme`, the shipped-theme name SPEC_TUI 7 selects by (the loader
+  carries the string; the TUI owns the vocabulary and the refusal).
 - JSON only, stdlib `encoding/json`; a YAML dep is rejected, named (1).
 - A malformed or unreadable file is a loud refusal at start naming the
   file and the field; an absent file is silent (3).
@@ -276,7 +278,7 @@ prefix:
 
 ```
 rig: config: ~/.config/rig/settings.json: retries: expected an integer, got "three"
-rig: config: ~/.config/rig/settings.json: unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, searxngUrl, swapUrl, system, trafilatura, webFetchProxy)
+rig: config: ~/.config/rig/settings.json: unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)
 rig: config: ~/.config/rig/settings.json: expected a JSON object
 rig: config: ~/.config/rig/settings.json: allow[2]: expected a string, got 5
 rig: config: ~/.config/rig/models.json: expected a JSON array of model rows
