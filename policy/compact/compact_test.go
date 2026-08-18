@@ -69,7 +69,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 			events: []core.Event{core.TextDelta{Text: "SUMMARY"}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 1}}},
 		}}}
 		fe := &captureFrontend{}
-		pol, err := compact.New(prov, fe, s, system, testRow)
+		pol, err := compact.New(prov, fe, s, "S", testRow)
 		if err != nil {
 			t.Fatalf("New: %v", err)
 		}
@@ -87,7 +87,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 		if s.Messages[1].Role != core.RoleAssistant || s.Messages[2].Role != core.RoleTool {
 			t.Fatalf("the kept tail must stay whole: %+v", s.Messages[1:])
 		}
-		if evs := fe.snapshot(); len(evs) != 1 {
+		if evs := stripCue(fe.snapshot()); len(evs) != 1 {
 			t.Fatalf("the trigger path must emit exactly one Compacted: %v", evs)
 		}
 	})
@@ -406,7 +406,7 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 	if strings.Contains(s.Messages[0].Content, `{"command"`) {
 		t.Fatalf("the summary must not be a tool call: %q", s.Messages[0].Content)
 	}
-	evs := fe.snapshot()
+	evs := stripCue(fe.snapshot())
 	if len(evs) != 1 {
 		t.Fatalf("frontend events = %v, want exactly one Compacted", evs)
 	}
@@ -454,7 +454,7 @@ func TestCompactedEventBeforeTheNextCall(t *testing.T) {
 		fe.Notify(ev)
 	}
 
-	evs := fe.snapshot()
+	evs := stripCue(fe.snapshot())
 	if len(evs) != 3 {
 		t.Fatalf("frontend events = %v, want Compacted then the call's two events", evs)
 	}
@@ -647,7 +647,7 @@ func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 		if len(s.Messages) != 2 || s.Messages[0].Content != compact.SummaryMarker+"S" {
 			t.Fatalf("the compact must have happened: %+v", s.Messages)
 		}
-		if evs := fe.snapshot(); len(evs) != 1 {
+		if evs := stripCue(fe.snapshot()); len(evs) != 1 {
 			t.Fatalf("the event must have been emitted: %v", evs)
 		}
 	})
@@ -669,7 +669,7 @@ func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 		if len(s.Messages) != 2 || s.Messages[0].Content != compact.SummaryMarker+"S" {
 			t.Fatalf("the compact must happen without the seam: %+v", s.Messages)
 		}
-		if evs := fe.snapshot(); len(evs) != 1 {
+		if evs := stripCue(fe.snapshot()); len(evs) != 1 {
 			t.Fatalf("the event must happen without the seam: %v", evs)
 		}
 	})
@@ -727,4 +727,36 @@ func TestSummaryEffortIsTheRow(t *testing.T) {
 			t.Fatalf("ReasoningEffort = %q, want the field's default medium", reqs[0].ReasoningEffort)
 		}
 	})
+}
+
+// TestCompactingCueOrder (SPEC_COMPACT 5, amended): the frontend hears
+// Compacting before the summary call runs — so the operator sees a
+// loader, not a hang, through a minutes-long deep-context prefill —
+// exactly once per compaction, and never on the passthrough.
+func TestCompactingCueOrder(t *testing.T) {
+	s := core.NewSession()
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)})
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 200), ContextTokens: 801})
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)})
+	prov := &scriptedProvider{turns: []scriptedTurn{{
+		events: []core.Event{core.TextDelta{Text: "SUMMARY"}, core.Done{}},
+	}}}
+	fe := &captureFrontend{}
+	pol, err := compact.New(prov, fe, s, "S", testRow)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := pol.Assemble(context.Background(), s); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	evs := fe.snapshot()
+	if len(evs) != 2 {
+		t.Fatalf("events = %v, want the cue then Compacted", evs)
+	}
+	if _, ok := evs[0].(core.Compacting); !ok {
+		t.Fatalf("event 0 = %T, want the Compacting cue first", evs[0])
+	}
+	if _, ok := evs[1].(core.Compacted); !ok {
+		t.Fatalf("event 1 = %T, want Compacted after the cue", evs[1])
+	}
 }

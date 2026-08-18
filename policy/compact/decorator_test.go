@@ -63,7 +63,7 @@ func TestOverflowRecoversOnce(t *testing.T) {
 			fe.Notify(ev)
 		}
 
-		evs := fe.snapshot()
+		evs := stripCue(fe.snapshot())
 		if len(evs) != 3 {
 			t.Fatalf("frontend order = %v, want Compacted, TextDelta, Done", evs)
 		}
@@ -135,7 +135,7 @@ func TestOverflowRecoversOnce(t *testing.T) {
 			fe.Notify(ev)
 		}
 		var order []string
-		for _, ev := range fe.snapshot() {
+		for _, ev := range stripCue(fe.snapshot()) {
 			switch e := ev.(type) {
 			case core.TextDelta:
 				order = append(order, "text:"+e.Text)
@@ -187,7 +187,7 @@ func TestOverflowRecoversOnceThenSurfaces(t *testing.T) {
 		}
 	}
 	stream()
-	evs := fe.snapshot()
+	evs := stripCue(fe.snapshot())
 	if len(evs) != 2 {
 		t.Fatalf("first stream = %v, want Compacted then the surfaced Fault", evs)
 	}
@@ -205,7 +205,7 @@ func TestOverflowRecoversOnceThenSurfaces(t *testing.T) {
 	// a new user message: the transcript grew — one more recovery is owed
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("n", 2000)})
 	stream()
-	evs = fe.snapshot()[2:]
+	evs = stripCue(fe.snapshot())[2:]
 	if len(evs) != 3 {
 		t.Fatalf("second stream = %v, want Compacted, TextDelta, Done", evs)
 	}
@@ -266,7 +266,7 @@ func TestOverflowClassifier(t *testing.T) {
 			for ev := range out {
 				fe.Notify(ev)
 			}
-			evs := fe.snapshot()
+			evs := stripCue(fe.snapshot())
 			if len(evs) != 3 {
 				t.Fatalf("%q: frontend = %v, want Compacted, TextDelta, Done", phrase, evs)
 			}
@@ -299,7 +299,7 @@ func TestOverflowClassifier(t *testing.T) {
 			for ev := range out {
 				fe.Notify(ev)
 			}
-			evs := fe.snapshot()
+			evs := stripCue(fe.snapshot())
 			if len(evs) != 1 {
 				t.Fatalf("%q: frontend = %v, want only the fault", phrase, evs)
 			}
@@ -652,7 +652,7 @@ func TestRecoveryKeptBatchOverrunsWindow(t *testing.T) {
 	for ev := range out {
 		fe.Notify(ev)
 	}
-	evs := fe.snapshot()
+	evs := stripCue(fe.snapshot())
 	// Compacted then a surfaced Fault — the retry (summary + kept batch
 	// ~ 1 + 200 + 852 = 1053 > 975) refused loud, not floor 1.
 	if len(evs) != 2 {
@@ -762,7 +762,7 @@ func TestSteerDuringRetry(t *testing.T) {
 		t.Fatalf("loop.Run: %v (a steer must not kill the run)", err)
 	}
 
-	evs := fe.snapshot()
+	evs := stripCue(fe.snapshot())
 	if len(evs) != 4 {
 		t.Fatalf("frontend events = %v, want the interrupt boundary, the next turn, its boundary", evs)
 	}

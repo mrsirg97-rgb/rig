@@ -124,3 +124,17 @@ func compactFixture() *core.Session {
 
 // stringify names an event for failure messages.
 func stringify(ev core.Event) string { return fmt.Sprintf("%T %+v", ev, ev) }
+
+// stripCue drops the Compacting cues (SPEC_COMPACT 5, amended): most
+// tests assert the transcript-bearing events; TestCompactingCueOrder
+// owns the cue's contract.
+func stripCue(evs []core.Event) []core.Event {
+	out := evs[:0:0]
+	for _, ev := range evs {
+		if _, ok := ev.(core.Compacting); ok {
+			continue
+		}
+		out = append(out, ev)
+	}
+	return out
+}

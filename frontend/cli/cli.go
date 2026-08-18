@@ -357,6 +357,10 @@ func (c *cli) Notify(ev core.Event) {
 		c.prompt += e.Usage.Prompt
 		c.completion += e.Usage.Completion
 		c.cacheRead += e.Usage.CacheRead
+	case core.Compacting:
+		// the loader's line (SPEC_COMPACT 5, amended): the summary call
+		// at deep context can prefill for minutes; say so once.
+		io.WriteString(c.out, "\u29c9 compacting\u2026\n")
 	case core.Compacted:
 		// SPEC_COMPACT 5: compaction is a transcript event — one line, the
 		// numbers as pane's formatTokens shapes; the TUI styles it (10).

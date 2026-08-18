@@ -56,7 +56,7 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 		}
 		// the batch is atomic and the overrun is bounded by one batch:
 		// the kept estimate is the batch's 175, 55 over the 120 budget.
-		evs := fe.snapshot()
+		evs := stripCue(fe.snapshot())
 		if len(evs) != 1 {
 			t.Fatalf("frontend events = %v", evs)
 		}

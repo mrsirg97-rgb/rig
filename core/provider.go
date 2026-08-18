@@ -127,6 +127,16 @@ type Compacted struct {
 
 func (Compacted) event() {}
 
+// Compacting announces the summary call is starting (SPEC_COMPACT 5,
+// amended): at deep context its prefill can run minutes, and the silent
+// gap reads as a hang. The policy emits it once per compaction, just
+// before the summary call, on both doors (the trigger path and the
+// forced verb); the loop forwards it in its existing default; a
+// Frontend renders a phase or ignores it (the compat rule).
+type Compacting struct{}
+
+func (Compacting) event() {}
+
 // Provider streams one model turn. One method: cancellation is ctx; per-
 // model tool-call wire formats are the adapter's problem, not the loop's.
 type Provider interface {
