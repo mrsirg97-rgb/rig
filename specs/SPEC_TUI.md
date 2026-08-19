@@ -245,10 +245,13 @@ up 214k down 18.2k · cache r 187k 92%
 
 The live status is two rows: the model with used over the window (the
 model alone before the first usage; the context part colored at the
-70/90 marks), and the usage row — the last turn's up, down, and
-cache-read hit rate (`TurnEnd` sets it from the turn's totals; before
-the first turn, the session's totals from the snapshot). No usage line
-commits per turn any more: the numbers live under the input, once. The live region's status is one string of newline-joined rows;
+70/90 marks), and the usage row — the turn's up, down, and cache-read
+hit rate, live within the turn: each model call's `Done` moves it (a
+long agentic turn shows its running totals and hit rate, which is
+when a cache miss is worth seeing), and the close keeps the turn's
+totals; before the first turn, the session's totals from the
+snapshot. No usage line commits per turn any more: the numbers live
+under the input, once. The live region's status is one string of newline-joined rows;
 the region splits and measures them (a wrapping usage row on a narrow
 terminal counts by its terminal rows, like every live row).
 

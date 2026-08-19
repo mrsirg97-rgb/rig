@@ -1373,3 +1373,32 @@ func TestSpacingRule(t *testing.T) {
 		t.Fatalf("oled's reasoning slot must be the grey: %q", got)
 	}
 }
+
+// TestUsageRowIsLiveWithinTheTurn (decision 3): the status's usage row
+// moves on each model call's Done, not only at the turn's close — a
+// long agentic turn shows its running up/down and hit rate.
+func TestUsageRowIsLiveWithinTheTurn(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	// the first model call of the turn: the row moves before TurnEnd.
+	s.fe.Notify(core.TextDelta{Text: "one\n"})
+	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 1000, Completion: 50, CacheRead: 900}})
+	s.await(th.Paint(SlotDim, "up 1.0k down 50 · cache r 900 90%"))
+	// the second call: the totals accumulate, still mid-turn.
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash", Args: []byte(`{"command":"ls"}`)}})
+	s.fe.Notify(core.ToolResult{ID: "c1", Content: "a\n"})
+	s.fe.Notify(core.TextDelta{Text: "two\n"})
+	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 2000, Completion: 30, CacheRead: 1900}})
+	s.await(th.Paint(SlotDim, "up 3.0k down 80 · cache r 2.8k 93%"))
+	// the close keeps the turn's totals.
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	rows := screenLines(t, s, 60)
+	if last := rows[len(rows)-1]; last != "up 3.0k down 80 · cache r 2.8k 93%" {
+		t.Fatalf("the usage row after the close = %q, want the turn's totals", last)
+	}
+}
