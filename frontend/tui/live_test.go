@@ -274,7 +274,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	}
 
 	want := []string{
-		paintFree(blockLines[0]), // the greeting (the fixture names no session)
+		paintFree(blockLines[0]), paintFree(blockLines[1]), paintFree(blockLines[2]), paintFree(blockLines[3]), // the title (the fixture names no session)
 		"hello",
 		"", // the prompt's margin (decision 2, amended): a blank under the frozen line
 		"thinking...",

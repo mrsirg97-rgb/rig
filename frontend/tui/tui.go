@@ -70,6 +70,12 @@ type tui struct {
 	// the current ToolStart: the block's detail line (decision 4).
 	toolName string
 	toolArgs []byte
+	// markdown: the decoration pass is on (the default; a later switch
+	// may turn it off). codeMode: inside a fenced block (the pass
+	// toggles it): lines commit preformatted, never word-wrapped, never
+	// decorated.
+	markdown bool
+	codeMode bool
 	// lastSlot: the slot of the last streamed text (decision 2's
 	// spacing rule): a reasoning block that ends and text or a tool
 	// that begins get one blank row between them, whether or not the
@@ -185,6 +191,7 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		width:         80,
 		height:        24,
 		showReasoning: true,
+		markdown:      true,
 		ed:            newEditor(),
 		pending:       make(chan string, 16),
 		wake:          make(chan struct{}, 1),
@@ -598,8 +605,14 @@ func (t *tui) onEnter() {
 		return // a blank line is a no-op, consumed (the CLI's rule)
 	}
 	t.mu.Lock()
-	full := t.theme.Paint(SlotAccent, t.theme.Glyph(GlyphPrompt)) +
-		t.theme.Paint(SlotText, " "+displayInput(line))
+	// the prompt line soft-wraps at words like any prose (decision 2,
+	// amended); the rows commit as one frozen block, the glyph on the
+	// first row.
+	promptRows := wrapSegs(t.theme, t.width, []seg{
+		{slot: SlotEmber, text: t.theme.Glyph(GlyphPrompt)},
+		{slot: SlotText, text: " " + displayInput(line)},
+	})
+	full := strings.Join(promptRows, "\n")
 	t.inputText = ""
 	t.editPos = 0
 	t.menuSyncLocked()
@@ -951,6 +964,7 @@ func (t *tui) Notify(ev core.Event) {
 		// row alone.
 		t.mu.Lock()
 		t.lastSlot = ""
+		t.codeMode = false // an unclosed fence does not leak into the next turn
 		pending := len(t.pend) > 0
 		t.mu.Unlock()
 		if pending {
@@ -1442,7 +1456,7 @@ func (t *tui) inputLineAndColLocked() (string, int) {
 	totalRows := (totalCols + width - 1) / width
 	if totalRows <= maxInputRows {
 		t.inputScroll = 0
-		line := t.theme.Paint(SlotAccent, glyph) +
+		line := t.theme.Paint(SlotEmber, glyph) +
 			t.theme.Paint(SlotText, " "+text+pad)
 		// the inline hint (decision 9): ghost text after the typed text,
 		// dim, display only. Single-row inputs only, cursor at the end
@@ -1484,7 +1498,7 @@ func (t *tui) inputLineAndColLocked() (string, int) {
 	win := sliceCols(logical, scroll*width, (scroll+maxInputRows)*width)
 	var line string
 	if scroll == 0 {
-		line = t.theme.Paint(SlotAccent, glyph) +
+		line = t.theme.Paint(SlotEmber, glyph) +
 			t.theme.Paint(SlotText, strings.TrimPrefix(win, glyph))
 	} else {
 		line = t.theme.Paint(SlotText, win)
@@ -1627,7 +1641,7 @@ func (t *tui) takeClosedLinesLocked() []string {
 				if p != "" {
 					cur = append(cur, seg{slot: s.slot, text: p})
 				}
-				lines = append(lines, paintSegs(t.theme, cur))
+				lines = append(lines, t.commitLineLocked(cur)...)
 				cur = nil
 			} else if p != "" {
 				cur = append(cur, seg{slot: s.slot, text: p})
@@ -1636,6 +1650,56 @@ func (t *tui) takeClosedLinesLocked() []string {
 	}
 	t.pend = cur
 	return lines
+}
+
+// commitLineLocked renders one closed line into its committed rows
+// (under mu): the markdown pass for the model's text (the fence toggle
+// and code mode; reasoning and mixed lines stay raw), then the word
+// wrap for prose (decision 2, amended) — preformatted lines (code
+// mode) commit whole, dim, indented two.
+func (t *tui) commitLineLocked(cur []seg) []string {
+	if t.codeMode {
+		// inside a fence: the closing fence ends the mode (the line
+		// drops); anything else commits preformatted.
+		plain := paintFreeSegs(cur)
+		if strings.HasPrefix(strings.TrimSpace(plain), "```") {
+			t.codeMode = false
+			return nil
+		}
+		return []string{t.theme.Paint(SlotDim, "  "+plain)}
+	}
+	if t.markdown && isTextLine(cur) {
+		out, fence, info := mdLine(t.theme, cur)
+		if fence {
+			t.codeMode = true
+			if info != "" {
+				return []string{t.theme.Paint(SlotDim, "  "+info)}
+			}
+			return nil
+		}
+		cur = out
+	}
+	return wrapSegs(t.theme, t.width, cur)
+}
+
+// isTextLine: every segment is the model's text (or unpainted): the
+// markdown pass's subject. Reasoning stays raw.
+func isTextLine(segs []seg) bool {
+	for _, s := range segs {
+		if s.slot != SlotText && s.slot != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// paintFreeSegs is the segments' text, unpainted.
+func paintFreeSegs(segs []seg) string {
+	var b strings.Builder
+	for _, s := range segs {
+		b.WriteString(s.text)
+	}
+	return b.String()
 }
 
 // --- the dynamic loops ------------------------------------------------

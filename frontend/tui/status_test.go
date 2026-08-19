@@ -27,7 +27,10 @@ func TestStatusBlockExactBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderStatus(th, statusInput())
-	want := th.Paint("ember", "welcome to rig") + "\n" +
+	want := th.Paint("dim", "welcome to") + "\n" +
+		th.Paint("ember", "█▀▄ █ █▀▀") + "\n" +
+		th.Paint("ember", "█▀▄ █ █ █") + "\n" +
+		th.Paint("ember", "▀ ▀ ▀ ▀▀▀") + "\n" +
 		th.Paint("dim", "session 2f9a1c0e77b3") + "\n" // the first twelve
 	if got != want {
 		t.Fatalf("the startup block:\ngot  %q\nwant %q", got, want)
@@ -61,8 +64,12 @@ func TestStatusBlockNoEffortOmitsTheSegment(t *testing.T) {
 	b := statusInput()
 	b.Session = ""
 	got := tui.RenderStatus(th, b)
-	if got != th.Paint("ember", "welcome to rig")+"\n" {
-		t.Fatalf("no session: the greeting alone:\n%q", got)
+	want := th.Paint("dim", "welcome to") + "\n" +
+		th.Paint("ember", "█▀▄ █ █▀▀") + "\n" +
+		th.Paint("ember", "█▀▄ █ █ █") + "\n" +
+		th.Paint("ember", "▀ ▀ ▀ ▀▀▀") + "\n"
+	if got != want {
+		t.Fatalf("no session: the title alone:\n%q", got)
 	}
 }
 
@@ -72,7 +79,7 @@ func TestStatusLineModelAloneBeforeFirstUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderStatusLine(th, "huihui3.8", 0, 262144, false, 0, 0, 0)
-	want := th.Paint("dim", "huihui3.8") + "\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
+	want := th.Paint("text", "huihui3.8") + "\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
 	if got != want {
 		t.Fatalf("before the first usage the first row is the model alone, the second the zero totals:\ngot  %q\nwant %q", got, want)
 	}
@@ -97,8 +104,8 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		if !strings.Contains(got, th.Paint(c.want, part)) {
 			t.Errorf("used=%d: the context part is not painted %s:\n%s", c.used, c.want, got)
 		}
-		if !strings.HasPrefix(got, th.Paint("dim", "huihui3.8 · ")) {
-			t.Errorf("used=%d: the model part is not dim:\n%s", c.used, got)
+		if !strings.HasPrefix(got, th.Paint("text", "huihui3.8")+th.Paint("dim", " · ")) {
+			t.Errorf("used=%d: the model part is not text (white), the dot dim:\n%s", c.used, got)
 		}
 		// the second row: the session's totals and the hit rate.
 		if !strings.HasSuffix(got, "\n"+th.Paint("dim", "up 214k down 3.2k · cache r 187k 87%")) {
