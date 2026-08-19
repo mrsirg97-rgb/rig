@@ -378,6 +378,44 @@ func TestMigrationNoOps(t *testing.T) {
 	})
 }
 
+// TestMigrationNeverRunsUnderAnOverride (SPEC_CONFIG 11, named):
+// RIG_HOME set to an **absent** directory, the old ~/.config/rig
+// present: no rename, no migration line, and the old home untouched
+// (the marker file still there) — the override is isolation, not a
+// move order (the RIG_HOME=$(mktemp -d) shape), whatever the override
+// holds.
+func TestMigrationNeverRunsUnderAnOverride(t *testing.T) {
+	scratch := t.TempDir()
+	oldHome := filepath.Join(scratch, ".config", "rig")
+	if err := os.MkdirAll(oldHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := `{"system": "OLD-DATA"}`
+	if err := os.WriteFile(filepath.Join(oldHome, "settings.json"), []byte(marker), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	override := filepath.Join(t.TempDir(), "absent-override") // not present
+	t.Setenv("HOME", scratch)
+	t.Setenv("RIG_HOME", override)
+
+	home, stderr, err := captureStderr(t, rigHome)
+	if err != nil {
+		t.Fatalf("rigHome: %v\n%s", err, stderr)
+	}
+	if home != override {
+		t.Fatalf("the override is the home, as-is: got %q, want %q", home, override)
+	}
+	if strings.Contains(stderr, "migrated") {
+		t.Fatalf("the migration must never run under an override, got %q", stderr)
+	}
+	if got, rerr := os.ReadFile(filepath.Join(oldHome, "settings.json")); rerr != nil || string(got) != marker {
+		t.Fatalf("the old home must be untouched (err=%v, contents=%q)", rerr, got)
+	}
+	if _, statErr := os.Stat(override); statErr == nil {
+		t.Fatalf("the override must not have been created by a migration rename")
+	}
+}
+
 // TestRigHomeOverrideBeatsTheOldHome (SPEC_PLUGINS, named): RIG_HOME
 // pointing at a home with settings.json while the old ~/.config/rig
 // holds a different one — the run takes the override's settings, and

@@ -628,15 +628,22 @@ rig: migrated the config home: /home/u/.config/rig -> /home/u/.rig
 The condition is total and idempotent: after the rename the old
 directory is gone, so the migration never fires twice; with the old
 directory absent it is a no-op; with the home already present (a fresh
-install, or the operator's `$RIG_HOME`) it is a no-op — a present home
-wins, whatever the old directory contains, and deletion is the
-operator's act, never the runtime's. A failed rename refuses the
+install) it is a no-op — a present home wins, whatever the old
+directory contains, and deletion is the operator's act, never the
+runtime's. A failed rename refuses the
 startup loud (the home is load-bearing; a half-migrated state is not
-one to boot on). The `$RIG_HOME` edge, named: when the override points
-at an existing directory, the migration does not run (the home is
-present) — the old directory is left for the operator to prune; when
-it points at an absent one, the old directory is renamed into it (the
-data follows the home the operator chose).
+one to boot on).
+
+**The `$RIG_HOME` edge, named: the migration never runs under an
+override.** An explicit override is an **isolation mechanism**, not a
+move order — `RIG_HOME=$(mktemp -d) rig -p ...` is the shape scripts
+and tests use, and under it the override is the home, used as-is,
+whatever it holds (present or absent), and the old `~/.config/rig`
+stays where it is. "The data follows the home" would turn every such
+run into a destructive move of the real config into a scratch
+directory; the default path is the migration's, and the operator who
+relocates permanently moves the data by hand (or unsets `RIG_HOME` on
+a run where the default home is absent and lets the rename do it).
 
 **The invariant's companion holds.** With no user files in either
 home, the entry modes are the 0.2.0 bytes (9): the home's location is
@@ -774,6 +781,11 @@ case names one, the built binary for the e2e.
   holds a different one (`FROM-OLD`): the request carries
   `FROM-RIG-HOME`, and the old directory is left intact (the present
   home wins).
+- `TestMigrationNeverRunsUnderAnOverride` — `RIG_HOME` set to an
+  **absent** directory, the old `~/.config/rig` present: no rename, no
+  migration line, and the old home untouched (the marker file still
+  there) — the override is isolation, not a move order (the
+  `RIG_HOME=$(mktemp -d)` shape), whatever the override holds.
 
 The suite is green on a box with no model loaded: every case is
 scripted, httptest, or a real store in a temp dir.

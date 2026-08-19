@@ -391,20 +391,20 @@ func listPluginFiles(home string) ([]string, error) {
 // rigHome is the config home (SPEC_CONFIG 11, SPEC_PLUGINS 6): $RIG_HOME
 // if set (the operator's spelling, used as-is), else ~/.rig — the
 // .pi/.omp convention, not the XDG one. The migration, once and
-// deterministic: if the resolved home is absent and the old
-// ~/.config/rig exists, the rename (atomic — both live under $HOME) and
-// the one line. A present home wins, whatever the old directory holds;
-// a failed rename refuses the start.
+// deterministic, and a **default-path event**: only when $RIG_HOME is
+// unset, if the resolved home is absent and the old ~/.config/rig
+// exists, the rename (atomic — both live under $HOME) and the one
+// line. Under an explicit override the migration never runs — the
+// override is isolation, not a move order (the RIG_HOME=$(mktemp -d)
+// shape); a failed rename refuses the start.
 func rigHome() (string, error) {
-	newHome := os.Getenv("RIG_HOME")
-	if newHome == "" {
-		if h := userHome(); h == "" {
-			return "", errors.New("cannot resolve the home directory (set $HOME or RIG_HOME)")
-		} else {
-			newHome = filepath.Join(h, ".rig")
-		}
+	if v := os.Getenv("RIG_HOME"); v != "" {
+		return v, nil // as-is, whatever it holds: the old home stays put
 	}
-	if h := userHome(); h != "" {
+	if h := userHome(); h == "" {
+		return "", errors.New("cannot resolve the home directory (set $HOME or RIG_HOME)")
+	} else {
+		newHome := filepath.Join(h, ".rig")
 		oldHome := filepath.Join(h, ".config", "rig")
 		if fi, err := os.Stat(oldHome); err == nil && fi.IsDir() {
 			if _, err := os.Stat(newHome); errors.Is(err, os.ErrNotExist) {
@@ -414,8 +414,8 @@ func rigHome() (string, error) {
 				fmt.Fprintf(os.Stderr, "rig: migrated the config home: %s -> %s\n", oldHome, newHome)
 			}
 		}
+		return newHome, nil
 	}
-	return newHome, nil
 }
 
 // resolveModel is the compaction row resolution (SPEC_COMPACT 2, 8;
