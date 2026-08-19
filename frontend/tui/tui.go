@@ -76,8 +76,7 @@ type tui struct {
 	// toggles it): lines commit preformatted, never word-wrapped, never
 	// decorated.
 	markdown bool
-	codeMode bool
-	codeLang string // the fence's language (langOf the info string) while in code mode
+	codeMode bool // inside a text-stream fence: lines commit preformatted, dim
 	// pendCol: the pending line's display column (under mu): the tab
 	// expansion's state. runewidth gives a tab width zero, but the
 	// terminal advances to an 8-column stop — an unexpanded tab in the
@@ -1109,7 +1108,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Lock()
 		t.lastSlot = ""
 		t.pendCol = 0
-		t.codeMode, t.codeLang = false, "" // an unclosed fence does not leak into the next turn
+		t.codeMode = false // an unclosed fence does not leak into the next turn
 		pending := len(t.pend) > 0
 		t.mu.Unlock()
 		if pending {
@@ -1840,42 +1839,26 @@ func (t *tui) takeClosedLinesLocked() []string {
 func (t *tui) commitLineLocked(cur []seg) []string {
 	if t.codeMode {
 		// inside a fence: the closing fence ends the mode (the line
-		// drops); anything else commits preformatted.
+		// drops); anything else commits preformatted, dim — the
+		// thinking's color, uniform (11, amended: the operator's
+		// simplification; the lexical highlighter is gone).
 		plain := paintFreeSegs(cur)
 		if strings.HasPrefix(strings.TrimSpace(plain), "```") {
 			t.codeMode = false
-			t.codeLang = ""
 			return nil
 		}
-		// the highlight (11, amended): the fence's language paints the
-		// line by the lexical pass; unknown paints dim.
-		return []string{"  " + highlightLine(t.theme, t.codeLang, plain)}
+		return []string{t.theme.Paint(SlotDim, "  "+plain)}
 	}
 	if t.markdown && isTextLine(cur) {
 		out, fence, info := mdLine(t.theme, cur)
 		if fence {
 			t.codeMode = true
-			t.codeLang = langOf(info)
 			if info != "" {
 				return []string{t.theme.Paint(SlotDim, "  "+info)}
 			}
 			return nil
 		}
 		cur = out
-	} else if t.markdown && isReasoningLine(cur) {
-		// a fence in the reasoning opens code mode too (11, amended):
-		// code is code wherever it appears, and this model thinks in
-		// it — the block highlights; the reasoning's other markdown
-		// stays raw (the margin notes are not decorated).
-		plain := strings.TrimSpace(paintFreeSegs(cur))
-		if strings.HasPrefix(plain, "```") {
-			t.codeMode = true
-			t.codeLang = langOf(strings.TrimPrefix(plain, "```"))
-			if info := strings.TrimSpace(strings.TrimPrefix(plain, "```")); info != "" {
-				return []string{t.theme.Paint(SlotDim, "  "+info)}
-			}
-			return nil
-		}
 	}
 	return wrapSegs(t.theme, t.width, cur)
 }
