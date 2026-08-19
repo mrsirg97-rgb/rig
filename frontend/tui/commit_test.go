@@ -107,6 +107,48 @@ func TestToolBlockHeadTailElided(t *testing.T) {
 	}
 }
 
+// the diff block (SPEC_DIFF decision 6): the opening carries the verb
+// (the one toolDetail entry); the rest of the block is the default
+// path (preview, outcome, duration), unchanged.
+func TestToolBlockDiffShowsVerbAndStaysDefaultPath(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body strings.Builder
+	for i := 1; i <= 10; i++ {
+		if i > 1 {
+			body.WriteString("\n")
+		}
+		body.WriteString("line" + itoa(i))
+	}
+	got := tui.RenderToolBlock(th, "diff", json.RawMessage(`{"mode":"files","ref":"base"}`), body.String()+"\n", false, 400*time.Millisecond)
+	lines := strings.Split(got, "\n")
+	// the opening: the accent dot, the name, the verb — then the
+	// default path: head six, the loud elided marker, tail two, close.
+	want := []string{
+		th.Paint("accent", "●") + " " + th.Paint("accent", "diff") + th.Paint("dim", " · ") + th.Paint("text", "files"),
+		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
+		th.Paint("dim", "  line4"), th.Paint("dim", "  line5"), th.Paint("dim", "  line6"),
+		th.Paint("dim", "  · 2 lines elided ·"),
+		th.Paint("dim", "  line9"), th.Paint("dim", "  line10"),
+		th.Paint("dim", "diff") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.4s"),
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("block = %d lines, want %d:\n%s", len(lines), len(want), got)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("line %d = %q, want %q", i, lines[i], want[i])
+		}
+	}
+	// a fed-back failure keeps the default outcome line.
+	got = tui.RenderToolBlock(th, "diff", json.RawMessage(`{"mode":"last","tool":"bash"}`), "no earlier observation", true, time.Second)
+	if !strings.Contains(got, th.Paint("error", "✕")) {
+		t.Fatalf("a failed diff block must keep the default failure outcome:\n%s", got)
+	}
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
@@ -168,6 +210,8 @@ func TestToolDetailTable(t *testing.T) {
 		{"python", `{"code":"import os\nprint(os)"}`, "import os"},
 		{"web_search", `{"query":"golang tui"}`, "golang tui"},
 		{"web_fetch", `{"url":"https://example.com/x"}`, "https://example.com/x"},
+		{"diff", `{"mode":"files","ref":"base"}`, "files"},
+		{"diff", `{"mode":"last","tool":"bash","args":{"command":"ls"}}`, "last"},
 		{"rem", `{"action":"recall","query":"pty"}`, ""}, // unknown to the table: name-only
 	}
 	for _, c := range cases {

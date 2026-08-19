@@ -77,7 +77,9 @@ type Observation struct {
 // exact string equality decision 3's write-time canonicalization
 // makes safe. The order is total: started_at is second precision,
 // message_seq breaks ties across messages, id breaks ties within one
-// (a multi-call message in a single second).
+// (a multi-call message in a single second). The world boundary
+// (SPEC_DIFF 5) is the session's last [compaction] marker row: the
+// re-landed tail is in scope, the rows before it are another world.
 func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args string, n int) ([]Observation, error) {
 	rows, err := db.DB.QueryContext(ctx, `
 		SELECT tc."result", tc."started_at", tc."message_seq"
@@ -87,6 +89,12 @@ func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args str
 		  AND tc."name" = $2
 		  AND tc."args" = $3
 		  AND tc."result" IS NOT NULL
+		  AND tc."message_seq" > COALESCE((
+		        SELECT MAX(m2."seq") FROM "messages" m2
+		        WHERE m2."session_id" = $1
+		          AND m2."role" = 'user'
+		          AND m2."content" LIKE '[compaction] %'
+		      ), 0)
 		ORDER BY tc."started_at" DESC, tc."message_seq" DESC, tc."id" DESC
 		LIMIT $4`, sessionID, name, args, n+1)
 	if err != nil {

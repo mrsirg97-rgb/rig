@@ -54,7 +54,7 @@ func TestCanonicalIgnoresKeyOrderAndWhitespaceValuesMatter(t *testing.T) {
 
 	// one value changed: the observation is different.
 	changed := []string{
-		`{"a":2,"b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`,  // the number
+		`{"a":2,"b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`,   // the number
 		`{"a":"1","b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`, // the type
 		`{"a":1,"b":"tow","c":[1,2,3],"d":{"e":true,"f":null}}`,   // the string
 		`{"a":1,"b":"two","c":[1,3,2],"d":{"e":true,"f":null}}`,   // the array order
@@ -330,6 +330,97 @@ func TestRecentToolCallsSessionScope(t *testing.T) {
 	}
 	if len(b) != 2 || b[0].Result != "rb2" || b[1].Result != "rb1" {
 		t.Fatalf("world-b rows = %d (%s), want rb2 rb1", len(b), resultsOf(b))
+	}
+}
+
+// TestRecentToolCallsWorldBoundary (SPEC_DIFF PR A, named): the world
+// boundary (decision 5) is the session's last [compaction] marker row:
+// a row before it is invisible (the summarized prefix is another
+// world), the re-landed tail is in scope (the current world's memory
+// carries forward through the re-landed rows), and a markerless
+// session reads whole (the boundary is at seq 0).
+func TestRecentToolCallsWorldBoundary(t *testing.T) {
+	db := openStore(t)
+	ctx := context.Background()
+	sid := "world"
+	if e := state.RecordSession(ctx, db, sid, "/w", "m", "v"); e != nil {
+		t.Fatal(e)
+	}
+	args := `{"command":"ls"}`
+	seq1, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e := state.RecordToolCall(ctx, db, seq1, "c1", "bash", args); e != nil {
+		t.Fatal(e)
+	}
+	if e := state.RecordToolResult(ctx, db, "c1", "r1", nil); e != nil {
+		t.Fatal(e)
+	}
+	// the compaction, as the loop drives it: the session is the summary
+	// row plus the kept tail, and the recorder re-lands the tail after
+	// the summary row (fresh seqs, name/args/result verbatim).
+	sess := core.NewSession()
+	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] the summary"})
+	sess.Append(core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: json.RawMessage(args)}}})
+	sess.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: "r1"})
+	rec := state.NewRecorder(&nullFrontend{}, db, "/w", "m", "v", sid, sess)
+	rec.Notify(core.Compacted{Summary: "[compaction] the summary"})
+
+	rows, err := state.RecentToolCalls(ctx, db, sid, "bash", args, 1)
+	if err != nil {
+		t.Fatalf("RecentToolCalls: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d (%s), want 1 (the re-landed copy; the original is before the marker and another world)", len(rows), resultsOf(rows))
+	}
+	if rows[0].Result != "r1" || rows[0].Seq <= seq1 {
+		t.Fatalf("the in-scope row = %q seq %d, want r1 at a fresh seq past the marker (the original's seq is %d)", rows[0].Result, rows[0].Seq, seq1)
+	}
+
+	// a call after the compaction pairs against the re-landed copy.
+	seq2, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e := state.RecordToolCall(ctx, db, seq2, "c2", "bash", args); e != nil {
+		t.Fatal(e)
+	}
+	if e := state.RecordToolResult(ctx, db, "c2", "r2", nil); e != nil {
+		t.Fatal(e)
+	}
+	rows, err = state.RecentToolCalls(ctx, db, sid, "bash", args, 1)
+	if err != nil {
+		t.Fatalf("RecentToolCalls: %v", err)
+	}
+	if len(rows) != 2 || rows[0].Result != "r2" || rows[1].Result != "r1" || rows[1].Seq <= seq1 {
+		t.Fatalf("rows = %d (%s), want r2 over the re-landed r1 (the tail's memory carries forward)", len(rows), resultsOf(rows))
+	}
+
+	// a markerless session reads whole (COALESCE puts the boundary at 0).
+	sid2 := "markerless"
+	if e := state.RecordSession(ctx, db, sid2, "/w", "m", "v"); e != nil {
+		t.Fatal(e)
+	}
+	for i, res := range []string{"a", "b"} {
+		seq, e := state.RecordMessage(ctx, db, sid2, "assistant", "", nil, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		id := fmt.Sprintf("m%d", i+1)
+		if e := state.RecordToolCall(ctx, db, seq, id, "bash", args); e != nil {
+			t.Fatal(e)
+		}
+		if e := state.RecordToolResult(ctx, db, id, res, nil); e != nil {
+			t.Fatal(e)
+		}
+	}
+	whole, err := state.RecentToolCalls(ctx, db, sid2, "bash", args, 1)
+	if err != nil {
+		t.Fatalf("RecentToolCalls(markerless): %v", err)
+	}
+	if len(whole) != 2 {
+		t.Fatalf("markerless rows = %d (%s), want 2 (no marker, the session reads whole)", len(whole), resultsOf(whole))
 	}
 }
 

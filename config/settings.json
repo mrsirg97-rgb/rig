@@ -2,7 +2,7 @@
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
   "system": "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done.",
-  "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch"],
+  "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff"],
   "retries": 3,
   "searxngUrl": "http://127.0.0.1:8888",
   "webFetchProxy": "http://127.0.0.1:8889",

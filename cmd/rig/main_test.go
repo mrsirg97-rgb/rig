@@ -20,6 +20,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state"
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
+	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
 	"github.com/mrsirg97-rgb/rig/tool/fs"
 )
@@ -134,6 +135,9 @@ func testTools() map[string]core.Tool {
 		"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 		"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "python": fakePython{},
 		"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
+		// the real diff surface: the state DB is the seam (SPEC_DIFF 7);
+		// the empty store keeps the registration test storeless.
+		"diff": diff.New(store.DB{}),
 	}
 }
 
@@ -166,8 +170,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	if got := k.SortedToolNames(); len(got) != 13 || got[0] != "bash" || got[5] != "python" || got[7] != "rem" || got[8] != "scheduler" || got[9] != "todo" || got[10] != "web_fetch" || got[11] != "web_search" || got[12] != "write" {
-		t.Fatalf("registered tools = %v, want bash,edit,find,grep,ls,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
+	if got := k.SortedToolNames(); len(got) != 14 || got[0] != "bash" || got[1] != "diff" || got[6] != "python" || got[8] != "rem" || got[9] != "scheduler" || got[10] != "todo" || got[11] != "web_fetch" || got[12] != "web_search" || got[13] != "write" {
+		t.Fatalf("registered tools = %v, want bash,diff,edit,find,grep,ls,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
 	}
 	if len(k.Middleware) != 2 {
 		t.Fatalf("middleware = %d links, want the allow-list and the bound (the observation tap is retired: the loop's events are the source)", len(k.Middleware))
