@@ -48,8 +48,11 @@ discovery is then a no-op that never starts the kernel. `core/` and
 
 ## non-goals
 
-- No plugin reload or hot-swap: the files are read once at start, as
-  the config files; a new plugin is a new process.
+- No plugin reload or hot-swap — AMENDED, deliberately reversed by
+  decision 8 (the reload and the forge), and GATED: the reversal ships
+  only after SPEC_SANDBOX's provenance rule (pending/approve) lands.
+  Until then the files are read once at start; a new plugin is a new
+  process.
 - No sandbox: the plugins run with rig's privileges until
   SPEC_SANDBOX (5) — the operator's python, the operator's machine.
 - No cross-plugin imports, no manifest, no versioning, no plugin
@@ -366,7 +369,8 @@ the surface (the model's python tool already is exactly that — a
 plugin is the model's python, shipped as a file); the sandbox is a
 later spec (a process boundary, a permissions story), not this one's.
 One line, as named: **pre-SPEC_SANDBOX, trust the plugins as you trust
-your own python.**
+your own python.** SPEC_SANDBOX now exists (the worker jail, the
+provenance rule); decision 8's reload is gated on it.
 
 ### 6. The home
 
@@ -392,6 +396,71 @@ to `allow` (or `--allow`), and the refusal's voice teaches the shape
 until then. Auto-allowing installed plugins would make the allow-list
 mean two things (named tools, and named-plus-whatever-is-in-a-
 directory); one thing it means is allow-listed tools.
+
+### 8. The reload and the forge (AMENDED; GATED on SPEC_SANDBOX)
+
+The reversal, named as SPEC_CONFIG named its own: this decision
+reverses the "no reload or hot-swap" non-goal. The plugins become a
+surface the session can grow: the model authors a plugin (it already
+has the `write` tool; the missing primitive is registration without a
+restart), the operator asks for one in a sentence, and the running
+harness picks it up. **Gated**: nothing here ships until
+SPEC_SANDBOX's provenance rule (the pending directory and the approve
+verb) is in — a model that can mint its own capabilities with the
+operator's privileges is the sandbox's loudest argument, and the gate
+is the point of writing both specs together.
+
+The pieces:
+
+- **`plugins_reload`, a native tool** (the one new primitive): re-runs
+  the discovery over `~/.rig/plugins/` — the same loud skips, the same
+  collision refusal, removal free (the list rebuilds from disk) — and
+  swaps the kernel's tool list at the root, the models-switch
+  semantics exactly: **next-turn**, never mid-turn (the current turn's
+  request already carries its list). The reload imports into the
+  running kernel, so a new plugin's functions are callable from the
+  python tool immediately, and callable as a tool on the next turn.
+- **`/plugins reload`**, the operator's verb: the same re-discovery,
+  the same next-turn registration, from the command door.
+- **`/plugins create <text>`**, a prompt template on the steer
+  precedent (the command queues a line; it never dispatches a turn
+  itself): "author a plugin: <text>; the contract is DESCRIPTION,
+  SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending
+  directory (SPEC_SANDBOX); call plugins_reload; test it with one
+  call." The command is sugar over capabilities the model has.
+- **Promotion**, the flow that motivated this: kernel code the model
+  keeps reusing becomes a plugin on request — and the rule is
+  **serialization, not reference**: the plugin file must be
+  self-contained, because kernel state dies with the process and the
+  file is the persistence. The shared namespace makes the transition
+  seamless in-session; the file makes it survive to the next.
+
+The costs, named:
+
+- **The cache**: the tools list rides the request prefix, so a reload
+  at deep context is one full re-prefill (minutes on a big window).
+  Deliberate, said out loud: a reload is an event, not a tic.
+- **The root's seam**: the provider/policy pair already rebuilds
+  per-turn (SPEC_COMMANDS 4); the kernel's tool list must be
+  re-readable the same way, at the root, zero loop lines — or the
+  feature waits. The implementing PR proves this before anything else.
+- **Provenance** (the gate, SPEC_SANDBOX): the model's `write` cannot
+  land files in `plugins/` directly — model-authored plugins land in
+  `plugins/pending/` (invisible to discovery: the listing is top-level
+  `*.py` already), and only the operator's `/plugins approve <name>`
+  moves one up. The forge mints; the operator blesses.
+
+Rejected, named:
+
+- A file watcher: the reload is an act with a name and a cost, not an
+  ambient behavior; watching is machinery and hides the re-prefill.
+- Mid-turn registration: the request's tool list is the turn's; a
+  list that mutates under a live turn is the race the models-switch
+  semantics were designed to avoid.
+- Auto-promotion (the harness noticing reuse and promoting on its
+  own): the operator asks, or the model proposes and the operator
+  approves — a capability that installs itself is the sandbox's
+  nightmare shape.
 
 ## testing
 

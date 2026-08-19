@@ -321,3 +321,10 @@ pass against a real kernel, the freeze gate holds, and the golden
 fixtures are byte-identical.
 
 > done (0.4.0)
+
+## the hardening sequence (post-0.4.0, pre-1.0)
+
+SPEC_SANDBOX before the surfaces grow further: PR B (the plugin
+provenance rule) unblocks SPEC_PLUGINS 8 (the reload and the forge);
+PR C (the worker jail) closes the oldest unpaid debt. The build round
+(Makefile + CI) may land in parallel; the forge lands last.
