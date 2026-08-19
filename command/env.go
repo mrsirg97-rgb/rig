@@ -62,6 +62,12 @@ type Env struct {
 	// description, file) and the skipped (name, reason) — SPEC_PLUGINS
 	// 4. Nil: no plugins seam (the root wired none).
 	Plugins []PluginInfo
+
+	// PluginsDir is the rig home's plugins/ directory (SPEC_SANDBOX
+	// 2): the pending zone is PluginsDir/pending, and /plugins pending
+	// and /plugins approve work on it. Empty: the verbs refuse with the
+	// no-seam voice, as the listing does for a nil Plugins.
+	PluginsDir string
 }
 
 // EnvOf asserts the dispatcher's env is this package's Env (decision 2):

@@ -271,7 +271,11 @@ func (c *cli) dispatch(ctx context.Context, line string) {
 		return
 	}
 	if out != "" {
-		fmt.Fprintln(c.out, out)
+		// the dispatcher owns the line's frame: the command's output is
+		// the bytes, and exactly one newline ends the line — a
+		// multi-line listing (the plugins' rows, a sessions show)
+		// carries its own trailing one, and the frame is not a second.
+		fmt.Fprint(c.out, strings.TrimRight(out, "\n")+"\n")
 	}
 }
 

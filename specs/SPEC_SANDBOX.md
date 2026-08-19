@@ -155,6 +155,29 @@ Creation is separated from installation:
   from a tool call (the command door is Frontend-side by
   construction — SPEC_COMMANDS 1 already guarantees this).
 
+**The voices, named (PR B).** The path rule's refusal: `permission
+denied: <path> is in plugins/ outside plugins/pending/ (plugins install
+by the operator's /plugins approve; write to plugins/pending/)`.
+`/plugins pending` is `plugins: N pending` with rows
+`  <name>: <DESCRIPTION> (<file>)` — each file's top-level DESCRIPTION
+string literal, read without running the file (a pending file is
+untrusted, and the read is not the moment to execute it; a file without
+one shows `(no DESCRIPTION)`) — and `plugins: no pending plugins` for
+an empty or absent zone. `/plugins approve <name>` checks in order and
+refuses loud: the pending file (absent, named); a name that collides
+with a native tool (the existing collision rule at the new door, its
+voice: `plugins: name collision: "<name>" (<name>.py) is already a
+native tool`); a file of the name already at the top level (a clobber
+is not an operator's verb by accident: `plugins: approve: "<name>" is
+already installed (<path> exists — remove it to install the pending
+one)`). The move is the atomic rename, named on success (`plugins:
+approved <name> (<from> -> <to>; the discovery loads it at the next
+start`); the reload is decision 8's, and a pre-8 approve is the move
+only. The zone is a fact of the home: created at startup, silent and
+idempotent — the write tool makes no directories, so the model's first
+pending write must not depend on the operator's mkdir. Usage: `plugins:
+usage: plugins | plugins pending | plugins approve <name>`.
+
 ### 3. The egress split
 
 Compute is jailed and netless (1); egress is the host's, guarded:
