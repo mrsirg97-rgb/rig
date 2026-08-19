@@ -145,7 +145,10 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
 - **The directory** — `~/.rig/plugins/` (the rig home's, top-level
   `*.py` only, in filename order). No directory, or an empty one, is a
   no-op that never starts the kernel; with no plugins the wire is the
-  built-in tools' bytes exactly.
+  built-in tools' bytes exactly. `plugins/pending/` is the forge's
+  landing zone (the model's authoring): invisible to discovery by the
+  top-level rule, and a fact of the home — created at startup, silent
+  and idempotent.
 - **The file's contract** — three names:
 
   ```python
@@ -170,13 +173,29 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   args dict; the return value is the tool result; an exception is a
   tool error carrying the traceback tail, and the kernel stays alive
   (it is the model's kernel too).
+- **The provenance rule** (SPEC_SANDBOX 2) — the model's `write` and
+  `edit` refuse a target inside `plugins/` that is not inside
+  `plugins/pending/`; the refusal teaches the shape: `permission
+  denied: <path> is in plugins/ outside plugins/pending/ (plugins
+  install by the operator's /plugins approve; write to
+  plugins/pending/)`. The rule is the guard for the honest path, not
+  the boundary: bash can still move a file into `plugins/` (the
+  operator's shell is the operator's); the worker jail (SPEC_SANDBOX
+  1) is the boundary, the provenance rule is the workflow.
 - **The allow-list** — a plugin is not in the built-in default; the
   operator allow-lists its name (`--allow echo` or `allow` in
   `settings.json`).
 - **`/plugins`** — the loaded plugins (name, description, file) and the
-  skipped ones with their reasons. No args, read-only.
-- **The sandbox** — pre-sandbox, trust the plugins as you trust your own
-  python: they run with rig's privileges, in the operator's kernel.
+  skipped ones with their reasons. `pending` lists the pending zone
+  with each file's DESCRIPTION (read without running the file);
+  `approve <name>` moves one to the top level — the operator's verb,
+  never a tool call; a name that collides with a built-in tool refuses
+  with the startup collision's voice, and an already-installed file of
+  the name refuses too.
+- **The sandbox** — the provenance rule is in (SPEC_SANDBOX 2); the
+  worker jail is the rest (SPEC_SANDBOX 1, 3, 5): until then, trust the
+  plugins as you trust your own python — they run with rig's
+  privileges, in the operator's kernel.
 
 ## terminal
 

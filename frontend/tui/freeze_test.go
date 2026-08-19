@@ -55,6 +55,9 @@ func TestFreezeGate(t *testing.T) {
 			p == "tool/bash" || strings.HasPrefix(p, "tool/bash/") ||
 			p == "tool/file" || strings.HasPrefix(p, "tool/file/") ||
 			p == "tool/rem" || strings.HasPrefix(p, "tool/rem/") ||
+			// the provenance rule's work surface (SPEC_SANDBOX 2): the
+			// perm's one new path rule, beside the allow-list.
+			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||
 			p == "plugins" || strings.HasPrefix(p, "plugins/") ||
 			p == "config" || strings.HasPrefix(p, "config/") ||
 			p == "docs" || strings.HasPrefix(p, "docs/") ||
