@@ -100,3 +100,34 @@ func TestMarkdownBlocks(t *testing.T) {
 		t.Fatalf("reasoning must stay raw: %q", got)
 	}
 }
+
+// TestHighlightLine (11, amended): the lexical pass per language —
+// keywords accent, strings ember, comments dim, numbers grey, the rest
+// text; unknown languages dim; SQL caseless; a string's escape skips.
+func TestHighlightLine(t *testing.T) {
+	th := oledTheme(t)
+	cases := []struct {
+		lang, line string
+		want       string
+	}{
+		{"go", `if x == "a\"b" { // hi`,
+			th.Paint(SlotAccent, "if") + th.Paint(SlotText, " x == ") + th.Paint(SlotEmber, `"a\"b"`) + th.Paint(SlotText, " { ") + th.Paint(SlotDim, "// hi")},
+		{"python", "def f(n=42):  # doc",
+			th.Paint(SlotAccent, "def") + th.Paint(SlotText, " f(n=") + th.Paint(SlotReasoning, "42") + th.Paint(SlotText, "):  ") + th.Paint(SlotDim, "# doc")},
+		{"sql", "select * from t where id = 7",
+			th.Paint(SlotAccent, "select") + th.Paint(SlotText, " * ") + th.Paint(SlotAccent, "from") + th.Paint(SlotText, " t ") + th.Paint(SlotAccent, "where") + th.Paint(SlotText, " id = ") + th.Paint(SlotReasoning, "7")},
+		{"", "anything at all", th.Paint(SlotDim, "anything at all")},
+		{"data", `{"k": 1}`, th.Paint(SlotText, "{") + th.Paint(SlotEmber, `"k"`) + th.Paint(SlotText, ": ") + th.Paint(SlotReasoning, "1") + th.Paint(SlotText, "}")},
+	}
+	for _, c := range cases {
+		if got := highlightLine(th, c.lang, c.line); got != c.want {
+			t.Errorf("%s %q:\n got %q\nwant %q", c.lang, c.line, got, c.want)
+		}
+	}
+	// the info string resolves aliases; unknown is "".
+	for info, want := range map[string]string{"golang": "go", "ts": "js", "bash": "shell", "Python3": "python", "json": "data", "brainfuck": ""} {
+		if got := langOf(info); got != want {
+			t.Errorf("langOf(%q) = %q, want %q", info, got, want)
+		}
+	}
+}

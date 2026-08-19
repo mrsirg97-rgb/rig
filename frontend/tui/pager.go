@@ -24,6 +24,11 @@ type pager struct {
 	width  int
 	height int
 	offset int // lines above the tail (0 = the tail is visible)
+	// footer: the live region's rows (the loader, the menu, the input,
+	// the status), pinned under the history — the operator types and
+	// steers while paging; the history scrolls above (the amended
+	// pager: the controls locked, the content scrollable).
+	footer []string
 }
 
 func newPager(lines []string, width, height int) *pager {
@@ -48,7 +53,11 @@ func (p *pager) rows(s string) int {
 // page is the lines one PgUp/PgDn moves: a screen minus one for
 // context, at least one.
 func (p *pager) page() int {
-	if n := p.height - 2; n > 1 {
+	footerRows := 0
+	for _, f := range p.footer {
+		footerRows += p.rows(f)
+	}
+	if n := p.height - 2 - footerRows; n > 1 {
 		return n
 	}
 	return 1
@@ -77,7 +86,14 @@ func (p *pager) move(delta int) bool {
 // miniature).
 func (p *pager) frame(th Theme) string {
 	end := len(p.lines) - p.offset // exclusive
-	budget := p.height - 1         // the status row keeps the last row
+	footerRows := 0
+	for _, f := range p.footer {
+		footerRows += p.rows(f)
+	}
+	budget := p.height - 1 - footerRows // the pager's status row and the footer keep the last rows
+	if budget < 1 {
+		budget = 1
+	}
 	var view []string
 	used := 0
 	for i := end - 1; i >= 0; i-- {
@@ -108,6 +124,11 @@ func (p *pager) frame(th Theme) string {
 		status = truncateWidth(th, status, p.width)
 	}
 	b.WriteString(th.Paint(SlotDim, status))
+	// the footer: the live region's rows, pinned under the history.
+	for _, f := range p.footer {
+		b.WriteString(lineEnd)
+		b.WriteString(f)
+	}
 	return b.String()
 }
 
