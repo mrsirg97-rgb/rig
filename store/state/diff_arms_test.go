@@ -54,7 +54,7 @@ func TestCanonicalIgnoresKeyOrderAndWhitespaceValuesMatter(t *testing.T) {
 
 	// one value changed: the observation is different.
 	changed := []string{
-		`{"a":2,"b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`,  // the number
+		`{"a":2,"b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`,   // the number
 		`{"a":"1","b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`, // the type
 		`{"a":1,"b":"tow","c":[1,2,3],"d":{"e":true,"f":null}}`,   // the string
 		`{"a":1,"b":"two","c":[1,3,2],"d":{"e":true,"f":null}}`,   // the array order

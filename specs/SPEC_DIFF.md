@@ -70,7 +70,12 @@ Rejected, named:
 - Both verbs reply with a unified diff, context 3, ANSI-free.
 - The engine is Go, stdlib only, a pure function (two strings in, a
   diff string out), no shell-out under `last`; the layout is git's:
-  `--- <old>` / `+++ <new>` / `@@ -a,b +c,d @@` hunks.
+  `--- <old>` / `+++ <new>` / `@@ -a,b +c,d @@` hunks. The algorithm is
+  the plain LCS table: split into lines, fill the DP table, walk it
+  back into the edit script, and group the edits into hunks of 3
+  context lines (hunks whose contexts touch merge). O(N*M) is fine:
+  the inputs are tool results (KBs) and the reply is capped at 100
+  lines, so the table's bound is the bound the cap already imposes.
 - The `last` reply is one header line, then the body. The header names
   the two observations (started_at, message_seq): the model sees which
   calls were compared, not just what changed.
@@ -96,8 +101,12 @@ Rejected, named:
   carries the shell-out contract; `last` does not need git.
 - A third-party diff library: `go.mod` is unchanged; a dependency is
   attack surface not written here.
-- An LCS DP table: O(n*m) memory over output the cap discards most of
-  the time.
+- A fancier diff algorithm (patience, histogram, a middle-snake
+  divide-and-conquer): the plain LCS table is the engine, and its
+  O(N*M) bound is not the cost. The inputs are tool results (KBs) and
+  the reply is capped at 100 lines, so the bound is the one the cap
+  already imposes, and the machinery it would save is never in the
+  output.
 - ANSI in the reply: the model reads bytes; the TUI preview already
   styles what it shows (decision 6).
 - A tail-keeping cap: the head is where the first hunk names the
@@ -444,9 +453,13 @@ last:
 - no session in ctx is a loud refusal, not a global scan
 - a re-landed tail after compaction (fresh seqs, verbatim
   name/args/result) diffs as an ordinary row
-- the engine's layout is git's: a cross-check case diffs a fixture
-  pair and compares the body against `git diff`'s (the test may shell
-  out; the runtime may not)
+- the engine's hunks are a patch: a cross-check case applies the
+  engine's hunks to the old string, with a tiny patch-apply helper in
+  the test, and asserts the result is the new string and the hunk
+  headers' ranges are consistent with the body (the test may apply;
+  the runtime may not). Two correct diffs may pick different
+  equal-cost scripts, so the property is the contract, not git's bytes
+  (chasing them is chasing xdiff's C)
 
 the wire:
 

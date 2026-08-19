@@ -78,6 +78,13 @@ type Observation struct {
 // makes safe. The order is total: started_at is second precision,
 // message_seq breaks ties across messages, id breaks ties within one
 // (a multi-call message in a single second).
+// RecentToolCalls returns the n+1 most recent completed observations
+// for (session, name, canonical args), newest first — the pair the
+// diff tool reads (SPEC_DIFF). The world boundary is the session's
+// last [compaction] marker row (SPEC_COMPACT 5: grep is the interface,
+// the marker is a user row): the re-landed tail is the current world's
+// memory; the rows before the marker are the autopsy, kept but not
+// diffed (SPEC_DIFF 5: no diffing across compaction).
 func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args string, n int) ([]Observation, error) {
 	rows, err := db.DB.QueryContext(ctx, `
 		SELECT tc."result", tc."started_at", tc."message_seq"
@@ -87,6 +94,12 @@ func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args str
 		  AND tc."name" = $2
 		  AND tc."args" = $3
 		  AND tc."result" IS NOT NULL
+		  AND tc."message_seq" > COALESCE((
+		        SELECT MAX(m2."seq") FROM "messages" m2
+		        WHERE m2."session_id" = $1
+		          AND m2."role" = 'user'
+		          AND m2."content" LIKE '[compaction] %'
+		      ), 0)
 		ORDER BY tc."started_at" DESC, tc."message_seq" DESC, tc."id" DESC
 		LIMIT $4`, sessionID, name, args, n+1)
 	if err != nil {
