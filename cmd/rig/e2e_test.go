@@ -228,7 +228,10 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	}
 	cmd := exec.Command(bin, "-p", "hi", "-model", "nope")
 	cmd.Dir = t.TempDir()
-	cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
+	// the scratch home (rigEnv): the real ~/.rig must not leak its
+	// models into the known list, nor the leftover-home line into the
+	// output (XDG_CONFIG_HOME stopped isolating at the ~/.rig move).
+	cmd.Env = rigEnv(t.TempDir(), "")
 	out, runErr := cmd.CombinedOutput()
 	if runErr == nil {
 		t.Fatalf("an unknown model with no env must refuse: %q", out)
