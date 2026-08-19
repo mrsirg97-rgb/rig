@@ -25,14 +25,15 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/fs"
 )
 
-// The 1.0 freeze (roadmap 9) is fixed: anything else is a release
+// TestVersionIsTheFreeze: the release version is the named fact — the
+// 1.0 tag waits for lived use, and everything before it is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 0.3.0: config loading as a first-class component (SPEC_CONFIG); the
-	// 1.0 tag waits for lived use (a worker soak, the TUI field-tested as
-	// the daily driver).
-	if Version != "0.3.0" {
-		t.Fatalf("Version = %q, want 0.3.0 (the feature-complete runtime)", Version)
+	// 0.4.0: the rig home (~/.rig, RIG_HOME) and the python plugins
+	// (SPEC_PLUGINS); pre-1.0 — the 1.0 tag waits for lived use (a
+	// worker soak, the TUI field-tested as the daily driver).
+	if Version != "0.4.0" {
+		t.Fatalf("Version = %q, want 0.4.0 (pre-1.0, feature-complete)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)

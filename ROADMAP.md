@@ -297,3 +297,27 @@ commands, the diff outside it (plus cmd/rig, docs, go.mod) is empty,
 and every CLI golden still passes: the CLI remains the piped mode and
 the reference bytes. If the TUI needs a loop change, 7 or 9 was
 incomplete and is reopened first.
+
+> done
+
+## 11. the rig home and the python plugins (pre-1.0)
+
+Deliverable: the extension surface, specced in `specs/SPEC_PLUGINS.md`
+(home amended in `specs/SPEC_CONFIG.md` 11). The config home moves to
+`~/.rig` (resolution `$RIG_HOME` > `~/.rig`; the one-time rename
+migration from `~/.config/rig`, loud and deterministic), and the python
+plugins ride it: one file under `~/.rig/plugins/`, one tool per file,
+discovered at startup through the shared python kernel (the same
+persistent kernel as the `python` tool — the namespace shared on
+purpose), registered on the existing `core.Tool` seam. Loud skip on a
+broken file, loud refusal on a native-name collision, `/plugins` the
+listing, allow-list subject and not in the default, sandbox named and
+deferred. `core/` and `loop/` zero diff; the 0.2.0 wire is untouched
+when no plugins directory is present.
+
+Done when: the named cases (discovery, skip, collision, round-trip,
+exception-with-kernel-alive, home, migration, `/plugins` rendering)
+pass against a real kernel, the freeze gate holds, and the golden
+fixtures are byte-identical.
+
+> done (0.4.0)

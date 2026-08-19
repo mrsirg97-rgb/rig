@@ -133,7 +133,7 @@ func rigEnv(scratch, binDir string) []string {
 
 func cfgDir(t *testing.T, scratch string) string {
 	t.Helper()
-	return filepath.Join(scratch, "rig")
+	return filepath.Join(scratch, ".rig")
 }
 
 // --- the named cases (SPEC_CONFIG, testing) ---

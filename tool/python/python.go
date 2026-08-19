@@ -169,6 +169,16 @@ func (t *Tool) Close() {
 	}
 }
 
+// Run executes one code cell in the persistent kernel and returns the
+// host's raw reply, unrendered (SPEC_PLUGINS 1, 3): the plugins leaf
+// drives discovery and calls through it — the same kernel, the same
+// namespace as the model's python tool, one process. Exec keeps its
+// rendered voice for the model; Run is the raw door.
+func (t *Tool) Run(ctx context.Context, code string, timeoutMs int) (Reply, error) {
+	req := request{Code: &code}
+	return t.k.send(ctx, req, timeoutMs)
+}
+
 // kernel is the client: one queue, one live process at a time, one
 // one-shot death note for the next call.
 type kernel struct {
@@ -582,20 +592,25 @@ func defaultInterpreter() string {
 	return filepath.Join(homeDir(), ".pi", "agent", "kernel-venv", "bin", "python")
 }
 
+// rigHome is the config home (SPEC_CONFIG 11, SPEC_PLUGINS 6): $RIG_HOME,
+// else ~/.rig — the .pi/.omp convention, the same rule the root applies.
+func rigHome() string {
+	if v := os.Getenv("RIG_HOME"); v != "" {
+		return v
+	}
+	return filepath.Join(homeDir(), ".rig")
+}
+
 // DefaultHost resolves the host: the shared agent path first (interop with
-// the shared venv), else the embedded host materialised into rig's config home
-// (idempotent; temp+rename). Exported so the root can name an explicit
-// interpreter (RIG_PYTHON) with the default host.
+// the shared venv), else the embedded host materialised into the rig
+// home's kernel directory (idempotent; temp+rename). Exported so the root
+// can name an explicit interpreter (RIG_PYTHON) with the default host.
 func DefaultHost() string {
 	local := filepath.Join(homeDir(), ".pi", "agent", "kernel", "kernel_host.py")
 	if _, err := os.Stat(local); err == nil {
 		return local
 	}
-	cfg, err := os.UserConfigDir()
-	if err != nil || cfg == "" {
-		cfg = filepath.Join(homeDir(), ".config")
-	}
-	dir := filepath.Join(cfg, "rig", "kernel")
+	dir := filepath.Join(rigHome(), "kernel")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		dir = os.TempDir()
 	}

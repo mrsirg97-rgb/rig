@@ -27,11 +27,11 @@ func allByName(t *testing.T) map[string]core.Command {
 	return out
 }
 
-// TestAllIsTheStandardSet (SPEC_COMMANDS, named): the seven commands,
+// TestAllIsTheStandardSet (SPEC_COMMANDS, named): the eight commands,
 // each implementing the seam, each with a non-empty description.
 func TestAllIsTheStandardSet(t *testing.T) {
 	byName := allByName(t)
-	want := []string{"compact", "models", "new", "scheduler", "sessions", "steer", "todo"}
+	want := []string{"compact", "models", "new", "plugins", "scheduler", "sessions", "steer", "todo"}
 	if len(byName) != len(want) {
 		t.Fatalf("the standard set has %d commands, want %d: %v", len(byName), len(want), names(byName))
 	}

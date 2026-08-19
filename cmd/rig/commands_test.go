@@ -859,7 +859,7 @@ func TestREPLCommands(t *testing.T) {
 	}
 
 	// the state store: two session rows, the older closed ok.
-	glob, _ := filepath.Glob(filepath.Join(scratch, "rig", "sessions", "*.sqlite"))
+	glob, _ := filepath.Glob(filepath.Join(scratch, ".rig", "sessions", "*.sqlite"))
 	if len(glob) != 1 {
 		t.Fatalf("sessions store = %v, want one", glob)
 	}
