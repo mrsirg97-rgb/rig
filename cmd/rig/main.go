@@ -412,6 +412,13 @@ func rigHome() (string, error) {
 					return "", fmt.Errorf("migrate the config home: %s -> %s: %v", oldHome, newHome, err)
 				}
 				fmt.Fprintf(os.Stderr, "rig: migrated the config home: %s -> %s\n", oldHome, newHome)
+			} else if err == nil {
+				// both homes exist: the present home won and the
+				// migration will never fire — name it, so a machine
+				// where a dev build half-birthed ~/.rig does not lose
+				// its real data to silence (the operator merges by
+				// hand; deletion is theirs, never the runtime's).
+				fmt.Fprintf(os.Stderr, "rig: the old config home still exists: %s (the home here won: %s; merge or prune it by hand)\n", oldHome, newHome)
 			}
 		}
 		return newHome, nil

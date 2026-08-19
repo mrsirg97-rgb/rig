@@ -745,3 +745,38 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 		}
 	}
 }
+
+// TestBothHomesPresentIsNamed (SPEC_CONFIG 11, amended): with the old
+// ~/.config/rig present and ~/.rig also present, the migration never
+// fires (a present home wins) — and the leftover is named on stderr,
+// so a machine where a dev build half-birthed ~/.rig does not lose its
+// real data to silence. Nothing moves; both directories are untouched.
+func TestBothHomesPresentIsNamed(t *testing.T) {
+	scratch := t.TempDir()
+	old := filepath.Join(scratch, ".config", "rig")
+	newH := filepath.Join(scratch, ".rig")
+	if err := os.MkdirAll(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(newH, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(old, "marker.txt")
+	if err := os.WriteFile(marker, []byte("real data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := buildBin(t, t.TempDir())
+	cmd := exec.Command(bin, "-p", "x", "-base-url", "http://127.0.0.1:1/v1", "-retries", "0")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "")
+	out, _ := cmd.CombinedOutput() // the model call fails; the startup ran
+	if !strings.Contains(string(out), "the old config home still exists: "+old) {
+		t.Fatalf("the leftover old home must be named on stderr:\n%s", out)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("the old home must be untouched: %v", err)
+	}
+	if strings.Contains(string(out), "migrated the config home") {
+		t.Fatalf("the migration must not fire with the home present:\n%s", out)
+	}
+}

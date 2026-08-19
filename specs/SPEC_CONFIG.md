@@ -630,7 +630,11 @@ directory is gone, so the migration never fires twice; with the old
 directory absent it is a no-op; with the home already present (a fresh
 install) it is a no-op — a present home wins, whatever the old
 directory contains, and deletion is the operator's act, never the
-runtime's. A failed rename refuses the
+runtime's — and the leftover is named (amended, the field: a dev
+build's half-birthed `~/.rig` blocked a real migration in silence):
+with both homes present, one stderr line says the old home still
+exists and which home won, so the operator merges or prunes by hand
+instead of discovering orphaned data later. A failed rename refuses the
 startup loud (the home is load-bearing; a half-migrated state is not
 one to boot on).
 
