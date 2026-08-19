@@ -1582,3 +1582,37 @@ func TestRepaintSyncsTheSize(t *testing.T) {
 		t.Fatalf("the post-resize line is missing:\n%q", rows)
 	}
 }
+
+// TestArrowsNavigateTheMenu (decision 9, amended): with the menu open
+// the arrows step the selection — the window follows, so a long list
+// pages — and Enter accepts the arrow-selected candidate; with the
+// menu closed the arrows stay the history.
+func TestArrowsNavigateTheMenu(t *testing.T) {
+	th := oledTheme(t)
+	todo := &subCmd{fakeCmd: fakeCmd{name: "todo", desc: "the queue"}}
+	models := &fakeCmd{name: "models", desc: "the table"}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{todo, models}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	row := func(name, desc string) string {
+		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
+	}
+	// the verb menu on /todo: Down steps to the second verb, Up wraps back.
+	s.si.feed("/todo")
+	s.await(th.Invert(row("read", "the queue")))
+	s.si.feed("\x1b[B") // Down
+	s.await(th.Invert(row("create", "the queue, the task's text")))
+	s.si.feed("\x1b[A") // Up
+	s.awaitCount(th.Invert(row("read", "the queue")), 2)
+	s.si.feed("\x1b[B\x1b[B") // Down Down -> done
+	s.await(th.Invert(row("done", "a task's id")))
+	// Enter accepts the arrow-selected verb, never dispatching.
+	s.si.feed("\n")
+	s.await(th.Paint(SlotText, " /todo done "))
+	if strings.Contains(s.out.String(), "queue reply") {
+		t.Fatalf("the accept must not dispatch")
+	}
+}

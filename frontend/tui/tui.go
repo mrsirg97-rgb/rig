@@ -447,6 +447,31 @@ func (t *tui) onKey(k key, r rune) {
 		}
 		t.mu.Unlock()
 		t.paintInput()
+	case keyUp, keyDown:
+		// the arrows step the menu's selection while it is open
+		// (decision 9, amended: the window follows the selection, so
+		// the arrows page a long list); with the menu closed they are
+		// the history, as today.
+		t.mu.Lock()
+		open := t.menuOpenLocked()
+		if open {
+			n := len(t.menuCands)
+			if k == keyDown {
+				t.menuSel = (t.menuSel + 1) % n
+			} else {
+				t.menuSel = (t.menuSel - 1 + n) % n
+			}
+		}
+		t.mu.Unlock()
+		if open {
+			t.paintInput()
+			return
+		}
+		t.ed.apply(k, r)
+		t.mu.Lock()
+		t.menuSyncLocked()
+		t.mu.Unlock()
+		t.paintInput()
 	default:
 		before := t.ed.text()
 		t.ed.apply(k, r)

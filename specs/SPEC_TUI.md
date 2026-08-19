@@ -524,8 +524,10 @@ does not move, and the CLI never sees the menu.
   most six rows show; the window follows the selection like the
   input's five-row window does, and a dim `… N more` tail counts the
   candidates past the window. Tab cycles the selection down, Shift-Tab
-  up (CSI Z, added to the parser), Enter accepts the selection into
-  the input — the typed prefix replaced by the candidate, a trailing
+  up (CSI Z, added to the parser), the arrows step it too while the
+  menu is open (the window follows the selection, so a long list
+  pages; with the menu closed the arrows stay the history), Enter
+  accepts the selection into the input — the typed prefix replaced by the candidate, a trailing
   space, never dispatching — and Esc closes the menu until the input
   changes.
 - exactly one candidate: the ghost, today's rule — the remainder, dim,
