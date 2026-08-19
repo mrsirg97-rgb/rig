@@ -190,6 +190,14 @@ content never soft-wraps: tool output, command output, and fenced code
 commit whole and break at the column edge as before. The paint
 survives the break per piece.
 
+The size is read at the repaint, not the signal (amended: the
+two-client tmux race): SIGWINCH is asynchronous, and a delta that
+repaints between the resize and the signal would clear the region with
+a stale width — the reflowed rows and the bookkeeping disagree, and
+every repaint leaves the region's top rows behind. Every repaint
+re-reads the terminal size before building rows (a TIOCGWINSZ per
+repaint, microseconds); the signal still fires the full repaint.
+
 The commit points are the events, exactly:
 
 - `ReasoningDelta` / `TextDelta`: streamed as they arrive (reasoning

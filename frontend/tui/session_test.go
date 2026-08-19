@@ -1536,3 +1536,49 @@ func TestMarkdownOnTheCommittedPath(t *testing.T) {
 		}
 	}
 }
+
+// TestRepaintSyncsTheSize (the two-client tmux race): a resize whose
+// SIGWINCH has not landed yet must not leave a repaint on the stale
+// width — every repaint re-reads the size before building rows, so
+// the region's clear math matches the reflowed screen. The test
+// injects a size change with no winch at all and asserts the next
+// delta's repaint lays the region out at the new width.
+func TestRepaintSyncsTheSize(t *testing.T) {
+	th := oledTheme(t)
+	w := 96
+	s := newScriptedSession(t, WithTheme(th), WithWidth(96),
+		WithSize(func() (int, int, bool) { return w, 30, true }),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	s.fe.Notify(core.TextDelta{Text: "before the resize\n"})
+	s.await("before the resize")
+	// the resize: no winch fires; the next repaint must pick it up.
+	s.fe.mu.Lock()
+	w = 40
+	s.fe.mu.Unlock()
+	s.fe.Notify(core.TextDelta{Text: "after the resize this line is long enough to wrap at forty\n"})
+	s.await("forty")
+	s.fe.mu.Lock()
+	width, lw := s.fe.width, s.fe.live.width
+	s.fe.mu.Unlock()
+	if width != 40 || lw != 40 {
+		t.Fatalf("the repaint did not sync the size: tui %d, live %d, want 40", width, lw)
+	}
+	// the committed prose wrapped at the new width (word wrap at 40).
+	rows := screenLines(t, s, 40)
+	found := false
+	for _, r := range rows {
+		if displayWidth(r) > 40 {
+			t.Fatalf("a row overflows the new width: %q", r)
+		}
+		if strings.Contains(r, "after the resize") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the post-resize line is missing:\n%q", rows)
+	}
+}
