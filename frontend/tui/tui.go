@@ -124,6 +124,40 @@ type tui struct {
 
 	ticks <-chan time.Time
 	winch <-chan struct{}
+
+	// sizeOf reads the terminal's size (the production default is
+	// term.GetSize on the input tty; the tests inject). Repaints call
+	// it before building rows: a resize's SIGWINCH is asynchronous,
+	// and a delta that repaints between the resize and the signal
+	// would clear the region with a stale width — the reflowed rows
+	// on screen and the bookkeeping disagree, and every repaint leaves
+	// the region's top rows behind (the duplicate cascade, found on a
+	// two-client tmux).
+	sizeOf func() (int, int, bool)
+}
+
+// WithSize is the size seam (a test seam: the tests inject a size;
+// the production default reads the input tty).
+func WithSize(f func() (int, int, bool)) Option {
+	return func(t *tui) { t.sizeOf = f }
+}
+
+// syncSizeLocked re-reads the terminal size before a repaint builds
+// rows (under mu): a change lands in the width, the height, and the
+// live region's wrap math — ahead of the SIGWINCH, which still fires
+// for the full repaint.
+func (t *tui) syncSizeLocked() {
+	if t.sizeOf == nil {
+		return
+	}
+	w, h, ok := t.sizeOf()
+	if !ok || w <= 0 {
+		return
+	}
+	if w != t.width || h != t.height {
+		t.width, t.height = w, h
+		t.live.setWidth(w)
+	}
 }
 
 // Option configures the frontend.
@@ -207,6 +241,11 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		}
 		if old, err := term.MakeRaw(t.fdi); err == nil {
 			t.rawOld = old
+		}
+		fdi := t.fdi
+		t.sizeOf = func() (int, int, bool) {
+			w, h, err := term.GetSize(fdi)
+			return w, h, err == nil
 		}
 	}
 	for _, opt := range opts {
@@ -651,6 +690,7 @@ func (t *tui) onEnter() {
 		return // a blank line is a no-op, consumed (the CLI's rule)
 	}
 	t.mu.Lock()
+	t.syncSizeLocked()
 	// the prompt line soft-wraps at words like any prose (decision 2,
 	// amended); the rows commit as one frozen block, the glyph on the
 	// first row.
@@ -1049,6 +1089,7 @@ func (t *tui) commit(chunk string) {
 // is showing (decision 9, amended), and the input row — the status
 // row is the region's last row, passed to the ops separately.
 func (t *tui) liveLinesLocked() []string {
+	t.syncSizeLocked()
 	// the margins (decision 2, amended): one blank live row between
 	// the region's groups — the loader stands apart from the streamed
 	// text and from the input, and the input stands apart from
@@ -1481,6 +1522,7 @@ const maxInputRows = 5
 // the cursor's cell, so the end-of-text cursor has a column (and, on
 // a row-exact line, a row) inside the region's row count.
 func (t *tui) inputLineAndColLocked() (string, int) {
+	t.syncSizeLocked()
 	glyph := t.theme.Glyph(GlyphPrompt)
 	prefixCols := displayWidth(glyph) + 1
 	text := displayInput(t.inputText)
