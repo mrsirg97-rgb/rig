@@ -24,8 +24,8 @@ const (
 	keyCtrlD
 	keyCtrlT
 	keyTab
-	keyShiftTab // CSI Z: the menu cycles up (decision 9, amended)
-	keyEsc      // a lone escape: clears the prompt (the reader names it, not the parser)
+	keyShiftTab    // CSI Z: the menu cycles up (decision 9, amended)
+	keyEsc         // a lone escape: clears the prompt (the reader names it, not the parser)
 	keyKillToStart // Ctrl-U
 	keyKillToEnd   // Ctrl-K
 	keyWordBack    // Ctrl-W
