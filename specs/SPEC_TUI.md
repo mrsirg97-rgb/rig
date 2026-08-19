@@ -120,10 +120,18 @@ alternate screen, the way less borrows it: PgUp/PgDn page, the arrows
 step a line (an emulator's wheel arrives as arrows on the alt screen),
 Home/End jump, and q, Esc, or Enter restore the main screen exactly.
 The document is the live region's own record of committed lines
-(painted, ring-capped at 5000); while the pager is up the live region
-suspends — its bookkeeping runs, its writes stop, and commits queue —
-and the return replays the queue. The main UI itself never enters the
-alternate screen.
+(painted, ring-capped at 5000). Amended: the live region is pinned
+under the history as the pager's footer — the loader, the menu, the
+input, and the status rows — and the pager follows the session while
+it is up: a commit lands in the frame, the footer follows the region
+(a tick, a delta, a keystroke). The operator types and steers while
+paging: every key but the pager's own goes to the editor; Enter with
+text submits and returns to the main screen (the turn is watched
+there); Esc returns always, and q or an empty Enter return when
+nothing is typed (typed, q is a letter). The main UI itself never
+enters the alternate screen: the content scrolls, the controls stay,
+inside the one mode where scrolling exists — a fixed footer over
+native scrollback stays rejected (the alt-screen model, decision 1).
 
 ### 2. The live region and the commit points
 
@@ -576,6 +584,14 @@ line-local: an inline mark that does not close on its line renders
 raw; `\*` escapes; marks inside code are text; the only cross-line
 state is the fence toggle, and a turn's end clears it (an unclosed
 fence never leaks into the next turn).
+
+Amended: a fenced block's lines paint by a small lexical pass, per
+line — keywords accent, strings ember, comments dim, numbers grey, the
+rest text — for the languages a model emits in a chat (go, python,
+js/ts, shell, sql, rust; json/yaml/toml as strings and numbers). Not a
+grammar: a string or a block comment that spans lines loses its paint
+at the line break (the price of never buffering, named). An unknown
+info string paints the block dim as before. Stdlib, no dependency.
 
 Who: `TextDelta` only. Reasoning stays raw (the margin notes are not
 decorated). Tool results and command output are the renderers' own.

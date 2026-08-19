@@ -1158,9 +1158,12 @@ func TestPasteAndEscKeybinds(t *testing.T) {
 	}
 }
 
-// TestPagerCopyMode (the copy-mode): PgUp opens the alt screen over
-// the committed history; events while it is up stay off the screen
-// (their bytes queue); q closes it and the queue replays.
+// TestPagerCopyMode (the copy-mode, amended): PgUp opens the alt
+// screen over the committed history with the live region pinned under
+// it as a footer; the history follows the session while it is up (a
+// commit lands in the pager's frame, the footer follows the region);
+// typing goes to the input; q with an empty input returns, and the
+// main screen resumes with the queued commit.
 func TestPagerCopyMode(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
@@ -1176,22 +1179,36 @@ func TestPagerCopyMode(t *testing.T) {
 	base := len(s.out.String())
 	s.si.feed("\x1b[5~")
 	s.await(altOn)
-	if after := s.out.String()[base:]; !strings.Contains(after, "the early content") {
+	after := s.out.String()[base:]
+	if !strings.Contains(after, "the early content") {
 		t.Fatalf("the pager frame must render the history: %q", after)
 	}
+	// the footer: the input and the status rows, under the pager's
+	// status row.
+	if !strings.Contains(after, "history · pgup/pgdn · q returns") || !strings.Contains(after, promptMark(th)) {
+		t.Fatalf("the pager frame must pin the live region under the history: %q", after)
+	}
 
-	// an event during the pager: bookkept, not written.
+	// an event during the pager: the frame follows (the commit lands
+	// in the history, the pager repaints).
 	mark := len(s.out.String())
 	s.fe.Notify(core.TextDelta{Text: "while paging\n"})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	if got := s.out.String()[mark:]; strings.Contains(got, "while paging") {
-		t.Fatalf("an event reached the pager's screen: %q", got)
+	s.await("while paging")
+	if got := s.out.String()[mark:]; !strings.Contains(got, altOn[:3]) && !strings.Contains(got, clearAll) {
+		t.Fatalf("the pager must repaint on the commit: %q", got)
 	}
 
-	// q returns: the alt screen closes, the queued commit replays.
+	// typing goes to the input (q is a letter once something is typed).
+	s.si.feed("aq")
+	s.await(th.Paint(SlotText, " aq"))
+	if strings.Contains(s.out.String()[mark:], altOff) {
+		t.Fatalf("q with text typed must not exit the pager")
+	}
+	// clear it, then q returns: the alt screen closes.
+	s.si.feed("\x15") // ^U
 	s.si.feed("q")
 	s.await(altOff)
-	s.await("while paging")
 }
 
 // TestCompactingLoader (SPEC_COMPACT 5, amended): the Compacting cue
@@ -1495,8 +1512,10 @@ func TestMarkdownOnTheCommittedPath(t *testing.T) {
 	if !strings.Contains(out, th.Paint(SlotAccent, "The plan")) {
 		t.Fatalf("the heading must paint accent, marks dropped")
 	}
-	if !strings.Contains(out, th.Paint(SlotDim, "  func long_identifier_that_would_wrap_at_thirty() {}")) {
-		t.Fatalf("the fenced line must commit preformatted (dim, indented, whole):\n%s", out)
+	// the fenced Go line commits whole (never word-wrapped), indented,
+	// highlighted: the keyword accent, the identifier text.
+	if !strings.Contains(out, "  "+th.Paint(SlotAccent, "func")+th.Paint(SlotText, " long_identifier_that_would_wrap_at_thirty() {}")) {
+		t.Fatalf("the fenced line must commit preformatted and highlighted (func accent, the rest text):\n%s", out)
 	}
 	if strings.Contains(RemoveColor(out), "```") {
 		t.Fatalf("the fence lines must drop")

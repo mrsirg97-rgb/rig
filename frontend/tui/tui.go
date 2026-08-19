@@ -35,6 +35,7 @@ type tui struct {
 	width         int
 	height        int // the terminal's height: the pager's budget
 	pg            *pager
+	fromPager     bool // reader-owned: a key forwarded by the pager to the editor (no re-entry)
 	live          *live
 	inputText     string // the line's text, rendered under mu
 	editPos       int    // the edit position, mirrored under mu
@@ -76,6 +77,7 @@ type tui struct {
 	// decorated.
 	markdown bool
 	codeMode bool
+	codeLang string // the fence's language (langOf the info string) while in code mode
 	// lastSlot: the slot of the last streamed text (decision 2's
 	// spacing rule): a reasoning block that ends and text or a tool
 	// that begins get one blank row between them, whether or not the
@@ -211,6 +213,7 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		opt(t)
 	}
 	t.live = newLive(out, t.width)
+	t.live.onSuspended = t.repaintPagerLocked // the pager follows the region while it is up
 	if t.rawOld != nil {
 		// bracketed paste (decision 9): a paste arrives as one input,
 		// its newlines text; only a real tty gets the mode (and Close
@@ -347,7 +350,7 @@ const escDelay = 30 * time.Millisecond
 // the named control keys do their thing (decision 9). Inside the
 // pager, the keys are the pager's.
 func (t *tui) onKey(k key, r rune) {
-	if t.pagerKey(k, r) {
+	if !t.fromPager && t.pagerKey(k, r) {
 		return
 	}
 	switch k {
@@ -453,39 +456,60 @@ func (t *tui) closeMenu() bool {
 // modal screen.
 func (t *tui) pagerKey(k key, r rune) bool {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	if t.pg == nil {
+		t.mu.Unlock()
 		return false
 	}
+	empty := strings.TrimSpace(t.ed.text()) == ""
 	moved := false
 	switch {
-	case k == keyEsc || k == keyEnter || (k == keyText && (r == 'q' || r == 'Q')):
+	case k == keyEsc, k == keyText && (r == 'q' || r == 'Q') && empty, k == keyEnter && empty:
+		// the way out: Esc always; q and an empty Enter when nothing
+		// is typed (typing q into a prompt is a letter).
 		t.exitPagerLocked()
+		t.mu.Unlock()
 		return true
 	case k == keyPgUp:
 		moved = t.pg.move(t.pg.page())
 	case k == keyPgDn:
 		moved = t.pg.move(-t.pg.page())
-	case k == keyUp:
-		moved = t.pg.move(1)
-	case k == keyDown:
-		moved = t.pg.move(-1)
-	case k == keyHome:
+	case k == keyHome && empty:
 		moved = t.pg.move(len(t.pg.lines))
-	case k == keyEnd:
+	case k == keyEnd && empty:
 		moved = t.pg.move(-len(t.pg.lines))
+	case k == keyUp && empty:
+		moved = t.pg.move(1)
+	case k == keyDown && empty:
+		moved = t.pg.move(-1)
 	case k == keyCtrlC:
 		// the session end works from anywhere; the pager closes first
 		// so the terminal is sane on the way out.
 		t.exitPagerLocked()
 		t.mu.Unlock()
 		t.quitSession()
-		t.mu.Lock()
+		return true
+	default:
+		// everything else is the editor's (the amended pager: the
+		// operator types and steers while the history scrolls above).
+		// Enter with text submits and returns to the main screen, so
+		// the turn is watched there.
+		t.mu.Unlock()
+		if k == keyEnter {
+			t.mu.Lock()
+			t.exitPagerLocked()
+			t.mu.Unlock()
+			t.onEnter()
+			return true
+		}
+		t.fromPager = true
+		t.onKey(k, r)
+		t.fromPager = false
 		return true
 	}
 	if moved {
 		t.pg.render(t.live.w, t.theme)
 	}
+	t.mu.Unlock()
 	return true
 }
 
@@ -499,8 +523,30 @@ func (t *tui) enterPager() {
 		return
 	}
 	t.pg = newPager(t.live.hist, t.width, t.height)
+	t.pg.footer = t.footerLocked()
 	t.live.suspend()
 	io.WriteString(t.live.w, altOn)
+	t.pg.render(t.live.w, t.theme)
+}
+
+// footerLocked is the live region's rows for the pager's footer (under
+// mu): the region as liveLinesLocked lays it out, then the status rows.
+func (t *tui) footerLocked() []string {
+	rows := t.liveLinesLocked()
+	return append(rows, statusRows(t.statusLineLocked())...)
+}
+
+// repaintPagerLocked refreshes the pager (under mu) when the live
+// region would have repainted: the history may have grown (a commit
+// queued while paging is in hist already), and the footer follows the
+// region (a tick, a keystroke, a delta).
+func (t *tui) repaintPagerLocked() {
+	if t.pg == nil {
+		return
+	}
+	t.pg.lines = t.live.hist
+	t.pg.footer = t.footerLocked()
+	t.pg.clamp()
 	t.pg.render(t.live.w, t.theme)
 }
 
@@ -964,7 +1010,7 @@ func (t *tui) Notify(ev core.Event) {
 		// row alone.
 		t.mu.Lock()
 		t.lastSlot = ""
-		t.codeMode = false // an unclosed fence does not leak into the next turn
+		t.codeMode, t.codeLang = false, "" // an unclosed fence does not leak into the next turn
 		pending := len(t.pend) > 0
 		t.mu.Unlock()
 		if pending {
@@ -1664,14 +1710,18 @@ func (t *tui) commitLineLocked(cur []seg) []string {
 		plain := paintFreeSegs(cur)
 		if strings.HasPrefix(strings.TrimSpace(plain), "```") {
 			t.codeMode = false
+			t.codeLang = ""
 			return nil
 		}
-		return []string{t.theme.Paint(SlotDim, "  "+plain)}
+		// the highlight (11, amended): the fence's language paints the
+		// line by the lexical pass; unknown paints dim.
+		return []string{"  " + highlightLine(t.theme, t.codeLang, plain)}
 	}
 	if t.markdown && isTextLine(cur) {
 		out, fence, info := mdLine(t.theme, cur)
 		if fence {
 			t.codeMode = true
+			t.codeLang = langOf(info)
 			if info != "" {
 				return []string{t.theme.Paint(SlotDim, "  "+info)}
 			}

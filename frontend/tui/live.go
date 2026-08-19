@@ -60,6 +60,9 @@ type live struct {
 	pend         []string
 	frozen       []string // the rows physically on screen at suspend
 	frozenParked int
+	// onSuspended fires at the end of any op while suspended: the
+	// pager repaints its footer from the region (the TUI sets it).
+	onSuspended func()
 
 	// the frame (decision 2's one op, one write): the op's bytes,
 	// flushed to the terminal as a single write at the op's end.
@@ -207,7 +210,14 @@ func (l *live) wf(s string) {
 // the op's boundary. A suspended region's frame is dropped (its bytes
 // would land on the pager's screen).
 func (l *live) flush() {
-	if l.suspended || l.frame.Len() == 0 {
+	if l.suspended {
+		l.frame.Reset()
+		if l.onSuspended != nil {
+			l.onSuspended()
+		}
+		return
+	}
+	if l.frame.Len() == 0 {
 		return
 	}
 	io.WriteString(l.w, l.frame.String())
