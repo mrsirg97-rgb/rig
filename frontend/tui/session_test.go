@@ -785,12 +785,15 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 	want := []string{
 		"welcome to rig",
 		"session 2f9a1c0e77b3",
+		"", // the margin above the input, frozen with the prompt
 		"❯ go",
+		"", // the prompt's margin
 		"aaaaaaaaaaaaaaaaaaaa",
 		"aaaa",
 		"bb",
 		"", // the CLI's Done newline: unconditional, so a blank line
 		"❯ ",
+		"",                    // the margin under the input
 		"huihui3.8 · 12/262k", // the status's first row, fed by the Done's usage
 		// the second: the turn's usage (no committed usage line),
 		// wrapping at 20 like everything else here.
@@ -977,32 +980,32 @@ func TestCompletionMenu(t *testing.T) {
 	// the screen: the block's two rows, the two menu rows, the input,
 	// the status row.
 	s.si.feed("/mo")
-	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status, usage})
+	s.awaitScreen(50, 9, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
 	s.await(th.Invert(row("models", "the per-model table")))
 	// Tab steps the selection down; Shift-Tab (CSI Z) steps it up.
 	s.si.feed("\t")
 	s.await(th.Invert(row("move", "move a thing")))
 	s.si.feed("\x1b[Z")
-	s.awaitScreen(50, 7, []string{"models  the per-model table", "move  move a thing", "❯ /mo", status, usage})
+	s.awaitScreen(50, 9, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
 	// Esc closes the menu; the input keeps its text. The lone Esc's
 	// grace window must settle before the next keystroke (the screen
 	// says when it has: the menu's rows are gone, the row count down).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 5, []string{"❯ /mo", status, usage})
+	s.awaitScreen(50, 7, []string{"❯ /mo", "", status, usage})
 	// a single candidate: the ghost — its remainder.
 	s.si.feed("d")
 	s.await(th.Paint(SlotDim, "els"))
 	// Esc again: the prompt clears (the menu is already closed).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 5, []string{"❯ ", status, usage})
+	s.awaitScreen(50, 7, []string{"❯ ", "", status, usage})
 
 	// the Sub() hints (the argument phase): the menu over the verbs.
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 8, []string{
+	s.awaitScreen(50, 10, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
-		"❯ /todo ", status, usage,
+		"❯ /todo ", "", status, usage,
 	})
 	// Tab to create, Shift-Tab twice wraps to done (the cycle).
 	s.si.feed("\t")
@@ -1011,7 +1014,7 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("done", "a task's id")))
 	// Enter accepts the selection into the input — never dispatching.
 	s.si.feed("\n")
-	s.awaitScreen(50, 5, []string{"❯ /todo done ", status, usage})
+	s.awaitScreen(50, 7, []string{"❯ /todo done ", "", status, usage})
 	if strings.Contains(s.out.String(), "queue reply") {
 		t.Fatal("the accepted line dispatched (Enter accepts, it does not run)")
 	}
@@ -1058,7 +1061,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// rows): the screen's tail is the input rows, then the status. Its
 	// height at this width is the renderer's business; the test
 	// measures it and slices above.
-	statusRows := 0
+	statusRows := 1 // the margin under the input
 	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", 0, 262144, false,
 		214000, 18200, 187000)), "\n") {
 		statusRows += (displayWidth(r) + 9) / 10
@@ -1249,12 +1252,12 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	s.si.feed("/mo")
-	// the block's two rows + two menu rows + input + the status's three
-	// rows at this width = 8: the long menu row did not wrap into a
-	// ninth.
-	s.awaitScreen(30, 8, []string{"move  short", "❯ /mo", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
+	// the block's two rows + the margin + two menu rows + input + the
+	// margin + the status's three rows at this width = 10: the long
+	// menu row did not wrap into an eleventh.
+	s.awaitScreen(30, 10, []string{"move  short", "❯ /mo", "", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
 	rows := screenLines(t, s, 30)
-	menuRow := rows[len(rows)-6]
+	menuRow := rows[len(rows)-7]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
 		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
 	}
@@ -1301,11 +1304,11 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	// pending, then the loader, then the input, then the status.
-	s.awaitScreen(50, 8, []string{"streaming text", "| thinking", "❯ ", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 13, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 	// the pending line closes into scrollback above; the loader stays
 	// directly above the input.
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
-	s.awaitScreen(50, 9, []string{"streaming text", "more", "| thinking", "❯ ", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 14, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 }
 
 // TestSpacingRule (decision 2, amended): the transcript never carries
@@ -1400,5 +1403,66 @@ func TestUsageRowIsLiveWithinTheTurn(t *testing.T) {
 	rows := screenLines(t, s, 60)
 	if last := rows[len(rows)-1]; last != "up 3.0k down 80 · cache r 2.8k 93%" {
 		t.Fatalf("the usage row after the close = %q, want the turn's totals", last)
+	}
+}
+
+// TestVerbMenuOnTheWholeName (decision 9, amended): a complete command
+// name with verbs opens the verb menu before the space is typed; an
+// accept lands "/name verb ".
+func TestVerbMenuOnTheWholeName(t *testing.T) {
+	th := oledTheme(t)
+	todo := &subCmd{fakeCmd: fakeCmd{name: "todo", desc: "the queue"}}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{todo}, nil),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	s.si.feed("/todo")
+	// the verb rows, then the input, then the margin and the status.
+	s.awaitScreen(50, 10, []string{
+		"read  the queue",
+		"create  the queue, the task's text",
+		"done  a task's id",
+		"❯ /todo", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%",
+	})
+	// Tab, Enter: the second verb, accepted with the name and space.
+	s.si.feed("\t\n")
+	s.await(th.Paint(SlotText, " /todo create "))
+	if strings.Contains(s.out.String(), "queue reply") {
+		t.Fatalf("the accept must not dispatch")
+	}
+}
+
+// TestMargins (decision 2, amended): the region's groups stand apart —
+// the prompt line commits with a blank under it, the loader has a blank
+// above and below, the input a blank above and below — and never two
+// blanks in a row.
+func TestMargins(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	// idle: block, blank, input, blank, status.
+	in := make(chan string, 1)
+	go func() { l, _ := s.input(); in <- l }()
+	s.await(promptMark(th))
+	s.awaitScreen(60, 7, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.si.feed("go\n")
+	<-in
+	s.fe.Notify(core.TextDelta{Text: "text"})
+	// mid-turn: prompt, blank, pending, blank, loader, blank, input, blank, status.
+	s.awaitScreen(60, 13, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.fe.Notify(core.TextDelta{Text: "\n"})
+	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	// after: prompt, blank, text, blank (Done's), input, blank, status —
+	// the Done blank and the input margin do not stack.
+	s.awaitScreen(60, 11, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "up 10 down 2 · cache r 0 0%"})
+	rows := screenLines(t, s, 60)
+	for i := 1; i < len(rows); i++ {
+		if rows[i] == "" && rows[i-1] == "" {
+			t.Fatalf("two blank rows in a row at %d:\n%q", i, rows)
+		}
 	}
 }

@@ -989,15 +989,35 @@ func (t *tui) commit(chunk string) {
 // is showing (decision 9, amended), and the input row — the status
 // row is the region's last row, passed to the ops separately.
 func (t *tui) liveLinesLocked() []string {
+	// the margins (decision 2, amended): one blank live row between
+	// the region's groups — the loader stands apart from the streamed
+	// text and from the input, and the input stands apart from
+	// everything above it. The blank rows are live rows: they leave
+	// with the region, never committed (the enter op commits the prompt
+	// line alone, and the spacing rule's collapse keeps the scrollback
+	// to one blank between blocks).
 	var lines []string
 	if t.turnLive || t.compacting {
 		// the pending line first, the activity row under it (decision
 		// 2, amended): the loader locks above the input; streamed text
 		// flows into scrollback above the loader, never under it.
 		if pl := paintSegs(t.theme, t.pend); pl != "" {
-			lines = append(lines, pl)
+			lines = append(lines, pl, "")
+		} else if !t.live.lastBlank {
+			// no pending line: the loader's margin is a live blank
+			// unless the scrollback already ends with one.
+			lines = append(lines, "")
 		}
 		lines = append(lines, t.activityLineLocked())
+	}
+	// the margin above the input (or above the menu when it is open):
+	// a live blank row — unless nothing live stands above it AND the
+	// last committed row is already a blank (the Done newline, the
+	// prompt's own margin), so the transcript never shows two. With
+	// the loader above, the margin separates the loader from the
+	// input whatever the scrollback ends with.
+	if len(lines) > 0 || !t.live.lastBlank {
+		lines = append(lines, "")
 	}
 	if ml := t.menuLinesLocked(); len(ml) > 0 {
 		lines = append(lines, ml...)
@@ -1008,8 +1028,15 @@ func (t *tui) liveLinesLocked() []string {
 // statusLineLocked is the status row (under mu; decision 3): the
 // model, and used over the window once a turn has run.
 func (t *tui) statusLineLocked() string {
-	return RenderStatusLine(t.theme, t.statusModel, t.statusUsed, t.statusWindow, t.statusHasUsed,
+	st := RenderStatusLine(t.theme, t.statusModel, t.statusUsed, t.statusWindow, t.statusHasUsed,
 		t.statusUp, t.statusDown, t.statusCache)
+	if st == "" {
+		return ""
+	}
+	// the margin under the input (decision 2, amended): a blank status
+	// row above the model row, so the input stands apart from the
+	// numbers.
+	return "\n" + st
 }
 
 // sessionStartLocked is the startup block and the status line's
@@ -1222,6 +1249,17 @@ func (t *tui) completionLocked() (cands []menuCand, accept string, ok bool) {
 			}
 		}
 		return cands, "/" + name + " ", true
+	}
+	// a complete name with verbs (decision 9, amended): the verb menu
+	// opens as soon as the name is whole — the operator sees the verbs
+	// before typing the space, and an accept lands "/name verb ".
+	if cmd, whole := t.commands[rest]; whole {
+		if subber, has := cmd.(command.Subber); has {
+			for _, sub := range subber.Sub() {
+				cands = append(cands, menuCand{name: sub.Name, desc: sub.Desc})
+			}
+			return cands, "/" + rest + " ", true
+		}
 	}
 	for _, name := range t.known {
 		if strings.HasPrefix(name, rest) {

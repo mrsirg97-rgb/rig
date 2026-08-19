@@ -25,21 +25,42 @@ type toolCmd struct {
 func (t toolCmd) Name() string { return t.name }
 
 func (t toolCmd) Description() string {
+	switch t.name {
+	case "todo":
+		return "the task queue: read it, add a task, or move one (start, done, fail, retry)"
+	case "scheduler":
+		return "the cron jobs: list, create, pause, resume, remove, or show a job's runs"
+	}
 	return "over the same " + t.name + " tool the model gets: the line is parsed into the tool's args, the reply printed verbatim"
 }
 
 // Sub is the TUI's argument hints (SPEC_TUI 9, amended): the todo
 // verbs, the menu's rows. The scheduler's line has no such hints
 // (its syntax is the name, the prompt, and the cron).
+// Sub is the verb table (SPEC_TUI 9's argument hints): every verb the
+// parser accepts, each described by what it does and what it takes.
 func (t toolCmd) Sub() []Sub {
-	if t.name != "todo" {
-		return nil
+	switch t.name {
+	case "todo":
+		return []Sub{
+			{Name: "read", Desc: "show the queue"},
+			{Name: "create", Desc: "add a task: create <text>"},
+			{Name: "start", Desc: "mark a task in progress: start <id>"},
+			{Name: "done", Desc: "mark a task complete: done <id>"},
+			{Name: "fail", Desc: "mark a task failed: fail <id>"},
+			{Name: "retry", Desc: "put a failed task back: retry <id>"},
+		}
+	case "scheduler":
+		return []Sub{
+			{Name: "list", Desc: "show the jobs"},
+			{Name: "create", Desc: "add a job: create <name> <prompt…> <cron>"},
+			{Name: "runs", Desc: "show a job's runs: runs <id> [n]"},
+			{Name: "pause", Desc: "pause a job: pause <id>"},
+			{Name: "resume", Desc: "resume a paused job: resume <id>"},
+			{Name: "remove", Desc: "remove a job: remove <id>"},
+		}
 	}
-	return []Sub{
-		{Name: "read", Desc: "the queue"},
-		{Name: "create", Desc: "the queue, the task's text"},
-		{Name: "done", Desc: "a task's id"},
-	}
+	return nil
 }
 
 func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) {
