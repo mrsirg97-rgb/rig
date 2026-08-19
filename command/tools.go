@@ -45,7 +45,6 @@ func (t toolCmd) Sub() []Sub {
 		return []Sub{
 			{Name: "read", Desc: "show the queue"},
 			{Name: "create", Desc: "add a task: create <text>"},
-			{Name: "add", Desc: "append a task: add <text>"},
 			{Name: "start", Desc: "mark a task in progress: start <id>"},
 			{Name: "done", Desc: "mark a task complete: done <id>"},
 			{Name: "fail", Desc: "mark a task failed: fail <id>"},
@@ -110,14 +109,6 @@ func todoArgs(args string) (json.RawMessage, error) {
 			"action": "create",
 			"tasks":  []map[string]any{{"text": text}},
 		})
-	case fields[0] == "add" && len(fields) >= 2:
-		// the whole remainder: one task's text, the interior verbatim.
-		// append semantics, no replacement (SPEC_UX 1).
-		text := strings.TrimSpace(args[len("add"):])
-		return json.Marshal(map[string]any{
-			"action": "add",
-			"text":   text,
-		})
 	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "retry") && len(fields) == 2:
 		action := fields[0]
 		if action == "done" {
@@ -133,19 +124,17 @@ func todoArgs(args string) (json.RawMessage, error) {
 	}
 	switch {
 	case len(fields) == 0:
-		return nil, errors.New("todo: usage: todo read|create <text…>|add <text…>|start|complete|fail|retry <id>|move <id> <pos>")
+		return nil, errors.New("todo: usage: todo read|create <text…>|start|complete|fail|retry <id>|move <id> <pos>")
 	case fields[0] == "read":
 		return nil, errors.New("todo: read takes no args (todo read)")
 	case fields[0] == "create":
 		return nil, errors.New("todo: create needs text (todo create <text…>)")
-	case fields[0] == "add":
-		return nil, errors.New("todo: add needs text (todo add <text…>)")
 	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "retry":
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":
 		return nil, errors.New("todo: move takes an id and a position (todo move <id> <pos>)")
 	default:
-		return nil, fmt.Errorf("todo: unknown action %q (todo read|create <text…>|add <text…>|start|complete|fail|retry <id>|move <id> <pos>)", fields[0])
+		return nil, fmt.Errorf("todo: unknown action %q (todo read|create <text…>|start|complete|fail|retry <id>|move <id> <pos>)", fields[0])
 	}
 }
 

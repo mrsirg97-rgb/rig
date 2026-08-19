@@ -572,11 +572,9 @@ func render(f *folded, session string) string {
 
 // --- verbs (the transactional surface) ---
 
-// Create lands the payload: fold, guard the foreign in-progress, plan at
-// the boundary, refuse loudly with the problem when planning finds one,
-// otherwise append the event as given and persist the projection. One
-// transaction, serializable. The replacement is counted: the reply names
-// what it dropped and the in-flight split (SPEC_UX 1).
+// Create lands the payload: fold, plan at the boundary, refuse loudly with
+// the problem when planning finds one, otherwise append the event as given
+// and persist the projection. One transaction, serializable.
 func Create(ctx context.Context, db store.DB, items []CreateItem, session string) (string, error) {
 	if session == "" {
 		session = anon
@@ -585,22 +583,15 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 		if e := maybeCompact(bound, tx, f, session); e != nil {
 			return "", e
 		}
-		if msg := foreignInProgress(f, session, planTexts(items)); msg != "" {
-			return "", fmt.Errorf("%s", msg)
-		}
-		dropped := countDropped(f, planTexts(items))
 		modified, problems := planCreate(f, items)
 		if len(problems) != 0 {
 			sort.Strings(problems)
 			return "", fmt.Errorf("todo: %s", strings.Join(problems, "; "))
 		}
-		note := "queue replaced: " + strconv.Itoa(len(items)) + " tasks"
+		note := "queue replaced with " + strconv.Itoa(len(items)) + " tasks"
 		if len(items) == 0 {
 			f.tasks = map[string]*taskState{} // clear: the only destructive verb
 			note = "queue cleared"
-		}
-		if c := droppedClause(dropped); c != "" {
-			note += " (" + c + ")"
 		}
 		args, _ := json.Marshal(map[string]any{"tasks": asGiven(items)})
 		seq, e := appendEvent(bound, f.maxSeq+1, "create", string(args), session)
@@ -615,153 +606,6 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 			return "", e
 		}
 		return replyText(f, session, note), nil
-	})
-}
-
-// planTexts is the replacement's texts — the plan that stands after the
-// create (the upsert keeps shared texts; the rest of the old queue is
-// the loss).
-func planTexts(items []CreateItem) map[string]bool {
-	plan := make(map[string]bool, len(items))
-	for _, it := range items {
-		plan[it.Text] = true
-	}
-	return plan
-}
-
-// foreignInProgress is the replacement guard (SPEC_UX 1): a create that
-// would drop another session's in-progress tasks refuses loud, naming
-// the tasks and their owner(s) — the ownership rule complete applies,
-// at the replacement's door. A text the new plan keeps is not dropped,
-// so it does not refuse. Own in-progress does not refuse; the
-// replacement counts it instead.
-func foreignInProgress(f *folded, session string, plan map[string]bool) string {
-	byOwner := map[string][]string{}
-	var owners []string
-	for _, ts := range orderedTaskStates(f) {
-		if ts.status != statusActive || ts.owner == "" || ts.owner == session {
-			continue
-		}
-		if plan[ts.text] {
-			continue
-		}
-		if _, ok := byOwner[ts.owner]; !ok {
-			owners = append(owners, ts.owner)
-		}
-		byOwner[ts.owner] = append(byOwner[ts.owner], ts.id)
-	}
-	if len(owners) == 0 {
-		return ""
-	}
-	total := 0
-	var ids []string
-	for _, o := range owners {
-		total += len(byOwner[o])
-		ids = append(ids, byOwner[o]...)
-	}
-	short := make([]string, len(owners))
-	for i, o := range owners {
-		if len(o) > 6 {
-			short[i] = o[:6] + "…"
-		} else {
-			short[i] = o
-		}
-	}
-	verb := "session"
-	if len(owners) > 1 {
-		verb = "sessions"
-	}
-	return fmt.Sprintf("todo: create would drop %d in-progress tasks owned by %s %s (%s): finish or fail them first, or add instead",
-		total, verb, strings.Join(short, ", "), strings.Join(ids, ", "))
-}
-
-// countDropped is the loss of a replacement by status bucket: the old
-// queue's tasks the new plan does not keep (the upsert keeps the shared
-// texts — they are not a loss).
-type droppedCounts struct{ total, open, active, done, failed int }
-
-func countDropped(f *folded, plan map[string]bool) droppedCounts {
-	var c droppedCounts
-	for _, ts := range f.tasks {
-		if plan[ts.text] {
-			continue
-		}
-		c.total++
-		switch ts.status {
-		case statusPending:
-			c.open++
-		case statusActive:
-			c.active++
-		case statusDone:
-			c.done++
-		case statusFailed:
-			c.failed++
-		}
-	}
-	return c
-}
-
-// droppedClause is the loss, voiced (SPEC_UX 1): the total, then the
-// in-flight split, done and failed as history — the non-zero buckets in
-// that order. Empty when nothing was dropped.
-func droppedClause(c droppedCounts) string {
-	if c.total == 0 {
-		return ""
-	}
-	var parts []string
-	if c.open > 0 {
-		parts = append(parts, strconv.Itoa(c.open)+" open")
-	}
-	if c.active > 0 {
-		parts = append(parts, strconv.Itoa(c.active)+" in progress")
-	}
-	if c.done > 0 {
-		parts = append(parts, strconv.Itoa(c.done)+" done")
-	}
-	if c.failed > 0 {
-		parts = append(parts, strconv.Itoa(c.failed)+" failed")
-	}
-	s := "dropped " + strconv.Itoa(c.total)
-	if len(parts) > 0 {
-		s += ": " + strings.Join(parts, ", ")
-	}
-	return s
-}
-
-// Add appends one task to the queue (SPEC_UX 1): no replacement
-// semantics at all — the parallel-session-safe verb. The event is a
-// single-task create: replay's create fold is the append (a new text
-// lands at the back, existing texts keep their state), so the fold gains
-// no verb. A duplicate text refuses loud — add never merges silently.
-func Add(ctx context.Context, db store.DB, text, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := maybeCompact(bound, tx, f, session); e != nil {
-			return "", e
-		}
-		if ex := f.byText(text); ex != nil {
-			return "", fmt.Errorf("todo: a task with this text already exists (%s)", ex.id)
-		}
-		modified, problems := planCreate(f, []CreateItem{{Text: text}})
-		if len(problems) != 0 {
-			sort.Strings(problems)
-			return "", fmt.Errorf("todo: %s", strings.Join(problems, "; "))
-		}
-		args, _ := json.Marshal(map[string]any{"tasks": asGiven([]CreateItem{{Text: text}})})
-		seq, e := appendEvent(bound, f.maxSeq+1, "create", string(args), session)
-		if e != nil {
-			return "", e
-		}
-		for _, ts := range modified {
-			ts.updatedSeq = seq
-			ts.updatedTs = nowRFC3339()
-		}
-		if e := rewrite(tx, f); e != nil {
-			return "", e
-		}
-		return replyText(f, session, modified[0].id+" added: "+text), nil
 	})
 }
 

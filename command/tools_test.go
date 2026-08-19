@@ -60,7 +60,7 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 	}
 	// the create reply carries its note above the queue; the read is the
 	// queue itself — the same queue, the model's and the user's.
-	if read != strings.TrimPrefix(created, "\u2192 queue replaced: 1 tasks\n") {
+	if read != strings.TrimPrefix(created, "\u2192 queue replaced with 1 tasks\n") {
 		t.Fatalf("read must be the same queue the create reported:\ncreate:\n%s\nread:\n%s", created, read)
 	}
 
@@ -255,49 +255,4 @@ func schedStores(t *testing.T, home, cwd string) sched.Stores {
 		t.Fatal(err)
 	}
 	return sched.Stores{Global: global, Cwd: cw}
-}
-
-// TestTodoAddDoorsByteEqual (SPEC_UX 1, named): the add line parses to
-// the tool's add action, and the two doors — the command's line and the
-// model's call — carry the same reply, byte-equal (decision 6's rule:
-// the shared renderer's input is the tool's own voice).
-func TestTodoAddDoorsByteEqual(t *testing.T) {
-	s := core.NewSession()
-	toolDB := openTodo(t)
-	cmdDB := openTodo(t)
-	env := &command.Env{
-		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(cmdDB)},
-	}
-	out, err := runCmd(t, "todo", "add wire the guard", env)
-	if err != nil {
-		t.Fatalf("add line: %v", err)
-	}
-	payload, err := json.Marshal(map[string]any{"action": "add", "text": "wire the guard"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	toolReply, err := todoapi.New(toolDB).Exec(context.Background(), payload)
-	if err != nil {
-		t.Fatalf("add action: %v", err)
-	}
-	if out != toolReply {
-		t.Fatalf("the two doors must be byte-equal below the opening line:\n[cmd]\n%s\n[tool]\n%s", out, toolReply)
-	}
-	if !strings.Contains(out, "t1 added: wire the guard") {
-		t.Fatalf("the add voice must carry the minted id and the text:\n%s", out)
-	}
-}
-
-// TestTodoAddLineShape is the adapter's shape refusals for the add line.
-func TestTodoAddLineShape(t *testing.T) {
-	s := core.NewSession()
-	env := &command.Env{
-		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(openTodo(t))},
-	}
-	_, err := runCmd(t, "todo", "add", env)
-	if err == nil || err.Error() != "todo: add needs text (todo add <text…>)" {
-		t.Fatalf("a bare add must name the shape, got: %v", err)
-	}
 }
