@@ -186,12 +186,20 @@ Rejected, named:
   reply.
 - No diff of arbitrary strings: that is `python`; this tool names its
   inputs by tool + args, not by pasting blobs into the wire.
-- No diffing across compaction: the `[compaction]` marker is a message
-  row, not a `tool_calls` row, and the tail compaction re-lands keeps
-  name/args/result verbatim under fresh seqs (SPEC_STATE), so those
-  rows diff as ordinary rows. The rows survive compaction, the store
-  keeps them; only the model's context forgot. The tool is exactly the
-  memory.
+- No diffing across compaction: the world boundary is the session's
+  last `[compaction]` marker row (SPEC_COMPACT 5: the marker is a user
+  row, grep is the interface), and the read is scoped to the rows
+  after it (the clause in the interfaces query). The summarized
+  prefix is another world, the same rejection as decision 4's
+  cross-session: a row before the last marker never enters the pair.
+  Without the boundary the re-landed copy (compaction re-lands the
+  kept tail, name/args/result verbatim under fresh seqs, SPEC_STATE)
+  would pair against its own original: a spurious `identical` no one
+  observed. The kept tail's memory carries forward through the
+  re-landed rows, which stay in scope: a call after the compaction
+  pairs against them. The rows survive compaction, the store keeps
+  them; only the model's context forgot. The tool is the current
+  world's memory, not the transcript's.
 
 ### 6. THE TUI
 
@@ -334,6 +342,9 @@ func CanonicalArgs(args string) (string, error)
 // completed calls of (name, canonical args) in sessionID, newest
 // first; fewer than n+1 means no earlier observation. Completed means
 // result IS NOT NULL: the in-flight call's result has not landed.
+// The world boundary (decision 5): only the rows after the session's
+// last [compaction] marker row; the summarized prefix is another
+// world, the re-landed tail is in scope.
 type Observation struct {
 	Result    string
 	StartedAt time.Time // RFC3339 UTC, as stored
@@ -356,9 +367,19 @@ WHERE m."session_id" = ?
   AND tc."name" = ?
   AND tc."args" = ?
   AND tc."result" IS NOT NULL
+  AND tc."message_seq" > COALESCE((
+        SELECT MAX(m2."seq") FROM "messages" m2
+        WHERE m2."session_id" = ?
+          AND m2."role" = 'user'
+          AND m2."content" LIKE '[compaction] %'
+      ), 0)
 ORDER BY tc."started_at" DESC, tc."message_seq" DESC, tc."id" DESC
 LIMIT 2
 ```
+
+The world-boundary clause (decision 5): the last `[compaction]` marker
+scopes the read; `COALESCE(…, 0)` puts a markerless session's boundary
+at seq 0, so an un-compacted session reads whole.
 
 The order is total: started_at is second precision, message_seq breaks
 ties across messages, id breaks ties within one (a multi-call message
@@ -417,6 +438,10 @@ order.
   first, for (session, name, canonical args)
 - a row whose result has not landed (result NULL) is invisible
 - a row in another session with the same (name, args) is invisible
+- the world boundary (decision 5): a row before the session's last
+  `[compaction]` marker is invisible (the summarized prefix is
+  another world); the re-landed tail is in scope (the current
+  world's memory); a markerless session reads whole
 - interleaving: other tools' calls, and the same tool with different
   args, between the pair do not displace it (the LIMIT-2 exactness
   that makes decision 3's write-time canonicalization load-bearing)
@@ -452,7 +477,12 @@ last:
 - a failed call (err set, result set) still participates
 - no session in ctx is a loud refusal, not a global scan
 - a re-landed tail after compaction (fresh seqs, verbatim
-  name/args/result) diffs as an ordinary row
+  name/args/result) diffs as an ordinary row, and is the observation
+  the pair finds: the old row is the re-landed copy, not the original
+- the spurious-identical guard (decision 5): one call, a compaction,
+  no call after: the current world has one observation, so the reply
+  is `no earlier observation`, never the spurious `identical` the
+  copy would produce pairing against its own original
 - the engine's hunks are a patch: a cross-check case applies the
   engine's hunks to the old string, with a tiny patch-apply helper in
   the test, and asserts the result is the new string and the hunk

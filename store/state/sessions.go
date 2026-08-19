@@ -77,14 +77,9 @@ type Observation struct {
 // exact string equality decision 3's write-time canonicalization
 // makes safe. The order is total: started_at is second precision,
 // message_seq breaks ties across messages, id breaks ties within one
-// (a multi-call message in a single second).
-// RecentToolCalls returns the n+1 most recent completed observations
-// for (session, name, canonical args), newest first — the pair the
-// diff tool reads (SPEC_DIFF). The world boundary is the session's
-// last [compaction] marker row (SPEC_COMPACT 5: grep is the interface,
-// the marker is a user row): the re-landed tail is the current world's
-// memory; the rows before the marker are the autopsy, kept but not
-// diffed (SPEC_DIFF 5: no diffing across compaction).
+// (a multi-call message in a single second). The world boundary
+// (SPEC_DIFF 5) is the session's last [compaction] marker row: the
+// re-landed tail is in scope, the rows before it are another world.
 func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args string, n int) ([]Observation, error) {
 	rows, err := db.DB.QueryContext(ctx, `
 		SELECT tc."result", tc."started_at", tc."message_seq"
