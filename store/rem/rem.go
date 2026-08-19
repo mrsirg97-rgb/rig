@@ -210,6 +210,46 @@ func applySupersedes(bound context.Context, byID int64, targets []int64) error {
 	return nil
 }
 
+// Recent is the K newest live project-scoped notes for the cwd, newest
+// first — the session-start recall read (SPEC_UX 2): a store read at
+// session start and the refresh points, never per turn. The cwd's notes
+// only (rem is already cwd-scoped); superseded rows are not notes (their
+// replacement is the newest row). The store's named raw query: an
+// unkeyed browse over the scope predicate.
+func Recent(ctx context.Context, db store.DB, cwd string, k int) ([]string, error) {
+	if k <= 0 {
+		k = 1
+	}
+	key := shortHash(cwd)
+	out, err := transact(ctx, db, func(bound context.Context, _ *sql.Tx) ([]string, error) {
+		tx, err := sqlx.TxFrom(bound)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := tx.QueryContext(bound,
+			`SELECT content FROM memories
+			 WHERE scope = $1 AND superseded_by IS NULL
+			 ORDER BY id DESC LIMIT $2`, key, k)
+		if err != nil {
+			return nil, fmt.Errorf("rem: recent: %w", err)
+		}
+		defer rows.Close()
+		var res []string
+		for rows.Next() {
+			var c string
+			if err := rows.Scan(&c); err != nil {
+				return nil, fmt.Errorf("rem: recent: %w", err)
+			}
+			res = append(res, c)
+		}
+		return res, rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // --- writes ---
 
 // LearnInput is one committed fact or constraint.

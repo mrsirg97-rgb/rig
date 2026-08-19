@@ -99,12 +99,17 @@ type tui struct {
 	known    []string
 	env      any
 
-	// the completion menu (decision 9, amended): the current
-	// candidates, the selection, and the Esc-closed flag (the close
-	// lives until the input changes).
-	menuCands []menuCand
-	menuSel   int
-	menuDead  bool
+	// the completion menu (decision 9, amended, SPEC_UX 5): the current
+	// candidates, the selection, the Esc-closed flag (the close lives
+	// until the input changes), and the navigation intent — Tab,
+	// Shift-Tab, or an arrow while the menu is open. Enter over a
+	// navigated menu accepts the selection; without navigation the
+	// typed line is the intent and dispatches (the "accept and type
+	// again" loop, closed).
+	menuCands     []menuCand
+	menuSel       int
+	menuDead      bool
+	menuNavigated bool
 	// the status line (decision 3): the snapshot from the root's
 	// closure (the banner's old door, refreshed at its reprint points)
 	// and the used number from the usage events (the last Done's
@@ -434,9 +439,14 @@ func (t *tui) onKey(k key, r rune) {
 		t.paintInput()
 	case keyTab:
 		// Tab (decision 9, amended): the menu's selection steps down
-		// while it is open; a single candidate is completed with its
-		// trailing space; anywhere else, a no-op.
+		// while it is open — and the step is the navigation intent
+		// (SPEC_UX 5: the Enter after it accepts the pick); a single
+		// candidate is completed with its trailing space; anywhere
+		// else, a no-op.
 		t.mu.Lock()
+		if t.menuOpenLocked() {
+			t.menuNavigated = true
+		}
 		next, changed := t.tabTextLocked()
 		t.mu.Unlock()
 		if changed {
@@ -447,9 +457,11 @@ func (t *tui) onKey(k key, r rune) {
 		}
 		t.paintInput()
 	case keyShiftTab:
-		// Shift-Tab (CSI Z): the menu's selection steps up.
+		// Shift-Tab (CSI Z): the menu's selection steps up — the
+		// navigation intent (SPEC_UX 5).
 		t.mu.Lock()
 		if t.menuOpenLocked() {
+			t.menuNavigated = true
 			n := len(t.menuCands)
 			t.menuSel = (t.menuSel - 1 + n) % n
 		}
@@ -458,11 +470,13 @@ func (t *tui) onKey(k key, r rune) {
 	case keyUp, keyDown:
 		// the arrows step the menu's selection while it is open
 		// (decision 9, amended: the window follows the selection, so
-		// the arrows page a long list); with the menu closed they are
-		// the history, as today.
+		// the arrows page a long list) — the navigation intent
+		// (SPEC_UX 5); with the menu closed they are the history, as
+		// today.
 		t.mu.Lock()
 		open := t.menuOpenLocked()
 		if open {
+			t.menuNavigated = true
 			n := len(t.menuCands)
 			if k == keyDown {
 				t.menuSel = (t.menuSel + 1) % n
@@ -494,11 +508,14 @@ func (t *tui) onKey(k key, r rune) {
 
 // menuSyncLocked refreshes the completion for the input's current text
 // (under mu; decision 9, amended): a new text resets the selection and
-// reopens the menu (Esc's close lives until the text changes).
+// reopens the menu (Esc's close lives until the text changes), and the
+// navigation intent arms fresh (SPEC_UX 5: the pick belongs to this
+// text's menu).
 func (t *tui) menuSyncLocked() {
 	t.menuCands, _, _ = t.completionLocked()
 	t.menuSel = 0
 	t.menuDead = false
+	t.menuNavigated = false
 }
 
 // menuOpenLocked: the menu is showing (two or more candidates, not
@@ -514,6 +531,7 @@ func (t *tui) closeMenu() bool {
 	open := t.menuOpenLocked()
 	if open {
 		t.menuDead = true
+		t.menuNavigated = false
 	}
 	t.mu.Unlock()
 	if open {
@@ -694,10 +712,13 @@ func (t *tui) regionStableLocked(lines []string, status string) bool {
 // takes the slot and the interrupt; a quiet prompt delivers in order.
 func (t *tui) onEnter() {
 	t.mu.Lock()
-	// the menu's accept (decision 9, amended): the selection fills the
-	// input — the typed prefix replaced by the candidate plus a
-	// trailing space — and never dispatches.
-	if t.menuOpenLocked() {
+	// the menu's accept (decision 9, amended, SPEC_UX 5): the
+	// navigation intent is the pick — the selection fills the input,
+	// the typed prefix replaced by the candidate plus a trailing
+	// space — and never dispatches. Without navigation the typed line
+	// is the intent: a complete command dispatches (the "accept and
+	// type again" loop, closed).
+	if t.menuOpenLocked() && t.menuNavigated {
 		accept := t.menuAcceptLocked()
 		t.mu.Unlock()
 		t.ed.setText(accept)
@@ -711,11 +732,15 @@ func (t *tui) onEnter() {
 	// remainder is showing, so the visible line is the intent — the
 	// completion lands first (Tab's text), and the Enter submits it.
 	// The typed prefix alone would dispatch as an unknown command
-	// while the row promised the completion.
-	if next, ok := t.tabTextLocked(); ok {
-		t.mu.Unlock()
-		t.ed.setText(next)
-		t.mu.Lock()
+	// while the row promised the completion. (Menu open without
+	// navigation: the typed line stands as typed — the Tab's
+	// selection step is the Tab's, not Enter's.)
+	if !t.menuOpenLocked() {
+		if next, ok := t.tabTextLocked(); ok {
+			t.mu.Unlock()
+			t.ed.setText(next)
+			t.mu.Lock()
+		}
 	}
 	t.mu.Unlock()
 	line, submitted := t.ed.apply(keyEnter, 0)
@@ -1455,6 +1480,9 @@ func (t *tui) menuLinesLocked() []string {
 	if n > cap {
 		rows = append(rows, t.theme.Paint(SlotDim, "… "+strconv.Itoa(n-cap)+" more"))
 	}
+	// the hint row (SPEC_UX 5): the rule, named — the navigation is
+	// the pick, the Enter runs what is typed.
+	rows = append(rows, t.theme.Paint(SlotDim, "tab/↓ pick · enter runs"))
 	return rows
 }
 

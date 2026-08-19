@@ -61,7 +61,29 @@ The findings, verbatim (condensed):
 
 ## decisions
 
-### 1. todo: the replacement counted, the foreign queue guarded, add
+### 1. todo: WITHDRAWN on review (the finding stands, the fixes do not)
+
+The review's live smoke discovered the premise false: `create` never
+replaced. The fold upserts by text (main and the branch alike;
+verified on main: two creates, the reply says "queue replaced with 1
+tasks" while the queue grows to 2) — the tool's description and reply
+have claimed replacement since the store shipped, and the field
+report's "I wiped the 43 old tasks" was the claim believed: nothing
+was wiped. The reporter's footgun was the reply lying in the safe
+direction.
+
+The operator's call: revert this decision's fixes whole — the count
+and the guard decorated drops that cannot happen, and `add` duplicated
+what `create` truthfully already does (upsert one task by text). The
+behavior was fine; the voice was the bug, and the voice fix is a later
+one-liner if lived use asks ("plan upserted", not "queue replaced").
+The event-sourced fold cannot change retroactively regardless (replay
+compatibility); the one genuinely destructive verb remains the empty
+create, unguarded as before, named here for the day it bites.
+
+The original decision, kept for the record:
+
+#### 1 (as specced, not implemented): the replacement counted, guarded, add
 
 `create` keeps its semantics — the full-replacement plan is the
 planning gesture, and changing it under the model's feet breaks the
