@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.5.0] — the plugin provenance rule
+
+- **creation separated from installation** (the forge's gate,
+  `specs/SPEC_SANDBOX.md` decision 2): `~/.rig/plugins/`, top level,
+  stays the TRUSTED set the discovery loads; `~/.rig/plugins/pending/`
+  is the FORGE's landing zone — invisible to discovery by the existing
+  top-level rule (no loader change at all), created at startup, silent
+  and idempotent (the write tool makes no directories, so the model's
+  first pending write must not depend on the operator's mkdir). The
+  perm middleware gains one path rule beside the allow-list: the
+  model's `write` and `edit` refuse a target inside `plugins/` that is
+  not inside `plugins/pending/`, and the refusal teaches —
+  `permission denied: <path> is in plugins/ outside plugins/pending/
+  (plugins install by the operator's /plugins approve; write to
+  plugins/pending/)`. The rule is the guard for the honest path, not
+  the boundary: bash can still move a file there (the operator's shell
+  is the operator's); the worker jail is the boundary, the provenance
+  rule is the workflow. `/plugins pending` lists the zone with each
+  file's DESCRIPTION (the file's top-level string literal, read without
+  running the file — a pending file is untrusted); `/plugins approve
+  <name>` moves one to the top level with the atomic rename — a name
+  that collides with a native tool refuses with the existing rule's
+  voice (the existing rule at the new door), and a file of the name
+  already installed refuses too (a clobber is not an operator's verb by
+  accident). Approval is the operator's verb: it never runs from a tool
+  call (the command door is Frontend-side by construction). The reload
+  is SPEC_PLUGINS decision 8's, and the forge (SPEC_PLUGINS 8) is
+  unblocked by this. `core/` and `loop/` zero diff. Version 0.5.0;
+  still pre-1.0 — the freeze's discipline and the tag's criterion
+  unchanged.
+
 ## [0.4.0] — the rig home and the python plugins
 
 - **the rig home** (the `~/.config/rig` move, `specs/SPEC_CONFIG.md` 11):

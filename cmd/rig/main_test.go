@@ -29,11 +29,12 @@ import (
 // 1.0 tag waits for lived use, and everything before it is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 0.4.0: the rig home (~/.rig, RIG_HOME) and the python plugins
-	// (SPEC_PLUGINS); pre-1.0 — the 1.0 tag waits for lived use (a
-	// worker soak, the TUI field-tested as the daily driver).
-	if Version != "0.4.0" {
-		t.Fatalf("Version = %q, want 0.4.0 (pre-1.0, feature-complete)", Version)
+	// 0.5.0: the plugin provenance rule (SPEC_SANDBOX 2: the pending
+	// zone, the perm's path rule, /plugins pending and approve);
+	// pre-1.0 — the 1.0 tag waits for lived use (a worker soak, the
+	// TUI field-tested as the daily driver).
+	if Version != "0.5.0" {
+		t.Fatalf("Version = %q, want 0.5.0 (pre-1.0, feature-complete)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)
@@ -174,8 +175,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if got := k.SortedToolNames(); len(got) != 14 || got[0] != "bash" || got[1] != "diff" || got[6] != "python" || got[8] != "rem" || got[9] != "scheduler" || got[10] != "todo" || got[11] != "web_fetch" || got[12] != "web_search" || got[13] != "write" {
 		t.Fatalf("registered tools = %v, want bash,diff,edit,find,grep,ls,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
 	}
-	if len(k.Middleware) != 2 {
-		t.Fatalf("middleware = %d links, want the allow-list and the bound (the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	if len(k.Middleware) != 3 {
+		t.Fatalf("middleware = %d links, want the provenance rule, the allow-list, and the bound (SPEC_SANDBOX 2; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
 	}
 }
 

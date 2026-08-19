@@ -40,7 +40,9 @@ is a loud line naming the known set, never silently a prompt.
 - `/todo`, `/scheduler` — the same tools the model gets, same queue, same
   store; the tool's own refusals teach the shape.
 - `/plugins` — the python plugins: the loaded ones (name, description,
-  file) and the skipped ones with their reasons. No args.
+  file), the skipped ones with their reasons, and the pending zone —
+  `pending` lists the model's authoring with each file's DESCRIPTION,
+  `approve <name>` installs one (the operator's verb).
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it and the summary lands in the
