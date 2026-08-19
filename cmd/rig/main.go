@@ -39,6 +39,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
+	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
 	"github.com/mrsirg97-rgb/rig/tool/fs"
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
@@ -131,7 +132,8 @@ func wire(r *root) *rig.Kernel {
 		rig.WithFrontend(r.rec),
 		rig.WithPolicy(pol),
 		rig.WithTools(r.tools["bash"], r.tools["read"], r.tools["write"], r.tools["edit"], r.tools["ls"], r.tools["find"], r.tools["grep"],
-			r.tools["todo"], r.tools["rem"], r.tools["scheduler"], r.tools["python"], r.tools["web_search"], r.tools["web_fetch"]),
+			r.tools["todo"], r.tools["rem"], r.tools["scheduler"], r.tools["python"], r.tools["web_search"], r.tools["web_fetch"],
+			r.tools["diff"]),
 		rig.WithMiddleware(mw...),
 	)
 	k.Session = r.session // one identity: the loop's session is the transcript's
@@ -682,6 +684,9 @@ func main() {
 			// the tool's description and schema are built from it.
 			"scheduler": schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job", cfg.Settings.DefaultJobModel),
 			"python":    py, "web_search": webSearch, "web_fetch": webFetch,
+			// the diff tool (SPEC_DIFF): the state DB the way todo takes
+			// its own; the session comes from ctx.
+			"diff": diff.New(sdb),
 		},
 	}
 
