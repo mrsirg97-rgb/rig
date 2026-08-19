@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -54,13 +55,47 @@ func RecordMessage(ctx context.Context, db store.DB, sessionID, role, content st
 	return seq, err
 }
 
+// CanonicalArgs is the args-equality rule (SPEC_DIFF decision 3), owned
+// by the store that holds the args column: two args JSONs are the same
+// observation iff they decode to the same JSON value — key order and
+// whitespace do not matter, values do. The canonical form is the
+// decoded value re-encoded with object keys sorted and no whitespace
+// (array element order is preserved).
+func CanonicalArgs(args string) (string, error) {
+	var v any
+	if err := json.Unmarshal([]byte(args), &v); err != nil {
+		return "", err
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// RecordToolCall lands one tool call row. The args are stored in their
+// canonical form (decision 3): the rule is applied at write time, so
+// the store query's args = ? equality is exact and RecentToolCalls's
+// LIMIT n+1 is, by construction, the n+1 most recent observations of
+// that call. An args string that fails to decode lands raw, and this
+// call returns the decode error even though the row was written: the
+// recorder speaks it through its existing loud voice (one stderr line,
+// not a new channel, not a Fault). The row always lands.
 func RecordToolCall(ctx context.Context, db store.DB, messageSeq int64, id, name, args string) error {
-	return withTx(db, ctx, func(c context.Context) error {
-		_, err := domain.NewToolCallDomain().InsertToolCall(c, domain.ToolCall{
-			Id: id, Name: name, Args: args, MessageSeq: messageSeq, StartedAt: now(),
+	canonical, cerr := CanonicalArgs(args)
+	if cerr != nil {
+		canonical = args
+	}
+	err := withTx(db, ctx, func(c context.Context) error {
+		_, e := domain.NewToolCallDomain().InsertToolCall(c, domain.ToolCall{
+			Id: id, Name: name, Args: canonical, MessageSeq: messageSeq, StartedAt: now(),
 		})
-		return err
+		return e
 	})
+	if err != nil {
+		return err
+	}
+	return cerr
 }
 
 func RecordToolResult(ctx context.Context, db store.DB, id, result string, failure *string) error {
