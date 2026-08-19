@@ -689,9 +689,10 @@ where the CI box allows and skip cleanly where not.
 - the freeze gate: the PR's diff outside `frontend/tui` and the
   allowlist's named work surfaces (last: the build surface — `Makefile`,
   `.github/`, `.gitignore`, `README.md`, SPEC_BUILD) is empty; `core/`
-  and `loop/` are identical with the fork point modulo gofmt whitespace
-  (the formatting-only drift is the named exception); the full suite
-  including every CLI golden is green.
+  and `loop/` are identical with the fork point modulo gofmt (each side
+  formatted, compared byte-exact — gofmt never touches string contents,
+  so a voice's spacing still shows) (the formatting-only drift is the
+  named exception); the full suite including every CLI golden is green.
 
 ## scope
 
