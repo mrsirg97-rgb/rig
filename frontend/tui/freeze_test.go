@@ -48,6 +48,14 @@ func TestFreezeGate(t *testing.T) {
 			p == "store/state" || strings.HasPrefix(p, "store/state/") ||
 			p == "tool/diff" || strings.HasPrefix(p, "tool/diff/") ||
 			p == "tool/python" || strings.HasPrefix(p, "tool/python/") ||
+			// the field-test round's work surfaces (SPEC_UX): the todo
+			// and rem doors, the bash and file tools.
+			p == "store/rem" || strings.HasPrefix(p, "store/rem/") ||
+			p == "store/todo" || strings.HasPrefix(p, "store/todo/") ||
+			p == "tool/bash" || strings.HasPrefix(p, "tool/bash/") ||
+			p == "tool/file" || strings.HasPrefix(p, "tool/file/") ||
+			p == "tool/rem" || strings.HasPrefix(p, "tool/rem/") ||
+			p == "tool/todo" || strings.HasPrefix(p, "tool/todo/") ||
 			p == "plugins" || strings.HasPrefix(p, "plugins/") ||
 			p == "config" || strings.HasPrefix(p, "config/") ||
 			p == "docs" || strings.HasPrefix(p, "docs/") ||

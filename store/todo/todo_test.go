@@ -1520,3 +1520,235 @@ func TestWorkspaceListsAreIsolated(t *testing.T) {
 		t.Fatalf("workspace b's render must be empty:\n%s", reply)
 	}
 }
+
+// --- SPEC_UX 1: the replacement counted, the foreign queue guarded, add ---
+
+func seedQueue(t *testing.T, db store.DB, session string, n int) {
+	t.Helper()
+	ctx := context.Background()
+	var items []item
+	for i := 1; i <= n; i++ {
+		items = append(items, item{Text: fmt.Sprintf("task %02d", i)})
+	}
+	if _, err := todostore.Create(ctx, db, items, session); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCreateReplyCountsTheDroppedSplit (SPEC_UX 1, named): the
+// replacement's reply names the loss and its in-flight split — open and
+// in progress — the confirmation the reporter wanted.
+func TestCreateReplyCountsTheDroppedSplit(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	seedQueue(t, db, "s1", 40)
+	if _, err := todostore.Add(ctx, db, "work 41", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Add(ctx, db, "work 42", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Add(ctx, db, "work 43", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"t41", "t42", "t43"} {
+		if _, err := todostore.Start(ctx, db, id, "s1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reply, err := todostore.Create(ctx, db, []item{
+		{Text: "new 1"}, {Text: "new 2"}, {Text: "new 3"}, {Text: "new 4"}, {Text: "new 5"},
+	}, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "queue replaced: 5 tasks (dropped 43: 40 open, 3 in progress)"
+	if !strings.Contains(reply, want) {
+		t.Fatalf("the replacement must count the loss with the split, got:\n%s", reply)
+	}
+}
+
+// TestCreateRefusesAForeignInProgressQueue (SPEC_UX 1, named): a
+// replacement that would drop another session's in-progress tasks
+// refuses loud, naming the tasks and the owner; own in-progress does not
+// refuse (replacing your own plan mid-flight is a choice, counted).
+func TestCreateRefusesAForeignInProgressQueue(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	seedQueue(t, db, "s1", 40)
+	for _, text := range []string{"work 41", "work 42", "work 43"} {
+		if _, err := todostore.Add(ctx, db, text, "s1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// a foreign session claims three of them
+	owner := "1a01ad00111122223333444455556666"
+	for _, id := range []string{"t41", "t42", "t43"} {
+		if _, err := todostore.Start(ctx, db, id, owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := todostore.Create(ctx, db, []item{{Text: "my plan"}}, "s2")
+	if err == nil {
+		t.Fatal("a replacement over a foreign in-progress task must refuse")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"would drop 3 in-progress tasks owned by session 1a01ad…",
+		"(t41, t42, t43)",
+		"finish or fail them first, or add instead",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("the guard must name the loss and the owner, got: %s", msg)
+		}
+	}
+	// the refusal is loud: the queue stands, nothing replaced
+	reply, err := todostore.Read(ctx, db, "s2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(reply, "my plan") {
+		t.Fatalf("a refused create must not land:\n%s", reply)
+	}
+	// finish them first: fail releases, then the replacement lands counted
+	for _, id := range []string{"t41", "t42", "t43"} {
+		if _, err := todostore.Fail(ctx, db, id, "s2"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reply, err = todostore.Create(ctx, db, []item{{Text: "my plan"}}, "s2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "queue replaced: 1 tasks (dropped 43: 40 open, 3 failed)"; !strings.Contains(reply, want) {
+		t.Fatalf("after the release the replacement lands, counted:\n%s", reply)
+	}
+}
+
+// TestOwnInProgressIsReplacedCountedNotRefused (SPEC_UX 1, named): the
+// guard is foreign-claims only; your own in-flight plan is replaced,
+// and the reply counts it.
+func TestOwnInProgressIsReplacedCountedNotRefused(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Add(ctx, db, "the plan", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}}, "s1")
+	if err != nil {
+		t.Fatalf("own in-progress must not refuse, got: %v", err)
+	}
+	if want := "queue replaced: 2 tasks (dropped 1: 1 in progress)"; !strings.Contains(reply, want) {
+		t.Fatalf("own in-flight work is counted in the reply, got:\n%s", reply)
+	}
+}
+
+// TestAddAppendsAndNeverDrops (SPEC_UX 1, named): add appends one task
+// to the tail, no replacement semantics at all — nothing in the queue
+// moves, changes status, or leaves.
+func TestAddAppendsAndNeverDrops(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	seedQueue(t, db, "s1", 3)
+	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Start(ctx, db, "t2", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Fail(ctx, db, "t2", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := todostore.Add(ctx, db, "wire the guard", "s2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reply, "t4 added: wire the guard") {
+		t.Fatalf("the add reply must name the minted id and the text, got:\n%s", reply)
+	}
+	if !strings.Contains(reply, "0/4 done") {
+		t.Fatalf("the queue's four tasks must all stand, got:\n%s", reply)
+	}
+	// nothing dropped: the old three, with their states, are intact
+	for _, want := range []string{"t1 [~]", "t2 [!]", "t3 [ ]", "t4 [ ]"} {
+		if !strings.Contains(reply, want) {
+			t.Fatalf("add must never drop or mutate the queue, got:\n%s", reply)
+		}
+	}
+	// the new task is at the tail, after t3's row
+	if !strings.Contains(reply, "t3 [ ] task 03\n  t4 [ ] wire the guard") {
+		t.Fatalf("add appends at the tail, got:\n%s", reply)
+	}
+}
+
+// TestAddRefusesADuplicateText (SPEC_UX 1): add never merges silently —
+// the existing task's id is named.
+func TestAddRefusesADuplicateText(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Add(ctx, db, "the same text", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := todostore.Add(ctx, db, "the same text", "s2")
+	if err == nil || !strings.Contains(err.Error(), "already exists (t1)") {
+		t.Fatalf("a duplicate add must refuse loud, naming the task, got: %v", err)
+	}
+}
+
+// TestAddReplaysThroughTheEventLog (SPEC_UX 1): the add is a
+// single-task create event — the projection is disposable, the log is
+// the spine. Tamper the projection; the fold must rebuild the appended
+// task.
+func TestAddReplaysThroughTheEventLog(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Add(ctx, db, "first", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Add(ctx, db, "second", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	rawExec(t, db, "DELETE FROM tasks")
+	rawExec(t, db, "DELETE FROM task_deps")
+	reply, err := todostore.Read(ctx, db, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"t1 [ ] first", "t2 [ ] second"} {
+		if !strings.Contains(reply, want) {
+			t.Fatalf("the adds must replay from the event log, got:\n%s", reply)
+		}
+	}
+}
+
+// TestCreateKeptTextsAreNotDropped (SPEC_UX 1): the replacement is an
+// upsert — a text the new plan keeps stands (its in-flight state and
+// claim included), so it is neither refused nor counted as a loss.
+func TestCreateKeptTextsAreNotDropped(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	seedQueue(t, db, "s1", 2) // t1, t2 open
+	if _, err := todostore.Add(ctx, db, "the shared task", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	// a foreign session claims the shared task
+	if _, err := todostore.Start(ctx, db, "t3", "foreign-owner"); err != nil {
+		t.Fatal(err)
+	}
+	// s2's plan keeps the shared text: no refusal (nothing of the
+	// foreigner's in-flight work falls out of the plan), and the count
+	// names only the two tasks that actually leave the plan.
+	reply, err := todostore.Create(ctx, db, []item{{Text: "the shared task"}, {Text: "fresh plan"}}, "s2")
+	if err != nil {
+		t.Fatalf("a plan that keeps the foreign in-flight text must not refuse: %v", err)
+	}
+	if want := "queue replaced: 2 tasks (dropped 2: 2 open)"; !strings.Contains(reply, want) {
+		t.Fatalf("kept texts are not a loss, got:\n%s", reply)
+	}
+	if !strings.Contains(reply, "t3 [~] the shared task") {
+		t.Fatalf("the kept task stands in-flight:\n%s", reply)
+	}
+}

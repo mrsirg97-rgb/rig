@@ -20,7 +20,7 @@ const schemaJSON = `{
 	"required": ["action"],
 	"properties": {
 		"action": {
-			"enum": ["create", "start", "complete", "fail", "retry", "move", "read"],
+			"enum": ["create", "add", "start", "complete", "fail", "retry", "move", "read"],
 			"description": "The action to perform. Required."
 		},
 		"tasks": {
@@ -41,6 +41,10 @@ const schemaJSON = `{
 				}
 			}
 		},
+		"text": {
+			"type": "string",
+			"description": "The task text for action='add'"
+		},
 		"id": {
 			"type": "string",
 			"description": "Task id as shown by the tool. Required for start/complete/fail/retry."
@@ -55,6 +59,8 @@ const schemaJSON = `{
 
 // description: lowercase, terse.
 const description = "Task queue per working directory. action REQUIRED. create replaces the queue (tasks: [{text}]); " +
+	"add appends one task (text) without replacing — the parallel-session-safe verb; " +
+	"create counts what it drops and refuses a replacement over another session's in-progress tasks. " +
 	"start/complete/fail/retry transition one task by id; read prints it. " +
 	"pending -> in_progress -> done (read-only) or failed; failed -> retry -> pending. " +
 	"create may link tasks into a tree: tasks[].dependsOn (task id or exact text; null clears a link); " +
@@ -86,6 +92,7 @@ func (a adapter) Schema() json.RawMessage {
 type given struct {
 	Action string           `json:"action"`
 	Tasks  []map[string]any `json:"tasks"`
+	Text   *string          `json:"text"`
 	ID     string           `json:"id"`
 	Pos    *int             `json:"pos"`
 }
@@ -110,6 +117,11 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			return "", err
 		}
 		return todostore.Create(ctx, a.db, items, session)
+	case "add":
+		if g.Text == nil || *g.Text == "" {
+			return "", fmt.Errorf("action 'add' requires text")
+		}
+		return todostore.Add(ctx, a.db, *g.Text, session)
 	case "start", "complete", "fail", "retry":
 		if g.ID == "" {
 			return "", fmt.Errorf("action '%s' requires id", g.Action)
