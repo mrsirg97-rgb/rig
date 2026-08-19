@@ -81,7 +81,7 @@ build:
 
 install: build
 	mkdir -p $(BINDIR)
-	cp bin/rig $(BINDIR)/
+	install -m 0755 bin/rig $(BINDIR)/
 
 test:
 	go vet ./...
@@ -111,8 +111,11 @@ rather than repeating its recipe; `run` is `build` plus the exec. The
 line (or in the environment) wins; else `$(GOBIN)` when `go env GOBIN` is
 non-empty; else `$(HOME)/.local/bin`. The Makefile asks `go env` for the
 toolchain's own answer rather than guessing at GOPATH. `mkdir -p` precedes
-the copy: the default destination is created on first install, and a
-directory the operator already made is taken as-is.
+the landing: the default destination is created on first install, and a
+directory the operator already made is taken as-is. The landing is
+`install -m`, not `cp`: a `cp` over a binary that is running fails with
+`ETXTBSY`, while `install(1)` unlinks first — an operator who installs
+over a live session keeps it running.
 
 ### 3. fmt-check is the gate
 
