@@ -12,8 +12,11 @@
   home is **absent** and the old `~/.config/rig` **exists**, the old
   directory is **renamed** to the resolved home (atomic — both live
   under `$HOME`) and exactly one line says so; a present home wins,
-  whatever the old directory holds, and a failed rename refuses the
-  start loud. The stores, the python kernel's materialised host
+  whatever the old directory holds, a failed rename refuses the
+  start loud, and it is a **default-path event**: under an explicit
+  `RIG_HOME` the migration never runs (the override is isolation, not
+  a move order — an absent override stays absent, the old home stays
+  put). The stores, the python kernel's materialised host
   (`~/.rig/kernel/`), and everything else ride the home; the root and
   `tool/python`'s host resolution carry the same one rule, named.
   `config.Load(dir, cwd)` keeps its seam; the invariant's companion

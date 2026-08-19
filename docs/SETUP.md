@@ -49,7 +49,9 @@ migration: on a start where the resolved home is absent and the old
 `~/.config/rig` exists, the old directory is renamed to the resolved
 home and one line says so; after that the old directory is gone and
 the migration is a no-op. A present home wins, whatever the old
-directory holds. Every file is optional; a present-but-malformed file is
+directory holds. The migration never runs under an explicit
+`RIG_HOME` — the override is isolation, not a move order: an absent
+override stays absent, and the old home stays put. Every file is optional; a present-but-malformed file is
 a loud refusal at start naming the file and the field (exit 1, before
 any store is opened), and an absent one is silent. Unknown keys refuse:
 the file is a contract, not a filter.
