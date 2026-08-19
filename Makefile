@@ -8,7 +8,7 @@ build:
 
 install: build
 	mkdir -p $(BINDIR)
-	cp bin/rig $(BINDIR)/
+	install -m 0755 bin/rig $(BINDIR)/
 
 test:
 	go vet ./...
