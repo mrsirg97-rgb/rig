@@ -85,8 +85,8 @@ func TestHardeningVocabulary(t *testing.T) {
 		_ core.Event = core.ToolResult{ID: "c1", Content: "out"}
 		_ core.Event = core.TurnEnd{Reason: core.TurnOver}
 		_ core.Event = core.TestEvent{Name: "x"}
-		_ core.Event = core.Compacted{Summary: "s"}  // SPEC_COMPACT 5: additive, the compat rule holds
-		_ core.Event = core.Compacting{}             // SPEC_COMPACT 5 amended: the loader's cue, same door
+		_ core.Event = core.Compacted{Summary: "s"} // SPEC_COMPACT 5: additive, the compat rule holds
+		_ core.Event = core.Compacting{}            // SPEC_COMPACT 5 amended: the loader's cue, same door
 	)
 	if core.TurnOver != "over" || core.TurnFault != "fault" || core.TurnInterrupt != "interrupt" {
 		t.Fatalf("turn reasons = %q/%q/%q, want over/fault/interrupt", core.TurnOver, core.TurnFault, core.TurnInterrupt)

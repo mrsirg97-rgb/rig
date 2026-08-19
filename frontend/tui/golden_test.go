@@ -50,9 +50,9 @@ func (s *scriptInput) close() { close(s.ch) }
 // records each Write's size — the write boundaries the tty delivers —
 // so the harness can feed the stream write by write.
 type lockBuf struct {
-	mu      sync.Mutex
-	b       bytes.Buffer
-	writes  []int
+	mu     sync.Mutex
+	b      bytes.Buffer
+	writes []int
 }
 
 func (l *lockBuf) Write(p []byte) (int, error) {
