@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -103,6 +104,26 @@ func (s *scriptedSession) awaitCount(marker string, n int) {
 	}
 }
 
+// awaitPending waits for n lines in the delivery queue (the reader is
+// async): the burst must have crossed the state machine, in order,
+// before the test sends the boundary event it races with.
+func (s *scriptedSession) awaitPending(n int) {
+	s.t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s.fe.mu.Lock()
+		got := len(s.fe.pending)
+		s.fe.mu.Unlock()
+		if got >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			s.t.Fatalf("timed out awaiting %d queued line(s), have %d", n, got)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // prompt awaits the input line, feeds the text, and returns what Input
 // delivered (the shared session ctx drives the turn).
 func (s *scriptedSession) prompt(marker, feed string) string {
@@ -144,10 +165,9 @@ func TestStatusLineRefresh(t *testing.T) {
 	// s2 context — a different model, so a refresh is visible in the
 	// stream and the call count is the door's.
 	model, window := "huihui3.8", 262144
-	calls := 0
+	var calls atomic.Int32
 	statusIn := func(ctx context.Context) StatusIn {
-		calls++
-		if calls == 1 {
+		if calls.Add(1) == 1 {
 			return StatusIn{
 				Model: model, Effort: "xhigh", Window: window,
 				Up: 214000, Down: 18200, CacheRead: 187000,
@@ -192,7 +212,7 @@ func TestStatusLineRefresh(t *testing.T) {
 		t.Fatalf("the Compacted event reprinted the block: %d, want 1", got)
 	}
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	if got := calls; got != 1 {
+	if got := int(calls.Load()); got != 1 {
 		t.Fatalf("a turn moved the status door: %d calls, want 1", got)
 	}
 
@@ -209,24 +229,24 @@ func TestStatusLineRefresh(t *testing.T) {
 	s.await(promptMark(th))
 	s.si.feed("/new\n")
 	s.await("model2")
-	if got := calls; got != 2 {
+	if got := int(calls.Load()); got != 2 {
 		t.Fatalf("/new refreshed %d times, want 2 total", got)
 	}
 	s.si.feed("/sessions resume s3\n")
 	s.await("resumed s3")
-	if got := calls; got != 3 {
+	if got := int(calls.Load()); got != 3 {
 		t.Fatalf("/sessions resume refreshed %d times, want 3 total", got)
 	}
 	s.si.feed("/models m2\n")
 	s.await("switched")
-	if got := calls; got != 4 {
+	if got := int(calls.Load()); got != 4 {
 		t.Fatalf("/models m2 refreshed %d times, want 4 total", got)
 	}
 	// the compact command is not a refresh point (its event would
 	// move the row's number): its output commits, the door does not.
 	s.si.feed("/compact\n")
 	s.await("nothing to drop")
-	if got := calls; got != 4 {
+	if got := int(calls.Load()); got != 4 {
 		t.Fatalf("the compact command refreshed the status: %d, want 4", got)
 	}
 	// a models list (no args) is not a switch.
@@ -239,7 +259,7 @@ func TestStatusLineRefresh(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if got := calls; got != 4 {
+	if got := int(calls.Load()); got != 4 {
 		t.Fatalf("the models list refreshed the status: %d, want 4", got)
 	}
 	// the turn after the commands: the fresh context's row takes the
@@ -258,7 +278,7 @@ func TestStatusLineRefresh(t *testing.T) {
 	if got := blockCount(); got != 1 {
 		t.Fatalf("the block count at the end = %d, want 1", got)
 	}
-	if got := calls; got != 4 {
+	if got := int(calls.Load()); got != 4 {
 		t.Fatalf("the status door moved at the end: %d calls, want 4", got)
 	}
 }
@@ -377,6 +397,7 @@ func TestPasteBurstThreePrompts(t *testing.T) {
 		t.Fatalf("prompt one = %q, want a", got)
 	}
 	s.si.feed("b\nc\n")
+	s.awaitPending(2) // the burst crossed, in order (the reader is async)
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 	line, err := s.input()
 	if line != "b" || err != nil {
