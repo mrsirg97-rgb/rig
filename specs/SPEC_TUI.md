@@ -190,6 +190,15 @@ content never soft-wraps: tool output, command output, and fenced code
 commit whole and break at the column edge as before. The paint
 survives the break per piece.
 
+Tabs expand at ingestion (amended: the code-duplication bug):
+runewidth gives a tab width zero, but the terminal advances to an
+8-column stop — an unexpanded tab in the pending line under-measures
+the row count, the cursor-up falls short, and every repaint leaves a
+copy (Go code is full of tabs). Streamed text expands tabs to spaces
+as it lands on the pending line, tracking the column across deltas
+and resetting at newlines, so the width math and the terminal agree
+everywhere after. The CLI keeps its raw bytes (the piped reference).
+
 The size is read at the repaint, not the signal (amended: the
 two-client tmux race): SIGWINCH is asynchronous, and a delta that
 repaints between the resize and the signal would clear the region with
@@ -603,7 +612,11 @@ grammar: a string or a block comment that spans lines loses its paint
 at the line break (the price of never buffering, named). An unknown
 info string paints the block dim as before. Stdlib, no dependency.
 
-Who: `TextDelta` only. Reasoning stays raw (the margin notes are not
+Who: `TextDelta`, and (amended) the fence: a ``` line in the
+reasoning opens and closes code mode too — code is code wherever it
+appears, and a model that thinks in code shows most of its fences
+there — with the block highlighted like the text stream's. The
+reasoning's other markdown stays raw (the margin notes are not
 decorated). Tool results and command output are the renderers' own.
 The CLI and one-shot never decorate (the piped reference). The pager
 shows the decorated transcript as committed. On by default; a settings

@@ -78,6 +78,14 @@ type tui struct {
 	markdown bool
 	codeMode bool
 	codeLang string // the fence's language (langOf the info string) while in code mode
+	// pendCol: the pending line's display column (under mu): the tab
+	// expansion's state. runewidth gives a tab width zero, but the
+	// terminal advances to an 8-column stop — an unexpanded tab in the
+	// pending line under-measures the row count, the cursor-up falls
+	// short, and every repaint leaves a copy (the code-duplication bug:
+	// Go code is full of tabs). Tabs expand to spaces at ingestion, so
+	// the width math and the terminal agree everywhere after.
+	pendCol int
 	// lastSlot: the slot of the last streamed text (decision 2's
 	// spacing rule): a reasoning block that ends and text or a tool
 	// that begins get one blank row between them, whether or not the
@@ -1075,6 +1083,7 @@ func (t *tui) Notify(ev core.Event) {
 		// row alone.
 		t.mu.Lock()
 		t.lastSlot = ""
+		t.pendCol = 0
 		t.codeMode, t.codeLang = false, "" // an unclosed fence does not leak into the next turn
 		pending := len(t.pend) > 0
 		t.mu.Unlock()
@@ -1708,6 +1717,35 @@ func paintSegs(t Theme, segs []seg) string {
 // newline (the CLI's boundaries: ToolStart, Done, Fault) closes the
 // pending line, or commits a blank one where the line is empty — the
 // CLI's bytes, kept verbatim.
+// expandTabsLocked expands tabs in streamed text to 8-column stops
+// (under mu), tracking the pending line's display column across
+// deltas; a newline resets the column. See pendCol: an unexpanded tab
+// breaks the live region's row math.
+func (t *tui) expandTabsLocked(text string) string {
+	if !strings.ContainsAny(text, "\t\n") && t.pendCol >= 0 {
+		for _, r := range text {
+			t.pendCol += runeWidth(r)
+		}
+		return text
+	}
+	var b strings.Builder
+	for _, r := range text {
+		switch r {
+		case '\n':
+			t.pendCol = 0
+			b.WriteRune(r)
+		case '\t':
+			n := 8 - t.pendCol%8
+			b.WriteString(strings.Repeat(" ", n))
+			t.pendCol += n
+		default:
+			t.pendCol += runeWidth(r)
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // slotAfterTool is lastSlot's sentinel after a tool block: the next
 // streamed text of any slot gets the boundary blank (the spacing rule).
 const slotAfterTool = "\x00after-tool"
@@ -1726,11 +1764,12 @@ func (t *tui) flow(slot, text string) {
 			sep = "\n\n"
 		}
 		t.pend = append(t.pend, seg{slot: slot, text: sep})
+		t.pendCol = 0
 	}
 	if slot != "" {
 		t.lastSlot = slot
 	}
-	t.pend = append(t.pend, seg{slot: slot, text: text})
+	t.pend = append(t.pend, seg{slot: slot, text: t.expandTabsLocked(text)})
 	lines := t.takeClosedLinesLocked()
 	chunk := ""
 	if len(lines) > 0 {
@@ -1795,8 +1834,33 @@ func (t *tui) commitLineLocked(cur []seg) []string {
 			return nil
 		}
 		cur = out
+	} else if t.markdown && isReasoningLine(cur) {
+		// a fence in the reasoning opens code mode too (11, amended):
+		// code is code wherever it appears, and this model thinks in
+		// it — the block highlights; the reasoning's other markdown
+		// stays raw (the margin notes are not decorated).
+		plain := strings.TrimSpace(paintFreeSegs(cur))
+		if strings.HasPrefix(plain, "```") {
+			t.codeMode = true
+			t.codeLang = langOf(strings.TrimPrefix(plain, "```"))
+			if info := strings.TrimSpace(strings.TrimPrefix(plain, "```")); info != "" {
+				return []string{t.theme.Paint(SlotDim, "  "+info)}
+			}
+			return nil
+		}
 	}
 	return wrapSegs(t.theme, t.width, cur)
+}
+
+// isReasoningLine: every segment is reasoning (or unpainted) — the
+// fence toggle's other door (11, amended).
+func isReasoningLine(segs []seg) bool {
+	for _, s := range segs {
+		if s.slot != SlotReasoning && s.slot != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // isTextLine: every segment is the model's text (or unpainted): the
