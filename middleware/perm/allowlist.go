@@ -1,7 +1,9 @@
 // Package perm is the deny-by-default permission middleware: a static
-// allow-list of tool names. A denied call is fed back to the model as a
-// refusal naming the tool and the list, attributed so downstream guards can
-// bound the repetition.
+// allow-list of tool names, and the plugin provenance rule (the
+// model's write and edit land in plugins/pending/, not plugins/). A
+// denied call is fed back to the model as a refusal naming the tool
+// and the list, attributed so downstream guards can bound the
+// repetition.
 package perm
 
 import (

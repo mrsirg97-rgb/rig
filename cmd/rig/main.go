@@ -51,9 +51,9 @@ import (
 )
 
 // Version is the binary's release version: pre-1.0, still feature-
-// complete (the home and the plugins in 0.4.0) — the 1.0 tag waits for
-// lived use.
-const Version = "0.4.0"
+// complete (the home and the plugins in 0.4.0, the plugin provenance
+// rule in 0.5.0) — the 1.0 tag waits for lived use.
+const Version = "0.5.0"
 
 // root is the process's mutable wiring state (SPEC_COMMANDS 2): the
 // active model, the row, the recorder, the session — the state the
@@ -76,6 +76,11 @@ type root struct {
 	sdb   store.DB      // the state store
 	remDB store.DB      // the rem store (the AutoReflect seam)
 	cwd   string
+
+	// pluginsDir is the rig home's plugins/ directory (SPEC_SANDBOX 2):
+	// the perm's provenance rule guards it, and the /plugins verbs work
+	// on it (the pending zone is pluginsDir/pending).
+	pluginsDir string
 
 	activeID string       // the active model id — the root's one mutable string every closure reads
 	row      models.Model // the active row (the root's own resolution)
@@ -109,7 +114,11 @@ func wire(r *root) *rig.Kernel {
 	if mw == nil {
 		// the root's chain is [perm, guard]: the observation tap is retired
 		// — the recorder now sources its rows from the loop's events.
+		// The provenance rule lists before the allow-list (first-listed
+		// is innermost, so the allow-list — the more basic refusal, the
+		// tool's name — is consulted first; SPEC_SANDBOX 2).
 		mw = []core.ToolMiddleware{
+			perm.Plugins(r.pluginsDir),
 			perm.Allowlist(r.allow...),
 			guard.Bound(r.retries),
 		}
@@ -151,6 +160,7 @@ func (r *root) buildSystem() string {
 	mw := r.middleware
 	if mw == nil {
 		mw = []core.ToolMiddleware{
+			perm.Plugins(r.pluginsDir),
 			perm.Allowlist(r.allow...),
 			guard.Bound(r.retries),
 		}
@@ -747,6 +757,15 @@ func main() {
 	// never starts the kernel (the fixture runs take the 0.2.0 wire).
 	// A broken file is a loud skip (one line, file + field); a name
 	// colliding with a native tool refuses loud — before the stores.
+	//
+	// The pending zone (SPEC_SANDBOX 2) is created with the home: the
+	// forge's landing zone is a fact of the runtime, silent and
+	// idempotent — the write tool makes no directories, so the model's
+	// first pending write must not depend on the operator's mkdir.
+	pluginsDir := filepath.Join(cfgDir, "plugins")
+	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "rig: plugins: create the pending zone: %v\n", err)
+	}
 	pluginFiles, err := listPluginFiles(cfgDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
@@ -869,17 +888,18 @@ func main() {
 	// re-wiring; the closures are the root's, and the command package sees
 	// core and models and nothing else.
 	r := &root{
-		baseURL:  baseURLV,
-		system:   systemPrompt,
-		agents:   cfg.Agents, // global then project, the load's assembly (6)
-		allow:    allowList,
-		retries:  retriesN,
-		sdb:      sdb,
-		remDB:    rdb,
-		cwd:      cwd,
-		activeID: modelID,
-		row:      row,
-		runtime:  runtimeTable(cfg.Models, modelID, row),
+		baseURL:    baseURLV,
+		system:     systemPrompt,
+		agents:     cfg.Agents, // global then project, the load's assembly (6)
+		allow:      allowList,
+		retries:    retriesN,
+		sdb:        sdb,
+		remDB:      rdb,
+		cwd:        cwd,
+		pluginsDir: pluginsDir,
+		activeID:   modelID,
+		row:        row,
+		runtime:    runtimeTable(cfg.Models, modelID, row),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
@@ -916,6 +936,7 @@ func main() {
 		SwitchModel:   r.switchModel,
 		Tools:         r.tools,
 		Plugins:       pluginInfos,
+		PluginsDir:    pluginsDir,
 	}
 
 	// The frontend: the REPL by default; one-shot under -p (deliverable 2's
