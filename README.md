@@ -22,6 +22,13 @@ go build ./cmd/rig
 
 then talk. Configuration and verification: `docs/SETUP.md`.
 
+Once tagged and public, the install path is the binary, not a script
+(`specs/SPEC_BUILD.md`):
+
+```sh
+go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
+```
+
 ## docs
 
 | doc                | what it is                                        |
