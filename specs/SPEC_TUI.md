@@ -604,20 +604,20 @@ raw; `\*` escapes; marks inside code are text; the only cross-line
 state is the fence toggle, and a turn's end clears it (an unclosed
 fence never leaks into the next turn).
 
-Amended: a fenced block's lines paint by a small lexical pass, per
-line — keywords accent, strings ember, comments dim, numbers grey, the
-rest text — for the languages a model emits in a chat (go, python,
-js/ts, shell, sql, rust; json/yaml/toml as strings and numbers). Not a
-grammar: a string or a block comment that spans lines loses its paint
-at the line break (the price of never buffering, named). An unknown
-info string paints the block dim as before. Stdlib, no dependency.
+Amended, then simplified (the operator's call, after the
+miscolored-session bug): a fenced block's lines commit preformatted
+and DIM — the thinking's color, uniform, the Claude Code precedent.
+The lexical highlighter that briefly lived here is REMOVED, and the
+reasoning-fence toggle with it: thinking opens fences it does not
+close (the sketch trails off), and the shared code mode lexed the
+rest of the turn — the answer included — as code (keywords accent,
+strings ember, whole lines dim): a session miscolored. One flag, one
+stream (TextDelta's), one color. Rejected on the way out, named: a
+per-stream code mode with a boundary auto-close (built, tested,
+discarded — it managed the bug; the removal deletes it).
 
-Who: `TextDelta`, and (amended) the fence: a ``` line in the
-reasoning opens and closes code mode too — code is code wherever it
-appears, and a model that thinks in code shows most of its fences
-there — with the block highlighted like the text stream's. The
-reasoning's other markdown stays raw (the margin notes are not
-decorated). Tool results and command output are the renderers' own.
+Who: `TextDelta` only. Reasoning is never decorated — fences included:
+its ``` lines render raw grey with the rest of the margin notes. Tool results and command output are the renderers' own.
 The CLI and one-shot never decorate (the piped reference). The pager
 shows the decorated transcript as committed. On by default; a settings
 switch is later work, named.

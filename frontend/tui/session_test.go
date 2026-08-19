@@ -1563,10 +1563,10 @@ func TestMarkdownOnTheCommittedPath(t *testing.T) {
 	if !strings.Contains(out, th.Paint(SlotAccent, "The plan")) {
 		t.Fatalf("the heading must paint accent, marks dropped")
 	}
-	// the fenced Go line commits whole (never word-wrapped), indented,
-	// highlighted: the keyword accent, the identifier text.
-	if !strings.Contains(out, "  "+th.Paint(SlotAccent, "func")+th.Paint(SlotText, " long_identifier_that_would_wrap_at_thirty() {}")) {
-		t.Fatalf("the fenced line must commit preformatted and highlighted (func accent, the rest text):\n%s", out)
+	// the fenced line commits whole (never word-wrapped), indented,
+	// dim - the thinking's color, uniform (11, amended).
+	if !strings.Contains(out, th.Paint(SlotDim, "  func long_identifier_that_would_wrap_at_thirty() {}")) {
+		t.Fatalf("the fenced line must commit preformatted and dim:\n%s", out)
 	}
 	if strings.Contains(RemoveColor(out), "```") {
 		t.Fatalf("the fence lines must drop")
@@ -1668,10 +1668,11 @@ func TestArrowsNavigateTheMenu(t *testing.T) {
 	}
 }
 
-// TestReasoningFenceHighlights (11, amended): a fence inside the
-// reasoning opens code mode — the block highlights like the text
-// stream's — while the reasoning's other markdown stays raw.
-func TestReasoningFenceHighlights(t *testing.T) {
+// TestReasoningStaysRawAndNeverLeaks (11, amended: the operator's
+// simplification): reasoning is never decorated - its fences render
+// raw grey - and a thought's unclosed fence never re-colors the
+// answer (the miscolored-session bug).
+func TestReasoningStaysRawAndNeverLeaks(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
@@ -1682,19 +1683,21 @@ func TestReasoningFenceHighlights(t *testing.T) {
 	s.fe.Notify(core.ReasoningDelta{Text: "**raw** thinking\n"})
 	s.fe.Notify(core.ReasoningDelta{Text: "```go\n"})
 	s.fe.Notify(core.ReasoningDelta{Text: "return nil\n"})
-	s.fe.Notify(core.ReasoningDelta{Text: "```\n"})
-	s.fe.Notify(core.ReasoningDelta{Text: "after\n"})
+	// the fence never closes: the answer must still render as prose
+	// (the miscolored-session bug: a thought's fence must not leak).
+	s.fe.Notify(core.TextDelta{Text: "the **answer** in prose\n"})
 	s.fe.Notify(core.Done{})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	s.await("after")
+	s.await("prose")
 	out := s.out.String()
-	if !strings.Contains(out, "  "+th.Paint(SlotAccent, "return")+th.Paint(SlotText, " ")+th.Paint(SlotAccent, "nil")) {
-		t.Fatalf("the reasoning's fenced go must highlight:\n%s", out)
+	// reasoning is never decorated: its fence lines stay raw grey.
+	if !strings.Contains(out, th.Paint(SlotReasoning, "```go")) {
+		t.Fatalf("the reasoning's fence line must stay raw:\n%s", out)
 	}
 	if !strings.Contains(out, th.Paint(SlotReasoning, "**raw** thinking")) {
 		t.Fatalf("the reasoning's inline markdown must stay raw")
 	}
-	if strings.Contains(RemoveColor(out), "```") {
-		t.Fatalf("the reasoning's fence lines must drop")
+	if !strings.Contains(out, th.Paint(SlotBold, "answer")) {
+		t.Fatalf("the answer must render as markdown prose (the thought's fence must not leak)")
 	}
 }
