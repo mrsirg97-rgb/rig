@@ -23,6 +23,16 @@ go build ./cmd/rig     # produces ./rig
 ./rig --version        # rig 0.4.0
 ```
 
+The install path (once tagged and public) is the binary, not a script
+(`specs/SPEC_BUILD.md`):
+
+```sh
+go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
+```
+
+`make install` is the same build landed locally: `$(go env GOBIN)` when
+set, else `~/.local/bin`; `BINDIR=...` names the directory.
+
 Contributors: the gate before any change is
 
 ```sh
