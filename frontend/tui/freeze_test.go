@@ -33,10 +33,13 @@ func TestFreezeGate(t *testing.T) {
 
 	allow := func(p string) bool {
 		return p == "frontend/tui" || strings.HasPrefix(p, "frontend/tui/") ||
+			p == "frontend/cli" || strings.HasPrefix(p, "frontend/cli/") ||
 			p == "cmd/rig" || strings.HasPrefix(p, "cmd/rig/") ||
 			p == "command" || strings.HasPrefix(p, "command/") ||
 			p == "store/state" || strings.HasPrefix(p, "store/state/") ||
 			p == "tool/diff" || strings.HasPrefix(p, "tool/diff/") ||
+			p == "tool/python" || strings.HasPrefix(p, "tool/python/") ||
+			p == "plugins" || strings.HasPrefix(p, "plugins/") ||
 			p == "config" || strings.HasPrefix(p, "config/") ||
 			p == "docs" || strings.HasPrefix(p, "docs/") ||
 			p == "specs" || strings.HasPrefix(p, "specs/") ||
