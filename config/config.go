@@ -16,8 +16,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/models"
 )
 
-// Load reads the user files under dir (the config home's rig directory,
-// e.g. ~/.config/rig) and the AGENTS.md pair (dir + cwd), each merged
+// Load reads the user files under dir (the rig home, e.g. ~/.rig —
+// SPEC_CONFIG 11) and the AGENTS.md pair (dir + cwd), each merged
 // over its embedded default. Absent files are silent (3). Present-but-
 // malformed or unreadable files refuse loud, naming the file and, for
 // JSON, the field (3). The read order is fixed — the first malformed

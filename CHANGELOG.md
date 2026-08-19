@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.4.0] — the rig home and the python plugins
+
+- **the rig home** (the `~/.config/rig` move, `specs/SPEC_CONFIG.md` 11):
+  the config home is `~/.rig` — the `.pi`/`.omp` convention, not the XDG
+  one. The resolution is stated once: **`$RIG_HOME` > `~/.rig`** — the
+  env var (non-empty) is the home, the operator's spelling used as-is;
+  unset, `~/.rig`. `RIG_HOME` is the one new env var (the config spec's
+  non-goal's named amendment); `XDG_CONFIG_HOME` is no longer consulted.
+  The migration is once and deterministic: at startup, if the resolved
+  home is **absent** and the old `~/.config/rig` **exists**, the old
+  directory is **renamed** to the resolved home (atomic — both live
+  under `$HOME`) and exactly one line says so; a present home wins,
+  whatever the old directory holds, and a failed rename refuses the
+  start loud. The stores, the python kernel's materialised host
+  (`~/.rig/kernel/`), and everything else ride the home; the root and
+  `tool/python`'s host resolution carry the same one rule, named.
+  `config.Load(dir, cwd)` keeps its seam; the invariant's companion
+  holds: a fixture run has neither home, so the 0.2.0 wire stays
+  byte-exact.
+
+- **python plugins** (the pre-1.0 extension surface,
+  `specs/SPEC_PLUGINS.md`): one file under `~/.rig/plugins/`, one tool
+  per file, the name the filename stem. The file's contract is three
+  names: `DESCRIPTION` (str), `SCHEMA` (dict, the wire's
+  `function.parameters`), `run(args: dict) -> str`. Discovery at startup
+  through the **shared python kernel** — the same persistent kernel as
+  the `python` tool, one process, the namespace shared on purpose (the
+  model's python can call plugin functions directly; plugin state
+  persists across calls) — imports each file, reads the three names,
+  and registers the tool on the existing `core.Tool` seam,
+  indistinguishable from a native tool on the wire (the wire's head is
+  the 14 natives in order; the plugins ride the tail, in file order). A
+  file missing a piece or failing import is a **loud skip** (one line
+  naming the file and the field — the kernel's own voice — startup
+  continues); a name colliding with a native tool is a **loud refusal**
+  at startup (native-wins would be silent shadowing — refuse instead);
+  a kernel-level discovery failure refuses loud (fail closed). A call
+  invokes the module's `run` with the model's args dict in the same
+  kernel: the return `str()`s into the tool result, an exception is a
+  tool error carrying the traceback tail, and the kernel stays alive.
+  No plugins directory (or an empty one) is a no-op that never starts
+  the kernel — the `golden_020` fixtures are untouched. `/plugins` is
+  the standard set's eighth entry: the loaded (name, description, file)
+  and the skipped (file, reason), in file order. The plugins are
+  subject to the allow-list like any tool and are **not** in the
+  built-in default (the operator allow-lists a plugin's name). The
+  sandbox is named and deferred: pre-sandbox, trust the plugins as you
+  trust your own python. `core/` and `loop/` zero diff; the `plugins/`
+  leaf and the `tool/python` `Run` door (the raw reply the discovery
+  and calls ride) are the only new surface. Version 0.4.0; still
+  pre-1.0 — the freeze's discipline and the tag's criterion unchanged.
+
 ## [0.3.0] — config as a first-class runtime component
 
 - **config loading** (the pre-10 runtime component, `specs/SPEC_CONFIG.md`):

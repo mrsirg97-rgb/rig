@@ -171,7 +171,7 @@ func TestUnknownCommandIsLoudNeverAPrompt(t *testing.T) {
 	if err != nil || line != "hello" {
 		t.Fatalf("the command line is consumed; the next line runs as a prompt, got %q %v", line, err)
 	}
-	want := "unknown command: bogus (known: compact, models, new, scheduler, sessions, steer, todo)"
+	want := "unknown command: bogus (known: compact, models, new, plugins, scheduler, sessions, steer, todo)"
 	if !strings.Contains(r.out.String(), want) {
 		t.Fatalf("the refusal must name the wrong and the right: %q", r.out.String())
 	}

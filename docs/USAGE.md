@@ -19,8 +19,8 @@ the transcript, the file provenance, and the identity are rebuilt from the
 state store in one read-only transaction (dangling tool calls are kept; an
 unknown id is loud). The per-process state — the guard's counts, the steering
 slot — starts fresh, and the session's id is the one to look up in the
-`sessions` table of the state store (`rig/sessions/*.sqlite` under the
-config dir). `-p` one-shot and `--resume` refuse at construction: one-shot
+`sessions` table of the state store (`~/.rig/sessions/*.sqlite` under the
+rig home — `$RIG_HOME` over `~/.rig`). `-p` one-shot and `--resume` refuse at construction: one-shot
 stays one-shot.
 
 ## commands
@@ -39,6 +39,8 @@ is a loud line naming the known set, never silently a prompt.
   bare `/steer` interrupts only.
 - `/todo`, `/scheduler` — the same tools the model gets, same queue, same
   store; the tool's own refusals teach the shape.
+- `/plugins` — the python plugins: the loaded ones (name, description,
+  file) and the skipped ones with their reasons. No args.
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it and the summary lands in the
@@ -112,8 +114,9 @@ rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits all thirteen built-in
-tools; narrowing is always available and compose-order-agnostic.
+refusal goes back to the model. The default permits the 14 built-in
+tools; python plugins (outside the default) must be allow-listed by name.
+Narrowing is always available and compose-order-agnostic.
 
 ## working-directory discipline
 

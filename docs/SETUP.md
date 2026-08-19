@@ -20,7 +20,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.3.0
+./rig --version        # rig 0.4.0
 ```
 
 Contributors: the gate before any change is
@@ -41,8 +41,15 @@ descends, except the two presence keys (below). No file present is the
 0.2.0 behavior, exactly — the embedded layer is the 0.2.0 values moved
 out of code.
 
-The files live in the config home, `~/.config/rig/` — the same directory
-the stores use. Every file is optional; a present-but-malformed file is
+The files live in the rig home, `~/.rig/` — the same directory the
+stores use (the `.pi`/`.omp` convention, not the XDG one). The home
+resolves `$RIG_HOME` > `~/.rig`: the env var, when set (non-empty), is
+the home — the operator's spelling, used as-is. The one-time
+migration: on a start where the resolved home is absent and the old
+`~/.config/rig` exists, the old directory is renamed to the resolved
+home and one line says so; after that the old directory is gone and
+the migration is a no-op. A present home wins, whatever the old
+directory holds. Every file is optional; a present-but-malformed file is
 a loud refusal at start naming the file and the field (exit 1, before
 any store is opened), and an absent one is silent. Unknown keys refuse:
 the file is a contract, not a filter.
@@ -63,7 +70,7 @@ directory's project file, not the creating session's.
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 13 built-in tools |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 14 built-in tools |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | resume        | `--resume <id>`| —                      | —               | fresh session (refuses with `-p`; one-shot stays one-shot) |
 | terminal      | `--tui` (auto/true/false) | — | — | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
@@ -113,8 +120,51 @@ starts fresh: the guard's counts and the steering slot are not persisted.
 
 **On the allow-list** — it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
-permits the thirteen built-in tools because a default-deny CLI would ship a
-dead agent; narrow with `--allow read` or similar.
+permits the 14 built-in tools because a default-deny CLI would ship a
+dead agent; narrow with `--allow read` or similar. Python plugins
+(`~/.rig/plugins/`) are **not** in the default: the operator who installs
+a plugin allow-lists its name (`--allow echo` or `allow` in
+`settings.json`) — the refusal's voice teaches the shape until then.
+
+## plugins
+
+Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
+
+- **The directory** — `~/.rig/plugins/` (the rig home's, top-level
+  `*.py` only, in filename order). No directory, or an empty one, is a
+  no-op that never starts the kernel; with no plugins the wire is the
+  built-in tools' bytes exactly.
+- **The file's contract** — three names:
+
+  ```python
+  DESCRIPTION = "what the tool does, for the model"
+  SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}}
+
+  def run(args: dict) -> str:
+      return "echo: " + args["text"]
+  ```
+
+  The tool's name is the filename stem (`echo.py` → `echo`); the
+  description and schema ride the wire verbatim.
+- **Discovery at startup** — the files are imported through the shared
+  python kernel (the same persistent kernel as the `python` tool: the
+  namespace is shared on purpose, so the model's python can call plugin
+  functions directly, and plugin state persists across calls). A file
+  missing a piece or failing import is a loud skip (one line naming the
+  file and the field; startup continues); a name colliding with a
+  built-in tool refuses the start loud (native-wins would be silent
+  shadowing).
+- **The call** — the kernel invokes the module's `run` with the model's
+  args dict; the return value is the tool result; an exception is a
+  tool error carrying the traceback tail, and the kernel stays alive
+  (it is the model's kernel too).
+- **The allow-list** — a plugin is not in the built-in default; the
+  operator allow-lists its name (`--allow echo` or `allow` in
+  `settings.json`).
+- **`/plugins`** — the loaded plugins (name, description, file) and the
+  skipped ones with their reasons. No args, read-only.
+- **The sandbox** — pre-sandbox, trust the plugins as you trust your own
+  python: they run with rig's privileges, in the operator's kernel.
 
 ## terminal
 
@@ -129,7 +179,7 @@ speak the CLI's bytes.
 - `--tui auto` (the default) picks by the terminal: stdout a terminal
   → the TUI; piped or redirected → the CLI. `--tui=true` forces the
   TUI (a pty, `tmux capture-pane`); `--tui=false` forces the CLI.
-- **Theme** — `~/.config/rig/theme.json`, three keys: `base` (the
+- **Theme** — `~/.rig/theme.json`, three keys: `base` (the
   shipped palette: `oled`, `paper`, `p1`, `p3`), `slots` (any of the
   eight — `accent`, `dim`, `error`, `reasoning`, `rule`, `success`,
   `text`, `warn` — mapped to a `#rrggbb` color), `glyphs` (`unicode`,
@@ -154,7 +204,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.3.0
+./rig --version                 # prints: rig 0.4.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
