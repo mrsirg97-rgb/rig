@@ -148,6 +148,10 @@ func toolDetail(name string, args json.RawMessage) string {
 		if u := s("url"); u != "" {
 			return u
 		}
+	case "diff":
+		if m := s("mode"); m != "" {
+			return m
+		}
 	}
 	return ""
 }
