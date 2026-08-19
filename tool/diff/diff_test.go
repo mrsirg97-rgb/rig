@@ -504,6 +504,32 @@ func TestLastRelandedTailDiffsAsOrdinaryRow(t *testing.T) {
 	}
 }
 
+// last: the spurious-identical guard (SPEC_DIFF PR B, named; decision
+// 5): one call, a compaction, no call after. The current world has
+// exactly one observation (the re-landed copy), so the reply is
+// `no earlier observation`. Without the world boundary the copy would
+// pair against its own original and reply the spurious `identical`.
+func TestLastRelandedCopyNeverRepliesSpuriousIdentical(t *testing.T) {
+	w := newWorld(t)
+	seq1 := w.call(t, "bash", `{"command":"ls"}`, "same\n", nil)
+	id := "c" + itob(seq1)
+	sess := core.NewSession()
+	sess.ID = w.sid
+	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] the summary"})
+	sess.Append(core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: id, Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}}})
+	sess.Append(core.Message{Role: core.RoleTool, ToolID: id, Content: "same\n"})
+	rec := state.NewRecorder(&nullFrontend{}, w.db, "/w", "m", "v", w.sid, sess)
+	rec.Notify(core.Compacted{Summary: "[compaction] the summary"})
+
+	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"}}`)
+	if err != nil {
+		t.Fatalf("one observation must be a named reply, not a refusal: %v (%s)", err, reply)
+	}
+	if reply != "no earlier observation" {
+		t.Fatalf("the copy has no earlier observation in the current world: got %q, want no earlier observation (the spurious identical is the copy pairing against its own original)", reply)
+	}
+}
+
 // last: the engine's hunks are a patch (SPEC_DIFF testing): applying
 // them to the old string yields the new string, and the hunk headers'
 // ranges are consistent with the body. Two correct diffs may pick
