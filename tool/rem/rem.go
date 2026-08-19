@@ -87,7 +87,8 @@ const description = "Memory tool: learn commits facts and constraints idempotent
 	"reflect stores a distilled memory with its raw source; prune consolidates the strength " +
 	"arithmetic or removes/reduces memories. Scopes: 'global' for general knowledge, default " +
 	"project (cwd). Recall k caps live hits; no query = browse. Ids are minted mN; copy, " +
-	"never invent."
+	"never invent. Your notes from this directory are in your context at session start; " +
+	"learn what the next session should not re-derive."
 
 // adapter is the surface over one opened hybrid store. The root resolves
 // the store file and hands the constructor its db; this seam only

@@ -3,6 +3,7 @@ package file_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,7 +176,7 @@ func TestEditAfterExternalChangeFailsLoud(t *testing.T) {
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "version", "new": "draft",
 	}))
-	if err == nil || !strings.Contains(err.Error(), "drift") {
+	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
 		t.Fatalf("edit-after-external-change must fail loudly naming the drift, got %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -216,7 +217,7 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": "." + string(os.PathSeparator) + "code.txt",
 		"old":  "version", "new": "draft",
-	})); err == nil || !strings.Contains(err.Error(), "drift") {
+	})); err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
 		t.Fatalf("drift check bypassed by path spelling, got %v", err)
 	}
 }
@@ -273,5 +274,89 @@ func TestEditRecordsFreshProvenance(t *testing.T) {
 	}
 	if string(data) != "three" {
 		t.Fatalf("second edit content = %q, want three", data)
+	}
+}
+
+// --- SPEC_UX 4: the drift refusal names the drift ---
+
+func driftSetup(t *testing.T, path, content string) (context.Context, *core.Session) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	session := core.NewSession()
+	ctx := core.WithSession(context.Background(), session)
+	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	return ctx, session
+}
+
+// TestDriftRefusalShowsASmallDriftWhole (SPEC_UX 4, named): the refusal
+// carries the diff — a one-line drift (a bash sed) shows whole, no
+// elision, on the diff tool's engine (the shared differ's labels).
+func TestDriftRefusalShowsASmallDriftWhole(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	ctx, _ := driftSetup(t, path, "alpha\nbeta\ngamma\n")
+	if err := os.WriteFile(path, []byte("alpha\nBETA\ngamma\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "beta", "new": "beta2",
+	}))
+	if err == nil {
+		t.Fatal("the drift must refuse")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"edit: the file changed since the read:",
+		"--- as read",
+		"+++ on disk",
+		"-beta",
+		"+BETA",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("the refusal must carry the diff, got:\n%s", msg)
+		}
+	}
+	if strings.Contains(msg, "more lines") {
+		t.Fatalf("a small drift shows whole, no elision:\n%s", msg)
+	}
+}
+
+// TestDriftRefusalCapsARewrite (SPEC_UX 4, named): a rewritten file
+// elides loudly — the first 20 lines stand, the tail is the marker with
+// the count of what it hides.
+func TestDriftRefusalCapsARewrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.txt")
+	var old strings.Builder
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&old, "old line %02d\n", i)
+	}
+	ctx, _ := driftSetup(t, path, old.String())
+	var nw strings.Builder
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&nw, "new line %02d\n", i)
+	}
+	if err := os.WriteFile(path, []byte(nw.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "old", "new": "new",
+	}))
+	if err == nil {
+		t.Fatal("the drift must refuse")
+	}
+	lines := strings.Split(err.Error(), "\n")
+	// the refusal: the header, the 20 capped diff lines, the marker.
+	if want := 1 + 20 + 1; len(lines) != want {
+		t.Fatalf("the refusal caps at 20 diff lines plus the loud marker, got %d lines:\n%s", len(lines), err.Error())
+	}
+	// the full rewrite is 83 diff lines (the 3 headers plus 80); the
+	// marker names the rest.
+	if last := lines[len(lines)-1]; last != "… 63 more lines" {
+		t.Fatalf("the marker must name the elided count, got %q", last)
 	}
 }

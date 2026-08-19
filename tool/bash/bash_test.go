@@ -3,6 +3,7 @@ package bash_test
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -37,14 +38,71 @@ func TestExecutesCommandAndReturnsOutput(t *testing.T) {
 
 func TestNonZeroExitIsAFedBackError(t *testing.T) {
 	tool := bash.New()
-	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "echo visible; exit 3",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "exit status 3") {
 		t.Fatalf("non-zero exit must be an error naming the status, got %v", err)
 	}
-	if got != "visible\n" {
-		t.Fatalf("output must still surface for the model to learn from, got %q", got)
+}
+
+// TestFailureNamesTheCwd (SPEC_UX 3, named): the failing reply gains one
+// trailing line naming the working directory — the "where am I" probe
+// after a path error, one line and only on failure.
+func TestFailureNamesTheCwd(t *testing.T) {
+	dir := t.TempDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := bash.New()
+	// the default cwd: the process's working directory
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "echo visible; exit 3",
+	}))
+	if err == nil {
+		t.Fatal("the failure must stay an error")
+	}
+	if want := "visible\n(cwd " + wd + ")"; got != want {
+		t.Fatalf("the failing reply must name the cwd as its trailing line, got %q", got)
+	}
+	// an explicit cwd: that directory, not the process's
+	got, err = tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "false",
+		"cwd":     dir,
+	}))
+	if err == nil {
+		t.Fatal("the failure must stay an error")
+	}
+	if want := "(cwd " + dir + ")"; got != want {
+		t.Fatalf("an empty failure still names the cwd alone (no leading blank), got %q", got)
+	}
+}
+
+// TestSuccessStaysByteIdentical (SPEC_UX 3, named): the cwd line is a
+// failure's — the success is the piped golden's bytes, with or without
+// an explicit cwd.
+func TestSuccessStaysByteIdentical(t *testing.T) {
+	tool := bash.New()
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "echo hello",
+	}))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if got != "hello\n" {
+		t.Fatalf("the success is byte-identical, got %q", got)
+	}
+	dir := t.TempDir()
+	got, err = tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "pwd",
+		"cwd":     dir,
+	}))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if got != dir+"\n" {
+		t.Fatalf("the explicit cwd's success is byte-identical, got %q", got)
 	}
 }
 

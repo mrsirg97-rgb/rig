@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -79,15 +80,34 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 		content = content[:outputCap] + "\n[output truncated]"
 	}
 	if err != nil {
-		if ctx.Err() != nil {
-			return content, ctx.Err()
+		dir := a.Cwd
+		if dir == "" {
+			if d, werr := os.Getwd(); werr == nil {
+				dir = d
+			}
 		}
-		// WaitDelay expired after a clean exit: the foreground finished and
-		// only its background descendants were cut off with partial output.
+		withCwd := content
+		switch {
+		case withCwd == "":
+			withCwd = "(cwd " + dir + ")"
+		case strings.HasSuffix(withCwd, "\n"):
+			withCwd += "(cwd " + dir + ")"
+		default:
+			withCwd += "\n(cwd " + dir + ")"
+		}
+		if ctx.Err() != nil {
+			return withCwd, ctx.Err()
+		}
+		// a clean exit with background descendants cut off (the
+		// WaitDelay's): the foreground succeeded — the success stays
+		// byte-identical (the piped goldens hold).
 		if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
 			return content, nil
 		}
-		return content, fmt.Errorf("bash: %w", err)
+		// a failure names the cwd (SPEC_UX 3): the "where am I" probe
+		// after a path error costs a line, not a call. One line, only on
+		// failure.
+		return withCwd, fmt.Errorf("bash: %w", err)
 	}
 	return content, nil
 }

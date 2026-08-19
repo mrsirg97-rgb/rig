@@ -116,22 +116,13 @@ func wire(r *root) *rig.Kernel {
 	}
 	// The guidelines ride the system prompt, not the chain (decision 6):
 	// prompt assembly belongs to the prompt, and the prompt string is the
-	// root's — zero loop change. AGENTS.md sits between the system prompt
-	// and the participant guidelines (SPEC_CONFIG 6): descending
-	// proximity — the operator's identity prompt, then the user's project
-	// contract, then the participants' operational prose. Empty segments
-	// are skipped, so no AGENTS.md is 0.2.0's bytes exactly.
-	parts := make([]string, 0, 3)
-	if r.system != "" {
-		parts = append(parts, r.system)
-	}
-	if r.agents != "" {
-		parts = append(parts, r.agents)
-	}
-	if g := guidelinesOf(mw); g != "" {
-		parts = append(parts, g)
-	}
-	r.fullSystem = strings.Join(parts, "\n\n")
+	// root's — zero loop change. The order (SPEC_CONFIG 6, SPEC_UX 2) is
+	// descending proximity: the operator's identity prompt, then the
+	// user's project contract, then the remembered notes (the cwd's
+	// recent memories — the session-start recall), then the participants'
+	// operational prose. Empty segments are skipped, so an absent pair
+	// is 0.2.0's bytes exactly.
+	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
 	k := rig.New(
 		rig.WithProvider(provider),
@@ -148,6 +139,90 @@ func wire(r *root) *rig.Kernel {
 	k.Session = r.session // one identity: the loop's session is the transcript's
 	r.k = k
 	return k
+}
+
+// buildSystem is the prompt assembly (SPEC_CONFIG 6, SPEC_UX 2): the
+// system, the AGENTS.md pair, the remembered notes, and the
+// participants' guidelines — in that order, empty segments skipped.
+// It is computed at session start and the refresh points (new, resume),
+// never per turn: the segment rides the prefix, and its cost is prefix
+// tokens — the cap is the point.
+func (r *root) buildSystem() string {
+	mw := r.middleware
+	if mw == nil {
+		mw = []core.ToolMiddleware{
+			perm.Allowlist(r.allow...),
+			guard.Bound(r.retries),
+		}
+	}
+	parts := make([]string, 0, 4)
+	if r.system != "" {
+		parts = append(parts, r.system)
+	}
+	if r.agents != "" {
+		parts = append(parts, r.agents)
+	}
+	if seg := r.remembered(); seg != "" {
+		parts = append(parts, seg)
+	}
+	if g := guidelinesOf(mw); g != "" {
+		parts = append(parts, g)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// rememberedK is the session-start recall budget (SPEC_UX 2): the cap
+// keeps the memory cheaper than what it saves.
+const rememberedK = 8
+
+// remembered is the cwd's recent notes (SPEC_UX 2): absent notes are an
+// absent segment (today's bytes exactly). A store read at session start
+// and the refresh points — never per turn.
+func (r *root) remembered() string {
+	if r.remDB.DB == nil || r.cwd == "" {
+		return ""
+	}
+	notes, err := remstore.Recent(context.Background(), r.remDB, r.cwd, rememberedK)
+	if err != nil || len(notes) == 0 {
+		return ""
+	}
+	return renderRemembered(notes)
+}
+
+// renderRemembered is the segment (SPEC_UX 2): the header, one line
+// per note (newest first, whitespace collapsed to the line), capped at
+// 1500 characters total — over the cap the oldest notes trim first, and
+// a single note over the cap alone is cut with the loud ellipsis.
+func renderRemembered(notes []string) string {
+	const capChars = 1500
+	header := "remembered (this directory):"
+	var lines []string
+	for _, n := range notes {
+		if n = strings.Join(strings.Fields(n), " "); n != "" {
+			lines = append(lines, "- "+n)
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	chars := func(s string) int { return len([]rune(s)) }
+	seg := func(l []string) string { return header + "\n" + strings.Join(l, "\n") }
+	if chars(seg(lines)) <= capChars {
+		return seg(lines)
+	}
+	for len(lines) > 1 && chars(seg(lines)) > capChars {
+		lines = lines[:len(lines)-1]
+	}
+	if chars(seg(lines)) <= capChars {
+		return seg(lines)
+	}
+	// the newest note alone overflows: cut it to the cap, loud.
+	budget := capChars - chars(header) - 1 - 2 - 1 // the newline, the bullet, the ellipsis
+	line := []rune(strings.TrimPrefix(lines[0], "- "))
+	if len(line) > budget {
+		line = line[:budget]
+	}
+	return header + "\n- " + string(line) + "…"
 }
 
 // buildPair is the provider+policy pair rebuild (SPEC_COMMANDS 4, 6):
@@ -186,6 +261,9 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	r.session = s
 	r.k.Frontend = rec2
 	r.k.Session = s
+	// the refresh points (SPEC_UX 2): a new or resumed session re-reads
+	// the cwd's notes — recall at session start, never per turn.
+	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
 	r.k.Provider = provider
 	r.k.Policy = pol
