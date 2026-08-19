@@ -32,6 +32,7 @@ const (
 	SlotRule      = "rule"
 	SlotReasoning = "reasoning"
 	SlotEmber     = "ember" // the greeting and the loaders: a pale, neutral orange
+	SlotBold      = "bold"  // derived: the text color, bold (the markdown pass); not a palette entry
 )
 
 // slotVocabulary is the sorted slot list the refusals name (7).

@@ -57,7 +57,7 @@ func statusFixture() StatusIn {
 // promptMark is the input line's painted prompt — the marker a test
 // awaits before it feeds.
 func promptMark(th Theme) string {
-	return th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
+	return th.Paint(SlotEmber, th.Glyph(GlyphPrompt))
 }
 
 // awaitCtxDone waits for the interrupt to land (the reader is async;
@@ -180,7 +180,7 @@ func TestStatusLineRefresh(t *testing.T) {
 	// usage.
 	s.fe.Notify(core.TextDelta{Text: "hi\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10}})
-	s.await(th.Paint(SlotDim, "huihui3.8 · ") + th.Paint(SlotDim, "10/262k"))
+	s.await(th.Paint(SlotText, "huihui3.8") + th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "10/262k"))
 	if got := blockCount(); got != 1 {
 		t.Fatalf("a plain turn reprinted the block: %d, want 1", got)
 	}
@@ -254,7 +254,7 @@ func TestStatusLineRefresh(t *testing.T) {
 		t.Fatal("timed out on go2")
 	}
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 20}})
-	s.await(th.Paint(SlotDim, "model2 · ") + th.Paint(SlotDim, "20/131k"))
+	s.await(th.Paint(SlotText, "model2") + th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "20/131k"))
 	if got := blockCount(); got != 1 {
 		t.Fatalf("the block count at the end = %d, want 1", got)
 	}
@@ -461,7 +461,7 @@ func TestSchedulerNewsLine(t *testing.T) {
 	}
 	// after the block: the news line follows the startup block (its
 	// greeting precedes it in the stream).
-	if iM := strings.Index(out, "welcome to rig"); iM < 0 {
+	if iM := strings.Index(out, "welcome to"); iM < 0 {
 		t.Fatalf("the block is not in the stream")
 	} else if iN := strings.Index(out, news); iN < iM {
 		t.Fatalf("the news line is before the block")
@@ -783,7 +783,10 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 		t.Fatalf("harness: %s\nstream:\n%q", v.err, s.out.String())
 	}
 	want := []string{
-		"welcome to rig",
+		"welcome to",
+		"█▀▄ █ █▀▀",
+		"█▀▄ █ █ █",
+		"▀ ▀ ▀ ▀▀▀",
 		"session 2f9a1c0e77b3",
 		"", // the margin above the input, frozen with the prompt
 		"❯ go",
@@ -980,28 +983,28 @@ func TestCompletionMenu(t *testing.T) {
 	// the screen: the block's two rows, the two menu rows, the input,
 	// the status row.
 	s.si.feed("/mo")
-	s.awaitScreen(50, 9, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
+	s.awaitScreen(50, 12, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
 	s.await(th.Invert(row("models", "the per-model table")))
 	// Tab steps the selection down; Shift-Tab (CSI Z) steps it up.
 	s.si.feed("\t")
 	s.await(th.Invert(row("move", "move a thing")))
 	s.si.feed("\x1b[Z")
-	s.awaitScreen(50, 9, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
+	s.awaitScreen(50, 12, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
 	// Esc closes the menu; the input keeps its text. The lone Esc's
 	// grace window must settle before the next keystroke (the screen
 	// says when it has: the menu's rows are gone, the row count down).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 7, []string{"❯ /mo", "", status, usage})
+	s.awaitScreen(50, 10, []string{"❯ /mo", "", status, usage})
 	// a single candidate: the ghost — its remainder.
 	s.si.feed("d")
 	s.await(th.Paint(SlotDim, "els"))
 	// Esc again: the prompt clears (the menu is already closed).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 7, []string{"❯ ", "", status, usage})
+	s.awaitScreen(50, 10, []string{"❯ ", "", status, usage})
 
 	// the Sub() hints (the argument phase): the menu over the verbs.
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 10, []string{
+	s.awaitScreen(50, 13, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
@@ -1014,7 +1017,7 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("done", "a task's id")))
 	// Enter accepts the selection into the input — never dispatching.
 	s.si.feed("\n")
-	s.awaitScreen(50, 7, []string{"❯ /todo done ", "", status, usage})
+	s.awaitScreen(50, 10, []string{"❯ /todo done ", "", status, usage})
 	if strings.Contains(s.out.String(), "queue reply") {
 		t.Fatal("the accepted line dispatched (Enter accepts, it does not run)")
 	}
@@ -1255,7 +1258,7 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	// the block's two rows + the margin + two menu rows + input + the
 	// margin + the status's three rows at this width = 10: the long
 	// menu row did not wrap into an eleventh.
-	s.awaitScreen(30, 10, []string{"move  short", "❯ /mo", "", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
+	s.awaitScreen(30, 13, []string{"move  short", "❯ /mo", "", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
 	rows := screenLines(t, s, 30)
 	menuRow := rows[len(rows)-7]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
@@ -1304,11 +1307,11 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	// pending, then the loader, then the input, then the status.
-	s.awaitScreen(50, 13, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 16, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 	// the pending line closes into scrollback above; the loader stays
 	// directly above the input.
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
-	s.awaitScreen(50, 14, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 17, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 }
 
 // TestSpacingRule (decision 2, amended): the transcript never carries
@@ -1420,7 +1423,7 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 	s.await(promptMark(th))
 	s.si.feed("/todo")
 	// the verb rows, then the input, then the margin and the status.
-	s.awaitScreen(50, 10, []string{
+	s.awaitScreen(50, 13, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
@@ -1447,22 +1450,70 @@ func TestMargins(t *testing.T) {
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
 	s.await(promptMark(th))
-	s.awaitScreen(60, 7, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 10, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 	s.si.feed("go\n")
 	<-in
 	s.fe.Notify(core.TextDelta{Text: "text"})
 	// mid-turn: prompt, blank, pending, blank, loader, blank, input, blank, status.
-	s.awaitScreen(60, 13, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 16, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
 	s.fe.Notify(core.TextDelta{Text: "\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 	// after: prompt, blank, text, blank (Done's), input, blank, status —
 	// the Done blank and the input margin do not stack.
-	s.awaitScreen(60, 11, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "up 10 down 2 · cache r 0 0%"})
+	s.awaitScreen(60, 14, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "up 10 down 2 · cache r 0 0%"})
 	rows := screenLines(t, s, 60)
 	for i := 1; i < len(rows); i++ {
 		if rows[i] == "" && rows[i-1] == "" {
 			t.Fatalf("two blank rows in a row at %d:\n%q", i, rows)
+		}
+	}
+}
+
+// TestMarkdownOnTheCommittedPath: the model's text decorates as it
+// commits — a heading, a code fence (preformatted: dim, indented, never
+// word-wrapped, the fence lines dropped), a bullet — and reasoning
+// stays raw; an unclosed fence does not leak into the next turn.
+func TestMarkdownOnTheCommittedPath(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(30),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	s.fe.Notify(core.TextDelta{Text: "# The plan\n"})
+	s.fe.Notify(core.TextDelta{Text: "```go\n"})
+	s.fe.Notify(core.TextDelta{Text: "func long_identifier_that_would_wrap_at_thirty() {}\n"})
+	s.fe.Notify(core.TextDelta{Text: "```\n"})
+	s.fe.Notify(core.TextDelta{Text: "- a **bold** item that is long enough to wrap\n"})
+	s.fe.Notify(core.ReasoningDelta{Text: "*raw* reasoning\n"})
+	s.fe.Notify(core.Done{})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.await("raw* reasoning")
+	out := s.out.String()
+	if !strings.Contains(out, th.Paint(SlotAccent, "The plan")) {
+		t.Fatalf("the heading must paint accent, marks dropped")
+	}
+	if !strings.Contains(out, th.Paint(SlotDim, "  func long_identifier_that_would_wrap_at_thirty() {}")) {
+		t.Fatalf("the fenced line must commit preformatted (dim, indented, whole):\n%s", out)
+	}
+	if strings.Contains(RemoveColor(out), "```") {
+		t.Fatalf("the fence lines must drop")
+	}
+	if !strings.Contains(out, th.Paint(SlotBold, "bold")) {
+		t.Fatalf("the bullet's bold must decorate")
+	}
+	if !strings.Contains(out, th.Paint(SlotReasoning, "*raw* reasoning")) {
+		t.Fatalf("reasoning must stay raw")
+	}
+	rows := screenLines(t, s, 30)
+	for _, r := range rows {
+		if strings.HasPrefix(r, "  func") && displayWidth(r) <= 30 {
+			continue
+		}
+		if displayWidth(r) > 30 && !strings.HasPrefix(r, "  func") {
+			t.Fatalf("a prose row overflows the width (only the code line may): %q", r)
 		}
 	}
 }

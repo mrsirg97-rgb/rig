@@ -173,6 +173,15 @@ and each yields where the scrollback already ends with a blank (the
 Done newline, the prompt's own margin), so the transcript never
 carries two in a row.
 
+Prose wraps at words (amended over "rig never hand-wraps"): a closed
+prose line — the model's text, its reasoning, the operator's prompt —
+commits as the terminal rows it needs, broken at spaces (a word wider
+than the width breaks at the edge, the terminal's rule); the pending
+(unclosed) line stays the terminal's while it streams. Preformatted
+content never soft-wraps: tool output, command output, and fenced code
+commit whole and break at the column edge as before. The paint
+survives the break per piece.
+
 The commit points are the events, exactly:
 
 - `ReasoningDelta` / `TextDelta`: streamed as they arrive (reasoning
@@ -237,21 +246,33 @@ and never per repaint: the closure is a store read, and a live row
 repaints on every keystroke.
 
 The committed half is the startup block (the choice, named: one
-committed block at session start, not deleted): the greeting in the
-ember (decision 7), the session id under it (its first twelve
+committed block at session start, not deleted): the title — "welcome
+to" in the dim, and under it the name in three rows of half-block
+glyphs in the ember, the one piece of retro texture the block keeps
+(decision 8: it spells the same word the plain row would; the ascii
+glyph set gets the plain row) — the session id under it (its first twelve
 characters, git's short-hash habit; `/sessions` lists the full ids),
 and the scheduler news line (decision 6) when there is one — no
 dotted rules (they enclosed the banner, and the banner is gone). The
 model and usage rows are the live status now, under the input:
 
 ```
-welcome to rig
+welcome to
+█▀▄ █ █▀▀
+█▀▄ █ █ █
+▀ ▀ ▀ ▀▀▀
 session 2f9a1c0e77b3
 · j5 failed 14:30 · scheduler runs j5
+
 ❯
+
 huihui3.8 · 41.2k/262k
 up 214k down 18.2k · cache r 187k 92%
 ```
+
+The prompt glyph is the ember too, and the status's model name is
+the text color (white on the dark themes): the two things the eye
+lands on first.
 
 The live status is two rows: the model with used over the window (the
 model alone before the first usage; the context part colored at the
@@ -536,6 +557,37 @@ terminal, the plain CLI when piped or redirected (`-tui=false` forces
 plain; scripts and the e2e keep the CLI bytes). `-p` and `run-job`
 never engage the TUI. The CLI frontend remains, untouched: it is the
 piped mode and the reference rendering.
+
+### 11. Markdown: decorated per committed line, never buffered
+
+The model's text renders with inline markdown decorated for the human,
+on the committed-line path — per closed line, when it commits — without
+buffering: the streaming and the scrollback-native design are not
+renegotiated. The subset, exactly: `**bold**` (the text color, SGR
+bold: a derived pseudo-slot, not a palette entry), `*em*`/`_em_` (dim),
+`` `code` `` (ember), `# `..`### ` headings (accent, marks dropped),
+`- `/`* `/`N. ` list items (the dot glyph for the bullet; the number
+kept, dim), `> ` quotes (dim, the bar glyph), and fenced code: a line
+that is ``` toggles a code mode — lines inside commit preformatted
+(dim, indented two, never word-wrapped, never decorated), the fence
+lines drop, the info string shows dim once. Everything else renders
+raw: tables, links, images, HTML, nested lists. The parser is
+line-local: an inline mark that does not close on its line renders
+raw; `\*` escapes; marks inside code are text; the only cross-line
+state is the fence toggle, and a turn's end clears it (an unclosed
+fence never leaks into the next turn).
+
+Who: `TextDelta` only. Reasoning stays raw (the margin notes are not
+decorated). Tool results and command output are the renderers' own.
+The CLI and one-shot never decorate (the piped reference). The pager
+shows the decorated transcript as committed. On by default; a settings
+switch is later work, named.
+
+Rejected, named: block-level rendering that waits for a block's close
+(a table needs its rows, and the stream will not wait; a badly rendered
+table is worse than a raw one); a markdown library (the subset is
+small, and the streaming constraint rules out a document renderer;
+`go.mod` unchanged).
 
 ## testing
 

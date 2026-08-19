@@ -324,7 +324,10 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	// the model's stream, a tool block, a command's reply). The blank
 	// is committed, so it survives into scrollback; the collapse keeps
 	// what follows to one blank.
-	l.record([]string{fullLine, ""})
+	// the frozen prompt may be several rows (the operator's prose,
+	// soft-wrapped at words): each is a committed row of its own.
+	frozen := strings.Split(fullLine, "\n")
+	l.record(append(append([]string(nil), frozen...), ""))
 	l.lastBlank = true
 	l.norm()
 	// the input row (the bookkeeping's last line, the status row below
@@ -357,8 +360,13 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 		}
 	}
 	l.wf(toCol(1))
-	l.wf(fullLine)
-	l.wf(lineEnd)
+	for i, fr := range frozen {
+		if i > 0 {
+			l.wf(clearLine)
+		}
+		l.wf(fr)
+		l.wf(lineEnd)
+	}
 	// the blank row under the prompt (committed): the row it lands on
 	// may hold the old region's next row (the status), so it is
 	// cleared, not just skipped — a lineEnd moves, it does not erase.

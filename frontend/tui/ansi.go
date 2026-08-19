@@ -21,6 +21,15 @@ const (
 // (38;2;r;g;b) when the terminal reports it, else the nearest 256 index
 // (38;5;n) — named, automatic, not configurable (decision 7).
 func (t Theme) SGR(slot string) string {
+	// the bold pseudo-slot (the markdown pass's **bold**): the text
+	// color with SGR bold — derived, not a palette entry, so it is not
+	// in theme.json's vocabulary.
+	if slot == SlotBold {
+		if base := t.SGR(SlotText); base != "" {
+			return base + ESC + "1m"
+		}
+		return ESC + "1m"
+	}
 	hex := t.slots[slot]
 	if hex == "" {
 		return ""

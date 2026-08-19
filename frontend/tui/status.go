@@ -24,7 +24,7 @@ type StatusIn struct {
 // resume). The model and usage rows are the live status now
 // (RenderStatusLine), under the input.
 func RenderStatus(t Theme, in StatusIn) string {
-	b := t.Paint(SlotEmber, "welcome to rig") + "\n"
+	b := renderTitle(t)
 	if in.Session != "" {
 		// the id's short form (a hash's first twelve, git's habit): the
 		// row is a glance, /sessions is the full list.
@@ -35,6 +35,30 @@ func RenderStatus(t Theme, in StatusIn) string {
 		b += t.Paint(SlotDim, "session "+id) + "\n"
 	}
 	return b
+}
+
+// renderTitle is the greeting (decision 3, amended): "welcome to" in
+// the dim, and under it the name in block letters, the ember — the one
+// piece of retro texture the block keeps (decision 8: texture, never
+// information; the letters spell the same word the plain row does).
+// The ascii glyph set (a terminal without unicode) gets the plain row.
+func renderTitle(t Theme) string {
+	b := t.Paint(SlotDim, "welcome to") + "\n"
+	if t.Glyph(GlyphPrompt) == ">" {
+		return b + t.Paint(SlotEmber, "rig") + "\n"
+	}
+	for _, row := range titleRows {
+		b += t.Paint(SlotEmber, row) + "\n"
+	}
+	return b
+}
+
+// titleRows is "rig" in three rows of block glyphs, 15 columns: the
+// retro banner, sized to fit a phone's width with room to spare.
+var titleRows = []string{
+	"█▀▄ █ █▀▀",
+	"█▀▄ █ █ █",
+	"▀ ▀ ▀ ▀▀▀",
 }
 
 // RenderStatusLine is the live status (decision 3, amended): two rows
@@ -50,7 +74,7 @@ func RenderStatusLine(t Theme, model string, used, window int, hasUsed bool, up,
 	}
 	var row1 string
 	if !hasUsed || window <= 0 {
-		row1 = t.Paint(SlotDim, model)
+		row1 = t.Paint(SlotText, model)
 	} else {
 		pct := used * 100 / window
 		slot := SlotDim
@@ -60,7 +84,7 @@ func RenderStatusLine(t Theme, model string, used, window int, hasUsed bool, up,
 		case pct >= 70:
 			slot = SlotWarn
 		}
-		row1 = t.Paint(SlotDim, model+" · ") +
+		row1 = t.Paint(SlotText, model) + t.Paint(SlotDim, " · ") +
 			t.Paint(slot, formatTokens(used)+"/"+formatTokens(window))
 	}
 	hit := 0

@@ -391,7 +391,9 @@ func TestTearSteeringEnter(t *testing.T) {
 
 	// the committed content stands, in order: turn one's reasoning, the
 	// frozen steering line, turn two's output.
-	marks := []string{"streaming re", "❯ steer this", "more after t"}
+	// the markers are word-safe: prose commits soft-wrapped at words
+	// (decision 2, amended), so a 12-col row holds "streaming" alone.
+	marks := []string{"streaming", "❯ steer this", "more after"}
 	last := -1
 	for _, m := range marks {
 		idx := strings.Index(strings.Join(rows, "\n"), m)
