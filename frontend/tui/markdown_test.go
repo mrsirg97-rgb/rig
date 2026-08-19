@@ -131,3 +131,28 @@ func TestHighlightLine(t *testing.T) {
 		}
 	}
 }
+
+// TestExpandTabs (the code-duplication bug): runewidth gives a tab
+// width zero but the terminal advances to an 8-column stop — tabs
+// expand to spaces at ingestion, tracking the column across deltas,
+// resetting at newlines, so the row math and the terminal agree.
+func TestExpandTabs(t *testing.T) {
+	tu := &tui{}
+	if got := tu.expandTabsLocked("\tx"); got != "        x" {
+		t.Fatalf("tab at col 0 = %q, want eight spaces", got)
+	}
+	tu.pendCol = 0
+	if got := tu.expandTabsLocked("ab\tc"); got != "ab      c" {
+		t.Fatalf("tab at col 2 = %q, want six spaces to the stop", got)
+	}
+	// the column carries across deltas and resets at a newline.
+	tu.pendCol = 0
+	_ = tu.expandTabsLocked("abcd")
+	if got := tu.expandTabsLocked("\t"); got != "    " {
+		t.Fatalf("tab at col 4 (across deltas) = %q, want four spaces", got)
+	}
+	_ = tu.expandTabsLocked("\n")
+	if got := tu.expandTabsLocked("\t"); got != "        " {
+		t.Fatalf("tab after a newline = %q, want eight spaces", got)
+	}
+}

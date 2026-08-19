@@ -1616,3 +1616,34 @@ func TestArrowsNavigateTheMenu(t *testing.T) {
 		t.Fatalf("the accept must not dispatch")
 	}
 }
+
+// TestReasoningFenceHighlights (11, amended): a fence inside the
+// reasoning opens code mode — the block highlights like the text
+// stream's — while the reasoning's other markdown stays raw.
+func TestReasoningFenceHighlights(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	s.fe.Notify(core.ReasoningDelta{Text: "**raw** thinking\n"})
+	s.fe.Notify(core.ReasoningDelta{Text: "```go\n"})
+	s.fe.Notify(core.ReasoningDelta{Text: "return nil\n"})
+	s.fe.Notify(core.ReasoningDelta{Text: "```\n"})
+	s.fe.Notify(core.ReasoningDelta{Text: "after\n"})
+	s.fe.Notify(core.Done{})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.await("after")
+	out := s.out.String()
+	if !strings.Contains(out, "  "+th.Paint(SlotAccent, "return")+th.Paint(SlotText, " ")+th.Paint(SlotAccent, "nil")) {
+		t.Fatalf("the reasoning's fenced go must highlight:\n%s", out)
+	}
+	if !strings.Contains(out, th.Paint(SlotReasoning, "**raw** thinking")) {
+		t.Fatalf("the reasoning's inline markdown must stay raw")
+	}
+	if strings.Contains(RemoveColor(out), "```") {
+		t.Fatalf("the reasoning's fence lines must drop")
+	}
+}
