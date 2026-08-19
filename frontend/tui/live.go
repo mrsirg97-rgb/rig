@@ -319,8 +319,13 @@ func (l *live) draw(committed string, newLines []string, status string) {
 // row's terminal rows are cleared first, whatever they wrapped to. The
 // status row (decision 3) is re-emitted last, when present.
 func (l *live) enter(fullLine, activity, inputLine, status string) {
-	l.record([]string{fullLine})
-	l.lastBlank = false // the prompt line is never blank
+	// the prompt line commits with a blank row under it (decision 2's
+	// margins: the operator's line stands apart from what follows —
+	// the model's stream, a tool block, a command's reply). The blank
+	// is committed, so it survives into scrollback; the collapse keeps
+	// what follows to one blank.
+	l.record([]string{fullLine, ""})
+	l.lastBlank = true
 	l.norm()
 	// the input row (the bookkeeping's last line, the status row below
 	// it when present, however many terminal rows it wrapped to) is
@@ -354,14 +359,25 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	l.wf(toCol(1))
 	l.wf(fullLine)
 	l.wf(lineEnd)
+	// the blank row under the prompt (committed): the row it lands on
+	// may hold the old region's next row (the status), so it is
+	// cleared, not just skipped — a lineEnd moves, it does not erase.
+	l.wf(clearLine)
+	l.wf(lineEnd)
+	// every row written from here may land on an old region row (the
+	// old status rows sat right under the old input): clear before
+	// writing, so no old text shows through a shorter new row.
 	if activity != "" {
+		l.wf(clearLine)
 		l.wf(activity)
 		l.wf(lineEnd)
 	}
+	l.wf(clearLine)
 	l.wf(inputLine)
 	srows := statusRows(status)
 	for _, sr := range srows {
 		l.wf(lineEnd)
+		l.wf(clearLine)
 		l.wf(sr)
 	}
 	if activity != "" {

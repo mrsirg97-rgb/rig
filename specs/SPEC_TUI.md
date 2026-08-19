@@ -163,6 +163,16 @@ usage is the status's second row (decision 3). A shrinking live region
 erases the rows it frees (CSI 0J before its last row), so nothing
 stands under the status.
 
+The margins (amended): the region's groups stand apart by one blank
+row — the pending line, then a blank, then the loader; a blank above
+the input (or above the menu when it is open); a blank under the
+input, above the status. The prompt line commits with a blank row
+under it, so the operator's line stands apart from what follows in
+the scrollback too. The blanks are live rows except the prompt's,
+and each yields where the scrollback already ends with a blank (the
+Done newline, the prompt's own margin), so the transcript never
+carries two in a row.
+
 The commit points are the events, exactly:
 
 - `ReasoningDelta` / `TextDelta`: streamed as they arrive (reasoning
@@ -488,8 +498,13 @@ does not move, and the CLI never sees the menu.
   completion, and the typed prefix alone would dispatch as an unknown
   command (`/m⏎` runs `models`).
 - the phases never mix: name candidates while the name is typed,
-  argument candidates after the name and a space, nothing for plain
-  prompts and the `//` escape.
+  argument candidates after the name and a space — and, amended, as
+  soon as the name is whole: `/todo` opens the verb menu before the
+  space is typed (an accept lands `/todo verb `); nothing for plain
+  prompts and the `//` escape. A command's `Sub()` is its whole verb
+  table, each verb described by what it does and what it takes
+  (`create  add a task: create <text>`), and its `Description()` says
+  what the command is for — the menu is the operator's help.
 
 Raw mode via `x/term`; the key parser covers the named keys (Tab and
 Shift-Tab included) and ignores unrecognized sequences (never crash on

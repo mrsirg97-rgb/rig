@@ -204,7 +204,7 @@ func TestLiveWalkPaintedLines(t *testing.T) {
 	}
 	for i := range want {
 		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q", i, v.rows[i], want[i])
+			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
 		}
 	}
 }
@@ -276,6 +276,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	want := []string{
 		paintFree(blockLines[0]), // the greeting (the fixture names no session)
 		"hello",
+		"", // the prompt's margin (decision 2, amended): a blank under the frozen line
 		"thinking...",
 		"hel",
 		"lo",
@@ -284,6 +285,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 		"bash ✓ 0.4s",
 		"| thinking", // the interrupted turn's activity row, left standing (frozen at its last frame)
 		"❯ fix the retry",
+		"", // the steer's margin
 		paintFree(usage),
 		"| thinking",
 		"❯ ",
@@ -293,7 +295,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	}
 	for i := range want {
 		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q", i, v.rows[i], want[i])
+			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
 		}
 	}
 }
@@ -327,7 +329,7 @@ func TestLiveRegionWidthExact(t *testing.T) {
 	}
 	for i := range want {
 		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q", i, v.rows[i], want[i])
+			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
 		}
 	}
 }
@@ -403,6 +405,7 @@ func TestLiveRegionStatusRow(t *testing.T) {
 	}
 	want := []string{
 		"hi",
+		"", // the prompt's margin
 		"hel",
 		"up 1.2k down 220 · cache r 0 0%", // the turn end: the region resets, the activity row (a live row) goes with it
 		"❯ ",
@@ -413,7 +416,7 @@ func TestLiveRegionStatusRow(t *testing.T) {
 	}
 	for i := range want {
 		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q", i, v.rows[i], want[i])
+			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
 		}
 	}
 }
@@ -459,7 +462,7 @@ func TestLiveRegionMenuRows(t *testing.T) {
 	}
 	for i := range want {
 		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q", i, v.rows[i], want[i])
+			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
 		}
 	}
 	// the menu frame laid the rows menu, input, status — in order in
