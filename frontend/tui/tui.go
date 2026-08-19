@@ -894,6 +894,11 @@ func (t *tui) Notify(ev core.Event) {
 			t.statusUsed = e.Usage.Prompt + e.Usage.Completion
 			t.statusHasUsed = true
 		}
+		// the usage row is live within the turn (decision 3): each
+		// model call's Done moves it, so a long agentic turn shows its
+		// running up/down and hit rate, not the previous turn's until
+		// the close.
+		t.statusUp, t.statusDown, t.statusCache = t.prompt, t.completion, t.cacheRead
 		t.mu.Unlock()
 		t.flow("", "\n")
 	case core.Fault:
