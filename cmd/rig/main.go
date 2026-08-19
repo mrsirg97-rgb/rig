@@ -31,6 +31,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/models"
+	"github.com/mrsirg97-rgb/rig/plugins"
 	"github.com/mrsirg97-rgb/rig/policy/compact"
 	"github.com/mrsirg97-rgb/rig/provider/openai"
 	"github.com/mrsirg97-rgb/rig/store"
@@ -49,9 +50,10 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-// Version is the binary's release version: the 1.0 freeze (roadmap 9)
-// — commands complete, the runtime the TUI consumes.
-const Version = "0.3.0"
+// Version is the binary's release version: pre-1.0, still feature-
+// complete (the home and the plugins in 0.4.0) — the 1.0 tag waits for
+// lived use.
+const Version = "0.4.0"
 
 // root is the process's mutable wiring state (SPEC_COMMANDS 2): the
 // active model, the row, the recorder, the session — the state the
@@ -82,6 +84,10 @@ type root struct {
 	session *core.Session
 	rec     *state.Recorder
 	tools   map[string]core.Tool // the same live instances the kernel executes
+
+	// pluginTools is the loaded plugins, in file order — the wire's tail
+	// after the natives (SPEC_PLUGINS 2): absent when there are none.
+	pluginTools []core.Tool
 
 	fullSystem string // system + the middleware guidelines (computed in wire)
 	k          *rig.Kernel
@@ -131,9 +137,12 @@ func wire(r *root) *rig.Kernel {
 		rig.WithProvider(provider),
 		rig.WithFrontend(r.rec),
 		rig.WithPolicy(pol),
-		rig.WithTools(r.tools["bash"], r.tools["read"], r.tools["write"], r.tools["edit"], r.tools["ls"], r.tools["find"], r.tools["grep"],
-			r.tools["todo"], r.tools["rem"], r.tools["scheduler"], r.tools["python"], r.tools["web_search"], r.tools["web_fetch"],
-			r.tools["diff"]),
+		rig.WithTools(append(
+			[]core.Tool{r.tools["bash"], r.tools["read"], r.tools["write"], r.tools["edit"], r.tools["ls"], r.tools["find"], r.tools["grep"],
+				r.tools["todo"], r.tools["rem"], r.tools["scheduler"], r.tools["python"], r.tools["web_search"], r.tools["web_fetch"],
+				r.tools["diff"]},
+			r.pluginTools..., // the loaded plugins, in file order (SPEC_PLUGINS 2)
+		)...),
 		rig.WithMiddleware(mw...),
 	)
 	k.Session = r.session // one identity: the loop's session is the transcript's
@@ -344,6 +353,71 @@ func checkOneShot(prompt, resumeID string) error {
 	return nil
 }
 
+// userHome is $HOME, loud nowhere (the caller's refusal names it).
+func userHome() string {
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		return h
+	}
+	return os.Getenv("HOME")
+}
+
+// nativeToolNames is the native tool set (SPEC_PLUGINS 2): the wire's
+// head, and the plugin collision check's refusal set. A native tool
+// added or retired updates this list and nothing else.
+var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff"}
+
+// listPluginFiles is the plugin listing (SPEC_PLUGINS 2): the rig
+// home's plugins/ directory, top-level *.py only, in filename order
+// (os.ReadDir sorts). No plugins directory, or an empty one, is a
+// no-op that never starts the kernel.
+func listPluginFiles(home string) ([]string, error) {
+	dir := filepath.Join(home, "plugins")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".py") {
+			files = append(files, filepath.Join(dir, e.Name()))
+		}
+	}
+	return files, nil
+}
+
+// rigHome is the config home (SPEC_CONFIG 11, SPEC_PLUGINS 6): $RIG_HOME
+// if set (the operator's spelling, used as-is), else ~/.rig — the
+// .pi/.omp convention, not the XDG one. The migration, once and
+// deterministic, and a **default-path event**: only when $RIG_HOME is
+// unset, if the resolved home is absent and the old ~/.config/rig
+// exists, the rename (atomic — both live under $HOME) and the one
+// line. Under an explicit override the migration never runs — the
+// override is isolation, not a move order (the RIG_HOME=$(mktemp -d)
+// shape); a failed rename refuses the start.
+func rigHome() (string, error) {
+	if v := os.Getenv("RIG_HOME"); v != "" {
+		return v, nil // as-is, whatever it holds: the old home stays put
+	}
+	if h := userHome(); h == "" {
+		return "", errors.New("cannot resolve the home directory (set $HOME or RIG_HOME)")
+	} else {
+		newHome := filepath.Join(h, ".rig")
+		oldHome := filepath.Join(h, ".config", "rig")
+		if fi, err := os.Stat(oldHome); err == nil && fi.IsDir() {
+			if _, err := os.Stat(newHome); errors.Is(err, os.ErrNotExist) {
+				if err := os.Rename(oldHome, newHome); err != nil {
+					return "", fmt.Errorf("migrate the config home: %s -> %s: %v", oldHome, newHome, err)
+				}
+				fmt.Fprintf(os.Stderr, "rig: migrated the config home: %s -> %s\n", oldHome, newHome)
+			}
+		}
+		return newHome, nil
+	}
+}
+
 // resolveModel is the compaction row resolution (SPEC_COMPACT 2, 8;
 // SPEC_CONFIG 4), loud before any store is opened: the table row for the
 // active id, with the RIG_MODEL_* env overlaid on its fields, else an env
@@ -485,12 +559,14 @@ func main() {
 		os.Exit(1)
 	}
 	digest := sha1.Sum([]byte(cwd))
-	cfgDir, err := os.UserConfigDir()
+	// The rig home (SPEC_CONFIG 11): $RIG_HOME over ~/.rig, the old
+	// home migrated (renamed, one line) when the condition holds.
+	cfgDir, err := rigHome()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	cfg, err := config.Load(filepath.Join(cfgDir, "rig"), cwd)
+	cfg, err := config.Load(cfgDir, cwd)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -577,7 +653,51 @@ func main() {
 	}
 	webFetch := webtool.NewFetch(webtool.FetchConfig{Proxy: proxy, Trafilatura: traf})
 
-	sessionsPath := filepath.Join(cfgDir, "rig", "sessions", hex.EncodeToString(digest[:6])+".sqlite")
+	// The python plugins (SPEC_PLUGINS): discovery at startup, through
+	// the shared python kernel — the same kernel as the python tool, the
+	// namespace shared (the cost is named, SPEC_PLUGINS 3). The listing
+	// is filename order (os.ReadDir sorts): the discovery, the skip
+	// lines, the first collision refusal, and the /plugins listing all
+	// follow it. No plugins directory, or an empty one, is a no-op that
+	// never starts the kernel (the fixture runs take the 0.2.0 wire).
+	// A broken file is a loud skip (one line, file + field); a name
+	// colliding with a native tool refuses loud — before the stores.
+	pluginFiles, err := listPluginFiles(cfgDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	pluginReports := make([]plugins.Report, 0)
+	if len(pluginFiles) > 0 {
+		pluginReports, err = plugins.Discover(context.Background(), py, pluginFiles)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "rig:", err)
+			os.Exit(1)
+		}
+	}
+	native := make(map[string]bool, len(nativeToolNames))
+	for _, name := range nativeToolNames {
+		native[name] = true
+	}
+	pluginTools := make([]core.Tool, 0, len(pluginReports))
+	pluginInfos := make([]command.PluginInfo, 0, len(pluginReports))
+	for _, rep := range pluginReports {
+		pluginInfos = append(pluginInfos, command.PluginInfo{
+			Name: rep.Name, Description: rep.Description, File: rep.File,
+			Skipped: rep.Skipped, Reason: rep.Reason,
+		})
+		if rep.Skipped {
+			fmt.Fprintf(os.Stderr, "rig: plugins: %s: %s\n", filepath.Base(rep.File), rep.Reason)
+			continue
+		}
+		if native[rep.Name] {
+			fmt.Fprintf(os.Stderr, "rig: plugins: name collision: %q (%s) is already a native tool\n", rep.Name, filepath.Base(rep.File))
+			os.Exit(1)
+		}
+		pluginTools = append(pluginTools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, py))
+	}
+
+	sessionsPath := filepath.Join(cfgDir, "sessions", hex.EncodeToString(digest[:6])+".sqlite")
 	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -594,7 +714,7 @@ func main() {
 
 	// The task queue: workspace-keyed, opened once, loud on corruption.
 	// (SPEC_STATE's paths, digest prefix twelve.)
-	todoPath := filepath.Join(cfgDir, "rig", "todo", hex.EncodeToString(digest[:12])+".sqlite")
+	todoPath := filepath.Join(cfgDir, "todo", hex.EncodeToString(digest[:12])+".sqlite")
 	if err := os.MkdirAll(filepath.Dir(todoPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -611,7 +731,7 @@ func main() {
 
 	// The memory store: one hybrid file (global and project scopes) under
 	// the user config directory; opened once, loud on corruption.
-	remPath := filepath.Join(cfgDir, "rig", "rem", "rem.sqlite")
+	remPath := filepath.Join(cfgDir, "rem", "rem.sqlite")
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -628,7 +748,7 @@ func main() {
 
 	// The scheduler stores: both scopes — global (this user) and this
 	// workspace — opened once under the scheduler home, loud on corruption.
-	schedHome := filepath.Join(cfgDir, "rig", "scheduler")
+	schedHome := filepath.Join(cfgDir, "scheduler")
 	if err := os.MkdirAll(schedHome, 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -688,6 +808,12 @@ func main() {
 			// its own; the session comes from ctx.
 			"diff": diff.New(sdb),
 		},
+		pluginTools: pluginTools,
+	}
+	// the plugins ride the tools map too (the lookup seam; the wire's
+	// order is pluginTools', SPEC_PLUGINS 2).
+	for _, t := range pluginTools {
+		r.tools[t.Name()] = t
 	}
 
 	// The command's env (SPEC_COMMANDS 2): closures, not handles. The
@@ -704,6 +830,7 @@ func main() {
 		ActiveModel:   func() string { return r.activeID },
 		SwitchModel:   r.switchModel,
 		Tools:         r.tools,
+		Plugins:       pluginInfos,
 	}
 
 	// The frontend: the REPL by default; one-shot under -p (deliverable 2's
@@ -808,7 +935,7 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig: usage: run-job <key>")
 		return 2
 	}
-	cfgDir, err := os.UserConfigDir()
+	cfgDir, err := rigHome()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
@@ -818,7 +945,7 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
 	}
-	cfg, err := config.Load(filepath.Join(cfgDir, "rig"), cwd)
+	cfg, err := config.Load(cfgDir, cwd)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
@@ -832,7 +959,7 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
 	}
-	home := filepath.Join(cfgDir, "rig", "scheduler")
+	home := filepath.Join(cfgDir, "scheduler")
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1

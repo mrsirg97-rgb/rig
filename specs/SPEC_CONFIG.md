@@ -23,9 +23,11 @@ TDD.
   worker the runner spawns is a `rig -p`, so it inherits the same load
   in its own cwd — a job inherits its cwd's `AGENTS.md` (6).
 - The files, one home: `models.json`, `settings.json`, and `theme.json`
-  (reserved) under the config home's `rig/` directory — the same home
-  the stores use (`~/.config/rig/` next to `sessions/`, `todo/`, `rem/`,
-  `scheduler/`) — plus `AGENTS.md`, global there, project in `<cwd>`.
+  (reserved) under the rig home (11: `~/.rig`, `$RIG_HOME` over it) —
+  the same home the stores use (`sessions/`, `todo/`, `rem/`,
+  `scheduler/` next to the files) and the plugins' `plugins/`
+  (`specs/SPEC_PLUGINS.md`) — plus `AGENTS.md`, global there, project
+  in `<cwd>`.
 - The models table out of code: `models.Defaults` becomes an embedded
   default `models.json` (go:embed); the user file merges over it row by
   row; `RIG_MODEL_*` env still wins for the active id (4).
@@ -63,8 +65,9 @@ TDD.
   (3) — that is the version signal. Adding keys is forward-compatible;
   removing one is a break the refusal names.
 - No env expansion in file values: the file is data, no `$HOME`.
-- No new env vars: the `RIG_*` surface is unchanged (8); the file layer
-  is new, not new env.
+- No new env vars (8) — one amendment, named: `RIG_HOME`, the home's
+  override (11). Every other `RIG_*` means what it meant in 0.2.0, with
+  a file layer below it.
 - No new `core/` or `loop/` line (10); no new dependencies (1).
 - No TUI palette: `theme.json` is read raw; 10 owns its schema (7).
 
@@ -111,12 +114,12 @@ each. Zero loop lines. `core/` zero diff.
 ```go
 package config
 
-// Load reads the user files under dir (the config home's rig
-// directory, e.g. ~/.config/rig) and the AGENTS.md pair (dir + cwd),
-// each merged over its embedded default. Absent files are silent.
+// Load reads the user files under dir (the rig home, e.g. ~/.rig —
+// 11) and the AGENTS.md pair (dir + cwd), each merged over its
+// embedded default. Absent files are silent.
 // Present-but-malformed or unreadable files refuse loud, naming the
 // file and, for JSON, the field (3). Load never creates a file. The
-// root computes dir (os.UserConfigDir + "rig", as it does for the
+// root computes dir ($RIG_HOME, else ~/.rig — 11, as it does for the
 // stores) and passes it: config/ reads paths, not env.
 func Load(dir, cwd string) (*Config, error)
 
@@ -204,12 +207,13 @@ before it spawns), and the worker the runner spawns is a plain `rig
 -p`, so it runs the same load in its own cwd. One load function, three
 entry modes, no per-mode config code.
 
-The config home is the same directory the stores use:
-`os.UserConfigDir()` + `rig` (`~/.config/rig` on Linux). The root
-already computes it for `sessions/`, `todo/`, `rem/`, `scheduler/`; it
-passes it to `Load`. `Load` takes `(dir, cwd)` and reads no env: the
-seam is testable in `t.TempDir()` without a scratch `XDG_CONFIG_HOME`
-(the e2e pattern stays for the binary cases).
+The config home is the same directory the stores use: the rig home —
+`$RIG_HOME` if set, else `~/.rig` (11, amended; the `.pi`/`.omp`
+convention, not the XDG one). The root already computes it for
+`sessions/`, `todo/`, `rem/`, `scheduler/`; it passes it to `Load`.
+`Load` takes `(dir, cwd)` and reads no env: the seam is testable in
+`t.TempDir()` with a scratch `HOME` (the e2e pattern stays for the
+binary cases).
 
 `-version` exits before the load (a version query refuses no config);
 every other path loads.
@@ -277,18 +281,18 @@ The voice is the existing `rig: …` startup voice, with the config
 prefix:
 
 ```
-rig: config: ~/.config/rig/settings.json: retries: expected an integer, got "three"
-rig: config: ~/.config/rig/settings.json: unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)
-rig: config: ~/.config/rig/settings.json: expected a JSON object
-rig: config: ~/.config/rig/settings.json: allow[2]: expected a string, got 5
-rig: config: ~/.config/rig/models.json: expected a JSON array of model rows
-rig: config: ~/.config/rig/models.json: row 2: "id" is required
-rig: config: ~/.config/rig/models.json: row 3: duplicate id "local"
-rig: config: ~/.config/rig/models.json: row 1: role: "boss" (allowed: interactive, worker)
-rig: config: ~/.config/rig/models.json: row 1: window: expected an integer, got "big"
-rig: config: ~/.config/rig/models.json: local: Reserve 81920 must be in [0, Window 65536): as large as the window, the trigger fires at every estimate
-rig: config: ~/.config/rig/theme.json: invalid character 'x' after object key:value pair
-rig: config: ~/.config/rig/AGENTS.md: permission denied
+rig: config: ~/.rig/settings.json: retries: expected an integer, got "three"
+rig: config: ~/.rig/settings.json: unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)
+rig: config: ~/.rig/settings.json: expected a JSON object
+rig: config: ~/.rig/settings.json: allow[2]: expected a string, got 5
+rig: config: ~/.rig/models.json: expected a JSON array of model rows
+rig: config: ~/.rig/models.json: row 2: "id" is required
+rig: config: ~/.rig/models.json: row 3: duplicate id "local"
+rig: config: ~/.rig/models.json: row 1: role: "boss" (allowed: interactive, worker)
+rig: config: ~/.rig/models.json: row 1: window: expected an integer, got "big"
+rig: config: ~/.rig/models.json: local: Reserve 81920 must be in [0, Window 65536): as large as the window, the trigger fires at every estimate
+rig: config: ~/.rig/theme.json: invalid character 'x' after object key:value pair
+rig: config: ~/.rig/AGENTS.md: permission denied
 ```
 
 Rules that make the voice total:
@@ -588,6 +592,65 @@ prints nothing** — the load is invisible when it is right (the
   still pre-1.0 — the freeze's discipline, the tag's criterion,
   unchanged) and updates `TestVersionIsTheFreeze` with it.
 
+### 11. The home: ~/.rig (amended, 0.4.0)
+
+**The move.** The config home is `~/.rig` — the `.pi`/`.omp`
+convention, the agent's dot-home, not the XDG one (`~/.config/rig`).
+Everything that lived under the old home rides it: `settings.json`,
+`models.json`, `theme.json`, `AGENTS.md`, the stores (`sessions/`,
+`todo/`, `rem/`, `scheduler/`), the python kernel's materialised host
+(`kernel/kernel_host.py`), and — new — `plugins/`
+(`specs/SPEC_PLUGINS.md`).
+
+**The resolution, stated once: `$RIG_HOME` > `~/.rig`.** `RIG_HOME`
+set (non-empty) is the home, the operator's spelling used as-is;
+unset, the home is `~/.rig` (`$HOME` + `.rig`). `XDG_CONFIG_HOME` is
+no longer consulted — the agent's dot-home is the convention, and the
+override is the escape. `RIG_HOME` is the one new env var (the
+non-goal's named amendment); it has no file layer: it is the home, and
+the home is not a knob. The resolution is the root's (`Load` keeps its
+`(dir, cwd)` seam — `config/` reads paths, not env), and it is applied
+at every entry mode: REPL, `-p`, and `run-job`, as the chain is. The
+two sites that resolve it — the root and `tool/python`'s host
+materialisation — carry the same one rule, named in
+`specs/SPEC_PLUGINS.md`.
+
+**The migration, once and deterministic.** At startup, before any file
+is read or store opened: if the resolved home is **absent** and the
+old `~/.config/rig` **exists**, the old directory is **renamed** to
+the resolved home (atomic on the same filesystem — both live under
+`$HOME`), and exactly one line says so:
+
+```
+rig: migrated the config home: /home/u/.config/rig -> /home/u/.rig
+```
+
+The condition is total and idempotent: after the rename the old
+directory is gone, so the migration never fires twice; with the old
+directory absent it is a no-op; with the home already present (a fresh
+install) it is a no-op — a present home wins, whatever the old
+directory contains, and deletion is the operator's act, never the
+runtime's. A failed rename refuses the
+startup loud (the home is load-bearing; a half-migrated state is not
+one to boot on).
+
+**The `$RIG_HOME` edge, named: the migration never runs under an
+override.** An explicit override is an **isolation mechanism**, not a
+move order — `RIG_HOME=$(mktemp -d) rig -p ...` is the shape scripts
+and tests use, and under it the override is the home, used as-is,
+whatever it holds (present or absent), and the old `~/.config/rig`
+stays where it is. "The data follows the home" would turn every such
+run into a destructive move of the real config into a scratch
+directory; the default path is the migration's, and the operator who
+relocates permanently moves the data by hand (or unsets `RIG_HOME` on
+a run where the default home is absent and lets the rename do it).
+
+**The invariant's companion holds.** With no user files in either
+home, the entry modes are the 0.2.0 bytes (9): the home's location is
+a user-config fact, and the fixture runs' scratch home has neither
+`~/.rig` nor `~/.config/rig` — the golden fixtures are untouched
+(`specs/SPEC_PLUGINS.md` pins the same for the plugins' absence).
+
 ## testing
 
 Named cases, failing first (the standing rule). Fakes at the DI seam:
@@ -698,6 +761,32 @@ case names one, the built binary for the e2e.
   lists it with its role; `models <id>` switches; the next turn's
   request carries its model (4).
 
+**cmd/rig — the home (11):**
+
+- `TestRigHomeResolvesEnvOverDefault` — `RIG_HOME` set (non-empty):
+  the home is it, whatever `~/.rig` holds; unset: `~/.rig` under the
+  process `$HOME`; the resolution never reads `XDG_CONFIG_HOME` (set to
+  a third directory, the home is still `~/.rig`).
+- `TestMigrationRenamesTheOldHomeOnce` — old `~/.config/rig` with a
+  marker file, `~/.rig` absent: the run starts, the marker is read from
+  the new home (the config load sees it), the old directory is gone,
+  and exactly one migration line is printed; the second start prints
+  none (the migration is once, by construction).
+- `TestMigrationNoOps` — subtests: the old home absent (nothing to
+  migrate, silent); the home already present (the old directory left
+  intact, silent); a failed rename (a file where the home would be)
+  refuses the startup loud (the rename's reason, the two paths).
+- `TestRigHomeOverrideBeatsTheOldHome` (e2e) — `RIG_HOME` pointing at
+  a home with `settings.json` (`FROM-RIG-HOME`) while `~/.config/rig`
+  holds a different one (`FROM-OLD`): the request carries
+  `FROM-RIG-HOME`, and the old directory is left intact (the present
+  home wins).
+- `TestMigrationNeverRunsUnderAnOverride` — `RIG_HOME` set to an
+  **absent** directory, the old `~/.config/rig` present: no rename, no
+  migration line, and the old home untouched (the marker file still
+  there) — the override is isolation, not a move order (the
+  `RIG_HOME=$(mktemp -d)` shape), whatever the override holds.
+
 The suite is green on a box with no model loaded: every case is
 scripted, httptest, or a real store in a temp dir.
 
@@ -727,6 +816,10 @@ PR A carries this spec file only; the diffs below land with PR B.
   env table gains the file layer; the "set empty" note extends to the
   file layer for the two presence keys.
 - **CHANGELOG + Version**: `0.2.0` → `0.3.0`, the test updated (10).
+- **SPEC_PLUGINS** (new, 0.4.0): the plugins' home is this spec's
+  decision 11 (`~/.rig/plugins`); the kernel host's materialisation
+  rides it too (`~/.rig/kernel`); the `/plugins` command is the
+  standard set's eighth entry, specified there.
 
 ## scope
 

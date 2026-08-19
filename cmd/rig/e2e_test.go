@@ -147,7 +147,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 
 	// the job: created in-process through the real verb with scripted
 	// seams, exactly as the agent-side tool would create it.
-	home := filepath.Join(scratch, "rig", "scheduler")
+	home := filepath.Join(scratch, ".rig", "scheduler")
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, "/ws/e2e")
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
@@ -319,7 +319,7 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 	}
 
 	// the state store: the summary row + its usage row + a session closed ok.
-	glob, _ := filepath.Glob(filepath.Join(scratch, "rig", "sessions", "*.sqlite"))
+	glob, _ := filepath.Glob(filepath.Join(scratch, ".rig", "sessions", "*.sqlite"))
 	if len(glob) != 1 {
 		t.Fatalf("sessions store = %v, want one", glob)
 	}

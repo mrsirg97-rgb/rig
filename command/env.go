@@ -57,6 +57,11 @@ type Env struct {
 	ActiveModel   func() string
 	SwitchModel   func(ctx context.Context, id string) error
 	Tools         map[string]core.Tool // the same instances the model gets
+
+	// Plugins is the discovery's rows, in file order: the loaded (name,
+	// description, file) and the skipped (name, reason) — SPEC_PLUGINS
+	// 4. Nil: no plugins seam (the root wired none).
+	Plugins []PluginInfo
 }
 
 // EnvOf asserts the dispatcher's env is this package's Env (decision 2):
