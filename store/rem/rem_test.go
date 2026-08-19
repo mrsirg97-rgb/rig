@@ -1283,3 +1283,64 @@ func TestExtraAndFtsStatementsAreApplied(t *testing.T) {
 		t.Fatalf("memory_fts after open = %d, want 1", fts)
 	}
 }
+
+// --- SPEC_UX 2: the session-start recall read ---
+
+// TestRecentIsTheCwdsNewestLiveNotes (SPEC_UX 2, named): K newest first,
+// the cwd's project notes only (another directory's never ride), and
+// superseded rows not notes (their replacement is the newest row).
+func TestRecentIsTheCwdsNewestLiveNotes(t *testing.T) {
+	db := newDB(t)
+	cwd := "/ws/recent"
+	for i := 1; i <= 10; i++ {
+		learn(t, db, cwd, fmt.Sprintf("note %02d", i), we())
+	}
+	learn(t, db, "/ws/other", "foreign note", we())
+	learn(t, db, cwd, "global-ish note", map[string]any{"scope": "global"})
+	notes, err := Recent(context.Background(), db, cwd, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 8 {
+		t.Fatalf("K=8 caps the read, got %d: %v", len(notes), notes)
+	}
+	want := []string{"note 10", "note 09", "note 08", "note 07", "note 06", "note 05", "note 04", "note 03"}
+	for i := range want {
+		if notes[i] != want[i] {
+			t.Fatalf("newest first, newest K only, got: %v", notes)
+		}
+	}
+	joined := strings.Join(notes, "\n")
+	if strings.Contains(joined, "foreign note") || strings.Contains(joined, "global-ish note") {
+		t.Fatalf("another scope's notes must not ride: %v", notes)
+	}
+}
+
+// TestRecentSkipsSuperseded is the supersession rule: a replaced note is
+// history, its replacement is the note.
+func TestRecentSkipsSuperseded(t *testing.T) {
+	db := newDB(t)
+	cwd := "/ws/super"
+	learn(t, db, cwd, "old fact", we())
+	learn(t, db, cwd, "new fact", map[string]any{"supersedes": int64(1)})
+	notes, err := Recent(context.Background(), db, cwd, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 1 || notes[0] != "new fact" {
+		t.Fatalf("the superseded note must not ride, got: %v", notes)
+	}
+}
+
+// TestRecentEmptyStoreIsAbsent is the absent-segment case: no notes, no
+// read to ride (the caller's absent segment, today's bytes exactly).
+func TestRecentEmptyStoreIsAbsent(t *testing.T) {
+	db := newDB(t)
+	notes, err := Recent(context.Background(), db, "/ws/empty", 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 0 {
+		t.Fatalf("an empty store reads empty, got: %v", notes)
+	}
+}

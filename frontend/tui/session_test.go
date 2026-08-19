@@ -976,13 +976,17 @@ func (s *scriptedSession) awaitScreen(width int, total int, want []string) {
 	}
 }
 
-// TestCompletionMenu is the amended decision 9: two or more candidates
-// show the menu (the ghost does not) with the selection inverted; Tab
-// steps it down, Shift-Tab up; Enter accepts the selection into the
-// input, never dispatching; Esc closes the menu (the input keeps its
-// text); a single candidate shows the ghost's remainder — a name or a
-// sub — and a known name plus a space shows the description when the
-// command has no Sub() hints.
+// TestCompletionMenu is the amended decision 9 (SPEC_UX 5): two or
+// more candidates show the menu (the ghost does not) with the
+// selection inverted and the hint row naming the rule; Tab steps it
+// down, Shift-Tab up, the arrows too — and that navigation is the
+// pick: the Enter after it accepts the selection into the input,
+// never dispatching. Without navigation the typed line is the intent:
+// a complete command dispatches (the "accept and type again" loop,
+// closed). Esc closes the menu (the input keeps its text); a single
+// candidate shows the ghost's remainder — a name or a sub — and a
+// known name plus a space shows the description when the command has
+// no Sub() hints.
 func TestCompletionMenu(t *testing.T) {
 	th := oledTheme(t)
 	models := &fakeCmd{name: "models", desc: "the per-model table"}
@@ -999,18 +1003,19 @@ func TestCompletionMenu(t *testing.T) {
 	}
 	status := "huihui3.8"
 	usage := "up 214k down 18k · cache r 187k 87%"
+	hint := "tab/↓ pick · enter runs"
 
-	// two candidates: the menu shows, the selection inverted, first.
-	// the screen: the block's two rows, the two menu rows, the input,
-	// the status row.
+	// two candidates: the menu shows, the selection inverted, first,
+	// the hint row naming the rule. the screen: the block's two rows,
+	// the two menu rows, the hint, the input, the status rows.
 	s.si.feed("/mo")
-	s.awaitScreen(50, 12, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
+	s.awaitScreen(50, 13, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, usage})
 	s.await(th.Invert(row("models", "the per-model table")))
 	// Tab steps the selection down; Shift-Tab (CSI Z) steps it up.
 	s.si.feed("\t")
 	s.await(th.Invert(row("move", "move a thing")))
 	s.si.feed("\x1b[Z")
-	s.awaitScreen(50, 12, []string{"models  the per-model table", "move  move a thing", "❯ /mo", "", status, usage})
+	s.awaitScreen(50, 13, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, usage})
 	// Esc closes the menu; the input keeps its text. The lone Esc's
 	// grace window must settle before the next keystroke (the screen
 	// says when it has: the menu's rows are gone, the row count down).
@@ -1023,12 +1028,34 @@ func TestCompletionMenu(t *testing.T) {
 	s.si.feed("\x1b")
 	s.awaitScreen(50, 10, []string{"❯ ", "", status, usage})
 
-	// the Sub() hints (the argument phase): the menu over the verbs.
+	// SPEC_UX 5: the navigation-intent rule — no navigation (no Tab,
+	// no arrow): Enter dispatches the complete command, it does not
+	// accept the first candidate (the "accept and type again" loop,
+	// closed).
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 13, []string{
+	s.awaitScreen(50, 14, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
+		hint,
+		"❯ /todo ", "", status, usage,
+	})
+	s.si.feed("\n")
+	// the dispatch commits the reply (the todo door's renderer falls
+	// back to the raw reply when it is not queue text).
+	s.await("queue reply")
+	if todo.calls != 1 {
+		t.Fatalf("the no-nav Enter dispatched %d times, want 1 (the complete command runs)", todo.calls)
+	}
+
+	// the Sub() hints (the argument phase): the menu over the verbs —
+	// over the dispatch's committed lines, the buffer stands at 22.
+	s.si.feed("/todo ")
+	s.awaitScreen(50, 22, []string{
+		"read  the queue",
+		"create  the queue, the task's text",
+		"done  a task's id",
+		hint,
 		"❯ /todo ", "", status, usage,
 	})
 	// Tab to create, Shift-Tab twice wraps to done (the cycle).
@@ -1036,11 +1063,12 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("create", "the queue, the task's text")))
 	s.si.feed("\x1b[Z\x1b[Z")
 	s.await(th.Invert(row("done", "a task's id")))
-	// Enter accepts the selection into the input — never dispatching.
+	// the navigation's Enter accepts the selection into the input —
+	// never dispatching.
 	s.si.feed("\n")
-	s.awaitScreen(50, 10, []string{"❯ /todo done ", "", status, usage})
-	if strings.Contains(s.out.String(), "queue reply") {
-		t.Fatal("the accepted line dispatched (Enter accepts, it does not run)")
+	s.awaitScreen(50, 18, []string{"❯ /todo done ", "", status, usage})
+	if todo.calls != 1 {
+		t.Fatalf("the accepted line dispatched: %d calls, want 1 (Enter after navigation accepts, it does not run)", todo.calls)
 	}
 	// a unique sub: the ghost — its remainder.
 	for i := 0; i < 5; i++ {
@@ -1293,12 +1321,12 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	s.si.feed("/mo")
-	// the block's two rows + the margin + two menu rows + input + the
-	// margin + the status's three rows at this width = 10: the long
-	// menu row did not wrap into an eleventh.
-	s.awaitScreen(30, 13, []string{"move  short", "❯ /mo", "", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
+	// the block's two rows + the margin + two menu rows + the hint
+	// row + the input + the margin + the status's three rows at this
+	// width = 11: the long menu row did not wrap into a twelfth.
+	s.awaitScreen(30, 14, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
 	rows := screenLines(t, s, 30)
-	menuRow := rows[len(rows)-7]
+	menuRow := rows[len(rows)-8]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
 		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
 	}
@@ -1460,11 +1488,13 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	s.si.feed("/todo")
-	// the verb rows, then the input, then the margin and the status.
-	s.awaitScreen(50, 13, []string{
+	// the verb rows, the hint row, the input, then the margin and the
+	// status.
+	s.awaitScreen(50, 14, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
+		"tab/↓ pick · enter runs",
 		"❯ /todo", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%",
 	})
 	// Tab, Enter: the second verb, accepted with the name and space.
