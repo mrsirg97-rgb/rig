@@ -283,7 +283,7 @@ func (c *cli) Notify(ev core.Event) {
 
 		hit := 0
 		if c.prompt > 0 {
-			hit = c.cacheRead * 100 / c.prompt
+			hit = int(int64(c.cacheRead) * 100 / int64(c.prompt))
 		}
 		fmt.Fprintf(c.out, "↑%s ↓%s · cache %s %d%%\n",
 			formatTokens(c.prompt), formatTokens(c.completion), formatTokens(c.cacheRead), hit)
