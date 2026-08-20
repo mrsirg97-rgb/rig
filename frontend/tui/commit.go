@@ -70,6 +70,10 @@ func RenderToolBlock(t Theme, name string, args json.RawMessage, content string,
 		b.WriteString(t.Paint(SlotText, d))
 	}
 	b.WriteString("\n")
+	if ap := argsPreview(t, name, args); ap != "" {
+		b.WriteString(ap)
+		b.WriteString("\n")
+	}
 	if p := preview(t, content); p != "" {
 		b.WriteString(p)
 		b.WriteString("\n")
@@ -149,7 +153,42 @@ func verbDetail(args json.RawMessage) string {
 	return act
 }
 
+func argsPreview(t Theme, name string, args json.RawMessage) string {
+	if name != "write" && name != "edit" {
+		return ""
+	}
+	var v map[string]any
+	if err := json.Unmarshal(args, &v); err != nil {
+		return ""
+	}
+	s := func(k string) string {
+		x, _ := v[k].(string)
+		return x
+	}
+	side := func(k, prefix, slot string) string {
+		if v := s(k); v != "" {
+			return previewWith(t, v, prefix, slot)
+		}
+		return ""
+	}
+	if name == "write" {
+		return side("content", "  ", SlotDim)
+	}
+	old, new := side("old", "- ", SlotError), side("new", "+ ", SlotSuccess)
+	switch {
+	case old == "":
+		return new
+	case new == "":
+		return old
+	}
+	return old + "\n" + new
+}
+
 func preview(t Theme, content string) string {
+	return previewWith(t, content, "  ", SlotDim)
+}
+
+func previewWith(t Theme, content, prefix, slot string) string {
 	lines := strings.Split(content, "\n")
 	if n := len(lines) - 1; n > 0 && lines[n] == "" {
 		lines = lines[:n]
@@ -175,7 +214,7 @@ func preview(t Theme, content string) string {
 			b.WriteString(t.Paint(SlotDim, "  · "+strconv.Itoa(elided)+" lines elided ·"))
 			continue
 		}
-		b.WriteString(t.Paint(SlotDim, "  "+l))
+		b.WriteString(t.Paint(slot, prefix+l))
 	}
 	return b.String()
 }
