@@ -425,10 +425,23 @@ func (t *tui) onKey(k key, r rune) {
 		t.showReasoning = !t.showReasoning
 		t.mu.Unlock()
 	case keyEsc:
-		// Esc's precedence (decision 9, amended): the pager first
-		// (pagerKey above), then the menu (the input keeps its text),
-		// then the prompt clear.
+		// Esc's precedence (decision 9, amended twice): the pager
+		// first (pagerKey above), then the menu (the input keeps its
+		// text), then the prompt clear — and on an EMPTY prompt during
+		// a live turn, the interrupt: the turn stops (the loop's
+		// TurnEnd renders as any interrupt's; no steer is queued —
+		// stopping is not saying something).
 		if t.closeMenu() {
+			return
+		}
+		t.mu.Lock()
+		live := t.turnLive
+		cancel := t.cancel
+		t.mu.Unlock()
+		if strings.TrimSpace(t.ed.text()) == "" && live {
+			if cancel != nil {
+				cancel()
+			}
 			return
 		}
 		t.ed.apply(keyEsc, 0)
@@ -780,21 +793,24 @@ func (t *tui) onEnter() {
 		t.pending <- line
 		return
 	}
-	if wasLive && established {
-		// the turn is established (an event has crossed): this is
-		// steering — the slot, latest wins, and the interrupt.
-		// the pending line stays on the screen as scrollback (the
-		// enter above froze the input row beneath it), and its state
-		// goes with it: the next turn starts a fresh line.
+	if wasLive {
+		// a line typed during a live turn steers — established or not
+		// (decision 9, amended): the first-event gate silently queued
+		// a steer typed during the prefill, and at depth the prefill
+		// runs minutes — the operator typed STOP and nothing happened.
+		// Bracketed paste retired the gate's reason: a paste is one
+		// input, so a mid-turn line is always the operator's intent.
+		// The slot, latest wins, and the interrupt; the pending line
+		// stays on the screen as scrollback, its state goes with it.
 		t.mu.Lock()
 		t.pend = nil
 		t.mu.Unlock()
 		t.steer(line)
 		return
 	}
-	// a quiet prompt, or a paste before the turn's first event: the
-	// lines deliver in order (the burst rule, decision 9) — the slot's
-	// latest-wins would silently drop all but the last of a paste.
+	_ = established
+	// a quiet prompt: the lines deliver in order (the burst rule,
+	// between turns only now).
 	t.pending <- line
 }
 

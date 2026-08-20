@@ -380,60 +380,44 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 	}
 }
 
-// TestPasteBurstThreePrompts is the named input case: a pasted line is
-// a separate ordered prompt — three lines, three prompts, in order —
-// and a line that lands after the turn's first event steers instead
-// (the slot, the interrupt, the slot's line on the next Input).
-func TestPasteBurstThreePrompts(t *testing.T) {
+// TestMidTurnLinesSteer is the amended input case (decision 9, twice):
+// a line typed during a live turn STEERS — established or not. The
+// first-event gate silently queued a steer typed during the prefill
+// (minutes, at depth); bracketed paste retired the gate's reason (a
+// paste is one input). Latest wins: two quick mid-turn lines deliver
+// as one steer, the last.
+func TestMidTurnLinesSteer(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(make(chan time.Time)))
 	mark := promptMark(th)
 
-	// the burst at the quiet prompt: all three lines are prompts in
-	// order (no event has crossed the turn when b and c land).
-	if got := s.prompt(mark, "a\n"); got != "a" {
-		t.Fatalf("prompt one = %q, want a", got)
-	}
-	s.si.feed("b\nc\n")
-	s.awaitPending(2) // the burst crossed, in order (the reader is async)
-	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	line, err := s.input()
-	if line != "b" || err != nil {
-		t.Fatalf("prompt two = (%q, %v), want b (the burst is in order)", line, err)
-	}
-	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	line, err = s.input()
-	if line != "c" || err != nil {
-		t.Fatalf("prompt three = (%q, %v), want c (the burst is in order)", line, err)
-	}
-
-	// the steering side of the rule: a line that lands after the
-	// turn's first event goes to the slot and interrupts.
+	// the turn starts; NO event has crossed (the prefill window).
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = core.WithInterrupt(ctx, cancel)
 	saved := s.ctx
 	s.ctx = ctx
-	defer func() { s.ctx = saved }()
-	if got := s.prompt(mark, "go\n"); got != "go" {
-		t.Fatalf("prompt four = %q, want go", got)
+	if got := s.prompt(mark, "a\n"); got != "a" {
+		t.Fatalf("prompt one = %q, want a", got)
 	}
-	s.fe.Notify(core.TextDelta{Text: "working\n"}) // the turn is established
-	s.si.feed("steer me\n")                        // the line steers
-	s.awaitCtxDone(ctx)
+	// two lines mid-prefill: both steer, latest wins, the turn is
+	// interrupted.
+	s.si.feed("b\nc\n")
+	deadline := time.Now().Add(3 * time.Second)
+	for ctx.Err() == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("the mid-prefill line did not interrupt the turn")
+		}
+		time.Sleep(time.Millisecond)
+	}
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
-	// the loop's next turn is a fresh ctx (the interrupted one is spent).
 	s.ctx = saved
-	line, err = s.input()
-	if line != "steer me" || err != nil {
-		t.Fatalf("the steering line = (%q, %v), want the queued slot line", line, err)
+	line, err := s.input()
+	if line != "c" || err != nil {
+		t.Fatalf("the steer = (%q, %v), want c (latest wins)", line, err)
 	}
 }
-
-// TestCtrlTogglesReasoning is the named input case: Ctrl-T toggles the
-// rendering of subsequent reasoning only — committed history is
-// immutable, the transcript untouched.
 func TestCtrlTogglesReasoning(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
@@ -636,6 +620,10 @@ func TestSteerSeam(t *testing.T) {
 	if line := <-in; line != "queued" {
 		t.Fatalf("the slot line = %q, want queued", line)
 	}
+	// the slot's delivery started a turn (the TUI's view); end it —
+	// under the amended rule a line typed into a live turn steers,
+	// established or not, so the next prompt needs a quiet boundary.
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
 	// during a live turn: the interrupt lands, the slot replaces.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1699,5 +1687,60 @@ func TestReasoningStaysRawAndNeverLeaks(t *testing.T) {
 	}
 	if !strings.Contains(out, th.Paint(SlotBold, "answer")) {
 		t.Fatalf("the answer must render as markdown prose (the thought's fence must not leak)")
+	}
+}
+
+// TestEscInterruptsTheLiveTurn (decision 9, amended twice): Esc on an
+// EMPTY prompt during a live turn interrupts it — no steer queued,
+// stopping is not saying something; Esc with text still only clears
+// the text (the ladder's lower rung), and the turn runs on.
+func TestEscInterruptsTheLiveTurn(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = core.WithInterrupt(ctx, cancel)
+	saved := s.ctx
+	s.ctx = ctx
+	defer func() { s.ctx = saved }()
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	// Esc with text typed: clears only; the turn stays live.
+	s.si.feed("half a thought")
+	s.await(th.Paint(SlotText, " half a thought"))
+	s.si.feed("\x1b")
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s.fe.mu.Lock()
+		cleared := s.fe.inputText == ""
+		s.fe.mu.Unlock()
+		if cleared {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Esc did not clear the text")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("Esc with text must not interrupt the turn")
+	}
+	// Esc again, empty prompt: the interrupt.
+	s.si.feed("\x1b")
+	deadline = time.Now().Add(3 * time.Second)
+	for ctx.Err() == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("Esc on the empty prompt did not interrupt the live turn")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// no steer was queued: after the turn ends, Input waits (nothing
+	// in the slot), and a fresh line prompts normally.
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
+	s.ctx = saved
+	if got := s.prompt(promptMark(th), "next\n"); got != "next" {
+		t.Fatalf("the post-interrupt prompt = %q, want next (no slot leftovers)", got)
 	}
 }

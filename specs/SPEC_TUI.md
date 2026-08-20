@@ -509,6 +509,17 @@ The kill keybinds, readline's: Esc cancels the prompt whole (the
 history draft with it; the reader names a lone Esc by the grace
 window, since a sequence's bytes arrive in one burst); Ctrl-U kills to
 the start, Ctrl-K to the end, Ctrl-W the word before the cursor.
+
+Amended twice, the field's two findings: (a) a line typed during a
+live turn STEERS, established or not — the first-event gate silently
+queued a steer typed during the prefill, and at depth the prefill runs
+minutes: the operator typed STOP and nothing happened. Bracketed paste
+retired the gate's reason (a paste is one input), so the burst rule
+holds between turns only; an un-bracketed mid-turn burst steers latest-
+wins, named. (b) Esc's ladder gains the interrupt rung: pager, then
+menu, then the prompt clear — and on an EMPTY prompt during a live
+turn, Esc interrupts it (the loop's TurnEnd renders as any
+interrupt's). No steer is queued: stopping is not saying something.
 Esc precedence, outermost first, amended: a pager up closes the
 pager; else a menu open closes the menu (the input keeps its text);
 else Esc cancels the prompt whole, as before.
