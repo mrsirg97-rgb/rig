@@ -11,12 +11,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// toolCmd is the thin, shared adapter over one of the model's own tools
-// (decision 8): parse the line into the tool's JSON args, call Exec with
-// the session threaded (the loop's own threading), and return the reply
-// verbatim — success or refusal. No parallel implementation, no
-// re-voicing: the queue the model reads is the queue the user reads,
-// and the tool's own refusals teach the protocol.
 type toolCmd struct {
 	name  string
 	parse func(args string) (json.RawMessage, error)
@@ -34,11 +28,6 @@ func (t toolCmd) Description() string {
 	return "over the same " + t.name + " tool the model gets: the line is parsed into the tool's args, the reply printed verbatim"
 }
 
-// Sub is the TUI's argument hints (SPEC_TUI 9, amended): the todo
-// verbs, the menu's rows. The scheduler's line has no such hints
-// (its syntax is the name, the prompt, and the cron).
-// Sub is the verb table (SPEC_TUI 9's argument hints): every verb the
-// parser accepts, each described by what it does and what it takes.
 func (t toolCmd) Sub() []Sub {
 	switch t.name {
 	case "todo":
@@ -74,7 +63,7 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 	}
 	raw, err := t.parse(args)
 	if err != nil {
-		return "", err // the adapter's own shape refusal, naming the shape
+		return "", err
 	}
 	if e.Session != nil {
 		if s := e.Session(); s != nil {
@@ -83,27 +72,22 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 	}
 	out, err := tool.Exec(ctx, raw)
 	if err != nil {
-		return out, err // the tool's refusal, verbatim — the dispatch prints it
+		return out, err
 	}
 	return out, nil
 }
 
-// todoArgs is the todo line's syntax (decision 8's table): token-shaped,
-// the per-action shape enforced at the boundary. A bare `todo create`
-// passes {"action":"create"} to the tool, whose own refusal teaches that
-// the queue is replaced.
 func todoArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
 	switch {
 	case len(fields) == 0:
-		return json.RawMessage(`{"action":""}`), nil // the tool's own 'action required' voice
+		return json.RawMessage(`{"action":""}`), nil
 	case fields[0] == "read" && len(fields) == 1:
 		return json.RawMessage(`{"action":"read"}`), nil
 	case fields[0] == "create":
 		if len(fields) == 1 {
 			return json.RawMessage(`{"action":"create"}`), nil
 		}
-		// the whole remainder: one task's text, the interior verbatim.
 		text := strings.TrimSpace(args[len("create"):])
 		return json.Marshal(map[string]any{
 			"action": "create",
@@ -112,7 +96,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "retry") && len(fields) == 2:
 		action := fields[0]
 		if action == "done" {
-			action = "complete" // the menu's spelling (SPEC_TUI 9), the tool's verb
+			action = "complete"
 		}
 		return json.Marshal(map[string]any{"action": action, "id": fields[1]})
 	case fields[0] == "move" && len(fields) == 3:
@@ -138,16 +122,11 @@ func todoArgs(args string) (json.RawMessage, error) {
 	}
 }
 
-// schedulerArgs is the scheduler line's syntax (decision 8's table): the
-// create tail is total — five vixie fields, or the one-word cron 'once'
-// plus its ISO token; a create that fits neither is the adapter's own
-// refusal. The store still validates the cron it gets: the adapter
-// parses, the store teaches.
 func schedulerArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
 	switch {
 	case len(fields) == 0:
-		return json.RawMessage(`{"action":""}`), nil // the tool's own 'unknown action' voice
+		return json.RawMessage(`{"action":""}`), nil
 	case fields[0] == "list" && len(fields) == 1:
 		return json.RawMessage(`{"action":"list"}`), nil
 	case (fields[0] == "pause" || fields[0] == "resume" || fields[0] == "remove") && len(fields) == 2:
@@ -179,9 +158,6 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 	}
 }
 
-// schedulerCreate splits the create line: the name is the first token
-// after the action, the cron is the tail (five vixie fields, or 'once'
-// plus its ISO token), and the prompt is the remainder between them.
 func schedulerCreate(fields []string) (json.RawMessage, error) {
 	const shape = "scheduler: create needs name, prompt, and a cron (5-field, or 'once' <ISO>)"
 	rest := fields[2:]
