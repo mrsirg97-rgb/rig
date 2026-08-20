@@ -61,7 +61,8 @@ const description = "Task queue per working directory. action REQUIRED. create r
 	"move reorders the queue: action='move' id + pos (1-based queue position); positions are " +
 	"minted as events, never updated in place. " +
 	"events record the claiming session; start claims, complete by a foreign session refuses " +
-	"(fail it first to take over), fail frees the claim. " +
+	"(fail it first to take over), fail frees the claim; completing your own unclaimed " +
+	"pending task implicitly starts and completes it (the echo notes auto-started). " +
 	"the event log auto-compacts past 1000 events: a full-state snapshot replaces history " +
 	"(staleness epochs reset), replay stays exact. " +
 	"the model's own read is the contract: transitions return the affected row and the summary; " +

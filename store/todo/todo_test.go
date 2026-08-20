@@ -975,6 +975,72 @@ func TestForeignClaimsShowInRenders(t *testing.T) {
 	}
 }
 
+// --- the lean complete (decision 9): completing the caller's own
+// unclaimed pending task implicitly claims and completes — start+complete,
+// both events, the echo noting the auto-start. Foreign-claim and
+// blocked-by-dependency refusals stay.
+
+func TestCompleteOnOwnPendingAutoStartsAndCompletes(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "instant"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "instant")
+	done, err := todostore.Complete(ctx, db, id, sessA)
+	if err != nil {
+		t.Fatalf("auto-complete: %v", err)
+	}
+	if !strings.Contains(done, "auto-started") {
+		t.Errorf("the echo must note the auto-start:\n%s", done)
+	}
+	if !strings.Contains(done, "[x] instant") {
+		t.Errorf("done marker:\n%s", done)
+	}
+	if got := projStatus(t, db, "instant"); got != "done" {
+		t.Errorf("status = %q, want done", got)
+	}
+	rows := rawQuery(t, db, "SELECT op, session FROM events ORDER BY seq")
+	defer rows.Close()
+	var ops, sess []string
+	for rows.Next() {
+		var op, s sql.NullString
+		if err := rows.Scan(&op, &s); err != nil {
+			t.Fatal(err)
+		}
+		ops = append(ops, op.String)
+		sess = append(sess, s.String)
+	}
+	if len(ops) != 3 {
+		t.Fatalf("events = %v, want create+start+complete", ops)
+	}
+	if ops[1] != "start" || ops[2] != "complete" {
+		t.Fatalf("auto-complete must append start then complete, got %v", ops)
+	}
+	if sess[1] != sessA || sess[2] != sessA {
+		t.Errorf("auto events must be attributed to the caller, got %v", sess)
+	}
+}
+
+func TestCompleteOnPendingBlockedRefusesWithBlocker(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "gate"}, {Text: "work", DependsOn: ptrTo("gate")}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	work := taskIDText(t, reply, "work")
+	if _, err := todostore.Complete(ctx, db, work, sessA); err == nil {
+		t.Fatal("pending blocked complete succeeded")
+	} else if !strings.Contains(err.Error(), "blocked by") {
+		t.Errorf("blocked voice: %v", err)
+	}
+	if got := eventCount(t, db); got != 1 {
+		t.Errorf("a refused auto-complete must append nothing: %d events", got)
+	}
+}
+
 func TestStartReplyAlreadyCarriesTheClaim(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()

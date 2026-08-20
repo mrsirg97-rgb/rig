@@ -16,7 +16,10 @@ import (
 // Drifting args of one tool share the budget: a model failing `edit` with
 // drifting args cannot dodge the bound by varying the call. (The old
 // TestDistinctCallsAreCountedSeparately codified the opposite; decision 7
-// inverts it into this shared-budget invariant.)
+// inverts it into this shared-budget invariant.) The hardened rule (decision
+// 8) refines it: the budget strikes identical retries only — a corrected
+// call (args differing from the last failed args) resets the count, so the
+// teaching "change the call" is never followed by blocking the changed call.
 func TestDriftingArgsShareOneBound(t *testing.T) {
 	e := &failingExec{calls: map[string]int{}}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -33,16 +36,66 @@ func TestDriftingArgsShareOneBound(t *testing.T) {
 		content, _ = exec(context.Background(), b)
 		last = content
 	}
-	// the first two failures (one per args shape) consume the shared budget;
-	// the rest are refused without executing
-	if e.calls[`{"path":"a"}`] != 1 || e.calls[`{"path":"b"}`] != 1 {
-		t.Fatalf("drifting args must share the budget, got %+v", e.calls)
+	// a differing call resets the streak: drifting args never accumulate a
+	// shared streak, so every issuance executes and none is ever refused.
+	if e.calls[`{"path":"a"}`] != 4 || e.calls[`{"path":"b"}`] != 4 {
+		t.Fatalf("drifting args each get a fresh streak, got %+v", e.calls)
 	}
-	if e.total != 2 {
-		t.Fatalf("total executions %d, want 2 (the shared bound)", e.total)
+	if e.total != 8 {
+		t.Fatalf("total executions %d, want 8 (drifting args never refuse)", e.total)
+	}
+	if strings.Contains(last, "stop reissuing") {
+		t.Fatalf("drifting args must not trip the bound, got %q", last)
+	}
+}
+
+// The hardened cap: the bound strikes identical retries only. A corrected
+// call — args differing from the last failed args — resets the count, so
+// the "change the call" teaching is never followed by blocking the changed
+// call. This inverts TestDriftingArgsShareOneBound's shared-budget reading:
+// drifting args do not share one budget, they each get a fresh streak.
+func TestChangedCallResetsTheCount(t *testing.T) {
+	e := &failingExec{calls: map[string]int{}}
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return e.Exec(ctx, call)
+	}
+	exec = guard.Bound(3).Wrap(exec)
+
+	a := core.ToolCall{ID: "c1", Name: "edit", Args: json.RawMessage(`{"path":"a"}`)}
+	b := core.ToolCall{ID: "c2", Name: "edit", Args: json.RawMessage(`{"path":"b"}`)}
+
+	var last string
+	for i := 0; i < 4; i++ { // three identical failures, then a refusal
+		last, _ = exec(context.Background(), a)
 	}
 	if !strings.Contains(last, "stop reissuing") {
-		t.Fatalf("the over-bound issuance must refuse, naming the bound, got %q", last)
+		t.Fatalf("the 4th identical retry must refuse (identical retries cap survives), got %q", last)
+	}
+	if e.calls[`{"path":"a"}`] != 3 {
+		t.Fatalf("identical retries must cap at %d executions, got %d", 3, e.calls[`{"path":"a"}`])
+	}
+
+	// the corrected call resets the count: it executes instead of being
+	// refused (the teaching never blocks the changed call).
+	last, _ = exec(context.Background(), b)
+	if strings.Contains(last, "stop reissuing") {
+		t.Fatalf("the changed call must reset the count and execute, got %q", last)
+	}
+	if e.calls[`{"path":"b"}`] != 1 {
+		t.Fatalf("the changed call must execute exactly once, got %d", e.calls[`{"path":"b"}`])
+	}
+
+	for i := 0; i < 3; i++ { // b now repeats identically: it caps at its own 3
+		last, _ = exec(context.Background(), b)
+	}
+	if !strings.Contains(last, "stop reissuing") {
+		t.Fatalf("identical retries of the corrected call must cap too, got %q", last)
+	}
+	if e.calls[`{"path":"b"}`] != 3 {
+		t.Fatalf("the corrected call's identical retries must cap at %d, got %d", 3, e.calls[`{"path":"b"}`])
+	}
+	if e.total != 6 {
+		t.Fatalf("total executions %d, want 6 (3 per identical streak; refusals never execute)", e.total)
 	}
 }
 
