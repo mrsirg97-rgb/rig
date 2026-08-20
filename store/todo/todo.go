@@ -1,12 +1,3 @@
-// Package todo is the task-queue store, Go over the generated substrate.
-// SPEC_STATE's "### todo" section is the spec.
-//
-// The event log is the spine. tasks/task_deps are a disposable projection,
-// rebuilt from the log inside every transaction and never trusted. Replay
-// is total: malformed or inapplicable rows are skipped, never thrown.
-// Positions are minted, never mutated in place; moves are events. Create
-// is the only dependency mutation point; the DAG is validated there, at the
-// boundary, and refused loudly with the problem in a teaching voice.
 package todo
 
 import (
@@ -25,15 +16,10 @@ import (
 	todometa "github.com/mrsirg97-rgb/rig/store/todo/metadata"
 )
 
-// SchemaVersion is applied at Open; mismatches are refused loudly.
 const SchemaVersion = 1
 
-// DDL: the generated statements alone (the drift diff's left side).
 func DDL() []string { return tododdl.Statements() }
 
-// Statements: the store's schema in application order: the generated
-// DDL, then the hand-written extra.sql (the natural-key unique index and
-// the ordering spine) — what the camera cannot emit.
 func Statements() []string {
 	out := tododdl.Statements()
 	return append(out, todometa.ExtraStatements()...)
@@ -41,12 +27,10 @@ func Statements() []string {
 
 const anon = "anon"
 
-// CreateItem is one entry of a create payload. DependsOn is id, exact text,
-// null (clears), or omitted (keeps).
 type CreateItem struct {
 	Text      string
 	DependsOn *string
-	DepNull   bool // the payload carried an explicit null (clears the link)
+	DepNull   bool
 }
 
 func (c CreateItem) raw() rawItem {
@@ -61,8 +45,6 @@ func (c CreateItem) raw() rawItem {
 	}
 	return it
 }
-
-// --- fold (the pure replay) ---
 
 type taskState struct {
 	id         string
@@ -127,8 +109,6 @@ func attrOf(e eventRow) string {
 	return e.session
 }
 
-// apply folds one event into the state. Total: malformed rows and
-// inapplicable transitions are skipped, never thrown.
 func (f *folded) apply(e eventRow) {
 	if e.seq > f.maxSeq {
 		f.maxSeq = e.seq
@@ -179,10 +159,10 @@ func decodeItems(args string) ([]rawItem, bool) {
 func (f *folded) applyCreate(e eventRow) {
 	items, ok := decodeItems(e.args)
 	if !ok {
-		return // total: one bad row cannot invalidate the queue
+		return
 	}
 	if len(items) == 0 {
-		f.tasks = map[string]*taskState{} // clear: the only destructive verb
+		f.tasks = map[string]*taskState{}
 		return
 	}
 	type pendingRef struct {
@@ -192,11 +172,11 @@ func (f *folded) applyCreate(e eventRow) {
 	}
 	var refs []pendingRef
 	seen := map[string]bool{}
-	preIDs := depPreIDs(f) // ids existing before this batch: the id-first stage
+	preIDs := depPreIDs(f)
 	batchTexts := map[string]*taskState{}
 	for _, item := range items {
 		if item.text == "" || seen[item.text] {
-			continue // first occurrence wins
+			continue
 		}
 		seen[item.text] = true
 		ex := f.byText(item.text)
@@ -219,9 +199,7 @@ func (f *folded) applyCreate(e eventRow) {
 			refs = append(refs, pendingRef{ts: ts, clear: item.depNull, ref: item.dep})
 		}
 	}
-	// Dependencies resolve now that every batch-internal text carries an
-	// id. Unresolvable references drop: total replay, never a deadlocked
-	// task. Explicit null clears.
+
 	for _, pr := range refs {
 		if pr.clear {
 			pr.ts.dep = ""
@@ -233,8 +211,6 @@ func (f *folded) applyCreate(e eventRow) {
 	}
 }
 
-// depPreIDs: the ids that existed before the batch — the only ids the
-// id-first stage may see.
 func depPreIDs(f *folded) map[string]bool {
 	out := map[string]bool{}
 	for id := range f.tasks {
@@ -243,11 +219,6 @@ func depPreIDs(f *folded) map[string]bool {
 	return out
 }
 
-// resolveDep: existing ids resolve id-first; batch-internal references
-// resolve by text only — a minted id cannot be known in advance, and
-// an id-first rule against fresh ids would shadow a task whose text
-// looks like an id with the caller's own fresh id. Id match
-// wins over text match; the text stage includes the batch.
 func resolveDep(preIDs map[string]bool, batchTexts map[string]*taskState, f *folded, raw string) string {
 	if preIDs[raw] {
 		return raw
@@ -297,11 +268,6 @@ func (f *folded) applyVerb(e eventRow) {
 	ts.updatedTs = e.ts
 }
 
-// --- planning (create, at the boundary) ---
-
-// planCreate dedups, mints ids, resolves dependencies against existing
-// tasks plus the batch, and collects problems — never throws. Any problem
-// rejects the whole batch: nothing is created, no event appended.
 func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems []string) {
 	planned := map[string]*taskState{}
 	type depRef struct {
@@ -312,11 +278,11 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems 
 	}
 	var refs []depRef
 	seen := map[string]bool{}
-	preIDs := depPreIDs(f) // ids existing before this batch: the id-first stage
+	preIDs := depPreIDs(f)
 	for _, item := range items {
 		raw := item.raw()
 		if raw.text == "" || seen[raw.text] {
-			continue // first occurrence wins; duplicates ignored entirely
+			continue
 		}
 		seen[raw.text] = true
 		ex := f.byText(raw.text)
@@ -331,17 +297,16 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems 
 		ts.id = f.mintID()
 		ts.pos = f.nextPos()
 		planned[raw.text] = ts
-		f.tasks[ts.id] = ts // lands tentatively; rolled back if problems
+		f.tasks[ts.id] = ts
 		modified = append(modified, ts)
 		if raw.hasDep {
 			refs = append(refs, depRef{ts: ts, text: raw.text, depNull: raw.depNull, dep: raw.dep})
 		}
 	}
-	// Dependencies resolve now that every batch-internal text carries an id
-	// — forward references included.
+
 	for _, dr := range refs {
 		if dr.depNull {
-			dr.ts.dep = "" // explicit null clears
+			dr.ts.dep = ""
 			continue
 		}
 		if dr.dep == dr.text {
@@ -370,8 +335,6 @@ func addOnce(list *[]string, s string) {
 	*list = append(*list, s)
 }
 
-// cyclePath: DFS over existing links plus the planned ones; the first cycle
-// as its node ids, or nil when acyclic.
 func cyclePath(f *folded, planned map[string]*taskState) []string {
 	adj := map[string][]string{}
 	for id, ts := range f.tasks {
@@ -421,8 +384,6 @@ func cyclePath(f *folded, planned map[string]*taskState) []string {
 	return nil
 }
 
-// --- render ---
-
 const (
 	statusPending = "pending"
 	statusActive  = "in_progress"
@@ -443,8 +404,6 @@ func marker(status string) string {
 	}
 }
 
-// orderedTaskStates is the queue order: position first, creation seq as
-// the deterministic tie-break.
 func orderedTaskStates(f *folded) []*taskState {
 	out := make([]*taskState, 0, len(f.tasks))
 	for _, ts := range f.tasks {
@@ -459,8 +418,6 @@ func orderedTaskStates(f *folded) []*taskState {
 	return out
 }
 
-// blockedBy is the dependency id when this unresolved task's dependency is
-// not done; empty otherwise.
 func blockedBy(f *folded, ts *taskState) string {
 	if ts.status != statusPending && ts.status != statusActive {
 		return ""
@@ -475,7 +432,6 @@ func blockedBy(f *folded, ts *taskState) string {
 	return ts.dep
 }
 
-// blockHint is the per-status teaching voice of a blocker.
 func blockHint(f *folded, depID string) string {
 	switch f.tasks[depID].status {
 	case statusPending:
@@ -487,7 +443,6 @@ func blockHint(f *folded, depID string) string {
 	}
 }
 
-// claimSuffix labels a foreign claim in render; own claims stay unlabeled.
 func claimSuffix(ts *taskState, session string) string {
 	if ts.status != statusActive || ts.owner == "" || ts.owner == session {
 		return ""
@@ -499,8 +454,6 @@ func claimSuffix(ts *taskState, session string) string {
 	return " \u00b7 claimed by " + owner
 }
 
-// staleFooter is the presence footer: unresolved history older than the
-// threshold behind the latest seq. Pure over the fold.
 func staleFooter(f *folded) string {
 	if f.maxSeq <= STALE_THRESHOLD_SEQ {
 		return ""
@@ -528,8 +481,6 @@ func staleFooter(f *folded) string {
 	return fmt.Sprintf("\u00b7 %d unresolved since %s (recovered from log)", n, latest)
 }
 
-// render: counts, the next pointer (blocked-skipping), the rows with
-// waits-on and claim labels.
 func render(f *folded, session string) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
@@ -570,11 +521,6 @@ func render(f *folded, session string) string {
 	return b.String()
 }
 
-// --- verbs (the transactional surface) ---
-
-// Create lands the payload: fold, plan at the boundary, refuse loudly with
-// the problem when planning finds one, otherwise append the event as given
-// and persist the projection. One transaction, serializable.
 func Create(ctx context.Context, db store.DB, items []CreateItem, session string) (string, error) {
 	if session == "" {
 		session = anon
@@ -590,7 +536,7 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 		}
 		note := "queue replaced with " + strconv.Itoa(len(items)) + " tasks"
 		if len(items) == 0 {
-			f.tasks = map[string]*taskState{} // clear: the only destructive verb
+			f.tasks = map[string]*taskState{}
 			note = "queue cleared"
 		}
 		args, _ := json.Marshal(map[string]any{"tasks": asGiven(items)})
@@ -609,8 +555,6 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 	})
 }
 
-// Start/Complete/Fail/Retry: the task FSM, with claim checks and
-// completion gating.
 func Start(ctx context.Context, db store.DB, id, session string) (string, error) {
 	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		switch ts.status {
@@ -710,10 +654,6 @@ func Retry(ctx context.Context, db store.DB, id, session string) (string, error)
 	}, "retry", statusPending, "'"+id+"' back to pending")
 }
 
-// Move reorders the queue: the event records intent as given; replay
-// renumbers densely around the moved task, a deterministic pure function
-// of the pre-state. Call-time validation refuses out-of-range positions
-// loudly; replay skips them. Any status may be moved.
 func Move(ctx context.Context, db store.DB, id string, pos int, session string) (string, error) {
 	if session == "" {
 		session = anon
@@ -803,10 +743,6 @@ func verb(
 	})
 }
 
-// --- reply shaping, auto-compaction, fold-side move/compact ---
-
-// replyText is the reply: the note line, the full queue, the stale
-// footer. Reads carry no note.
 func replyText(f *folded, session, note string) string {
 	var b strings.Builder
 	if note != "" {
@@ -819,16 +755,11 @@ func replyText(f *folded, session, note string) string {
 	return b.String()
 }
 
-// STALE_THRESHOLD_SEQ and COMPACT_THRESHOLD_EVENTS: deterministic,
-// boundary-testable, exported.
 const (
 	STALE_THRESHOLD_SEQ      = 200
 	COMPACT_THRESHOLD_EVENTS = 1000
 )
 
-// maybeCompact is the auto-compaction: a mutation past the threshold
-// lands the full-state snapshot first, rewrites the anchors to the
-// snapshot's epoch, and deletes the older log. Reads never reach this.
 func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) error {
 	if f.maxSeq-f.compactSeq < COMPACT_THRESHOLD_EVENTS {
 		return nil
@@ -850,8 +781,6 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) 
 	return nil
 }
 
-// snapshotOf is the compact payload: positions zero-based, links and
-// claims as given.
 func snapshotOf(f *folded) []any {
 	var out []any
 	for _, ts := range f.tasks {
@@ -871,9 +800,6 @@ func snapshotOf(f *folded) []any {
 	return out
 }
 
-// appliedMove is the splice: remove at the current position, insert at
-// the target, renumber densely, no gaps. False when the move is a no-op or
-// inapplicable.
 func appliedMove(f *folded, ts *taskState, pos int) bool {
 	if pos < 1 || pos > len(f.tasks) {
 		return false
@@ -902,8 +828,6 @@ func appliedMove(f *folded, ts *taskState, pos int) bool {
 	return true
 }
 
-// applyMoveEvent folds one move event: total. Missing tasks, out-of-range
-// positions, and no-ops skip.
 func (f *folded) applyMoveEvent(e eventRow) {
 	var payload struct {
 		ID  string `json:"id"`
@@ -923,9 +847,6 @@ func (f *folded) applyMoveEvent(e eventRow) {
 	ts.updatedTs = e.ts
 }
 
-// applyCompactEvent folds a snapshot: the map is cleared and rebuilt from
-// the capture. A malformed snapshot reads as an empty queue; replay never
-// throws.
 func (f *folded) applyCompactEvent(e eventRow) {
 	tasks := map[string]*taskState{}
 	var payload struct {
@@ -977,8 +898,6 @@ func (f *folded) applyCompactEvent(e eventRow) {
 	f.compactSeq = e.seq
 }
 
-// --- plumbing ---
-
 func mutate(ctx context.Context, db store.DB, act func(bound context.Context, tx *sql.Tx, f *folded) (string, error)) (string, error) {
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {
@@ -999,9 +918,6 @@ func mutate(ctx context.Context, db store.DB, act func(bound context.Context, tx
 	return reply, nil
 }
 
-// eventsOf: the event scan that rebuilds the fold. Raw SQL on purpose:
-// no ordered event-log scan accessor is generated — the fold reads the
-// spine in seq order — the store's one raw read, named as such.
 func eventsOf(tx *sql.Tx) (*folded, error) {
 	rows, err := tx.Query("SELECT seq, op, args, session, ts FROM events ORDER BY seq")
 	if err != nil {
@@ -1024,9 +940,6 @@ func eventsOf(tx *sql.Tx) (*folded, error) {
 	return f, nil
 }
 
-// appendEvent lands one event through the generated domain and returns
-// the seq. seq is passed explicitly (maxSeq+1 over the caller's fold):
-// strictly increasing by construction, no mint query owned.
 func appendEvent(bound context.Context, seq int64, op, args, session string) (int64, error) {
 	if session == "" {
 		session = anon
@@ -1042,10 +955,6 @@ func appendEvent(bound context.Context, seq int64, op, args, session string) (in
 	return ev.Seq, nil
 }
 
-// rewrite: the projection's reconstruction. Raw SQL on purpose: no
-// bulk-replace accessor is generated, and the projection is replaced
-// whole inside the caller's transaction — the store's one raw write,
-// named as such.
 func rewrite(tx *sql.Tx, f *folded) error {
 	if _, err := tx.Exec("DELETE FROM task_deps"); err != nil {
 		return fmt.Errorf("todo: rewrite: %w", err)

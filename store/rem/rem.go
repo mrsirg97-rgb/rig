@@ -1,16 +1,3 @@
-// Package rem is the memory store, Go over the generated substrate.
-// SPEC_STATE's "### rem" section is the spec.
-//
-// Writes land through the generated accessors inside one serializable
-// transaction per operation; the store owns a small named raw surface,
-// each statement commented as such: the natural-key dedup seek, the
-// recall arms (FTS MATCH, the trigram overlap) and the browse ordering,
-// the prune selection predicate, the supersession-clearing UPDATE (the
-// runtime behaviour of ON DELETE SET NULL — the camera emits no foreign
-// keys at all), and the fts rowid bookkeeping (the virtual table is not
-// a container the grammar speaks). Ids are minted from a meta counter
-// inside the caller's transaction: strictly increasing, never reused —
-// the AUTOINCREMENT rule, kept by minting.
 package rem
 
 import (
@@ -33,34 +20,21 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
-// SchemaVersion is applied at Open; mismatches are refused loudly.
 const SchemaVersion = 1
 
-// DDL: the generated statements alone (the drift diff's left side).
 func DDL() []string { return remdd.Statements() }
 
-// Statements: the store's schema in application order — the generated
-// DDL, then extra.sql (the seek indexes), then fts.sql (the FTS5 virtual
-// table). A driver that cannot create the table fails loudly here;
-// recall's shipped policy on capability absence is the fuzzy-only
-// degradation — unreachable under the bundled pure-Go driver, which
-// always ships FTS5.
 func Statements() []string {
 	out := remdd.Statements()
 	out = append(out, remmeta.ExtraStatements()...)
 	return append(out, remmeta.FtsStatements()...)
 }
 
-// --- fts capability: production rides the schema application (fts.sql
-// created the table at open, so a live handle implies the capability);
-// the seam simulates an absent build for the degradation cases and gates
-// the semantic arm's statements out — prepare included.
 var (
 	ftsOverrideSet atomic.Bool
 	ftsOverride    atomic.Bool
 )
 
-// SetFtsAvailable is the degradation seam: nil clears the override.
 func SetFtsAvailable(v *bool) {
 	if v == nil {
 		ftsOverrideSet.Store(false)
@@ -77,15 +51,11 @@ func ftsEnabled() bool {
 	return true
 }
 
-// --- scope ---
-
-// shortHash: the scope key of a workspace — sha1(cwd)[:12].
 func shortHash(cwd string) string {
 	d := sha1.Sum([]byte(cwd))
 	return hex.EncodeToString(d[:])[:12]
 }
 
-// writeScope: the write-side scope shaping.
 func writeScope(scope, cwd string) (key, label string, err error) {
 	if scope == "global" {
 		return "global", "global", nil
@@ -100,7 +70,6 @@ func writeScope(scope, cwd string) (key, label string, err error) {
 	return shortHash(cwd), label, nil
 }
 
-// readScopes: the read-side scope shaping — global, project, both.
 func readScopes(scope, cwd string) ([]string, error) {
 	switch scope {
 	case "global":
@@ -122,13 +91,8 @@ func nowISO() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
-// --- plumbing: one transaction per operation, serializable ---
-
 func zero[T any]() T { var z T; return z }
 
-// transact opens the operation's single serializable transaction,
-// threads the bound context through the act, commits on success, rolls
-// back on any error.
 func transact[T any](ctx context.Context, db store.DB, act func(bound context.Context, tx *sql.Tx) (T, error)) (T, error) {
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {
@@ -145,13 +109,8 @@ func transact[T any](ctx context.Context, db store.DB, act func(bound context.Co
 	return out, nil
 }
 
-// --- id minting: the meta counter, the AUTOINCREMENT rule ---
-
 const idCounterKey = "memory_id_seq"
 
-// mintID mints the next memory id from the meta counter inside the
-// caller's write transaction: strictly increasing, never reused — a
-// pruned id must never silently re-point a supersession reference.
 func mintID(bound context.Context) (int64, error) {
 	existing, err := remdom.NewMetaDomain().GetMeta(bound, idCounterKey).Row()
 	if err != nil {
@@ -178,12 +137,6 @@ func mintID(bound context.Context) (int64, error) {
 	return next, nil
 }
 
-// --- supersedes ---
-
-// applySupersedes: the trust-chain update through the generated
-// surface. Missing targets refuse loudly — a typo must never silently
-// corrupt the chain. Self-supersedes are filtered: re-superseding one's
-// own id is a no-op, never a self-demotion.
 func applySupersedes(bound context.Context, byID int64, targets []int64) error {
 	seen := map[int64]bool{}
 	var uniq []int64
@@ -210,12 +163,6 @@ func applySupersedes(bound context.Context, byID int64, targets []int64) error {
 	return nil
 }
 
-// Recent is the K newest live project-scoped notes for the cwd, newest
-// first — the session-start recall read (SPEC_UX 2): a store read at
-// session start and the refresh points, never per turn. The cwd's notes
-// only (rem is already cwd-scoped); superseded rows are not notes (their
-// replacement is the newest row). The store's named raw query: an
-// unkeyed browse over the scope predicate.
 func Recent(ctx context.Context, db store.DB, cwd string, k int) ([]string, error) {
 	if k <= 0 {
 		k = 1
@@ -250,26 +197,22 @@ func Recent(ctx context.Context, db store.DB, cwd string, k int) ([]string, erro
 	return out, nil
 }
 
-// --- writes ---
-
-// LearnInput is one committed fact or constraint.
 type LearnInput struct {
 	Content       string
 	Kind          string
 	Importance    float64
-	ImportanceSet bool // the caller passed an explicit importance
+	ImportanceSet bool
 	Scope         string
-	Source        string // "" lands NULL
+	Source        string
 	Supersedes    []int64
 }
 
-// ReflectInput is one distilled memory with its raw source.
 type ReflectInput struct {
 	Content       string
 	Importance    float64
 	ImportanceSet bool
 	Scope         string
-	Source        string // explicit provenance; "" lands NULL
+	Source        string
 }
 
 type writeResult struct {
@@ -278,9 +221,6 @@ type writeResult struct {
 	existing bool
 }
 
-// Learn commits a fact idempotently on (scope, md5(content)) — the
-// natural key. Existing rows accept importance and supersedes updates;
-// content is untouched.
 func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string, *remdom.Memory, bool, error) {
 	if in.Content == "" {
 		return "", nil, false, fmt.Errorf("rem: action 'learn' requires content")
@@ -313,9 +253,6 @@ func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string,
 	return res.reply, res.mem, res.existing, nil
 }
 
-// Reflect stores the distilled memory with its raw source — provenance,
-// never indexed, shown only. Kind defaults to reflection; existing rows
-// accept importance and source updates.
 func Reflect(ctx context.Context, db store.DB, cwd string, in ReflectInput) (string, *remdom.Memory, bool, error) {
 	if in.Content == "" {
 		return "", nil, false, fmt.Errorf("rem: action 'reflect' requires content")
@@ -351,10 +288,6 @@ func Reflect(ctx context.Context, db store.DB, cwd string, in ReflectInput) (str
 	return res.reply, res.mem, res.existing, nil
 }
 
-// AutoReflect is the compaction-entry path: the
-// distilled summary as a low-importance reflection, scoped to the
-// workspace, deduped by content. Blank summaries are inert. The caller
-// is fire-and-forget: a store failure never crashes the session.
 func AutoReflect(ctx context.Context, db store.DB, cwd, summary string) (string, error) {
 	if strings.TrimSpace(summary) == "" {
 		return "", nil
@@ -378,8 +311,6 @@ type writeShape struct {
 	supersedes    []int64
 }
 
-// storeOrTouch: the write path — natural-key find-or-create, trigram
-// bookkeeping, gated fts bookkeeping, supersedes. One transaction.
 func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Memory, bool, error) {
 	scopeKey, scopeLabel, err := writeScope(sh.scope, cwd)
 	if err != nil {
@@ -387,8 +318,6 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 	}
 	digest := md5hex(sh.content)
 
-	// Natural-key dedup seek — the find-or-create predicate; no
-	// generated accessor spans a non-primary predicate. Named.
 	tx, err := sqlx.TxFrom(bound)
 	if err != nil {
 		return nil, false, err
@@ -397,7 +326,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 	err = tx.QueryRowContext(bound, `SELECT id FROM memories WHERE scope = $1 AND content_md5 = $2`, scopeKey, digest).Scan(&existingID)
 	switch {
 	case err == nil:
-		// found below
+
 	case err == sql.ErrNoRows:
 		existingID = 0
 	default:
@@ -472,8 +401,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 		return nil, false, err
 	}
 	if ftsEnabled() {
-		// Gated FTS bookkeeping: keyed by rowid, suppressed entirely —
-		// prepare included — when the capability is absent. Named.
+
 		if _, err := tx.ExecContext(bound, `INSERT INTO memory_fts (rowid, content) VALUES ($1, $2)`, id, sh.content); err != nil {
 			return nil, false, fmt.Errorf("rem: fts insert: %w", err)
 		}
@@ -486,8 +414,6 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 	return fresh, false, nil
 }
 
-// insertGrams: the shadow rows through the generated accessor, deduped
-// per memory.
 func insertGrams(bound context.Context, id int64, grams []string) error {
 	for _, gram := range grams {
 		if _, err := remdom.NewTrigramDomain().InsertTrigram(bound, remdom.Trigram{MemoryId: id, Gram: gram}); err != nil {
@@ -497,21 +423,15 @@ func insertGrams(bound context.Context, id int64, grams []string) error {
 	return nil
 }
 
-// --- prune ---
-
-// PruneInput is one prune call.
 type PruneInput struct {
-	Verb          string // consolidate | remove | reduce
+	Verb          string
 	IDs           []int64
 	Scope         string
 	Kind          string
 	OlderThanDays int
-	Importance    *float64 // the reduce target
+	Importance    *float64
 }
 
-// Prune: consolidate persists the decay pass (idempotent by
-// construction); remove/reduce are bounded by a selection and report
-// actual effects.
 type pruneResult struct {
 	reply string
 	count int
@@ -562,8 +482,6 @@ func Prune(ctx context.Context, db store.DB, cwd string, in PruneInput) (string,
 	return "", 0, fmt.Errorf("rem: action '%s' not implemented", in.Verb)
 }
 
-// candidatesOf: the selection — ids win; else the criteria predicate;
-// else the whole store (consolidate's named default).
 func candidatesOf(bound context.Context, in PruneInput, cwd string, whole bool) ([]int64, error) {
 	if len(in.IDs) > 0 {
 		return dedupeIDs(in.IDs), nil
@@ -573,8 +491,7 @@ func candidatesOf(bound context.Context, in PruneInput, cwd string, whole bool) 
 		if !whole {
 			return nil, fmt.Errorf("rem: prune needs ids or criteria (kind/older_than_days/scope)")
 		}
-		// Whole-store candidate enumeration — consolidate's default.
-		// Named: no generated accessor spans an unkeyed scan.
+
 		tx, err := sqlx.TxFrom(bound)
 		if err != nil {
 			return nil, err
@@ -598,8 +515,7 @@ func candidatesOf(bound context.Context, in PruneInput, cwd string, whole bool) 
 	if err != nil {
 		return nil, err
 	}
-	// The prune selection predicate; no generated accessor spans it.
-	// Named.
+
 	clauses := []string{"scope IN (" + placeholders(len(scopes)) + ")"}
 	args := make([]any, 0, len(scopes)+2)
 	for _, s := range scopes {
@@ -662,9 +578,6 @@ func placeholders(n int) string {
 	return b.String()
 }
 
-// consolidatePass: the decay pass — effective-at-recall equals what
-// this persists; a replay with no elapsed time and no new accesses is a
-// no-op, so the pass is idempotent by construction.
 func consolidatePass(bound context.Context, in PruneInput, cwd string) (int, error) {
 	ids, err := candidatesOf(bound, in, cwd, true)
 	if err != nil {
@@ -691,8 +604,6 @@ func consolidatePass(bound context.Context, in PruneInput, cwd string) (int, err
 	return len(rows), nil
 }
 
-// daysSince: elapsed days since an ISO timestamp; unparseable or future
-// timestamps read as zero.
 func daysSince(older string, now time.Time) float64 {
 	if older == "" {
 		return 0
@@ -704,8 +615,6 @@ func daysSince(older string, now time.Time) float64 {
 	return now.Sub(t).Hours() / 24
 }
 
-// removeMemories: the prune's bookkeeping, all inside the caller's
-// transaction. Missing ids count zero, never phantom deletions.
 func removeMemories(bound context.Context, in PruneInput, cwd string) (int, error) {
 	tx, err := sqlx.TxFrom(bound)
 	if err != nil {
@@ -717,21 +626,16 @@ func removeMemories(bound context.Context, in PruneInput, cwd string) (int, erro
 	}
 	removed := 0
 	for _, id := range ids {
-		// ON DELETE SET NULL, runtime behaviour: removing the
-		// superseding memory unsupersedes the older one, whose content is
-		// then the best surviving record. The camera emits no foreign keys
-		// at all, so the store clears the pointers itself, same
-		// transaction. Named.
+
 		if _, err := tx.ExecContext(bound, `UPDATE memories SET superseded_by = NULL WHERE superseded_by = $1`, id); err != nil {
 			return removed, fmt.Errorf("rem: remove: %w", err)
 		}
-		// Defense-in-depth trigram cleanup. Named.
+
 		if _, err := tx.ExecContext(bound, `DELETE FROM trigrams WHERE memory_id = $1`, id); err != nil {
 			return removed, fmt.Errorf("rem: remove: %w", err)
 		}
 		if ftsEnabled() {
-			// Gated FTS bookkeeping, keyed by rowid — an fts-less build
-			// must not even compile the statement. Named.
+
 			if _, err := tx.ExecContext(bound, `DELETE FROM memory_fts WHERE rowid = $1`, id); err != nil {
 				return removed, fmt.Errorf("rem: remove: %w", err)
 			}
@@ -745,9 +649,6 @@ func removeMemories(bound context.Context, in PruneInput, cwd string) (int, erro
 	return removed, nil
 }
 
-// reduceImportance: lowers importance over the selection; reports
-// actual effects. Selection precedes the importance check, so the
-// selection voice wins on bare calls.
 func reduceImportance(bound context.Context, in PruneInput, cwd string) (int, error) {
 	ids, err := candidatesOf(bound, in, cwd, false)
 	if err != nil {
@@ -774,9 +675,6 @@ func reduceImportance(bound context.Context, in PruneInput, cwd string) (int, er
 	return reduced, nil
 }
 
-// --- reply render ---
-// indent: two-space per line.
-
 func indent(text string) string {
 	lines := strings.Split(text, "\n")
 	for i := range lines {
@@ -785,8 +683,6 @@ func indent(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderMemoryLine is one hit row: the head (id, effective strength,
-// scope label, kind), the supersession tag, the indented content.
 func renderMemoryLine(h Hit) string {
 	head := fmt.Sprintf("m%d [%.2f] %s · %s", h.ID, h.EffectiveStrength, h.ScopeLabel, h.Kind)
 	if h.SupersededBy != nil {

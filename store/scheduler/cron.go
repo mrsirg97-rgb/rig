@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-// 5-field vixie cron. Fields in order: minute, hour, day-of-month,
-// month, day-of-week (0 and 7 are both Sunday). No names, no @-macros, no
-// wrap. Every refusal names the field and the problem.
-
 type fieldSpec struct {
 	name string
 	min  int
@@ -28,29 +24,23 @@ var cronFields = []fieldSpec{
 
 var invalidCharRe = regexp.MustCompile(`^[0-9*,/-]+$`)
 
-// CronSet is one parsed field: the expanded value set plus whether the
-// field was unrestricted (* or a full-span */step) — the dom/dow union
-// turns on that bit.
 type CronSet struct {
 	Values []int
 	IsStar bool
 }
 
-// ParsedCron is a validated 5-field expression.
 type ParsedCron struct {
 	Minute CronSet
 	Hour   CronSet
 	Dom    CronSet
 	Month  CronSet
-	Dow    CronSet // 0 and 7 both mean Sunday
+	Dow    CronSet
 }
 
 func cronFail(format string, a ...any) error {
 	return fmt.Errorf("cron: "+format, a...)
 }
 
-// ValidateCron parses and validates a 5-field cron expression; errors are
-// `cron: ...` and name the field.
 func ValidateCron(expr string) (ParsedCron, error) {
 	text := strings.TrimSpace(expr)
 	if strings.HasPrefix(text, "@") {
@@ -163,14 +153,10 @@ func parseItem(item string, spec fieldSpec, token string) ([]int, error) {
 	return out, nil
 }
 
-const dayCap = 1462 // ~4 years: covers any real cycle (leap day included)
+const dayCap = 1462
 
-// NextFire returns the next fire strictly after `from`, in local time
-// (crontab semantics). dom/dow union follows vixie: when both are
-// restricted, either may match. False when no day matches within the cap
-// (e.g. `0 0 30 2 *`).
 func NextFire(parsed ParsedCron, from time.Time) (time.Time, bool) {
-	first := from.Truncate(time.Minute).Add(time.Minute) // floor: the next whole minute
+	first := from.Truncate(time.Minute).Add(time.Minute)
 
 	floorH := first.Hour()
 	floorM := first.Minute()
@@ -207,8 +193,6 @@ func inSet(vs []int, v int) bool {
 	return false
 }
 
-// dayMatches is the vixie union: restricted dom OR restricted dow; a
-// restricted field alone governs. Go's Weekday is 0=Sunday like cron's.
 func dayMatches(parsed ParsedCron, d time.Time) bool {
 	domHit := inSet(parsed.Dom.Values, d.Day())
 	dowHit := inSet(parsed.Dow.Values, int(d.Weekday()))

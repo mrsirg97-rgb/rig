@@ -18,16 +18,8 @@ import (
 	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
-// --- run-job: the fire engine cron invokes ---
-//
-// Every outcome is recorded; only unexpected errors come back loud (the
-// verb maps that to exit non-zero). The job runtime is rig itself in -p
-// mode; the report-back instruction is appended to every prompt.
-
-// Fetch is the busy-check transport seam.
 type Fetch func(url string) (json.RawMessage, error)
 
-// SpawnResult is one worker run's outcome.
 type SpawnResult struct {
 	Exit     int
 	Stdout   string
@@ -35,41 +27,28 @@ type SpawnResult struct {
 	TimedOut bool
 }
 
-// Spawn is the worker-spawn seam.
 type Spawn func(ctx context.Context, argv []string, cwd string) (SpawnResult, error)
 
-// RunOpts is RunJob's seam bundle: production wires the real crontab,
-// fetch, and spawn once at the root; tests inject fakes. The sandbox
-// seam (SPEC_SANDBOX 1, 5) is the worker jail's profile and binds, and
-// the operator's rig home (the kernel line's source).
 type RunOpts struct {
 	Home         string
 	Crontab      Crontab
 	Fetch        Fetch
 	Spawn        Spawn
-	WorkerCmd    []string // nil: the process's own executable
-	SwapURL      string   // empty: the default llama-swap endpoint
+	WorkerCmd    []string
+	SwapURL      string
 	Timeout      time.Duration
 	Now          func() time.Time
-	Sandbox      string   // the worker's profile: "" (jailed), "jailed", or "off"
-	SandboxBinds []string // the operator's extra binds (ro, unless ":rw")
-	RigHome      string   // the operator's rig home (the kernel line's source)
+	Sandbox      string
+	SandboxBinds []string
+	RigHome      string
 }
 
-// DefaultRunTimeout bounds one worker run.
 const DefaultRunTimeout = 30 * time.Minute
 
-// defaultSwapURL is the default llama-swap endpoint.
 const defaultSwapURL = "http://127.0.0.1:8090"
 
-// ReportBack is the standing report-back directive, appended to every
-// job prompt: findings persist through rem, scoped to the job's cwd.
 const ReportBack = "\n\nReport back: when you finish, persist durable findings with the rem tool (project scope: this job's cwd) and end your reply with a short summary of what you found and did."
 
-// RunJob fires one job from its key: lock, drift/zombie self-heal, busy
-// policy, worker spawn under a bounded context, record, log, once-
-// consumption. Nil error means a recorded outcome (the verb exits 0); a
-// loud error means nothing ran (the verb exits non-zero).
 func RunJob(key string, opts RunOpts) error {
 	if opts.Crontab == nil || opts.Fetch == nil || opts.Spawn == nil {
 		return fmt.Errorf("run-job: crontab, fetch, and spawn seams are required")
@@ -90,7 +69,6 @@ func RunJob(key string, opts RunOpts) error {
 		return err
 	}
 
-	// the store for this key, opened cold: run-job is its own process
 	db, quarantined, err := store.Open(StorePathFor(opts.Home, parsed), Statements(), SchemaVersion)
 	if err != nil {
 		return fmt.Errorf("run-job: store: %w", err)
@@ -100,8 +78,6 @@ func RunJob(key string, opts RunOpts) error {
 	}
 	defer db.DB.Close()
 
-	// one fire per key at a time: the flock mechanism, attempted non-
-	// blocking. Held by a previous fire -> recorded skip, benign exit.
 	lockFD, held, err := acquireLock(opts.Home, key)
 	if err != nil {
 		return fmt.Errorf("run-job: lock: %w", err)
@@ -115,8 +91,6 @@ func RunJob(key string, opts RunOpts) error {
 		return nil
 	}
 
-	// drift first: cron fires from the line, so an absent line is drift —
-	// record loudly, touch nothing
 	text, err := opts.Crontab.List()
 	if err != nil {
 		return err
@@ -128,7 +102,6 @@ func RunJob(key string, opts RunOpts) error {
 		return nil
 	}
 
-	// the job row (the projection): zombie, done, and paused gates
 	bound, tx, err := db.TxReadOnly(context.Background())
 	if err != nil {
 		return fmt.Errorf("run-job: job row: %w", err)
@@ -162,9 +135,6 @@ func RunJob(key string, opts RunOpts) error {
 		return nil
 	}
 
-	// busy policy: llama-swap is the GPU truth; own-slot-loaded short-
-	// circuits (concurrent slots are safe, no eviction); unreachable
-	// fails closed
 	st := busyState(opts.Fetch, opts.SwapURL, job.Model)
 	switch st.kind {
 	case "error":
@@ -181,7 +151,6 @@ func RunJob(key string, opts RunOpts) error {
 		}
 	}
 
-	// the worker run, bounded: context timeout with process-group kill
 	workerCmd := opts.WorkerCmd
 	if len(workerCmd) == 0 {
 		exe, err := os.Executable()
@@ -192,11 +161,6 @@ func RunJob(key string, opts RunOpts) error {
 	}
 	prompt := job.Prompt + ReportBack
 
-	// the sandbox profile (SPEC_SANDBOX 1, 5): jailed (the default)
-	// spawns the worker under bwrap, through the socket hole, with the
-	// scratch home; off runs the worker as today, with the one loud
-	// line per run. The refusals are recorded skips (the outcome row
-	// carries them); a malformed profile is the runner's loud failure.
 	profile, err := SandboxProfile(opts.Sandbox)
 	if err != nil {
 		return fmt.Errorf("run-job: sandbox: %w", err)
@@ -204,16 +168,13 @@ func RunJob(key string, opts RunOpts) error {
 	var (
 		argv    []string
 		proxy   *SocketProxy
-		homeEnv string // the worker's RIG_HOME (the scratch home)
-		refuse  string // a fail-closed refusal (the recorded skip's reason)
+		homeEnv string
+		refuse  string
 	)
 	if profile == "off" {
-		// the operator's explicit act, named once per worker run.
+
 		fmt.Fprintln(os.Stderr, "run-job: sandbox off: the worker runs unjailed (the operator's choice)")
-		// the worker's model endpoint is the runner's swap, plus the
-		// job's model: two defaults for the same server is how the
-		// worker faults every tick while the busy check (on the swap)
-		// passes.
+
 		argv = append(append([]string{}, workerCmd...),
 			"-p", prompt,
 			"-base-url", opts.SwapURL+"/v1",
@@ -237,9 +198,7 @@ func RunJob(key string, opts RunOpts) error {
 	startedTime := opts.Now().UTC()
 	started := startedTime.Format(time.RFC3339)
 	if homeEnv != "" {
-		// the scratch home rides the worker's env (SPEC_SANDBOX 1):
-		// set for the spawn, restored after (run-job is one fire per
-		// process; the restore keeps the test process honest).
+
 		prev, had := os.LookupEnv("RIG_HOME")
 		os.Setenv("RIG_HOME", homeEnv)
 		defer func() {
@@ -257,7 +216,6 @@ func RunJob(key string, opts RunOpts) error {
 	ended := opts.Now().UTC().Format(time.RFC3339)
 	durationMs := opts.Now().UTC().Sub(startedTime).Milliseconds()
 
-	// the log: runs/<scope>/<id>/<ts>.log, newest twenty kept
 	logName := strings.NewReplacer(":", "-", ".", "-").Replace(opts.Now().UTC().Format("2006-01-02T15:04:05.000Z")) + ".log"
 	logRel := filepath.Join("runs", ScopeDir(parsed), parsed.ID, logName)
 	dir := filepath.Join(opts.Home, "runs", ScopeDir(parsed), parsed.ID)
@@ -288,8 +246,6 @@ func RunJob(key string, opts RunOpts) error {
 		return fmt.Errorf("run-job: record: %w", err)
 	}
 
-	// once job: mark done (store first), then consume the line. A crash in
-	// between leaves a live line on a done row; the next fire heals it.
 	if job.At != nil {
 		job.State = "done"
 		job.UpdatedSeq = seq
@@ -311,7 +267,6 @@ func RunJob(key string, opts RunOpts) error {
 	return nil
 }
 
-// recordSkip lands one skip record without touching the crontab.
 func recordSkip(db DB, id, reason string) error {
 
 	if _, err := RecordRun(context.Background(), db, RunRecordInput{
@@ -322,8 +277,6 @@ func recordSkip(db DB, id, reason string) error {
 	return nil
 }
 
-// installRemoved consumes a healed line: surgery plus install, skipped
-// when the line is absent or already clean.
 func installRemoved(ct Crontab, text, key string) error {
 	next, found := RemoveLine(text, key)
 	if !found || next == text {
@@ -332,10 +285,6 @@ func installRemoved(ct Crontab, text, key string) error {
 	return ct.Install(next)
 }
 
-// acquireLock attempts the key's non-blocking flock. Held true means the
-// lock is acquired by this process (release later); held false with a nil
-// error means contention (the caller records the skip). Other errors
-// surface (loud).
 func acquireLock(home, key string) (*os.File, bool, error) {
 	lockDir := filepath.Join(home, "locks")
 	if err := os.MkdirAll(lockDir, 0o755); err != nil {
@@ -349,7 +298,7 @@ func acquireLock(home, key string) (*os.File, bool, error) {
 	if err := syscall.Flock(int(fd.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		fd.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, false, nil // held by another fire
+			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("flock: %w", err)
 	}
@@ -361,7 +310,6 @@ func releaseLock(fd *os.File) {
 	fd.Close()
 }
 
-// hasLine: is this key's tagged line present (active or paused)?
 func hasLine(text, key string) bool {
 	for _, l := range Scan(text) {
 		if l.Key == key {
@@ -371,7 +319,6 @@ func hasLine(text, key string) bool {
 	return false
 }
 
-// pruneLogs keeps the newest keep names in dir.
 func pruneLogs(dir string, keep int) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -395,19 +342,12 @@ func pruneLogs(dir string, keep int) error {
 	return nil
 }
 
-// --- busy policy ---
-
-// busyResult is one busy-state verdict.
 type busyResult struct {
-	kind   string // run | busy | error
+	kind   string
 	names  string
 	reason string
 }
 
-// busyState is the busy check: normalize names
-// through the swap's alias map, short-circuit on own-slot loaded (concurrent
-// slots are safe, no eviction), then resident-size decides. Fetch failure
-// fails closed.
 func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 	modelsRaw, err := fetch(swapURL + "/v1/models")
 	if err != nil {
@@ -443,8 +383,6 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 		return busyResult{kind: "error", reason: "busy check failed: running: " + err.Error()}
 	}
 
-	// normalize names: the store keeps pi catalog ids while /running
-	// reports canonical llama-swap names
 	canon := map[string]string{}
 	for _, m := range models.Data {
 		for _, n := range append([]string{m.ID}, m.Meta.LLamaSwap.Aliases...) {
@@ -460,7 +398,7 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 	own := norm(jobModel)
 	for _, m := range models.Data {
 		if norm(m.ID) == own && m.Status.Value == "loaded" {
-			return busyResult{kind: "run"} // own slot already allocated
+			return busyResult{kind: "run"}
 		}
 	}
 	resident := map[string]bool{}
@@ -471,7 +409,7 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 		return busyResult{kind: "run"}
 	}
 	if len(resident) == 0 {
-		return busyResult{kind: "run"} // nothing to evict: a plain load
+		return busyResult{kind: "run"}
 	}
 	var names []string
 	for n := range resident {
@@ -481,9 +419,6 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 	return busyResult{kind: "busy", names: strings.Join(names, ", ")}
 }
 
-// --- production seams ---
-
-// RealFetch is the production busy-check transport.
 func RealFetch(timeout time.Duration) Fetch {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
@@ -503,8 +438,6 @@ func RealFetch(timeout time.Duration) Fetch {
 	}
 }
 
-// RealSpawn is the production worker spawn: context-bounded, process-
-// group kill on cancellation (tool/bash's discipline), captured output.
 func RealSpawn(ctx context.Context, argv []string, cwd string) (SpawnResult, error) {
 	if len(argv) == 0 {
 		return SpawnResult{}, errors.New("spawn: empty argv")
@@ -539,7 +472,7 @@ func RealSpawn(ctx context.Context, argv []string, cwd string) (SpawnResult, err
 			res.Exit = exit.ExitCode()
 			return res, nil
 		}
-		// the worker never resolved: loud, the verb's exit-1 path
+
 		return SpawnResult{}, fmt.Errorf("spawn: %w", runErr)
 	}
 	return res, nil
