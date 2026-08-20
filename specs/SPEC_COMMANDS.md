@@ -458,8 +458,11 @@ next — adoption is idempotent, named.
 Output: `sessions: resumed <id> (<N> messages)`, N the projection's
 message count.
 
-Usage: `sessions <other>` → `sessions: usage: sessions [show|resume
-<id>]`.
+Usage: `sessions <other>` → `sessions: usage: sessions [list|show|resume
+<id>]`. `list` is the bare command's read under a name — the verb the
+TUI's menu (10) accepts — and the `Sub()` hints are `list`, `show`,
+`resume`, one-lined, so `/sessions` opens the same selectable, scrollable
+verb menu as `todo` and `scheduler` (SPEC_TUI 9).
 
 ### 6. `models`: the table, and the switch that takes effect next turn
 
@@ -748,6 +751,9 @@ crontab spool for the scheduler (the e2e's existing pattern).
   **before** the current row is touched (assert the current row is
   still open).
 - `TestSessionsUsage` — `sessions frob` → the sub-verb usage line.
+- `TestSessionsSubHints` — the `Sub()` hints are `list`, `show`,
+  `resume`, each one-lined (the TUI's menu door); `sessions list` is the
+  bare command's read, not a usage refusal.
 
 **models:**
 

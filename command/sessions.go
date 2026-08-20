@@ -12,6 +12,14 @@ import (
 
 type sessionsCmd struct{}
 
+func (sessionsCmd) Sub() []Sub {
+	return []Sub{
+		{Name: "list", Desc: "show the sessions"},
+		{Name: "show", Desc: "show a session's transcript: show <id>"},
+		{Name: "resume", Desc: "resume a session: resume <id>"},
+	}
+}
+
 func (sessionsCmd) Name() string { return "sessions" }
 
 func (sessionsCmd) Description() string {
@@ -25,7 +33,7 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 	}
 	fields := strings.Fields(args)
 	switch {
-	case len(fields) == 0:
+	case len(fields) == 0 || (len(fields) == 1 && fields[0] == "list"):
 		if e.SessionList == nil {
 			return "", errors.New("sessions: no sessions seam (the root did not wire one)")
 		}
@@ -80,7 +88,7 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 		}
 		return "", errors.New("sessions: resume takes one id")
 	default:
-		return "", errors.New("sessions: usage: sessions [show|resume <id>]")
+		return "", errors.New("sessions: usage: sessions [list|show|resume <id>]")
 	}
 }
 
