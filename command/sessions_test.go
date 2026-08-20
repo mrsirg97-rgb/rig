@@ -42,6 +42,50 @@ func TestSessionsList(t *testing.T) {
 	}
 }
 
+// TestSessionsSubHints (SPEC_TUI 9, named): the verb commands carry
+// Sub() hints for the TUI's selectable, scrollable menu — the list
+// verb first, then the id-taking show and resume.
+func TestSessionsSubHints(t *testing.T) {
+	byName := allByName(t)
+	subber, ok := byName["sessions"].(interface{ Sub() []command.Sub })
+	if !ok {
+		t.Fatal("sessions must carry Sub hints (the TUI's menu door)")
+	}
+	subs := subber.Sub()
+	want := []string{"list", "show", "resume"}
+	if len(subs) != len(want) {
+		t.Fatalf("Sub() = %d hints, want %d", len(subs), len(want))
+	}
+	for i, s := range subs {
+		if s.Name != want[i] {
+			t.Fatalf("Sub() %d = %q, want %q", i, s.Name, want[i])
+		}
+		if s.Desc == "" {
+			t.Fatalf("Sub() %d (%s) must carry a one-liner", i, s.Name)
+		}
+	}
+}
+
+// TestSessionsListVerb (SPEC_COMMANDS 5, amended): the list verb is
+// the bare command's read — the menu accepts it without a usage
+// refusal.
+func TestSessionsListVerb(t *testing.T) {
+	byName := allByName(t)
+	env := &command.Env{
+		SessionList: func(ctx context.Context) ([]command.SessionRow, error) { return listRows, nil },
+	}
+	out, err := byName["sessions"].Run(context.Background(), "list", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3  *\n" +
+		"01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12\n" +
+		"01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1\n"
+	if out != want {
+		t.Fatalf("the list verb must match the bare list:\ngot:\n%s\nwant:\n%s", out, want)
+	}
+}
+
 // TestSessionsListNone (SPEC_COMMANDS 5): an empty store prints the
 // named line.
 func TestSessionsListNone(t *testing.T) {
@@ -121,7 +165,7 @@ func TestSessionsShowRefusals(t *testing.T) {
 func TestSessionsUsage(t *testing.T) {
 	byName := allByName(t)
 	_, err := byName["sessions"].Run(context.Background(), "frob", &command.Env{})
-	if err == nil || err.Error() != "sessions: usage: sessions [show|resume <id>]" {
+	if err == nil || err.Error() != "sessions: usage: sessions [list|show|resume <id>]" {
 		t.Fatalf("a foreign sub-verb must be the usage line, got %v", err)
 	}
 }

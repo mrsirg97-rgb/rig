@@ -44,7 +44,9 @@ the leaf.
   root; the loop reads `k.Provider`/`k.Policy` fresh at each turn start).
 - **new** — closes the current session row ok, mints a fresh session and
   recorder, swaps them into the kernel; the steering slot is dropped.
-- **sessions** — lists, shows, resumes over the rows that exist.
+- **sessions** — lists, shows, resumes over the rows that exist; its
+  `Sub()` hints are `list`, `show`, `resume` (the TUI's verb menu), and
+  `list` is the bare command's read under a name.
 - **steer** — 7's slot, made a verb: queue the text (latest wins) and
   interrupt a live turn if one is; queue only if not. Empty interrupts
   only.

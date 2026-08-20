@@ -334,7 +334,7 @@ bash ✓ 0.4s
 
 - `ToolStart` opens the row: accent glyph, tool name, the detail;
 - the result body renders head/tail: first N and last M lines with a
-  dim `· k lines elided ·` between (N=6, M=2 at v1; the caps are the
+  dim `· k lines hidden ·` between (N=6, M=2 at v1; the caps are the
   TUI's, the runtime's own output caps still apply first);
 - `ToolResult` closes it: name, `✓`/`✕`, duration; a fed-back failure
   (`Err` non-nil) renders `✕` and the content stays visible: the
@@ -499,7 +499,7 @@ spinner, and palette only. The rules:
 
 Wrapping, the second sinkhole rule: committed lines are wrapped by the
 terminal (print and flow); rig truncates only tool previews and does
-so loudly (`· k lines elided ·`). The TUI never measures committed
+so loudly (`· k lines hidden ·`). The TUI never measures committed
 prose; it measures only the live region (menu rows included, decision
 9) and the startup block (runewidth, decision 10), both built to fit
 50 columns.
