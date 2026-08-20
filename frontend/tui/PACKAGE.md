@@ -20,8 +20,10 @@ width) — no core or loop line (decision 10).
 - **The live region** (`live.go`): the activity, pending, menu, input,
   and status rows; cursor-up redraw, width handling, the one-op-one-write
   frame (the write gate, decision 2).
-- **Committed blocks** (`commit.go`): turn text, reasoning, tool rows,
-  command output, the usage, the compact line, the fault line.
+- **Committed blocks** (`commit.go`): turn text, reasoning, tool rows
+  (the result body head/tail; write and edit preview their arguments
+  first — the content, the `-`/`+` sides — decision 4 amended), command
+  output, the usage, the compact line, the fault line.
 - **The status line and startup block** (`status.go`): the live row
   (`RenderStatusLine`, three rows — identity / effort · role · approve /
   usage), the one-shot startup block (`RenderStatus`), and the snapshot's
