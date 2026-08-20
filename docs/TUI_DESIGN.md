@@ -110,7 +110,7 @@ window, a sequence's bytes arriving in one burst).
 ## the block formats
 
 Tool block: the accent-glyph start line with the detail, the body at head
-six and tail two with the dim elided marker between, and the close line
+six and tail two with the dim hidden marker between, and the close line
 with name, outcome glyph, and duration. Todo and scheduler replies are
 parsed out of the tools' own reply text and re-rendered pane's way (the
 progress bar fills done plus in-progress over the capped segments); a
