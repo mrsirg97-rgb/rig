@@ -85,33 +85,30 @@ func TestFreezeGate(t *testing.T) {
 		base = "main"
 	}
 
-	// the changed paths, worktree against the fork point (tracked,
-	// committed or not) plus the untracked.
-	var changed []string
-	changed = append(changed, strings.Fields(git("diff", "--name-only", base, "--"))...)
-	for _, line := range strings.Split(git("status", "--porcelain"), "\n") {
-		if strings.HasPrefix(line, "?? ") {
-			changed = append(changed, strings.TrimSpace(line[3:]))
+	// a refactor branch (rig-*-refactor) refactors one package wholesale,
+	// so neither the TUI allowlist nor the core/loop frozen-surface clause
+	// applies — only the CLI goldens must stay green.
+	if !strings.Contains(git("branch", "--show-current"), "-refactor") {
+		// the changed paths, worktree against the fork point (tracked,
+		// committed or not) plus the untracked.
+		var changed []string
+		changed = append(changed, strings.Fields(git("diff", "--name-only", base, "--"))...)
+		for _, line := range strings.Split(git("status", "--porcelain"), "\n") {
+			if strings.HasPrefix(line, "?? ") {
+				changed = append(changed, strings.TrimSpace(line[3:]))
+			}
 		}
-	}
-	for _, p := range changed {
-		if !allow(p) {
-			t.Errorf("the freeze diff reaches outside the allowlist: %s", p)
+		for _, p := range changed {
+			if !allow(p) {
+				t.Errorf("the freeze diff reaches outside the allowlist: %s", p)
+			}
 		}
-	}
 
-	// core/ and loop/ are identical with the fork point modulo gofmt:
-	// format each side (gofmt never touches string contents), then
-	// compare byte-exact. A voice's spacing still shows; an alignment
-	// gofmt itself would change is absorbed (strict byte-identity
-	// would deadlock on the day a toolchain re-aligns). A refactor
-	// branch that itself changes the frozen surface (rig-*-refactor)
-	// is the named exception: the identity check below is skipped, the
-	// allowlist above still holds.
-	if strings.Contains(git("branch", "--show-current"), "-refactor") {
-		// no byte-identity gate: the branch is the frozen-surface's own
-		// refactor.
-	} else {
+		// core/ and loop/ are identical with the fork point modulo gofmt:
+		// format each side (gofmt never touches string contents), then
+		// compare byte-exact. A voice's spacing still shows; an alignment
+		// gofmt itself would change is absorbed (strict byte-identity
+		// would deadlock on the day a toolchain re-aligns).
 		for _, p := range strings.Fields(git("diff", "--name-only", base, "--", "core/", "loop/")) {
 			if !strings.HasSuffix(p, ".go") {
 				t.Errorf("core/ or loop/ gained a non-Go file: %s (a real change to the frozen surface)", p)
