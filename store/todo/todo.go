@@ -612,23 +612,55 @@ func Complete(ctx context.Context, db store.DB, id, session string) (string, err
 	if session == "" {
 		session = anon
 	}
-	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
+	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := maybeCompact(bound, tx, f, session); e != nil {
+			return "", e
+		}
+		ts, ok := f.tasks[id]
+		if !ok {
+			return "", fmt.Errorf("no task '%s'", id)
+		}
 		switch ts.status {
-		case statusPending:
-			return false, "'" + id + "' is pending; start it first"
 		case statusDone:
-			return false, "'" + id + "' is done; read-only"
+			return "", fmt.Errorf("'%s' is done; read-only", id)
 		case statusFailed:
-			return false, "'" + id + "' failed; retry it first"
+			return "", fmt.Errorf("'%s' failed; retry it first", id)
 		}
 		if ts.owner != "" && ts.owner != session {
-			return false, "'" + id + "' is claimed by " + ts.owner + "; fail it first to take over"
+			return "", fmt.Errorf("'%s' is claimed by %s; fail it first to take over", id, ts.owner)
 		}
 		if blocker := blockedBy(f, ts); blocker != "" {
-			return false, "'" + id + "' is blocked by '" + blocker + "' (" + blockHint(f, blocker) + ")"
+			return "", fmt.Errorf("'%s' is blocked by '%s' (%s)", id, blocker, blockHint(f, blocker))
 		}
-		return true, ""
-	}, "complete", statusDone, "'"+id+"' completed")
+		// the caller's own unclaimed pending task: complete implicitly
+		// claims and completes — start+complete, both events.
+		args, _ := json.Marshal(map[string]any{"id": id})
+		note := "'" + id + "' completed"
+		if ts.status == statusPending {
+			startSeq, e := appendEvent(bound, f.maxSeq+1, "start", string(args), session)
+			if e != nil {
+				return "", e
+			}
+			ts.status = statusActive
+			ts.owner = session
+			ts.updatedSeq = startSeq
+			ts.updatedTs = nowRFC3339()
+			f.maxSeq = startSeq
+			note = "'" + id + "' auto-started and completed"
+		}
+		seq, e := appendEvent(bound, f.maxSeq+1, "complete", string(args), session)
+		if e != nil {
+			return "", e
+		}
+		ts.status = statusDone
+		ts.owner = ""
+		ts.updatedSeq = seq
+		ts.updatedTs = nowRFC3339()
+		if e := rewrite(tx, f); e != nil {
+			return "", e
+		}
+		return echoTask(f, session, id, note), nil
+	})
 }
 
 func Fail(ctx context.Context, db store.DB, id, session string) (string, error) {

@@ -17,6 +17,9 @@ the threaded ctx; replies exactly as the store shapes them.
 
 - Replies are the store's shapes, verbatim — the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
+- Complete on your own unclaimed pending task implicitly claims and
+  completes (auto-started); foreign-claim and blocked-by-dependency
+  refusals carry through unchanged.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
   actionable queue (done folds into the summary line), read all:true
   returns the history, and a transition echo is the affected row plus

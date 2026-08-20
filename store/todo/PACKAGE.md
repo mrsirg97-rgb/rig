@@ -37,6 +37,9 @@ filtered queue.
 - Positions are minted, never mutated in place; moves are events.
 - Create is the only dependency-mutation point; the DAG is validated
   there at the boundary.
+- Complete on the caller's own unclaimed pending task implicitly claims
+  and completes: start+complete, both events appended, the echo noting
+  the auto-start. Foreign-claim and blocked-by-dependency refusals stay.
 - The read contract is lean (SPEC_TODO_LEAN): Read renders the
   actionable queue — done rows fold into the unconditional summary line
   `(N/M done · next: tN · K failed)`, never "(no tasks)" on an all-done
