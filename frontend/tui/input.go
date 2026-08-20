@@ -5,12 +5,11 @@ import (
 	"unicode/utf8"
 )
 
-// key is one parsed input event (decision 9's named vocabulary).
 type key int
 
 const (
 	keyNone key = iota
-	keyText     // the rune carries it
+	keyText
 	keyEnter
 	keyBackspace
 	keyDelete
@@ -18,52 +17,42 @@ const (
 	keyRight
 	keyHome
 	keyEnd
-	keyUp   // history
-	keyDown // history
+	keyUp
+	keyDown
 	keyCtrlC
 	keyCtrlD
 	keyCtrlT
 	keyTab
-	keyShiftTab    // CSI Z: the menu cycles up (decision 9, amended)
-	keyEsc         // a lone escape: clears the prompt (the reader names it, not the parser)
-	keyKillToStart // Ctrl-U
-	keyKillToEnd   // Ctrl-K
-	keyWordBack    // Ctrl-W
-	keyPasteStart  // CSI 200~: the bracketed paste opens (parser-internal)
-	keyPasteEnd    // CSI 201~: the bracketed paste closes (parser-internal)
-	keyPgUp        // opens the pager; pages inside it
-	keyPgDn        // pages inside the pager
+	keyShiftTab
+	keyEsc
+	keyKillToStart
+	keyKillToEnd
+	keyWordBack
+	keyPasteStart
+	keyPasteEnd
+	keyPgUp
+	keyPgDn
 )
 
-// The parser states: top, the escape families (CSI, the SS3 cursor
-// mode, the OSC device string), and a UTF-8 accumulation.
 const (
 	stTop = iota
 	stEsc
-	stEsc3 // an ESC + intermediate: the designator's final byte is consumed
+	stEsc3
 	stCSI
 	stSS3
 	stOSC
-	stOSCST // an ESC inside the OSC: the ST's backslash or content
+	stOSCST
 	stUTF8
 )
 
-// keyParser is the raw-mode key parser (decision 9): the named keys —
-// the arrows, home/end, backspace and delete across the line, Enter,
-// Ctrl-C/D/T, and printable text — and every other sequence is consumed
-// and ignored, never a crash on an exotic terminal. It is the only
-// state the reader goroutine keeps on the byte stream.
 type keyParser struct {
 	state   int
 	csi     []byte
 	utf8buf []byte
-	paste   bool // inside a bracketed paste: newlines are text, controls inert
-	cr      bool // the last paste byte was CR (a CRLF folds to one newline)
+	paste   bool
+	cr      bool
 }
 
-// next feeds one byte and reports the key it completed, if any. A text
-// key carries its rune; the multi-byte ones arrive as a single key, so
-// the editor sees a wide glyph as one unit (the backspace's rule).
 func (p *keyParser) next(b byte) (key, rune) {
 	switch p.state {
 	case stUTF8:
@@ -76,7 +65,7 @@ func (p *keyParser) next(b byte) (key, rune) {
 		buf := p.utf8buf
 		p.utf8buf = nil
 		if r == utf8.RuneError && (size < len(buf) || size == 1) {
-			return keyNone, 0 // an invalid sequence: consumed, dropped
+			return keyNone, 0
 		}
 		return keyText, r
 	case stEsc:
@@ -88,18 +77,17 @@ func (p *keyParser) next(b byte) (key, rune) {
 		case b == 'O':
 			p.state = stSS3
 		case b == ']':
-			p.state = stOSC // a device string (a title, a paste artifact): the BEL or ST ends it
+			p.state = stOSC
 		case b >= 0x20 && b <= 0x2f:
-			// a designator (a charset selection, a mode): the final
-			// byte is part of the sequence, consumed.
+
 			p.state = stEsc3
 		}
-		// a lone ESC or another two-byte sequence: not named, consumed.
+
 	case stEsc3:
-		p.state = stTop // the final byte: consumed (0x30-0x7e or not)
+		p.state = stTop
 
 	case stCSI:
-		if b >= 0x40 && b <= 0x7e { // the terminating byte
+		if b >= 0x40 && b <= 0x7e {
 			p.state = stTop
 			switch k := csiKey(string(p.csi), b); k {
 			case keyPasteStart:
@@ -113,9 +101,9 @@ func (p *keyParser) next(b byte) (key, rune) {
 			}
 		}
 		if b >= 0x20 && b <= 0x3f && len(p.csi) < 32 {
-			p.csi = append(p.csi, b) // a parameter (0x30-0x3f) or intermediate (0x20-0x2f) byte
+			p.csi = append(p.csi, b)
 		}
-		// a malformed middle byte: consumed (the length cap bounds it)
+
 	case stSS3:
 		p.state = stTop
 		switch b {
@@ -130,15 +118,15 @@ func (p *keyParser) next(b byte) (key, rune) {
 		}
 	case stOSC:
 		switch b {
-		case 0x07: // BEL: the string ends
+		case 0x07:
 			p.state = stTop
-		case 0x1b: // the ST candidate: the next byte decides
+		case 0x1b:
 			p.state = stOSCST
 		}
 	case stOSCST:
 		p.state = stTop
 		if b != '\\' {
-			// not the ST: the ESC was content; re-feed this byte at top.
+
 			return p.next(b)
 		}
 	case stTop:
@@ -146,8 +134,7 @@ func (p *keyParser) next(b byte) (key, rune) {
 		p.cr = false
 		switch {
 		case b == '\n' || b == '\r':
-			// inside a bracketed paste, a newline is text (the paste is
-			// one input); a CRLF folds to one. Typed, it is the Enter.
+
 			if p.paste {
 				if b == '\n' && wasCR {
 					return keyNone, 0
@@ -166,12 +153,12 @@ func (p *keyParser) next(b byte) (key, rune) {
 		case b >= 0x20 && b < 0x7f:
 			return keyText, rune(b)
 		case b >= 0x80 && b < 0xc0:
-			// an orphaned continuation byte: consumed, dropped.
+
 		case b >= 0xc0:
 			p.utf8buf = []byte{b}
 			p.state = stUTF8
 		case p.paste:
-			// a pasted control byte: consumed, never an action.
+
 		case b == 0x7f || b == 0x08:
 			return keyBackspace, 0
 		case b == 0x03:
@@ -196,9 +183,6 @@ func (p *keyParser) next(b byte) (key, rune) {
 	return keyNone, 0
 }
 
-// csiKey is the named CSI set: the arrows (history and the line's
-// horizontal cursor), home/end (all the common encodings), delete.
-// Every other CSI is the unrecognized case, ignored (9).
 func csiKey(params string, term byte) key {
 	switch {
 	case term == 'A':
@@ -236,7 +220,6 @@ func csiKey(params string, term byte) key {
 	return keyNone
 }
 
-// utf8Len is the sequence length of a lead byte (0 for a non-lead).
 func utf8Len(b byte) int {
 	switch {
 	case b >= 0xc2 && b < 0xe0:
@@ -250,37 +233,25 @@ func utf8Len(b byte) int {
 	}
 }
 
-// editor is the single-line state (decision 9): the rune buffer, the
-// edit position, and the session history (in memory, up and down, the
-// draft preserved around a history trip). A key applies in place; the
-// Enter reports the submitted line. The painting is the TUI's — the
-// editor is text and columns only, so it is testable without a
-// terminal.
 type editor struct {
 	buf     []rune
 	pos     int
 	hist    []string
-	histPos int // -1 = the draft
+	histPos int
 	draft   string
 }
 
-// newEditor is the editor's only constructor: the zero value's
-// histPos 0 is a valid history index, not "the draft" — the draft
-// state (-1) is constructed, never assumed.
 func newEditor() editor {
 	return editor{histPos: -1}
 }
 
-// apply one parsed key. A keyEnter with a non-blank line reports true
-// and the submitted text; the line is blank or the key a no-op, false.
 func (e *editor) apply(k key, r rune) (string, bool) {
 	switch k {
 	case keyText:
 		e.buf = append(e.buf[:e.pos], append([]rune{r}, e.buf[e.pos:]...)...)
 		e.pos++
 	case keyBackspace:
-		// the rune under the cursor goes, wide glyph whole: the buffer
-		// is runes, not bytes (the wide-glyph rule).
+
 		if e.pos > 0 {
 			e.buf = append(e.buf[:e.pos-1], e.buf[e.pos:]...)
 			e.pos--
@@ -302,8 +273,7 @@ func (e *editor) apply(k key, r rune) (string, bool) {
 	case keyEnd:
 		e.pos = len(e.buf)
 	case keyEsc:
-		// cancels the prompt: the line is dropped, the history trip
-		// abandoned (the draft with it — the Esc is the discard).
+
 		e.buf, e.pos = nil, 0
 		e.histPos = -1
 		e.draft = ""
@@ -313,8 +283,7 @@ func (e *editor) apply(k key, r rune) (string, bool) {
 	case keyKillToEnd:
 		e.buf = e.buf[:e.pos]
 	case keyWordBack:
-		// the word before the cursor: trailing spaces, then the run of
-		// non-spaces (readline's unix-word-rubout).
+
 		i := e.pos
 		for i > 0 && e.buf[i-1] == ' ' {
 			i--
@@ -325,8 +294,7 @@ func (e *editor) apply(k key, r rune) (string, bool) {
 		e.buf = append(e.buf[:i], e.buf[e.pos:]...)
 		e.pos = i
 	case keyUp:
-		// the newest entry first (the last submitted), then older —
-		// the editor's history order.
+
 		if len(e.hist) == 0 {
 			return "", false
 		}
@@ -358,7 +326,7 @@ func (e *editor) apply(k key, r rune) (string, bool) {
 		e.histPos = -1
 		e.draft = ""
 		if strings.TrimSpace(line) == "" {
-			return "", false // a blank line is not a submission
+			return "", false
 		}
 		e.hist = append(e.hist, line)
 		return line, true
@@ -366,11 +334,6 @@ func (e *editor) apply(k key, r rune) (string, bool) {
 	return "", false
 }
 
-// text is the line's content; cursorCol is the one-based terminal
-// column of the edit position, over the painted line's prefix (the
-// prompt and its space, prefixCols wide).
-// setText replaces the buffer (tab completion's landing) and parks the
-// cursor at the end.
 func (e *editor) setText(t string) {
 	e.buf = []rune(t)
 	e.pos = len(e.buf)

@@ -10,9 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// formatTokens: the CLI's shaping, byte-identical (the CLI is the piped
-// reference; the TUI restyles, never re-shapes). Raw under 1000,
-// one-decimal k under 10k, rounded k under 1M, else M.
 func formatTokens(n int) string {
 	switch {
 	case n < 1000:
@@ -26,9 +23,6 @@ func formatTokens(n int) string {
 	}
 }
 
-// RenderUsage is the turn-end usage line (decision 2): the turn's
-// session-scoped totals, pane's shaping, all dim. The hit rate is the
-// CLI's (cache read over prompt; 0 on an empty turn).
 func RenderUsage(t Theme, up, down, cacheRead int) string {
 	hit := 0
 	if up > 0 {
@@ -38,9 +32,6 @@ func RenderUsage(t Theme, up, down, cacheRead int) string {
 		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))
 }
 
-// RenderCompacted is the compaction line (decision 2; the CLI's voice,
-// pane's shaping): the compact glyph, the drop and keep in the
-// trigger's units, the summary call's usage.
 func RenderCompacted(t Theme, ev core.Compacted) string {
 	return t.Paint(SlotAccent, t.Glyph(GlyphCompact)) + " " +
 		t.Paint(SlotDim, fmt.Sprintf("compact: -%s kept %s · summary up %s down %s",
@@ -48,14 +39,10 @@ func RenderCompacted(t Theme, ev core.Compacted) string {
 			formatTokens(ev.Usage.Prompt), formatTokens(ev.Usage.Completion)))
 }
 
-// RenderFault is the fault line (the CLI's voice: [fault] err), the
-// fail glyph and the error color.
 func RenderFault(t Theme, err error) string {
 	return t.Paint(SlotError, t.Glyph(GlyphFail)+" fault: "+err.Error())
 }
 
-// previewHead and previewTail are the tool preview's caps (decision 4's
-// v1 values): the TUI's, and the runtime's own output caps apply first.
 const (
 	previewHead = 6
 	previewTail = 2
@@ -63,12 +50,6 @@ const (
 
 const elideSentinel = "\x00elided\x00"
 
-// RenderToolBlock is the committed tool block (decision 4): the
-// accent-glyph start line with the detail, the head-six/tail-two body
-// with the loud elided marker between, and the close line with the
-// name, the outcome, and the plain duration. A fed-back failure keeps
-// the content visible: the refusal is the interesting part. todo and
-// scheduler delegate to tools_render's shared renderer (decision 6).
 func RenderToolBlock(t Theme, name string, args json.RawMessage, content string, failed bool, dur time.Duration) string {
 	if name == "todo" || name == "scheduler" {
 		open := t.Paint(SlotAccent, t.Glyph(GlyphDone)) + " " + t.Paint(SlotAccent, name)
@@ -105,9 +86,6 @@ func RenderToolBlock(t Theme, name string, args json.RawMessage, content string,
 	return b.String()
 }
 
-// toolDetail is decision 4's table, one line per tool. Unknown tools
-// (a future registration) render name-only: the table is a nicety, not
-// a contract.
 func toolDetail(name string, args json.RawMessage) string {
 	var v map[string]any
 	if err := json.Unmarshal(args, &v); err != nil {
@@ -156,8 +134,6 @@ func toolDetail(name string, args json.RawMessage) string {
 	return ""
 }
 
-// verbDetail is the todo/scheduler opening's detail: the action, with
-// the id when the verb takes one (start t3, runs j2).
 func verbDetail(args json.RawMessage) string {
 	var v map[string]any
 	if err := json.Unmarshal(args, &v); err != nil {
@@ -173,9 +149,6 @@ func verbDetail(args json.RawMessage) string {
 	return act
 }
 
-// preview is the head/tail body (decision 4): first six and last two
-// lines with the dim elided marker between, two-space indented, all dim.
-// Eight lines or fewer commit in full; a trailing newline is not a line.
 func preview(t Theme, content string) string {
 	lines := strings.Split(content, "\n")
 	if n := len(lines) - 1; n > 0 && lines[n] == "" {
