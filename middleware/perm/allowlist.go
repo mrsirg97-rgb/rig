@@ -1,9 +1,3 @@
-// Package perm is the deny-by-default permission middleware: a static
-// allow-list of tool names, and the plugin provenance rule (the
-// model's write and edit land in plugins/pending/, not plugins/). A
-// denied call is fed back to the model as a refusal naming the tool
-// and the list, attributed so downstream guards can bound the
-// repetition.
 package perm
 
 import (
@@ -14,13 +8,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-type allowlist struct {
-	allowed map[string]bool
-}
-
-// Allowlist permits exactly the listed tool names; everything else is
-// denied. A wrap-only participant: it adapts through ToolMiddlewareFunc
-// and carries neither optional capability.
 func Allowlist(names ...string) core.ToolMiddleware {
 	allowed := make(map[string]bool, len(names))
 	for _, n := range names {
