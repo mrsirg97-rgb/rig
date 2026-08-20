@@ -347,6 +347,23 @@ web_fetch the url, todo/scheduler the action (their blocks are
 decision 6's). Unknown tools (a future registration) render name-only:
 the table is a nicety, not a contract.
 
+Amended (the operator's ask): write and edit preview their ARGUMENTS
+under the opening line, before the result body — for those two tools
+the interesting bytes are what went in, not the one-line receipt that
+came back. Write previews the content in the dim, the result body's
+shape; edit previews the old side as `- ` lines in the error color and
+the new side as `+ ` lines in the success color. Each side elides by
+the same head/tail rule, an empty side adds no rows, and the result
+line follows as ever:
+
+```
+● edit · store/todo/todo.go
+- 	return replyText(f, session, note), nil
++ 	return echoTask(f, session, id, note), nil
+  edited store/todo/todo.go
+edit ✓ 0.0s
+```
+
 ### 5. Reasoning and command output
 
 Reasoning streams dim and commits dim, visible by default: at this
