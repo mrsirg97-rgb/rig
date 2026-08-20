@@ -1,5 +1,3 @@
-// Package policy carries prompt-assembly implementations. v1 ships the
-// passthrough: system prompt plus transcript, verbatim.
 package policy
 
 import (
@@ -10,8 +8,6 @@ import (
 
 type passthrough struct{ system string }
 
-// Passthrough assembles the system prompt (when set) followed by the
-// transcript, verbatim. Pure across repeated assemblies.
 func Passthrough(system string) core.ContextPolicy {
 	return &passthrough{system: system}
 }
