@@ -30,11 +30,13 @@ type Settings struct {
 	SwapURL         string
 	DefaultJobModel string
 	Theme           string // shipped theme name; "" = the TUI's default
+	Sandbox         string // the worker jail's profile: "jailed" (default) or "off" (SPEC_SANDBOX 5)
+	SandboxBinds    []string
 }
 
 // knownSettings is the known key set, sorted: the unknown-key refusal
 // names the sorted list (3).
-var knownSettings = []string{"allow", "baseUrl", "defaultJobModel", "model", "python", "retries", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
+var knownSettings = []string{"allow", "baseUrl", "defaultJobModel", "model", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -110,6 +112,12 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.Theme != "" {
 		out.Theme = file.Theme
+	}
+	if file.Sandbox != "" {
+		out.Sandbox = file.Sandbox
+	}
+	if len(file.SandboxBinds) > 0 {
+		out.SandboxBinds = file.SandboxBinds
 	}
 	return out
 }
@@ -187,6 +195,14 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	} else if ok && v != "" {
 		s.Theme = v
 	}
+	if v, ok, err := str("sandbox"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		if v != "jailed" && v != "off" {
+			return Settings{}, fmt.Errorf("config: %s: sandbox: expected \"jailed\" or \"off\", got %s", path, gojson(v))
+		}
+		s.Sandbox = v
+	}
 	if raw, ok := keys["allow"]; ok {
 		v, err := jsonAllow(raw)
 		if err != nil {
@@ -194,6 +210,15 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		}
 		if len(v) > 0 {
 			s.Allow = v
+		}
+	}
+	if raw, ok := keys["sandboxBinds"]; ok {
+		v, err := jsonStringArray(raw, "sandboxBinds")
+		if err != nil {
+			return Settings{}, fmt.Errorf("config: %s: %v", path, err)
+		}
+		if len(v) > 0 {
+			s.SandboxBinds = v
 		}
 	}
 	if raw, ok := keys["retries"]; ok {
@@ -263,6 +288,28 @@ func jsonAllow(raw json.RawMessage) ([]string, error) {
 		str, ok := el.(string)
 		if !ok {
 			return nil, fmt.Errorf("allow[%d]: expected a string, got %s", i, gojson(el))
+		}
+		out = append(out, str)
+	}
+	return out, nil
+}
+
+// jsonStringArray is a named array-of-strings decoder (SPEC_SANDBOX 5's
+// sandboxBinds is its user): the refusals name the operator's key.
+func jsonStringArray(raw json.RawMessage, key string) ([]string, error) {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: expected an array of paths, got %s", key, gojson(v))
+	}
+	out := make([]string, 0, len(arr))
+	for i, el := range arr {
+		str, ok := el.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s[%d]: expected a string, got %s", key, i, gojson(el))
 		}
 		out = append(out, str)
 	}

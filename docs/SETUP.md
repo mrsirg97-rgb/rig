@@ -13,6 +13,27 @@ and the frontends carry no dependencies. The one leaf dependency is
 - An **OpenAI-compatible** chat-completions endpoint (SSE streaming): a local
   model server, a gateway, or the hosted API. rig speaks the wire protocol
   only; vendor specifics live in your endpoint configuration.
+- **bubblewrap** (the `bwrap` binary) for the scheduler's jailed workers —
+  the one environment dependency of that path, as git is the diff tool's
+  (`specs/SPEC_SANDBOX.md`). Linux only; the run refuses on other platforms
+  and names the profile. It is the only dependency the *scheduled worker*
+  needs beyond the rig binary and the endpoint: the interactive REPL and
+  one-shot runs run with or without it.
+
+  ```sh
+  # Debian / Ubuntu: the package is bubblewrap, the binary bwrap
+  sudo apt-get install bubblewrap
+  ```
+
+  **Ubuntu 24.04 and friends** — the box ships
+  `kernel.apparmor_restrict_unprivileged_userns=1`, and AppArmor then
+  blocks the unprivileged user namespace's netns setup: bwrap fails with
+  `loopback: Failed RTM_NEWADDR: Operation not permitted`. The box's
+  choice, named by the refusal:
+
+  ```sh
+  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+  ```
 
 ## build
 
@@ -20,7 +41,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.4.0
+./rig --version        # rig 0.6.0
 ```
 
 The install path (once tagged and public) is the binary, not a script
@@ -91,7 +112,21 @@ directory's project file, not the creating session's.
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
 | scheduler job |                | —                      | `defaultJobModel` | `qwen3.8-workers`; a job's explicit `model` arg beats it |
+| worker sandbox | —              | —                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
+| sandbox binds | —              | —                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
 | model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the two-row table |
+
+**On the worker sandbox** — `sandbox` is the scheduled worker's jail
+(`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the default — fail closed)
+spawns the worker under bwrap's unshare-all profile, netless except
+the one bound socket its model calls ride, with its home a scratch
+directory inside the job's cwd; `off` runs the worker as before and
+names that fact once per worker run. The refusal is loud and recorded:
+bwrap absent refuses with both settings keys named. The interactive
+REPL and one-shot runs never consult the sandbox code. `sandboxBinds`
+rides the profile as extra binds (the operator's need, e.g. a python
+venv): absolute paths, read-only by default, `:rw` opts one in. The
+profile is the spec's block, verbatim (`store/scheduler/jail.go`).
 
 **On the presence keys** — `RIG_WEB_FETCH_PROXY` and `RIG_TRAFILATURA`
 are presence-aware at every layer: "set empty" means present but empty,

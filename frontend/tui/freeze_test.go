@@ -59,6 +59,11 @@ func TestFreezeGate(t *testing.T) {
 			// perm's one new path rule, beside the allow-list.
 			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||
 			p == "plugins" || strings.HasPrefix(p, "plugins/") ||
+			// the worker jail's work surface (SPEC_SANDBOX 1, 5): the
+			// runner's bwrap spawn and socket proxy, the provider's
+			// unix: base URL.
+			p == "store/scheduler" || strings.HasPrefix(p, "store/scheduler/") ||
+			p == "provider" || strings.HasPrefix(p, "provider/") ||
 			p == "config" || strings.HasPrefix(p, "config/") ||
 			p == "docs" || strings.HasPrefix(p, "docs/") ||
 			p == "specs" || strings.HasPrefix(p, "specs/") ||

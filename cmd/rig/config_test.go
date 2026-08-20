@@ -218,6 +218,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 			[]byte("0 5 * * * "+bin+" run-job # pane-scheduler:"+key+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		sandboxOff(t, scratch) // the operator's explicit choice: the test pins the worker's env, not the jail
 
 		cmd := exec.Command(bin, "run-job", key)
 		cmd.Dir = workDir
@@ -752,6 +753,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 		[]byte("0 5 * * * "+bin+" run-job # pane-scheduler:"+key+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	sandboxOff(t, scratch) // the operator's explicit choice: the test pins the worker's env, not the jail
 	cmd := exec.Command(bin, "run-job", key)
 	cmd.Dir = sessDir // the creating session's cwd: its project file must NOT ride
 	cmd.Env = append(rigEnv(scratch, binDir), "RIG_SWAP_URL="+srv.URL)

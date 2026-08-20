@@ -39,16 +39,21 @@ type SpawnResult struct {
 type Spawn func(ctx context.Context, argv []string, cwd string) (SpawnResult, error)
 
 // RunOpts is RunJob's seam bundle: production wires the real crontab,
-// fetch, and spawn once at the root; tests inject fakes.
+// fetch, and spawn once at the root; tests inject fakes. The sandbox
+// seam (SPEC_SANDBOX 1, 5) is the worker jail's profile and binds, and
+// the operator's rig home (the kernel line's source).
 type RunOpts struct {
-	Home      string
-	Crontab   Crontab
-	Fetch     Fetch
-	Spawn     Spawn
-	WorkerCmd []string // nil: the process's own executable
-	SwapURL   string   // empty: the default llama-swap endpoint
-	Timeout   time.Duration
-	Now       func() time.Time
+	Home         string
+	Crontab      Crontab
+	Fetch        Fetch
+	Spawn        Spawn
+	WorkerCmd    []string // nil: the process's own executable
+	SwapURL      string   // empty: the default llama-swap endpoint
+	Timeout      time.Duration
+	Now          func() time.Time
+	Sandbox      string   // the worker's profile: "" (jailed), "jailed", or "off"
+	SandboxBinds []string // the operator's extra binds (ro, unless ":rw")
+	RigHome      string   // the operator's rig home (the kernel line's source)
 }
 
 // DefaultRunTimeout bounds one worker run.
@@ -185,17 +190,66 @@ func RunJob(key string, opts RunOpts) error {
 		}
 		workerCmd = []string{exe}
 	}
-	// the worker's model endpoint is the runner's swap, plus the job's
-	// model: two defaults for the same server is how the worker faults
-	// every tick while the busy check (on the swap) passes.
-	argv := append(append([]string{}, workerCmd...),
-		"-p", job.Prompt+ReportBack,
-		"-base-url", opts.SwapURL+"/v1",
-		"-model", job.Model)
+	prompt := job.Prompt + ReportBack
+
+	// the sandbox profile (SPEC_SANDBOX 1, 5): jailed (the default)
+	// spawns the worker under bwrap, through the socket hole, with the
+	// scratch home; off runs the worker as today, with the one loud
+	// line per run. The refusals are recorded skips (the outcome row
+	// carries them); a malformed profile is the runner's loud failure.
+	profile, err := SandboxProfile(opts.Sandbox)
+	if err != nil {
+		return fmt.Errorf("run-job: sandbox: %w", err)
+	}
+	var (
+		argv    []string
+		proxy   *SocketProxy
+		homeEnv string // the worker's RIG_HOME (the scratch home)
+		refuse  string // a fail-closed refusal (the recorded skip's reason)
+	)
+	if profile == "off" {
+		// the operator's explicit act, named once per worker run.
+		fmt.Fprintln(os.Stderr, "run-job: sandbox off: the worker runs unjailed (the operator's choice)")
+		// the worker's model endpoint is the runner's swap, plus the
+		// job's model: two defaults for the same server is how the
+		// worker faults every tick while the busy check (on the swap)
+		// passes.
+		argv = append(append([]string{}, workerCmd...),
+			"-p", prompt,
+			"-base-url", opts.SwapURL+"/v1",
+			"-model", job.Model)
+	} else {
+		argv, proxy, homeEnv, refuse, err = jailSpawn(opts, job.Cwd, workerCmd, job.Model, prompt)
+		if err != nil {
+			return fmt.Errorf("run-job: jail: %w", err)
+		}
+		if refuse != "" {
+			if e := recordSkip(db, parsed.ID, refuse); e != nil {
+				return e
+			}
+			return nil
+		}
+		defer proxy.Close()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	startedTime := opts.Now().UTC()
 	started := startedTime.Format(time.RFC3339)
+	if homeEnv != "" {
+		// the scratch home rides the worker's env (SPEC_SANDBOX 1):
+		// set for the spawn, restored after (run-job is one fire per
+		// process; the restore keeps the test process honest).
+		prev, had := os.LookupEnv("RIG_HOME")
+		os.Setenv("RIG_HOME", homeEnv)
+		defer func() {
+			if had {
+				os.Setenv("RIG_HOME", prev)
+			} else {
+				os.Unsetenv("RIG_HOME")
+			}
+		}()
+	}
 	res, err := opts.Spawn(ctx, argv, job.Cwd)
 	if err != nil {
 		return fmt.Errorf("run-job: spawn: %w", err)

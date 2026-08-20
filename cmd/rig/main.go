@@ -52,8 +52,9 @@ import (
 
 // Version is the binary's release version: pre-1.0, still feature-
 // complete (the home and the plugins in 0.4.0, the plugin provenance
-// rule in 0.5.0) — the 1.0 tag waits for lived use.
-const Version = "0.5.0"
+// rule in 0.5.0, the worker jail in 0.6.0) — the 1.0 tag waits for
+// lived use.
+const Version = "0.6.0"
 
 // root is the process's mutable wiring state (SPEC_COMMANDS 2): the
 // active model, the row, the recorder, the session — the state the
@@ -1077,6 +1078,13 @@ func runJob(args []string) int {
 		Spawn:     sched.RealSpawn,
 		WorkerCmd: []string{self},
 		SwapURL:   swapURL,
+		// the worker jail (SPEC_SANDBOX 1, 5): the settings' profile
+		// and binds (the chain: file over the embedded default — the
+		// settings spec's two keys, no env, no flags), and the
+		// operator's rig home (the kernel line's source).
+		Sandbox:      cfg.Settings.Sandbox,
+		SandboxBinds: cfg.Settings.SandboxBinds,
+		RigHome:      cfgDir,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1

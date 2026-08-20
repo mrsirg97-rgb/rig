@@ -331,4 +331,7 @@ PR C (the worker jail) closes the oldest unpaid debt. The build round
 SPEC_UX (the first user's findings: todo's guard and add, rem's
 recall at start, bash's cwd, edit's drift diff, the menu's
 navigation-intent Enter) implements FIRST — the field test's harvest
-before the hardening. Then the sandbox rounds, then SPEC_MODES.
+before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is the worker's
+> boundary now (the provenance rule is the workflow beside it). What
+> the sequence leaves: SPEC_PLUGINS 8 — the reload and the forge,
+> unblocked by PR B and the last sandbox round — then SPEC_MODES.
