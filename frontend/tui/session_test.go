@@ -200,7 +200,8 @@ func TestStatusLineRefresh(t *testing.T) {
 	// usage.
 	s.fe.Notify(core.TextDelta{Text: "hi\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10}})
-	s.await(th.Paint(SlotText, "huihui3.8") + th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "10/262k"))
+	s.await(th.Paint(SlotText, "huihui3.8") + th.Paint(SlotDim, " · ") + th.Paint(SlotEffortXhigh, "xhigh") +
+		th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "10/262k"))
 	if got := blockCount(); got != 1 {
 		t.Fatalf("a plain turn reprinted the block: %d, want 1", got)
 	}
@@ -274,7 +275,8 @@ func TestStatusLineRefresh(t *testing.T) {
 		t.Fatal("timed out on go2")
 	}
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 20}})
-	s.await(th.Paint(SlotText, "model2") + th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "20/131k"))
+	s.await(th.Paint(SlotText, "model2") + th.Paint(SlotDim, " · ") + th.Paint(SlotEffortLow, "low") +
+		th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "20/131k"))
 	if got := blockCount(); got != 1 {
 		t.Fatalf("the block count at the end = %d, want 1", got)
 	}
@@ -805,10 +807,12 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 		"bb",
 		"", // the CLI's Done newline: unconditional, so a blank line
 		"❯ ",
-		"",                    // the margin under the input
-		"huihui3.8 · 12/262k", // the status's first row, fed by the Done's usage
-		// the second: the turn's usage (no committed usage line),
-		// wrapping at 20 like everything else here.
+		"", // the margin under the input
+		// the status's first row, fed by the Done's usage — the info row
+		// (model · effort · context · role) wraps at 20 like the rest.
+		"huihui3.8 · xhigh · ",
+		"12/262k · default",
+		// the second: the turn's usage (no committed usage line).
 		"up 10 down 2 · cache",
 		" r 0 0%",
 	}
@@ -989,7 +993,7 @@ func TestCompletionMenu(t *testing.T) {
 	row := func(name, desc string) string {
 		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
 	}
-	status := "huihui3.8"
+	status := "huihui3.8 · xhigh · default"
 	usage := "up 214k down 18k · cache r 187k 87%"
 	hint := "tab/↓ pick · enter runs"
 
@@ -1102,7 +1106,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// height at this width is the renderer's business; the test
 	// measures it and slices above.
 	statusRows := 1 // the margin under the input
-	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "", 0, 262144, false,
+	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "xhigh", "", 0, 262144, false,
 		214000, 18200, 187000)), "\n") {
 		statusRows += (displayWidth(r) + 9) / 10
 	}
@@ -1317,7 +1321,7 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	// the block's two rows + the margin + two menu rows + the hint
 	// row + the input + the margin + the status's three rows at this
 	// width = 11: the long menu row did not wrap into a twelfth.
-	s.awaitScreen(30, 14, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
+	s.awaitScreen(30, 14, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8 · xhigh · default", "up 214k down 18k · cache r 187", "k 87%"})
 	rows := screenLines(t, s, 30)
 	menuRow := rows[len(rows)-8]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
@@ -1366,11 +1370,11 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	// pending, then the loader, then the input, then the status.
-	s.awaitScreen(50, 16, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 16, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8 · xhigh · default", "up 214k down 18k · cache r 187k 87%"})
 	// the pending line closes into scrollback above; the loader stays
 	// directly above the input.
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
-	s.awaitScreen(50, 17, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 17, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8 · xhigh · default", "up 214k down 18k · cache r 187k 87%"})
 }
 
 // TestSpacingRule (decision 2, amended): the transcript never carries
@@ -1488,7 +1492,7 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 		"create  the queue, the task's text",
 		"done  a task's id",
 		"tab/↓ pick · enter runs",
-		"❯ /todo", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%",
+		"❯ /todo", "", "huihui3.8 · xhigh · default", "up 214k down 18k · cache r 187k 87%",
 	})
 	// Tab, Enter: the second verb, accepted with the name and space.
 	s.si.feed("\t\n")
@@ -1511,18 +1515,18 @@ func TestMargins(t *testing.T) {
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
 	s.await(promptMark(th))
-	s.awaitScreen(60, 10, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 10, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8 · xhigh · default", "up 214k down 18k · cache r 187k 87%"})
 	s.si.feed("go\n")
 	<-in
 	s.fe.Notify(core.TextDelta{Text: "text"})
 	// mid-turn: prompt, blank, pending, blank, loader, blank, input, blank, status.
-	s.awaitScreen(60, 16, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 16, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8 · xhigh · default", "up 214k down 18k · cache r 187k 87%"})
 	s.fe.Notify(core.TextDelta{Text: "\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 	// after: prompt, blank, text, blank (Done's), input, blank, status —
 	// the Done blank and the input margin do not stack.
-	s.awaitScreen(60, 14, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "up 10 down 2 · cache r 0 0%"})
+	s.awaitScreen(60, 14, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · xhigh · 12/262k · default", "up 10 down 2 · cache r 0 0%"})
 	rows := screenLines(t, s, 60)
 	for i := 1; i < len(rows); i++ {
 		if rows[i] == "" && rows[i-1] == "" {

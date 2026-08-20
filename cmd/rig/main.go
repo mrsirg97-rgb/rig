@@ -453,17 +453,36 @@ func (r *root) sessionResume(ctx context.Context, id string) error {
 // the switch is not a new session, and the row keeps the model the
 // session started with (a historical record; the switch is not
 // retroactive).
-func (r *root) switchModel(ctx context.Context, id string) error {
+func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	row, ok := r.runtime.Get(id)
 	if !ok {
-		return fmt.Errorf("models: no row for %q (known: %s)", id, strings.Join(r.runtime.Known(), ", "))
+		return "", fmt.Errorf("models: no row for %q (known: %s)", id, strings.Join(r.runtime.Known(), ", "))
+	}
+	// the effort dial across the switch (SPEC_MODES 1, amended): the
+	// vocabulary is the row's, so a level the new row does not name is
+	// reset — loudly, in the switch's reply — never stamped silently
+	// into a template that cannot speak it.
+	note := ""
+	if r.effort != "" && !hasLevel(row.Efforts, r.effort) {
+		note = fmt.Sprintf("effort: %q is not a level for %s — reset to server default", r.effort, id)
+		r.effort = ""
 	}
 	r.row = row
 	r.activeID = id
 	provider, pol := r.buildPair()
 	r.k.Provider = provider
 	r.k.Policy = pol
-	return nil
+	return note, nil
+}
+
+// hasLevel reports whether the row's efforts name the level.
+func hasLevel(levels []string, level string) bool {
+	for _, l := range levels {
+		if l == level {
+			return true
+		}
+	}
+	return false
 }
 
 // switchEffort is the effort dial's root closure (SPEC_MODES 1): set the
@@ -680,7 +699,13 @@ func tuiTrueColor() bool {
 // root's (the store is its), at the refresh points only.
 func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 	return func(ctx context.Context) tui.StatusIn {
-		b := tui.StatusIn{Model: r.activeID, Effort: r.row.Effort, Window: r.row.Window, Role: r.role}
+		// the effort shown is the session's truth (SPEC_MODES 3,
+		// amended): the dial when set, else the row's configured level.
+		eff := r.effort
+		if eff == "" {
+			eff = r.row.Effort
+		}
+		b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role}
 		if r.session == nil {
 			return b
 		}

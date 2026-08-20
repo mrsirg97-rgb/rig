@@ -102,6 +102,16 @@ Rejected, named:
 - Cycling on bare `/effort`: a state-changing no-argument command is
   a misfire magnet; bare shows, the argument sets, the menu completes.
 
+Amended (the operator's review): the dial across a model switch. The
+vocabulary is the row's, so a level the new row's `efforts` does not
+name is reset on the switch — loudly, as the switch's note (`effort:
+"xhigh" is not a level for deepseek — reset to server default`,
+appended to the `/models` reply) — never stamped silently into a
+template that cannot speak it (the day-one eval lesson: an invalid
+effort string manufactures failures without a sound). A level the new
+row names rides the switch untouched, no note. The `SwitchModel` seam
+returns the note beside the error.
+
 ### 2. The role: a stance between the system prompt and the contract
 
 The prompt assembly (SPEC_CONFIG 6) gains one optional segment:
@@ -124,11 +134,17 @@ personality cosplay — a stance is a bias in what to do first and what
 to refuse, not a costume.
 
 A switch recomputes the assembly and rebuilds the pair at the root
-(the models-switch machinery, next-turn). The status line (SPEC_TUI 3)
-shows a non-default role: `huihui3.8 · architect · 41.2k/262k` — the
-operator glances the stance the model is in. The cost, named: the
-role sits near the prefix's head, so a switch is a full re-prefill at
-depth, always.
+(the models-switch machinery, next-turn). The status line (SPEC_TUI 3,
+amended by the operator's review) is the model info row — `model ·
+effort · used/window · role` — the active effort in its ramp color
+(pane's footer colors, the `effort*` theme slots; a level outside the
+ramp paints accent; a row naming none drops the segment), the context
+part once a turn has run, and the stance last, always, abbreviated:
+`architect -> arch`, `reviewer -> rev`, the default shown as
+`default`. The effort shown is the session's truth: the dial when
+set, else the row's configured level. The cost, named: the role sits
+near the prefix's head, so a switch is a full re-prefill at depth,
+always.
 
 Rejected, named:
 

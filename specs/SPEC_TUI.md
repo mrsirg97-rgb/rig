@@ -421,7 +421,11 @@ The palette is a table of named slots, four shipped:
   the glyph hierarchy survives without hue.
 
 Slots (the schema's vocabulary, fixed here): `text`, `dim`, `accent`,
-`success`, `error`, `warn`, `rule`, `reasoning`, `ember`. Reasoning
+`success`, `error`, `warn`, `rule`, `reasoning`, `ember`, and the
+effort ramp (amended, SPEC_MODES 3): `effortOff`, `effortMinimal`,
+`effortLow`, `effortMedium`, `effortHigh`, `effortXhigh`,
+`effortMax` — the status row's level colors, pane's footer ramp on
+oled/paper, brightness tiers on the phosphors. Reasoning
 is grey (amended: `#8a8a8a` on oled, `#8c959f` on paper — it reads as
 the model's margin notes, not a second accent; the phosphors keep
 their dim step). The ember
