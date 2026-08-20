@@ -1710,3 +1710,22 @@ func TestEachTransitionEchoesOneAffectedLine(t *testing.T) {
 		}
 	}
 }
+
+func TestTransitionEchoCarriesTheStaleFooter(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "ancient"}, {Text: "live"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	age(t, db, 210)
+	echo, err := todostore.Start(ctx, db, "t2", "s1")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if !strings.Contains(echo, "unresolved since") {
+		t.Errorf("the transition echo lost the stale footer:\n%s", echo)
+	}
+	if rowCount(echo) != 1 {
+		t.Errorf("the footer must not widen the echo: %d rows:\n%s", rowCount(echo), echo)
+	}
+}
