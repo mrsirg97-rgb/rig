@@ -5,10 +5,6 @@ import (
 	"errors"
 )
 
-// new closes the current session row ok, mints a fresh session and
-// recorder, and swaps them into the kernel — same process (decision 4).
-// The steering slot is dropped: a steer queued for the old session is
-// not delivered into the new one.
 type newCmd struct{}
 
 func (newCmd) Name() string { return "new" }
@@ -33,7 +29,7 @@ func (newCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	}
 	id, err := e.NewSession(ctx)
 	if err != nil {
-		return "", err // a refused close (store fault) is loud; the swap did not happen
+		return "", err
 	}
 	if e.Steer != nil {
 		e.Steer.ClearSlot()
