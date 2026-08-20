@@ -144,9 +144,11 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		want    string
 	}{
 		{"retries type", `{"retries": "three"}`, `retries: expected an integer, got "three"`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
+		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed" or "off", got "maybe"`},
+		{"sandboxBinds element", `{"sandboxBinds": ["/dev/nvidia0", 5]}`, `sandboxBinds[1]: expected a string, got 5`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -171,6 +173,45 @@ func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 	}
 	if cfg.Settings.Model != "local" {
 		t.Fatalf("model = %q, want the embedded local (empty descends)", cfg.Settings.Model)
+	}
+}
+
+// TestSandboxDefaultsToJailed (SPEC_SANDBOX 5): the two worker-jail keys
+// are settings keys; the embedded defaults are the containment itself —
+// "jailed", no extra binds. The file layer overrides, as every key.
+func TestSandboxDefaultsToJailed(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	if cfg.Settings.Sandbox != "jailed" {
+		t.Fatalf("sandbox = %q, want the embedded default jailed (fail closed is the default)", cfg.Settings.Sandbox)
+	}
+	if len(cfg.Settings.SandboxBinds) != 0 {
+		t.Fatalf("sandboxBinds = %v, want empty (no extra binds by default)", cfg.Settings.SandboxBinds)
+	}
+
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"sandbox": "off", "sandboxBinds": ["/dev/nvidia0", "/data:rw"]}`)
+	cfg = load(t, dir, t.TempDir())
+	if cfg.Settings.Sandbox != "off" {
+		t.Fatalf("sandbox = %q, want the file's off (the operator's explicit act)", cfg.Settings.Sandbox)
+	}
+	want := []string{"/dev/nvidia0", "/data:rw"}
+	if !reflect.DeepEqual(cfg.Settings.SandboxBinds, want) {
+		t.Fatalf("sandboxBinds = %v, want %v", cfg.Settings.SandboxBinds, want)
+	}
+}
+
+// TestSandboxBindsEmptyDescends (SPEC_SANDBOX 5): zero = unset at the
+// file layer — the value descends to the embedded (the same rule as
+// every other key).
+func TestSandboxBindsEmptyDescends(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"sandbox": "off", "sandboxBinds": []}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.Sandbox != "off" {
+		t.Fatalf("sandbox = %q, want the file's off", cfg.Settings.Sandbox)
+	}
+	if len(cfg.Settings.SandboxBinds) != 0 {
+		t.Fatalf("sandboxBinds = %v, want the embedded empty (an empty file list is no binds)", cfg.Settings.SandboxBinds)
 	}
 }
 
