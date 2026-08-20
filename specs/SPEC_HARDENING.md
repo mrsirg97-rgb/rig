@@ -467,6 +467,11 @@ dataflow for result mutation).
   a model failing `edit` with drifting args: under name + args keying every
   drift is a new budget, and the bound never fires. Pane keys by
   `event.toolName`; so do we.
+- **The streak is per args**: the bound strikes identical retries only. A
+  corrected call (args differing from the last failed args) resets the
+  count before the guard check, so the "change the call" teaching is never
+  followed by blocking the changed call. Drifting args no longer share one
+  budget — each differing call starts a fresh streak.
 - **Cleared per turn**, via `TurnStart` (the widened seam, decision 6;
   pane's `turn_start`). A new user message is a new budget. Today the
   counter persists across turns.
