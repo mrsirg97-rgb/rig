@@ -138,6 +138,8 @@ func setupJob(t *testing.T, cwd, scope string, mutate func(in *sched.CreateInput
 }
 
 func runOpts(h *harness, running []string, spawn *fakeSpawn, extra fetchOpts) sched.RunOpts {
+	// Sandbox off: these cases pin the unjailed argv (byte-identical to
+	// pre-0.6.0); the jailed profile's argv is the sandbox suite's pin.
 	return sched.RunOpts{
 		Home:      h.home,
 		Crontab:   h.ct,
@@ -146,6 +148,7 @@ func runOpts(h *harness, running []string, spawn *fakeSpawn, extra fetchOpts) sc
 		WorkerCmd: []string{"/x/rig"},
 		SwapURL:   "http://127.0.0.1:8090",
 		Now:       func() time.Time { return runnerNow },
+		Sandbox:   "off",
 	}
 }
 

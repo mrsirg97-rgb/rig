@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.6.0] — the worker jail
+
+- **the scheduled worker runs jailed** (`specs/SPEC_SANDBOX.md`
+  decisions 1, 3, 5): the `run-job` runner spawns the worker under
+  bubblewrap's `--unshare-all` profile — the spec's block, verbatim,
+  composed by a pure function (`store/scheduler/jail.go` pins it
+  line-for-line): the ro system, the fresh `/proc`/`/dev`/`/tmp`, the
+  job's cwd rw, the operator home's kernel directory and the rig
+  binary ro, the socket's one bind, and the worker payload. The
+  worker is netless except **one unix socket** — the runner's socket
+  proxy (stdlib `net` + `httputil`, no new Go dependency) listens on
+  it and forwards to the swap endpoint, the OpenAI `/v1` prefix
+  applied exactly once, whatever the operator's spelling; the socket
+  is removed after the run, nothing answers. The worker's rig home is
+  the **scratch home** `<job cwd>/.rig-job`: the worker's stores land
+  inside the jail, and a worker that cannot write the operator's
+  stores cannot poison the next session's transcript — the
+  operator's `~/.rig` is byte- and mtime-untouched after the run.
+  **Fail closed is the default**: `sandbox: "jailed"` refuses the run
+  loud (recorded as a skip, the outcome row carries it) when bwrap is
+  absent, on a non-linux platform, or where the operator home's
+  kernel directory is absent — the refusal names bwrap and the
+  profile and teaches both settings keys; `sandbox: "off"` is the
+  operator's explicit act, runs the worker as before with exactly one
+  loud line per worker run. `sandboxBinds` rides the profile as extra
+  binds (an absolute path, ro by default, `:rw` opts one in — the
+  operator's venv need). The provider dials a `unix:` base URL
+  (socket transport, the OpenAI path clean on the wire). The
+  interactive REPL never consults the sandbox code (the fake PATH
+  shim's marker stays untouched, the golden path is byte-for-byte
+  the model's reply). The real-jail fixture jobs gate on a box that
+  can run unprivileged bwrap (the probe is the profile's mechanics;
+  the skip names the box's
+  `kernel.apparmor_restrict_unprivileged_userns`); a bare box skips
+  cleanly, no flake. SETUP names bubblewrap as the jailed worker's
+  one environment dependency (the package is `bubblewrap`, the
+  binary `bwrap`) and the Ubuntu 24.04 sysctl's named workaround.
+  `core/` and `loop/` zero diff. Version 0.6.0; still pre-1.0.
+
 ## [0.5.0] — the plugin provenance rule
 
 - **creation separated from installation** (the forge's gate,

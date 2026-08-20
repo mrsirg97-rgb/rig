@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -21,16 +22,46 @@ type provider struct {
 	baseURL string
 	model   string
 	client  *http.Client
+	sock    string // a unix: base URL's destination (the jailed worker's socket hole)
 }
 
-// New registers a provider over an OpenAI-compatible endpoint. baseURL may
-// carry a path prefix such as /v1; it joins /chat/completions.
+// New registers a provider over an OpenAI-compatible endpoint. baseURL
+// may carry a path prefix such as /v1; it joins /chat/completions. A
+// unix: base URL (the runner's socket proxy, SPEC_SANDBOX 1) dials the
+// named socket instead: the socket path is the transport's business,
+// and the request's path stays the OpenAI suffix, clean.
 func New(baseURL, model string) core.Provider {
-	return &provider{
-		baseURL: strings.TrimRight(baseURL, "/"),
+	baseURL = strings.TrimRight(baseURL, "/")
+	p := &provider{
+		baseURL: baseURL,
 		model:   model,
 		client:  &http.Client{},
 	}
+	if strings.HasPrefix(baseURL, "unix:") {
+		sock := strings.TrimPrefix(baseURL, "unix:")
+		p.sock = sock
+		d := net.Dialer{}
+		p.client = &http.Client{
+			Transport: &http.Transport{
+				Proxy: nil, // the socket is the destination; no env proxy
+				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return d.DialContext(ctx, "unix", sock)
+				},
+			},
+		}
+	}
+	return p
+}
+
+// endpoint joins the suffix onto the base (the plain-URL rule), and
+// for a unix: base maps the request to a clean http URL — the socket
+// rides the transport, not the wire.
+func (p *provider) endpoint(suffix string) string {
+	u := p.baseURL + suffix
+	if p.sock == "" {
+		return u
+	}
+	return "http://localhost" + strings.TrimPrefix(strings.TrimPrefix(u, "unix:"), p.sock)
 }
 
 func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
@@ -56,7 +87,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		return nil, fmt.Errorf("openai: encode request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/chat/completions"), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("openai: encode request: %w", err)
 	}
