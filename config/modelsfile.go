@@ -20,9 +20,10 @@ type rowDoc struct {
 	keepRecent *int
 	role       *string
 	effort     *string
+	efforts    *[]string
 }
 
-var knownRowKeys = []string{"effort", "id", "keepRecent", "maxTokens", "reserve", "role", "window"}
+var knownRowKeys = []string{"effort", "efforts", "id", "keepRecent", "maxTokens", "reserve", "role", "window"}
 
 var knownRowKeysSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownRowKeys))
@@ -135,6 +136,13 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 			}
 			d.effort = &v
 		}
+		if rawEfforts, ok := keys["efforts"]; ok {
+			var list []string
+			if err := json.Unmarshal(rawEfforts, &list); err != nil {
+				return nil, rowErr(n, "efforts: expected a JSON array of level names")
+			}
+			d.efforts = &list
+		}
 		out = append(out, d)
 	}
 	seen := map[string]bool{}
@@ -179,6 +187,9 @@ func mergeRows(t models.Table, docs []rowDoc, path string) (models.Table, error)
 		if d.effort != nil {
 			m.Effort = *d.effort
 		}
+		if d.efforts != nil {
+			m.Efforts = append([]string(nil), *d.efforts...)
+		}
 		added = append(added, m)
 	}
 	rows := make([]models.Model, 0, len(t.Known())+len(added))
@@ -202,6 +213,9 @@ func mergeRows(t models.Table, docs []rowDoc, path string) (models.Table, error)
 			}
 			if d.effort != nil {
 				m.Effort = *d.effort
+			}
+			if d.efforts != nil {
+				m.Efforts = append([]string(nil), *d.efforts...)
 			}
 		}
 		rows = append(rows, m)

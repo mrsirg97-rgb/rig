@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/models"
@@ -23,7 +24,7 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 		{"duplicate id", `[{"id": "local", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1}, {"id": "local", "window": 200, "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 2: duplicate id "local"`},
 		{"unknown role", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "role": "boss"}]`, `row 1: role: "boss" (allowed: interactive, worker)`},
 		{"bad int", `[{"id": "x", "window": "big", "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 1: window: expected an integer, got "big"`},
-		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: effort, id, keepRecent, maxTokens, reserve, role, window)`},
+		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: effort, efforts, id, keepRecent, maxTokens, reserve, role, window)`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -49,8 +50,8 @@ func TestModelsMergesOverEmbeddedRowByRow(t *testing.T) {
 		if !ok {
 			t.Fatalf("the merged table lost the embedded row local")
 		}
-		want := models.Model{ID: "local", Window: 32768, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive}
-		if m != want {
+		want := models.Model{ID: "local", Window: 32768, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive, Efforts: []string{"low", "medium", "xhigh"}}
+		if !reflect.DeepEqual(m, want) {
 			t.Fatalf("overlay = %+v, want the user's window over the embedded fields (+%+v)", m, want)
 		}
 	})

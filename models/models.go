@@ -21,6 +21,7 @@ type Model struct {
 	KeepRecent int
 	Role       string
 	Effort     string
+	Efforts    []string // the model's available effort levels, in its own vocabulary and order (SPEC_MODES 1)
 }
 
 func (m Model) Check() error {

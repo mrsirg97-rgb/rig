@@ -78,7 +78,7 @@ func TestStatusLineModelAloneBeforeFirstUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", 0, 262144, false, 0, 0, 0)
+	got := tui.RenderStatusLine(th, "huihui3.8", "", 0, 262144, false, 0, 0, 0)
 	want := th.Paint("text", "huihui3.8") + "\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
 	if got != want {
 		t.Fatalf("before the first usage the first row is the model alone, the second the zero totals:\ngot  %q\nwant %q", got, want)
@@ -99,7 +99,7 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		{180000, "error"}, // 90%: the error tier
 	}
 	for _, c := range cases {
-		got := tui.RenderStatusLine(th, "huihui3.8", c.used, 200000, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", "", c.used, 200000, true, 214000, 3200, 187000)
 		part := fmtTokens(c.used) + "/" + fmtTokens(200000)
 		if !strings.Contains(got, th.Paint(c.want, part)) {
 			t.Errorf("used=%d: the context part is not painted %s:\n%s", c.used, c.want, got)
@@ -119,7 +119,7 @@ func TestStatusLineEmptyModelIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := tui.RenderStatusLine(th, "", 100, 1000, true, 1, 1, 1); got != "" {
+	if got := tui.RenderStatusLine(th, "", "", 100, 1000, true, 1, 1, 1); got != "" {
 		t.Fatalf("no model, no row: %q", got)
 	}
 }
@@ -136,5 +136,40 @@ func fmtTokens(n int) string {
 		return fmt.Sprintf("%dk", (n+500)/1000)
 	default:
 		return fmt.Sprintf("%.1fM", float64(n)/1000000)
+	}
+}
+
+// TestStatusLineShowsNonDefaultRole (SPEC_MODES, named): the status row
+// shows the stance the model is in — model · role · used/window — the
+// operator glances it. The role segment is the spec's pinned shape.
+func TestStatusLineShowsNonDefaultRole(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderStatusLine(th, "huihui3.8", "architect", 41200, 262144, true, 214000, 3200, 187000)
+	if !strings.Contains(got, th.Paint("dim", " · architect · ")) {
+		t.Fatalf("a non-default role must show between the model and the context:\n%s", got)
+	}
+	if !strings.HasPrefix(got, th.Paint("text", "huihui3.8")+th.Paint("dim", " · architect · ")) {
+		t.Fatalf("the role must sit right after the model:\n%s", got)
+	}
+}
+
+// TestStatusLineDropsRoleOnDefault (SPEC_MODES, named): the default
+// stance shows no role segment — the row is today's model · used/window.
+func TestStatusLineDropsRoleOnDefault(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []string{"", "default"} {
+		got := tui.RenderStatusLine(th, "huihui3.8", role, 41200, 262144, true, 214000, 3200, 187000)
+		if strings.Contains(got, "architect") || strings.Contains(got, "reviewer") {
+			t.Fatalf("role %q must drop the segment:\n%s", role, got)
+		}
+		if !strings.HasPrefix(got, th.Paint("text", "huihui3.8")+th.Paint("dim", " · ")) {
+			t.Fatalf("role %q: the model leads the row:\n%s", role, got)
+		}
 	}
 }

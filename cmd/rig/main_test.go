@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/rig/command"
 	"github.com/mrsirg97-rgb/rig/config"
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
@@ -374,4 +375,113 @@ func mustReadMsg(t *testing.T, db store.DB, seq int64) domain.Message {
 		t.Fatal(err)
 	}
 	return *m
+}
+
+// TestDefaultRoleIsByteIdentical (SPEC_MODES, named): with the dial at
+// default, the assembly is today's exactly — system, then AGENTS.md,
+// then the participants' prose, empty segments skipped.
+func TestDefaultRoleIsByteIdentical(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	got := r.buildSystem()
+	want := "be terse" + "\n\n" + "G\n\nP"
+	if got != want {
+		t.Fatalf("the default assembly = %q, want today's bytes %q (the role sits between system and AGENTS.md only when set)", got, want)
+	}
+}
+
+// TestRoleAssemblySitsBetweenSystemAndAgents (SPEC_MODES, named): the
+// stance's prose lands between the system prompt and the AGENTS.md pair
+// — the runtime's identity first, the stance second, the operator's
+// contract third — and rides the prefix before the participants' prose.
+func TestRoleAssemblySitsBetweenSystemAndAgents(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	r.role = "architect"
+	got := r.buildSystem()
+	want := "be terse" + "\n\n" + command.RoleProse("architect") + "\n\n" + "G\n\nP"
+	if got != want {
+		t.Fatalf("the architect assembly = %q, want %q (system, the stance, then AGENTS.md)", got, want)
+	}
+}
+
+// TestRoleSwitchRebuildsThePair (SPEC_MODES, named): a role switch
+// recomputes the assembly and rebuilds the pair at the root — the next
+// turn's request sees the new system message. The live turn's request
+// was already built; the change is visible on the next one (the
+// models-switch semantics).
+func TestRoleSwitchRebuildsThePair(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	wire(r)
+	before := r.fullSystem
+	if err := r.switchRole(context.Background(), "architect"); err != nil {
+		t.Fatalf("switchRole: %v", err)
+	}
+	if r.fullSystem == before || !strings.Contains(r.fullSystem, "architect") {
+		t.Fatalf("the switch must recompute the assembly with the stance: %q", r.fullSystem)
+	}
+	msgs, err := r.k.Policy.Assemble(context.Background(), core.NewSession())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || !strings.Contains(msgs[0].Content, "architect") {
+		t.Fatalf("the rebuilt pair's request must carry the stance: %+v", msgs)
+	}
+}
+
+// TestRoleSwitchDefaultInjectsNothing (SPEC_MODES, named): returning to
+// default drops the stance — the assembly is today's bytes again.
+func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	wire(r)
+	if err := r.switchRole(context.Background(), "architect"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.switchRole(context.Background(), "default"); err != nil {
+		t.Fatal(err)
+	}
+	got := r.fullSystem
+	want := "be terse" + "\n\n" + "G\n\nP"
+	if got != want {
+		t.Fatalf("back to default = %q, want today's bytes %q", got, want)
+	}
+}
+
+// TestSwapInKeepsDialsAndRebuilds (SPEC_MODES, named): a resume does not
+// restore the dials — it keeps the current values (they were never
+// saved), recomputes the assembly, and rebuilds the pair. The swap-in is
+// the handoff /new and resume share; /new resets before it.
+func TestSwapInKeepsDialsAndRebuilds(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	wire(r)
+	r.effort = "xhigh"
+	r.role = "architect"
+	s2 := core.NewSession()
+	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2)
+	r.swapIn(s2, rec2)
+	if r.effort != "xhigh" || r.role != "architect" {
+		t.Fatalf("a resume must keep the dials, got effort=%q role=%q", r.effort, r.role)
+	}
+	if !strings.Contains(r.fullSystem, "architect") {
+		t.Fatalf("the handoff must recompute the assembly with the stance: %q", r.fullSystem)
+	}
+}
+
+// TestNewResetsDials (SPEC_MODES, named): /new starts at the defaults —
+// effort unset, role default (no injection).
+func TestNewResetsDials(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	h.r.effort = "xhigh"
+	h.r.role = "architect"
+	if _, err := h.r.newSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.r.effort != "" || h.r.role != "" {
+		t.Fatalf("/new must reset the dials, got effort=%q role=%q", h.r.effort, h.r.role)
+	}
+	if strings.Contains(h.r.fullSystem, "architect") {
+		t.Fatalf("the fresh assembly must drop the stance: %q", h.r.fullSystem)
+	}
 }

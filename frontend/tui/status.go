@@ -12,6 +12,7 @@ type StatusIn struct {
 	Model     string
 	Effort    string
 	Window    int
+	Role      string // the session's stance ("" = default, SPEC_MODES 2)
 	Session   string // the session id (the startup block's second row)
 	Up        int    // session prompt total
 	Down      int    // session completion total
@@ -61,20 +62,26 @@ var titleRows = []string{
 	"▀ ▀ ▀ ▀▀▀",
 }
 
-// RenderStatusLine is the live status (decision 3, amended): two rows
-// under the input. The first is the model, with used over the window
-// once a turn has run — the context part colored at the 70/90 marks
-// (dim under 70, warn at 70, error at 90), the model dim; before the
-// first usage, the model alone. The second is the session's usage
-// totals: up, down, and the cache-read hit rate. The rows are joined
-// by a newline; the live region splits them (statusRows).
-func RenderStatusLine(t Theme, model string, used, window int, hasUsed bool, up, down, cacheRead int) string {
+// RenderStatusLine is the live status (decision 3, amended, SPEC_MODES
+// 2): two rows under the input. The first is the model, with the
+// non-default role's stance between it and the context — model · role ·
+// used/window — the operator glances the stance the model is in — and
+// used over the window once a turn has run, the context part colored at
+// the 70/90 marks (dim under 70, warn at 70, error at 90), the model
+// dim; before the first usage, the model alone. The second is the
+// session's usage totals: up, down, and the cache-read hit rate. The
+// rows are joined by a newline; the live region splits them (statusRows).
+func RenderStatusLine(t Theme, model, role string, used, window int, hasUsed bool, up, down, cacheRead int) string {
 	if model == "" {
 		return ""
 	}
+	head := t.Paint(SlotText, model)
 	var row1 string
 	if !hasUsed || window <= 0 {
-		row1 = t.Paint(SlotText, model)
+		if role != "" && role != "default" {
+			head += t.Paint(SlotDim, " · "+role)
+		}
+		row1 = head
 	} else {
 		pct := used * 100 / window
 		slot := SlotDim
@@ -84,8 +91,12 @@ func RenderStatusLine(t Theme, model string, used, window int, hasUsed bool, up,
 		case pct >= 70:
 			slot = SlotWarn
 		}
-		row1 = t.Paint(SlotText, model) + t.Paint(SlotDim, " · ") +
-			t.Paint(slot, formatTokens(used)+"/"+formatTokens(window))
+		if role != "" && role != "default" {
+			head += t.Paint(SlotDim, " · "+role+" · ")
+		} else {
+			head += t.Paint(SlotDim, " · ")
+		}
+		row1 = head + t.Paint(slot, formatTokens(used)+"/"+formatTokens(window))
 	}
 	hit := 0
 	if up > 0 {
