@@ -60,8 +60,18 @@ type Env struct {
 
 	// Plugins is the discovery's rows, in file order: the loaded (name,
 	// description, file) and the skipped (name, reason) — SPEC_PLUGINS
-	// 4. Nil: no plugins seam (the root wired none).
-	Plugins []PluginInfo
+	// 4. A closure, not a slice: the root's listing is the fact, read
+	// at call time, so a reload's swap (SPEC_PLUGINS 8) is visible with
+	// no re-wiring — the command's listing follows the root's. Nil: no
+	// plugins seam (the root wired none).
+	Plugins func() []PluginInfo
+
+	// Reload is the reload's action (SPEC_PLUGINS 8): the root's
+	// re-discovery and swap, its reply verbatim. The /plugins reload
+	// verb's door and the approve's tail (SPEC_SANDBOX 2, post-8).
+	// Nil: a pre-8 root (the verb refuses, the approve is the move
+	// only).
+	Reload func(ctx context.Context) (string, error)
 
 	// PluginsDir is the rig home's plugins/ directory (SPEC_SANDBOX
 	// 2): the pending zone is PluginsDir/pending, and /plugins pending

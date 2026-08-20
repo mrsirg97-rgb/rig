@@ -1185,6 +1185,11 @@ func TestPasteAndEscKeybinds(t *testing.T) {
 	if line := <-in; line != "ok" {
 		t.Fatalf("after Esc the line = %q, want ok (the paste cancelled)", line)
 	}
+	// the first half's "ok" started a turn; end it (the loop's job: the
+	// model call, the turn end) — otherwise the second paste's Enter
+	// lands mid-turn and steers (decision 9), not prompts, and the
+	// steer's slot is not what this test asserts.
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
 	// a pasted Enter submits nothing; the typed Enter after it commits
 	// the real newlines.

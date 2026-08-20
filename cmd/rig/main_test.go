@@ -29,12 +29,13 @@ import (
 // 1.0 tag waits for lived use, and everything before it is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 0.6.0: the worker jail (SPEC_SANDBOX 1, 5: the bwrap profile,
-	// the socket hole, the scratch home, fail closed by default);
-	// pre-1.0 — the 1.0 tag waits for lived use (a worker soak, the
-	// TUI field-tested as the daily driver).
-	if Version != "0.6.0" {
-		t.Fatalf("Version = %q, want 0.6.0 (pre-1.0, feature-complete)", Version)
+	// 0.7.0: the plugin reload and the forge (SPEC_PLUGINS 8: the
+	// plugins_reload native, /plugins reload, /plugins create, the
+	// approve's tail, the next-turn registration over the root's
+	// live tool list); pre-1.0 — the 1.0 tag waits for lived use
+	// (a worker soak, the TUI field-tested as the daily driver).
+	if Version != "0.7.0" {
+		t.Fatalf("Version = %q, want 0.7.0 (pre-1.0, feature-complete)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)
@@ -140,7 +141,22 @@ func testTools() map[string]core.Tool {
 		// the real diff surface: the state DB is the seam (SPEC_DIFF 7);
 		// the empty store keeps the registration test storeless.
 		"diff": diff.New(store.DB{}),
+		// the native's surface only (the reload's real door is the
+		// reload harness's, SPEC_PLUGINS 8's named cases).
+		"plugins_reload": fakeReload{},
 	}
+}
+
+// fakeReload is the plugins_reload native's surface for the wiring and
+// command tests (the reload's action is the root's method; the seam's
+// cases stand in with a canned reply).
+type fakeReload struct{}
+
+func (fakeReload) Name() string            { return "plugins_reload" }
+func (fakeReload) Description() string     { return "the fixture reload surface" }
+func (fakeReload) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (fakeReload) Exec(ctx context.Context, args json.RawMessage) (string, error) {
+	return "plugins: reload: 0 loaded, 0 skipped", nil
 }
 
 func testRoot(fe core.Frontend) *root {
@@ -172,11 +188,11 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	if got := k.SortedToolNames(); len(got) != 14 || got[0] != "bash" || got[1] != "diff" || got[6] != "python" || got[8] != "rem" || got[9] != "scheduler" || got[10] != "todo" || got[11] != "web_fetch" || got[12] != "web_search" || got[13] != "write" {
-		t.Fatalf("registered tools = %v, want bash,diff,edit,find,grep,ls,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
+	if got := k.SortedToolNames(); len(got) != 15 || got[0] != "bash" || got[1] != "diff" || got[6] != "plugins_reload" || got[7] != "python" || got[9] != "rem" || got[10] != "scheduler" || got[11] != "todo" || got[12] != "web_fetch" || got[13] != "web_search" || got[14] != "write" {
+		t.Fatalf("registered tools = %v, want bash,diff,edit,find,grep,ls,plugins_reload,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
 	}
-	if len(k.Middleware) != 3 {
-		t.Fatalf("middleware = %d links, want the provenance rule, the allow-list, and the bound (SPEC_SANDBOX 2; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	if len(k.Middleware) != 4 {
+		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, and the bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
 	}
 }
 
