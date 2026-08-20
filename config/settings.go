@@ -26,9 +26,10 @@ type Settings struct {
 	Theme           string
 	Sandbox         string
 	SandboxBinds    []string
+	Approve         string // the approval dial's default (SPEC_MODES 4): "auto" or "manual"
 }
 
-var knownSettings = []string{"allow", "baseUrl", "defaultJobModel", "model", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -105,6 +106,9 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if len(file.SandboxBinds) > 0 {
 		out.SandboxBinds = file.SandboxBinds
+	}
+	if file.Approve != "" {
+		out.Approve = file.Approve
 	}
 	return out
 }
@@ -183,6 +187,14 @@ func parseSettings(data []byte, path string) (Settings, error) {
 			return Settings{}, fmt.Errorf("config: %s: sandbox: expected \"jailed\" or \"off\", got %s", path, gojson(v))
 		}
 		s.Sandbox = v
+	}
+	if v, ok, err := str("approve"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		if v != "auto" && v != "manual" {
+			return Settings{}, fmt.Errorf("config: %s: approve: expected \"auto\" or \"manual\", got %s", path, gojson(v))
+		}
+		s.Approve = v
 	}
 	if raw, ok := keys["allow"]; ok {
 		v, err := jsonAllow(raw)

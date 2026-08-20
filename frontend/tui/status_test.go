@@ -78,10 +78,12 @@ func TestStatusLineModelAloneBeforeFirstUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", 0, 262144, false, 0, 0, 0)
-	want := th.Paint("text", "huihui3.8") + "\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 0, 262144, false, 0, 0, 0)
+	want := th.Paint("text", "huihui3.8") +
+		"\n" + th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("dim", "auto") +
+		"\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
 	if got != want {
-		t.Fatalf("before the first usage the first row is the model alone, the second the zero totals:\ngot  %q\nwant %q", got, want)
+		t.Fatalf("before the first usage: the model alone, the stance row, the zero totals:\ngot  %q\nwant %q", got, want)
 	}
 }
 
@@ -99,7 +101,7 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		{180000, "error"}, // 90%: the error tier
 	}
 	for _, c := range cases {
-		got := tui.RenderStatusLine(th, "huihui3.8", c.used, 200000, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", c.used, 200000, true, 214000, 3200, 187000)
 		part := fmtTokens(c.used) + "/" + fmtTokens(200000)
 		if !strings.Contains(got, th.Paint(c.want, part)) {
 			t.Errorf("used=%d: the context part is not painted %s:\n%s", c.used, c.want, got)
@@ -119,7 +121,7 @@ func TestStatusLineEmptyModelIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := tui.RenderStatusLine(th, "", 100, 1000, true, 1, 1, 1); got != "" {
+	if got := tui.RenderStatusLine(th, "", "", "", "", 100, 1000, true, 1, 1, 1); got != "" {
 		t.Fatalf("no model, no row: %q", got)
 	}
 }
@@ -136,5 +138,76 @@ func fmtTokens(n int) string {
 		return fmt.Sprintf("%dk", (n+500)/1000)
 	default:
 		return fmt.Sprintf("%.1fM", float64(n)/1000000)
+	}
+}
+
+// TestStatusThreeRowShape (SPEC_MODES 3 and 4, amended): the status is
+// three rows — model · context / effort · role · approve / usage — the
+// effort in its ramp color, the role abbreviated, manual in the warn.
+func TestStatusThreeRowShape(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderStatusLine(th, "huihui3.8", "xhigh", "architect", "manual", 41200, 262144, true, 214000, 3200, 187000)
+	sep := th.Paint("dim", " · ")
+	rows := strings.Split(got, "\n")
+	if len(rows) != 3 {
+		t.Fatalf("three rows, got %d:\n%q", len(rows), got)
+	}
+	if want := th.Paint("text", "huihui3.8") + sep + th.Paint("dim", "41k/262k"); rows[0] != want {
+		t.Fatalf("row1 (identity):\ngot  %q\nwant %q", rows[0], want)
+	}
+	if want := th.Paint("effortXhigh", "xhigh") + sep + th.Paint("dim", "arch") + sep + th.Paint("warn", "manual"); rows[1] != want {
+		t.Fatalf("row2 (stance):\ngot  %q\nwant %q", rows[1], want)
+	}
+	if !strings.Contains(rows[2], "up 214k") {
+		t.Fatalf("row3 (usage):\n%q", rows[2])
+	}
+}
+
+// TestStatusLineRoleAbbreviations (SPEC_MODES 3, amended): architect ->
+// arch, reviewer -> rev, default (and the empty state) -> default — the
+// stance always shows, in the stance row; auto rides dim beside it.
+func TestStatusLineRoleAbbreviations(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ role, want string }{
+		{"architect", "arch"}, {"reviewer", "rev"}, {"default", "default"}, {"", "default"},
+	}
+	for _, c := range cases {
+		got := tui.RenderStatusLine(th, "huihui3.8", "", c.role, "", 41200, 262144, true, 214000, 3200, 187000)
+		rows := strings.Split(got, "\n")
+		want := th.Paint("dim", c.want) + th.Paint("dim", " · ") + th.Paint("dim", "auto")
+		if len(rows) != 3 || rows[1] != want {
+			t.Errorf("role %q: the stance row must be %q:\n%q", c.role, want, rows[1])
+		}
+	}
+}
+
+// TestStatusLineEffortColorsAndFallback (SPEC_MODES 3, amended): each
+// ramp level paints its own slot (pane's footer colors); a level the
+// ramp does not name paints accent; an empty effort drops the segment.
+func TestStatusLineEffortColorsAndFallback(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ level, slot string }{
+		{"off", "effortOff"}, {"minimal", "effortMinimal"}, {"low", "effortLow"},
+		{"medium", "effortMedium"}, {"high", "effortHigh"}, {"xhigh", "effortXhigh"},
+		{"max", "effortMax"}, {"galactic", "accent"},
+	} {
+		got := tui.RenderStatusLine(th, "huihui3.8", c.level, "", "", 41200, 262144, true, 214000, 3200, 187000)
+		if !strings.Contains(got, th.Paint(c.slot, c.level)) {
+			t.Errorf("level %q must paint %s:\n%s", c.level, c.slot, got)
+		}
+	}
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000)
+	rows := strings.Split(got, "\n")
+	if len(rows) != 3 || rows[1] != th.Paint("dim", "default")+th.Paint("dim", " · ")+th.Paint("dim", "auto") {
+		t.Fatalf("an empty effort must drop the segment from the stance row:\n%q", got)
 	}
 }

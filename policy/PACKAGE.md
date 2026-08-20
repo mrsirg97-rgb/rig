@@ -28,6 +28,9 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
 - `compact.recoveryOwed`, `spendBudget`, `calibrate` — the once budget and
   the delta-only factor update.
 - `SummaryMarker`, `SummarySystem` — the marker and the summary role.
+- `effort.Decorator` — the effort dial's provider decorator (SPEC_MODES 1):
+  stamps the session's effort onto a request that has none; the compaction
+  summary call's own (the row's) is untouched.
 
 ## How it is consumed
 

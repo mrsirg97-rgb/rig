@@ -805,10 +805,13 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 		"bb",
 		"", // the CLI's Done newline: unconditional, so a blank line
 		"❯ ",
-		"",                    // the margin under the input
-		"huihui3.8 · 12/262k", // the status's first row, fed by the Done's usage
-		// the second: the turn's usage (no committed usage line),
-		// wrapping at 20 like everything else here.
+		"", // the margin under the input
+		// the status, fed by the Done's usage: the identity row fits at
+		// 20; the stance row wraps like everything else here.
+		"huihui3.8 · 12/262k",
+		"xhigh · default · au",
+		"to",
+		// the third: the turn's usage (no committed usage line).
 		"up 10 down 2 · cache",
 		" r 0 0%",
 	}
@@ -990,6 +993,7 @@ func TestCompletionMenu(t *testing.T) {
 		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
 	}
 	status := "huihui3.8"
+	stance := "xhigh · default · auto"
 	usage := "up 214k down 18k · cache r 187k 87%"
 	hint := "tab/↓ pick · enter runs"
 
@@ -997,36 +1001,36 @@ func TestCompletionMenu(t *testing.T) {
 	// the hint row naming the rule. the screen: the block's two rows,
 	// the two menu rows, the hint, the input, the status rows.
 	s.si.feed("/mo")
-	s.awaitScreen(50, 13, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, usage})
+	s.awaitScreen(50, 14, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, stance, usage})
 	s.await(th.Invert(row("models", "the per-model table")))
 	// Tab steps the selection down; Shift-Tab (CSI Z) steps it up.
 	s.si.feed("\t")
 	s.await(th.Invert(row("move", "move a thing")))
 	s.si.feed("\x1b[Z")
-	s.awaitScreen(50, 13, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, usage})
+	s.awaitScreen(50, 14, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, stance, usage})
 	// Esc closes the menu; the input keeps its text. The lone Esc's
 	// grace window must settle before the next keystroke (the screen
 	// says when it has: the menu's rows are gone, the row count down).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 10, []string{"❯ /mo", "", status, usage})
+	s.awaitScreen(50, 11, []string{"❯ /mo", "", status, stance, usage})
 	// a single candidate: the ghost — its remainder.
 	s.si.feed("d")
 	s.await(th.Paint(SlotDim, "els"))
 	// Esc again: the prompt clears (the menu is already closed).
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 10, []string{"❯ ", "", status, usage})
+	s.awaitScreen(50, 11, []string{"❯ ", "", status, stance, usage})
 
 	// SPEC_UX 5: the navigation-intent rule — no navigation (no Tab,
 	// no arrow): Enter dispatches the complete command, it does not
 	// accept the first candidate (the "accept and type again" loop,
 	// closed).
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 14, []string{
+	s.awaitScreen(50, 15, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
 		hint,
-		"❯ /todo ", "", status, usage,
+		"❯ /todo ", "", status, stance, usage,
 	})
 	s.si.feed("\n")
 	// the dispatch commits the reply (the todo door's renderer falls
@@ -1039,12 +1043,12 @@ func TestCompletionMenu(t *testing.T) {
 	// the Sub() hints (the argument phase): the menu over the verbs —
 	// over the dispatch's committed lines, the buffer stands at 22.
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 22, []string{
+	s.awaitScreen(50, 23, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
 		hint,
-		"❯ /todo ", "", status, usage,
+		"❯ /todo ", "", status, stance, usage,
 	})
 	// Tab to create, Shift-Tab twice wraps to done (the cycle).
 	s.si.feed("\t")
@@ -1054,7 +1058,7 @@ func TestCompletionMenu(t *testing.T) {
 	// the navigation's Enter accepts the selection into the input —
 	// never dispatching.
 	s.si.feed("\n")
-	s.awaitScreen(50, 18, []string{"❯ /todo done ", "", status, usage})
+	s.awaitScreen(50, 19, []string{"❯ /todo done ", "", status, stance, usage})
 	if todo.calls != 1 {
 		t.Fatalf("the accepted line dispatched: %d calls, want 1 (Enter after navigation accepts, it does not run)", todo.calls)
 	}
@@ -1102,7 +1106,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// height at this width is the renderer's business; the test
 	// measures it and slices above.
 	statusRows := 1 // the margin under the input
-	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", 0, 262144, false,
+	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "xhigh", "", "", 0, 262144, false,
 		214000, 18200, 187000)), "\n") {
 		statusRows += (displayWidth(r) + 9) / 10
 	}
@@ -1317,9 +1321,9 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	// the block's two rows + the margin + two menu rows + the hint
 	// row + the input + the margin + the status's three rows at this
 	// width = 11: the long menu row did not wrap into a twelfth.
-	s.awaitScreen(30, 14, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "up 214k down 18k · cache r 187", "k 87%"})
+	s.awaitScreen(30, 15, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187", "k 87%"})
 	rows := screenLines(t, s, 30)
-	menuRow := rows[len(rows)-8]
+	menuRow := rows[len(rows)-9] // the stance row moved the tail down one
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
 		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
 	}
@@ -1366,11 +1370,11 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	// pending, then the loader, then the input, then the status.
-	s.awaitScreen(50, 16, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 17, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 	// the pending line closes into scrollback above; the loader stays
 	// directly above the input.
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
-	s.awaitScreen(50, 17, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 18, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 }
 
 // TestSpacingRule (decision 2, amended): the transcript never carries
@@ -1483,12 +1487,12 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 	s.si.feed("/todo")
 	// the verb rows, the hint row, the input, then the margin and the
 	// status.
-	s.awaitScreen(50, 14, []string{
+	s.awaitScreen(50, 15, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
 		"tab/↓ pick · enter runs",
-		"❯ /todo", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%",
+		"❯ /todo", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%",
 	})
 	// Tab, Enter: the second verb, accepted with the name and space.
 	s.si.feed("\t\n")
@@ -1511,18 +1515,18 @@ func TestMargins(t *testing.T) {
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
 	s.await(promptMark(th))
-	s.awaitScreen(60, 10, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 11, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 	s.si.feed("go\n")
 	<-in
 	s.fe.Notify(core.TextDelta{Text: "text"})
 	// mid-turn: prompt, blank, pending, blank, loader, blank, input, blank, status.
-	s.awaitScreen(60, 16, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 17, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 	s.fe.Notify(core.TextDelta{Text: "\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 	// after: prompt, blank, text, blank (Done's), input, blank, status —
 	// the Done blank and the input margin do not stack.
-	s.awaitScreen(60, 14, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "up 10 down 2 · cache r 0 0%"})
+	s.awaitScreen(60, 15, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "xhigh · default · auto", "up 10 down 2 · cache r 0 0%"})
 	rows := screenLines(t, s, 60)
 	for i := 1; i < len(rows); i++ {
 		if rows[i] == "" && rows[i-1] == "" {
@@ -1747,5 +1751,68 @@ func TestEscInterruptsTheLiveTurn(t *testing.T) {
 	s.ctx = saved
 	if got := s.prompt(promptMark(th), "next\n"); got != "next" {
 		t.Fatalf("the post-interrupt prompt = %q, want next (no slot leftovers)", got)
+	}
+}
+
+// TestAskDoor (SPEC_MODES 4, named): the approval question blocks the
+// asking goroutine, shows in the live region, and resolves on y (run),
+// n (decline), or the context's end (an interrupt while asking is a
+// decline); every other key is swallowed while the question stands.
+func TestAskDoor(t *testing.T) {
+	th, err := ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTicks(make(chan time.Time)))
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+
+	ask := func(feed string) bool {
+		res := make(chan bool, 1)
+		go func() { res <- s.fe.Ask(context.Background(), "bash {\"cmd\":\"go test\"}") }()
+		s.await("approve bash")
+		for _, r := range feed {
+			s.si.feed(string(r))
+		}
+		select {
+		case v := <-res:
+			return v
+		case <-time.After(3 * time.Second):
+			t.Fatalf("the ask never resolved on %q", feed)
+			return false
+		}
+	}
+	if !ask("y") {
+		t.Fatal("y must approve")
+	}
+	s.out.Reset()
+	if ask("n") {
+		t.Fatal("n must decline")
+	}
+	s.out.Reset()
+	// swallowed keys: x and a digit change nothing, then y approves —
+	// and the input's text is untouched by the swallowed keys.
+	if !ask("x7y") {
+		t.Fatal("y after swallowed keys must approve")
+	}
+	if got := s.fe.ed.text(); got != "" {
+		t.Fatalf("the swallowed keys must not reach the input: %q", got)
+	}
+	// the context's end resolves the ask as a decline.
+	ctx, cancel := context.WithCancel(context.Background())
+	res := make(chan bool, 1)
+	go func() { res <- s.fe.Ask(ctx, "write {\"path\":\"x\"}") }()
+	s.out.Reset()
+	s.await("approve write")
+	cancel()
+	select {
+	case v := <-res:
+		if v {
+			t.Fatal("a dead context is a decline")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the ask must resolve when the context ends")
 	}
 }

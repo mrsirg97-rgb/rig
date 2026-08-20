@@ -75,7 +75,7 @@ func TestThemeJSONSchemaRefusals(t *testing.T) {
 	}{
 		{"unknown base", `{"base":"plasma"}`, `unknown base "plasma" (known: oled, p1, p3, paper)`},
 		{"missing base", `{"glyphs":"ascii"}`, `base required (known: oled, p1, p3, paper)`},
-		{"unknown slot", `{"base":"oled","slots":{"hue":"#ff9e64"}}`, `unknown slot "hue" (known: accent, dim, ember, error, reasoning, rule, success, text, warn)`},
+		{"unknown slot", `{"base":"oled","slots":{"hue":"#ff9e64"}}`, `unknown slot "hue" (known: accent, dim, effortHigh, effortLow, effortMax, effortMedium, effortMinimal, effortOff, effortXhigh, ember, error, reasoning, rule, success, text, warn)`},
 		{"bad hex short", `{"base":"oled","slots":{"accent":"#ff9e6"}}`, `accent: #ff9e6: expected #rrggbb`},
 		{"bad hex digits", `{"base":"oled","slots":{"accent":"#ffzz64"}}`, `accent: #ffzz64: expected #rrggbb`},
 		{"bad hex no hash", `{"base":"oled","slots":{"accent":"ff9e64"}}`, `accent: ff9e64: expected #rrggbb`},
