@@ -6,17 +6,6 @@ import (
 	"strings"
 )
 
-// decision 6: the todo and scheduler tool render blocks are owned by
-// this file and used by both doors — the tool-result path (the model
-// called the tool) and the command path (the operator typed the line).
-// A rendering that differs between the two is a bug; the goldens assert
-// byte equality minus the opening line.
-//
-// The renderers parse the tools' own reply text (the queue the reply
-// already carries): no new tool surface, no reaching into stores from
-// the render path. If parsing fails (a future voice change), the raw
-// reply commits as-is: degrade to the CLI, never hide.
-
 var (
 	todoHeadRe   = regexp.MustCompile(`^(\d+)/(\d+) done( · next: (\S+))?( · (\d+) failed)?$`)
 	todoTaskRe   = regexp.MustCompile(`^  (t\d+) \[([x!~ ])\] (.+)$`)
@@ -26,7 +15,7 @@ var (
 
 type todoTask struct {
 	ID     string
-	Status string // done | active | pending | failed
+	Status string
 	Text   string
 	Waits  string
 	Claim  string
@@ -42,10 +31,6 @@ type todoParsed struct {
 	Footer string
 }
 
-// parseTodo reads the store's reply (SPEC_STATE's todo voice): the note
-// line (the opening carries the action), the count head, one row per
-// task with the waits-on and claim suffixes, and the stale footer.
-// Anything off-shape is a parse failure, the degrade-to-raw rule.
 func parseTodo(reply string) (todoParsed, bool) {
 	lines := strings.Split(strings.TrimRight(reply, "\n"), "\n")
 	p := todoParsed{}
@@ -130,9 +115,6 @@ func atoi(s string) (int, error) {
 	return n, nil
 }
 
-// RenderTodoBlock is the todo block, one door at a time: the caller's
-// opening line (the tool's accent dot or the command's dim echo), then
-// the shared body. An unparseable reply degrades to the raw text.
 func RenderTodoBlock(t Theme, opening, reply string) string {
 	p, ok := parseTodo(reply)
 	if !ok {
@@ -141,9 +123,7 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	var b strings.Builder
 	b.WriteString(opening)
 	b.WriteString("\n")
-	// the progress head: the bar fills done plus in-progress over the
-	// capped segments (the spec's 2/5-with-one-active example renders
-	// three of five filled), then the counts, pane's shaping.
+
 	segs := p.Total
 	if segs > 8 {
 		segs = 8
@@ -155,7 +135,7 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	if p.Total > 0 {
 		filled = (p.Done + p.Active) * segs / p.Total
 		if rem := (p.Done + p.Active) * segs % p.Total; rem*2 >= p.Total {
-			filled++ // round half up
+			filled++
 		}
 	}
 	if filled > segs {
@@ -194,8 +174,6 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// todoStatusGlyph is the task row's status: done, in-progress, pending,
-// failed — the glyph table's vocabulary over the theme's slots.
 func (t Theme) todoStatusGlyph(status string) (string, string) {
 	switch status {
 	case "done":
@@ -212,23 +190,21 @@ func (t Theme) todoStatusGlyph(status string) (string, string) {
 type schedParsed struct {
 	IsList   bool
 	Sections []schedSection
-	// the runs block: the head line plus the run lines, verbatim.
+
 	Runs []string
 }
 
 type schedSection struct {
-	Name  string // global | cwd
+	Name  string
 	Empty bool
 	Jobs  []schedJob
 }
 
 type schedJob struct {
-	Head   string // id, name, state, next, last — verbatim
+	Head   string
 	Detail []string
 }
 
-// parseScheduler reads the store's list or runs reply (SPEC_STATE's
-// scheduler voice). Off-shape is a parse failure.
 func parseScheduler(reply string) (schedParsed, bool) {
 	lines := strings.Split(strings.TrimRight(reply, "\n"), "\n")
 	if len(lines) == 0 {
@@ -275,10 +251,6 @@ func parseScheduler(reply string) (schedParsed, bool) {
 	return p, true
 }
 
-// RenderSchedulerBlock is the scheduler block, one door at a time: the
-// caller's opening line, then the shared body (the sectioned list with
-// the state glyphs, or the run lines). An unparseable reply degrades
-// to the raw text.
 func RenderSchedulerBlock(t Theme, opening, reply string) string {
 	p, ok := parseScheduler(reply)
 	if !ok {
@@ -321,8 +293,6 @@ func RenderSchedulerBlock(t Theme, opening, reply string) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// schedStateGlyph is the job head's state glyph (decision 6): active,
-// paused, or the fail mark for anything else.
 func (t Theme) schedStateGlyph(head string) (string, string) {
 	fields := strings.Fields(head)
 	for _, f := range fields {

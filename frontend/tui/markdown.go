@@ -2,28 +2,8 @@ package tui
 
 import "strings"
 
-// The markdown pass (SPEC_TUI, amended: a decision of its own): the
-// model's text renders with inline markdown decorated for the human,
-// on the committed-line path, per closed line, without buffering — the
-// streaming and the scrollback-native design are not renegotiated. The
-// subset is exactly this: `**bold**` -> bold (the text color, SGR bold), `*em*` -> dim,
-// `` `code` `` -> ember, `# `..`### ` headings -> accent with the marks
-// dropped, `- `/`* `/`1. ` list items -> the dot glyph for the bullet,
-// `> ` quotes -> dim, and fenced code (a line that is ``` with an
-// optional info string) toggles a code mode: lines inside commit
-// preformatted (dim, indented two, never word-wrapped), the fence lines
-// drop, the info string shows dim once. Everything else renders raw:
-// tables, links, images, HTML, nested lists. Reasoning is never
-// decorated (the margin notes stay raw); tool results and command
-// output are the renderers' own.
-
-// mdLine decorates one closed prose line: the segments in, the
-// segments out (the paint per piece), and whether the line is a fence
-// (the caller toggles code mode and drops the line). Inside code mode
-// the caller does not call this.
 func mdLine(th Theme, segs []seg) (out []seg, fence bool, info string) {
-	// only text-slot lines are markdown; a mixed line (reasoning
-	// segments) stays raw.
+
 	plain := true
 	var b strings.Builder
 	for _, s := range segs {
@@ -40,8 +20,7 @@ func mdLine(th Theme, segs []seg) (out []seg, fence bool, info string) {
 	if strings.HasPrefix(trim, "```") {
 		return nil, true, strings.TrimSpace(strings.TrimPrefix(trim, "```"))
 	}
-	// block-level: headings, quotes, list bullets (the leading mark
-	// decides; the rest of the line is inline-decorated).
+
 	switch {
 	case strings.HasPrefix(line, "### "):
 		return []seg{{slot: SlotAccent, text: line[4:]}}, false, ""
@@ -52,7 +31,7 @@ func mdLine(th Theme, segs []seg) (out []seg, fence bool, info string) {
 	case strings.HasPrefix(line, "> "):
 		return append([]seg{{slot: SlotDim, text: th.Glyph(GlyphBarOn) + " "}}, mdInline(line[2:], SlotDim)...), false, ""
 	}
-	// list items: "- ", "* ", "N. " (leading spaces kept as indent)
+
 	lead := len(line) - len(strings.TrimLeft(line, " "))
 	rest := line[lead:]
 	if strings.HasPrefix(rest, "- ") || strings.HasPrefix(rest, "* ") {
@@ -64,8 +43,6 @@ func mdLine(th Theme, segs []seg) (out []seg, fence bool, info string) {
 	return mdInline(line, SlotText), false, ""
 }
 
-// numberedPrefix is the length of a "N. " list mark at the start of s,
-// or 0.
 func numberedPrefix(s string) int {
 	i := 0
 	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
@@ -77,9 +54,6 @@ func numberedPrefix(s string) int {
 	return i + 2
 }
 
-// mdInline decorates the inline marks in one line: **bold**, *em* /
-// _em_, `code`; an unclosed mark renders raw; \* escapes; a backtick
-// run inside code is text. base is the slot for undecorated text.
 func mdInline(line string, base string) []seg {
 	var out []seg
 	var cur strings.Builder
@@ -98,7 +72,7 @@ func mdInline(line string, base string) []seg {
 			cur.WriteRune(rs[i+1])
 			i += 2
 		case r == '`':
-			// code: to the next backtick on the line, else raw
+
 			j := i + 1
 			for j < len(rs) && rs[j] != '`' {
 				j++
@@ -112,7 +86,7 @@ func mdInline(line string, base string) []seg {
 				i++
 			}
 		case r == '*' && i+1 < len(rs) && rs[i+1] == '*':
-			// bold: to the next ** on the line, else raw
+
 			j := i + 2
 			for j+1 < len(rs) && !(rs[j] == '*' && rs[j+1] == '*') {
 				j++
@@ -126,7 +100,7 @@ func mdInline(line string, base string) []seg {
 				i += 2
 			}
 		case (r == '*' || r == '_') && i+1 < len(rs) && rs[i+1] != ' ' && rs[i+1] != r:
-			// emphasis: to the matching mark on the line, else raw
+
 			j := i + 1
 			for j < len(rs) && rs[j] != r {
 				j++
