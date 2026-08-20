@@ -342,14 +342,17 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 		panic("rig: wire: " + err.Error()) // a violating row is refused at construction
 	}
 	r.compactFn = pol.Compact // the rebuilt pair carries its own forced seam
-	// the effort decorator (SPEC_MODES 1): stamps the session's effort
-	// onto a request that has none — the main turn's, built by the loop
-	// with none — and leaves the compaction summary call's own (the
-	// row's) untouched. The compact decorator wraps the effort
-	// decorator over the same inner, so a context-length recovery (the
-	// same turn's continuation) keeps the effort, and the dial is read
-	// at call time — next-turn by construction, zero loop lines.
-	effInner := effort.Decorator(inner, func() string { return r.effort })
+	// the effort decorator (SPEC_MODES 1, amended): stamps the
+	// session's truth onto a request that has none — the dial when
+	// set, else the row's `effort` (the model's default level; the
+	// wire carries it explicitly instead of leaning on the template's
+	// silent default, and the status row's label is never a guess).
+	// A row without `effort` is today's bytes exactly. The compaction
+	// summary call sets its own (the same row value) and is untouched.
+	// The compact decorator wraps the effort decorator over the same
+	// inner, so a context-length recovery keeps the effort, and the
+	// closure is read at call time — next-turn by construction.
+	effInner := effort.Decorator(inner, r.effortForWire)
 	// the request's end of the live tool list (SPEC_PLUGINS 8): the
 	// table's specs stamped into every request, per call — a reload's
 	// swap rides the next turn's request by construction (the models-
@@ -517,6 +520,16 @@ func hasLevel(levels []string, level string) bool {
 		}
 	}
 	return false
+}
+
+// effortForWire is the level the request carries (SPEC_MODES 1,
+// amended): the dial when set, else the row's default — the same
+// fallback the status row shows, so the label and the wire agree.
+func (r *root) effortForWire() string {
+	if r.effort != "" {
+		return r.effort
+	}
+	return r.row.Effort
 }
 
 // switchEffort is the effort dial's root closure (SPEC_MODES 1): set the
