@@ -580,3 +580,22 @@ func TestNewResetsDials(t *testing.T) {
 		t.Fatalf("the fresh assembly must drop the stance: %q", h.r.fullSystem)
 	}
 }
+
+// TestEffortForWireFallsBackToTheRow (SPEC_MODES 1, amended): the
+// request's level is the dial when set, else the row's default effort
+// — the same fallback the status row shows, so the label and the wire
+// agree; a row without effort and an unset dial is today's bytes.
+func TestEffortForWireFallsBackToTheRow(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	if got := r.effortForWire(); got != "" {
+		t.Fatalf("no dial, no row default: today's bytes, got %q", got)
+	}
+	r.row.Effort = "xhigh"
+	if got := r.effortForWire(); got != "xhigh" {
+		t.Fatalf("the row's default must ride the wire: %q", got)
+	}
+	r.effort = "low"
+	if got := r.effortForWire(); got != "low" {
+		t.Fatalf("the dial must override the row: %q", got)
+	}
+}
