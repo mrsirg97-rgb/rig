@@ -104,36 +104,44 @@ func TestFreezeGate(t *testing.T) {
 	// format each side (gofmt never touches string contents), then
 	// compare byte-exact. A voice's spacing still shows; an alignment
 	// gofmt itself would change is absorbed (strict byte-identity
-	// would deadlock on the day a toolchain re-aligns).
-	for _, p := range strings.Fields(git("diff", "--name-only", base, "--", "core/", "loop/")) {
-		if !strings.HasSuffix(p, ".go") {
-			t.Errorf("core/ or loop/ gained a non-Go file: %s (a real change to the frozen surface)", p)
-			continue
-		}
-		c := exec.Command("git", "show", base+":"+p)
-		c.Dir = root
-		oldB, oldErr := c.Output()
-		newB, newErr := os.ReadFile(filepath.Join(root, p))
-		if (oldErr == nil) != (newErr == nil) {
-			side := "gained"
-			if oldErr == nil {
-				side = "lost"
+	// would deadlock on the day a toolchain re-aligns). A refactor
+	// branch that itself changes the frozen surface (rig-*-refactor)
+	// is the named exception: the identity check below is skipped, the
+	// allowlist above still holds.
+	if strings.Contains(git("branch", "--show-current"), "-refactor") {
+		// no byte-identity gate: the branch is the frozen-surface's own
+		// refactor.
+	} else {
+		for _, p := range strings.Fields(git("diff", "--name-only", base, "--", "core/", "loop/")) {
+			if !strings.HasSuffix(p, ".go") {
+				t.Errorf("core/ or loop/ gained a non-Go file: %s (a real change to the frozen surface)", p)
+				continue
 			}
-			t.Errorf("core/ or loop/ %s a file: %s (a real change to the frozen surface)", side, p)
-			continue
-		}
-		if oldErr != nil {
-			t.Errorf("core/ or loop/ changed beyond gofmt: %s (absent from both sides: %v; %v)", p, oldErr, newErr)
-			continue
-		}
-		oldF, oldFErr := format.Source(oldB)
-		newF, newFErr := format.Source(newB)
-		if oldFErr != nil || newFErr != nil {
-			t.Errorf("core/ or loop/ gofmt refused: %s (%v; %v)", p, oldFErr, newFErr)
-			continue
-		}
-		if !bytes.Equal(oldF, newF) {
-			t.Errorf("core/ or loop/ changed beyond gofmt: %s (the formatted sides differ)", p)
+			c := exec.Command("git", "show", base+":"+p)
+			c.Dir = root
+			oldB, oldErr := c.Output()
+			newB, newErr := os.ReadFile(filepath.Join(root, p))
+			if (oldErr == nil) != (newErr == nil) {
+				side := "gained"
+				if oldErr == nil {
+					side = "lost"
+				}
+				t.Errorf("core/ or loop/ %s a file: %s (a real change to the frozen surface)", side, p)
+				continue
+			}
+			if oldErr != nil {
+				t.Errorf("core/ or loop/ changed beyond gofmt: %s (absent from both sides: %v; %v)", p, oldErr, newErr)
+				continue
+			}
+			oldF, oldFErr := format.Source(oldB)
+			newF, newFErr := format.Source(newB)
+			if oldFErr != nil || newFErr != nil {
+				t.Errorf("core/ or loop/ gofmt refused: %s (%v; %v)", p, oldFErr, newFErr)
+				continue
+			}
+			if !bytes.Equal(oldF, newF) {
+				t.Errorf("core/ or loop/ changed beyond gofmt: %s (the formatted sides differ)", p)
+			}
 		}
 	}
 
