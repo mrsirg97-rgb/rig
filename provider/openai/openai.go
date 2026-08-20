@@ -1,6 +1,3 @@
-// Package openai is the OpenAI-compatible streaming adapter over net/http:
-// the wire format is plain JSON and SSE, stdlib only. Per-model tool-call
-// formats are the adapter's problem; the loop sees core.Event only.
 package openai
 
 import (
@@ -22,14 +19,9 @@ type provider struct {
 	baseURL string
 	model   string
 	client  *http.Client
-	sock    string // a unix: base URL's destination (the jailed worker's socket hole)
+	sock    string
 }
 
-// New registers a provider over an OpenAI-compatible endpoint. baseURL
-// may carry a path prefix such as /v1; it joins /chat/completions. A
-// unix: base URL (the runner's socket proxy, SPEC_SANDBOX 1) dials the
-// named socket instead: the socket path is the transport's business,
-// and the request's path stays the OpenAI suffix, clean.
 func New(baseURL, model string) core.Provider {
 	baseURL = strings.TrimRight(baseURL, "/")
 	p := &provider{
@@ -43,7 +35,7 @@ func New(baseURL, model string) core.Provider {
 		d := net.Dialer{}
 		p.client = &http.Client{
 			Transport: &http.Transport{
-				Proxy: nil, // the socket is the destination; no env proxy
+				Proxy: nil,
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 					return d.DialContext(ctx, "unix", sock)
 				},
@@ -53,9 +45,6 @@ func New(baseURL, model string) core.Provider {
 	return p
 }
 
-// endpoint joins the suffix onto the base (the plain-URL rule), and
-// for a unix: base maps the request to a clean http URL — the socket
-// rides the transport, not the wire.
 func (p *provider) endpoint(suffix string) string {
 	u := p.baseURL + suffix
 	if p.sock == "" {
@@ -69,7 +58,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		return nil, fmt.Errorf("openai: empty message list")
 	}
 
-	var kwargs *wireChatTemplateKwargs // set only when the effort is set
+	var kwargs *wireChatTemplateKwargs
 	if req.ReasoningEffort != "" {
 		kwargs = &wireChatTemplateKwargs{ReasoningEffort: req.ReasoningEffort}
 	}
@@ -95,7 +84,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	ch := make(chan core.Event, 4)
-	emit := func(ev core.Event) bool { // false once the context is gone
+	emit := func(ev core.Event) bool {
 		select {
 		case ch <- ev:
 			return true
@@ -109,7 +98,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		resp, err := p.client.Do(httpReq)
 		if err != nil {
 			if ctx.Err() != nil {
-				return // torn down: closed without Done or Fault
+				return
 			}
 			emit(core.Fault{Err: fmt.Errorf("openai: transport: %w", err)})
 			return
@@ -125,7 +114,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		}
 
 		scanner := bufio.NewScanner(resp.Body)
-		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024) // bounded, generous
+		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
 		var (
 			pending   map[int]*core.ToolCall
@@ -140,9 +129,6 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 				continue
 			}
 			if strings.HasPrefix(line, ":") {
-				// an SSE comment (the spec's keep-alive): the server
-				// heartbeats through a long prefill; ignored, never a
-				// fault.
 				continue
 			}
 			payload, ok := sseData(line)
@@ -159,8 +145,6 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 				return
 			}
 			if chunk.Usage != nil {
-				// cached tokens are a subset of prompt on this wire;
-				// total_tokens is read and ignored
 				usage = core.Usage{
 					Prompt:     chunk.Usage.PromptTokens,
 					Completion: chunk.Usage.CompletionTokens,
@@ -169,7 +153,6 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 				}
 			}
 			for _, choice := range chunk.Choices {
-				// thinking precedes speech, within a unit and across the stream
 				if choice.Delta.ReasoningContent != "" && !emit(core.ReasoningDelta{Text: choice.Delta.ReasoningContent}) {
 					return
 				}
@@ -187,22 +170,18 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 
 		if err := scanner.Err(); err != nil {
 			if ctx.Err() != nil {
-				return // torn down by the cancellation
+				return
 			}
 			fault(fmt.Errorf("openai: stream read: %w", err))
 			return
 		}
 		if finishing == "" {
-			// incomplete calls are discarded, never executed.
 			fault(fmt.Errorf("openai: stream truncated: no finish marker"))
 			return
 		}
 		for _, idx := range sortedPending(pending) {
 			call := pending[idx]
 			if len(call.Args) > 0 && !json.Valid(call.Args) {
-				// A length-capped stream can cut a call's args mid-JSON.
-				// Executing or re-sending half-args poisons the transcript,
-				// so drop the call and fault with the cause named.
 				fault(fmt.Errorf("openai: tool call %q truncated mid-args (finish_reason %q); raise MaxTokens or the reserve", call.Name, finishing))
 				return
 			}
@@ -250,33 +229,21 @@ func sortedPending(pending map[int]*core.ToolCall) []int {
 	return idxs
 }
 
-// wire shapes. Named types so a field typo fails at compile time.
-
 type wireRequest struct {
 	Model              string                  `json:"model"`
 	Messages           []wireMessage           `json:"messages"`
 	Tools              []wireTool              `json:"tools,omitempty"`
-	MaxTokens          int                     `json:"max_tokens,omitempty"`       // SPEC_COMPACT 8's request-side reserve; 0 = omitted (the server default)
-	ReasoningEffort    string                  `json:"reasoning_effort,omitempty"` // SPEC_COMPACT 3's summary effort; empty = the server default
+	MaxTokens          int                     `json:"max_tokens,omitempty"`
+	ReasoningEffort    string                  `json:"reasoning_effort,omitempty"`
 	ChatTemplateKwargs *wireChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
 	Stream             bool                    `json:"stream"`
 	StreamOptions      *wireStreamOptions      `json:"stream_options,omitempty"`
 }
 
-// wireChatTemplateKwargs carries the reasoning effort to the chat template.
-// Both shapes go over the wire when the effort is set, because the two
-// server families read two different fields: OpenAI-shaped servers read
-// the top-level reasoning_effort; llama.cpp (the worker swap) ignores it
-// and its Qwen3 template takes it only as a chat_template_kwargs entry —
-// measured on the swap: only chat_template_kwargs.reasoning_effort
-// changes the think length. A server that knows neither ignores both.
 type wireChatTemplateKwargs struct {
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
-// wireStreamOptions asks the server to include the usage chunk on the
-// stream. OpenAI and llama.cpp both emit usage only when this is set;
-// without it Done.Usage is all zeros and the cache-hit line reads zero.
 type wireStreamOptions struct {
 	IncludeUsage bool `json:"include_usage"`
 }
@@ -308,9 +275,6 @@ func wireTools(specs []core.ToolSpec) []wireTool {
 	return out
 }
 
-// parameters must go over the wire as a JSON object (json.RawMessage), not
-// a quoted string: OpenAI-compat servers and llama.cpp templates take the
-// object shape.
 type wireToolFn struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
