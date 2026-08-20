@@ -48,7 +48,7 @@ const (
 	previewTail = 2
 )
 
-const elideSentinel = "\x00elided\x00"
+const elideSentinel = "\x00hidden\x00"
 
 func RenderToolBlock(t Theme, name string, args json.RawMessage, content string, failed bool, dur time.Duration) string {
 	if name == "todo" || name == "scheduler" {
@@ -211,7 +211,7 @@ func previewWith(t Theme, content, prefix, slot string) string {
 			b.WriteString("\n")
 		}
 		if l == elideSentinel {
-			b.WriteString(t.Paint(SlotDim, "  · "+strconv.Itoa(elided)+" lines elided ·"))
+			b.WriteString(t.Paint(SlotDim, "  · "+strconv.Itoa(elided)+" lines hidden ·"))
 			continue
 		}
 		b.WriteString(t.Paint(slot, prefix+l))

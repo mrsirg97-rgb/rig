@@ -88,12 +88,12 @@ func TestToolBlockHeadTailElided(t *testing.T) {
 	}
 	got := tui.RenderToolBlock(th, "bash", bashArgs(), body.String()+"\n", false, 400*time.Millisecond)
 	lines := strings.Split(got, "\n")
-	// head six, the loud elided marker, tail two, then the close line.
+	// head six, the loud hidden marker, tail two, then the close line.
 	want := []string{
 		th.Paint("accent", "●") + " " + th.Paint("accent", "bash") + th.Paint("dim", " · ") + th.Paint("text", "$ go test ./middleware/"),
 		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
 		th.Paint("dim", "  line4"), th.Paint("dim", "  line5"), th.Paint("dim", "  line6"),
-		th.Paint("dim", "  · 2 lines elided ·"),
+		th.Paint("dim", "  · 2 lines hidden ·"),
 		th.Paint("dim", "  line9"), th.Paint("dim", "  line10"),
 		th.Paint("dim", "bash") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.4s"),
 	}
@@ -125,12 +125,12 @@ func TestToolBlockDiffShowsVerbAndStaysDefaultPath(t *testing.T) {
 	got := tui.RenderToolBlock(th, "diff", json.RawMessage(`{"mode":"files","ref":"base"}`), body.String()+"\n", false, 400*time.Millisecond)
 	lines := strings.Split(got, "\n")
 	// the opening: the accent dot, the name, the verb — then the
-	// default path: head six, the loud elided marker, tail two, close.
+	// default path: head six, the loud hidden marker, tail two, close.
 	want := []string{
 		th.Paint("accent", "●") + " " + th.Paint("accent", "diff") + th.Paint("dim", " · ") + th.Paint("text", "files"),
 		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
 		th.Paint("dim", "  line4"), th.Paint("dim", "  line5"), th.Paint("dim", "  line6"),
-		th.Paint("dim", "  · 2 lines elided ·"),
+		th.Paint("dim", "  · 2 lines hidden ·"),
 		th.Paint("dim", "  line9"), th.Paint("dim", "  line10"),
 		th.Paint("dim", "diff") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.4s"),
 	}
@@ -175,14 +175,14 @@ func TestToolBlockFailureKeepsTheContent(t *testing.T) {
 	}
 }
 
-func TestToolBlockShortBodyUnelided(t *testing.T) {
+func TestToolBlockShortBodyUnhidden(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := tui.RenderToolBlock(th, "bash", bashArgs(), "a\nb\nc", false, 100*time.Millisecond)
-	if strings.Contains(got, "elided") {
-		t.Fatalf("eight lines or fewer are not elided:\n%s", got)
+	if strings.Contains(got, "hidden") {
+		t.Fatalf("eight lines or fewer are not hidden:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("dim", "  a")) || !strings.Contains(got, th.Paint("dim", "  c")) {
 		t.Fatalf("the short body commits in full:\n%s", got)
@@ -281,7 +281,7 @@ func TestEditBlockPreviewsOldAndNewElided(t *testing.T) {
 		th.Paint("accent", "●") + " " + th.Paint("accent", "edit") + th.Paint("dim", " · ") + th.Paint("text", "b.go"),
 		th.Paint("error", "- o1"), th.Paint("error", "- o2"), th.Paint("error", "- o3"),
 		th.Paint("error", "- o4"), th.Paint("error", "- o5"), th.Paint("error", "- o6"),
-		th.Paint("dim", "  · 2 lines elided ·"),
+		th.Paint("dim", "  · 2 lines hidden ·"),
 		th.Paint("error", "- o9"), th.Paint("error", "- o10"),
 		th.Paint("success", "+ n1"), th.Paint("success", "+ n2"),
 		th.Paint("dim", "  edited b.go"),
