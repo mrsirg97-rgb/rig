@@ -928,7 +928,7 @@ func main() {
 	}); ok {
 		r.askDoor = a.Ask
 	}
-	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID, session)
+	rec := state.NewRecorder(fe, sdb, cwd, modelID, Version, session.ID, session)
 	r.rec = rec
 
 	k := wire(r)
