@@ -1,15 +1,3 @@
-// Package tui is the terminal frontend over the frozen runtime
-// (SPEC_TUI): the same events, the same commands, the same tools,
-// rendered in pane's design language with fewer parts. The terminal
-// owns scrollback (decision 1); the TUI commits blocks on event
-// boundaries and redraws a live region capped at decision 2's rows
-// (the menu's, the input's, the status).
-//
-// The split: theme.go, status.go, commit.go, and tools_render.go are
-// pure renderers (state in, bytes out); live.go turns them into the
-// escape stream; input.go is the key parser and line editor; tui.go is
-// the Frontend shell (the reader goroutine, the command dispatch, the
-// completion menu, the status line's refresh points).
 package tui
 
 import (
@@ -21,7 +9,6 @@ import (
 	"strings"
 )
 
-// The palette slots (decision 7's fixed vocabulary).
 const (
 	SlotText      = "text"
 	SlotDim       = "dim"
@@ -31,14 +18,10 @@ const (
 	SlotWarn      = "warn"
 	SlotRule      = "rule"
 	SlotReasoning = "reasoning"
-	SlotEmber     = "ember" // the greeting and the loaders: a pale, neutral orange
-	SlotBold      = "bold"  // derived: the text color, bold (the markdown pass); not a palette entry
+	SlotEmber     = "ember"
+	SlotBold      = "bold"
 )
 
-// The effort ramp (SPEC_MODES 3, amended): one slot per reasoning
-// level, pane's footer colors — the status row paints the active level
-// in its own color so the budget reads at a glance. The vocabulary is
-// pane's seven; a level outside it paints accent (pane's fallback).
 const (
 	SlotEffortOff     = "effortOff"
 	SlotEffortMinimal = "effortMinimal"
@@ -49,23 +32,21 @@ const (
 	SlotEffortMax     = "effortMax"
 )
 
-// slotVocabulary is the sorted slot list the refusals name (7).
 var slotVocabulary = []string{SlotAccent, SlotDim,
 	SlotEffortHigh, SlotEffortLow, SlotEffortMax, SlotEffortMedium, SlotEffortMinimal, SlotEffortOff, SlotEffortXhigh,
 	SlotEmber, SlotError, SlotReasoning, SlotRule, SlotSuccess, SlotText, SlotWarn}
 
-// The glyph slots, in both sets.
 const (
-	GlyphPending = "pending" // ○ / [ ]
-	GlyphActive  = "active"  // ◐ / [~]
-	GlyphDone    = "done"    // ● / [*]
-	GlyphFail    = "fail"    // ✕ / [x]
-	GlyphOK      = "ok"      // ✓ / v (the close line's success mark, 4)
-	GlyphCompact = "compact" // ⧉ / =
-	GlyphPrompt  = "prompt"  // ❯ / >
-	GlyphBarOn   = "bar"     // ▰ / #
-	GlyphBarOff  = "baroff"  // ▱ / -
-	GlyphDot     = "dot"     // · / .
+	GlyphPending = "pending"
+	GlyphActive  = "active"
+	GlyphDone    = "done"
+	GlyphFail    = "fail"
+	GlyphOK      = "ok"
+	GlyphCompact = "compact"
+	GlyphPrompt  = "prompt"
+	GlyphBarOn   = "bar"
+	GlyphBarOff  = "baroff"
+	GlyphDot     = "dot"
 )
 
 var (
@@ -79,33 +60,19 @@ var (
 	}
 )
 
-// Theme is a resolved palette: named slots over hex colors, one glyph
-// set, and the output mode (truecolor or the 256 downconvert, decision
-// 7: named, automatic, not configurable).
 type Theme struct {
-	name      string // the base theme's shipped name
+	name      string
 	TrueColor bool
 	slots     map[string]string
 	glyphs    map[string]string
 }
 
-// Name is the base theme's shipped name.
 func (t Theme) Name() string { return t.name }
 
-// Slot is one palette slot's hex value (#rrggbb).
 func (t Theme) Slot(name string) string { return t.slots[name] }
 
-// Glyph is one glyph set entry.
 func (t Theme) Glyph(name string) string { return t.glyphs[name] }
 
-// SGR and Paint (ansi.go) wrap text in the slot's color and a reset,
-// truecolor when the terminal reports it, else the nearest 256 index.
-
-// Shipped is the palette table: oled (default), paper, and the two
-// phosphor ramps (decision 7). The phosphor palettes are four
-// brightnesses of one hue: text on the brightest, accent and success on
-// the next tier, error, warn, and reasoning on the middle, dim and rule
-// on the deepest, so the state hierarchy survives without hue.
 var Shipped = map[string]map[string]string{
 	"oled": {
 		SlotText:      "#d8d8d8",
@@ -117,7 +84,7 @@ var Shipped = map[string]map[string]string{
 		SlotRule:      "#3c3c3c",
 		SlotReasoning: "#8a8a8a",
 		SlotEmber:     "#e8a86b",
-		// the effort ramp: pane's subtle-dark footer, cool-to-hot
+
 		SlotEffortOff:     "#5a5a5a",
 		SlotEffortMinimal: "#6e6e6e",
 		SlotEffortLow:     "#5f87af",
@@ -136,7 +103,7 @@ var Shipped = map[string]map[string]string{
 		SlotRule:      "#d0d7de",
 		SlotReasoning: "#8c959f",
 		SlotEmber:     "#bc4c00",
-		// the effort ramp: pane's subtle-light footer, cool-to-hot
+
 		SlotEffortOff:     "#8c959f",
 		SlotEffortMinimal: "#767676",
 		SlotEffortLow:     "#0969da",
@@ -155,7 +122,7 @@ var Shipped = map[string]map[string]string{
 		SlotDim:       "#156b33",
 		SlotRule:      "#156b33",
 		SlotEmber:     "#8fe8a8",
-		// the effort ramp as brightness (7's rule: hierarchy without hue)
+
 		SlotEffortOff:     "#156b33",
 		SlotEffortMinimal: "#156b33",
 		SlotEffortLow:     "#2aa050",
@@ -174,7 +141,7 @@ var Shipped = map[string]map[string]string{
 		SlotDim:       "#7a5215",
 		SlotRule:      "#7a5215",
 		SlotEmber:     "#f0b860",
-		// the effort ramp as brightness (7's rule: hierarchy without hue)
+
 		SlotEffortOff:     "#7a5215",
 		SlotEffortMinimal: "#7a5215",
 		SlotEffortLow:     "#b07820",
@@ -185,7 +152,6 @@ var Shipped = map[string]map[string]string{
 	},
 }
 
-// shippedNames is the sorted shipped set the refusals name (7).
 var shippedNames = func() []string {
 	out := make([]string, 0, len(Shipped))
 	for n := range Shipped {
@@ -195,14 +161,11 @@ var shippedNames = func() []string {
 	return out
 }()
 
-// ParseHex is the #rrggbb parse (7): exactly a hash plus six hex digits,
-// case-insensitive, normalized to lowercase.
 func ParseHex(s string) (r, g, b int, err error) {
 	if len(s) != 7 || s[0] != '#' {
 		return 0, 0, 0, fmt.Errorf("%s: expected #rrggbb", s)
 	}
-	// ParseUint: bitSize 8 is signed for ParseInt (max 127), which would
-	// refuse every high byte of a truecolor color.
+
 	for i, p := range []int{1, 3, 5} {
 		n, e := strconv.ParseUint(s[p:p+2], 16, 8)
 		if e != nil {
@@ -220,13 +183,10 @@ func ParseHex(s string) (r, g, b int, err error) {
 	return r, g, b, nil
 }
 
-// Nearest256 is the downconvert (7): the nearest xterm-256 entry over
-// the cube (16-231) and the grayscale ramp (232-255). Exact matches win;
-// the named pairs are pinned by the tests.
 func Nearest256(hex string) int {
 	r, g, b, err := ParseHex(hex)
 	if err != nil {
-		return 16 // the refusal happens upstream; 16 is the floor
+		return 16
 	}
 	best, bestD := 16, 1<<30
 	for n := 16; n < 256; n++ {
@@ -239,7 +199,6 @@ func Nearest256(hex string) int {
 	return best
 }
 
-// palette256 is the xterm cube (16-231) and grayscale ramp (232-255).
 func palette256(n int) (r, g, b int) {
 	if n >= 232 {
 		v := 8 + 10*(n-232)
@@ -250,11 +209,6 @@ func palette256(n int) (r, g, b int) {
 	return lvl[n/36], lvl[(n/6)%6], lvl[n%6]
 }
 
-// ResolveTheme is the selection and override (decision 7): the shipped
-// name from settings.theme (absent = oled), with theme.json's base,
-// slot overrides, and glyph set over it; the file wins when both are
-// set (the more specific intent, named). Refusals are loud and name the
-// known vocabulary, in SPEC_CONFIG's voice (the root adds the path).
 func ResolveTheme(settingsTheme string, doc json.RawMessage, trueColor bool) (Theme, error) {
 	if settingsTheme != "" {
 		if _, ok := Shipped[settingsTheme]; !ok {
@@ -362,7 +316,6 @@ func isSlot(k string) bool {
 	return false
 }
 
-// kindOf names a JSON value's kind for the refusal voice.
 func kindOf(raw json.RawMessage) string {
 	s := strings.TrimSpace(string(raw))
 	switch {
