@@ -189,7 +189,8 @@ func newHarness(t *testing.T, row models.Model, activeID string, runtime models.
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "python": &fakePython{},
 			"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
-			"diff": diff.New(db),
+			"diff":           diff.New(db),
+			"plugins_reload": fakeReload{},
 		},
 	}
 	r.session = core.NewSession()

@@ -27,10 +27,12 @@ func pluginsCmd(t *testing.T) core.Command {
 // counts, the loaded rows' name/description/file, the skipped rows'
 // file/reason, in file order.
 func TestPluginsListRendersLoadedAndSkipped(t *testing.T) {
-	env := &command.Env{Plugins: []command.PluginInfo{
-		{Name: "echo", Description: "the fixture echo plugin", File: "/home/u/.rig/plugins/echo.py"},
-		{Name: "broken", File: "/home/u/.rig/plugins/broken.py", Skipped: true, Reason: "NameError: name 'x' is not defined"},
-		{Name: "missing", File: "/home/u/.rig/plugins/missing.py", Skipped: true, Reason: "missing SCHEMA"},
+	env := &command.Env{Plugins: func() []command.PluginInfo {
+		return []command.PluginInfo{
+			{Name: "echo", Description: "the fixture echo plugin", File: "/home/u/.rig/plugins/echo.py"},
+			{Name: "broken", File: "/home/u/.rig/plugins/broken.py", Skipped: true, Reason: "NameError: name 'x' is not defined"},
+			{Name: "missing", File: "/home/u/.rig/plugins/missing.py", Skipped: true, Reason: "missing SCHEMA"},
+		}
 	}}
 	out, err := pluginsCmd(t).Run(context.Background(), "", env)
 	if err != nil {
@@ -48,10 +50,10 @@ skipped:
 	}
 }
 
-// TestPluginsNoArgsRefusal (SPEC_PLUGINS, named): args given — the
-// usage voice.
+// TestPluginsNoArgsRefusal (SPEC_PLUGINS, named): args the set does
+// not carry — the usage voice.
 func TestPluginsNoArgsRefusal(t *testing.T) {
-	_, err := pluginsCmd(t).Run(context.Background(), "reload", &command.Env{Plugins: []command.PluginInfo{}})
+	_, err := pluginsCmd(t).Run(context.Background(), "reload extra", &command.Env{Plugins: func() []command.PluginInfo { return nil }})
 	if err == nil || !strings.Contains(err.Error(), "usage: plugins") {
 		t.Fatalf("args given must refuse with the usage voice, got %v", err)
 	}
@@ -69,7 +71,7 @@ func TestPluginsNilSeamRefusal(t *testing.T) {
 // TestPluginsNone (SPEC_PLUGINS, named): an empty (non-nil) slice —
 // plugins: none.
 func TestPluginsNone(t *testing.T) {
-	out, err := pluginsCmd(t).Run(context.Background(), "", &command.Env{Plugins: []command.PluginInfo{}})
+	out, err := pluginsCmd(t).Run(context.Background(), "", &command.Env{Plugins: func() []command.PluginInfo { return []command.PluginInfo{} }})
 	if err != nil || out != "plugins: none" {
 		t.Fatalf("(out, err) = (%q, %v), want (\"plugins: none\", nil)", out, err)
 	}

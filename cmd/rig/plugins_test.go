@@ -460,9 +460,9 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 // TestPluginsDiscoveryRegistersAndSkips (SPEC_PLUGINS, named): a
 // fixture directory with a good, a broken-import, and a missing-SCHEMA
 // plugin — the startup prints exactly the two skip lines (file and
-// field named), the request's tools array is the 14 natives plus the
-// good plugin (its DESCRIPTION and SCHEMA verbatim), and the broken
-// and missing ones are absent from the wire.
+// field named), the request's tools array is the native set (15,
+// post-8) plus the good plugin (its DESCRIPTION and SCHEMA verbatim),
+// and the broken and missing ones are absent from the wire.
 func TestPluginsDiscoveryRegistersAndSkips(t *testing.T) {
 	py := pluginKernelPy(t)
 	s := &pluginSrv{replies: []string{pongReply}}
@@ -511,11 +511,11 @@ def run(args):
 	if !strings.Contains(string(out), "rig: plugins: missing.py: TypeError: missing SCHEMA") {
 		t.Fatalf("the missing-schema plugin's line must name the file and the field:\n%s", out)
 	}
-	// the wire: the 14 natives plus echo, in order; the broken and
+	// the wire: the native set plus echo, in order; the broken and
 	// missing ones absent.
 	tools := wireTools(t, s.body(0))
 	if len(tools) != len(nativeToolNames)+1 {
-		t.Fatalf("tools = %d, want %d (the 14 natives plus the loaded plugin)", len(tools), len(nativeToolNames)+1)
+		t.Fatalf("tools = %d, want %d (the native set plus the loaded plugin)", len(tools), len(nativeToolNames)+1)
 	}
 	for i, name := range nativeToolNames {
 		if tools[i].Name != name {
@@ -589,7 +589,7 @@ def run(args: dict) -> str:
     return "echo: " + args["text"]
 `)
 	// the allow-list: the file's list is the list (the embedded default
-	// is the 14 natives — the plugin must be allow-listed, SPEC_PLUGINS 7).
+	// is the native set — the plugin must be allow-listed, SPEC_PLUGINS 7).
 	if err := os.WriteFile(filepath.Join(cfgDir(t, scratch), "settings.json"), []byte(`{"allow": ["echo"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -631,7 +631,7 @@ def run(args: dict) -> str:
     raise ValueError("boom args: " + args["when"])
 `)
 	// the allow-list: the file's list is the list (the embedded default
-	// is the 14 natives — the plugin must be allow-listed, SPEC_PLUGINS 7).
+	// is the native set — the plugin must be allow-listed, SPEC_PLUGINS 7).
 	if err := os.WriteFile(filepath.Join(cfgDir(t, scratch), "settings.json"), []byte(`{"allow": ["boom", "python"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -737,7 +737,7 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 	}
 	tools := wireTools(t, s.last())
 	if len(tools) != len(nativeToolNames) {
-		t.Fatalf("tools = %d, want the 14 natives (no plugins directory, no plugins)", len(tools))
+		t.Fatalf("tools = %d, want the native set (no plugins directory, no plugins)", len(tools))
 	}
 	for i, name := range nativeToolNames {
 		if tools[i].Name != name {

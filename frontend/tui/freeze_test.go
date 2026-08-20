@@ -59,6 +59,9 @@ func TestFreezeGate(t *testing.T) {
 			// perm's one new path rule, beside the allow-list.
 			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||
 			p == "plugins" || strings.HasPrefix(p, "plugins/") ||
+			// the reload's seam (SPEC_PLUGINS 8): the toolset table and
+			// its two adapters, beside the perm's.
+			p == "middleware/toolset" || strings.HasPrefix(p, "middleware/toolset/") ||
 			// the worker jail's work surface (SPEC_SANDBOX 1, 5): the
 			// runner's bwrap spawn and socket proxy, the provider's
 			// unix: base URL.
