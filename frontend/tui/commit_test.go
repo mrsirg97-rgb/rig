@@ -233,3 +233,82 @@ func firstLine(s string) string {
 	}
 	return s[:i]
 }
+
+// the write and edit previews (decision 4, amended): the interesting
+// bytes of a write or an edit are its arguments, so the block previews
+// them under the opening line — write the content, edit the old (-) and
+// new (+) sides — with the same head/tail elision as a result body; the
+// tool's own result line follows as ever.
+func TestWriteBlockPreviewsTheContent(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := json.RawMessage(`{"path":"a.go","content":"package a\n\nfunc A() {}\n"}`)
+	got := tui.RenderToolBlock(th, "write", args, "wrote 24 bytes to a.go", false, 50*time.Millisecond)
+	want := []string{
+		th.Paint("accent", "●") + " " + th.Paint("accent", "write") + th.Paint("dim", " · ") + th.Paint("text", "a.go"),
+		th.Paint("dim", "  package a"), th.Paint("dim", "  "), th.Paint("dim", "  func A() {}"),
+		th.Paint("dim", "  wrote 24 bytes to a.go"),
+		th.Paint("dim", "write") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.1s"),
+	}
+	lines := strings.Split(got, "\n")
+	if len(lines) != len(want) {
+		t.Fatalf("block = %d lines, want %d:\n%s", len(lines), len(want), got)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("line %d = %q, want %q", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestEditBlockPreviewsOldAndNewElided(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var old strings.Builder
+	for i := 1; i <= 10; i++ {
+		if i > 1 {
+			old.WriteString("\n")
+		}
+		old.WriteString("o" + itoa(i))
+	}
+	raw, _ := json.Marshal(map[string]string{"path": "b.go", "old": old.String(), "new": "n1\nn2"})
+	got := tui.RenderToolBlock(th, "edit", raw, "edited b.go", false, 50*time.Millisecond)
+	want := []string{
+		th.Paint("accent", "●") + " " + th.Paint("accent", "edit") + th.Paint("dim", " · ") + th.Paint("text", "b.go"),
+		th.Paint("error", "- o1"), th.Paint("error", "- o2"), th.Paint("error", "- o3"),
+		th.Paint("error", "- o4"), th.Paint("error", "- o5"), th.Paint("error", "- o6"),
+		th.Paint("dim", "  · 2 lines elided ·"),
+		th.Paint("error", "- o9"), th.Paint("error", "- o10"),
+		th.Paint("success", "+ n1"), th.Paint("success", "+ n2"),
+		th.Paint("dim", "  edited b.go"),
+		th.Paint("dim", "edit") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.1s"),
+	}
+	lines := strings.Split(got, "\n")
+	if len(lines) != len(want) {
+		t.Fatalf("block = %d lines, want %d:\n%s", len(lines), len(want), got)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("line %d = %q, want %q", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestArgsPreviewOnlyForWriteAndEdit(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderToolBlock(th, "read", json.RawMessage(`{"path":"a.go","content":"never shown"}`), "body", false, time.Second)
+	if strings.Contains(got, "never shown") {
+		t.Fatalf("read must not preview its args:\n%s", got)
+	}
+	got = tui.RenderToolBlock(th, "edit", json.RawMessage(`{"path":"a.go","old":"","new":""}`), "edited", false, time.Second)
+	if lines := strings.Split(got, "\n"); len(lines) != 3 {
+		t.Fatalf("empty sides must add no rows, got %d:\n%s", len(lines), got)
+	}
+}
