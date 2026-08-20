@@ -30,9 +30,13 @@ locking.
 ## Gotchas
 
 - `limit < 1` clamps to 1.
-- Keyed by tool name, not args: drifting args cannot dodge the budget.
-- Success clears the count (the bound tracks streaks, not history);
-  polling that eventually succeeds never hits the bound.
+- Keyed by tool name, but the streak is per args: the bound strikes
+  identical retries only. A corrected call (args differing from the last
+  failed args) resets the count before the guard check, so the "change the
+  call" teaching never blocks the changed call.
+- Success clears the count and the last-failed-args marker (the bound
+  tracks streaks, not history); polling that eventually succeeds never
+  hits the bound.
 - On the limit-th failure the note is appended below the tool's own
   content, or replaces it when the content is blank.
 - The refusal returns the same message as both `content` and `error`;

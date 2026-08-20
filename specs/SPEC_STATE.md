@@ -215,7 +215,9 @@ deliverable 9) or plain `sqlite3`.
 - Semantics kept verbatim: projection rebuilt from the log on every call and
   never trusted; replay is total and skips inapplicable rows; positions
   minted never mutated; move via events; claim semantics (start claims,
-  foreign complete refuses, fail frees); compaction past 1000 events
+  foreign complete refuses, fail frees; completing your own unclaimed
+  pending task implicitly claims and completes — start+complete, both
+  events, the echo noting auto-started); compaction past 1000 events
   snapshots the queue and resets the epoch; dependsOn DAG validated at the
   boundary, cycles refused, completion gated, blocked skipped by `next`.
 - The FSM lives in `store/todo/todo.go` as Go, errors in pane's teaching
