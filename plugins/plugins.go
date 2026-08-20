@@ -1,12 +1,3 @@
-// Package plugins is the python plugin surface (SPEC_PLUGINS): one file
-// under the rig home's plugins/ directory, one tool per file, the name
-// the filename stem. Discovery runs at startup through the shared
-// python kernel — the same persistent kernel as tool/python, one
-// process, the namespace shared — and the loaded tools register on the
-// existing Tool seam, indistinguishable from a native tool on the wire.
-//
-// Stdlib plus core and tool/python (the kernel seam), nothing else: the
-// leaf discovers and wraps; the root (cmd/rig) wires.
 package plugins
 
 import (
@@ -20,15 +11,8 @@ import (
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 )
 
-// defaultTimeoutMs is the cell's budget, the python tool's own
-// (SPEC_PLUGINS 3): the timeout starts only after the kernel slot is
-// taken, so a queued call is never charged queue time.
 const defaultTimeoutMs = 120000
 
-// Report is one plugin file's discovery outcome (SPEC_PLUGINS 2): the
-// name (the filename stem), the file, and — when loaded — the
-// description and schema the wire carries; when skipped — the reason
-// (the kernel's voice, verbatim).
 type Report struct {
 	Name        string
 	File        string
@@ -38,15 +22,10 @@ type Report struct {
 	Reason      string
 }
 
-// Kernel is the shared-kernel seam (SPEC_PLUGINS 1, 3): one code cell,
-// the host's raw reply. tool/python's Tool implements it (Run); the
-// tests stand in with a fake, no python required.
 type Kernel interface {
 	Run(ctx context.Context, code string, timeoutMs int) (pythontool.Reply, error)
 }
 
-// wireReport is the kernel's per-file row, as printed by the discovery
-// cell (the JSON list on the cell's stdout).
 type wireReport struct {
 	Name        string          `json:"name"`
 	File        string          `json:"file"`
@@ -56,11 +35,6 @@ type wireReport struct {
 	Error       string          `json:"error"`
 }
 
-// Discover imports every file through the kernel and reports each, in
-// file order (SPEC_PLUGINS 2). A kernel-level failure (the call gave
-// up, the kernel died, the report is not the JSON list) is the error;
-// a per-file failure is a skipped report, never the error — a broken
-// plugin must not brick the harness.
 func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error) {
 	reply, err := k.Run(ctx, discoveryCell(files), defaultTimeoutMs)
 	if err != nil {
@@ -89,14 +63,8 @@ func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error) {
 	return reports, nil
 }
 
-// discoveryCell is the kernel-side discovery (SPEC_PLUGINS 2): import
-// each file by path, validate the three names, keep the module where
-// the kernel can reach it (the user namespace's __rig_plugins__, and
-// sys.modules under the stem), and print one JSON report line. The
-// per-file outcome is the kernel's own voice: the missing piece names
-// the field, the import failure carries the exception.
 func discoveryCell(files []string) string {
-	paths, _ := json.Marshal(files) // a JSON array of strings; the error is unreachable
+	paths, _ := json.Marshal(files)
 	return `import importlib.util as _rig_iu, json as _rig_j, os as _rig_os, sys as _rig_sys
 __rig_plugins__ = {}
 _rig_report = []
@@ -131,9 +99,6 @@ print(_rig_j.dumps(_rig_report))
 `
 }
 
-// Tool is one loaded plugin on the Tool seam (SPEC_PLUGINS 2, 3): the
-// name is the filename stem, the description and schema are the file's
-// verbatim (the wire's three), the call rides the shared kernel.
 type Tool struct {
 	name        string
 	description string
@@ -142,29 +107,20 @@ type Tool struct {
 	k           Kernel
 }
 
-var _ core.Tool = (*Tool)(nil) // the seam is compile-time enforced
+var _ core.Tool = (*Tool)(nil)
 
-// New wraps one discovery report as the seam's tool.
 func New(name, description, file string, schema json.RawMessage, k Kernel) *Tool {
 	return &Tool{name: name, description: description, file: file, schema: schema, k: k}
 }
 
-// File is the plugin file's path, for the /plugins listing (SPEC_PLUGINS 4).
 func (t *Tool) File() string { return t.file }
 
-// Name implements core.Tool: the filename stem.
 func (t *Tool) Name() string { return t.name }
 
-// Description implements core.Tool: the file's DESCRIPTION, verbatim.
 func (t *Tool) Description() string { return t.description }
 
-// Schema implements core.Tool: the file's SCHEMA, verbatim.
 func (t *Tool) Schema() json.RawMessage { return t.schema }
 
-// Exec is the call (SPEC_PLUGINS 3): the kernel invokes the module's
-// run with the args dict, the return prints into the result, and an
-// exception is a tool error carrying the traceback tail — the kernel
-// stays alive, as it is the model's python kernel too.
 func (t *Tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	argsJSON, err := compactJSON(args)
 	if err != nil {
@@ -172,7 +128,7 @@ func (t *Tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	}
 	reply, err := t.k.Run(ctx, callCell(t.name, argsJSON), defaultTimeoutMs)
 	if err != nil {
-		return "", err // the call gave up (ctx); the kernel is untouched
+		return "", err
 	}
 	if !reply.Ok {
 		msg := t.name + ": " + errorTail(reply)
@@ -181,29 +137,22 @@ func (t *Tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 			out = strings.TrimSuffix(*reply.Out, "\n")
 		}
 		if out != "" {
-			return out + "\n" + msg, errors.New(msg) // the partial output rides along
+			return out + "\n" + msg, errors.New(msg)
 		}
 		return "", errors.New(msg)
 	}
 	out := ""
 	if reply.Out != nil {
-		out = strings.TrimSuffix(*reply.Out, "\n") // print's own newline, dropped
+		out = strings.TrimSuffix(*reply.Out, "\n")
 	}
 	return out, nil
 }
 
-// callCell is the call (SPEC_PLUGINS 3): the module's run with the args
-// dict, the return printed. The kernel already has the module (the
-// discovery imported it); the call adds nothing — json is stdlib, in
-// sys.modules.
 func callCell(name, argsJSON string) string {
-	named, _ := json.Marshal(name) // a JSON string literal; a valid python literal
+	named, _ := json.Marshal(name)
 	return "import json as _rig_j\nprint(__rig_plugins__[" + string(named) + "].run(_rig_j.loads('" + pyLiteral(argsJSON) + "')))"
 }
 
-// compactJSON re-marshals the model's args compactly: the cell carries
-// them as one embedded literal, and compact JSON has no raw newlines —
-// the embedding (pyLiteral) is total on it.
 func compactJSON(raw json.RawMessage) (string, error) {
 	var v any
 	if len(raw) == 0 {
@@ -219,18 +168,12 @@ func compactJSON(raw json.RawMessage) (string, error) {
 	return string(b), nil
 }
 
-// pyLiteral embeds s in a single-quoted python string literal: JSON
-// text has no raw newlines, no double-quote collisions; the only live
-// characters are the backslash and the single quote.
 func pyLiteral(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `'`, `\'`)
 	return s
 }
 
-// errorTail is the reply's error voice: the exception's type and
-// message (the host's format_exception_only tail), else the stderr
-// stream, else a named gap.
 func errorTail(r pythontool.Reply) string {
 	if r.Error != nil && *r.Error != "" {
 		return *r.Error
