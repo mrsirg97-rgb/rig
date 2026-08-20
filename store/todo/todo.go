@@ -481,11 +481,8 @@ func staleFooter(f *folded) string {
 	return fmt.Sprintf("\u00b7 %d unresolved since %s (recovered from log)", n, latest)
 }
 
-func render(f *folded, session string) string {
+func summaryOf(f *folded) string {
 	ordered := orderedTaskStates(f)
-	if len(ordered) == 0 {
-		return "(no tasks)"
-	}
 	done, failed := 0, 0
 	nextID := ""
 	for _, ts := range ordered {
@@ -510,13 +507,50 @@ func render(f *folded, session string) string {
 	if failed != 0 {
 		fmt.Fprintf(&b, " \u00b7 %d failed", failed)
 	}
+	return b.String()
+}
+
+func lineOf(f *folded, ts *taskState, session string) string {
+	line := fmt.Sprintf("  %s %s %s", ts.id, marker(ts.status), ts.text)
+	if blocker := blockedBy(f, ts); blocker != "" {
+		line += fmt.Sprintf(" \u00b7 waits on %s", blocker)
+	}
+	line += claimSuffix(ts, session)
+	return line
+}
+
+// renderQueue is the actionable render: done rows fold into the summary.
+// all=true keeps every row (the history). A genuinely empty queue still
+// says "(no tasks)".
+func renderQueue(f *folded, session string, all bool) string {
+	ordered := orderedTaskStates(f)
+	if len(ordered) == 0 {
+		return "(no tasks)"
+	}
+	var b strings.Builder
+	b.WriteString(summaryOf(f))
 	for _, ts := range ordered {
-		line := fmt.Sprintf("  %s %s %s", ts.id, marker(ts.status), ts.text)
-		if blocker := blockedBy(f, ts); blocker != "" {
-			line += fmt.Sprintf(" \u00b7 waits on %s", blocker)
+		if !all && ts.status == statusDone {
+			continue
 		}
-		line += claimSuffix(ts, session)
-		b.WriteString("\n" + line)
+		b.WriteString("\n" + lineOf(f, ts, session))
+	}
+	return b.String()
+}
+
+// echoTask is the lean transition echo: the affected line, the summary,
+// and the stale footer when staleness is live.
+func echoTask(f *folded, session, id, note string) string {
+	var b strings.Builder
+	if note != "" {
+		fmt.Fprintf(&b, "\u2192 %s\n", note)
+	}
+	if ts := f.tasks[id]; ts != nil {
+		b.WriteString(lineOf(f, ts, session))
+	}
+	b.WriteString("\n" + summaryOf(f))
+	if foot := staleFooter(f); foot != "" {
+		b.WriteString("\n" + foot)
 	}
 	return b.String()
 }
@@ -551,7 +585,7 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return replyText(f, session, note), nil
+		return replyText(f, session, note, false), nil
 	})
 }
 
@@ -641,7 +675,7 @@ func Fail(ctx context.Context, db store.DB, id, session string) (string, error) 
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return replyText(f, session, note), nil
+		return echoTask(f, session, id, note), nil
 	})
 }
 
@@ -681,11 +715,19 @@ func Move(ctx context.Context, db store.DB, id string, pos int, session string) 
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return replyText(f, session, "'"+id+"' moved to position "+strconv.Itoa(pos)), nil
+		return echoTask(f, session, id, "'"+id+"' moved to position "+strconv.Itoa(pos)), nil
 	})
 }
 
 func Read(ctx context.Context, db store.DB, session string) (string, error) {
+	return read(ctx, db, session, false)
+}
+
+func ReadAll(ctx context.Context, db store.DB, session string) (string, error) {
+	return read(ctx, db, session, true)
+}
+
+func read(ctx context.Context, db store.DB, session string, all bool) (string, error) {
 	if session == "" {
 		session = anon
 	}
@@ -693,7 +735,7 @@ func Read(ctx context.Context, db store.DB, session string) (string, error) {
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return replyText(f, session, ""), nil
+		return replyText(f, session, "", all), nil
 	})
 }
 
@@ -739,16 +781,16 @@ func verb(
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return replyText(f, session, note), nil
+		return echoTask(f, session, id, note), nil
 	})
 }
 
-func replyText(f *folded, session, note string) string {
+func replyText(f *folded, session, note string, all bool) string {
 	var b strings.Builder
 	if note != "" {
 		fmt.Fprintf(&b, "\u2192 %s\n", note)
 	}
-	b.WriteString(render(f, session))
+	b.WriteString(renderQueue(f, session, all))
 	if foot := staleFooter(f); foot != "" {
 		b.WriteString("\n" + foot)
 	}
