@@ -30,6 +30,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/middleware/toolset"
 	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/plugins"
 	"github.com/mrsirg97-rgb/rig/policy/compact"
@@ -52,9 +53,9 @@ import (
 
 // Version is the binary's release version: pre-1.0, still feature-
 // complete (the home and the plugins in 0.4.0, the plugin provenance
-// rule in 0.5.0, the worker jail in 0.6.0) — the 1.0 tag waits for
-// lived use.
-const Version = "0.6.0"
+// rule in 0.5.0, the worker jail in 0.6.0, the plugin reload and the
+// forge in 0.7.0) — the 1.0 tag waits for lived use.
+const Version = "0.7.0"
 
 // root is the process's mutable wiring state (SPEC_COMMANDS 2): the
 // active model, the row, the recorder, the session — the state the
@@ -95,6 +96,28 @@ type root struct {
 	// after the natives (SPEC_PLUGINS 2): absent when there are none.
 	pluginTools []core.Tool
 
+	// live is the root's live tool list (SPEC_PLUGINS 8): the wire's
+	// truth — the natives (the set's order) and the loaded plugins (the
+	// file order), swapped atomically by a reload. The loop's snapshot
+	// is the bootstrap; the table is what the next turn's request
+	// stamps and the exec resolves (the router, the carrier).
+	live *toolset.Table
+	// natives is the native set (SPEC_PLUGINS 2, 8): the collision
+	// check's refusal set, including plugins_reload itself.
+	natives map[string]bool
+	// py is the shared python kernel (SPEC_PLUGINS 1, 3, 8): the
+	// discovery's and the plugin calls' ride — one process, one session,
+	// the namespace shared (the forge's import is the python tool's).
+	py plugins.Kernel
+	// pluginsHome is the rig home (SPEC_PLUGINS 6, 8): the listing is
+	// its top-level *.py (the pending zone is its, SPEC_SANDBOX 2).
+	pluginsHome string
+	// pluginInfos is the listing's fact (SPEC_PLUGINS 4, 8): the loaded
+	// and the skipped, in file order — the command's listing reads it
+	// at call time (the Env's closure), so a reload's swap is visible
+	// with no re-wiring.
+	pluginInfos []command.PluginInfo
+
 	fullSystem string // system + the middleware guidelines (computed in wire)
 	k          *rig.Kernel
 	// the forced seam (3): the current policy's Compact, as a method value —
@@ -111,14 +134,31 @@ type root struct {
 // the pair rebuild is the one function the model switch and /new share,
 // and the command's closures read it at call time.
 func wire(r *root) *rig.Kernel {
+	// The live tool list (SPEC_PLUGINS 8): the root's one truth for the
+	// wire and the exec — the natives (the set's order) and the loaded
+	// plugins (the file order). A reload's swap is one atomic write,
+	// effective on the next turn (never mid-turn), zero loop lines —
+	// the models-switch's semantics (SPEC_COMMANDS 6) on the kernel's
+	// tool list. The loop's snapshot below is the bootstrap (the chain's
+	// lookup, the test chains' exec); the table is what counts.
+	if r.live == nil {
+		r.live = toolset.New(append(r.nativeTools(), r.pluginTools...)...)
+	}
+	if r.natives == nil {
+		r.natives = make(map[string]bool, len(nativeToolNames))
+		for _, name := range nativeToolNames {
+			r.natives[name] = true
+		}
+	}
 	mw := r.middleware
 	if mw == nil {
-		// the root's chain is [perm, guard]: the observation tap is retired
-		// — the recorder now sources its rows from the loop's events.
-		// The provenance rule lists before the allow-list (first-listed
-		// is innermost, so the allow-list — the more basic refusal, the
-		// tool's name — is consulted first; SPEC_SANDBOX 2).
+		// the root's chain is [router, perm, guard]: the router (the
+		// table's exec end) lists first — innermost, first-listed is
+		// innermost — so the chain's participants still bound what the
+		// table serves (SPEC_PLUGINS 8's seam). The provenance rule
+		// lists before the allow-list, as before (SPEC_SANDBOX 2).
 		mw = []core.ToolMiddleware{
+			toolset.Resolve(r.live),
 			perm.Plugins(r.pluginsDir),
 			perm.Allowlist(r.allow...),
 			guard.Bound(r.retries),
@@ -139,9 +179,7 @@ func wire(r *root) *rig.Kernel {
 		rig.WithFrontend(r.rec),
 		rig.WithPolicy(pol),
 		rig.WithTools(append(
-			[]core.Tool{r.tools["bash"], r.tools["read"], r.tools["write"], r.tools["edit"], r.tools["ls"], r.tools["find"], r.tools["grep"],
-				r.tools["todo"], r.tools["rem"], r.tools["scheduler"], r.tools["python"], r.tools["web_search"], r.tools["web_fetch"],
-				r.tools["diff"]},
+			r.nativeTools(),  // the set's order (SPEC_PLUGINS 2, 8)
 			r.pluginTools..., // the loaded plugins, in file order (SPEC_PLUGINS 2)
 		)...),
 		rig.WithMiddleware(mw...),
@@ -236,6 +274,16 @@ func renderRemembered(notes []string) string {
 	return header + "\n- " + string(line) + "…"
 }
 
+// nativeTools is the wire's head (SPEC_PLUGINS 2, 8): the natives in
+// the set's order — the table's head, and the loop's snapshot's.
+func (r *root) nativeTools() []core.Tool {
+	out := make([]core.Tool, 0, len(nativeToolNames))
+	for _, name := range nativeToolNames {
+		out = append(out, r.tools[name])
+	}
+	return out
+}
+
 // buildPair is the provider+policy pair rebuild (SPEC_COMMANDS 4, 6):
 // the fresh inner on the active id, the fresh compact policy over the
 // current recorder, session, and row, and the overflow decorator over
@@ -256,7 +304,11 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 		panic("rig: wire: " + err.Error()) // a violating row is refused at construction
 	}
 	r.compactFn = pol.Compact // the rebuilt pair carries its own forced seam
-	return compact.Decorator(inner, pol), pol
+	// the request's end of the live tool list (SPEC_PLUGINS 8): the
+	// table's specs stamped into every request, per call — a reload's
+	// swap rides the next turn's request by construction (the models-
+	// switch's semantics, the loop untouched).
+	return toolset.Carry(r.live, compact.Decorator(inner, pol)), pol
 }
 
 // swapIn is the handoff's tail (SPEC_COMMANDS 4): the retiring recorder
@@ -385,6 +437,53 @@ func (r *root) switchModel(ctx context.Context, id string) error {
 	return nil
 }
 
+// swapPlugins is the reload's rebuild (SPEC_PLUGINS 8): the discovery's
+// reports into the live list — the natives (the set's order) and the
+// loaded (the file order), the wire's shape — one atomic write to the
+// table, and the listing's fact follows (the command's listing reads
+// it at call time). Called only after Check refused nothing, so a
+// refusal leaves the table — and the wire — whole.
+func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (string, error) {
+	infos := make([]command.PluginInfo, 0, len(reports))
+	tools := r.nativeTools()
+	for _, rep := range reports {
+		infos = append(infos, command.PluginInfo{
+			Name: rep.Name, Description: rep.Description, File: rep.File,
+			Skipped: rep.Skipped, Reason: rep.Reason,
+		})
+		if !rep.Skipped {
+			tools = append(tools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, r.py))
+		}
+	}
+	r.live.Set(tools)
+	r.pluginInfos = infos
+	return command.RenderPlugins(infos, "reload"), nil
+}
+
+// reloadPlugins is the reload's action (SPEC_PLUGINS 8): the listing
+// (no files, no kernel), the discovery through the shared kernel (the
+// loud skips in the reply), the collision check (the refusal before the
+// swap), and the rebuild — the operator's /plugins reload door and the
+// approve's tail. The tool's door (plugins_reload) is the same action
+// with its discovery and the root's swap.
+func (r *root) reloadPlugins(ctx context.Context) (string, error) {
+	files, err := plugins.List(r.pluginsHome)
+	if err != nil {
+		return "", fmt.Errorf("plugins: reload: %v", err)
+	}
+	reports := make([]plugins.Report, 0)
+	if len(files) > 0 {
+		reports, err = plugins.Discover(ctx, r.py, files)
+		if err != nil {
+			return "", fmt.Errorf("plugins: reload: %v", err)
+		}
+	}
+	if err := plugins.Check(reports, r.natives); err != nil {
+		return "", err
+	}
+	return r.swapPlugins(ctx, reports)
+}
+
 // runtimeTable is the models command's table (SPEC_COMMANDS 6;
 // SPEC_CONFIG 4): the merged table, with the active row replaced by the
 // resolved row when the resolution overlaid or synthesized it — so
@@ -453,29 +552,7 @@ func userHome() string {
 // nativeToolNames is the native tool set (SPEC_PLUGINS 2): the wire's
 // head, and the plugin collision check's refusal set. A native tool
 // added or retired updates this list and nothing else.
-var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff"}
-
-// listPluginFiles is the plugin listing (SPEC_PLUGINS 2): the rig
-// home's plugins/ directory, top-level *.py only, in filename order
-// (os.ReadDir sorts). No plugins directory, or an empty one, is a
-// no-op that never starts the kernel.
-func listPluginFiles(home string) ([]string, error) {
-	dir := filepath.Join(home, "plugins")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var files []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".py") {
-			files = append(files, filepath.Join(dir, e.Name()))
-		}
-	}
-	return files, nil
-}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff", "plugins_reload"}
 
 // rigHome is the config home (SPEC_CONFIG 11, SPEC_PLUGINS 6): $RIG_HOME
 // if set (the operator's spelling, used as-is), else ~/.rig — the
@@ -767,7 +844,7 @@ func main() {
 	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "rig: plugins: create the pending zone: %v\n", err)
 	}
-	pluginFiles, err := listPluginFiles(cfgDir)
+	pluginFiles, err := plugins.List(cfgDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -795,11 +872,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "rig: plugins: %s: %s\n", filepath.Base(rep.File), rep.Reason)
 			continue
 		}
-		if native[rep.Name] {
-			fmt.Fprintf(os.Stderr, "rig: plugins: name collision: %q (%s) is already a native tool\n", rep.Name, filepath.Base(rep.File))
-			os.Exit(1)
-		}
 		pluginTools = append(pluginTools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, py))
+	}
+	// The collision refusal (SPEC_PLUGINS 2's rule; the reload's door
+	// shares it, 8) — after the loud skips, before the registration.
+	if err := plugins.Check(pluginReports, native); err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
 	}
 
 	sessionsPath := filepath.Join(cfgDir, "sessions", hex.EncodeToString(digest[:6])+".sqlite")
@@ -915,12 +994,25 @@ func main() {
 			"diff": diff.New(sdb),
 		},
 		pluginTools: pluginTools,
+		py:          py,
+		pluginsHome: cfgDir,
+		pluginInfos: pluginInfos,
 	}
 	// the plugins ride the tools map too (the lookup seam; the wire's
 	// order is pluginTools', SPEC_PLUGINS 2).
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t
 	}
+	// The native set (SPEC_PLUGINS 2, 8) and the one new native: the
+	// model's reload (SPEC_PLUGINS 8) — the re-discovery and the root's
+	// swap, no arguments. The operator's /plugins reload and the
+	// approve's tail are the same action (the root's method); the
+	// collision check's refusal set includes plugins_reload itself.
+	r.natives = make(map[string]bool, len(nativeToolNames))
+	for _, name := range nativeToolNames {
+		r.natives[name] = true
+	}
+	r.tools["plugins_reload"] = plugins.NewReload(cfgDir, r.natives, py, r.swapPlugins)
 
 	// The command's env (SPEC_COMMANDS 2): closures, not handles. The
 	// Steer seam is the frontend's — the dispatcher fills it in its
@@ -936,7 +1028,8 @@ func main() {
 		ActiveModel:   func() string { return r.activeID },
 		SwitchModel:   r.switchModel,
 		Tools:         r.tools,
-		Plugins:       pluginInfos,
+		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
+		Reload:        r.reloadPlugins,
 		PluginsDir:    pluginsDir,
 	}
 

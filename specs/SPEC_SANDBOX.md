@@ -171,12 +171,17 @@ native tool`); a file of the name already at the top level (a clobber
 is not an operator's verb by accident: `plugins: approve: "<name>" is
 already installed (<path> exists — remove it to install the pending
 one)`). The move is the atomic rename, named on success (`plugins:
-approved <name> (<from> -> <to>; the discovery loads it at the next
-start`); the reload is decision 8's, and a pre-8 approve is the move
-only. The zone is a fact of the home: created at startup, silent and
-idempotent — the write tool makes no directories, so the model's first
-pending write must not depend on the operator's mkdir. Usage: `plugins:
-usage: plugins | plugins pending | plugins approve <name>`.
+approved <name> (<from> -> <to>)`), and post-SPEC_PLUGINS-8 the
+approved plugin's reload rides the same verb: its reply follows the
+move's line, and a reload failure after the move keeps the move (the
+disk is the truth) and names the failure (`...; the reload failed:
+<reason>`). A pre-8 root (no reload seam) is the move only (`...; the
+discovery loads it at the next start`). The zone is a fact of the
+home: created at startup, silent and idempotent — the write tool makes
+no directories, so the model's first pending write must not depend on
+the operator's mkdir. Usage: `plugins: usage: plugins | plugins
+pending | plugins approve <name> | plugins reload | plugins create
+<text>`.
 
 ### 3. The egress split
 

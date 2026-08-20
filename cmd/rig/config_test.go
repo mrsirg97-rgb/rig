@@ -25,8 +25,9 @@ import (
 
 // --- shared helpers ---
 
-// goldenDir is the 0.2.0 wire fixtures: captured from the 0.2.0 build
-// with no user files present (SPEC_CONFIG 9: the invariant's goldens).
+// goldenDir is the wire's pin: the 0.2.0 wire baseline, the bytes the
+// current native set (the pin moves with the set, as the earlier
+// releases' did; SPEC_PLUGINS 8 regenerated the fixtures in place).
 const goldenDir = "testdata/golden_020"
 
 type bodySrv struct {
@@ -164,7 +165,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(s.last(), want) {
-			t.Fatalf("the one-shot request body is not the 0.2.0 bytes:\ngot:\n%s\nwant:\n%s", s.last(), want)
+			t.Fatalf("the one-shot request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", s.last(), want)
 		}
 	})
 	t.Run("repl", func(t *testing.T) {
@@ -189,7 +190,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(s.last(), want) {
-			t.Fatalf("the REPL request body is not the 0.2.0 bytes:\ngot:\n%s\nwant:\n%s", s.last(), want)
+			t.Fatalf("the REPL request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", s.last(), want)
 		}
 	})
 	t.Run("runjob", func(t *testing.T) {
@@ -266,7 +267,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, want) {
-			t.Fatalf("the worker's request body is not the 0.2.0 bytes:\ngot:\n%s\nwant:\n%s", got, want)
+			t.Fatalf("the worker's request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }

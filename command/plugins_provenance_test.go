@@ -62,7 +62,7 @@ func TestPluginsPendingListsTheZoneWithDescriptions(t *testing.T) {
 	}
 	zone := filepath.Join(home, "plugins", "pending")
 	out, err := pluginsCmd(t).Run(context.Background(), "pending", &command.Env{
-		Plugins:    []command.PluginInfo{},
+		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: filepath.Join(home, "plugins"),
 	})
 	if err != nil {
@@ -91,7 +91,7 @@ func TestPluginsPendingEmptyAndAbsentZone(t *testing.T) {
 		t.TempDir(), // no zone at all
 	} {
 		out, err := pluginsCmd(t).Run(context.Background(), "pending", &command.Env{
-			Plugins:    []command.PluginInfo{},
+			Plugins:    func() []command.PluginInfo { return nil },
 			PluginsDir: filepath.Join(home, "plugins"),
 		})
 		if err != nil || out != "plugins: no pending plugins" {
@@ -129,7 +129,7 @@ func TestPluginsApproveMovesThePendingFile(t *testing.T) {
 	dst := filepath.Join(pluginsDir, "forge.py")
 
 	out, err := pluginsCmd(t).Run(context.Background(), "approve forge", &command.Env{
-		Plugins:    []command.PluginInfo{},
+		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: pluginsDir,
 		Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
 	})
@@ -147,7 +147,7 @@ func TestPluginsApproveMovesThePendingFile(t *testing.T) {
 	}
 
 	_, err = pluginsCmd(t).Run(context.Background(), "approve forge", &command.Env{
-		Plugins:    []command.PluginInfo{},
+		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: pluginsDir,
 		Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
 	})
@@ -164,7 +164,7 @@ func TestPluginsApproveNativeCollisionRefuses(t *testing.T) {
 	home := homeWithZone(t, map[string]string{"bash.py": goodPending})
 	pluginsDir := filepath.Join(home, "plugins")
 	_, err := pluginsCmd(t).Run(context.Background(), "approve bash", &command.Env{
-		Plugins:    []command.PluginInfo{},
+		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: pluginsDir,
 		Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
 	})
@@ -188,7 +188,7 @@ func TestPluginsApproveInstalledCollisionRefuses(t *testing.T) {
 	home := homeWithZone(t, map[string]string{"echo.py": goodPending}, "echo.py")
 	pluginsDir := filepath.Join(home, "plugins")
 	_, err := pluginsCmd(t).Run(context.Background(), "approve echo", &command.Env{
-		Plugins:    []command.PluginInfo{},
+		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: pluginsDir,
 		Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
 	})
@@ -218,14 +218,14 @@ func TestPluginsApproveBadNames(t *testing.T) {
 // with the full usage line — the verbs the set does carry are named.
 func TestPluginsUnknownVerbUsage(t *testing.T) {
 	home := t.TempDir()
-	_, err := pluginsCmd(t).Run(context.Background(), "reload", &command.Env{
-		Plugins:    []command.PluginInfo{},
+	_, err := pluginsCmd(t).Run(context.Background(), "frobnicate", &command.Env{
+		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: filepath.Join(home, "plugins"),
 	})
 	if err == nil {
 		t.Fatal("an unknown verb must refuse")
 	}
-	want := "plugins: usage: plugins | plugins pending | plugins approve <name>"
+	want := "plugins: usage: plugins | plugins pending | plugins approve <name> | plugins reload | plugins create <text>"
 	if err.Error() != want {
 		t.Fatalf("the usage line = %q, want %q", err.Error(), want)
 	}

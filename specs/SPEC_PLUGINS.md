@@ -136,6 +136,20 @@ func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error)
 // description and schema are the file's, the call rides the kernel.
 func New(name, description, file string, schema json.RawMessage, k Kernel) core.Tool
 
+// Reload is the plugins_reload tool (8): the one new primitive —
+// re-runs the discovery over the home's plugins/ (the same loud
+// skips, the same collision refusal, removal free) and hands the
+// reports to the root's swap, which takes effect on the next turn
+// (never mid-turn). Name is "plugins_reload"; the schema is the
+// empty object (no arguments).
+type Reload struct {
+	Home    string            // the rig home (the listing is its top-level *.py)
+	Kernel  Kernel
+	Natives map[string]bool   // the collision set (the native tools, including plugins_reload)
+	Swap    func(ctx context.Context, reports []Report) (string, error) // the root's rebuild
+}
+func NewReload(home string, natives map[string]bool, k Kernel, swap func(ctx context.Context, reports []Report) (string, error)) *Reload
+
 package command
 
 // PluginInfo is one discovered plugin file (4): the name (the
@@ -151,7 +165,13 @@ type PluginInfo struct {
 
 // Env gains:
 //
-//	Plugins []PluginInfo // the loaded and the skipped, in file order
+//	Plugins func() []PluginInfo // the loaded and the skipped, in file
+//	                    // order — read at call time, so a reload's
+//	                    // swap is visible with no re-wiring (8; the
+//	                    // slice is the pre-8 shape)
+//	Reload  func(ctx context.Context) (string, error) // the reload's
+//	                    // action (8): the /plugins reload verb's door
+//	                    // and the approve's tail; nil = a pre-8 root
 ```
 
 The plugin file's contract (the kernel-side contract, stated once):
@@ -357,8 +377,11 @@ plugins: no plugins seam (the root did not wire one)       (Env.Plugins nil)
 plugins: none                                               (no plugins directory, or an empty one)
 ```
 
-`/plugins` never mutates: no reload, no enable/disable (the files are
-the interface, as the config's; a change is a new process).
+`/plugins` was never mutating: no enable/disable (the files are the
+interface, as the config's; a change is a new process). AMENDED by
+decision 8: `reload` re-registers from disk (a change is a
+re-discovery, not a new process), `create <text>` queues the
+authoring line, and `approve`'s tail reloads (SPEC_SANDBOX 2).
 
 ### 5. The sandbox: named, deferred
 
@@ -444,6 +467,19 @@ The costs, named:
   per-turn (SPEC_COMMANDS 4); the kernel's tool list must be
   re-readable the same way, at the root, zero loop lines — or the
   feature waits. The implementing PR proves this before anything else.
+  The seam, named: the loop borrows two things per turn — the
+  provider (the request's tools array) and the execution chain (the
+  middleware). The root owns both ends of one live tool table
+  (`middleware/toolset`): a provider wrapper stamps the table's
+  specs into every request before delegating, and a middleware —
+  listed first, so innermost, first-listed is innermost — resolves a
+  call against the table before the chain's participants bound its
+  result, falling through to the loop's own exec for a name the
+  table does not carry. A swap (the `plugins_reload`'s, the `/plugins
+  reload`'s, the approve's tail) is one atomic write to that table:
+  the next turn's request carries the new list and the new tools
+  execute, by construction — the models-switch's semantics, zero
+  loop lines, core/ and loop/ byte-frozen.
 - **Provenance** (the gate, SPEC_SANDBOX): the model's `write` cannot
   land files in `plugins/` directly — model-authored plugins land in
   `plugins/pending/` (invisible to discovery: the listing is top-level
@@ -548,7 +584,102 @@ a good plugin, a broken-import one, a missing-SCHEMA one):**
 - `TestPluginsNilSeamRefusal` — `Env.Plugins` nil: the no-seam voice.
 - `TestPluginsNone` — an empty (non-nil) slice: `plugins: none`.
 
-**the set:**
+**decision 8 (the reload and the forge, the named cases):**
+
+`middleware/toolset` (the seam, pure core — no kernel, no python):
+
+- `TestResolveServesTheTableAndFallsThrough` — a name the table
+  carries runs the table's tool (the args and the result, verbatim);
+  a name the table does not carry falls through to the inner exec
+  (the loop's own, the unknown-tool voice).
+- `TestResolveSeesASwapOnTheNextCall` — a tool absent before a Set
+  executes after it (the next turn's exec), and a tool the swap
+  dropped does not (the list rebuilds from the table — removal free).
+- `TestCarryStampsTheRequestPerCall` — the request's tools array is
+  the table's specs at call time: a Set changes the next call's
+  array, and a call made before the Set keeps the list it was
+  stamped with (next turn, never mid-turn).
+
+plugins (the leaf, fake kernel — no python required):
+
+- `TestReloadToolSurfacesAreTheNativeContract` — Name is
+  `plugins_reload`, the schema the empty object, the description
+  names the re-discovery and the next-turn effect.
+- `TestReloadToolExecRediscoversAndHandsOff` — a canned report
+  (one loaded, one skipped): the swap receives the reports in file
+  order, the reply is the swap's verbatim, and the kernel's cell is
+  the discovery's (the files embedded).
+- `TestReloadToolEmptyDirectoryNeverStartsTheKernel` — no
+  top-level file: zero kernel cells, the swap receives the empty
+  report (the list rebuilds to the natives — removal free), the
+  reply names the empty list.
+- `TestReloadToolCollisionRefusesBeforeTheSwap` — a loaded report
+  named like a native (the set includes `plugins_reload` itself):
+  the refusal is the startup collision's voice, and the swap is
+  never called.
+- `TestReloadToolKernelFailureIsTheError` — a non-OK reply: the
+  error carries the kernel's reason under the reload's prefix, and
+  the swap is never called.
+- `TestListIsTopLevelPyOnly` — the listing rule: the pending zone,
+  a subdirectory, and a non-.py file are not the listing's, and the
+  order is filename order.
+- `TestCheckVoicesTheCollision` — the shared refusal (the startup's
+  and the reload's one rule): the voice, and a skipped report never
+  collides.
+
+command (the leaf, fakes at the Env seam):
+
+- `TestPluginsReloadVerbPassesTheReplyThrough` — the reload seam
+  wired: the verb's reply is the root's verbatim; a nil seam
+  refuses with the no-seam voice.
+- `TestPluginsCreateQueuesTheTemplate` — the queued line is 8's
+  template with the operator's text spliced in (the steer
+  precedent: the command queues a line and never dispatches a
+  turn); the interrupt voice when a live turn was interrupted; a
+  nil steer seam refuses; an empty text is usage.
+- `TestPluginsUsageNamesTheReloadAndCreateVerbs` — the unknown
+  verb's usage line carries the set's whole shape.
+- `TestPluginsApproveMovesThenReloads` — the move lands and the
+  reply carries the move's line plus the reload's reply; a reload
+  failure after the move keeps the move (the disk is the truth) and
+  names the failure; a root without the reload seam is the move
+  only (the pre-8 voice, intact).
+
+cmd/rig (root + e2e; the fake kernel is the DI seam, the e2e gates
+on a usable python as the plugin suite's):
+
+- `TestReloadTakesEffectNextTurnZeroLoopLines` — the seam's proof
+  (the feature's gate): a turn over, the root's swap adds a tool,
+  and the next turn's request carries it (name, description,
+  schema) while the finished turn's request does not; the new tool
+  executes on that next turn (the router's end) and the natives
+  keep executing (the fall-through); loop/ and core/ stay
+  byte-frozen against the branch's base.
+- `TestPluginsReloadToolRebuildsTheList` — the model calls
+  `plugins_reload`: the reply is the reload's (the loud skips in
+  it), the next turn's wire carries the new plugin (its
+  DESCRIPTION and SCHEMA verbatim) and it executes (the round
+  trip); a second reload over a removed file rebuilds the list
+  down (removal free), and the wire follows.
+- `TestPluginsReloadCollisionRefusesAndKeepsTheList` — a loaded
+  report named like a native: the tool error is the collision's
+  voice, and the wire is the pre-reload list, whole.
+- `TestReloadE2ERegistersAForgedPluginNextTurn` — the real kernel
+  (gated): the provider's first request lands a new file in
+  `plugins/` (the scripted clock), the model calls
+  `plugins_reload`, the reply carries the loaded line, the next
+  turn's wire carries the plugin, and the model's call of it
+  round-trips through the shared namespace (the import is the
+  reload's, the call is the next turn's).
+- `TestApproveReloadsPost8` — the pending zone's file: `/plugins
+  approve` moves it, the reply carries the move plus the reload's
+  line, and the next `/plugins` listing shows it loaded (the root's
+  state swapped, the command's listing follows).
+- the no-plugins wire (the golden pin's companion): the native
+  set, `plugins_reload` among them (15, in order), and the golden
+  fixtures regenerated in place (the directory is the 0.2.0 wire
+  baseline, the bytes the current native set — the pin moves with
+  the set, as the earlier releases' did).
 
 - `TestAllIsTheStandardSet` — the standard set is eight (the existing
   assertion, extended with `plugins`).
@@ -580,6 +711,21 @@ kernel gate, and the golden fixtures are untouched.
 - **CHANGELOG + Version**: `0.3.0` → `0.4.0`, the
   `TestVersionIsTheFreeze` line updated (additive; pre-1.0 — the
   freeze's discipline and the tag's criterion unchanged).
+
+Decision 8's diffs (the reload and the forge, `0.6.0` → `0.7.0`):
+
+- **SPEC_SANDBOX**: decision 2's usage line gains the two new verbs,
+  and the approve's tail is the reload's (post-8).
+- **SPEC_CONFIG**: the built-in `allow` default gains
+  `plugins_reload` (a native the model must be able to call without
+  an operator line), and the golden fixtures regenerate in place.
+- **`middleware/toolset`**: NEW leaf (the seam, named in 8's costs).
+- **`plugins`**: gains `List`, `Check`, and the `Reload` tool; the
+  root's startup collision check is `Check` (one rule, two doors).
+- **`command`**: the `reload` and `create <text>` verbs, the
+  `Env.Reload` seam, the `Plugins` closure (the listing follows a
+  reload), and the approve's tail.
+- **`core/` and `loop/`**: byte-frozen (the seam's price, named in 8).
 
 ## scope
 

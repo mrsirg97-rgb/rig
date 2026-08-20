@@ -88,7 +88,7 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.System != "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done." {
 		t.Fatalf("system = %q, want the 0.2.0 default system prompt", s.System)
 	}
-	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff"}
+	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff", "plugins_reload"}
 	if !reflect.DeepEqual(s.Allow, wantAllow) {
 		t.Fatalf("allow = %v, want the 0.2.0 default list %v", s.Allow, wantAllow)
 	}
