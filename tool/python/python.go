@@ -1,6 +1,3 @@
-// Package python is the persistent IPython kernel tool: one kernel per
-// session, state across calls, the JSON-lines wire protocol over stdio,
-// no third-party client.
 package python
 
 import (
@@ -40,8 +37,6 @@ const description = "Run Python in a persistent IPython session. Variables, impo
 	"available; IPython magics (%timeit, %run) work. action='vars' lists the current " +
 	"namespace, action='reset' clears it."
 
-// guidelines is folded after the description in Description() since
-// rig's tool surface carries no separate guidelines channel.
 const guidelines = "Guidelines: " +
 	"arithmetic, data shaping, parsing, bulk text -> compute in python, don't estimate. " +
 	"state persists; compute once, query it in later calls."
@@ -55,7 +50,6 @@ const schemaJSON = `{
 	}
 }`
 
-// Reply is one wire reply from the host.
 type Reply struct {
 	ID     *string `json:"id"`
 	Ok     bool    `json:"ok"`
@@ -66,63 +60,40 @@ type Reply struct {
 	Note   *string `json:"note"`
 }
 
-// request is one wire line: the payload plus the routed id.
 type request struct {
 	Code *string `json:"code,omitempty"`
 	Cmd  *string `json:"cmd,omitempty"`
 	ID   string  `json:"id"`
 }
 
-// given is the decoded tool call.
 type given struct {
 	Code      *string `json:"code"`
 	Action    string  `json:"action"`
 	TimeoutMs *int    `json:"timeoutMs"`
 }
 
-// Tool owns one persistent kernel. rig runs one session per process and
-// the root wires one tool per process, so per-instance ownership is
-// one-kernel-per-session with no shared package state.
 type Tool struct{ k *kernel }
 
-var _ core.Tool = (*Tool)(nil) // the seam is compile-time enforced
+var _ core.Tool = (*Tool)(nil)
 
-// New returns the tool with the defaults: the shared venv interpreter and
-// the host resolved by DefaultHost. The default path keeps the lazy venv
-// bootstrap; the seam does not.
 func New() *Tool {
 	return &Tool{k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1)}}
 }
 
-// NewWith is the injection seam: an explicit
-// interpreter and host, and the default-venv bootstrap is skipped — the
-// seam provides everything; the bootstrap is the default path's policy,
-// not the seam's. New() is the default path.
 func NewWith(python, host string) *Tool {
 	return &Tool{k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true}}
 }
 
-// Host reports the resolved host path, for the root's startup log and for
-// debugging which host (the shared agent path or the embedded) a session
-// runs on.
 func (t *Tool) Host() string { return t.k.host }
 
-// Name implements core.Tool.
 func (t *Tool) Name() string { return "python" }
 
-// Description implements core.Tool: description with guidelines folded
-// (rig's surface has no separate channel).
 func (t *Tool) Description() string { return description + "\n\n" + guidelines }
 
-// Guidelines is the operational guidance alone, for composers that keep
-// the channels separate.
 func Guidelines() string { return guidelines }
 
-// Schema implements core.Tool.
 func (t *Tool) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
-// Exec implements core.Tool: the "no code supplied" refusal, the payload
-// choice (action vs code), the timeout, and the rendered reply.
 func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a given
 	if err := json.Unmarshal(data, &a); err != nil {
@@ -144,7 +115,7 @@ func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 
 	reply, err := t.k.send(ctx, req, timeoutMs)
 	if err != nil {
-		// the call gave up (ctx); the kernel is untouched
+
 		return "", err
 	}
 	text := render(reply)
@@ -157,8 +128,6 @@ func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	return text, errors.New(text)
 }
 
-// Close is the root's teardown line: kill the whole process group and
-// wait briefly for the death to be processed.
 func (t *Tool) Close() {
 	p := t.k.shutdown()
 	if p != nil {
@@ -169,29 +138,22 @@ func (t *Tool) Close() {
 	}
 }
 
-// Run executes one code cell in the persistent kernel and returns the
-// host's raw reply, unrendered (SPEC_PLUGINS 1, 3): the plugins leaf
-// drives discovery and calls through it — the same kernel, the same
-// namespace as the model's python tool, one process. Exec keeps its
-// rendered voice for the model; Run is the raw door.
 func (t *Tool) Run(ctx context.Context, code string, timeoutMs int) (Reply, error) {
 	req := request{Code: &code}
 	return t.k.send(ctx, req, timeoutMs)
 }
 
-// kernel is the client: one queue, one live process at a time, one
-// one-shot death note for the next call.
 type kernel struct {
 	python string
 	host   string
 
-	queue chan struct{} // one dispatch at a time
+	queue chan struct{}
 
 	seq atomic.Int64
 
-	noBootstrap bool // the seam's contract: the default venv is not our business
+	noBootstrap bool
 
-	mu        sync.Mutex // guards proc and lastDeath
+	mu        sync.Mutex
 	proc      *proc
 	lastDeath *deathNote
 }
@@ -201,15 +163,12 @@ type deathNote struct {
 	stderr string
 }
 
-// proc is one live kernel subprocess and its protocol state. State is
-// per-process on purpose: a restart is a fresh object, so no stale buffer
-// or dead kernel's stderr can leak across deaths.
 type proc struct {
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
 
-	readDone chan struct{} // closed when stdout is fully drained
-	dead     chan struct{} // closed after the death is processed
+	readDone chan struct{}
+	dead     chan struct{}
 
 	mu      sync.Mutex
 	pending map[string]chan Reply
@@ -218,11 +177,9 @@ type proc struct {
 	errBuf []byte
 }
 
-// start spawns the kernel. The caller holds k.mu and keeps it held.
 func (k *kernel) start() (*proc, error) {
 	cmd := exec.Command(k.python, k.host)
-	// Process-group discipline from tool/bash: own pgroup, bounded pipe
-	// wait for background descendants, group kill on teardown.
+
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = waitDelay
 	stdin, err := cmd.StdinPipe()
@@ -254,7 +211,6 @@ func (k *kernel) start() (*proc, error) {
 	return p, nil
 }
 
-// readLoop is the protocol reader: one JSON object per line; junk ignored.
 func (p *proc) readLoop(r io.Reader) {
 	sc := bufio.NewReader(r)
 	for {
@@ -269,9 +225,6 @@ func (p *proc) readLoop(r io.Reader) {
 	close(p.readDone)
 }
 
-// deliver routes a reply by id. First writer wins, once: the channel is
-// buffered one and the send is non-blocking, so a late reply after a death
-// announcement (or vice versa) is dropped, never double-delivered.
 func (p *proc) deliver(raw string) {
 	line := strings.TrimSpace(raw)
 	if line == "" {
@@ -279,7 +232,7 @@ func (p *proc) deliver(raw string) {
 	}
 	var r Reply
 	if err := json.Unmarshal([]byte(line), &r); err != nil {
-		return // a non-protocol line means the host printed junk; ignore it
+		return
 	}
 	if r.ID == nil {
 		return
@@ -296,7 +249,6 @@ func (p *proc) deliver(raw string) {
 	}
 }
 
-// drainStderr keeps the last stderrTailLen bytes.
 func (p *proc) drainStderr(r io.Reader) {
 	buf := make([]byte, 32*1024)
 	for {
@@ -321,8 +273,6 @@ func (p *proc) stderrTail() string {
 	return strings.TrimSpace(string(p.errBuf))
 }
 
-// waitLoop reaps the process, flushes any final reply, then claims the
-// death if it is still the current one.
 func (k *kernel) waitLoop(p *proc) {
 	waitErr := p.cmd.Wait()
 	<-p.readDone
@@ -342,7 +292,7 @@ func (k *kernel) onDeath(p *proc, _ error) {
 	}
 	k.mu.Unlock()
 	if !current {
-		return // a deliberate teardown already claimed this death
+		return
 	}
 	msg := "kernel exited (" + desc + ")"
 	if tail != "" {
@@ -351,8 +301,6 @@ func (k *kernel) onDeath(p *proc, _ error) {
 	p.failAll(msg)
 }
 
-// failAll resolves every pending call with the message, in the shape
-// { id: null, ok: false, error }.
 func (p *proc) failAll(msg string) {
 	p.mu.Lock()
 	chs := make([]chan Reply, 0, len(p.pending))
@@ -369,9 +317,6 @@ func (p *proc) failAll(msg string) {
 	}
 }
 
-// send: queue, then dispatch. The timeout starts
-// only after the slot is taken, so queue time is never charged to the
-// cell's own timeout.
 func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, error) {
 	k.queue <- struct{}{}
 	defer func() { <-k.queue }()
@@ -415,8 +360,7 @@ func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, e
 	}
 	body = append(body, '\n')
 	if _, err := p.stdin.Write(body); err != nil {
-		// a dead kernel's pipe fails the write: fail fast, do not wait
-		// out the timeout
+
 		p.forget(id)
 		msg := "kernel is not writable: " + err.Error()
 		return Reply{ID: strPtr(id), Ok: false, Error: &msg, Note: note}, nil
@@ -441,14 +385,12 @@ func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, e
 	}
 }
 
-// forget drops the id from the pending map (the reply is no one's).
 func (p *proc) forget(id string) {
 	p.mu.Lock()
 	delete(p.pending, id)
 	p.mu.Unlock()
 }
 
-// takeDeathNote is the one-shot note for the next call.
 func (k *kernel) takeDeathNote() *string {
 	k.mu.Lock()
 	d := k.lastDeath
@@ -464,9 +406,6 @@ func (k *kernel) takeDeathNote() *string {
 	return strPtr(s)
 }
 
-// restart is the timeout path; shutdown is the root teardown. Both
-// null the current process before killing, so the deliberate death leaves
-// no death note.
 func (k *kernel) restart() { k.teardown("kernel was restarted; all variables are gone") }
 func (k *kernel) shutdown() *proc {
 	return k.teardown("kernel shut down")
@@ -482,18 +421,15 @@ func (k *kernel) teardown(msg string) *proc {
 	}
 	p.failAll(msg)
 	if p.cmd.Process != nil {
-		syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL) // the whole group
+		syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 	}
 	return p
 }
 
-// roundSeconds rounds ms to seconds half-up (1500ms reads 2s).
 func roundSeconds(ms int) int {
 	return (ms + 500) / 1000
 }
 
-// render: note, out, [stderr], [error], then
-// the result only if the out does not already contain it.
 func render(r Reply) string {
 	var parts []string
 	if r.Note != nil && strings.TrimSpace(*r.Note) != "" {
@@ -522,7 +458,6 @@ func render(r Reply) string {
 
 func strPtr(s string) *string { return &s }
 
-// exitDescription reads "signal SIGX" or "code N".
 func exitDescription(st *os.ProcessState) string {
 	if st == nil {
 		return "code 1"
@@ -577,9 +512,6 @@ func signalName(s syscall.Signal) string {
 	return "SIG" + strconv.Itoa(int(s))
 }
 
-// --- resolution and bootstrap ---
-
-// homeDir is $HOME, loud only where a path needs it.
 func homeDir() string {
 	if h, err := os.UserHomeDir(); err == nil && h != "" {
 		return h
@@ -587,13 +519,10 @@ func homeDir() string {
 	return os.Getenv("HOME")
 }
 
-// defaultInterpreter is the shared agent venv's python.
 func defaultInterpreter() string {
 	return filepath.Join(homeDir(), ".pi", "agent", "kernel-venv", "bin", "python")
 }
 
-// rigHome is the config home (SPEC_CONFIG 11, SPEC_PLUGINS 6): $RIG_HOME,
-// else ~/.rig — the .pi/.omp convention, the same rule the root applies.
 func rigHome() string {
 	if v := os.Getenv("RIG_HOME"); v != "" {
 		return v
@@ -601,10 +530,6 @@ func rigHome() string {
 	return filepath.Join(homeDir(), ".rig")
 }
 
-// DefaultHost resolves the host: the shared agent path first (interop with
-// the shared venv), else the embedded host materialised into the rig
-// home's kernel directory (idempotent; temp+rename). Exported so the root
-// can name an explicit interpreter (RIG_PYTHON) with the default host.
 func DefaultHost() string {
 	local := filepath.Join(homeDir(), ".pi", "agent", "kernel", "kernel_host.py")
 	if _, err := os.Stat(local); err == nil {
@@ -634,9 +559,6 @@ type bootCall struct {
 	err  error
 }
 
-// ensureKernel is the lazy bootstrap: the shared venv, created once if
-// missing (python3 + network). Single-flight; a failed bootstrap is
-// re-attempted on the next call.
 func ensureKernel(ctx context.Context) error {
 	if _, err := os.Stat(defaultInterpreter()); err == nil {
 		return nil
@@ -662,14 +584,13 @@ func ensureKernel(ctx context.Context) error {
 	b.err = err
 	bootMu.Lock()
 	if bootInflight == b && err != nil {
-		bootInflight = nil // failure is re-tryable on the next call
+		bootInflight = nil
 	}
 	bootMu.Unlock()
 	close(b.done)
 	return err
 }
 
-// runStep runs one bootstrap step: 300s budget, stderr-tailed error.
 func runStep(ctx context.Context, command string, args []string) error {
 	stepCtx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()

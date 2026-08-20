@@ -16,17 +16,14 @@ import (
 const (
 	searchTimeout = 15 * time.Second
 	snippetCap    = 300
-	searchBodyCap = 1 << 20 // 1 MiB: enough for 20 results, bounded work
+	searchBodyCap = 1 << 20
 )
 
 const searchDescription = "Search the web via SearXNG instance. Returns compact JSON: title, url, snippet per result."
 
-// searchGuidelines is folded after the description since rig's tool
-// surface carries no separate guidelines channel.
 const searchGuidelines = "Guidelines: " +
 	"current or external info -> web_search; never for code already in the workspace."
 
-// searchSchema: required: query; maxResults bounds 1..20.
 const searchSchema = `{
 	"type": "object",
 	"properties": {
@@ -41,23 +38,16 @@ var (
 	searchWS  = regexp.MustCompile(`\s+`)
 )
 
-// SearchConfig is the search tool's configuration: the SearXNG instance
-// root (/search is appended)
-// and a transport seam for tests and composers.
 type SearchConfig struct {
 	BaseURL string
 	Do      func(*http.Request) (*http.Response, error)
 }
 
-// search is the web_search tool: one SearXNG JSON call, then the result
-// map. Concrete type unexported with named constructors, the core/tool.go
-// house shape.
 type search struct {
 	searchURL string
 	do        func(*http.Request) (*http.Response, error)
 }
 
-// Search is the default: the web-tools compose on loopback.
 func Search() *search { return NewSearch(SearchConfig{}) }
 
 func NewSearch(cfg SearchConfig) *search {
@@ -74,32 +64,24 @@ func NewSearch(cfg SearchConfig) *search {
 	return s
 }
 
-// Name implements core.Tool.
 func (s *search) Name() string { return "web_search" }
 
-// Description implements core.Tool: description with guidelines folded
-// (the house convention).
 func (s *search) Description() string { return searchDescription + "\n\n" + searchGuidelines }
 
-// Schema implements core.Tool.
 func (s *search) Schema() json.RawMessage { return json.RawMessage(searchSchema) }
 
-// searxngResult is the wire shape; pointers so null and absent both read
-// as "".
 type searxngResult struct {
 	Title   *string `json:"title"`
 	URL     *string `json:"url"`
 	Content *string `json:"content"`
 }
 
-// result is the mapped shape: {title, url, snippet}.
 type result struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
 	Snippet string `json:"snippet"`
 }
 
-// Exec implements core.Tool.
 func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Query      string `json:"query"`
@@ -119,9 +101,6 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	cctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
 
-	// The query string is built by hand in a fixed key order
-	// (?q=...&format=json), not url.Values, which would sort the keys.
-	// Spaces go to %20, not the form-encoding "+" that QueryEscape emits.
 	q := strings.ReplaceAll(url.QueryEscape(p.Query), "+", "%20")
 	req, err := http.NewRequestWithContext(cctx, http.MethodGet,
 		s.searchURL+"?q="+q+"&format=json", nil)
@@ -135,7 +114,7 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
-		return "", err // the raw dial error, loud
+		return "", err
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
@@ -174,9 +153,6 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	return string(b), nil
 }
 
-// snippet: tags stripped, whitespace collapsed,
-// 300-char cap. Rune-capped, not byte-capped, so multibyte text cannot
-// be cut mid-rune.
 func snippet(s string) string {
 	s = searchTag.ReplaceAllString(s, " ")
 	s = searchWS.ReplaceAllString(s, " ")
