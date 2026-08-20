@@ -29,12 +29,12 @@ import (
 // 1.0 tag waits for lived use, and everything before it is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 0.5.0: the plugin provenance rule (SPEC_SANDBOX 2: the pending
-	// zone, the perm's path rule, /plugins pending and approve);
+	// 0.6.0: the worker jail (SPEC_SANDBOX 1, 5: the bwrap profile,
+	// the socket hole, the scratch home, fail closed by default);
 	// pre-1.0 — the 1.0 tag waits for lived use (a worker soak, the
 	// TUI field-tested as the daily driver).
-	if Version != "0.5.0" {
-		t.Fatalf("Version = %q, want 0.5.0 (pre-1.0, feature-complete)", Version)
+	if Version != "0.6.0" {
+		t.Fatalf("Version = %q, want 0.6.0 (pre-1.0, feature-complete)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)

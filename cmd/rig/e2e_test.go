@@ -35,10 +35,10 @@ func writeFakeCrontab(t *testing.T, binDir, spool string) {
 SPOOL="` + spool + `"
 case "${1:-}" in
   -l)
-    if [ -f "$SPOOL" ]; then cat "$SPOOL"; else echo "no crontab for $(id -un)"; exit 1; fi
+    if [ -f "$SPOOL" ]; then /bin/cat "$SPOOL"; else echo "no crontab for $(id -un)"; exit 1; fi
     ;;
   -)
-    cat > "$SPOOL"
+    /bin/cat > "$SPOOL"
     ;;
   *)
     echo "crontab: unknown option" >&2; exit 2
@@ -164,6 +164,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	if err := os.WriteFile(spool, []byte(fake.text_()), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	sandboxOff(t, scratch) // the operator's explicit choice: the test pins the cold shell, not the jail
 
 	// the cold shell: argv plus env only.
 	cmd := exec.Command(bin, "run-job", key)
