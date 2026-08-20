@@ -5,9 +5,6 @@ import (
 	"errors"
 )
 
-// steer is 7's slot, made a verb (decision 7): queue the text (latest
-// wins, replacing whatever is there) and interrupt a live turn if one
-// is; queue only if not. Empty steer interrupts only.
 type steerCmd struct{}
 
 func (steerCmd) Name() string { return "steer" }

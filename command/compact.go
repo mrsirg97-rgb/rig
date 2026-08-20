@@ -5,11 +5,6 @@ import (
 	"errors"
 )
 
-// compact forces the compaction action (decision 3): the policy's
-// Compact seam over the same internal action the trigger path runs —
-// split, summarize, rewrite, reflect — with the trigger bypassed on
-// purpose: the trigger is the model's window math, the verb is the
-// user's judgment.
 type compactCmd struct{}
 
 func (compactCmd) Name() string { return "compact" }
@@ -27,8 +22,6 @@ func (compactCmd) Run(ctx context.Context, args string, env any) (string, error)
 		return "", err
 	}
 	if liveTurn(e) {
-		// the action rewrites Session.Messages; a mid-turn rewrite races
-		// the loop's own read of the transcript (decision 3's named case).
 		return "", errors.New("compact: a turn is live; steer or interrupt first")
 	}
 	if e.Compact == nil {
@@ -36,13 +29,10 @@ func (compactCmd) Run(ctx context.Context, args string, env any) (string, error)
 	}
 	_, compacted, err := e.Compact(ctx)
 	if err != nil {
-		return "", err // the action's error, verbatim — the command owns its voice
+		return "", err
 	}
 	if !compacted {
 		return "compact: nothing to drop", nil
 	}
-	// compacted: the Compacted line, the existing CLI rendering, exactly
-	// once — the root's closure delivers the event to the recorder (the
-	// ⧉ line is the output); the command prints no second line.
 	return "", nil
 }
