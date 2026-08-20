@@ -12,8 +12,9 @@ the leaf.
 
 - The prefix rule (`IsCommandLine`), the escape (`Unescape`), and the
   line splitter (`Parse`).
-- `All()` — the standard set of eight commands: `compact`, `new`,
-  `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`.
+- `All()` — the standard set of eleven commands: `compact`, `new`,
+  `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
+  `effort`, `role`, `approve`.
 - `Env` — the command's world, built at the root: closures, not handles.
 - `EnvOf` — the type assertion on the dispatcher's env.
 - `Sub` / `Subber` — the TUI's argument-hints door (SPEC_TUI 9).
