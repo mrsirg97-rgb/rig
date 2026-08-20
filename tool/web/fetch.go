@@ -32,14 +32,11 @@ const description = "Fetch a public http(s) URL and return its readable text (ar
 	"raw body for JSON/plain). Redirects are followed and re-checked; private/internal " +
 	"addresses are refused. Output is capped; a loud [TRUNCATED] marker states the full size."
 
-// guidelines is folded after the description since rig's tool surface
-// carries no separate guidelines channel.
 const guidelines = "Guidelines: " +
 	"search finds, fetch reads; snippets are not the page. " +
 	"web pages and textual APIs only; local files -> read, local services -> bash. " +
 	"[TRUNCATED] -> refetch with larger maxChars only if the missing part matters."
 
-// schemaJSON: required: url; maxChars >= 100, timeoutMs >= 1000.
 const schemaJSON = `{
 	"type": "object",
 	"properties": {
@@ -51,19 +48,13 @@ const schemaJSON = `{
 }`
 
 var (
-	// the textual content-type allow-list.
 	textualRE = regexp.MustCompile(`(?i)^(text/|application/(json|xml|xhtml\+xml|rss\+xml|atom\+xml|[\w.-]+\+(json|xml))(\s*;|$))`)
-	// the html/xml content-type test that routes through extraction.
+
 	htmlishRE = regexp.MustCompile(`(?i)html|xml`)
 )
 
-// LookupFn is the DNS seam: host in, addresses out.
 type LookupFn func(host string) ([]string, error)
 
-// FetchConfig is the injection seam: the egress proxy, the trafilatura
-// binary, the DNS and transport seams, the byte cap. Trafilatura is
-// tri-state: nil = the default resolution (shared venv, then PATH);
-// non-nil = explicit (empty = off).
 type FetchConfig struct {
 	Proxy       string
 	Trafilatura *string
@@ -72,7 +63,6 @@ type FetchConfig struct {
 	MaxBytes    int
 }
 
-// Fetched is the result of one guarded fetch.
 type Fetched struct {
 	FinalURL      string
 	Status        int
@@ -81,19 +71,14 @@ type Fetched struct {
 	BodyTruncated bool
 }
 
-// fetch is the web_fetch tool: the guarded fetch plus extraction.
-// Concrete type unexported with named constructors, the core/tool.go
-// house shape.
 type fetch struct {
 	proxy    string
-	traf     string // resolved binary; "" = off (the stdlib pass carries)
+	traf     string
 	lookup   LookupFn
 	do       func(*http.Request) (*http.Response, error)
 	maxBytes int
 }
 
-// Fetch is the defaults: the web-tools proxy on loopback, trafilatura
-// resolved from the shared venv then PATH.
 func Fetch() *fetch {
 	return NewFetch(FetchConfig{Proxy: DefaultProxy})
 }
@@ -132,28 +117,19 @@ func NewFetch(cfg FetchConfig) *fetch {
 			tr.Proxy = http.ProxyURL(pu)
 		}
 	}
-	// Redirects are manual: the client returns 3xx, the loop owns the
-	// hop, and every hop is re-guarded before the next dial.
+
 	f.do = (&http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}).Do
 	return f
 }
 
-// Name implements core.Tool.
 func (f *fetch) Name() string { return "web_fetch" }
 
-// Description implements core.Tool: description with guidelines folded
-// (the house convention).
 func (f *fetch) Description() string { return description + "\n\n" + guidelines }
 
-// Schema implements core.Tool.
 func (f *fetch) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
-// IPisPrivate refuses the v4 private and
-// CGNAT ranges, link-local, 192.0.0.0/24, benchmarking, and multicast
-// through broadcast; the v6 loopback, unique-local, link-local, and
-// multicast ranges; IPv4-mapped v6 folded to the v4 table.
 func IPisPrivate(ip string) bool {
 	normalized := strings.ToLower(ip)
 	v4 := normalized
@@ -177,19 +153,19 @@ func IPisPrivate(ip string) bool {
 		switch {
 		case a == 0, a == 10, a == 127:
 			return true
-		case a == 100 && b >= 64 && b <= 127: // CGNAT
+		case a == 100 && b >= 64 && b <= 127:
 			return true
-		case a == 169 && b == 254: // link-local
+		case a == 169 && b == 254:
 			return true
 		case a == 172 && b >= 16 && b <= 31:
 			return true
 		case a == 192 && b == 168:
 			return true
-		case a == 192 && b == 0 && octets[2] == 0: // IETF protocol assignments
+		case a == 192 && b == 0 && octets[2] == 0:
 			return true
-		case a == 198 && (b == 18 || b == 19): // benchmarking
+		case a == 198 && (b == 18 || b == 19):
 			return true
-		case a >= 224: // multicast through broadcast
+		case a >= 224:
 			return true
 		}
 		return false
@@ -197,30 +173,27 @@ func IPisPrivate(ip string) bool {
 	switch {
 	case normalized == "::", normalized == "::1":
 		return true
-	case strings.HasPrefix(normalized, "fc"), strings.HasPrefix(normalized, "fd"): // unique-local
+	case strings.HasPrefix(normalized, "fc"), strings.HasPrefix(normalized, "fd"):
 		return true
 	case strings.HasPrefix(normalized, "fe8"), strings.HasPrefix(normalized, "fe9"),
-		strings.HasPrefix(normalized, "fea"), strings.HasPrefix(normalized, "feb"): // link-local
+		strings.HasPrefix(normalized, "fea"), strings.HasPrefix(normalized, "feb"):
 		return true
-	case strings.HasPrefix(normalized, "ff"): // multicast
+	case strings.HasPrefix(normalized, "ff"):
 		return true
 	}
 	return false
 }
 
-// guardedURL: parse (against the base for
-// redirect hops), http(s) only, resolve, and refuse any private address
-// before any connection.
 func guardedURL(raw string, base *url.URL, lookup LookupFn) (*url.URL, error) {
 	var u *url.URL
 	var err error
 	if base != nil {
-		u, err = base.Parse(raw) // relative or absolute
+		u, err = base.Parse(raw)
 	} else {
 		u, err = url.Parse(raw)
 	}
 	if err != nil || u.Scheme == "" {
-		// schemeless input parses in Go where WHATWG throws; refuse it too.
+
 		return nil, fmt.Errorf("invalid URL: %s", raw)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
@@ -239,9 +212,6 @@ func guardedURL(raw string, base *url.URL, lookup LookupFn) (*url.URL, error) {
 	return u, nil
 }
 
-// Guarded is the guarded fetch: the timeout is the caller's ctx (one
-// budget for the whole fetch, all hops included) and the hop loop owns
-// the redirects.
 func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 	start := time.Now()
 	budgetMs := 0
@@ -282,7 +252,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 
 		if loc := res.Header.Get("Location"); res.StatusCode >= 300 && res.StatusCode < 400 && loc != "" {
 			res.Body.Close()
-			nu, err := guardedURL(loc, u, f.lookup) // every hop re-guarded
+			nu, err := guardedURL(loc, u, f.lookup)
 			if err != nil {
 				return Fetched{}, err
 			}
@@ -326,9 +296,6 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 	}
 }
 
-// readCapped reads to the byte cap; the truncation flag is set only when
-// there was actually more (a one-byte probe, so an exact fit is not
-// flagged).
 func readCapped(r io.Reader, max int) (string, bool, error) {
 	buf, err := io.ReadAll(io.LimitReader(r, int64(max)))
 	if err != nil {
@@ -340,8 +307,6 @@ func readCapped(r io.Reader, max int) (string, bool, error) {
 	return string(buf), false, nil
 }
 
-// isConnRefused detects ECONNREFUSED for the proxy-unreachable message;
-// the string check is the portable backstop.
 func isConnRefused(err error) bool {
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
@@ -358,7 +323,6 @@ func isConnRefused(err error) bool {
 	return strings.Contains(err.Error(), "connection refused")
 }
 
-// Exec implements core.Tool; errors carry the web_fetch: prefix.
 func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		URL       string `json:"url"`
@@ -380,8 +344,6 @@ func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) 
 		timeoutMs = *p.TimeoutMs
 	}
 
-	// The budget is the whole fetch, all hops included; the timeout
-	// message reconstructs the ms from the deadline at the moment it fires.
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
@@ -389,8 +351,7 @@ func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("web_fetch: %s", err)
 	}
-	// html/xml goes through the extractor,
-	// everything else is the raw body trimmed.
+
 	var readable string
 	if htmlishRE.MatchString(fetched.ContentType) {
 		var note string
@@ -402,8 +363,6 @@ func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) 
 		readable = strings.TrimSpace(fetched.Body)
 	}
 
-	// Order: the char cap first, then the byte-cap marker, then the
-	// empty-content fallback.
 	text := CapChars(readable, maxC)
 	if fetched.BodyTruncated {
 		text += "\n\n[TRUNCATED: download hit the byte cap; content is partial.]"
@@ -414,13 +373,6 @@ func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) 
 	return text, nil
 }
 
-// ---- extraction ---------------------------------------------------------
-
-// HtmlToText is the stdlib text pipeline: the non-text blocks and
-// comments out, block boundaries to newlines, the rest of the tags to
-// spaces, entities decoded, lines collapsed. RE2 has no backreferences,
-// so the block-tag pairs are five non-greedy patterns (equivalent for
-// matched pairs, the only sane HTML).
 var (
 	blockTags  = []string{"script", "style", "noscript", "svg", "head"}
 	commentRE  = regexp.MustCompile(`(?s)<!--.*?-->`)
@@ -446,7 +398,6 @@ func HtmlToText(html string) string {
 	return strings.TrimSpace(blank3RE.ReplaceAllString(strings.Join(lines, "\n"), "\n\n"))
 }
 
-// decodeEntities decodes the named entity table plus the numeric forms.
 var entityRE = regexp.MustCompile(`&(#x?[0-9a-fA-F]+|\w+);`)
 
 var entities = map[string]string{
@@ -481,7 +432,6 @@ func decodeEntities(text string) string {
 	})
 }
 
-// CapChars caps at max runes and appends the truncation marker.
 func CapChars(text string, max int) string {
 	r := []rune(text)
 	if len(r) <= max {
@@ -492,8 +442,6 @@ func CapChars(text string, max int) string {
 		max, len(r))
 }
 
-// runTrafilatura: html on stdin, stdout capped at trafilaturaCap, 20s
-// budget, failure as an error (the caller decides the fallback).
 func runTrafilatura(bin, html string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), trafilaturaTime)
 	defer cancel()
@@ -515,10 +463,6 @@ func runTrafilatura(bin, html string) (string, error) {
 	return stdout.String(), nil
 }
 
-// ExtractReadable extracts readable text; the second return is a footer
-// naming the fallback ("" means trafilatura worked). The fallback is
-// announced, never silent: a quiet quality change is the kind of silent
-// behaviour the house rules refuse.
 func ExtractReadable(html string, trafilatura *string) (string, string) {
 	bin := DefaultTrafilatura()
 	explicit := trafilatura != nil

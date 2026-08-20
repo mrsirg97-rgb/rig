@@ -1,7 +1,3 @@
-// Package file carries the read, write, and edit tools. Edit is exact-match
-// string replacement with loud, specific failure messages; provenance from
-// the threaded session makes edit-after-external-change fail loudly instead
-// of clobbering.
 package file
 
 import (
@@ -22,19 +18,10 @@ import (
 	difftool "github.com/mrsirg97-rgb/rig/tool/diff"
 )
 
-// readCap bounds a single read's contribution to the transcript.
 const readCap = 1 << 20
 
-// driftCap bounds the drift refusal's diff (SPEC_UX 4): over the cap the
-// first lines stand, the tail is the loud elision marker — a small
-// drift (a bash sed) shows whole, a rewrite does not flood the reply.
 const driftCap = 20
 
-// lastRead is the remembered bytes per path. The session's FileState
-// carries the hash and the mtime (core stays byte-identical), so the
-// content the drift diff shows stands here: process-scoped, written by
-// read and write, consulted by edit's refusal. A resume re-reads, so a
-// refusal after a resume carries the voice without the diff.
 var lastRead = struct {
 	sync.RWMutex
 	m map[string]string
@@ -71,9 +58,6 @@ func stateOf(ctx context.Context, path string) (core.FileState, bool) {
 	return st, ok
 }
 
-// normalizePath canonicalizes at the boundary so a.go and ./a.go are the
-// same key: without it the drift check can be silently bypassed by path
-// spelling.
 func normalizePath(path string) string {
 	if abs, err := filepath.Abs(path); err == nil {
 		return abs
@@ -84,7 +68,7 @@ func normalizePath(path string) string {
 func recordState(ctx context.Context, path string, data []byte) {
 	s, ok := core.SessionFrom(ctx)
 	if !ok {
-		return // standalone exec: no session to maintain
+		return
 	}
 	st, err := os.Stat(path)
 	if err != nil {
@@ -96,8 +80,6 @@ func recordState(ctx context.Context, path string, data []byte) {
 		Mtime: st.ModTime().UnixNano(),
 	}
 }
-
-// --- read -----------------------------------------------------------------
 
 type readTool struct{}
 
@@ -142,8 +124,6 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	return content, nil
 }
 
-// --- write ----------------------------------------------------------------
-
 type writeTool struct{}
 
 func Write() core.Tool { return &writeTool{} }
@@ -183,8 +163,6 @@ func (writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	rememberContent(a.Path, a.Content)
 	return fmt.Sprintf("wrote %d bytes to %s", len(a.Content), a.Path), nil
 }
-
-// --- edit -----------------------------------------------------------------
 
 type editTool struct{}
 
@@ -229,7 +207,6 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		return "", fmt.Errorf("edit: %w", err)
 	}
 
-	// drift check: the file must still be what was last observed.
 	if recorded, seen := stateOf(ctx, a.Path); seen {
 		sum := sha256.Sum256(fileData)
 		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
@@ -261,11 +238,6 @@ func mtimeOf(path string) int64 {
 	return st.ModTime().UnixNano()
 }
 
-// driftRefusal is the drift's voice (SPEC_UX 4): the refusal, then the
-// unified diff of the remembered bytes against the disk — the diff
-// tool's own engine (the shared differ, no second), capped at
-// driftCap lines with the loud elision. A small drift shows whole; a
-// rewrite does not flood the reply.
 func driftRefusal(path, onDisk string) string {
 	const header = "edit: the file changed since the read:"
 	remembered, ok := forgottenContent(path)

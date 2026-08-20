@@ -1,8 +1,3 @@
-// Package rem adapts store/rem to the loop's tool surface: runtime
-// shape checks loud at execute; session attribution from the threaded
-// ctx (memories.source defaults to the calling session id, anon when
-// unthreaded, and accepts free text when the caller passes one);
-// replies exactly as the store shapes them.
 package rem
 
 import (
@@ -16,7 +11,6 @@ import (
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 )
 
-// schemaJSON: action required, the flat optional surface.
 const schemaJSON = `{
 	"type": "object",
 	"required": ["action"],
@@ -81,7 +75,6 @@ const schemaJSON = `{
 	}
 }`
 
-// description: lowercase, terse.
 const description = "Memory tool: learn commits facts and constraints idempotently; recall fetches past " +
 	"solutions by intent (fuzzy/semantic search, project-scoped first with global fill); " +
 	"reflect stores a distilled memory with its raw source; prune consolidates the strength " +
@@ -90,12 +83,8 @@ const description = "Memory tool: learn commits facts and constraints idempotent
 	"never invent. Your notes from this directory are in your context at session start; " +
 	"learn what the next session should not re-derive."
 
-// adapter is the surface over one opened hybrid store. The root resolves
-// the store file and hands the constructor its db; this seam only
-// consumes it.
 type adapter struct{ db store.DB }
 
-// New hands the opened store to the surface.
 func New(db store.DB) core.Tool { return adapter{db: db} }
 
 func (a adapter) Name() string        { return "rem" }
@@ -104,7 +93,6 @@ func (a adapter) Schema() json.RawMessage {
 	return json.RawMessage(schemaJSON)
 }
 
-// given is one decoded call.
 type given struct {
 	Action            string   `json:"action"`
 	Content           *string  `json:"content"`
@@ -121,8 +109,6 @@ type given struct {
 	IncludeSuperseded *bool    `json:"include_superseded"`
 }
 
-// Exec maps the call onto the store's verbs with the threaded session.
-// The store's own refusals pass through.
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
 	if err := json.Unmarshal(args, &g); err != nil {
@@ -216,7 +202,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		switch verb {
 		case "":
-			// the store's execute-time voice
+
 		case "consolidate", "remove", "reduce":
 		default:
 			return "", fmt.Errorf("rem: verb must be remove, reduce, or consolidate, got '%s'", verb)
@@ -255,8 +241,6 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	}
 }
 
-// attributedSource: an explicit source rides verbatim; absent, the
-// calling session id (anon when unthreaded).
 func attributedSource(explicit *string, ctx context.Context) string {
 	if explicit != nil && *explicit != "" {
 		return *explicit
@@ -274,8 +258,6 @@ func scopeOf(s *string) string {
 	return ""
 }
 
-// scopeCheck: the scope enum, loud at execute — unknown scopes
-// refuse rather than silently default.
 func scopeCheck(s *string) error {
 	if s == nil || *s == "" || *s == "project" || *s == "global" || *s == "all" {
 		return nil
@@ -301,7 +283,7 @@ func recallK(k *int) int {
 	if k != nil {
 		return *k
 	}
-	return 0 // the store defaults to 10 and caps at 50
+	return 0
 }
 
 func importanceOf(v *float64) (float64, bool, error) {
