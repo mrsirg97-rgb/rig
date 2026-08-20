@@ -11,28 +11,21 @@ import (
 	"time"
 )
 
-// FileState pins what a file looked like at last read, so edit-after-
-// external-change fails loudly instead of clobbering. Mtime is unix
-// nanoseconds: JSON-stable, timezone-free.
 type FileState struct {
 	Hash  string
 	Mtime int64
 }
 
-// Session is the turn's state: the transcript plus file provenance.
-// In-memory for v1, JSON-serializable from day one.
 type Session struct {
-	ID       string // minted at NewSession: ULID-style, time-ordered; persistence attributes to it
+	ID       string
 	Messages []Message
-	Files    map[string]FileState // path -> state at last read
+	Files    map[string]FileState
 }
 
 func NewSession() *Session {
 	return &Session{ID: mintSessionID(), Files: map[string]FileState{}}
 }
 
-// mintSessionID is the ULID-style identifier: a time-ordered prefix plus a
-// random suffix, stdlib crypto/rand only. Stable for the process.
 func mintSessionID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -45,7 +38,6 @@ func (s *Session) Append(m Message) {
 	s.Messages = append(s.Messages, m)
 }
 
-// Save writes the session as JSON to path.
 func (s *Session) Save(path string) error {
 	data, err := json.Marshal(s)
 	if err != nil {
@@ -57,7 +49,6 @@ func (s *Session) Save(path string) error {
 	return nil
 }
 
-// Load reads a session saved by Save.
 func Load(path string) (*Session, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -75,19 +66,14 @@ func Load(path string) (*Session, error) {
 	return s, nil
 }
 
-// context threading. ToolExec's ctx is the only channel the loop controls;
-// the session rides it so file tools maintain FileState without reaching
-// around the Tool interface.
 type contextKey int
 
 const sessionKey contextKey = 1
 
-// WithSession threads the session into ctx for the execution chain.
 func WithSession(ctx context.Context, s *Session) context.Context {
 	return context.WithValue(ctx, sessionKey, s)
 }
 
-// SessionFrom recovers the session threaded by WithSession.
 func SessionFrom(ctx context.Context) (*Session, bool) {
 	s, ok := ctx.Value(sessionKey).(*Session)
 	return s, ok
