@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 )
 
 // StatusIn is the status line's and the startup block's numbers
@@ -63,26 +64,26 @@ var titleRows = []string{
 }
 
 // RenderStatusLine is the live status (decision 3, amended, SPEC_MODES
-// 2): two rows under the input. The first is the model, with the
-// non-default role's stance between it and the context — model · role ·
-// used/window — the operator glances the stance the model is in — and
-// used over the window once a turn has run, the context part colored at
-// the 70/90 marks (dim under 70, warn at 70, error at 90), the model
-// dim; before the first usage, the model alone. The second is the
-// session's usage totals: up, down, and the cache-read hit rate. The
-// rows are joined by a newline; the live region splits them (statusRows).
-func RenderStatusLine(t Theme, model, role string, used, window int, hasUsed bool, up, down, cacheRead int) string {
+// 2 and 3): two rows under the input. The first is the model info row —
+// model · effort · used/window · role — the model in the text color,
+// the active effort in its ramp color (pane's footer, SlotEffort*;
+// accent for a level outside the ramp; skipped when the row names
+// none), the context part colored at the 70/90 marks (dim under 70,
+// warn at 70, error at 90) once a turn has run and skipped before,
+// and the stance last, abbreviated (architect -> arch, reviewer ->
+// rev, default shown as default), the dim. The second is the session's
+// usage totals: up, down, and the cache-read hit rate. The rows are
+// joined by a newline; the live region splits them (statusRows).
+func RenderStatusLine(t Theme, model, effort, role string, used, window int, hasUsed bool, up, down, cacheRead int) string {
 	if model == "" {
 		return ""
 	}
-	head := t.Paint(SlotText, model)
-	var row1 string
-	if !hasUsed || window <= 0 {
-		if role != "" && role != "default" {
-			head += t.Paint(SlotDim, " · "+role)
-		}
-		row1 = head
-	} else {
+	sep := t.Paint(SlotDim, " · ")
+	row1 := t.Paint(SlotText, model)
+	if effort != "" {
+		row1 += sep + t.Paint(effortSlot(t, effort), effort)
+	}
+	if hasUsed && window > 0 {
 		pct := used * 100 / window
 		slot := SlotDim
 		switch {
@@ -91,13 +92,9 @@ func RenderStatusLine(t Theme, model, role string, used, window int, hasUsed boo
 		case pct >= 70:
 			slot = SlotWarn
 		}
-		if role != "" && role != "default" {
-			head += t.Paint(SlotDim, " · "+role+" · ")
-		} else {
-			head += t.Paint(SlotDim, " · ")
-		}
-		row1 = head + t.Paint(slot, formatTokens(used)+"/"+formatTokens(window))
+		row1 += sep + t.Paint(slot, formatTokens(used)+"/"+formatTokens(window))
 	}
+	row1 += sep + t.Paint(SlotDim, abbrevRole(role))
 	hit := 0
 	if up > 0 {
 		hit = cacheRead * 100 / up
@@ -105,4 +102,34 @@ func RenderStatusLine(t Theme, model, role string, used, window int, hasUsed boo
 	row2 := t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
 		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))
 	return row1 + "\n" + row2
+}
+
+// effortSlot maps a level name onto the effort ramp's slot: "low" ->
+// effortLow, matched case-insensitively against pane's seven; a level
+// outside the ramp paints accent (pane's fallback rule).
+func effortSlot(t Theme, level string) string {
+	if len(level) == 0 {
+		return SlotAccent
+	}
+	key := "effort" + strings.ToUpper(level[:1]) + strings.ToLower(level[1:])
+	if t.Slot(key) != "" {
+		return key
+	}
+	return SlotAccent
+}
+
+// abbrevRole is the stance's short form for the info row (SPEC_MODES
+// 3, amended): architect -> arch, reviewer -> rev, the default (and
+// the empty root state) -> default; a name outside the shipped three
+// shows as-is.
+func abbrevRole(role string) string {
+	switch role {
+	case "architect":
+		return "arch"
+	case "reviewer":
+		return "rev"
+	case "", "default":
+		return "default"
+	}
+	return role
 }

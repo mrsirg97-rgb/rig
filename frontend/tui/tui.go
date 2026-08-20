@@ -1205,7 +1205,7 @@ func (t *tui) liveLinesLocked() []string {
 // statusLineLocked is the status row (under mu; decision 3): the
 // model, and used over the window once a turn has run.
 func (t *tui) statusLineLocked() string {
-	st := RenderStatusLine(t.theme, t.statusModel, t.statusRole, t.statusUsed, t.statusWindow, t.statusHasUsed,
+	st := RenderStatusLine(t.theme, t.statusModel, t.statusEffort, t.statusRole, t.statusUsed, t.statusWindow, t.statusHasUsed,
 		t.statusUp, t.statusDown, t.statusCache)
 	if st == "" {
 		return ""

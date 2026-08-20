@@ -449,6 +449,46 @@ func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
 	}
 }
 
+// TestModelSwitchResetsAForeignEffort (SPEC_MODES 1, amended): the
+// vocabulary is the row's, so a model switch resets a dial the new row
+// does not name — loudly, in the switch's note — never stamping a level
+// into a template that cannot speak it. A level the new row names rides
+// the switch untouched, no note.
+func TestModelSwitchResetsAForeignEffort(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	speaks, err := models.New(
+		models.Model{Role: models.RoleInteractive, ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Efforts: []string{"low", "medium", "xhigh"}},
+		models.Model{Role: models.RoleInteractive, ID: "onlymax", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Efforts: []string{"max"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.runtime = speaks
+	wire(r)
+
+	r.effort = "xhigh"
+	note, err := r.switchModel(context.Background(), "onlymax")
+	if err != nil {
+		t.Fatalf("switchModel: %v", err)
+	}
+	if r.effort != "" {
+		t.Fatalf("a level the new row does not name must reset, kept %q", r.effort)
+	}
+	want := `effort: "xhigh" is not a level for onlymax — reset to server default`
+	if note != want {
+		t.Fatalf("the reset must be the switch's note:\ngot  %q\nwant %q", note, want)
+	}
+
+	r.effort = "max"
+	note, err = r.switchModel(context.Background(), "onlymax")
+	if err != nil {
+		t.Fatalf("switchModel same: %v", err)
+	}
+	if r.effort != "max" || note != "" {
+		t.Fatalf("a level the row names must survive the switch silently, got (%q, %q)", r.effort, note)
+	}
+}
+
 // TestSwapInKeepsDialsAndRebuilds (SPEC_MODES, named): a resume does not
 // restore the dials — it keeps the current values (they were never
 // saved), recomputes the assembly, and rebuilds the pair. The swap-in is
