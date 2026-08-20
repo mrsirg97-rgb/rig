@@ -7,8 +7,6 @@ import (
 
 const SchemaVersion = 1
 
-func DDL() []string { return schedddl.Statements() }
-
 func Statements() []string { return schedddl.Statements() }
 
 type DB = store.DB

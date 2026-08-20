@@ -14,7 +14,7 @@ written before the store commit; drift is surfaced in list.
 
 ## What it includes
 
-- `scheduler.go` — the package doc, `SchemaVersion`, `DDL`, `Statements`,
+- `scheduler.go` — the package doc, `SchemaVersion`, `Statements`,
   the `DB` alias.
 - `cron.go` — the vixie cron parser and matcher.
 - `crontab.go` — the tagged-lines crontab edit/merge.
