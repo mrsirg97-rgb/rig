@@ -30,3 +30,9 @@ in a teaching voice.
 - Positions are minted, never mutated in place; moves are events.
 - Create is the only dependency-mutation point; the DAG is validated
   there at the boundary.
+- The read contract is lean (SPEC_TODO_LEAN): Read renders the
+  actionable queue — done rows fold into the unconditional summary line
+  `(N/M done · next: tN · K failed)`, never "(no tasks)" on an all-done
+  queue; ReadAll returns the history; a transition echo is the affected
+  row plus the summary. Create keeps the full (filtered) queue: a
+  replacement's point is the new state.

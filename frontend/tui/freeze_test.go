@@ -55,6 +55,10 @@ func TestFreezeGate(t *testing.T) {
 			p == "tool/bash" || strings.HasPrefix(p, "tool/bash/") ||
 			p == "tool/file" || strings.HasPrefix(p, "tool/file/") ||
 			p == "tool/rem" || strings.HasPrefix(p, "tool/rem/") ||
+			// the lean-read round (SPEC_TODO_LEAN): the todo store's
+			// filtered render and echo, and the tool's all surface.
+			p == "store/todo" || strings.HasPrefix(p, "store/todo/") ||
+			p == "tool/todo" || strings.HasPrefix(p, "tool/todo/") ||
 			// the provenance rule's work surface (SPEC_SANDBOX 2): the
 			// perm's one new path rule, beside the allow-list.
 			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||

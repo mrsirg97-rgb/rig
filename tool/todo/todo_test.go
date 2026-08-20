@@ -203,3 +203,40 @@ func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 		t.Errorf("claim voice: %v", err)
 	}
 }
+
+func TestReadAllTrueReturnsHistory(t *testing.T) {
+	tool := todoapi.New(newDB(t))
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "keep"},
+		map[string]any{"text": "drop"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	drop := strings.Fields(strings.Split(reply, "\n")[3])[0]
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": drop}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": drop}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	defaultRead, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(defaultRead, "drop") {
+		t.Errorf("default read leaked the done row:\n%s", defaultRead)
+	}
+	history, err := exec(t, tool, ctx, map[string]any{"action": "read", "all": true})
+	if err != nil {
+		t.Fatalf("read all: %v", err)
+	}
+	if !strings.Contains(history, "drop") {
+		t.Errorf("all:true dropped the done row:\n%s", history)
+	}
+	if !strings.Contains(history, "[x] drop") {
+		t.Errorf("all:true lost the done marker:\n%s", history)
+	}
+}
