@@ -116,6 +116,7 @@ type tui struct {
 	statusModel   string
 	statusEffort  string
 	statusRole    string
+	statusApprove string
 	statusWindow  int
 	statusUsed    int
 	statusHasUsed bool
@@ -123,6 +124,15 @@ type tui struct {
 	// from the turn's totals); the session's totals from the snapshot
 	// before the first turn.
 	statusUp, statusDown, statusCache int
+
+	// the approval ask (SPEC_MODES 4): the pending question's text and
+	// its answer channel — nil channel means no ask. The gate's Ask
+	// blocks the turn goroutine on the channel; the key handler answers
+	// (y/n; Esc declines and interrupts) and every other key is
+	// swallowed while the ask stands. Ask outranks the pager and the
+	// menu in the key routing — the question is the screen's one modal.
+	askText  string
+	askReply chan bool
 
 	// reader-owned: the line state and the byte-stream parser.
 	ed editor
@@ -403,6 +413,31 @@ const escDelay = 30 * time.Millisecond
 // the named control keys do their thing (decision 9). Inside the
 // pager, the keys are the pager's.
 func (t *tui) onKey(k key, r rune) {
+	// the ask outranks everything (SPEC_MODES 4): while the approval
+	// question stands, y approves, n declines, Esc declines and
+	// interrupts the turn, ^C declines and quits — every other key is
+	// swallowed (the input is not the operator's until the answer).
+	t.mu.Lock()
+	asking := t.askReply != nil
+	cancel := t.cancel
+	t.mu.Unlock()
+	if asking {
+		switch {
+		case r == 'y' || r == 'Y':
+			t.askAnswer(true)
+		case r == 'n' || r == 'N':
+			t.askAnswer(false)
+		case k == keyEsc:
+			t.askAnswer(false)
+			if cancel != nil {
+				cancel()
+			}
+		case k == keyCtrlC:
+			t.askAnswer(false)
+			t.quitSession()
+		}
+		return
+	}
 	if !t.fromPager && t.pagerKey(k, r) {
 		return
 	}
@@ -1196,16 +1231,27 @@ func (t *tui) liveLinesLocked() []string {
 	if len(lines) > 0 || !t.live.lastBlank {
 		lines = append(lines, "")
 	}
-	if ml := t.menuLinesLocked(); len(ml) > 0 {
+	if t.askReply != nil {
+		// the ask row (SPEC_MODES 4): the question stands where the
+		// menu would — the screen's one modal, the menu suppressed.
+		lines = append(lines, t.askLineLocked())
+	} else if ml := t.menuLinesLocked(); len(ml) > 0 {
 		lines = append(lines, ml...)
 	}
 	return append(lines, t.inputLineLocked())
 }
 
+// askLineLocked is the approval question's row (under mu; SPEC_MODES
+// 4): the warn color carries the pause, the keys ride dim.
+func (t *tui) askLineLocked() string {
+	return t.theme.Paint(SlotWarn, "approve "+t.askText+"?") +
+		t.theme.Paint(SlotDim, "  [y run · n decline · esc interrupts]")
+}
+
 // statusLineLocked is the status row (under mu; decision 3): the
 // model, and used over the window once a turn has run.
 func (t *tui) statusLineLocked() string {
-	st := RenderStatusLine(t.theme, t.statusModel, t.statusEffort, t.statusRole, t.statusUsed, t.statusWindow, t.statusHasUsed,
+	st := RenderStatusLine(t.theme, t.statusModel, t.statusEffort, t.statusRole, t.statusApprove, t.statusUsed, t.statusWindow, t.statusHasUsed,
 		t.statusUp, t.statusDown, t.statusCache)
 	if st == "" {
 		return ""
@@ -1225,6 +1271,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusModel = in.Model
 		t.statusEffort = in.Effort
 		t.statusRole = in.Role
+		t.statusApprove = in.Approve
 		t.statusWindow = in.Window
 		t.statusUsed = 0
 		t.statusHasUsed = false
@@ -1299,6 +1346,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		t.statusModel = in.Model
 		t.statusEffort = in.Effort
 		t.statusRole = in.Role
+		t.statusApprove = in.Approve
 		t.statusWindow = in.Window
 		if fresh {
 			t.statusUsed = 0
@@ -1324,6 +1372,44 @@ func (t *tui) commandOpeningLocked(name, args string) string {
 // Steer queues the text (latest wins) and reports whether an interrupt
 // landed: the live turn now (a dispatch from a keypress mid-turn), or
 // the reader's "an interrupt just landed" fact (consumed here).
+// Ask is the approval door (SPEC_MODES 4): the gate's question, asked
+// from the turn goroutine, blocking until the operator answers or the
+// turn's context ends (an interrupt while asking is a decline). The
+// root wires the gate only for a frontend offering this method — the
+// optional interface keeps the Frontend seam untouched.
+func (t *tui) Ask(ctx context.Context, prompt string) bool {
+	reply := make(chan bool, 1)
+	t.mu.Lock()
+	t.askText, t.askReply = prompt, reply
+	t.mu.Unlock()
+	t.paintInput()
+	select {
+	case ans := <-reply:
+		return ans
+	case <-ctx.Done():
+		t.mu.Lock()
+		t.askText, t.askReply = "", nil
+		t.mu.Unlock()
+		t.paintInput()
+		return false
+	}
+}
+
+// askAnswer resolves the pending ask (the key handler's half): clears
+// the state, answers the blocked gate, repaints. A nil channel (the
+// ask already resolved by the context) is a no-op.
+func (t *tui) askAnswer(ans bool) {
+	t.mu.Lock()
+	reply := t.askReply
+	t.askText, t.askReply = "", nil
+	t.mu.Unlock()
+	if reply == nil {
+		return
+	}
+	reply <- ans
+	t.paintInput()
+}
+
 func (t *tui) Steer(text string) bool {
 	t.mu.Lock()
 	t.slot = text

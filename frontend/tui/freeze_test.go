@@ -62,6 +62,8 @@ func TestFreezeGate(t *testing.T) {
 			// the reload's seam (SPEC_PLUGINS 8): the toolset table and
 			// its two adapters, beside the perm's.
 			p == "middleware/toolset" || strings.HasPrefix(p, "middleware/toolset/") ||
+			// the approval gate (SPEC_MODES 4): the modes branch's leaf.
+			p == "middleware/approve" || strings.HasPrefix(p, "middleware/approve/") ||
 			// the worker jail's work surface (SPEC_SANDBOX 1, 5): the
 			// runner's bwrap spawn and socket proxy, the provider's
 			// unix: base URL.

@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.8.0] — the modes
+
+- **`/effort`** (`specs/SPEC_MODES.md` 1): the session's reasoning
+  budget in the row's own vocabulary (`models.json` `efforts`) — a
+  provider decorator stamps the dial onto requests that carry none;
+  the compaction summary's own effort survives untouched; unset is
+  today's bytes. A model switch resets a level the new row does not
+  name — loudly, in the `/models` reply — never stamping a level into
+  a template that cannot speak it.
+- **`/role`** (2): default, architect, or reviewer — the stance's
+  prose sits between the system prompt and AGENTS.md (position is
+  precedence: the contract reads after it and wins), rebuilt on the
+  switch, next-turn.
+- **`/approve`** (4): auto (today) or manual — every mutating tool
+  call pauses for the operator's y/n at a TUI ask row (y runs, n
+  declines, Esc declines and interrupts; a denial is a model-visible
+  teaching refusal, the turn continues). The gate is a middleware
+  wired with closures; the ask door is an optional frontend
+  interface — `core/` and `loop/` byte-frozen, the Frontend seam
+  untouched. The read set and the store tools pass silently; every
+  plugin pauses. The default is settings.json `approve`; workers and
+  the one-shot never ask.
+- **the status is three rows** (3, amended): identity (`model ·
+  used/window`), the stance (`effort · role · auto|manual` — the
+  effort in pane's footer ramp colors, new `effort*` theme slots;
+  the role abbreviated; manual in the warn), and the usage totals.
+
 ## [0.7.0] — the reload and the forge
 
 - **plugins register without a restart** (`specs/SPEC_PLUGINS.md`
