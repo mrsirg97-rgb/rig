@@ -39,10 +39,20 @@ is a loud line naming the known set, never silently a prompt.
   bare `/steer` interrupts only.
 - `/todo`, `/scheduler` — the same tools the model gets, same queue, same
   store; the tool's own refusals teach the shape.
+- `/effort` — the reasoning dial: bare shows the active level and the
+  model's available ones; `/effort <level>` sets it for subsequent turns
+  (`specs/SPEC_MODES.md`).
+- `/role` — the stance: `/role <default|architect|reviewer>` sets the
+  session's role prose between the system prompt and AGENTS.md.
+- `/approve` — `/approve auto` (today's behavior) or `/approve manual`:
+  manual pauses every mutating tool call for the operator's y/n at the
+  TUI ask row; a denial is a model-visible teaching refusal.
 - `/plugins` — the python plugins: the loaded ones (name, description,
   file), the skipped ones with their reasons, and the pending zone —
   `pending` lists the model's authoring with each file's DESCRIPTION,
-  `approve <name>` installs one (the operator's verb).
+  `approve <name>` installs one (the operator's verb), `reload`
+  re-registers from disk (the `plugins_reload` tool's command door),
+  `create <text>` queues the authoring prompt.
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it and the summary lands in the
@@ -50,8 +60,9 @@ transcript and in rem.
 
 ## what you see
 
-Rendering is deliberately plain and greppable (a TUI frontend is a later
-extension, same seam):
+The piped CLI's rendering is deliberately plain and greppable (the
+terminal default is the TUI — see `docs/SETUP.md`; the CLI stays the byte
+reference):
 
 ```
 $ what files are here?
@@ -80,13 +91,16 @@ bash ✓ 12ms
   interruption the loop returns to awaiting input rather than dying.
 - **A failed tool call is fed back to the model once** — the loop never
   retries silently. The bound (`--retries`) tracks the model's re-issuance of
-  a failing *tool*, keyed by tool name and cleared at the start of every
-  turn: drift in the arguments does not dodge it. The limit-th consecutive
-  failure of a tool carries a note telling the model to read the error and
-  change the call, or stop calling the tool; the next re-issuance is refused
-  without executing, naming the bound. A successful call clears the count —
-  the bound tracks streaks, not history. Practical effect: persistent
-  flapping on one broken tool gets a named refusal, not an infinite loop.
+  a failing *tool*, keyed by tool name with the streak per args, and
+  cleared at the start of every turn: the bound strikes identical retries
+  only, so a corrected call (args differing from the last failed args)
+  resets its own streak and always executes. The limit-th consecutive
+  failure of a call carries a note telling the model to read the error and
+  change the call, or stop calling the tool; the next re-issuance of that
+  call is refused without executing, naming the bound. A successful call
+  clears the count — the bound tracks streaks, not history. Practical
+  effect: persistent flapping on one broken tool gets a named refusal, not
+  an infinite loop.
 - **Unknown tool names** are fed back as errors; the turn continues.
 - **Denials** (a tool outside the allow-list) are attributed with the reason
   and are countable by the bound — that pairing is the spec's core invariant
@@ -116,7 +130,7 @@ rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits the 14 built-in
+refusal goes back to the model. The default permits the 15 built-in
 tools; python plugins (outside the default) must be allow-listed by name.
 Narrowing is always available and compose-order-agnostic.
 
