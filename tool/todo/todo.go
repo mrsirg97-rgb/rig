@@ -44,6 +44,10 @@ const schemaJSON = `{
 			"type": "integer",
 			"minimum": 1,
 			"description": "Queue position (1-based, first = 1) for action='move'."
+		},
+		"all": {
+			"type": "boolean",
+			"description": "read all:true returns the full history (done rows included); the default read is the actionable queue."
 		}
 	}
 }`
@@ -60,7 +64,9 @@ const description = "Task queue per working directory. action REQUIRED. create r
 	"(fail it first to take over), fail frees the claim. " +
 	"the event log auto-compacts past 1000 events: a full-state snapshot replaces history " +
 	"(staleness epochs reset), replay stays exact. " +
-	"every mutation returns the full queue. ids are minted by the tool; copy, never invent."
+	"the model's own read is the contract: transitions return the affected row and the summary; " +
+	"read returns the actionable queue (done folds into the summary line); read all:true returns the history. " +
+	"ids are minted by the tool; copy, never invent."
 
 type adapter struct{ db store.DB }
 
@@ -77,6 +83,7 @@ type given struct {
 	Tasks  []map[string]any `json:"tasks"`
 	ID     string           `json:"id"`
 	Pos    *int             `json:"pos"`
+	All    *bool            `json:"all"`
 }
 
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
@@ -120,6 +127,9 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		return todostore.Move(ctx, a.db, g.ID, *g.Pos, session)
 	case "read":
+		if g.All != nil && *g.All {
+			return todostore.ReadAll(ctx, a.db, session)
+		}
 		return todostore.Read(ctx, a.db, session)
 	default:
 		return "", fmt.Errorf("todo: unknown action %q", g.Action)

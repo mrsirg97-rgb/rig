@@ -1520,3 +1520,193 @@ func TestWorkspaceListsAreIsolated(t *testing.T) {
 		t.Fatalf("workspace b's render must be empty:\n%s", reply)
 	}
 }
+
+// --- the lean render (SPEC_TODO_LEAN): the actionable queue, the summary
+// fold, and the per-transition echo. Done rows are hidden by default;
+// every transition echo is the affected line plus the summary.
+
+var rowRE = regexp.MustCompile(`^\s+t\d+ \[`)
+
+func rowCount(reply string) int {
+	n := 0
+	for _, ln := range strings.Split(reply, "\n") {
+		if rowRE.MatchString(ln) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestReadDefaultHidesDoneRows(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "keep"}, {Text: "drop"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	drop := taskIDText(t, reply, "drop")
+	if _, err := todostore.Start(ctx, db, drop, "s1"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, drop, "s1"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	read, err := todostore.Read(ctx, db, "s1")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(read, "drop") {
+		t.Errorf("done row leaked into the actionable read:\n%s", read)
+	}
+	if !strings.Contains(read, "keep") {
+		t.Errorf("actionable row missing:\n%s", read)
+	}
+	if !strings.Contains(read, "1/2 done") {
+		t.Errorf("summary fold missing:\n%s", read)
+	}
+	if rowCount(read) != 1 {
+		t.Errorf("default read row count = %d, want only the actionable row:\n%s", rowCount(read), read)
+	}
+}
+
+func TestAllDoneQueueRendersSummaryOnly(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for _, id := range []string{"t1", "t2"} {
+		if _, err := todostore.Start(ctx, db, id, "s1"); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+		if _, err := todostore.Complete(ctx, db, id, "s1"); err != nil {
+			t.Fatalf("complete: %v", err)
+		}
+	}
+	read, err := todostore.Read(ctx, db, "s1")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(read, "(no tasks)") {
+		t.Errorf("an all-done queue must never say '(no tasks)':\n%s", read)
+	}
+	if !strings.Contains(read, "2/2 done") {
+		t.Errorf("summary fold missing:\n%s", read)
+	}
+	if rowCount(read) != 0 {
+		t.Errorf("all-done queue must render as summary with zero rows:\n%s", read)
+	}
+}
+
+func TestReadAllShowsDoneRows(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "keep"}, {Text: "drop"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	drop := taskIDText(t, reply, "drop")
+	if _, err := todostore.Start(ctx, db, drop, "s1"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, drop, "s1"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	full, err := todostore.ReadAll(ctx, db, "s1")
+	if err != nil {
+		t.Fatalf("read all: %v", err)
+	}
+	if !strings.Contains(full, "drop") {
+		t.Errorf("history read dropped the done row:\n%s", full)
+	}
+	if !strings.Contains(full, "[x] drop") {
+		t.Errorf("done marker missing:\n%s", full)
+	}
+	if !strings.Contains(full, "1/2 done") {
+		t.Errorf("summary fold missing:\n%s", full)
+	}
+	if rowCount(full) != 2 {
+		t.Errorf("history row count = %d, want every row:\n%s", rowCount(full), full)
+	}
+}
+
+func TestNoWaitsOnReferencesAHiddenDoneRow(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "gate"}, {Text: "work", DependsOn: ptrTo("gate")}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
+		t.Fatalf("start gate: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, "t1", "s1"); err != nil {
+		t.Fatalf("complete gate: %v", err)
+	}
+	read, err := todostore.Read(ctx, db, "s1")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(read, "waits on") {
+		t.Errorf("a hidden (done) dep must not leave a waits-on suffix:\n%s", read)
+	}
+	if !strings.Contains(read, "work") {
+		t.Errorf("the unblocked dependent vanished:\n%s", read)
+	}
+}
+
+func TestFailedAndForeignClaimedRowsSurviveTheFilter(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "failme"}, {Text: "watched"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	failID := taskIDText(t, reply, "failme")
+	watched := taskIDText(t, reply, "watched")
+	if _, err := todostore.Start(ctx, db, failID, sessA); err != nil {
+		t.Fatalf("start failme: %v", err)
+	}
+	if _, err := todostore.Fail(ctx, db, failID, sessB); err != nil {
+		t.Fatalf("fail failme: %v", err)
+	}
+	if _, err := todostore.Start(ctx, db, watched, sessA); err != nil {
+		t.Fatalf("start watched: %v", err)
+	}
+	read, err := todostore.Read(ctx, db, sessB)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(read, "[!] failme") {
+		t.Errorf("failed row dropped by the filter:\n%s", read)
+	}
+	if !strings.Contains(read, "claimed by "+sessA) {
+		t.Errorf("foreign-claimed row lost its claim label:\n%s", read)
+	}
+}
+
+func TestEachTransitionEchoesOneAffectedLine(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	var echoes []string
+	for _, id := range []string{"t1", "t2", "t3"} {
+		if _, err := todostore.Start(ctx, db, id, "s1"); err != nil {
+			t.Fatalf("start %s: %v", id, err)
+		}
+		done, err := todostore.Complete(ctx, db, id, "s1")
+		if err != nil {
+			t.Fatalf("complete %s: %v", id, err)
+		}
+		echoes = append(echoes, done)
+	}
+	for i, e := range echoes {
+		if rowCount(e) != 1 {
+			t.Errorf("echo %d shows %d rows, want exactly the affected line:\n%s", i, rowCount(e), e)
+		}
+		if !strings.Contains(e, "completed") {
+			t.Errorf("echo %d lost its note:\n%s", i, e)
+		}
+	}
+}
