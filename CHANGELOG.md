@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.7.0] — the reload and the forge
+
+- **plugins register without a restart** (`specs/SPEC_PLUGINS.md`
+  decision 8): `plugins_reload`, the fifteenth native — re-runs the
+  discovery over the rig home's `plugins/` directory (the same loud
+  skips, the same collision refusal, removal free: the list rebuilds
+  from disk) and swaps the kernel's tool list at the root. The seam
+  is named and built (`middleware/toolset`, pure core): the root owns
+  one live tool table — a provider wrapper stamps the table's specs
+  into every request before delegating, and a middleware, innermost
+  first, resolves a call against the table before the chain's
+  participants bound its result, falling through to the loop's own
+  exec. A swap is one atomic write to that table: the next turn's
+  request carries the new list and the new tool executes, by
+  construction — the models-switch's semantics, **zero `loop/` and
+  `core/` lines** (both byte-frozen against the branch's base), the
+  loop's snapshot is the bootstrap and the table is the truth.
+  `/plugins reload` is the operator's verb (the same re-discovery,
+  from the command door); `/plugins create <text>` queues the
+  authoring prompt (the steer precedent: the command queues a line,
+  never dispatches a turn) — the forge's contract, the model
+  authors, the plugin lands in the pending zone (SPEC_SANDBOX's
+  provenance, the gate this decision waits on), the operator
+  approves. **The approve's tail is the reload's**:
+  `/plugins approve <name>` moves the file and re-registers, and the
+  next `/plugins` listing follows the swap (the listing reads the
+  root's state at call time). The reload imports into the running
+  kernel, so a new plugin's functions are callable from the python
+  tool immediately — the shared namespace, one process — and callable
+  as a tool on the next turn. The no-plugins wire's golden pin moves
+  with the set: the fixtures regenerate in place (the 0.2.0 wire
+  baseline, the 0.7.0 native set — 15, `plugins_reload` among them),
+  as the earlier releases' did. `core/` and `loop/` zero diff.
+  Version 0.7.0; still pre-1.0.
+
 ## [0.6.0] — the worker jail
 
 - **the scheduled worker runs jailed** (`specs/SPEC_SANDBOX.md`

@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mrsirg97-rgb/rig/plugins"
 )
 
 // TestListPluginFilesIgnoresThePendingZone (SPEC_SANDBOX, named):
@@ -34,9 +36,9 @@ func TestListPluginFilesIgnoresThePendingZone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files, err := listPluginFiles(home)
+	files, err := plugins.List(home)
 	if err != nil {
-		t.Fatalf("listPluginFiles: %v", err)
+		t.Fatalf("plugins.List: %v", err)
 	}
 	if len(files) != 1 || files[0] != filepath.Join(pluginsDir, "echo.py") {
 		t.Fatalf("the listing = %v, want only the top-level file", files)
@@ -234,8 +236,8 @@ def run(args):
 		"/plugins pending",
 	)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 4 {
-		t.Fatalf("the dispatch prints the commands' lines, got %q", out)
+	if len(lines) != 7 {
+		t.Fatalf("the dispatch prints the commands' lines (post-8: the approve's tail is the reload's), got %q", out)
 	}
 	// the listing before: the zone's file with its DESCRIPTION.
 	if !strings.Contains(lines[0], "pending") {
@@ -248,9 +250,17 @@ def run(args):
 	if !strings.Contains(lines[2], "approved forge") || !strings.Contains(lines[2], "pending") {
 		t.Fatalf("the approve line must name the move, got %q", lines[2])
 	}
+	// the reload's tail (post-8): the list rebuilt, the forged plugin
+	// loaded from its new top-level home.
+	if !strings.Contains(lines[3], "reload: 1 loaded, 0 skipped") {
+		t.Fatalf("the approve's tail must be the reload's (SPEC_SANDBOX, post-8), got %q", lines[3])
+	}
+	if lines[4] != "loaded:" || !strings.Contains(lines[5], "forge: the fixture forge plugin") || strings.Contains(lines[5], "pending") {
+		t.Fatalf("the reload's listing must carry the loaded plugin at its top-level home, got %q", lines[5])
+	}
 	// the listing after: empty.
-	if lines[3] != "plugins: no pending plugins" {
-		t.Fatalf("the zone must be empty after the approve, got %q", lines[3])
+	if lines[6] != "plugins: no pending plugins" {
+		t.Fatalf("the zone must be empty after the approve, got %q", lines[6])
 	}
 	// the filesystem: moved.
 	if _, err := os.Stat(filepath.Join(home, "plugins", "forge.py")); err != nil {
