@@ -10,8 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// sessions lists, shows, and resumes the workspace sessions (decision 5)
-// over the rows that exist.
 type sessionsCmd struct{}
 
 func (sessionsCmd) Name() string { return "sessions" }
@@ -49,9 +47,6 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 		}
 		return out, nil
 	case fields[0] == "resume" && len(fields) == 2:
-		// validate before mutate (decision 5's named order): the live
-		// turn and the current id refuse before the current row is
-		// touched; the unknown id is loud in the seam, before the close.
 		if liveTurn(e) {
 			return "", errors.New("sessions: a turn is live; steer or interrupt first")
 		}
@@ -73,7 +68,6 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 		}
 		return fmt.Sprintf("sessions: resumed %s (%d messages)", fields[1], n), nil
 	}
-	// the shape refusals, naming the sub-verb's shape
 	switch {
 	case len(fields) > 0 && fields[0] == "show":
 		if len(fields) == 1 {
@@ -90,11 +84,6 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 	}
 }
 
-// renderList is the plain list (decision 5): the store's order (newest
-// first, capped), one line per row, the current session marked. 'exit
-// open' is the render of a row not yet closed (ended_at NULL) — the one
-// place the word appears; the store's exit vocabulary stays
-// ok | fault | cancelled.
 func renderList(rows []SessionRow) string {
 	w := 0
 	for _, r := range rows {
@@ -114,12 +103,6 @@ func renderList(rows []SessionRow) string {
 	return b.String()
 }
 
-// RenderShow is the plain transcript projection render (decision 5):
-// numbered in projection order, headers always [n]-prefixed so
-// grep '^\[' walks the conversation; multi-line content keeps its lines
-// verbatim (unindented — the [n] prefix is what makes a header a
-// header); the compaction summary renders as an ordinary user row, the
-// marker in the content self-describing.
 func RenderShow(s *core.Session) string {
 	var b strings.Builder
 	n := 0
