@@ -8,10 +8,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-type allowlist struct {
-	allowed map[string]bool
-}
-
 func Allowlist(names ...string) core.ToolMiddleware {
 	allowed := make(map[string]bool, len(names))
 	for _, n := range names {
