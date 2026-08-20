@@ -105,7 +105,11 @@ func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
 
 	cmd := exec.Command(bin, "run-job", key)
 	cmd.Dir = t.TempDir()
-	cmd.Env = append(os.Environ(), "PATH="+binDir, "HOME="+scratch, "XDG_CONFIG_HOME="+scratch)
+	// The door is the subject: the busy check must pass regardless of
+	// what this machine has on the default swap port — the fake
+	// endpoint does (the door's off sibling pins it the same way).
+	cmd.Env = append(os.Environ(), "PATH="+binDir, "HOME="+scratch, "XDG_CONFIG_HOME="+scratch,
+		"RIG_SWAP_URL="+newSwapServer(t).URL)
 	out, runErr := cmd.CombinedOutput()
 	if runErr != nil {
 		t.Fatalf("recorded outcomes exit 0: %v\n%s", runErr, out)
