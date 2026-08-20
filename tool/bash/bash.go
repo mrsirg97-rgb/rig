@@ -1,5 +1,3 @@
-// Package bash is the bash(1) tool: real subprocesses, output surfaced to
-// the model, bounded.
 package bash
 
 import (
@@ -17,7 +15,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// outputCap bounds the work one call can induce on the transcript.
 const outputCap = 256 * 1024
 
 type tool struct{}
@@ -59,9 +56,7 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	if a.Cwd != "" {
 		cmd.Dir = a.Cwd
 	}
-	// background children: bash exits but its descendants hold the pipes.
-	// WaitDelay bounds the pipe wait after exit; Setpgid + Cancel take the
-	// whole group down on cancellation.
+
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = time.Second
 	cmd.Cancel = func() error {
@@ -98,15 +93,11 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 		if ctx.Err() != nil {
 			return withCwd, ctx.Err()
 		}
-		// a clean exit with background descendants cut off (the
-		// WaitDelay's): the foreground succeeded — the success stays
-		// byte-identical (the piped goldens hold).
+
 		if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
 			return content, nil
 		}
-		// a failure names the cwd (SPEC_UX 3): the "where am I" probe
-		// after a path error costs a line, not a call. One line, only on
-		// failure.
+
 		return withCwd, fmt.Errorf("bash: %w", err)
 	}
 	return content, nil
