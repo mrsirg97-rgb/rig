@@ -1,6 +1,7 @@
 package models_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -98,7 +99,7 @@ func TestResolveReturnsTheKnownRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if m != legal {
+	if !reflect.DeepEqual(m, legal) {
 		t.Fatalf("Resolve = %+v, want the table row %+v", m, legal)
 	}
 }
@@ -116,7 +117,7 @@ func TestResolveEnvOverlaysTheActiveRow(t *testing.T) {
 	}
 	want := legal
 	want.Window = 32768
-	if m != want {
+	if !reflect.DeepEqual(m, want) {
 		t.Fatalf("Resolve = %+v, want the row with the env's window only (+%d)", m, want.Window-legal.Window)
 	}
 
@@ -183,7 +184,7 @@ func TestResolveSynthesizesFromEnv(t *testing.T) {
 	// the synthesized row carries its role (SPEC_CONFIG 4): the env path
 	// has no file to borrow one from, and the default is interactive.
 	want := models.Model{ID: "brain", Window: 262144, MaxTokens: 16384, Reserve: 16384, KeepRecent: 32768, Role: models.RoleInteractive}
-	if m != want {
+	if !reflect.DeepEqual(m, want) {
 		t.Fatalf("row = %+v, want %+v", m, want)
 	}
 }

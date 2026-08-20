@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -833,7 +834,7 @@ func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	if !ok {
 		t.Fatal("the runtime table lost local (the file row must list under its id)")
 	}
-	if listed != resolved {
+	if !reflect.DeepEqual(listed, resolved) {
 		t.Fatalf("/models would list %#+v, want the in-effect row %#+v", listed, resolved)
 	}
 }
@@ -962,7 +963,7 @@ func TestModelsFileRowListsAndSwitches(t *testing.T) {
 	if len(modelsOut) == 0 || modelsOut[len(modelsOut)-1] != "brain" {
 		t.Fatalf("the turn after the switch must carry brain, got %v", modelsOut)
 	}
-	if h.r.row != brain {
+	if !reflect.DeepEqual(h.r.row, brain) {
 		t.Fatalf("the active row = %+v, want the file's brain row", h.r.row)
 	}
 	h.finish(done)

@@ -115,6 +115,7 @@ type tui struct {
 	// Prompt + Completion, or the compact's Kept).
 	statusModel   string
 	statusEffort  string
+	statusRole    string
 	statusWindow  int
 	statusUsed    int
 	statusHasUsed bool
@@ -217,6 +218,7 @@ func WithCommands(cmds []core.Command, env any) Option {
 		if e, ok := env.(*command.Env); ok {
 			e.Steer = t
 			command.ModelHints(cmds, e)
+			command.EffortHints(cmds, e)
 		}
 	}
 }
@@ -1203,7 +1205,7 @@ func (t *tui) liveLinesLocked() []string {
 // statusLineLocked is the status row (under mu; decision 3): the
 // model, and used over the window once a turn has run.
 func (t *tui) statusLineLocked() string {
-	st := RenderStatusLine(t.theme, t.statusModel, t.statusUsed, t.statusWindow, t.statusHasUsed,
+	st := RenderStatusLine(t.theme, t.statusModel, t.statusRole, t.statusUsed, t.statusWindow, t.statusHasUsed,
 		t.statusUp, t.statusDown, t.statusCache)
 	if st == "" {
 		return ""
@@ -1222,6 +1224,7 @@ func (t *tui) sessionStartLocked() string {
 		in := t.statusIn(context.Background())
 		t.statusModel = in.Model
 		t.statusEffort = in.Effort
+		t.statusRole = in.Role
 		t.statusWindow = in.Window
 		t.statusUsed = 0
 		t.statusHasUsed = false
@@ -1281,6 +1284,8 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		refresh, fresh = true, true
 	case name == "models" && args != "":
 		refresh = true // the same context under a new window: the used number stands
+	case name == "role" && args != "":
+		refresh = true // the stance's segment rides the status row: refreshed on a switch
 	}
 	if out != "" {
 		t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
@@ -1293,6 +1298,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		in := t.statusIn(context.Background())
 		t.statusModel = in.Model
 		t.statusEffort = in.Effort
+		t.statusRole = in.Role
 		t.statusWindow = in.Window
 		if fresh {
 			t.statusUsed = 0

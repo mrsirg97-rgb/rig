@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,6 +35,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/plugins"
 	"github.com/mrsirg97-rgb/rig/policy/compact"
+	effort "github.com/mrsirg97-rgb/rig/policy/effort"
 	"github.com/mrsirg97-rgb/rig/provider/openai"
 	"github.com/mrsirg97-rgb/rig/store"
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
@@ -87,6 +89,12 @@ type root struct {
 	activeID string       // the active model id — the root's one mutable string every closure reads
 	row      models.Model // the active row (the root's own resolution)
 	runtime  models.Table // the merged table plus, when the resolution overlaid or synthesized the active row, that row (6)
+
+	// effort and role are the session's dials (SPEC_MODES 1, 2): runtime
+	// state at the root, next-turn by construction, reset by /new and
+	// never persisted — a resume keeps the current values.
+	effort string // the active effort ("" = the server default, today's bytes)
+	role   string // the active stance ("" = default, no injection)
 
 	session *core.Session
 	rec     *state.Recorder
@@ -189,12 +197,16 @@ func wire(r *root) *rig.Kernel {
 	return k
 }
 
-// buildSystem is the prompt assembly (SPEC_CONFIG 6, SPEC_UX 2): the
-// system, the AGENTS.md pair, the remembered notes, and the
-// participants' guidelines — in that order, empty segments skipped.
-// It is computed at session start and the refresh points (new, resume),
-// never per turn: the segment rides the prefix, and its cost is prefix
-// tokens — the cap is the point.
+// buildSystem is the prompt assembly (SPEC_CONFIG 6, SPEC_UX 2,
+// SPEC_MODES 2): the system, the stance's prose when a role is set, the
+// AGENTS.md pair, the remembered notes, and the participants' guidelines
+// — in that order, empty segments skipped. The stance sits between the
+// system prompt and the operator's contract: it colors the identity but
+// never outranks AGENTS.md (which reads after it and wins conflicts by
+// position). default injects nothing, so the assembly is today's bytes
+// exactly. It is computed at session start and the refresh points (new,
+// resume, a role switch), never per turn: the segment rides the prefix,
+// and its cost is prefix tokens — the cap is the point.
 func (r *root) buildSystem() string {
 	mw := r.middleware
 	if mw == nil {
@@ -204,9 +216,12 @@ func (r *root) buildSystem() string {
 			guard.Bound(r.retries),
 		}
 	}
-	parts := make([]string, 0, 4)
+	parts := make([]string, 0, 5)
 	if r.system != "" {
 		parts = append(parts, r.system)
+	}
+	if seg := command.RoleProse(r.role); seg != "" {
+		parts = append(parts, seg)
 	}
 	if r.agents != "" {
 		parts = append(parts, r.agents)
@@ -304,11 +319,19 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 		panic("rig: wire: " + err.Error()) // a violating row is refused at construction
 	}
 	r.compactFn = pol.Compact // the rebuilt pair carries its own forced seam
+	// the effort decorator (SPEC_MODES 1): stamps the session's effort
+	// onto a request that has none — the main turn's, built by the loop
+	// with none — and leaves the compaction summary call's own (the
+	// row's) untouched. The compact decorator wraps the effort
+	// decorator over the same inner, so a context-length recovery (the
+	// same turn's continuation) keeps the effort, and the dial is read
+	// at call time — next-turn by construction, zero loop lines.
+	effInner := effort.Decorator(inner, func() string { return r.effort })
 	// the request's end of the live tool list (SPEC_PLUGINS 8): the
 	// table's specs stamped into every request, per call — a reload's
 	// swap rides the next turn's request by construction (the models-
 	// switch's semantics, the loop untouched).
-	return toolset.Carry(r.live, compact.Decorator(inner, pol)), pol
+	return toolset.Carry(r.live, compact.Decorator(effInner, pol)), pol
 }
 
 // swapIn is the handoff's tail (SPEC_COMMANDS 4): the retiring recorder
@@ -355,6 +378,12 @@ func (r *root) newSession(ctx context.Context) (string, error) {
 	if err := r.rec.Close("ok"); err != nil {
 		return "", fmt.Errorf("new: %v", err)
 	}
+	// /new starts at the defaults (SPEC_MODES, non-goal): the dials are
+	// session state, so a fresh session resets them before the handoff —
+	// the swap-in recomputes the assembly and rebuilds the pair with the
+	// defaults (a resume keeps the current values; it does not restore).
+	r.effort = ""
+	r.role = ""
 	s2 := core.NewSession()
 	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2)
 	if err := rec2.Ensure(); err != nil {
@@ -437,6 +466,37 @@ func (r *root) switchModel(ctx context.Context, id string) error {
 	return nil
 }
 
+// switchEffort is the effort dial's root closure (SPEC_MODES 1): set the
+// root's effort. The effort decorator reads it at call time, so the next
+// turn's request carries it by construction — no rebuild, zero loop
+// lines. An unknown level is refused in the command (which names the
+// row's list); the closure trusts the caller.
+func (r *root) switchEffort(ctx context.Context, level string) error {
+	r.effort = level
+	return nil
+}
+
+// switchRole is the role dial's root closure (SPEC_MODES 2): set the
+// root's stance, recompute the assembly, and rebuild the pair — the
+// compact policy captures the assembled system, so the role change must
+// rebuild it for the next turn's request to see the stance. The live
+// turn's request is already built; the change is visible on the next one
+// (the models-switch semantics).
+func (r *root) switchRole(ctx context.Context, name string) error {
+	if !command.ValidRole(name) {
+		return fmt.Errorf("role: %q is not a role (default, architect, reviewer)", name)
+	}
+	if name == "default" {
+		name = ""
+	}
+	r.role = name
+	r.fullSystem = r.buildSystem()
+	provider, pol := r.buildPair()
+	r.k.Provider = provider
+	r.k.Policy = pol
+	return nil
+}
+
 // swapPlugins is the reload's rebuild (SPEC_PLUGINS 8): the discovery's
 // reports into the live list — the natives (the set's order) and the
 // loaded (the file order), the wire's shape — one atomic write to the
@@ -491,7 +551,7 @@ func (r *root) reloadPlugins(ctx context.Context) (string, error) {
 // it. A table the operator cannot see is a table the operator cannot
 // use.
 func runtimeTable(t models.Table, active string, resolved models.Model) models.Table {
-	if base, ok := t.Get(active); ok && base == resolved {
+	if base, ok := t.Get(active); ok && reflect.DeepEqual(base, resolved) {
 		return t
 	}
 	rows := make([]models.Model, 0, len(t.Known())+1)
@@ -620,7 +680,7 @@ func tuiTrueColor() bool {
 // root's (the store is its), at the refresh points only.
 func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 	return func(ctx context.Context) tui.StatusIn {
-		b := tui.StatusIn{Model: r.activeID, Effort: r.row.Effort, Window: r.row.Window}
+		b := tui.StatusIn{Model: r.activeID, Effort: r.row.Effort, Window: r.row.Window, Role: r.role}
 		if r.session == nil {
 			return b
 		}
@@ -1027,6 +1087,11 @@ func main() {
 		Models:        func() models.Table { return r.runtime },
 		ActiveModel:   func() string { return r.activeID },
 		SwitchModel:   r.switchModel,
+		Effort:        func() string { return r.effort },
+		Efforts:       func() []string { return r.row.Efforts },
+		SetEffort:     r.switchEffort,
+		Role:          func() string { return r.role },
+		SetRole:       r.switchRole,
 		Tools:         r.tools,
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
 		Reload:        r.reloadPlugins,

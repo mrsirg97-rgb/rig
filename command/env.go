@@ -37,6 +37,11 @@ type Env struct {
 	Models        func() models.Table
 	ActiveModel   func() string
 	SwitchModel   func(ctx context.Context, id string) error
+	Effort        func() string   // the active effort ("" = the server default, SPEC_MODES 1)
+	Efforts       func() []string // the active row's available levels (empty = the dial is off)
+	SetEffort     func(ctx context.Context, level string) error
+	Role          func() string // the active stance ("" = default)
+	SetRole       func(ctx context.Context, name string) error
 	Tools         map[string]core.Tool
 
 	Plugins    func() []PluginInfo

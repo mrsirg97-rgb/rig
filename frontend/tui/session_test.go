@@ -1102,7 +1102,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	// height at this width is the renderer's business; the test
 	// measures it and slices above.
 	statusRows := 1 // the margin under the input
-	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", 0, 262144, false,
+	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "", 0, 262144, false,
 		214000, 18200, 187000)), "\n") {
 		statusRows += (displayWidth(r) + 9) / 10
 	}
