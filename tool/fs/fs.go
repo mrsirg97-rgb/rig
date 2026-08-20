@@ -1,6 +1,3 @@
-// Package fs provides named filesystem tools: ls, find, grep. Named tools
-// with small schemas are what a local model reaches for; `bash grep` is
-// where it fumbles quoting. Stdlib only: WalkDir, regexp, path.Match.
 package fs
 
 import (
@@ -21,37 +18,31 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// Hard result caps. Truncation is named in the output, never silent;
-// matches beyond a cap count, not accumulate, so memory stays bounded.
 const (
-	lsCap   = 1000 // entries
-	findCap = 1000 // paths
-	grepCap = 500  // match lines
-	lineCap = 512  // result bytes per matched line
+	lsCap   = 1000
+	findCap = 1000
+	grepCap = 500
+	lineCap = 512
 )
 
-const binaryPeek = 8 << 10 // a NUL byte within the first 8 KiB marks binary
+const binaryPeek = 8 << 10
 
-// lsArgs names one directory level.
 type lsArgs struct {
 	Path   string `json:"path"`
 	Hidden bool   `json:"hidden"`
 }
 
-// findArgs names a glob under a root.
 type findArgs struct {
 	Pattern string `json:"pattern"`
 	Root    string `json:"root"`
 }
 
-// grepArgs names a regexp under a root, optionally path-restricted.
 type grepArgs struct {
 	Pattern string `json:"pattern"`
 	Root    string `json:"root"`
 	Glob    string `json:"glob"`
 }
 
-// tool is the shared shape: name, description, hand-authored schema, exec.
 type tool struct {
 	name        string
 	description string
@@ -69,7 +60,6 @@ func (t *tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	return t.exec(ctx, args)
 }
 
-// LS lists one directory level.
 func LS() core.Tool {
 	return &tool{
 		name:        "ls",
@@ -79,7 +69,6 @@ func LS() core.Tool {
 	}
 }
 
-// Find searches by glob name under a root; ** spans directories.
 func Find() core.Tool {
 	return &tool{
 		name:        "find",
@@ -89,7 +78,6 @@ func Find() core.Tool {
 	}
 }
 
-// Grep searches file lines under a root with a Go regexp.
 func Grep() core.Tool {
 	return &tool{
 		name:        "grep",
@@ -206,7 +194,7 @@ func grepExec(ctx context.Context, data json.RawMessage) (string, error) {
 		}
 		f, err := os.Open(filepath.Join(root, filepath.FromSlash(rel)))
 		if err != nil {
-			*sk += 1 // unreadable at use: counted with the walk's skips
+			*sk += 1
 			return nil
 		}
 		defer f.Close()
@@ -216,7 +204,7 @@ func grepExec(ctx context.Context, data json.RawMessage) (string, error) {
 			return nil
 		}
 		if bytes.IndexByte(peek[:n], 0) >= 0 {
-			return nil // binary: skipped
+			return nil
 		}
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return err
@@ -283,22 +271,17 @@ func (a grepArgs) pathOr(def string) string {
 	return def
 }
 
-// walk visits every entry under root, root-relative and slash-separated,
-// pruning .git subtrees. WalkDir does not follow symlinks.
-// walk visits every entry under root, root-relative and slash-separated,
-// pruning .git subtrees. Unreadable entries are skipped, counted, and named
-// in the result as [skipped: N unreadable]; WalkDir does not follow symlinks.
 func walk(root string, visit func(rel string, d fs.DirEntry, skipped *int) error) (skipped int, err error) {
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			if path == root {
-				return werr // a missing or unreadable root stays loud
+				return werr
 			}
 			skipped++
 			if d != nil && d.IsDir() {
-				return fs.SkipDir // unreadable tree: counted, pruned
+				return fs.SkipDir
 			}
-			return nil // unreadable entry: counted, walk continues
+			return nil
 		}
 		if d.IsDir() && d.Name() == ".git" {
 			return fs.SkipDir
@@ -315,8 +298,6 @@ func walk(root string, visit func(rel string, d fs.DirEntry, skipped *int) error
 	return
 }
 
-// findMatch: a bare pattern (no / and no **) names the file name itself, the
-// find -name reading; anything else globs the root-relative path.
 func findMatch(rel, pattern string) bool {
 	if !strings.Contains(pattern, "/") && !strings.Contains(pattern, "**") {
 		ok, _ := filepath.Match(pattern, filepath.Base(rel))
@@ -325,9 +306,6 @@ func findMatch(rel, pattern string) bool {
 	return globMatch(rel, pattern)
 }
 
-// globMatch reports whether the slash-separated relative path rel matches
-// pattern; a ** segment spans zero or more segments, everything else is
-// path.Match. Recursive over pattern segments, bounded by their count.
 func globMatch(rel, pattern string) bool {
 	seg := func(s string) []string { return strings.Split(s, "/") }
 	ps, qs := seg(pattern), seg(rel)

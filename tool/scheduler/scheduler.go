@@ -1,7 +1,3 @@
-// Package scheduler adapts the scheduler store to rig's tool seam: the
-// description, guidelines, schema, and runtime voices; the Exec mapping
-// onto the store's verbs with the threaded session attribution (the
-// adapter consumes opened seams).
 package scheduler
 
 import (
@@ -16,9 +12,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// description is the tool's description, built from the default job
-// model (SPEC_CONFIG 5: the constant leaves code for the settings' file
-// layer; the root passes the resolved value).
 func description(defModel string) string {
 	return "Background jobs on the user's crontab, bound to the worker GPU. " +
 		"create schedules a headless worker session (5-field vixie cron 'M H D Mo DOW', " +
@@ -32,9 +25,6 @@ func description(defModel string) string {
 		"Default model: " + defModel + "."
 }
 
-// guidelines is the operational guidance; folded after the
-// description in Description() since rig's tool surface carries no
-// separate guidelines channel.
 const guidelines = "Guidelines: " +
 	"recurring/one-shot background work -> scheduler create; the job runs a headless worker session on the worker model. " +
 	"default scope is cwd; scope:'global' for machine-wide jobs. ids jN are per scope: copy from list, never invent. " +
@@ -42,8 +32,6 @@ const guidelines = "Guidelines: " +
 	"cron is 5-field 'M H D Mo DOW'; 'once' + at:<ISO> fires at that minute and self-deletes; a failed once job is done-with-fail, re-create to retry. " +
 	"list flags drift (store vs crontab): a drifting job is not trustworthy until the drift note is gone."
 
-// schemaJSON is the tool's schema, built from the default job model
-// (SPEC_CONFIG 5: the parameter's voice is the passed value).
 func schemaJSON(defModel string) string {
 	return `{
 	"type": "object",
@@ -116,34 +104,21 @@ type adapter struct {
 	st        sched.Stores
 	ct        sched.Crontab
 	runnerCmd string
-	defModel  string // the default job model (the settings' defaultJobModel)
+	defModel  string
 }
 
-// New consumes the opened seams: both-scope stores, the crontab shim,
-// the runner command the crontab lines embed, and the default job model
-// (SPEC_CONFIG 5) — the description, the schema text, and the job a
-// create without a model are all built from it.
 func New(st sched.Stores, ct sched.Crontab, runnerCmd, defModel string) core.Tool {
 	return adapter{st: st, ct: ct, runnerCmd: runnerCmd, defModel: defModel}
 }
 
-// Name implements core.Tool.
 func (a adapter) Name() string { return "scheduler" }
 
-// Description implements core.Tool: the description with guidelines
-// folded (rig's surface has no separate channel).
 func (a adapter) Description() string { return description(a.defModel) + "\n\n" + guidelines }
 
-// Guidelines is the operational guidance alone, for composers that keep
-// the channels separate.
 func Guidelines() string { return guidelines }
 
-// Schema implements core.Tool.
 func (a adapter) Schema() json.RawMessage { return json.RawMessage(schemaJSON(a.defModel)) }
 
-// Exec maps the call onto the store's verbs; the store's own refusals
-// pass through. Session attribution from the threaded session, anon when
-// unthreaded.
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
 	if err := json.Unmarshal(args, &g); err != nil {
@@ -157,8 +132,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("scheduler: %v", err)
 	}
-	// scope validates before any action voice: a
-	// malformed scope is the answer even when the action would refuse.
+
 	scope, err := scopeCheck(g.Scope)
 	if err != nil {
 		return "", err
@@ -216,8 +190,6 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	}
 }
 
-// scopeCheck enforces the scope voice; empty passes through as the
-// caller's default scope.
 func scopeCheck(scope string) (string, error) {
 	if scope == "" || scope == "global" || scope == "cwd" {
 		return scope, nil

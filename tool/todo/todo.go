@@ -1,6 +1,3 @@
-// Package todo adapts store/todo to the loop's tool surface: session
-// attribution from the threaded ctx; replies exactly as the store
-// shapes them.
 package todo
 
 import (
@@ -13,8 +10,6 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
-// schemaJSON: action required, tasks for create (text plus the
-// dependsOn union), id for the verbs, pos for move.
 const schemaJSON = `{
 	"type": "object",
 	"required": ["action"],
@@ -53,7 +48,6 @@ const schemaJSON = `{
 	}
 }`
 
-// description: lowercase, terse.
 const description = "Task queue per working directory. action REQUIRED. create replaces the queue (tasks: [{text}]); " +
 	"start/complete/fail/retry transition one task by id; read prints it. " +
 	"pending -> in_progress -> done (read-only) or failed; failed -> retry -> pending. " +
@@ -68,12 +62,8 @@ const description = "Task queue per working directory. action REQUIRED. create r
 	"(staleness epochs reset), replay stays exact. " +
 	"every mutation returns the full queue. ids are minted by the tool; copy, never invent."
 
-// adapter is the surface over one opened workspace store. The root
-// resolves the workspace file and hands the constructor its db; this seam
-// only consumes it.
 type adapter struct{ db store.DB }
 
-// New hands the opened store to the surface.
 func New(db store.DB) core.Tool { return adapter{db: db} }
 
 func (a adapter) Name() string        { return "todo" }
@@ -82,7 +72,6 @@ func (a adapter) Schema() json.RawMessage {
 	return json.RawMessage(schemaJSON)
 }
 
-// given is one decoded call.
 type given struct {
 	Action string           `json:"action"`
 	Tasks  []map[string]any `json:"tasks"`
@@ -90,8 +79,6 @@ type given struct {
 	Pos    *int             `json:"pos"`
 }
 
-// Exec maps the call onto the store's verbs with the threaded session.
-// The store's own refusals pass through.
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
 	if err := json.Unmarshal(args, &g); err != nil {
@@ -139,8 +126,6 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	}
 }
 
-// itemsOf validates the create payload loudly and maps it to the store's
-// item shape, carrying explicit-null versus omitted through.
 func itemsOf(tasks []map[string]any) ([]todostore.CreateItem, error) {
 	if tasks == nil {
 		return nil, fmt.Errorf("action 'create' requires tasks: array of {text}")

@@ -1,11 +1,3 @@
-// The engine (SPEC_DIFF decision 2): two strings in, a unified diff out
-// in git's layout (context 3), the empty string when identical. Pure.
-//
-// A plain LCS table: dp[i][j] is the LCS of the suffixes a[i:] and b[j:],
-// filled in O(N*M) and walked back into the edit script. O(N*M) is
-// deliberate: the inputs are tool results (KBs) and the reply is capped
-// at 100 lines, so the table is bounded by the bound the cap already
-// imposes.
 package diff
 
 import (
@@ -15,15 +7,11 @@ import (
 
 const contextLines = 3
 
-// line is one record: its text plus whether it ends the string without a
-// trailing newline. The absence of the newline is part of the record, so
-// "foo" and "foo\n" are different lines.
 type line struct {
 	text string
 	eof  bool
 }
 
-// lines splits a string into records; a trailing newline is not a record.
 func lines(s string) []line {
 	if s == "" {
 		return nil
@@ -37,17 +25,11 @@ func lines(s string) []line {
 	return out
 }
 
-// tok is one step of the edit script: 'm' match, 'd' delete (a record of
-// the old), 'i' insert (a record of the new); idx indexes the side the
-// step consumes.
 type tok struct {
 	kind byte
 	idx  int
 }
 
-// script fills the LCS table and walks it back into the edit script. Ties
-// break to the delete (the move that keeps the old index), which is what
-// puts deletions before insertions in the output — git's order.
 func script(a, b []line) []tok {
 	n, m := len(a), len(b)
 	dp := make([][]int, n+1)
@@ -92,12 +74,8 @@ func script(a, b []line) []tok {
 	return out
 }
 
-// hunk is a contiguous slice of the script, expanded by the context.
 type hunk struct{ from, to int }
 
-// hunks groups the script's edits: each maximal run holding an edit,
-// expanded by contextLines records on each side, and merged with the next
-// when the two contexts touch (a gap of at most 2*contextLines records).
 func hunks(toks []tok) []hunk {
 	var out []hunk
 	for k := 0; k < len(toks); {
@@ -128,9 +106,6 @@ func hunks(toks []tok) []hunk {
 	return out
 }
 
-// side renders one side of a @@ header: the 1-based start and the count,
-// the count omitted when 1, a zero-count side keeping ",0" with the start
-// the record before the edit (git's rule).
 func side(start, count int) string {
 	if count == 0 {
 		return strconv.Itoa(start) + ",0"
@@ -141,8 +116,6 @@ func side(start, count int) string {
 	return strconv.Itoa(start+1) + "," + strconv.Itoa(count)
 }
 
-// Diff is the engine's public face (decision 7): two strings, two labels,
-// a unified diff — the empty string when identical.
 func Diff(old, new string, oldLabel, newLabel string) string {
 	a, b := lines(old), lines(new)
 	toks := script(a, b)
@@ -150,7 +123,7 @@ func Diff(old, new string, oldLabel, newLabel string) string {
 	if len(hs) == 0 {
 		return ""
 	}
-	oldc := make([]int, len(toks)+1) // old records consumed before each token
+	oldc := make([]int, len(toks)+1)
 	newc := make([]int, len(toks)+1)
 	for k, tk := range toks {
 		oldc[k+1], newc[k+1] = oldc[k], newc[k]

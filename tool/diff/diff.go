@@ -1,9 +1,3 @@
-// Package diff is the observation diff (SPEC_DIFF): one leaf tool, two
-// verbs. files: the working tree against HEAD (or ref), via git diff —
-// the shell-out is the files verb's contract (decision 1). last: the
-// previous observation of the same tool call (this session only) from
-// the state store — a read path over the transcript; the diff itself
-// is the pure Go engine (Diff), stdlib only.
 package diff
 
 import (
@@ -23,14 +17,10 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state"
 )
 
-// capLines bounds the body of a reply (decision 2): over the cap, the
-// first capLines-1 lines are kept, the tail is the loud marker.
 const capLines = 100
 
 type tool struct{ db store.DB }
 
-// New hands the state DB to the surface (decision 7): registered at
-// the root, once, at the seam; the session comes from ctx.
 func New(db store.DB) core.Tool { return tool{db: db} }
 
 func (tool) Name() string { return "diff" }
@@ -79,8 +69,6 @@ const schemaJSON = `{
   }
 }`
 
-// Exec dispatches the verb and carries the pinned voices (decision 6:
-// loud, naming the reason).
 func (t tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(args, &keys); err != nil {
@@ -156,9 +144,6 @@ func (t tool) lastArgs(keys map[string]json.RawMessage) (string, json.RawMessage
 	return name, argsRaw, n, nil
 }
 
-// files shells out to git diff (decision 1): --no-color, -U3, the
-// process cwd, the one-dot ref form (ref vs working tree), optional
-// paths. The body is capped; a clean tree is the word identical.
 func (t tool) files(ctx context.Context, ref string, paths []string) (string, error) {
 	cmdArgs := []string{"diff", "--no-color", "-U3"}
 	if ref != "" {
@@ -195,9 +180,6 @@ func (t tool) files(ctx context.Context, ref string, paths []string) (string, er
 	return capBody(body), nil
 }
 
-// last is the read path (decision 5): the session's rows only, the
-// same call matched by canonical args equality at query time, the
-// pair diffed by the engine, the header naming both observations.
 func (t tool) last(ctx context.Context, name string, argsRaw json.RawMessage, n int) (string, error) {
 	sess, ok := core.SessionFrom(ctx)
 	if !ok || sess == nil {
@@ -226,7 +208,6 @@ func (t tool) last(ctx context.Context, name string, argsRaw json.RawMessage, n 
 	return header + "\n\n" + capBody(body), nil
 }
 
-// firstLine returns the first non-empty trimmed line of s.
 func firstLine(s string) string {
 	for _, line := range strings.Split(s, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
@@ -236,8 +217,6 @@ func firstLine(s string) string {
 	return ""
 }
 
-// capBody applies the cap (decision 2): over the cap, the first
-// capLines-1 lines are kept and the tail is the loud marker.
 func capBody(body string) string {
 	ln := strings.Split(body, "\n")
 	if len(ln) <= capLines {
