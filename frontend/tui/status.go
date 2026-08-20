@@ -54,7 +54,7 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, wi
 	sep := t.Paint(SlotDim, " · ")
 	row1 := t.Paint(SlotText, model)
 	if hasUsed && window > 0 {
-		pct := used * 100 / window
+		pct := int(int64(used) * 100 / int64(window))
 		slot := SlotDim
 		switch {
 		case pct >= 90:
@@ -76,7 +76,7 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, wi
 	}
 	hit := 0
 	if up > 0 {
-		hit = cacheRead * 100 / up
+		hit = int(int64(cacheRead) * 100 / int64(up))
 	}
 	row3 := t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
 		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))

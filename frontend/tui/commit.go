@@ -26,7 +26,7 @@ func formatTokens(n int) string {
 func RenderUsage(t Theme, up, down, cacheRead int) string {
 	hit := 0
 	if up > 0 {
-		hit = cacheRead * 100 / up
+		hit = int(int64(cacheRead) * 100 / int64(up))
 	}
 	return t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
 		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))
