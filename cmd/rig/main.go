@@ -29,6 +29,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/loop"
+	"github.com/mrsirg97-rgb/rig/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/middleware/toolset"
@@ -56,8 +57,9 @@ import (
 // Version is the binary's release version: pre-1.0, still feature-
 // complete (the home and the plugins in 0.4.0, the plugin provenance
 // rule in 0.5.0, the worker jail in 0.6.0, the plugin reload and the
-// forge in 0.7.0) — the 1.0 tag waits for lived use.
-const Version = "0.7.0"
+// forge in 0.7.0, the modes — effort, role, approval — in 0.8.0) —
+// the 1.0 tag waits for lived use.
+const Version = "0.8.0"
 
 // root is the process's mutable wiring state (SPEC_COMMANDS 2): the
 // active model, the row, the recorder, the session — the state the
@@ -95,6 +97,16 @@ type root struct {
 	// never persisted — a resume keeps the current values.
 	effort string // the active effort ("" = the server default, today's bytes)
 	role   string // the active stance ("" = default, no injection)
+
+	// approve is the tool-approval dial (SPEC_MODES 4): session state
+	// like the other two, but its default is the operator's standing
+	// choice (settings.json "approve") — /new resets to the default,
+	// not to a hardcoded auto. The ask door is the frontend's, wired
+	// when the frontend can ask (the TUI); without a door the gate is
+	// not wired and manual is refused at the command.
+	approve        string // the active mode: "auto" or "manual"
+	approveDefault string // the settings default (/new's reset target)
+	askDoor        func(ctx context.Context, prompt string) bool
 
 	session *core.Session
 	rec     *state.Recorder
@@ -167,10 +179,21 @@ func wire(r *root) *rig.Kernel {
 		// lists before the allow-list, as before (SPEC_SANDBOX 2).
 		mw = []core.ToolMiddleware{
 			toolset.Resolve(r.live),
+		}
+		// the approval gate (SPEC_MODES 4): wired only when the frontend
+		// can ask (the TUI's door) — a -p worker or a plain CLI never
+		// asks, by construction. Listed after the router (first-listed
+		// is innermost), so the allow-list and the provenance rule are
+		// consulted first: the operator is only ever asked about a call
+		// that would actually run.
+		if r.askDoor != nil {
+			mw = append(mw, approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating))
+		}
+		mw = append(mw,
 			perm.Plugins(r.pluginsDir),
 			perm.Allowlist(r.allow...),
 			guard.Bound(r.retries),
-		}
+		)
 	}
 	// The guidelines ride the system prompt, not the chain (decision 6):
 	// prompt assembly belongs to the prompt, and the prompt string is the
@@ -382,8 +405,10 @@ func (r *root) newSession(ctx context.Context) (string, error) {
 	// session state, so a fresh session resets them before the handoff —
 	// the swap-in recomputes the assembly and rebuilds the pair with the
 	// defaults (a resume keeps the current values; it does not restore).
+	// The approval dial resets to the settings default, not to auto.
 	r.effort = ""
 	r.role = ""
+	r.approve = r.approveDefault
 	s2 := core.NewSession()
 	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2)
 	if err := rec2.Ensure(); err != nil {
@@ -475,6 +500,15 @@ func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	return note, nil
 }
 
+// firstNonEmpty is the settings-default descent: the file's value when
+// set, else the fallback.
+func firstNonEmpty(v, fallback string) string {
+	if v != "" {
+		return v
+	}
+	return fallback
+}
+
 // hasLevel reports whether the row's efforts name the level.
 func hasLevel(levels []string, level string) bool {
 	for _, l := range levels {
@@ -492,6 +526,38 @@ func hasLevel(levels []string, level string) bool {
 // row's list); the closure trusts the caller.
 func (r *root) switchEffort(ctx context.Context, level string) error {
 	r.effort = level
+	return nil
+}
+
+// mutatingNatives is the approval gate's native pause set (SPEC_MODES
+// 4): the natives that change the world outside rig's own stores. The
+// read set (read, ls, find, grep, the web pair) and the store tools
+// (todo, rem, diff) pass silently — manual is a gate, not a turnstile.
+var mutatingNatives = map[string]bool{
+	"bash": true, "write": true, "edit": true, "python": true,
+	"scheduler": true, "plugins_reload": true,
+}
+
+// isMutating is the gate's pause predicate (SPEC_MODES 4): the named
+// natives, and every plugin (arbitrary python is mutating by nature —
+// the name outside the native set is a plugin's).
+func (r *root) isMutating(name string) bool {
+	return mutatingNatives[name] || !r.natives[name]
+}
+
+// switchApprove is the approval dial's root closure (SPEC_MODES 4):
+// validate the vocabulary, refuse manual without an ask door (a
+// frontend that cannot ask must not promise to), set the dial — the
+// gate reads it at call time, so the very next tool call obeys.
+func (r *root) switchApprove(ctx context.Context, mode string) error {
+	m, ok := approve.Mode(mode)
+	if !ok {
+		return fmt.Errorf("approve: %q is not a mode (auto, manual)", mode)
+	}
+	if m == approve.Manual && r.askDoor == nil {
+		return errors.New("approve: manual needs an ask door (this frontend cannot ask)")
+	}
+	r.approve = m
 	return nil
 }
 
@@ -705,7 +771,7 @@ func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 		if eff == "" {
 			eff = r.row.Effort
 		}
-		b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role}
+		b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve}
 		if r.session == nil {
 			return b
 		}
@@ -1065,6 +1131,11 @@ func main() {
 		activeID:   modelID,
 		row:        row,
 		runtime:    runtimeTable(cfg.Models, modelID, row),
+		// the approval dial (SPEC_MODES 4): the settings default is the
+		// session's starting mode and /new's reset target; Load
+		// validated the vocabulary, empty descends to auto.
+		approve:        firstNonEmpty(cfg.Settings.Approve, approve.Auto),
+		approveDefault: firstNonEmpty(cfg.Settings.Approve, approve.Auto),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
@@ -1117,6 +1188,8 @@ func main() {
 		SetEffort:     r.switchEffort,
 		Role:          func() string { return r.role },
 		SetRole:       r.switchRole,
+		Approve:       func() string { return r.approve },
+		SetApprove:    r.switchApprove,
 		Tools:         r.tools,
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
 		Reload:        r.reloadPlugins,
@@ -1168,6 +1241,14 @@ func main() {
 	}
 	r.session = session
 	r.fe = fe // the handoff builds the fresh recorder over the same inner frontend
+	// the ask door (SPEC_MODES 4): the frontend that can ask offers the
+	// optional interface; the root wires the gate only then. The
+	// one-shot and the plain CLI offer none — a worker never asks.
+	if a, ok := fe.(interface {
+		Ask(ctx context.Context, prompt string) bool
+	}); ok {
+		r.askDoor = a.Ask
+	}
 	rec := state.NewRecorder(fe, sdb, cwd, *model, Version, session.ID, session)
 	r.rec = rec
 

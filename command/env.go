@@ -46,7 +46,12 @@ type Env struct {
 	SetEffort   func(ctx context.Context, level string) error
 	Role        func() string // the active stance ("" = default)
 	SetRole     func(ctx context.Context, name string) error
-	Tools       map[string]core.Tool
+	// Approve is the tool-approval dial (SPEC_MODES 4): auto or manual.
+	// SetApprove refuses manual when the frontend cannot ask (the root's
+	// door rule) — the refusal is the reply.
+	Approve    func() string
+	SetApprove func(ctx context.Context, mode string) error
+	Tools      map[string]core.Tool
 
 	Plugins    func() []PluginInfo
 	Reload     func(ctx context.Context) (string, error)

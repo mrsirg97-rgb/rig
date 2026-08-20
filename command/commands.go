@@ -14,6 +14,7 @@ func All() []core.Command {
 		pluginsCmd{},
 		&effortCmd{},
 		roleCmd{},
+		approveCmd{},
 	}
 }
 

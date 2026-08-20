@@ -9,5 +9,6 @@
   "swapUrl": "http://127.0.0.1:8090",
   "defaultJobModel": "qwen3.8-workers",
   "sandbox": "jailed",
-  "sandboxBinds": []
+  "sandboxBinds": [],
+  "approve": "auto"
 }

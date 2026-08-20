@@ -489,6 +489,62 @@ func TestModelSwitchResetsAForeignEffort(t *testing.T) {
 	}
 }
 
+// TestApproveDialDoorRule (SPEC_MODES 4, named): manual needs an ask
+// door — a frontend that cannot ask must not promise to; with a door
+// the dial sets, and an unknown mode refuses naming the two.
+func TestApproveDialDoorRule(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	if err := r.switchApprove(context.Background(), "manual"); err == nil ||
+		!strings.Contains(err.Error(), "ask door") {
+		t.Fatalf("manual without a door must refuse: %v", err)
+	}
+	r.askDoor = func(ctx context.Context, prompt string) bool { return true }
+	if err := r.switchApprove(context.Background(), "manual"); err != nil || r.approve != "manual" {
+		t.Fatalf("manual with a door must set: (%v, %q)", err, r.approve)
+	}
+	if err := r.switchApprove(context.Background(), "auto"); err != nil || r.approve != "auto" {
+		t.Fatalf("auto must set: (%v, %q)", err, r.approve)
+	}
+	if err := r.switchApprove(context.Background(), "yolo"); err == nil {
+		t.Fatal("an unknown mode must refuse")
+	}
+}
+
+// TestNewResetsApproveToTheSettingsDefault (SPEC_MODES 4, named): /new
+// resets the dial to the settings default, not to a hardcoded auto.
+func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	h.r.approveDefault = "manual"
+	h.r.askDoor = func(ctx context.Context, prompt string) bool { return true }
+	h.r.approve = "auto"
+	if _, err := h.r.newSession(context.Background()); err != nil {
+		t.Fatalf("newSession: %v", err)
+	}
+	if h.r.approve != "manual" {
+		t.Fatalf("/new must reset to the settings default: %q", h.r.approve)
+	}
+}
+
+// TestIsMutatingPredicate (SPEC_MODES 4, named): the named natives and
+// every plugin pause; the read set and the store tools pass.
+func TestIsMutatingPredicate(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.natives = map[string]bool{}
+	for _, n := range nativeToolNames {
+		r.natives[n] = true
+	}
+	for _, n := range []string{"bash", "write", "edit", "python", "scheduler", "plugins_reload", "gpu_stats"} {
+		if !r.isMutating(n) {
+			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
+		}
+	}
+	for _, n := range []string{"read", "ls", "find", "grep", "web_search", "web_fetch", "todo", "rem", "diff"} {
+		if r.isMutating(n) {
+			t.Errorf("%s must pass silently", n)
+		}
+	}
+}
+
 // TestSwapInKeepsDialsAndRebuilds (SPEC_MODES, named): a resume does not
 // restore the dials — it keeps the current values (they were never
 // saved), recomputes the assembly, and rebuilds the pair. The swap-in is

@@ -14,6 +14,7 @@ type StatusIn struct {
 	Effort    string
 	Window    int
 	Role      string // the session's stance ("" = default, SPEC_MODES 2)
+	Approve   string // the approval dial ("" = auto, SPEC_MODES 4)
 	Session   string // the session id (the startup block's second row)
 	Up        int    // session prompt total
 	Down      int    // session completion total
@@ -64,25 +65,24 @@ var titleRows = []string{
 }
 
 // RenderStatusLine is the live status (decision 3, amended, SPEC_MODES
-// 2 and 3): two rows under the input. The first is the model info row —
-// model · effort · used/window · role — the model in the text color,
-// the active effort in its ramp color (pane's footer, SlotEffort*;
-// accent for a level outside the ramp; skipped when the row names
-// none), the context part colored at the 70/90 marks (dim under 70,
-// warn at 70, error at 90) once a turn has run and skipped before,
-// and the stance last, abbreviated (architect -> arch, reviewer ->
-// rev, default shown as default), the dim. The second is the session's
-// usage totals: up, down, and the cache-read hit rate. The rows are
-// joined by a newline; the live region splits them (statusRows).
-func RenderStatusLine(t Theme, model, effort, role string, used, window int, hasUsed bool, up, down, cacheRead int) string {
+// 2, 3, and 4): three rows under the input. The first is identity —
+// model · used/window — the model in the text color, the context part
+// colored at the 70/90 marks (dim under 70, warn at 70, error at 90)
+// once a turn has run and skipped before. The second is the session's
+// stance — effort · role · approve — the active effort in its ramp
+// color (pane's footer, SlotEffort*; accent for a level outside the
+// ramp; skipped when the row names none), the role abbreviated
+// (architect -> arch, reviewer -> rev, default shown as default), and
+// the approval dial (manual in the warn color — the paused posture
+// should read at a glance; auto dim). The third is the usage totals:
+// up, down, and the cache-read hit rate. The rows are joined by
+// newlines; the live region splits them (statusRows).
+func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, window int, hasUsed bool, up, down, cacheRead int) string {
 	if model == "" {
 		return ""
 	}
 	sep := t.Paint(SlotDim, " · ")
 	row1 := t.Paint(SlotText, model)
-	if effort != "" {
-		row1 += sep + t.Paint(effortSlot(t, effort), effort)
-	}
 	if hasUsed && window > 0 {
 		pct := used * 100 / window
 		slot := SlotDim
@@ -94,14 +94,23 @@ func RenderStatusLine(t Theme, model, effort, role string, used, window int, has
 		}
 		row1 += sep + t.Paint(slot, formatTokens(used)+"/"+formatTokens(window))
 	}
-	row1 += sep + t.Paint(SlotDim, abbrevRole(role))
+	var row2 string
+	if effort != "" {
+		row2 = t.Paint(effortSlot(t, effort), effort) + sep
+	}
+	row2 += t.Paint(SlotDim, abbrevRole(role)) + sep
+	if approveMode == "manual" {
+		row2 += t.Paint(SlotWarn, "manual")
+	} else {
+		row2 += t.Paint(SlotDim, "auto")
+	}
 	hit := 0
 	if up > 0 {
 		hit = cacheRead * 100 / up
 	}
-	row2 := t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
+	row3 := t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
 		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))
-	return row1 + "\n" + row2
+	return row1 + "\n" + row2 + "\n" + row3
 }
 
 // effortSlot maps a level name onto the effort ramp's slot: "low" ->
