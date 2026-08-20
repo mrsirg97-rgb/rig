@@ -69,10 +69,19 @@ order (the template's words, not a rig-invented scale; llama.cpp's
 chat templates read arbitrary strings and each model family names its
 own). Absent = the dial is off for that row: `/effort` says so and
 names the key. The row's existing `effort` (the summary call's) is
-unchanged and unrelated.
+also the row's DEFAULT level (amended, the operator's field report):
+with the dial unset the decorator stamps it onto the main turn's
+request — the wire carries the level explicitly instead of leaning on
+the template's silent default, and the status row's label (the same
+dial-else-row fallback) is never a guess. The server never reports
+the applied level back, so what rig stamps is the only truth rig can
+show. A row without `effort` is today's bytes exactly, and the
+summary call is untouched either way (it sets the same row value
+itself).
 
-The active effort is root state, default empty (the server's default
-behavior — today's bytes exactly, the 0.2.0 invariant's spirit). The
+The active effort is root state, default empty (the row's default
+behavior — the empty-row case is today's bytes exactly, the 0.2.0
+invariant's spirit). The
 plumbing is a decorator, zero loop lines:
 
 ```go
