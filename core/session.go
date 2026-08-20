@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -78,5 +77,3 @@ func SessionFrom(ctx context.Context) (*Session, bool) {
 	s, ok := ctx.Value(sessionKey).(*Session)
 	return s, ok
 }
-
-var ErrNoSession = errors.New("session not threaded")
