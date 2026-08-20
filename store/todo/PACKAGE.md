@@ -11,6 +11,13 @@ moves are events. Create is the only dependency-mutation point; the DAG
 is validated there, at the boundary, and refused loudly with the problem
 in a teaching voice.
 
+The reply contract (the lean read): a transition echoes the affected
+row, the summary line, and — like every other reply — the stale footer
+when staleness is live; the moment the model acts on recovered state is
+the moment the warning matters most. Read returns the actionable queue
+(done folds into the summary), ReadAll the history, Create the full
+filtered queue.
+
 ## What it includes
 
 - `todo.go` — the store: operations, replay, position minting, the DAG

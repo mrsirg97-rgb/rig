@@ -538,7 +538,8 @@ func renderQueue(f *folded, session string, all bool) string {
 	return b.String()
 }
 
-// echoTask is the lean transition echo: the affected line plus the summary.
+// echoTask is the lean transition echo: the affected line, the summary,
+// and the stale footer when staleness is live.
 func echoTask(f *folded, session, id, note string) string {
 	var b strings.Builder
 	if note != "" {
@@ -548,6 +549,9 @@ func echoTask(f *folded, session, id, note string) string {
 		b.WriteString(lineOf(f, ts, session))
 	}
 	b.WriteString("\n" + summaryOf(f))
+	if foot := staleFooter(f); foot != "" {
+		b.WriteString("\n" + foot)
+	}
 	return b.String()
 }
 
