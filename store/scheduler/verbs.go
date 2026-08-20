@@ -15,21 +15,14 @@ import (
 	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
-// --- scope and identity plumbing ---
-
-// Stores is the two-store pairing handed to the verbs by the root: the
-// global store and this session's cwd-scoped store, opened once.
 type Stores struct {
 	Global DB
 	Cwd    DB
 }
 
-// JobKey is a parsed scheduling key: scope plus id, the hash locating the
-// cwd-scope store. One token subsumes <scope> <id>, because a cwd-scope id
-// alone cannot address its store.
 type JobKey struct {
-	Scope string // "global" | "cwd"
-	Hash  string // "" for global; 12-hex for cwd
+	Scope string
+	Hash  string
 	ID    string
 }
 
@@ -39,7 +32,6 @@ var (
 	hashRe      = regexp.MustCompile(`^[0-9a-f]{12}$`)
 )
 
-// KeyOf composes the scheduling key.
 func KeyOf(scope, hash, id string) (string, error) {
 	if scope == "global" {
 		return id, nil
@@ -50,7 +42,6 @@ func KeyOf(scope, hash, id string) (string, error) {
 	return fmt.Sprintf("cwd-%s:%s", hash, id), nil
 }
 
-// ParseKey decomposes a scheduling key. Garbage refuses.
 func ParseKey(key string) (JobKey, error) {
 	var out JobKey
 	if m := keyRe.FindStringSubmatch(key); m != nil {
@@ -64,7 +55,6 @@ func ParseKey(key string) (JobKey, error) {
 	return out, fmt.Errorf("key: bad key '%s' (want j<n> or cwd-<12hex>:j<n>)", key)
 }
 
-// StorePathFor: the scheduler home's file for one parsed key.
 func StorePathFor(home string, key JobKey) string {
 	if key.Hash != "" {
 		return filepath.Join(home, key.Hash+".sqlite")
@@ -72,7 +62,6 @@ func StorePathFor(home string, key JobKey) string {
 	return filepath.Join(home, "global.sqlite")
 }
 
-// ScopeDir names the runs/<scope>/ directory: global, or cwd-<hash>.
 func ScopeDir(key JobKey) string {
 	if key.Hash != "" {
 		return "cwd-" + key.Hash
@@ -80,8 +69,6 @@ func ScopeDir(key JobKey) string {
 	return "global"
 }
 
-// CwdHash is the workspace digest prefix: the first twelve hex digits of
-// sha1(cwd) — the store file's locator.
 func CwdHash(cwd string) string {
 	sum := sha1.Sum([]byte(cwd))
 	return hex.EncodeToString(sum[:])[:12]
@@ -108,9 +95,6 @@ func scopeHash(scope, sessionCwd string) string {
 	return CwdHash(sessionCwd)
 }
 
-// --- create ---
-
-// CreateInput is one create payload (scope "" is the cwd scope).
 type CreateInput struct {
 	Name   string
 	Prompt string
@@ -124,13 +108,10 @@ type CreateInput struct {
 
 const defaultModel = "qwen3.8-workers"
 
-// schedErr shapes the store voice: the "scheduler: ..." prefix.
 func schedErr(format string, a ...any) error {
 	return fmt.Errorf("scheduler: "+format, a...)
 }
 
-// Create schedules one job: crontab first (the visible failure mode is a
-// line with no row), then the store mutation.
 func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionCwd, session, runnerCmd string, now func() time.Time) (string, error) {
 	if now == nil {
 		now = time.Now
@@ -148,8 +129,7 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 	if scope == "global" {
 		db = st.Global
 	}
-	// where the job RUNS: explicit, else the creating session's cwd — in
-	// both scopes a job always has a working directory
+
 	jobCwd := in.Cwd
 	if jobCwd == "" {
 		jobCwd = sessionCwd
@@ -178,18 +158,15 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 		}
 		norm := t.UTC().Format(time.RFC3339)
 		at = &norm
-		// cron fires in local time; the runner's minute-granularity is the
-		// contract
+
 		lt := t.Local()
 		cron = fmt.Sprintf("%d %d %d %d *", lt.Minute(), lt.Hour(), lt.Day(), int(lt.Month()))
 	} else {
 		if _, err := ValidateCron(cron); err != nil {
-			return "", err // `cron: ...` before anything is written
+			return "", err
 		}
 	}
 
-	// read phase: duplicate-name check (live jobs only) and the candidate
-	// id the crontab key rides
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {
 		return "", err
@@ -210,7 +187,6 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 		return "", err
 	}
 
-	// crontab first: the visible failure mode is a line with no row
 	text, err := ct.List()
 	if err != nil {
 		return "", err
@@ -220,7 +196,6 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 		return "", err
 	}
 
-	// store mutation: replay fresh, compact check, event, projection
 	if err := maybeCompact(bound, tx, f, session); err != nil {
 		return "", err
 	}
@@ -255,8 +230,6 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 	return replyText(fmt.Sprintf("created %s '%s' (%s)", created.ID, created.Name, scope), lines), nil
 }
 
-// createdRow finds the job this create event produced: live, and updated by
-// exactly this event's seq.
 func createdRow(f *fold, seq int64) *jobState {
 	for _, j := range f.jobs {
 		if j.State != "removed" && j.UpdatedSeq == seq {
@@ -266,11 +239,6 @@ func createdRow(f *fold, seq int64) *jobState {
 	return nil
 }
 
-// --- state actions (pause / resume / remove) ---
-
-// Pause/Resume/Remove: the crontab write lands before the store mutation;
-// a drift (line missing) still changes the store state — list flags it
-// afterward.
 func Pause(ctx context.Context, st Stores, ct Crontab, id, scope, sessionCwd, session string) (string, error) {
 	return stateAction(ctx, st, ct, id, scope, sessionCwd, session, "pause")
 }
@@ -317,7 +285,7 @@ func stateAction(ctx context.Context, st Stores, ct Crontab, id, scope, sessionC
 	if err != nil {
 		return "", err
 	}
-	// crontab first: a failed crontab write never leaves a store mutation.
+
 	text, err := ct.List()
 	if err != nil {
 		return "", err
@@ -371,8 +339,6 @@ func stateAction(ctx context.Context, st Stores, ct Crontab, id, scope, sessionC
 	return replyText(fmt.Sprintf("%s %s -> %s", row.ID, row.Name, row.State), lines), nil
 }
 
-// jobScopeOf names which scope store this handle is (for key derivation:
-// the key rides the workspace that created the job).
 func jobScopeOf(st Stores, db DB) string {
 	if db.DB == st.Global.DB {
 		return "global"
@@ -380,10 +346,6 @@ func jobScopeOf(st Stores, db DB) string {
 	return "cwd"
 }
 
-// --- runs ---
-
-// RunRecordInput is one run record, including the runs container's
-// started/ended pair.
 type RunRecordInput struct {
 	ID       string
 	Status   string
@@ -395,9 +357,6 @@ type RunRecordInput struct {
 	Ended    string
 }
 
-// RecordRun lands one run record: the run event (the jobs projection's
-// last_* rides it), the structured runs row (seq-paired with the event, so
-// history survives compaction), and the jobs update. One transaction.
 func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {
@@ -470,7 +429,6 @@ func statusOf(s string) string {
 	return "skip"
 }
 
-// runRecord is one runs-container row as read.
 type runRecord struct {
 	Seq        int64
 	Started    string
@@ -481,8 +439,6 @@ type runRecord struct {
 	LogPath    *string
 }
 
-// Runs is the audit trail: the last n records, oldest first, a chain read
-// over the runs container (SPEC_STATE's deviation).
 func Runs(ctx context.Context, st Stores, id, scope string, n int) (string, error) {
 	if n <= 0 {
 		n = 5
@@ -505,9 +461,7 @@ func Runs(ctx context.Context, st Stores, id, scope string, n int) (string, erro
 		return "", err
 	}
 	defer tx.Rollback()
-	// the runs read: a bounded seek over this job's rows, newest first —
-	// the narrow indexed seek SPEC_STATE names for the container.
-	// Named raw arm.
+
 	rows, err := tx.Query(`SELECT seq, started_at, status, exit, duration_ms, reason, log_path FROM runs WHERE job_id = ? ORDER BY seq DESC LIMIT ?`, id, n)
 	if err != nil {
 		return "", fmt.Errorf("scheduler: runs: %w", err)
@@ -556,11 +510,6 @@ func runDetail(r runRecord) string {
 	return strings.Join(bits, " ")
 }
 
-// --- resolution ---
-
-// resolveJob resolves an id to exactly one (store, job). Unknown ids
-// refuse; ids present in both scopes refuse without an explicit scope.
-// Tombstones resolve too (runs works after remove).
 func resolveJob(ctx context.Context, st Stores, id, scope string) (DB, *jobState, bool, error) {
 	var dbs []struct {
 		scope string
@@ -578,7 +527,7 @@ func resolveJob(ctx context.Context, st Stores, id, scope string) (DB, *jobState
 			db    DB
 		}{{"cwd", st.Cwd}}
 	default:
-		// no scope: global first, then cwd; both present is ambiguous
+
 		dbs = []struct {
 			scope string
 			db    DB

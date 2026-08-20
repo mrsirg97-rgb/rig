@@ -9,24 +9,12 @@ import (
 	"strings"
 )
 
-// Crontab surgery. One tagged line per job:
-//
-//	<cron> <runnerCmd> <key>  # pane-scheduler:<key>
-//
-// paused = the same line prefixed with "# ". Only lines carrying the
-// trailing tag are ever rewritten; every other byte passes through
-// untouched. The tag text is kept for compatibility with existing crontab
-// lines.
-
 var tagRe = regexp.MustCompile(`^(?P<lead>\S.*?)\s+#\s*pane-scheduler:(?P<key>\S+)$`)
 
-// LineFor builds the exact tagged format for one job.
 func LineFor(key, cron, runnerCmd string) string {
 	return fmt.Sprintf("%s %s %s  # pane-scheduler:%s", cron, runnerCmd, key, key)
 }
 
-// Normalize: exactly one trailing newline for non-empty text; empty stays
-// empty.
 func Normalize(text string) string {
 	trimmed := strings.TrimRight(text, "\n")
 	if trimmed == "" {
@@ -35,15 +23,12 @@ func Normalize(text string) string {
 	return trimmed + "\n"
 }
 
-// TaggedLine is one discovered job line, in file order.
 type TaggedLine struct {
 	Key    string
 	Cron   string
 	Paused bool
 }
 
-// Scan returns all tagged lines. Lookalikes (prose, mid-line, standalone
-// comment tags) never match: the tag must trail a non-empty line.
 func Scan(text string) []TaggedLine {
 	var out []TaggedLine
 	for _, raw := range strings.Split(text, "\n") {
@@ -96,8 +81,6 @@ func findTagIndex(lines []string, key string) int {
 	return -1
 }
 
-// UpsertLine appends (new key) or replaces in place (existing key, becomes
-// active). Foreign lines are untouched.
 func UpsertLine(text, key, cron, runnerCmd string) (string, bool) {
 	lines := linesOf(text)
 	line := LineFor(key, cron, runnerCmd)
@@ -110,9 +93,6 @@ func UpsertLine(text, key, cron, runnerCmd string) (string, bool) {
 	return joinLines(lines), false
 }
 
-// SetPaused comments the line out (pause) or strips exactly the "# "
-// prefix (resume). Idempotent; a missing key changes nothing and reports
-// found=false.
 func SetPaused(text, key string, paused bool) (string, bool) {
 	lines := linesOf(text)
 	idx := findTagIndex(lines, key)
@@ -133,7 +113,6 @@ func SetPaused(text, key string, paused bool) (string, bool) {
 	return joinLines(lines), true
 }
 
-// RemoveLine deletes the line (active or paused); no trace remains.
 func RemoveLine(text, key string) (string, bool) {
 	lines := linesOf(text)
 	idx := findTagIndex(lines, key)
@@ -144,9 +123,6 @@ func RemoveLine(text, key string) (string, bool) {
 	return joinLines(lines), true
 }
 
-// Crontab is the scheduling-truth seam: list the current crontab and
-// install a rewritten one. Production binds crontab(1); tests inject an
-// in-memory fake.
 type Crontab interface {
 	List() (string, error)
 	Install(text string) error
@@ -154,11 +130,6 @@ type Crontab interface {
 
 var noCrontabRe = regexp.MustCompile(`(?i)no crontab for`)
 
-// RealCrontab is the production shim: `crontab -l` / `crontab -`
-// round-trip. Fail closed: an empty result may only come from the spool's
-// own "no crontab for <user>". Any other failure rejects — installing
-// from a false empty would silently wipe every foreign line in the user's
-// crontab.
 func RealCrontab(bin string) Crontab {
 	if bin == "" {
 		bin = "crontab"
@@ -179,7 +150,7 @@ func (r realCrontab) List() (string, error) {
 			}
 			return "", fmt.Errorf("crontab list failed (exit %d): %s", exit.ExitCode(), stderrOf(stderr, err))
 		}
-		// the binary never resolved
+
 		return "", errors.New("crontab: binary not found")
 	}
 	return string(out), nil
@@ -195,7 +166,7 @@ func (r realCrontab) Install(text string) error {
 		if errors.As(err, &exit) {
 			return fmt.Errorf("crontab install failed (exit %d): %s", exit.ExitCode(), stderrOf(strings.TrimSpace(stderr.String()), err))
 		}
-		// the binary never resolved
+
 		return errors.New("crontab: binary not found")
 	}
 	return nil

@@ -1,7 +1,3 @@
-// recall's DB-level path: the two named raw arms, reciprocal rank
-// fusion over their rankings, browse, and the effective-strength blend.
-// Every raw statement below is named as such; the two arms are the
-// store's named raw queries.
 package rem
 
 import (
@@ -18,8 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
-// Hit is one surfaced memory: the record plus the reaching arm and the
-// effective strength at recall time.
 type Hit struct {
 	ID                 int64
 	Scope              string
@@ -36,23 +30,17 @@ type Hit struct {
 	LastConsolidatedAt string
 	ContentMd5         string
 	EffectiveStrength  float64
-	Match              string // fts | fuzzy | both | browse
+	Match              string
 }
 
-// RecallInput is one recall call.
 type RecallInput struct {
 	Query             string
-	Scope             string // "" (hybrid) | project | global | all
+	Scope             string
 	Kind              string
 	K                 int
 	IncludeSuperseded bool
 }
 
-// Recall: two arms fused by reciprocal rank, strength-blended, budgeted;
-// an empty query browses latest by effective strength. Project scope
-// first, global fills the unused budget (the hybrid default). One
-// transaction per scoped path; touches access counters only — never
-// strength.
 func Recall(ctx context.Context, db store.DB, cwd string, in RecallInput) (string, []Hit, error) {
 	k := in.K
 	if k <= 0 {
@@ -85,8 +73,7 @@ func Recall(ctx context.Context, db store.DB, cwd string, in RecallInput) (strin
 			}
 			hits = h
 		} else {
-			// Hybrid default: project scope first, global fills only the
-			// unused budget.
+
 			scopes, err := readScopes("", cwd)
 			if err != nil {
 				return "", nil, err
@@ -121,9 +108,6 @@ func minInt(a, b int) int {
 	return b
 }
 
-// recallScoped: one scoped fused recall — arms, fusion, hydration,
-// effective strength, the blend ordering, the live/superseded split, the
-// budget, the touch.
 func recallScoped(bound context.Context, scopes []string, in RecallInput, k int) ([]Hit, error) {
 	now := time.Now().UTC()
 	cap := k * armCapFactor
@@ -189,7 +173,7 @@ func recallScoped(bound context.Context, scopes []string, in RecallInput, k int)
 		top = append(top, superseded[:take]...)
 	}
 	if len(top) > 0 {
-		// The touch: access counters only, through the generated surface.
+
 		nowStr := now.Format(time.RFC3339)
 		for _, h := range top {
 			row := rowByID[h.ID]
@@ -225,11 +209,6 @@ func hitOf(r remdom.Memory, eff float64, match string) Hit {
 	}
 }
 
-// semanticArm: the FTS5 MATCH join ranked by bm25. The store's named
-// raw query.
-//
-// Placeholder discipline: arguments bind in occurrence order, so every
-// occurrence is a unique sequential marker — no duplicated markers.
 func semanticArm(bound context.Context, tokens []string, scopes []string, kind string, cap int) ([]armHit, error) {
 	tx, err := sqlx.TxFrom(bound)
 	if err != nil {
@@ -281,8 +260,6 @@ func semanticArm(bound context.Context, tokens []string, scopes []string, kind s
 	return out, rows.Err()
 }
 
-// fuzzyArm: the trigram overlap join, minimum overlap and containment
-// enforced. The store's named raw query.
 func fuzzyArm(bound context.Context, grams []string, scopes []string, kind string, cap int) ([]armHit, error) {
 	tx, err := sqlx.TxFrom(bound)
 	if err != nil {
@@ -343,9 +320,6 @@ func fuzzyArm(bound context.Context, grams []string, scopes []string, kind strin
 	return out, rows.Err()
 }
 
-// browse: latest by created_at within scope, the
-// kind filter, ordered by effective strength. The store's named raw
-// query (no ordered browse accessor is generated).
 func browse(bound context.Context, cwd string, in RecallInput, k int) ([]Hit, error) {
 	now := time.Now().UTC()
 	scopes, err := readScopes(in.Scope, cwd)
