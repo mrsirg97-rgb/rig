@@ -11,12 +11,6 @@ import (
 	"strings"
 )
 
-// Settings: the existing knobs by their env names, lowerCamel (RIG_
-// BASE_URL -> baseUrl), plus defaultJobModel (no env in 0.2.0; file over
-// embedded only) (5). WebFetchProxy and Trafilatura are presence-aware:
-// their empty value is a choice (direct egress, the stdlib text pass) —
-// 0.2.0's documented "set empty" env semantics, extended to the file
-// layer (2, 5).
 type Settings struct {
 	BaseURL         string
 	Model           string
@@ -26,16 +20,14 @@ type Settings struct {
 	Python          string
 	SearXNG         string
 	WebFetchProxy   *string
-	Trafilatura     *string // nil = auto (shared venv, then PATH)
+	Trafilatura     *string
 	SwapURL         string
 	DefaultJobModel string
-	Theme           string // shipped theme name; "" = the TUI's default
-	Sandbox         string // the worker jail's profile: "jailed" (default) or "off" (SPEC_SANDBOX 5)
+	Theme           string
+	Sandbox         string
 	SandboxBinds    []string
 }
 
-// knownSettings is the known key set, sorted: the unknown-key refusal
-// names the sorted list (3).
 var knownSettings = []string{"allow", "baseUrl", "defaultJobModel", "model", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
 
 var knownSettingsSet = func() map[string]bool {
@@ -46,11 +38,6 @@ var knownSettingsSet = func() map[string]bool {
 	return m
 }()
 
-// loadSettings is the settings chain's file-over-embedded layer (2):
-// the embedded 0.2.0 defaults, with the user file's set keys over them.
-// Zero means unset at the file layer (an empty string or zero
-// descends), except the two presence-aware keys, for which present is
-// set — even empty (2, 5).
 func loadSettings(dir string) (Settings, error) {
 	embeddedData, err := embedded.ReadFile("settings.json")
 	if err != nil {
@@ -64,7 +51,7 @@ func loadSettings(dir string) (Settings, error) {
 	data, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return base, nil // absent is silent (3)
+			return base, nil
 		}
 		return Settings{}, readErr(p, err)
 	}
@@ -122,17 +109,11 @@ func mergeSettings(base, file Settings) Settings {
 	return out
 }
 
-// parseSettings decodes one settings document (embedded or user). Each
-// known key is decoded individually, so a type error names the
-// operator's JSON key, not a Go struct name (3); an unknown key refuses
-// naming the known list (3).
 func parseSettings(data []byte, path string) (Settings, error) {
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(data, &keys); err != nil {
 		return Settings{}, fmt.Errorf("config: %s: expected a JSON object", path)
 	}
-	// the unknown key is the first in sorted order: deterministic, and
-	// the typo'd key is named before anything it might shadow.
 	var unknown []string
 	for k := range keys {
 		if !knownSettingsSet[k] {
@@ -230,7 +211,6 @@ func parseSettings(data []byte, path string) (Settings, error) {
 			s.Retries = v
 		}
 	}
-	// the presence-aware keys: present is set, even empty (2, 5).
 	if raw, ok := keys["webFetchProxy"]; ok {
 		v, err := jsonString(raw)
 		if err != nil {
@@ -247,8 +227,6 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	}
 	return s, nil
 }
-
-// --- the per-key decoders (3: the field is the operator's spelling) ---
 
 func jsonString(raw json.RawMessage) (string, error) {
 	var v any
@@ -294,8 +272,6 @@ func jsonAllow(raw json.RawMessage) ([]string, error) {
 	return out, nil
 }
 
-// jsonStringArray is a named array-of-strings decoder (SPEC_SANDBOX 5's
-// sandboxBinds is its user): the refusals name the operator's key.
 func jsonStringArray(raw json.RawMessage, key string) ([]string, error) {
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
@@ -316,8 +292,6 @@ func jsonStringArray(raw json.RawMessage, key string) ([]string, error) {
 	return out, nil
 }
 
-// gojson renders a JSON value the way the operator wrote it: strings
-// quoted, numbers as-is — the refusal voice's "got" half (3).
 func gojson(v any) string {
 	switch t := v.(type) {
 	case string:
