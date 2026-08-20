@@ -1,8 +1,3 @@
-// Hand-written four-tag metadata for the state store: the session
-// transcript as rows. Source of truth; domain and ddl are generated from
-// it, never typed by hand. Nullable columns are pointers. Every link is
-// paired with a plain alias sharing its column (lift's association shape)
-// so the FK survives into the generated INSERT.
 package metadata
 
 import "time"

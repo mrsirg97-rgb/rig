@@ -1,10 +1,3 @@
-// Hand-written metadata for the todo store: the four containers
-// SPEC_STATE's "### todo" section fixes — events (the spine), tasks
-// (the disposable projection), task_deps (the graph), meta (versions).
-// Source of truth; domain and ddl are generated from it, never typed by
-// hand. Nullable columns are pointers. Every link is paired with a plain
-// alias sharing its column (lift's association shape) so the FK survives
-// into the generated INSERT.
 package metadata
 
 import (
@@ -19,9 +12,6 @@ type Meta struct {
 }
 
 // table:"events"
-//
-// Seq is minted by sqlite's rowid semantics on omission: events is
-// append-only and strictly increasing by construction.
 type Event struct {
 	Seq     int64   `primary:"true" alias:"name=seq,nullable=false"`
 	Ts      string  `alias:"name=ts,nullable=false"`
@@ -43,8 +33,6 @@ type Task struct {
 }
 
 // table:"task_deps"
-//
-// Composite primary (task_id + depends_on); both sides reference tasks.
 type TaskDep struct {
 	TaskID       string `primary:"true" alias:"name=task_id,nullable=false"`
 	Task         Task   `link:"from=Task,on=id,many=false"`
@@ -54,16 +42,9 @@ type TaskDep struct {
 	CreatedEvent Event  `link:"from=Event,on=seq,many=false"`
 }
 
-// extra.sql — what the DDL camera cannot emit (SPEC_STATE, decisions):
-// the text unique index (idempotent-create natural key) and the
-// (pos, created_seq) ordering spine.
-//
 //go:embed extra.sql
 var extraSQL []byte
 
-// ExtraStatements: the embedded extra.sql as individual statements — the
-// natural-key unique index and the ordering spine, what the camera cannot
-// emit. Comment-only fragments drop; order is preserved.
 func ExtraStatements() []string {
 	var out []string
 	for _, stmt := range strings.Split(string(extraSQL), ";") {

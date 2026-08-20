@@ -12,16 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-// Recorder is the observing Frontend: it forwards every Input/Notify call
-// untouched to the inner frontend, and appends state rows for what the
-// loop already emits — user messages, assistant text and reasoning
-// assembled per message, tool calls with their results (the loop's
-// ToolResult event, the Observe tap retired), usage with the cache
-// columns, the files snapshot at the turn boundary, faults, and session
-// closure. Each row lands inside its own short transaction, so a kill
-// leaves every completed row readable. Observation failures surface
-// loudly and never disturb the turn. The rule (SPEC_HARDENING decision
-// 4): an unlanded partial at any TurnEnd is a partial and is discarded.
 type Recorder struct {
 	inner   core.Frontend
 	db      store.DB
@@ -29,12 +19,12 @@ type Recorder struct {
 	model   string
 	version string
 	sid     string
-	session *core.Session // root-owned; the files snapshot reads it at the boundary
+	session *core.Session
 	buffer  strings.Builder
 	reason  strings.Builder
 	pending []core.ToolCall
 	lastSeq int64
-	relandN int // the re-landing id suffix counter (SPEC_COMPACT 5)
+	relandN int
 	ensured bool
 	mu      sync.Mutex
 }
@@ -50,7 +40,7 @@ func (r *Recorder) Input(ctx context.Context) (string, error) {
 	if e := r.ensure(); e != nil {
 		r.loud("session row", e)
 	}
-	// transcript order: anything pending from before lands before the user row
+
 	_ = r.land()
 	text, err := r.inner.Input(ctx)
 	if err != nil {
@@ -62,7 +52,7 @@ func (r *Recorder) Input(ctx context.Context) (string, error) {
 	} else {
 		r.setLastSeq(seq)
 	}
-	r.upsertFiles() // turn boundary: the session's files snapshot, as it stands
+	r.upsertFiles()
 	return text, err
 }
 
@@ -89,8 +79,7 @@ func (r *Recorder) observe(ev core.Event) {
 		r.pending = append(r.pending, e.Call)
 		r.mu.Unlock()
 	case core.ToolResult:
-		// the loop's event carries the guarded result, named: the Observe
-		// tap in the chain is retired (SPEC_HARDENING decision 1).
+
 		if e := r.ensure(); e != nil {
 			r.loud("session row", e)
 		}
@@ -112,13 +101,9 @@ func (r *Recorder) observe(ev core.Event) {
 				r.loud("usage", e2)
 			}
 		}
-		r.upsertFiles() // turn boundary: the session's files snapshot
+		r.upsertFiles()
 	case core.Compacted:
-		// SPEC_COMPACT 5: the summary lands as a marked user row plus a
-		// usage row, and the kept tail is re-landed after it (fresh seqs,
-		// fresh call ids) so the resume projection — which starts from the
-		// last [compaction] row — rebuilds the compacted shape, not the
-		// full history.
+
 		r.landCompacted(e)
 	case core.Fault:
 		if _, e2 := RecordFault(context.Background(), r.db, r.sid, now(), e.Err.Error()); e2 != nil {
@@ -126,9 +111,7 @@ func (r *Recorder) observe(ev core.Event) {
 		}
 		r.discardPartial()
 	case core.TurnEnd:
-		// the rule: an unlanded partial at any TurnEnd is a partial and is
-		// discarded — subsuming the Fault-time discard, and covering the
-		// interrupt, which has no Fault (the "PARTIAL fresh" bug reversed).
+
 		r.discardPartial()
 	}
 }
@@ -141,11 +124,6 @@ func (r *Recorder) discardPartial() {
 	r.mu.Unlock()
 }
 
-// land flushes the assembled text, reasoning, and the pending calls into
-// one assistant row — written even when its content is empty — and lands
-// the calls against it. The tool-ID marker names a single call; a
-// multi-call turn leaves it unset, the calls carrying their own
-// attribution.
 func (r *Recorder) land() (seq int64) {
 	r.mu.Lock()
 	text := r.buffer.String()
@@ -182,8 +160,6 @@ func (r *Recorder) land() (seq int64) {
 	return seq
 }
 
-// landCompacted lands a compaction (SPEC_COMPACT 5): the summary as a
-// marked user row plus a usage row, then re-lands the kept tail after it.
 func (r *Recorder) landCompacted(ev core.Compacted) {
 	seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", ev.Summary, nil, nil)
 	if e != nil {
@@ -197,15 +173,6 @@ func (r *Recorder) landCompacted(ev core.Compacted) {
 	r.relandTail()
 }
 
-// relandTail re-lands the kept tail after the summary row (SPEC_COMPACT
-// 5): at the Compacted moment the root's session is exactly [summary row]
-// + tail, so the tail is the session's messages after the first. Fresh
-// rows (fresh seqs); the assistant calls carry recorder-minted fresh ids
-// (the tool_calls.id primary key), name/args/result verbatim, so the
-// call/result pair stays consistent within the copy; the earlier rows
-// stay in the store as the autopsy. Duplicates bounded by the tail
-// (KeepRecent + one batch). A dangling result whose call is not in the
-// tail has nothing fresh to attach to — the original row is the autopsy.
 func (r *Recorder) relandTail() {
 	if r.session == nil {
 		return
@@ -256,7 +223,7 @@ func (r *Recorder) relandTail() {
 		case core.RoleTool:
 			fresh, ok := idMap[m.ToolID]
 			if !ok {
-				continue // a dangling result: nothing fresh to attach to
+				continue
 			}
 			if e2 := RecordToolResult(context.Background(), r.db, fresh, m.Content, nil); e2 != nil {
 				r.loud("re-landed result", e2)
@@ -265,10 +232,6 @@ func (r *Recorder) relandTail() {
 	}
 }
 
-// upsertFiles snapshots the session's file provenance at the turn
-// boundary: a drifted row is replaced, a new path inserted (the files
-// table is keyed by session + path). This is what lets a resumed session
-// keep its drift checks.
 func (r *Recorder) upsertFiles() {
 	if r.session == nil {
 		return
@@ -315,18 +278,10 @@ func (r *Recorder) Close(exit string) error {
 	return CloseSession(context.Background(), r.db, r.sid, exit)
 }
 
-// Ensure is the exported lazy session-row creation (SPEC_COMMANDS 4's
-// handoff, step 2): the row exists before any row lands under the id.
-// Idempotent: a pre-existing row is adopted, never re-inserted.
 func (r *Recorder) Ensure() error {
 	return r.ensure()
 }
 
-// Retarget re-points the retiring recorder (SPEC_COMMANDS 4's handoff,
-// step 3): the swap re-points the retiring recorder before it completes
-// — its in-flight Input lands the user row (and the files snapshot)
-// under the new session's id, then retires. The new recorder is already
-// built over the new session; this is the in-flight row's adoption.
 func (r *Recorder) Retarget(sid string, session *core.Session) {
 	r.mu.Lock()
 	r.sid = sid
@@ -334,15 +289,13 @@ func (r *Recorder) Retarget(sid string, session *core.Session) {
 	r.mu.Unlock()
 }
 
-// ensure lands the session row before any observation appends to it —
-// lazily, once, inside its own short transaction.
 func (r *Recorder) ensure() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.ensured {
 		return nil
 	}
-	// idempotent: a pre-existing session row is adopted, never re-inserted
+
 	if func() bool {
 		found := false
 		_ = withTx(r.db, context.Background(), func(c context.Context) error {
