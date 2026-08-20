@@ -14,24 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-// Resume is the read-side projection (SPEC_HARDENING decision 5,
-// SPEC_STATE's "projection rebuilt from the log"): the session row must
-// exist; the transcript is rebuilt in seq order — user rows to RoleUser,
-// assistant rows to RoleAssistant with their Reasoning and their
-// tool_calls (args re-parsed to json.RawMessage, call order following the
-// row order), each call's landed result to a RoleTool message with its
-// ToolID; files rebuild so a resumed session keeps its drift checks. A
-// dangling call (result never landed, the kill-mid-turn shape) is kept,
-// not dropped or synthesized: the template renders an assistant call
-// without a response as a legal conversational state, and the projection
-// is faithful — the transcript is not rewritten.
-//
-// One read-only transaction draws the whole snapshot: the generated
-// accessors refuse an unbound context, and a projection that mixes
-// transactions is not a projection.
-//
-// The per-process state (the guard's counters, the python kernel, the
-// input slot) does not ride the projection: resume starts them fresh.
 func Resume(ctx context.Context, db store.DB, sessionID string) (*core.Session, error) {
 	c, tx, err := db.TxReadOnly(ctx)
 	if err != nil {
@@ -89,15 +71,6 @@ func resumeIn(ctx context.Context, tx *sql.Tx, sessionID string) (*core.Session,
 	}
 	rows.Close()
 
-	// SPEC_COMPACT 5: the marker is the projection interface. After a
-	// compaction the store holds the full history, the original tail rows,
-	// the summary row, the re-landed tail, and the post-compaction rows; a
-	// naive seq-order projection would rebuild the whole pre-compaction
-	// transcript plus a summary that lands after the tail it summarizes —
-	// over the trigger on the first Assemble, re-summarizing what was
-	// already summarized. Start from the last [compaction] row when one
-	// exists (the window is the summary row and everything after it); with
-	// none, the full history as before.
 	start := int64(0)
 	for _, m := range ms {
 		if m.role == "user" && strings.HasPrefix(m.content, compact.SummaryMarker) {
@@ -123,8 +96,7 @@ func resumeIn(ctx context.Context, tx *sql.Tx, sessionID string) (*core.Session,
 			}
 			msg.ToolCalls = calls
 			sess.Append(msg)
-			// the landed results, in call order; a dangling call (no
-			// result) keeps its place in the calls and gains no message.
+
 			for _, l := range landed {
 				sess.Append(core.Message{Role: core.RoleTool, ToolID: l.id, Content: l.result})
 			}
@@ -148,9 +120,6 @@ type landedResult struct {
 	result string
 }
 
-// callsFor reads one assistant row's calls in row order (sqlite rowid:
-// the insertion order, which is the stream order) with their results,
-// nullable until they landed.
 func callsFor(ctx context.Context, tx *sql.Tx, messageSeq int64) ([]core.ToolCall, []landedResult, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT "id", "name", "args", "result"

@@ -12,31 +12,14 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
-// DB is the store handle every store package names its context with.
 type DB = sqlx.DB
 
-// pragmas ride the DSN (_pragma=…), applied by the driver at connection
-// init — a pragma Exec'd against one pooled connection leaves every other
-// connection the pool opens without it, and writers meeting each other
-// there refuse instantly. Carried in the DSN they reach every connection:
-// the cross-process posture (a runner writing while a session reads) is
-// WAL plus busy_timeout plus up-front write locks (_txlock=immediate:
-// every transaction takes the RESERVED lock at begin and waits the
-// timeout window, so concurrent writers serialize instead of refusing
-// each other at the deferred read-to-write upgrade).
 var pragmas = []string{
 	"PRAGMA journal_mode=WAL",
 	"PRAGMA busy_timeout=5000",
 	"PRAGMA foreign_keys=ON",
 }
 
-// Open opens (or creates) the sqlite file at path. It applies the pragmas,
-// reads the file's integrity, checks meta.schema_version against
-// wantVersion (absent initializes it, mismatch refuses loudly naming
-// both), then applies the store's schema statements in order — the
-// generated DDL, then extra.sql. An existing corrupt file is quarantined
-// aside as <path>.corrupt-<ts> and a fresh one created; quarantined names
-// the aside so callers surface it. Never silently truncated.
 func Open(path string, statements []string, wantVersion int) (sqlx.DB, string, error) {
 	existing, _ := fileSize(path)
 	var quarantined string
@@ -50,8 +33,7 @@ func Open(path string, statements []string, wantVersion int) (sqlx.DB, string, e
 			if attempt > 0 || existing == 0 {
 				return sqlx.DB{}, quarantined, err
 			}
-			// an existing file that refuses to read is quarantined, never
-			// truncated; the aside is named for loudness
+
 			aside := fmt.Sprintf("%s.corrupt-%d", path, time.Now().UnixNano())
 			if err := os.Rename(path, aside); err != nil {
 				return sqlx.DB{}, quarantined, fmt.Errorf("quarantine: %w", err)
@@ -62,7 +44,7 @@ func Open(path string, statements []string, wantVersion int) (sqlx.DB, string, e
 		}
 		if err := apply(raw, statements, wantVersion); err != nil {
 			_ = raw.Close()
-			return sqlx.DB{}, quarantined, err // policy/schema errors surface; never quarantined
+			return sqlx.DB{}, quarantined, err
 		}
 		return sqlx.DB{DB: raw}, quarantined, nil
 	}
@@ -75,8 +57,7 @@ func integrity(raw *sql.DB) error {
 			return fmt.Errorf("pragma %s: %w", p, err)
 		}
 	}
-	// reading the schema page is the integrity probe: a corrupt file
-	// surfaces an error here, not a silent empty database
+
 	if _, err := raw.Exec("SELECT count(*) FROM sqlite_master"); err != nil {
 		return fmt.Errorf("integrity: %w", err)
 	}

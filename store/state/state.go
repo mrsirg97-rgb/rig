@@ -12,22 +12,13 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-// SchemaVersion is the schema version this build applies. A bump is a
-// named change; Open refuses mismatches loudly.
 const SchemaVersion = 1
 
-//go:generate GOGEN=$PWD; cd ../../../lift/cmd && go run main.go -config=$GOGEN/gen.json -source=$GOGEN/source.json
+///go:generate GOGEN=$PWD; cd ../../../lift/cmd && go run main.go -config=$GOGEN/gen.json -source=$GOGEN/source.json
 
-// Statements is the store's schema in application order: the generated
-// DDL, then any extra.sql hand-written beside it. state has no extra.sql.
 func Statements() []string {
 	return ddl.Statements()
 }
-
-// record/append functions: each event lands in its own short transaction —
-// one inside the caller's bound transaction if one exists, otherwise
-// opened here. A kill mid-turn leaves every earlier committed row
-// readable. Outside any transaction they never write.
 
 func RecordSession(ctx context.Context, db store.DB, id, cwd, model, version string) error {
 	return withTx(db, ctx, func(c context.Context) error {
@@ -55,12 +46,6 @@ func RecordMessage(ctx context.Context, db store.DB, sessionID, role, content st
 	return seq, err
 }
 
-// CanonicalArgs is the args-equality rule (SPEC_DIFF decision 3), owned
-// by the store that holds the args column: two args JSONs are the same
-// observation iff they decode to the same JSON value — key order and
-// whitespace do not matter, values do. The canonical form is the
-// decoded value re-encoded with object keys sorted and no whitespace
-// (array element order is preserved).
 func CanonicalArgs(args string) (string, error) {
 	var v any
 	if err := json.Unmarshal([]byte(args), &v); err != nil {
@@ -73,14 +58,6 @@ func CanonicalArgs(args string) (string, error) {
 	return string(out), nil
 }
 
-// RecordToolCall lands one tool call row. The args are stored in their
-// canonical form (decision 3): the rule is applied at write time, so
-// the store query's args = ? equality is exact and RecentToolCalls's
-// LIMIT n+1 is, by construction, the n+1 most recent observations of
-// that call. An args string that fails to decode lands raw, and this
-// call returns the decode error even though the row was written: the
-// recorder speaks it through its existing loud voice (one stderr line,
-// not a new channel, not a Fault). The row always lands.
 func RecordToolCall(ctx context.Context, db store.DB, messageSeq int64, id, name, args string) error {
 	canonical, cerr := CanonicalArgs(args)
 	if cerr != nil {
@@ -174,9 +151,6 @@ func CloseSession(ctx context.Context, db store.DB, id, exit string) error {
 
 func now() time.Time { return time.Now().UTC() }
 
-// safely recovers the generated getters' empty-key panic at this boundary
-// into a loud error: they panic rather than erring, and a store never
-// panics.
 func safely[T any](fn func() (T, error)) (out T, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -186,9 +160,6 @@ func safely[T any](fn func() (T, error)) (out T, err error) {
 	return fn()
 }
 
-// withTx runs fn inside the caller's bound transaction when one exists,
-// otherwise in a short transaction opened here: one event, one transaction,
-// committed on success, rolled back on any error.
 func withTx(db store.DB, ctx context.Context, fn func(context.Context) error) error {
 	if _, err := sqlx.TxFrom(ctx); err == nil {
 		return fn(ctx)
@@ -204,9 +175,6 @@ func withTx(db store.DB, ctx context.Context, fn func(context.Context) error) er
 	return tx.Commit()
 }
 
-// mintSeq is the store's one raw query: primary-key minting (max+1) inside
-// the bound transaction. The generated Insert takes the key from the
-// caller, and ids are minted by the store — never invented by a model.
 func mintSeq(ctx context.Context, db store.DB, table, column string) (int64, error) {
 	var seq int64
 	err := db.DB.QueryRowContext(ctx, "SELECT COALESCE(MAX("+column+"), 0) + 1 FROM "+table).Scan(&seq)
