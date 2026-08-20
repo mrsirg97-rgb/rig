@@ -144,11 +144,12 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		want    string
 	}{
 		{"retries type", `{"retries": "three"}`, `retries: expected an integer, got "three"`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, baseUrl, defaultJobModel, model, python, retries, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, python, retries, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed" or "off", got "maybe"`},
 		{"sandboxBinds element", `{"sandboxBinds": ["/dev/nvidia0", 5]}`, `sandboxBinds[1]: expected a string, got 5`},
+		{"approve value", `{"approve": "yolo"}`, `approve: expected "auto" or "manual", got "yolo"`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -173,6 +174,22 @@ func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 	}
 	if cfg.Settings.Model != "local" {
 		t.Fatalf("model = %q, want the embedded local (empty descends)", cfg.Settings.Model)
+	}
+}
+
+// TestApproveDefaultsToAuto (SPEC_MODES 4): the approval dial's default
+// is a settings key; the embedded default is auto (today's behavior),
+// the file layer overrides.
+func TestApproveDefaultsToAuto(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	if cfg.Settings.Approve != "auto" {
+		t.Fatalf("approve = %q, want the embedded default auto", cfg.Settings.Approve)
+	}
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"approve": "manual"}`)
+	cfg = load(t, dir, t.TempDir())
+	if cfg.Settings.Approve != "manual" {
+		t.Fatalf("approve = %q, want the file's manual", cfg.Settings.Approve)
 	}
 }
 

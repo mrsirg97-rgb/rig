@@ -35,8 +35,24 @@ const (
 	SlotBold      = "bold"  // derived: the text color, bold (the markdown pass); not a palette entry
 )
 
+// The effort ramp (SPEC_MODES 3, amended): one slot per reasoning
+// level, pane's footer colors — the status row paints the active level
+// in its own color so the budget reads at a glance. The vocabulary is
+// pane's seven; a level outside it paints accent (pane's fallback).
+const (
+	SlotEffortOff     = "effortOff"
+	SlotEffortMinimal = "effortMinimal"
+	SlotEffortLow     = "effortLow"
+	SlotEffortMedium  = "effortMedium"
+	SlotEffortHigh    = "effortHigh"
+	SlotEffortXhigh   = "effortXhigh"
+	SlotEffortMax     = "effortMax"
+)
+
 // slotVocabulary is the sorted slot list the refusals name (7).
-var slotVocabulary = []string{SlotAccent, SlotDim, SlotEmber, SlotError, SlotReasoning, SlotRule, SlotSuccess, SlotText, SlotWarn}
+var slotVocabulary = []string{SlotAccent, SlotDim,
+	SlotEffortHigh, SlotEffortLow, SlotEffortMax, SlotEffortMedium, SlotEffortMinimal, SlotEffortOff, SlotEffortXhigh,
+	SlotEmber, SlotError, SlotReasoning, SlotRule, SlotSuccess, SlotText, SlotWarn}
 
 // The glyph slots, in both sets.
 const (
@@ -101,6 +117,14 @@ var Shipped = map[string]map[string]string{
 		SlotRule:      "#3c3c3c",
 		SlotReasoning: "#8a8a8a",
 		SlotEmber:     "#e8a86b",
+		// the effort ramp: pane's subtle-dark footer, cool-to-hot
+		SlotEffortOff:     "#5a5a5a",
+		SlotEffortMinimal: "#6e6e6e",
+		SlotEffortLow:     "#5f87af",
+		SlotEffortMedium:  "#81a2be",
+		SlotEffortHigh:    "#b294bb",
+		SlotEffortXhigh:   "#d183e8",
+		SlotEffortMax:     "#ff5fff",
 	},
 	"paper": {
 		SlotText:      "#24292f",
@@ -112,6 +136,14 @@ var Shipped = map[string]map[string]string{
 		SlotRule:      "#d0d7de",
 		SlotReasoning: "#8c959f",
 		SlotEmber:     "#bc4c00",
+		// the effort ramp: pane's subtle-light footer, cool-to-hot
+		SlotEffortOff:     "#8c959f",
+		SlotEffortMinimal: "#767676",
+		SlotEffortLow:     "#0969da",
+		SlotEffortMedium:  "#1b7c7c",
+		SlotEffortHigh:    "#875f87",
+		SlotEffortXhigh:   "#8b008b",
+		SlotEffortMax:     "#af005f",
 	},
 	"p1": {
 		SlotText:      "#aaffc2",
@@ -123,6 +155,14 @@ var Shipped = map[string]map[string]string{
 		SlotDim:       "#156b33",
 		SlotRule:      "#156b33",
 		SlotEmber:     "#8fe8a8",
+		// the effort ramp as brightness (7's rule: hierarchy without hue)
+		SlotEffortOff:     "#156b33",
+		SlotEffortMinimal: "#156b33",
+		SlotEffortLow:     "#2aa050",
+		SlotEffortMedium:  "#57e07c",
+		SlotEffortHigh:    "#57e07c",
+		SlotEffortXhigh:   "#aaffc2",
+		SlotEffortMax:     "#aaffc2",
 	},
 	"p3": {
 		SlotText:      "#ffd28a",
@@ -134,6 +174,14 @@ var Shipped = map[string]map[string]string{
 		SlotDim:       "#7a5215",
 		SlotRule:      "#7a5215",
 		SlotEmber:     "#f0b860",
+		// the effort ramp as brightness (7's rule: hierarchy without hue)
+		SlotEffortOff:     "#7a5215",
+		SlotEffortMinimal: "#7a5215",
+		SlotEffortLow:     "#b07820",
+		SlotEffortMedium:  "#e0a245",
+		SlotEffortHigh:    "#e0a245",
+		SlotEffortXhigh:   "#ffd28a",
+		SlotEffortMax:     "#ffd28a",
 	},
 }
 

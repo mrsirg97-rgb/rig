@@ -634,7 +634,7 @@ func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 		t.Fatalf("ActiveModel reports the new id: %q", h.r.activeID)
 	}
 	row, ok := defaultsTable(t).Get("qwen3.8-workers")
-	if !ok || h.r.row != row {
+	if !ok || !reflect.DeepEqual(h.r.row, row) {
 		t.Fatalf("the new policy is built with the new row: %+v (want %+v)", h.r.row, row)
 	}
 }
@@ -670,7 +670,7 @@ func TestModelsRuntimeTableIncludesSynthesizedRow(t *testing.T) {
 	if h.r.activeID != "e2e" {
 		t.Fatalf("the switch back must land: %q", h.r.activeID)
 	}
-	if h.r.row != row {
+	if !reflect.DeepEqual(h.r.row, row) {
 		t.Fatalf("the switch back must carry the synthesized row's numbers: %+v", h.r.row)
 	}
 	if main, _ := h.s.counts(); main != 0 {

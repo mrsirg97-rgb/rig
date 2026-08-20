@@ -61,10 +61,15 @@ func (modelsCmd) Run(ctx context.Context, args string, env any) (string, error) 
 		if e.SwitchModel == nil {
 			return "", errors.New("models: no switch seam (the root did not wire one)")
 		}
-		if err := e.SwitchModel(ctx, fields[0]); err != nil {
+		note, err := e.SwitchModel(ctx, fields[0])
+		if err != nil {
 			return "", err
 		}
-		return "models: active is now " + fields[0], nil
+		reply := "models: active is now " + fields[0]
+		if note != "" {
+			reply += "\n" + note
+		}
+		return reply, nil
 	}
 	if e.Models == nil || e.ActiveModel == nil {
 		return "", errors.New("models: no models seam (the root did not wire one)")

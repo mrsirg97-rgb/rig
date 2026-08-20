@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/rig/command"
 	"github.com/mrsirg97-rgb/rig/config"
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
@@ -29,13 +30,12 @@ import (
 // 1.0 tag waits for lived use, and everything before it is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 0.7.0: the plugin reload and the forge (SPEC_PLUGINS 8: the
-	// plugins_reload native, /plugins reload, /plugins create, the
-	// approve's tail, the next-turn registration over the root's
-	// live tool list); pre-1.0 — the 1.0 tag waits for lived use
-	// (a worker soak, the TUI field-tested as the daily driver).
-	if Version != "0.7.0" {
-		t.Fatalf("Version = %q, want 0.7.0 (pre-1.0, feature-complete)", Version)
+	// 0.8.0: the modes (SPEC_MODES: the /effort dial, the /role
+	// stance, the /approve gate with the TUI ask door, the three-row
+	// status); pre-1.0 — the 1.0 tag waits for lived use (a worker
+	// soak, the TUI field-tested as the daily driver).
+	if Version != "0.8.0" {
+		t.Fatalf("Version = %q, want 0.8.0 (pre-1.0, feature-complete)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)
@@ -374,4 +374,209 @@ func mustReadMsg(t *testing.T, db store.DB, seq int64) domain.Message {
 		t.Fatal(err)
 	}
 	return *m
+}
+
+// TestDefaultRoleIsByteIdentical (SPEC_MODES, named): with the dial at
+// default, the assembly is today's exactly — system, then AGENTS.md,
+// then the participants' prose, empty segments skipped.
+func TestDefaultRoleIsByteIdentical(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	got := r.buildSystem()
+	want := "be terse" + "\n\n" + "G\n\nP"
+	if got != want {
+		t.Fatalf("the default assembly = %q, want today's bytes %q (the role sits between system and AGENTS.md only when set)", got, want)
+	}
+}
+
+// TestRoleAssemblySitsBetweenSystemAndAgents (SPEC_MODES, named): the
+// stance's prose lands between the system prompt and the AGENTS.md pair
+// — the runtime's identity first, the stance second, the operator's
+// contract third — and rides the prefix before the participants' prose.
+func TestRoleAssemblySitsBetweenSystemAndAgents(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	r.role = "architect"
+	got := r.buildSystem()
+	want := "be terse" + "\n\n" + command.RoleProse("architect") + "\n\n" + "G\n\nP"
+	if got != want {
+		t.Fatalf("the architect assembly = %q, want %q (system, the stance, then AGENTS.md)", got, want)
+	}
+}
+
+// TestRoleSwitchRebuildsThePair (SPEC_MODES, named): a role switch
+// recomputes the assembly and rebuilds the pair at the root — the next
+// turn's request sees the new system message. The live turn's request
+// was already built; the change is visible on the next one (the
+// models-switch semantics).
+func TestRoleSwitchRebuildsThePair(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	wire(r)
+	before := r.fullSystem
+	if err := r.switchRole(context.Background(), "architect"); err != nil {
+		t.Fatalf("switchRole: %v", err)
+	}
+	if r.fullSystem == before || !strings.Contains(r.fullSystem, "architect") {
+		t.Fatalf("the switch must recompute the assembly with the stance: %q", r.fullSystem)
+	}
+	msgs, err := r.k.Policy.Assemble(context.Background(), core.NewSession())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || !strings.Contains(msgs[0].Content, "architect") {
+		t.Fatalf("the rebuilt pair's request must carry the stance: %+v", msgs)
+	}
+}
+
+// TestRoleSwitchDefaultInjectsNothing (SPEC_MODES, named): returning to
+// default drops the stance — the assembly is today's bytes again.
+func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.agents = "G\n\nP"
+	wire(r)
+	if err := r.switchRole(context.Background(), "architect"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.switchRole(context.Background(), "default"); err != nil {
+		t.Fatal(err)
+	}
+	got := r.fullSystem
+	want := "be terse" + "\n\n" + "G\n\nP"
+	if got != want {
+		t.Fatalf("back to default = %q, want today's bytes %q", got, want)
+	}
+}
+
+// TestModelSwitchResetsAForeignEffort (SPEC_MODES 1, amended): the
+// vocabulary is the row's, so a model switch resets a dial the new row
+// does not name — loudly, in the switch's note — never stamping a level
+// into a template that cannot speak it. A level the new row names rides
+// the switch untouched, no note.
+func TestModelSwitchResetsAForeignEffort(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	speaks, err := models.New(
+		models.Model{Role: models.RoleInteractive, ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Efforts: []string{"low", "medium", "xhigh"}},
+		models.Model{Role: models.RoleInteractive, ID: "onlymax", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Efforts: []string{"max"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.runtime = speaks
+	wire(r)
+
+	r.effort = "xhigh"
+	note, err := r.switchModel(context.Background(), "onlymax")
+	if err != nil {
+		t.Fatalf("switchModel: %v", err)
+	}
+	if r.effort != "" {
+		t.Fatalf("a level the new row does not name must reset, kept %q", r.effort)
+	}
+	want := `effort: "xhigh" is not a level for onlymax — reset to server default`
+	if note != want {
+		t.Fatalf("the reset must be the switch's note:\ngot  %q\nwant %q", note, want)
+	}
+
+	r.effort = "max"
+	note, err = r.switchModel(context.Background(), "onlymax")
+	if err != nil {
+		t.Fatalf("switchModel same: %v", err)
+	}
+	if r.effort != "max" || note != "" {
+		t.Fatalf("a level the row names must survive the switch silently, got (%q, %q)", r.effort, note)
+	}
+}
+
+// TestApproveDialDoorRule (SPEC_MODES 4, named): manual needs an ask
+// door — a frontend that cannot ask must not promise to; with a door
+// the dial sets, and an unknown mode refuses naming the two.
+func TestApproveDialDoorRule(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	if err := r.switchApprove(context.Background(), "manual"); err == nil ||
+		!strings.Contains(err.Error(), "ask door") {
+		t.Fatalf("manual without a door must refuse: %v", err)
+	}
+	r.askDoor = func(ctx context.Context, prompt string) bool { return true }
+	if err := r.switchApprove(context.Background(), "manual"); err != nil || r.approve != "manual" {
+		t.Fatalf("manual with a door must set: (%v, %q)", err, r.approve)
+	}
+	if err := r.switchApprove(context.Background(), "auto"); err != nil || r.approve != "auto" {
+		t.Fatalf("auto must set: (%v, %q)", err, r.approve)
+	}
+	if err := r.switchApprove(context.Background(), "yolo"); err == nil {
+		t.Fatal("an unknown mode must refuse")
+	}
+}
+
+// TestNewResetsApproveToTheSettingsDefault (SPEC_MODES 4, named): /new
+// resets the dial to the settings default, not to a hardcoded auto.
+func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	h.r.approveDefault = "manual"
+	h.r.askDoor = func(ctx context.Context, prompt string) bool { return true }
+	h.r.approve = "auto"
+	if _, err := h.r.newSession(context.Background()); err != nil {
+		t.Fatalf("newSession: %v", err)
+	}
+	if h.r.approve != "manual" {
+		t.Fatalf("/new must reset to the settings default: %q", h.r.approve)
+	}
+}
+
+// TestIsMutatingPredicate (SPEC_MODES 4, named): the named natives and
+// every plugin pause; the read set and the store tools pass.
+func TestIsMutatingPredicate(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.natives = map[string]bool{}
+	for _, n := range nativeToolNames {
+		r.natives[n] = true
+	}
+	for _, n := range []string{"bash", "write", "edit", "python", "scheduler", "plugins_reload", "gpu_stats"} {
+		if !r.isMutating(n) {
+			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
+		}
+	}
+	for _, n := range []string{"read", "ls", "find", "grep", "web_search", "web_fetch", "todo", "rem", "diff"} {
+		if r.isMutating(n) {
+			t.Errorf("%s must pass silently", n)
+		}
+	}
+}
+
+// TestSwapInKeepsDialsAndRebuilds (SPEC_MODES, named): a resume does not
+// restore the dials — it keeps the current values (they were never
+// saved), recomputes the assembly, and rebuilds the pair. The swap-in is
+// the handoff /new and resume share; /new resets before it.
+func TestSwapInKeepsDialsAndRebuilds(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	wire(r)
+	r.effort = "xhigh"
+	r.role = "architect"
+	s2 := core.NewSession()
+	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2)
+	r.swapIn(s2, rec2)
+	if r.effort != "xhigh" || r.role != "architect" {
+		t.Fatalf("a resume must keep the dials, got effort=%q role=%q", r.effort, r.role)
+	}
+	if !strings.Contains(r.fullSystem, "architect") {
+		t.Fatalf("the handoff must recompute the assembly with the stance: %q", r.fullSystem)
+	}
+}
+
+// TestNewResetsDials (SPEC_MODES, named): /new starts at the defaults —
+// effort unset, role default (no injection).
+func TestNewResetsDials(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	h.r.effort = "xhigh"
+	h.r.role = "architect"
+	if _, err := h.r.newSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.r.effort != "" || h.r.role != "" {
+		t.Fatalf("/new must reset the dials, got effort=%q role=%q", h.r.effort, h.r.role)
+	}
+	if strings.Contains(h.r.fullSystem, "architect") {
+		t.Fatalf("the fresh assembly must drop the stance: %q", h.r.fullSystem)
+	}
 }

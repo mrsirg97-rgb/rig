@@ -12,6 +12,9 @@ func All() []core.Command {
 		toolCmd{name: "todo", parse: todoArgs},
 		toolCmd{name: "scheduler", parse: schedulerArgs},
 		pluginsCmd{},
+		&effortCmd{},
+		roleCmd{},
+		approveCmd{},
 	}
 }
 

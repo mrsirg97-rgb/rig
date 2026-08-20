@@ -102,6 +102,16 @@ Rejected, named:
 - Cycling on bare `/effort`: a state-changing no-argument command is
   a misfire magnet; bare shows, the argument sets, the menu completes.
 
+Amended (the operator's review): the dial across a model switch. The
+vocabulary is the row's, so a level the new row's `efforts` does not
+name is reset on the switch — loudly, as the switch's note (`effort:
+"xhigh" is not a level for deepseek — reset to server default`,
+appended to the `/models` reply) — never stamped silently into a
+template that cannot speak it (the day-one eval lesson: an invalid
+effort string manufactures failures without a sound). A level the new
+row names rides the switch untouched, no note. The `SwitchModel` seam
+returns the note beside the error.
+
 ### 2. The role: a stance between the system prompt and the contract
 
 The prompt assembly (SPEC_CONFIG 6) gains one optional segment:
@@ -124,11 +134,19 @@ personality cosplay — a stance is a bias in what to do first and what
 to refuse, not a costume.
 
 A switch recomputes the assembly and rebuilds the pair at the root
-(the models-switch machinery, next-turn). The status line (SPEC_TUI 3)
-shows a non-default role: `huihui3.8 · architect · 41.2k/262k` — the
-operator glances the stance the model is in. The cost, named: the
-role sits near the prefix's head, so a switch is a full re-prefill at
-depth, always.
+(the models-switch machinery, next-turn). The status (SPEC_TUI 3,
+amended twice by the operator's review) is three rows under the
+input: identity — `model · used/window` (the context part once a turn
+has run); the stance — `effort · role · auto|manual` — the active
+effort in its ramp color (pane's footer colors, the `effort*` theme
+slots; a level outside the ramp paints accent; a row naming none
+drops the segment), the role abbreviated (`architect -> arch`,
+`reviewer -> rev`, the default shown as `default`), and the approval
+dial (decision 4; manual in the warn color — the paused posture reads
+at a glance); and the usage totals. The effort shown is the session's
+truth: the dial when set, else the row's configured level. The cost,
+named: the role sits near the prefix's head, so a switch is a full
+re-prefill at depth, always.
 
 Rejected, named:
 
@@ -159,6 +177,63 @@ models switch is `/models m2`, not `/models update m2`; the bare
 argument is the house grammar, one word shorter, and the menu makes
 it discoverable. Flagged for the operator's review since the sketch
 named `update` explicitly.
+
+### 4. The approval dial: manual asks, auto is today (AMENDED in)
+
+The operator's third dial: `/approve auto` (today's behavior) or
+`/approve manual` — every mutating tool call pauses for the
+operator's y/n before it runs. Effective at the very next tool call:
+the gate reads the dial at call time, and nothing rides the request
+prefix — no re-prefill cost, unlike the other two dials.
+
+The pieces, each holding a frozen surface untouched:
+
+- **The gate** is a `ToolMiddleware` (`middleware/approve`, the perm
+  chain's precedent), wired at the root with three closures — the
+  dial, the ask door, and the mutating predicate. Zero core lines,
+  zero loop lines. It lists after the router (first-listed is
+  innermost) so the allow-list and the provenance rule are consulted
+  first: the operator is only ever asked about a call that would
+  actually run.
+- **The ask door** is the frontend's, offered as an optional
+  interface (`Ask(ctx, prompt) bool`) the root type-asserts — the
+  Frontend seam in core/ is untouched. The TUI offers it: the
+  question stands where the menu would (the screen's one modal,
+  warn-colored, the argument preview truncated to a glance), y runs,
+  n declines, Esc declines and interrupts the turn, ^C declines and
+  quits; every other key is swallowed while the question stands. The
+  one-shot and the plain CLI offer no door.
+- **The mutating set**: the natives that change the world outside
+  rig's own stores — bash, write, edit, python, scheduler,
+  plugins_reload — and every plugin (arbitrary python is mutating by
+  nature). The read set (read, ls, find, grep, the web pair) and the
+  store tools (todo, rem, diff) pass silently: manual is a gate, not
+  a turnstile.
+- **A denial teaches, never kills**: the declined call returns a
+  model-visible refusal ("the operator declined bash — do not retry
+  the same call; adjust, or ask what they want"), the turn continues.
+  A dead context while asking (the interrupt) resolves as a decline.
+- **The dial's home**: session state like the other two, but its
+  default is the operator's standing choice — settings.json
+  `approve` ("auto" | "manual", embedded default auto). `/new`
+  resets to the settings default, not to a hardcoded auto; a resume
+  keeps the current value. The asymmetry vs. effort and role, named:
+  an approval posture outlives a session's mood.
+- **Workers never ask**: the -p one-shot (run-job's runtime) wires no
+  door, so the gate is not wired at all — the jail is the worker's
+  gate (SPEC_SANDBOX), this one is the interactive session's.
+  `/approve manual` on a doorless frontend refuses, naming the
+  reason.
+
+Rejected, named:
+
+- An Ask method on `core.Frontend`: the frozen surface; the optional
+  interface is the same power without the modification.
+- A per-call allowlist grammar ("always allow bash"): the memory of
+  approvals is a policy store, later, if lived use votes; v1 is the
+  dial and the door.
+- A timeout on the ask: the operator's pause is the point; a gate
+  that answers itself is auto with extra steps.
 
 ## interfaces
 

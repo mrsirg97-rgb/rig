@@ -1,4 +1,4 @@
 [
-  {"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive"},
-  {"id": "qwen3.8-workers", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "worker"}
+  {"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]},
+  {"id": "qwen3.8-workers", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "worker", "efforts": ["low", "medium", "xhigh"]}
 ]
