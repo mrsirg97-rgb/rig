@@ -14,8 +14,9 @@ locking.
 ## What it includes
 
 - `Bound(limit)` — the constructor: returns a `core.ToolMiddleware`.
-- `bound` (unexported) — the per-turn state: `limit` plus `counts`
-  (tool name -> consecutive failures this turn).
+- `bound` (unexported) — the per-turn state: `limit`, `counts` (tool
+  name -> consecutive identical failures this turn), and `lastFailed`
+  (tool name -> the args of the last failure; the streak's identity).
 
 ## How it is consumed
 
@@ -34,6 +35,11 @@ locking.
   identical retries only. A corrected call (args differing from the last
   failed args) resets the count before the guard check, so the "change the
   call" teaching never blocks the changed call.
+- Not a count per (name, args): the marker is the tool's last failure
+  only. Two failing calls of one tool alternating within a turn reset each
+  other and never trip the bound (`TestDriftingArgsEachGetAFreshStreak`
+  pins it as the accepted consequence, SPEC_HARDENING 7); the loop has no
+  round cap, so the operator's interrupt is that loop's bound.
 - Success clears the count and the last-failed-args marker (the bound
   tracks streaks, not history); polling that eventually succeeds never
   hits the bound.

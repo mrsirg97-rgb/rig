@@ -12,7 +12,7 @@ import (
 type bound struct {
 	limit      int
 	counts     map[string]int
-	lastFailed map[string]string // tool name -> the args of the last failure
+	lastFailed map[string]string
 }
 
 func Bound(limit int) core.ToolMiddleware {
@@ -24,9 +24,6 @@ func Bound(limit int) core.ToolMiddleware {
 
 func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 	return func(ctx context.Context, call core.ToolCall) (string, error) {
-		// a corrected call (args differing from the last failed args) resets
-		// the streak before the guard check, so the "change the call" teaching
-		// never blocks the changed call.
 		if g.lastFailed[call.Name] != string(call.Args) {
 			g.counts[call.Name] = 0
 		}
@@ -36,8 +33,6 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 		}
 		content, err := next(ctx, call)
 		if err != nil {
-			// the bound strikes identical retries only: same args as the last
-			// failure keep counting; differing args start a fresh streak.
 			if g.lastFailed[call.Name] == string(call.Args) {
 				g.counts[call.Name]++
 			} else {

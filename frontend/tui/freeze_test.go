@@ -68,6 +68,9 @@ func TestFreezeGate(t *testing.T) {
 			p == "middleware/toolset" || strings.HasPrefix(p, "middleware/toolset/") ||
 			// the approval gate (SPEC_MODES 4): the modes branch's leaf.
 			p == "middleware/approve" || strings.HasPrefix(p, "middleware/approve/") ||
+			// the retry guard's streak rule (SPEC_HARDENING 7, amended):
+			// the corrected-call reset and its named cases.
+			p == "middleware/guard" || strings.HasPrefix(p, "middleware/guard/") ||
 			// the worker jail's work surface (SPEC_SANDBOX 1, 5): the
 			// runner's bwrap spawn and socket proxy, the provider's
 			// unix: base URL.
