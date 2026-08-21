@@ -76,6 +76,8 @@ func TestFreezeGate(t *testing.T) {
 			p == "middleware/toolset" || strings.HasPrefix(p, "middleware/toolset/") ||
 			// the approval gate (SPEC_MODES 4): the modes branch's leaf.
 			p == "middleware/approve" || strings.HasPrefix(p, "middleware/approve/") ||
+			// the event loop (SPEC_EVT phase 1): libevt's shape, a leaf.
+			p == "evt" || strings.HasPrefix(p, "evt/") ||
 			// the retry guard's streak rule (SPEC_HARDENING 7, amended):
 			// the corrected-call reset and its named cases.
 			p == "middleware/guard" || strings.HasPrefix(p, "middleware/guard/") ||

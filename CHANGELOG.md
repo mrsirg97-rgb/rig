@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+- **the event loop, phase 1** (`specs/SPEC_EVT.md`): libevt's shape
+  (`~/Projects/libtrdr`) made Go-centric as the leaf package `evt` —
+  `Context`, `Event`, `Queue` (the 4-ary max-heap, priority desc then
+  arrival, with the one addition `Update`), `Engine` (one consumer,
+  many producers, a mutex and a cond where the C spun), `Scheduler`
+  (the harness, the codes as errors), `Clock`. libevt's tests by name.
+  Consumed by nothing yet: phase 2, named in the spec, makes the turn
+  loop its consumer (parallel tool calls as goroutines posting ordered
+  completions) and reopens SPEC_CORE.
+
 ## [0.11.0] — the delegate
 
 - **the one-shot worker tool** (`specs/SPEC_DELEGATE.md`): `delegate`
