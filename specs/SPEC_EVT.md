@@ -23,9 +23,10 @@ CAS busy flag with multi-producer adds and an idle poll, a context that
 is a scope plus a function, and a scheduler that is the thread harness.
 This spec takes that **exact shape** and makes it Go-centric: the five
 parts keep their names and contracts; the mechanism becomes what Go has
-for it. Phase 1 (this spec) ships the package and its tests. Phase 2
-(named, not built here) makes the turn loop its consumer, which reopens
-SPEC_CORE and the freeze.
+for it. Phase 1 ships the package and its tests. Phase 2a (decision 6) puts
+the batch in the turn loop — concurrent reads, ordered emission — the
+named reopening of the frozen loop. Phase 2b (decision 7, named) makes
+the loop the engine's consumer.
 
 ## goals
 
@@ -148,40 +149,85 @@ engine refuses (`ErrStarted` at the scheduler; the engine itself is
 single-consumer by contract and does not guard against two `Start`s —
 the scheduler is the door that does).
 
-### 6. Phase 2, named: the turn loop as the consumer.
+### 6. Phase 2a, the batch — built.
 
-Not built here; the shape it will take, so phase 1's interfaces are
-cut for it:
+The turn loop's L5 ("for each call, in order: start, execute, result,
+append") becomes the batch (`loop/batch.go`): the kernel carries a
+predicate, `Concurrent(call) bool`, and a bound, `Parallel`. Walking the
+calls in order, a run of consecutive admitted calls is dispatched as
+goroutines (at most `Parallel` in flight, default 8); a refused call is
+a barrier — everything before it has been awaited, it runs alone on the
+loop goroutine, and the calls after it wait. Emission never changes
+shape: for call *i* the loop emits `ToolStart`, waits for *i*'s result,
+emits `ToolResult` with *i*'s own duration, appends *i*'s tool message.
+Results land in the order the model asked, whatever order they finished;
+the bracket per call is the same bytes the CLI reference already has, so
+no frontend, recorder, or golden changes. A nil predicate is the loop of
+0.11, byte-for-byte.
+
+The root's predicate is **narrower than "not mutating"**: the pure reads
+— `read`, `ls`, `find`, `grep`, `web_search`, `web_fetch`, `diff` — and
+nothing else. `todo` and `rem` write SQLite (serialized transactions
+would collide inside one batch), `python` and every plugin share one
+kernel, `bash`/`write`/`edit`/`scheduler`/`delegate` have effects whose
+order the model chose. Rejected, named: reordering execution (a `bash`
+that ran, ran — only emission is ordered); `!isMutating` as the
+predicate (the approval gate's notion, not a concurrency-safety one);
+a settings key for the bound in this phase (the default is the loop's;
+a key is a config round when lived use asks).
+
+What sequential delivery used to buy, and who now pays: `guard.Bound`
+keeps its maps under a mutex (the duplicates in one run may all execute
+— each passed the check before any had failed; they are not retries,
+and the bound strikes the re-issuance after, a named case); the file
+tool's `Session.Files` writes go through a package mutex (the session
+type stays frozen; the tool that writes it locks); `toolset` was already
+an RWMutex; `perm` is stateless; the approval gate only ever asks for
+barriers, so asks stay one at a time while reads run. The recorder and
+every `Notify` stay on the loop goroutine.
+
+Not the engine. The batch needs an indexed wait (call order is known
+before dispatch), not a priority queue; `evt` is phase 2b's spine, and
+using it here would be machinery for its own sake.
+
+The gate: `frontend/tui/freeze_test.go` carries a named `reopened`
+clause for `loop/` and `kernel.go` under this deliverable; the re-freeze
+PR after the merge deletes the clause and the gate measures the new
+bytes against the next fork point. Not the `-refactor` branch bypass.
+
+### 7. Phase 2b, named: the turn loop as the consumer.
+
+Not built here; the shape, so 2a's seams are cut for it:
 
 - **The loop is the consumer.** `loop.Run` becomes an engine's `Start`
-  with the session as the consumer's state; every session mutation is an
-  event executed on the loop goroutine. Sequential delivery survives:
-  the guard stays lock-free, the recorder sees one thing at a time, the
-  compaction anchor is still "the last message".
+  with the session as the consumer's state; every session mutation is
+  an event on the loop goroutine. Sequential delivery survives.
 - **Producers.** The frontend's `Input` (a goroutine posting operator
-  input), tool calls (each a goroutine posting its completion with the
-  result in the closure), delegated workers (the same, at a lower
-  priority), timers (a goroutine posting at fire time), the interrupt
-  (the highest priority; `Update` raises a pending steer to it).
+  input), tool completions (2a's goroutines, posting instead of
+  channelling), delegated workers, timers (a goroutine posting at fire
+  time), the interrupt (the highest priority; `Update` raises a pending
+  steer to it).
 - **Priorities, from the top:** interrupt, operator input, tool
-  completion, worker completion, timer. Phase 2 fixes the numbers and
-  owns the starvation consequence (decision 5's non-goal).
-- **Parallel tool calls with ordered emission.** A turn's batch is
-  dispatched as N goroutines; each posts a completion event carrying its
-  index and result; the consumer holds completions in an indexed buffer
-  and emits `ToolStart`/`ToolResult` in call order as the earliest
-  unfinished call completes. Side effects cannot be reordered or undone
-  (a `bash` that ran, ran) — so the *emission* is ordered, never the
-  execution, and the model sees results in the order it asked.
-- **The approval gate in a batch.** Mutating calls still ask one at a
-  time (the ask is an operator-input event); reads run while the
-  operator decides. Named in phase 2.
-- **What it reopens:** SPEC_CORE (the loop lines, the event vocabulary
-  for a batch), the freeze gate (`loop/` changes under a named
-  deliverable), SPEC_HARDENING 6–8 (the guard under batches, the
-  overflow recovery's once-budget with N completions), SPEC_MODES 4.
+  completion, worker completion, timer. 2b fixes the numbers and owns
+  the starvation consequence.
+- **The approval gate in a batch** is already one ask at a time (2a);
+  2b makes the ask an operator-input event.
+- **What it reopens:** SPEC_CORE's loop lines (rewritten, not
+  amended), the gate again, SPEC_HARDENING 6–8 (the overflow recovery's
+  once-budget with N completions), SPEC_MODES 4.
 
 ## testing
+
+Phase 2a (`loop/batch_test.go`, `middleware/guard`, `tool/file`):
+concurrent-eligible reads overlap and their results are emitted and
+appended in call order with each result's own duration; a refused call
+is a barrier (starts after the reads ahead of it end; the read after it
+starts after it ends); no predicate is sequential (peak in flight 1);
+`Parallel` bounds a run (peak exactly the bound); a run-context cancel
+inside a run drains the batch into the transcript whole; the chain sees
+every call of a run; the bound is race-free under a concurrent run and
+refuses the re-issuance after; concurrent reads record their file state
+without a race. Every pre-2a loop case passes unchanged under `-race`.
 
 libevt's cases, by name, in Go (`evt/queue_test.go`):
 

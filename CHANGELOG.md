@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- **the batch** (`specs/SPEC_EVT.md` 6, the named reopening of the
+  frozen loop): a turn's tool calls the kernel's `Concurrent` predicate
+  admits run together (bounded by `Parallel`, default 8); any other call
+  is a barrier in call order; results are emitted and appended in the
+  order the model asked, each with its own duration. The root admits the
+  pure reads (`read`, `ls`, `find`, `grep`, `web_search`, `web_fetch`,
+  `diff`); everything with effects, a store, or the shared kernel stays
+  sequential. The guard and the file tool lock the state they share
+  across a run. A nil predicate is the 0.11 loop, byte-identical. The
+  freeze gate carries the reopening by name; the re-freeze follows the
+  merge.
+
+## [Unreleased]
+
 - **the event loop, phase 1** (`specs/SPEC_EVT.md`): libevt's shape
   (`~/Projects/libtrdr`) made Go-centric as the leaf package `evt` —
   `Context`, `Event`, `Queue` (the 4-ary max-heap, priority desc then

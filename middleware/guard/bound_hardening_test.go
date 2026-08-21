@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/core"
@@ -187,5 +188,36 @@ func TestNoteAloneWhenTheToolContentIsEmpty(t *testing.T) {
 	}
 	if !strings.Contains(content, "[retry-guard] bash failed 1× in a row this turn") {
 		t.Fatalf("an empty tool content must carry the note alone: %q", content)
+	}
+}
+
+// SPEC_EVT 2a: the bound is safe under a concurrent batch — identical
+// failing calls from many goroutines are counted without a race, and
+// the limit refuses once they have landed. Named: the duplicates in one
+// run may all execute (each passed the check before any had failed);
+// they are not retries, and the bound strikes the re-issuance after.
+func TestBoundIsSafeUnderAConcurrentBatch(t *testing.T) {
+	e := &failingExec{calls: map[string]int{}}
+	var inner core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return e.Exec(ctx, call)
+	}
+	g := guard.Bound(3)
+	exec := g.Wrap(inner)
+	call := core.ToolCall{ID: "c", Name: "edit", Args: json.RawMessage(`{"path":"a"}`)}
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = exec(context.Background(), call)
+		}()
+	}
+	wg.Wait()
+	text, err := exec(context.Background(), call)
+	if err == nil || !strings.Contains(text, "stop reissuing") {
+		t.Fatalf("after a concurrent streak the bound must refuse, got %q", text)
+	}
+	if e.total < 3 {
+		t.Fatalf("the run's duplicates execute (they are not retries), got %d", e.total)
 	}
 }

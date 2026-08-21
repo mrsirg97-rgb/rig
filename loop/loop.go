@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/mrsirg97-rgb/rig"
 	"github.com/mrsirg97-rgb/rig/core"
@@ -159,14 +158,15 @@ func Run(ctx context.Context, k *rig.Kernel) error {
 					ToolCalls:     calls,
 					ContextTokens: usage.Prompt + usage.Completion,
 				})
-				for _, call := range calls {
+				b := newBatch(core.WithSession(turnCtx, session), exec, calls, k.Concurrent, k.Parallel)
+				for i, call := range calls {
 					k.Frontend.Notify(core.ToolStart{Call: call})
-					start := time.Now()
-					content, execErr := exec(core.WithSession(turnCtx, session), call)
+					out := b.result(i)
+					content, execErr := out.content, out.err
 					if execErr != nil && content == "" {
 						content = execErr.Error()
 					}
-					k.Frontend.Notify(core.ToolResult{ID: call.ID, Content: content, Err: execErr, Duration: time.Since(start)})
+					k.Frontend.Notify(core.ToolResult{ID: call.ID, Content: content, Err: execErr, Duration: out.dur})
 					session.Append(core.Message{
 						Role:    core.RoleTool,
 						ToolID:  call.ID,
