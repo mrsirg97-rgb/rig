@@ -211,6 +211,25 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
 
     <div class="gap reveal"></div>
+    <div class="msg reveal">the flags are per-run; the durable home is the rig folder. a new row in
+    ~/.rig/models.json carries a model's own window and reserves — the embedded rows
+    stay, you add only what you need — and settings.json names the default. precedence
+    runs flag, then env, then the file, then the embedded default.</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">write</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/models.json</span></div>
+    <div class="ln py reveal">  [</div>
+    <div class="ln py reveal">    {"id": <span class="s">"big-ctx"</span>, "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 65536, "role": <span class="s">"interactive"</span>}</div>
+    <div class="ln py reveal">  ]</div>
+    <div class="ln out reveal">  models.json written — "big-ctx" added; embedded rows kept</div>
+    <div class="ln reveal"><span class="tname-done">write</span>   <span class="ok">✓</span>   <span class="dim">0.4s</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">edit</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/settings.json</span></div>
+    <div class="ln out reveal">  default model → big-ctx (settings.json)</div>
+    <div class="ln reveal"><span class="tname-done">edit</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
+
+    <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t3</span></div>
     <div class="ln reveal"><span class="bar-on">▰▰▰</span><span class="bar-off">▱▱</span> <span class="dim">3/5 · next t4</span></div>
     <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
@@ -232,6 +251,21 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln tl reveal"><span class="tn">rem</span>    memory; recall by intent, consolidation arithmetic</div>
     <div class="ln tl reveal"><span class="tn">scheduler</span>   background jobs on cron; the worker runs in a bwrap jail</div>
     <div class="ln tl reveal"><span class="tn">plugins_reload</span>   re-discover from disk; the swap takes effect next turn</div>
+
+    <div class="gap reveal"></div>
+    <div class="msg reveal">the python kernel is persistent. a value you define stays put for the
+    next call, so you compute once and reuse — no re-setup between calls.</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">python</span>   <span class="dim">·</span>   <span class="toolargs">code</span></div>
+    <div class="ln py reveal">  nums = list(range(1, 101))</div>
+    <div class="ln reveal"><span class="tname-done">python</span>   <span class="ok">✓</span>   <span class="dim">0.3s</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">python</span>   <span class="dim">·</span>   <span class="toolargs">code</span></div>
+    <div class="ln py reveal">  sum(n for n in nums if n % 2)</div>
+    <div class="ln out reveal">  2500</div>
+    <div class="ln reveal"><span class="tname-done">python</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t4</span></div>
