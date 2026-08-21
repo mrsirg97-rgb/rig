@@ -78,8 +78,12 @@ Surfaces reviewed: the embedded system prompt (`config/settings.json`
 Findings (green unless noted):
 
 - **Deny by default**: `perm.Allowlist` refuses unlisted tool names; the
-  embedded allow-list is the tool surface. Denials return the message as
-  both content and error so `guard.Bound` can bound the repetition.
+  embedded allow-list is the tool surface. `AllowlistWithDoor` adds the
+  second door (SPEC_PLUGINS 7): a name the live plugin table carries as a
+  plugin passes though absent from the static list — an installed plugin's
+  presence in `plugins/` root is its own admission. Denials return the
+  message as both content and error so `guard.Bound` can bound the
+  repetition.
 - **Provenance rule**: `perm.Plugins` canonicalizes paths the way the file
   tools do, so the model's `write`/`edit` to `plugins/` outside
   `plugins/pending/` is refused; the pending zone is invisible to

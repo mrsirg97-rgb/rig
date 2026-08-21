@@ -106,6 +106,7 @@ func wire(r *root) *rig.Kernel {
 	if r.live == nil {
 		r.live = toolset.New(append(r.nativeTools(), r.pluginTools...)...)
 	}
+	r.live.SetPlugins(r.pluginNames()...)
 	if r.natives == nil {
 		r.natives = make(map[string]bool, len(nativeToolNames))
 		for _, name := range nativeToolNames {
@@ -124,7 +125,7 @@ func wire(r *root) *rig.Kernel {
 		}
 		mw = append(mw,
 			perm.Plugins(r.pluginsDir),
-			perm.Allowlist(r.allow...),
+			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
 		)
 	}
@@ -151,7 +152,7 @@ func (r *root) buildSystem() string {
 	if mw == nil {
 		mw = []core.ToolMiddleware{
 			perm.Plugins(r.pluginsDir),
-			perm.Allowlist(r.allow...),
+			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
 		}
 	}
@@ -423,9 +424,36 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 			tools = append(tools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, r.py))
 		}
 	}
+	names := make([]string, 0, len(reports))
+	for _, rep := range reports {
+		if !rep.Skipped {
+			names = append(names, rep.Name)
+		}
+	}
 	r.live.Set(tools)
+	r.live.SetPlugins(names...)
 	r.pluginInfos = infos
 	return command.RenderPlugins(infos, "reload"), nil
+}
+
+// pluginNames are the names of the startup-discovered plugins (the
+// seed; reloads own the live table's plugin set afterwards).
+func (r *root) pluginNames() []string {
+	out := make([]string, 0, len(r.pluginTools))
+	for _, t := range r.pluginTools {
+		out = append(out, t.Name())
+	}
+	return out
+}
+
+// pluginDoor is the allow-list's second door over the live plugin
+// table: it admits a currently-live plugin only, never a native (the
+// collision rule keeps the sets disjoint). A nil live table answers
+// nothing — the nil-door, today-only behavior.
+func (r *root) pluginDoor() func(string) bool {
+	return func(name string) bool {
+		return r.live != nil && r.live.IsPlugin(name)
+	}
 }
 
 func (r *root) reloadPlugins(ctx context.Context) (string, error) {

@@ -3,15 +3,22 @@
 ## What it is
 
 The deny-by-default permission middleware: a static allow-list of tool
-names, plus the plugin provenance rule (the model's write and edit land
-in plugins/pending/, not plugins/). A denied call is fed back to the
-model as a refusal naming the tool and the list, attributed so
-downstream guards can bound the repetition.
+names with a second door over the live plugin table (SPEC_PLUGINS 7,
+the presence reversal), plus the plugin provenance rule (the model's
+write and edit land in plugins/pending/, not plugins/). A denied call
+is fed back to the model as a refusal naming the tool and the list,
+attributed so downstream guards can bound the repetition.
 
 ## What it includes
 
 - `Allowlist(names...)` — permits exactly the listed tool names;
-  everything else is denied.
+  everything else is denied. This is the nil-door today.
+- `AllowlistWithDoor(names, door)` — the allow-list plus a second door
+  (the live plugin table's membership): a name the door admits passes
+  though absent from the static list. The door speaks for plugins only
+  (never a native); a nil door is `Allowlist`.
+- `Plugins(pluginsDir)` — the plugin provenance rule (SPEC_SANDBOX 2)
+  for `write` and `edit`.
 - `Plugins(pluginsDir)` — the plugin provenance rule (SPEC_SANDBOX 2)
   for `write` and `edit`.
 - `normalizePath` (unexported) — canonicalizes a path the way the file

@@ -131,7 +131,10 @@ rig --allow bash,read            # run things, inspect things, change nothing
 
 Anything not named is refused at the boundary with the reason named, and the
 refusal goes back to the model. The default permits the 15 built-in
-tools; python plugins (outside the default) must be allow-listed by name.
+tools. Python plugins (outside the default) are admitted by their
+presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7) — an installed
+plugin's own allow-list entry — not by an `allow` line; a plugin still
+in `plugins/pending/` stays refused until approved and reloaded.
 Narrowing is always available and compose-order-agnostic.
 
 ## working-directory discipline

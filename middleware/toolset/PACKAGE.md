@@ -13,9 +13,12 @@ new tools execute, by construction — the models-switch's semantics
 ## What it includes
 
 - `Table` — the live list: ordered (the wire's order), swapped
-  atomically under a `sync.RWMutex`.
+  atomically under a `sync.RWMutex`, plus the plugin subset.
 - `New(tools...)` — builds the table, copying the caller's slice.
 - `Set(tools)` — swaps the list (the reload's rebuild), copy-in.
+- `SetPlugins(names...)` — marks the currently-live plugin names (the
+  reload carries its own plugin subset); `IsPlugin` answers the table's
+  plugin membership.
 - `List()` — the table's tools as a snapshot.
 - `Specs()` — the wire's projection: name, description, schema per
   tool, in the table's order.
@@ -30,6 +33,9 @@ new tools execute, by construction — the models-switch's semantics
   bound) still bound what the table serves.
 - `Carry` wraps the provider (compact's decorator); it stamps the table's
   specs into the request's tools array before delegating, per call.
+- `IsPlugin` feeds the allow-list's second door (`perm.AllowlistWithDoor`,
+  SPEC_PLUGINS 7): a name the table carries as a plugin passes the
+  allow-list though absent from the static list.
 - The loop's own startup list is a bootstrap for the chain's lookup.
 
 ## Gotchas
