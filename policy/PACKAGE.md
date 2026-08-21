@@ -74,6 +74,12 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
 - `Estimate` counts `Reasoning` on the last assistant message only — the
   chat templates strip it from history, so the server never counts it. A
   single-message list (the `split` budget) counts its own.
+- An older prefix whose summary input does not leave the summary floor
+  (`min(Reserve/4, 256)`) is cut to the oldest slice that does
+  (`fitPrefix`: a binary search over the rendered input, then back to a
+  call boundary); the remainder rides ahead of the tail and folds on a
+  later pass. A prefix of one message that does not fit is the loud
+  failure (SPEC_COMPACT 3, amended 2026-08-21).
 - `clampMaxTokens` refuses loud when the kept batch overruns the window
   (budget below the smaller of `Reserve/4` and 256) — surfaced as a Fault
   so `-p` exits non-zero.
