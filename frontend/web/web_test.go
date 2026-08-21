@@ -555,6 +555,130 @@ func TestSchedulerVerbatim(t *testing.T) {
 	}
 }
 
+// --- the scheduler create (SPEC_SERVE phase 2, decision 7) ---
+
+func TestSchedulerCreate(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+
+	post := func(body string) *httptest.ResponseRecorder {
+		hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+		hdr.Set("Content-Type", "application/json")
+		return doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(body), hdr)
+	}
+
+	// a valid 5-field create -> the verb's reply, and the list carries it.
+	rec := post(`{"name":"nightly","prompt":"do the nightly","cron":"0 3 * * *"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	reply, _ := created["reply"].(string)
+	if !strings.Contains(reply, "nightly") || !strings.Contains(reply, "cwd") {
+		t.Fatalf("create: reply %q, want the job named in its scope", reply)
+	}
+	rec = doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
+	var after map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(after["text"], "nightly") {
+		t.Fatalf("list after create: %q, want the new job", after["text"])
+	}
+
+	// a 'once' plus a valid 'at' lands.
+	rec = post(`{"name":"oncejob","prompt":"once","cron":"once","at":"2026-01-02T03:04:05Z"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("once create: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	if r := post(`{"name":"oncejob","prompt":"twice","cron":"0 4 * * *"}`); r.Code == http.StatusOK {
+		t.Fatal("a second create with the same name: want the duplicate refusal")
+	}
+
+	// a duplicate name in the same scope is a named refusal.
+	rec = post(`{"name":"nightly","prompt":"again","cron":"0 5 * * *"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate: got %d, want 400", rec.Code)
+	}
+	var dup map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &dup); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(dup["error"], "already exists") {
+		t.Fatalf("duplicate: %q, want the named refusal", dup["error"])
+	}
+
+	// a bad cron is the verb's refusal.
+	rec = post(`{"name":"badopt","prompt":"p","cron":"bogus"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad cron: got %d, want 400", rec.Code)
+	}
+	// 'once' without an 'at' is a refusal.
+	rec = post(`{"name":"noat","prompt":"p","cron":"once"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("once without at: got %d, want 400", rec.Code)
+	}
+	// empty name and empty prompt are refusals.
+	rec = post(`{"prompt":"p","cron":"0 6 * * *"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty name: got %d, want 400", rec.Code)
+	}
+	rec = post(`{"name":"noprompt","cron":"0 7 * * *"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty prompt: got %d, want 400", rec.Code)
+	}
+
+	// a global-scope create lands in the global section.
+	rec = post(`{"name":"gjob","prompt":"p","cron":"0 8 * * *","scope":"global"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("global create: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	var gcreated map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &gcreated); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := gcreated["reply"].(string); !strings.Contains(g, "global") {
+		t.Fatalf("global create: reply %q, want the global scope", g)
+	}
+	rec = doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
+	var gbody map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &gbody); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gbody["text"], "gjob") {
+		t.Fatalf("global job missing from the list: %q", gbody["text"])
+	}
+
+	// the walls: no Origin, a foreign Origin, an over-cap body.
+	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"x","prompt":"p","cron":"0 9 * * *"}`), bearer(tok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("no origin: got %d, want 403", rec.Code)
+	}
+	foreign := http.Header{"Origin": {"http://evil.example"}, "Authorization": {"Bearer " + tok}}
+	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"x","prompt":"p","cron":"0 9 * * *"}`), foreign)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("foreign origin: got %d, want 403", rec.Code)
+	}
+	big := strings.Repeat("x", maxWriteBytes+1)
+	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(big), both(bearer(tok), "Origin", "http://127.0.0.1:7777"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("over-cap: got %d, want 400", rec.Code)
+	}
+
+	// a wrong method on the path is a 405 naming POST.
+	rec = doReq(t, h, "DELETE", "/api/scheduler"+q, nil, bearer(tok))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("DELETE: got %d, want 405", rec.Code)
+	}
+	if allow := rec.Header().Get("Allow"); !strings.Contains(allow, "GET") || !strings.Contains(allow, "POST") {
+		t.Fatalf("DELETE: Allow %q, want GET and POST", allow)
+	}
+}
+
 func TestMemoryRecent(t *testing.T) {
 	srv, tok := newTestServer(t)
 	rec := doReq(t, srv.Handler(), "GET", "/api/memory?cwd="+testCWD, nil, bearer(tok))
@@ -655,23 +779,151 @@ func TestPluginsListing(t *testing.T) {
 	}
 }
 
+// --- the plugin create (SPEC_SERVE phase 2, decision 7) ---
+
+func TestPluginsCreate(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+
+	post := func(body string) *httptest.ResponseRecorder {
+		hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+		hdr.Set("Content-Type", "application/json")
+		return doReq(t, h, "POST", "/api/plugins", strings.NewReader(body), hdr)
+	}
+
+	// a valid create -> the file lands in the pending zone with the
+	// contract (DESCRIPTION, SCHEMA, the run body), and the listing
+	// carries it (the live listing, decision 8).
+	rec := post(`{"name":"hello","description":"says hi","code":"return \"hello\" + str(args)"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	reply, _ := created["reply"].(string)
+	if !strings.Contains(reply, "pending") {
+		t.Fatalf("create: reply %q, want the pending zone named", reply)
+	}
+	path := filepath.Join(srv.home, "plugins", "pending", "hello.py")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the created file: %v", err)
+	}
+	src := string(data)
+	if !strings.Contains(src, `DESCRIPTION = "says hi"`) {
+		t.Fatalf("file missing the DESCRIPTION:\n%s", src)
+	}
+	if !strings.Contains(src, "SCHEMA = {") || !strings.Contains(src, "\"type\": \"object\"") {
+		t.Fatalf("file missing the SCHEMA object:\n%s", src)
+	}
+	if !strings.Contains(src, "def run(args):") || !strings.Contains(src, `return "hello" + str(args)`) {
+		t.Fatalf("file missing the run body:\n%s", src)
+	}
+	rec = doReq(t, h, "GET", "/api/plugins", nil, bearer(tok))
+	var body struct {
+		Pending []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"pending"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, p := range body.Pending {
+		if p.Name == "hello" && p.Description == "says hi" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("pending listing after create: %v, want hello", body.Pending)
+	}
+
+	// the live listing: a file dropped after New is visible without a
+	// rebuild.
+	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "pending", "dropped.py"),
+		[]byte("DESCRIPTION = \"dropped in later\"\nSCHEMA = {\"type\": \"object\"}\n\ndef run(args):\n    return \"ok\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec = doReq(t, h, "GET", "/api/plugins", nil, bearer(tok))
+	if !strings.Contains(rec.Body.String(), "dropped") {
+		t.Fatalf("live listing: %s, want the later-dropped file", rec.Body.String())
+	}
+
+	// a duplicate name in either zone is a named refusal, no overwrite.
+	rec = post(`{"name":"hello","description":"again","code":"return 1"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate: got %d, want 400", rec.Code)
+	}
+	var dup map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &dup); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(dup["error"], "hello") || !strings.Contains(dup["error"], "already") {
+		t.Fatalf("duplicate: %q, want the named refusal", dup["error"])
+	}
+	// a name colliding with the loaded zone is refused too.
+	rec = post(`{"name":"loaded_one","description":"x","code":"return 1"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("loaded collision: got %d, want 400", rec.Code)
+	}
+
+	// bad names: uppercase, a leading digit, a slash, empty.
+	for _, bad := range []string{"Hello", "1abc", "a/b", "has space"} {
+		rec = post(`{"name":"` + bad + `","description":"d","code":"return 1"}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("bad name %q: got %d, want 400", bad, rec.Code)
+		}
+	}
+	// an empty code is a refusal (a run with no body is no plugin).
+	rec = post(`{"name":"emptybody","description":"d","code":"  \n"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty code: got %d, want 400", rec.Code)
+	}
+
+	// the walls hold as with the todo create.
+	rec = doReq(t, h, "POST", "/api/plugins", strings.NewReader(`{"name":"x","description":"d","code":"return 1"}`), bearer(tok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("no origin: got %d, want 403", rec.Code)
+	}
+	big := strings.Repeat("x", maxWriteBytes+1)
+	rec = doReq(t, h, "POST", "/api/plugins", strings.NewReader(big), both(bearer(tok), "Origin", "http://127.0.0.1:7777"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("over-cap: got %d, want 400", rec.Code)
+	}
+}
+
 // --- the static assets are reachable and served ---
 
 func TestStaticAssets(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 
-	for path, want := range map[string]string{
-		"/":                 "<!doctype html>",
-		"/static/app.js":    "renderSessions",
-		"/static/style.css": "--accent",
+	// the page, its assets, and this round's surfaces (SPEC_SERVE phase 2:
+	// the mobile drawer, the new-workspace picker, the TUI-homage
+	// renderers for the todo and scheduler text).
+	for path, wants := range map[string][]string{
+		"/": {"<!doctype html", `id="nav-toggle"`, `id="cwd-add"`},
+		"/static/app.js": {
+			"renderSessions",
+			"parseTodo",
+			"parseScheduler",
+			"progressBar",
+			"addCwd",
+			"setNavOpen",
+		},
+		"/static/style.css": {"--accent", "@media (max-width: 720px)", ".nav-open"},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: got %d", path, rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), want) {
-			t.Fatalf("%s: body missing %q", path, want)
+		for _, want := range wants {
+			if !strings.Contains(rec.Body.String(), want) {
+				t.Fatalf("%s: body missing %q", path, want)
+			}
 		}
 	}
 	// an unknown static file is a 404.

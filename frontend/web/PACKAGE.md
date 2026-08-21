@@ -5,17 +5,19 @@
 The local dashboard (SPEC_SERVE): a loopback-only `net/http` server that
 reads the rig home's stores and renders them as one embedded page. It is
 a *reader* of the same SQLite files a live session is writing — the same
-rig home, the same pragmas, the same store verbs — and it has exactly one
-write (a todo create, attributed to `dashboard`). It is a leaf package
-wired once at the root, beside `cli`/`tui`; the loop never names it. No
+rig home, the same pragmas, the same store verbs — and it carries three
+writes (a todo create, a scheduler create, and a plugin create into the
+pending zone), each attributed to `dashboard` and riding the existing
+verb or the provenance rule's landing zone. It is a leaf package wired
+once at the root, beside `cli`/`tui`; the loop never names it. No
 framework, no build step, no external asset: `go build` alone ships it.
 
 ## What it includes
 
 - **`Server` / `New` / `ListenAndServe` / `Handler` / `Close`** — the
   dashboard: the static inputs (the rig home, the serve cwd, the models
-  table, the crontab), the token, the allowed origins, the store cache,
-  the rooted static assets.
+  table, the crontab, the runner command), the token, the allowed
+  origins, the store cache, the rooted static assets.
 - **The token gate** (SPEC_SERVE 5) — `serve.token` (0600) minted once and
   printed once; `Authorization: Bearer`, the one-time `?token=` (which then
   sets the cookie), or the cookie; a constant-time compare; a 401 with the
@@ -32,24 +34,38 @@ framework, no build step, no external asset: `go build` alone ships it.
   memory (recent for the cwd), models (every row: window, effort list,
   role), plugins (the loaded set and the pending zone, each with the file's
   DESCRIPTION).
-- **The one write** — a todo create (one task per line): Origin-checked
-  (same-origin only), body-capped, calling `todo.Create` with session
-  `dashboard`, the reply verbatim. The only `db.Tx` (not `TxReadOnly`) the
-  dashboard opens.
+- **The writes** (SPEC_SERVE phase 2) — a todo create (one task per
+  line, `todo.Create`), a scheduler create (`scheduler.Create`, the
+  runner command the root wired), and a plugin create (one file into
+  `plugins/pending/`, the contract's `DESCRIPTION`/`SCHEMA`/`run`). Each
+  is Origin-checked (same-origin only), body-capped, POST-only, the
+  reply verbatim; the only `db.Tx` (not `TxReadOnly`) the dashboard
+  opens (the plugin write is a file write the provenance rule blesses).
 - **The store cache** — opens the store files the way the root does (the
   stores' own path helpers, one shared source) and caches them per file;
   a reader of the same files, never a second copy.
-- **The static assets** (`static/`) — the single page, the sidebar nav,
-  the cwd picker, the create form, and the oled palette's values
-  (the `frontend/tui` `theme.go` table).
+- **The plugin listing, live** (SPEC_SERVE phase 2, decision 8) — read
+  per request from the home's `plugins/` and `plugins/pending/`, never
+  cached at `New`: a file created, promoted, or dropped is visible on
+  the next read.
+- **The static assets** (`static/`) — the single page, the sidebar nav
+  (the mobile drawer below 720px), the cwd picker with the
+  new-workspace add (client state, decision 9), the create forms, and
+  the TUI's design language: the oled palette's values (the
+  `frontend/tui` `theme.go` table), its glyph set, and the todo and
+  scheduler text parsed and rendered by the `frontend/tui`
+  `tools_render.go` rules mirrored in JS (the homage, decision 10;
+  unparseable text falls back to the verbatim `<pre>`).
 
 ## How it is consumed
 
-- The root wires it with `web.New(web.Options{Home, CWD, Models, Crontab})`
-  and `srv.ListenAndServe(ctx, addr)`, behind the `serve` subcommand
-  (`cmd/rig/serve.go`, one file plus a registration line in `main.go`).
+- The root wires it with `web.New(web.Options{Home, CWD, Models,
+  Crontab, RunnerCmd})` and `srv.ListenAndServe(ctx, addr)`, behind the
+  `serve` subcommand (`cmd/rig/serve.go`, one file plus a registration
+  line in `main.go`).
 - The models table is `cfg.Models` (the config's table, every row); the
-  crontab is `sched.RealCrontab("")` (injected in tests).
+  crontab is `sched.RealCrontab("")` (injected in tests); the runner
+  command is `<self> run-job` (the store's `rig run-job` when empty).
 - The operator opens `http://127.0.0.1:7777/?token=<printed>` once (the
   cookie is set); the same-origin fetches then carry it.
 
@@ -58,9 +74,12 @@ framework, no build step, no external asset: `go build` alone ships it.
 The dashboard calls store verbs, never domain accessors and never raw SQL
 (SPEC_SERVE 3): `state.ListSessions`, `state.Resume`,
 `state.SessionUsage`, `todo.Read`, `todo.ReadAll`, `todo.Create`,
-`scheduler.List`, `rem.Recent`, and the `models.Table` / `plugins.List`
-surfaces. The two small store additions (`SessionRow.Cwd`,
-`SessionUsage`) are typed verbs the dashboard consumes, not a SQL leak.
+`scheduler.List`, `scheduler.Create`, `rem.Recent`, and the
+`models.Table` / `plugins.List` surfaces. The two small store additions
+(`SessionRow.Cwd`, `SessionUsage`) are typed verbs the dashboard
+consumes, not a SQL leak. The plugin create writes the file the
+provenance rule already blesses (`plugins/pending/`), then reads it back
+through the same listing.
 
 ## Gotchas
 
@@ -82,6 +101,30 @@ surfaces. The two small store additions (`SessionRow.Cwd`,
 - The write's Origin must name the bound address (and `localhost` when the
   bind is loopback); the origins are set from the bound address at serve
   time (set directly in tests).
+- The scheduler create rides `scheduler.Create` verbatim: the crontab is
+  the scheduling truth, so a create installs a line in the real crontab
+  (the runner command the root wired); a duplicate name in the same
+  scope is the verb's named refusal, and the reply is the store's voice.
+- The plugin create is the operator's authoring door, not the model's:
+  the file lands in `plugins/pending/` (the provenance rule's landing
+  zone), never in `plugins/` — promotion (move it up, reload) stays the
+  operator's step. The name is the filename stem (lowercase, leading
+  letter), refused when it exists in either zone; the generated file is
+  the contract with an empty `SCHEMA` object until extended.
+- The plugin listing is live (decision 8): `New` no longer caches it, so
+  a listing reflects the files at request time; a bad `DESCRIPTION` read
+  is an empty description, never an error (one bad file must not brick
+  the listing).
+- The new-workspace picker is client state (decision 9): added cwds and
+  the selected cwd live in the browser (localStorage), merged over the
+  server's list; the server's list stays the truth for what exists.
+- The homage's parsers mirror `frontend/tui/tools_render.go` line for
+  line (decision 10): the todo head/task/footer rules, the scheduler
+  section/job/detail rules, the bar's fill, the glyph and slot mapping.
+  The JS todo render keeps the reply's `→` action line as the block's
+  opening (the TUI's opening line, which the TUI substitutes for it).
+  Text the rules do not parse is the verbatim `<pre>`, never a broken
+  page.
 
 ## Tests
 
@@ -89,10 +132,16 @@ The named cases (SPEC_SERVE, testing), `httptest` over a temp rig home
 with seeded stores (the store path helpers are the round-trip): the token
 gate (401s, the bearer, the `?token=` cookie, the 0600 file, no re-mint);
 the loopback refusal (accepts and refuses by name); the allow-list (404,
-405 with `Allow`); the write's walls (Origin, body cap, empty body, the
-verbatim reply, the upsert); the reads (the cwds, the sessions list and
-cwd, the transcript golden — messages, reasoning, tool calls and results,
-and the usage rows — the todo/scheduler verbatim text, the memory, the
-models rows with effort and role, the plugins with DESCRIPTION); and the
-static assets (served, 404, traversal refused). The store additions carry
-their own cases in `store/{state,todo,rem}`.
+405 with `Allow`); the writes' walls (Origin, body cap, empty body, the
+verbatim reply, the upsert — for the todo, the scheduler, and the plugin
+creates, plus the scheduler's duplicate/cron/once refusals, the plugin's
+name/duplicate/empty-body refusals, and the live listing); the reads (the
+cwds, the sessions list and cwd, the transcript golden — messages,
+reasoning, tool calls and results, and the usage rows — the
+todo/scheduler verbatim text, the memory, the models rows with effort and
+role, the plugins with DESCRIPTION); and the static assets (served, 404,
+traversal refused, the drawer's toggle, the picker's add, the homage's
+parsers and bar). The store additions carry their own cases in
+`store/{state,todo,rem}`. The JS parsers' parity with the Go ones is
+checked by hand against the same seeded text (the node harness, not a
+suite member).
