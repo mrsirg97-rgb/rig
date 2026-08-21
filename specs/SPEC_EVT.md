@@ -259,8 +259,10 @@ run context (it would drop the drain of a torn stream and the boundary
 rule the cases pin); a per-turn engine (the engine is the run's; the
 turn is an object the events carry).
 
-The gate: the `reopened` clause names 2b; the re-freeze PR after the
-merge deletes it.
+The gate: the `reopened` clause named 2b; the re-freeze PR after the
+merge deleted it. `loop/` is frozen at 0.12.0's bytes: the event loop
+work is closed end to end — phase 1 the engine, 2a the batch, 2b the
+consumer — and the next change to the loop opens it by name again.
 
 ## testing
 
