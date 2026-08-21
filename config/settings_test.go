@@ -85,7 +85,7 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.Model != "local" {
 		t.Fatalf("model = %q, want the 0.2.0 flag default", s.Model)
 	}
-	if s.System != "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done." {
+	if s.System != "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Remembered notes are suggestions; the code and the spec are the truth. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin." {
 		t.Fatalf("system = %q, want the 0.2.0 default system prompt", s.System)
 	}
 	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff", "plugins_reload"}
