@@ -14,6 +14,9 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   and the AGENTS.md pair (`dir` + `cwd`), each merged over its embedded
   default; returns `*Config`.
 - `Config` — `Settings`, `Models` (`models.Table`), `Agents`, `Theme`.
+  `Settings.Plugins` (`SettingsPlugins{Enabled, Max}`) is the plugin
+  enablement (SPEC_GROWTH 9): the operator's `plugins.enabled` list and
+  the `max` cap, parsed in `parseSettings`.
 - `loadSettings` / `parseSettings` / `mergeSettings` — the settings
   chain's file-over-embedded layer.
 - `loadModels` / `parseRows` / `mergeRows` — the model table out of code.

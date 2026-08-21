@@ -2,6 +2,7 @@ package toolset
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"github.com/mrsirg97-rgb/rig/core"
@@ -67,6 +68,49 @@ func (t *Table) Specs() []core.ToolSpec {
 	return out
 }
 
+// NativeSpecs is the request's tool list (SPEC_GROWTH 9): every tool the
+// table does not carry as a plugin — the natives, including the plugin
+// door. Plugin schemas stay out of the request; the door's own schema
+// carries their names' enum. Carry stamps this, not Specs().
+func (t *Table) NativeSpecs() []core.ToolSpec {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make([]core.ToolSpec, 0, len(t.tools))
+	for _, tool := range t.tools {
+		if t.plugins[tool.Name()] {
+			continue
+		}
+		out = append(out, core.ToolSpec{Name: tool.Name(), Description: tool.Description(), Schema: tool.Schema()})
+	}
+	return out
+}
+
+// PluginNames is the live plugin set, sorted (the door's schema enum, the
+// deterministic order decision 2's). The swap's names ride here.
+func (t *Table) PluginNames() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	names := make([]string, 0, len(t.plugins))
+	for name := range t.plugins {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// Tool resolves a live table tool by name (the plugin door's lookup seam,
+// SPEC_GROWTH 9). It serves natives and plugins alike.
+func (t *Table) Tool(name string) (core.Tool, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for _, tool := range t.tools {
+		if tool.Name() == name {
+			return tool, true
+		}
+	}
+	return nil, false
+}
+
 func (t *Table) tool(name string) (core.Tool, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -99,6 +143,6 @@ type carrier struct {
 }
 
 func (c carrier) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
-	req.Tools = c.table.Specs()
+	req.Tools = c.table.NativeSpecs()
 	return c.inner.Stream(ctx, req)
 }

@@ -32,10 +32,12 @@ func (pluginsCmd) Sub() []Sub {
 		{Name: "approve", Desc: "approve <name>: move the pending plugin to the top level (the operator's verb)"},
 		{Name: "reload", Desc: "re-run the discovery; the new list is registered on the next turn"},
 		{Name: "create", Desc: "create <text>: queue the authoring prompt (the plugin lands in the pending zone)"},
+		{Name: "enable", Desc: "enable <name>: turn a plugin on (settings.json plugins.enabled), next turn"},
+		{Name: "disable", Desc: "disable <name>: turn a plugin off (hidden, not callable), next turn"},
 	}
 }
 
-const usage = "plugins: usage: plugins | plugins pending | plugins approve <name> | plugins reload | plugins create <text>"
+const usage = "plugins: usage: plugins | plugins pending | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
 
 const createTemplate = "author a plugin: %s; the contract is DESCRIPTION, SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending directory (SPEC_SANDBOX); call plugins_reload; test it with one call."
 
@@ -54,9 +56,22 @@ func (pluginsCmd) Run(ctx context.Context, args string, env any) (string, error)
 		return create(env, ctx, strings.TrimSpace(strings.TrimPrefix(args, "create")))
 	case len(fields) == 2 && fields[0] == "approve":
 		return approve(ctx, env, fields[1])
+	case len(fields) == 2 && (fields[0] == "enable" || fields[0] == "disable"):
+		return setPlugins(ctx, env, fields[0] == "enable", fields[1])
 	default:
 		return "", errors.New(usage)
 	}
+}
+
+func setPlugins(ctx context.Context, env any, enabled bool, name string) (string, error) {
+	e, err := EnvOf(env)
+	if err != nil {
+		return "", err
+	}
+	if e.SetPlugins == nil {
+		return "", errors.New("plugins: no enablement seam (the root did not wire one)")
+	}
+	return e.SetPlugins(ctx, name, enabled)
 }
 
 func listPlugins(env any) (string, error) {

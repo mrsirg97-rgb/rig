@@ -168,11 +168,7 @@ def run(args):
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
-	tools := wireTools(t, s.body(0))
-	names := make([]string, 0, len(tools))
-	for _, tl := range tools {
-		names = append(names, tl.Name)
-	}
+	names := pluginNamesIn(s.body(0))
 	foundEcho, foundOther := false, false
 	for _, n := range names {
 		if n == "echo" {
@@ -183,7 +179,7 @@ def run(args):
 		}
 	}
 	if !foundEcho {
-		t.Fatalf("the top-level plugin must be on the wire, got %v", names)
+		t.Fatalf("the top-level plugin must be in the plugin door's enum, got %v", names)
 	}
 	if foundOther {
 		t.Fatalf("the pending plugin must never load, got %v", names)

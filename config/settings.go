@@ -27,9 +27,18 @@ type Settings struct {
 	Sandbox         string
 	SandboxBinds    []string
 	Approve         string // the approval dial's default (SPEC_MODES 4): "auto" or "manual"
+	Plugins         SettingsPlugins // the plugin enablement (SPEC_GROWTH 9): the hide/turn-off surface
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
+// SettingsPlugins is the operator's plugin enablement: a name in Enabled
+// is live, absent names are hidden (not wired, not callable); Max caps the
+// door's name enum at the top Max live plugins (file order). Empty = all.
+type SettingsPlugins struct {
+	Enabled []string
+	Max     int
+}
+
+var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -109,6 +118,12 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.Approve != "" {
 		out.Approve = file.Approve
+	}
+	if file.Plugins.Enabled != nil {
+		out.Plugins.Enabled = file.Plugins.Enabled
+	}
+	if file.Plugins.Max != 0 {
+		out.Plugins.Max = file.Plugins.Max
 	}
 	return out
 }
@@ -236,6 +251,29 @@ func parseSettings(data []byte, path string) (Settings, error) {
 			return Settings{}, fmt.Errorf("config: %s: trafilatura: %v", path, err)
 		}
 		s.Trafilatura = &v
+	}
+	if raw, ok := keys["plugins"]; ok {
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			return Settings{}, fmt.Errorf("config: %s: plugins: expected an object", path)
+		}
+		if e, ok := obj["enabled"]; ok {
+			v, err := jsonStringArray(e, "plugins.enabled")
+			if err != nil {
+				return Settings{}, fmt.Errorf("config: %s: %v", path, err)
+			}
+			s.Plugins.Enabled = v
+		}
+		if m, ok := obj["max"]; ok {
+			v, err := jsonInt(m)
+			if err != nil {
+				return Settings{}, fmt.Errorf("config: %s: plugins.max: %v", path, err)
+			}
+			if v < 0 {
+				return Settings{}, fmt.Errorf("config: %s: plugins.max: expected a non-negative number, got %d", path, v)
+			}
+			s.Plugins.Max = v
+		}
 	}
 	return s, nil
 }

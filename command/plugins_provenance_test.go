@@ -225,7 +225,7 @@ func TestPluginsUnknownVerbUsage(t *testing.T) {
 	if err == nil {
 		t.Fatal("an unknown verb must refuse")
 	}
-	want := "plugins: usage: plugins | plugins pending | plugins approve <name> | plugins reload | plugins create <text>"
+	want := "plugins: usage: plugins | plugins pending | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
 	if err.Error() != want {
 		t.Fatalf("the usage line = %q, want %q", err.Error(), want)
 	}
