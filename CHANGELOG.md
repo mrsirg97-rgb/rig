@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+- **the dashboard speaks the TUI's grammar** (`specs/SPEC_SERVE.md`
+  11–14): every view is a tool block (`● name · detail` … `name ✓`),
+  input is a `❯` prompt row, no panels; the models view in the `/models`
+  table's line with the effort ramp; the memory tab and route removed;
+  the plugins page split approved | pending with the forge — an embedded
+  python editor (gutter, highlighting, no dependency) over three doors:
+  source by zone, save into the pending zone (the contract checked, a
+  native name refused), approve (the command's verb; an installed name a
+  409 until `replace`); a folder browser for the workspace picker, rooted
+  at home, directories only, symlinks resolved, capped; the mobile nav
+  toggle hidden on desktop (the bug: it was hidden by a class the button
+  did not carry).
+
 ## [0.10.0] — the dashboard's polish round
 
 - **the polish round** (`specs/SPEC_SERVE.md`, phase 2): the local

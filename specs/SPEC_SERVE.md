@@ -426,3 +426,84 @@ seeded temp home):
 
 The TUI freeze gate needs no new allowance: the round touches
 `frontend/web`, `cmd/rig`, and `specs/`, all named.
+
+## phase 2, second pass: the TUI's grammar, the forge, the browser
+
+The first polish round put the TUI's palette on the page; this pass puts
+the TUI's grammar on it and closes the plugin loop from the browser.
+Four issues from the phone and the desk, and two doors.
+
+### 11. The memory view is gone.
+
+`rem` is the model's store: the model learns, recalls, and consolidates
+it through its tool, and the operator reads it in the TUI when it
+matters. A per-workspace list of recent notes on a dashboard was noise
+beside the views the operator acts on; the route (`/api/memory`) and the
+tab are removed, the seed stays in the tests (the store is unchanged).
+Rejected, named: a read-only rem browser (it would want search, scopes,
+and supersession to be honest — a fourth phase, if ever).
+
+### 12. The forge: source, save, approve.
+
+The plugin page splits into approved | pending (approved by default,
+the counts in the toggle) and opens a plugin into an editor: a gutter,
+a highlighted mirror over a transparent textarea (Tab indents four,
+Enter keeps the indent and adds one after a colon), no dependency.
+Three doors, the same walls as every write (POST, Origin, the body cap,
+the name wall):
+
+- `GET /api/plugins/source?name&zone` — the file, verbatim, by zone.
+- `POST /api/plugins/save {name, source}` — the full source into
+  `plugins/pending/<name>.py`, create or update; the contract is checked
+  by presence (`DESCRIPTION`, `SCHEMA`, `def run(`); a native name is
+  the collision refusal. An edit of an approved plugin saves a pending
+  revision under the same name — nothing reaches `plugins/` by saving.
+- `POST /api/plugins/approve {name, replace?}` — the command's verb,
+  verbatim: pending → `plugins/`; a native name refused; an installed
+  name a 409 naming `replace` until it is explicit, then the swap. The
+  reply names what a live session needs: its next `plugins_reload`.
+
+The phase-2 create form (`POST /api/plugins`, the run body wrapped)
+stays as a door; the page now uses the editor with the contract's
+template. Rejected, named: saving straight into `plugins/` from the
+editor (the operator's hand is the approve verb, not the save; one door
+for promotion keeps the provenance rule one rule); executing the plugin
+from the page (the shared kernel is a session's; phase 4).
+
+### 13. The folder browser, rooted at home.
+
+The picker's "add a workspace" gains a browser: `GET /api/fs?path` lists
+directories only, rooted at the user's home (`Options.Root`, the tests
+inject one), symlinks resolved before the root check (a link out of home
+is outside), hidden entries off unless `hidden=true`, the listing capped
+at 500 with a named truncation, a path outside the root a 403 by name, a
+file a 400, an absent path a 404. A pick is an add (decision 9): the
+page's bookmark, nothing written. Rejected, named: browsing `/` (the
+dashboard is a reader of the operator's work, not the box), listing
+files (the picker wants folders), following links out of home.
+
+### 14. The page speaks the TUI's grammar.
+
+Every view is a tool block — `● name · detail`, the body, `name ✓` —
+the shape `frontend/tui` commits (commit.go); input is a `❯` prompt row
+with a rule under it, never a boxed field; the nav marks the active view
+with `❯`; nothing sits in a panel. The models view takes the `/models`
+table's line (`id  role  window … trigger …`) with the effort list in
+the ramp's slots, the row's default underlined. The sessions list is
+rows you click, the transcript's tool calls open `● name · detail` like
+the TUI's and show raw args only when no detail parses. The mobile nav
+toggle is hidden above 720px by its class (the first round's button
+carried only the id and showed on desktop — the one bug in the list).
+
+### testing
+
+The phase 1 and 2 cases stay green, minus the memory read (now the 404
+case), plus (failing first): the forge's source by zone and its
+refusals; save creates then updates, checks the contract, refuses a
+native name, and holds the Origin wall; approve moves the file, finds
+nothing the second time, 409s over an installed name until replace, and
+refuses a native; the browser's root listing (folders only, hidden off,
+no parent), hidden on request, a child with its parent, the outside-root
+and traversal 403s, the absent 404, the file 400, the 405; the static
+assets carry the forge, the browser, the tool-block renderer, the
+class-hidden toggle, and the effort ramp.
