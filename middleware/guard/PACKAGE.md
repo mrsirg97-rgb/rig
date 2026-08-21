@@ -8,8 +8,9 @@ once, always; what is bounded is the repeated failing issuance. After
 `limit` failures of one tool in a turn, the next issuance of that tool is
 refused without executing, naming the bound. The limit-th failure carries
 a note telling the model to change the call. Successful re-issuance
-(polling) never counts and stays unbounded. Sequential delivery means no
-locking.
+(polling) never counts and stays unbounded. The maps sit under a mutex
+since the batch (SPEC_EVT 2a): a concurrent run calls the chain from
+many goroutines.
 
 ## What it includes
 
@@ -31,6 +32,9 @@ locking.
 ## Gotchas
 
 - `limit < 1` clamps to 1.
+- Identical calls inside one concurrent run may all execute: each passed
+  the check before any had failed. They are duplicates, not retries; the
+  bound strikes the re-issuance after them (SPEC_EVT 2a, named).
 - Keyed by tool name, but the streak is per args: the bound strikes
   identical retries only. A corrected call (args differing from the last
   failed args) resets the count before the guard check, so the "change the

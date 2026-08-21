@@ -31,3 +31,6 @@ clobbering.
   recorded `FileState` — edit-after-external-change never silently
   clobbers.
 - A standalone exec (no threaded session) skips provenance maintenance.
+- `Session.Files` is written under a package mutex (`filesMu`): reads in
+  one batch run concurrently (SPEC_EVT 2a) and the session type is
+  frozen, so the tool that writes it is the one that locks.

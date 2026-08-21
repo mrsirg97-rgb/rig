@@ -28,6 +28,13 @@ type Kernel struct {
 	// ignores it — dispatch is the Frontend's business, exactly as the
 	// steering slot is.
 	Commands []core.Command
+
+	// Concurrent is the batch's predicate (SPEC_EVT 2a): a call it admits
+	// runs beside its concurrent neighbours; any other call is a barrier
+	// in call order. Nil is the sequential loop, byte-identical.
+	Concurrent func(call core.ToolCall) bool
+	// Parallel bounds a concurrent run (0 = the loop's default).
+	Parallel int
 }
 
 // Option configures the Kernel at construction.
@@ -91,6 +98,14 @@ func WithCommands(cmds ...core.Command) Option {
 // first-listed composes innermost.
 func WithMiddleware(mw ...core.ToolMiddleware) Option {
 	return func(k *Kernel) { k.Middleware = append(k.Middleware, mw...) }
+}
+
+func WithConcurrent(pred func(call core.ToolCall) bool) Option {
+	return func(k *Kernel) { k.Concurrent = pred }
+}
+
+func WithParallel(n int) Option {
+	return func(k *Kernel) { k.Parallel = n }
 }
 
 // SortedToolNames exposes registered tool names in stable order; useful in

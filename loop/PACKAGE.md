@@ -17,6 +17,10 @@ the session at the boundary, clean.
   ctx cancels. A concrete function by design: making the loop pluggable
   would make ordering emergent and undebuggable.
 - `directExec(tools)` — the innermost exec: lookup and run.
+- `batch` (`batch.go`, SPEC_EVT 2a) — the tool-call batch: runs of
+  calls the kernel's `Concurrent` predicate admits are dispatched as
+  goroutines (at most `Parallel`, default 8); a refused call is a
+  barrier; `result(i)` dispatches lazily and waits in call order.
 
 ## How it is consumed
 
@@ -46,6 +50,10 @@ the session at the boundary, clean.
   event.
 - **L8** — the `ContextTokens` stamp (`usage.Prompt + usage.Completion`)
   rides both assistant-append branches; 0 when unreported.
+- **L9** — the batch (SPEC_EVT 2a): admitted calls overlap, barriers
+  run alone in order, emission and the transcript are in call order,
+  each `ToolResult` carries its own duration. A nil predicate is the
+  sequential loop, byte-identical.
 
 ## Gotchas
 
@@ -67,3 +75,9 @@ the session at the boundary, clean.
   not name forward untouched; the Frontend tolerates what it does not know.
 - A run-context cancel ends the run, not a turn, and emits no `TurnEnd`;
   every turn exit emits one.
+- Inside a concurrent run the middleware chain and the tools run off the
+  loop goroutine: a middleware with state locks it (the guard does), a
+  tool that writes the session locks its writes (the file tool does),
+  and every `Notify` and `Append` stays on the loop goroutine. Execution
+  order is never rearranged — only emission is ordered — so a call with
+  effects must not be admitted by the predicate.
