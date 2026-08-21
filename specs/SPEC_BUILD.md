@@ -4,8 +4,11 @@ The build surface, boring on purpose: one Makefile with six named targets,
 one Linux CI job (the PR gate), one release workflow (the tag path), one
 POSIX installer, and one static install site. The Makefile is CI's
 vocabulary and the operator's shorthand, nothing more. No Go code
-changes — except the gofmt drift that `fmt-check` catches on day one, and
-the single formatting commit that pays it.
+changes — except the gofmt drift that `fmt-check` catches on day one, the
+single formatting commit that pays it, and the one distribution-round
+delta: two Linux-only signal names dropped from the python tool's
+signal-name map (`tool/python/python.go`), so the darwin cross-build
+compiles — the named cost of the four-target matrix.
 
 The baseline is 0.4.0 (main at ce18671, the plugins merge included). The
 invariant: zero semantic Go diff on this branch — the only Go delta is the
@@ -62,7 +65,10 @@ alignment in the drift commit; the exception is named, not hidden).
 - Nothing in the Makefile beyond the six targets: no macros, no variables
   beyond the `GOBIN`/`BINDIR` chain. The Makefile is CI's vocabulary and
   the operator's shorthand, nothing more.
-- No Go code changes beyond `gofmt`: no import, no signature, no behavior.
+- No Go code changes beyond `gofmt` and the one named distribution
+  delta: two Linux-only signal names (`SIGSTKFLT`, `SIGPWR`) dropped from
+  the python tool's signal-name map so the darwin cross-build compiles —
+  no import, no signature, no other behavior.
 
 ## layout
 

@@ -487,7 +487,6 @@ var signalNames = map[syscall.Signal]string{
 	syscall.SIGPIPE:   "SIGPIPE",
 	syscall.SIGALRM:   "SIGALRM",
 	syscall.SIGTERM:   "SIGTERM",
-	syscall.SIGSTKFLT: "SIGSTKFLT",
 	syscall.SIGCHLD:   "SIGCHLD",
 	syscall.SIGCONT:   "SIGCONT",
 	syscall.SIGSTOP:   "SIGSTOP",
@@ -501,7 +500,6 @@ var signalNames = map[syscall.Signal]string{
 	syscall.SIGPROF:   "SIGPROF",
 	syscall.SIGWINCH:  "SIGWINCH",
 	syscall.SIGIO:     "SIGIO",
-	syscall.SIGPWR:    "SIGPWR",
 	syscall.SIGSYS:    "SIGSYS",
 }
 
