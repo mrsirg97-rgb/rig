@@ -13,8 +13,8 @@ import (
 // named plugin and the schema tool reads its contract. middleware/toolset's
 // Table implements it; the leaf never imports the middleware.
 type Live interface {
-	PluginNames() []string                 // the live plugin names, sorted
-	Tool(name string) (core.Tool, bool)    // the named tool, if the table carries it
+	PluginNames() []string              // the live plugin names, sorted
+	Tool(name string) (core.Tool, bool) // the named tool, if the table carries it
 }
 
 // Door is the plugin dispatch tool (SPEC_GROWTH 9): one native tool that

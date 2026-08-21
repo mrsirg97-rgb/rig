@@ -26,7 +26,7 @@ type Settings struct {
 	Theme           string
 	Sandbox         string
 	SandboxBinds    []string
-	Approve         string // the approval dial's default (SPEC_MODES 4): "auto" or "manual"
+	Approve         string          // the approval dial's default (SPEC_MODES 4): "auto" or "manual"
 	Plugins         SettingsPlugins // the plugin enablement (SPEC_GROWTH 9): the hide/turn-off surface
 }
 
