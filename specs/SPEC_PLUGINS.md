@@ -409,16 +409,28 @@ with neither home — the migration is a no-op there, and the wire is
 0.2.0's bytes (SPEC_CONFIG 9, the companion pinned here: **a fixture
 run has no plugins directory**).
 
-### 7. The allow-list
+### 7. The allow-list (AMENDED; the presence reversal)
 
-A plugin is **subject to the allow-list like any tool**: the
-default-deny below it, the refusal fed back to the model. The
-embedded default is the 13 native tools; a plugin is not in it, and
-that is deliberate — the operator who installs a plugin adds its name
-to `allow` (or `--allow`), and the refusal's voice teaches the shape
-until then. Auto-allowing installed plugins would make the allow-list
-mean two things (named tools, and named-plus-whatever-is-in-a-
-directory); one thing it means is allow-listed tools.
+The reversal, named as SPEC_SANDBOX named its own: the presence of a
+plugin in `plugins/` root is itself the allow-list entry. The
+provenance rule (SPEC_SANDBOX 2) forces a model's `write`/`edit` into
+`plugins/pending/`, so a plugin sitting in `plugins/` root can only
+have gotten there by an operator act (the `/plugins` approve) — that
+presence IS the admission, and the operator need not add a name to
+`allow`.
+
+The mechanism is a second door on the allow-list, wired to the live
+plugin table (`middleware/toolset`'s `IsPlugin`): a name is permitted
+if it is in the static `allow` **or** the live table carries it as a
+plugin (`perm.AllowlistWithDoor`; `Allowlist` is the nil-door today —
+static alone). The door speaks for plugins only: a native is never
+admitted by it (the collision rule keeps the sets disjoint), and a
+plugin in `plugins/pending/` is not live and stays refused until the
+operator approves and reloads. A plugin whose file is deleted stops
+being admitted on the next reload. The refusal's voice names the tool
+and the allow-list; it teaches the shape — a live plugin, or a name
+for `allow` — until then. Plugins stay flat as real tools; nesting
+them under one tool is a later decision once the count grows.
 
 ### 8. The reload and the forge (AMENDED; GATED on SPEC_SANDBOX)
 

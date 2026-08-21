@@ -193,9 +193,14 @@ starts fresh: the guard's counts and the steering slot are not persisted.
 refused at the boundary and the refusal is fed back to the model. The default
 permits the 15 built-in tools because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar. Python plugins
-(`~/.rig/plugins/`) are **not** in the default: the operator who installs
-a plugin allow-lists its name (`--allow echo` or `allow` in
-`settings.json`) — the refusal's voice teaches the shape until then.
+(`~/.rig/plugins/`) are **not** in the default — but a plugin sitting in
+`plugins/` root is itself an allow-list entry (SPEC_PLUGINS 7): the
+provenance rule forces a model's writes into `plugins/pending/`, so an
+installed plugin got there by the operator's `/plugins` approve, and that
+presence admits it through the allow-list's second door (the live plugin
+table). A plugin still in `plugins/pending/` is not live and stays
+refused until approved and reloaded; the refusal's voice names the tool
+and the allow-list either way.
 
 ## plugins
 
@@ -241,9 +246,11 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   the boundary: bash can still move a file into `plugins/` (the
   operator's shell is the operator's); the worker jail (SPEC_SANDBOX
   1) is the boundary, the provenance rule is the workflow.
-- **The allow-list** — a plugin is not in the built-in default; the
-  operator allow-lists its name (`--allow echo` or `allow` in
-  `settings.json`).
+- **The allow-list** — a plugin is not in the built-in default, but an
+  installed plugin's presence in `plugins/` root is itself its allow-list
+  entry (SPEC_PLUGINS 7): the operator's approve put it there, and the
+  allow-list's second door (the live plugin table) admits it without an
+  `allow` line.
 - **`/plugins`** — the loaded plugins (name, description, file) and the
   skipped ones with their reasons. `pending` lists the pending zone
   with each file's DESCRIPTION (read without running the file);
