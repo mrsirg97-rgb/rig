@@ -25,3 +25,6 @@ the threaded ctx; replies exactly as the store shapes them.
   returns the history, and a transition echo is the affected row plus
   the summary — never the full queue. Create keeps the full (filtered)
   queue because a replacement's point is the new state.
+- The description is shape only (SPEC_STREAMLINE 1): the state machine,
+  the claim rules, and the compaction rule ride the store's voices — the
+  replies teach on contact, the standing context does not double-teach.

@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.9.1"
+const Version = "0.9.2"
 
 type root struct {
 	baseURL string
@@ -108,8 +108,13 @@ func wire(r *root) *rig.Kernel {
 		// fill it from the natives (the doors among them) and the plugins.
 		r.live = toolset.New()
 		if r.tools["plugin"] == nil {
-			r.tools["plugin"] = plugins.NewDoor(r.live)
-			r.tools["plugin_schema"] = plugins.NewSchemaDoor(r.live)
+			// the door's redo seam (SPEC_STREAMLINE 4): no home, no redo
+			var redo func(ctx context.Context) error
+			if r.pluginsHome != "" {
+				redo = r.redoPlugins
+			}
+			r.tools["plugin"] = plugins.NewDoor(r.live, redo)
+			r.tools["plugin_schema"] = plugins.NewSchemaDoor(r.live, redo)
 		}
 		r.live.Set(append(r.nativeTools(), r.pluginTools...))
 	}
@@ -461,6 +466,13 @@ func (r *root) pluginDoor() func(string) bool {
 	return func(name string) bool {
 		return r.live != nil && r.live.IsPlugin(name)
 	}
+}
+
+// redoPlugins is the door's redo seam (SPEC_STREAMLINE 4): the error half
+// of the reload — the door needs the swap, not the listing.
+func (r *root) redoPlugins(ctx context.Context) error {
+	_, err := r.reloadPlugins(ctx)
+	return err
 }
 
 func (r *root) reloadPlugins(ctx context.Context) (string, error) {

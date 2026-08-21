@@ -863,7 +863,7 @@ func TestDefaultJobModelFromSettings(t *testing.T) {
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
 	tool := schedapi.New(st, ct, "rig run-job", cfg.Settings.DefaultJobModel)
-	if !strings.Contains(tool.Description(), "Default model: brain") {
+	if !strings.Contains(tool.Description(), "(default: brain)") {
 		t.Fatalf("the tool description must name the file's default: %q", tool.Description())
 	}
 	raw, err := json.Marshal(map[string]any{

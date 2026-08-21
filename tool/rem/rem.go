@@ -75,13 +75,13 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "Memory tool: learn commits facts and constraints idempotently; recall fetches past " +
-	"solutions by intent (fuzzy/semantic search, project-scoped first with global fill); " +
-	"reflect stores a distilled memory with its raw source; prune consolidates the strength " +
-	"arithmetic or removes/reduces memories. Scopes: 'global' for general knowledge, default " +
-	"project (cwd). Recall k caps live hits; no query = browse. Ids are minted mN; copy, " +
-	"never invent. Your notes from this directory are in your context at session start; " +
-	"learn what the next session should not re-derive."
+const description = "Memory tool: learn commits facts and constraints idempotently; recall finds past " +
+	"solutions by intent (project scope first, global fill); reflect stores a distilled " +
+	"memory with its raw source; prune removes, reduces, or consolidates memories. " +
+	"Scope 'global' for general knowledge, default project (cwd). Recall k caps live hits; " +
+	"no query is a browse. Ids are minted mN; copy, never invent. Your notes for this " +
+	"directory arrive in context at session start; learn what the next session should not " +
+	"re-derive."
 
 type adapter struct{ db store.DB }
 
