@@ -12,8 +12,11 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
 <!--
   one file, zero requests after load: the same deal rig makes of its core.
-  palette is rig's own oled theme (frontend/tui/theme.go); the face is rig's
-  own 3x3 block letters (frontend/tui/status.go titleRows).
+  this page is a rig session, rendered the way the TUI renders it:
+  the palette is the oled theme (frontend/tui/theme.go), the face is the
+  3x3 block letters (frontend/tui/status.go titleRows), the tool and
+  todo shapes come from the golden stream (frontend/tui/golden_test.go)
+  and RenderTodoBlock (frontend/tui/tools_render.go).
 -->
 <style>
 :root {
@@ -26,6 +29,8 @@
   --warn: #e5c07b;
   --ember: #e8a86b;
   --rule: #3c3c3c;
+  --reason: #8a8a8a;
+  --xhigh: #d183e8;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
 }
 * { box-sizing: border-box; }
@@ -43,55 +48,81 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.frame { max-width: 47rem; margin: 0 auto; padding: 4rem 1rem 3rem; }
-.hero { text-align: center; }
-.hello { margin: 0; color: var(--dim); font-size: 14px; letter-spacing: .04em; }
+.frame { max-width: 60rem; margin: 0 auto; padding: 3rem 1rem 2.5rem; }
+.term {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: rgba(255,255,255,.014);
+  box-shadow: 0 0 44px rgba(232,168,107,.05), 0 24px 60px rgba(0,0,0,.5);
+  overflow: hidden;
+}
+.tbar {
+  display: flex; gap: .9rem; align-items: baseline;
+  padding: .5rem .95rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px; color: var(--faint);
+}
+.tbar .name { color: var(--ember); }
+.tbar .dots { letter-spacing: .3em; }
+.tbar .ver { margin-left: auto; }
+.tr { padding: 1.15rem 1.25rem 1.35rem; font-size: 13px; line-height: 1.7; }
+.ln { white-space: pre-wrap; word-wrap: break-word; }
+.dim { color: var(--dim); }
+.gap { height: .95rem; }
+.boot { color: var(--dim); }
 .logo {
-  margin: .6rem 0 .5rem;
+  margin: 0;
   color: var(--ember);
   text-shadow: 0 0 18px rgba(232,168,107,.35);
-  font-size: 24px;
-  line-height: 1.3;
-  overflow-x: auto;
+  font-size: 18px;
+  line-height: 1.35;
   white-space: pre;
+  overflow-x: auto;
 }
-.cursor::after { content: "█"; color: var(--ember); animation: blink 1.06s steps(1) infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-section { margin: 3rem 0 0; }
-.pitch { margin: 0; }
-.lede { margin: 0 0 .7rem; color: var(--dim); font-size: 13px; }
-.tools { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1.8rem; margin: 0; padding: 0; list-style: none; }
-@media (max-width: 560px) { .tools { grid-template-columns: 1fr; } }
-.tools li { font-size: 13.5px; line-height: 1.5; }
-.tname { color: var(--ember); }
-.tdesc { color: var(--dim); }
-.cmd { border: 1px solid var(--rule); background: rgba(255,255,255,.022); margin: .9rem 0; transition: border-color .2s ease; }
-.cmd:hover { border-color: var(--dim); }
-.cmd-head {
-  display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: baseline;
-  padding: .55rem .9rem;
-  border-bottom: 1px solid var(--rule);
-  font-size: 12.5px;
-}
-.cmd-name { color: var(--ember); }
-.cmd-note { color: var(--dim); }
+.model { color: var(--text); }
+.xhigh { color: var(--xhigh); }
+.ps { color: var(--ember); }
+.in { color: var(--text); }
+.think { color: var(--ember); }
+.reason { color: var(--reason); }
+.tglyph { color: var(--accent); }
+.tname { color: var(--accent); }
+.toolargs { color: var(--text); }
+.out { color: var(--dim); }
+.tname-done { color: var(--dim); }
+.ok { color: var(--ok); }
+.bar-on { color: var(--accent); }
+.bar-off { color: var(--dim); }
+.tid { color: var(--dim); }
+.pend { color: var(--dim); }
+.act { color: var(--accent); }
+.doneg { color: var(--ok); }
+.task-text { color: var(--text); }
+.tl { color: var(--dim); }
+.tl .tn { color: var(--ember); }
 .copy {
-  margin-left: auto;
-  font: inherit; font-size: 12px;
+  font: inherit; font-size: 11px;
   color: var(--dim);
   background: none;
   border: 1px solid var(--rule);
-  padding: .05rem .6rem;
+  border-radius: 3px;
+  padding: 0 .5rem;
+  margin-left: .7rem;
   cursor: pointer;
+  vertical-align: baseline;
 }
 .copy:hover { color: var(--text); border-color: var(--dim); }
 .copy.done { color: var(--ok); border-color: var(--ok); }
-.cmd-code { margin: 0; padding: .6rem .9rem; font-size: 13px; color: var(--text); overflow-x: auto; white-space: pre; }
-.ps { color: var(--ember); }
-footer { border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: 1.2rem; color: var(--dim); font-size: 13px; text-align: center; }
-footer .links { margin: .5rem 0; }
+.py { color: var(--text); }
+.py .k { color: var(--accent); }
+.py .s { color: var(--ok); }
+.py .f { color: var(--ember); }
+.cursor::after { content: "█"; color: var(--ember); animation: blink 1.06s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+footer { border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1.1rem; color: var(--dim); font-size: 13px; text-align: center; }
+footer .links { margin: .4rem 0; }
 .signoff { color: var(--faint); }
-html.js .reveal { opacity: 0; transform: translateY(8px); transition: opacity .45s ease, transform .45s ease; }
+html.js .reveal { opacity: 0; transform: translateY(6px); transition: opacity .4s ease, transform .4s ease; }
 html.js .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .cursor::after { animation: none; }
@@ -101,91 +132,152 @@ html.js .reveal.in { opacity: 1; transform: none; }
 </head>
 <body>
 <div class="frame">
+<div class="term">
+  <div class="tbar" aria-hidden="true">
+    <span class="dots">○ ◐ ●</span>
+    <span class="name">rig</span>
+    <span class="ver">0.8.1</span>
+  </div>
+  <div class="tr">
+<h2 class="sr">a rig session: figure out how to install rig</h2>
 
-  <section class="hero" aria-label="welcome to rig">
-    <p class="hello reveal">welcome to <span class="cursor" aria-hidden="true"></span></p>
+    <div class="ln boot reveal">welcome to</div>
     <pre class="logo reveal" aria-label="rig, in the 3x3 block face">█▀▄ █ █▀▀
 █▀▄ █ █ █
 ▀ ▀ ▀ ▀▀▀</pre>
-  </section>
+    <div class="gap reveal"></div>
+    <div class="ln model reveal">huihui3.8</div>
+    <div class="ln reveal"><span class="xhigh">xhigh</span><span class="dim"> · default · auto</span></div>
+    <div class="ln dim reveal">up 214k down 18k · cache r 187k 87%</div>
 
-  <section aria-labelledby="h-what">
-    <h2 id="h-what" class="sr">what rig is</h2>
-    <p class="pitch reveal">rig is a minimalist agentic harness. one job: the turn — assemble
-    context, stream the model's output, execute what it asks for, feed the
-    results back, repeat. every dependency held at a typed seam, every induced
-    work bounded, and the harness names no concrete type.</p>
-  </section>
+    <div class="gap reveal"></div>
+    <div class="ln in reveal"><span class="ps">❯</span>  figure out how to install rig</div>
 
-  <section aria-labelledby="h-plugins">
-    <h2 id="h-plugins" class="sr">plugins</h2>
-    <p class="pitch reveal">one file under <span class="tname">~/.rig/plugins/</span> is one tool:
-    the name is the filename, the description and schema are the file's, and the
-    call rides the shared python kernel. loaded tools register on the same seam
-    as the native set — indistinguishable on the wire. a broken file names itself
-    and is skipped; it never bricks the harness.</p>
-  </section>
+    <div class="gap reveal"></div>
+    <div class="ln think reveal">| thinking</div>
+    <div class="ln reason reveal">let me plan this before I do it.</div>
 
-  <section aria-labelledby="h-tools">
-    <h2 id="h-tools" class="sr">tools</h2>
-    <p class="lede reveal">ten native tools, each a leaf behind the Tool seam — every call
-    observed by the walls, bounded, and named.</p>
-    <ul class="tools reveal">
-      <li><span class="tname">bash</span><span class="tdesc"> — real subprocesses; output surfaced and bounded</span></li>
-      <li><span class="tname">file</span><span class="tdesc"> — read · write · edit; edits drift-checked against what you read</span></li>
-      <li><span class="tname">fs</span><span class="tdesc"> — ls · find · grep; small schemas a local model can reach</span></li>
-      <li><span class="tname">diff</span><span class="tdesc"> — the working tree vs HEAD, or the last observation of the same call</span></li>
-      <li><span class="tname">python</span><span class="tdesc"> — a persistent IPython kernel; state persists across calls</span></li>
-      <li><span class="tname">web</span><span class="tdesc"> — search via SearXNG; fetch with the SSRF guard and extraction</span></li>
-      <li><span class="tname">todo</span><span class="tdesc"> — the task queue; event-sourced, DAG-validated at create</span></li>
-      <li><span class="tname">rem</span><span class="tdesc"> — memory; recall by intent, consolidation arithmetic</span></li>
-      <li><span class="tname">scheduler</span><span class="tdesc"> — background jobs on cron; the worker runs in a bwrap jail</span></li>
-      <li><span class="tname">plugins_reload</span><span class="tdesc"> — re-discover from disk; the swap takes effect next turn</span></li>
-    </ul>
-  </section>
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">create</span></div>
+    <div class="ln reveal"><span class="bar-off">▱▱▱▱▱</span> <span class="dim">0/5 · next t1</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
-  <section aria-labelledby="h-install">
-    <h2 id="h-install" class="sr">install</h2>
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">web_search</span>   <span class="dim">·</span>   <span class="toolargs">rig minimal agent harness install</span></div>
+    <div class="ln out reveal">  rig: a minimal agentic harness. stdlib-only core, install in one line.</div>
+    <div class="ln reveal"><span class="tname-done">web_search</span>   <span class="ok">✓</span>   <span class="dim">0.6s</span></div>
 
-    <div class="cmd reveal">
-      <div class="cmd-head">
-        <span class="cmd-name">installer</span>
-        <span class="cmd-note">POSIX sh · checksums verified before anything moves · lands in ~/.local/bin · linux and darwin, amd64 and arm64</span>
-        <button class="copy" type="button" aria-label="copy installer command">copy</button>
-      </div>
-      <pre class="cmd-code"><span class="ps">❯</span> curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</pre>
-    </div>
+    <div class="gap reveal"></div>
+    <div class="ln reveal">rig is a minimalist agentic harness. one job: the turn. assemble context,
+    stream the model's output, execute what it asks for, feed the results back,
+    repeat. every dependency held at a typed seam, every induced work bounded.
+    not a framework: one harness, one job.</div>
 
-    <div class="cmd reveal">
-      <div class="cmd-head">
-        <span class="cmd-name">release binary</span>
-        <span class="cmd-note">the same asset the installer fetches — pick rig_&lt;os&gt;_&lt;arch&gt;, the version lives in the URL</span>
-        <button class="copy" type="button" aria-label="copy release binary command">copy</button>
-      </div>
-      <pre class="cmd-code"><span class="ps">❯</span> curl -fsSL https://github.com/mrsirg97-rgb/rig/releases/latest/download/rig_linux_amd64 -o rig
-<span class="ps">❯</span> chmod +x rig &amp;&amp; ./rig --version</pre>
-    </div>
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t1</span></div>
+    <div class="ln reveal"><span class="bar-on">▰</span><span class="bar-off">▱▱▱▱</span> <span class="dim">1/5 · next t2</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
-    <div class="cmd reveal">
-      <div class="cmd-head">
-        <span class="cmd-name">go install</span>
-        <span class="cmd-note">needs Go ≥ 1.26 — the core is stdlib-only; the one leaf is a pure-Go sqlite driver</span>
-        <button class="copy" type="button" aria-label="copy go install command">copy</button>
-      </div>
-      <pre class="cmd-code"><span class="ps">❯</span> go install github.com/mrsirg97-rgb/rig/cmd/rig@latest</pre>
-    </div>
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command">copy</button></div>
+    <div class="ln out reveal">  rig 0.8.1</div>
+    <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.9s</span></div>
 
-    <div class="cmd reveal">
-      <div class="cmd-head">
-        <span class="cmd-name">then talk</span>
-        <span class="cmd-note">any OpenAI-compatible endpoint — a local server, a gateway, a hosted API. the wire protocol only.</span>
-      </div>
-      <pre class="cmd-code"><span class="ps">❯</span> rig --base-url $ENDPOINT --model $NAME</pre>
-    </div>
-  </section>
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t2</span></div>
+    <div class="ln reveal"><span class="bar-on">▰▰</span><span class="bar-off">▱▱▱</span> <span class="dim">2/5 · next t3</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal">point it at your endpoint. any OpenAI-compatible server works: a local box,
+    a gateway, a hosted API. the wire protocol only.</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ rig --base-url $ENDPOINT --model $NAME</span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command">copy</button></div>
+    <div class="ln out reveal">  rig 0.8.1 ready</div>
+    <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t3</span></div>
+    <div class="ln reveal"><span class="bar-on">▰▰▰</span><span class="bar-off">▱▱</span> <span class="dim">3/5 · next t4</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal">ten native tools ship in the box. each is a leaf behind the Tool seam;
+    every call observed by the walls, bounded, and named:</div>
+    <div class="ln tl reveal"><span class="tn">bash</span>   real subprocesses; output surfaced and bounded</div>
+    <div class="ln tl reveal"><span class="tn">file</span>   read · write · edit; edits drift-checked against what you read</div>
+    <div class="ln tl reveal"><span class="tn">fs</span>     ls · find · grep; small schemas a local model can reach</div>
+    <div class="ln tl reveal"><span class="tn">diff</span>   the working tree vs HEAD, or the last observation of the same call</div>
+    <div class="ln tl reveal"><span class="tn">python</span> a persistent IPython kernel; state persists across calls</div>
+    <div class="ln tl reveal"><span class="tn">web</span>    search and fetch; the fetch carries the SSRF guard</div>
+    <div class="ln tl reveal"><span class="tn">todo</span>   the task queue; event-sourced, DAG-validated at create</div>
+    <div class="ln tl reveal"><span class="tn">rem</span>    memory; recall by intent, consolidation arithmetic</div>
+    <div class="ln tl reveal"><span class="tn">scheduler</span>   background jobs on cron; the worker runs in a bwrap jail</div>
+    <div class="ln tl reveal"><span class="tn">plugins_reload</span>   re-discover from disk; the swap takes effect next turn</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t4</span></div>
+    <div class="ln reveal"><span class="bar-on">▰▰▰▰</span><span class="bar-off">▱</span> <span class="dim">4/5 · next t5</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal">one file under ~/.rig/plugins/ is one tool. the name is the filename; the
+    description and schema are the file's; the call rides the shared python
+    kernel. a loaded tool registers on the same seam as the native set,
+    indistinguishable on the wire. a broken file names itself and is skipped;
+    it never bricks the harness.</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ cat ~/.rig/plugins/uptime.py</span></div>
+    <div class="ln py reveal">  DESCRIPTION = <span class="s">"report host uptime, terse"</span></div>
+    <div class="ln py reveal">  SCHEMA = <span class="s">{"type": "object", "properties": {}}</span></div>
+    <div class="ln py reveal">  <span class="k">def</span> <span class="f">run</span>(args: dict) -&gt; str:</div>
+    <div class="ln py reveal">      s = open(<span class="s">"/proc/uptime"</span>).read().split()[0]</div>
+    <div class="ln py reveal">      <span class="k">return</span> f<span class="s">"up {int(float(s) // 3600)}h {int(float(s) // 60) % 60:02d}m"</span></div>
+    <div class="ln out reveal">  uptime: report host uptime, terse (~/.rig/plugins/uptime.py)</div>
+    <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.1s</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t5</span></div>
+    <div class="ln reveal"><span class="bar-on">▰▰▰▰▰</span> <span class="dim">5/5</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln reveal">all five done. rig 0.8.1 is installed, pointed at your endpoint, ten tools
+    loaded. you're in.</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln in reveal"><span class="ps">❯</span>  <span class="cursor" aria-hidden="true"></span></div>
+  </div>
+</div>
 
   <footer class="reveal">
-    <div>rig 0.8.1 — a minimal agentic loop harness</div>
+    <div>rig 0.8.1 · a minimal agentic loop harness</div>
     <div class="links">
       <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a> ·
       <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a> ·
@@ -195,7 +287,6 @@ html.js .reveal.in { opacity: 1; transform: none; }
     </div>
     <div class="signoff">not a framework. a harness.</div>
   </footer>
-
 </div>
 
 <script>
@@ -206,17 +297,15 @@ html.js .reveal.in { opacity: 1; transform: none; }
   for (var i = 0; i < items.length; i++) {
     (function (el, delay) {
       if (reduced) { el.classList.add("in"); return; }
-      setTimeout(function () { el.classList.add("in"); }, 60 + delay * 100);
+      setTimeout(function () { el.classList.add("in"); }, 40 + delay * 38);
     })(items[i], i);
   }
   var btns = document.querySelectorAll(".copy");
   for (var b = 0; b < btns.length; b++) {
     (function (btn) {
       btn.addEventListener("click", function () {
-        var cmd = btn.closest(".cmd");
-        var code = cmd ? cmd.querySelector(".cmd-code") : null;
-        if (!code) { return; }
-        var text = code.innerText.replace(/^\s*\u276f\s?/m, "");
+        var text = btn.getAttribute("data-cmd");
+        if (!text) { return; }
         function done(label) {
           btn.textContent = label;
           btn.classList.add("done");
@@ -224,7 +313,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
         }
         function fallback() {
           var r = document.createRange();
-          r.selectNodeContents(code);
+          r.selectNodeContents(btn);
           var s = window.getSelection();
           s.removeAllRanges();
           s.addRange(r);

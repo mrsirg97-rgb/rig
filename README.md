@@ -9,7 +9,7 @@ work bounded. Not a framework: a machine for one thing, built closed.
 leaf dependency is `modernc.org/sqlite` (pure-Go driver) for the stores —
 justified in `specs/SPEC_STATE.md`.
 
-Status: feature-complete runtime, version `0.8.0`. The freeze discipline
+Status: feature-complete runtime, version `0.8.1`. The freeze discipline
 holds on `core/` and `loop/`; the 1.0 tag waits for lived use (a worker
 soak, the TUI field-tested as the daily driver).
 
@@ -42,8 +42,7 @@ chmod +x rig
 ./rig --version
 ```
 
-**go install** (needs Go ≥ 1.26; pre-tag `@master` works today, `@latest`
-once tagged):
+**go install** (needs Go ≥ 1.26; the core is stdlib-only):
 
 ```sh
 go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
