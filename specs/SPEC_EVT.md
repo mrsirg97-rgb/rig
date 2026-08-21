@@ -25,8 +25,9 @@ This spec takes that **exact shape** and makes it Go-centric: the five
 parts keep their names and contracts; the mechanism becomes what Go has
 for it. Phase 1 ships the package and its tests. Phase 2a (decision 6) puts
 the batch in the turn loop — concurrent reads, ordered emission — the
-named reopening of the frozen loop. Phase 2b (decision 7, named) makes
-the loop the engine's consumer.
+named reopening of the frozen loop. Phase 2b (decision 7) makes the
+loop the engine's consumer: every step of a turn is an event on one
+goroutine; everything that waits on the world posts.
 
 ## goals
 
@@ -48,8 +49,9 @@ the loop the engine's consumer.
 
 ## non-goals (phase 1, named)
 
-- **No loop change.** `core/` and `loop/` are untouched; the turn loop
-  does not consume this yet. Phase 2 below.
+- **No loop change in phase 1.** `core/` and `loop/` were untouched;
+  phases 2a and 2b are the named reopenings of `loop/` (`core/` stays
+  frozen throughout).
 - **No timers inside the engine.** libevt has none: a timer is a
   producer (a goroutine that posts at fire time), never engine state.
   Keeping the engine timer-free keeps it one thing.
@@ -197,28 +199,79 @@ bytes against the next fork point. Not the `-refactor` branch bypass.
 The form, for every future reopening: open by name in the PR that
 changes the loop, close by name in the PR right after its merge.
 
-### 7. Phase 2b, named: the turn loop as the consumer.
+### 7. Phase 2b, the loop as the consumer — built.
 
-Not built here; the shape, so 2a's seams are cut for it:
+`loop.Run` is the engine's consumer: it wires the tools and the chain
+as before, posts the first prompt, and blocks in `engine.Start`. Every
+step of a turn is a closure executed on the loop goroutine; everything
+that waits on the world is a producer goroutine that posts:
 
-- **The loop is the consumer.** `loop.Run` becomes an engine's `Start`
-  with the session as the consumer's state; every session mutation is
-  an event on the loop goroutine. Sequential delivery survives.
-- **Producers.** The frontend's `Input` (a goroutine posting operator
-  input), tool completions (2a's goroutines, posting instead of
-  channelling), delegated workers, timers (a goroutine posting at fire
-  time), the interrupt (the highest priority; `Update` raises a pending
-  steer to it).
-- **Priorities, from the top:** interrupt, operator input, tool
-  completion, worker completion, timer. 2b fixes the numbers and owns
-  the starvation consequence.
-- **The approval gate in a batch** is already one ask at a time (2a);
-  2b makes the ask an operator-input event.
-- **What it reopens:** SPEC_CORE's loop lines (rewritten, not
-  amended), the gate again, SPEC_HARDENING 6–8 (the overflow recovery's
-  once-budget with N completions), SPEC_MODES 4.
+- **The prompt.** `prompt` mints the turn (its context, its interrupt
+  handle) and spawns a producer that calls `Frontend.Input` once and
+  posts the line (priority 90). The prompt is only ever posted between
+  turns, so the Frontend's contract is unchanged: one `Input` per turn,
+  the steering slot and the interrupt handle exactly as SPEC_CORE has
+  them.
+- **The model.** `model` runs `Assemble` and opens the stream on the
+  loop goroutine (a compaction's summary call blocks here, as before);
+  a producer drains the stream channel and posts each event (priority
+  50, arrival order — the stream stays in order), then a `streamEnd`.
+- **The tools.** `streamEnd` appends the assistant message and builds
+  the batch (2a); `advance` walks the cursor — `ToolStart` when the
+  cursor reaches a call, its run dispatched then, `ToolResult` and the
+  tool message when its completion has landed — and each tool goroutine
+  posts its completion (priority 50). When the cursor passes the last
+  call, `model` again. A barrier runs in a goroutine too: the loop
+  goroutine never blocks on a tool.
+- **The end.** `end` cancels the turn context, emits `TurnEnd`, drops
+  the turn, posts the prompt. The run ends only from a handler (`stop`):
+  EOF or a dead run context at the prompt, the provider-closed-without-
+  Done fault, a dead run context at a stream's end — the engine runs on
+  a background context so the loop's own boundary rule decides, exactly
+  as the sequential loop did.
+
+Every event captures its turn and checks it is still the live one; a
+stale completion or stream event (a turn ended while a producer was
+still posting) is ignored by name, never misapplied. Every `Notify` and
+every `Append` happens on the loop goroutine — the consumer is one
+goroutine, which is the property the recorder, the guard's counting,
+and the compaction anchor rely on (a named case pins it).
+
+Priorities, fixed: input 90, stream 50, tool completion 50. Input
+outranks the work of a turn, but is never pending during one (the
+prompt is posted between turns), so today the numbers only order
+arrivals; they are the seam the later producers use — a delegated
+worker's async completion below tool completions, a timer below that,
+the interrupt above input via `Update`. Those producers are the next
+decisions, each one file plus a post.
+
+What stays sequential: `Assemble` (and a compaction inside it) and the
+`Stream` call run on the loop goroutine, blocking the consumer, as the
+sequential loop blocked; the operator's interrupt still reaches them
+through the turn context (the Frontend's handle), not through an event.
+Making them producers is a later decision if a real case wants the
+loop responsive while a summary call runs.
+
+Rejected, named: calling `Input` continuously (steering as an event) —
+it would move the steering slot from the Frontend into the loop and
+reopen SPEC_COMMANDS 2 and every frontend; the engine stopping on the
+run context (it would drop the drain of a torn stream and the boundary
+rule the cases pin); a per-turn engine (the engine is the run's; the
+turn is an object the events carry).
+
+The gate: the `reopened` clause names 2b; the re-freeze PR after the
+merge deletes it.
 
 ## testing
+
+Phase 2b (`loop/consumer_test.go`): a concurrent run completing out of
+order followed by a streaming call never overlaps two `Notify` calls
+and never asks `Input` during a live turn (the consumer is one
+goroutine; the prompt is between turns); a completion that lands before
+the run ends is in the transcript, one that would land after is
+ignored. Every pre-2b loop case — the thirty of the sequential loop and
+2a's six — passes unchanged under `-race`: the contract is the same
+bytes.
 
 Phase 2a (`loop/batch_test.go`, `middleware/guard`, `tool/file`):
 concurrent-eligible reads overlap and their results are emitted and

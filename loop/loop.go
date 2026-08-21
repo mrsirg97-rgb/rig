@@ -9,7 +9,40 @@ import (
 
 	"github.com/mrsirg97-rgb/rig"
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/evt"
 )
+
+const (
+	prioInput  = 90
+	prioStream = 50
+	prioTool   = 50
+)
+
+type turn struct {
+	ctx       context.Context
+	cancel    context.CancelFunc
+	text      strings.Builder
+	reasoning strings.Builder
+	calls     []core.ToolCall
+	done      bool
+	faulted   bool
+	usage     core.Usage
+	reason    core.TurnReason
+	batch     *batch
+	results   []*outcome
+	cursor    int
+	started   int
+}
+
+type run struct {
+	ctx    context.Context
+	k      *rig.Kernel
+	engine evt.Engine
+	exec   core.ToolExec
+	specs  []core.ToolSpec
+	turn   *turn
+	err    error
+}
 
 func Run(ctx context.Context, k *rig.Kernel) error {
 	if k.Provider == nil {
@@ -37,149 +70,227 @@ func Run(ctx context.Context, k *rig.Kernel) error {
 		exec = mw.Wrap(exec)
 	}
 
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil
-		}
+	r := &run{ctx: ctx, k: k, engine: evt.NewEngine(), exec: exec, specs: specs}
+	r.post(prioInput, r.prompt)
+	r.engine.Start(context.Background())
+	return r.err
+}
 
-		turnCtx, turnCancel := context.WithCancel(ctx)
+func (r *run) post(priority int, f func()) {
+	r.engine.Add(evt.Func(func(context.Context) { f() }), priority)
+}
 
-		userMsg, err := k.Frontend.Input(core.WithInterrupt(turnCtx, turnCancel))
-		if err != nil {
-			turnCancel()
-			if ctx.Err() != nil || errors.Is(err, io.EOF) {
-				return nil
-			}
-			if turnCtx.Err() != nil {
-				continue
-			}
-			k.Frontend.Notify(core.Fault{Err: err})
-			return err
-		}
-		if strings.TrimSpace(userMsg) == "" {
-			turnCancel()
-			continue
-		}
+func (r *run) stop(err error) {
+	r.err = err
+	r.engine.Stop()
+}
 
-		session := k.Session
-		session.Append(core.Message{Role: core.RoleUser, Content: userMsg})
-
-		for _, mw := range k.Middleware {
-			if obs, ok := mw.(core.TurnObserver); ok {
-				obs.TurnStart(turnCtx, session)
-			}
-		}
-
-		reason := core.TurnOver
-	turn:
-		for {
-			msgs, err := k.Policy.Assemble(turnCtx, session)
-			if err != nil {
-				if turnCtx.Err() != nil {
-					reason = core.TurnInterrupt
-					break turn
-				}
-				k.Frontend.Notify(core.Fault{Err: err})
-				reason = core.TurnFault
-				break turn
-			}
-
-			events, err := k.Provider.Stream(turnCtx, core.Request{Messages: msgs, Tools: specs})
-			if err != nil {
-				if turnCtx.Err() != nil {
-					reason = core.TurnInterrupt
-					break turn
-				}
-				k.Frontend.Notify(core.Fault{Err: err})
-				reason = core.TurnFault
-				break turn
-			}
-
-			var (
-				text      strings.Builder
-				reasoning strings.Builder
-				calls     []core.ToolCall
-				done      bool
-				faulted   bool
-				usage     core.Usage
-			)
-			for ev := range events {
-				switch e := ev.(type) {
-				case core.TextDelta:
-					k.Frontend.Notify(ev)
-					text.WriteString(e.Text)
-				case core.ReasoningDelta:
-					k.Frontend.Notify(ev)
-					reasoning.WriteString(e.Text)
-				case core.ToolCallEvent:
-					k.Frontend.Notify(ev)
-					calls = append(calls, e.Call)
-				case core.Done:
-					k.Frontend.Notify(ev)
-					done = true
-					usage = e.Usage
-				case core.Fault:
-					k.Frontend.Notify(ev)
-					faulted = true
-					if turnCtx.Err() != nil {
-						reason = core.TurnInterrupt
-					} else {
-						reason = core.TurnFault
-					}
-				default:
-					k.Frontend.Notify(ev)
-				}
-			}
-
-			switch {
-			case faulted:
-				break turn
-			case !done:
-				if ctx.Err() != nil {
-					turnCancel()
-					return nil
-				}
-				if turnCtx.Err() != nil {
-					reason = core.TurnInterrupt
-					break turn
-				}
-				k.Frontend.Notify(core.Fault{Err: errors.New("loop: provider closed the stream without Done or Fault")})
-				turnCancel()
-				k.Frontend.Notify(core.TurnEnd{Reason: core.TurnFault})
-				return errors.New("loop: provider closed the stream without Done or Fault")
-			case len(calls) == 0:
-				session.Append(core.Message{Role: core.RoleAssistant, Content: text.String(), Reasoning: reasoning.String(), ContextTokens: usage.Prompt + usage.Completion})
-				break turn
-			default:
-				session.Append(core.Message{
-					Role:          core.RoleAssistant,
-					Content:       text.String(),
-					Reasoning:     reasoning.String(),
-					ToolCalls:     calls,
-					ContextTokens: usage.Prompt + usage.Completion,
-				})
-				b := newBatch(core.WithSession(turnCtx, session), exec, calls, k.Concurrent, k.Parallel)
-				for i, call := range calls {
-					k.Frontend.Notify(core.ToolStart{Call: call})
-					out := b.result(i)
-					content, execErr := out.content, out.err
-					if execErr != nil && content == "" {
-						content = execErr.Error()
-					}
-					k.Frontend.Notify(core.ToolResult{ID: call.ID, Content: content, Err: execErr, Duration: out.dur})
-					session.Append(core.Message{
-						Role:    core.RoleTool,
-						ToolID:  call.ID,
-						Content: content,
-					})
-				}
-				continue
-			}
-		}
-
-		turnCancel()
-		k.Frontend.Notify(core.TurnEnd{Reason: reason})
+func (r *run) prompt() {
+	if r.ctx.Err() != nil {
+		r.stop(nil)
+		return
 	}
+	turnCtx, turnCancel := context.WithCancel(r.ctx)
+	t := &turn{ctx: turnCtx, cancel: turnCancel, reason: core.TurnOver}
+	r.turn = t
+	go func() {
+		msg, err := r.k.Frontend.Input(core.WithInterrupt(turnCtx, turnCancel))
+		r.post(prioInput, func() { r.input(t, msg, err) })
+	}()
+}
+
+func (r *run) input(t *turn, msg string, err error) {
+	if t != r.turn {
+		return
+	}
+	if err != nil {
+		t.cancel()
+		if r.ctx.Err() != nil || errors.Is(err, io.EOF) {
+			r.stop(nil)
+			return
+		}
+		if t.ctx.Err() != nil {
+			r.prompt()
+			return
+		}
+		r.k.Frontend.Notify(core.Fault{Err: err})
+		r.stop(err)
+		return
+	}
+	if strings.TrimSpace(msg) == "" {
+		t.cancel()
+		r.prompt()
+		return
+	}
+
+	session := r.k.Session
+	session.Append(core.Message{Role: core.RoleUser, Content: msg})
+
+	for _, mw := range r.k.Middleware {
+		if obs, ok := mw.(core.TurnObserver); ok {
+			obs.TurnStart(t.ctx, session)
+		}
+	}
+	r.model(t)
+}
+
+func (r *run) model(t *turn) {
+	session := r.k.Session
+	msgs, err := r.k.Policy.Assemble(t.ctx, session)
+	if err != nil {
+		if t.ctx.Err() != nil {
+			t.reason = core.TurnInterrupt
+		} else {
+			r.k.Frontend.Notify(core.Fault{Err: err})
+			t.reason = core.TurnFault
+		}
+		r.end(t)
+		return
+	}
+
+	events, err := r.k.Provider.Stream(t.ctx, core.Request{Messages: msgs, Tools: r.specs})
+	if err != nil {
+		if t.ctx.Err() != nil {
+			t.reason = core.TurnInterrupt
+		} else {
+			r.k.Frontend.Notify(core.Fault{Err: err})
+			t.reason = core.TurnFault
+		}
+		r.end(t)
+		return
+	}
+
+	t.text.Reset()
+	t.reasoning.Reset()
+	t.calls = nil
+	t.done, t.faulted = false, false
+	t.usage = core.Usage{}
+	go func() {
+		for ev := range events {
+			ev := ev
+			r.post(prioStream, func() { r.streamEvent(t, ev) })
+		}
+		r.post(prioStream, func() { r.streamEnd(t) })
+	}()
+}
+
+func (r *run) streamEvent(t *turn, ev core.Event) {
+	if t != r.turn {
+		return
+	}
+	switch e := ev.(type) {
+	case core.TextDelta:
+		r.k.Frontend.Notify(ev)
+		t.text.WriteString(e.Text)
+	case core.ReasoningDelta:
+		r.k.Frontend.Notify(ev)
+		t.reasoning.WriteString(e.Text)
+	case core.ToolCallEvent:
+		r.k.Frontend.Notify(ev)
+		t.calls = append(t.calls, e.Call)
+	case core.Done:
+		r.k.Frontend.Notify(ev)
+		t.done = true
+		t.usage = e.Usage
+	case core.Fault:
+		r.k.Frontend.Notify(ev)
+		t.faulted = true
+		if t.ctx.Err() != nil {
+			t.reason = core.TurnInterrupt
+		} else {
+			t.reason = core.TurnFault
+		}
+	default:
+		r.k.Frontend.Notify(ev)
+	}
+}
+
+func (r *run) streamEnd(t *turn) {
+	if t != r.turn {
+		return
+	}
+	session := r.k.Session
+	switch {
+	case t.faulted:
+		r.end(t)
+	case !t.done:
+		if r.ctx.Err() != nil {
+			t.cancel()
+			r.stop(nil)
+			return
+		}
+		if t.ctx.Err() != nil {
+			t.reason = core.TurnInterrupt
+			r.end(t)
+			return
+		}
+		err := errors.New("loop: provider closed the stream without Done or Fault")
+		r.k.Frontend.Notify(core.Fault{Err: err})
+		t.cancel()
+		r.k.Frontend.Notify(core.TurnEnd{Reason: core.TurnFault})
+		r.stop(err)
+	case len(t.calls) == 0:
+		session.Append(core.Message{Role: core.RoleAssistant, Content: t.text.String(), Reasoning: t.reasoning.String(), ContextTokens: t.usage.Prompt + t.usage.Completion})
+		r.end(t)
+	default:
+		session.Append(core.Message{
+			Role:          core.RoleAssistant,
+			Content:       t.text.String(),
+			Reasoning:     t.reasoning.String(),
+			ToolCalls:     t.calls,
+			ContextTokens: t.usage.Prompt + t.usage.Completion,
+		})
+		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Concurrent, r.k.Parallel, func(x int, out outcome) {
+			r.post(prioTool, func() { r.toolDone(t, x, out) })
+		})
+		t.results = make([]*outcome, len(t.calls))
+		t.cursor, t.started = 0, 0
+		r.advance(t)
+	}
+}
+
+func (r *run) toolDone(t *turn, x int, out outcome) {
+	if t != r.turn {
+		return
+	}
+	t.results[x] = &out
+	r.advance(t)
+}
+
+func (r *run) advance(t *turn) {
+	session := r.k.Session
+	for t.cursor < len(t.calls) {
+		i := t.cursor
+		call := t.calls[i]
+		if t.started == i {
+			r.k.Frontend.Notify(core.ToolStart{Call: call})
+			t.started++
+			t.batch.dispatch(i)
+		}
+		out := t.results[i]
+		if out == nil {
+			return
+		}
+		content, execErr := out.content, out.err
+		if execErr != nil && content == "" {
+			content = execErr.Error()
+		}
+		r.k.Frontend.Notify(core.ToolResult{ID: call.ID, Content: content, Err: execErr, Duration: out.dur})
+		session.Append(core.Message{
+			Role:    core.RoleTool,
+			ToolID:  call.ID,
+			Content: content,
+		})
+		t.cursor++
+	}
+	r.model(t)
+}
+
+func (r *run) end(t *turn) {
+	t.cancel()
+	r.k.Frontend.Notify(core.TurnEnd{Reason: t.reason})
+	r.turn = nil
+	r.prompt()
 }
 
 func directExec(tools map[string]core.Tool) core.ToolExec {
