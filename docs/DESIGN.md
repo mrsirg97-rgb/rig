@@ -1,8 +1,8 @@
 # rig design
 
-rig is a minimal agent loop machine: it executes the agent loop against the
+rig is a minimal agentic harness: it executes the agent loop against the
 seams you wire in, exactly once, faithfully. It is not a framework. What it is
-a machine for, in one sentence: a faithful turn loop — assemble context, stream
+a harness for, in one sentence: a faithful turn loop — assemble context, stream
 the provider's output, execute what it asks for, feed it back, repeat — with
 every dependency held at a typed seam.
 
