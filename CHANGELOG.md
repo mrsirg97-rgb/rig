@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.9.2] — the streamlined contract and the self-healing door
+
+- **the contract split** (`specs/SPEC_STREAMLINE.md` 1): the standing
+  context carries shape, the responses carry semantics. The todo,
+  scheduler, and rem descriptions trim to the verbs and the arguments;
+  the state machine, the claim rules, the auto-start, and the
+  compaction sentence ride the voices that already teach them on
+  contact. The pinned goldens regenerate in place (the SPEC_PLUGINS 8
+  precedent); the wire carries the trimmed bytes.
+- **the compaction fact** (2): the operation that crosses the
+  1000-event threshold names the fold in its own reply —
+  `· log compacted (N events folded into the snapshot)` — so the stale
+  footer's quieting after the fold reads as explained, not as state
+  loss. Below the threshold the replies are byte-identical to
+  0.9.1's.
+- **the minted-id voice** (3): the unknown-id refusal at every verb
+  now reads `no task 'tN' (ids are minted by the tool; copy from a
+  reply)`, the teaching on contact instead of standing prose.
+- **the door's self-heal** (4, 5): the `plugin` and `plugin_schema`
+  doors take a redo seam; an unknown name runs the root's reload once
+  and re-resolves, a nil redo keeps today's refusal, and a failing redo
+  is named in the refusal. The authoring dance loses its reload step —
+  write to pending, the operator approves, the model calls the door —
+  and the `/plugins create` template says so. `plugins_reload` stays
+  the operator's explicit verb.
+
 ## [0.9.1] — the estimate tells the truth
 
 - **calibration trusts a measurement, not a turn** (`specs/SPEC_COMPACT.md`

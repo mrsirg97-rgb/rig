@@ -52,22 +52,10 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "Task queue per working directory. action REQUIRED. create replaces the queue (tasks: [{text}]); " +
-	"start/complete/fail/retry transition one task by id; read prints it. " +
-	"pending -> in_progress -> done (read-only) or failed; failed -> retry -> pending. " +
-	"create may link tasks into a tree: tasks[].dependsOn (task id or exact text; null clears a link); " +
-	"a task is blocked until its dependency is done; cycles are refused; next skips blocked tasks. " +
-	"several tasks may be in flight; batched transitions apply in order, each against fresh state. " +
-	"move reorders the queue: action='move' id + pos (1-based queue position); positions are " +
-	"minted as events, never updated in place. " +
-	"events record the claiming session; start claims, complete by a foreign session refuses " +
-	"(fail it first to take over), fail frees the claim; completing your own unclaimed " +
-	"pending task implicitly starts and completes it (the echo notes auto-started). " +
-	"the event log auto-compacts past 1000 events: a full-state snapshot replaces history " +
-	"(staleness epochs reset), replay stays exact. " +
-	"the model's own read is the contract: transitions return the affected row and the summary; " +
-	"read returns the actionable queue (done folds into the summary line); read all:true returns the history. " +
-	"ids are minted by the tool; copy, never invent."
+const description = "Task queue per working directory. create replaces the queue (tasks: [{text, dependsOn?}]); " +
+	"start/complete/fail/retry act on one task id; move reorders by a 1-based pos; read prints the queue " +
+	"(all:true for history). The reply is the contract: the affected row plus the summary, and a refusal " +
+	"names the rule it broke. Task ids are minted by the tool; copy them from a reply, never invent."
 
 type adapter struct{ db store.DB }
 

@@ -91,12 +91,13 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	d := h.tool.Description()
 	for _, want := range []string{
-		"never reused - copy them from list, never invent",
-		"busy:'skip' default; 'force' evicts",
-		"ids jN are per scope",
-		"Default model: qwen3.8-workers",
+		"minted per scope; copy from list, never invent",
+		"busy:'skip' (default) skips a fire while another model holds the GPU",
+		"'force' evicts it, only when the user wants the GPU now",
+		"(default: qwen3.8-workers)",
 		"the drift note is gone",
-		"re-create to retry",
+		"re-create it to retry",
+		"a once line self-deletes after one fire",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing voice fragment: %q", want)
@@ -194,7 +195,7 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 	h := newHarnessModel(t, "/ws/sa-model", "brain")
 	d := h.tool.Description()
-	if !strings.Contains(d, "Default model: brain") {
+	if !strings.Contains(d, "(default: brain)") {
 		t.Fatalf("description = %q, want the passed default named", d)
 	}
 	var schema struct {

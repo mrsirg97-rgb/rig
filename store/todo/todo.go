@@ -560,7 +560,8 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 		session = anon
 	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := maybeCompact(bound, tx, f, session); e != nil {
+		foot, e := maybeCompact(bound, tx, f, session)
+		if e != nil {
 			return "", e
 		}
 		modified, problems := planCreate(f, items)
@@ -585,7 +586,7 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return replyText(f, session, note, false), nil
+		return withFoot(replyText(f, session, note, false), foot), nil
 	})
 }
 
@@ -613,12 +614,13 @@ func Complete(ctx context.Context, db store.DB, id, session string) (string, err
 		session = anon
 	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := maybeCompact(bound, tx, f, session); e != nil {
+		foot, e := maybeCompact(bound, tx, f, session)
+		if e != nil {
 			return "", e
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", fmt.Errorf("no task '%s'", id)
+			return "", unknownTask(id)
 		}
 		switch ts.status {
 		case statusDone:
@@ -659,7 +661,7 @@ func Complete(ctx context.Context, db store.DB, id, session string) (string, err
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return echoTask(f, session, id, note), nil
+		return withFoot(echoTask(f, session, id, note), foot), nil
 	})
 }
 
@@ -668,12 +670,13 @@ func Fail(ctx context.Context, db store.DB, id, session string) (string, error) 
 		session = anon
 	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := maybeCompact(bound, tx, f, session); e != nil {
+		foot, e := maybeCompact(bound, tx, f, session)
+		if e != nil {
 			return "", e
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", fmt.Errorf("no task '%s'", id)
+			return "", unknownTask(id)
 		}
 		var voice string
 		switch ts.status {
@@ -707,7 +710,7 @@ func Fail(ctx context.Context, db store.DB, id, session string) (string, error) 
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return echoTask(f, session, id, note), nil
+		return withFoot(echoTask(f, session, id, note), foot), nil
 	})
 }
 
@@ -725,12 +728,13 @@ func Move(ctx context.Context, db store.DB, id string, pos int, session string) 
 		session = anon
 	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := maybeCompact(bound, tx, f, session); e != nil {
+		foot, e := maybeCompact(bound, tx, f, session)
+		if e != nil {
 			return "", e
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", fmt.Errorf("no task '%s'", id)
+			return "", unknownTask(id)
 		}
 		if pos < 1 || pos > len(f.tasks) {
 			return "", fmt.Errorf("move position for '%s' must be between 1 and %d, got %d", id, len(f.tasks), pos)
@@ -747,7 +751,7 @@ func Move(ctx context.Context, db store.DB, id string, pos int, session string) 
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return echoTask(f, session, id, "'"+id+"' moved to position "+strconv.Itoa(pos)), nil
+		return withFoot(echoTask(f, session, id, "'"+id+"' moved to position "+strconv.Itoa(pos)), foot), nil
 	})
 }
 
@@ -782,12 +786,13 @@ func verb(
 		session = anon
 	}
 	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := maybeCompact(bound, tx, f, session); e != nil {
+		foot, e := maybeCompact(bound, tx, f, session)
+		if e != nil {
 			return "", e
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", fmt.Errorf("no task '%s'", id)
+			return "", unknownTask(id)
 		}
 		ok, voice := check(f, ts)
 		if !ok {
@@ -813,7 +818,7 @@ func verb(
 		if e := rewrite(tx, f); e != nil {
 			return "", e
 		}
-		return echoTask(f, session, id, note), nil
+		return withFoot(echoTask(f, session, id, note), foot), nil
 	})
 }
 
@@ -834,14 +839,15 @@ const (
 	COMPACT_THRESHOLD_EVENTS = 1000
 )
 
-func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) error {
+func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 	if f.maxSeq-f.compactSeq < COMPACT_THRESHOLD_EVENTS {
-		return nil
+		return "", nil
 	}
+	folded := f.maxSeq - f.compactSeq
 	args, _ := json.Marshal(map[string]any{"tasks": snapshotOf(f)})
 	seq, e := appendEvent(bound, f.maxSeq+1, "compact", string(args), session)
 	if e != nil {
-		return e
+		return "", e
 	}
 	f.compactSeq = seq
 	f.maxSeq = seq
@@ -850,9 +856,9 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) 
 		ts.createdSeq, ts.updatedSeq, ts.updatedTs = seq, seq, tsStr
 	}
 	if _, e := tx.Exec("DELETE FROM events WHERE seq < ?", seq); e != nil {
-		return fmt.Errorf("todo: compact: %w", e)
+		return "", fmt.Errorf("todo: compact: %w", e)
 	}
-	return nil
+	return fmt.Sprintf("\u00b7 log compacted (%d events folded into the snapshot)", folded), nil
 }
 
 func snapshotOf(f *folded) []any {
@@ -970,6 +976,17 @@ func (f *folded) applyCompactEvent(e eventRow) {
 	}
 	f.tasks = tasks
 	f.compactSeq = e.seq
+}
+
+func unknownTask(id string) error {
+	return fmt.Errorf("no task '%s' (ids are minted by the tool; copy from a reply)", id)
+}
+
+func withFoot(reply, foot string) string {
+	if foot == "" {
+		return reply
+	}
+	return reply + "\n" + foot
 }
 
 func mutate(ctx context.Context, db store.DB, act func(bound context.Context, tx *sql.Tx, f *folded) (string, error)) (string, error) {

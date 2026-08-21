@@ -13,24 +13,19 @@ import (
 )
 
 func description(defModel string) string {
-	return "Background jobs on the user's crontab, bound to the worker GPU. " +
-		"create schedules a headless worker session (5-field vixie cron 'M H D Mo DOW', " +
-		"or cron:'once' + at:<ISO> for one-shot; the line self-deletes after one fire, no " +
-		"retry). Jobs run under flock via the run-job verb, skip when another model holds the GPU " +
-		"(busy:'skip' default; 'force' evicts), and log to the scheduler home (runs/). " +
-		"list shows jobs in both scopes with drift between store and crontab. " +
+	return "Background jobs on the user's crontab, bound to the worker GPU; each job is a headless " +
+		"worker session on the worker model (default: " + defModel + "). create schedules: cron is " +
+		"5-field 'M H D Mo DOW' or 'once' + at:<ISO>; a once line self-deletes after one fire. " +
+		"list shows jobs in both scopes with drift between store and crontab; " +
 		"pause/resume/remove manage jobs; runs gives the audit trail (n last, default 5). " +
-		"Two stores: scope 'global' (this user) and 'cwd' (this working directory); ids jN " +
-		"are minted per scope, never reused - copy them from list, never invent. " +
-		"Default model: " + defModel + "."
+		"Scopes: 'global' (this user) and 'cwd' (this working directory, the default). " +
+		"Job ids jN are minted per scope; copy from list, never invent."
 }
 
 const guidelines = "Guidelines: " +
-	"recurring/one-shot background work -> scheduler create; the job runs a headless worker session on the worker model. " +
-	"default scope is cwd; scope:'global' for machine-wide jobs. ids jN are per scope: copy from list, never invent. " +
-	"busy:'skip' (default) skips a fire while another model holds the GPU; 'force' evicts it - only when the user wants the GPU now. " +
-	"cron is 5-field 'M H D Mo DOW'; 'once' + at:<ISO> fires at that minute and self-deletes; a failed once job is done-with-fail, re-create to retry. " +
-	"list flags drift (store vs crontab): a drifting job is not trustworthy until the drift note is gone."
+	"busy:'skip' (default) skips a fire while another model holds the GPU; 'force' evicts it, " +
+	"only when the user wants the GPU now. A drifting job is not trustworthy until the drift " +
+	"note is gone. A failed once job is done-with-fail: re-create it to retry."
 
 func schemaJSON(defModel string) string {
 	return `{

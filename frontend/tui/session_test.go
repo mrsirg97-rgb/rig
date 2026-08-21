@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -167,13 +168,18 @@ func TestStatusLineRefresh(t *testing.T) {
 	model, window := "huihui3.8", 262144
 	var calls atomic.Int32
 	statusIn := func(ctx context.Context) StatusIn {
-		if calls.Add(1) == 1 {
+		n := calls.Add(1)
+		if n == 1 {
 			return StatusIn{
 				Model: model, Effort: "xhigh", Window: window,
 				Up: 214000, Down: 18200, CacheRead: 187000,
 			}
 		}
-		return StatusIn{Model: "model2", Effort: "low", Window: 131072}
+		// A per-call marker in a rendered field: the refresh's own draw
+		// is the sequencing point — dispatch commits the command's
+		// output before it calls the door, so the output's bytes do not
+		// prove the refresh ran.
+		return StatusIn{Model: "model2", Effort: "rf" + strconv.Itoa(int(n)), Window: 131072}
 	}
 
 	newC := &fakeCmd{name: "new", out: "new session: s2"}
@@ -219,26 +225,37 @@ func TestStatusLineRefresh(t *testing.T) {
 	// the refresh points, each exactly once. The dispatch runs inside
 	// the Input that keeps pulling after each command.
 	in := make(chan string, 1)
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
 		l, err := s.input()
 		if err != nil {
-			s.t.Errorf("prompt: %v", err)
+			// no report after the test has completed (the failure path
+			// leaves the pump behind; the cleanup's Close wakes it)
+			select {
+			case <-done:
+			default:
+				s.t.Errorf("prompt: %v", err)
+			}
 		}
 		in <- l
 	}()
 	s.await(promptMark(th))
+	// Each refresh point is sequenced on the refresh's own draw (the
+	// per-call marker), not on the command's output: the output commits
+	// before the door call, so its bytes do not prove the refresh ran.
 	s.si.feed("/new\n")
-	s.await("model2")
+	s.await("rf2")
 	if got := int(calls.Load()); got != 2 {
 		t.Fatalf("/new refreshed %d times, want 2 total", got)
 	}
 	s.si.feed("/sessions resume s3\n")
-	s.await("resumed s3")
+	s.await("rf3")
 	if got := int(calls.Load()); got != 3 {
 		t.Fatalf("/sessions resume refreshed %d times, want 3 total", got)
 	}
 	s.si.feed("/models m2\n")
-	s.await("switched")
+	s.await("rf4")
 	if got := int(calls.Load()); got != 4 {
 		t.Fatalf("/models m2 refreshed %d times, want 4 total", got)
 	}
