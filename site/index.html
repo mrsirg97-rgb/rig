@@ -55,18 +55,6 @@ a:hover { text-decoration: underline; }
   overflow-x: auto;
   white-space: pre;
 }
-.tag { margin: 0; color: var(--dim); font-size: 13px; }
-.tag .st { color: var(--dim); }
-.tag .st1 { animation: tag 3.6s linear infinite; }
-.tag .st2 { animation: tag 3.6s linear infinite .9s; }
-.tag .st3 { animation: tag 3.6s linear infinite 1.8s; }
-.tag .st4 { animation: tag 3.6s linear infinite 2.7s; }
-@keyframes tag {
-  0%   { color: var(--ember); text-shadow: 0 0 10px rgba(232,168,107,.5); }
-  25%  { color: var(--ember); }
-  45%  { color: var(--dim); text-shadow: none; }
-  100% { color: var(--dim); }
-}
 .cursor::after { content: "█"; color: var(--ember); animation: blink 1.06s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 section { margin: 3rem 0 0; }
@@ -107,7 +95,6 @@ html.js .reveal { opacity: 0; transform: translateY(8px); transition: opacity .4
 html.js .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .cursor::after { animation: none; }
-  .tag .st1, .tag .st2, .tag .st3, .tag .st4 { animation: none; }
   html.js .reveal { transition: none; }
 }
 </style>
@@ -120,7 +107,6 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <pre class="logo reveal" aria-label="rig, in the 3x3 block face">█▀▄ █ █▀▀
 █▀▄ █ █ █
 ▀ ▀ ▀ ▀▀▀</pre>
-    <p class="tag reveal"><span class="st st1">assemble</span> · <span class="st st2">stream</span> · <span class="st st3">execute</span> · <span class="st st4">repeat</span></p>
   </section>
 
   <section aria-labelledby="h-what">
