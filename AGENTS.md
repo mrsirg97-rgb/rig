@@ -45,6 +45,10 @@ plus one registration line, and the loop never names a concrete type.
   only, no behavior.
 - `loop` — the turn runtime: the one place turn ordering is written
   down; fault- and cancel-aware.
+- `evt` — the event loop (SPEC_EVT): libevt's shape, Go-centric — one
+  consumer, many producers, closures ordered by priority then arrival;
+  a leaf consumed by nothing until phase 2 makes the turn loop its
+  consumer.
 - `kernel.go` (root package `rig`) — the composition kernel: the
   dependency bag the loop drives, assembled from options.
 - `cmd/rig` — the binary and composition root: flag/env/file config
