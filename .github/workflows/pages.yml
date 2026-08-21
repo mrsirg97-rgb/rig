@@ -16,9 +16,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: assemble the site artifact
         run: |
+          # RIG_VERSION is main.go's Version const — one source of truth,
+          # so the page and install.sh never drift from the code.
+          RIG_VERSION=$(grep -oP 'Version = "[^"]+"' cmd/rig/main.go | sed 's/.*"\(.*\)".*/\1/')
+          echo "RIG_VERSION=$RIG_VERSION"
           mkdir -p dist
           cp site/* dist/
           cp install.sh dist/install.sh
+          sed -i "s/{{RIG_VERSION}}/$RIG_VERSION/g" dist/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
