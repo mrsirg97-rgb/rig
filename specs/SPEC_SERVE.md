@@ -306,3 +306,123 @@ What this is not:
   phases.
 - Not a change to the loop, core, or middleware: the design test holds;
   `frontend/web` is one file plus a registration line at the root.
+
+## phase 2: the polish round
+
+Phase 1 shipped the read dashboard and the one write. This round is the
+polish: two more writes through the existing verbs (the named phase 2
+scheduler create and the plugin forge's first cut), the page made mobile,
+and the page's design language turned into a deliberate homage to the
+TUI — each view renders the way the TUI renders that tool's output.
+
+### goals
+
+- **The scheduler create.** `POST /api/scheduler` calls
+  `scheduler.Create` with session `dashboard`, the same verb a live
+  session's `scheduler` tool calls. The form carries name, prompt, cron
+  (five fields, or `once` plus an ISO `at`), and the scope (the page's
+  cwd by default, global on request). The verb's reply is shown
+  verbatim, the list re-read after.
+- **The plugin create.** `POST /api/plugins` writes one file into the
+  pending zone (`plugins/pending/<name>.py`), the provenance rule's
+  landing zone (SPEC_SANDBOX 2): the operator's creation is reviewable,
+  never silently live. The file is the plugin contract (SPEC_PLUGINS) —
+  a `DESCRIPTION`, a `SCHEMA` (an empty object until the operator
+  promotes and extends it), and a `run(args)` whose body the form
+  supplies. The name is the filename stem: lowercase, digits and
+  underscores, leading letter, and it must not already exist in either
+  zone (a duplicate is a named refusal, no overwrite).
+- **The cwd picker accepts new workspaces.** The page can add any
+  workspace path (persisted in the browser), not only the ones that
+  already have a session; the reads already take any cwd, and a cwd with
+  no state store keeps its named 404 (fail closed). No server state:
+  the picker is the page's, the stores are the truth.
+- **Mobile.** The sidebar collapses into a drawer below 720px (a
+  toggle in the header, the backdrop closes it); the header, forms, and
+  tables wrap and keep 44px touch targets. Desktop is unchanged.
+- **The TUI homage.** The page reuses the TUI's theme values (already
+  the case) and its visual grammar: the todo view renders the store's
+  text with the TUI's todo render (the progress bar, the
+  `done/total · next · failed` head, the status glyphs, the dim
+  `waits on`/`claimed by` tails); the scheduler view renders it with
+  the TUI's scheduler render (the scope sections, the state glyphs,
+  the dim detail lines, the warn `drift:`); sessions and the transcript
+  adopt the tool-block shape (the `✓ name · detail` opening, the `→`
+  result, the `❯` prompt for the user's line, the aggregated usage
+  row); the memory and plugins views adopt the same block grammar. The
+  parse rules mirror `frontend/tui/tools_render.go`; text the rules do
+  not parse falls back to the verbatim `<pre>` (the TUI's own rule).
+
+### decisions
+
+### 7. Two more writes, the same walls as the first.
+
+The scheduler and plugin creates are POST-only, Origin-checked,
+body-capped, and ride the existing verbs (`scheduler.Create`; a file
+write into the pending zone the plugin rule already blesses). The
+attribution is `dashboard`, as with the todo create. The scheduler
+create's runner command is the root's own (`<self> run-job`), injected
+through `web.Options.RunnerCmd` exactly as the crontab is — the page
+never assembles the command line.
+
+### 8. The plugin listing is live.
+
+`GET /api/plugins` re-reads the directory on every request instead of
+caching the `New`-time list: a file created by the form, promoted by
+the operator, or dropped by another tab is visible on the next read,
+with no reload of the serve process. The listing stays a read of the
+files (name from the stem, the file's `DESCRIPTION`), not discovery —
+no kernel, no execution.
+
+### 9. The new-workspace picker is client state.
+
+The added workspaces live in the browser (localStorage), merged over
+the server's list on load. The server's list stays the truth for what
+exists (the serve cwd, the workspaces with sessions); the page's
+additions are the operator's bookmarks. A read of an added cwd with no
+state store is the named 404, unchanged.
+
+### 10. The homage is a render, not a new wire.
+
+The page parses the store's verbatim text with the TUI's own rules and
+renders it in the oled slots; the wire keeps the store's voice
+(phase 1's decision 6 holds — the text is unchanged, only the
+presentation is structured). The JS parsers mirror the Go parsers line
+for line; a parse failure is the verbatim fallback, never a broken
+page. No new endpoint, no new verb, no new dependency.
+
+### testing
+
+The phase 1 cases stay green, plus (failing first, `httptest` over the
+seeded temp home):
+
+- **The scheduler create.** A same-Origin `POST /api/scheduler` with
+  name/prompt/cron returns the verb's reply (`created jN 'name'
+  (scope)`) and the list carries the job; a `once` plus a valid `at`
+  lands; a duplicate name in the same scope is a named refusal; a bad
+  cron is the verb's refusal; a no-Origin or foreign-Origin write is a
+  403; an over-cap body is a 400; `DELETE /api/scheduler` is a 405 with
+  `Allow` naming POST.
+- **The plugin create.** A same-Origin `POST /api/plugins` with
+  name/description/code writes `plugins/pending/<name>.py` carrying the
+  `DESCRIPTION`, a `SCHEMA` object, and a `def run(args):`; the pending
+  listing then carries it (the live listing); a duplicate name in
+  either zone is a named refusal; a bad name (uppercase, leading
+  digit, a slash) is a 400; an empty code is a 400; the walls (Origin,
+  cap) hold as with the todo create.
+- **The static assets.** The page carries the drawer's toggle and the
+  new-workspace affordance; the parsers for the todo and scheduler
+  text, the bar and glyph renderers, the add-cwd and nav-toggle
+  handlers, and the drawer's styles are present in the shipped assets.
+
+### the diffs this phase implies
+
+- **`frontend/web`**: the two write handlers, `Options.RunnerCmd`, the
+  live plugin listing, the rewritten static assets (the mobile shell,
+  the homage renderers, the picker), the `PACKAGE.md` update.
+- **`cmd/rig/serve.go`**: the one added option (the runner command).
+- **`specs/SPEC_SERVE.md`**: this section.
+- **`CHANGELOG.md`**: the phase 2 entry.
+
+The TUI freeze gate needs no new allowance: the round touches
+`frontend/web`, `cmd/rig`, and `specs/`, all named.
