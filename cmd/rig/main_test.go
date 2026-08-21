@@ -41,11 +41,14 @@ func TestVersionIsTheFreeze(t *testing.T) {
 	// 0.8.2 the allow-list's presence reversal (SPEC_PLUGINS 7, amended);
 	// 0.8.0 the modes (SPEC_MODES). pre-1.0 — the 1.0 tag waits for lived
 	// use (a worker soak, the TUI field-tested as the daily driver).
-	if Version != "11.0.0" {
-		t.Fatalf("Version = %q, want 11.0.0 (pre-1.0, feature-complete)", Version)
+	if Version != "0.11.0" {
+		t.Fatalf("Version = %q, want 0.11.0 (pre-1.0, feature-complete)", Version)
 	}
-	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
-		t.Fatalf("Version %q must be dotted numeric", Version)
+	// pre-1.0 the major is 0 by definition: a dropped zero ("11.0.0" for
+	// 0.11.0) shipped once and the release assert would have demanded a
+	// v11.0.0 tag; flip this on purpose at 1.0.
+	if !regexp.MustCompile(`^0\.\d+\.\d+$`).MatchString(Version) {
+		t.Fatalf("Version %q must be 0.x.y until 1.0", Version)
 	}
 }
 

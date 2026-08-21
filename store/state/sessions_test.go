@@ -226,3 +226,39 @@ type nullFrontend struct{}
 
 func (*nullFrontend) Input(context.Context) (string, error) { return "", io.EOF }
 func (*nullFrontend) Notify(core.Event)                     {}
+
+// NewestSince is the delegate's session lookup (SPEC_DELEGATE 3): the
+// newest session in a cwd started at or after a moment; none is the
+// named refusal. The heuristic's race (another session in the same cwd
+// during the window) is the spec's, not this verb's.
+func TestNewestSinceNamesTheLatestSessionInCwd(t *testing.T) {
+	db := openStore(t)
+	ctx := context.Background()
+	before := time.Now().Add(-time.Hour)
+	if e := state.RecordSession(ctx, db, "old", "/w", "m", "v"); e != nil {
+		t.Fatal(e)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	mid := time.Now()
+	time.Sleep(1100 * time.Millisecond)
+	if e := state.RecordSession(ctx, db, "new", "/w", "m", "v"); e != nil {
+		t.Fatal(e)
+	}
+	if e := state.RecordSession(ctx, db, "elsewhere", "/other", "m", "v"); e != nil {
+		t.Fatal(e)
+	}
+	id, err := state.NewestSince(ctx, db, "/w", mid)
+	if err != nil || id != "new" {
+		t.Fatalf("since mid: (%q, %v), want new", id, err)
+	}
+	id, err = state.NewestSince(ctx, db, "/w", before)
+	if err != nil || id != "new" {
+		t.Fatalf("since before: (%q, %v), want the newest (new)", id, err)
+	}
+	if _, err := state.NewestSince(ctx, db, "/w", time.Now().Add(time.Hour)); !errors.Is(err, state.ErrNoSuchSession) {
+		t.Fatalf("since the future: %v, want ErrNoSuchSession", err)
+	}
+	if _, err := state.NewestSince(ctx, db, "/nope", before); !errors.Is(err, state.ErrNoSuchSession) {
+		t.Fatalf("unknown cwd: %v, want ErrNoSuchSession", err)
+	}
+}

@@ -59,6 +59,7 @@ type DelegateResult struct {
 	ID       string
 	LogRel   string
 	Started  string
+	Note     string
 }
 
 func delegateInput(in DelegateInput) DelegateInput {
@@ -145,11 +146,10 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		proxy   *SocketProxy
 		homeEnv string
 		refuse  string
+		note    string
 	)
 	if profile == "off" {
-
-		fmt.Fprintln(os.Stderr, "delegate: sandbox off: the worker runs unjailed (the operator's choice)")
-
+		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = append(append([]string{}, workerCmd...),
 			"-p", prompt,
 			"-base-url", in.SwapURL+"/v1",
@@ -233,7 +233,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	return DelegateResult{
 		Exit: res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
 		TimedOut: res.TimedOut, Duration: ended.Sub(started),
-		ID: id, LogRel: logRel, Started: startedStr,
+		ID: id, LogRel: logRel, Started: startedStr, Note: note,
 	}, nil
 }
 

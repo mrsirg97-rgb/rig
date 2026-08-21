@@ -145,6 +145,9 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	content := capOutput(res.Stdout)
 	trailer := fmt.Sprintf("delegate: exit %d · %dms · session %s · log %s",
 		res.Exit, res.Duration.Milliseconds(), sessionID, res.LogRel)
+	if res.Note != "" {
+		trailer += " · " + res.Note
+	}
 	content += "\n" + trailer
 
 	switch {
@@ -197,11 +200,7 @@ func findSession(ctx context.Context, rigHome, cwd, started string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("delegate: spawn start: %w", err)
 	}
-	var id string
-	var at time.Time
-	err = db.DB.QueryRowContext(ctx,
-		`SELECT "id", "started_at" FROM "sessions" WHERE "cwd" = $1 AND "started_at" >= $2 ORDER BY "started_at" DESC LIMIT 1`,
-		cwd, after).Scan(&id, &at)
+	id, err := state.NewestSince(ctx, db, cwd, after)
 	if err != nil {
 		return "", fmt.Errorf("delegate: no worker session recorded (%v)", err)
 	}
