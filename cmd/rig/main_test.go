@@ -189,8 +189,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	if got := k.SortedToolNames(); len(got) != 15 || got[0] != "bash" || got[1] != "diff" || got[6] != "plugins_reload" || got[7] != "python" || got[9] != "rem" || got[10] != "scheduler" || got[11] != "todo" || got[12] != "web_fetch" || got[13] != "web_search" || got[14] != "write" {
-		t.Fatalf("registered tools = %v, want bash,diff,edit,find,grep,ls,plugins_reload,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
+	if got := k.SortedToolNames(); len(got) != 17 || got[0] != "bash" || got[1] != "diff" || got[6] != "plugin" || got[7] != "plugin_schema" || got[8] != "plugins_reload" || got[9] != "python" || got[11] != "rem" || got[12] != "scheduler" || got[13] != "todo" || got[14] != "web_fetch" || got[15] != "web_search" || got[16] != "write" {
+		t.Fatalf("registered tools = %v, want bash,diff,edit,find,grep,ls,plugin,plugin_schema,plugins_reload,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
 	}
 	if len(k.Middleware) != 4 {
 		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, and the bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; the observation tap is retired: the loop's events are the source)", len(k.Middleware))

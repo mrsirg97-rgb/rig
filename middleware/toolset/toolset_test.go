@@ -211,3 +211,40 @@ func TestIsPluginTracksTheSwap(t *testing.T) {
 		t.Fatal("a dropped plugin must stop being admitted")
 	}
 }
+
+// TestNativeSpecsExcludesPlugins (SPEC_GROWTH 9, named): the request's
+// tool list is the natives plus the door, never the per-plugin schemas —
+// NativeSpecs drops the plugin tools, PluginNames carries their names.
+func TestNativeSpecsExcludesPlugins(t *testing.T) {
+	bash := &stubTool{name: "bash"}
+	networth := &stubTool{name: "networth"}
+	tbl := New(bash, networth)
+	tbl.SetPlugins("networth")
+
+	if got := names(tbl.NativeSpecs()); len(got) != 1 || got[0] != "bash" {
+		t.Fatalf("NativeSpecs = %v, want the natives only (bash)", got)
+	}
+	if got := tbl.PluginNames(); len(got) != 1 || got[0] != "networth" {
+		t.Fatalf("PluginNames = %v, want the live plugin", got)
+	}
+	// the swap adds a plugin: NativeSpecs still drops it, PluginNames grows.
+	flip := &stubTool{name: "flip_calc"}
+	tbl.Set([]core.Tool{bash, networth, flip})
+	tbl.SetPlugins("networth", "flip_calc")
+	if got := tbl.PluginNames(); len(got) != 2 || got[0] != "flip_calc" || got[1] != "networth" {
+		t.Fatalf("PluginNames after the swap = %v, want the sorted live set", got)
+	}
+}
+
+// TestGetResolvesTheTable (SPEC_GROWTH 9, named): the door's lookup — Get
+// returns the table's tool for a live name and nil for an absent one.
+func TestGetResolvesTheTable(t *testing.T) {
+	bash := &stubTool{name: "bash"}
+	tbl := New(bash)
+	if got, ok := tbl.Tool("bash"); !ok || got != bash {
+		t.Fatal("a live name must resolve to its tool")
+	}
+	if _, ok := tbl.Tool("nope"); ok {
+		t.Fatal("an absent name must resolve nil")
+	}
+}

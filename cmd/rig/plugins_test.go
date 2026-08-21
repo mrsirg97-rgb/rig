@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -511,33 +510,23 @@ def run(args):
 	if !strings.Contains(string(out), "rig: plugins: missing.py: TypeError: missing SCHEMA") {
 		t.Fatalf("the missing-schema plugin's line must name the file and the field:\n%s", out)
 	}
-	// the wire: the native set plus echo, in order; the broken and
-	// missing ones absent.
+	// the wire: the native set (the doors among them), in order; the
+	// loaded plugin rides in the plugin door's name enum (SPEC_GROWTH 9),
+	// not as its own schema.
 	tools := wireTools(t, s.body(0))
-	if len(tools) != len(nativeToolNames)+1 {
-		t.Fatalf("tools = %d, want %d (the native set plus the loaded plugin)", len(tools), len(nativeToolNames)+1)
+	if len(tools) != len(nativeToolNames) {
+		t.Fatalf("tools = %d, want %d (the native set; the plugins live behind the door)", len(tools), len(nativeToolNames))
 	}
 	for i, name := range nativeToolNames {
 		if tools[i].Name != name {
 			t.Fatalf("the wire's head must be the native set in order; position %d = %q, want %q", i, tools[i].Name, name)
 		}
 	}
-	last := tools[len(tools)-1]
-	if last.Name != "echo" {
-		t.Fatalf("the wire's tail = %q, want the loaded plugin", last.Name)
+	if !hasPluginName(s.body(0), "echo") {
+		t.Fatalf("the loaded plugin must be in the plugin door's enum, got %v", pluginNamesIn(s.body(0)))
 	}
-	if last.Description != "the fixture echo plugin" {
-		t.Fatalf("the plugin's description must ride verbatim, got %q", last.Description)
-	}
-	var gotSchema, wantSchema any
-	if err := json.Unmarshal(last.Parameters, &gotSchema); err != nil {
-		t.Fatalf("the plugin's schema is not JSON: %v", err)
-	}
-	if err := json.Unmarshal([]byte(`{"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}`), &wantSchema); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(gotSchema, wantSchema) {
-		t.Fatalf("the plugin's schema must ride through as the same JSON value, got %s", last.Parameters)
+	if hasPluginName(s.body(0), "broken") || hasPluginName(s.body(0), "missing") {
+		t.Fatalf("the broken and missing plugins must be absent from the door's enum")
 	}
 }
 
@@ -703,15 +692,8 @@ def run(args):
 	if got := systemOf(t, s.last()); got != "FROM-OVERRIDE" {
 		t.Fatalf("the override's settings must win, got %q", got)
 	}
-	tools := wireTools(t, s.body(0))
-	found := false
-	for _, tl := range tools {
-		if tl.Name == "echo" && tl.Description == "the override's echo plugin" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("the override's plugin must be discovered (tools=%d)", len(tools))
+	if !hasPluginName(s.body(0), "echo") {
+		t.Fatalf("the override's plugin must be discovered (in the plugin door's enum, got %v)", pluginNamesIn(s.body(0)))
 	}
 	for _, d := range []string{filepath.Join(scratch, ".rig"), filepath.Join(scratch, ".config", "rig")} {
 		if got, rerr := os.ReadFile(filepath.Join(d, "settings.json")); rerr != nil || string(got) != `{"system": "FROM-LOSER"}` {

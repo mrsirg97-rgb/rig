@@ -22,6 +22,13 @@ new tools execute, by construction — the models-switch's semantics
 - `List()` — the table's tools as a snapshot.
 - `Specs()` — the wire's projection: name, description, schema per
   tool, in the table's order.
+- `NativeSpecs()` — the request's list (SPEC_GROWTH 9): the natives
+  plus the plugin door, never the per-plugin schemas; `Carry` stamps
+  this, not `Specs()`.
+- `PluginNames()` — the live plugin names, sorted (the door's schema
+  enum, deterministic).
+- `Tool(name)` — the door's lookup seam: the named tool, if the table
+  carries it.
 - `Resolve(t)` — the exec's end middleware.
 - `Carry(t, inner)` — the request's end provider wrapper.
 
@@ -32,7 +39,9 @@ new tools execute, by construction — the models-switch's semantics
   middleware chain, so the chain's participants (the allow-list, the
   bound) still bound what the table serves.
 - `Carry` wraps the provider (compact's decorator); it stamps the table's
-  specs into the request's tools array before delegating, per call.
+  `NativeSpecs()` into the request's tools array before delegating, per
+  call — the natives plus the door, the plugin schemas behind
+  `plugin_schema` (SPEC_GROWTH 9).
 - `IsPlugin` feeds the allow-list's second door (`perm.AllowlistWithDoor`,
   SPEC_PLUGINS 7): a name the table carries as a plugin passes the
   allow-list though absent from the static list.

@@ -22,6 +22,14 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 - `List` — the home's plugin listing (top-level `*.py`).
 - `Check` — the collision refusal (a loaded plugin named like a native).
 - `Kernel` — the shared-kernel seam (one code cell, the host's raw reply).
+- `Live` — the live plugin table's seam (SPEC_GROWTH 9): `PluginNames`
+  and `Tool(name)`, implemented by `middleware/toolset`'s Table.
+- `Door` + `NewDoor` — the `plugin` native (SPEC_GROWTH 9): one dispatch
+  tool collapsing all plugin schemas to one request entry; the schema's
+  `name` enum is the live plugin names; `Exec` resolves and calls.
+- `SchemaDoor` + `NewSchemaDoor` — the `plugin_schema` native: returns a
+  live plugin's description and schema verbatim (the model fetches args
+  on demand).
 
 ## How it is consumed
 

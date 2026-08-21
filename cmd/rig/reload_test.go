@@ -265,6 +265,48 @@ func hasTool(t *testing.T, body []byte, name, description string) bool {
 	return false
 }
 
+// pluginNamesIn is the plugin door's name enum (SPEC_GROWTH 9): the live
+// plugins the wire carries in one `plugin` tool, not as per-plugin schemas.
+func pluginNamesIn(body []byte) []string {
+	var req struct {
+		Tools []struct {
+			Function struct {
+				Name       string          `json:"name"`
+				Parameters json.RawMessage `json:"parameters"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		panic("unmarshal the captured body: " + err.Error())
+	}
+	for _, tl := range req.Tools {
+		if tl.Function.Name != "plugin" {
+			continue
+		}
+		var schema struct {
+			Properties struct {
+				Name struct {
+					Enum []string `json:"enum"`
+				} `json:"name"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(tl.Function.Parameters, &schema); err != nil {
+			panic("the plugin door's schema is not JSON: " + err.Error())
+		}
+		return schema.Properties.Name.Enum
+	}
+	return nil
+}
+
+func hasPluginName(body []byte, name string) bool {
+	for _, n := range pluginNamesIn(body) {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 // bodiesAll is the captured bodies, snapshotted (the loop has joined).
 func bodiesAll(s *pluginSrv) [][]byte {
 	s.mu.Lock()
@@ -331,14 +373,10 @@ def run(args: dict) -> str:
 		t.Fatalf("the reload's reply = %q, want the reload's (the listing with its action named):\n%q", got, want)
 	}
 
-	// turn 3's wire: forged, name and description and schema verbatim.
-	tools3 := wireTools(t, bodies[3])
-	last := tools3[len(tools3)-1]
-	if last.Name != "forged" {
-		t.Fatalf("turn 3's wire's tail = %q, want the swapped-in tool", last.Name)
-	}
-	if last.Description != "the fixture forged plugin" {
-		t.Fatalf("the description must ride verbatim, got %q", last.Description)
+	// turn 3's wire: the door's name enum carries forged (SPEC_GROWTH 9:
+	// one `plugin` tool, no per-plugin schemas).
+	if !hasPluginName(bodies[3], "forged") {
+		t.Fatalf("turn 3's wire must carry forged in the plugin door's enum, got %v", pluginNamesIn(bodies[3]))
 	}
 	// the round trip: the new tool executed (the router's end).
 	if got := toolMessageOf(t, bodies[4]); got != "forged: hi" {
@@ -421,12 +459,13 @@ def run(args):
 	if got := toolMessageOf(t, bodies[1]); !strings.Contains(got, "plugins: reload: 1 loaded, 1 skipped") || !strings.Contains(got, "broken.py: NameError: name 'x' is not defined") {
 		t.Fatalf("the up reload's reply = %q, want the loud skips in it", got)
 	}
-	// the next turn's wire: alpha, verbatim; the skipped one absent.
-	if !hasTool(t, bodies[2], "alpha", "the fixture alpha plugin") {
-		t.Fatal("the next turn's wire must carry the loaded plugin (its DESCRIPTION verbatim)")
+	// the next turn's wire: alpha in the plugin door's enum; the skipped
+	// one absent.
+	if !hasPluginName(bodies[2], "alpha") {
+		t.Fatal("the next turn's wire must carry alpha in the plugin door's enum")
 	}
-	if hasToolName(bodies[2], "broken") {
-		t.Fatal("the skipped plugin must not be on the wire")
+	if hasPluginName(bodies[2], "broken") {
+		t.Fatal("the skipped plugin must not be in the plugin door's enum")
 	}
 	// the down reload: the list rebuilds to the disk (empty), and the
 	// wire follows.
@@ -635,15 +674,10 @@ def run(args: dict) -> str:
 	if got := toolMessageOf(t, bodies[1]); got != "plugins: reload: 1 loaded, 0 skipped\nloaded:\n  forged: the fixture forged plugin (the real kernel) ("+forgedFile+")\n" {
 		t.Fatalf("the reload's reply = %q, want the loaded line (the real kernel's discovery)", got)
 	}
-	// the next turn's wire: the plugin, verbatim (the description and
-	// the schema the file's, the discovery's).
-	if !hasTool(t, bodies[2], "forged", "the fixture forged plugin (the real kernel)") {
-		t.Fatal("the next turn's wire must carry the forged plugin (its DESCRIPTION verbatim)")
-	}
-	for _, tl := range wireTools(t, bodies[2]) {
-		if tl.Name == "forged" && !strings.Contains(string(tl.Parameters), `"x"`) {
-			t.Fatalf("the forged tool's schema must be the file's SCHEMA, got %s", tl.Parameters)
-		}
+	// the next turn's wire: forged in the plugin door's enum (SPEC_GROWTH
+	// 9: one `plugin` tool, the schema behind plugin_schema).
+	if !hasPluginName(bodies[2], "forged") {
+		t.Fatal("the next turn's wire must carry forged in the plugin door's enum")
 	}
 	// the round trip: the plugin's run, the real kernel's numpy.
 	if got := toolMessageOf(t, bodies[3]); got != "42" {

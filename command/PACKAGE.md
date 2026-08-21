@@ -56,7 +56,9 @@ the leaf.
   session threaded, return the reply verbatim.
 - **plugins** — lists the loaded/skipped plugins and the pending zone;
   `approve <name>` installs a pending plugin; `reload` re-registers from
-  disk; `create <text>` queues the authoring prompt.
+  disk; `create <text>` queues the authoring prompt; `enable <name>` /
+  `disable <name>` toggle settings.json's `plugins.enabled` and reload
+  (SPEC_GROWTH 9, the hide/turn-off surface).
 
 ## Gotchas
 

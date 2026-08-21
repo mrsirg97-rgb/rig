@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 
@@ -104,7 +105,15 @@ type root struct {
 func wire(r *root) *rig.Kernel {
 
 	if r.live == nil {
-		r.live = toolset.New(append(r.nativeTools(), r.pluginTools...)...)
+		// The door tools hold the table as their Live seam (SPEC_GROWTH 9);
+		// build the empty table first, construct the doors over it, then
+		// fill it from the natives (the doors among them) and the plugins.
+		r.live = toolset.New()
+		if r.tools["plugin"] == nil {
+			r.tools["plugin"] = plugins.NewDoor(r.live)
+			r.tools["plugin_schema"] = plugins.NewSchemaDoor(r.live)
+		}
+		r.live.Set(append(r.nativeTools(), r.pluginTools...))
 	}
 	r.live.SetPlugins(r.pluginNames()...)
 	if r.natives == nil {
@@ -474,6 +483,66 @@ func (r *root) reloadPlugins(ctx context.Context) (string, error) {
 	return r.swapPlugins(ctx, reports)
 }
 
+// setPluginEnabled toggles a plugin's enablement (SPEC_GROWTH 9): edits
+// settings.json's plugins.enabled array (preserving the rest of the file),
+// then reloads — the next-turn semantics, exactly.
+func (r *root) setPluginEnabled(ctx context.Context, name string, enabled bool) (string, error) {
+	path := filepath.Join(r.pluginsHome, "settings.json")
+	raw := []byte("{}")
+	if data, err := os.ReadFile(path); err == nil {
+		raw = data
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("plugins: enable: %v", err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return "", fmt.Errorf("plugins: enable: %s: %v", path, err)
+	}
+	pl, _ := obj["plugins"].(map[string]any)
+	if pl == nil {
+		pl = map[string]any{}
+	}
+	enabledList, _ := pl["enabled"].([]any)
+	if enabled {
+		present := false
+		for _, n := range enabledList {
+			if n == name {
+				present = true
+			}
+		}
+		if !present {
+			enabledList = append(enabledList, name)
+			pl["enabled"] = enabledList
+		}
+	} else {
+		filtered := make([]any, 0, len(enabledList))
+		for _, n := range enabledList {
+			if n != name {
+				filtered = append(filtered, n)
+			}
+		}
+		pl["enabled"] = filtered
+	}
+	obj["plugins"] = pl
+	out, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("plugins: enable: %v", err)
+	}
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		return "", fmt.Errorf("plugins: enable: %v", err)
+	}
+	verb := "enabled"
+	if !enabled {
+		verb = "disabled"
+	}
+	line := fmt.Sprintf("plugins: %s %s", verb, name)
+	reply, err := r.reloadPlugins(ctx)
+	if err != nil {
+		return "", fmt.Errorf("%s; the reload failed: %v", line, err)
+	}
+	return line + "\n" + reply, nil
+}
+
 func runtimeTable(t models.Table, active string, resolved models.Model) models.Table {
 	if base, ok := t.Get(active); ok && reflect.DeepEqual(base, resolved) {
 		return t
@@ -523,7 +592,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff", "plugins_reload"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff", "plugin", "plugin_schema", "plugins_reload"}
 
 func rigHome() (string, error) {
 	if v := os.Getenv("RIG_HOME"); v != "" {
@@ -756,13 +825,35 @@ func main() {
 	}
 	pluginTools := make([]core.Tool, 0, len(pluginReports))
 	pluginInfos := make([]command.PluginInfo, 0, len(pluginReports))
+	enabled := cfg.Settings.Plugins.Enabled
+	enabledSet := make(map[string]bool, len(enabled))
+	for _, n := range enabled {
+		enabledSet[n] = true
+	}
+	enabledN := 0
 	for _, rep := range pluginReports {
-		pluginInfos = append(pluginInfos, command.PluginInfo{
+		info := command.PluginInfo{
 			Name: rep.Name, Description: rep.Description, File: rep.File,
 			Skipped: rep.Skipped, Reason: rep.Reason,
-		})
-		if rep.Skipped {
-			fmt.Fprintf(os.Stderr, "rig: plugins: %s: %s\n", filepath.Base(rep.File), rep.Reason)
+		}
+		if !rep.Skipped && (len(enabledSet) == 0 || enabledSet[rep.Name]) {
+			// the enablement (SPEC_GROWTH 9): an enabled plugin wires; a
+			// cap (max) keeps only the top Max in file order (the door's enum).
+			if cfg.Settings.Plugins.Max > 0 && enabledN >= cfg.Settings.Plugins.Max {
+				info.Skipped = true
+				info.Reason = "disabled: over the settings.json plugins.max cap"
+			} else {
+				enabledN++
+			}
+		} else if !rep.Skipped {
+			info.Skipped = true
+			info.Reason = "disabled: not in settings.json plugins.enabled"
+		}
+		pluginInfos = append(pluginInfos, info)
+		if info.Skipped {
+			// the discovery's loud skips, and the enablement's (SPEC_GROWTH
+			// 9): a broken file and a disabled one are both named, one line.
+			fmt.Fprintf(os.Stderr, "rig: plugins: %s: %s\n", filepath.Base(rep.File), info.Reason)
 			continue
 		}
 		pluginTools = append(pluginTools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, py))
@@ -911,6 +1002,7 @@ func main() {
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
 		Reload:        r.reloadPlugins,
 		PluginsDir:    pluginsDir,
+		SetPlugins:    r.setPluginEnabled,
 	}
 
 	var fe core.Frontend
