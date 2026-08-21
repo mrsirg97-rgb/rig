@@ -65,6 +65,8 @@ func TestFreezeGate(t *testing.T) {
 			// the streamlined round (SPEC_STREAMLINE 1): the scheduler
 			// description's de-duplication, beside its store.
 			p == "tool/scheduler" || strings.HasPrefix(p, "tool/scheduler/") ||
+			// the delegate round (SPEC_DELEGATE): the one-shot worker tool.
+			p == "tool/delegate" || strings.HasPrefix(p, "tool/delegate/") ||
 			// the provenance rule's work surface (SPEC_SANDBOX 2): the
 			// perm's one new path rule, beside the allow-list.
 			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||
@@ -87,6 +89,7 @@ func TestFreezeGate(t *testing.T) {
 			p == "policy" || strings.HasPrefix(p, "policy/") ||
 			p == "docs" || strings.HasPrefix(p, "docs/") ||
 			p == "specs" || strings.HasPrefix(p, "specs/") ||
+			p == "AGENTS.md" ||
 			p == "Makefile" || p == ".gitignore" || p == "README.md" ||
 			p == ".github" || strings.HasPrefix(p, ".github/") ||
 			// the distribution round (SPEC_BUILD 5): the installer and

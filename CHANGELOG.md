@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.11.0] — the delegate
+
+- **the one-shot worker tool** (`specs/SPEC_DELEGATE.md`): `delegate`
+  spawns a headless worker on a task now, in a cwd under the session's
+  or the rig home, waits, and feeds back the worker's last message.
+  One tool over the existing runner — the jail per the sandbox setting
+  (fail closed exactly as workers do), the socket proxy, the worker
+  command, the GPU busy rule with `busy:skip` semantics. A failed or
+  timed-out worker is a tool error naming which; a timeout kills the
+  worker's process tree.
+- **the record and the transcript**: every delegation is a recorded
+  run in the cwd-scope scheduler store under a minted ad-hoc key (no
+  crontab line, nothing scheduled), so `scheduler runs` and the
+  dashboard show it beside cron runs with its log path; the worker's
+  transcript is its own resumable session in the state store (the
+  jailed worker's sessions dir is bound in), named by the tool result
+  for `sessions resume`.
+- **the bounds, named**: one delegation in flight per session (a
+  concurrent call refuses); a worker cannot delegate (the `RIG_DELEGATE`
+  marker, refused by name); the embedded allow default gains
+  `delegate`, a worker's allow-list omits it; `delegate` counts as
+  mutating for the approval gate, whose prompt shows the task's first
+  line.
+
 ## [0.10.2] — the todo's hands
 
 - **start and done from the dashboard** (`specs/SPEC_SERVE.md` 15): a
@@ -28,7 +52,6 @@
   at home, directories only, symlinks resolved, capped; the mobile nav
   toggle hidden on desktop (the bug: it was hidden by a class the button
   did not carry).
-
 ## [0.10.0] — the dashboard's polish round
 
 - **the polish round** (`specs/SPEC_SERVE.md`, phase 2): the local

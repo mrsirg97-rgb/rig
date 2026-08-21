@@ -19,6 +19,8 @@ type JailProfile struct {
 	KernelDir string
 	SockPath  string
 	Binds     []string
+	StateDir  string
+	Allow     string
 }
 
 func JailArgv(p JailProfile) ([]string, error) {
@@ -41,6 +43,9 @@ func JailArgv(p JailProfile) ([]string, error) {
 	}
 	argv = append(argv, "--ro-bind", p.Binary, p.Binary)
 	argv = append(argv, "--bind", p.SockPath, p.SockPath)
+	if p.StateDir != "" {
+		argv = append(argv, "--bind", p.StateDir, filepath.Join(p.Cwd, ".rig-job", "sessions"))
+	}
 	for i, entry := range p.Binds {
 		src, rw, err := parseBind(entry, i)
 		if err != nil {
@@ -59,6 +64,9 @@ func JailArgv(p JailProfile) ([]string, error) {
 		"-base-url", p.BaseURL,
 		"-model", p.Model,
 	)
+	if p.Allow != "" {
+		argv = append(argv, "-allow", p.Allow)
+	}
 	return argv, nil
 }
 
@@ -105,7 +113,7 @@ func SocketRefusal(sock string, err error) string {
 	return "sandbox: the socket proxy: " + sock + ": " + err.Error()
 }
 
-func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt string) ([]string, *SocketProxy, string, string, error) {
+func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow string) ([]string, *SocketProxy, string, string, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil, "", PlatformRefusal(runtime.GOOS), nil
 	}
@@ -126,6 +134,12 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt strin
 		return nil, nil, "", ScratchRefusal(scratch, err), nil
 	}
 
+	if opts.StateDir != "" {
+		if err := os.MkdirAll(filepath.Join(scratch, "sessions"), 0o755); err != nil {
+			return nil, nil, "", ScratchRefusal(filepath.Join(scratch, "sessions"), err), nil
+		}
+	}
+
 	sock := filepath.Join(cwd, ".rig-job.sock")
 	proxy, err := NewSocketProxy(sock, opts.SwapURL)
 	if err != nil {
@@ -141,6 +155,8 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt strin
 		KernelDir: kernelDir,
 		SockPath:  sock,
 		Binds:     opts.SandboxBinds,
+		StateDir:  opts.StateDir,
+		Allow:     allow,
 	})
 	if err != nil {
 		proxy.Close()

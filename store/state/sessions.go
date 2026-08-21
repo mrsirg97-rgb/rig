@@ -47,6 +47,20 @@ func ListSessions(ctx context.Context, db store.DB) ([]SessionRow, error) {
 	return out, nil
 }
 
+func NewestSince(ctx context.Context, db store.DB, cwd string, since time.Time) (string, error) {
+	var id string
+	var at time.Time
+	err := db.DB.QueryRowContext(ctx, `
+		SELECT "id", "started_at" FROM "sessions"
+		WHERE "cwd" = $1
+		ORDER BY "started_at" DESC
+		LIMIT 1`, cwd).Scan(&id, &at)
+	if err != nil || at.Before(since) {
+		return "", ErrNoSuchSession
+	}
+	return id, nil
+}
+
 type Observation struct {
 	Result    string
 	StartedAt time.Time
