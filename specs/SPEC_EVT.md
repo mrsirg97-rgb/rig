@@ -218,8 +218,8 @@ The Go cases (`evt/queue_test.go`, `engine_test.go`,
 ## scope
 
 - `evt/` (new), `evt/PACKAGE.md`, this spec, the freeze allowlist line,
-  the CHANGELOG entry. `core/` and `loop/` byte-frozen. AGENTS.md's
-  package list gains `evt` when the allowlist admits AGENTS.md (#74).
+  the CHANGELOG entry, AGENTS.md's package list. `core/` and `loop/`
+  byte-frozen.
 - Prior art, credited: `~/Projects/libtrdr/src/libevt` (queue, event,
   context, engine, scheduler, clock) — the C is the reference
   implementation; a divergence is a named decision above.
