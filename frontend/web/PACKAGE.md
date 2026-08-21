@@ -48,6 +48,11 @@ framework, no build step, no external asset: `go build` alone ships it.
   per request from the home's `plugins/` and `plugins/pending/`, never
   cached at `New`: a file created, promoted, or dropped is visible on
   the next read.
+- **The todo's two hands** (`todoverbs.go`, SPEC_SERVE 15) — `POST
+  /api/todo/start` and `/api/todo/complete` (`{id}`): `todo.Start` and
+  `todo.Complete` attributed to `dashboard`, the id checked to the
+  tool's shape, the reply verbatim (a model-claimed task refuses in the
+  store's voice). Same walls as every write.
 - **The forge** (`forge.go`, SPEC_SERVE 12) — `GET /api/plugins/source`
   (a plugin's file, by name and zone), `POST /api/plugins/save` (the
   full source into the pending zone, create or update; the contract —

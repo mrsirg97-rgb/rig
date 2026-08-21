@@ -200,7 +200,7 @@ function taskGlyph(status) {
   }
 }
 
-function todoBodyEl(p) {
+function todoBodyEl(p, onVerb) {
   const e = el('div');
   const head = line();
   const bar = progressBar(p.done, p.active, p.total);
@@ -225,15 +225,22 @@ function todoBodyEl(p) {
     l.appendChild(span(' ' + t.text, t.status === 'done' ? 'dim' : 'text'));
     if (t.waits) l.appendChild(span(' ' + G.dot + ' waits on ' + t.waits, 'dim'));
     if (t.claim) l.appendChild(span(' ' + G.dot + ' claimed by ' + t.claim, 'dim'));
+    if (onVerb && (t.status === 'pending' || t.status === 'active')) {
+      const acts = el('span', 'taskact');
+      acts.appendChild(span('  ', 'dim'));
+      if (t.status === 'pending') acts.appendChild(button('start', null, () => onVerb('start', t.id)));
+      acts.appendChild(button('done', null, () => onVerb('complete', t.id)));
+      l.appendChild(acts);
+    }
     e.appendChild(l);
   }
   if (p.footer) e.appendChild(line('dim')).textContent = p.footer;
   return e;
 }
 
-function todoArea(text) {
+function todoArea(text, onVerb) {
   const parsed = parseTodo(text);
-  return parsed ? todoBodyEl(parsed) : verbatimEl(text);
+  return parsed ? todoBodyEl(parsed, onVerb) : verbatimEl(text);
 }
 
 // --- the TUI's scheduler render, mirrored ---
@@ -462,7 +469,21 @@ async function renderTodos(q) {
   const tb = toolBlock('todo', 'read');
   main.appendChild(tb.el);
   const area = el('div');
-  area.appendChild(todoArea(data.text));
+  const refresh = async () => {
+    const d = await api('/api/todo' + q + '&all=' + all);
+    area.innerHTML = '';
+    area.appendChild(todoArea(d.text, onVerb));
+  };
+  async function onVerb(verb, id) {
+    try {
+      const r = await post('/api/todo/' + verb + q, { id });
+      setEcho(out, r.reply);
+      await refresh();
+    } catch (e) {
+      setEcho(out, e.message, true);
+    }
+  }
+  area.appendChild(todoArea(data.text, onVerb));
   tb.body.appendChild(area);
 
   const actions = el('div', 'actions');
@@ -470,9 +491,7 @@ async function renderTodos(q) {
     all = !all;
     tog.disabled = true;
     try {
-      const d = await api('/api/todo' + q + '&all=' + all);
-      area.innerHTML = '';
-      area.appendChild(todoArea(d.text));
+      await refresh();
       tb.open.children[3].textContent = all ? 'read all' : 'read';
       tog.textContent = all ? 'read actionable' : 'read all';
     } catch (e) {
@@ -499,9 +518,7 @@ async function renderTodos(q) {
       const r = await api('/api/todo' + q, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: ta.value });
       setEcho(out, r.reply);
       ta.value = '';
-      const d = await api('/api/todo' + q + '&all=' + all);
-      area.innerHTML = '';
-      area.appendChild(todoArea(d.text));
+      await refresh();
     } catch (e) {
       setEcho(out, e.message, true);
     } finally {
@@ -583,18 +600,19 @@ async function renderModels() {
     tb.body.appendChild(line('dim')).textContent = 'no models in the config';
     return;
   }
-  const wID = Math.max(...models.map((m) => m.id.length)) + 2;
-  const wRole = Math.max(...models.map((m) => m.role.length)) + 2;
   for (const m of models) {
-    const row = line();
-    row.appendChild(span(G.done + ' ', 'accent'));
-    row.appendChild(span(m.id.padEnd(wID), 'text bold'));
-    row.appendChild(span(m.role.padEnd(wRole), 'ember'));
-    row.appendChild(span('window ' + m.window + '  max ' + m.max_tokens + '  reserve ' + m.reserve +
-      '  keep ' + m.keep_recent + '  trigger ' + (m.window - m.reserve), 'dim'));
-    tb.body.appendChild(row);
+    const head = line();
+    head.appendChild(span(G.done + ' ', 'accent'));
+    head.appendChild(span(m.id, 'text bold'));
+    head.appendChild(span('  ' + m.role, 'ember'));
+    tb.body.appendChild(head);
+    const ctx = line('dim');
+    ctx.textContent = '  window ' + m.window + ' ' + G.dot + ' max ' + m.max_tokens + ' ' + G.dot +
+      ' reserve ' + m.reserve + ' ' + G.dot + ' keep ' + m.keep_recent + ' ' + G.dot +
+      ' trigger ' + (m.window - m.reserve);
+    tb.body.appendChild(ctx);
     const eff = line();
-    eff.appendChild(span('  efforts ', 'dim'));
+    eff.appendChild(span('  effort ', 'dim'));
     const list = m.efforts || [];
     if (!list.length) eff.appendChild(span('(the server default)', 'dim'));
     list.forEach((e, i) => {
@@ -603,6 +621,7 @@ async function renderModels() {
     });
     if (m.effort && !list.includes(m.effort)) eff.appendChild(span('  default ' + m.effort, effortClass(m.effort)));
     tb.body.appendChild(eff);
+    tb.body.appendChild(line()).textContent = ' ';
   }
 }
 
