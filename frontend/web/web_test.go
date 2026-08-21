@@ -160,7 +160,7 @@ func modelsTable(t *testing.T) models.Table {
 func newTestServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := seedHome(t)
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Crontab: &fakeCrontab{}})
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,26 +679,17 @@ func TestSchedulerCreate(t *testing.T) {
 	}
 }
 
-func TestMemoryRecent(t *testing.T) {
+// The memory view is gone (SPEC_SERVE 11): the route is a 404 like any
+// unknown path, and the page carries no memory tab.
+func TestMemoryRouteIsGone(t *testing.T) {
 	srv, tok := newTestServer(t)
 	rec := doReq(t, srv.Handler(), "GET", "/api/memory?cwd="+testCWD, nil, bearer(tok))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("memory: got %d", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("memory: got %d, want 404", rec.Code)
 	}
-	var body struct {
-		Memories []string `json:"memories"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, m := range body.Memories {
-		if m == "remembered fact" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("memory: %v, want the seeded memory", body.Memories)
+	rec = doReq(t, srv.Handler(), "GET", "/", nil, bearer(tok))
+	if strings.Contains(rec.Body.String(), `data-view="memory"`) {
+		t.Fatal("the page still carries a memory tab")
 	}
 }
 
@@ -905,7 +896,7 @@ func TestStaticAssets(t *testing.T) {
 	// the mobile drawer, the new-workspace picker, the TUI-homage
 	// renderers for the todo and scheduler text).
 	for path, wants := range map[string][]string{
-		"/": {"<!doctype html", `id="nav-toggle"`, `id="cwd-add"`},
+		"/": {"<!doctype html", `id="nav-toggle" class="nav-toggle"`, `id="cwd-add"`, `id="browse-btn"`, `data-view="plugins"`},
 		"/static/app.js": {
 			"renderSessions",
 			"parseTodo",
@@ -913,8 +904,13 @@ func TestStaticAssets(t *testing.T) {
 			"progressBar",
 			"addCwd",
 			"setNavOpen",
+			"highlightPython",
+			"editorEl",
+			"openForge",
+			"browseTo",
+			"toolBlock",
 		},
-		"/static/style.css": {"--accent", "@media (max-width: 720px)", ".nav-open"},
+		"/static/style.css": {"--accent", "@media (max-width: 720px)", ".nav-open", ".nav-toggle {\n  display: none;", ".editor", "--effort-xhigh"},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))
 		if rec.Code != http.StatusOK {
@@ -935,5 +931,184 @@ func TestStaticAssets(t *testing.T) {
 	rec = doReq(t, h, "GET", "/static/../web.go", nil, bearer(tok))
 	if rec.Code == http.StatusOK {
 		t.Fatalf("traversal: got 200, want a refusal")
+	}
+}
+
+// --- the forge: source, save, approve (SPEC_SERVE 12) ---
+
+func TestForgeSourceSaveApprove(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	hdr := func() http.Header {
+		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+		x.Set("Content-Type", "application/json")
+		return x
+	}
+
+	// the source of a loaded and a pending plugin reads back verbatim.
+	rec := doReq(t, h, "GET", "/api/plugins/source?name=loaded_one&zone=loaded", nil, bearer(tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "the loaded plugin") {
+		t.Fatalf("loaded source: got %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, h, "GET", "/api/plugins/source?name=pending_one&zone=pending", nil, bearer(tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "the pending plugin") {
+		t.Fatalf("pending source: got %d %s", rec.Code, rec.Body.String())
+	}
+	// a bad zone, a bad name, an absent plugin.
+	if rec = doReq(t, h, "GET", "/api/plugins/source?name=loaded_one&zone=elsewhere", nil, bearer(tok)); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad zone: got %d, want 400", rec.Code)
+	}
+	if rec = doReq(t, h, "GET", "/api/plugins/source?name=../x&zone=loaded", nil, bearer(tok)); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad name: got %d, want 400", rec.Code)
+	}
+	if rec = doReq(t, h, "GET", "/api/plugins/source?name=nope&zone=loaded", nil, bearer(tok)); rec.Code != http.StatusNotFound {
+		t.Fatalf("absent: got %d, want 404", rec.Code)
+	}
+
+	// a save lands the full source in the pending zone (create, then update).
+	src := "DESCRIPTION = \"drafted\"\nSCHEMA = {\"type\": \"object\"}\n\ndef run(args):\n    return \"draft\"\n"
+	body, _ := json.Marshal(map[string]string{"name": "draft", "source": src})
+	rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr())
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "created 'draft'") {
+		t.Fatalf("save: got %d %s", rec.Code, rec.Body.String())
+	}
+	got, err := os.ReadFile(filepath.Join(srv.home, "plugins", "pending", "draft.py"))
+	if err != nil || string(got) != src {
+		t.Fatalf("saved file: %v %q", err, string(got))
+	}
+	body, _ = json.Marshal(map[string]string{"name": "draft", "source": strings.Replace(src, "draft", "draft2", 1)})
+	rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr())
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "updated 'draft'") {
+		t.Fatalf("re-save: got %d %s", rec.Code, rec.Body.String())
+	}
+	// the contract is checked; a native name is a collision; the walls hold.
+	body, _ = json.Marshal(map[string]string{"name": "nocontract", "source": "x = 1\n"})
+	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "DESCRIPTION") {
+		t.Fatalf("no contract: got %d %s", rec.Code, rec.Body.String())
+	}
+	body, _ = json.Marshal(map[string]string{"name": "bash", "source": src})
+	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "native") {
+		t.Fatalf("native collision: got %d %s", rec.Code, rec.Body.String())
+	}
+	body, _ = json.Marshal(map[string]string{"name": "draft", "source": src})
+	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), bearer(tok)); rec.Code != http.StatusForbidden {
+		t.Fatalf("no origin: got %d, want 403", rec.Code)
+	}
+
+	// approve moves pending -> plugins; a second approve finds nothing.
+	body, _ = json.Marshal(map[string]any{"name": "draft"})
+	rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr())
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "approved 'draft'") {
+		t.Fatalf("approve: got %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(srv.home, "plugins", "draft.py")); err != nil {
+		t.Fatalf("approved file missing: %v", err)
+	}
+	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusNotFound {
+		t.Fatalf("approve twice: got %d, want 404", rec.Code)
+	}
+
+	// a pending revision of an installed plugin: approve is a 409 until
+	// replace is explicit, then the file is swapped.
+	rev := strings.Replace(src, "draft", "revised", -1)
+	body, _ = json.Marshal(map[string]string{"name": "draft", "source": rev})
+	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusOK {
+		t.Fatalf("save revision: got %d %s", rec.Code, rec.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{"name": "draft"})
+	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusConflict {
+		t.Fatalf("approve over installed: got %d, want 409", rec.Code)
+	}
+	body, _ = json.Marshal(map[string]any{"name": "draft", "replace": true})
+	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "replaced") {
+		t.Fatalf("approve replace: got %d %s", rec.Code, rec.Body.String())
+	}
+	got, _ = os.ReadFile(filepath.Join(srv.home, "plugins", "draft.py"))
+	if string(got) != rev {
+		t.Fatalf("replace did not swap the file: %q", string(got))
+	}
+	// a native name never approves.
+	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "pending", "read.py"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body, _ = json.Marshal(map[string]any{"name": "read"})
+	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest {
+		t.Fatalf("native approve: got %d, want 400", rec.Code)
+	}
+	// the allow-list: GET on save is a 405.
+	if rec = doReq(t, h, "GET", "/api/plugins/save", nil, bearer(tok)); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET save: got %d, want 405", rec.Code)
+	}
+}
+
+// --- the folder browser (SPEC_SERVE 13) ---
+
+func TestBrowseRootedAtHome(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	root := t.TempDir()
+	srv.root = root
+	for _, d := range []string{"alpha", "beta/inner", ".hidden"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Root   string `json:"root"`
+		Path   string `json:"path"`
+		Parent string `json:"parent"`
+		Dirs   []struct {
+			Name string `json:"name"`
+			Path string `json:"path"`
+		} `json:"dirs"`
+	}
+	get := func(q string) int {
+		rec := doReq(t, h, "GET", "/api/fs"+q, nil, bearer(tok))
+		body.Dirs = nil
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return rec.Code
+	}
+	names := func() []string {
+		out := []string{}
+		for _, d := range body.Dirs {
+			out = append(out, d.Name)
+		}
+		return out
+	}
+	// the root: folders only, hidden off, no parent.
+	if code := get(""); code != http.StatusOK {
+		t.Fatalf("root: got %d", code)
+	}
+	if got := names(); strings.Join(got, ",") != "alpha,beta" {
+		t.Fatalf("root dirs %v, want alpha,beta (no files, no hidden)", got)
+	}
+	if body.Parent != "" {
+		t.Fatalf("root parent %q, want none", body.Parent)
+	}
+	// hidden on request; a child with its parent; a traversal refused; an
+	// absent path a 404; a file a 400; the wrong method a 405.
+	if get("?hidden=true"); !strings.Contains(strings.Join(names(), ","), ".hidden") {
+		t.Fatalf("hidden=true dirs %v, want .hidden", names())
+	}
+	if code := get("?path=" + filepath.Join(root, "beta")); code != http.StatusOK || strings.Join(names(), ",") != "inner" || body.Parent == "" {
+		t.Fatalf("child: got %d dirs %v parent %q", code, names(), body.Parent)
+	}
+	if code := get("?path=/"); code != http.StatusForbidden {
+		t.Fatalf("outside root: got %d, want 403", code)
+	}
+	if code := get("?path=" + filepath.Join(root, "..")); code != http.StatusForbidden {
+		t.Fatalf("traversal: got %d, want 403", code)
+	}
+	if code := get("?path=" + filepath.Join(root, "nope")); code != http.StatusNotFound {
+		t.Fatalf("absent: got %d, want 404", code)
+	}
+	if code := get("?path=" + filepath.Join(root, "file.txt")); code != http.StatusBadRequest {
+		t.Fatalf("a file: got %d, want 400", code)
+	}
+	if rec := doReq(t, h, "POST", "/api/fs", nil, bearer(tok)); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST fs: got %d, want 405", rec.Code)
 	}
 }
