@@ -110,13 +110,6 @@ func TestFreezeGate(t *testing.T) {
 		base = "main"
 	}
 
-	// the named reopening (SPEC_EVT 2b, the loop as the engine's consumer):
-	// loop/ changes under a spec'd deliverable; the re-freeze PR after the
-	// merge deletes this function and the gate measures the new bytes.
-	reopened := func(p string) bool {
-		return p == "loop" || strings.HasPrefix(p, "loop/")
-	}
-
 	// a refactor branch (rig-*-refactor) refactors one package wholesale,
 	// so neither the TUI allowlist nor the core/loop frozen-surface clause
 	// applies — only the CLI goldens must stay green.
@@ -131,9 +124,6 @@ func TestFreezeGate(t *testing.T) {
 			}
 		}
 		for _, p := range changed {
-			if reopened(p) {
-				continue
-			}
 			if !allow(p) {
 				t.Errorf("the freeze diff reaches outside the allowlist: %s", p)
 			}
@@ -145,9 +135,6 @@ func TestFreezeGate(t *testing.T) {
 		// gofmt itself would change is absorbed (strict byte-identity
 		// would deadlock on the day a toolchain re-aligns).
 		for _, p := range strings.Fields(git("diff", "--name-only", base, "--", "core/", "loop/")) {
-			if reopened(p) {
-				continue
-			}
 			if !strings.HasSuffix(p, ".go") {
 				t.Errorf("core/ or loop/ gained a non-Go file: %s (a real change to the frozen surface)", p)
 				continue
