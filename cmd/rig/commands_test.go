@@ -187,7 +187,7 @@ func newHarness(t *testing.T, row models.Model, activeID string, runtime models.
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
-			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "python": &fakePython{},
+			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": &fakePython{},
 			"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
 			"diff":           diff.New(db),
 			"plugins_reload": fakeReload{},
