@@ -1112,3 +1112,53 @@ func TestBrowseRootedAtHome(t *testing.T) {
 		t.Fatalf("POST fs: got %d, want 405", rec.Code)
 	}
 }
+
+// --- the todo's two hands (SPEC_SERVE 15) ---
+
+func TestTodoStartAndComplete(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+	hdr := func() http.Header {
+		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+		x.Set("Content-Type", "application/json")
+		return x
+	}
+	read := func(all bool) string {
+		target := "/api/todo" + q
+		if all {
+			target += "&all=true"
+		}
+		rec := doReq(t, h, "GET", target, nil, bearer(tok))
+		var body map[string]string
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return body["text"]
+	}
+	rec := doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t1"}`), hdr())
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "t1") {
+		t.Fatalf("start: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(read(false), "t1 [~]") {
+		t.Fatalf("after start the read must show t1 active: %q", read(false))
+	}
+	rec = doReq(t, h, "POST", "/api/todo/complete"+q, strings.NewReader(`{"id":"t1"}`), hdr())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("complete: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(read(true), "t1 [x]") {
+		t.Fatalf("after complete the history must show t1 done: %q", read(true))
+	}
+	// the verb's refusal for an unknown id; a malformed id; the walls.
+	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t99"}`), hdr()); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown id: got %d, want 400", rec.Code)
+	}
+	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"../x"}`), hdr()); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad id: got %d, want 400", rec.Code)
+	}
+	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t1"}`), bearer(tok)); rec.Code != http.StatusForbidden {
+		t.Fatalf("no origin: got %d, want 403", rec.Code)
+	}
+	if rec = doReq(t, h, "GET", "/api/todo/complete"+q, nil, bearer(tok)); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET complete: got %d, want 405", rec.Code)
+	}
+}
