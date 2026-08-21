@@ -169,7 +169,7 @@ The embedded defaults (the move is exact — 0.2.0's values):
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
-  "system": "You are rig, a minimal coding agent. Use the provided tools to inspect, change, and run things in the working directory. Answer in plain text when done.",
+  "system": "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Remembered notes are suggestions; the code and the spec are the truth. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin.",
   "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch"],
   "retries": 3,
   "searxngUrl": "http://127.0.0.1:8888",
