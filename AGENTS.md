@@ -108,6 +108,10 @@ plus one registration line, and the loop never names a concrete type.
   with the SSRF guard and extraction.
 - `tool/todo`, `tool/rem`, `tool/scheduler` — thin adapters over their
   stores: session attribution and the store's shapes, verbatim.
+- `tool/delegate` — the one-shot worker tool (SPEC_DELEGATE): spawn a
+  headless worker on a task now, wait, and feed back its last message;
+  a recorded run in the cwd-scope scheduler store, a resumable
+  transcript.
 - `frontend/cli` — the stdin/stdout frontend and the piped reference:
   plain text, command dispatch, the steering seam.
 - `frontend/tui` — the terminal UI: the same events and commands in a

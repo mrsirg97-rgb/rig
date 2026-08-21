@@ -109,6 +109,7 @@ func (f *fold) apply(e eventRow) {
 
 func (f *fold) applyCreate(e eventRow) {
 	var a struct {
+		ID     string  `json:"id"`
 		Name   string  `json:"name"`
 		Prompt string  `json:"prompt"`
 		Cron   string  `json:"cron"`
@@ -121,12 +122,22 @@ func (f *fold) applyCreate(e eventRow) {
 		return
 	}
 
-	for _, j := range f.jobs {
-		if j.State != "removed" && j.Name == a.Name {
+	id := a.ID
+	if id != "" {
+		// the delegate's ad-hoc row (SPEC_DELEGATE 4): the id is minted
+		// by the caller, never collides, and names may repeat (the same
+		// task delegated twice) — no name-collision rule.
+		if f.jobs[id] != nil {
 			return
 		}
+	} else {
+		for _, j := range f.jobs {
+			if j.State != "removed" && j.Name == a.Name {
+				return
+			}
+		}
+		id = f.mintID()
 	}
-	id := f.mintID()
 	var at string
 	if a.At != nil {
 		at = *a.At

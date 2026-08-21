@@ -21,6 +21,10 @@ written before the store commit; drift is surfaced in list.
 - `verbs.go` — the command verbs (list/create/pause/resume/remove/runs).
 - `runner.go` — the job runner (the worker spawn, bwrap jail, socket
   proxy).
+- `delegate.go` — the one-shot worker spawn (SPEC_DELEGATE): the busy
+  rule, the ad-hoc record (a minted job row with no crontab line), the
+  state-store bind for the resumable transcript, the one-in-flight
+  flock and the no-recursion marker.
 - `jail.go` — the bwrap jail argv composition.
 - `proxy.go` — the unix-socket proxy (the jail's one hole).
 - `fold.go` — the fold/replay over the event log.
