@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.1] — the dashboard in the TUI's grammar
 
 - **the dashboard speaks the TUI's grammar** (`specs/SPEC_SERVE.md`
   11–14): every view is a tool block (`● name · detail` … `name ✓`),
