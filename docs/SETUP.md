@@ -44,18 +44,32 @@ go build ./cmd/rig     # produces ./rig
 ./rig --version        # rig 0.8.0
 ```
 
-The install path is the binary, not a script (`specs/SPEC_BUILD.md`).
-Pre-tag, `@master` works today; once tagged and public, `@latest`:
+The install paths, three (`specs/SPEC_BUILD.md` 5):
+
+**Installer** (POSIX sh, no Go, no sudo — lands in `~/.local/bin`):
+
+```sh
+curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh
+```
+
+**Release binary** — the same asset the installer fetches, downloaded
+directly (no script): pick `rig_<os>_<arch>` from `releases/latest`;
+the version lives in the URL, not the name.
+
+```sh
+curl -fsSL https://github.com/mrsirg97-rgb/rig/releases/latest/download/rig_linux_amd64 -o rig
+chmod +x rig
+./rig --version
+```
+
+**go install** — pre-tag `@master` works today, `@latest` once tagged;
+the one prerequisite is Go ≥ 1.26 (the toolchain line pulls the newest
+matching patch automatically):
 
 ```sh
 go install github.com/mrsirg97-rgb/rig/cmd/rig@master   # today (no tag yet)
 go install github.com/mrsirg97-rgb/rig/cmd/rig@latest   # once tagged
 ```
-
-The one prerequisite is Go ≥ 1.26 (the toolchain line pulls the newest
-matching patch automatically). A release binary (for those who do not
-want Go) is the post-open-source step; the Makefile's `make install`
-lands a local build in `$(GOBIN)`/`~/.local/bin`.
 
 `make install` is the same build landed locally: `$(go env GOBIN)` when
 set, else `~/.local/bin`; `BINDIR=...` names the directory.

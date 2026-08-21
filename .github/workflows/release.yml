@@ -1,0 +1,74 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The tag is asserted against the Version const before any asset is
+      # built: a tag that does not equal "v" + the version refuses to ship.
+      - name: assert the tag matches the Version const
+        id: assert
+        run: |
+          go build -o bin/rig ./cmd/rig
+          VERSION="$(./bin/rig -version | awk '{print $2}')"
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "release: tag ${GITHUB_REF_NAME} != v${VERSION} (the Version const in cmd/rig); refusing to ship mismatched assets" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # modernc sqlite is pure Go: CGO_ENABLED=0 cross-builds the four with
+      # no cgo toolchains. Assets are rig_<os>_<arch>, no extension, no
+      # version in the name; checksums.txt ties them to the tag.
+      - name: cross-build linux/darwin x amd64/arm64
+        run: |
+          set -eu
+          for spec in "linux amd64" "linux arm64" "darwin amd64" "darwin arm64"; do
+            os="${spec% *}"
+            arch="${spec#* }"
+            CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" \
+              go build -trimpath -ldflags="-s -w" -o "dist/rig_${os}_${arch}" ./cmd/rig
+          done
+          cd dist
+          sha256sum rig_* > checksums.txt
+
+      - name: attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/rig_linux_amd64, dist/rig_linux_arm64, dist/rig_darwin_amd64, dist/rig_darwin_arm64
+
+      # The release body comes from the matching CHANGELOG.md section; a
+      # missing section refuses an empty body.
+      - name: create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.assert.outputs.version }}"
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { insec=1; next }
+            insec && /^## \[/ { exit }
+            insec { print }
+          ' CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ]; then
+            echo "release: no CHANGELOG.md section for ${VERSION}; refusing an empty release body" >&2
+            exit 1
+          fi
+          gh release create "v$VERSION" \
+            dist/rig_linux_amd64 dist/rig_linux_arm64 \
+            dist/rig_darwin_amd64 dist/rig_darwin_arm64 dist/checksums.txt \
+            --notes-file release-body.md

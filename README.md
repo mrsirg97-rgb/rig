@@ -22,16 +22,32 @@ go build ./cmd/rig
 
 then talk. Configuration and verification: `docs/SETUP.md`.
 
-The install path is the binary, not a script (`specs/SPEC_BUILD.md`).
-Pre-tag, `@master` works today; once tagged and public, `@latest`:
+## install
+
+Three paths (`specs/SPEC_BUILD.md` 5); pick one:
+
+**Installer** (POSIX sh, no Go, no sudo — lands in `~/.local/bin`):
 
 ```sh
-go install github.com/mrsirg97-rgb/rig/cmd/rig@master   # today
-go install github.com/mrsirg97-rgb/rig/cmd/rig@latest   # once tagged
+curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh
 ```
 
-The one prerequisite is Go ≥ 1.26; a release binary (for those who do not
-want Go) is the post-open-source step — see `docs/SETUP.md` install.
+**Release binary** — the same asset the installer fetches, downloaded
+directly (no script). Pick `rig_<os>_<arch>` from
+`releases/latest`; the version lives in the URL, not the name:
+
+```sh
+curl -fsSL https://github.com/mrsirg97-rgb/rig/releases/latest/download/rig_linux_amd64 -o rig
+chmod +x rig
+./rig --version
+```
+
+**go install** (needs Go ≥ 1.26; pre-tag `@master` works today, `@latest`
+once tagged):
+
+```sh
+go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
+```
 
 ## docs
 

@@ -26,6 +26,12 @@
   used/window`), the stance (`effort · role · auto|manual` — the
   effort in pane's footer ramp colors, new `effort*` theme slots;
   the role abbreviated; manual in the warn), and the usage totals.
+- **the distribution surface** (`specs/SPEC_BUILD.md` 5): the first real
+  tag ships through a release workflow (the tag asserted against the
+  `Version` const before any asset is built, `CGO_ENABLED=0` cross-builds
+  linux/darwin x amd64/arm64, checksums, provenance attestation, the body
+  from the matching CHANGELOG section), a POSIX installer fetches and
+  verifies the binary, and a static install site serves it.
 
 ## [0.7.0] — the reload and the forge
 
