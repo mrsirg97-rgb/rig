@@ -1,8 +1,9 @@
 # rig: the build surface (the Makefile, the CI job)
 
 The build surface, boring on purpose: one Makefile with six named targets,
-one Linux CI job, and one line of documented install path. The Makefile is
-CI's vocabulary and the operator's shorthand, nothing more. No Go code
+one Linux CI job (the PR gate), one release workflow (the tag path), one
+POSIX installer, and one static install site. The Makefile is CI's
+vocabulary and the operator's shorthand, nothing more. No Go code
 changes — except the gofmt drift that `fmt-check` catches on day one, and
 the single formatting commit that pays it.
 
@@ -28,23 +29,33 @@ alignment in the drift commit; the exception is named, not hidden).
   else `~/.local/bin`; `BINDIR=...` overrides.
 - The CI job (`.github/workflows/ci.yml`): on `pull_request` and `push` to
   `main`, one Linux job — checkout, `setup-go` with
-  `go-version-file: go.mod` and the module cache, then `make test` and
-  `make fmt-check`.
+  `go-version-file: go.mod` and the module cache, then `make test`,
+  `make fmt-check`, and `shellcheck install.sh`. It stays the PR gate;
+  a tag ships through the release workflow, not this one.
 - The drift commit: one commit on this branch runs `make fmt` and carries
   only the formatting delta, so `fmt-check` goes green and stays the gate.
-- The documented install path:
+- The documented install paths, three (decision 5):
+  the installer (`curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh
+  | sh`), the release binary (the same asset the installer fetches,
+  downloaded directly), and
   `go install github.com/mrsirg97-rgb/rig/cmd/rig@latest` (README
   quickstart, `docs/SETUP.md` build section).
 
 ## non-goals (the point)
 
-- No install script, no `curl | sh`: the binary is the installer, and
-  `go install .../cmd/rig@latest` is the documented path.
-- No packaging: no tarballs, no deb/rpm, no installer artifacts —
-  post-open-source work, if ever.
-- No cross-compile, no matrix, no Windows/macOS CI: one job, linux only.
-- No release workflow: a tag is a release decision (the `Version` freeze),
-  not a pipeline.
+- **goreleaser** — a dependency (and its config) for a four-entry matrix
+  that one shell loop plus three pinned actions already ship.
+- **Homebrew / AUR** — packaging for a package manager is "later, if
+  asked"; the installer covers the operator who does not want Go.
+- **The version in the asset name** — the asset is `rig_<os>_<arch>`, no
+  version, no extension: the download URL carries the version (a release
+  download is scoped to its tag), so the name stays a stable reference
+  and the checksums.txt is the tie to the tag.
+- **Installing with sudo** — never sudo, never `/usr/local`; the installer
+  lands in `${RIG_BIN:-$HOME/.local/bin}` with `install -m 0755`, the
+  operator's own directory.
+- No Windows: the matrix is linux/darwin x amd64/arm64 (the sqlite is
+  modernc, pure Go; no cgo toolchains).
 - No version stamping via `ldflags`: `Version` is a spec-pinned const
   (`cmd/rig`, held by `TestVersionIsTheFreeze`), and a stamped version
   would fight it — the stamp is a code change wearing an env's clothes.
@@ -57,11 +68,15 @@ alignment in the drift commit; the exception is named, not hidden).
 
 ```
 Makefile                     the six targets (this spec)
-.github/workflows/ci.yml     the one job
+.github/workflows/ci.yml     the PR gate: test, fmt-check, shellcheck
+.github/workflows/release.yml the tag path: assert, cross-build, attest, release
+.github/workflows/pages.yml  the install site, on push to main
+install.sh                   the POSIX installer (decision 5)
+site/index.html              the one static page (decision 5)
 specs/SPEC_BUILD.md          this file
 .gitignore                   + /bin
-README.md                    quickstart: the go install line
-docs/SETUP.md                build: the go install line
+README.md                    quickstart: the three install paths
+docs/SETUP.md                build: the three install paths
 ```
 
 ## decisions
@@ -132,8 +147,59 @@ One job, `ubuntu-latest`, on `pull_request` and `push` to `main`. The
 steps: `actions/checkout`, `actions/setup-go` with
 `go-version-file: go.mod` (the `go 1.26.6` module line is the toolchain's
 single source of truth — the workflow names no version) and the module
-cache, then `make test`, then `make fmt-check`. No artifacts, no uploads,
-no secrets, no matrix.
+cache, then `make test`, then `make fmt-check`, then `shellcheck
+install.sh`. No artifacts, no uploads, no secrets, no matrix. This job is
+the PR gate; the release workflow runs only on tags.
+
+### 5. Distribution
+
+The tag path, the installer, and the site. The first real tag, `v0.8.0`,
+is the live test of the whole path: the release workflow must make it
+succeed on the first try, and the `Version` const (`cmd/rig`, "0.8.0") is
+the fact the tag is asserted against — a tag that does not match the
+const refuses to ship.
+
+**The release workflow** (`.github/workflows/release.yml`, on
+`push: tags: ['v*']`). One job, `ubuntu-latest`. First step: build the
+binary and assert the tag equals "v" + the `Version` constant — `go build
+-o bin/rig ./cmd/rig`, run `./bin/rig -version`, take its second field,
+and refuse loud (`exit 1`, naming both) when `$GITHUB_REF_NAME` != `v` +
+that field. A mismatch fails the release before any asset is built; a
+green assert is the whole path's precondition. Then `CGO_ENABLED=0`
+cross-builds linux/darwin x amd64/arm64 with `-trimpath
+-ldflags="-s -w"` (the sqlite is modernc, pure Go; no cgo toolchains),
+naming the assets `rig_<os>_<arch>` — no extension, no version in the
+name — and writes `checksums.txt` (sha256 over the four). Then attests
+build provenance with `actions/attest-build-provenance` (pinned by major
+tag), and creates the GitHub Release with `gh release create`, the body
+extracted from the matching `## [<version>]` CHANGELOG.md section (a
+missing section refuses, loud, an empty body). Actions pinned by major
+tag (`actions/checkout@v4`, `actions/setup-go@v5`, the attest action).
+Permissions minimal and explicit: `contents: write`, `id-token: write`,
+`attestations: write`.
+
+**The installer** (`install.sh`, repo root). POSIX sh, under 80 lines, no
+bashisms, `set -eu`. Maps `uname -s` / `uname -m` into the asset name
+(Linux→linux, Darwin→darwin, x86_64/amd64→amd64, aarch64/arm64→arm64)
+and refuses unknown pairs by name. The version: `RIG_VERSION` (env) or the
+first argument wins; default resolves the `releases/latest` redirect
+(no API call, no JSON parse). Downloads the asset and `checksums.txt`
+into a `mktemp` dir (`curl -fsSL`, `wget` fallback), verifies with
+`sha256sum` or `shasum -a 256` **before anything moves**, installs with
+`install -m 0755` into `${RIG_BIN:-$HOME/.local/bin}` — never sudo, never
+`/usr/local` — prints the PATH hint when the bindir is not on PATH, then
+runs `rig -version`. Every failure names what it was doing. The ci job
+shellchecks it.
+
+**The site** (`site/`, published by `.github/workflows/pages.yml` on
+`push` to `main`). One static page: no build step, no JS framework, no
+external assets. The page carries the name, one line on what rig is
+(AGENTS.md's overview), the install line `curl -fsSL
+https://mrsirg97-rgb.github.io/rig/install.sh | sh`, the `go install
+github.com/mrsirg97-rgb/rig/cmd/rig@latest` alternative, and links to the
+README, `specs/`, and the latest release. The pages job copies
+`install.sh` into the artifact so the site URL serves the same bytes as
+the repo root.
 
 ## testing
 
@@ -147,6 +213,10 @@ deliverable's own test. The local checklist, in order:
   `make install BINDIR=<dir>` lands it in the named directory.
 - `make build` leaves `bin/rig` and `git status` clean of it (the `/bin`
   ignore holds).
+- `shellcheck install.sh` green.
+- `sh install.sh 0.7.0` (a local, pre-tag version) downloads, verifies,
+  and runs `rig -version`; an unknown `uname -m` pair and a checksum
+  mismatch each fail loud, naming the step.
 - The full suite green before the PR.
 
 ## scope

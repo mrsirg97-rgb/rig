@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rig — a minimal agent loop machine</title>
+  <style>
+    body { font-family: ui-monospace, monospace; max-width: 46rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; color: #222; background: #fff; }
+    h1 { font-size: 1.6rem; }
+    pre { background: #f4f4f4; padding: .6rem .8rem; overflow-x: auto; }
+    a { color: #0645ad; }
+    .muted { color: #555; }
+    ul { padding-left: 1.2rem; }
+  </style>
+</head>
+<body>
+  <h1>rig</h1>
+  <p>A minimal agent-loop machine: assemble context, stream the model's
+  output, execute what it asks for, feed the results back, repeat.</p>
+
+  <p>Install the release binary for your platform:</p>
+  <pre>curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</pre>
+
+  <p class="muted">Or, with Go ≥ 1.26:</p>
+  <pre>go install github.com/mrsirg97-rgb/rig/cmd/rig@latest</pre>
+
+  <ul>
+    <li><a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a></li>
+    <li><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a></li>
+    <li><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">latest release</a></li>
+  </ul>
+</body>
+</html>
