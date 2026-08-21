@@ -265,7 +265,10 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   from the command door; `/plugins create <text>` queues the authoring
   prompt (the steer precedent: the command queues a line, never dispatches
   a turn), the model's `write` lands the file in `plugins/pending/`, and
-  `approve` installs it.
+  `approve` installs it. The `plugin` door self-heals (SPEC_STREAMLINE
+  4): an unknown name re-discovers once before refusing, so an
+  out-of-band install is callable without a reload call; `plugins_reload`
+  stays the operator's explicit verb.
 - **The sandbox** — the provenance rule is the workflow (SPEC_SANDBOX
   2); the worker jail is the boundary (SPEC_SANDBOX 1, 3, 5): a scheduled
   worker's plugins run jailed under bwrap. In the interactive REPL the

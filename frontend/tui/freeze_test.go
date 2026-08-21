@@ -62,6 +62,9 @@ func TestFreezeGate(t *testing.T) {
 			// filtered render and echo, and the tool's all surface.
 			p == "store/todo" || strings.HasPrefix(p, "store/todo/") ||
 			p == "tool/todo" || strings.HasPrefix(p, "tool/todo/") ||
+			// the streamlined round (SPEC_STREAMLINE 1): the scheduler
+			// description's de-duplication, beside its store.
+			p == "tool/scheduler" || strings.HasPrefix(p, "tool/scheduler/") ||
 			// the provenance rule's work surface (SPEC_SANDBOX 2): the
 			// perm's one new path rule, beside the allow-list.
 			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||

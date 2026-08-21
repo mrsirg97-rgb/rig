@@ -134,7 +134,8 @@ refusal goes back to the model. The default permits the 15 built-in
 tools. Python plugins (outside the default) are admitted by their
 presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7) — an installed
 plugin's own allow-list entry — not by an `allow` line; a plugin still
-in `plugins/pending/` stays refused until approved and reloaded.
+in `plugins/pending/` stays refused until approved (the approve's reload
+lands it live, SPEC_STREAMLINE 4).
 Narrowing is always available and compose-order-agnostic.
 
 ## working-directory discipline

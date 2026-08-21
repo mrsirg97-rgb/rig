@@ -52,7 +52,8 @@ The three dense contracts are trimmed to the shape:
   completed`, `waits on tN`).
 - `tool/scheduler`'s description and guidelines de-duplicate: the cron
   shape, the once-line self-delete, the busy semantics, the id minting,
-  the scope list, and the drift note each appear once.
+  the scope list, and the drift note each appear once. SPEC_CONFIG 5's
+  named clause (`Default model:`) rides the new `(default: X)` phrase.
 - `tool/rem` drops the search-engine internals (fuzzy/semantic) and
   keeps the verbs, the scope rule, the k cap, and the session-start
   note.
@@ -137,7 +138,8 @@ door's call, not `plugins_reload`:
 
 `plugins_reload` stays a native, in the allow-list default: it is the
 operator's explicit verb (removal detection, the collision report), not
-the authoring flow's.
+the authoring flow's. This amends SPEC_PLUGINS 8's testing clause,
+named.
 
 ## testing
 
@@ -190,8 +192,11 @@ seam, SPEC_PLUGINS 8's harness):**
 - `tool/todo`, `tool/scheduler`, `tool/rem`: the trimmed descriptions;
   `tool/scheduler`'s guidelines de-duplicated.
 - `cmd/rig/testdata/golden_020`: regenerated in place.
-- `PACKAGE.md`: store/todo, plugins, command, tool/todo,
-  tool/scheduler, tool/rem.
-- `CHANGELOG.md`: the 0.9.2 entry.
+- The description-pinned test surfaces follow the new voice:
+  `tool/scheduler`, `tool/rem`, `cmd/rig`'s config test, and
+  `frontend/tui`'s freeze allowlist (the tool/scheduler line).
+- `PACKAGE.md`: store/todo, plugins, tool/todo.
+- `docs/USAGE.md`, `docs/SETUP.md`: the dance's tail, named.
+- `CHANGELOG.md`: the 0.9.2 entry; the version 0.9.2.
 - `loop/` and `core/` frozen; the middleware set unchanged; the native
   set unchanged (17).
