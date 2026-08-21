@@ -38,11 +38,17 @@ func serve(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
 	}
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		return 1
+	}
 	srv, err := web.New(web.Options{
-		Home:    home,
-		CWD:     cwd,
-		Models:  cfg.Models,
-		Crontab: sched.RealCrontab(""),
+		Home:      home,
+		CWD:       cwd,
+		Models:    cfg.Models,
+		Crontab:   sched.RealCrontab(""),
+		RunnerCmd: self + " run-job",
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig serve:", err)
