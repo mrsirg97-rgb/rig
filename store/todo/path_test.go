@@ -1,0 +1,46 @@
+package todo_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/mrsirg97-rgb/rig/store"
+	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+)
+
+// TestStorePathRoundTrip (SPEC_SERVE 2, named): the todo path helper
+// resolves to the same file the root opens — open via the helper, create a
+// task, read it back. The root and the dashboard share one source.
+func TestStorePathRoundTrip(t *testing.T) {
+	home := t.TempDir()
+	cwd := "/workspace/roundtrip"
+	path := todostore.StorePath(home, cwd)
+	if filepath.Dir(path) != filepath.Join(home, "todo") {
+		t.Fatalf("path %q, want it under %s/todo", path, home)
+	}
+	if again := todostore.StorePath(home, cwd); again != path {
+		t.Fatalf("StorePath not stable: %q vs %q", again, path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, _, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.DB.Close()
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []todostore.CreateItem{{Text: "a task"}}, "seed"); err != nil {
+		t.Fatal(err)
+	}
+	text, err := todostore.Read(ctx, db, "seed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "a task") {
+		t.Fatalf("round-trip read %q, want the created task", text)
+	}
+}

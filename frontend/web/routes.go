@@ -1,0 +1,626 @@
+package web
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"io/fs"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/mrsirg97-rgb/rig/core"
+	remstore "github.com/mrsirg97-rgb/rig/store/rem"
+	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+)
+
+const (
+	maxWriteBytes = 64 * 1024
+	defaultReadTO = 5 * time.Second
+	defaultPage   = 200
+	defaultMemK   = 50
+)
+
+// router is the allow-list (SPEC_SERVE posture): every (method, path) is
+// named; an unknown path is a 404 and a known path with the wrong method
+// is a 405 (with the Allow header). There is no catch-all beyond the named
+// static assets.
+func (s *Server) router() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		allowed, ok := s.allowed(path)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if !allowed[r.Method] {
+			w.Header().Set("Allow", strings.Join(methods(allowed), ", "))
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.dispatch(w, r, path)
+	})
+}
+
+// allowed maps a path to its allowed methods (the allow-list); unknown
+// paths have no entry (a 404).
+func (s *Server) allowed(path string) (map[string]bool, bool) {
+	switch {
+	case path == "/":
+		return setOf("GET"), true
+	case strings.HasPrefix(path, "/static/"):
+		return setOf("GET"), true
+	case path == "/api/cwds":
+		return setOf("GET"), true
+	case path == "/api/sessions":
+		return setOf("GET"), true
+	case isTranscriptPath(path):
+		return setOf("GET"), true
+	case path == "/api/todo":
+		return setOf("GET", "POST"), true
+	case path == "/api/scheduler":
+		return setOf("GET"), true
+	case path == "/api/memory":
+		return setOf("GET"), true
+	case path == "/api/models":
+		return setOf("GET"), true
+	case path == "/api/plugins":
+		return setOf("GET"), true
+	}
+	return nil, false
+}
+
+func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
+	switch {
+	case path == "/":
+		s.serveStatic(w, "index.html", "text/html; charset=utf-8")
+	case strings.HasPrefix(path, "/static/"):
+		s.serveStaticFile(w, r, strings.TrimPrefix(path, "/static/"))
+	case path == "/api/cwds":
+		s.handleCwds(w, r)
+	case path == "/api/sessions":
+		s.handleSessions(w, r)
+	case isTranscriptPath(path):
+		s.handleTranscript(w, r, transcriptID(path))
+	case path == "/api/todo" && r.Method == "GET":
+		s.handleTodoRead(w, r)
+	case path == "/api/todo" && r.Method == "POST":
+		s.handleTodoCreate(w, r)
+	case path == "/api/scheduler":
+		s.handleScheduler(w, r)
+	case path == "/api/memory":
+		s.handleMemory(w, r)
+	case path == "/api/models":
+		s.handleModels(w, r)
+	case path == "/api/plugins":
+		s.handlePlugins(w, r)
+	}
+}
+
+func isTranscriptPath(path string) bool {
+	const prefix = "/api/sessions/"
+	const suffix = "/transcript"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return false
+	}
+	id := path[len(prefix) : len(path)-len(suffix)]
+	return id != "" && !strings.Contains(id, "/")
+}
+
+func transcriptID(path string) string {
+	const prefix = "/api/sessions/"
+	const suffix = "/transcript"
+	id := path[len(prefix) : len(path)-len(suffix)]
+	return id
+}
+
+// --- the read views ---
+
+func (s *Server) handleCwds(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	writeJSON(w, http.StatusOK, map[string]any{"cwds": s.workspaces(ctx)})
+}
+
+// workspaces is the picker's list (SPEC_SERVE): the serve process's cwd
+// first, then the workspaces that have sessions (each a state file),
+// alphabetical. A workspace with no sessions is not named (a read of it is
+// the named refusal).
+func (s *Server) workspaces(ctx context.Context) []string {
+	seen := map[string]bool{}
+	var others []string
+	add := func(cwd string) {
+		if cwd == "" || seen[cwd] {
+			return
+		}
+		seen[cwd] = true
+		others = append(others, cwd)
+	}
+	dir := filepath.Join(s.home, "sessions")
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".sqlite") {
+				continue
+			}
+			path := filepath.Join(dir, e.Name())
+			db, err := s.stores.open(path, state.Statements(), state.SchemaVersion)
+			if err != nil {
+				continue
+			}
+			rows, err := state.ListSessions(ctx, db)
+			if err != nil || len(rows) == 0 {
+				continue
+			}
+			add(rows[0].Cwd)
+		}
+	}
+	out := make([]string, 0, len(others)+1)
+	if s.cwd != "" {
+		out = append(out, s.cwd)
+		seen[s.cwd] = true
+	}
+	sort.Strings(others)
+	for _, o := range others {
+		if !seen[o] {
+			out = append(out, o)
+			seen[o] = true
+		}
+	}
+	return out
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	if !s.stateFile(cwd) {
+		writeErr(w, http.StatusNotFound, "no such workspace: "+cwd)
+		return
+	}
+	db, err := s.stores.state(cwd)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	rows, err := state.ListSessions(ctx, db)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]sessionJSON, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, sessionJSON{
+			ID: row.ID, Cwd: row.Cwd,
+			Started: row.Started.UTC().Format(time.RFC3339),
+			Exit:    row.Exit, Turns: row.Turns,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "sessions": out})
+}
+
+func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request, id string) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	if !s.stateFile(cwd) {
+		writeErr(w, http.StatusNotFound, "no such workspace: "+cwd)
+		return
+	}
+	db, err := s.stores.state(cwd)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sess, err := state.Resume(ctx, db, id)
+	if err != nil {
+		if errors.Is(err, state.ErrNoSuchSession) {
+			writeErr(w, http.StatusNotFound, "no such session: "+id)
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	usage, err := state.SessionUsage(ctx, db, id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	limit, offset := pageParams(r)
+	total := len(sess.Messages)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	page := sess.Messages[offset:end]
+	msgs := make([]messageJSON, 0, len(page))
+	for _, m := range page {
+		msgs = append(msgs, messageJSONOf(m))
+	}
+	urows := make([]usageJSON, 0, len(usage))
+	for _, u := range usage {
+		urows = append(urows, usageJSON{
+			Seq: u.Seq, Prompt: u.Prompt, Completion: u.Completion,
+			CacheRead: u.CacheRead, CacheWrite: u.CacheWrite,
+		})
+	}
+	writeJSON(w, http.StatusOK, transcriptJSON{
+		ID: id, Cwd: cwd, Total: total, Limit: limit, Offset: offset,
+		HasMore:  end < total,
+		Messages: msgs, Usage: urows,
+	})
+}
+
+func (s *Server) handleTodoRead(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	db, err := s.stores.todo(cwd)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var (
+		text string
+	)
+	if r.URL.Query().Get("all") == "true" {
+		text, err = todostore.ReadAll(ctx, db, sessionName)
+	} else {
+		text, err = todostore.Read(ctx, db, sessionName)
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "text": text})
+}
+
+func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	global, err := s.stores.schedulerGlobal()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	cwdDB, err := s.stores.schedulerCwd(cwd)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	text, err := sched.List(ctx, sched.Stores{Global: global, Cwd: cwdDB}, s.crontab, cwd, nil, time.Now)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "text": text})
+}
+
+func (s *Server) handleMemory(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	db, err := s.stores.rem()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	mems, err := remstore.Recent(ctx, db, cwd, defaultMemK)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if mems == nil {
+		mems = []string{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "memories": mems})
+}
+
+func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	ids := s.models.Known()
+	rows := make([]modelJSON, 0, len(ids))
+	for _, id := range ids {
+		m, ok := s.models.Get(id)
+		if !ok {
+			continue
+		}
+		efforts := m.Efforts
+		if efforts == nil {
+			efforts = []string{}
+		}
+		rows = append(rows, modelJSON{
+			ID: m.ID, Window: m.Window, MaxTokens: m.MaxTokens,
+			Reserve: m.Reserve, KeepRecent: m.KeepRecent,
+			Role: m.Role, Effort: m.Effort, Efforts: efforts,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"models": rows})
+}
+
+func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
+	loaded := make([]pluginJSON, 0, len(s.plugins))
+	for _, p := range s.plugins {
+		loaded = append(loaded, pluginJSON{Name: p.Name, Description: p.Description, File: p.File})
+	}
+	pending := make([]pluginJSON, 0, len(s.pending))
+	for _, p := range s.pending {
+		pending = append(pending, pluginJSON{Name: p.Name, Description: p.Description, File: p.File})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"loaded": loaded, "pending": pending})
+}
+
+// --- the one write (the todo create) ---
+
+func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	if !s.originOK(r) {
+		writeErr(w, http.StatusForbidden, "origin mismatch (same-origin only)")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxWriteBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
+	}
+	lines := splitTasks(string(body))
+	if len(lines) == 0 {
+		writeErr(w, http.StatusBadRequest, "no tasks (one per line)")
+		return
+	}
+	items := make([]todostore.CreateItem, 0, len(lines))
+	for _, l := range lines {
+		items = append(items, todostore.CreateItem{Text: l})
+	}
+	db, err := s.stores.todo(cwd)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	reply, err := todostore.Create(ctx, db, items, sessionName)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
+}
+
+// --- the static assets ---
+
+func (s *Server) serveStatic(w http.ResponseWriter, name, ct string) {
+	data, err := fs.ReadFile(s.static, name)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", ct)
+	_, _ = w.Write(data)
+}
+
+func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, name string) {
+	if name == "" || strings.Contains(name, "..") {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := fs.ReadFile(s.static, name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", mimeFor(name))
+	_, _ = w.Write(data)
+}
+
+// --- small helpers ---
+
+// readCtx bounds each read (and the one write) (SPEC_SERVE posture).
+func (s *Server) readCtx(r *http.Request) (context.Context, context.CancelFunc) {
+	to := s.readTO
+	if to <= 0 {
+		to = defaultReadTO
+	}
+	return context.WithTimeout(r.Context(), to)
+}
+
+// stateFile reports whether the workspace's state store is on disk (the
+// fail-closed read: no file, a named refusal — SPEC_SERVE).
+func (s *Server) stateFile(cwd string) bool {
+	_, err := os.Stat(state.StorePath(s.home, cwd))
+	return err == nil
+}
+
+// originOK is the write's Origin wall (SPEC_SERVE posture): the request's
+// Origin must name the bound address (same-origin only, no CORS).
+func (s *Server) originOK(r *http.Request) bool {
+	o := r.Header.Get("Origin")
+	if o == "" {
+		return false
+	}
+	for _, allowed := range s.origins {
+		if strings.EqualFold(o, allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+func pageParams(r *http.Request) (limit, offset int) {
+	limit, offset = defaultPage, 0
+	q := r.URL.Query()
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if v := q.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	return limit, offset
+}
+
+func splitTasks(body string) []string {
+	var out []string
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+func mimeFor(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".js"):
+		return "text/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".css"):
+		return "text/css; charset=utf-8"
+	case strings.HasSuffix(name, ".html"):
+		return "text/html; charset=utf-8"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+func setOf(methods ...string) map[string]bool {
+	out := make(map[string]bool, len(methods))
+	for _, m := range methods {
+		out[m] = true
+	}
+	return out
+}
+
+func methods(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for m := range set {
+		out = append(out, m)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeErr(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// --- the JSON shapes (structure for sessions, verbatim text for the rest) ---
+
+type sessionJSON struct {
+	ID      string `json:"id"`
+	Cwd     string `json:"cwd"`
+	Started string `json:"started"`
+	Exit    string `json:"exit"`
+	Turns   int    `json:"turns"`
+}
+
+type messageJSON struct {
+	Role      string         `json:"role"`
+	Content   string         `json:"content"`
+	Reasoning string         `json:"reasoning,omitempty"`
+	ToolCalls []toolCallJSON `json:"tool_calls,omitempty"`
+	ToolID    string         `json:"tool_id,omitempty"`
+}
+
+type toolCallJSON struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Args string `json:"args"`
+}
+
+type usageJSON struct {
+	Seq        int64 `json:"seq"`
+	Prompt     int64 `json:"prompt"`
+	Completion int64 `json:"completion"`
+	CacheRead  int64 `json:"cache_read"`
+	CacheWrite int64 `json:"cache_write"`
+}
+
+type transcriptJSON struct {
+	ID       string        `json:"id"`
+	Cwd      string        `json:"cwd"`
+	Total    int           `json:"total"`
+	Limit    int           `json:"limit"`
+	Offset   int           `json:"offset"`
+	HasMore  bool          `json:"has_more"`
+	Messages []messageJSON `json:"messages"`
+	Usage    []usageJSON   `json:"usage"`
+}
+
+type modelJSON struct {
+	ID         string   `json:"id"`
+	Window     int      `json:"window"`
+	MaxTokens  int      `json:"max_tokens"`
+	Reserve    int      `json:"reserve"`
+	KeepRecent int      `json:"keep_recent"`
+	Role       string   `json:"role"`
+	Effort     string   `json:"effort"`
+	Efforts    []string `json:"efforts"`
+}
+
+type pluginJSON struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	File        string `json:"file"`
+}
+
+func messageJSONOf(m core.Message) messageJSON {
+	out := messageJSON{
+		Role:      string(m.Role),
+		Content:   m.Content,
+		Reasoning: m.Reasoning,
+		ToolID:    m.ToolID,
+	}
+	if len(m.ToolCalls) > 0 {
+		out.ToolCalls = make([]toolCallJSON, 0, len(m.ToolCalls))
+		for _, c := range m.ToolCalls {
+			out.ToolCalls = append(out.ToolCalls, toolCallJSON{ID: c.ID, Name: c.Name, Args: string(c.Args)})
+		}
+	}
+	return out
+}
