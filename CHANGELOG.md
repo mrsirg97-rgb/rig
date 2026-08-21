@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.12.0] — the event loop
 
 - **the loop is the engine's consumer** (`specs/SPEC_EVT.md` 7, the
   named reopening after 2a): every step of a turn is a closure on the
@@ -25,7 +25,7 @@
   freeze gate carries the reopening by name; the re-freeze follows the
   merge.
 
-## [Unreleased]
+## [0.12.0] — the event loop
 
 - **the event loop, phase 1** (`specs/SPEC_EVT.md`): libevt's shape
   (`~/Projects/libtrdr`) made Go-centric as the leaf package `evt` —
