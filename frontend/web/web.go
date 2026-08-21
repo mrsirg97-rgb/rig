@@ -41,6 +41,12 @@ type Options struct {
 	RunnerCmd string
 	// ReadTimeout bounds each read (and the writes); 0 = the default.
 	ReadTimeout time.Duration
+	// Natives is the native tool set: a plugin save or approve under one
+	// of these names is the collision refusal.
+	Natives []string
+	// Root is the folder browser's root (directories under it only); empty
+	// = the user's home directory.
+	Root string
 }
 
 // Server is the dashboard: the token, the allowed origins, the store cache,
@@ -53,6 +59,8 @@ type Server struct {
 	crontab   sched.Crontab
 	runnerCmd string
 	readTO    time.Duration
+	natives   map[string]bool
+	root      string
 
 	origins []string
 	token   string
@@ -80,6 +88,14 @@ func New(opts Options) (*Server, error) {
 	if runner == "" {
 		runner = "rig run-job"
 	}
+	natives := make(map[string]bool, len(opts.Natives))
+	for _, n := range opts.Natives {
+		natives[n] = true
+	}
+	root := opts.Root
+	if root == "" {
+		root, _ = os.UserHomeDir()
+	}
 	return &Server{
 		home:      opts.Home,
 		cwd:       opts.CWD,
@@ -87,6 +103,8 @@ func New(opts Options) (*Server, error) {
 		crontab:   ct,
 		runnerCmd: runner,
 		readTO:    opts.ReadTimeout,
+		natives:   natives,
+		root:      root,
 		stores:    newStoreCache(opts.Home),
 		static:    sub,
 	}, nil

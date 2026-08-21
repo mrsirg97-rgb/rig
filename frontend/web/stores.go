@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/mrsirg97-rgb/rig/store"
-	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
@@ -50,10 +49,6 @@ func (c *storeCache) state(cwd string) (store.DB, error) {
 
 func (c *storeCache) todo(cwd string) (store.DB, error) {
 	return c.open(todostore.StorePath(c.home, cwd), todostore.Statements(), todostore.SchemaVersion)
-}
-
-func (c *storeCache) rem() (store.DB, error) {
-	return c.open(remstore.FilePath(c.home), remstore.Statements(), remstore.SchemaVersion)
 }
 
 func (c *storeCache) schedulerGlobal() (store.DB, error) {

@@ -31,9 +31,9 @@ framework, no build step, no external asset: `go build` alone ships it.
 - **The read views** — sessions (the list, grouped by workspace, and the
   transcript as structure: messages, reasoning, tool calls and results,
   and the usage rows), todo and scheduler (the store's own text, verbatim),
-  memory (recent for the cwd), models (every row: window, effort list,
-  role), plugins (the loaded set and the pending zone, each with the file's
-  DESCRIPTION).
+  models (every row: window, effort list, role), plugins (the loaded set
+  and the pending zone, each with the file's DESCRIPTION). The memory
+  view is gone (SPEC_SERVE 11): rem is the model's, read in the TUI.
 - **The writes** (SPEC_SERVE phase 2) — a todo create (one task per
   line, `todo.Create`), a scheduler create (`scheduler.Create`, the
   runner command the root wired), and a plugin create (one file into
@@ -48,14 +48,32 @@ framework, no build step, no external asset: `go build` alone ships it.
   per request from the home's `plugins/` and `plugins/pending/`, never
   cached at `New`: a file created, promoted, or dropped is visible on
   the next read.
-- **The static assets** (`static/`) — the single page, the sidebar nav
-  (the mobile drawer below 720px), the cwd picker with the
-  new-workspace add (client state, decision 9), the create forms, and
-  the TUI's design language: the oled palette's values (the
-  `frontend/tui` `theme.go` table), its glyph set, and the todo and
-  scheduler text parsed and rendered by the `frontend/tui`
-  `tools_render.go` rules mirrored in JS (the homage, decision 10;
-  unparseable text falls back to the verbatim `<pre>`).
+- **The forge** (`forge.go`, SPEC_SERVE 12) — `GET /api/plugins/source`
+  (a plugin's file, by name and zone), `POST /api/plugins/save` (the
+  full source into the pending zone, create or update; the contract —
+  `DESCRIPTION`, `SCHEMA`, `def run(` — checked; a native name refused),
+  `POST /api/plugins/approve` (pending → `plugins/`, the command's
+  verb; a native name refused; an installed name a 409 until `replace`
+  is explicit). Same walls as every write.
+- **The folder browser** (`browse.go`, SPEC_SERVE 13) — `GET /api/fs`:
+  directories only, rooted at `Options.Root` (the user's home by
+  default), symlinks resolved before the root check, hidden entries off
+  unless asked, the listing capped at 500, a path outside the root a
+  403 by name.
+- **The static assets** (`static/`) — the single page in the TUI's own
+  grammar (decision 14): every view is a tool block (`● name · detail`,
+  the body, `name ✓`), input is a `❯` prompt row, the nav marks the
+  active view with `❯`, nothing sits in a panel; the oled palette's
+  values and the effort ramp (the `frontend/tui` `theme.go` table), the
+  glyph set, the todo and scheduler text parsed by the
+  `tools_render.go` rules mirrored in JS (decision 10; unparseable text
+  falls back to the verbatim `<pre>`), the models view in the `/models`
+  table's shape with the effort list in the ramp's colors, the plugins
+  view split approved | pending with the forge's editor (a gutter, a
+  highlighted mirror over a transparent textarea; Tab indents, Enter
+  keeps the indent), the folder browser under the header, the mobile
+  drawer below 720px (its toggle hidden on desktop), the cwd picker
+  with the new-workspace add (client state, decision 9).
 
 ## How it is consumed
 
@@ -117,7 +135,15 @@ through the same listing.
   the listing).
 - The new-workspace picker is client state (decision 9): added cwds and
   the selected cwd live in the browser (localStorage), merged over the
-  server's list; the server's list stays the truth for what exists.
+  server's list; the server's list stays the truth for what exists. The
+  folder browser feeds it: a pick is an add, nothing more.
+- A save always lands in `plugins/pending/` — also an edit of a loaded
+  plugin, which becomes a pending revision under the same name; approve
+  then refuses with a 409 until `replace: true`, the one explicit
+  overwrite. Nothing reaches `plugins/` except through approve.
+- The mobile nav toggle is `.nav-toggle` (hidden above 720px by class,
+  not by id — the first round's button carried only the id and showed
+  on desktop).
 - The homage's parsers mirror `frontend/tui/tools_render.go` line for
   line (decision 10): the todo head/task/footer rules, the scheduler
   section/job/detail rules, the bar's fill, the glyph and slot mapping.

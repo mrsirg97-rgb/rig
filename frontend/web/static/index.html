@@ -9,24 +9,25 @@
 <body>
 <header>
   <div class="brand">
-    <button id="nav-toggle" aria-label="toggle the navigation" aria-expanded="false">≡</button>
-    <h1>rig<span class="sub"> serve</span></h1>
+    <button id="nav-toggle" class="nav-toggle" aria-label="toggle the navigation" aria-expanded="false">≡</button>
+    <h1><span class="ember">rig</span><span class="sub"> serve</span></h1>
   </div>
   <form id="cwd-form" class="cwdpick">
-    <label for="cwd">cwd</label>
+    <span class="dim">cwd</span>
     <select id="cwd" aria-label="workspace"></select>
     <input id="cwd-add" type="text" placeholder="add a workspace path…" spellcheck="false" autocomplete="off">
     <button id="cwd-add-btn" type="submit">add</button>
+    <button id="browse-btn" type="button" aria-expanded="false">browse</button>
   </form>
 </header>
+<div id="browser" hidden></div>
 <div class="layout">
   <nav id="nav" aria-label="views">
-    <button data-view="sessions" class="active">Sessions</button>
-    <button data-view="todos">Todos</button>
-    <button data-view="scheduler">Scheduler</button>
-    <button data-view="memory">Memory</button>
-    <button data-view="models">Models</button>
-    <button data-view="plugins">Plugins</button>
+    <button data-view="sessions" class="active">sessions</button>
+    <button data-view="todos">todo</button>
+    <button data-view="scheduler">scheduler</button>
+    <button data-view="models">models</button>
+    <button data-view="plugins">plugins</button>
   </nav>
   <div id="backdrop" hidden></div>
   <main id="main" aria-live="polite"></main>

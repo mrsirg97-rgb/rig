@@ -49,6 +49,7 @@ func serve(args []string) int {
 		Models:    cfg.Models,
 		Crontab:   sched.RealCrontab(""),
 		RunnerCmd: self + " run-job",
+		Natives:   nativeToolNames,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig serve:", err)
