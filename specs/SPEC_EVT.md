@@ -190,10 +190,12 @@ Not the engine. The batch needs an indexed wait (call order is known
 before dispatch), not a priority queue; `evt` is phase 2b's spine, and
 using it here would be machinery for its own sake.
 
-The gate: `frontend/tui/freeze_test.go` carries a named `reopened`
+The gate: `frontend/tui/freeze_test.go` carried a named `reopened`
 clause for `loop/` and `kernel.go` under this deliverable; the re-freeze
-PR after the merge deletes the clause and the gate measures the new
+PR after the merge deleted the clause, and the gate measures the new
 bytes against the next fork point. Not the `-refactor` branch bypass.
+The form, for every future reopening: open by name in the PR that
+changes the loop, close by name in the PR right after its merge.
 
 ### 7. Phase 2b, named: the turn loop as the consumer.
 
