@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.2] — the plugins land
+
+- **the allow-list's presence reversal** (`specs/SPEC_PLUGINS.md` 7,
+  amended): an installed plugin's presence in `plugins/` root is itself
+  the allow-list entry. The provenance rule forces a model's
+  `write`/`edit` into `plugins/pending/`, so a plugin in the root can
+  only have arrived by the operator's `/plugins` approve — that presence
+  IS the admission, and the operator need not add a name to `allow`.
+  The mechanism is a second door (`perm.AllowlistWithDoor`) wired to the
+  live plugin table's `IsPlugin`: a name the table carries as a plugin
+  passes though absent from the static list. Plugins only, never natives
+  (the collision rule keeps the sets disjoint); nil door is today. Pinned
+  with approved-passes / pending-refused / deleted-after-reload-refused /
+  native-still-refused. `loop/` and `core/` stay byte-frozen.
+- **the plugins are a live surface** (the local install): `listen`,
+  `net_conn`, `syshealth`, `url_check`, and `plugin_scaffold` land as
+  real tools — read-only probes, the SSRF-guarded fetch, and the
+  scaffold that writes the next plugin into `pending/`. `plugin_scaffold`
+  closes the loop: author, approve, reload, land.
+
 ## [0.8.1] — the walls speak
 
 - **the system prompt names the walls** (`config/settings.json`): the
