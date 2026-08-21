@@ -1240,6 +1240,71 @@ func TestReadNeverCompacts(t *testing.T) {
 	}
 }
 
+// TestCompactNamesTheSnapshotInTheReply (SPEC_STREAMLINE 2): the reply of
+// the operation that causes the compaction carries the footer with the
+// folded count; the log folds to the snapshot; the following operation,
+// below the threshold, is footer-free.
+func TestCompactNamesTheSnapshotInTheReply(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, []item{{Text: "alpha"}, {Text: "beta"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	a := taskIDText(t, reply, "alpha")
+	b := taskIDText(t, reply, "beta")
+	age(t, db, 1010) // 1011 events: the next operation crosses the threshold
+	got, err := todostore.Start(ctx, db, b, "s1")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if !strings.Contains(got, "log compacted (1011 events folded into the snapshot)") {
+		t.Errorf("the compacting reply must name the snapshot and the folded count:\n%s", got)
+	}
+	if !strings.Contains(got, "started") {
+		t.Errorf("the compacting reply keeps the operation's echo:\n%s", got)
+	}
+	if got := eventCount(t, db); got != 2 {
+		t.Errorf("events = %d; want the compact event plus the start", got)
+	}
+	if got := projStatus(t, db, "beta"); got != "in_progress" {
+		t.Errorf("beta = %v, want in_progress", got)
+	}
+	if got := projStatus(t, db, "alpha"); got != "pending" {
+		t.Errorf("alpha = %v, want pending", got)
+	}
+	quiet, err := todostore.Start(ctx, db, a, "s1") // below the threshold now
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if strings.Contains(quiet, "log compacted") {
+		t.Errorf("the below-threshold reply footered:\n%s", quiet)
+	}
+}
+
+// TestUnknownIdNamesMinting (SPEC_STREAMLINE 3): every verb's unknown-id
+// refusal carries the minted-id voice, the no-task prefix intact.
+func TestUnknownIdNamesMinting(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, []item{{Text: "a"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	calls := map[string]func() error{
+		"start":    func() error { _, e := todostore.Start(ctx, db, "t99", "s1"); return e },
+		"complete": func() error { _, e := todostore.Complete(ctx, db, "t99", "s1"); return e },
+		"fail":     func() error { _, e := todostore.Fail(ctx, db, "t99", "s1"); return e },
+		"retry":    func() error { _, e := todostore.Retry(ctx, db, "t99", "s1"); return e },
+		"move":     func() error { _, e := todostore.Move(ctx, db, "t99", 1, "s1"); return e },
+	}
+	for verb, call := range calls {
+		err := call()
+		if err == nil || !strings.Contains(err.Error(), "no task 't99'") || !strings.Contains(err.Error(), "minted") {
+			t.Errorf("%s: the unknown-id refusal must name the minting, got %v", verb, err)
+		}
+	}
+}
+
 // --- stale footer ---
 
 func TestStaleTasksAppendFooterFreshOmit(t *testing.T) {

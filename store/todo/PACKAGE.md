@@ -16,7 +16,11 @@ row, the summary line, and — like every other reply — the stale footer
 when staleness is live; the moment the model acts on recovered state is
 the moment the warning matters most. Read returns the actionable queue
 (done folds into the summary), ReadAll the history, Create the full
-filtered queue.
+filtered queue. The operation that crosses the compaction threshold
+names it in its own reply (`· log compacted (N events folded into the
+snapshot)`), so the stale footer's quieting after the fold reads as
+explained, not as state loss (SPEC_STREAMLINE 2). The unknown-id
+refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 
 ## What it includes
 
