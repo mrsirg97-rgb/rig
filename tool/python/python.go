@@ -45,7 +45,7 @@ const schemaJSON = `{
 	"type": "object",
 	"properties": {
 		"code": {"type": "string", "description": "Python source to execute"},
-		"action": {"type": "string", "enum": ["vars", "reset"], "description": "'vars' summarises the namespace, 'reset' clears it. Omit to run code."},
+		"action": {"type": "string", "enum": ["code", "vars", "reset"], "description": "'code' (or omitted) runs code; 'vars' summarises the namespace; 'reset' clears it."},
 		"timeoutMs": {"type": "integer", "description": "Timeout in ms (default 120000)", "minimum": 1000}
 	}
 }`
@@ -100,13 +100,17 @@ func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 		return "", fmt.Errorf("python: %v", err)
 	}
 	var req request
-	if a.Action != "" {
-		req.Cmd = &a.Action
-	} else {
+	switch a.Action {
+	case "", "code":
 		if a.Code == nil || strings.TrimSpace(*a.Code) == "" {
 			return "no code supplied", errors.New("no code supplied")
 		}
 		req.Code = a.Code
+	case "vars", "reset":
+		req.Cmd = &a.Action
+	default:
+		msg := fmt.Sprintf("python: unknown action %q; the actions are code (or omit it), vars, reset", a.Action)
+		return msg, errors.New(msg)
 	}
 	timeoutMs := defaultTimeoutMs
 	if a.TimeoutMs != nil {

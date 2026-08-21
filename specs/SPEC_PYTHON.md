@@ -136,6 +136,18 @@ default path and keeps it.
   semantics, same 16000-char clip per stream with the named elision
   marker. One word moved in the docstring ("pi session" -> "agent
   session"); nothing else.
+- **The action vocabulary is closed, and `code` is in it** (amended
+  2026-08-21). `code` (or an omitted action) runs the code; `vars` and
+  `reset` are the host's commands; any other action is refused before the
+  kernel is touched, naming the three. The field failure that forced it:
+  a model sent `action: "code"` with its code on every call, the old
+  dispatch forwarded the unknown cmd without the code, the host's
+  fallthrough ran the empty string, and 457 calls in one session came
+  back `(no output)` ok — a silent success that ran nothing, the one
+  reply shape the harness must never produce. Rejected, named: teaching
+  the model out of `code` by description alone (the enum is the teaching;
+  the obvious word should work), and refusing `code` (it is the obvious
+  word).
 
 ## testing
 
@@ -148,6 +160,8 @@ suite kernel, so the order-dependent state cases hold as in pane's file):
 - vars lists user-defined names only
 - reset clears the namespace
 - empty call fails loudly with a clear message
+- action code runs the code; an unknown action refuses loud before the
+  kernel (added 2026-08-21)
 - runtime errors are reported as errors with traceback text
 - oversized output is clipped with an elision marker
 - hung cell times out, kernel is restarted, caller is told
