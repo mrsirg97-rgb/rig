@@ -11,6 +11,7 @@ package approve
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/core"
@@ -62,8 +63,40 @@ func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool,
 
 // Prompt is the ask row's text: the tool's name and a one-line preview
 // of its arguments, truncated — the operator glances what is about to
-// run, the transcript keeps the full call as ever.
+// run, the transcript keeps the full call as ever. A delegate call
+// (SPEC_DELEGATE 7) shows the task's first line, not the wire: the
+// operator glances the work, not the args JSON.
 func Prompt(call core.ToolCall) string {
+	if call.Name == "delegate" {
+		return delegatePrompt(call)
+	}
+	return PromptGeneric(call)
+}
+
+// delegatePrompt renders "delegate · <first line>", falling back to the
+// generic shape when the args do not parse as {task}.
+func delegatePrompt(call core.ToolCall) string {
+	var a struct {
+		Task string `json:"task"`
+	}
+	if json.Unmarshal(call.Args, &a) != nil {
+		return PromptGeneric(call)
+	}
+	line := strings.SplitN(strings.TrimSpace(a.Task), "\n", 2)[0]
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "delegate"
+	}
+	const cap = 120
+	if len(line) > cap {
+		line = line[:cap] + "…"
+	}
+	return "delegate · " + line
+}
+
+// PromptGeneric is the non-delegate shape (tool name + flattened args),
+// kept exported for the fallback.
+func PromptGeneric(call core.ToolCall) string {
 	args := strings.Join(strings.Fields(string(call.Args)), " ")
 	const cap = 120
 	if len(args) > cap {

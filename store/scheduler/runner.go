@@ -41,6 +41,7 @@ type RunOpts struct {
 	Sandbox      string
 	SandboxBinds []string
 	RigHome      string
+	StateDir     string
 }
 
 const DefaultRunTimeout = 30 * time.Minute
@@ -180,7 +181,7 @@ func RunJob(key string, opts RunOpts) error {
 			"-base-url", opts.SwapURL+"/v1",
 			"-model", job.Model)
 	} else {
-		argv, proxy, homeEnv, refuse, err = jailSpawn(opts, job.Cwd, workerCmd, job.Model, prompt)
+		argv, proxy, homeEnv, refuse, err = jailSpawn(opts, job.Cwd, workerCmd, job.Model, prompt, "")
 		if err != nil {
 			return fmt.Errorf("run-job: jail: %w", err)
 		}

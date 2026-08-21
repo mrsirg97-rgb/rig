@@ -151,3 +151,24 @@ func TestPromptPreviewTruncates(t *testing.T) {
 		t.Fatalf("empty args drop the preview: %q", p)
 	}
 }
+
+// TestDelegatePromptShowsTheTaskFirstLine (SPEC_DELEGATE 7, named): a
+// delegate call's ask row renders "delegate · <first line>", not the
+// args JSON — the operator glances the work.
+func TestDelegatePromptShowsTheTaskFirstLine(t *testing.T) {
+	p := approve.Prompt(call("delegate", `{"task":"sweep the /tmp tree\nand report","cwd":"/ws"}`))
+	if p != "delegate · sweep the /tmp tree" {
+		t.Fatalf("the prompt must be the task's first line: %q", p)
+	}
+	long := `{"task":"` + strings.Repeat("a", 300) + `"}`
+	p = approve.Prompt(call("delegate", long))
+	if len(p) > 140 || !strings.HasSuffix(p, "…") {
+		t.Fatalf("a long first line must truncate: %d chars", len(p))
+	}
+	if p := approve.Prompt(call("delegate", `{}`)); p != "delegate" {
+		t.Fatalf("no task renders the bare name: %q", p)
+	}
+	if p := approve.Prompt(call("delegate", `not json`)); p == "delegate · " {
+		t.Fatalf("unparseable args must fall back to the generic shape: %q", p)
+	}
+}

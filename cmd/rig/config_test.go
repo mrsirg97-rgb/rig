@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"io"
 	"net"
 	"net/http"
@@ -25,6 +26,33 @@ import (
 )
 
 // --- shared helpers ---
+
+// goldenUpdate writes a captured wire body to its fixture when the test
+// runs with -update (the regeneration seam, SPEC_PLUGINS 8's precedent).
+var goldenUpdateFlag = flag.Bool("update", false, "regenerate the golden_020 fixtures in place")
+
+func goldenWrite(t *testing.T, name string, data []byte) {
+	t.Helper()
+	path := filepath.Join(goldenDir, name)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("golden write: %v", err)
+	}
+}
+
+func goldenCheck(t *testing.T, name string, data []byte) {
+	t.Helper()
+	if *goldenUpdateFlag {
+		goldenWrite(t, name, data)
+		return
+	}
+	want, err := os.ReadFile(filepath.Join(goldenDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, want) {
+		t.Fatalf("the request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", data, want)
+	}
+}
 
 // goldenDir is the wire's pin: the 0.2.0 wire baseline, the bytes the
 // current native set (the pin moves with the set, as the earlier
@@ -161,13 +189,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		if s.count() != 1 {
 			t.Fatalf("requests = %d, want 1", s.count())
 		}
-		want, err := os.ReadFile(filepath.Join(goldenDir, "oneshot.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(s.last(), want) {
-			t.Fatalf("the one-shot request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", s.last(), want)
-		}
+		goldenCheck(t, "oneshot.json", s.last())
 	})
 	t.Run("repl", func(t *testing.T) {
 		s := &bodySrv{}
@@ -186,13 +208,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		if s.count() != 1 {
 			t.Fatalf("requests = %d, want 1", s.count())
 		}
-		want, err := os.ReadFile(filepath.Join(goldenDir, "repl.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(s.last(), want) {
-			t.Fatalf("the REPL request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", s.last(), want)
-		}
+		goldenCheck(t, "repl.json", s.last())
 	})
 	t.Run("runjob", func(t *testing.T) {
 		s := &bodySrv{}
@@ -263,13 +279,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 			t.Fatalf("the worker's model = %q, want the job's model (the argv's -model)", req.Model)
 		}
 		// and the body is the 0.2.0 bytes, whole.
-		want, err := os.ReadFile(filepath.Join(goldenDir, "runjob.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Fatalf("the worker's request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", got, want)
-		}
+		goldenCheck(t, "runjob.json", got)
 	})
 }
 

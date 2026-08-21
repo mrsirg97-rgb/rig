@@ -39,6 +39,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
+	"github.com/mrsirg97-rgb/rig/tool/delegate"
 	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
 	"github.com/mrsirg97-rgb/rig/tool/fs"
@@ -49,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.10.2"
+const Version = "0.11.0"
 
 type root struct {
 	baseURL string
@@ -390,7 +391,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 
 var mutatingNatives = map[string]bool{
 	"bash": true, "write": true, "edit": true, "python": true,
-	"scheduler": true, "plugins_reload": true,
+	"scheduler": true, "plugins_reload": true, "delegate": true,
 }
 
 func (r *root) isMutating(name string) bool {
@@ -602,7 +603,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch", "diff", "plugin", "plugin_schema", "plugins_reload"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugin_schema", "plugins_reload"}
 
 func rigHome() (string, error) {
 	if v := os.Getenv("RIG_HOME"); v != "" {
@@ -951,6 +952,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
+	swapURL := cfg.Settings.SwapURL
+	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
+		swapURL = v
+	}
 
 	r := &root{
 		baseURL:    baseURLV,
@@ -974,7 +979,21 @@ func main() {
 			"todo": todoapi.New(tdb), "rem": remapi.New(rdb),
 
 			"scheduler": schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job", cfg.Settings.DefaultJobModel),
-			"python":    py, "web_search": webSearch, "web_fetch": webFetch,
+			"delegate": delegate.New(delegate.Opts{
+				DB:           scdb,
+				Home:         schedHome,
+				RigHome:      cfgDir,
+				StateDir:     filepath.Join(cfgDir, "sessions"),
+				SwapURL:      swapURL,
+				WorkerCmd:    []string{self},
+				DefaultModel: cfg.Settings.DefaultJobModel,
+				Sandbox:      cfg.Settings.Sandbox,
+				SandboxBinds: cfg.Settings.SandboxBinds,
+				Allow:        allowList,
+				Fetch:        sched.RealFetch(0),
+				Spawn:        sched.RealSpawn,
+			}),
+			"python": py, "web_search": webSearch, "web_fetch": webFetch,
 
 			"diff": diff.New(sdb),
 		},
