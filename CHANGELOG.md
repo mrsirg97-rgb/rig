@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **the loop is the engine's consumer** (`specs/SPEC_EVT.md` 7, the
+  named reopening after 2a): every step of a turn is a closure on the
+  loop goroutine; the Frontend's `Input`, the provider's stream, and
+  every tool run are producers that post (input 90, stream 50, tool
+  completion 50). The Frontend contract, the event bracket, the
+  transcript, and every named loop case are unchanged — thirty-six
+  cases pass byte-for-byte under `-race`; two new ones pin the one
+  goroutine and the stale-event rule. The loop goroutine never blocks
+  on a tool; `Assemble` and the `Stream` call still run on it (named).
+  `loop` now imports `evt`, an in-repo stdlib-only leaf.
+
 - **the batch** (`specs/SPEC_EVT.md` 6, the named reopening of the
   frozen loop): a turn's tool calls the kernel's `Concurrent` predicate
   admits run together (bounded by `Parallel`, default 8); any other call

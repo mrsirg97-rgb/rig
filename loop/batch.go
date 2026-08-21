@@ -21,12 +21,12 @@ type batch struct {
 	calls      []core.ToolCall
 	concurrent func(core.ToolCall) bool
 	sem        chan struct{}
-	done       []chan outcome
+	post       func(x int, out outcome)
 	dispatched int
 }
 
-func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, concurrent func(core.ToolCall) bool, parallel int) *batch {
-	b := &batch{ctx: ctx, exec: exec, calls: calls, concurrent: concurrent, done: make([]chan outcome, len(calls))}
+func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, concurrent func(core.ToolCall) bool, parallel int, post func(x int, out outcome)) *batch {
+	b := &batch{ctx: ctx, exec: exec, calls: calls, concurrent: concurrent, post: post}
 	if concurrent != nil {
 		if parallel <= 0 {
 			parallel = defaultParallel
@@ -36,25 +36,23 @@ func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, co
 	return b
 }
 
-func (b *batch) result(i int) outcome {
-	if i >= b.dispatched {
-		if b.concurrent != nil && b.concurrent(b.calls[i]) {
-			j := i
-			for j < len(b.calls) && b.concurrent(b.calls[j]) {
-				j++
-			}
-			for x := i; x < j; x++ {
-				b.done[x] = make(chan outcome, 1)
-				go b.run(x)
-			}
-			b.dispatched = j
-		} else {
-			b.done[i] = make(chan outcome, 1)
-			b.run(i)
-			b.dispatched = i + 1
-		}
+func (b *batch) dispatch(i int) {
+	if i < b.dispatched {
+		return
 	}
-	return <-b.done[i]
+	if b.concurrent != nil && b.concurrent(b.calls[i]) {
+		j := i
+		for j < len(b.calls) && b.concurrent(b.calls[j]) {
+			j++
+		}
+		for x := i; x < j; x++ {
+			go b.run(x)
+		}
+		b.dispatched = j
+		return
+	}
+	go b.run(i)
+	b.dispatched = i + 1
 }
 
 func (b *batch) run(x int) {
@@ -64,5 +62,5 @@ func (b *batch) run(x int) {
 	}
 	start := time.Now()
 	content, err := b.exec(b.ctx, b.calls[x])
-	b.done[x] <- outcome{content: content, err: err, dur: time.Since(start)}
+	b.post(x, outcome{content: content, err: err, dur: time.Since(start)})
 }
