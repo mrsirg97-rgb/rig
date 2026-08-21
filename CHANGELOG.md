@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.2] — the todo's hands
+
+- **start and done from the dashboard** (`specs/SPEC_SERVE.md` 15): a
+  pending task carries `start` and `done`, an active one `done`; each is
+  the store's own verb (`todo.Start`, `todo.Complete`) attributed to
+  `dashboard`, the reply verbatim, the queue re-read — a task the model
+  claimed refuses in the store's voice (fail it first to take over), as
+  the tool would.
+- **the models view in three rows**: name and role, the context line
+  (window · max · reserve · keep · trigger), the effort ladder in the
+  ramp's colors.
+- **the mobile header stacks**: the workspace on its own row, add and
+  browse on the row after.
+
 ## [0.10.1] — the dashboard in the TUI's grammar
 
 - **the dashboard speaks the TUI's grammar** (`specs/SPEC_SERVE.md`
