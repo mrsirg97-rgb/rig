@@ -8,10 +8,16 @@
 </head>
 <body>
 <header>
-  <h1>rig serve</h1>
-  <label>cwd
+  <div class="brand">
+    <button id="nav-toggle" aria-label="toggle the navigation" aria-expanded="false">≡</button>
+    <h1>rig<span class="sub"> serve</span></h1>
+  </div>
+  <form id="cwd-form" class="cwdpick">
+    <label for="cwd">cwd</label>
     <select id="cwd" aria-label="workspace"></select>
-  </label>
+    <input id="cwd-add" type="text" placeholder="add a workspace path…" spellcheck="false" autocomplete="off">
+    <button id="cwd-add-btn" type="submit">add</button>
+  </form>
 </header>
 <div class="layout">
   <nav id="nav" aria-label="views">
@@ -22,6 +28,7 @@
     <button data-view="models">Models</button>
     <button data-view="plugins">Plugins</button>
   </nav>
+  <div id="backdrop" hidden></div>
   <main id="main" aria-live="polite"></main>
 </div>
 <script src="/static/app.js"></script>

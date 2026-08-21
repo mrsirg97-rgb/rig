@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.10.0] — the dashboard's polish round
+
+- **the polish round** (`specs/SPEC_SERVE.md`, phase 2): the local
+  dashboard grows its two named phase-2 writes — a scheduler create
+  (the same `scheduler.Create` verb a live session calls, attributed to
+  `dashboard`, the runner command the root wires) and a plugin create
+  (one contract file into `plugins/pending/`, the provenance rule's
+  landing zone, refused by name against both zones). The plugin listing
+  goes live (read per request, never cached), the cwd picker accepts
+  new workspaces (client state over the server's list), and the sidebar
+  collapses into a drawer below 720px.
+- **the TUI homage** (phase 2, decision 10): the page adopts the TUI's
+  visual grammar — the todo and scheduler text are parsed with the
+  `frontend/tui` `tools_render.go` rules and rendered in the oled slots
+  (the progress bar, the status glyphs, the dim metadata, the warn
+  `drift:`), the sessions and transcript take the tool-block shape
+  (the `✓ name · detail` opening, the `❯` prompt, the `→` result, the
+  aggregated usage row), and unparseable text keeps the verbatim
+  `<pre>` (the TUI's own fallback).
+
 ## [0.9.2] — the streamlined contract and the self-healing door
 
 - **the contract split** (`specs/SPEC_STREAMLINE.md` 1): the standing
