@@ -394,7 +394,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		}
 	})
 
-	t.Run("a 10x report clamps to 4", func(t *testing.T) {
+	t.Run("a 10x report clamps to 2", func(t *testing.T) {
 		s := base()
 		prov := &scriptedProvider{turns: []scriptedTurn{
 			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 10*100, Completion: 1}}}},
@@ -410,13 +410,51 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		}
 		for range out {
 		}
-		// delta est 100: clamped factor 4 -> size 900 == the trigger
-		// (passthrough); unclamped 10 would give 1500 (compact).
+		// grow the delta to est 200: clamped factor 2 -> size 900 == the
+		// trigger (passthrough); the old 4 clamp would give 1300 and
+		// compact (the 2026-08-21 field shape: a pinned 4 read bytes as
+		// tokens and compacted a 262k brain at ~50k).
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: strings.Repeat("r", 400)}) // +100
 		if _, err := pol.Assemble(context.Background(), s); err != nil {
 			t.Fatalf("Assemble: %v", err)
 		}
 		if prov.calls() != 1 {
-			t.Fatalf("the 4x clamp must hold at the boundary (calls = %d, want none)", prov.calls())
+			t.Fatalf("the 2x clamp must hold at the boundary (calls = %d, want none)", prov.calls())
+		}
+	})
+
+	t.Run("a delta under 2% of the anchor is not a measurement", func(t *testing.T) {
+		// the field failure: a tool-loop turn whose new bytes are tiny
+		// next to the anchor reads the template's own overhead (and the
+		// kept or stripped reasoning) as the delta's tokenizer — ratios
+		// of 44 and 0.02 on consecutive turns. Such a delta leaves the
+		// factor where it was.
+		s := core.NewSession()
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)})
+		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ContextTokens: anchor})
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 20)}) // est 5: 1% of the anchor
+		prov := &scriptedProvider{turns: []scriptedTurn{
+			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 500, Completion: 1}}}}, // ratio 100
+		}}
+		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		dec := compact.Decorator(prov, pol)
+		out, err := dec.Stream(context.Background(), core.Request{Messages: append([]core.Message{{Role: core.RoleSystem, Content: "S"}}, s.Messages...)})
+		if err != nil {
+			t.Fatalf("Stream: %v", err)
+		}
+		for range out {
+		}
+		// grow the delta to est 355: factor 1.0 -> size 855 <= 900
+		// (passthrough); a learned-and-clamped 2 -> 1210 (compact).
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: strings.Repeat("r", 1400)}) // +350
+		if _, err := pol.Assemble(context.Background(), s); err != nil {
+			t.Fatalf("Assemble: %v", err)
+		}
+		if prov.calls() != 1 {
+			t.Fatalf("a tiny delta must not move the factor (calls = %d, want none)", prov.calls())
 		}
 	})
 

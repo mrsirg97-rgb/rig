@@ -211,7 +211,7 @@ func (p *policy) calibrate(req core.Request, u core.Usage) {
 		return
 	}
 	deltaEst := Estimate(msgs[idx+1:])
-	if deltaEst == 0 {
+	if deltaEst == 0 || deltaEst*50 < msgs[idx].ContextTokens {
 		return
 	}
 	ratio := float64(u.Prompt-msgs[idx].ContextTokens) / float64(deltaEst)
@@ -222,8 +222,8 @@ func (p *policy) calibrate(req core.Request, u core.Usage) {
 	if f < 0.5 {
 		f = 0.5
 	}
-	if f > 4.0 {
-		f = 4.0
+	if f > 2.0 {
+		f = 2.0
 	}
 	p.mu.Lock()
 	p.factor = f

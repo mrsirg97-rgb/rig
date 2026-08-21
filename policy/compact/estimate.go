@@ -7,9 +7,19 @@ import (
 )
 
 func Estimate(msgs []core.Message) int {
+	last := -1
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == core.RoleAssistant {
+			last = i
+			break
+		}
+	}
 	total := 0
-	for _, m := range msgs {
-		b := len(m.Content) + len(m.Reasoning)
+	for i, m := range msgs {
+		b := len(m.Content)
+		if i == last {
+			b += len(m.Reasoning)
+		}
 		for _, c := range m.ToolCalls {
 			b += len(c.Name) + len(c.Args)
 		}
