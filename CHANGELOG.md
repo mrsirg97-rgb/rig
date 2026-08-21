@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.0] — the plugin door and the enablement
+
+- **the plugin door** (`specs/SPEC_GROWTH.md` 9, SPEC_PLUGINS 7's named
+  "later decision once the count grows"): the count has grown, and the
+  flat shape is the context problem. `toolset.Carry` stamps the natives
+  plus one `plugin` door into every request instead of every per-plugin
+  schema; `plugin_schema` fetches one plugin's contract on demand.
+  Plugins stay real `core.Tool`s in the table, callable by the python
+  tool and by the door's name. The door's `name` enum is the live
+  plugin names (the swap's own list), cheap.
+- **the enablement** (`settings.json` `plugins.enabled` + `max`, SPEC_CONFIG):
+  a disabled name is not wired as a tool (the door's enum carries enabled
+  plugins only), hidden entirely; `max` caps the enum. `/plugins enable
+  <name>` / `disable <name>` toggle the file and reload — the
+  models-switch semantics, next-turn.
+
 ## [0.8.2] — the plugins land
 
 - **the allow-list's presence reversal** (`specs/SPEC_PLUGINS.md` 7,
