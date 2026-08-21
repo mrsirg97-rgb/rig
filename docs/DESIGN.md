@@ -11,17 +11,20 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
 ## architecture
 
 ```
- user ◄──────────────────────────►  frontend/cli        seam: Frontend
+ user ◄──────────────────────────►  frontend (tui default, cli piped)  seam: Frontend
                          │
                          ▼
                   loop.Run(ctx, kernel)   the concrete turn runtime
                   │  ├─ seam: ContextPolicy ─► policy        (per-turn Assemble)
                   │  └─ seam: Provider      ─► provider/openai (stream out, events in)
                   └─ seam: Tool ─► ToolMiddleware chain
-                                   └─ perm.Allowlist → guard.Bound (first-listed = innermost)
+                                   └─ toolset.Resolve → approve.Gate → perm.Plugins
+                                       → perm.Allowlist → guard.Bound
+                                       (first-listed = innermost)
                                         │
                                         ▼
-             tool/bash · tool/file · tool/fs · tool/todo · tool/rem · tool/scheduler · tool/python · tool/web
+             tool/bash · tool/file · tool/fs · tool/todo · tool/rem · tool/scheduler
+             · tool/python · tool/web · tool/diff · plugins_reload
 
  cmd/rig (composition root): wires every seam once at startup; flags and env only.
  store/state: the recorder wraps the Frontend — it sources its rows from the
@@ -87,11 +90,14 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 ### middleware composition
 
-`WithMiddleware(perm, guard)` composes **first-listed innermost**: the chain
-executes perm first, guard second. This is a deliberate inversion of the common
-`http.Handler` convention, chosen so that the listing order reads as the
-execution order (`[deny, bound]` = deny runs first). It is what makes the
-spec's pairing workable — the bound must sit outside the denial to count it.
+The root's chain `WithMiddleware(toolset, approve, perm.Plugins,
+perm.Allowlist, guard.Bound)` composes **first-listed innermost**: the
+chain executes toolset first (the live table resolves a call), then the
+approve gate, then the two perm rules, and guard last. This is a deliberate
+inversion of the common `http.Handler` convention, chosen so that the listing
+order reads as the execution order (`[resolve, deny, bound]` = resolve runs
+first, bound outermost). It is what makes the spec's pairing workable — the
+bound must sit outside the denial to count it.
 
 ### guard semantics (`guard.Bound`)
 
@@ -99,7 +105,9 @@ Per the spec, every tool call executes exactly once, always — the guard never
 retries silently. What it bounds is the *model's* re-issuance of a failing
 *tool*, aligned to pane's retry guard:
 
-- keyed by **tool name** — drift in the arguments does not dodge the bound;
+- keyed by **tool name**, with the streak per args — the bound strikes
+  identical retries only, and a corrected call (args differing from the
+  last failed args) resets its own streak and always executes;
 - **cleared at the start of every turn** (the loop's `TurnStart` fan-out)
   and on success: the bound tracks streaks within a turn, not history;
 - the limit-th consecutive failure of a tool carries a note — the error is
@@ -153,8 +161,9 @@ and the loop never names a concrete type.
 2. **A provider** — implement `core.Provider` (every stream ends in Done or
    Fault, ctx teardown excepted); `WithProvider(...)`.
 3. **A context policy** — implement `core.ContextPolicy`; `WithPolicy(...)`.
-   Passthrough and the compaction policy (`policy/compact`, per-model
-   trigger) both ship; the policy may rewrite the session transcript — the
+   The compaction policy (`policy/compact`, per-model trigger) wraps the
+   passthrough, and `policy/effort` decorates the provider with the
+   reasoning dial; a policy may rewrite the session transcript — the
    one named mutation the seam carries.
 4. **A frontend** — implement `core.Frontend`'s two methods (a TUI can sit
    beside the CLI); `WithFrontend(...)`.
@@ -186,5 +195,8 @@ and the loop never names a concrete type.
 
 ## non-goals
 
-Explicitly out, per the spec: sandboxing, plugin systems, multi-provider
-negotiation, and conversational features the model does not ask for.
+Explicitly out, per the spec: multi-provider negotiation and
+conversational features the model does not ask for. Sandboxing and plugin
+systems were non-goals at the day-one spec and now ship (`docs/SETUP.md`):
+the worker jail (`specs/SPEC_SANDBOX.md`) and the python plugins
+(`specs/SPEC_PLUGINS.md`).

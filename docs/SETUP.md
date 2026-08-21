@@ -41,15 +41,21 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.6.0
+./rig --version        # rig 0.8.0
 ```
 
-The install path (once tagged and public) is the binary, not a script
-(`specs/SPEC_BUILD.md`):
+The install path is the binary, not a script (`specs/SPEC_BUILD.md`).
+Pre-tag, `@master` works today; once tagged and public, `@latest`:
 
 ```sh
-go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
+go install github.com/mrsirg97-rgb/rig/cmd/rig@master   # today (no tag yet)
+go install github.com/mrsirg97-rgb/rig/cmd/rig@latest   # once tagged
 ```
+
+The one prerequisite is Go ≥ 1.26 (the toolchain line pulls the newest
+matching patch automatically). A release binary (for those who do not
+want Go) is the post-open-source step; the Makefile's `make install`
+lands a local build in `$(GOBIN)`/`~/.local/bin`.
 
 `make install` is the same build landed locally: `$(go env GOBIN)` when
 set, else `~/.local/bin`; `BINDIR=...` names the directory.
@@ -90,7 +96,7 @@ the file is a contract, not a filter.
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix) |
-| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`) and `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) |
+| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) and `efforts` (the model's available effort levels — `low`, `medium`, `xhigh` — the `/effort` dial's vocabulary) |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's theme (`specs/SPEC_TUI.md` 7): `base` (one of `oled`, `paper`, `p1`, `p3`, required), optional `slots` (the eight slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema |
 
@@ -103,7 +109,7 @@ directory's project file, not the creating session's.
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 14 built-in tools |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 15 built-in tools |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | resume        | `--resume <id>`| —                      | —               | fresh session (refuses with `-p`; one-shot stays one-shot) |
 | terminal      | `--tui` (auto/true/false) | — | — | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
@@ -112,6 +118,8 @@ directory's project file, not the creating session's.
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
 | scheduler job |                | —                      | `defaultJobModel` | `qwen3.8-workers`; a job's explicit `model` arg beats it |
+| swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
+| approval dial  |                | —                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox | —              | —                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds | —              | —                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
 | model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the two-row table |
@@ -150,13 +158,15 @@ row can carry it, an embedded id cannot): the named cost of the rule.
 
 **On `RIG_RETRIES`** — read before tuning: the value does **not** permit
 silent re-execution. Every tool call executes exactly once; the value bounds
-the *model's* re-issuance of a failing *tool* — keyed by tool name, so
-drifting arguments do not dodge it, and cleared at the start of every turn.
-The limit-th consecutive failure of a tool carries a note telling the model
+the *model's* re-issuance of a failing *tool* — keyed by tool name, with
+the streak per args: the bound strikes identical retries only, and a
+corrected call (args differing from the last failed args) resets its own
+streak and always executes; the bound is cleared at the start of every turn.
+The limit-th consecutive failure of a call carries a note telling the model
 to read the error and change the call or stop calling the tool; the next
-re-issuance is refused without executing, naming the bound. A successful call
-clears the count: the bound tracks streaks within a turn, not history. It is
-a brake on repetition, not a retry allowance.
+re-issuance of that call is refused without executing, naming the
+bound. A successful call clears the count: the bound tracks streaks within
+a turn, not history. It is a brake on repetition, not a retry allowance.
 
 **On `--resume`** — it rebuilds the session from the state store (the
 transcript in order, assistant reasoning, the tool calls, the file
@@ -167,7 +177,7 @@ starts fresh: the guard's counts and the steering slot are not persisted.
 
 **On the allow-list** — it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
-permits the 14 built-in tools because a default-deny CLI would ship a
+permits the 15 built-in tools because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar. Python plugins
 (`~/.rig/plugins/`) are **not** in the default: the operator who installs
 a plugin allow-lists its name (`--allow echo` or `allow` in
@@ -227,16 +237,26 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   never a tool call; a name that collides with a built-in tool refuses
   with the startup collision's voice, and an already-installed file of
   the name refuses too.
-- **The sandbox** — the provenance rule is in (SPEC_SANDBOX 2); the
-  worker jail is the rest (SPEC_SANDBOX 1, 3, 5): until then, trust the
-  plugins as you trust your own python — they run with rig's
-  privileges, in the operator's kernel.
+- **`plugins_reload`** — the fifteenth native tool (`specs/SPEC_PLUGINS.md`
+  8): re-runs the discovery over `plugins/` and swaps the kernel's tool
+  list, so a plugin registers without a restart; removal is free (the
+  list rebuilds from disk). `/plugins reload` is the operator's same verb
+  from the command door; `/plugins create <text>` queues the authoring
+  prompt (the steer precedent: the command queues a line, never dispatches
+  a turn), the model's `write` lands the file in `plugins/pending/`, and
+  `approve` installs it.
+- **The sandbox** — the provenance rule is the workflow (SPEC_SANDBOX
+  2); the worker jail is the boundary (SPEC_SANDBOX 1, 3, 5): a scheduled
+  worker's plugins run jailed under bwrap. In the interactive REPL the
+  plugins run with rig's privileges, in the operator's kernel — trust
+  them as you trust your own python.
 
 ## terminal
 
 The default REPL is the terminal frontend (`specs/SPEC_TUI.md`): the
 same session, the same commands, the same exits — themed, with the
-banner (model, effort, context, session usage), the live region (the
+three-row status — identity (`model · used/window`), the stance
+(`effort · role · auto|manual`), and the usage totals — the live region (the
 activity row and the input line, redrawn in place), the todo and
 scheduler blocks, and the usage line at every turn's end. The piped CLI
 is unchanged and is the reference: pipe, `-p`, and `--tui=false` all
@@ -270,7 +290,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.4.0
+./rig --version                 # prints: rig 0.8.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
@@ -280,8 +300,8 @@ session once the in-flight step unwinds; Ctrl-D exits at the prompt. If
 nothing streams, check the endpoint first — rig surfaces provider faults
 verbatim and loudly; it does not hide them.
 
-The terminal's verify: the banner's two rows (model and context), a
-streaming turn with its activity row, a tool line with its glyph and
+The terminal's verify: the three-row status (identity, stance, usage),
+a streaming turn with its activity row, a tool line with its glyph and
 duration, the usage line at the turn's end, and a clean Ctrl-D exit.
 `--tui=true` under `tmux` gives the same session to `capture-pane`
 (piped `--tui=false` stays the byte reference).
