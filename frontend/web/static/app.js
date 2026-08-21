@@ -1,7 +1,7 @@
-// the dashboard's client: the fetch loop, the homage render, the forms.
-// Plain JS, no framework, no build step, no external asset. The token rides
-// the cookie (set once by the first ?token= load); same-origin fetch carries
-// it, so no token handling here.
+// the dashboard's client: the fetch loop, the TUI's shapes, the forms, the
+// forge's editor, the folder browser. Plain JS, no framework, no build
+// step, no external asset. The token rides the cookie (set once by the
+// first ?token= load); same-origin fetch carries it.
 
 const nav = document.getElementById('nav');
 const main = document.getElementById('main');
@@ -9,13 +9,15 @@ const cwdSelect = document.getElementById('cwd');
 const cwdAdd = document.getElementById('cwd-add');
 const backdrop = document.getElementById('backdrop');
 const navToggle = document.getElementById('nav-toggle');
+const browseBtn = document.getElementById('browse-btn');
+const browser = document.getElementById('browser');
 
-const state = { view: 'sessions', cwd: '', transcript: null };
+const state = { view: 'sessions', cwd: '', transcript: null, pluginZone: 'approved' };
 
 // the TUI's glyph table (frontend/tui theme.go), unicode set.
 const G = {
   pending: '○', active: '◐', done: '●', fail: '✕', ok: '✓',
-  compact: '⧉', prompt: '❯', barOn: '▰', barOff: '▱', dot: '·',
+  compact: '⧉', prompt: '❯', barOn: '▰', barOff: '▱', dot: '·', dir: '▸',
 };
 
 async function api(path, opts) {
@@ -26,25 +28,31 @@ async function api(path, opts) {
       const j = await res.json();
       if (j && j.error) msg = j.error;
     } catch (_) {}
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
 
-function span(text, cls) {
-  const e = document.createElement('span');
+function post(path, body) {
+  return api(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
   if (cls) e.className = cls;
-  e.textContent = text;
+  if (text !== undefined) e.textContent = text;
   return e;
 }
 
-function note(text, cls) {
-  const e = document.createElement('p');
-  if (cls) e.className = cls;
-  e.textContent = text;
-  return e;
-}
-
+function span(text, cls) { return el('span', cls, text); }
+function line(cls) { return el('div', 'line' + (cls ? ' ' + cls : '')); }
+function note(text, cls) { return el('p', cls, text); }
 function clear() { main.innerHTML = ''; }
 
 function renderError(msg) {
@@ -53,45 +61,73 @@ function renderError(msg) {
 }
 
 function verbatimEl(text) {
-  const pre = document.createElement('pre');
-  pre.className = 'verbatim';
-  pre.textContent = text;
+  const pre = el('pre', 'verbatim', text);
   return pre;
 }
 
-// the view head: the TUI's tool-block opening line (the ok glyph, the
-// accent name, the dim tail).
-function viewHead(name, tail) {
-  const e = document.createElement('div');
-  e.className = 'view-head';
-  e.appendChild(span(G.ok + ' ', 'ok'));
-  e.appendChild(span(name, 'view-name'));
-  if (tail) e.appendChild(span(' ' + G.dot + ' ' + tail, 'dim'));
-  return e;
+function button(label, cls, onClick) {
+  const b = el('button', cls, label);
+  b.type = 'button';
+  if (onClick) b.addEventListener('click', onClick);
+  return b;
 }
 
-// the create forms' reply echo: the store's voice, the arrow line.
+// the tool block: the TUI's commit shape — the opening ● name · detail,
+// the body, and the closing name ✓ (frontend/tui commit.go).
+function toolBlock(name, detail) {
+  const tb = el('div', 'tb');
+  const open = el('div', 'tb-open');
+  open.appendChild(span(G.done + ' ', 'accent'));
+  open.appendChild(span(name, 'accent'));
+  if (detail) {
+    open.appendChild(span(' ' + G.dot + ' ', 'dim'));
+    open.appendChild(span(detail, 'text'));
+  }
+  const body = el('div', 'tb-body');
+  const close = el('div', 'tb-close');
+  close.appendChild(span(name + ' ', 'dim'));
+  close.appendChild(span(G.ok, 'ok'));
+  tb.appendChild(open);
+  tb.appendChild(body);
+  tb.appendChild(close);
+  return { el: tb, body, open, close };
+}
+
+function setClose(tb, outcome, slot) {
+  tb.close.innerHTML = '';
+  tb.close.appendChild(span(tb.open.children[1].textContent + ' ', 'dim'));
+  tb.close.appendChild(span(outcome, slot));
+}
+
 function echoEl() {
-  const e = document.createElement('pre');
-  e.className = 'echo';
+  const e = el('div', 'echo');
   e.hidden = true;
   return e;
 }
 
 function setEcho(e, text, isError) {
   e.hidden = false;
-  e.textContent = text;
+  e.textContent = (isError ? G.fail + ' ' : '→ ') + text;
   e.classList.toggle('err', !!isError);
 }
 
-function fieldRow(label, input) {
-  const d = document.createElement('div');
-  d.className = 'field';
-  const l = document.createElement('label');
-  l.textContent = label;
-  d.appendChild(l);
+// the prompt row: ❯ label input (the TUI's input line).
+function promptRow(label, input, mark) {
+  const d = el('div', 'prompt');
+  d.appendChild(span(mark || G.prompt, 'mark' + (mark ? ' dim' : '')));
+  if (label) d.appendChild(span(label, 'label'));
   d.appendChild(input);
   return d;
+}
+
+function textInput(placeholder, required) {
+  const i = el('input');
+  i.type = 'text';
+  i.placeholder = placeholder;
+  i.spellcheck = false;
+  i.autocomplete = 'off';
+  if (required) i.required = true;
+  return i;
 }
 
 // --- the TUI's todo render, mirrored (frontend/tui tools_render.go) ---
@@ -116,14 +152,14 @@ function parseTodo(reply) {
   };
   i++;
   for (; i < lines.length; i++) {
-    const line = lines[i];
-    if (line === '') continue;
-    if (line.startsWith('· ')) {
+    const l = lines[i];
+    if (l === '') continue;
+    if (l.startsWith('· ')) {
       if (p.footer) return null;
-      p.footer = line;
+      p.footer = l;
       continue;
     }
-    const tm = line.match(/^  (t\d+) \[([x!~ ])\] (.+)$/);
+    const tm = l.match(/^  (t\d+) \[([x!~ ])\] (.+)$/);
     if (!tm) return null;
     const task = { id: tm[1] };
     if (tm[2] === 'x') task.status = 'done';
@@ -164,44 +200,40 @@ function taskGlyph(status) {
   }
 }
 
-function todoBlockEl(p) {
-  const e = document.createElement('div');
-  e.className = 'block';
+function todoBodyEl(p) {
+  const e = el('div');
+  const head = line();
   const bar = progressBar(p.done, p.active, p.total);
-  e.appendChild(span(G.barOn.repeat(bar.on), 'bar-on'));
-  e.appendChild(span(G.barOff.repeat(bar.off), 'bar-off'));
-  let head = ' ' + p.done + '/' + p.total;
-  if (p.next) head += ' ' + G.dot + ' next ' + p.next;
-  if (p.failed) head += ' ' + G.dot + ' ' + p.failed + ' failed';
-  e.appendChild(span(head, 'dim'));
+  head.appendChild(span(G.barOn.repeat(bar.on), 'bar-on'));
+  head.appendChild(span(G.barOff.repeat(bar.off), 'bar-off'));
+  let h = ' ' + p.done + '/' + p.total;
+  if (p.next) h += ' ' + G.dot + ' next ' + p.next;
+  if (p.failed) h += ' ' + G.dot + ' ' + p.failed + ' failed';
+  head.appendChild(span(h, 'dim'));
+  e.appendChild(head);
   if (p.action) {
-    const a = document.createElement('div');
-    a.className = 'action';
+    const a = line();
     a.appendChild(span('→ ', 'accent'));
     a.appendChild(span(p.action, 'text'));
     e.appendChild(a);
   }
   for (const t of p.tasks) {
-    const line = document.createElement('div');
-    line.className = 'taskline';
+    const l = line();
     const [g, cls] = taskGlyph(t.status);
-    line.appendChild(span(g + ' ', cls));
-    line.appendChild(span(t.id, 'dim'));
-    line.appendChild(span(' ' + t.text, 'text'));
-    if (t.waits) line.appendChild(span(' ' + G.dot + ' waits on ' + t.waits, 'dim'));
-    if (t.claim) line.appendChild(span(' ' + G.dot + ' claimed by ' + t.claim, 'dim'));
-    e.appendChild(line);
+    l.appendChild(span(g + ' ', cls));
+    l.appendChild(span(t.id, 'dim'));
+    l.appendChild(span(' ' + t.text, t.status === 'done' ? 'dim' : 'text'));
+    if (t.waits) l.appendChild(span(' ' + G.dot + ' waits on ' + t.waits, 'dim'));
+    if (t.claim) l.appendChild(span(' ' + G.dot + ' claimed by ' + t.claim, 'dim'));
+    e.appendChild(l);
   }
-  if (p.footer) e.appendChild(span('  ' + p.footer, 'dim'));
+  if (p.footer) e.appendChild(line('dim')).textContent = p.footer;
   return e;
 }
 
-// swap the queue area (the block, or the verbatim fallback) in place.
-function setQueueArea(text) {
-  const area = main.querySelector('.block') || main.querySelector('pre.verbatim');
-  if (!area) return;
+function todoArea(text) {
   const parsed = parseTodo(text);
-  area.replaceWith(parsed ? todoBlockEl(parsed) : verbatimEl(text));
+  return parsed ? todoBodyEl(parsed) : verbatimEl(text);
 }
 
 // --- the TUI's scheduler render, mirrored ---
@@ -213,26 +245,26 @@ function parseScheduler(reply) {
   const p = { sections: [] };
   let cur = null;
   let job = null;
-  for (const line of lines) {
-    if (line === '') continue;
-    if (line.startsWith('global:') || line.startsWith('cwd:')) {
+  for (const l of lines) {
+    if (l === '') continue;
+    if (l.startsWith('global:') || l.startsWith('cwd:')) {
       job = null;
       cur = {
-        name: line.endsWith(': no jobs') ? line.slice(0, -': no jobs'.length) : line.slice(0, -1),
-        empty: line.endsWith(': no jobs'),
+        name: l.endsWith(': no jobs') ? l.slice(0, -': no jobs'.length) : l.slice(0, -1),
+        empty: l.endsWith(': no jobs'),
         jobs: [],
       };
       p.sections.push(cur);
       continue;
     }
     if (!cur) return null;
-    if (line.startsWith('  ')) {
+    if (l.startsWith('  ')) {
       if (!job) return null;
-      job.detail.push(line.slice(2));
+      job.detail.push(l.slice(2));
       continue;
     }
-    if (!/^(j\d+)(?: .+)?$/.test(line) || cur.empty) return null;
-    job = { head: line, detail: [] };
+    if (!/^(j\d+)(?: .+)?$/.test(l) || cur.empty) return null;
+    job = { head: l, detail: [] };
     cur.jobs.push(job);
   }
   return p;
@@ -246,45 +278,37 @@ function schedGlyph(head) {
   return [G.pending, 'dim'];
 }
 
-function schedulerBlockEl(p) {
-  const e = document.createElement('div');
-  e.className = 'block';
+function schedulerBodyEl(p) {
+  const e = el('div');
   if (p.runs) {
-    for (const l of p.runs) e.appendChild(span('  ' + l, 'dim'));
+    for (const l of p.runs) e.appendChild(line('dim')).textContent = l;
     return e;
   }
   for (const sec of p.sections) {
-    const h = document.createElement('div');
-    h.className = 'schedsec';
     if (sec.empty) {
-      h.appendChild(span('  ' + sec.name + ': no jobs', 'dim'));
-    } else {
-      h.appendChild(span('  ' + sec.name + ':', 'dim'));
-      for (const j of sec.jobs) {
-        const row = document.createElement('div');
-        row.className = 'schedjob';
-        const [g, cls] = schedGlyph(j.head);
-        row.appendChild(span(g + ' ', cls));
-        row.appendChild(span(j.head, 'text'));
-        h.appendChild(row);
-        for (const d of j.detail) {
-          const dl = document.createElement('div');
-          dl.className = d.startsWith('drift: ') ? 'detail drift' : 'detail';
-          dl.textContent = '    ' + d;
-          h.appendChild(dl);
-        }
+      e.appendChild(line('dim')).textContent = sec.name + ': no jobs';
+      continue;
+    }
+    e.appendChild(line('dim')).textContent = sec.name + ':';
+    for (const j of sec.jobs) {
+      const row = line();
+      const [g, cls] = schedGlyph(j.head);
+      row.appendChild(span(g + ' ', cls));
+      row.appendChild(span(j.head, 'text'));
+      e.appendChild(row);
+      for (const d of j.detail) {
+        const dl = line(d.startsWith('drift: ') ? 'detail drift' : 'detail');
+        dl.textContent = '  ' + d;
+        e.appendChild(dl);
       }
     }
-    e.appendChild(h);
   }
   return e;
 }
 
-function setJobsArea(text) {
-  const area = main.querySelector('.block');
-  if (!area) return;
+function schedulerArea(text) {
   const parsed = parseScheduler(text);
-  area.replaceWith(parsed ? schedulerBlockEl(parsed) : verbatimEl(text));
+  return parsed ? schedulerBodyEl(parsed) : verbatimEl(text);
 }
 
 // --- the sessions view ---
@@ -302,27 +326,25 @@ function exitGlyph(exit) {
 async function renderSessions(q) {
   const data = await api('/api/sessions' + q);
   clear();
-  main.appendChild(viewHead('sessions', state.cwd));
   const sessions = data.sessions || [];
+  const tb = toolBlock('sessions', state.cwd);
+  main.appendChild(tb.el);
   if (!sessions.length) {
-    main.appendChild(note('no sessions in this workspace', 'dim'));
+    tb.body.appendChild(line('dim')).textContent = 'no sessions in this workspace';
     return;
   }
   for (const s of sessions) {
-    const row = document.createElement('div');
-    row.className = 'sess';
+    const row = el('div', 'sess');
     const [g, cls] = exitGlyph(s.exit);
     row.appendChild(span(g + ' ', cls));
-    row.appendChild(span(s.id, 'sid'));
-    row.appendChild(span('  ' + s.started, 'dim'));
+    row.appendChild(span(s.id.slice(0, 12), 'text'));
+    row.appendChild(span('  ' + s.started.replace('T', ' ').replace(/Z$/, ''), 'dim'));
     row.appendChild(span('  ' + s.turns + ' turns', 'dim'));
     row.appendChild(span('  ' + s.exit, 'exit-' + s.exit));
-    const b = document.createElement('button');
-    b.textContent = 'open';
-    b.addEventListener('click', () => renderTranscript(s.id, q));
-    row.appendChild(b);
-    main.appendChild(row);
+    row.addEventListener('click', () => renderTranscript(s.id, q));
+    tb.body.appendChild(row);
   }
+  tb.body.appendChild(el('div', 'hint', 'open a session by clicking its row'));
 }
 
 function formatTokens(n) {
@@ -355,52 +377,39 @@ function toolDetail(name, argsStr) {
     case 'web_search': if (s('query')) return s('query'); break;
     case 'web_fetch': if (s('url')) return s('url'); break;
     case 'diff': if (s('mode')) return s('mode'); break;
+    case 'todo': case 'scheduler': case 'rem': case 'plugins_reload':
+      if (s('action')) return s('action') + (s('id') ? ' ' + s('id') : ''); break;
   }
   return '';
 }
 
 function messageEl(m) {
-  const block = document.createElement('div');
-  block.className = 'msg msg-' + m.role;
+  const block = el('div', 'msg msg-' + m.role);
   if (m.role === 'user') {
-    block.appendChild(span(G.prompt + ' ', 'ember'));
-  }
-  if (m.reasoning) {
-    const r = document.createElement('div');
-    r.className = 'reasoning';
-    r.textContent = m.reasoning;
-    block.appendChild(r);
-  }
-  if (m.content && m.role !== 'tool') {
-    const c = document.createElement('div');
-    c.className = 'content';
-    c.textContent = m.content;
+    const c = el('div', 'content');
+    c.appendChild(span(G.prompt + ' ', 'ember'));
+    c.appendChild(span(m.content, 'text'));
     block.appendChild(c);
+    return block;
   }
+  if (m.reasoning) block.appendChild(el('div', 'reasoning', m.reasoning));
+  if (m.content && m.role !== 'tool') block.appendChild(el('div', 'content', m.content));
   for (const tc of m.tool_calls || []) {
-    const t = document.createElement('div');
-    t.className = 'tool';
-    const head = document.createElement('div');
-    head.className = 'tool-head';
-    head.appendChild(span(G.ok + ' ', 'ok'));
+    const t = el('div', 'tool');
+    const head = el('div', 'tool-head');
+    head.appendChild(span(G.done + ' ', 'accent'));
     head.appendChild(span(tc.name, 'accent'));
     const d = toolDetail(tc.name, tc.args);
     if (d) {
       head.appendChild(span(' ' + G.dot + ' ', 'dim'));
       head.appendChild(span(d, 'text'));
     }
-    const pre = document.createElement('pre');
-    pre.textContent = tc.args;
     t.appendChild(head);
-    t.appendChild(pre);
+    if (!d) t.appendChild(el('pre', null, tc.args));
     block.appendChild(t);
   }
   if (m.role === 'tool') {
-    block.appendChild(span('→ ', 'dim'));
-    const pre = document.createElement('pre');
-    pre.className = 'toolres';
-    pre.textContent = m.content;
-    block.appendChild(pre);
+    block.appendChild(el('pre', 'toolres', m.content));
   }
   return block;
 }
@@ -410,27 +419,23 @@ async function renderTranscript(id, q) {
   const base = '/api/sessions/' + encodeURIComponent(id) + '/transcript';
   const first = await api(base + q);
   clear();
-  main.appendChild(viewHead('session ' + id, state.cwd));
-  const meta = document.createElement('div');
-  const back = document.createElement('button');
-  back.textContent = 'back';
-  back.addEventListener('click', () => { state.transcript = null; render(); });
-  meta.appendChild(back);
-  const count = document.createElement('span');
-  count.className = 'dim';
+  const tb = toolBlock('session', id.slice(0, 12) + ' ' + G.dot + ' ' + state.cwd);
+  main.appendChild(tb.el);
+  const meta = el('div', 'actions');
+  meta.appendChild(button('back', null, () => { state.transcript = null; render(); }));
+  const count = span('', 'dim');
   meta.appendChild(count);
-  main.appendChild(meta);
-  const list = document.createElement('div');
-  main.appendChild(list);
-  const more = document.createElement('button');
-  more.textContent = 'more ↓';
+  tb.body.appendChild(meta);
+  const list = el('div');
+  tb.body.appendChild(list);
+  const more = button('more ↓', null);
   more.disabled = true;
-  main.appendChild(more);
+  tb.body.appendChild(more);
   let offset = 0;
   const paint = (d) => {
     for (const m of d.messages) list.appendChild(messageEl(m));
     offset += d.messages.length;
-    count.textContent = ' ' + offset + ' of ' + d.total + ' messages';
+    count.textContent = offset + ' of ' + d.total + ' messages';
     more.disabled = false;
     more.hidden = !d.has_more;
   };
@@ -441,73 +446,70 @@ async function renderTranscript(id, q) {
       paint(await api(base + q + '&limit=' + first.limit + '&offset=' + offset));
     } catch (e) {
       more.disabled = false;
-      main.appendChild(note(G.fail + ' ' + e.message, 'error'));
+      tb.body.appendChild(note(G.fail + ' ' + e.message, 'error'));
     }
   });
   const u = usageLine(first.usage);
-  if (u) main.appendChild(u);
+  if (u) tb.body.appendChild(u);
 }
 
-// --- the todos view ---
+// --- the todo view ---
 
 async function renderTodos(q) {
   const data = await api('/api/todo' + q);
   clear();
-  main.appendChild(viewHead('todos', state.cwd));
-  const parsed = parseTodo(data.text);
-  main.appendChild(parsed ? todoBlockEl(parsed) : verbatimEl(data.text));
-
-  const tog = document.createElement('button');
-  tog.className = 'toggle';
   let all = false;
-  const label = () => (all ? 'history ' + G.dot + ' ReadAll' : 'actionable ' + G.dot + ' Read');
-  tog.textContent = label();
-  tog.addEventListener('click', async () => {
+  const tb = toolBlock('todo', 'read');
+  main.appendChild(tb.el);
+  const area = el('div');
+  area.appendChild(todoArea(data.text));
+  tb.body.appendChild(area);
+
+  const actions = el('div', 'actions');
+  const tog = button('read all', null, async () => {
     all = !all;
-    tog.textContent = G.dot.repeat(3);
+    tog.disabled = true;
     try {
       const d = await api('/api/todo' + q + '&all=' + all);
-      setQueueArea(d.text);
+      area.innerHTML = '';
+      area.appendChild(todoArea(d.text));
+      tb.open.children[3].textContent = all ? 'read all' : 'read';
+      tog.textContent = all ? 'read actionable' : 'read all';
     } catch (e) {
-      main.appendChild(note(G.fail + ' ' + e.message, 'error'));
+      setEcho(out, e.message, true);
     } finally {
-      tog.textContent = label();
+      tog.disabled = false;
     }
   });
-  main.appendChild(tog);
+  actions.appendChild(tog);
+  tb.body.appendChild(actions);
 
-  const form = document.createElement('form');
-  form.className = 'create';
-  const ta = document.createElement('textarea');
-  ta.rows = 3;
-  ta.placeholder = 'one task per line (adds to the queue)';
+  const ta = el('textarea');
+  ta.rows = 2;
+  ta.placeholder = 'create: one task per line';
+  ta.spellcheck = false;
+  tb.body.appendChild(promptRow('', ta));
   const out = echoEl();
-  const btn = document.createElement('button');
-  btn.type = 'submit';
-  btn.textContent = 'create';
-  form.appendChild(fieldRow('create (one task per line)', ta));
-  form.appendChild(out);
-  form.appendChild(btn);
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
+  tb.body.appendChild(out);
+  const act = el('div', 'actions');
+  const btn = button('create', 'primary', async () => {
+    if (!ta.value.trim()) { ta.focus(); return; }
     btn.disabled = true;
     try {
-      const r = await api('/api/todo' + q, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: ta.value,
-      });
-      setEcho(out, '→ ' + r.reply);
+      const r = await api('/api/todo' + q, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: ta.value });
+      setEcho(out, r.reply);
       ta.value = '';
-      const d = await api('/api/todo' + q);
-      setQueueArea(d.text);
+      const d = await api('/api/todo' + q + '&all=' + all);
+      area.innerHTML = '';
+      area.appendChild(todoArea(d.text));
     } catch (e) {
-      setEcho(out, G.fail + ' ' + e.message, true);
+      setEcho(out, e.message, true);
     } finally {
       btn.disabled = false;
     }
   });
-  main.appendChild(form);
+  act.appendChild(btn);
+  tb.body.appendChild(act);
 }
 
 // --- the scheduler view ---
@@ -515,217 +517,315 @@ async function renderTodos(q) {
 async function renderScheduler(q) {
   const data = await api('/api/scheduler' + q);
   clear();
-  main.appendChild(viewHead('scheduler', state.cwd));
-  const parsed = parseScheduler(data.text);
-  main.appendChild(parsed ? schedulerBlockEl(parsed) : verbatimEl(data.text));
+  const tb = toolBlock('scheduler', 'list');
+  main.appendChild(tb.el);
+  const area = el('div');
+  area.appendChild(schedulerArea(data.text));
+  tb.body.appendChild(area);
 
-  const form = document.createElement('form');
-  form.className = 'create';
-  const name = document.createElement('input');
-  name.type = 'text';
-  name.placeholder = 'name (e.g. nightly-digest)';
-  name.required = true;
-  const prompt = document.createElement('textarea');
+  const name = textInput('name (e.g. nightly-digest)', true);
+  const prompt = el('textarea');
   prompt.rows = 2;
   prompt.placeholder = 'the prompt the worker runs';
-  prompt.required = true;
-  const cron = document.createElement('input');
-  cron.type = 'text';
-  cron.placeholder = 'cron: 30 7 * * * (five fields, or once)';
-  cron.required = true;
-  const at = document.createElement('input');
-  at.type = 'text';
-  at.placeholder = 'at (ISO, only when cron is once): 2026-01-02T03:04:05Z';
-  at.hidden = true;
-  cron.addEventListener('input', () => { at.hidden = cron.value.trim() !== 'once'; });
-  const scope = document.createElement('select');
-  scope.appendChild(new Option('this workspace (cwd)'));
-  scope.appendChild(new Option('global'));
+  const cron = textInput('30 7 * * *  (five fields, or once)', true);
+  const at = textInput('2026-01-02T03:04:05Z', false);
+  const atRow = promptRow('at', at, G.dot);
+  atRow.hidden = true;
+  cron.addEventListener('input', () => { atRow.hidden = cron.value.trim() !== 'once'; });
+  const scope = el('select');
+  scope.appendChild(new Option('this workspace (cwd)', 'cwd'));
+  scope.appendChild(new Option('global', 'global'));
+  tb.body.appendChild(el('div', 'hint', 'create'));
+  tb.body.appendChild(promptRow('name', name));
+  tb.body.appendChild(promptRow('prompt', prompt, G.dot));
+  tb.body.appendChild(promptRow('cron', cron, G.dot));
+  tb.body.appendChild(atRow);
+  tb.body.appendChild(promptRow('scope', scope, G.dot));
   const out = echoEl();
-  const btn = document.createElement('button');
-  btn.type = 'submit';
-  btn.textContent = 'create';
-  form.appendChild(fieldRow('name', name));
-  form.appendChild(fieldRow('prompt', prompt));
-  form.appendChild(fieldRow('cron', cron));
-  form.appendChild(fieldRow('at', at));
-  form.appendChild(fieldRow('scope', scope));
-  form.appendChild(out);
-  form.appendChild(btn);
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
+  tb.body.appendChild(out);
+  const act = el('div', 'actions');
+  const btn = button('create', 'primary', async () => {
     btn.disabled = true;
     try {
-      const body = {
-        name: name.value.trim(),
-        prompt: prompt.value,
-        cron: cron.value.trim(),
-      };
+      const body = { name: name.value.trim(), prompt: prompt.value, cron: cron.value.trim() };
       if (body.cron === 'once') body.at = at.value.trim();
-      if (scope.selectedIndex === 1) body.scope = 'global';
-      const r = await api('/api/scheduler' + q, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      setEcho(out, '→ ' + r.reply);
-      name.value = '';
-      prompt.value = '';
-      cron.value = '';
-      at.value = '';
+      if (scope.value === 'global') body.scope = 'global';
+      const r = await post('/api/scheduler' + q, body);
+      setEcho(out, r.reply);
+      name.value = ''; prompt.value = ''; cron.value = ''; at.value = '';
       const d = await api('/api/scheduler' + q);
-      setJobsArea(d.text);
+      area.innerHTML = '';
+      area.appendChild(schedulerArea(d.text));
     } catch (e) {
-      setEcho(out, G.fail + ' ' + e.message, true);
+      setEcho(out, e.message, true);
     } finally {
       btn.disabled = false;
     }
   });
-  main.appendChild(form);
+  act.appendChild(btn);
+  tb.body.appendChild(act);
 }
 
-// --- the memory view ---
+// --- the models view: the /models table's shape (command/models.go) ---
 
-async function renderMemory(q) {
-  const data = await api('/api/memory' + q);
-  clear();
-  const memories = data.memories || [];
-  main.appendChild(viewHead('memory', memories.length + ' recent ' + G.dot + ' ' + state.cwd));
-  if (!memmaries.length) {
-    main.appendChild(note('no memories for this workspace', 'dim'));
-    return;
-  }
-  const e = document.createElement('div');
-  e.className = 'block';
-  memories.forEach((m, i) => {
-    const line = document.createElement('div');
-    line.className = 'memline';
-    line.appendChild(span(G.dot + ' ', 'dim'));
-    line.appendChild(span(String(i + 1).padStart(2, '0'), 'dim'));
-    line.appendChild(span(' ' + m, 'text'));
-    e.appendChild(line);
-  });
-  main.appendChild(e);
+function effortClass(level) {
+  const known = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+  return known.includes(level) ? 'effort-' + level : 'accent';
 }
-
-// --- the models view ---
 
 async function renderModels() {
   const data = await api('/api/models');
   clear();
-  main.appendChild(viewHead('models', 'config'));
+  const tb = toolBlock('models', 'config');
+  main.appendChild(tb.el);
   const models = data.models || [];
   if (!models.length) {
-    main.appendChild(note('no models in the config', 'dim'));
+    tb.body.appendChild(line('dim')).textContent = 'no models in the config';
     return;
   }
-  const cols = [
-    ['id', 'id'], ['window', 'window'], ['max_tokens', 'max tokens'],
-    ['reserve', 'reserve'], ['keep_recent', 'keep recent'],
-    ['role', 'role'], ['effort', 'effort'],
-  ];
-  const table = document.createElement('table');
-  const head = document.createElement('tr');
-  for (const [, label] of cols) {
-    const th = document.createElement('th');
-    th.textContent = label;
-    head.appendChild(th);
-  }
-  const thE = document.createElement('th');
-  thE.textContent = 'efforts';
-  head.appendChild(thE);
-  table.appendChild(head);
+  const wID = Math.max(...models.map((m) => m.id.length)) + 2;
+  const wRole = Math.max(...models.map((m) => m.role.length)) + 2;
   for (const m of models) {
-    const tr = document.createElement('tr');
-    for (const [key] of cols) {
-      const td = document.createElement('td');
-      td.textContent = m[key];
-      tr.appendChild(td);
-    }
-    const td = document.createElement('td');
-    td.textContent = (m.efforts || []).join(', ');
-    tr.appendChild(td);
-    table.appendChild(tr);
+    const row = line();
+    row.appendChild(span(G.done + ' ', 'accent'));
+    row.appendChild(span(m.id.padEnd(wID), 'text bold'));
+    row.appendChild(span(m.role.padEnd(wRole), 'ember'));
+    row.appendChild(span('window ' + m.window + '  max ' + m.max_tokens + '  reserve ' + m.reserve +
+      '  keep ' + m.keep_recent + '  trigger ' + (m.window - m.reserve), 'dim'));
+    tb.body.appendChild(row);
+    const eff = line();
+    eff.appendChild(span('  efforts ', 'dim'));
+    const list = m.efforts || [];
+    if (!list.length) eff.appendChild(span('(the server default)', 'dim'));
+    list.forEach((e, i) => {
+      if (i) eff.appendChild(span(' ', 'dim'));
+      eff.appendChild(span(e, effortClass(e) + (e === m.effort ? ' effort-on' : '')));
+    });
+    if (m.effort && !list.includes(m.effort)) eff.appendChild(span('  default ' + m.effort, effortClass(m.effort)));
+    tb.body.appendChild(eff);
   }
-  main.appendChild(table);
 }
 
-// --- the plugins view ---
+// --- the forge: the python editor (a gutter, a highlighted mirror, the textarea) ---
+
+const PY_KW = new Set(('False None True and as assert async await break class continue def del elif ' +
+  'else except finally for from global if import in is lambda nonlocal not or pass raise return try ' +
+  'while with yield').split(' '));
+const PY_BUILTIN = new Set(('print len str int float dict list set tuple range open isinstance getattr ' +
+  'hasattr json os sys time re subprocess Exception args').split(' '));
+
+function escapeHTML(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function highlightPython(src) {
+  const re = /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|#[^\n]*|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b|\s+|[^\w\s"'#]+)/g;
+  const out = [];
+  let prev = '';
+  let m;
+  while ((m = re.exec(src))) {
+    const t = m[0];
+    let cls = '';
+    if (t[0] === '#') cls = 'hl-c';
+    else if (t[0] === '"' || t[0] === "'") cls = 'hl-s';
+    else if (/^\d/.test(t)) cls = 'hl-n';
+    else if (PY_KW.has(t)) cls = 'hl-k';
+    else if (prev === 'def' || prev === 'class') cls = 'hl-f';
+    else if (/^[A-Z][A-Z0-9_]+$/.test(t)) cls = 'hl-const';
+    else if (PY_BUILTIN.has(t)) cls = 'hl-b';
+    out.push(cls ? '<span class="' + cls + '">' + escapeHTML(t) + '</span>' : escapeHTML(t));
+    if (!/^\s+$/.test(t)) prev = t;
+  }
+  return out.join('') + '\n';
+}
+
+function editorEl(initial) {
+  const wrap = el('div', 'editor');
+  const gutter = el('div', 'gutter');
+  const cell = el('div', 'cell');
+  const pre = el('pre', 'hl');
+  pre.setAttribute('aria-hidden', 'true');
+  const ta = el('textarea', 'code');
+  ta.spellcheck = false;
+  ta.setAttribute('autocapitalize', 'off');
+  ta.setAttribute('autocomplete', 'off');
+  ta.value = initial;
+  const sync = () => {
+    pre.innerHTML = highlightPython(ta.value);
+    const n = ta.value.split('\n').length;
+    let g = '';
+    for (let i = 1; i <= n; i++) g += i + '\n';
+    gutter.textContent = g;
+    gutter.scrollTop = ta.scrollTop;
+  };
+  ta.addEventListener('input', sync);
+  ta.addEventListener('scroll', () => {
+    pre.scrollTop = ta.scrollTop;
+    pre.scrollLeft = ta.scrollLeft;
+    gutter.scrollTop = ta.scrollTop;
+  });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = ta.selectionStart, t = ta.selectionEnd;
+      ta.setRangeText('    ', s, t, 'end');
+      sync();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const s = ta.selectionStart;
+      const before = ta.value.slice(0, s);
+      const cur = before.slice(before.lastIndexOf('\n') + 1);
+      let indent = (cur.match(/^\s*/) || [''])[0];
+      if (/:\s*$/.test(cur)) indent += '    ';
+      ta.setRangeText('\n' + indent, s, ta.selectionEnd, 'end');
+      sync();
+    }
+  });
+  cell.appendChild(pre);
+  cell.appendChild(ta);
+  wrap.appendChild(gutter);
+  wrap.appendChild(cell);
+  sync();
+  return {
+    el: wrap,
+    get value() { return ta.value; },
+    set value(v) { ta.value = v; sync(); },
+    focus: () => ta.focus(),
+  };
+}
+
+const PLUGIN_TEMPLATE = 'DESCRIPTION = "what it does, one line"\n' +
+  'SCHEMA = {"type": "object", "properties": {}}\n\n' +
+  'def run(args: dict) -> str:\n' +
+  '    return "hello " + str(args.get("who") or "world")\n';
+
+// --- the plugins view: approved | pending, the list, the forge ---
 
 async function renderPlugins() {
   const data = await api('/api/plugins');
   clear();
-  main.appendChild(viewHead('plugins', 'the home'));
-  const section = (title, list) => {
-    const h = document.createElement('div');
-    h.className = 'plugsec';
-    const arr = list || [];
-    if (!arr.length) {
-      h.appendChild(span('  ' + title + ': no plugins', 'dim'));
-    } else {
-      h.appendChild(span('  ' + title + ':', 'dim'));
-      for (const p of arr) {
-        const d = document.createElement('div');
-        d.className = 'plugrow';
-        d.appendChild(span(G.ok + ' ', 'ok'));
-        d.appendChild(span(p.name, 'accent'));
-        d.appendChild(span(' ' + G.dot + ' ' + (p.description || '(no DESCRIPTION)'), 'dim'));
-        h.appendChild(d);
-      }
-    }
-    main.appendChild(h);
-  };
-  section('loaded', data.loaded);
-  section('pending', data.pending);
+  const zone = state.pluginZone;
+  const tb = toolBlock('plugins', zone);
+  main.appendChild(tb.el);
 
-  const form = document.createElement('form');
-  form.className = 'create';
-  const name = document.createElement('input');
-  name.type = 'text';
-  name.placeholder = 'name (lowercase, the filename stem)';
-  name.required = true;
-  const desc = document.createElement('input');
-  desc.type = 'text';
-  desc.placeholder = 'DESCRIPTION (what it does, one line)';
-  desc.required = true;
-  const code = document.createElement('textarea');
-  code.rows = 5;
-  code.placeholder = 'the run body: args in, text out, e.g.\n    return "hello " + str(args.get("who") or "world")';
-  code.required = true;
-  const out = echoEl();
-  const btn = document.createElement('button');
-  btn.type = 'submit';
-  btn.textContent = 'create ' + G.dot + ' lands in plugins/pending';
-  form.appendChild(fieldRow('name', name));
-  form.appendChild(fieldRow('description', desc));
-  form.appendChild(fieldRow('run body (args in, text out)', code));
-  form.appendChild(out);
-  form.appendChild(btn);
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    btn.disabled = true;
-    try {
-      const r = await api('/api/plugins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.value.trim(),
-          description: desc.value.trim(),
-          code: code.value,
-        }),
-      });
-      setEcho(out, '→ ' + r.reply);
-      name.value = '';
-      desc.value = '';
-      code.value = '';
+  const seg = el('div', 'seg');
+  for (const z of ['approved', 'pending']) {
+    const b = button(z + ' ' + (z === 'approved' ? (data.loaded || []).length : (data.pending || []).length), z === zone ? 'active' : '', () => {
+      state.pluginZone = z;
       renderPlugins();
+    });
+    seg.appendChild(b);
+  }
+  tb.body.appendChild(seg);
+
+  const list = zone === 'approved' ? (data.loaded || []) : (data.pending || []);
+  const listEl = el('div');
+  if (!list.length) {
+    listEl.appendChild(line('dim')).textContent = zone === 'approved'
+      ? 'no approved plugins (~/.rig/plugins/)'
+      : 'nothing pending (~/.rig/plugins/pending/)';
+  }
+  for (const p of list) {
+    const row = line('click');
+    row.appendChild(span((zone === 'approved' ? G.done : G.pending) + ' ', zone === 'approved' ? 'ok' : 'warn'));
+    row.appendChild(span(p.name, 'accent'));
+    row.appendChild(span(' ' + G.dot + ' ' + (p.description || '(no DESCRIPTION)'), 'dim'));
+    row.addEventListener('click', () => openForge(forge, p.name, zone === 'approved' ? 'loaded' : 'pending'));
+    listEl.appendChild(row);
+  }
+  tb.body.appendChild(listEl);
+  const hint = el('div', 'hint');
+  hint.textContent = zone === 'approved'
+    ? 'click a plugin to read it; an edit saves a pending revision, approve (replace) swaps it in'
+    : 'click a plugin to edit it; approve moves it into plugins/ — a live session loads it at its next plugins_reload';
+  tb.body.appendChild(hint);
+
+  const act = el('div', 'actions');
+  act.appendChild(button('new plugin', 'primary', () => openForge(forge, null, 'pending')));
+  tb.body.appendChild(act);
+
+  const forge = el('div');
+  forge.hidden = true;
+  tb.body.appendChild(forge);
+}
+
+async function openForge(host, name, zone) {
+  host.hidden = false;
+  host.innerHTML = '';
+  let source = PLUGIN_TEMPLATE;
+  if (name) {
+    try {
+      const d = await api('/api/plugins/source?name=' + encodeURIComponent(name) + '&zone=' + zone);
+      source = d.source;
     } catch (e) {
-      setEcho(out, G.fail + ' ' + e.message, true);
+      host.appendChild(note(G.fail + ' ' + e.message, 'error'));
+      return;
+    }
+  }
+  const head = line();
+  head.appendChild(span(G.prompt + ' ', 'ember'));
+  head.appendChild(span(name ? 'forge ' + G.dot + ' ' + name + ' (' + zone + ')' : 'forge ' + G.dot + ' new plugin', 'text'));
+  host.appendChild(head);
+  const nameIn = textInput('name (lowercase, the filename stem)', true);
+  if (name) { nameIn.value = name; nameIn.readOnly = true; }
+  host.appendChild(promptRow('name', nameIn, G.dot));
+  const ed = editorEl(source);
+  host.appendChild(ed.el);
+  const out = echoEl();
+  host.appendChild(out);
+  const act = el('div', 'actions');
+  const save = button(zone === 'loaded' ? 'save as pending revision' : 'save → pending', 'primary', async () => {
+    save.disabled = true;
+    try {
+      const r = await post('/api/plugins/save', { name: nameIn.value.trim(), source: ed.value });
+      setEcho(out, r.reply);
+      if (!name) { name = r.name; nameIn.readOnly = true; }
+      zone = 'pending';
+      approve.hidden = false;
+      refreshCounts();
+    } catch (e) {
+      setEcho(out, e.message, true);
     } finally {
-      btn.disabled = false;
+      save.disabled = false;
     }
   });
-  main.appendChild(form);
+  act.appendChild(save);
+  const approve = button('approve', null, () => doApprove(false));
+  approve.hidden = zone !== 'pending';
+  const replace = button('approve with replace', 'danger', () => doApprove(true));
+  replace.hidden = true;
+  async function doApprove(force) {
+    approve.disabled = true;
+    replace.disabled = true;
+    try {
+      const r = await post('/api/plugins/approve', { name: nameIn.value.trim(), replace: force });
+      setEcho(out, r.reply);
+      replace.hidden = true;
+      approve.hidden = true;
+      state.pluginZone = 'approved';
+      setTimeout(renderPlugins, 900);
+    } catch (e) {
+      setEcho(out, e.message, true);
+      if (e.status === 409) replace.hidden = false;
+    } finally {
+      approve.disabled = false;
+      replace.disabled = false;
+    }
+  }
+  act.appendChild(approve);
+  act.appendChild(replace);
+  act.appendChild(button('close', null, () => { host.hidden = true; host.innerHTML = ''; }));
+  host.appendChild(act);
+  async function refreshCounts() {
+    try {
+      const d = await api('/api/plugins');
+      for (const b of main.querySelectorAll('.seg button')) {
+        const z = b.textContent.split(' ')[0];
+        b.textContent = z + ' ' + (z === 'approved' ? (d.loaded || []).length : (d.pending || []).length);
+      }
+    } catch (_) {}
+  }
+  ed.focus();
 }
 
 // --- the cwd picker (the server's list + the operator's additions) ---
@@ -751,7 +851,8 @@ async function loadCwds() {
     cwdSelect.appendChild(o);
   }
   if (cwds.length) {
-    const remembered = localStorage.getItem(CWD_KEY);
+    let remembered = null;
+    try { remembered = localStorage.getItem(CWD_KEY); } catch (_) {}
     state.cwd = remembered && cwds.includes(remembered) ? remembered : cwdSelect.value;
     cwdSelect.value = state.cwd;
   } else {
@@ -759,8 +860,8 @@ async function loadCwds() {
   }
 }
 
-function addCwd() {
-  const c = cwdAdd.value.trim();
+function addCwd(path) {
+  const c = (path !== undefined ? path : cwdAdd.value).trim();
   if (!c) {
     cwdAdd.focus();
     return;
@@ -777,16 +878,58 @@ function addCwd() {
     const added = addedCwds();
     if (!added.includes(c)) {
       added.push(c);
-      localStorage.setItem(ADDED_KEY, JSON.stringify(added));
+      try { localStorage.setItem(ADDED_KEY, JSON.stringify(added)); } catch (_) {}
     }
   }
   cwdSelect.value = c;
   cwdAdd.value = '';
-  localStorage.setItem(CWD_KEY, c);
+  try { localStorage.setItem(CWD_KEY, c); } catch (_) {}
   state.cwd = c;
   state.transcript = null;
   render();
 }
+
+// --- the folder browser: ls, for the picker ---
+
+async function browseTo(path) {
+  let d;
+  try {
+    d = await api('/api/fs' + (path ? '?path=' + encodeURIComponent(path) : ''));
+  } catch (e) {
+    browser.innerHTML = '';
+    browser.appendChild(note(G.fail + ' ' + e.message, 'error'));
+    return;
+  }
+  browser.innerHTML = '';
+  const head = el('div', 'browse-path');
+  head.appendChild(span(G.done + ' ', 'accent'));
+  head.appendChild(span('ls', 'accent'));
+  head.appendChild(span(' ' + G.dot + ' ', 'dim'));
+  head.appendChild(span(d.path, 'text'));
+  head.appendChild(button('use this folder', 'primary', () => { addCwd(d.path); setBrowser(false); }));
+  if (d.parent) head.appendChild(button('..', null, () => browseTo(d.parent)));
+  head.appendChild(button('close', null, () => setBrowser(false)));
+  browser.appendChild(head);
+  const list = el('div', 'browse-list');
+  if (!d.dirs.length) list.appendChild(line('dim')).textContent = '(no folders)';
+  for (const e of d.dirs) {
+    const row = line('click');
+    row.appendChild(span(G.dir + ' ', 'dim'));
+    row.appendChild(span(e.name + '/', 'text'));
+    row.addEventListener('click', () => browseTo(e.path));
+    list.appendChild(row);
+  }
+  if (d.truncated) list.appendChild(line('dim')).textContent = G.dot + ' more folders not shown (the listing is capped) ' + G.dot;
+  browser.appendChild(list);
+}
+
+function setBrowser(open) {
+  browser.hidden = !open;
+  browseBtn.setAttribute('aria-expanded', String(open));
+  if (open) browseTo(state.cwd || '');
+}
+
+browseBtn.addEventListener('click', () => setBrowser(browser.hidden));
 
 // --- the mobile drawer ---
 
@@ -822,14 +965,15 @@ document.getElementById('cwd-form').addEventListener('submit', (e) => {
 
 cwdSelect.addEventListener('change', () => {
   state.cwd = cwdSelect.value;
-  localStorage.setItem(CWD_KEY, state.cwd);
+  try { localStorage.setItem(CWD_KEY, state.cwd); } catch (_) {}
   state.transcript = null;
   render();
 });
 
 function render() {
   state.transcript = null;
-  if (!state.cwd) {
+  const needsCwd = state.view === 'sessions' || state.view === 'todos' || state.view === 'scheduler';
+  if (needsCwd && !state.cwd) {
     clear();
     main.appendChild(note('pick a workspace (cwd) to read', 'dim'));
     return;
@@ -841,7 +985,6 @@ function render() {
     sessions: () => renderSessions(q),
     todos: () => renderTodos(q),
     scheduler: () => renderScheduler(q),
-    memory: () => renderMemory(q),
     models: () => renderModels(),
     plugins: () => renderPlugins(),
   }[state.view];

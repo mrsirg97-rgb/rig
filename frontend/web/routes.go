@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
-	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
@@ -27,7 +26,6 @@ const (
 	maxWriteBytes = 64 * 1024
 	defaultReadTO = 5 * time.Second
 	defaultPage   = 200
-	defaultMemK   = 50
 )
 
 // pluginNameRe is the plugin name's wall (the filename stem): lowercase,
@@ -73,12 +71,18 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 		return setOf("GET", "POST"), true
 	case path == "/api/scheduler":
 		return setOf("GET", "POST"), true
-	case path == "/api/memory":
-		return setOf("GET"), true
 	case path == "/api/models":
 		return setOf("GET"), true
 	case path == "/api/plugins":
 		return setOf("GET", "POST"), true
+	case path == "/api/plugins/source":
+		return setOf("GET"), true
+	case path == "/api/plugins/save":
+		return setOf("POST"), true
+	case path == "/api/plugins/approve":
+		return setOf("POST"), true
+	case path == "/api/fs":
+		return setOf("GET"), true
 	}
 	return nil, false
 }
@@ -103,14 +107,20 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleScheduler(w, r)
 	case path == "/api/scheduler" && r.Method == "POST":
 		s.handleSchedulerCreate(w, r)
-	case path == "/api/memory":
-		s.handleMemory(w, r)
 	case path == "/api/models":
 		s.handleModels(w, r)
 	case path == "/api/plugins" && r.Method == "GET":
 		s.handlePlugins(w, r)
 	case path == "/api/plugins" && r.Method == "POST":
 		s.handlePluginsCreate(w, r)
+	case path == "/api/plugins/source":
+		s.handlePluginSource(w, r)
+	case path == "/api/plugins/save":
+		s.handlePluginSave(w, r)
+	case path == "/api/plugins/approve":
+		s.handlePluginApprove(w, r)
+	case path == "/api/fs":
+		s.handleBrowse(w, r)
 	}
 }
 
@@ -330,30 +340,6 @@ func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "text": text})
-}
-
-func (s *Server) handleMemory(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := s.readCtx(r)
-	defer cancel()
-	cwd := r.URL.Query().Get("cwd")
-	if cwd == "" {
-		writeErr(w, http.StatusBadRequest, "cwd is required")
-		return
-	}
-	db, err := s.stores.rem()
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	mems, err := remstore.Recent(ctx, db, cwd, defaultMemK)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if mems == nil {
-		mems = []string{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "memories": mems})
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {

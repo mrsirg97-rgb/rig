@@ -1,10 +1,11 @@
-/* pane's design language: the oled palette's values (frontend/tui theme.go),
-   and the TUI's visual grammar (the glyphs, the dim metadata, the blocks). */
+/* the TUI, in a browser: the oled palette's values (frontend/tui theme.go)
+   and its grammar — no panels, no boxes; lines on the terminal's ground,
+   tool blocks that open with ● and close with ✓, the ❯ prompt for input. */
 :root {
-  --bg: #1e1e1e;
-  --panel: #252526;
+  --bg: #050505;
   --text: #d8d8d8;
   --dim: #6e6e6e;
+  --faint: #3c3c3c;
   --accent: #61afef;
   --success: #98c379;
   --error: #e06c75;
@@ -12,32 +13,38 @@
   --rule: #3c3c3c;
   --reasoning: #8a8a8a;
   --ember: #e8a86b;
+  --effort-off: #5a5a5a;
+  --effort-minimal: #6e6e6e;
+  --effort-low: #5f87af;
+  --effort-medium: #81a2be;
+  --effort-high: #b294bb;
+  --effort-xhigh: #d183e8;
+  --effort-max: #ff5fff;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
 }
 
 * { box-sizing: border-box; }
-
 html, body { height: 100%; }
-
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font: 13px/1.6 var(--mono);
 }
+::selection { background: rgba(232, 168, 107, 0.28); }
+a { color: var(--accent); text-decoration: none; }
 
-/* the header */
+/* the header: the TUI's first row */
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--rule);
 }
-
 .brand { display: flex; align-items: center; gap: 10px; }
-
-h1 { margin: 0; font-size: 14px; font-weight: 600; color: var(--accent); letter-spacing: 0.04em; }
+h1 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
 h1 .sub { color: var(--dim); font-weight: 400; }
 
 .nav-toggle {
@@ -48,194 +55,200 @@ h1 .sub { color: var(--dim); font-weight: 400; }
   height: 40px;
   font-size: 18px;
   line-height: 1;
-  color: var(--text);
 }
 
-.cwdpick {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--dim);
-  font-size: 12px;
-}
+.cwdpick { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+#cwd-add { width: 200px; }
 
-select, textarea, input {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
+/* the controls: the TUI's input — no box, a rule underneath */
+select, textarea, input, button {
   font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 3px 4px;
+  outline: none;
 }
-
-select { padding: 4px 8px; max-width: 40vw; }
-
-#cwd-add { padding: 4px 8px; width: 180px; }
-
-textarea { width: 100%; padding: 8px; resize: vertical; }
+select { max-width: 40vw; }
+select option { background: var(--bg); color: var(--text); }
+input:focus, textarea:focus, select:focus { border-bottom-color: var(--accent); }
+textarea { width: 100%; resize: vertical; line-height: 1.6; }
+button {
+  color: var(--dim);
+  border-bottom-color: transparent;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+button:hover { color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: wait; }
+button.primary { color: var(--accent); }
+button.danger:hover { color: var(--error); }
+button::before { content: "[ "; color: var(--faint); }
+button::after { content: " ]"; color: var(--faint); }
+.nav-toggle::before, .nav-toggle::after, nav button::before, nav button::after, .seg button::before, .seg button::after { content: none; }
 
 /* the layout */
-.layout { display: flex; min-height: calc(100vh - 51px); }
-
-nav {
-  width: 156px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--rule);
-  padding: 14px 0;
-}
-
+.layout { display: flex; min-height: calc(100vh - 45px); }
+nav { width: 150px; flex-shrink: 0; border-right: 1px solid var(--rule); padding: 12px 0; }
 nav button {
   display: block;
   width: 100%;
   text-align: left;
-  background: none;
   border: none;
   border-left: 2px solid transparent;
   color: var(--dim);
-  padding: 7px 20px;
-  cursor: pointer;
-  font: inherit;
+  padding: 6px 18px;
 }
-
 nav button:hover { color: var(--text); }
+nav button.active { color: var(--text); border-left-color: var(--ember); }
+nav button.active::before { content: "❯ "; color: var(--ember); }
+main { flex: 1; padding: 18px 22px 40px; overflow: auto; min-width: 0; }
 
-nav button.active {
-  color: var(--text);
-  border-left-color: var(--accent);
-  background: rgba(97, 175, 239, 0.08);
-}
-
-main { flex: 1; padding: 20px 24px; overflow: auto; min-width: 0; }
-
-/* the base controls */
-button {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 4px 12px;
-  cursor: pointer;
-  font: inherit;
-}
-
-button:hover { border-color: var(--accent); color: var(--accent); }
-button:disabled { opacity: 0.5; cursor: wait; }
-button.toggle { margin: 4px 0 0; }
-
+/* slots */
 .dim { color: var(--dim); }
+.faint { color: var(--faint); }
 .error { color: var(--error); }
 .ok { color: var(--success); }
 .err { color: var(--error); }
+.warn { color: var(--warn); }
 .accent { color: var(--accent); }
 .ember { color: var(--ember); }
 .text { color: var(--text); }
+.bold { font-weight: 600; }
+.effort-off { color: var(--effort-off); }
+.effort-minimal { color: var(--effort-minimal); }
+.effort-low { color: var(--effort-low); }
+.effort-medium { color: var(--effort-medium); }
+.effort-high { color: var(--effort-high); }
+.effort-xhigh { color: var(--effort-xhigh); }
+.effort-max { color: var(--effort-max); }
+.effort-on { text-decoration: underline; text-underline-offset: 3px; }
 
-/* the view head: the TUI's tool-block opening line */
-.view-head { margin: 0 0 14px; font-weight: 600; }
-.view-name { color: var(--accent); }
-
-/* the blocks (todo, scheduler, memory): the TUI's render, in slots */
-.block {
-  margin: 0 0 14px;
-  padding: 12px 14px;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
+/* the tool block: ● name · detail / body / name ✓ */
+.tb { margin: 0 0 22px; }
+.tb-open { white-space: pre-wrap; word-break: break-word; }
+.tb-body { padding: 2px 0 2px 2ch; white-space: pre-wrap; word-break: break-word; }
+.tb-close { color: var(--dim); }
+.line { white-space: pre-wrap; word-break: break-word; }
+.line.click { cursor: pointer; }
+.line.click:hover { background: rgba(97, 175, 239, 0.07); }
 .bar-on { color: var(--accent); letter-spacing: 0.08em; }
 .bar-off { color: var(--dim); letter-spacing: 0.08em; }
-
-.taskline, .memline, .action { margin: 2px 0; }
-
-.schedsec { margin: 0 0 6px; }
-.schedsec .schedjob { margin: 0 0 2px; }
 .detail { color: var(--dim); }
 .detail.drift { color: var(--warn); }
+.hint { color: var(--dim); margin: 6px 0 0; }
 
-/* the verbatim fallback (the TUI's own rule: unparseable, raw) */
-pre.verbatim {
-  margin: 0 0 14px;
-  padding: 12px;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
+/* the verbatim fallback: the TUI's raw block */
+pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--text); }
 
-/* the sessions */
-.sess { padding: 8px 0; border-bottom: 1px solid var(--rule); }
-.sess button { margin-left: 8px; }
-.sid { color: var(--text); }
+/* the prompt rows: the TUI's input line */
+.prompt { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; }
+.prompt .mark { color: var(--ember); padding-top: 3px; flex-shrink: 0; }
+.prompt .mark.dim { color: var(--dim); }
+.prompt input, .prompt select, .prompt textarea { flex: 1; min-width: 0; }
+.prompt textarea { min-height: 46px; }
+.prompt .label { color: var(--dim); width: 9ch; flex-shrink: 0; padding-top: 3px; }
+.actions { margin: 10px 0 0 2ch; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+
+/* the echo: the store's voice, the → line */
+.echo { margin: 8px 0 0 2ch; white-space: pre-wrap; word-break: break-word; color: var(--success); }
+.echo.err { color: var(--error); }
+
+/* the segmented toggle: the TUI's menu row */
+.seg { display: flex; gap: 14px; margin: 0 0 8px 2ch; }
+.seg button { padding: 2px 0; color: var(--dim); border-bottom: 1px solid transparent; }
+.seg button.active { color: var(--text); border-bottom-color: var(--ember); }
+.seg button.active::before { content: "❯ "; color: var(--ember); }
+
+/* the sessions and the transcript */
+.sess { padding: 2px 0; cursor: pointer; white-space: pre-wrap; word-break: break-word; }
+.sess:hover { background: rgba(97, 175, 239, 0.07); }
 .exit-open { color: var(--ember); }
 .exit-ok { color: var(--success); }
 .exit-fault { color: var(--error); }
 .exit-cancelled { color: var(--warn); }
-
-/* the transcript: the tool-block shape */
-.msg { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; }
-.msg-user { border-left: 2px solid var(--ember); }
-.msg-assistant { border-left: 2px solid var(--success); }
-.msg-tool { border-left: 2px solid var(--ember); }
+.msg { margin: 0 0 14px; }
 .msg .content { white-space: pre-wrap; word-break: break-word; }
-.reasoning { color: var(--reasoning); white-space: pre-wrap; word-break: break-word; margin-bottom: 8px; font-size: 12px; }
-.tool { margin-top: 8px; }
-.tool-head { font-size: 13px; }
+.msg-user .content { color: var(--text); }
+.reasoning { color: var(--reasoning); white-space: pre-wrap; word-break: break-word; margin: 0 0 6px; }
+.tool { margin: 6px 0 0; }
 .tool pre, .toolres {
-  margin: 4px 0 0;
-  padding: 8px;
-  background: var(--bg);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  overflow: auto;
-  max-height: 320px;
+  margin: 0;
+  padding: 0 0 0 2ch;
+  color: var(--dim);
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 12px;
-  color: var(--dim);
+  max-height: 320px;
+  overflow: auto;
 }
 .usage-line { margin: 6px 0 0; }
 
-/* the create forms */
-.create { margin-top: 18px; border-top: 1px solid var(--rule); padding-top: 14px; }
-.field { margin: 0 0 10px; }
-.field label { display: block; color: var(--dim); font-size: 11px; margin-bottom: 4px; }
-.field input, .field select, .field textarea { width: 100%; padding: 6px 8px; }
-.field textarea { min-height: 44px; }
-
-.echo {
-  margin: 10px 0;
-  padding: 10px;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  white-space: pre-wrap;
-  word-break: break-word;
+/* the editor: a gutter, a highlighted mirror, a transparent textarea */
+.editor {
+  position: relative;
+  display: grid;
+  grid-template-columns: 5ch 1fr;
+  margin: 8px 0 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  height: 360px;
 }
-.echo.err { color: var(--error); }
-.echo:not(.err) { color: var(--success); }
+.editor .gutter {
+  color: var(--faint);
+  text-align: right;
+  padding: 8px 1ch 8px 0;
+  white-space: pre;
+  overflow: hidden;
+  border-right: 1px solid var(--rule);
+  user-select: none;
+}
+.editor .cell { position: relative; overflow: hidden; }
+.editor pre.hl, .editor textarea.code {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 8px 1ch;
+  font: inherit;
+  line-height: 1.6;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 4;
+  border: none;
+}
+.editor pre.hl { color: var(--text); pointer-events: none; }
+.editor textarea.code {
+  color: transparent;
+  caret-color: var(--text);
+  background: transparent;
+  resize: none;
+  outline: none;
+}
+.editor textarea.code::selection { background: rgba(97, 175, 239, 0.25); }
+.hl-k { color: var(--ember); }
+.hl-s { color: var(--success); }
+.hl-c { color: var(--dim); font-style: italic; }
+.hl-n { color: var(--effort-xhigh); }
+.hl-f { color: var(--accent); }
+.hl-const { color: var(--warn); }
+.hl-b { color: var(--effort-medium); }
 
-/* the tables */
-table { border-collapse: collapse; width: 100%; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
-th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-td { color: var(--text); }
-
-a { color: var(--accent); }
+/* the folder browser: a ls-shaped panel under the header */
+#browser { padding: 10px 22px 12px; border-bottom: 1px solid var(--rule); }
+#browser[hidden] { display: none; }
+.browse-path { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.browse-list { margin: 6px 0 0 2ch; columns: 3; column-gap: 2ch; }
+.browse-list .line { break-inside: avoid; }
 
 /* the mobile drawer */
-#backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.5); }
+#backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.55); }
 #backdrop[hidden] { display: none; }
 
 @media (max-width: 720px) {
-  header {
-    flex-wrap: wrap;
-    padding: 10px 12px;
-  }
+  header { flex-wrap: wrap; padding: 8px 12px; }
   .nav-toggle { display: inline-flex; }
-  .cwdpick { width: 100%; order: 3; }
+  .cwdpick { width: 100%; order: 3; flex-wrap: wrap; }
   .cwdpick select { flex: 1; min-width: 0; max-width: none; }
   #cwd-add { flex: 1; min-width: 0; width: auto; }
   .layout { min-height: auto; }
@@ -254,12 +267,13 @@ a { color: var(--accent); }
     transition: transform 0.18s ease;
   }
   body.nav-open nav { transform: translateX(0); }
-  nav button { padding: 13px 20px; font-size: 14px; }
-  main { padding: 14px 12px; }
-  .block { padding: 10px 12px; }
-  .msg { padding: 8px 10px; }
-  .sess button, .create button, .toggle { min-height: 38px; }
-  table { display: block; overflow-x: auto; }
+  nav button { padding: 12px 20px; font-size: 14px; }
+  main { padding: 12px 10px 40px; }
+  .prompt .label { width: 7ch; }
+  .browse-list { columns: 1; }
+  .editor { height: 300px; }
+  button { min-height: 36px; }
+  nav button, .seg button { min-height: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
