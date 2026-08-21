@@ -1,15 +1,15 @@
 # rig
 
-A minimal agent loop machine. It executes the agent loop faithfully — assemble
+A minimal agentic harness. It executes the agent loop faithfully — assemble
 context, stream the model's output, execute what it asks for, feed results
 back, repeat — with every dependency held at a typed seam and every induced
-work bounded. Not a framework: a machine for one thing, built closed.
+work bounded. Not a framework: a harness for one job, built closed.
 
 **Stdlib-only core.** `core/` and `loop/` carry no dependencies; the one
 leaf dependency is `modernc.org/sqlite` (pure-Go driver) for the stores —
 justified in `specs/SPEC_STATE.md`.
 
-Status: feature-complete runtime, version `0.8.1`. The freeze discipline
+Status: feature-complete runtime, version `0.8.2`. The freeze discipline
 holds on `core/` and `loop/`; the 1.0 tag waits for lived use (a worker
 soak, the TUI field-tested as the daily driver).
 

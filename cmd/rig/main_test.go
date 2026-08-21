@@ -30,12 +30,13 @@ import (
 // 1.0 tag waits for lived use, and everything before it is a release
 // decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 0.8.0: the modes (SPEC_MODES: the /effort dial, the /role
-	// stance, the /approve gate with the TUI ask door, the three-row
-	// status); pre-1.0 — the 1.0 tag waits for lived use (a worker
-	// soak, the TUI field-tested as the daily driver).
-	if Version != "0.8.1" {
-		t.Fatalf("Version = %q, want 0.8.0 (pre-1.0, feature-complete)", Version)
+	// 0.8.2: the allow-list's presence reversal (SPEC_PLUGINS 7, amended:
+	// an installed plugin's presence in plugins/ root is its own allow-list
+	// entry, through the second door over the live plugin table); 0.8.0 the
+	// modes (SPEC_MODES). pre-1.0 — the 1.0 tag waits for lived use (a
+	// worker soak, the TUI field-tested as the daily driver).
+	if Version != "0.8.2" {
+		t.Fatalf("Version = %q, want 0.8.2 (pre-1.0, feature-complete)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be dotted numeric", Version)
