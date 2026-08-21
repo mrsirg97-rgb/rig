@@ -322,7 +322,11 @@ the Frontend's business, exactly as the steering slot is.
 
 The loop is a concrete function, not an interface. It is the one place turn
 ordering is written down; making it pluggable would make ordering emergent
-and undebuggable.
+and undebuggable. Since SPEC_EVT 2b it is the `evt` engine's consumer:
+each step below is a closure executed on the loop goroutine, and what
+waits on the world — the Frontend's `Input`, the provider's stream, a
+tool's execution — is a producer goroutine that posts. One goroutine
+touches the session; the steps and their order are unchanged.
 
 ```go
 func Run(ctx context.Context, k *Kernel) error
@@ -331,13 +335,16 @@ func Run(ctx context.Context, k *Kernel) error
 Per turn (deliverable 7 adds the named changes; SPEC_HARDENING has the
 argument):
 
-1. `frontend.Input(ctx)` blocks for the user message; append to session. A
+1. `frontend.Input(ctx)` is asked once, between turns, by a producer; the
+   line is posted and appended to the session on the loop goroutine. A
    queued message (steering) returns here before a fresh read.
 2. The loop calls `TurnStart` on every middleware that observes it (the
    guard's per-turn budget resets).
 3. `policy.Assemble(ctx, session)` produces the request messages.
-4. `provider.Stream(ctx, req)`; forward every event to `frontend.Notify`,
-   including `ReasoningDelta` (accumulated into the assistant message).
+4. `provider.Stream(ctx, req)`; a producer drains the channel and posts
+   each event in order; the loop forwards every event to
+   `frontend.Notify`, including `ReasoningDelta` (accumulated into the
+   assistant message).
 5. Accumulate deltas, reasoning, and tool calls until `Done`.
 6. No tool calls: append the assistant message, turn over, goto 1.
 7. Tool calls: the batch (SPEC_EVT 2a). A call the kernel's
@@ -345,9 +352,11 @@ argument):
    (a run, bounded by `Parallel`); any other call is a barrier that
    waits for everything before it and runs alone. Emission is in call
    order regardless of completion order: for each call, emit
-   `ToolStart`, wait for its result, emit `ToolResult` (its own
-   duration), append one tool message; then goto 3. A nil predicate is
-   the sequential loop, byte-identical.
+   `ToolStart` as the cursor reaches it, emit `ToolResult` (its own
+   duration) and append one tool message when its completion has been
+   posted; then goto 3. Every call runs in a goroutine; the loop
+   goroutine never blocks on a tool. A nil predicate is the sequential
+   order, byte-identical.
 
 L8 (SPEC_COMPACT 4): the loop stamps the assistant message it appends —
 in both the no-calls and the tool-calls branch — with `Done.Usage`'s
@@ -430,6 +439,9 @@ needed exists there: `net/http` (streaming via `bufio.Scanner` over SSE),
 `encoding/json`, `os/exec`, `context`, `flag`. The go.mod for v1 has zero
 requires. Any future dep is added to a leaf package, never to core, and is
 justified in this file first.
+
+`loop` imports `evt` (SPEC_EVT), an in-repo stdlib-only leaf: the engine
+the loop consumes. No third-party line; the stdlib-only rule holds.
 
 ## testing
 

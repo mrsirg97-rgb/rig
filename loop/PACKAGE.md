@@ -2,7 +2,10 @@
 
 ## What it is
 
-The one place turn ordering is written down. Per turn:
+The one place turn ordering is written down — and, since SPEC_EVT 2b,
+the `evt` engine's consumer: every step of a turn is a closure run on
+the loop goroutine; the Frontend's `Input`, the provider's stream, and
+each tool's execution are producer goroutines that post. Per turn:
 
     awaiting_input -> awaiting_model -> executing_tools
     -> awaiting_model -> ... -> done
@@ -13,14 +16,22 @@ the session at the boundary, clean.
 
 ## What it includes
 
-- `Run(ctx, k *rig.Kernel)` — drives turns until the frontend dries up or
-  ctx cancels. A concrete function by design: making the loop pluggable
-  would make ordering emergent and undebuggable.
+- `Run(ctx, k *rig.Kernel)` — wires the tools and the chain, posts the
+  first prompt, and blocks in the engine until a handler stops it (EOF,
+  a dead run context at a boundary, the provider-closed fault). A
+  concrete function by design: making the loop pluggable would make
+  ordering emergent and undebuggable.
+- `run` / `turn` — the consumer's state: the engine, the chain, the
+  specs, the live turn (its context, accumulators, batch, cursor); the
+  handlers `prompt`, `input`, `model`, `streamEvent`, `streamEnd`,
+  `toolDone`, `advance`, `end`, `stop`. Priorities: input 90, stream
+  50, tool completion 50.
 - `directExec(tools)` — the innermost exec: lookup and run.
 - `batch` (`batch.go`, SPEC_EVT 2a) — the tool-call batch: runs of
   calls the kernel's `Concurrent` predicate admits are dispatched as
   goroutines (at most `Parallel`, default 8); a refused call is a
-  barrier; `result(i)` dispatches lazily and waits in call order.
+  barrier; `dispatch(i)` starts the run the cursor reached, every call
+  in a goroutine, each posting its completion.
 
 ## How it is consumed
 
@@ -75,6 +86,13 @@ the session at the boundary, clean.
   not name forward untouched; the Frontend tolerates what it does not know.
 - A run-context cancel ends the run, not a turn, and emits no `TurnEnd`;
   every turn exit emits one.
+- Every event captures its turn and checks it is the live one; a stale
+  completion or stream event is ignored by name.
+- The engine runs on a background context: the run ends from a handler
+  at a boundary (the sequential loop's rule), never mid-drain.
+- `Assemble` (a compaction inside it) and the `Stream` call block the
+  consumer, as before; the interrupt reaches them through the turn
+  context, not an event.
 - Inside a concurrent run the middleware chain and the tools run off the
   loop goroutine: a middleware with state locks it (the guard does), a
   tool that writes the session locks its writes (the file tool does),
