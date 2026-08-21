@@ -49,11 +49,15 @@ func strictDecode(data json.RawMessage, out any) error {
 	return dec.Decode(out)
 }
 
+var filesMu sync.Mutex
+
 func stateOf(ctx context.Context, path string) (core.FileState, bool) {
 	s, ok := core.SessionFrom(ctx)
 	if !ok {
 		return core.FileState{}, false
 	}
+	filesMu.Lock()
+	defer filesMu.Unlock()
 	st, ok := s.Files[path]
 	return st, ok
 }
@@ -75,6 +79,8 @@ func recordState(ctx context.Context, path string, data []byte) {
 		return
 	}
 	sum := sha256.Sum256(data)
+	filesMu.Lock()
+	defer filesMu.Unlock()
 	s.Files[path] = core.FileState{
 		Hash:  hex.EncodeToString(sum[:]),
 		Mtime: st.ModTime().UnixNano(),

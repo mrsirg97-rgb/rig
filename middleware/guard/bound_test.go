@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/core"
@@ -13,11 +14,14 @@ import (
 
 // failingExec always fails, counting executions per distinct args.
 type failingExec struct {
+	mu    sync.Mutex
 	calls map[string]int
 	total int
 }
 
 func (e *failingExec) Exec(ctx context.Context, call core.ToolCall) (string, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	key := string(call.Args)
 	e.calls[key]++
 	e.total++
