@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.8.1] — the walls speak
+
+- **the system prompt names the walls** (`config/settings.json`): the
+  default grows from two sentences to five — the harness enforces an
+  allowlist, a retry guard, an approval gate, and a plugin landing zone,
+  names each refusal, and a refusal is final for that call (change it or
+  ask, never reach the same effect through another tool); remembered
+  notes are suggestions, the code and the spec are the truth; python is
+  a persistent kernel and a capability built twice belongs in a plugin.
+  Operator-overridable as before (`system`, `RIG_SYSTEM`, `-system`).
+- **python's action vocabulary is closed** (`specs/SPEC_PYTHON.md`,
+  amended): `code` (or no action) runs the code, `vars`/`reset` are the
+  host's, anything else is refused by name before the kernel is touched.
+  The field failure: a model sent `action: "code"` on every call, the old
+  dispatch forwarded it without the code, the host ran the empty string,
+  and 457 calls came back `(no output)` ok — a silent success that ran
+  nothing. `code` joins the schema enum.
+- **the guard's spec says one thing** (`specs/SPEC_HARDENING.md` 7):
+  the streak is per tool with a last-failed-args marker — identical
+  retries cap, a changed call resets; the named consequence, alternating
+  failing calls never trip the bound; the test is named for what it
+  asserts (`TestDriftingArgsEachGetAFreshStreak`); `bound.go` carries no
+  comments.
+- **the flaky kernel test was a race** (`tool/python`): the unwritable-
+  kernel host now closes stdin before it answers, so the client's next
+  write is EPIPE by construction instead of sometimes waiting out the
+  timeout on a loaded runner. Flaky is a bug, never a rerun.
+- **distribution, proven**: v0.8.0 shipped through the tag path on the
+  first try; the installer at `https://mrsirg97-rgb.github.io/rig/install.sh`
+  verified end-to-end; the repo is public.
+
 ## [0.8.0] — the modes
 
 - **`/effort`** (`specs/SPEC_MODES.md` 1): the session's reasoning

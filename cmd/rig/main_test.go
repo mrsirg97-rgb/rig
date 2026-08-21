@@ -34,7 +34,7 @@ func TestVersionIsTheFreeze(t *testing.T) {
 	// stance, the /approve gate with the TUI ask door, the three-row
 	// status); pre-1.0 — the 1.0 tag waits for lived use (a worker
 	// soak, the TUI field-tested as the daily driver).
-	if Version != "0.8.0" {
+	if Version != "0.8.1" {
 		t.Fatalf("Version = %q, want 0.8.0 (pre-1.0, feature-complete)", Version)
 	}
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
