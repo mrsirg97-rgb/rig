@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.1] — the estimate tells the truth
+
+- **calibration trusts a measurement, not a turn** (`specs/SPEC_COMPACT.md`
+  4, amended): a delta under 2% of the anchor no longer moves the factor
+  — a tool-loop turn's `reported − anchor` is the template's overhead and
+  the reasoning it keeps or strips, none of it in the delta's bytes; the
+  clamp ceiling is 2.0. The field shape: per-turn ratios of 44, 0.31,
+  31.8, 0.02 pinned the factor at 4, the brain compacted 20 times at ~50k
+  real tokens, and a 125k summary input read as 427k and faulted.
+- **history reasoning leaves the estimate**: `Reasoning` counts on the
+  last assistant message only — every chat template strips it from prior
+  turns, so the server never counted the 8.3 MB one session carried; a
+  `-resume` of it would have compacted everything on the first assemble.
+- **the oldest slice that fits** (3, amended): an older prefix whose
+  summary input does not fit the window is cut to the largest prefix that
+  leaves the summary floor, one call, the remainder folding on a later
+  pass — where it was a fault that stuck the session until `/new`. A
+  single message that alone does not fit is still the loud failure.
+
 ## [0.9.0] — the plugin door and the enablement
 
 - **the plugin door** (`specs/SPEC_GROWTH.md` 9, SPEC_PLUGINS 7's named

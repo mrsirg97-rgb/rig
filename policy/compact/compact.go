@@ -115,9 +115,19 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	factor = p.factor
 	p.mu.Unlock()
 	est := int(float64(Estimate(input)) * factor)
-	if budget := p.row.Window - est; budget <= 0 {
-		return core.Compacted{}, false, fmt.Errorf("compact: %s: the summary input alone does not fit the window: window %d, estimate %d",
-			p.row.ID, p.row.Window, est)
+	if floor := p.summaryFloor(); p.row.Window-est < floor {
+		k := fitPrefix(older, factor, p.row.Window-floor)
+		if k == 0 {
+			return core.Compacted{}, false, fmt.Errorf("compact: %s: the summary input alone does not fit the window: window %d, estimate %d",
+				p.row.ID, p.row.Window, est)
+		}
+		rest := older[k:]
+		older = older[:k]
+		kept := make([]core.Message, 0, len(rest)+len(tail))
+		kept = append(kept, rest...)
+		tail = append(kept, tail...)
+		input = SummaryInput(older)
+		est = int(float64(Estimate(input)) * factor)
 	}
 
 	p.fe.Notify(core.Compacting{})
@@ -211,7 +221,7 @@ func (p *policy) calibrate(req core.Request, u core.Usage) {
 		return
 	}
 	deltaEst := Estimate(msgs[idx+1:])
-	if deltaEst == 0 {
+	if deltaEst == 0 || deltaEst*50 < msgs[idx].ContextTokens {
 		return
 	}
 	ratio := float64(u.Prompt-msgs[idx].ContextTokens) / float64(deltaEst)
@@ -222,12 +232,47 @@ func (p *policy) calibrate(req core.Request, u core.Usage) {
 	if f < 0.5 {
 		f = 0.5
 	}
-	if f > 4.0 {
-		f = 4.0
+	if f > 2.0 {
+		f = 2.0
 	}
 	p.mu.Lock()
 	p.factor = f
 	p.mu.Unlock()
+}
+
+func (p *policy) summaryFloor() int {
+	floor := p.row.Reserve / 4
+	if floor > 256 {
+		floor = 256
+	}
+	if floor < 1 {
+		floor = 1
+	}
+	return floor
+}
+
+func fitPrefix(older []core.Message, factor float64, limit int) int {
+	fits := func(k int) bool {
+		return int(float64(Estimate(SummaryInput(older[:k])))*factor) <= limit
+	}
+	lo, hi := 0, len(older)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fits(mid) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	k := lo
+	for k > 0 && k < len(older) && older[k].Role == core.RoleTool {
+		j := callIn(older[:k], older[k].ToolID)
+		if j < 0 {
+			break
+		}
+		k = j
+	}
+	return k
 }
 
 func minInt(a, b int) int {
