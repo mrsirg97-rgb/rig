@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig — a minimal agent-loop machine</title>
-<meta name="description" content="A lean agent runtime, built closed. Stdlib-only core, ten native tools, one-file python plugins, the walls named. Install rig in one line.">
+<title>rig — a minimal agentic loop harness</title>
+<meta name="description" content="A minimalist agentic harness, built closed. Stdlib-only core, ten native tools, one-file python plugins, the walls named. Install rig in one line.">
 <meta name="theme-color" content="#050505">
-<meta property="og:title" content="rig — a minimal agent-loop machine">
-<meta property="og:description" content="A lean agent runtime, built closed. Install in one line; extend with one file.">
+<meta property="og:title" content="rig — a minimal agentic loop harness">
+<meta property="og:description" content="A minimalist agentic harness, built closed. Install in one line; extend with one file.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
 <!--
@@ -70,6 +70,13 @@ a:hover { text-decoration: underline; }
 .cursor::after { content: "█"; color: var(--ember); animation: blink 1.06s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 section { margin: 3rem 0 0; }
+.pitch { margin: 0; }
+.lede { margin: 0 0 .7rem; color: var(--dim); font-size: 13px; }
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1.8rem; margin: 0; padding: 0; list-style: none; }
+@media (max-width: 560px) { .tools { grid-template-columns: 1fr; } }
+.tools li { font-size: 13.5px; line-height: 1.5; }
+.tname { color: var(--ember); }
+.tdesc { color: var(--dim); }
 .cmd { border: 1px solid var(--rule); background: rgba(255,255,255,.022); margin: .9rem 0; transition: border-color .2s ease; }
 .cmd:hover { border-color: var(--dim); }
 .cmd-head {
@@ -116,6 +123,41 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <p class="tag reveal"><span class="st st1">assemble</span> · <span class="st st2">stream</span> · <span class="st st3">execute</span> · <span class="st st4">repeat</span></p>
   </section>
 
+  <section aria-labelledby="h-what">
+    <h2 id="h-what" class="sr">what rig is</h2>
+    <p class="pitch reveal">rig is a minimalist agentic harness. one job: the turn — assemble
+    context, stream the model's output, execute what it asks for, feed the
+    results back, repeat. every dependency held at a typed seam, every induced
+    work bounded, and the harness names no concrete type.</p>
+  </section>
+
+  <section aria-labelledby="h-plugins">
+    <h2 id="h-plugins" class="sr">plugins</h2>
+    <p class="pitch reveal">one file under <span class="tname">~/.rig/plugins/</span> is one tool:
+    the name is the filename, the description and schema are the file's, and the
+    call rides the shared python kernel. loaded tools register on the same seam
+    as the native set — indistinguishable on the wire. a broken file names itself
+    and is skipped; it never bricks the harness.</p>
+  </section>
+
+  <section aria-labelledby="h-tools">
+    <h2 id="h-tools" class="sr">tools</h2>
+    <p class="lede reveal">ten native tools, each a leaf behind the Tool seam — every call
+    observed by the walls, bounded, and named.</p>
+    <ul class="tools reveal">
+      <li><span class="tname">bash</span><span class="tdesc"> — real subprocesses; output surfaced and bounded</span></li>
+      <li><span class="tname">file</span><span class="tdesc"> — read · write · edit; edits drift-checked against what you read</span></li>
+      <li><span class="tname">fs</span><span class="tdesc"> — ls · find · grep; small schemas a local model can reach</span></li>
+      <li><span class="tname">diff</span><span class="tdesc"> — the working tree vs HEAD, or the last observation of the same call</span></li>
+      <li><span class="tname">python</span><span class="tdesc"> — a persistent IPython kernel; state persists across calls</span></li>
+      <li><span class="tname">web</span><span class="tdesc"> — search via SearXNG; fetch with the SSRF guard and extraction</span></li>
+      <li><span class="tname">todo</span><span class="tdesc"> — the task queue; event-sourced, DAG-validated at create</span></li>
+      <li><span class="tname">rem</span><span class="tdesc"> — memory; recall by intent, consolidation arithmetic</span></li>
+      <li><span class="tname">scheduler</span><span class="tdesc"> — background jobs on cron; the worker runs in a bwrap jail</span></li>
+      <li><span class="tname">plugins_reload</span><span class="tdesc"> — re-discover from disk; the swap takes effect next turn</span></li>
+    </ul>
+  </section>
+
   <section aria-labelledby="h-install">
     <h2 id="h-install" class="sr">install</h2>
 
@@ -157,7 +199,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
   </section>
 
   <footer class="reveal">
-    <div>rig 0.8.1 — a minimal agent-loop machine</div>
+    <div>rig 0.8.1 — a minimal agentic loop harness</div>
     <div class="links">
       <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a> ·
       <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a> ·
@@ -165,7 +207,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
       <a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a> ·
       <a href="https://github.com/mrsirg97-rgb/rig">github</a>
     </div>
-    <div class="signoff">not a framework. a machine.</div>
+    <div class="signoff">not a framework. a harness.</div>
   </footer>
 
 </div>
@@ -178,7 +220,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
   for (var i = 0; i < items.length; i++) {
     (function (el, delay) {
       if (reduced) { el.classList.add("in"); return; }
-      setTimeout(function () { el.classList.add("in"); }, 60 + delay * 110);
+      setTimeout(function () { el.classList.add("in"); }, 60 + delay * 100);
     })(items[i], i);
   }
   var btns = document.querySelectorAll(".copy");
