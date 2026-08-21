@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -719,6 +717,10 @@ func main() {
 		os.Exit(runJob(os.Args[2:]))
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "serve" {
+		os.Exit(serve(os.Args[2:]))
+	}
+
 	if err := checkOneShot(*prompt, *resumeID); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(2)
@@ -729,7 +731,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	digest := sha1.Sum([]byte(cwd))
 
 	cfgDir, err := rigHome()
 	if err != nil {
@@ -864,7 +865,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sessionsPath := filepath.Join(cfgDir, "sessions", hex.EncodeToString(digest[:6])+".sqlite")
+	sessionsPath := state.StorePath(cfgDir, cwd)
 	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -879,7 +880,7 @@ func main() {
 	}
 	defer sdb.DB.Close()
 
-	todoPath := filepath.Join(cfgDir, "todo", hex.EncodeToString(digest[:12])+".sqlite")
+	todoPath := todostore.StorePath(cfgDir, cwd)
 	if err := os.MkdirAll(filepath.Dir(todoPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -894,7 +895,7 @@ func main() {
 	}
 	defer tdb.DB.Close()
 
-	remPath := filepath.Join(cfgDir, "rem", "rem.sqlite")
+	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)

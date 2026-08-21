@@ -22,6 +22,13 @@ go build ./cmd/rig
 
 then talk. Configuration and verification: `docs/SETUP.md`.
 
+## dashboard
+
+`rig serve` opens a loopback-only dashboard on the rig home's stores
+(sessions, todo, scheduler, memory, models, plugins) with one write — a
+todo create: open the printed address with the printed token
+(`specs/SPEC_SERVE.md`).
+
 ## install
 
 Three paths (`specs/SPEC_BUILD.md` 5); pick one:
