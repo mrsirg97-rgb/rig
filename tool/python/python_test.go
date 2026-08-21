@@ -285,13 +285,15 @@ func TestQueuedCallTimeoutDoesNotCountTimeSpentWaiting(t *testing.T) {
 const unwritableHostSrc = `
 import json, sys, time, os
 line = sys.stdin.readline()
+# close the host's end of stdin BEFORE answering (os.close: PEP 442's lazy
+# wrapper close would leave fd 0 open) so the client's next write fails
+# with EPIPE while the host stays alive (no death-path race). Closing
+# after the answer raced the client: its second write could land in the
+# pipe buffer before the close and wait out the whole timeout (CI, twice).
+os.close(0)
 if line:
     req = json.loads(line)
     print(json.dumps({"ok": True, "out": "one", "err": "", "result": None, "error": None, "id": req.get("id")}), flush=True)
-# close the host's end of stdin (os.close: PEP 442's lazy wrapper close
-# would leave fd 0 open) so the client's next write fails with EPIPE
-# while the host stays alive (no death-path race)
-os.close(0)
 time.sleep(60)
 `
 
