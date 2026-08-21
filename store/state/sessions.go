@@ -12,6 +12,7 @@ var ErrNoSuchSession = errors.New("no such session")
 
 type SessionRow struct {
 	ID      string
+	Cwd     string
 	Started time.Time
 	Exit    string
 	Turns   int
@@ -19,7 +20,7 @@ type SessionRow struct {
 
 func ListSessions(ctx context.Context, db store.DB) ([]SessionRow, error) {
 	rows, err := db.DB.QueryContext(ctx, `
-		SELECT s."id", s."started_at",
+		SELECT s."id", s."cwd", s."started_at",
 			CASE WHEN s."ended_at" IS NULL THEN 'open' ELSE s."exit" END,
 			(SELECT count(*) FROM "messages" m
 			 WHERE m."session_id" = s."id"
@@ -35,7 +36,7 @@ func ListSessions(ctx context.Context, db store.DB) ([]SessionRow, error) {
 	var out []SessionRow
 	for rows.Next() {
 		var r SessionRow
-		if err := rows.Scan(&r.ID, &r.Started, &r.Exit, &r.Turns); err != nil {
+		if err := rows.Scan(&r.ID, &r.Cwd, &r.Started, &r.Exit, &r.Turns); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

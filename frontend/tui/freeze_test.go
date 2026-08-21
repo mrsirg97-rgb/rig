@@ -43,6 +43,9 @@ func TestFreezeGate(t *testing.T) {
 	allow := func(p string) bool {
 		return p == "frontend/tui" || strings.HasPrefix(p, "frontend/tui/") ||
 			p == "frontend/cli" || strings.HasPrefix(p, "frontend/cli/") ||
+			// the dashboard round (SPEC_SERVE): the web leaf and its
+			// store verbs, beside the frontends.
+			p == "frontend/web" || strings.HasPrefix(p, "frontend/web/") ||
 			p == "cmd/rig" || strings.HasPrefix(p, "cmd/rig/") ||
 			p == "command" || strings.HasPrefix(p, "command/") ||
 			p == "store/state" || strings.HasPrefix(p, "store/state/") ||
