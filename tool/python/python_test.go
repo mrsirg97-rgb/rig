@@ -155,6 +155,31 @@ func TestEmptyCallFailsLoudlyWithAClearMessage(t *testing.T) {
 	matches(t, `no code supplied`, text)
 }
 
+// The field failure (2026-08-21): a model sent action "code" with its
+// code on every call; the old dispatch forwarded the unknown cmd without
+// the code, the host ran the empty string, and 457 calls came back
+// "(no output)" ok. action "code" now runs the code like an omitted action.
+func TestActionCodeRunsTheCode(t *testing.T) {
+	requireKernel(t)
+	text, ok := mustRun(t, map[string]any{"action": "code", "code": "40 + 2"})
+	if !ok {
+		t.Fatalf("isError: %s", text)
+	}
+	matches(t, `Out\[.*\]: 42`, text)
+}
+
+// Any other action is refused before the kernel is touched, naming the
+// vocabulary: never an ok reply that ran nothing.
+func TestUnknownActionRefusesLoudBeforeTheKernel(t *testing.T) {
+	tl := NewWith("/nonexistent/python", "/nonexistent/host.py")
+	text, err := call(t, tl, map[string]any{"action": "run", "code": "1"})
+	if err == nil {
+		t.Fatalf("unknown action succeeded: %s", text)
+	}
+	matches(t, `unknown action "run"`, text)
+	matches(t, `code \(or omit it\), vars, reset`, text)
+}
+
 func TestRuntimeErrorsAreReportedAsErrorsWithTracebackText(t *testing.T) {
 	requireKernel(t)
 	text, ok := run(map[string]any{"code": "1 / 0"})
