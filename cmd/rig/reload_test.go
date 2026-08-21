@@ -692,3 +692,62 @@ def run(args: dict) -> str:
 		t.Fatalf("the python tool's call of the forged module = %q, want the namespace's proof (the kernel's result echo of \"10\")", got)
 	}
 }
+
+// TestDoorSelfHealsAnOutOfBandInstall (SPEC_STREAMLINE 4, the door's
+// proof): a plugin file lands in the home after the wire, no
+// plugins_reload is called, and the model calls the door by name; the
+// door re-discovers once, executes, and the result rides back verbatim;
+// the following request carries the name in the door's enum.
+func TestDoorSelfHealsAnOutOfBandInstall(t *testing.T) {
+	home := t.TempDir()
+	kernel := &kernelStub{replies: []pythontool.Reply{
+		okReply(`[{"name":"dropped","file":"` + filepath.Join(home, "plugins", "dropped.py") + `","ok":true,"description":"the fixture dropped plugin","schema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}}]`),
+		okReply("dropped: hi\n"),
+	}}
+	h := newReloadHarness(t, home, kernel, []string{
+		toolCallReply("c1", "plugin", `{"name":"dropped","args":{"text":"hi"}}`), // turn 1: the door's call
+		pongReply, // turn 1 ends
+		pongReply, // turn 2: the wire's shape
+	})
+	h.start()
+
+	// the out-of-band install: the operator's file, no reload called
+	writePlugin(t, home, "dropped.py", `DESCRIPTION = "the fixture dropped plugin"
+SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
+
+def run(args: dict) -> str:
+    return "dropped: " + args["text"]
+`)
+
+	h.line("one")
+	h.line("two")
+	h.stop()
+
+	bodies := bodiesAll(h.s)
+	if len(bodies) != 3 {
+		t.Fatalf("requests = %d, want 3 (the scripted schedule)", len(bodies))
+	}
+	// the call's wire: the stamp predates the swap, the enum does not
+	// carry dropped.
+	if hasPluginName(bodies[0], "dropped") {
+		t.Fatalf("the call's own wire carries dropped (the stamp predates the swap)")
+	}
+	// the self-healed run: the result rides back verbatim.
+	if got := toolMessageOf(t, bodies[1]); got != "dropped: hi" {
+		t.Fatalf("the self-healed result = %q, want \"dropped: hi\" verbatim", got)
+	}
+	// the following request: the door's enum carries dropped (the swap
+	// has landed).
+	if !hasPluginName(bodies[2], "dropped") {
+		t.Fatalf("the following wire must carry dropped in the door's enum, got %v", pluginNamesIn(bodies[2]))
+	}
+	// the redo ran exactly once (the discovery), and the call once.
+	if got := kernel.cellCount(); got != 2 {
+		t.Fatalf("kernel cells = %d, want the discovery plus the call", got)
+	}
+	// the swap left the plugin as a real tool in the table (the router's
+	// end, the python import's end).
+	if got := len(h.r.live.List()); got != len(nativeToolNames)+1 {
+		t.Fatalf("the table after the self-heal = %d tools, want the natives plus the swapped-in one", got)
+	}
+}
