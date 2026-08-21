@@ -390,15 +390,27 @@ a named boundary: a fixture at exactly `Window - Reserve` is passthrough;
 one over compacts.
 
 The estimate is stdlib: for each message, the bytes of `Content` plus
-`Reasoning` plus each tool call's name and args, divided by 4, rounded
-up. Named approximate: it is a trigger, not an accounting.
+each tool call's name and args, divided by 4, rounded up; `Reasoning`
+counts on the last assistant message of the list only (amended
+2026-08-21). Named approximate: it is a trigger, not an accounting. The
+reasoning rule mirrors the wire: the adapter sends `reasoning_content`
+for every assistant row, and every chat template in use strips it from
+history (Qwen3 keeps thinking only after the last user turn; DeepSeek
+drops it from prior turns), so the server's count never carries it.
+Counting it did: one 2026-08-21 session held 8.3 MB of reasoning beside
+359 KB of assistant text — an estimate of ~2M tokens for a transcript the
+server counted at 192k, and a `-resume` of it would have compacted
+everything on the first assemble. `split`'s per-message budget sees each
+message as its own list, so the tail counts its messages' reasoning —
+conservative on the cut, named.
 
 The calibration is the provider's reported usage, applied only to the
 delta: the number the server actually counted rides `Done.Usage`, already
 in the event vocabulary (SPEC_HARDENING decision 3) — the same wire, no
 new channel. On every `Done` the decorator relays (the main call's), if
 the request carries an anchor and a non-empty delta,
-`factor <- clamp((reported - anchor) / estimate(delta), 0.5, 4.0)`; a
+`factor <- clamp((reported - anchor) / estimate(delta), 0.5, 2.0)`, and
+only when `estimate(delta) >= anchor / 50` (amended 2026-08-21, below); a
 request with no anchor (the session's first call) leaves the factor as it
 is — the whole-request ratio carries the system+spec constant, the bug
 this decision exists to remove, and staying at 1.0 beats learning a
@@ -416,6 +428,29 @@ as its average — small next to the uncalibrated case (bytes/4 off by 2x
 or more on CJK-heavy or code-heavy transcripts), and the anchor is what
 lets one estimator stay honest on a 64k worker and a 262k brain with
 different tokenizers, from one shared config (decision 2's case).
+
+Amended 2026-08-21, the field failure: a session faulted twice with
+`the summary input alone does not fit the window: window 262144, estimate
+426816` while the server counted the whole context at 192k. The
+per-turn ratios reconstructed from its store read 44, 0.31, 4.57, 3.84,
+0.63, 31.8, 0.58, 7.27, 2.9, 1.88, 0.02 — noise, not a tokenizer. A
+tool-loop delta of a hundred tokens has `reported - anchor` dominated by
+the template's own overhead and by the reasoning the template keeps or
+strips between two calls, neither of which is in the delta's bytes; one
+such turn pinned the factor at the 4.0 clamp, and from then on every
+estimate was raw bytes read as tokens: the brain compacted at ~50k real
+tokens (20 times in one session) and a ~110k summary input read as 427k.
+Two changes. A delta under 2% of the anchor is not a measurement and
+leaves the factor where it was — the ratio is only trusted when the
+delta is large enough that the overhead is inside the rounding. The
+clamp ceiling is 2.0: bytes/4 is never 4x sparse on text, and the
+ceiling bounds the damage of any one bad sample to 2x (the summary-input
+check at 2x fits where 4x faulted). Rejected, named: an EMA over samples
+(slower to learn, still wrong on a noisy sample, and the named tests want
+the first good report to land); calibrating on the whole request (the
+system+spec constant, the reason this decision exists); a real tokenizer
+(a dependency, per model). The overflow recovery (7) remains the net
+under both.
 
 Where the calibration lives, named: the decorator is the only place that
 sees both sides of a main call — the assembled request and the reported
