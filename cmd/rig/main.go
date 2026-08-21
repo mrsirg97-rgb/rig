@@ -154,6 +154,7 @@ func wire(r *root) *rig.Kernel {
 			r.pluginTools...,
 		)...),
 		rig.WithMiddleware(mw...),
+		rig.WithConcurrent(func(c core.ToolCall) bool { return concurrentNatives[c.Name] }),
 	)
 	k.Session = r.session
 	r.k = k
@@ -387,6 +388,11 @@ func (r *root) effortForWire() string {
 func (r *root) switchEffort(ctx context.Context, level string) error {
 	r.effort = level
 	return nil
+}
+
+var concurrentNatives = map[string]bool{
+	"read": true, "ls": true, "find": true, "grep": true,
+	"web_search": true, "web_fetch": true, "diff": true,
 }
 
 var mutatingNatives = map[string]bool{

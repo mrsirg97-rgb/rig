@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
 type bound struct {
+	mu         sync.Mutex
 	limit      int
 	counts     map[string]int
 	lastFailed map[string]string
@@ -24,14 +26,19 @@ func Bound(limit int) core.ToolMiddleware {
 
 func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 	return func(ctx context.Context, call core.ToolCall) (string, error) {
+		g.mu.Lock()
 		if g.lastFailed[call.Name] != string(call.Args) {
 			g.counts[call.Name] = 0
 		}
 		if g.counts[call.Name] >= g.limit {
+			g.mu.Unlock()
 			msg := fmt.Sprintf("bound exhausted: %s has failed %d times; stop reissuing this call", call.Name, g.limit)
 			return msg, errors.New(msg)
 		}
+		g.mu.Unlock()
 		content, err := next(ctx, call)
+		g.mu.Lock()
+		defer g.mu.Unlock()
 		if err != nil {
 			if g.lastFailed[call.Name] == string(call.Args) {
 				g.counts[call.Name]++
@@ -56,6 +63,8 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 }
 
 func (g *bound) TurnStart(ctx context.Context, s *core.Session) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	g.counts = map[string]int{}
 	g.lastFailed = map[string]string{}
 }

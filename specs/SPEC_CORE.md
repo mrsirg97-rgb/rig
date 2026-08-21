@@ -340,9 +340,14 @@ argument):
    including `ReasoningDelta` (accumulated into the assistant message).
 5. Accumulate deltas, reasoning, and tool calls until `Done`.
 6. No tool calls: append the assistant message, turn over, goto 1.
-7. Tool calls: for each, in order: emit `ToolStart`, execute through the
-   middleware chain, emit `ToolResult` (with duration), append one tool
-   message, then goto 3.
+7. Tool calls: the batch (SPEC_EVT 2a). A call the kernel's
+   `Concurrent` predicate admits runs beside its admitted neighbours
+   (a run, bounded by `Parallel`); any other call is a barrier that
+   waits for everything before it and runs alone. Emission is in call
+   order regardless of completion order: for each call, emit
+   `ToolStart`, wait for its result, emit `ToolResult` (its own
+   duration), append one tool message; then goto 3. A nil predicate is
+   the sequential loop, byte-identical.
 
 L8 (SPEC_COMPACT 4): the loop stamps the assistant message it appends —
 in both the no-calls and the tool-calls branch — with `Done.Usage`'s
@@ -352,8 +357,11 @@ compaction trigger reads. No other loop change.
 
 State machine per turn: `awaiting_input -> awaiting_model -> executing_tools
 -> awaiting_model -> ... -> done`. Deliverable 7 leaves it unchanged; its
-additions are inside the states. Tool execution is sequential in v1;
-parallel execution is a loop change and is deliberately out.
+additions are inside the states. Tool execution was sequential through
+0.11; SPEC_EVT 2a (the batch) is the named loop change that admits
+concurrent runs inside `executing_tools` while keeping emission and the
+transcript in call order — the one reopening of the frozen loop, with
+its own gate clause and re-freeze.
 
 Faults: a `Fault` event or transport error aborts the turn, surfaces the
 error through `Notify`, preserves the session up to the last complete
