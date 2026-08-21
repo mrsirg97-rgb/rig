@@ -70,15 +70,7 @@ func Prompt(call core.ToolCall) string {
 	if call.Name == "delegate" {
 		return delegatePrompt(call)
 	}
-	args := strings.Join(strings.Fields(string(call.Args)), " ")
-	const cap = 120
-	if len(args) > cap {
-		args = args[:cap] + "…"
-	}
-	if args == "" || args == "{}" {
-		return call.Name
-	}
-	return call.Name + " " + args
+	return PromptGeneric(call)
 }
 
 // delegatePrompt renders "delegate · <first line>", falling back to the

@@ -50,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "11.0.0"
+const Version = "0.11.0"
 
 type root struct {
 	baseURL string

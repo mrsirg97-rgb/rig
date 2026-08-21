@@ -1,6 +1,6 @@
 # Changelog
 
-## [11.0.0] — the delegate
+## [0.11.0] — the delegate
 
 - **the one-shot worker tool** (`specs/SPEC_DELEGATE.md`): `delegate`
   spawns a headless worker on a task now, in a cwd under the session's
