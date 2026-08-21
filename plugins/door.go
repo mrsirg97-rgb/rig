@@ -20,17 +20,24 @@ type Live interface {
 // Door is the plugin dispatch tool (SPEC_GROWTH 9): one native tool that
 // collapses all plugin schemas to one request entry — the context fix for
 // a grown table. The schema's name field carries the live plugin names'
-// enum; args pass through to the named plugin's Exec.
-type Door struct{ Live Live }
+// enum; args pass through to the named plugin's Exec. An unknown name
+// runs the redo seam once (the root's reload) and re-resolves
+// (SPEC_STREAMLINE 4); a nil redo keeps the plain refusal.
+type Door struct {
+	Live Live
+	redo func(ctx context.Context) error
+}
 
 var _ core.Tool = (*Door)(nil)
 
-func NewDoor(live Live) *Door { return &Door{Live: live} }
+func NewDoor(live Live, redo func(ctx context.Context) error) *Door {
+	return &Door{Live: live, redo: redo}
+}
 
 func (d *Door) Name() string { return "plugin" }
 
 func (d *Door) Description() string {
-	return "run a live plugin: the model calls `plugin` with {name, args}; the schema's name enum lists the live plugins. `plugin_schema <name>` shows a plugin's contract (description and args) before you call it. Plugins are also importable from the python tool by name."
+	return "run a live plugin: the model calls `plugin` with {name, args}; the schema's name enum lists the live plugins, and an unknown name re-discovers once before refusing (an out-of-band install needs no reload). `plugin_schema <name>` shows a plugin's contract (description and args) before you call it. Plugins are also importable from the python tool by name."
 }
 
 func (d *Door) Schema() json.RawMessage {
@@ -54,6 +61,12 @@ func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 		return "", fmt.Errorf("plugin: no name (want {name, args})")
 	}
 	tool, ok := d.Live.Tool(in.Name)
+	if !ok && d.redo != nil {
+		if err := d.redo(ctx); err != nil {
+			return "", fmt.Errorf("plugin: unknown plugin %q; re-discovery failed: %v", in.Name, err)
+		}
+		tool, ok = d.Live.Tool(in.Name)
+	}
 	if !ok {
 		return "", fmt.Errorf("plugin: unknown plugin %q (live: %s)", in.Name, strings.Join(d.Live.PluginNames(), ", "))
 	}
@@ -68,11 +81,16 @@ func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 // plugin's description and schema verbatim — the model fetches the args
 // it needs before a non-trivial call, so the request can carry the door
 // alone.
-type SchemaDoor struct{ Live Live }
+type SchemaDoor struct {
+	Live Live
+	redo func(ctx context.Context) error
+}
 
 var _ core.Tool = (*SchemaDoor)(nil)
 
-func NewSchemaDoor(live Live) *SchemaDoor { return &SchemaDoor{Live: live} }
+func NewSchemaDoor(live Live, redo func(ctx context.Context) error) *SchemaDoor {
+	return &SchemaDoor{Live: live, redo: redo}
+}
 
 func (d *SchemaDoor) Name() string { return "plugin_schema" }
 
@@ -95,6 +113,12 @@ func (d *SchemaDoor) Exec(ctx context.Context, args json.RawMessage) (string, er
 		return "", fmt.Errorf("plugin_schema: no name (want {name})")
 	}
 	tool, ok := d.Live.Tool(in.Name)
+	if !ok && d.redo != nil {
+		if err := d.redo(ctx); err != nil {
+			return "", fmt.Errorf("plugin_schema: unknown plugin %q; re-discovery failed: %v", in.Name, err)
+		}
+		tool, ok = d.Live.Tool(in.Name)
+	}
 	if !ok {
 		return "", fmt.Errorf("plugin_schema: unknown plugin %q (live: %s)", in.Name, strings.Join(d.Live.PluginNames(), ", "))
 	}

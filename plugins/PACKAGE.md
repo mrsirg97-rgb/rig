@@ -26,10 +26,12 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   and `Tool(name)`, implemented by `middleware/toolset`'s Table.
 - `Door` + `NewDoor` — the `plugin` native (SPEC_GROWTH 9): one dispatch
   tool collapsing all plugin schemas to one request entry; the schema's
-  `name` enum is the live plugin names; `Exec` resolves and calls.
+  `name` enum is the live plugin names; `Exec` resolves and calls. An
+  unknown name runs the `redo` seam once (the root's reload) and
+  re-resolves; a nil redo keeps the plain refusal (SPEC_STREAMLINE 4).
 - `SchemaDoor` + `NewSchemaDoor` — the `plugin_schema` native: returns a
   live plugin's description and schema verbatim (the model fetches args
-  on demand).
+  on demand); the same redo seam (SPEC_STREAMLINE 4).
 
 ## How it is consumed
 
@@ -57,6 +59,11 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   total (`pyLiteral`); the args must parse as JSON.
 - `pyLiteral` escapes backslash and single-quote; JSON text has no raw
   newlines and no double-quote collisions.
+- The doors' redo runs at most once per call and never on a known name;
+  a failing redo is named in the refusal (`re-discovery failed: ...`).
+  The named cost is one full discovery on the failure path (the retry
+  bound still caps a model that keeps calling a name that is not there;
+  SPEC_STREAMLINE 4).
 - `errorTail` prefers the exception's type+message, else stderr, else a
   named gap.
 - `List` skips the pending zone, subdirectories, and non-`.py` files; a
