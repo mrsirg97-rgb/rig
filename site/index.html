@@ -1,33 +1,391 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rig — a minimal agent loop machine</title>
-  <style>
-    body { font-family: ui-monospace, monospace; max-width: 46rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; color: #222; background: #fff; }
-    h1 { font-size: 1.6rem; }
-    pre { background: #f4f4f4; padding: .6rem .8rem; overflow-x: auto; }
-    a { color: #0645ad; }
-    .muted { color: #555; }
-    ul { padding-left: 1.2rem; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rig — a minimal agent-loop machine</title>
+<meta name="description" content="A lean agent runtime, built closed. Stdlib-only core, ten native tools, one-file python plugins, the walls named. Install rig in one line.">
+<meta name="theme-color" content="#050505">
+<meta property="og:title" content="rig — a minimal agent-loop machine">
+<meta property="og:description" content="A lean agent runtime, built closed. Install in one line; extend with one file.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
+<!--
+  one file, zero requests after load: the same deal rig makes of its core.
+  palette is rig's own "oled" theme (frontend/tui/theme.go); the display font
+  is rig's own 3x3 block face (frontend/tui/status.go titleRows).
+-->
+<style>
+:root {
+  --bg: #050505;
+  --text: #d8d8d8;
+  --dim: #6e6e6e;
+  --faint: #4a4a4a;
+  --accent: #61afef;
+  --ok: #98c379;
+  --warn: #e5c07b;
+  --ember: #e8a86b;
+  --rule: #3c3c3c;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text);
+  background: radial-gradient(130% 100% at 50% 0%, #0e0e0e 0%, var(--bg) 52%, #030303 100%);
+  min-height: 100vh;
+}
+::selection { background: rgba(232, 168, 107, .28); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.crt::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.15) 0px, rgba(0,0,0,.15) 1px, transparent 1px, transparent 3px);
+}
+.frame { max-width: 47rem; margin: 0 auto; padding: 2.5rem 1rem 3rem; }
+.chrome {
+  display: flex; gap: .8rem; align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: .6rem; margin-bottom: 1.5rem;
+  color: var(--dim); font-size: 13px;
+}
+.dots { color: var(--faint); letter-spacing: .3em; }
+.chrome .ver { margin-left: auto; color: var(--faint); }
+section { margin: 2.8rem 0; }
+.art {
+  margin: 0 0 1.1rem;
+  color: var(--ember);
+  text-shadow: 0 0 12px rgba(232,168,107,.35);
+  font-size: 15px;
+  line-height: 1.35;
+  overflow-x: auto;
+  white-space: pre;
+}
+.dim { color: var(--dim); }
+.boot {
+  margin: 0;
+  background: rgba(255,255,255,.022);
+  border: 1px solid var(--rule);
+  padding: 1rem 1.1rem 1.1rem;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.boot .ln { display: block; white-space: pre; }
+.welcome { color: var(--dim); }
+.rigart { color: var(--ember); text-shadow: 0 0 14px rgba(232,168,107,.4); }
+.ok { color: var(--ok); }
+.wired { color: var(--accent); }
+.armed { color: var(--warn); }
+.ready { color: var(--ember); }
+.cursor::after { content: "█"; color: var(--ember); animation: blink 1.06s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.pitch { margin: .2rem 0 0; }
+.loop { margin: 1.3rem 0 0; font-size: 13.5px; line-height: 1.4; color: var(--faint); overflow-x: auto; white-space: pre; }
+.loop .st { color: var(--text); }
+.loop .st1 { animation: stage 2.8s linear infinite; }
+.loop .st2 { animation: stage 2.8s linear infinite .7s; }
+.loop .st3 { animation: stage 2.8s linear infinite 1.4s; }
+.loop .st4 { animation: stage 2.8s linear infinite 2.1s; }
+@keyframes stage {
+  0%   { color: var(--ember); text-shadow: 0 0 12px rgba(232,168,107,.5); }
+  22%  { color: var(--ember); }
+  34%  { color: var(--text); text-shadow: none; }
+  100% { color: var(--text); }
+}
+.lede { color: var(--dim); margin: .9rem 0 0; font-size: 14px; }
+.cmd { border: 1px solid var(--rule); background: rgba(255,255,255,.022); margin: .9rem 0; }
+.cmd-head {
+  display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: baseline;
+  padding: .55rem .9rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12.5px;
+}
+.cmd-name { color: var(--ember); }
+.cmd-note { color: var(--dim); }
+.copy {
+  margin-left: auto;
+  font: inherit; font-size: 12px;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--rule);
+  padding: .05rem .6rem;
+  cursor: pointer;
+}
+.copy:hover { color: var(--text); border-color: var(--dim); }
+.copy.done { color: var(--ok); border-color: var(--ok); }
+.cmd-code { margin: 0; padding: .6rem .9rem; font-size: 13px; color: var(--text); overflow-x: auto; white-space: pre; }
+.ps { color: var(--ember); }
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1.8rem; margin: 0; padding: 0; list-style: none; }
+@media (max-width: 560px) { .tools { grid-template-columns: 1fr; } }
+.tools li { font-size: 13.5px; line-height: 1.5; }
+.tname { color: var(--ember); }
+.tdesc { color: var(--dim); }
+.frontends { margin: 1.1rem 0 0; color: var(--dim); font-size: 13px; }
+.block { border: 1px solid var(--rule); background: rgba(255,255,255,.022); margin: .9rem 0; }
+.block pre { margin: 0; padding: .8rem .9rem; font-size: 13px; overflow-x: auto; white-space: pre; }
+.bl { color: var(--ember); }
+.bd { color: var(--dim); }
+.ba { color: var(--accent); }
+blockquote {
+  margin: 1.2rem 0; padding: .2rem 0 .2rem 1rem;
+  border-left: 2px solid var(--ember);
+  color: var(--text);
+  font-size: 14px;
+}
+blockquote .q { color: var(--ember); }
+.why { margin: 0; padding: 0; list-style: none; }
+.why li { margin: 1.1rem 0; }
+.why .k { color: var(--ember); }
+.why .k::before { content: "❯ "; color: var(--faint); }
+.why p { margin: .15rem 0 0; font-size: 14px; }
+footer { border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: 1.2rem; color: var(--dim); font-size: 13px; }
+footer .links { margin: .5rem 0; }
+.signoff { color: var(--faint); }
+@media (prefers-reduced-motion: reduce) {
+  .cursor::after { animation: none; }
+  .loop .st1, .loop .st2, .loop .st3, .loop .st4 { animation: none; }
+}
+</style>
 </head>
-<body>
-  <h1>rig</h1>
-  <p>A minimal agent-loop machine: assemble context, stream the model's
-  output, execute what it asks for, feed the results back, repeat.</p>
+<body class="crt">
+<div class="frame">
 
-  <p>Install the release binary for your platform:</p>
-  <pre>curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</pre>
+  <div class="chrome">
+    <span class="dots" aria-hidden="true">○ ◐ ●</span>
+    <span>rig — install</span>
+    <span class="ver">v0.8.1</span>
+  </div>
 
-  <p class="muted">Or, with Go ≥ 1.26:</p>
-  <pre>go install github.com/mrsirg97-rgb/rig/cmd/rig@latest</pre>
+  <section aria-label="boot">
+    <pre class="boot" id="boot" aria-label="rig boot log"><span class="ln dim">rig 0.8.1 — the turn runtime, booting</span>
+<span class="ln"><span class="dim">core     </span> stdlib-only                             <span class="ok">ok</span></span>
+<span class="ln"><span class="dim">loop     </span> assemble · stream · execute · repeat    <span class="ok">ok</span></span>
+<span class="ln"><span class="dim">seams    </span> provider · tools · policy · frontend    <span class="wired">wired</span></span>
+<span class="ln"><span class="dim">stores   </span> state · todo · rem · scheduler          <span class="ok">ok</span></span>
+<span class="ln"><span class="dim">tools    </span> 10 native, 9 packages                   <span class="ok">ok</span></span>
+<span class="ln"><span class="dim">walls    </span> perm · approve · guard                  <span class="armed">armed</span></span>
+<span class="ln"><span class="dim">plugins  </span> one file, one tool                      <span class="ready">ready</span></span>
+<span class="ln welcome">welcome to</span>
+<span class="ln rigart">█▀▄ █ █▀▀
+█▀▄ █ █ █
+▀ ▀ ▀ ▀▀▀</span>
+<span class="ln cursor"></span></pre>
+  </section>
 
-  <ul>
-    <li><a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a></li>
-    <li><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a></li>
-    <li><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">latest release</a></li>
-  </ul>
+  <section aria-labelledby="h-hero">
+    <h2 class="sr" id="h-hero">what rig is</h2>
+    <p class="pitch">rig is a lean agent runtime — a minimal agent-loop machine,
+    <span class="tname">built closed</span>. You talk, the model thinks, the tools do the work in
+    your tree. Every dependency held at a typed seam, every induced work bounded,
+    and the loop names no concrete type. Not a framework: a machine for one thing.</p>
+    <pre class="loop" aria-label="the turn: assemble, stream, execute, feed back, repeat"><span class="st st1">   assemble</span> <span class="ar">─►</span> <span class="st st2">stream</span> <span class="ar">─►</span> <span class="st st3">execute</span> <span class="ar">─►</span> <span class="st st4">feed back</span>
+<span class="ar">      ▲                                     │</span>
+<span class="ar">      └─────────────────────────────────────┘</span></pre>
+    <p class="lede">one turn, faithfully — fault-aware, cancel-aware, and exactly once.
+    the same machine runs your repl, your <span class="tname">-p</span> one-shots, and the scheduled
+    workers.</p>
+  </section>
+
+  <section aria-labelledby="h-install">
+    <h2 id="h-install" class="sr">install</h2>
+    <pre class="art" aria-hidden="true">█   █▄█ █▀▀ █▀█ █▀█ █   █   
+█   █ █ ▀▀   █  ▀ ▀ █   █   
+▀   ▀ ▀ ▀▀▀  █  ▀ ▀ ▀▀▀ ▀▀▀</pre>
+    <p class="lede" style="margin-top:0">three doors in. no sudo, no framework, no build step — pick one:</p>
+
+    <div class="cmd">
+      <div class="cmd-head">
+        <span class="cmd-name">installer</span>
+        <span class="cmd-note">POSIX sh · checksums verified before anything moves · lands in ~/.local/bin · linux and darwin, amd64 and arm64</span>
+        <button class="copy" type="button" aria-label="copy installer command">copy</button>
+      </div>
+      <pre class="cmd-code"><span class="ps">❯</span> curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</pre>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head">
+        <span class="cmd-name">release binary</span>
+        <span class="cmd-note">the same asset the installer fetches — pick rig_&lt;os&gt;_&lt;arch&gt;, the version lives in the URL</span>
+        <button class="copy" type="button" aria-label="copy release binary command">copy</button>
+      </div>
+      <pre class="cmd-code"><span class="ps">❯</span> curl -fsSL https://github.com/mrsirg97-rgb/rig/releases/latest/download/rig_linux_amd64 -o rig
+<span class="ps">❯</span> chmod +x rig &amp;&amp; ./rig --version</pre>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head">
+        <span class="cmd-name">go install</span>
+        <span class="cmd-note">needs Go ≥ 1.26 — the core is stdlib-only; the one leaf is a pure-Go sqlite driver</span>
+        <button class="copy" type="button" aria-label="copy go install command">copy</button>
+      </div>
+      <pre class="cmd-code"><span class="ps">❯</span> go install github.com/mrsirg97-rgb/rig/cmd/rig@latest</pre>
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-head">
+        <span class="cmd-name">then talk</span>
+        <span class="cmd-note">any OpenAI-compatible endpoint — a local server, a gateway, a hosted API. the wire protocol only.</span>
+      </div>
+      <pre class="cmd-code"><span class="ps">❯</span> rig --base-url $ENDPOINT --model $NAME</pre>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-tools">
+    <h2 id="h-tools" class="sr">toolset</h2>
+    <pre class="art" aria-hidden="true">█▀█ █▀█ █▀█ █   █▀▀ █▀▀ █▀█
+ █  █ █ █ █ █   ▀▀  █    █
+ █  ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀  █</pre>
+    <p class="lede" style="margin-top:0">ten native tools, each a leaf behind the Tool seam — every call
+    observed by the walls, bounded, and named.</p>
+    <ul class="tools">
+      <li><span class="tname">bash</span><span class="tdesc"> — real subprocesses; output surfaced and bounded</span></li>
+      <li><span class="tname">file</span><span class="tdesc"> — read · write · edit; edits drift-checked against what you read</span></li>
+      <li><span class="tname">fs</span><span class="tdesc"> — ls · find · grep; small schemas a local model can reach</span></li>
+      <li><span class="tname">diff</span><span class="tdesc"> — the working tree vs HEAD, or the last observation of the same call</span></li>
+      <li><span class="tname">python</span><span class="tdesc"> — a persistent IPython kernel; state persists across calls</span></li>
+      <li><span class="tname">web</span><span class="tdesc"> — search via SearXNG; fetch with the SSRF guard and extraction</span></li>
+      <li><span class="tname">todo</span><span class="tdesc"> — the task queue; event-sourced, DAG-validated at create</span></li>
+      <li><span class="tname">rem</span><span class="tdesc"> — memory; recall by intent, consolidation arithmetic</span></li>
+      <li><span class="tname">scheduler</span><span class="tdesc"> — background jobs on cron; the worker runs in a bwrap jail</span></li>
+      <li><span class="tname">plugins_reload</span><span class="tdesc"> — re-discover from disk; the swap takes effect next turn</span></li>
+    </ul>
+    <p class="frontends">frontends — tui (the terminal default) · cli (the piped reference) · oneshot (-p, the worker)</p>
+  </section>
+
+  <section aria-labelledby="h-plugins">
+    <h2 id="h-plugins" class="sr">plugins</h2>
+    <pre class="art" aria-hidden="true">█▀▀ █   █ █ █▀▀ █   █▄█ █▀▀
+█▀▀ █   █ █ █ █ █   █ █ ▀▀
+▀   ▀▀▀ ▀▀▀ ▀▀▀ ▀   ▀ ▀ ▀▀▀</pre>
+    <p class="lede" style="margin-top:0">one file under <span class="tname">~/.rig/plugins/</span> is one tool.
+    the name is the filename, the description and schema are the file's, and the call
+    rides the shared python kernel. loaded tools register on the same seam as the
+    native set — indistinguishable on the wire. a broken file names itself and is
+    skipped; it never bricks the harness.</p>
+
+    <div class="block">
+      <pre><span class="bd"># ~/.rig/plugins/uptime.py   →   the tool "uptime"</span>
+<span class="ba">DESCRIPTION</span> = "report host uptime, terse"
+<span class="ba">SCHEMA</span> = {"type": "object", "properties": {}}
+
+<span class="ba">def</span> run(args: dict) -&gt; str:
+    s = open("/proc/uptime").read().split()[0]
+    <span class="ba">return</span> f"up {int(float(s) // 3600)}h {int(float(s) // 60) % 60:02d}m"</pre>
+    </div>
+
+    <div class="block">
+      <pre><span class="bl">❯ /plugins</span>
+plugins: 1 loaded, 2 skipped
+loaded:
+  uptime: report host uptime, terse (~/.rig/plugins/uptime.py)
+skipped:
+  broken.py: NameError: name 'x' is not defined
+  missing.py: TypeError: missing SCHEMA</pre>
+    </div>
+
+    <blockquote>The design test, enforced structurally: adding a tool, a provider, a
+    context policy, a frontend, or a tool middleware is
+    <span class="q">one file plus one registration line</span> at the composition root — the loop
+    never names a concrete type.</blockquote>
+  </section>
+
+  <section aria-labelledby="h-why">
+    <h2 id="h-why" class="sr">why rig</h2>
+    <pre class="art" aria-hidden="true">▀ ▀ █ █ █ █   █▀▄ █   █▀▀
+▀▀▀ █▀█ ▀▀▀   █▀▄ █   █ █
+█▀█ ▀ ▀  █    ▀ ▀ ▀   ▀▀▀</pre>
+    <ul class="why">
+      <li><span class="k">not a framework</span>
+        <p>one machine, one job — the turn. assemble, stream, execute, feed back,
+        repeat; exactly once, faithfully, against the seams you wire in.</p></li>
+      <li><span class="k">built closed</span>
+        <p>stdlib-only core; the one leaf is a pure-Go sqlite driver, justified in
+        the spec. every dependency held at a typed seam, wired once at the
+        composition root, swapped at registration with zero consumer changes.</p></li>
+      <li><span class="k">the walls speak</span>
+        <p>an allowlist (deny by default), a retry guard (the bound is named), an
+        approval gate, a plugin landing zone. a refusal names the wall — and is
+        final for that call.</p></li>
+      <li><span class="k">fail closed</span>
+        <p>a corrupt store is quarantined; a broken plugin is skipped by name; an
+        unknown model row is loud, with the known set. uncertain state is a
+        refusal, not a guess.</p></li>
+      <li><span class="k">the log is the spine</span>
+        <p>sessions outlive the process; the event log is the audit, and the queue
+        and its projections are disposable — rebuilt in one transaction.</p></li>
+      <li><span class="k">this page, on the same terms</span>
+        <p>one file, zero requests after load, no framework, no build step, no
+        webfont. readable with JS off — because seams should be swappable, never
+        load-bearing.</p></li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>rig 0.8.1 — a minimal agent-loop machine</div>
+    <div class="links">
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a> ·
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a> ·
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/docs">docs/</a> ·
+      <a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a> ·
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+    </div>
+    <div class="signoff">not a framework. a machine.</div>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var boot = document.getElementById("boot");
+  if (boot) {
+    var lines = boot.querySelectorAll(".ln");
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced && lines.length) {
+      for (var i = 0; i < lines.length; i++) { lines[i].style.visibility = "hidden"; }
+      for (var j = 0; j < lines.length; j++) {
+        (function (el, delay) {
+          setTimeout(function () { el.style.visibility = "visible"; }, delay);
+        })(lines[j], 140 + j * 110);
+      }
+    }
+  }
+  var btns = document.querySelectorAll(".copy");
+  for (var b = 0; b < btns.length; b++) {
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        var cmd = btn.closest(".cmd");
+        var code = cmd ? cmd.querySelector(".cmd-code") : null;
+        if (!code) { return; }
+        var text = code.innerText.replace(/^\s*\u276f\s?/m, "");
+        function done(label) {
+          btn.textContent = label;
+          btn.classList.add("done");
+          setTimeout(function () { btn.textContent = "copy"; btn.classList.remove("done"); }, 1600);
+        }
+        function fallback() {
+          var r = document.createRange();
+          r.selectNodeContents(code);
+          var s = window.getSelection();
+          s.removeAllRanges();
+          s.addRange(r);
+          done("selected");
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done("copied \u2713"); }, fallback);
+        } else { fallback(); }
+      });
+    })(btns[b]);
+  }
+})();
+</script>
 </body>
 </html>
