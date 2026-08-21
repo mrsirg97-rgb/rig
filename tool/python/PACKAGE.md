@@ -28,3 +28,9 @@ The shared kernel is also the plugin discovery/execution surface
   time).
 - `kernel_host.py` is embedded and shipped; regenerating it changes the
   runtime.
+- The action vocabulary is closed in `Exec`, not in the host: `code` (or
+  none) runs code, `vars`/`reset` go to the host as commands, anything
+  else is refused by name before the kernel is touched. The host's own
+  unknown-cmd fallthrough runs the code field — which is the empty string
+  when the Go side forwards only a cmd — so an unguarded action is an ok
+  reply that ran nothing (SPEC_PYTHON, amended).
