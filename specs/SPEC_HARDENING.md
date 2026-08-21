@@ -30,7 +30,8 @@ one fan-out call at the turn boundary.
 - One agent-side extension mechanism, widened from the existing middleware
   seam: turn-boundary observation and system-prompt guidelines for any
   participant.
-- The retry guard matches pane: bound keyed by tool name, cleared per turn.
+- The retry guard matches pane: bound keyed by tool name, the streak per
+  args (identical retries only), cleared per turn.
 - The compat rule is written down: events are added, never changed; a
   Frontend must tolerate events it does not know. This is what lets 1.0
   freeze.
@@ -463,15 +464,29 @@ dataflow for result mutation).
 
 `middleware/guard` re-keys and re-scopes:
 
-- **Keyed by tool name**, not name + args digest. The real failure mode is
-  a model failing `edit` with drifting args: under name + args keying every
-  drift is a new budget, and the bound never fires. Pane keys by
+- **Keyed by tool name, the streak per args** (amended, PR #57). The state
+  is one count and one last-failed-args marker per tool. A failure with
+  the same args as the tool's last failure extends the streak; a failure
+  with differing args starts a new one; a call differing from the last
+  failed args resets the count before the guard check. So the bound
+  strikes identical retries only, and the "change the call" teaching is
+  never followed by blocking the changed call. Pane keys by
   `event.toolName`; so do we.
-- **The streak is per args**: the bound strikes identical retries only. A
-  corrected call (args differing from the last failed args) resets the
-  count before the guard check, so the "change the call" teaching is never
-  followed by blocking the changed call. Drifting args no longer share one
-  budget — each differing call starts a fresh streak.
+- Rejected, named: **name keying with a shared budget** (this decision's
+  first form). Its reason was that drifting args must not dodge the bound;
+  in the field it blocked the corrected call the note had just asked for,
+  and a model being taught got punished for learning. The harness's first
+  job is to let the changed call run.
+- Rejected, named: **a count per (name, args) key**. It would cap a finite
+  set of alternating failing calls where the shipped rule does not (see
+  the accepted consequence), but it bounds neither pure drift nor the
+  alternation a model actually produces (it rarely repeats an exact
+  earlier call after changing it); it buys little and doubles the state.
+  Reopen if lived use shows a real alternation loop.
+- Accepted consequence, named: two or more failing calls of one tool
+  alternating within a turn never trip the bound (pinned by
+  `TestDriftingArgsEachGetAFreshStreak`); the loop has no per-turn round
+  cap, so that loop is bounded only by the operator's interrupt.
 - **Cleared per turn**, via `TurnStart` (the widened seam, decision 6;
   pane's `turn_start`). A new user message is a new budget. Today the
   counter persists across turns.
@@ -494,11 +509,13 @@ failure + note, refusal. The model gets the teaching at the bound and a
 hard stop after it.
 
 Named test change: `TestDistinctCallsAreCountedSeparately` codified the
-old keying (distinct args keep separate budgets). Under name keying the
-same tool's drifted args share the budget, so the case inverts and is
-rewritten as the shared-budget invariant; the new named cases (failing
-first) are `edit`-style drifting args hitting one bound, and a budget that
-clears at the turn boundary.
+original args-digest keying. This decision's first form inverted it into a
+shared-budget case (`TestDriftingArgsShareOneBound`); the amendment
+inverted that case back into `TestDriftingArgsEachGetAFreshStreak` and
+added `TestChangedCallResetsTheCount` (identical retries cap, the
+corrected call executes, its own identical retries cap in turn). The other
+named cases (failing first) are a budget that clears at the turn boundary
+and the note at the bound.
 
 ### 8. The additive-events compat rule (into SPEC_CORE)
 
@@ -549,7 +566,8 @@ asserted, and hold).
 **Unchanged** (guard): `TestRepetitionIsBoundedWithoutSilentRetry`,
 `TestSuccessfulReissuanceStaysUnbounded`,
 `TestSuccessfulReissuanceResetsTheCount`. **Named change** (guard):
-`TestDistinctCallsAreCountedSeparately` inverts (decision 7).
+`TestDistinctCallsAreCountedSeparately` inverts, then inverts back under
+the amendment (decision 7).
 
 **New named cases** (failing first, per decision):
 
@@ -596,9 +614,10 @@ asserted, and hold).
   a dangling call survives; an unknown id fails loud naming the id; the
   root `-resume` path (adopted session id, recorder reuse) and
   `-p` + `-resume` refusing at construction.
-- Guard: drifting args of one tool share the bound (failing first under
-  today's keying); the budget clears at the turn boundary; the bound-th
-  failure carries pane's note verbatim.
+- Guard: identical retries cap and the corrected call executes (decision 7
+  as amended; the first form's shared-bound case is superseded); the
+  budget clears at the turn boundary; the bound-th failure carries pane's
+  note verbatim.
 - Compat: the loop forwards `TestEvent` untouched (no accumulation, no
   ordering break); the CLI and one-shot ignore it (no output, no panic).
 

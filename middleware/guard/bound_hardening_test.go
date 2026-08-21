@@ -1,6 +1,6 @@
 package guard_test
 
-// Name keying, the per-turn clear, and the note at the bound.
+// The streak rule, the per-turn clear, and the note at the bound.
 
 import (
 	"context"
@@ -13,14 +13,13 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 )
 
-// Drifting args of one tool share the budget: a model failing `edit` with
-// drifting args cannot dodge the bound by varying the call. (The old
-// TestDistinctCallsAreCountedSeparately codified the opposite; decision 7
-// inverts it into this shared-budget invariant.) The hardened rule (decision
-// 8) refines it: the budget strikes identical retries only — a corrected
-// call (args differing from the last failed args) resets the count, so the
-// teaching "change the call" is never followed by blocking the changed call.
-func TestDriftingArgsShareOneBound(t *testing.T) {
+// Drifting args each get a fresh streak (SPEC_HARDENING decision 7, as
+// amended): the bound strikes identical retries only, and a call differing
+// from the last failed args resets the tool's count. The consequence this
+// case pins, named and accepted: two failing calls alternating within one
+// turn never trip the bound. (The pre-amendment version of this case,
+// TestDriftingArgsShareOneBound, asserted the opposite.)
+func TestDriftingArgsEachGetAFreshStreak(t *testing.T) {
 	e := &failingExec{calls: map[string]int{}}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
@@ -36,8 +35,8 @@ func TestDriftingArgsShareOneBound(t *testing.T) {
 		content, _ = exec(context.Background(), b)
 		last = content
 	}
-	// a differing call resets the streak: drifting args never accumulate a
-	// shared streak, so every issuance executes and none is ever refused.
+	// every alternation resets the other call's streak, so every issuance
+	// executes and none is ever refused
 	if e.calls[`{"path":"a"}`] != 4 || e.calls[`{"path":"b"}`] != 4 {
 		t.Fatalf("drifting args each get a fresh streak, got %+v", e.calls)
 	}
@@ -49,11 +48,10 @@ func TestDriftingArgsShareOneBound(t *testing.T) {
 	}
 }
 
-// The hardened cap: the bound strikes identical retries only. A corrected
-// call — args differing from the last failed args — resets the count, so
-// the "change the call" teaching is never followed by blocking the changed
-// call. This inverts TestDriftingArgsShareOneBound's shared-budget reading:
-// drifting args do not share one budget, they each get a fresh streak.
+// The corrected call always executes: identical retries cap at the limit
+// and the next identical issuance refuses, then a call with differing args
+// resets the count and runs, and its own identical retries cap in turn. The
+// "change the call" teaching is never followed by blocking the changed call.
 func TestChangedCallResetsTheCount(t *testing.T) {
 	e := &failingExec{calls: map[string]int{}}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {

@@ -101,6 +101,9 @@ func TestSuccessfulReissuanceResetsTheCount(t *testing.T) {
 	}
 }
 
-// TestDistinctCallsAreCountedSeparately (the old args-digest keying) is
-// inverted by SPEC_HARDENING decision 7 into TestDriftingArgsShareOneBound:
-// drifting args of one tool share the budget.
+// TestDistinctCallsAreCountedSeparately (the original args-digest keying)
+// was inverted by SPEC_HARDENING decision 7 into a shared-budget case, then
+// inverted back by the same decision's amendment into
+// TestDriftingArgsEachGetAFreshStreak (bound_hardening_test.go): the streak
+// is per args again, but keyed through the tool's last failure, so only
+// identical retries count.

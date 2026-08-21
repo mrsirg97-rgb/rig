@@ -258,7 +258,8 @@ additionally observe the turn boundary (`TurnObserver`; the loop fans out
 (`GuidelineContributor`; the root collects it into the system prompt). The
 retry guard is the first participant beyond a plain wrap: it wraps to bound
 and refuse, and observes the turn boundary to clear its per-turn budget
-(bound keyed by tool name, cleared per turn, pane's semantics).
+(bound keyed by tool name, the streak per args, cleared per turn, pane's
+semantics).
 
 Deny-by-default permission middleware ships in v1 with a static allowlist; a
 denied call returns a refusal string to the model, not an error to the user.
@@ -358,7 +359,8 @@ Faults: a `Fault` event or transport error aborts the turn, surfaces the
 error through `Notify`, preserves the session up to the last complete
 message, and returns to `awaiting_input`. A malformed tool call (bad JSON,
 unknown name) is fed back to the model as a tool error result, once; the
-retry guard bounds repetition (keyed by tool name, cleared per turn). The
+retry guard bounds repetition (keyed by tool name, identical retries only,
+cleared per turn). The
 loop never retries silently.
 
 Cancellation and steering: the run context threads through every await and
