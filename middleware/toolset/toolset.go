@@ -8,14 +8,15 @@ import (
 )
 
 type Table struct {
-	mu    sync.RWMutex
-	tools []core.Tool
+	mu      sync.RWMutex
+	tools   []core.Tool
+	plugins map[string]bool
 }
 
 func New(tools ...core.Tool) *Table {
 	cp := make([]core.Tool, len(tools))
 	copy(cp, tools)
-	return &Table{tools: cp}
+	return &Table{tools: cp, plugins: make(map[string]bool)}
 }
 
 func (t *Table) Set(tools []core.Tool) {
@@ -24,6 +25,28 @@ func (t *Table) Set(tools []core.Tool) {
 	t.mu.Lock()
 	t.tools = cp
 	t.mu.Unlock()
+}
+
+// SetPlugins marks the currently-live plugin names (a swap carries its
+// own plugin subset; names are disjoint from natives by the collision
+// rule). IsPlugin answers the live plugin table's membership.
+func (t *Table) SetPlugins(names ...string) {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	t.mu.Lock()
+	t.plugins = set
+	t.mu.Unlock()
+}
+
+// IsPlugin reports whether name is a currently-live plugin. It never
+// answers true for a native (the collision rule keeps the sets
+// disjoint), so a door over it admits plugins only.
+func (t *Table) IsPlugin(name string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.plugins[name]
 }
 
 func (t *Table) List() []core.Tool {

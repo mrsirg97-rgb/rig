@@ -183,3 +183,31 @@ func TestSetIsAtomic(t *testing.T) {
 		}
 	}
 }
+
+// TestIsPluginTracksTheSwap (SPEC_PLUGINS 7, the presence reversal):
+// the live plugin table answers membership — a SetPlugins-approved
+// plugin is a plugin, a native never is (the sets are disjoint), and a
+// reload that drops the name stops admitting it (deleted-after-reload).
+func TestIsPluginTracksTheSwap(t *testing.T) {
+	bash := &stubTool{name: "bash"}
+	tbl := New(bash)
+	if tbl.IsPlugin("forged") {
+		t.Fatal("no plugin is live before SetPlugins")
+	}
+	if tbl.IsPlugin("bash") {
+		t.Fatal("a native must never answer as a plugin")
+	}
+
+	tbl.SetPlugins("forged") // the approved plugin goes live
+	if !tbl.IsPlugin("forged") {
+		t.Fatal("an approved plugin must answer live")
+	}
+	if tbl.IsPlugin("bash") {
+		t.Fatal("the door must not admit a native")
+	}
+
+	tbl.SetPlugins() // the reload dropped it (removal free)
+	if tbl.IsPlugin("forged") {
+		t.Fatal("a dropped plugin must stop being admitted")
+	}
+}
