@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig — a minimal agentic loop harness</title>
-<meta name="description" content="A minimalist agentic harness, built closed. Stdlib-only core, ten native tools, one-file python plugins, the walls named. Install rig in one line.">
+<title>rig: a minimal agentic loop harness</title>
+<meta name="description" content="A minimalist agentic harness, built closed. Stdlib-only core, eleven native tools, one-file python plugins, the walls named. Install rig in one line.">
 <meta name="theme-color" content="#050505">
-<meta property="og:title" content="rig — a minimal agentic loop harness">
+<meta property="og:title" content="rig: a minimal agentic loop harness">
 <meta property="og:description" content="A minimalist agentic harness, built closed. Install in one line; extend with one file.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
@@ -174,9 +174,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
 
     <div class="gap reveal"></div>
     <div class="msg reveal">rig is a minimalist agentic harness. one job: the turn. assemble context,
-    stream the model's output, execute what it asks for, feed the results back,
-    repeat. every dependency held at a typed seam, every induced work bounded.
-    not a framework: one harness, one job.</div>
+    run the tools, feed the result back, repeat.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t1</span></div>
@@ -202,8 +200,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">point it at your endpoint. any OpenAI-compatible server works: a local box,
-    a gateway, a hosted API. the wire protocol only.</div>
+    <div class="msg reveal">point it at any OpenAI-compatible endpoint: a local box, a gateway, or a hosted API.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ rig --base-url $ENDPOINT --model $NAME</span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command">copy</button></div>
@@ -211,22 +208,25 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">the flags are per-run; the durable home is the rig folder. a new row in
-    ~/.rig/models.json carries a model's own window and reserves — the embedded rows
-    stay, you add only what you need — and settings.json names the default. precedence
-    runs flag, then env, then the file, then the embedded default.</div>
+    <div class="msg reveal">flags are per-run. the durable config lives in ~/.rig: models.json carries
+    each model's window and reserves, settings.json names the default. precedence
+    is flag, env, file, then embedded.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">write</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/models.json</span></div>
     <div class="ln py reveal">  [</div>
     <div class="ln py reveal">    {"id": <span class="s">"big-ctx"</span>, "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 65536, "role": <span class="s">"interactive"</span>}</div>
     <div class="ln py reveal">  ]</div>
-    <div class="ln out reveal">  models.json written — "big-ctx" added; embedded rows kept</div>
+    <div class="ln out reveal">  models.json written: big-ctx added, embedded rows kept</div>
     <div class="ln reveal"><span class="tname-done">write</span>   <span class="ok">✓</span>   <span class="dim">0.4s</span></div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">edit</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/settings.json</span></div>
-    <div class="ln out reveal">  default model → big-ctx (settings.json)</div>
+    <div class="ln py reveal">  {</div>
+    <div class="ln py reveal">    <span class="s">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,</div>
+    <div class="ln py reveal">    <span class="s">"model"</span>: <span class="s">"big-ctx"</span></div>
+    <div class="ln py reveal">  }</div>
+    <div class="ln out reveal">  settings.json: endpoint + default model</div>
     <div class="ln reveal"><span class="tname-done">edit</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
 
     <div class="gap reveal"></div>
@@ -239,8 +239,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">ten native tools ship in the box. each is a leaf behind the Tool seam;
-    every call observed by the walls, bounded, and named:</div>
+    <div class="msg reveal">eleven native tools ship in the box.</div>
     <div class="ln tl reveal"><span class="tn">bash</span>   real subprocesses; output surfaced and bounded</div>
     <div class="ln tl reveal"><span class="tn">file</span>   read · write · edit; edits drift-checked against what you read</div>
     <div class="ln tl reveal"><span class="tn">fs</span>     ls · find · grep; small schemas a local model can reach</div>
@@ -250,11 +249,11 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln tl reveal"><span class="tn">todo</span>   the task queue; event-sourced, DAG-validated at create</div>
     <div class="ln tl reveal"><span class="tn">rem</span>    memory; recall by intent, consolidation arithmetic</div>
     <div class="ln tl reveal"><span class="tn">scheduler</span>   background jobs on cron; the worker runs in a bwrap jail</div>
+    <div class="ln tl reveal"><span class="tn">delegate</span>   one-shot worker; run a task on a fresh session, get back its last message</div>
     <div class="ln tl reveal"><span class="tn">plugins_reload</span>   re-discover from disk; the swap takes effect next turn</div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">the python kernel is persistent. a value you define stays put for the
-    next call, so you compute once and reuse — no re-setup between calls.</div>
+    <div class="msg reveal">the python kernel is persistent. define a value in one call, use it in the next.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">python</span>   <span class="dim">·</span>   <span class="toolargs">code</span></div>
@@ -277,13 +276,9 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">one file under ~/.rig/plugins/ is one tool. the name is the filename; the
-    description and schema are the file's; the call rides the shared python
-    kernel. a loaded tool registers on the same seam as the native set,
-    indistinguishable on the wire. a broken file names itself and is skipped;
-    it never bricks the harness.
-    an installed plugin is its own allow-list entry: it arrived by your approve,
-    not by an allow line.</div>
+    <div class="msg reveal">one file under ~/.rig/plugins/ is one tool. the name is the filename,
+    the schema is the file's. a broken file names itself and is skipped,
+    never bricks the harness.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ cat ~/.rig/plugins/uptime.py</span></div>
@@ -305,8 +300,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">all five done. rig {{RIG_VERSION}} is installed, pointed at your endpoint, ten tools
-    loaded, plugins live. you're in.</div>
+    <div class="msg reveal">all five done. rig {{RIG_VERSION}} is installed and pointed at your endpoint. you're in.</div>
 
     <div class="gap reveal"></div>
     <div class="ln in reveal"><span class="ps">❯</span>  <span class="cursor" aria-hidden="true"></span></div>
