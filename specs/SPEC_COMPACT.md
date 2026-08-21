@@ -51,9 +51,11 @@ the model's own window, and the case is impossible by construction
   first (the roadmap's rule) and decision 7 is rewritten — that is the
   stop condition.
 - No TUI, no footer: the CLI prints one line; 10 renders it.
-- No chunked (multi-pass) summarization: an old prefix that does not fit
-  the summary window is a loud failure (decision 3's boundary), not an
-  invented algorithm.
+- No chunked (multi-pass) summarization: one summary call per
+  compaction, always. An old prefix that does not fit the summary window
+  is cut to the oldest slice that does (decision 3, amended 2026-08-21),
+  the remainder folds on a later pass; a single message that alone does
+  not fit is the loud failure. No map-reduce, no second algorithm.
 - No new dependencies: stdlib only in `models/` and `policy/compact/`;
   the summary prompt is a file via `go:embed`.
 - No config files: the table is code plus `RIG_MODEL_*` env at the root.
@@ -349,22 +351,39 @@ The summary request's `max_tokens` is clamped to what the window actually
 has left for this request: `min(MaxTokens, Window - est(prompt + older)
 * factor)` — the calibrated estimate (4); nothing follows in the summary
 call, so `Window - est` is the honest budget, and the reserve is not
-subtracted twice (the main-call clamp in 8 is the same shape). If the budget is <= 0 — the input alone does not fit
-the window (a single oversized message, a calibration miss, or an older
-prefix that itself exceeds the summary window when the transcript is far
-past the trigger — `KeepRecent < Window - Reserve` guarantees the
-post-compact fit, not the summary-call fit) — the compact fails loud,
-naming the id, window, and the input's estimate: no invented chunking in
-8 (non-goal), and the overflow decorator (7) is the recovery if the call
+subtracted twice (the main-call clamp in 8 is the same shape). If the
+budget is under the summary floor (`min(Reserve/4, 256)`, the same
+threshold the main-call clamp uses: room for a summary, not a token) —
+the input does not fit the window (an older prefix that itself exceeds
+the summary window when the transcript is far past the trigger — one
+turn that added a 300 KB `read`, or a calibration miss —
+`KeepRecent < Window - Reserve` guarantees the post-compact fit, not the
+summary-call fit) — the compact summarizes **the oldest slice that fits**
+(amended 2026-08-21): the largest prefix of `older` whose summary input
+leaves the floor, cut back to a call boundary the way `split` cuts (a
+result never leads the remainder without its call), one call, and the
+remainder rides ahead of the tail uncompacted. The marker row replaces
+the slice; the next assemble over the trigger folds the remainder in
+(the fold above), one call per pass, converging. `Dropped` is the
+slice, `Kept` is remainder plus tail — the event's shape is unchanged
+(the frozen `core`). A single message that alone does not fit (the
+prefix of one) is still the loud failure, naming the id, window, and the
+input's estimate; the overflow decorator (7) is the recovery if the call
 still faults. The next call's fit (system + summary + tail in the usable
 window) is a separate bound: the fold (above) and the recovery (7) carry
 it, layer by layer.
 
 Why one call and no chunking: a map-reduce summary is a second algorithm
-with its own cost and its own failure shapes; the boundary it rescues is
-the oversized-message case, which the structural checks (2) and the loud
-failure (here) already name. If it is needed, it is a named extension
-with its own tests.
+with its own cost and its own failure shapes. The slice is not that: it
+is the same one call over a shorter prefix, and the fold that already
+existed does the rest on later passes. Before the amendment the
+over-the-window prefix was a loud failure that stuck until `/new`; the
+2026-08-21 session faulted on it twice and the operator lost the
+session. Rejected, named: summarizing in one oversized call and hoping
+(the server truncates or refuses; the summary is wrong either way);
+compacting to empty (the "kept" tail must survive); a loop of passes in
+one assemble (the main call's overflow recovery already bounds the
+remainder, and one call per assemble keeps the event count legible).
 
 ### 4. The trigger anchors on the server's own count; the estimate covers only the delta
 
@@ -390,15 +409,27 @@ a named boundary: a fixture at exactly `Window - Reserve` is passthrough;
 one over compacts.
 
 The estimate is stdlib: for each message, the bytes of `Content` plus
-`Reasoning` plus each tool call's name and args, divided by 4, rounded
-up. Named approximate: it is a trigger, not an accounting.
+each tool call's name and args, divided by 4, rounded up; `Reasoning`
+counts on the last assistant message of the list only (amended
+2026-08-21). Named approximate: it is a trigger, not an accounting. The
+reasoning rule mirrors the wire: the adapter sends `reasoning_content`
+for every assistant row, and every chat template in use strips it from
+history (Qwen3 keeps thinking only after the last user turn; DeepSeek
+drops it from prior turns), so the server's count never carries it.
+Counting it did: one 2026-08-21 session held 8.3 MB of reasoning beside
+359 KB of assistant text — an estimate of ~2M tokens for a transcript the
+server counted at 192k, and a `-resume` of it would have compacted
+everything on the first assemble. `split`'s per-message budget sees each
+message as its own list, so the tail counts its messages' reasoning —
+conservative on the cut, named.
 
 The calibration is the provider's reported usage, applied only to the
 delta: the number the server actually counted rides `Done.Usage`, already
 in the event vocabulary (SPEC_HARDENING decision 3) — the same wire, no
 new channel. On every `Done` the decorator relays (the main call's), if
 the request carries an anchor and a non-empty delta,
-`factor <- clamp((reported - anchor) / estimate(delta), 0.5, 4.0)`; a
+`factor <- clamp((reported - anchor) / estimate(delta), 0.5, 2.0)`, and
+only when `estimate(delta) >= anchor / 50` (amended 2026-08-21, below); a
 request with no anchor (the session's first call) leaves the factor as it
 is — the whole-request ratio carries the system+spec constant, the bug
 this decision exists to remove, and staying at 1.0 beats learning a
@@ -416,6 +447,29 @@ as its average — small next to the uncalibrated case (bytes/4 off by 2x
 or more on CJK-heavy or code-heavy transcripts), and the anchor is what
 lets one estimator stay honest on a 64k worker and a 262k brain with
 different tokenizers, from one shared config (decision 2's case).
+
+Amended 2026-08-21, the field failure: a session faulted twice with
+`the summary input alone does not fit the window: window 262144, estimate
+426816` while the server counted the whole context at 192k. The
+per-turn ratios reconstructed from its store read 44, 0.31, 4.57, 3.84,
+0.63, 31.8, 0.58, 7.27, 2.9, 1.88, 0.02 — noise, not a tokenizer. A
+tool-loop delta of a hundred tokens has `reported - anchor` dominated by
+the template's own overhead and by the reasoning the template keeps or
+strips between two calls, neither of which is in the delta's bytes; one
+such turn pinned the factor at the 4.0 clamp, and from then on every
+estimate was raw bytes read as tokens: the brain compacted at ~50k real
+tokens (20 times in one session) and a ~110k summary input read as 427k.
+Two changes. A delta under 2% of the anchor is not a measurement and
+leaves the factor where it was — the ratio is only trusted when the
+delta is large enough that the overhead is inside the rounding. The
+clamp ceiling is 2.0: bytes/4 is never 4x sparse on text, and the
+ceiling bounds the damage of any one bad sample to 2x (the summary-input
+check at 2x fits where 4x faulted). Rejected, named: an EMA over samples
+(slower to learn, still wrong on a noisy sample, and the named tests want
+the first good report to land); calibrating on the whole request (the
+system+spec constant, the reason this decision exists); a real tokenizer
+(a dependency, per model). The overflow recovery (7) remains the net
+under both.
 
 Where the calibration lives, named: the decorator is the only place that
 sees both sides of a main call — the assembled request and the reported
@@ -919,7 +973,8 @@ What 8 is not:
   as promised, the caller owning delivery.
 - Deliverable 10's footer renders `Compacted` — the context-used bar the
   event already carries (`Dropped`/`Kept` against the window).
-- Chunked summarization (3's rejection), a tokenizer dependency (the
+- Chunked, multi-pass summarization (3's rejection; the oldest-slice cut
+  is one call, not a second algorithm), a tokenizer dependency (the
   non-goal), and parallel tool execution (a loop change, and a different
   deliverable).
 

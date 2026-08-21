@@ -760,3 +760,93 @@ func TestCompactingCueOrder(t *testing.T) {
 		t.Fatalf("event 1 = %T, want Compacted after the cue", evs[1])
 	}
 }
+
+// TestOversizedOlderCompactsTheOldestSliceThatFits (SPEC_COMPACT 3,
+// amended 2026-08-21): an older prefix whose summary input does not fit
+// the window is cut to the oldest slice that does — one call — and the
+// remainder rides ahead of the tail, uncompacted, to fold on a later
+// pass. Before the amendment this was the loud failure that stuck a
+// session until /new.
+func TestOversizedOlderCompactsTheOldestSliceThatFits(t *testing.T) {
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+	s := core.NewSession()
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1200)})      // 300
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 1200)}) // 300
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1200)})      // 300
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("b", 1200)}) // 300
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("t", 100)})       // 25, the tail
+	// older = the first four (est 1200 + the prompt's ~200) does not fit
+	// a 1000 window; the first two (~800) leave the floor (25).
+	prov := &scriptedProvider{turns: []scriptedTurn{summaryTurn("S1", core.Usage{Prompt: 800, Completion: 20})}}
+	fe := &captureFrontend{}
+	pol, err := compact.New(prov, fe, s, "", row)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	out, err := pol.Assemble(context.Background(), s)
+	if err != nil {
+		t.Fatalf("Assemble must compact the slice, not fail: %v", err)
+	}
+	if prov.calls() != 1 {
+		t.Fatalf("one summary call, got %d", prov.calls())
+	}
+	sent := prov.reqs()[0].Messages[1].Content
+	if !strings.Contains(sent, "pppp") || !strings.Contains(sent, "aaaa") {
+		t.Fatalf("the slice must hold the oldest messages, got %d bytes", len(sent))
+	}
+	if strings.Contains(sent, "qqqq") || strings.Contains(sent, "bbbb") {
+		t.Fatal("the remainder must not be in the summary input")
+	}
+	// the transcript: marker + the remainder + the tail
+	if len(s.Messages) != 4 || !strings.HasPrefix(s.Messages[0].Content, compact.SummaryMarker) ||
+		!strings.HasPrefix(s.Messages[1].Content, "qqqq") || !strings.HasPrefix(s.Messages[2].Content, "bbbb") ||
+		!strings.HasPrefix(s.Messages[3].Content, "tttt") {
+		t.Fatalf("transcript = marker + remainder + tail, got %d messages", len(s.Messages))
+	}
+	if len(out) != len(s.Messages) {
+		t.Fatalf("assemble returns the rewritten transcript (no system): %d vs %d", len(out), len(s.Messages))
+	}
+	var ev core.Compacted
+	found := false
+	for _, e := range fe.events {
+		if c, ok := e.(core.Compacted); ok {
+			ev, found = c, true
+		}
+	}
+	if !found {
+		t.Fatal("the Compacted event must be delivered")
+	}
+	if ev.Dropped < 590 || ev.Dropped > 610 || ev.Kept < 615 || ev.Kept > 635 {
+		t.Fatalf("Dropped is the slice (~600) and Kept is remainder plus tail (~625), got %d / %d", ev.Dropped, ev.Kept)
+	}
+}
+
+// A slice never leads its remainder with a tool result whose call was
+// cut away: the cut moves back to the call, as split's does.
+func TestOversizedOlderSliceRespectsTheCallBoundary(t *testing.T) {
+	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
+	s := core.NewSession()
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1200)})                                                                                             // 300
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{"command":"ls"}`)}}}) // ~105
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})                                                                               // 500, the result
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("b", 1200)})                                                                                        // 300
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("t", 100)})                                                                                              // 25, the tail
+	// by size the slice would be [p, a-with-call] (~600 + prompt) and the
+	// remainder would lead with c1's result; the cut moves back to the
+	// call, so the slice is [p] alone.
+	prov := &scriptedProvider{turns: []scriptedTurn{summaryTurn("S1", core.Usage{Prompt: 500, Completion: 20})}}
+	pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := pol.Assemble(context.Background(), s); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	sent := prov.reqs()[0].Messages[1].Content
+	if !strings.Contains(sent, "pppp") || strings.Contains(sent, "[calls bash]") || strings.Contains(sent, "rrrr") {
+		t.Fatalf("the slice must stop before the call whose result would lead the remainder, got %d bytes", len(sent))
+	}
+	if len(s.Messages) != 5 || len(s.Messages[1].ToolCalls) != 1 || s.Messages[2].ToolID != "c1" {
+		t.Fatalf("the call and its result must stay together in the remainder, got %d messages", len(s.Messages))
+	}
+}

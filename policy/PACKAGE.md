@@ -66,8 +66,20 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
   same transcript surfaces — never a silent loop.
 - `sizeOf` anchors on the last `ContextTokens > 0` message; no anchored
   message means the whole list is estimated. `calibrate` is delta-only:
-  `reported - anchor` isolates the delta; the factor is clamped to
-  `[0.5, 4.0]` and stays 1.0 until the first report.
+  `reported - anchor` isolates the delta; a delta under 2% of the anchor
+  is not a measurement and leaves the factor alone; the factor is clamped
+  to `[0.5, 2.0]` and stays 1.0 until the first trusted report
+  (SPEC_COMPACT 4, amended 2026-08-21: a tiny tool-loop delta pinned the
+  factor at 4 and the brain compacted at ~50k).
+- `Estimate` counts `Reasoning` on the last assistant message only — the
+  chat templates strip it from history, so the server never counts it. A
+  single-message list (the `split` budget) counts its own.
+- An older prefix whose summary input does not leave the summary floor
+  (`min(Reserve/4, 256)`) is cut to the oldest slice that does
+  (`fitPrefix`: a binary search over the rendered input, then back to a
+  call boundary); the remainder rides ahead of the tail and folds on a
+  later pass. A prefix of one message that does not fit is the loud
+  failure (SPEC_COMPACT 3, amended 2026-08-21).
 - `clampMaxTokens` refuses loud when the kept batch overruns the window
   (budget below the smaller of `Reserve/4` and 256) — surfaced as a Fault
   so `-p` exits non-zero.
