@@ -19,7 +19,12 @@ import (
 // passthrough returned.
 func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 	t.Run("budget inside a multi-call batch slides to the batch's assistant", func(t *testing.T) {
-		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 850, MaxTokens: 500, Reserve: 100, KeepRecent: 120}
+		// window 900 / reserve 150 (was 850 / 100; the trigger stays 750):
+		// the older prefix's summary input is ~849, and the summary floor
+		// (SPEC_COMPACT 3, amended) wants room for a summary, not a token
+		// — at 850 the prefix would be sliced; the cut this case pins is
+		// the tail's, unchanged.
+		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 900, MaxTokens: 500, Reserve: 150, KeepRecent: 120}
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)}) // 500, the older bulk
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})  // 50

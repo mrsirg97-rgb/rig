@@ -51,9 +51,11 @@ the model's own window, and the case is impossible by construction
   first (the roadmap's rule) and decision 7 is rewritten — that is the
   stop condition.
 - No TUI, no footer: the CLI prints one line; 10 renders it.
-- No chunked (multi-pass) summarization: an old prefix that does not fit
-  the summary window is a loud failure (decision 3's boundary), not an
-  invented algorithm.
+- No chunked (multi-pass) summarization: one summary call per
+  compaction, always. An old prefix that does not fit the summary window
+  is cut to the oldest slice that does (decision 3, amended 2026-08-21),
+  the remainder folds on a later pass; a single message that alone does
+  not fit is the loud failure. No map-reduce, no second algorithm.
 - No new dependencies: stdlib only in `models/` and `policy/compact/`;
   the summary prompt is a file via `go:embed`.
 - No config files: the table is code plus `RIG_MODEL_*` env at the root.
@@ -349,22 +351,39 @@ The summary request's `max_tokens` is clamped to what the window actually
 has left for this request: `min(MaxTokens, Window - est(prompt + older)
 * factor)` — the calibrated estimate (4); nothing follows in the summary
 call, so `Window - est` is the honest budget, and the reserve is not
-subtracted twice (the main-call clamp in 8 is the same shape). If the budget is <= 0 — the input alone does not fit
-the window (a single oversized message, a calibration miss, or an older
-prefix that itself exceeds the summary window when the transcript is far
-past the trigger — `KeepRecent < Window - Reserve` guarantees the
-post-compact fit, not the summary-call fit) — the compact fails loud,
-naming the id, window, and the input's estimate: no invented chunking in
-8 (non-goal), and the overflow decorator (7) is the recovery if the call
+subtracted twice (the main-call clamp in 8 is the same shape). If the
+budget is under the summary floor (`min(Reserve/4, 256)`, the same
+threshold the main-call clamp uses: room for a summary, not a token) —
+the input does not fit the window (an older prefix that itself exceeds
+the summary window when the transcript is far past the trigger — one
+turn that added a 300 KB `read`, or a calibration miss —
+`KeepRecent < Window - Reserve` guarantees the post-compact fit, not the
+summary-call fit) — the compact summarizes **the oldest slice that fits**
+(amended 2026-08-21): the largest prefix of `older` whose summary input
+leaves the floor, cut back to a call boundary the way `split` cuts (a
+result never leads the remainder without its call), one call, and the
+remainder rides ahead of the tail uncompacted. The marker row replaces
+the slice; the next assemble over the trigger folds the remainder in
+(the fold above), one call per pass, converging. `Dropped` is the
+slice, `Kept` is remainder plus tail — the event's shape is unchanged
+(the frozen `core`). A single message that alone does not fit (the
+prefix of one) is still the loud failure, naming the id, window, and the
+input's estimate; the overflow decorator (7) is the recovery if the call
 still faults. The next call's fit (system + summary + tail in the usable
 window) is a separate bound: the fold (above) and the recovery (7) carry
 it, layer by layer.
 
 Why one call and no chunking: a map-reduce summary is a second algorithm
-with its own cost and its own failure shapes; the boundary it rescues is
-the oversized-message case, which the structural checks (2) and the loud
-failure (here) already name. If it is needed, it is a named extension
-with its own tests.
+with its own cost and its own failure shapes. The slice is not that: it
+is the same one call over a shorter prefix, and the fold that already
+existed does the rest on later passes. Before the amendment the
+over-the-window prefix was a loud failure that stuck until `/new`; the
+2026-08-21 session faulted on it twice and the operator lost the
+session. Rejected, named: summarizing in one oversized call and hoping
+(the server truncates or refuses; the summary is wrong either way);
+compacting to empty (the "kept" tail must survive); a loop of passes in
+one assemble (the main call's overflow recovery already bounds the
+remainder, and one call per assemble keeps the event count legible).
 
 ### 4. The trigger anchors on the server's own count; the estimate covers only the delta
 
@@ -954,7 +973,8 @@ What 8 is not:
   as promised, the caller owning delivery.
 - Deliverable 10's footer renders `Compacted` — the context-used bar the
   event already carries (`Dropped`/`Kept` against the window).
-- Chunked summarization (3's rejection), a tokenizer dependency (the
+- Chunked, multi-pass summarization (3's rejection; the oldest-slice cut
+  is one call, not a second algorithm), a tokenizer dependency (the
   non-goal), and parallel tool execution (a loop change, and a different
   deliverable).
 
