@@ -35,7 +35,11 @@ type Options struct {
 	// Crontab is the scheduler's crontab (the drift read); nil = the real
 	// crontab (injected in tests).
 	Crontab sched.Crontab
-	// ReadTimeout bounds each read (and the one write); 0 = the default.
+	// RunnerCmd is the scheduler create's runner command (the crontab
+	// line's command column); the root wires <self> run-job, the store's
+	// own voice when empty.
+	RunnerCmd string
+	// ReadTimeout bounds each read (and the writes); 0 = the default.
 	ReadTimeout time.Duration
 }
 
@@ -43,13 +47,12 @@ type Options struct {
 // and the static assets. It is built by New and served by
 // ListenAndServe.
 type Server struct {
-	home    string
-	cwd     string
-	models  models.Table
-	plugins []Plugin
-	pending []Plugin
-	crontab sched.Crontab
-	readTO  time.Duration
+	home      string
+	cwd       string
+	models    models.Table
+	crontab   sched.Crontab
+	runnerCmd string
+	readTO    time.Duration
 
 	origins []string
 	token   string
@@ -57,16 +60,13 @@ type Server struct {
 	static  fs.FS
 }
 
-// New builds the dashboard (SPEC_SERVE 1): it lists the plugins (the loaded
-// set and the pending zone) and roots the static assets. It opens no store
-// and mints no token; those happen on first use and at serve, respectively.
+// New builds the dashboard (SPEC_SERVE 1): it roots the static assets. It
+// opens no store and mints no token; those happen on first use and at
+// serve, respectively. The plugin listing is live (decision 8): read per
+// request, never cached here.
 func New(opts Options) (*Server, error) {
 	if opts.Home == "" {
 		return nil, errors.New("web: home is required (the rig home)")
-	}
-	loaded, pending, err := listPlugins(opts.Home)
-	if err != nil {
-		return nil, fmt.Errorf("web: plugins: %w", err)
 	}
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -76,16 +76,19 @@ func New(opts Options) (*Server, error) {
 	if ct == nil {
 		ct = sched.RealCrontab("")
 	}
+	runner := opts.RunnerCmd
+	if runner == "" {
+		runner = "rig run-job"
+	}
 	return &Server{
-		home:    opts.Home,
-		cwd:     opts.CWD,
-		models:  opts.Models,
-		plugins: loaded,
-		pending: pending,
-		crontab: ct,
-		readTO:  opts.ReadTimeout,
-		stores:  newStoreCache(opts.Home),
-		static:  sub,
+		home:      opts.Home,
+		cwd:       opts.CWD,
+		models:    opts.Models,
+		crontab:   ct,
+		runnerCmd: runner,
+		readTO:    opts.ReadTimeout,
+		stores:    newStoreCache(opts.Home),
+		static:    sub,
 	}, nil
 }
 

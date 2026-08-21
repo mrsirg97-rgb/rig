@@ -25,9 +25,10 @@ then talk. Configuration and verification: `docs/SETUP.md`.
 ## dashboard
 
 `rig serve` opens a loopback-only dashboard on the rig home's stores
-(sessions, todo, scheduler, memory, models, plugins) with one write — a
-todo create: open the printed address with the printed token
-(`specs/SPEC_SERVE.md`).
+(sessions, todo, scheduler, memory, models, plugins) with three writes —
+todo create, scheduler create, and plugin create into the pending zone —
+rendered in the TUI's design language and mobile-ready: open the printed
+address with the printed token (`specs/SPEC_SERVE.md`, phase 2).
 
 ## install
 

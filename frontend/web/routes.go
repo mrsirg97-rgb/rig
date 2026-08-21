@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +29,10 @@ const (
 	defaultPage   = 200
 	defaultMemK   = 50
 )
+
+// pluginNameRe is the plugin name's wall (the filename stem): lowercase,
+// digits and underscores, a leading letter, bounded in length.
+var pluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 // router is the allow-list (SPEC_SERVE posture): every (method, path) is
 // named; an unknown path is a 404 and a known path with the wrong method
@@ -66,13 +72,13 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 	case path == "/api/todo":
 		return setOf("GET", "POST"), true
 	case path == "/api/scheduler":
-		return setOf("GET"), true
+		return setOf("GET", "POST"), true
 	case path == "/api/memory":
 		return setOf("GET"), true
 	case path == "/api/models":
 		return setOf("GET"), true
 	case path == "/api/plugins":
-		return setOf("GET"), true
+		return setOf("GET", "POST"), true
 	}
 	return nil, false
 }
@@ -93,14 +99,18 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleTodoRead(w, r)
 	case path == "/api/todo" && r.Method == "POST":
 		s.handleTodoCreate(w, r)
-	case path == "/api/scheduler":
+	case path == "/api/scheduler" && r.Method == "GET":
 		s.handleScheduler(w, r)
+	case path == "/api/scheduler" && r.Method == "POST":
+		s.handleSchedulerCreate(w, r)
 	case path == "/api/memory":
 		s.handleMemory(w, r)
 	case path == "/api/models":
 		s.handleModels(w, r)
-	case path == "/api/plugins":
+	case path == "/api/plugins" && r.Method == "GET":
 		s.handlePlugins(w, r)
+	case path == "/api/plugins" && r.Method == "POST":
+		s.handlePluginsCreate(w, r)
 	}
 }
 
@@ -368,18 +378,26 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
-	loaded := make([]pluginJSON, 0, len(s.plugins))
-	for _, p := range s.plugins {
-		loaded = append(loaded, pluginJSON{Name: p.Name, Description: p.Description, File: p.File})
+	loaded, pending, err := listPlugins(s.home)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	pending := make([]pluginJSON, 0, len(s.pending))
-	for _, p := range s.pending {
-		pending = append(pending, pluginJSON{Name: p.Name, Description: p.Description, File: p.File})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"loaded": loaded, "pending": pending})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"loaded":  pluginRows(loaded),
+		"pending": pluginRows(pending),
+	})
 }
 
-// --- the one write (the todo create) ---
+func pluginRows(ps []Plugin) []pluginJSON {
+	out := make([]pluginJSON, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, pluginJSON{Name: p.Name, Description: p.Description, File: p.File})
+	}
+	return out
+}
+
+// --- the writes (the todo, scheduler, and plugin creates) ---
 
 func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
@@ -419,6 +437,147 @@ func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
+}
+
+// handleSchedulerCreate is the scheduler's create (SPEC_SERVE phase 2,
+// decision 7): the same verb a live session's scheduler tool calls, with
+// session dashboard, the runner command the root wired, and the page's
+// cwd as the session cwd. The verb's refusal is the refusal (the store's
+// voice is the contract).
+func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	if !s.originOK(r) {
+		writeErr(w, http.StatusForbidden, "origin mismatch (same-origin only)")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxWriteBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
+	}
+	var in sched.CreateInput
+	if err := json.Unmarshal(body, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "a JSON body {name, prompt, cron, at?, scope?} is required: "+err.Error())
+		return
+	}
+	global, err := s.stores.schedulerGlobal()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	cwdDB, err := s.stores.schedulerCwd(cwd)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	reply, err := sched.Create(ctx, sched.Stores{Global: global, Cwd: cwdDB}, s.crontab,
+		in, cwd, sessionName, s.runnerCmd, time.Now)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
+}
+
+// handlePluginsCreate is the plugin's create (SPEC_SERVE phase 2, decision
+// 7): one file into the pending zone, the provenance rule's landing zone.
+// The file is the plugin contract — a DESCRIPTION, an empty SCHEMA object,
+// and a run(args) whose body the form supplies. A name in either zone is a
+// named refusal (no overwrite); the name is the filename stem.
+func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	if !s.originOK(r) {
+		writeErr(w, http.StatusForbidden, "origin mismatch (same-origin only)")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxWriteBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "read body: "+err.Error())
+		return
+	}
+	var in struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Code        string `json:"code"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "a JSON body {name, description, code} is required: "+err.Error())
+		return
+	}
+	name := strings.TrimSpace(in.Name)
+	if !pluginNameRe.MatchString(name) {
+		writeErr(w, http.StatusBadRequest,
+			"the name is the filename stem: lowercase, digits and underscores, a leading letter (got "+strconv.Quote(name)+")")
+		return
+	}
+	code := strings.TrimRight(in.Code, " \t\r\n")
+	if code == "" {
+		writeErr(w, http.StatusBadRequest, "the run body is required (a run with no body is no plugin)")
+		return
+	}
+	loaded, pending, err := listPlugins(s.home)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, p := range loaded {
+		if p.Name == name {
+			writeErr(w, http.StatusBadRequest, "a plugin named '"+name+"' already exists (loaded); remove it first")
+			return
+		}
+	}
+	for _, p := range pending {
+		if p.Name == name {
+			writeErr(w, http.StatusBadRequest, "a plugin named '"+name+"' already exists (pending); remove it first")
+			return
+		}
+	}
+	dir := filepath.Join(s.home, "plugins", "pending")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	path := filepath.Join(dir, name+".py")
+	if _, err := os.Stat(path); err == nil {
+		writeErr(w, http.StatusBadRequest, "a plugin named '"+name+"' already exists (pending); remove it first")
+		return
+	}
+	desc, err := json.Marshal(in.Description)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "DESCRIPTION = %s\n", desc)
+	b.WriteString("SCHEMA = {\"type\": \"object\"}\n\n")
+	b.WriteString("def run(args):\n")
+	for _, line := range strings.Split(code, "\n") {
+		if strings.TrimSpace(line) == "" {
+			b.WriteString("\n")
+			continue
+		}
+		b.WriteString("    " + strings.TrimLeft(line, " \t") + "\n")
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	rel, err := filepath.Rel(s.home, path)
+	if err != nil {
+		rel = path
+	}
+	reply := "created '" + name + "' in " + filepath.ToSlash(rel) + " (the pending zone: move it into plugins/ and reload to load)"
+	_ = ctx
+	writeJSON(w, http.StatusOK, map[string]any{"name": name, "file": path, "reply": reply})
 }
 
 // --- the static assets ---
