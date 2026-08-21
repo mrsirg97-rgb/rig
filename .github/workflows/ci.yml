@@ -18,3 +18,5 @@ jobs:
         run: make test
       - name: fmt-check
         run: make fmt-check
+      - name: shellcheck install.sh
+        run: shellcheck install.sh

@@ -83,6 +83,9 @@ func TestFreezeGate(t *testing.T) {
 			p == "specs" || strings.HasPrefix(p, "specs/") ||
 			p == "Makefile" || p == ".gitignore" || p == "README.md" ||
 			p == ".github" || strings.HasPrefix(p, ".github/") ||
+			// the distribution round (SPEC_BUILD 5): the installer and
+			// the site, beside the release/pages workflows.
+			p == "install.sh" || p == "site" || strings.HasPrefix(p, "site/") ||
 			p == "core" || strings.HasPrefix(p, "core/") ||
 			p == "CHANGELOG.md" || p == "ROADMAP.md" ||
 			p == "go.mod" || p == "go.sum"
