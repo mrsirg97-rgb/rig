@@ -504,8 +504,7 @@ func (t *tui) enterPager() {
 	t.pg = newPager(t.live.hist, t.width, t.height)
 	t.pg.footer = t.footerLocked()
 	t.live.suspend()
-	io.WriteString(t.live.w, altOn)
-	t.pg.render(t.live.w, t.theme)
+	io.WriteString(t.live.w, altOn+t.pg.frame(t.theme))
 }
 
 func (t *tui) footerLocked() []string {
