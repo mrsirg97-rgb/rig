@@ -18,7 +18,7 @@ nothing is read into the prompt by a session start.
 
 - `rem.go` — the store: write/read operations, id minting, the raw
   statements, prune and supersession, the repo scope, the migration, and
-  the `/rem` command's reads (`List`, `Show`, `Pin`, `Forget`).
+  the `/rem` command's reads (`List`, `Show`, `Forget`).
 - `recall.go` — the pure core: consolidation arithmetic, the lexical
   shapes of the two arms (FTS and trigram), reciprocal rank fusion
   (RRF, k=60). Zero I/O.
@@ -29,7 +29,7 @@ nothing is read into the prompt by a session start.
 ## How it is consumed
 
 - `tool/rem` calls the read/write operations; the `/rem` command's
-  closures (`List`/`Show`/`Pin`/`Forget`) are wired at the root
+  closures (`List`/`Show`/`Forget`) are wired at the root
   (SPEC_COMMANDS 11). The compaction reflection seam is cut.
 - Ids are minted from a meta counter inside the caller's transaction:
   strictly increasing, never reused (the AUTOINCREMENT rule, kept by

@@ -57,7 +57,7 @@ func TestRemListVerbAndEmpty(t *testing.T) {
 	}
 }
 
-func TestRemShowAndForgetAndPin(t *testing.T) {
+func TestRemShowAndForget(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
 		RemShow: func(ctx context.Context, id int64) (command.RemRow, error) {
@@ -67,12 +67,6 @@ func TestRemShowAndForgetAndPin(t *testing.T) {
 			return command.RemRow{ID: 3, Kind: "fact", ScopeLabel: "rig", CreatedAt: recentISO(), Strength: 0.5, Importance: 0.5, Source: "s1", Content: "the full memory content"}, nil
 		},
 		RemForget: func(ctx context.Context, id int64) error {
-			if id != 3 {
-				return errors.New("rem: no such memory: 3")
-			}
-			return nil
-		},
-		RemPin: func(ctx context.Context, id int64) error {
 			if id != 3 {
 				return errors.New("rem: no such memory: 3")
 			}
@@ -93,10 +87,6 @@ func TestRemShowAndForgetAndPin(t *testing.T) {
 	if err != nil || out != "rem: forgot m3" {
 		t.Fatalf("forget = (%q, %v), want the named line", out, err)
 	}
-	out, err = byName["rem"].Run(context.Background(), "pin 3", env)
-	if err != nil || out != "rem: pinned m3" {
-		t.Fatalf("pin = (%q, %v), want the named line", out, err)
-	}
 }
 
 func TestRemRefusalsByName(t *testing.T) {
@@ -106,18 +96,15 @@ func TestRemRefusalsByName(t *testing.T) {
 			return command.RemRow{}, errors.New("rem: no such memory: 99")
 		},
 		RemForget: func(ctx context.Context, id int64) error { return errors.New("rem: no such memory: 99") },
-		RemPin:    func(ctx context.Context, id int64) error { return errors.New("rem: no such memory: 99") },
 	}
 	cases := []struct{ args, want string }{
 		{"show", "rem: show needs an id (rem show <id>)"},
 		{"show a b", "rem: show takes one id"},
 		{"show 99", "rem: no such memory: 99"},
 		{"forget", "rem: forget needs an id (rem forget <id>)"},
-		{"pin", "rem: pin needs an id (rem pin <id>)"},
 		{"forget 99", "rem: no such memory: 99"},
-		{"pin 99", "rem: no such memory: 99"},
 		{"show abc", "rem: the id must be a memory id (m<N> or <N>)"},
-		{"frob", "rem: usage: rem [list|show|forget|pin <id>]"},
+		{"frob", "rem: usage: rem [list|show|forget <id>]"},
 	}
 	for _, c := range cases {
 		_, err := byName["rem"].Run(context.Background(), c.args, env)
@@ -134,7 +121,7 @@ func TestRemSubHints(t *testing.T) {
 		t.Fatal("rem must carry Sub hints (the TUI's menu door)")
 	}
 	subs := subber.Sub()
-	want := []string{"list", "show", "forget", "pin"}
+	want := []string{"list", "show", "forget"}
 	if len(subs) != len(want) {
 		t.Fatalf("Sub() = %d hints, want %d", len(subs), len(want))
 	}

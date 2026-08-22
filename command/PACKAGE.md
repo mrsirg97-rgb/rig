@@ -55,9 +55,9 @@ the leaf.
   tools: parse the line into the tool's JSON args, call `Exec` with the
   session threaded, return the reply verbatim.
 - **rem** — the operator's verb over the memory store (SPEC_STATE: rem is
-  deliberate): `rem [list|show|forget|pin]` — list the live memories
-  (project then global, one line each), show by id, forget by id, pin by
-  id (importance 1). The model's learn/recall/reflect/prune stays the
+  deliberate): `rem [list|show|forget]` — list the live memories
+  (project then global, one line each), show by id, forget by id. The
+  model's learn/recall/reflect/prune stays the
   tool; the operator's read and prune get a typed line.
 - **plugins** — lists the loaded/skipped plugins and the pending zone;
   `approve <name>` installs a pending plugin; `reload` re-registers from

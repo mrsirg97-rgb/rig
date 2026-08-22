@@ -761,24 +761,6 @@ func Show(ctx context.Context, db store.DB, id int64) (*remdom.Memory, error) {
 	return out, nil
 }
 
-func Pin(ctx context.Context, db store.DB, id int64) error {
-	_, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (struct{}, error) {
-		row, err := remdom.NewMemoryDomain().GetMemory(bound, id).Row()
-		if err != nil {
-			return struct{}{}, fmt.Errorf("rem: pin: %w", err)
-		}
-		if row == nil {
-			return struct{}{}, ErrNoSuchMemory
-		}
-		row.Importance = 1
-		if _, err := remdom.NewMemoryDomain().UpdateMemory(bound, *row); err != nil {
-			return struct{}{}, fmt.Errorf("rem: pin: %w", err)
-		}
-		return struct{}{}, nil
-	})
-	return err
-}
-
 func Forget(ctx context.Context, db store.DB, cwd string, id int64) error {
 	_, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (struct{}, error) {
 		row, err := remdom.NewMemoryDomain().GetMemory(bound, id).Row()

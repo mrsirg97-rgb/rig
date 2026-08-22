@@ -63,7 +63,6 @@ type Env struct {
 	RemList   func(ctx context.Context) ([]RemRow, error)
 	RemShow   func(ctx context.Context, id int64) (RemRow, error)
 	RemForget func(ctx context.Context, id int64) error
-	RemPin    func(ctx context.Context, id int64) error
 
 	Plugins    func() []PluginInfo
 	Reload     func(ctx context.Context) (string, error)

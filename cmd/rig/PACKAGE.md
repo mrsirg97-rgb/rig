@@ -28,7 +28,7 @@ sees core and models and nothing else.
   `sessionList/Show/Resume`, `switchModel`, `switchEffort`, `switchRole`,
   `switchApprove`, `reloadPlugins` / `swapPlugins`, `nativeTools`,
   `runtimeTable`, and the `/rem` command's closures
-  (`RemList`/`RemShow`/`RemForget`/`RemPin` over `store/rem`).
+  (`RemList`/`RemShow`/`RemForget` over `store/rem`).
 - **Resolution helpers**: `rigHome` (the migration), `resolveModel`,
   `tuiTrueColor`, `tuiStatusIn`, `tuiNews`, `sessionFor`,
   `checkOneShot`, `splitCSV`, `firstNonEmpty`, `hasLevel`,

@@ -1014,18 +1014,6 @@ func main() {
 			}
 			return nil
 		},
-		RemPin: func(ctx context.Context, id int64) error {
-			if r.remDB.DB == nil {
-				return errors.New("rem: no rem store")
-			}
-			if err := remstore.Pin(ctx, r.remDB, id); err != nil {
-				if errors.Is(err, remstore.ErrNoSuchMemory) {
-					return fmt.Errorf("rem: no such memory: %d", id)
-				}
-				return err
-			}
-			return nil
-		},
 	}
 
 	var fe core.Frontend

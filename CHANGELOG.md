@@ -57,10 +57,13 @@
   removed; another project's id is refused by name with its label.
 
 - **the `/rem` command** (`specs/SPEC_COMMANDS.md` 11): `rem [list|show|
-  forget|pin]` over the same store — list the live memories (project
-  then global, one line each), show by id, forget by id, pin by id
-  (importance 1). The model's multi-line learn/recall/reflect/prune
-  stays the tool; the operator's read and prune get a typed line.
+  forget]` over the same store — list the live memories (project then
+  global, one line each), show by id, forget by id. The model's
+  multi-line learn/recall/reflect/prune stays the tool; the operator's
+  read and prune get a typed line. Rejected, named: `rem pin` — importance
+  is only the per-access reinforcement multiplier, so the verb changed
+  nothing the operator could see, and an operator write that is not a
+  prune is off the surface.
 
 ## [0.12.2] — the two bounds
 

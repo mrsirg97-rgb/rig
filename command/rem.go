@@ -15,14 +15,13 @@ func (remCmd) Sub() []Sub {
 		{Name: "list", Desc: "show the live memories"},
 		{Name: "show", Desc: "show a memory: show <id>"},
 		{Name: "forget", Desc: "forget a memory: forget <id>"},
-		{Name: "pin", Desc: "pin a memory at importance 1: pin <id>"},
 	}
 }
 
 func (remCmd) Name() string { return "rem" }
 
 func (remCmd) Description() string {
-	return "list, show, forget, or pin the live memories"
+	return "list, show, or forget the live memories"
 }
 
 func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
@@ -66,18 +65,6 @@ func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
 			return "", err
 		}
 		return fmt.Sprintf("rem: forgot m%d", id), nil
-	case fields[0] == "pin" && len(fields) == 2:
-		id, err := remID(fields[1])
-		if err != nil {
-			return "", err
-		}
-		if e.RemPin == nil {
-			return "", errors.New("rem: no rem seam (the root did not wire one)")
-		}
-		if err := e.RemPin(ctx, id); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("rem: pinned m%d", id), nil
 	}
 	switch {
 	case len(fields) > 0 && fields[0] == "show":
@@ -90,13 +77,8 @@ func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
 			return "", errors.New("rem: forget needs an id (rem forget <id>)")
 		}
 		return "", errors.New("rem: forget takes one id")
-	case len(fields) > 0 && fields[0] == "pin":
-		if len(fields) == 1 {
-			return "", errors.New("rem: pin needs an id (rem pin <id>)")
-		}
-		return "", errors.New("rem: pin takes one id")
 	default:
-		return "", errors.New("rem: usage: rem [list|show|forget|pin <id>]")
+		return "", errors.New("rem: usage: rem [list|show|forget <id>]")
 	}
 }
 
