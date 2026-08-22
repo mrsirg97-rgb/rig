@@ -978,3 +978,31 @@ func TestModelsFileRowListsAndSwitches(t *testing.T) {
 	}
 	h.finish(done)
 }
+
+// SPEC_PLUGINS 7 / SPEC_GROWTH 9: the embedded allow default is the native
+// set, exactly. The door round added two natives and not their allow
+// entries, and every plugin call on a default home was refused (0.12.1).
+func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
+	cfg, err := config.Load(t.TempDir(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{}
+	for _, n := range cfg.Settings.Allow {
+		allowed[n] = true
+	}
+	for _, n := range nativeToolNames {
+		if !allowed[n] {
+			t.Errorf("native %q is not in the embedded allow default", n)
+		}
+	}
+	natives := map[string]bool{}
+	for _, n := range nativeToolNames {
+		natives[n] = true
+	}
+	for _, n := range cfg.Settings.Allow {
+		if !natives[n] {
+			t.Errorf("embedded allow names %q, which is not a native", n)
+		}
+	}
+}
