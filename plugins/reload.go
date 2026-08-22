@@ -76,7 +76,7 @@ func NewReload(home string, natives map[string]bool, k Kernel, swap func(ctx con
 func (r *Reload) Name() string { return "plugins_reload" }
 
 func (r *Reload) Description() string {
-	return "re-run the python plugin discovery over the rig home's plugins/ directory: the same loud skips, the same collision refusal, and removal free (the list rebuilds from disk). A new or changed plugin is registered for the next turn, and its functions are importable from the python tool right away (the shared kernel). No arguments."
+	return "re-run plugin discovery over plugins/. Guidelines: after a plugin you wrote is approved, or when the plugin door refuses a name that should exist; the swap applies next turn. Reply: the discovery's list — loaded, and skipped with reasons."
 }
 
 func (r *Reload) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }

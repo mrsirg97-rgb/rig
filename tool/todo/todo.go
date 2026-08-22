@@ -52,10 +52,10 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "Task queue per working directory. create replaces the queue (tasks: [{text, dependsOn?}]); " +
-	"start/complete/fail/retry act on one task id; move reorders by a 1-based pos; read prints the queue " +
-	"(all:true for history). The reply is the contract: the affected row plus the summary, and a refusal " +
-	"names the rule it broke. Task ids are minted by the tool; copy them from a reply, never invent."
+const description = "the task queue for this working directory. Guidelines: any job of three or more steps -> " +
+	"create before the first edit (tasks: [{text, dependsOn?}]), start before working, complete or fail on " +
+	"finish; read shows the actionable queue (all:true for history); move reorders by a 1-based pos. Reply: " +
+	"the affected row and the summary; a refusal names the rule. Ids (tN) are minted by the tool — copy, never invent."
 
 type adapter struct{ db store.DB }
 

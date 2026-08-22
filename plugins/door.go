@@ -28,7 +28,7 @@ func NewDoor(live Live, redo func(ctx context.Context) error) *Door {
 func (d *Door) Name() string { return "plugin" }
 
 func (d *Door) Description() string {
-	return "run a live plugin: the model calls `plugin` with {name, args}; the schema's name enum lists the live plugins, and an unknown name re-discovers once before refusing (an out-of-band install needs no reload). `plugin_schema <name>` shows a plugin's contract (description and args) before you call it. Plugins are also importable from the python tool by name."
+	return "run a live plugin by name with its args. Guidelines: the name enum is the live set; call plugin_schema first when you do not know a plugin's args; an unknown name re-discovers once, then refuses. Reply: the plugin's text. Plugins are also importable from python by name."
 }
 
 func (d *Door) Schema() json.RawMessage {
@@ -82,7 +82,7 @@ func NewSchemaDoor(live Live, redo func(ctx context.Context) error) *SchemaDoor 
 func (d *SchemaDoor) Name() string { return "plugin_schema" }
 
 func (d *SchemaDoor) Description() string {
-	return "show a live plugin's contract (description and JSON schema) before calling it through the `plugin` door. Schema: {name}."
+	return "show a live plugin's contract. Guidelines: before the first call of a plugin whose args you do not know. Reply: its description and JSON schema, verbatim."
 }
 
 func (d *SchemaDoor) Schema() json.RawMessage {

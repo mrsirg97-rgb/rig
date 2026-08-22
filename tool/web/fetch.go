@@ -28,14 +28,13 @@ const (
 	trafilaturaCap   = 2 * maxBytesDefault
 )
 
-const description = "Fetch a public http(s) URL and return its readable text (article extraction for HTML, " +
-	"raw body for JSON/plain). Redirects are followed and re-checked; private/internal " +
-	"addresses are refused. Output is capped; a loud [TRUNCATED] marker states the full size."
+const description = "fetch a public http(s) URL as readable text (article extraction for HTML, the raw body " +
+	"for JSON and plain text)."
 
-const guidelines = "Guidelines: " +
-	"search finds, fetch reads; snippets are not the page. " +
-	"web pages and textual APIs only; local files -> read, local services -> bash. " +
-	"[TRUNCATED] -> refetch with larger maxChars only if the missing part matters."
+const guidelines = "Guidelines: search finds, fetch reads — snippets are not the page; web pages and textual " +
+	"APIs only (local files -> read, local services -> bash). Reply: the text, capped with a [TRUNCATED] " +
+	"marker naming the full size — refetch with a larger maxChars only if the missing part matters; " +
+	"private and internal addresses are refused."
 
 const schemaJSON = `{
 	"type": "object",

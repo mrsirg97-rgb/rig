@@ -41,13 +41,11 @@ type adapter struct{ Opts }
 func (a adapter) Name() string { return "delegate" }
 
 func (a adapter) Description() string {
-	return "spawn a headless worker on a task now, in a cwd, wait, and return its last message. " +
-		"Use it for a bounded sub-task whose result is a message, not a conversation: a long compute, " +
-		"a sweep, a review — run on a separate worker row without threading the whole turn through it. " +
-		"cwd defaults to the session's cwd and must be under it or the rig home; model defaults to " +
-		"(default: " + a.DefaultModel + "); timeoutMs defaults to 10 minutes (ceiling the runner's 30). " +
-		"A held GPU is a loud refusal naming the holder (busy:skip); one delegation in flight per session; " +
-		"the worker's transcript is resumable with sessions resume <id>."
+	return "spawn a headless worker on a task now, wait, and return its last message. Guidelines: a bounded " +
+		"sub-task whose result is a message — a long compute, a sweep, a review — never a conversation; one " +
+		"in flight per session. Reply: the worker's message plus a trailer (exit, duration, session id, log); " +
+		"a held GPU refuses naming the holder. cwd must be under the session's cwd or the rig home; the model " +
+		"defaults to " + a.DefaultModel + "; the timeout to 10 minutes (ceiling 30)."
 }
 
 func (a adapter) Schema() json.RawMessage {

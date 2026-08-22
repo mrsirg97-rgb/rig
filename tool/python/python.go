@@ -32,14 +32,12 @@ const (
 	waitDelay        = 2 * time.Second
 )
 
-const description = "Run Python in a persistent IPython session. Variables, imports and definitions " +
-	"persist across calls, so build state up incrementally. numpy and pandas are " +
-	"available; IPython magics (%timeit, %run) work. action='vars' lists the current " +
-	"namespace, action='reset' clears it."
+const description = "run Python in a persistent IPython kernel: variables, imports, and definitions persist " +
+	"across calls; numpy and pandas are available."
 
-const guidelines = "Guidelines: " +
-	"arithmetic, data shaping, parsing, bulk text -> compute in python, don't estimate. " +
-	"state persists; compute once, query it in later calls."
+const guidelines = "Guidelines: arithmetic, data shaping, parsing, bulk text -> compute here, never estimate; " +
+	"compute once, query it in later calls. Reply: stdout and the last expression's value; action vars " +
+	"lists the namespace, reset clears it."
 
 const schemaJSON = `{
 	"type": "object",

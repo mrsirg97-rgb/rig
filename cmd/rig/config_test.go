@@ -962,3 +962,44 @@ func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 		}
 	}
 }
+
+func TestToolMenuBudgetAndVocabulary(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(goldenDir, "oneshot.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		Tools []struct {
+			Function struct {
+				Name        string          `json:"name"`
+				Description string          `json:"description"`
+				Parameters  json.RawMessage `json:"parameters"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatal(err)
+	}
+	const budget = 14000
+	total := 0
+	for _, tl := range wire.Tools {
+		f := tl.Function
+		total += len(f.Description) + len(f.Parameters)
+		text := f.Description + string(f.Parameters)
+		for _, bad := range []string{"pi ", "pane"} {
+			if strings.Contains(text, bad) {
+				t.Errorf("%s carries another harness's voice: %q", f.Name, bad)
+			}
+		}
+		if !strings.Contains(f.Description, "Guidelines:") {
+			t.Errorf("%s has no Guidelines sentence", f.Name)
+		}
+		if !strings.Contains(f.Description, "Reply:") {
+			t.Errorf("%s does not name its reply's shape", f.Name)
+		}
+	}
+	if total > budget {
+		t.Fatalf("the tool menu is %d chars on the wire, over the %d budget: trimming is a decision, name it", total, budget)
+	}
+	t.Logf("tool menu: %d chars of %d", total, budget)
+}

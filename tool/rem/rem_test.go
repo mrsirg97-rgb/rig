@@ -248,7 +248,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 		t.Fatalf("name %q", tool.Name())
 	}
 	d := tool.Description()
-	for _, want := range []string{"learn commits facts", "prune removes, reduces, or consolidates", "Ids are minted mN"} {
+	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "ids (mN)"} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing %q:\n%s", want, d)
 		}
