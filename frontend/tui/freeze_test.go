@@ -42,6 +42,9 @@ func TestFreezeGate(t *testing.T) {
 			p == "store/state" || strings.HasPrefix(p, "store/state/") ||
 			p == "tool/diff" || strings.HasPrefix(p, "tool/diff/") ||
 			p == "tool/python" || strings.HasPrefix(p, "tool/python/") ||
+			p == "tool/bash" || strings.HasPrefix(p, "tool/bash/") ||
+			p == "tool/fs" || strings.HasPrefix(p, "tool/fs/") ||
+			p == "tool/web" || strings.HasPrefix(p, "tool/web/") ||
 
 			p == "store/rem" || strings.HasPrefix(p, "store/rem/") ||
 			p == "tool/bash" || strings.HasPrefix(p, "tool/bash/") ||

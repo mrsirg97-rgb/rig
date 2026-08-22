@@ -94,7 +94,7 @@ func Read() core.Tool { return &readTool{} }
 func (readTool) Name() string { return "read" }
 
 func (readTool) Description() string {
-	return "read a file (offset/limit select a narrower line range); remembers its disk state for drift-checked edits"
+	return "read a file, or a line range of it (offset/limit). Guidelines: read before you edit — an edit is drift-checked against what you last read; a large file -> a narrower range. Reply: the text; a range past the end refuses by name."
 }
 
 func (readTool) Schema() json.RawMessage {
@@ -166,7 +166,7 @@ func Write() core.Tool { return &writeTool{} }
 func (writeTool) Name() string { return "write" }
 
 func (writeTool) Description() string {
-	return "create or overwrite a file"
+	return "create or overwrite a file with the full content. Guidelines: new files and whole rewrites; a change inside an existing file -> edit. Reply: the path written; a plugin you author lands in plugins/pending/ for the operator to approve."
 }
 
 func (writeTool) Schema() json.RawMessage {
@@ -206,7 +206,7 @@ func Edit() core.Tool { return &editTool{} }
 func (editTool) Name() string { return "edit" }
 
 func (editTool) Description() string {
-	return "replace exactly one occurrence of an old string; refuses drift and ambiguity"
+	return "replace exactly one occurrence of old with new in a file. Guidelines: the precise change; read first and make old unique with context — an ambiguous or missing old, or a file changed since your read, refuses by name. Reply: the path edited."
 }
 
 func (editTool) Schema() json.RawMessage {

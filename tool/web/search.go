@@ -19,10 +19,10 @@ const (
 	searchBodyCap = 1 << 20
 )
 
-const searchDescription = "Search the web via SearXNG instance. Returns compact JSON: title, url, snippet per result."
+const searchDescription = "search the web (a local SearXNG)."
 
-const searchGuidelines = "Guidelines: " +
-	"current or external info -> web_search; never for code already in the workspace."
+const searchGuidelines = "Guidelines: current or external information; never for code already in the workspace. " +
+	"Reply: compact JSON — title, url, snippet per result."
 
 const searchSchema = `{
 	"type": "object",

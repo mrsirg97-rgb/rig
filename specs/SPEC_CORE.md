@@ -229,7 +229,25 @@ type Tool interface {
 ```
 
 Schemas are authored by hand next to the tool. Reflection-derived schemas
-drift from intent and add deps. Edit is exact-match string replacement with
+drift from intent and add deps.
+
+**The description's shape** (amended 0.12.2): every description is the
+same four parts, in order — *what* it does (one sentence); *when* to
+reach for it and when not (a `Guidelines:` sentence, on every tool — it
+is the sentence that changes behavior, and it was missing from 13 of
+18); the *reply's* shape (one clause); at most *one gotcha*. Storage
+mechanics and implementation notes live in the package's `PACKAGE.md`,
+never on the wire: the model needs the reply contract, not the event
+log's compaction rule. Refusals and descriptions share vocabulary (the
+pending zone, approve, the door), so the model meets each word in both
+places. The whole menu — every native's description plus schema — is
+pinned under 14,000 characters by a case in `cmd/rig` over the wire
+golden (13.1k at the amendment: 5.5k of description, 7.5k of schema),
+so growth is a decision; the schemas of `rem`, `scheduler`, `todo`, and
+`diff` are 4k of that and the next lever, named. No description carries
+the voice of another harness ("pi", "pane"), pinned by the same case. The
+one-line tools (`bash`, `write`, `edit`, `ls`) keep their line and gain
+the shape's clauses without padding. Edit is exact-match string replacement with
 loud, specific failure messages; a fuzzy edit tool silently corrupts files.
 
 ### ToolMiddleware

@@ -13,19 +13,16 @@ import (
 )
 
 func description(defModel string) string {
-	return "Background jobs on the user's crontab, bound to the worker GPU; each job is a headless " +
-		"worker session on the worker model (default: " + defModel + "). create schedules: cron is " +
-		"5-field 'M H D Mo DOW' or 'once' + at:<ISO>; a once line self-deletes after one fire. " +
-		"list shows jobs in both scopes with drift between store and crontab; " +
-		"pause/resume/remove manage jobs; runs gives the audit trail (n last, default 5). " +
-		"Scopes: 'global' (this user) and 'cwd' (this working directory, the default). " +
-		"Job ids jN are minted per scope; copy from list, never invent."
+	return "background jobs on the user's crontab: each job is a headless worker session on the worker " +
+		"model (default: " + defModel + "), in scope cwd (this directory, the default) or global."
 }
 
-const guidelines = "Guidelines: " +
-	"busy:'skip' (default) skips a fire while another model holds the GPU; 'force' evicts it, " +
-	"only when the user wants the GPU now. A drifting job is not trustworthy until the drift " +
-	"note is gone. A failed once job is done-with-fail: re-create it to retry."
+const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D Mo DOW', or once + at:<ISO>, which " +
+	"self-deletes after one fire); list shows both scopes with any drift between store and crontab; " +
+	"pause/resume/remove; runs is the audit trail. Reply: the job row or the list; ids (jN, per scope) " +
+	"are minted — copy from list, never invent. busy:skip (default) skips a fire while another model holds " +
+	"the GPU, force evicts it — only when the user wants the GPU now; a drifting job is not trustworthy " +
+	"until the note clears; a failed once job is done — re-create it to retry."
 
 func schemaJSON(defModel string) string {
 	return `{
@@ -41,7 +38,7 @@ func schemaJSON(defModel string) string {
 		},
 		"prompt": {
 			"type": "string",
-			"description": "The prompt a worker pi session runs. Required for create."
+			"description": "The prompt the worker session runs. Required for create."
 		},
 		"cron": {
 			"type": "string",
@@ -57,7 +54,7 @@ func schemaJSON(defModel string) string {
 		},
 		"model": {
 			"type": "string",
-			"description": "pi model id (default ` + defModel + `)."
+			"description": "worker model id (default ` + defModel + `)."
 		},
 		"busy": {
 			"type": "string",

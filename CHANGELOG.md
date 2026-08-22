@@ -2,6 +2,16 @@
 
 ## [0.12.2] — the two bounds
 
+- **the description's shape** (`specs/SPEC_CORE.md`, the Tool section):
+  every tool's description is the same four parts — what, a
+  `Guidelines:` sentence on when and when not (it was missing from 13 of
+  18), the reply's shape, at most one gotcha; storage mechanics leave
+  the wire for the `PACKAGE.md`s; the scheduler's "pi session" / "pi
+  model id" become rig's words. A case in `cmd/rig` pins the whole
+  menu under 14,000 chars on the wire and refuses another harness's
+  voice, so growth is a decision; the schemas of rem, scheduler, todo,
+  and diff are the next lever, named.
+
 - **no comments in Go, anywhere**: the sweep strips every comment from
   implementation and test code (147 files; generated code and the
   `metadata` packages exempt — lift reads their doc comments), the

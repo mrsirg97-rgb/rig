@@ -63,7 +63,7 @@ func (t *tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 func LS() core.Tool {
 	return &tool{
 		name:        "ls",
-		description: "list one level of a directory: kind, name, and size",
+		description: "list one level of a directory: kind, name, size. Guidelines: orientation; a search by name -> find, by content -> grep. Reply: one entry per line, capped.",
 		schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"directory to list (default .)"},"hidden":{"type":"boolean","description":"include dot-entries"}}}`),
 		exec:        lsExec,
 	}
@@ -72,7 +72,7 @@ func LS() core.Tool {
 func Find() core.Tool {
 	return &tool{
 		name:        "find",
-		description: "find files by name or path glob under a root; bare patterns match the name, ** spans directories",
+		description: "find files by a name glob, or a path glob with / (** spans directories), under a root. Guidelines: locating files by name; by content -> grep. Reply: one path per line, capped.",
 		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"a name glob (matches the file name) or a path glob with / (** spans directories)"},"root":{"type":"string","description":"root to search (default .)"}},"required":["pattern"]}`),
 		exec:        findExec,
 	}
@@ -81,7 +81,7 @@ func Find() core.Tool {
 func Grep() core.Tool {
 	return &tool{
 		name:        "grep",
-		description: "search file lines under a root with a Go regexp; prints path:line: text",
+		description: "search file lines under a root with a Go regexp. Guidelines: locating code by content, narrowed with glob; one file's whole text -> read. Reply: path:line: text, capped.",
 		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Go regexp matched per line"},"root":{"type":"string","description":"root to search (default .)"},"glob":{"type":"string","description":"restrict matches to a path glob"}},"required":["pattern"]}`),
 		exec:        grepExec,
 	}

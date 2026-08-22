@@ -75,13 +75,11 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "Memory tool: learn commits facts and constraints idempotently; recall finds past " +
-	"solutions by intent (project scope first, global fill); reflect stores a distilled " +
-	"memory with its raw source; prune removes, reduces, or consolidates memories. " +
-	"Scope 'global' for general knowledge, default project (cwd). Recall k caps live hits; " +
-	"no query is a browse. Ids are minted mN; copy, never invent. Your notes for this " +
-	"directory arrive in context at session start; learn what the next session should not " +
-	"re-derive."
+const description = "memory across sessions: learn commits a fact or constraint (idempotent), recall finds past " +
+	"solutions by intent (project scope first, global fill), reflect stores a distilled memory with its source, " +
+	"prune removes, reduces, or consolidates. Guidelines: recall before re-deriving a project fact; learn " +
+	"deliberately what the next session should not re-derive; supersede by id when the code disagrees. Reply: " +
+	"the hits with their ids (mN) and strength, or the written row; copy ids, never invent; no query is a browse."
 
 type adapter struct{ db store.DB }
 

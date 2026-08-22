@@ -687,11 +687,10 @@ func TestNameDescriptionAndSchemaAreTheSpecText(t *testing.T) {
 	if tool.Name() != "diff" {
 		t.Fatalf("name = %q, want diff", tool.Name())
 	}
-	const wantDescription = "diff a tool call's result against its previous observation, or the working tree against HEAD.\n\n" +
-		"mode 'files': the tool shells out to `git diff` and says so: the working tree against HEAD (or ref, optional), optional paths; a non-git cwd refuses loud, naming the reason.\n\n" +
-		"mode 'last': the recorded tool calls of this session only (a resumed session is the same session; another session is another world): the newest result of the same call (tool name + exact args; key order and whitespace do not matter, values do) against its n-th previous (n optional, default 1). a read path over state the harness already recorded; nothing new is written.\n\n" +
-		"the reply is a unified diff (context 3, ANSI-free, capped, '… K more lines'), or the word 'identical', or 'no earlier observation'.\n\n" +
-		"Guidelines: 'did my change actually apply' -> last, with the tool and args of the call that made the change; tree against HEAD -> files; diff of arbitrary strings -> python, not this."
+	const wantDescription = "diff the working tree against HEAD (mode files, git diff), or a tool call's newest result against " +
+		"its previous observation in this session (mode last: the same tool and args). Guidelines: 'did my change " +
+		"actually apply' -> last with that call's tool and args; the tree -> files; arbitrary strings -> python, not this. " +
+		"Reply: a unified diff (context 3, capped), 'identical', or 'no earlier observation'; a non-git cwd refuses files by name."
 	if tool.Description() != wantDescription {
 		t.Fatalf("description = %q, want the spec's verbatim text", tool.Description())
 	}

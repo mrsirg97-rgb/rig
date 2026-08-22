@@ -87,13 +87,13 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	d := h.tool.Description()
 	for _, want := range []string{
-		"minted per scope; copy from list, never invent",
-		"busy:'skip' (default) skips a fire while another model holds the GPU",
-		"'force' evicts it, only when the user wants the GPU now",
+		"are minted — copy from list, never invent",
+		"busy:skip (default) skips a fire while another model holds the GPU",
+		"force evicts it — only when the user wants the GPU now",
 		"(default: qwen3.8-workers)",
-		"the drift note is gone",
+		"until the note clears",
 		"re-create it to retry",
-		"a once line self-deletes after one fire",
+		"self-deletes after one fire",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing voice fragment: %q", want)
@@ -196,7 +196,7 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	model, _ := schema.Properties["model"].(map[string]any)
-	if got, _ := model["description"].(string); got != "pi model id (default brain)." {
+	if got, _ := model["description"].(string); got != "worker model id (default brain)." {
 		t.Fatalf("schema model description %q, want the passed default named", got)
 	}
 
