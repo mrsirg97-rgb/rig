@@ -1,17 +1,5 @@
 package tui
 
-// The live-region tear's regressions (SPEC_TUI's testing section):
-// the terminal wraps a line that reaches the last column, and the wrap
-// may resolve at a flush point (a write boundary) rather than at the
-// next byte — a frame that leaves the cursor at the last column across
-// a write boundary shifts the cursor a row, and the next op's cursor
-// tally is off by a row (the clear misses the top row, the indicator
-// lands between committed text). The three tests below pin the
-// invariant from three doors: the flush-aware terminal model over
-// whole-line deltas, the rune-at-a-time deltas with spinner ticks
-// interleaved, and the steering Enter over a parked wrapped input with
-// an open pending line.
-
 import (
 	"context"
 	"strings"
@@ -22,8 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// reproScreen replays the session's byte stream through the vt harness
-// and returns the rows (or fails).
 func reproScreen(t *testing.T, s *scriptedSession, width int) []string {
 	t.Helper()
 	v := newVT(width)
@@ -34,17 +20,6 @@ func reproScreen(t *testing.T, s *scriptedSession, width int) []string {
 	return v.rows
 }
 
-// vtFlush is the vt harness with one terminal behavior added: the
-// deferred wrap resolves at a write boundary (a flush point). A real
-// terminal may resolve the pending wrap when its input processing
-// flushes between two writes; a frame that leaves the cursor at the
-// last column across a write boundary then shifts by one row, and the
-// next op's cursor-up tally is off by a row — the clear misses the top
-// row (the indicator) and the indicator lands between committed text.
-//
-// feedWrite is one write to the terminal: the bytes of a single
-// io.WriteString. The wrap pending at the end of a feedWrite resolves
-// (the cursor advances) — the flush.
 type vtFlush struct {
 	width int
 	rows  []string
@@ -80,10 +55,9 @@ func (v *vtFlush) writeRune(r rune) {
 	v.c++
 }
 
-// feedWrite is one write to the terminal (the write boundary).
 func (v *vtFlush) feedWrite(b []byte) {
 	v.feedBytes(b)
-	// the flush: a pending wrap (cursor at the last column) resolves.
+
 	if v.c > 0 && v.c == v.width {
 		v.r++
 		v.c = 0
@@ -133,7 +107,7 @@ func (v *vtFlush) feedBytes(b []byte) {
 				}
 				v.r -= n
 			case 'B':
-				// the cursor down: the norm's un-park.
+
 				n, aerr := atoi(params)
 				if aerr != nil || n <= 0 {
 					v.fail("cursor-down with n = " + params)
@@ -160,7 +134,7 @@ func (v *vtFlush) feedBytes(b []byte) {
 				v.ensureRow(v.r)
 				v.rows[v.r] = ""
 			case 'J':
-				// erase from the cursor to the end of the screen (0J).
+
 				if params != "0" && params != "" {
 					v.fail("an unknown erase mode: 0J only")
 					return
@@ -189,14 +163,6 @@ func (v *vtFlush) feedBytes(b []byte) {
 	}
 }
 
-// TestTearFlushBoundaries is the live-region tear (SPEC_TUI's testing
-// section): a repaint is many small writes, and a line written exactly
-// to the last column leaves a pending wrap across a write boundary —
-// the terminal resolves it at the flush, the cursor shifts a row, and
-// the next op's clear misses the top row (the indicator), which lands
-// between committed text. Stream multi-line wrapped reasoning through
-// the flush-aware terminal model, write by write as the tty delivers
-// them, and assert no indicator bytes land between committed text.
 func TestTearFlushBoundaries(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(20),
@@ -205,8 +171,7 @@ func TestTearFlushBoundaries(t *testing.T) {
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
-	// lines that land exactly on the width (20) force a pending wrap at
-	// write boundaries, the way a decoder's deltas do.
+
 	s.fe.Notify(core.ReasoningDelta{Text: "twenty char line one\n"})
 	s.fe.Notify(core.ReasoningDelta{Text: "twenty char line two\n"})
 	s.fe.Notify(core.ReasoningDelta{Text: "third\n"})
@@ -221,8 +186,7 @@ func TestTearFlushBoundaries(t *testing.T) {
 		t.Fatalf("harness: %s\nstream:\n%s", v.err, s.out.String())
 	}
 	t.Logf("screen:\n%s", strings.Join(v.rows, "\n"))
-	// the committed reasoning lines, in order, each intact — no
-	// indicator (spinner frame + phase) between them.
+
 	wantIdx := []string{"twenty char line one", "twenty char line two", "third"}
 	last := -1
 	for _, want := range wantIdx {
@@ -238,8 +202,7 @@ func TestTearFlushBoundaries(t *testing.T) {
 		}
 		last = idx
 	}
-	// no indicator row between the first committed reasoning line and
-	// the end of the committed block (before the usage line).
+
 	usage := -1
 	for i := len(v.rows) - 1; i >= 0; i-- {
 		if strings.Contains(v.rows[i], "cache r") {
@@ -257,8 +220,6 @@ func TestTearFlushBoundaries(t *testing.T) {
 	}
 }
 
-// streamAndScreen runs a turn with the given reasoning text (delivered
-// one rune at a time, ticks interleaved) and returns the final vt screen.
 func streamAndScreen(t *testing.T, width int, text string) []string {
 	t.Helper()
 	th := oledTheme(t)
@@ -278,7 +239,7 @@ func streamAndScreen(t *testing.T, width int, text string) []string {
 	}
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	// let the tick loop drain
+
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		n := len(s.out.Bytes())
@@ -295,8 +256,6 @@ func streamAndScreen(t *testing.T, width int, text string) []string {
 	return v.rows
 }
 
-// isIndicator reports whether a row is the activity row (the indicator):
-// it starts with a spinner frame or the phase word.
 func isIndicator(r string) bool {
 	rr := strings.TrimPrefix(r, " ")
 	for _, f := range []string{"|", "/", "-", "\\"} {
@@ -307,9 +266,6 @@ func isIndicator(r string) bool {
 	return strings.Contains(rr, "thinking") || strings.Contains(rr, " bash")
 }
 
-// TestTearCharByChar: stream reasoning one rune at a time (fast deltas,
-// spinner ticks interleaved) with the pending line wrapping, and assert
-// no indicator bytes land between committed text on the final screen.
 func TestTearCharByChar(t *testing.T) {
 	text := "first reasoning line that wraps across the edge of the terminal " +
 		"and keeps going to force a wrap\n" +
@@ -318,8 +274,6 @@ func TestTearCharByChar(t *testing.T) {
 	rows := streamAndScreen(t, 24, text)
 	t.Logf("final screen:\n%s", strings.Join(rows, "\n"))
 
-	// Find the committed reasoning lines and check that no indicator row
-	// is wedged between the first and the last committed reasoning line.
 	first, last := -1, -1
 	for i, r := range rows {
 		if strings.Contains(r, "reasoning") || strings.Contains(r, "second line") || strings.Contains(r, "third short") {
@@ -339,12 +293,6 @@ func TestTearCharByChar(t *testing.T) {
 	}
 }
 
-// TestTearSteeringEnter: a steering Enter mid-stream, with a parked
-// wrapped input and an open pending line, then the interrupted turn's
-// end and the next turn. enter() freezes the input row and leaves the
-// activity row and the pending line standing (they become scrollback,
-// the interrupt's snapshot); the tear would be a frame character inside
-// a committed prose row, not the snapshot's own indicator row.
 func TestTearSteeringEnter(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(12),
@@ -358,11 +306,11 @@ func TestTearSteeringEnter(t *testing.T) {
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
-	// establish the turn and open a pending line.
+
 	s.fe.Notify(core.ReasoningDelta{Text: "streaming reasoning that wraps around and around and around\n"})
 	s.fe.Notify(core.ReasoningDelta{Text: "still thinking "})
 	s.await("still thinking")
-	// type a long line (wrapped, parked) and steer with Enter.
+
 	long := "steer this turn in a long way"
 	s.si.feed(long)
 	deadline := time.Now().Add(3 * time.Second)
@@ -384,15 +332,11 @@ func TestTearSteeringEnter(t *testing.T) {
 	if line != long || err != nil {
 		t.Fatalf("the steering line = (%q, %v)", line, err)
 	}
-	// finish the second turn.
+
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 	rows := reproScreen(t, s, 12)
 	t.Logf("final screen:\n%s", strings.Join(rows, "\n"))
 
-	// the committed content stands, in order: turn one's reasoning, the
-	// frozen steering line, turn two's output.
-	// the markers are word-safe: prose commits soft-wrapped at words
-	// (decision 2, amended), so a 12-col row holds "streaming" alone.
 	marks := []string{"streaming", "❯ steer this", "more after"}
 	last := -1
 	for _, m := range marks {
@@ -402,9 +346,7 @@ func TestTearSteeringEnter(t *testing.T) {
 		}
 		last = idx
 	}
-	// the tear: a frame character inside a committed prose row. The
-	// snapshot's own indicator row (frame + " thinking") is the
-	// standing activity row enter() leaves, not a tear.
+
 	for i, r := range rows {
 		if strings.ContainsAny(r, "|/-\\") &&
 			(strings.Contains(r, "streaming") || strings.Contains(r, "asoning") || strings.Contains(r, "around")) {

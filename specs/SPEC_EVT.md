@@ -32,7 +32,8 @@ goroutine; everything that waits on the world posts.
 ## goals
 
 - A leaf package, `evt`, stdlib-only, with libevt's five parts as Go
-  types of the same names: `Context`, `Event`, `Queue`, `Engine`,
+  types: `Closure` (libevt's `Context` — the one rename, since in Go
+  that word is `context.Context`), `Event`, `Queue`, `Engine`,
   `Scheduler` — plus the `Clock` that mints ids.
 - The queue's order, verbatim: priority descending, then id ascending
   (earlier arrival first). A 4-ary max-heap, as in C.
@@ -70,7 +71,7 @@ goroutine; everything that waits on the world posts.
 
 ```
 evt/
-  context.go    Context (the closure), Func
+  closure.go    Closure (libevt's Context), Func
   event.go      Event, NewEvent, Execute
   clock.go      Clock, Counter (default), Monotonic
   queue.go      Queue, NewQueue: the 4-ary max-heap with the position map
@@ -83,8 +84,8 @@ evt/
 
 | libevt | Go | the mechanism that changed |
 |---|---|---|
-| `Context { scope, future_fn }`, `context_resolve` | `Context` interface: `Resolve(ctx)`; `Func` adapts a `func(ctx)` | a closure is a closure; the `scope` is captured, not carried |
-| `Event { id, priority, ctx }`, `event_execute`, `event_update_priority` | `Event` interface: `ID`, `Priority`, `Context`, `UpdatePriority`; `Execute(e, ctx)` | unchanged |
+| `Context { scope, future_fn }`, `context_resolve` | `Closure` interface: `Resolve(ctx)`; `Func` adapts a `func(ctx)` | a closure is a closure; the `scope` is captured, not carried; the name changes because in Go `Context` is `context.Context` |
+| `Event { id, priority, ctx }`, `event_execute`, `event_update_priority` | `Event` interface: `ID`, `Priority`, `Closure`, `UpdatePriority`; `Execute(e, ctx)` | unchanged |
 | `Queue` 4-ary max-heap, `push/pop/peek/view` | `Queue` interface: `Push`, `Pop`, `Peek`, `View`, `Len`, `Update` | the heap is the same; `View` drains a clone (sorted); `Update` is the addition, via a position map |
 | `Engine { q, tick_fn, busy, running }`, CAS spin on `busy`, `engine_start` loop, `engine_add_event`, `engine_stop` | `Engine` interface: `Start(ctx)`, `Add`, `Update`, `Stop`, `Pending`; `sync.Mutex` + `sync.Cond` | the CAS spin is a mutex; the idle poll (`tick_fn` or `usleep(0)`) is `cond.Wait` unless `WithTick` names a hook; `Start(ctx)` also stops on `ctx.Done` |
 | `Scheduler { engine, engine_th, spawn_mu }`, `start_loop` (-1/-2/-3), `schedule_evt`, `stop_loop` (join) | `Scheduler` interface: `Start() error`, `Schedule`, `Stop`, `Done`; `ErrNoEngine`, `ErrStarted` | the pthread is a goroutine; the codes are errors; `Stop` joins through `Done` |

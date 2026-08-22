@@ -38,7 +38,7 @@ func (q *queue) Len() int { return len(q.evts) }
 func (q *queue) Push(e Event) {
 	ev, ok := e.(*event)
 	if !ok {
-		ev = &event{id: e.ID(), priority: e.Priority(), ctx: e.Context()}
+		ev = &event{id: e.ID(), priority: e.Priority(), closure: e.Closure()}
 	}
 	if _, dup := q.positions[ev.id]; dup {
 		return

@@ -13,20 +13,18 @@ import (
 	"github.com/mrsirg97-rgb/rig/loop"
 )
 
-// --- DI-seam fakes ---------------------------------------------------------
-// scriptedProvider replays canned event streams, one per model call.
 type scriptedTurn struct {
 	events    []core.Event
-	err       error // transport error at call time
-	holdCtx   bool  // block until ctx cancels, then close without Done (teardown)
-	bare      bool  // close without Done or Fault (provider bug)
-	holdAfter bool  // deliver events, then block until ctx cancels and close (mid-stream teardown)
+	err       error
+	holdCtx   bool
+	bare      bool
+	holdAfter bool
 }
 
 type scriptedProvider struct {
 	turns    []scriptedTurn
 	calls    int
-	toolReqs int // model calls that carried tools
+	toolReqs int
 }
 
 func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
@@ -42,7 +40,7 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 		return nil, turn.err
 	}
 	if turn.holdCtx {
-		<-ctx.Done() // transport torn down by the cancellation
+		<-ctx.Done()
 		ch := make(chan core.Event)
 		close(ch)
 		return ch, nil
@@ -54,7 +52,7 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 			for _, ev := range turn.events {
 				out <- ev
 			}
-			<-ctx.Done() // torn down mid-stream by the steering cancel
+			<-ctx.Done()
 			close(out)
 		}()
 	case turn.bare:
@@ -70,8 +68,6 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 	return out, nil
 }
 
-// recorderFrontend serves scripted inputs (close = EOF) and records every
-// Notify.
 type recorderFrontend struct {
 	inputs chan string
 	events []core.Event
@@ -93,10 +89,9 @@ func (f *recorderFrontend) Notify(ev core.Event) {
 	f.events = append(f.events, ev)
 }
 
-// transcriptPolicy is the minimal seam fake for Assemble in these tests.
 type transcriptPolicy struct {
 	system  string
-	errOnce error // first Assemble returns this, then clears
+	errOnce error
 }
 
 func (p *transcriptPolicy) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
@@ -112,14 +107,12 @@ func (p *transcriptPolicy) Assemble(ctx context.Context, s *core.Session) ([]cor
 	return append(msgs, s.Messages...), nil
 }
 
-// scriptedTool answers with a canned result, failing for its first fail
-// calls to exercise fed-back paths.
 type scriptedTool struct {
 	name   string
 	fail   int
 	result string
 	calls  int
-	cancel context.CancelFunc // deterministic cancellation point, tests only
+	cancel context.CancelFunc
 }
 
 func (t *scriptedTool) Name() string { return t.name }
@@ -199,8 +192,6 @@ func dumpList(ms []core.Message) string {
 	return b.String()
 }
 
-// --- the named cases -------------------------------------------------------
-
 func TestTextOnlyTurnOrdering(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
 		events: []core.Event{textEv("hello"), textEv(" world"), doneEv()},
@@ -226,7 +217,6 @@ func TestTextOnlyTurnOrdering(t *testing.T) {
 	}
 	wantTranscript(t, session, want...)
 
-	// every streamed event must reach the frontend, in order.
 	var kinds []string
 	for _, ev := range f.events {
 		switch ev.(type) {
@@ -277,16 +267,11 @@ func TestToolRoundTripOrdering(t *testing.T) {
 	}
 	wantTranscript(t, session, want...)
 
-	// both model calls must have carried the tool spec.
 	if p.toolReqs != 2 {
 		t.Fatalf("tool-carrying model calls = %d, want 2", p.toolReqs)
 	}
 }
 
-// TestLoopStampsContextTokens (SPEC_COMPACT 4, L8): the loop stamps the
-// assistant message it appends with Done.Usage's prompt+completion as
-// ContextTokens in both branches (the plain and the tool-call); a Done
-// reporting zero usage leaves it 0.
 func TestLoopStampsContextTokens(t *testing.T) {
 	t.Run("plain answer stamps prompt+completion", func(t *testing.T) {
 		p := &scriptedProvider{turns: []scriptedTurn{{
@@ -350,9 +335,6 @@ func TestLoopStampsContextTokens(t *testing.T) {
 	})
 }
 
-// TestLoopForwardsCompactedUntouched (SPEC_COMPACT 5, the TestEvent
-// precedent): a Compacted between stream events forwards untouched, and
-// the existing loop cases stay byte-identical.
 func TestLoopForwardsCompactedUntouched(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
 		events: []core.Event{textEv("a"), core.Compacted{Summary: "s", Dropped: 1, Kept: 2}, textEv("b"), doneEv()},
@@ -403,8 +385,6 @@ func TestFaultMidStreamPreservesSession(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	// the partial assistant text never enters the transcript; the user
-	// message, being complete, survives.
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "first"},
 		{Role: core.RoleUser, Content: "second"},
@@ -500,7 +480,7 @@ func TestCancellationMidStream(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	f.inputs <- "speak"
-	cancel() // armed before Run: Input drains the line first, then the stream tears down
+	cancel()
 	close(f.inputs)
 	if err := loop.Run(ctx, k); err != nil {
 		t.Fatalf("cancellation must exit cleanly, got %v", err)
@@ -509,16 +489,14 @@ func TestCancellationMidStream(t *testing.T) {
 
 func TestCancellationBetweenToolCalls(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	// the cancellation lands inside the first tool execution, so the
-	// boundary between tool calls and the next model call is exercised
-	// without racing Input.
+
 	bash := &scriptedTool{name: "bash", cancel: cancel}
 	p := &scriptedProvider{turns: []scriptedTurn{
 		{events: []core.Event{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
-		{holdCtx: true}, // second model call meets the cancelled context
+		{holdCtx: true},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -536,7 +514,6 @@ func TestCancellationBetweenToolCalls(t *testing.T) {
 		t.Fatalf("cancellation between tool calls must exit cleanly, got %v", err)
 	}
 
-	// transcript preserved through the complete assistant turn.
 	if len(session.Messages) < 2 || session.Messages[1].Role != core.RoleAssistant {
 		t.Fatalf("transcript must preserve through the tool-call turn, got: %s", dump(session))
 	}

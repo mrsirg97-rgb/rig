@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// Effective strength at recall, checkpointed decay at prune.
-// The pure arithmetic is the load-bearing math — pinned by name, no I/O.
-
 func TestDecayIsIdentityAtZeroElapsed(t *testing.T) {
 	if got := decay(0.8, 0); got != 0.8 {
 		t.Errorf("decay(0.8, 0) = %v, want identity", got)
@@ -42,8 +39,6 @@ func TestConsolidateClampsToUnitInterval(t *testing.T) {
 	}
 }
 
-// a replay with no elapsed time and no new accesses is a no-op, so
-// the pass is idempotent by construction.
 func TestConsolidateReplayWithNoElapsedIsNoOp(t *testing.T) {
 	once := consolidate(0.4, 0, 0, 0.7)
 	twice := consolidate(once, 0, 0, 0.7)
@@ -52,8 +47,6 @@ func TestConsolidateReplayWithNoElapsedIsNoOp(t *testing.T) {
 	}
 }
 
-// a decayed memory loses to a fresh one, decay
-// observable without consolidate.
 func TestEffectiveAgedLosesToFresh(t *testing.T) {
 	aged := consolidate(0.5, 40, 0, 0.5)
 	fresh := consolidate(0.5, 0, 0, 0.5)
@@ -78,7 +71,6 @@ func TestTokenizeLowercasesAndSplits(t *testing.T) {
 	}
 }
 
-// the pg_trgm convention: two-space padding, per-word grams.
 func TestGramsOfWordArePaddedTrigrams(t *testing.T) {
 	got := gramsOfWord("abc")
 	want := []string{"  a", " ab", "abc", "bc ", "c  "}
@@ -108,8 +100,6 @@ func TestFtsQueryQuotesReservedOperators(t *testing.T) {
 	}
 }
 
-// lift's reciprocal rank fusion: contribution 1/(k+rank), deduped by id,
-// match annotated with the reaching arm.
 func TestFuseIsReciprocalRank(t *testing.T) {
 	f := fuse([][]armHit{
 		{{memoryID: 1, arm: "fts", rank: 1}, {memoryID: 2, arm: "fts", rank: 1}},

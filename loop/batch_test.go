@@ -14,9 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/loop"
 )
 
-// timedTool sleeps for its args' ms, records when each call started and
-// ended, and tracks the peak number of calls in flight — the batch's
-// observable: what overlapped, and what waited.
 type timedTool struct {
 	name   string
 	cur    atomic.Int32
@@ -139,9 +136,6 @@ func same(a, b []string) bool {
 
 var onlyRead = func(c core.ToolCall) bool { return c.Name == "read" }
 
-// SPEC_EVT 2a: concurrent-eligible calls overlap; results are emitted
-// and appended in call order regardless of completion order; each
-// result's Duration is its own.
 func TestBatchRunsReadsConcurrentlyAndEmitsInCallOrder(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 90), timedCall("c2", "read", 40), timedCall("c3", "read", 10)}
@@ -175,8 +169,6 @@ func TestBatchRunsReadsConcurrentlyAndEmitsInCallOrder(t *testing.T) {
 	}
 }
 
-// A call the predicate refuses is a barrier: everything before it
-// finishes first, it runs alone, and the calls after it wait for it.
 func TestBatchMutatingCallIsABarrier(t *testing.T) {
 	read, write := newTimed("read"), newTimed("write")
 	calls := []core.ToolCall{timedCall("c1", "read", 60), timedCall("c2", "read", 20), timedCall("c3", "write", 10), timedCall("c4", "read", 10)}
@@ -202,7 +194,6 @@ func TestBatchMutatingCallIsABarrier(t *testing.T) {
 	}
 }
 
-// No predicate is the sequential loop, byte-identical: nothing overlaps.
 func TestBatchWithoutAPredicateIsSequential(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 30), timedCall("c2", "read", 30), timedCall("c3", "read", 30)}
@@ -218,7 +209,6 @@ func TestBatchWithoutAPredicateIsSequential(t *testing.T) {
 	}
 }
 
-// Parallel bounds a run: four eligible calls, at most two in flight.
 func TestBatchParallelBoundsTheRun(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 40), timedCall("c2", "read", 40), timedCall("c3", "read", 40), timedCall("c4", "read", 40)}
@@ -234,9 +224,6 @@ func TestBatchParallelBoundsTheRun(t *testing.T) {
 	}
 }
 
-// A run-context cancel landing inside a concurrent run: every call's
-// result still lands (the batch drains), the transcript keeps the
-// batch whole, and the run exits clean at the next boundary.
 func TestBatchCancellationMidRunDrainsTheBatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	read := newTimed("read")
@@ -261,9 +248,6 @@ func TestBatchCancellationMidRunDrainsTheBatch(t *testing.T) {
 	}
 }
 
-// The guard under a batch: identical failing calls in one concurrent
-// run are counted without a race, and the bound still holds for the
-// next turn's identical call.
 func TestBatchGuardCountsConcurrentFailures(t *testing.T) {
 	calls := make([]core.ToolCall, 0, 6)
 	for i := 0; i < 6; i++ {

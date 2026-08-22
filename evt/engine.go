@@ -7,7 +7,7 @@ import (
 
 type Engine interface {
 	Start(ctx context.Context)
-	Add(c Context, priority int) uint64
+	Add(c Closure, priority int) uint64
 	Update(id uint64, priority int) bool
 	Stop()
 	Pending() []Event
@@ -76,7 +76,7 @@ func (e *engine) Start(ctx context.Context) {
 	}
 }
 
-func (e *engine) Add(c Context, priority int) uint64 {
+func (e *engine) Add(c Closure, priority int) uint64 {
 	if c == nil {
 		return 0
 	}

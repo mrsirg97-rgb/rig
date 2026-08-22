@@ -26,38 +26,19 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/fs"
 )
 
-// TestVersionIsTheFreeze: the release version is the named fact — the
-// 1.0 tag waits for lived use, and everything before it is a release
-// decision, not a code change.
 func TestVersionIsTheFreeze(t *testing.T) {
-	// 11.0.0: the delegate round (SPEC_DELEGATE: the one-shot worker tool,
-	// the native set 18, the embedded allow default gains delegate);
-	// 0.10.2: the todo's hands (SPEC_SERVE 15: the dashboard's start/done);
-	// 0.10.1: the dashboard in the TUI's grammar (SPEC_SERVE 11-14);
-	// 0.10.0: the dashboard's polish round (SPEC_SERVE phase 2: the two
-	// named writes, the live listing, the mobile drawer, the TUI homage);
-	// 0.9.0: the plugin door and the enablement (SPEC_GROWTH 9: the count
-	// has grown, Carry stamps natives + the door, settings.json enabled/max);
-	// 0.8.2 the allow-list's presence reversal (SPEC_PLUGINS 7, amended);
-	// 0.8.0 the modes (SPEC_MODES). pre-1.0 — the 1.0 tag waits for lived
-	// use (a worker soak, the TUI field-tested as the daily driver).
+
 	if Version != "0.12.2" {
 		t.Fatalf("Version = %q, want 0.12.2 (pre-1.0, feature-complete)", Version)
 	}
-	// pre-1.0 the major is 0 by definition: a dropped zero ("11.0.0" for
-	// 0.11.0) shipped once and the release assert would have demanded a
-	// v11.0.0 tag; flip this on purpose at 1.0.
+
 	if !regexp.MustCompile(`^0\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be 0.x.y until 1.0", Version)
 	}
 }
 
-// The composition root must wire every seam explicitly: swapping a seam is a
-// registration change here and nowhere else.
 type nullFrontend struct{}
 
-// fakeTodo stands in for the todo surface so the seam's registration is
-// testable without a store file.
 type fakeTodo struct{}
 
 func (fakeTodo) Name() string { return "todo" }
@@ -138,7 +119,6 @@ func (fakeWebFetch) Exec(ctx context.Context, args json.RawMessage) (string, err
 func (nullFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
 func (nullFrontend) Notify(ev core.Event)                      {}
 
-// oneLineFrontend serves exactly one input line, then EOFs.
 type oneLineFrontend struct{ line string }
 
 func (f *oneLineFrontend) Input(ctx context.Context) (string, error) {
@@ -151,26 +131,19 @@ func (f *oneLineFrontend) Input(ctx context.Context) (string, error) {
 }
 func (*oneLineFrontend) Notify(ev core.Event) {}
 
-// testTools is the wiring test's tool set: the real builtins, fakes at
-// the injected seams.
 func testTools() map[string]core.Tool {
 	return map[string]core.Tool{
 		"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 		"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 		"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": fakePython{},
 		"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
-		// the real diff surface: the state DB is the seam (SPEC_DIFF 7);
-		// the empty store keeps the registration test storeless.
+
 		"diff": diff.New(store.DB{}),
-		// the native's surface only (the reload's real door is the
-		// reload harness's, SPEC_PLUGINS 8's named cases).
+
 		"plugins_reload": fakeReload{},
 	}
 }
 
-// fakeReload is the plugins_reload native's surface for the wiring and
-// command tests (the reload's action is the root's method; the seam's
-// cases stand in with a canned reply).
 type fakeReload struct{}
 
 func (fakeReload) Name() string            { return "plugins_reload" }
@@ -188,8 +161,8 @@ func testRoot(fe core.Frontend) *root {
 		allow:    []string{"bash", "read", "write", "edit"},
 		retries:  3,
 		fe:       fe,
-		sdb:      store.DB{}, // no state store: the recorder's rows stay pending
-		remDB:    store.DB{}, // no rem store: the AutoReflect seam stays off
+		sdb:      store.DB{},
+		remDB:    store.DB{},
 		cwd:      "",
 		activeID: "local",
 		row:      defaultRow(),
@@ -217,9 +190,6 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	}
 }
 
-// decision 6: the root collects Guidelines() into the system prompt before
-// it builds the policy — prompt assembly belongs to the prompt, and the
-// prompt string is the root's; zero loop change.
 type guidelineMW struct {
 	core.ToolMiddlewareFunc
 	text string
@@ -256,8 +226,6 @@ func TestWireSystemPromptCarriesTheBase(t *testing.T) {
 	}
 }
 
-// decision 5: -p with -resume is a construction error: one-shot stays
-// one-shot. A resumed session keeps its identity.
 func TestOneShotAndResumeRefuseAtConstruction(t *testing.T) {
 	if err := checkOneShot("", ""); err != nil {
 		t.Fatalf("the bare REPL must pass: %v", err)
@@ -297,9 +265,6 @@ func TestSessionForResumesOrStartsFresh(t *testing.T) {
 	}
 }
 
-// decision 5: the root -resume path — the resumed session is adopted by
-// the recorder (one identity for todo's claims and rem's sources), and
-// the transcript continues after the seeded rows.
 func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
@@ -317,7 +282,7 @@ func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resume: %v", err)
 	}
-	// the recorder adopts the existing row and the session keeps its id
+
 	rec := state.NewRecorder(&oneLineFrontend{line: "resumed"}, db, "/tmp/wt", "model-x", Version, sess.ID, sess)
 	if text, err := rec.Input(ctx); err != nil || text != "resumed" {
 		t.Fatalf("input on the resumed session: %q %v", text, err)
@@ -325,7 +290,7 @@ func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 	if e := rec.Close("ok"); e != nil {
 		t.Fatal(e)
 	}
-	// the seeded row is intact, the new user row follows it in seq order
+
 	first := mustReadMsg(t, db, 1)
 	if first.Role != "user" || first.Content != "before the kill" {
 		t.Fatalf("the seeded transcript must survive the adoption: %+v", first)
@@ -342,14 +307,10 @@ func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 	}
 }
 
-// defaultRow is the spec's worker row, for the wiring tests.
 func defaultRow() models.Model {
 	return models.Model{Role: models.RoleInteractive, ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384}
 }
 
-// defaultsTable is the 0.2.0 rows from the embedded config file
-// (SPEC_CONFIG 4: the table leaves code; the test harnesses construct
-// it from the same rows).
 func defaultsTable(t *testing.T) models.Table {
 	t.Helper()
 	cfg, err := config.Load(t.TempDir(), t.TempDir())
@@ -359,7 +320,6 @@ func defaultsTable(t *testing.T) models.Table {
 	return cfg.Models
 }
 
-// defaultsTableValue is the same rows for constructors without a t.
 func defaultsTableValue() models.Table {
 	dir := filepath.Join(os.TempDir(), "rig-test-nodir")
 	cfg, err := config.Load(dir, dir)
@@ -397,9 +357,6 @@ func mustReadMsg(t *testing.T, db store.DB, seq int64) domain.Message {
 	return *m
 }
 
-// TestDefaultRoleIsByteIdentical (SPEC_MODES, named): with the dial at
-// default, the assembly is today's exactly — system, then AGENTS.md,
-// then the participants' prose, empty segments skipped.
 func TestDefaultRoleIsByteIdentical(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.agents = "G\n\nP"
@@ -410,10 +367,6 @@ func TestDefaultRoleIsByteIdentical(t *testing.T) {
 	}
 }
 
-// TestRoleAssemblySitsBetweenSystemAndAgents (SPEC_MODES, named): the
-// stance's prose lands between the system prompt and the AGENTS.md pair
-// — the runtime's identity first, the stance second, the operator's
-// contract third — and rides the prefix before the participants' prose.
 func TestRoleAssemblySitsBetweenSystemAndAgents(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.agents = "G\n\nP"
@@ -425,11 +378,6 @@ func TestRoleAssemblySitsBetweenSystemAndAgents(t *testing.T) {
 	}
 }
 
-// TestRoleSwitchRebuildsThePair (SPEC_MODES, named): a role switch
-// recomputes the assembly and rebuilds the pair at the root — the next
-// turn's request sees the new system message. The live turn's request
-// was already built; the change is visible on the next one (the
-// models-switch semantics).
 func TestRoleSwitchRebuildsThePair(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.agents = "G\n\nP"
@@ -450,8 +398,6 @@ func TestRoleSwitchRebuildsThePair(t *testing.T) {
 	}
 }
 
-// TestRoleSwitchDefaultInjectsNothing (SPEC_MODES, named): returning to
-// default drops the stance — the assembly is today's bytes again.
 func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.agents = "G\n\nP"
@@ -469,11 +415,6 @@ func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
 	}
 }
 
-// TestModelSwitchResetsAForeignEffort (SPEC_MODES 1, amended): the
-// vocabulary is the row's, so a model switch resets a dial the new row
-// does not name — loudly, in the switch's note — never stamping a level
-// into a template that cannot speak it. A level the new row names rides
-// the switch untouched, no note.
 func TestModelSwitchResetsAForeignEffort(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	speaks, err := models.New(
@@ -509,9 +450,6 @@ func TestModelSwitchResetsAForeignEffort(t *testing.T) {
 	}
 }
 
-// TestApproveDialDoorRule (SPEC_MODES 4, named): manual needs an ask
-// door — a frontend that cannot ask must not promise to; with a door
-// the dial sets, and an unknown mode refuses naming the two.
 func TestApproveDialDoorRule(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	if err := r.switchApprove(context.Background(), "manual"); err == nil ||
@@ -530,8 +468,6 @@ func TestApproveDialDoorRule(t *testing.T) {
 	}
 }
 
-// TestNewResetsApproveToTheSettingsDefault (SPEC_MODES 4, named): /new
-// resets the dial to the settings default, not to a hardcoded auto.
 func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	h.r.approveDefault = "manual"
@@ -545,8 +481,6 @@ func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	}
 }
 
-// TestIsMutatingPredicate (SPEC_MODES 4, named): the named natives and
-// every plugin pause; the read set and the store tools pass.
 func TestIsMutatingPredicate(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.natives = map[string]bool{}
@@ -565,10 +499,6 @@ func TestIsMutatingPredicate(t *testing.T) {
 	}
 }
 
-// TestSwapInKeepsDialsAndRebuilds (SPEC_MODES, named): a resume does not
-// restore the dials — it keeps the current values (they were never
-// saved), recomputes the assembly, and rebuilds the pair. The swap-in is
-// the handoff /new and resume share; /new resets before it.
 func TestSwapInKeepsDialsAndRebuilds(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	wire(r)
@@ -585,8 +515,6 @@ func TestSwapInKeepsDialsAndRebuilds(t *testing.T) {
 	}
 }
 
-// TestNewResetsDials (SPEC_MODES, named): /new starts at the defaults —
-// effort unset, role default (no injection).
 func TestNewResetsDials(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	h.r.effort = "xhigh"
@@ -602,10 +530,6 @@ func TestNewResetsDials(t *testing.T) {
 	}
 }
 
-// TestEffortForWireFallsBackToTheRow (SPEC_MODES 1, amended): the
-// request's level is the dial when set, else the row's default effort
-// — the same fallback the status row shows, so the label and the wire
-// agree; a row without effort and an unset dial is today's bytes.
 func TestEffortForWireFallsBackToTheRow(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	if got := r.effortForWire(); got != "" {

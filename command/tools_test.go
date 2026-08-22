@@ -36,9 +36,6 @@ func openTodo(t *testing.T) store.DB {
 	return db
 }
 
-// TestTodoCommandRoundTrip (SPEC_COMMANDS, named): the tool's own voice,
-// verbatim — create, read, start, the no-task refusal, the bare-todo
-// refusal, and the adapter's shape refusal.
 func TestTodoCommandRoundTrip(t *testing.T) {
 	s := core.NewSession()
 	env := &command.Env{
@@ -58,8 +55,7 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	// the create reply carries its note above the queue; the read is the
-	// queue itself — the same queue, the model's and the user's.
+
 	if read != strings.TrimPrefix(created, "\u2192 queue replaced with 1 tasks\n") {
 		t.Fatalf("read must be the same queue the create reported:\ncreate:\n%s\nread:\n%s", created, read)
 	}
@@ -88,9 +84,6 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 	}
 }
 
-// TestToolCommandThreadsTheLiveSession (SPEC_COMMANDS, named): the Exec
-// ctx carries the live session (post-`/new`) — the same attribution the
-// model's calls get.
 func TestToolCommandThreadsTheLiveSession(t *testing.T) {
 	type seen struct {
 		mu   sync.Mutex
@@ -123,7 +116,7 @@ func TestToolCommandThreadsTheLiveSession(t *testing.T) {
 		t.Fatalf("the live session must be threaded, got %q (have=%v)", saw.id, saw.have)
 	}
 
-	cur = after // the /new swap
+	cur = after
 	if _, err := runCmd(t, "todo", "read", env); err != nil {
 		t.Fatal(err)
 	}
@@ -132,8 +125,6 @@ func TestToolCommandThreadsTheLiveSession(t *testing.T) {
 	}
 }
 
-// fakeTool is a core.Tool that delegates Exec to a function, for the
-// threading test.
 type fakeTool struct {
 	exec func(ctx context.Context, args json.RawMessage) (string, error)
 }
@@ -149,9 +140,6 @@ func fakeExecFunc(f func(ctx context.Context, args json.RawMessage) (string, err
 	return fakeTool{exec: f}
 }
 
-// TestSchedulerCommandRoundTrip (SPEC_COMMANDS, named): create (vixie
-// and once), list, pause/resume/remove, runs — the tool's voice,
-// verbatim, over the real stores.
 func TestSchedulerCommandRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	cwd, err := os.Getwd()
@@ -214,7 +202,6 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 	}
 }
 
-// fakeCron is the scheduler's crontab seam at the test bench.
 type fakeCron struct {
 	mu   sync.Mutex
 	text string

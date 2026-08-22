@@ -1,12 +1,5 @@
 package main
 
-// The plugins' named cases (SPEC_PLUGINS, testing): the home and
-// migration (SPEC_CONFIG 11) as in-package unit cases, and the
-// discovery, collision, call, and kernel-alive cases as e2e over the
-// built binary with a scratch home and a scripted provider. The kernel
-// cases gate on a usable python (the tool/python suite's rule): a bare
-// box skips cleanly.
-
 import (
 	"encoding/json"
 	"github.com/mrsirg97-rgb/rig/plugins"
@@ -23,12 +16,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/config"
 )
 
-// --- gates and helpers ---
-
-// pluginKernelPy names an interpreter with the kernel's dependencies
-// (IPython, numpy, pandas): the shared venv first, then python3 on
-// PATH — or the case skips cleanly on a bare box (the same gate as
-// tool/python's requireKernel).
 func pluginKernelPy(t *testing.T) string {
 	t.Helper()
 	if h, err := os.UserHomeDir(); err == nil {
@@ -49,7 +36,6 @@ func pluginKernelPy(t *testing.T) string {
 	return p
 }
 
-// writePlugin drops a fixture plugin into the home's plugins/ directory.
 func writePlugin(t *testing.T, home, name, body string) {
 	t.Helper()
 	dir := filepath.Join(home, "plugins")
@@ -61,8 +47,6 @@ func writePlugin(t *testing.T, home, name, body string) {
 	}
 }
 
-// pluginSrv is the scripted provider: one canned SSE reply per request
-// index (the last repeats), every body captured.
 type pluginSrv struct {
 	mu      sync.Mutex
 	bodies  [][]byte
@@ -121,9 +105,6 @@ func (s *pluginSrv) last() []byte {
 	return s.bodies[len(s.bodies)-1]
 }
 
-// toolCallReply is one SSE tool_call (the golden e2e's shape): the
-// arguments ride the data line's JSON string, so their quotes are
-// escaped.
 func toolCallReply(id, name, argumentsJSON string) string {
 	esc := strings.ReplaceAll(argumentsJSON, `\`, `\\`)
 	esc = strings.ReplaceAll(esc, `"`, `\"`)
@@ -132,7 +113,6 @@ func toolCallReply(id, name, argumentsJSON string) string {
 
 const pongReply = `data: {"choices":[{"delta":{"content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}` + "\n"
 
-// wireTools pulls the request's tools array (name, description, parameters).
 func wireTools(t *testing.T, body []byte) []struct {
 	Name        string
 	Description string
@@ -166,9 +146,6 @@ func wireTools(t *testing.T, body []byte) []struct {
 	return out
 }
 
-// toolMessageOf pulls the last tool-role message's content out of a
-// request (the transcript replays its earlier tool results — the
-// latest is the call under assertion).
 func toolMessageOf(t *testing.T, body []byte) string {
 	t.Helper()
 	var req struct {
@@ -194,8 +171,6 @@ func toolMessageOf(t *testing.T, body []byte) string {
 	return last
 }
 
-// pluginEnv is rigEnv plus the kernel's interpreter (RIG_PYTHON, the
-// chain's seam) when py is named.
 func pluginEnv(scratch, py string) []string {
 	env := rigEnv(scratch, "")
 	if py != "" {
@@ -204,11 +179,6 @@ func pluginEnv(scratch, py string) []string {
 	return env
 }
 
-// --- the home and the migration (SPEC_CONFIG 11, SPEC_PLUGINS 6) ---
-
-// TestRigHomeResolvesEnvOverDefault (SPEC_PLUGINS, named): RIG_HOME set
-// (non-empty) is the home, whatever ~/.rig holds; unset, the home is
-// ~/.rig; the resolution never reads XDG_CONFIG_HOME.
 func TestRigHomeResolvesEnvOverDefault(t *testing.T) {
 	scratch := t.TempDir()
 	xdg := t.TempDir()
@@ -262,11 +232,6 @@ func captureStderr(t *testing.T, f func() (string, error)) (string, string, erro
 	return out, string(buf), fErr
 }
 
-// TestMigrationRenamesTheOldHomeOnce (SPEC_PLUGINS, named): the old
-// ~/.config/rig with a marker, ~/.rig absent — the rename happens, the
-// marker is read from the new home (the config load sees it), the old
-// directory is gone, exactly one migration line, and the second start
-// prints none (once, by construction).
 func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
 	scratch := t.TempDir()
 	oldHome := filepath.Join(scratch, ".config", "rig")
@@ -288,12 +253,12 @@ func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
 	if home != want {
 		t.Fatalf("the home = %q, want %q", home, want)
 	}
-	// the migration's one line.
+
 	wantLine := "rig: migrated the config home: " + oldHome + " -> " + want
 	if strings.Count(stderr, wantLine) != 1 {
 		t.Fatalf("the migration line must print exactly once, got %q", stderr)
 	}
-	// the old directory is gone; the marker rides the new home.
+
 	if _, err := os.Stat(oldHome); !os.IsNotExist(err) {
 		t.Fatalf("the old home must be gone after the rename (stat: %v)", err)
 	}
@@ -304,7 +269,7 @@ func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
 	if cfg.Settings.System != "MIGRATED-MARKER" {
 		t.Fatalf("the config load must see the migrated marker, got %q", cfg.Settings.System)
 	}
-	// the second start: silent, no rename.
+
 	_, stderr2, err := captureStderr(t, rigHome)
 	if err != nil {
 		t.Fatalf("rigHome (second): %v", err)
@@ -314,9 +279,6 @@ func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
 	}
 }
 
-// TestMigrationNoOps (SPEC_PLUGINS, named): the old home absent (silent
-// no-op); the home already present (the old directory left intact,
-// silent); a failed rename (a read-only $HOME) refuses loud.
 func TestMigrationNoOps(t *testing.T) {
 	t.Run("the old home absent", func(t *testing.T) {
 		scratch := t.TempDir()
@@ -363,7 +325,7 @@ func TestMigrationNoOps(t *testing.T) {
 		}
 		t.Setenv("HOME", scratch)
 		t.Setenv("RIG_HOME", "")
-		// a read-only $HOME: the rename's target parent is not writable.
+
 		if err := os.Chmod(scratch, 0o555); err != nil {
 			t.Fatal(err)
 		}
@@ -378,12 +340,6 @@ func TestMigrationNoOps(t *testing.T) {
 	})
 }
 
-// TestMigrationNeverRunsUnderAnOverride (SPEC_CONFIG 11, named):
-// RIG_HOME set to an **absent** directory, the old ~/.config/rig
-// present: no rename, no migration line, and the old home untouched
-// (the marker file still there) — the override is isolation, not a
-// move order (the RIG_HOME=$(mktemp -d) shape), whatever the override
-// holds.
 func TestMigrationNeverRunsUnderAnOverride(t *testing.T) {
 	scratch := t.TempDir()
 	oldHome := filepath.Join(scratch, ".config", "rig")
@@ -394,7 +350,7 @@ func TestMigrationNeverRunsUnderAnOverride(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(oldHome, "settings.json"), []byte(marker), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	override := filepath.Join(t.TempDir(), "absent-override") // not present
+	override := filepath.Join(t.TempDir(), "absent-override")
 	t.Setenv("HOME", scratch)
 	t.Setenv("RIG_HOME", override)
 
@@ -416,10 +372,6 @@ func TestMigrationNeverRunsUnderAnOverride(t *testing.T) {
 	}
 }
 
-// TestRigHomeOverrideBeatsTheOldHome (SPEC_PLUGINS, named): RIG_HOME
-// pointing at a home with settings.json while the old ~/.config/rig
-// holds a different one — the run takes the override's settings, and
-// the old directory is left intact (the present-home edge).
 func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
@@ -455,14 +407,6 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 	}
 }
 
-// --- the discovery, the collision, the call (SPEC_PLUGINS, e2e) ---
-
-// TestPluginsDiscoveryRegistersAndSkips (SPEC_PLUGINS, named): a
-// fixture directory with a good, a broken-import, and a missing-SCHEMA
-// plugin — the startup prints exactly the two skip lines (file and
-// field named), the request's tools array is the native set (15,
-// post-8) plus the good plugin (its DESCRIPTION and SCHEMA verbatim),
-// and the broken and missing ones are absent from the wire.
 func TestPluginsDiscoveryRegistersAndSkips(t *testing.T) {
 	py := pluginKernelPy(t)
 	s := &pluginSrv{replies: []string{pongReply}}
@@ -494,8 +438,7 @@ def run(args):
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
-	// the skip lines: exactly two, the file and the field named, in
-	// file order (broken.py before missing.py).
+
 	skipLines := 0
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.HasPrefix(line, "rig: plugins:") {
@@ -511,9 +454,7 @@ def run(args):
 	if !strings.Contains(string(out), "rig: plugins: missing.py: TypeError: missing SCHEMA") {
 		t.Fatalf("the missing-schema plugin's line must name the file and the field:\n%s", out)
 	}
-	// the wire: the native set (the doors among them), in order; the
-	// loaded plugin rides in the plugin door's name enum (SPEC_GROWTH 9),
-	// not as its own schema.
+
 	tools := wireTools(t, s.body(0))
 	if len(tools) != len(nativeToolNames) {
 		t.Fatalf("tools = %d, want %d (the native set; the plugins live behind the door)", len(tools), len(nativeToolNames))
@@ -531,10 +472,6 @@ def run(args):
 	}
 }
 
-// TestPluginCollisionRefusesLoud (SPEC_PLUGINS, named): a fixture
-// plugin named like a native tool — exit non-zero, the refusal names
-// the plugin's file and the native tool, and no state store is created
-// (the refusal is before the stores).
 func TestPluginCollisionRefusesLoud(t *testing.T) {
 	py := pluginKernelPy(t)
 	bin := buildBin(t, t.TempDir())
@@ -560,9 +497,6 @@ def run(args):
 	}
 }
 
-// TestPluginCallRoundTripsArgsResult (SPEC_PLUGINS, named): the model
-// calls the good plugin with an args dict — the tool result on the
-// wire is run's return, verbatim (args in, result out).
 func TestPluginCallRoundTripsArgsResult(t *testing.T) {
 	py := pluginKernelPy(t)
 	s := &pluginSrv{replies: []string{
@@ -578,8 +512,7 @@ SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "require
 def run(args: dict) -> str:
     return "echo: " + args["text"]
 `)
-	// the allow-list: the file's list is the list (the embedded default
-	// is the native set — the plugin must be allow-listed, SPEC_PLUGINS 7).
+
 	if err := os.WriteFile(filepath.Join(cfgDir(t, scratch), "settings.json"), []byte(`{"allow": ["echo"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -598,11 +531,6 @@ def run(args: dict) -> str:
 	}
 }
 
-// TestPluginExceptionIsAToolErrorKernelAlive (SPEC_PLUGINS, named): a
-// fixture plugin whose run raises — the tool result on the wire is a
-// tool error carrying the traceback tail; the model's next call — the
-// python tool — runs on the same kernel and returns its result (the
-// kernel is alive after, the shared namespace intact).
 func TestPluginExceptionIsAToolErrorKernelAlive(t *testing.T) {
 	py := pluginKernelPy(t)
 	s := &pluginSrv{replies: []string{
@@ -620,8 +548,7 @@ def run(args: dict) -> str:
     print("partial output")
     raise ValueError("boom args: " + args["when"])
 `)
-	// the allow-list: the file's list is the list (the embedded default
-	// is the native set — the plugin must be allow-listed, SPEC_PLUGINS 7).
+
 	if err := os.WriteFile(filepath.Join(cfgDir(t, scratch), "settings.json"), []byte(`{"allow": ["boom", "python"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -648,11 +575,6 @@ def run(args: dict) -> str:
 	}
 }
 
-// TestRigHomeOverrideWins (SPEC_PLUGINS, named): RIG_HOME set (a home
-// with a plugins/ directory and a settings.json) over the scratch
-// ~/.rig and the old ~/.config/rig — the run takes the override's
-// settings, discovers the override's plugins, and leaves both the
-// default home and the old one untouched.
 func TestRigHomeOverrideWins(t *testing.T) {
 	py := pluginKernelPy(t)
 	s := &pluginSrv{replies: []string{pongReply}}
@@ -672,7 +594,7 @@ SCHEMA = {"type": "object"}
 def run(args):
     return "override echo"
 `)
-	// the competing homes: the default and the old, both with markers.
+
 	for _, d := range []string{filepath.Join(scratch, ".rig"), filepath.Join(scratch, ".config", "rig")} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
@@ -703,10 +625,6 @@ def run(args):
 	}
 }
 
-// TestNoPluginsDirectoryIsTheV020Wire (SPEC_PLUGINS, named): a fixture
-// run (no plugins directory) carries exactly the native tool names in
-// the tools array — the 0.2.0 wire, byte-exact (the golden pin's
-// companion assertion).
 func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
@@ -729,11 +647,6 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 	}
 }
 
-// TestBothHomesPresentIsNamed (SPEC_CONFIG 11, amended): with the old
-// ~/.config/rig present and ~/.rig also present, the migration never
-// fires (a present home wins) — and the leftover is named on stderr,
-// so a machine where a dev build half-birthed ~/.rig does not lose its
-// real data to silence. Nothing moves; both directories are untouched.
 func TestBothHomesPresentIsNamed(t *testing.T) {
 	scratch := t.TempDir()
 	old := filepath.Join(scratch, ".config", "rig")
@@ -752,7 +665,7 @@ func TestBothHomesPresentIsNamed(t *testing.T) {
 	cmd := exec.Command(bin, "-p", "x", "-base-url", "http://127.0.0.1:1/v1", "-retries", "0")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(scratch, "")
-	out, _ := cmd.CombinedOutput() // the model call fails; the startup ran
+	out, _ := cmd.CombinedOutput()
 	if !strings.Contains(string(out), "the old config home still exists: "+old) {
 		t.Fatalf("the leftover old home must be named on stderr:\n%s", out)
 	}
@@ -764,8 +677,6 @@ func TestBothHomesPresentIsNamed(t *testing.T) {
 	}
 }
 
-// SPEC_GROWTH 9 (amended): the cap applies on every reload, not only at
-// wiring — capPlugins is the one function both paths call.
 func TestCapPluginsAppliesInFileOrderAndNamesTheReason(t *testing.T) {
 	reps := []plugins.Report{{Name: "a"}, {Name: "b", Skipped: true, Reason: "broken"}, {Name: "c"}, {Name: "d"}}
 	out := capPlugins(reps, 2)

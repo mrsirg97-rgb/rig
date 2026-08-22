@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// --- the named cases (SPEC_CONFIG, testing) ---
-
-// TestThemeAbsentNil (SPEC_CONFIG 7): absent is silent — Theme nil.
 func TestThemeAbsentNil(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
 	if cfg.Theme != nil {
@@ -15,9 +12,6 @@ func TestThemeAbsentNil(t *testing.T) {
 	}
 }
 
-// TestThemeRawIsTheFileBytes (SPEC_CONFIG 7): the loader reads the
-// document verbatim as written — 10 (SPEC_TUI) owns the schema and
-// decodes this raw value.
 func TestThemeRawIsTheFileBytes(t *testing.T) {
 	dir := t.TempDir()
 	doc := []byte(`{"palette":{"bg":"#0a0a0a","fg":"#e5e5e5"},"font":"system"}
@@ -29,8 +23,6 @@ func TestThemeRawIsTheFileBytes(t *testing.T) {
 	}
 }
 
-// TestThemeMalformedRefuses (SPEC_CONFIG 3, 7): present but not one
-// well-formed JSON value — the decoder's reason, the path named.
 func TestThemeMalformedRefuses(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, dir, "theme.json", `{"a":1 x}`)

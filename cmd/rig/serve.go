@@ -13,10 +13,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// serve is the dashboard subcommand (SPEC_SERVE): one file plus a
-// registration line at the root (SPEC_SERVE 1). It resolves the rig home
-// and the config (the models table), builds the dashboard, and serves it
-// over loopback until interrupted.
 func serve(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", "127.0.0.1:7777", "the bind address (loopback only: 127.0.0.1, ::1, or localhost; tailscale serve is the way out)")

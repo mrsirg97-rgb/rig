@@ -2,6 +2,18 @@
 
 ## [0.12.2] — the two bounds
 
+- **no comments in Go, anywhere**: the sweep strips every comment from
+  implementation and test code (147 files; generated code and the
+  `metadata` packages exempt — lift reads their doc comments), the
+  substance that was not already in a `PACKAGE.md` lands there (three
+  new: the root kernel, `frontend/oneshot`, `middleware/approve`), and
+  AGENTS.md carries the one rule with its reason: a small model reads
+  the repository as one corpus. The freeze gate now compares
+  comment-stripped sources, so a comment is never a change to the
+  frozen surface. No behavior change: the stripper refused any file
+  whose comment-free AST would differ, and the suite is green under
+  `-race`.
+
 - **the round cap** (`specs/SPEC_HARDENING.md` 9): `guard.Rounds(n)` counts
   every tool call in a turn (settings `rounds`, default 200, `RIG_ROUNDS`
   env with a loud invalid-value refusal) and past `n` refuses every

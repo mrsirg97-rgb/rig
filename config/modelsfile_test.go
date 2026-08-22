@@ -7,11 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/models"
 )
 
-// --- the named cases (SPEC_CONFIG, testing) ---
-
-// TestModelsMalformedNamesFileRowAndField (SPEC_CONFIG 3): the voices,
-// exactly — the row (1-based) and the field, the operator's JSON
-// spelling.
 func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -38,9 +33,6 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 	}
 }
 
-// TestModelsMergesOverEmbeddedRowByRow (SPEC_CONFIG 4): per-field
-// overlay on an embedded id (unset fields keep the embedded values),
-// new rows added with their defaults, unlisted embedded rows kept.
 func TestModelsMergesOverEmbeddedRowByRow(t *testing.T) {
 	t.Run("overlay keeps the unset fields", func(t *testing.T) {
 		dir := t.TempDir()
@@ -107,9 +99,6 @@ func TestModelsMergesOverEmbeddedRowByRow(t *testing.T) {
 	})
 }
 
-// TestModelsMergeViolationRefuses (SPEC_CONFIG 3, 4): a post-merge
-// invariant error names the row id and the invariant clause (the
-// models.Check voice), with the file.
 func TestModelsMergeViolationRefuses(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, dir, "models.json", `[{"id": "local", "reserve": 81920}]`)

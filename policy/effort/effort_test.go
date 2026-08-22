@@ -9,9 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/policy/effort"
 )
 
-// recProvider is a fake core.Provider that captures the requests it sees
-// and streams one Done. The DI seam: the decorator's only job is to
-// stamp the session's effort, so the provider's reply does not matter.
 type recProvider struct {
 	mu   sync.Mutex
 	reqs []core.Request
@@ -38,10 +35,6 @@ func drain(ch <-chan core.Event) {
 	}
 }
 
-// TestDecoratorStampsSessionEffortOnBareRequest (SPEC_MODES, named): a
-// request that carries no effort gains the session's. The main turn's
-// request is built by the loop with none (core.Request{Messages, Tools}),
-// so the decorator is the seam that puts the dial on the wire.
 func TestDecoratorStampsSessionEffortOnBareRequest(t *testing.T) {
 	inner := &recProvider{}
 	d := effort.Decorator(inner, func() string { return "xhigh" })
@@ -58,10 +51,6 @@ func TestDecoratorStampsSessionEffortOnBareRequest(t *testing.T) {
 	}
 }
 
-// TestDecoratorLeavesSummaryEffortUntouched (SPEC_MODES, named): a
-// request that already carries an effort — the compaction summary call,
-// which sets its own (the row's, SPEC_CONFIG 4) — is passed through
-// untouched, whatever the session's dial says.
 func TestDecoratorLeavesSummaryEffortUntouched(t *testing.T) {
 	inner := &recProvider{}
 	d := effort.Decorator(inner, func() string { return "xhigh" })
@@ -79,9 +68,6 @@ func TestDecoratorLeavesSummaryEffortUntouched(t *testing.T) {
 	}
 }
 
-// TestDecoratorEmptyEffortIsTodayBytes (SPEC_MODES, named): with the
-// dial unset the request is today's request bytes — the decorator
-// stamps nothing, so the golden wire holds.
 func TestDecoratorEmptyEffortIsTodayBytes(t *testing.T) {
 	inner := &recProvider{}
 	d := effort.Decorator(inner, func() string { return "" })

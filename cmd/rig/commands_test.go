@@ -32,15 +32,13 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/fs"
 )
 
-// --- scripted provider (the OpenAI wire, classified server-side) ---
-
 type scriptSrv struct {
 	mu      sync.Mutex
 	main    int
 	summary int
-	models  []string // the model field per main call
-	bodies  []string // every message's content, concatenated, per main call
-	fault   bool     // main calls fault with context length
+	models  []string
+	bodies  []string
+	fault   bool
 }
 
 func (s *scriptSrv) counts() (main, summary int) {
@@ -96,8 +94,6 @@ func newScriptSrv(t *testing.T, s *scriptSrv) *httptest.Server {
 	return srv
 }
 
-// --- the REPL harness: real cli, real loop, real stores, scripted provider ---
-
 type chanReader struct{ ch chan string }
 
 func (r chanReader) Read(p []byte) (int, error) {
@@ -108,9 +104,6 @@ func (r chanReader) Read(p []byte) (int, error) {
 	return copy(p, []byte(v)), nil
 }
 
-// lockedWriter is the harness's output: the loop's goroutine writes while
-// the test polls — the mutex is the test's synchronization, not the
-// CLI's.
 type lockedWriter struct {
 	mu sync.Mutex
 	b  *bytes.Buffer
@@ -201,8 +194,6 @@ func newHarness(t *testing.T, row models.Model, activeID string, runtime models.
 	return &harness{t: t, r: r, out: out, in: in, db: db, remDB: remDB, s: s}
 }
 
-// startRun launches the loop; the test schedules the lines against
-// observable output (a schedule, not a sleep on the outcome).
 func (h *harness) startRun() chan error {
 	h.t.Helper()
 	done := make(chan error, 1)
@@ -224,8 +215,6 @@ func (h *harness) waitCount(what string, n int) {
 
 func (h *harness) waitOut(what string) { h.waitCount(what, 1) }
 
-// finish closes stdin, joins the loop, and closes the session row as the
-// root does at process end (a clean REPL exit).
 func (h *harness) finish(done chan error) {
 	h.t.Helper()
 	close(h.in)
@@ -285,14 +274,6 @@ func (h *harness) userRows(sid string) []string {
 	return out
 }
 
-// --- the named cases (SPEC_COMMANDS, testing) ---
-
-// TestNewClosesOldRowAndNextTurnLandsInFreshOne (SPEC_COMMANDS 4, named):
-// prompt, /new, prompt, EOF — two session rows: the first closed ok with
-// ended_at set, the second closed ok at EOF; the first prompt row under
-// the first id, the second under the fresh id; the fresh session's
-// projection carries only its own prompt; the model never saw a prompt
-// cross the boundary.
 func TestNewClosesOldRowAndNextTurnLandsInFreshOne(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	s1 := h.r.session.ID
@@ -368,11 +349,6 @@ func (h *harness) sessionRowsByID(id string) (r struct {
 	return r
 }
 
-// TestNewKeepsPerProcessState (SPEC_COMMANDS 4, named): the python tool
-// instance and the guard participant are the same before and after /new —
-// the swap is the session, the recorder, and the pair; the per-process
-// state survives (SPEC_PYTHON's one kernel per process, the guard's
-// per-turn budget).
 func TestNewKeepsPerProcessState(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	beforeTools := append([]core.Tool(nil), h.r.k.Tools...)
@@ -392,10 +368,7 @@ func TestNewKeepsPerProcessState(t *testing.T) {
 			t.Fatalf("tool %d (%s) changed across /new: the per-process tool instances survive", i, beforeTools[i].Name())
 		}
 	}
-	// the chain survives: same length, same order, same types; the pointer
-	// participants (the guard's per-turn budget is its state) are the same
-	// object, not a copy. Function participants are closures — their
-	// identity is their type and position in the surviving chain.
+
 	if len(h.r.k.Middleware) != len(beforeMW) {
 		t.Fatalf("middleware count changed across /new")
 	}
@@ -408,7 +381,7 @@ func TestNewKeepsPerProcessState(t *testing.T) {
 			t.Fatalf("middleware %d is not the same object across /new: the guard participant survives", i)
 		}
 	}
-	// the python tool instance, named in the spec: the same pointer.
+
 	var afterPy, beforePy *fakePython
 	for _, tl := range h.r.k.Tools {
 		if p, ok := tl.(*fakePython); ok {
@@ -425,18 +398,8 @@ func TestNewKeepsPerProcessState(t *testing.T) {
 	}
 }
 
-// TestCompactForcesTheAction (SPEC_COMMANDS 3, named): a fixture
-// transcript below the trigger, a scripted summary provider — the
-// transcript is rewritten to [summary] + tail, the Compacted event is
-// delivered to the recorder (the summary row + usage row land, the tail
-// re-lands), AutoReflect is called, the CLI renders the one ⧉ line — and
-// the once budget is spent behaviorally: with nothing new since the
-// forced compact, the next main call's context-length fault surfaces
-// without recovery (exactly one summary call, the forced one).
 func TestCompactForcesTheAction(t *testing.T) {
-	// below the trigger (estimate 800 <= 900 = Window - Reserve), but the
-	// provider says the request does not fit — the fault the recovery
-	// classifies.
+
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 200, Reserve: 100, KeepRecent: 700}
 	u1, a1, u2 := strings.Repeat("u", 1200), strings.Repeat("a", 1200), strings.Repeat("u", 800)
 	h := newHarness(t, row, "local", defaultsTable(t))
@@ -463,14 +426,11 @@ func TestCompactForcesTheAction(t *testing.T) {
 	h.waitOut("[fault]")
 	h.finish(done)
 
-	// exactly one summary call (the forced one) plus the faulted main
-	// call: the budget is spent, the fault surfaces without recovery.
 	main, summary := h.s.counts()
 	if summary != 1 || main != 1 {
 		t.Fatalf("summary calls = %d, main calls = %d — want exactly the forced summary plus the faulted main", summary, main)
 	}
-	// one compact line, and one loader cue before it (SPEC_COMPACT 5,
-	// amended): the verb's door shows the loader too.
+
 	if got := strings.Count(h.out.String(), "⧉ compact:"); got != 1 {
 		t.Fatalf("the CLI renders the one compact line, got %d:\n%s", got, h.out.String())
 	}
@@ -481,7 +441,6 @@ func TestCompactForcesTheAction(t *testing.T) {
 		t.Fatalf("the fault must surface: %q", h.out.String())
 	}
 
-	// the rewrite: [summary row] + tail, in the session.
 	msgs := h.r.session.Messages
 	if len(msgs) < 3 || msgs[0].Role != core.RoleUser || !strings.HasPrefix(msgs[0].Content, "[compaction] ") || !strings.Contains(msgs[0].Content, "SUM") {
 		t.Fatalf("the transcript must be rewritten to [summary] + tail: %+v", msgs)
@@ -490,8 +449,6 @@ func TestCompactForcesTheAction(t *testing.T) {
 		t.Fatalf("the tail is kept verbatim, then the next prompt: %+v", msgs)
 	}
 
-	// the recorder: the summary row + its usage row, the tail re-landed
-	// after it (fresh seqs).
 	var sumSeq int64
 	if err := h.db.DB.QueryRow(`SELECT seq FROM messages WHERE content LIKE '[compaction] %' AND session_id = ?`, sid).Scan(&sumSeq); err != nil {
 		t.Fatalf("the summary row must have landed: %v", err)
@@ -512,8 +469,6 @@ func TestCompactForcesTheAction(t *testing.T) {
 		t.Fatalf("the re-landed tail follows the summary: %q (%v)", tailUser, err)
 	}
 
-	// AutoReflect: the summary is handed to rem exactly as on the trigger
-	// path — a forced compaction is a compaction.
 	var memories int
 	if err := h.remDB.DB.QueryRow(`SELECT count(*) FROM memories`).Scan(&memories); err != nil || memories < 1 {
 		t.Fatalf("AutoReflect must have landed a memory: %d (%v)", memories, err)
@@ -524,13 +479,8 @@ func TestCompactForcesTheAction(t *testing.T) {
 	}
 }
 
-// TestSessionsResume (SPEC_COMMANDS 5, named): the current-id refusal;
-// the unknown-id refusal before the current row is touched (the current
-// row is still open); the happy path — the old row closed ok, the next
-// prompt lands under the resumed id, the transcript is the projection
-// plus the new row, the files provenance restored.
 func TestSessionsResume(t *testing.T) {
-	// the current-id refusal (the current row is still open when it lands).
+
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	sid := h.r.session.ID
 	done := h.startRun()
@@ -541,7 +491,6 @@ func TestSessionsResume(t *testing.T) {
 	}
 	h.finish(done)
 
-	// the unknown-id refusal, before the current row is touched.
 	h = newHarness(t, defaultRow(), "local", defaultsTable(t))
 	sid = h.r.session.ID
 	done = h.startRun()
@@ -552,7 +501,6 @@ func TestSessionsResume(t *testing.T) {
 	}
 	h.finish(done)
 
-	// the happy path.
 	h = newHarness(t, defaultRow(), "local", defaultsTable(t))
 	ctx := context.Background()
 	if e := state.RecordSession(ctx, h.db, "sess-2", h.r.cwd, "local", Version); e != nil {
@@ -577,8 +525,7 @@ func TestSessionsResume(t *testing.T) {
 	if rows := h.sessionRows(); len(rows) != 2 {
 		t.Fatalf("session rows = %v, want two", rows)
 	}
-	// the old row closed ok; the resumed row closed at EOF; the next
-	// prompt landed under the resumed id.
+
 	closedOK := false
 	for _, r := range h.sessionRows() {
 		if r.ID != "sess-2" && r.Exit == "ok" && r.Ended {
@@ -596,10 +543,6 @@ func TestSessionsResume(t *testing.T) {
 	}
 }
 
-// TestModelsSwitchTakesEffectNextTurn (SPEC_COMMANDS 6, named):
-// models <id2> — the next prompt reaches the new model (the wire's model
-// field), and only it; ActiveModel reports the new id; the root's row is
-// the new row's (the next clamp/trigger math is the new row's).
 func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	done := h.startRun()
@@ -624,9 +567,7 @@ func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 	if !strings.Contains(bodies[0], "one") {
 		t.Fatalf("the first request carries the first prompt: %q", bodies[0])
 	}
-	// the transcript persists across the switch: the second request is the
-	// whole history plus the second prompt, on the new model — the wire's
-	// model field is the provider discriminator.
+
 	if !strings.Contains(bodies[1], "two") {
 		t.Fatalf("the second request carries the second prompt: %q", bodies[1])
 	}
@@ -639,9 +580,6 @@ func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 	}
 }
 
-// TestModelsRuntimeTableIncludesSynthesizedRow (SPEC_COMMANDS 6, named):
-// a row synthesized from env at startup lists (marked active) and can be
-// switched to and back — the root's table, not just 8's Defaults.
 func TestModelsRuntimeTableIncludesSynthesizedRow(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "e2e", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 1000}
 	if err := row.Check(); err != nil {
@@ -678,10 +616,6 @@ func TestModelsRuntimeTableIncludesSynthesizedRow(t *testing.T) {
 	}
 }
 
-// TestOneShotCommandShapedPromptIsAPrompt (SPEC_COMMANDS 9, named):
-// -p "/compact" runs the model on a user message whose content is
-// /compact — the env's Compact was never called (the one-shot frontend
-// never dispatches); stdout is the assistant text only.
 func TestOneShotCommandShapedPromptIsAPrompt(t *testing.T) {
 	dir := t.TempDir()
 	db, _, err := store.Open(filepath.Join(dir, "sessions.sqlite"), state.Statements(), state.SchemaVersion)
@@ -716,7 +650,7 @@ func TestOneShotCommandShapedPromptIsAPrompt(t *testing.T) {
 		compactCalls++
 		return r.compactNow(ctx)
 	}
-	_ = env // the root built it; the one-shot never dispatches over it
+	_ = env
 
 	if err := loop.Run(context.Background(), r.k); err != nil {
 		t.Fatalf("loop: %v", err)
@@ -738,12 +672,6 @@ func TestOneShotCommandShapedPromptIsAPrompt(t *testing.T) {
 	}
 }
 
-// TestREPLCommands (SPEC_COMMANDS, named e2e): the built binary, the REPL
-// over stdin — /models (the table line), /todo create x + /todo read
-// (the queue), /new (the fresh row), /sessions (both rows, the old one
-// closed ok) — exit 0; the state store under the scratch home carries the
-// two session rows. The provider is dead: every line is a command, so no
-// model call is made.
 func TestREPLCommands(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -762,7 +690,7 @@ func TestREPLCommands(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
-		"RIG_BASE_URL=http://127.0.0.1:1/v1", // dead endpoint: commands only, no model
+		"RIG_BASE_URL=http://127.0.0.1:1/v1",
 	)
 	var mu sync.Mutex
 	var out bytes.Buffer
@@ -803,11 +731,7 @@ func TestREPLCommands(t *testing.T) {
 		defer mu.Unlock()
 		return out.String()
 	}
-	// The REPL's steering slot is one message, latest wins (7): a flood of
-	// piped lines collapses to the last. So the test schedules the lines
-	// against observable output — a line is typed only after the previous
-	// one has printed (the reader then takes it direct, as a human's line
-	// would).
+
 	type step struct {
 		line, marker string
 		count        int
@@ -841,25 +765,23 @@ func TestREPLCommands(t *testing.T) {
 	}
 
 	outStr := snapshot()
-	// the models table (the active row marked, the trigger column).
+
 	if !strings.Contains(outStr, "window 65536") || !strings.Contains(outStr, "trigger 57344") {
 		t.Fatalf("the models table must print: %q", outStr)
 	}
-	// the todo round-trip, the tool's own reply verbatim.
+
 	if !strings.Contains(outStr, "next: t1") || !strings.Contains(outStr, "x") {
 		t.Fatalf("the todo create + read must show the queue: %q", outStr)
 	}
-	// /new: the fresh session line.
+
 	if !strings.Contains(outStr, "new: session") {
 		t.Fatalf("the new line must print the fresh id: %q", outStr)
 	}
-	// /sessions: both rows — the old one closed ok, the current one open
-	// (not yet closed at the moment of the list) and marked.
+
 	if !strings.Contains(outStr, "exit ok") || !strings.Contains(outStr, "exit open") || !strings.Contains(outStr, "*") {
 		t.Fatalf("the session list must show both rows, the old closed ok, the current open: %q", outStr)
 	}
 
-	// the state store: two session rows, the older closed ok.
 	glob, _ := filepath.Glob(filepath.Join(scratch, ".rig", "sessions", "*.sqlite"))
 	if len(glob) != 1 {
 		t.Fatalf("sessions store = %v, want one", glob)

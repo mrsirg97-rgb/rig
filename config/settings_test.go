@@ -10,8 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/config"
 )
 
-// --- helpers (shared by the settings and models-file cases) ---
-
 func write(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
@@ -39,10 +37,6 @@ func loadErr(t *testing.T, dir, cwd string) error {
 	return err
 }
 
-// --- the named cases (SPEC_CONFIG, testing) ---
-
-// TestLoadAbsentFilesIsSilent (SPEC_CONFIG 3): no dir, no files, no
-// AGENTS.md — the embedded values, Theme nil, Agents "".
 func TestLoadAbsentFilesIsSilent(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
 	if cfg.Settings.BaseURL == "" || cfg.Settings.Model == "" || cfg.Settings.System == "" {
@@ -62,8 +56,6 @@ func TestLoadAbsentFilesIsSilent(t *testing.T) {
 	}
 }
 
-// TestLoadEmptyDirIsSilent (SPEC_CONFIG 9): the directory exists, no
-// files — the same result. The directory's presence is not an event.
 func TestLoadEmptyDirIsSilent(t *testing.T) {
 	empty := t.TempDir()
 	absent := t.TempDir()
@@ -74,9 +66,6 @@ func TestLoadEmptyDirIsSilent(t *testing.T) {
 	}
 }
 
-// TestEmbeddedDefaultsAreTheV020Values (SPEC_CONFIG 4, 5): the move is
-// exact — the embedded settings equal the 0.2.0 flag defaults key by
-// key, and the embedded table equals the 0.2.0 rows row by row.
 func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
 	s := cfg.Settings
@@ -121,9 +110,6 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 		t.Fatalf("defaultJobModel = %q, want the 0.2.0 scheduler default", s.DefaultJobModel)
 	}
 
-	// the table: the 0.2.0 rows, exactly — the numbers verbatim, and the
-	// roles named (4's example): local is interactive, the scheduler's
-	// worker id is worker.
 	want := map[string]string{"local": "interactive", "qwen3.8-workers": "worker"}
 	for _, id := range []string{"local", "qwen3.8-workers"} {
 		m, ok := cfg.Models.Get(id)
@@ -142,8 +128,6 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	}
 }
 
-// TestSettingsMalformedNamesFileAndField (SPEC_CONFIG 3): the voices,
-// exactly — the file and the field, the operator's JSON spelling.
 func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -174,8 +158,6 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 	}
 }
 
-// TestSettingsZeroDescendsToEmbedded (SPEC_CONFIG 2): zero = unset at
-// the file layer — the value descends to the embedded.
 func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"retries": 0, "model": ""}`)
@@ -188,9 +170,6 @@ func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 	}
 }
 
-// TestApproveDefaultsToAuto (SPEC_MODES 4): the approval dial's default
-// is a settings key; the embedded default is auto (today's behavior),
-// the file layer overrides.
 func TestApproveDefaultsToAuto(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
 	if cfg.Settings.Approve != "auto" {
@@ -204,9 +183,6 @@ func TestApproveDefaultsToAuto(t *testing.T) {
 	}
 }
 
-// TestSandboxDefaultsToJailed (SPEC_SANDBOX 5): the two worker-jail keys
-// are settings keys; the embedded defaults are the containment itself —
-// "jailed", no extra binds. The file layer overrides, as every key.
 func TestSandboxDefaultsToJailed(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
 	if cfg.Settings.Sandbox != "jailed" {
@@ -228,9 +204,6 @@ func TestSandboxDefaultsToJailed(t *testing.T) {
 	}
 }
 
-// TestSandboxBindsEmptyDescends (SPEC_SANDBOX 5): zero = unset at the
-// file layer — the value descends to the embedded (the same rule as
-// every other key).
 func TestSandboxBindsEmptyDescends(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"sandbox": "off", "sandboxBinds": []}`)
@@ -243,9 +216,6 @@ func TestSandboxBindsEmptyDescends(t *testing.T) {
 	}
 }
 
-// TestSettingsThemeIsAKnownKey (SPEC_CONFIG 5): theme is a settings
-// key; the value is a name the TUI validates (ResolveTheme owns the
-// vocabulary), the file layer just carries it.
 func TestSettingsThemeIsAKnownKey(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"theme": "paper"}`)
@@ -255,10 +225,6 @@ func TestSettingsThemeIsAKnownKey(t *testing.T) {
 	}
 }
 
-// TestSettingsPresenceKeysInFileAreExplicit (SPEC_CONFIG 2, 5): for the
-// two presence-aware keys, present at the file layer is set — even
-// empty. 0.2.0's documented "set empty = the choice" env semantics,
-// extended to the file.
 func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {
 	t.Run("webFetchProxy empty is the choice", func(t *testing.T) {
 		dir := t.TempDir()
@@ -293,9 +259,6 @@ func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {
 	})
 }
 
-// SPEC_GROWTH 9 (amended): plugins.enabled is retired. A non-empty list
-// refuses at load naming the directory switch; an empty one (the
-// residue of the old disable, which meant "all") is dropped.
 func TestPluginsEnabledKeyIsRetired(t *testing.T) {
 	home := t.TempDir()
 	write := func(body string) {

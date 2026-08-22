@@ -10,7 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/evt"
 )
 
-// scheduler_start_loop's codes are errors: -1 no engine, -2 started.
 func TestSchedulerStartErrorsAreNamed(t *testing.T) {
 	if err := evt.NewScheduler(nil).Start(); !errors.Is(err, evt.ErrNoEngine) {
 		t.Fatalf("nil engine: %v, want ErrNoEngine", err)
@@ -25,8 +24,6 @@ func TestSchedulerStartErrorsAreNamed(t *testing.T) {
 	}
 }
 
-// Schedule before Start is queued and runs after; Stop joins (Done is
-// closed when the loop goroutine has returned).
 func TestSchedulerScheduleStopJoins(t *testing.T) {
 	s := evt.NewScheduler(evt.NewEngine())
 	var ran atomic.Int64
@@ -54,7 +51,6 @@ func TestSchedulerScheduleStopJoins(t *testing.T) {
 	s.Stop()
 }
 
-// A nil engine's Schedule is a 0 id, never a panic.
 func TestSchedulerNilEngineSchedulesNothing(t *testing.T) {
 	if id := evt.NewScheduler(nil).Schedule(evt.Func(func(context.Context) {}), 1); id != 0 {
 		t.Fatalf("id %d, want 0", id)

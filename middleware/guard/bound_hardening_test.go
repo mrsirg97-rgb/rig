@@ -1,7 +1,5 @@
 package guard_test
 
-// The streak rule, the per-turn clear, and the note at the bound.
-
 import (
 	"context"
 	"encoding/json"
@@ -14,12 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 )
 
-// Drifting args each get a fresh streak (SPEC_HARDENING decision 7, as
-// amended): the bound strikes identical retries only, and a call differing
-// from the last failed args resets the tool's count. The consequence this
-// case pins, named and accepted: two failing calls alternating within one
-// turn never trip the bound. (The pre-amendment version of this case,
-// TestDriftingArgsShareOneBound, asserted the opposite.)
 func TestDriftingArgsEachGetAFreshStreak(t *testing.T) {
 	e := &failingExec{calls: map[string]int{}}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -36,8 +28,7 @@ func TestDriftingArgsEachGetAFreshStreak(t *testing.T) {
 		content, _ = exec(context.Background(), b)
 		last = content
 	}
-	// every alternation resets the other call's streak, so every issuance
-	// executes and none is ever refused
+
 	if e.calls[`{"path":"a"}`] != 4 || e.calls[`{"path":"b"}`] != 4 {
 		t.Fatalf("drifting args each get a fresh streak, got %+v", e.calls)
 	}
@@ -49,10 +40,6 @@ func TestDriftingArgsEachGetAFreshStreak(t *testing.T) {
 	}
 }
 
-// The corrected call always executes: identical retries cap at the limit
-// and the next identical issuance refuses, then a call with differing args
-// resets the count and runs, and its own identical retries cap in turn. The
-// "change the call" teaching is never followed by blocking the changed call.
 func TestChangedCallResetsTheCount(t *testing.T) {
 	e := &failingExec{calls: map[string]int{}}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -64,7 +51,7 @@ func TestChangedCallResetsTheCount(t *testing.T) {
 	b := core.ToolCall{ID: "c2", Name: "edit", Args: json.RawMessage(`{"path":"b"}`)}
 
 	var last string
-	for i := 0; i < 4; i++ { // three identical failures, then a refusal
+	for i := 0; i < 4; i++ {
 		last, _ = exec(context.Background(), a)
 	}
 	if !strings.Contains(last, "stop reissuing") {
@@ -74,8 +61,6 @@ func TestChangedCallResetsTheCount(t *testing.T) {
 		t.Fatalf("identical retries must cap at %d executions, got %d", 3, e.calls[`{"path":"a"}`])
 	}
 
-	// the corrected call resets the count: it executes instead of being
-	// refused (the teaching never blocks the changed call).
 	last, _ = exec(context.Background(), b)
 	if strings.Contains(last, "stop reissuing") {
 		t.Fatalf("the changed call must reset the count and execute, got %q", last)
@@ -84,7 +69,7 @@ func TestChangedCallResetsTheCount(t *testing.T) {
 		t.Fatalf("the changed call must execute exactly once, got %d", e.calls[`{"path":"b"}`])
 	}
 
-	for i := 0; i < 3; i++ { // b now repeats identically: it caps at its own 3
+	for i := 0; i < 3; i++ {
 		last, _ = exec(context.Background(), b)
 	}
 	if !strings.Contains(last, "stop reissuing") {
@@ -98,8 +83,6 @@ func TestChangedCallResetsTheCount(t *testing.T) {
 	}
 }
 
-// A new user message is a new budget: the loop's TurnStart fan-out clears
-// the tool's count.
 func TestBudgetClearsAtTheTurnBoundary(t *testing.T) {
 	mw := guard.Bound(1)
 	obs, ok := mw.(core.TurnObserver)
@@ -119,9 +102,8 @@ func TestBudgetClearsAtTheTurnBoundary(t *testing.T) {
 	if content, _ := exec(context.Background(), call); !strings.Contains(content, "stop reissuing") {
 		t.Fatalf("the second failure of the turn must be refused at limit 1, got %q", content)
 	}
-	obs.TurnStart(context.Background(), core.NewSession()) // the loop's L6 fan-out
-	// the fake always fails: a fresh budget shows up as executed-and-fed-
-	// back, not refused.
+	obs.TurnStart(context.Background(), core.NewSession())
+
 	if content, _ := exec(context.Background(), call); strings.Contains(content, "stop reissuing") {
 		t.Fatalf("the new turn must start with a fresh budget (executed, not refused), got %q", content)
 	}
@@ -130,8 +112,6 @@ func TestBudgetClearsAtTheTurnBoundary(t *testing.T) {
 	}
 }
 
-// The limit-th failure of a tool in a turn carries the note, appended to
-// the fed-back content.
 func TestBoundFailureCarriesTheNoteVerbatim(t *testing.T) {
 	var exec core.ToolExec = guard.Bound(3).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "tool failed", errors.New("synthetic failure")
@@ -147,8 +127,6 @@ func TestBoundFailureCarriesTheNoteVerbatim(t *testing.T) {
 	}
 }
 
-// The note is appended to the tool's own fed-back content, not a
-// replacement of it: the error stays above the note.
 func TestNoteAppendsToTheToolContent(t *testing.T) {
 	var exec core.ToolExec = guard.Bound(1).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "the tool said no", errors.New("tool said no")
@@ -159,8 +137,6 @@ func TestNoteAppendsToTheToolContent(t *testing.T) {
 	}
 }
 
-// A refusal is an error (the fed-back failure marker) with the bound
-// named — the loop's ToolResult carries it as Err.
 func TestRefusalIsAnErrorNamingTheBound(t *testing.T) {
 	var exec core.ToolExec = guard.Bound(1).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "fed back", errors.New("synthetic failure")
@@ -176,8 +152,6 @@ func TestRefusalIsAnErrorNamingTheBound(t *testing.T) {
 	}
 }
 
-// An empty fed-back content carries the note alone: the model still gets
-// the teaching, and the error is the marker.
 func TestNoteAloneWhenTheToolContentIsEmpty(t *testing.T) {
 	var exec core.ToolExec = guard.Bound(1).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "", errors.New("boom")
@@ -191,11 +165,6 @@ func TestNoteAloneWhenTheToolContentIsEmpty(t *testing.T) {
 	}
 }
 
-// SPEC_EVT 2a: the bound is safe under a concurrent batch — identical
-// failing calls from many goroutines are counted without a race, and
-// the limit refuses once they have landed. Named: the duplicates in one
-// run may all execute (each passed the check before any had failed);
-// they are not retries, and the bound strikes the re-issuance after.
 func TestBoundIsSafeUnderAConcurrentBatch(t *testing.T) {
 	e := &failingExec{calls: map[string]int{}}
 	var inner core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {

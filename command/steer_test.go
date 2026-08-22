@@ -7,9 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/command"
 )
 
-// TestSteerNoSeam (SPEC_COMMANDS, named): a dispatcher that did not
-// fill Env.Steer refuses loud — the compat shape: a Frontend without
-// steering simply never gets the command to work.
 func TestSteerNoSeam(t *testing.T) {
 	byName := allByName(t)
 	_, err := byName["steer"].Run(context.Background(), "fix it", &command.Env{})
@@ -18,9 +15,6 @@ func TestSteerNoSeam(t *testing.T) {
 	}
 }
 
-// TestSteerQueuesAndReports (SPEC_COMMANDS 7): the text is queued
-// (latest wins, the seam's contract) and the interrupt's landing is
-// reported on the line.
 func TestSteerQueuesAndReports(t *testing.T) {
 	byName := allByName(t)
 
@@ -45,8 +39,6 @@ func TestSteerQueuesAndReports(t *testing.T) {
 	}
 }
 
-// TestSteerEmptyInterrupts (SPEC_COMMANDS 7): empty steer interrupts
-// only — no text is queued — and reports the landing.
 func TestSteerEmptyInterrupts(t *testing.T) {
 	byName := allByName(t)
 

@@ -9,7 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// stubCmd is a command-shaped stand-in for the registration tests.
 type stubCmd struct{ name string }
 
 func (s stubCmd) Name() string        { return s.name }
@@ -39,9 +38,6 @@ func TestWithCommandsDuplicateNamePanics(t *testing.T) {
 	New(WithCommands(stubCmd{name: "dup"}, stubCmd{name: "other"}, stubCmd{name: "dup"}))
 }
 
-// TestKernelWithoutCommandsIsUnchanged (SPEC_COMMANDS 10): a kernel built
-// without WithCommands carries an empty registry — the loop does not read
-// it, and nothing in the kernel's shape changes.
 func TestKernelWithoutCommandsIsUnchanged(t *testing.T) {
 	k := New()
 	if k.Commands != nil {
@@ -57,9 +53,6 @@ func namesOf(cmds []core.Command) []string {
 	return out
 }
 
-// The stub's Run must take the seam's shape verbatim (the spec's
-// interface, decision 2): env is any, the reply is a string, the refusal
-// an error.
 var _ core.Command = stubCmd{}
 
 func TestCommandSeamShape(t *testing.T) {

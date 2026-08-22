@@ -1,10 +1,5 @@
 package command
 
-// roleProse is the shipped stances (SPEC_MODES 2), verbatim: the
-// stance's prose sits between the system prompt and AGENTS.md — the
-// runtime's identity first, the stance second, the operator's contract
-// third — and never outranks the contract (AGENTS.md reads after it and
-// wins conflicts by position). default injects nothing.
 var roleProse = map[string]string{
 	"architect": `This session's stance: architect. Design before implementation, every
 time. For any non-trivial ask: name the interfaces and contracts
@@ -20,16 +15,12 @@ Distrust green tests you have not read. Praise at most once, and only
 for something specific.`,
 }
 
-// roleHints is the menu's vocabulary (SPEC_MODES 3): the shipped three,
-// each one-lined — default is the absence of a stance.
 var roleHints = []Sub{
 	{Name: "default", Desc: "no stance — today's prompt exactly"},
 	{Name: "architect", Desc: "design before implementation"},
 	{Name: "reviewer", Desc: "review, don't build — hunt defects"},
 }
 
-// RoleProse returns the stance's embedded prose for a role name;
-// default (and the empty root state) injects nothing.
 func RoleProse(name string) string {
 	if name == "default" {
 		return ""
@@ -37,13 +28,10 @@ func RoleProse(name string) string {
 	return roleProse[name]
 }
 
-// ValidRole reports whether name is one of the shipped stances.
 func ValidRole(name string) bool {
 	return name == "" || name == "default" || name == "architect" || name == "reviewer"
 }
 
-// RoleHints is the role command's Sub() vocabulary: the shipped three,
-// in order.
 func RoleHints() []Sub {
 	out := make([]Sub, len(roleHints))
 	copy(out, roleHints)

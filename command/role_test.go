@@ -7,8 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/command"
 )
 
-// TestRoleBareShowsDefault (SPEC_MODES, named): the default stance
-// reads "default" — today's prompt exactly, no injection.
 func TestRoleBareShowsDefault(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Role: func() string { return "" }}
@@ -18,8 +16,6 @@ func TestRoleBareShowsDefault(t *testing.T) {
 	}
 }
 
-// TestRoleBareShowsActive (SPEC_MODES, named): a non-default stance
-// shows its name on bare.
 func TestRoleBareShowsActive(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Role: func() string { return "architect" }}
@@ -29,8 +25,6 @@ func TestRoleBareShowsActive(t *testing.T) {
 	}
 }
 
-// TestRoleSetCallsTheSeam (SPEC_MODES, named): with a name the command
-// sets the stance and replies the pinned "(next turn)".
 func TestRoleSetCallsTheSeam(t *testing.T) {
 	byName := allByName(t)
 	set := ""
@@ -47,8 +41,6 @@ func TestRoleSetCallsTheSeam(t *testing.T) {
 	}
 }
 
-// TestRoleUnknownNameRefusesNamingThree (SPEC_MODES, named): an unknown
-// name refuses naming the shipped three — the pinned voice.
 func TestRoleUnknownNameRefusesNamingThree(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Role: func() string { return "default" }}
@@ -58,8 +50,6 @@ func TestRoleUnknownNameRefusesNamingThree(t *testing.T) {
 	}
 }
 
-// TestRoleSubCarriesTheThree (SPEC_MODES, named): the menu hints carry
-// the shipped three with one-line descriptions.
 func TestRoleSubCarriesTheThree(t *testing.T) {
 	byName := allByName(t)
 	subber, ok := byName["role"].(command.Subber)

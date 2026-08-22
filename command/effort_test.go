@@ -7,9 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/command"
 )
 
-// TestEffortBareShowsActiveAndAvailable (SPEC_MODES, named): the pinned
-// reply — the active level and the row's available ones, in the row's
-// order.
 func TestEffortBareShowsActiveAndAvailable(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -23,9 +20,6 @@ func TestEffortBareShowsActiveAndAvailable(t *testing.T) {
 	}
 }
 
-// TestEffortBareServerDefault (SPEC_MODES, named): with the dial unset
-// the active level reads "server default" — today's bytes — beside the
-// available list.
 func TestEffortBareServerDefault(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -39,9 +33,6 @@ func TestEffortBareServerDefault(t *testing.T) {
 	}
 }
 
-// TestEffortBareNoLevelsShowsActiveOnly (SPEC_MODES, named): a row that
-// names no levels — the dial is off — still shows on bare, without an
-// available clause.
 func TestEffortBareNoLevelsShowsActiveOnly(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -55,9 +46,6 @@ func TestEffortBareNoLevelsShowsActiveOnly(t *testing.T) {
 	}
 }
 
-// TestEffortSetCallsTheSeam (SPEC_MODES, named): with an argument the
-// command sets the dial and replies the pinned "(next turn)" — a dial,
-// not a per-turn syntax, so the reply names the turn it reaches.
 func TestEffortSetCallsTheSeam(t *testing.T) {
 	byName := allByName(t)
 	set := ""
@@ -75,9 +63,6 @@ func TestEffortSetCallsTheSeam(t *testing.T) {
 	}
 }
 
-// TestEffortUnknownLevelRefusesNamingList (SPEC_MODES, named): a level
-// outside the row's list refuses, naming the level, the model, and the
-// list — the pinned voice.
 func TestEffortUnknownLevelRefusesNamingList(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -90,9 +75,6 @@ func TestEffortUnknownLevelRefusesNamingList(t *testing.T) {
 	}
 }
 
-// TestEffortNoLevelsRefusesNamingKey (SPEC_MODES, named): a row without
-// efforts refuses an argument, naming the key — the dial is off for that
-// row.
 func TestEffortNoLevelsRefusesNamingKey(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -105,9 +87,6 @@ func TestEffortNoLevelsRefusesNamingKey(t *testing.T) {
 	}
 }
 
-// TestEffortSubCarriesLevelsInRowOrder (SPEC_MODES, named): the menu
-// hints carry the row's levels, in the row's order, each described with
-// a generic one-liner (the words are the model's).
 func TestEffortSubCarriesLevelsInRowOrder(t *testing.T) {
 	cmds := command.All()
 	env := &command.Env{

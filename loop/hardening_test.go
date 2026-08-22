@@ -1,10 +1,5 @@
 package loop_test
 
-// The SPEC_HARDENING named cases (failing first): the tool-event bracket,
-// the reasoning accumulation, the steering contract (L2, L3), the interrupt
-// handle (L1), the TurnStart fan-out (L6), the TurnEnd vocabulary (L7),
-// and the compat rule (TestEvent).
-
 import (
 	"context"
 	"encoding/json"
@@ -41,8 +36,6 @@ func hasFault(events []core.Event) bool {
 	return false
 }
 
-// L4: the bracket order for a tool turn, the guarded result carried, the
-// transcript byte-identical to TestToolRoundTripOrdering.
 func TestToolEventBracketOrderAndContent(t *testing.T) {
 	bash := &scriptedTool{name: "bash", result: "42"}
 	p := &scriptedProvider{turns: []scriptedTurn{
@@ -68,7 +61,6 @@ func TestToolEventBracketOrderAndContent(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	// the transcript is byte-identical to TestToolRoundTripOrdering's.
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "what is the answer?"},
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash"}}},
@@ -77,8 +69,6 @@ func TestToolEventBracketOrderAndContent(t *testing.T) {
 	}
 	wantTranscript(t, session, want...)
 
-	// the bracket: ToolStart before ToolResult, after the stream's Done,
-	// before the next model call's events.
 	var (
 		kinds  []string
 		result *core.ToolResult
@@ -112,8 +102,6 @@ func TestToolEventBracketOrderAndContent(t *testing.T) {
 	}
 }
 
-// L4 with the chain: ToolResult carries the guarded result — the refusal,
-// named, with Err non-nil (the fed-back failure marker).
 func TestToolResultCarriesTheGuardedRefusal(t *testing.T) {
 	bash := &countingTool{name: "bash", fail: 999}
 	p := &scriptedProvider{turns: []scriptedTurn{
@@ -158,8 +146,6 @@ func TestToolResultCarriesTheGuardedRefusal(t *testing.T) {
 	}
 }
 
-// L7: TurnEnd closes every turn with the right reason, after the turn's
-// last other event.
 func TestTurnEndClosesEveryTurnWithTheRightReason(t *testing.T) {
 	boom := errors.New("mid-stream fault")
 	p := &scriptedProvider{turns: []scriptedTurn{
@@ -194,7 +180,7 @@ func TestTurnEndClosesEveryTurnWithTheRightReason(t *testing.T) {
 			t.Fatalf("TurnEnd %d reason = %q, want %q", i, ends[i].Reason, w)
 		}
 	}
-	// the fault's TurnEnd follows the Fault event, not the other way round.
+
 	faultIdx, endIdx := -1, -1
 	for i, ev := range f.events {
 		if ft, ok := ev.(core.Fault); ok && errors.Is(ft.Err, boom) {
@@ -209,7 +195,6 @@ func TestTurnEndClosesEveryTurnWithTheRightReason(t *testing.T) {
 	}
 }
 
-// L7: a run-context cancel ends the run, not a turn — no TurnEnd.
 func TestTurnEndAbsentOnRunContextEnd(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
 		events:  []core.Event{textEv("never delivered")},
@@ -226,7 +211,7 @@ func TestTurnEndAbsentOnRunContextEnd(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	f.inputs <- "speak"
-	cancel() // armed before Run: the run context ends the run at the boundary
+	cancel()
 	close(f.inputs)
 	if err := loop.Run(ctx, k); err != nil {
 		t.Fatalf("cancellation must exit cleanly, got %v", err)
@@ -236,10 +221,8 @@ func TestTurnEndAbsentOnRunContextEnd(t *testing.T) {
 	}
 }
 
-// L5: reasoning accumulates onto the assistant message in both branches,
-// and the deltas forward in stream order.
 func TestReasoningAccumulatesInBothBranches(t *testing.T) {
-	// the text-only branch.
+
 	p := &scriptedProvider{turns: []scriptedTurn{{
 		events: []core.Event{reasonEv("thinking... "), reasonEv("got it"), textEv("answer"), doneEv()},
 	}}}
@@ -279,7 +262,6 @@ func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 		t.Fatalf("stream order = %v, want reasoning,reasoning,delta,done", kinds)
 	}
 
-	// the tool-call branch: the thinking that led to the calls survives.
 	bash := &scriptedTool{name: "bash", result: "42"}
 	p2 := &scriptedProvider{turns: []scriptedTurn{
 		{events: []core.Event{reasonEv("planning the call"), callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
@@ -314,9 +296,6 @@ func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 	}
 }
 
-// steeringFrontend holds the interrupt handle from each Input ctx (L1) and
-// steers: "delta" cancels on the first streamed delta (mid-turn), "prompt"
-// cancels and errors on the first Input (at the prompt, L2).
 type steeringFrontend struct {
 	inputs      []string
 	n           int
@@ -333,7 +312,7 @@ func (f *steeringFrontend) Input(ctx context.Context) (string, error) {
 		f.handle = cancel
 	}
 	if f.mode == "prompt" && f.n == 1 {
-		f.handle() // steer at the prompt: the handle fires, the Input fails
+		f.handle()
 		return "", errors.New("steered at the prompt")
 	}
 	if f.served >= len(f.inputs) {
@@ -349,14 +328,11 @@ func (f *steeringFrontend) Notify(ev core.Event) {
 	if f.mode == "delta" && !f.steeredOnce {
 		if _, ok := ev.(core.TextDelta); ok {
 			f.steeredOnce = true
-			f.handle() // the line lands during the live turn: interrupt
+			f.handle()
 		}
 	}
 }
 
-// L3 + the interrupt handle (L1): a line during the live turn cancels the
-// turn; the queued message is delivered on the re-entry; the run continues
-// and the partial never lands.
 func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{
 		{events: []core.Event{textEv("partial ")}, holdAfter: true},
@@ -375,7 +351,6 @@ func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 		t.Fatalf("steering must not end the run, got %v", err)
 	}
 
-	// both turns land in the transcript; the partial never does.
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "speak"},
 		{Role: core.RoleUser, Content: "steer"},
@@ -393,14 +368,14 @@ func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 	if ends[0].Reason != core.TurnInterrupt || ends[1].Reason != core.TurnOver {
 		t.Fatalf("reasons = %v/%v, want interrupt then over", ends[0].Reason, ends[1].Reason)
 	}
-	// the interrupt TurnEnd precedes the re-entry's events.
+
 	endIdx, secondIdx := -1, -1
 	for i, ev := range f.events {
 		if te, ok := ev.(core.TurnEnd); ok && te.Reason == core.TurnInterrupt {
 			endIdx = i
 		}
 		if _, ok := ev.(core.TextDelta); ok && i > 0 && secondIdx == -1 {
-			if i >= 2 { // the first delta is the partial's
+			if i >= 2 {
 				secondIdx = i
 			}
 		}
@@ -410,8 +385,6 @@ func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 	}
 }
 
-// L2: a dead turn context at the prompt is an interrupt, not a fault: the
-// loop re-enters awaiting_input and the run continues.
 func TestSteeringAtThePromptReentersWithoutFault(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
 		events: []core.Event{textEv("real"), doneEv()},
@@ -442,15 +415,6 @@ func TestSteeringAtThePromptReentersWithoutFault(t *testing.T) {
 	}
 }
 
-// the pre-stream seam (L1): a dead turn ctx at the Assemble or Stream call
-// is the user's interrupt (or the session's end), not a provider fault —
-// no Fault row, no re-entry; the turn re-prompts like L2. The real shape
-// of that interleaving: the frontend serves the steer line and cancels
-// the turn's interrupt handle in the same Input — by the time the loop
-// reaches the first seam of the turn, the turn ctx is already dead.
-
-// steerFrontend delivers one named line with the interrupt: it cancels
-// the turn's handle (from the Input ctx) as it serves it.
 type steerFrontend struct {
 	*recorderFrontend
 	steer string
@@ -459,7 +423,7 @@ type steerFrontend struct {
 func (f *steerFrontend) Input(ctx context.Context) (string, error) {
 	line, err := f.recorderFrontend.Input(ctx)
 	if err == nil && line == f.steer && f.steer != "" {
-		f.steer = "" // once
+		f.steer = ""
 		if cancel, ok := core.InterruptFrom(ctx); ok {
 			cancel()
 		}
@@ -467,8 +431,6 @@ func (f *steerFrontend) Input(ctx context.Context) (string, error) {
 	return line, err
 }
 
-// ctxCheckingPolicy fails Assemble at call time when the context is dead
-// — the "or a policy that does" case of the pre-stream seam.
 type ctxCheckingPolicy struct{ *transcriptPolicy }
 
 func (p *ctxCheckingPolicy) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
@@ -478,8 +440,6 @@ func (p *ctxCheckingPolicy) Assemble(ctx context.Context, s *core.Session) ([]co
 	return p.transcriptPolicy.Assemble(ctx, s)
 }
 
-// ctxCheckingProvider fails at call time when its context is already dead
-// — the "a different Provider would" case of the pre-stream seam.
 type ctxCheckingProvider struct{ *scriptedProvider }
 
 func (p *ctxCheckingProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
@@ -506,8 +466,7 @@ func TestPreStreamAssembleFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	// turn 1 died at Assemble: exactly one TurnEnd{interrupt}, no Fault,
-	// no Done, and the provider was never called. Turn 2 is clean.
+
 	if len(f.events) != 4 {
 		t.Fatalf("events = %v, want TurnEnd, TextDelta, Done, TurnEnd", f.events)
 	}
@@ -537,7 +496,7 @@ func TestPreStreamCallFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	// turn 1 died at the Stream call: same shape — interrupt, no Fault.
+
 	if len(f.events) != 4 {
 		t.Fatalf("events = %v, want TurnEnd, TextDelta, Done, TurnEnd", f.events)
 	}
@@ -550,8 +509,6 @@ func TestPreStreamCallFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 	}
 }
 
-// L6: the turn fan-out fires once per user turn, before the first Assemble
-// — not per model call.
 type countingObserver struct {
 	core.ToolMiddlewareFunc
 	turns int
@@ -589,8 +546,6 @@ func TestTurnStartFansOutOncePerTurn(t *testing.T) {
 	}
 }
 
-// decision 8: the loop forwards an event it does not name, untouched, in
-// order; it does not accumulate it.
 func TestTestEventForwardsUntouched(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
 		events: []core.Event{core.TestEvent{Name: "x"}, textEv("hello"), doneEv()},

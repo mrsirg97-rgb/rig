@@ -49,7 +49,6 @@ func runningJSON(models ...string) string {
 	return string(b)
 }
 
-// fakeFetch answers the busy probes: a resident other model means busy.
 func fakeFetch(resident string) func(url string) (json.RawMessage, error) {
 	return func(url string) (json.RawMessage, error) {
 		switch {
@@ -74,8 +73,6 @@ func (e jsonErr) Error() string { return string(e) }
 
 func jsonError(s string) error { return jsonErr(s) }
 
-// fakeSpawn records calls; an optional record runs before the pinned
-// result returns (the happy path writes the worker's session row).
 type fakeSpawn struct {
 	mu       sync.Mutex
 	calls    []fakeCall
@@ -114,8 +111,6 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched
 	return f.result, f.err
 }
 
-// harness wires a scratch scheduler home + cwd-scope store and a rig home
-// with a state-store directory.
 type harness struct {
 	home    string
 	rigHome string
@@ -152,8 +147,6 @@ func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) co
 	})
 }
 
-// seedSession writes the worker's session row into the state store the
-// tool queries (SPEC_DELEGATE 3: the transcript is resumable).
 func seedSession(t *testing.T, rigHome, cwd string) string {
 	t.Helper()
 	db, _, err := store.Open(state.StorePath(rigHome, cwd), state.Statements(), state.SchemaVersion)
@@ -177,7 +170,7 @@ func TestDelegateHappyPathFeedsBackAndRecords(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	wd, _ := os.Getwd()
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "the answer"}}
-	// the worker records its session row at startup (the resumable transcript).
+
 	spawn.record = func() { seedSession(t, h.rigHome, wd) }
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
 	out, err := tool.Exec(context.Background(), runArgs("do the sweep"))
@@ -198,8 +191,6 @@ func TestDelegateHappyPathFeedsBackAndRecords(t *testing.T) {
 		t.Fatalf("the prompt must carry the task: %q", c.Argv[2])
 	}
 
-	// the record: an ad-hoc job row (no crontab, name delegate:...) and a
-	// run with a log path.
 	var name, cron, state string
 	if err := h.db.DB.QueryRow(`SELECT name, cron, state FROM jobs`).Scan(&name, &cron, &state); err != nil {
 		t.Fatal(err)
@@ -279,8 +270,7 @@ func TestDelegateOneInFlightRefuses(t *testing.T) {
 		}
 		first <- out
 	}()
-	// wait for the first spawn to be in flight (the read is under the
-	// mutex: the spawn goroutine appends under it)
+
 	deadline := time.Now().Add(2 * time.Second)
 	for spawn.count() == 0 {
 		if time.Now().After(deadline) {

@@ -21,13 +21,11 @@ func waitFor(t *testing.T, cond func() bool) {
 	}
 }
 
-// The engine executes by priority then arrival: events added before
-// Start drain in order (the C engine's contract over the queue's).
 func TestEngineExecutesByPriorityThenArrival(t *testing.T) {
 	e := evt.NewEngine()
 	var mu sync.Mutex
 	var order []int
-	record := func(n int) evt.Context {
+	record := func(n int) evt.Closure {
 		return evt.Func(func(context.Context) {
 			mu.Lock()
 			order = append(order, n)
@@ -56,8 +54,6 @@ func TestEngineExecutesByPriorityThenArrival(t *testing.T) {
 	}
 }
 
-// Multi-producer adds while running are all executed (libevt's
-// multi-producer door), and the default idle wait does not spin.
 func TestEngineMultiProducer(t *testing.T) {
 	e := evt.NewEngine()
 	var ran atomic.Int64
@@ -78,7 +74,6 @@ func TestEngineMultiProducer(t *testing.T) {
 	e.Stop()
 }
 
-// An event may add an event: execution is outside the lock.
 func TestEngineAddFromWithinAnEvent(t *testing.T) {
 	e := evt.NewEngine()
 	done := make(chan struct{})
@@ -94,7 +89,6 @@ func TestEngineAddFromWithinAnEvent(t *testing.T) {
 	e.Stop()
 }
 
-// WithTick runs the hook when idle (libevt's tick_fn), not while busy.
 func TestEngineTickHookRunsWhenIdle(t *testing.T) {
 	var ticks atomic.Int64
 	e := evt.NewEngine(evt.WithTick(func(context.Context) {
@@ -109,7 +103,6 @@ func TestEngineTickHookRunsWhenIdle(t *testing.T) {
 	e.Stop()
 }
 
-// Stop runs nothing further; the pending set stays visible, sorted.
 func TestEngineStopLeavesPendingVisible(t *testing.T) {
 	e := evt.NewEngine()
 	started := make(chan struct{})
@@ -133,7 +126,6 @@ func TestEngineStopLeavesPendingVisible(t *testing.T) {
 	}
 }
 
-// Cancelling Start's ctx is a Stop.
 func TestEngineContextCancelStops(t *testing.T) {
 	e := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -147,7 +139,6 @@ func TestEngineContextCancelStops(t *testing.T) {
 	}
 }
 
-// A negative priority clamps to 0 (libevt clamps at add).
 func TestEngineNegativePriorityClampsToZero(t *testing.T) {
 	e := evt.NewEngine()
 	e.Add(evt.Func(func(context.Context) {}), -5)
@@ -163,13 +154,11 @@ func TestEngineNegativePriorityClampsToZero(t *testing.T) {
 	}
 }
 
-// The engine's Update raises a pending event: the latest-steer-wins
-// rule phase 2 needs.
 func TestEngineUpdateRaisesAPendingEvent(t *testing.T) {
 	e := evt.NewEngine()
 	var mu sync.Mutex
 	var order []string
-	record := func(s string) evt.Context {
+	record := func(s string) evt.Closure {
 		return evt.Func(func(context.Context) {
 			mu.Lock()
 			order = append(order, s)

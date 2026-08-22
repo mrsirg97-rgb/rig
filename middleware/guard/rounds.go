@@ -9,10 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// rounds is the per-turn round cap: it counts every call in a turn on the
-// widened seam and, past the limit, refuses every further call without
-// executing, in a teaching voice. The counter sits under a mutex because a
-// concurrent batch (SPEC_EVT 6) calls the chain from many goroutines.
 type rounds struct {
 	mu    sync.Mutex
 	limit int

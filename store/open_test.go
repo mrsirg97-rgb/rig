@@ -24,11 +24,11 @@ func TestOpenInitializesSchemaVersion(t *testing.T) {
 	if _, err := db.Exec("SELECT COUNT(*) FROM probe"); err != nil {
 		t.Fatalf("schema statements not applied: %v", err)
 	}
-	// idempotent: the same version re-opens
+
 	if _, _, err := Open(path, probeDDL, 7); err != nil {
 		t.Fatalf("re-open same version: %v", err)
 	}
-	// a mismatch is a loud refusal naming both versions
+
 	if _, _, err := Open(path, probeDDL, 8); err == nil {
 		t.Fatal("version mismatch not refused")
 	} else if !strings.Contains(err.Error(), "7") || !strings.Contains(err.Error(), "8") {

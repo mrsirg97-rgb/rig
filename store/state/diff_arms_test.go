@@ -16,11 +16,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-// --- the named cases (SPEC_DIFF, PR A: the store arms) ---
-
-// TestCanonicalIgnoresKeyOrderAndWhitespaceValuesMatter (SPEC_DIFF PR A,
-// named): a property over key permutations and re-spacing of one JSON
-// (all canonicalize equal), and over one value changed (unequal).
 func TestCanonicalIgnoresKeyOrderAndWhitespaceValuesMatter(t *testing.T) {
 	parts := []struct{ key, val string }{
 		{"a", `1`},
@@ -52,14 +47,13 @@ func TestCanonicalIgnoresKeyOrderAndWhitespaceValuesMatter(t *testing.T) {
 		}
 	}
 
-	// one value changed: the observation is different.
 	changed := []string{
-		`{"a":2,"b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`,   // the number
-		`{"a":"1","b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`, // the type
-		`{"a":1,"b":"tow","c":[1,2,3],"d":{"e":true,"f":null}}`,   // the string
-		`{"a":1,"b":"two","c":[1,3,2],"d":{"e":true,"f":null}}`,   // the array order
-		`{"a":1,"b":"two","c":[1,2,3],"d":{"e":false,"f":null}}`,  // the bool
-		`{"a":1,"b":"two","c":[1,2,3],"d":{"e":true,"f":0}}`,      // the null
+		`{"a":2,"b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`,
+		`{"a":"1","b":"two","c":[1,2,3],"d":{"e":true,"f":null}}`,
+		`{"a":1,"b":"tow","c":[1,2,3],"d":{"e":true,"f":null}}`,
+		`{"a":1,"b":"two","c":[1,3,2],"d":{"e":true,"f":null}}`,
+		`{"a":1,"b":"two","c":[1,2,3],"d":{"e":false,"f":null}}`,
+		`{"a":1,"b":"two","c":[1,2,3],"d":{"e":true,"f":0}}`,
 	}
 	for _, s := range changed {
 		got, err := state.CanonicalArgs(s)
@@ -72,10 +66,6 @@ func TestCanonicalIgnoresKeyOrderAndWhitespaceValuesMatter(t *testing.T) {
 	}
 }
 
-// TestCanonicalDistinguishesNamedPairs (SPEC_DIFF PR A, named): 1 vs "1"
-// is different; {"a":1} vs {"a":null} is different; {"a":1} vs {} is
-// different. And 1 vs 1.0 decodes to the same JSON value: the same
-// observation.
 func TestCanonicalDistinguishesNamedPairs(t *testing.T) {
 	cases := [][2]string{
 		{`1`, `"1"`},
@@ -108,8 +98,6 @@ func TestCanonicalDistinguishesNamedPairs(t *testing.T) {
 	}
 }
 
-// TestRecordToolCallStoresCanonicalForm (SPEC_DIFF PR A, named):
-// {"b":1, "a":2} lands as {"a":2,"b":1}.
 func TestRecordToolCallStoresCanonicalForm(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -132,10 +120,6 @@ func TestRecordToolCallStoresCanonicalForm(t *testing.T) {
 	}
 }
 
-// TestRecorderUndecodableArgsLandsRawAndSpeaks (SPEC_DIFF PR A, named):
-// an args string that fails to decode at write time lands raw, the row
-// always lands, and the recorder says so through its existing loud voice
-// — one stderr line, not a new channel, not a Fault.
 func TestRecorderUndecodableArgsLandsRawAndSpeaks(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -156,7 +140,7 @@ func TestRecorderUndecodableArgsLandsRawAndSpeaks(t *testing.T) {
 	os.Stderr = w
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(raw)}})
 	rec.Notify(core.Done{StopReason: "end_turn"})
-	// the second call lands the same way: one loud line each.
+
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c2", Name: "bash", Args: json.RawMessage(raw)}})
 	rec.Notify(core.Done{StopReason: "end_turn"})
 	w.Close()
@@ -175,7 +159,6 @@ func TestRecorderUndecodableArgsLandsRawAndSpeaks(t *testing.T) {
 		}
 	}
 
-	// the row always lands, raw — the autopsy is total.
 	for _, id := range []string{"c1", "c2"} {
 		tc := mustRead(t, db, func(c context.Context) (any, error) {
 			return domain.NewToolCallDomain().GetToolCall(c, id).Row()
@@ -189,9 +172,6 @@ func TestRecorderUndecodableArgsLandsRawAndSpeaks(t *testing.T) {
 	}
 }
 
-// TestRecentToolCallsReturnsNewestFirst (SPEC_DIFF PR A, named): the n+1
-// most recent completed rows, newest first, for (session, name,
-// canonical args) — the n=1 base, and n=2.
 func TestRecentToolCallsReturnsNewestFirst(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -244,8 +224,6 @@ func TestRecentToolCallsReturnsNewestFirst(t *testing.T) {
 	}
 }
 
-// TestRecentToolCallsInflightInvisible (SPEC_DIFF PR A, named): a row
-// whose result has not landed (result NULL) is invisible.
 func TestRecentToolCallsInflightInvisible(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -273,7 +251,7 @@ func TestRecentToolCallsInflightInvisible(t *testing.T) {
 	if e := state.RecordToolResult(ctx, db, "c2", "r2", nil); e != nil {
 		t.Fatal(e)
 	}
-	// the in-flight call: the row landed, its result has not.
+
 	seq, e = state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
 	if e != nil {
 		t.Fatal(e)
@@ -290,8 +268,6 @@ func TestRecentToolCallsInflightInvisible(t *testing.T) {
 	}
 }
 
-// TestRecentToolCallsSessionScope (SPEC_DIFF PR A, named): a row in
-// another session with the same (name, args) is invisible.
 func TestRecentToolCallsSessionScope(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -333,12 +309,6 @@ func TestRecentToolCallsSessionScope(t *testing.T) {
 	}
 }
 
-// TestRecentToolCallsWorldBoundary (SPEC_DIFF PR A, named): the world
-// boundary (decision 5) is the session's last [compaction] marker row:
-// a row before it is invisible (the summarized prefix is another
-// world), the re-landed tail is in scope (the current world's memory
-// carries forward through the re-landed rows), and a markerless
-// session reads whole (the boundary is at seq 0).
 func TestRecentToolCallsWorldBoundary(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -357,9 +327,7 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 	if e := state.RecordToolResult(ctx, db, "c1", "r1", nil); e != nil {
 		t.Fatal(e)
 	}
-	// the compaction, as the loop drives it: the session is the summary
-	// row plus the kept tail, and the recorder re-lands the tail after
-	// the summary row (fresh seqs, name/args/result verbatim).
+
 	sess := core.NewSession()
 	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] the summary"})
 	sess.Append(core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: json.RawMessage(args)}}})
@@ -378,7 +346,6 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 		t.Fatalf("the in-scope row = %q seq %d, want r1 at a fresh seq past the marker (the original's seq is %d)", rows[0].Result, rows[0].Seq, seq1)
 	}
 
-	// a call after the compaction pairs against the re-landed copy.
 	seq2, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
 	if e != nil {
 		t.Fatal(e)
@@ -397,7 +364,6 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 		t.Fatalf("rows = %d (%s), want r2 over the re-landed r1 (the tail's memory carries forward)", len(rows), resultsOf(rows))
 	}
 
-	// a markerless session reads whole (COALESCE puts the boundary at 0).
 	sid2 := "markerless"
 	if e := state.RecordSession(ctx, db, sid2, "/w", "m", "v"); e != nil {
 		t.Fatal(e)
@@ -424,10 +390,6 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 	}
 }
 
-// TestRecentToolCallsInterleavingKeepsThePair (SPEC_DIFF PR A, named):
-// other tools' calls, and the same tool with different args, between the
-// pair do not displace it — the LIMIT-(n+1) exactness that makes
-// decision 3's write-time canonicalization load-bearing.
 func TestRecentToolCallsInterleavingKeepsThePair(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -463,10 +425,6 @@ func TestRecentToolCallsInterleavingKeepsThePair(t *testing.T) {
 	}
 }
 
-// TestRecentToolCallsTotalOrder (SPEC_DIFF PR A, the query's order is
-// total): started_at is second precision, message_seq breaks ties across
-// messages, id breaks ties within one (a multi-call message in a single
-// second).
 func TestRecentToolCallsTotalOrder(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -486,11 +444,10 @@ func TestRecentToolCallsTotalOrder(t *testing.T) {
 	seed := func(id string, messageSeq int64, res string) {
 		t.Helper()
 		if e := state.RecordToolCall(ctx, db, messageSeq, id, "bash", `{"command":"ls"}`); e != nil {
-			// the same-second tie is the point: the row's started_at is
-			// the test's, not now().
+
 			t.Fatal(e)
 		}
-		// overwrite the started_at with the test's second, exactly.
+
 		mustRead(t, db, func(c context.Context) (any, error) {
 			tc, err := domain.NewToolCallDomain().GetToolCall(c, id).Row()
 			if err != nil {
@@ -505,8 +462,8 @@ func TestRecentToolCallsTotalOrder(t *testing.T) {
 		}
 	}
 	seed("a", seq1, "ra")
-	seed("b", seq1, "rb") // the multi-call message in a single second: id breaks the tie
-	seed("c", seq2, "rc") // the later message in the same second: message_seq breaks the tie
+	seed("b", seq1, "rb")
+	seed("c", seq2, "rc")
 	got, err := state.RecentToolCalls(ctx, db, sid, "bash", `{"command":"ls"}`, 2)
 	if err != nil {
 		t.Fatalf("RecentToolCalls: %v", err)
@@ -518,8 +475,6 @@ func TestRecentToolCallsTotalOrder(t *testing.T) {
 		t.Fatalf("order = %s, want rc (later message), then rb over ra (id desc within the message)", resultsOf(got))
 	}
 }
-
-// --- helpers ---
 
 func resultsOf(rows []state.Observation) string {
 	out := make([]string, len(rows))

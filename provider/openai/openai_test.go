@@ -14,7 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/provider/openai"
 )
 
-// drain runs one Stream and collects until close.
 func drain(t *testing.T, ctx context.Context, p core.Provider, req core.Request) ([]core.Event, error) {
 	t.Helper()
 	ch, err := p.Stream(ctx, req)
@@ -136,9 +135,7 @@ func TestAccumulatesSplitToolCallArgs(t *testing.T) {
 }
 
 func TestLengthFinishedTruncatedToolCallArgsFault(t *testing.T) {
-	// The live failure: max_tokens cut the stream mid-args, the server
-	// still reports finish_reason "length", and the half-JSON args would
-	// otherwise be executed and re-sent as broken data.
+
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"bash","arguments":"{\"command\": \"cat /tmp/longfile"}}]}}]}`,
 		`data: {"choices":[{"delta":{},"finish_reason":"length"}]}`,
@@ -173,8 +170,7 @@ func TestLengthFinishedTruncatedToolCallArgsFault(t *testing.T) {
 }
 
 func TestNoArgToolCallStillEmitted(t *testing.T) {
-	// Complement of the truncation rule: empty args are legal (a no-arg
-	// call), so the validity check must not fault them.
+
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"ping"}}]}}]}`,
 		`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
@@ -303,7 +299,7 @@ func TestNonSSELineFaults(t *testing.T) {
 
 func TestCancellationTearsDownTheStream(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// hold until the client tears down the connection
+
 		io.Copy(io.Discard, r.Body)
 		w.WriteHeader(http.StatusOK)
 		io.WriteString(w, `data: {"choices":[{"delta":{"content":"late"}}]}`)
@@ -316,7 +312,7 @@ func TestCancellationTearsDownTheStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stream: %v", err)
 	}
-	time.Sleep(50 * time.Millisecond) // let the transport attach, then cancel
+	time.Sleep(50 * time.Millisecond)
 	cancel()
 
 	var events []core.Event
@@ -431,7 +427,7 @@ func TestBaseURLJoining(t *testing.T) {
 		if _, ok := events[len(events)-1].(core.Done); !ok {
 			t.Fatalf("expected Done; got events %v", events)
 		}
-		// the path suffix is /chat/completions under whatever prefix was given.
+
 		if !strings.HasSuffix(path, "/chat/completions") {
 			t.Fatalf("baseURL %q joined to %q, want a /chat/completions suffix", baseURL, path)
 		}
@@ -444,10 +440,6 @@ func TestBaseURLJoining(t *testing.T) {
 	}
 }
 
-// TestStreamIgnoresSSEComments: a line starting with ":" is an SSE
-// comment (the spec's keep-alive) — llama.cpp heartbeats through a
-// long prefill. Ignored, never a fault (the field fault: a compaction
-// summary call at deep context died on ":").
 func TestStreamIgnoresSSEComments(t *testing.T) {
 	body := strings.Join([]string{
 		`: ping`,

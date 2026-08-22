@@ -1,9 +1,5 @@
 package openai_test
 
-// The SPEC_HARDENING named cases (decision 2, decision 3): the reasoning
-// round-trip over the wire and the cache usage fields, failing first
-// against the adapter that had neither.
-
 import (
 	"context"
 	"encoding/json"
@@ -26,8 +22,6 @@ func sseServer(t *testing.T, body string) *httptest.Server {
 	return srv
 }
 
-// delta.reasoning_content streams as ReasoningDelta, in stream order —
-// the thinking arrives before the answer, as the live swap emits it.
 func TestReasoningContentStreamsAsReasoningDelta(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"reasoning_content":"let me "}}]}`,
@@ -69,8 +63,6 @@ func TestReasoningContentStreamsAsReasoningDelta(t *testing.T) {
 	}
 }
 
-// A delta carrying both kinds emits the thinking first: the stream order
-// is the wire order, and a unit's own order is thinking-then-speech.
 func TestReasoningPrecedesContentWithinOneDelta(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"reasoning_content":"hmm","content":"sure"}}]}`,
@@ -99,8 +91,6 @@ func TestReasoningPrecedesContentWithinOneDelta(t *testing.T) {
 	}
 }
 
-// usage.prompt_tokens_details.cached_tokens maps to CacheRead (grounded
-// live: warm 918 of 922 prompt tokens).
 func TestUsageCacheReadMapsFromPromptTokensDetails(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"content":"x"}}],"usage":{"prompt_tokens":922,"completion_tokens":10,"prompt_tokens_details":{"cached_tokens":918}}}`,
@@ -124,7 +114,6 @@ func TestUsageCacheReadMapsFromPromptTokensDetails(t *testing.T) {
 	}
 }
 
-// An absent details object reports zero: no cache accounting, not an error.
 func TestUsageCacheAbsentReportsZero(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"content":"x"}}],"usage":{"prompt_tokens":3,"completion_tokens":7}}`,
@@ -145,7 +134,6 @@ func TestUsageCacheAbsentReportsZero(t *testing.T) {
 	}
 }
 
-// cache_write_tokens maps when the server reports it (zero until then).
 func TestUsageCacheWriteMapsWhenReported(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"content":"x"}}],"usage":{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":40,"cache_write_tokens":60}}}`,
@@ -166,8 +154,6 @@ func TestUsageCacheWriteMapsWhenReported(t *testing.T) {
 	}
 }
 
-// The round-trip: an assistant message carrying Reasoning goes back over
-// the wire as reasoning_content (the F2 wire-shape precedent).
 func TestAssistantReasoningRoundTripsOverTheWire(t *testing.T) {
 	var captured map[string]json.RawMessage
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -207,11 +193,6 @@ func stringOrError(raw json.RawMessage) (string, bool) {
 	return s, true
 }
 
-// The adapter must request the usage chunk on the stream: OpenAI and
-// llama.cpp emit usage only when stream_options.include_usage is set —
-// without it Done.Usage is all zeros and the cache line reads zero
-// (verified live against the swap). Assert the field goes over the wire,
-// the way the shape test asserts parameters is an object.
 func TestStreamRequestsUsageOnTheWire(t *testing.T) {
 	var captured json.RawMessage
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -243,9 +224,6 @@ func TestStreamRequestsUsageOnTheWire(t *testing.T) {
 	}
 }
 
-// TestMaxTokensWireShape (SPEC_COMPACT 8): the request-side reserve maps
-// to max_tokens on the wire — present when non-zero, absent when 0 (the
-// server's default). The shape test asserts both directions.
 func TestMaxTokensWireShape(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -273,7 +251,6 @@ func TestMaxTokensWireShape(t *testing.T) {
 		t.Fatalf("stream: %v", err)
 	}
 
-	// zero = the provider's default: max_tokens must be absent.
 	var saw bool
 	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -292,14 +269,6 @@ func TestMaxTokensWireShape(t *testing.T) {
 	}
 }
 
-// TestReasoningEffortWireShape (SPEC_COMPACT 3): the summary request's
-// reasoning effort goes over the wire in both shapes the server families
-// read — the top-level reasoning_effort (OpenAI-shaped servers) and
-// chat_template_kwargs.reasoning_effort (llama.cpp, whose Qwen3 template
-// ignores the top-level field: measured on the swap, only the kwargs
-// entry changes the think length) — present in both when set, absent in
-// both when empty (the server's default). A server that knows neither
-// ignores both.
 func TestReasoningEffortWireShape(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -308,7 +277,7 @@ func TestReasoningEffortWireShape(t *testing.T) {
 			t.Fatalf("request body is not JSON: %v", err)
 		}
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n")
-		// both fields present, both carrying the effort
+
 		var top string
 		if err := json.Unmarshal(req["reasoning_effort"], &top); err != nil {
 			t.Fatalf("reasoning_effort is not a string: %v", err)
@@ -334,7 +303,6 @@ func TestReasoningEffortWireShape(t *testing.T) {
 		t.Fatalf("stream: %v", err)
 	}
 
-	// empty = the server's default: both fields must be absent.
 	var sawTop, sawKwargs bool
 	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)

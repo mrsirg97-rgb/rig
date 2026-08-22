@@ -9,9 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/models"
 )
 
-// table is the 0.2.0 rows with their roles (SPEC_CONFIG 4: the table
-// leaves code for the embedded config/models.json; the test harnesses
-// construct the same rows).
 func table() models.Table {
 	t, err := models.New(
 		models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
@@ -23,10 +20,6 @@ func table() models.Table {
 	return t
 }
 
-// TestModelsListMarksActive (SPEC_COMMANDS, named): the exact lines —
-// window, max, reserve, keep, trigger (Window - Reserve), the active
-// row marked, the raw token counts (greppable) — now with the role
-// column (SPEC_CONFIG 4).
 func TestModelsListMarksActive(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -44,9 +37,6 @@ func TestModelsListMarksActive(t *testing.T) {
 	}
 }
 
-// TestModelsListShowsRoleColumn (SPEC_CONFIG 4, named): the /models
-// line gains the role column after the id; the listing order is stable
-// (sorted by id, the table's Known() order).
 func TestModelsListShowsRoleColumn(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -57,8 +47,7 @@ func TestModelsListShowsRoleColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the exact lines, id-sorted, the role between the id and the
-	// numbers, the active marker on the worker row.
+
 	want := "local            interactive  window 65536  max 8192  reserve 8192  keep 16384  trigger 57344\n" +
 		"qwen3.8-workers  worker       window 65536  max 8192  reserve 8192  keep 16384  trigger 57344  *\n"
 	if out != want {
@@ -94,8 +83,6 @@ func TestModelsSwitchCallsTheSeam(t *testing.T) {
 	}
 }
 
-// TestModelsSwitchCarriesTheNote (SPEC_MODES 1, amended): the switch's
-// note — the effort dial's reset — rides the reply, under the line.
 func TestModelsSwitchCarriesTheNote(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{

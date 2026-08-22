@@ -124,9 +124,7 @@ func (f *fold) applyCreate(e eventRow) {
 
 	id := a.ID
 	if id != "" {
-		// the delegate's ad-hoc row (SPEC_DELEGATE 4): the id is minted
-		// by the caller, never collides, and names may repeat (the same
-		// task delegated twice) — no name-collision rule.
+
 		if f.jobs[id] != nil {
 			return
 		}

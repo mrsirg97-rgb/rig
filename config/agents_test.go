@@ -6,11 +6,6 @@ import (
 	"testing"
 )
 
-// --- the named cases (SPEC_CONFIG, testing) ---
-
-// TestAgentsGlobalThenProject (SPEC_CONFIG 6): global then project,
-// concatenated global-first with a blank line between; the content is
-// the files as written.
 func TestAgentsGlobalThenProject(t *testing.T) {
 	dir := t.TempDir()
 	cwd := t.TempDir()
@@ -40,8 +35,6 @@ func TestAgentsGlobalOnly(t *testing.T) {
 	}
 }
 
-// TestAgentsUnreadableRefuses (SPEC_CONFIG 3): a present-but-unreadable
-// AGENTS.md refuses with the OS reason, the path named once.
 func TestAgentsUnreadableRefuses(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: permission bits do not refuse")
@@ -61,8 +54,6 @@ func TestAgentsUnreadableRefuses(t *testing.T) {
 	}
 }
 
-// TestAgentsDirectoryRefuses (SPEC_CONFIG 3): a directory by that name
-// is not a file — the refusal is loud.
 func TestAgentsDirectoryRefuses(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "AGENTS.md")

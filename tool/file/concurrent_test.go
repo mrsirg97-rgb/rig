@@ -13,8 +13,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/file"
 )
 
-// SPEC_EVT 2a: concurrent reads in one batch record their file state
-// into the shared session without a race.
 func TestReadsRecordFileStateConcurrently(t *testing.T) {
 	dir := t.TempDir()
 	const n = 16

@@ -1,9 +1,5 @@
 package guard_test
 
-// The round cap (SPEC_HARDENING decision 9): a per-turn cap on tool calls
-// that counts every call on the widened seam, past the cap refuses without
-// executing, and clears at the turn boundary like the bound.
-
 import (
 	"context"
 	"encoding/json"
@@ -15,8 +11,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 )
 
-// countingExec counts executions; the round cap's own counter is what the
-// case reads, so the inner exec just records how many calls ran.
 type countingExec struct {
 	mu    sync.Mutex
 	total int
@@ -29,8 +23,6 @@ func (e *countingExec) Exec(ctx context.Context, call core.ToolCall) (string, er
 	return "ran", nil
 }
 
-// The n+1th call of a turn is refused without executing, in the teaching
-// voice naming the cap and what to do; the one thing left is to answer.
 func TestRoundCapRefusesTheNextCallWithTheVoice(t *testing.T) {
 	e := &countingExec{}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -57,7 +49,7 @@ func TestRoundCapRefusesTheNextCallWithTheVoice(t *testing.T) {
 			t.Fatalf("the refusal must name the cap and teach in both content and error, got:\ncontent %q\nerror %q", content, err)
 		}
 	}
-	// the refused call is still counted: the next issuance is refused too.
+
 	if _, er := exec(context.Background(), call); er == nil {
 		t.Fatal("every call past the cap must be refused, without executing")
 	}
@@ -66,9 +58,6 @@ func TestRoundCapRefusesTheNextCallWithTheVoice(t *testing.T) {
 	}
 }
 
-// Alternating calls hit the cap: the cap counts every call in a turn,
-// whatever the tool — the alternation the retry bound (SPEC_HARDENING 7)
-// does not bound is bounded here.
 func TestAlternatingCallsHitTheRoundCap(t *testing.T) {
 	e := &countingExec{}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -86,7 +75,7 @@ func TestAlternatingCallsHitTheRoundCap(t *testing.T) {
 			t.Fatalf("alternating calls within the cap must execute: %v", er)
 		}
 	}
-	// the fifth call is past the cap (4 per turn), refused without executing.
+
 	content, er := exec(context.Background(), a)
 	if er == nil || !strings.Contains(content, "round cap") {
 		t.Fatalf("the fifth alternating call must hit the cap, got %q %v", content, er)
@@ -96,8 +85,6 @@ func TestAlternatingCallsHitTheRoundCap(t *testing.T) {
 	}
 }
 
-// A new user message is a new budget: TurnStart clears the counter, like
-// the bound's.
 func TestRoundCapClearsAtTheTurnBoundary(t *testing.T) {
 	mw := guard.Rounds(2)
 	obs, ok := mw.(core.TurnObserver)
@@ -119,7 +106,7 @@ func TestRoundCapClearsAtTheTurnBoundary(t *testing.T) {
 	if _, er := exec(context.Background(), call); er == nil {
 		t.Fatal("call 3 must refuse at limit 2")
 	}
-	obs.TurnStart(context.Background(), core.NewSession()) // the loop's L6 fan-out
+	obs.TurnStart(context.Background(), core.NewSession())
 	if _, er := exec(context.Background(), call); er != nil {
 		t.Fatalf("the new turn must start with a fresh budget: %v", er)
 	}
@@ -128,9 +115,6 @@ func TestRoundCapClearsAtTheTurnBoundary(t *testing.T) {
 	}
 }
 
-// SPEC_EVT 6: the cap is safe under a concurrent batch — a concurrent run
-// of identical reads counts each (the cap is on calls, not turns of the
-// loop), race-free under -race.
 func TestRoundCapCountsAConcurrentRunRaceFree(t *testing.T) {
 	e := &countingExec{}
 	var inner core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -150,7 +134,7 @@ func TestRoundCapCountsAConcurrentRunRaceFree(t *testing.T) {
 	if e.total != 50 {
 		t.Fatalf("a concurrent run of 50 identical reads counts 50 (the cap is on calls, not turns), got %d", e.total)
 	}
-	// the counter is exactly 50: the next call refuses, in one place.
+
 	if _, er := exec(context.Background(), call); er == nil {
 		t.Fatal("the 51st call must refuse after a concurrent run of 50")
 	}

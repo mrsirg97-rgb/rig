@@ -1,10 +1,5 @@
 package main
 
-// SPEC_UX 2, named: the remembered notes ride the prefix at session
-// start and the refresh points — the segment's order, its absence when
-// there are no notes (today's bytes exactly), the K and character caps,
-// the refresh points' re-read, and the cwd scoping.
-
 import (
 	"context"
 	"fmt"
@@ -35,9 +30,6 @@ func learnNote(t *testing.T, db store.DB, cwd, content string) {
 	}
 }
 
-// TestRememberedSegmentRidesAfterAgentsBeforeGuidelines (SPEC_UX 2,
-// named): the segment sits after AGENTS.md, before the guidelines —
-// descending proximity, one order.
 func TestRememberedSegmentRidesAfterAgentsBeforeGuidelines(t *testing.T) {
 	gw := guidelineMW{
 		ToolMiddlewareFunc: func(next core.ToolExec) core.ToolExec { return next },
@@ -63,8 +55,6 @@ func TestRememberedSegmentRidesAfterAgentsBeforeGuidelines(t *testing.T) {
 	}
 }
 
-// TestRememberedSegmentAbsentKeepsTodaysBytes (SPEC_UX 2, named): no
-// notes, no segment — the 0.2.0 assembly stands exactly.
 func TestRememberedSegmentAbsentKeepsTodaysBytes(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.agents = "G\n\nP"
@@ -75,7 +65,7 @@ func TestRememberedSegmentAbsentKeepsTodaysBytes(t *testing.T) {
 	if r.fullSystem != want {
 		t.Fatalf("absent notes keep today's bytes exactly, got:\n%q", r.fullSystem)
 	}
-	// and a root with no rem store at all (the test roots' shape)
+
 	r2 := testRoot(nullFrontend{})
 	r2.fullSystem = r2.buildSystem()
 	if r2.fullSystem != "be terse" {
@@ -83,9 +73,6 @@ func TestRememberedSegmentAbsentKeepsTodaysBytes(t *testing.T) {
 	}
 }
 
-// TestRememberedSegmentCaps (SPEC_UX 2, named): K = 8 newest notes
-// only, and the 1500-character cap — over it the oldest trim first, and
-// one note over the cap alone is cut with the loud ellipsis.
 func TestRememberedSegmentCaps(t *testing.T) {
 	remDB := openRemDB(t)
 	for i := 1; i <= 10; i++ {
@@ -102,12 +89,10 @@ func TestRememberedSegmentCaps(t *testing.T) {
 		t.Fatalf("the two oldest must not ride (K=8):\n%q", r.fullSystem)
 	}
 
-	// the character cap: one note long enough to overflow the segment
-	// alone (learned last: the newest, so it leads the K)
 	long := strings.Repeat("x", 1600)
 	learnNote(t, remDB, "/ws/caps", long)
 	r2 := testRoot(nullFrontend{})
-	r2.remDB = remDB // the same store: 10 short + 1 long = 11 notes
+	r2.remDB = remDB
 	r2.cwd = "/ws/caps"
 	r2.fullSystem = r2.buildSystem()
 	seg := segmentOf(t, r2.fullSystem)
@@ -126,16 +111,13 @@ func segmentOf(t *testing.T, full string) string {
 		t.Fatal("no remembered segment")
 	}
 	seg := "remembered (this directory):" + after
-	// the segment runs to the next blank-line join (the guidelines) or the end
+
 	if i := strings.Index(seg, "\n\n"); i >= 0 {
 		seg = seg[:i]
 	}
 	return seg
 }
 
-// TestRememberedSegmentRefreshesAtTheRefreshPoints (SPEC_UX 2, named):
-// the read is at session start and the refresh points (new, resume) —
-// a note learned after the start rides the next session's prefix.
 func TestRememberedSegmentRefreshesAtTheRefreshPoints(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	if strings.Contains(h.r.fullSystem, "remembered (this directory):") {
@@ -150,8 +132,6 @@ func TestRememberedSegmentRefreshesAtTheRefreshPoints(t *testing.T) {
 	}
 }
 
-// TestRememberedSegmentIsCwdScoped (SPEC_UX 2, named): another
-// directory's notes never ride — the cwd is the scope rem already chose.
 func TestRememberedSegmentIsCwdScoped(t *testing.T) {
 	remDB := openRemDB(t)
 	learnNote(t, remDB, "/ws/home", "a note in another directory")

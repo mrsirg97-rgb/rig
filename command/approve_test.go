@@ -9,8 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/command"
 )
 
-// TestApproveBareShows (SPEC_MODES 4, named): bare shows the active
-// mode; the empty root state reads as auto.
 func TestApproveBareShows(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Approve: func() string { return "" }}
@@ -25,9 +23,6 @@ func TestApproveBareShows(t *testing.T) {
 	}
 }
 
-// TestApproveSetCallsTheSeam (SPEC_MODES 4, named): the argument sets
-// through the root's closure; the reply names the very-next-call
-// effect (no prefix moves — no re-prefill talk).
 func TestApproveSetCallsTheSeam(t *testing.T) {
 	byName := allByName(t)
 	set := ""
@@ -41,9 +36,6 @@ func TestApproveSetCallsTheSeam(t *testing.T) {
 	}
 }
 
-// TestApproveRefusalPassesThrough (SPEC_MODES 4, named): the root's
-// refusal — manual without an ask door — is the command's reply,
-// verbatim.
 func TestApproveRefusalPassesThrough(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -58,8 +50,6 @@ func TestApproveRefusalPassesThrough(t *testing.T) {
 	}
 }
 
-// TestApproveUsage (SPEC_MODES 4, named): two words refuse with the
-// usage; the Sub hints carry the two modes.
 func TestApproveUsage(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Approve: func() string { return "" }}

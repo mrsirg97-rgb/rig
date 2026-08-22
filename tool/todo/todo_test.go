@@ -1,5 +1,3 @@
-// Package tests: the todo surface over store/todo at the adapter level:
-// schema voices, session attribution, reply shaping pass-through.
 package todo_test
 
 import (

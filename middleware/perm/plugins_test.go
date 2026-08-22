@@ -1,12 +1,5 @@
 package perm_test
 
-// The plugin provenance rule (SPEC_SANDBOX 2): the model's write and
-// edit refuse a target inside the rig home's plugins/ that is not
-// inside plugins/pending/; the model's authoring lands in the pending
-// zone, and the operator's /plugins approve installs. The rule is the
-// workflow guard for the honest path — bash can still move a file
-// there — so the tests pin the path decision, not a boundary.
-
 import (
 	"context"
 	"encoding/json"
@@ -19,8 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 )
 
-// pluginCall runs one named call with raw args through the given
-// middleware and reports whether the exec saw it.
 func pluginCall(t *testing.T, mw core.ToolMiddleware, name, args string) (calls int, content string, err error) {
 	t.Helper()
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -36,10 +27,6 @@ func pluginCall(t *testing.T, mw core.ToolMiddleware, name, args string) (calls 
 	return calls, content, err
 }
 
-// TestPluginsRuleRefusesOutsidePending (SPEC_SANDBOX, named): the
-// model's write and edit refuse a target inside plugins/ that is not
-// inside plugins/pending/ — the refusal teaches the operator's verb
-// and the pending zone, and the exec never runs.
 func TestPluginsRuleRefusesOutsidePending(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -63,9 +50,6 @@ func TestPluginsRuleRefusesOutsidePending(t *testing.T) {
 	}
 }
 
-// TestPluginsRuleAllowsThePendingZone (SPEC_SANDBOX, named): into
-// plugins/pending/ the same calls land — the forge's landing zone is
-// the model's authoring path.
 func TestPluginsRuleAllowsThePendingZone(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -81,9 +65,6 @@ func TestPluginsRuleAllowsThePendingZone(t *testing.T) {
 	}
 }
 
-// TestPluginsRuleIgnoresOtherTools (SPEC_SANDBOX 2): the rule names
-// write and edit — read can still look at the installed set, and the
-// other tools are not path rules.
 func TestPluginsRuleIgnoresOtherTools(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -97,9 +78,6 @@ func TestPluginsRuleIgnoresOtherTools(t *testing.T) {
 	}
 }
 
-// TestPluginsRuleIgnoresForeignPluginsDirs: a directory named plugins/
-// elsewhere is not the rig home's — the rule is the home's rule, by
-// path.
 func TestPluginsRuleIgnoresForeignPluginsDirs(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -111,9 +89,6 @@ func TestPluginsRuleIgnoresForeignPluginsDirs(t *testing.T) {
 	}
 }
 
-// TestPluginsRuleSiblingPrefixIsOutside: pluginspending/ shares the
-// plugins/ prefix but is a sibling — the zone test is a path test, not
-// a string prefix.
 func TestPluginsRuleSiblingPrefixIsOutside(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -125,8 +100,6 @@ func TestPluginsRuleSiblingPrefixIsOutside(t *testing.T) {
 	}
 }
 
-// TestPluginsRuleTargetIsThePluginsDir: the plugins/ directory itself
-// is inside plugins/ and not inside plugins/pending/ — refused.
 func TestPluginsRuleTargetIsThePluginsDir(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -140,9 +113,6 @@ func TestPluginsRuleTargetIsThePluginsDir(t *testing.T) {
 	}
 }
 
-// TestPluginsRulePassesThroughWithoutAPath: the args are the tool's to
-// parse — a missing path is the tool's own loud voice, not this
-// rule's.
 func TestPluginsRulePassesThroughWithoutAPath(t *testing.T) {
 	home := t.TempDir()
 	calls, _, err := pluginCall(t, perm.Plugins(filepath.Join(home, "plugins")), "write", `{}`)
@@ -151,9 +121,6 @@ func TestPluginsRulePassesThroughWithoutAPath(t *testing.T) {
 	}
 }
 
-// TestPluginsRuleRelativePaths (SPEC_SANDBOX, named companion): the
-// model spells the target relative to the cwd; the rule decides on the
-// absolute path, whatever the spelling.
 func TestPluginsRuleRelativePaths(t *testing.T) {
 	home := t.TempDir()
 	old, err := os.Getwd()
@@ -178,11 +145,6 @@ func TestPluginsRuleRelativePaths(t *testing.T) {
 	}
 }
 
-// TestDenialOrderTheAllowlistSpeaksFirst: the chain lists the
-// provenance rule before the allow-list (first-listed is innermost, so
-// the allow-list is consulted first) — a tool that is not allowed
-// speaks with the allow-list's voice, the more basic refusal, whatever
-// the path is.
 func TestDenialOrderTheAllowlistSpeaksFirst(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -192,12 +154,12 @@ func TestDenialOrderTheAllowlistSpeaksFirst(t *testing.T) {
 		t.Fatal("a denied call must not reach the exec")
 		return "", nil
 	}
-	exec = perm.Plugins(pluginsDir).Wrap(exec) // listed first = innermost: consulted after the allow-list
+	exec = perm.Plugins(pluginsDir).Wrap(exec)
 	exec = perm.Allowlist("bash").Wrap(exec)
 
 	content, err := exec(context.Background(), core.ToolCall{
 		ID:   "c1",
-		Name: "write", // not in the allow-list
+		Name: "write",
 		Args: json.RawMessage(`{"path": ` + mustJSON(t, target) + `, "content": "x"}`),
 	})
 	if err == nil {

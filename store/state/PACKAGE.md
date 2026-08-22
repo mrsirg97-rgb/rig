@@ -30,3 +30,11 @@ loop already emits; the read side rebuilds a session from the log.
   to the inner frontend; it must not double-record or drop events.
 - A turn starts with a user message; the defined turns count comes from
   the row's lifecycle.
+- `StorePath(home, cwd)` resolves the workspace's state file the way the
+  root does (SPEC_SERVE 2): one file per cwd under `<home>/sessions`,
+  keyed by the first six sha1 bytes of the cwd; the root and the
+  dashboard share this one source. `SessionUsage` is the typed usage
+  read beside `Resume` (one row per landed turn, transcript order) the
+  dashboard renders as structure. The generation line, kept here and
+  disabled in code: `GOGEN=$PWD; cd ../../../lift/cmd && go run main.go
+  -config=$GOGEN/gen.json -source=$GOGEN/source.json`.

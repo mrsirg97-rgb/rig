@@ -1,12 +1,5 @@
 package command_test
 
-// The reload and the forge, command door (SPEC_PLUGINS 8, testing):
-// /plugins reload passes the root's reply through (the command is
-// sugar over capabilities the model has); /plugins create <text>
-// queues the spec's template on the steer precedent (the command
-// queues a line; it never dispatches a turn itself); the approve's
-// tail is the reload's (SPEC_SANDBOX 2, post-8).
-
 import (
 	"context"
 	"errors"
@@ -20,17 +13,12 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// the template's tail is SPEC_STREAMLINE 5's: the operator's approve and
-// the door's call, not the reload (the door self-heals, SPEC_STREAMLINE 4).
 const createTemplate = "author a plugin: %s; the contract is DESCRIPTION, SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending directory (SPEC_SANDBOX); the operator installs it with /plugins approve; then call it through the plugin door and test it with one call."
 
 func wantUsage() string {
 	return "plugins: usage: plugins | plugins pending | plugins disabled | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
 }
 
-// TestPluginsReloadVerbPassesTheReplyThrough (SPEC_PLUGINS 8, named):
-// the reload seam wired — the verb's reply is the root's verbatim; a
-// nil seam refuses with the no-seam voice.
 func TestPluginsReloadVerbPassesTheReplyThrough(t *testing.T) {
 	reply := "plugins: reload: 1 loaded, 1 skipped\nloaded:\n  echo: the fixture echo plugin (/h/plugins/echo.py)\nskipped:\n  broken.py: NameError: name 'x' is not defined\n"
 	calls := 0
@@ -62,11 +50,6 @@ func TestPluginsReloadVerbPassesTheReplyThrough(t *testing.T) {
 	}
 }
 
-// TestPluginsCreateQueuesTheTemplate (SPEC_PLUGINS 8, named): the
-// queued line is 8's template with the operator's text spliced in
-// (the steer precedent: the command queues a line and never dispatches
-// a turn); the interrupt voice when a live turn was interrupted; a nil
-// steer seam refuses; an empty text is usage.
 func TestPluginsCreateQueuesTheTemplate(t *testing.T) {
 	want := fmt.Sprintf(createTemplate, "an echo plugin")
 	steer := &fakeSteer{}
@@ -81,7 +64,6 @@ func TestPluginsCreateQueuesTheTemplate(t *testing.T) {
 		t.Fatalf("the reply = %q, want the queued line named", out)
 	}
 
-	// the interrupt voice (a live turn was interrupted by the queue).
 	steer2 := &fakeSteer{live: true}
 	out, err = pluginsCmd(t).Run(context.Background(), "create an echo plugin", &command.Env{Steer: steer2})
 	if err != nil {
@@ -91,21 +73,17 @@ func TestPluginsCreateQueuesTheTemplate(t *testing.T) {
 		t.Fatalf("the interrupt voice = %q, want the steer precedent's", out)
 	}
 
-	// no steering seam.
 	_, err = pluginsCmd(t).Run(context.Background(), "create an echo plugin", &command.Env{})
 	if err == nil || !strings.Contains(err.Error(), "no steering seam") {
 		t.Fatalf("a nil steer seam must refuse, got %v", err)
 	}
 
-	// an empty text is usage.
 	_, err = pluginsCmd(t).Run(context.Background(), "create", &command.Env{Steer: &fakeSteer{}})
 	if err == nil || err.Error() != wantUsage() {
 		t.Fatalf("an empty text must be usage, got %v", err)
 	}
 }
 
-// TestPluginsUsageNamesTheReloadAndCreateVerbs (SPEC_PLUGINS 8,
-// named): the unknown verb's usage line carries the set's whole shape.
 func TestPluginsUsageNamesTheReloadAndCreateVerbs(t *testing.T) {
 	home := t.TempDir()
 	_, err := pluginsCmd(t).Run(context.Background(), "frobnicate", &command.Env{
@@ -120,11 +98,6 @@ func TestPluginsUsageNamesTheReloadAndCreateVerbs(t *testing.T) {
 	}
 }
 
-// TestPluginsApproveMovesThenReloads (SPEC_PLUGINS 8, named —
-// SPEC_SANDBOX 2 post-8): the move lands and the reply carries the
-// move's line plus the reload's reply; a reload failure after the move
-// keeps the move (the disk is the truth) and names the failure; a root
-// without the reload seam is the move only (the pre-8 voice, intact).
 func TestPluginsApproveMovesThenReloads(t *testing.T) {
 	t.Run("the move plus the reload's reply", func(t *testing.T) {
 		home := homeWithZone(t, map[string]string{"forge.py": goodPending})

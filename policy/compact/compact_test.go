@@ -20,14 +20,8 @@ import (
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 )
 
-// testRow is the spec's worker profile scaled to fixture sizes
-// (decision 2's shape; the numbers are the test's).
 var testRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 
-// TestBelowTriggerIsPassthroughByteIdentical (SPEC_COMPACT, named): at
-// exactly Window - Reserve the output deep-equals policy.Passthrough on
-// the same session; one over, the same fixture compacts. Both the
-// anchored shape (4) and the anchorless fresh-session shape.
 func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 	const system = "S"
 
@@ -36,7 +30,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)})
 		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 200), ContextTokens: 800})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)})
-		// size = anchor 800 + est(delta 400B = 100) = 900 = Window - Reserve
+
 		pol, err := compact.New(&scriptedProvider{}, &captureFrontend{}, s, system, testRow)
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -64,7 +58,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)})
 		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 200), ContextTokens: 801})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)})
-		// size = 801 + 100 = 901 > 900: the trigger is strict
+
 		prov := &scriptedProvider{turns: []scriptedTurn{{
 			events: []core.Event{core.TextDelta{Text: "SUMMARY"}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 1}}},
 		}}}
@@ -76,8 +70,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 		if _, err := pol.Assemble(context.Background(), s); err != nil {
 			t.Fatalf("Assemble: %v", err)
 		}
-		// the older prefix (the first user message) was summarized; the
-		// tail (the assistant + its result, the pair kept whole) survives.
+
 		if len(s.Messages) != 3 {
 			t.Fatalf("transcript = %d messages, want the summary + the kept tail", len(s.Messages))
 		}
@@ -94,7 +87,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 
 	t.Run("anchorless at the boundary is passthrough", func(t *testing.T) {
 		s := core.NewSession()
-		// system (1B -> 1) + 449 + 450 = 900 = Window - Reserve, no anchor
+
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1796)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1800)})
 		prov := &scriptedProvider{}
@@ -112,7 +105,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 
 	t.Run("anchorless one over compacts", func(t *testing.T) {
 		s := core.NewSession()
-		// system (1) + 449 + 451 = 901 > 900
+
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1796)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1804)})
 		prov := &scriptedProvider{turns: []scriptedTurn{{
@@ -131,10 +124,6 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 	})
 }
 
-// TestTriggerMathPerModelOneConfig (named): one table, one root: the
-// worker row and the brain row; a transcript over the worker's trigger
-// and under the brain's — the worker compacts, the brain passes through
-// byte-identically. The pi shape (Reserve >= Window) cannot exist.
 func TestTriggerMathPerModelOneConfig(t *testing.T) {
 	worker := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	brain := models.Model{Role: models.RoleInteractive, ID: "brain", Window: 4000, MaxTokens: 500, Reserve: 200, KeepRecent: 500}
@@ -143,8 +132,6 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 		t.Fatalf("one table carrying both rows: %v", err)
 	}
 
-	// the shared fixture: size = anchor 800 + est(delta 800B = 200) = 1000,
-	// over the worker's trigger (900), under the brain's (3800).
 	fixture := func() *core.Session {
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)})
@@ -188,7 +175,6 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 		t.Fatalf("the brain must not compact (calls = %d)", provB.calls())
 	}
 
-	// the named pi case (2026-08-15): a global-reserve shape cannot exist.
 	piShape := models.Model{Role: models.RoleInteractive, ID: "pi", Window: 100, MaxTokens: 10, Reserve: 100}
 	if err := piShape.Check(); err == nil {
 		t.Fatal("Reserve >= Window must be refused at construction (the pi shape)")
@@ -196,17 +182,13 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 	_ = table
 }
 
-// TestSummaryMaxTokensClamped (named): the summary request's MaxTokens is
-// min(row.MaxTokens, Window - est(input)) — 3's honest budget, the
-// reserve not subtracted twice; a budget <= 0 fails loud, naming the
-// row's numbers.
 func TestSummaryMaxTokensClamped(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 
 	t.Run("honest budget", func(t *testing.T) {
 		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)}) // 500, the older prefix
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)}) // 500, the tail
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)})
 		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 		if err != nil {
@@ -219,13 +201,7 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 		if len(reqs) != 1 {
 			t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
 		}
-		// the summary input is the 3 shape: the short system role plus one
-		// user message carrying the older prefix (500) as quoted transcript
-		// data and the prompt's instruction. The clamp is Window -
-		// est(input), bounded by MaxTokens — 3's honest budget, the reserve
-		// not subtracted twice. est is the same stdlib rule as the
-		// policy's: per message, bytes/4 rounded up, over the request's
-		// actual messages.
+
 		est := compact.Estimate(reqs[0].Messages)
 		want := row.Window - est
 		if want > row.MaxTokens {
@@ -238,8 +214,8 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 
 	t.Run("budget at or under zero fails loud", func(t *testing.T) {
 		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 5000)}) // 1250
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 100)})  // 25, the tail
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 5000)})
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 100)})
 		prov := &scriptedProvider{}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 		if err != nil {
@@ -249,10 +225,7 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 		if err == nil {
 			t.Fatal("Assemble = ok, want the loud failure")
 		}
-		// the input (the 3 shape over the 1250-token prefix) does not fit
-		// the 1000-token window: the refusal names the row's numbers, with
-		// the input's estimate computed the policy's way — over the exact
-		// message list the policy would have sent.
+
 		older := []core.Message{{Role: core.RoleUser, Content: strings.Repeat("p", 5000)}}
 		wantEst := compact.Estimate(compact.SummaryInput(older))
 		msg := err.Error()
@@ -264,10 +237,6 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 	})
 }
 
-// TestRenderTranscriptRendersRolesCallsAndResults (named): one line per
-// message, role prefixed — a multi-line user message keeps its lines,
-// an assistant's content precedes its [calls] line, a result is its
-// tool line.
 func TestRenderTranscriptRendersRolesCallsAndResults(t *testing.T) {
 	older := []core.Message{
 		{Role: core.RoleUser, Content: "line one\nline two"},
@@ -284,15 +253,6 @@ func TestRenderTranscriptRendersRolesCallsAndResults(t *testing.T) {
 	}
 }
 
-// TestSummarySummarizesRatherThanContinues (named, decision 3): an older
-// prefix whose last user message says "reply with only X" and whose last
-// assistant message is a tool call must be summarized as data — the
-// request is the short system role plus one user message carrying the
-// prefix inside a quoted <transcript> block (the call and its result
-// rendered as lines, the trap instruction as a line, not a live
-// message), followed by the prompt's instruction, no tools, no live tool
-// calls; and the summary describes the request and the call, never X or
-// a tool call.
 func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1900, MaxTokens: 500, Reserve: 100, KeepRecent: 10}
 	s := core.NewSession()
@@ -305,12 +265,11 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: "ok"})
 	s.Append(core.Message{Role: core.RoleUser, Content: "reply with only X"})
 	s.Append(core.Message{
-		Role: core.RoleAssistant, ContextTokens: 1800, // the L8 anchor: size 1800 + est(tail) 1 = 1801 > 1800
+		Role: core.RoleAssistant, ContextTokens: 1800,
 		ToolCalls: []core.ToolCall{{ID: "c2", Name: "bash", Args: []byte(`{"command":"echo X"}`)}},
 	})
-	s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: "X"}) // the tail (KeepRecent 10)
-	// the scripted summary plays the model's answer under the 3 shape:
-	// it describes the request and the call, instead of continuing them.
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: "X"})
+
 	const summary = "The session set up the build: the model called bash with make build (it printed ok); the user then asked to reply with only X."
 	prov := &scriptedProvider{turns: []scriptedTurn{{
 		events: []core.Event{core.TextDelta{Text: summary}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 5}}},
@@ -346,14 +305,13 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 		"user: Set up the build.",
 		"assistant: [calls bash] {\"command\":\"make build\"}",
 		"tool: ok",
-		"user: reply with only X", // the trap instruction, as a quoted line
+		"user: reply with only X",
 	} {
 		if !strings.Contains(c, want) {
 			t.Fatalf("the quoted transcript must render %q", want)
 		}
 	}
-	// the prompt's instruction follows the closing tag — never before
-	// it — and the kept tail is not in the block at all.
+
 	prompt, perr := os.ReadFile("summary_prompt.txt")
 	if perr != nil {
 		t.Fatalf("read the prompt file: %v", perr)
@@ -383,7 +341,6 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 		t.Fatalf("ReasoningEffort = %q, want medium (the one call whose thinking nobody reads)", reqs[0].ReasoningEffort)
 	}
 
-	// the rewrite: [summary row] + the kept tail, whole.
 	if len(s.Messages) != 3 {
 		t.Fatalf("transcript = %d messages, want the summary + the kept tail", len(s.Messages))
 	}
@@ -393,8 +350,7 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 	if s.Messages[1].ToolCalls[0].ID != "c2" || s.Messages[2].Role != core.RoleTool {
 		t.Fatalf("the kept tail must be the pair, whole: %+v", s.Messages[1:])
 	}
-	// the summary describes the request and the call; it is never X and
-	// never a tool call.
+
 	if s.Messages[0].Content == compact.SummaryMarker+"X" {
 		t.Fatal("the summary is the trap instruction's answer")
 	}
@@ -419,22 +375,18 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 	}
 }
 
-// TestCompactedEventBeforeTheNextCall (named): the trigger path emits
-// Compacted before the next model call's events, and the fields are
-// right: Summary is the transcript's summary content, Dropped/Kept are
-// the calibrated estimates, Usage is the summary call's reported usage.
 func TestCompactedEventBeforeTheNextCall(t *testing.T) {
 	s := core.NewSession()
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)}) // 500, the older prefix
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
 	s.Append(core.Message{
 		Role: core.RoleAssistant, Content: strings.Repeat("a", 200),
-		ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{}`)}}, // 50
+		ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{}`)}},
 	})
-	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)}) // 500, the tail
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})
 
 	prov := &scriptedProvider{turns: []scriptedTurn{
 		{events: []core.Event{core.TextDelta{Text: "THE SUMMARY"}, core.Done{Usage: core.Usage{Prompt: 777, Completion: 33}}}},
-		// the next model call's events, replayed through the same frontend
+
 		{events: []core.Event{core.TextDelta{Text: "next"}, core.Done{}}},
 	}}
 	fe := &captureFrontend{}
@@ -445,7 +397,7 @@ func TestCompactedEventBeforeTheNextCall(t *testing.T) {
 	if _, err := pol.Assemble(context.Background(), s); err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
-	// the loop streams the next call through the frontend it holds
+
 	next, err := prov.Stream(context.Background(), core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "x"}}})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
@@ -479,14 +431,11 @@ func TestCompactedEventBeforeTheNextCall(t *testing.T) {
 	}
 }
 
-// TestSecondCompactionFoldsTheFirst (named): the second compact's older
-// prefix contains the first summary row; the transcript after equals
-// [new summary] + tail; the seam is called with each new body.
 func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	s := core.NewSession()
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)}) // 500
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)}) // 500, the tail
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
 
 	var bodies []string
 	reflect := func(_ context.Context, summary string) error { bodies = append(bodies, summary); return nil }
@@ -507,17 +456,12 @@ func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 		t.Fatalf("after the first compact the transcript = %+v, want [SUM1 row, the tail]", s.Messages)
 	}
 
-	// the session grows past the trigger again. The second-growth tail must
-	// stay small enough that the fold's older prefix (decision 3's summary
-	// input) still fits the summary window: p3 is the older fold, p4 the
-	// tail (400 tokens).
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p3", 400)})  // 100, the older fold
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p4", 1600)}) // 400, the tail
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p3", 400)})
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p4", 1600)})
 	if _, err := pol.Assemble(context.Background(), s); err != nil {
 		t.Fatalf("second Assemble: %v", err)
 	}
 
-	// the fold: the second summary's input carried the first summary row
 	reqs := prov.reqs()
 	if len(reqs) != 2 {
 		t.Fatalf("summary calls = %d, want 2", len(reqs))
@@ -539,10 +483,6 @@ func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 	}
 }
 
-// TestAutoReflectLandsDedupesAndNeverFails (named): a real rem store —
-// the memory row (kind reflection, importance 0.2, cwd scope, source
-// "session compaction"); a store failure (a closed db) leaves Assemble
-// successful; the absent seam skips the call and changes nothing else.
 func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 	cwd := t.TempDir()
@@ -553,8 +493,8 @@ func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 			t.Fatalf("open the rem store: %v", err)
 		}
 		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)}) // 500
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)}) // 500, the tail
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
 		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "REAL SUMMARY"}, core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row, compact.WithAutoReflect(func(ctx context.Context, summary string) error {
 			_, err := remstore.AutoReflect(ctx, rdb, cwd, summary)
@@ -575,8 +515,7 @@ func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 		if err := rdb.DB.QueryRow(`SELECT kind, source, importance, scope FROM memories`).Scan(&kind, &source, &importance, &scope); err != nil {
 			t.Fatalf("the memory row: %v", err)
 		}
-		// the store keys project scope as shortHash(cwd) (sha1[:12], rem),
-		// not the raw path — the same shaping the rem tests assert.
+
 		d := sha1.Sum([]byte(cwd))
 		wantScope := hex.EncodeToString(d[:])[:12]
 		if kind != "reflection" || source.String != "session compaction" || importance != 0.2 || scope != wantScope {
@@ -665,7 +604,7 @@ func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 		if _, err := pol.Assemble(context.Background(), s); err != nil {
 			t.Fatalf("Assemble: %v", err)
 		}
-		// the seam is absent: the compact and the event still happen
+
 		if len(s.Messages) != 2 || s.Messages[0].Content != compact.SummaryMarker+"S" {
 			t.Fatalf("the compact must happen without the seam: %+v", s.Messages)
 		}
@@ -675,16 +614,11 @@ func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
 	})
 }
 
-// TestSummaryEffortIsTheRow (SPEC_CONFIG 4, named): the summary call's
-// reasoning effort is the row's Effort — the one call whose thinking
-// nobody reads takes the row's budget where the operator set one; the
-// policy keeps "medium" as the field's default (the 0.2.0 behavior, now
-// the field's default).
 func TestSummaryEffortIsTheRow(t *testing.T) {
 	compactFixture := func(row models.Model) (*scriptedProvider, *core.Session) {
 		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)}) // 500, the older prefix
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)}) // 500, the tail
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)})
 		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		return prov, s
 	}
@@ -710,7 +644,7 @@ func TestSummaryEffortIsTheRow(t *testing.T) {
 		}
 	})
 	t.Run("an empty field keeps the policy's medium", func(t *testing.T) {
-		row := base // Effort ""
+		row := base
 		prov, s := compactFixture(row)
 		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 		if err != nil {
@@ -729,10 +663,6 @@ func TestSummaryEffortIsTheRow(t *testing.T) {
 	})
 }
 
-// TestCompactingCueOrder (SPEC_COMPACT 5, amended): the frontend hears
-// Compacting before the summary call runs — so the operator sees a
-// loader, not a hang, through a minutes-long deep-context prefill —
-// exactly once per compaction, and never on the passthrough.
 func TestCompactingCueOrder(t *testing.T) {
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)})
@@ -761,22 +691,15 @@ func TestCompactingCueOrder(t *testing.T) {
 	}
 }
 
-// TestOversizedOlderCompactsTheOldestSliceThatFits (SPEC_COMPACT 3,
-// amended 2026-08-21): an older prefix whose summary input does not fit
-// the window is cut to the oldest slice that does — one call — and the
-// remainder rides ahead of the tail, uncompacted, to fold on a later
-// pass. Before the amendment this was the loud failure that stuck a
-// session until /new.
 func TestOversizedOlderCompactsTheOldestSliceThatFits(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	s := core.NewSession()
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1200)})      // 300
-	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 1200)}) // 300
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1200)})      // 300
-	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("b", 1200)}) // 300
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("t", 100)})       // 25, the tail
-	// older = the first four (est 1200 + the prompt's ~200) does not fit
-	// a 1000 window; the first two (~800) leave the floor (25).
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1200)})
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 1200)})
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1200)})
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("b", 1200)})
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("t", 100)})
+
 	prov := &scriptedProvider{turns: []scriptedTurn{summaryTurn("S1", core.Usage{Prompt: 800, Completion: 20})}}
 	fe := &captureFrontend{}
 	pol, err := compact.New(prov, fe, s, "", row)
@@ -797,7 +720,7 @@ func TestOversizedOlderCompactsTheOldestSliceThatFits(t *testing.T) {
 	if strings.Contains(sent, "qqqq") || strings.Contains(sent, "bbbb") {
 		t.Fatal("the remainder must not be in the summary input")
 	}
-	// the transcript: marker + the remainder + the tail
+
 	if len(s.Messages) != 4 || !strings.HasPrefix(s.Messages[0].Content, compact.SummaryMarker) ||
 		!strings.HasPrefix(s.Messages[1].Content, "qqqq") || !strings.HasPrefix(s.Messages[2].Content, "bbbb") ||
 		!strings.HasPrefix(s.Messages[3].Content, "tttt") {
@@ -821,19 +744,15 @@ func TestOversizedOlderCompactsTheOldestSliceThatFits(t *testing.T) {
 	}
 }
 
-// A slice never leads its remainder with a tool result whose call was
-// cut away: the cut moves back to the call, as split's does.
 func TestOversizedOlderSliceRespectsTheCallBoundary(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	s := core.NewSession()
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1200)})                                                                                             // 300
-	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{"command":"ls"}`)}}}) // ~105
-	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})                                                                               // 500, the result
-	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("b", 1200)})                                                                                        // 300
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("t", 100)})                                                                                              // 25, the tail
-	// by size the slice would be [p, a-with-call] (~600 + prompt) and the
-	// remainder would lead with c1's result; the cut moves back to the
-	// call, so the slice is [p] alone.
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1200)})
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{"command":"ls"}`)}}})
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})
+	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("b", 1200)})
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("t", 100)})
+
 	prov := &scriptedProvider{turns: []scriptedTurn{summaryTurn("S1", core.Usage{Prompt: 500, Completion: 20})}}
 	pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 	if err != nil {

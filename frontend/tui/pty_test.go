@@ -11,11 +11,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// openPTY gives the test a pty pair (a master to drive and observe, a
-// slave to hand to the frontend). The pty is opened the Linux way
-// (/dev/ptmx, grant, unlock, the slave's name); every failure is a
-// clean skip — the pty-dependent cases run where a pty exists and are
-// absent where it does not (SPEC_TUI's testing section).
 func openPTY(t *testing.T) (master, slave *os.File) {
 	t.Helper()
 	mfd, err := unix.Open("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY, 0)
@@ -36,7 +31,7 @@ func openPTY(t *testing.T) (master, slave *os.File) {
 	if err != nil {
 		t.Skipf("open the pty slave: %v", err)
 	}
-	// the pty starts at the kernel default; pin the size this test needs.
+
 	if err := unix.IoctlSetWinsize(mfd, unix.TIOCSWINSZ, &unix.Winsize{Row: 25, Col: 80}); err != nil {
 		t.Skipf("set the pty size: %v", err)
 	}
@@ -49,8 +44,6 @@ func openPTY(t *testing.T) (master, slave *os.File) {
 	return master, slave
 }
 
-// ttyEcho reports the terminal's echo bit (raw mode clears it; the
-// restore puts it back).
 func ttyEcho(t *testing.T, f *os.File) bool {
 	t.Helper()
 	tc, err := unix.IoctlGetTermios(int(f.Fd()), unix.TCGETS)
@@ -60,11 +53,6 @@ func ttyEcho(t *testing.T, f *os.File) bool {
 	return tc.Iflag&unix.ECHO != 0
 }
 
-// TestPTYRawMode is the named pty case: when the input is a terminal,
-// the frontend puts it in raw mode (x/term) and Close restores the
-// mode — the operator's terminal is left as it was. The pty's start
-// state is pinned first (this kernel's ptys start echo-off); the
-// assertion is the change, not the default.
 func TestPTYRawMode(t *testing.T) {
 	_, slave := openPTY(t)
 	tc, err := unix.IoctlGetTermios(int(slave.Fd()), unix.TCGETS)
@@ -89,9 +77,6 @@ func TestPTYRawMode(t *testing.T) {
 	}
 }
 
-// TestPTYResize is the named pty case: a resize takes the new width
-// from the terminal (the production path) and repaints the live
-// region at it — history is the terminal's problem (decision 2).
 func TestPTYResize(t *testing.T) {
 	master, slave := openPTY(t)
 	th := oledTheme(t)
@@ -102,8 +87,6 @@ func TestPTYResize(t *testing.T) {
 		WithWinch(winch), WithTicks(make(chan time.Time))).(*tui)
 	defer fe.Close()
 
-	// the first banner paints at the pty's width (80): start one
-	// Input (the banner commits there) and let it block.
 	go func() {
 		fe.Input(context.Background())
 	}()
@@ -124,8 +107,6 @@ func TestPTYResize(t *testing.T) {
 		t.Fatalf("the banner painted at width %d, want 80 (the pty's)", w80)
 	}
 
-	// the resize: the new size lands on the terminal, the winch fires,
-	// and the width follows the terminal.
 	if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 25, Col: 120}); err != nil {
 		t.Fatalf("set the winsize: %v", err)
 	}

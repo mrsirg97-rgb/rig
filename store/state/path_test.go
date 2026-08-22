@@ -10,10 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state"
 )
 
-// TestStorePathRoundTrip (SPEC_SERVE 2, named): the path helper resolves to
-// the same file the root opens — open via the helper, write a session, read
-// it back. The root and the dashboard share one source; the formula is the
-// first six sha1 bytes of the cwd, under <home>/sessions.
 func TestStorePathRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	cwd := "/workspace/roundtrip"
@@ -40,7 +36,7 @@ func TestStorePathRoundTrip(t *testing.T) {
 	if len(rows) != 1 || rows[0].Cwd != cwd {
 		t.Fatalf("round-trip: %+v, want one session with cwd %s", rows, cwd)
 	}
-	// the formula is stable: the same (home, cwd) always names the same file.
+
 	if again := state.StorePath(home, cwd); again != path {
 		t.Fatalf("StorePath not stable: %q vs %q", again, path)
 	}

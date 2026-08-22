@@ -8,8 +8,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/plugins"
 )
 
-// Plugin is one listing row (SPEC_SERVE): the loaded set or the pending
-// zone, by name with the file's DESCRIPTION.
 type Plugin struct {
 	Name        string
 	Description string
@@ -17,9 +15,6 @@ type Plugin struct {
 	Pending     bool
 }
 
-// listPlugins reads the loaded set (plugins.List) and the pending zone
-// (home/plugins/pending), each with the file's DESCRIPTION (SPEC_SERVE).
-// A read-only description read, not discovery: no kernel, no execution.
 func listPlugins(home string) (loaded, pending, disabled []Plugin, err error) {
 	files, err := plugins.List(home)
 	if err != nil {
@@ -53,9 +48,6 @@ func pluginRow(file string, pending bool) Plugin {
 	return Plugin{Name: name, Description: descriptionOf(file), File: file, Pending: pending}
 }
 
-// descriptionOf reads the file's DESCRIPTION (the plugin contract: a str),
-// single- or triple-quoted. A read failure is an empty description, not an
-// error: one bad file must not brick the listing.
 func descriptionOf(file string) string {
 	data, err := os.ReadFile(file)
 	if err != nil {
@@ -64,8 +56,6 @@ func descriptionOf(file string) string {
 	return extractDescription(string(data))
 }
 
-// extractDescription pulls the DESCRIPTION value (the plugin contract):
-// the token, the =, then a single- or triple-quoted string.
 func extractDescription(src string) string {
 	idx := strings.Index(src, "DESCRIPTION")
 	if idx == -1 {

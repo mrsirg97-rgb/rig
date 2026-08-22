@@ -12,7 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 )
 
-// failingExec always fails, counting executions per distinct args.
 type failingExec struct {
 	mu    sync.Mutex
 	calls map[string]int
@@ -39,7 +38,7 @@ func TestRepetitionIsBoundedWithoutSilentRetry(t *testing.T) {
 		call := core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"flaky"}`)}
 		var lastErr error
 		for i := 0; i <= limit; i++ {
-			// each issuance executes at most once; the (limit+1)th is refused
+
 			if _, lastErr = exec(context.Background(), call); i == limit {
 				break
 			}
@@ -79,13 +78,12 @@ func TestSuccessfulReissuanceStaysUnbounded(t *testing.T) {
 }
 
 func TestSuccessfulReissuanceResetsTheCount(t *testing.T) {
-	// fail, fail, SUCCESS, fail: the success clears the count, so the fourth
-	// issuance executes instead of being refused.
+
 	var total int
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		total++
 		if total == 3 {
-			return "ok", nil // the success in the middle
+			return "ok", nil
 		}
 		return "fed back", errors.New("synthetic failure")
 	}
@@ -104,10 +102,3 @@ func TestSuccessfulReissuanceResetsTheCount(t *testing.T) {
 		t.Fatalf("total executions %d, want 4 (the success resets the count)", total)
 	}
 }
-
-// TestDistinctCallsAreCountedSeparately (the original args-digest keying)
-// was inverted by SPEC_HARDENING decision 7 into a shared-budget case, then
-// inverted back by the same decision's amendment into
-// TestDriftingArgsEachGetAFreshStreak (bound_hardening_test.go): the streak
-// is per args again, but keyed through the tool's last failure, so only
-// identical retries count.

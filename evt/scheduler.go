@@ -13,7 +13,7 @@ var (
 
 type Scheduler interface {
 	Start() error
-	Schedule(c Context, priority int) uint64
+	Schedule(c Closure, priority int) uint64
 	Stop()
 	Done() <-chan struct{}
 }
@@ -51,7 +51,7 @@ func (s *scheduler) Start() error {
 	return nil
 }
 
-func (s *scheduler) Schedule(c Context, priority int) uint64 {
+func (s *scheduler) Schedule(c Closure, priority int) uint64 {
 	if s.engine == nil {
 		return 0
 	}

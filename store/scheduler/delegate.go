@@ -10,21 +10,8 @@ import (
 	"time"
 )
 
-// DelegateEnv is the no-recursion marker (SPEC_DELEGATE 6): set on the
-// worker's spawn, the delegate tool's Exec refuses by name when it is
-// set — a worker cannot delegate.
 const DelegateEnv = "RIG_DELEGATE"
 
-// DelegateInput is the one-shot worker spawn (SPEC_DELEGATE 2): the
-// same RunOpts/Spawn path run-job uses, verbatim, with the ad-hoc
-// record and the resumable-transcript additions. DB is the session's
-// cwd-scope scheduler store; Home is the scheduler home (the log
-// dirs); StoreCwd is the session cwd whose store DB is passed (the
-// log dir and `scheduler runs` read it); Cwd is the delegate's working
-// directory (the worker's chdir, the job row's cwd, the state-store
-// hash). StateDir is the operator's state-store directory
-// (<rig home>/sessions), bound into the jail so the worker's session
-// is resumable (SPEC_DELEGATE 3).
 type DelegateInput struct {
 	DB           DB
 	Home         string
@@ -46,10 +33,6 @@ type DelegateInput struct {
 	Now          func() time.Time
 }
 
-// DelegateResult is what the tool feeds back: the worker's stdout (the
-// last assistant message), its outcome, and the record's names. ID is
-// the minted ad-hoc job id; LogRel the run's log path; Started the
-// spawn start (RFC3339, UTC) the tool uses to find the session row.
 type DelegateResult struct {
 	Exit     int
 	Stdout   string
@@ -82,21 +65,12 @@ func delegateTimeout(t time.Duration) time.Duration {
 	return t
 }
 
-// Delegate spawns a worker on an ad-hoc task now and records the run
-// (SPEC_DELEGATE). The busy rule is busy:skip — a held GPU is a loud
-// refusal naming the holder, never an eviction; a failed busy check
-// fails closed naming the check. The ad-hoc job row is minted without a
-// crontab line; the run is recorded with its log path; a timeout kills
-// the worker's process tree (RealSpawn's cancel).
 func Delegate(in DelegateInput) (DelegateResult, error) {
 	in = delegateInput(in)
 	if in.Fetch == nil || in.Spawn == nil {
 		return DelegateResult{}, fmt.Errorf("delegate: fetch and spawn seams are required")
 	}
 
-	// One delegation in flight per session (SPEC_DELEGATE 6): a
-	// non-blocking flock, acquired before the busy check so a concurrent
-	// second call refuses immediately.
 	lockFD, held, err := acquireLock(in.Home, "delegate:"+in.Session)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: lock: %w", err)
@@ -106,9 +80,6 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	}
 	defer releaseLock(lockFD)
 
-	// No recursion (SPEC_DELEGATE 6): a worker's inherited marker refuses
-	// by name. The check sits after the lock, so a concurrent operator
-	// call refuses "already in flight" before it reaches the marker.
 	if os.Getenv(DelegateEnv) != "" {
 		return DelegateResult{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
@@ -269,10 +240,6 @@ func firstLine(s string) string {
 	return l
 }
 
-// adHocCreate mints the delegate's job row in the cwd-scope store: a
-// create event carrying the fold-minted id, no crontab line (nothing is
-// scheduled). The name is the task's first line; cron "once" with the
-// spawn start renders "at passed" and reads as a one-shot record.
 func adHocCreate(ctx context.Context, db DB, in DelegateInput) (string, error) {
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {

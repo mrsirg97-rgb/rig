@@ -14,9 +14,6 @@ import (
 	todo "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
-// SPEC_STATE's generation-drift guard: regenerate into a temp root against
-// the committed metadata and diff against the committed generated files.
-// Drift fails the build with the regenerate command in the message.
 func TestGeneratedMatchesCommitted(t *testing.T) {
 	liftCmd, err := filepath.Abs(filepath.Join(os.Getenv("HOME"), "Projects", "lift", "cmd"))
 	if err != nil {
@@ -49,7 +46,7 @@ func TestGeneratedMatchesCommitted(t *testing.T) {
 		if err := json.Unmarshal(mustReadJSON(t, filepath.Join(workDir, "source.json")), &srcCfg); err != nil {
 			t.Fatalf("source.json: %v", err)
 		}
-		srcCfg["sourceDirectory"] = workDir // the committed metadata lives beside this package
+		srcCfg["sourceDirectory"] = workDir
 		tmpSrc, err := writeJSON(t, filepath.Join(tmp, "source.json"), srcCfg)
 		if err != nil {
 			t.Fatal(err)
@@ -133,8 +130,6 @@ func listFiles(t *testing.T, root string) map[string][]byte {
 	return out
 }
 
-// extra.sql is applied: the combined Statements() carries the additional
-// statements, and a fresh open leaves both indexes behind.
 func TestExtraStatementsAreApplied(t *testing.T) {
 	statements := todo.Statements()
 	if len(statements) <= len(todo.DDL()) {

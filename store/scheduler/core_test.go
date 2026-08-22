@@ -16,13 +16,10 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// Deterministic now: a fixed instant (Sat 2026-08-15 12:00Z), UTC-pinned
-// package-wide.
 var nowFixed = time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
 
 const runnerCmd = "/x/rig run-job"
 
-// fakeCrontab is an in-memory crontab: tests never touch a live spool.
 type fakeCrontab struct {
 	mu   sync.Mutex
 	text string
@@ -48,7 +45,6 @@ func (f *fakeCrontab) Install(text string) error {
 	return nil
 }
 
-// failingCrontab pins one seam's failure.
 type failingCrontab struct {
 	listErr    error
 	installErr error
@@ -64,8 +60,6 @@ type harness struct {
 	sessCwd string
 }
 
-// newHarness wires a scratch scheduler home with both stores opened and an
-// in-memory crontab.
 func newHarness(t *testing.T, sessionCwd string) *harness {
 	t.Helper()
 	home := t.TempDir()
@@ -96,12 +90,9 @@ func (h *harness) runs(id, scope string, n int) (string, error) {
 	return sched.Runs(context.Background(), h.st, id, scope, n)
 }
 
-// --- inspection: direct-store asserts ---
-
 func jobsRow(t *testing.T, h *harness, scope, id string) map[string]any {
 	t.Helper()
-	// "" scopes to the cwd store: these tests' jobs are cwd-scope; global
-	// requires an explicit scope.
+
 	db := h.st.Cwd
 	if scope == "global" {
 		db = h.st.Global
@@ -186,14 +177,12 @@ func index(t *testing.T, hay, needle string) int {
 	return strings.Index(hay, needle)
 }
 
-// ---- create ----
-
 func TestCreateCwdScopeMintsJ1WritesStoreAndTaggedLineForeignIntact(t *testing.T) {
 	h := newHarness(t, "/ws/a")
 	reply, err := h.create(sched.CreateInput{Name: "nightly", Prompt: "do it", Cron: "0 */4 * * *"})
 	mustOK(t, err)
 	contains(t, reply, "created j1 'nightly' (cwd)")
-	// next fire strictly after NOW (12:00 is an exact fire boundary of */4)
+
 	contains(t, reply, "next 2026-08-15T16:00:00Z")
 	key := "cwd-" + sched.CwdHash("/ws/a") + ":j1"
 	line := `0 */4 * * * ` + runnerCmd + ` ` + key + `  # pane-scheduler:` + key
@@ -202,9 +191,7 @@ func TestCreateCwdScopeMintsJ1WritesStoreAndTaggedLineForeignIntact(t *testing.T
 	if _, err := os.Stat(filepath.Join(h.home, sched.CwdHash("/ws/a")+".sqlite")); err != nil {
 		t.Fatal("cwd store file missing")
 	}
-	// untouched = no events landed in the global store (the root opens
-	// both store files eagerly, so the file exists; the cwd-scope create
-	// writes nothing global)
+
 	var gn int
 	if err := h.st.Global.DB.QueryRow(`SELECT count(*) FROM events`).Scan(&gn); err != nil {
 		t.Fatal(err)
@@ -253,13 +240,11 @@ func TestDuplicateNameAcrossScopesIsFine(t *testing.T) {
 	mustOK(t, err)
 }
 
-// The job's run directory is independent of the store key, in both
-// scopes; a job always has a working directory.
 func TestCreateJobCwdIsIndependentOfTheStoreKey(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	reply, err := h.create(sched.CreateInput{Name: "gw", Prompt: "p", Cron: "0 0 * * *", Scope: "global"})
 	mustOK(t, err)
-	contains(t, reply, "/ws/sess") // global job runs in the creating session's cwd
+	contains(t, reply, "/ws/sess")
 
 	_, err = h.create(sched.CreateInput{Name: "gw2", Prompt: "p", Cron: "1 0 * * *", Scope: "global", Cwd: "/shop/make-money"})
 	mustOK(t, err)
@@ -323,8 +308,6 @@ func TestCreateOnceTranslatesToCronFieldsMissingAtRefuses(t *testing.T) {
 	contains(t, h.ct.text, `7 3 16 8 * `+runnerCmd+` `+key+`  # pane-scheduler:`+key)
 }
 
-// ---- list + drift ----
-
 func TestListRendersBothScopesCleanJobsHaveNullDrift(t *testing.T) {
 	h := newHarness(t, "/ws/f")
 	if _, err := h.create(sched.CreateInput{Name: "cw", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
@@ -348,14 +331,12 @@ func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// missing line
 	h.ct.mu.Lock()
 	h.ct.text = regexp.MustCompile(`(?m).*pane-scheduler:j1.*\n?`).ReplaceAllString(h.ct.text, "")
 	h.ct.mu.Unlock()
 	list, _ := h.list()
 	contains(t, list, "drift: no crontab line")
 
-	// altered cron
 	key2 := "cwd-" + sched.CwdHash("/ws/g") + ":j1"
 	h.ct.mu.Lock()
 	h.ct.text = strings.Replace(h.ct.text, `0 2 * * * `+runnerCmd+` `+key2, `59 23 * * * `+runnerCmd+` `+key2, 1)
@@ -363,7 +344,6 @@ func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 	list, _ = h.list()
 	contains(t, list, "cron differs")
 
-	// state split: store says paused, line is active (pause kept the altered cron)
 	if _, err := sched.Pause(context.Background(), h.st, h.ct, "j1", "cwd", h.sessCwd, "sess-core"); err != nil {
 		t.Fatal(err)
 	}
@@ -385,8 +365,6 @@ func TestListMarksAJobRunningWhenItsLockIsHeld(t *testing.T) {
 	mustOK(t, err)
 	contains(t, list, "running (lock held)")
 }
-
-// ---- pause / resume ----
 
 func TestPauseCommentsTheLineAndResumeRestoresByteIdentical(t *testing.T) {
 	h := newHarness(t, "/ws/i")
@@ -457,14 +435,12 @@ func TestPauseOnPausedRefusesResumeOnActiveRefuses(t *testing.T) {
 	mustErr(t, err, `not paused`)
 }
 
-// ---- id resolution across scopes ----
-
 func TestIdInBothScopesRefusesWithoutAnExplicitScope(t *testing.T) {
 	h := newHarness(t, "/ws/k")
 	if _, err := h.create(sched.CreateInput{Name: "gl", Prompt: "p", Cron: "0 5 * * *", Scope: "global"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.create(sched.CreateInput{Name: "cw", Prompt: "p", Cron: "0 6 * * *"}); err != nil { // both j1
+	if _, err := h.create(sched.CreateInput{Name: "cw", Prompt: "p", Cron: "0 6 * * *"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := sched.Pause(context.Background(), h.st, h.ct, "j1", "", h.sessCwd, "sess-core")
@@ -477,13 +453,11 @@ func TestIdInBothScopesRefusesWithoutAnExplicitScope(t *testing.T) {
 	mustErr(t, err, `no job 'j99'`)
 }
 
-// ---- remove + runs ----
-
 func TestRemoveTombstonesTheRowAndRunsSurvive(t *testing.T) {
 	h := newHarness(t, "/ws/l")
 	_, err := h.create(sched.CreateInput{Name: "doomed", Prompt: "p", Cron: "0 7 * * *"})
 	mustOK(t, err)
-	// a run, recorded like the runner does
+
 	if _, err := sched.RecordRun(context.Background(), h.st.Cwd, sched.RunRecordInput{
 		ID: "j1", Status: "ok", Exit: int64ptr(0), Duration: int64ptr(1000), Log: "runs/x/a.log",
 	}); err != nil {
@@ -538,8 +512,6 @@ func TestRunsReturnsTheLastNInChronologicalOrder(t *testing.T) {
 	_, err = h.runs("j404", "", 0)
 	mustErr(t, err, `no job 'j404'`)
 }
-
-// ---- crontab-first ordering: a crontab failure leaves no store row ----
 
 func TestCrontabInstallFailureRefusesAndLeavesTheStoreUntouched(t *testing.T) {
 	h := newHarness(t, "/ws/n")

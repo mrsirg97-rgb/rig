@@ -11,9 +11,6 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
-// TestStorePathRoundTrip (SPEC_SERVE 2, named): the todo path helper
-// resolves to the same file the root opens — open via the helper, create a
-// task, read it back. The root and the dashboard share one source.
 func TestStorePathRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	cwd := "/workspace/roundtrip"

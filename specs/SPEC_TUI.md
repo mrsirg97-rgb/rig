@@ -740,3 +740,11 @@ After 10: the field test. The version stays 0.x until rig is the
 daily driver and the TUI has survived real use on the phone; the 1.0
 tag is earned by soak, not by shipping the glass (the roadmap's
 criterion, unchanged).
+
+### The gate, amended 0.12.2: comments are not changes
+
+The freeze gate compares comment-stripped sources on both sides of the
+frozen surface, and a changed `.go` file whose comment-free source is
+unchanged does not count against the allowlist; a `PACKAGE.md` anywhere
+is documentation. The rule the gate enforces is the repository's: no
+comments in Go, so a comment can never be a change to anything.

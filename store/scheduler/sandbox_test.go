@@ -1,10 +1,5 @@
 package scheduler_test
 
-// The runner's sandbox cases (SPEC_SANDBOX 1, 5, testing): fail closed
-// when bwrap is absent (the outcome row carries the refusal), sandbox
-// off runs unjailed with the one loud line, and the jailed run's
-// scratch home rides the worker's env.
-
 import (
 	"context"
 	"io"
@@ -17,8 +12,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// envSpawn is a spawn fake that also records the worker's env at the
-// call (the scratch home's seam, SPEC_SANDBOX 1).
 type envSpawn struct {
 	calls   []fakeCall
 	homeEnv []string
@@ -32,7 +25,6 @@ func (f *envSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.
 	return f.result, f.err
 }
 
-// runSandboxOpts is the runner's opts with the sandbox seam set.
 func runSandboxOpts(h *harness, s sched.Spawn, profile string) sched.RunOpts {
 	return sched.RunOpts{
 		Home:      h.home,
@@ -47,7 +39,6 @@ func runSandboxOpts(h *harness, s sched.Spawn, profile string) sched.RunOpts {
 	}
 }
 
-// captureStderr redirects os.Stderr around f and returns what it held.
 func captureStderrRun(t *testing.T, f func()) string {
 	t.Helper()
 	old := os.Stderr
@@ -63,14 +54,10 @@ func captureStderrRun(t *testing.T, f func()) string {
 	return string(buf)
 }
 
-// TestJailedRunRefusesLoudWithoutBwrap (SPEC_SANDBOX 1, fail closed):
-// profile jailed and no bwrap on $PATH refuses the run; the outcome
-// row carries the refusal (bwrap and the profile named, both settings
-// keys taught); nothing spawns; the crontab stays untouched.
 func TestJailedRunRefusesLoudWithoutBwrap(t *testing.T) {
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, "", nil)
-	t.Setenv("PATH", t.TempDir()) // scrubbed: no bwrap, nothing
+	t.Setenv("PATH", t.TempDir())
 	spawn := &envSpawn{}
 	before := h.ct.text
 	err := sched.RunJob(key, runSandboxOpts(h, spawn.spawn, ""))
@@ -93,10 +80,6 @@ func TestJailedRunRefusesLoudWithoutBwrap(t *testing.T) {
 	}
 }
 
-// TestSandboxOffRunsUnjailedWithTheOneLoudLine (SPEC_SANDBOX 1, 5):
-// the operator's explicit act — the worker runs as today (the plain
-// argv, the swap endpoint), and exactly one loud line per worker run
-// names the unjailed fact.
 func TestSandboxOffRunsUnjailedWithTheOneLoudLine(t *testing.T) {
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, "", nil)
@@ -129,18 +112,14 @@ func TestSandboxOffRunsUnjailedWithTheOneLoudLine(t *testing.T) {
 	}
 }
 
-// TestJailedRunCarriesTheScratchHome (SPEC_SANDBOX 1): the worker's
-// rig home is the scratch home inside the job's cwd (RIG_HOME rides
-// the spawn's env, restored after) — the worker's stores cannot land
-// in the operator's home.
 func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, "", nil)
-	// the profile's kernel line (the operator home's kernel directory).
+
 	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// bwrap resolvable (the refusal's named dependency).
+
 	shimDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(shimDir, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -162,15 +141,12 @@ func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 	if got := os.Getenv("RIG_HOME"); got == filepath.Join(cwd, ".rig-job") {
 		t.Fatal("the scratch home must not leak into the runner's env after the run")
 	}
-	// the socket is gone after the run (the hole is per-run).
+
 	if _, err := os.Stat(filepath.Join(cwd, ".rig-job.sock")); !os.IsNotExist(err) {
 		t.Fatalf("the run's socket must be removed after the spawn (stat: %v)", err)
 	}
 }
 
-// TestJailedRunRefusesOnANonLinuxPlatform (SPEC_SANDBOX 1, testing):
-// the named refusal on a non-linux build — the voice pins the
-// linux-only fact, the platform, and the profile.
 func TestJailedRunRefusesOnANonLinuxPlatform(t *testing.T) {
 	v := sched.PlatformRefusal("windows")
 	if !strings.Contains(v, "windows") || !strings.Contains(v, "linux") || !strings.Contains(v, "jailed") {

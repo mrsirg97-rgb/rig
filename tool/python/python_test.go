@@ -1,8 +1,3 @@
-// Package python tests: the named cases against the real kernel. The
-// file-level tests share one kernel; the order-dependent state cases hold
-// because of that. The fake-host cases drive stdlib-only stand-ins through
-// the NewWith seam and skip only when there is no python3 at all: the seam
-// provides everything and does not bootstrap the shared venv.
 package python
 
 import (
@@ -28,9 +23,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// --- gates and helpers ---
-
-// pythonAvailable names a usable python3: the shared venv first, then PATH.
 func pythonAvailable(t *testing.T) string {
 	t.Helper()
 	py := defaultInterpreter()
@@ -44,11 +36,6 @@ func pythonAvailable(t *testing.T) string {
 	return p
 }
 
-// requireKernel is pythonAvailable plus the real-kernel gate: IPython,
-// numpy, and pandas must be importable, or the suite skips cleanly on a
-// bare box. On a box with no venv but a working python3 the suite kernel
-// bootstraps the venv on first use (ensureKernel); the importability
-// of the system interpreter is the availability signal for that path.
 func requireKernel(t *testing.T) string {
 	t.Helper()
 	py := pythonAvailable(t)
@@ -72,8 +59,6 @@ func mustRun(t *testing.T, params map[string]any) (string, bool) {
 	return text, ok
 }
 
-// call returns the fed-back text and the error (the reply's error field,
-// which the death cases assert on rather than the rendered text).
 func call(t *testing.T, tl *Tool, params map[string]any) (string, error) {
 	t.Helper()
 	payload, _ := json.Marshal(params)
@@ -95,8 +80,6 @@ func writeHost(t *testing.T, path, src string) {
 		t.Fatal(err)
 	}
 }
-
-// --- the named cases ---
 
 func TestExecutesCodeAndReportsTheResult(t *testing.T) {
 	requireKernel(t)
@@ -128,7 +111,7 @@ func TestNumpyAndPandasAreImportable(t *testing.T) {
 
 func TestVarsListsUserDefinedNamesOnly(t *testing.T) {
 	requireKernel(t)
-	// x from TestStatePersistsBetweenCalls: the shared kernel keeps state
+
 	text, ok := mustRun(t, map[string]any{"action": "vars"})
 	if !ok {
 		t.Fatalf("isError: %s", text)
@@ -155,10 +138,6 @@ func TestEmptyCallFailsLoudlyWithAClearMessage(t *testing.T) {
 	matches(t, `no code supplied`, text)
 }
 
-// The field failure (2026-08-21): a model sent action "code" with its
-// code on every call; the old dispatch forwarded the unknown cmd without
-// the code, the host ran the empty string, and 457 calls came back
-// "(no output)" ok. action "code" now runs the code like an omitted action.
 func TestActionCodeRunsTheCode(t *testing.T) {
 	requireKernel(t)
 	text, ok := mustRun(t, map[string]any{"action": "code", "code": "40 + 2"})
@@ -168,8 +147,6 @@ func TestActionCodeRunsTheCode(t *testing.T) {
 	matches(t, `Out\[.*\]: 42`, text)
 }
 
-// Any other action is refused before the kernel is touched, naming the
-// vocabulary: never an ok reply that ran nothing.
 func TestUnknownActionRefusesLoudBeforeTheKernel(t *testing.T) {
 	tl := NewWith("/nonexistent/python", "/nonexistent/host.py")
 	text, err := call(t, tl, map[string]any{"action": "run", "code": "1"})
@@ -353,7 +330,7 @@ func TestUnwritableKernelFailsFastInsteadOfWaitingOutTheTimeout(t *testing.T) {
 
 func TestMissingHostSurfacesStderrDiagnosticsAndSelfHeals(t *testing.T) {
 	py := requireKernel(t)
-	host := filepath.Join(t.TempDir(), "kernel_host.py") // absent at first
+	host := filepath.Join(t.TempDir(), "kernel_host.py")
 	kt := NewWith(py, host)
 	defer kt.Close()
 
@@ -364,7 +341,6 @@ func TestMissingHostSurfacesStderrDiagnosticsAndSelfHeals(t *testing.T) {
 	matches(t, `kernel exited \(code \d+\)`, text)
 	matches(t, `\[stderr\]`, text)
 
-	// restore the host: the same tool self-heals on the next call
 	writeHost(t, host, kernelHostSrc)
 	healed, err := call(t, kt, map[string]any{"code": "1 + 1"})
 	if err != nil {
@@ -475,8 +451,6 @@ func TestConstructorOptionsSelectInterpreterAndHostInjectionSeam(t *testing.T) {
 	}
 }
 
-// fakeHostSrc is an env-steered protocol host: deterministic dirty-death
-// scenarios with a per-spawn counter, no sleeps.
 const fakeHostSrc = `
 import json, os, sys
 state = os.environ.get('RIG_FAKE_STATE_DIR')
@@ -528,8 +502,6 @@ func TestDirtyDeathLeavesNoStaleBufferThatSwallowsTheNextKernelReply(t *testing.
 	}
 	matches(t, `kernel exited \(code 0\)`, first)
 
-	// the reply landed: ok, and out carries "fake-ok" (the one-shot note
-	// may prefix the render, it is not a failure)
 	second, err := call(t, kt, map[string]any{"code": "b", "timeoutMs": 3000})
 	if err != nil {
 		t.Fatalf("stale buffer swallowed the reply: %s (%v)", second, err)
@@ -549,8 +521,6 @@ func TestDeadKernelStderrDoesNotLeakIntoTheNextKernelDeathMessage(t *testing.T) 
 	matches(t, `kernel exited \(code 4\)`, err.Error())
 	matches(t, `old-error`, err.Error())
 
-	// assert on the error, not the render: the one-shot note legitimately
-	// carries the first death's stderr
 	_, err = call(t, kt, map[string]any{"code": "b", "timeoutMs": 5000})
 	if err == nil {
 		t.Fatal("second call succeeded")
@@ -570,10 +540,6 @@ func TestTimeoutMessageDescribesTheLazyRestartAccurately(t *testing.T) {
 	matches(t, `will be restarted on the next call; all variables are gone`, text)
 }
 
-// The rig-side named case: the seam's contract. An explicit interpreter
-// and host (what NewWith is, what RIG_PYTHON at the root selects) must
-// not drag in the default venv's lazy bootstrap; the default path keeps
-// it.
 func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) {
 	seam := NewWith("/opt/operator/python3", "/tmp/whatever/kernel_host.py")
 	if seam.k.python != "/opt/operator/python3" {

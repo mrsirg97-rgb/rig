@@ -24,8 +24,6 @@ type cmdRig struct {
 	in  chan string
 }
 
-// buildWithCommands wires the CLI over the standard set with the given
-// env (the dispatcher fills the frontend-owned seam, decision 2).
 func buildWithCommands(t *testing.T, env *command.Env, lines ...string) *cmdRig {
 	t.Helper()
 	in := make(chan string, len(lines)+2)
@@ -37,8 +35,6 @@ func buildWithCommands(t *testing.T, env *command.Env, lines ...string) *cmdRig 
 	return &cmdRig{fe: fe, out: out, in: in}
 }
 
-// defaultTable is the 0.2.0 rows (SPEC_CONFIG 4: the table leaves code;
-// the test harnesses construct the same rows).
 func defaultTable() models.Table {
 	tbl, err := models.New(
 		models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
@@ -57,8 +53,6 @@ func commandsEnv() *command.Env {
 	}
 }
 
-// cliProvider is a scripted core.Provider with request capture, for the
-// loop-level dispatch case.
 type cliProvider struct {
 	mu     sync.Mutex
 	reqs   []core.Request
@@ -90,12 +84,6 @@ func (p *cliProvider) requests() []core.Request {
 	return append([]core.Request(nil), p.reqs...)
 }
 
-// TestDispatchByPrefixLoopNeverSeesCommand (SPEC_COMMANDS, named):
-// loop.Run over the CLI with commands and a scripted provider — the
-// command line is consumed in the dispatch; the provider is called
-// exactly once with exactly one user message; the command's fake
-// recorded the call; no command line anywhere in the transcript or the
-// request.
 func TestDispatchByPrefixLoopNeverSeesCommand(t *testing.T) {
 	prov := &cliProvider{answer: "hi"}
 	modelsCalls := 0
@@ -107,7 +95,7 @@ func TestDispatchByPrefixLoopNeverSeesCommand(t *testing.T) {
 		ActiveModel: func() string { return "local" },
 	}
 	r := buildWithCommands(t, env, "/models\n", "hello\n")
-	close(r.in) // EOF after the two lines
+	close(r.in)
 
 	k := rigpkg.New(
 		rigpkg.WithProvider(prov),
@@ -148,9 +136,6 @@ func TestDispatchByPrefixLoopNeverSeesCommand(t *testing.T) {
 	}
 }
 
-// TestFrontendWithoutCommandsIsUnchanged (SPEC_COMMANDS 10): the CLI
-// without WithCommands — its / lines are prompts, as today; nothing is
-// hijacked from it.
 func TestFrontendWithoutCommandsIsUnchanged(t *testing.T) {
 	r := build(t, "/models\n")
 	close(r.in)
@@ -160,10 +145,6 @@ func TestFrontendWithoutCommandsIsUnchanged(t *testing.T) {
 	}
 }
 
-// TestUnknownCommandIsLoudNeverAPrompt (SPEC_COMMANDS, named): /bogus
-// prints the refusal naming the known list, the line is consumed (the
-// next line runs as a prompt), and the transcript is untouched (the
-// prompt is the typed line, not the command line).
 func TestUnknownCommandIsLoudNeverAPrompt(t *testing.T) {
 	r := buildWithCommands(t, commandsEnv(), "/bogus\n", "hello\n")
 	close(r.in)
@@ -177,8 +158,6 @@ func TestUnknownCommandIsLoudNeverAPrompt(t *testing.T) {
 	}
 }
 
-// TestEscapedPromptIsAPrompt (SPEC_COMMANDS 1): the // escape consumes
-// one slash — //home/ng reaches the model as /home/ng; ///x as //x.
 func TestEscapedPromptIsAPrompt(t *testing.T) {
 	r := buildWithCommands(t, commandsEnv(), "//home/ng\n")
 	close(r.in)
@@ -195,10 +174,6 @@ func TestEscapedPromptIsAPrompt(t *testing.T) {
 	}
 }
 
-// TestSteerLiveTurn (SPEC_COMMANDS, named): a /steer line typed during
-// a live turn — the turn breaks (the interrupt lands), the command
-// reports it, and the queued text drives the next model call as the
-// user message.
 func TestSteerLiveTurn(t *testing.T) {
 	r := buildWithCommands(t, commandsEnv(), "one\n")
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -207,12 +182,9 @@ func TestSteerLiveTurn(t *testing.T) {
 		t.Fatalf("first input: %q %v", line, err)
 	}
 
-	// the turn is live: the steer line queues and interrupts.
 	r.in <- "/steer fix it\n"
 	waitFor(t, func() bool { return ctx1.Err() != nil }, "the steer must interrupt the live turn")
 
-	// the re-entry: the command reports the interrupt, and the queued
-	// text is the next user message.
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
 	line, err := r.fe.Input(core.WithInterrupt(ctx2, cancel2))
@@ -224,9 +196,6 @@ func TestSteerLiveTurn(t *testing.T) {
 	}
 }
 
-// TestSteerBetweenTurns (SPEC_COMMANDS, named): at a quiet prompt the
-// steer queues only — no interrupt, no report of one — and the text is
-// the next prompt, exactly as a typed line would be.
 func TestSteerBetweenTurns(t *testing.T) {
 	r := buildWithCommands(t, commandsEnv(), "one\n")
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -234,9 +203,9 @@ func TestSteerBetweenTurns(t *testing.T) {
 	if line, err := r.fe.Input(core.WithInterrupt(ctx1, cancel1)); err != nil || line != "one" {
 		t.Fatalf("first input: %q %v", line, err)
 	}
-	cancel1() // the turn ends at the boundary
+	cancel1()
 
-	r.in <- "/steer fix it\n" // between turns: queued, no interrupt
+	r.in <- "/steer fix it\n"
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
@@ -252,12 +221,8 @@ func TestSteerBetweenTurns(t *testing.T) {
 	}
 }
 
-// TestSteerEmptyInterrupts (SPEC_COMMANDS, named): an empty steer
-// interrupts only — the live turn: the turn breaks, the slot keeps no
-// steer text, 'steer: interrupted'; a quiet prompt after a clean
-// boundary: 'steer: no live turn'.
 func TestSteerEmptyInterrupts(t *testing.T) {
-	// live: the empty steer breaks the turn and queues no text.
+
 	r := buildWithCommands(t, commandsEnv(), "one\n")
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
@@ -269,7 +234,7 @@ func TestSteerEmptyInterrupts(t *testing.T) {
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	r.in <- "next\n" // the slot kept no steer text: the next line is the prompt
+	r.in <- "next\n"
 	line, err := r.fe.Input(core.WithInterrupt(ctx2, cancel2))
 	if err != nil || line != "next" {
 		t.Fatalf("after an empty steer the next typed line is the prompt, got %q %v", line, err)
@@ -278,7 +243,6 @@ func TestSteerEmptyInterrupts(t *testing.T) {
 		t.Fatalf("a broken live turn must report 'steer: interrupted': %q", r.out.String())
 	}
 
-	// a clean boundary: nothing live, nothing queued.
 	r = buildWithCommands(t, commandsEnv())
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	defer cancel3()
@@ -293,27 +257,18 @@ func TestSteerEmptyInterrupts(t *testing.T) {
 	}
 }
 
-// TestNewDropsTheQueuedSteer (SPEC_COMMANDS 4, named): a steer text in
-// the slot, then /new — the slot is empty and the next prompt is the
-// typed line, not the steer text; the fresh transcript has no steer
-// text. The flow is scheduled, not slept: each queued line is observed
-// through its interrupt (the slot write happens-before the cancel the
-// test waits on), so the re-entry sees exactly what the test scheduled.
 func TestNewDropsTheQueuedSteer(t *testing.T) {
 	env := &command.Env{
 		NewSession: func(ctx context.Context) (string, error) { return "s2", nil },
 	}
 	r := buildWithCommands(t, env, "one\n")
 
-	// turn one, live.
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
 	if line, err := r.fe.Input(core.WithInterrupt(ctx1, cancel1)); err != nil || line != "one" {
 		t.Fatalf("first input: %q %v", line, err)
 	}
 
-	// a steer queued during the live turn: it queues, interrupts, and is
-	// delivered at the re-entry as the old session's prompt (7's flow).
 	r.in <- "steer text\n"
 	waitFor(t, func() bool { return ctx1.Err() != nil }, "the queued steer must interrupt the live turn")
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -322,14 +277,9 @@ func TestNewDropsTheQueuedSteer(t *testing.T) {
 		t.Fatalf("the queued steer is delivered at the re-entry, got %q %v", line, err)
 	}
 
-	// turn two, live: /new queues and interrupts; the re-entry dispatches
-	// it (the slot write happened before the cancel the test waited on).
 	r.in <- "/new\n"
 	waitFor(t, func() bool { return ctx2.Err() != nil }, "/new must interrupt the live turn")
 
-	// the re-entry: the dispatch prints the fresh id, the slot is clear,
-	// and the next prompt is the typed line (direct, the dispatch is in
-	// flight — not the steer text).
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	defer cancel3()
 	r.in <- "typed line\n"
@@ -345,14 +295,10 @@ func TestNewDropsTheQueuedSteer(t *testing.T) {
 	}
 }
 
-// TestLiveTurnIsStructurallyFalseAtDispatch (SPEC_COMMANDS 2, named):
-// at the CLI's dispatch the loop is in awaiting_input — the previous
-// turn's ctx is dead, so compact / new / sessions resume do not refuse
-// on liveness (the TUI's mid-turn keypress is the refusal case).
 func TestLiveTurnIsStructurallyFalseAtDispatch(t *testing.T) {
 	env := commandsEnv()
 	env.Compact = func(ctx context.Context) (core.Compacted, bool, error) {
-		return core.Compacted{}, false, nil // nothing to drop (an empty session)
+		return core.Compacted{}, false, nil
 	}
 	r := buildWithCommands(t, env, "one\n", "/compact\n")
 	close(r.in)
@@ -361,10 +307,8 @@ func TestLiveTurnIsStructurallyFalseAtDispatch(t *testing.T) {
 	if line, err := r.fe.Input(core.WithInterrupt(ctx1, cancel1)); err != nil || line != "one" {
 		t.Fatalf("first input: %q %v", line, err)
 	}
-	cancel1() // the turn ends: the loop is back in awaiting_input
-	// the /compact line dispatches without a live-turn refusal: the
-	// compact command's own voice (nothing to drop — an empty session)
-	// is what prints, not the refusal.
+	cancel1()
+
 	if _, err := r.fe.Input(context.Background()); err != nil && !errorsIsEOF(err) {
 		t.Fatalf("input: %v", err)
 	}
@@ -378,15 +322,11 @@ func TestLiveTurnIsStructurallyFalseAtDispatch(t *testing.T) {
 
 func errorsIsEOF(err error) bool { return err == io.EOF }
 
-// A burst of lines that arrives while Input is not parked (a pipe, a
-// paste, the window between turns) must deliver every line in order —
-// the steering slot's latest-wins is live-turn semantics only. Red
-// against the old readLoop fallback, which dropped all but the last.
 func TestBurstInputDeliversEveryLineInOrder(t *testing.T) {
 	out := &bytes.Buffer{}
 	fe := cli.New(strings.NewReader("/one\n/two\n/three\n"), out,
 		cli.WithCommands(command.All(), commandsEnv()))
-	time.Sleep(50 * time.Millisecond) // let the reader race ahead of Input, the bug's shape
+	time.Sleep(50 * time.Millisecond)
 	if _, err := fe.Input(context.Background()); err != io.EOF {
 		t.Fatalf("input: want io.EOF after the burst dispatches, got %v", err)
 	}
@@ -397,8 +337,6 @@ func TestBurstInputDeliversEveryLineInOrder(t *testing.T) {
 	}
 }
 
-// The same burst shape for prompts: two pasted lines are two prompts,
-// in order, not one surviving steer.
 func TestPastedPromptsAreDeliveredInOrder(t *testing.T) {
 	fe := cli.New(strings.NewReader("one\ntwo\n"), &bytes.Buffer{})
 	time.Sleep(50 * time.Millisecond)

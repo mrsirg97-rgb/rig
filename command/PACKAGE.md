@@ -82,3 +82,13 @@ the leaf.
 - `renderTable`/`renderList`/`RenderShow`/`RenderPlugins` keep stable
   order (sorted by id / store order), so golden lines do not depend on
   merge order.
+- `/effort`'s hints are positional: the words are the model's (the
+  row's `efforts`, in its order), the one-liners are generic, so the
+  descriptions describe position, never semantics. A row without
+  efforts is a dial that is off.
+- `/role`'s prose sits between the system prompt and AGENTS.md — the
+  runtime's identity first, the stance second, the operator's contract
+  third — and never outranks the contract: position is precedence, and
+  AGENTS.md reads after it. `default` injects nothing. `/approve` is
+  effective at the very next tool call (the gate reads the dial at call
+  time; no request prefix moves, no re-prefill).

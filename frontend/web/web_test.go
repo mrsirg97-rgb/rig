@@ -30,10 +30,6 @@ func (f *fakeCrontab) Install(text string) error {
 	return nil
 }
 
-// seedHome builds a temp rig home with seeded stores and plugins, using the
-// stores' own path helpers (the round-trip the dashboard relies on). The
-// transcript golden's seed: one closed session with a user turn, an
-// assistant turn (reasoning), a tool call and its result, and a usage row.
 func seedHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -155,8 +151,6 @@ func modelsTable(t *testing.T) models.Table {
 	return table
 }
 
-// newTestServer seeds a home, builds the dashboard, and returns it with the
-// token and the allowed origin set (the write's Origin wall).
 func newTestServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := seedHome(t)
@@ -190,14 +184,11 @@ func bearer(tok string) http.Header {
 	return h
 }
 
-// --- the token gate (SPEC_SERVE 5) ---
-
 func TestTokenGate(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	home := srv.home
 
-	// no credential -> 401 (with the challenge).
 	rec := doReq(t, h, "GET", "/", nil, nil)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("no credential: got %d, want 401", rec.Code)
@@ -206,19 +197,16 @@ func TestTokenGate(t *testing.T) {
 		t.Fatalf("no credential: missing WWW-Authenticate: Bearer, got %q", rec.Header().Get("WWW-Authenticate"))
 	}
 
-	// a wrong token -> 401.
 	rec = doReq(t, h, "GET", "/", nil, bearer("wrong"))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("wrong token: got %d, want 401", rec.Code)
 	}
 
-	// the minted token (header) -> 200.
 	rec = doReq(t, h, "GET", "/", nil, bearer(tok))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("bearer: got %d, want 200", rec.Code)
 	}
 
-	// ?token= sets the HttpOnly SameSite=Strict cookie, then reads as it.
 	rec = doReq(t, h, "GET", "/?token="+tok, nil, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("?token=: got %d, want 200", rec.Code)
@@ -236,7 +224,6 @@ func TestTokenGate(t *testing.T) {
 		t.Fatalf("cookie: got %d, want 200", rec.Code)
 	}
 
-	// the token file is 0600 and is not re-minted on a second read.
 	fi, err := os.Stat(tokenPath(home))
 	if err != nil {
 		t.Fatalf("token file: %v", err)
@@ -256,8 +243,6 @@ func TestTokenGate(t *testing.T) {
 	}
 }
 
-// --- the loopback refusal (SPEC_SERVE 5) ---
-
 func TestLoopbackRefusal(t *testing.T) {
 	for _, ok := range []string{"127.0.0.1:7777", "[::1]:7777", "localhost:7777"} {
 		if err := Loopback(ok); err != nil {
@@ -271,8 +256,6 @@ func TestLoopbackRefusal(t *testing.T) {
 	}
 }
 
-// --- the allow-list (SPEC_SERVE posture) ---
-
 func TestAllowList404And405(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
@@ -282,7 +265,6 @@ func TestAllowList404And405(t *testing.T) {
 		t.Fatalf("unknown path: got %d, want 404", rec.Code)
 	}
 
-	// a known path with the wrong method is a 405 with the Allow header.
 	rec = doReq(t, h, "POST", "/api/models", nil, bearer(tok))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("wrong method: got %d, want 405", rec.Code)
@@ -291,7 +273,6 @@ func TestAllowList404And405(t *testing.T) {
 		t.Fatalf("wrong method: Allow %q, want GET in it", allow)
 	}
 
-	// the todo path allows both GET and POST.
 	rec = doReq(t, h, "DELETE", "/api/todo", nil, bearer(tok))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("todo DELETE: got %d, want 405", rec.Code)
@@ -301,40 +282,33 @@ func TestAllowList404And405(t *testing.T) {
 	}
 }
 
-// --- the write's walls (SPEC_SERVE posture) ---
-
 func TestTodoCreateWalls(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	q := "?cwd=" + testCWD
 
-	// no Origin -> refused (same-origin only).
 	rec := doReq(t, h, "POST", "/api/todo"+q, strings.NewReader("a task\n"), bearer(tok))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("no origin: got %d, want 403", rec.Code)
 	}
 
-	// a foreign Origin -> refused.
 	foreign := http.Header{"Origin": {"http://evil.example"}, "Authorization": {"Bearer " + tok}}
 	rec = doReq(t, h, "POST", "/api/todo"+q, strings.NewReader("a task\n"), foreign)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("foreign origin: got %d, want 403", rec.Code)
 	}
 
-	// an empty body -> refused (no create with zero tasks).
 	rec = doReq(t, h, "POST", "/api/todo"+q, strings.NewReader("   \n"), both(bearer(tok), "Origin", "http://127.0.0.1:7777"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("empty body: got %d, want 400", rec.Code)
 	}
 
-	// an over-cap body -> refused.
 	big := strings.Repeat("x", maxWriteBytes+1)
 	rec = doReq(t, h, "POST", "/api/todo"+q, strings.NewReader(big), both(bearer(tok), "Origin", "http://127.0.0.1:7777"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("over-cap: got %d, want 400", rec.Code)
 	}
 
-	// a same-Origin create -> the verb's reply verbatim, and the queue replaced.
 	rec = doReq(t, h, "POST", "/api/todo"+q, strings.NewReader("alpha\n\nbeta\n"), both(bearer(tok), "Origin", "http://127.0.0.1:7777"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create: got %d, want 200 (body %s)", rec.Code, rec.Body.String())
@@ -348,8 +322,6 @@ func TestTodoCreateWalls(t *testing.T) {
 		t.Fatalf("create: reply %q, want the created tasks", reply)
 	}
 
-	// the queue now carries the created tasks (Create is an upsert: the
-	// seeded task stays, the new ones are added).
 	rec = doReq(t, h, "GET", "/api/todo"+q, nil, bearer(tok))
 	var after map[string]string
 	if err := json.Unmarshal(rec.Body.Bytes(), &after); err != nil {
@@ -367,8 +339,6 @@ func both(base http.Header, k, v string) http.Header {
 	base.Set(k, v)
 	return base
 }
-
-// --- the read views (SPEC_SERVE) ---
 
 func TestCwds(t *testing.T) {
 	srv, tok := newTestServer(t)
@@ -422,7 +392,6 @@ func TestSessionsList(t *testing.T) {
 		t.Fatalf("session row %+v, want id sess1, cwd %s, exit ok", s, testCWD)
 	}
 
-	// a cwd with no state store is a named refusal (fail closed).
 	rec = doReq(t, h, "GET", "/api/sessions?cwd=/nope/nowhere", nil, bearer(tok))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("absent workspace: got %d, want 404", rec.Code)
@@ -465,8 +434,7 @@ func TestTranscriptGolden(t *testing.T) {
 	if body.HasMore {
 		t.Fatalf("has_more true for a small transcript")
 	}
-	// the user turn, the assistant turn (reasoning + the tool call), and the
-	// tool result (a tool message) — the transcript as structure.
+
 	roles := make([]string, 0, len(body.Messages))
 	for _, m := range body.Messages {
 		roles = append(roles, m.Role)
@@ -497,7 +465,7 @@ func TestTranscriptGolden(t *testing.T) {
 	if !sawToolResult {
 		t.Fatal("transcript: no tool result rendered")
 	}
-	// the usage rows (the typed read beside Resume).
+
 	if len(body.Usage) != 1 {
 		t.Fatalf("usage: %d rows, want 1", len(body.Usage))
 	}
@@ -505,7 +473,6 @@ func TestTranscriptGolden(t *testing.T) {
 		t.Fatalf("usage row %+v, want prompt 100 completion 42", body.Usage[0])
 	}
 
-	// an unknown session is a named refusal.
 	rec = doReq(t, srv.Handler(), "GET", "/api/sessions/nope/transcript?cwd="+testCWD, nil, bearer(tok))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown session: got %d, want 404", rec.Code)
@@ -526,7 +493,7 @@ func TestTodoReadVerbatim(t *testing.T) {
 	if !strings.Contains(body["text"], "seeded task") {
 		t.Fatalf("todo read: %q, want the seeded task", body["text"])
 	}
-	// the history toggle (ReadAll) also returns the store's text.
+
 	rec = doReq(t, h, "GET", "/api/todo?cwd="+testCWD+"&all=true", nil, bearer(tok))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("todo ReadAll: got %d", rec.Code)
@@ -555,8 +522,6 @@ func TestSchedulerVerbatim(t *testing.T) {
 	}
 }
 
-// --- the scheduler create (SPEC_SERVE phase 2, decision 7) ---
-
 func TestSchedulerCreate(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
@@ -568,7 +533,6 @@ func TestSchedulerCreate(t *testing.T) {
 		return doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(body), hdr)
 	}
 
-	// a valid 5-field create -> the verb's reply, and the list carries it.
 	rec := post(`{"name":"nightly","prompt":"do the nightly","cron":"0 3 * * *"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create: got %d (body %s)", rec.Code, rec.Body.String())
@@ -590,7 +554,6 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("list after create: %q, want the new job", after["text"])
 	}
 
-	// a 'once' plus a valid 'at' lands.
 	rec = post(`{"name":"oncejob","prompt":"once","cron":"once","at":"2026-01-02T03:04:05Z"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("once create: got %d (body %s)", rec.Code, rec.Body.String())
@@ -599,7 +562,6 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatal("a second create with the same name: want the duplicate refusal")
 	}
 
-	// a duplicate name in the same scope is a named refusal.
 	rec = post(`{"name":"nightly","prompt":"again","cron":"0 5 * * *"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("duplicate: got %d, want 400", rec.Code)
@@ -612,17 +574,16 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("duplicate: %q, want the named refusal", dup["error"])
 	}
 
-	// a bad cron is the verb's refusal.
 	rec = post(`{"name":"badopt","prompt":"p","cron":"bogus"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad cron: got %d, want 400", rec.Code)
 	}
-	// 'once' without an 'at' is a refusal.
+
 	rec = post(`{"name":"noat","prompt":"p","cron":"once"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("once without at: got %d, want 400", rec.Code)
 	}
-	// empty name and empty prompt are refusals.
+
 	rec = post(`{"prompt":"p","cron":"0 6 * * *"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("empty name: got %d, want 400", rec.Code)
@@ -632,7 +593,6 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("empty prompt: got %d, want 400", rec.Code)
 	}
 
-	// a global-scope create lands in the global section.
 	rec = post(`{"name":"gjob","prompt":"p","cron":"0 8 * * *","scope":"global"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("global create: got %d (body %s)", rec.Code, rec.Body.String())
@@ -653,7 +613,6 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("global job missing from the list: %q", gbody["text"])
 	}
 
-	// the walls: no Origin, a foreign Origin, an over-cap body.
 	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"x","prompt":"p","cron":"0 9 * * *"}`), bearer(tok))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("no origin: got %d, want 403", rec.Code)
@@ -669,7 +628,6 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("over-cap: got %d, want 400", rec.Code)
 	}
 
-	// a wrong method on the path is a 405 naming POST.
 	rec = doReq(t, h, "DELETE", "/api/scheduler"+q, nil, bearer(tok))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("DELETE: got %d, want 405", rec.Code)
@@ -679,8 +637,6 @@ func TestSchedulerCreate(t *testing.T) {
 	}
 }
 
-// The memory view is gone (SPEC_SERVE 11): the route is a 404 like any
-// unknown path, and the page carries no memory tab.
 func TestMemoryRouteIsGone(t *testing.T) {
 	srv, tok := newTestServer(t)
 	rec := doReq(t, srv.Handler(), "GET", "/api/memory?cwd="+testCWD, nil, bearer(tok))
@@ -768,8 +724,7 @@ func TestPluginsListing(t *testing.T) {
 	if body.Pending[0].Description != "the pending plugin" {
 		t.Fatalf("pending description %q, want the file's DESCRIPTION", body.Pending[0].Description)
 	}
-	// the disabled zone (SPEC_SERVE 12b): a file in plugins/disabled/ is
-	// listed there and nowhere else.
+
 	if err := os.MkdirAll(filepath.Join(srv.home, "plugins", "disabled"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -797,8 +752,6 @@ func TestPluginsListing(t *testing.T) {
 	}
 }
 
-// --- the plugin create (SPEC_SERVE phase 2, decision 7) ---
-
 func TestPluginsCreate(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
@@ -809,9 +762,6 @@ func TestPluginsCreate(t *testing.T) {
 		return doReq(t, h, "POST", "/api/plugins", strings.NewReader(body), hdr)
 	}
 
-	// a valid create -> the file lands in the pending zone with the
-	// contract (DESCRIPTION, SCHEMA, the run body), and the listing
-	// carries it (the live listing, decision 8).
 	rec := post(`{"name":"hello","description":"says hi","code":"return \"hello\" + str(args)"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create: got %d (body %s)", rec.Code, rec.Body.String())
@@ -859,8 +809,6 @@ func TestPluginsCreate(t *testing.T) {
 		t.Fatalf("pending listing after create: %v, want hello", body.Pending)
 	}
 
-	// the live listing: a file dropped after New is visible without a
-	// rebuild.
 	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "pending", "dropped.py"),
 		[]byte("DESCRIPTION = \"dropped in later\"\nSCHEMA = {\"type\": \"object\"}\n\ndef run(args):\n    return \"ok\"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -870,7 +818,6 @@ func TestPluginsCreate(t *testing.T) {
 		t.Fatalf("live listing: %s, want the later-dropped file", rec.Body.String())
 	}
 
-	// a duplicate name in either zone is a named refusal, no overwrite.
 	rec = post(`{"name":"hello","description":"again","code":"return 1"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("duplicate: got %d, want 400", rec.Code)
@@ -882,26 +829,24 @@ func TestPluginsCreate(t *testing.T) {
 	if !strings.Contains(dup["error"], "hello") || !strings.Contains(dup["error"], "already") {
 		t.Fatalf("duplicate: %q, want the named refusal", dup["error"])
 	}
-	// a name colliding with the loaded zone is refused too.
+
 	rec = post(`{"name":"loaded_one","description":"x","code":"return 1"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("loaded collision: got %d, want 400", rec.Code)
 	}
 
-	// bad names: uppercase, a leading digit, a slash, empty.
 	for _, bad := range []string{"Hello", "1abc", "a/b", "has space"} {
 		rec = post(`{"name":"` + bad + `","description":"d","code":"return 1"}`)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("bad name %q: got %d, want 400", bad, rec.Code)
 		}
 	}
-	// an empty code is a refusal (a run with no body is no plugin).
+
 	rec = post(`{"name":"emptybody","description":"d","code":"  \n"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("empty code: got %d, want 400", rec.Code)
 	}
 
-	// the walls hold as with the todo create.
 	rec = doReq(t, h, "POST", "/api/plugins", strings.NewReader(`{"name":"x","description":"d","code":"return 1"}`), bearer(tok))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("no origin: got %d, want 403", rec.Code)
@@ -913,15 +858,10 @@ func TestPluginsCreate(t *testing.T) {
 	}
 }
 
-// --- the static assets are reachable and served ---
-
 func TestStaticAssets(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 
-	// the page, its assets, and this round's surfaces (SPEC_SERVE phase 2:
-	// the mobile drawer, the new-workspace picker, the TUI-homage
-	// renderers for the todo and scheduler text).
 	for path, wants := range map[string][]string{
 		"/": {"<!doctype html", `id="nav-toggle" class="nav-toggle"`, `id="cwd-add"`, `id="browse-btn"`, `data-view="plugins"`},
 		"/static/app.js": {
@@ -949,19 +889,17 @@ func TestStaticAssets(t *testing.T) {
 			}
 		}
 	}
-	// an unknown static file is a 404.
+
 	rec := doReq(t, h, "GET", "/static/nope.js", nil, bearer(tok))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown static: got %d, want 404", rec.Code)
 	}
-	// a path traversal is refused (not a 200).
+
 	rec = doReq(t, h, "GET", "/static/../web.go", nil, bearer(tok))
 	if rec.Code == http.StatusOK {
 		t.Fatalf("traversal: got 200, want a refusal")
 	}
 }
-
-// --- the forge: source, save, approve (SPEC_SERVE 12) ---
 
 func TestForgeSourceSaveApprove(t *testing.T) {
 	srv, tok := newTestServer(t)
@@ -972,7 +910,6 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 		return x
 	}
 
-	// the source of a loaded and a pending plugin reads back verbatim.
 	rec := doReq(t, h, "GET", "/api/plugins/source?name=loaded_one&zone=loaded", nil, bearer(tok))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "the loaded plugin") {
 		t.Fatalf("loaded source: got %d %s", rec.Code, rec.Body.String())
@@ -981,7 +918,7 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "the pending plugin") {
 		t.Fatalf("pending source: got %d %s", rec.Code, rec.Body.String())
 	}
-	// a bad zone, a bad name, an absent plugin.
+
 	if rec = doReq(t, h, "GET", "/api/plugins/source?name=loaded_one&zone=elsewhere", nil, bearer(tok)); rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad zone: got %d, want 400", rec.Code)
 	}
@@ -992,7 +929,6 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 		t.Fatalf("absent: got %d, want 404", rec.Code)
 	}
 
-	// a save lands the full source in the pending zone (create, then update).
 	src := "DESCRIPTION = \"drafted\"\nSCHEMA = {\"type\": \"object\"}\n\ndef run(args):\n    return \"draft\"\n"
 	body, _ := json.Marshal(map[string]string{"name": "draft", "source": src})
 	rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr())
@@ -1008,7 +944,7 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "updated 'draft'") {
 		t.Fatalf("re-save: got %d %s", rec.Code, rec.Body.String())
 	}
-	// the contract is checked; a native name is a collision; the walls hold.
+
 	body, _ = json.Marshal(map[string]string{"name": "nocontract", "source": "x = 1\n"})
 	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "DESCRIPTION") {
 		t.Fatalf("no contract: got %d %s", rec.Code, rec.Body.String())
@@ -1022,7 +958,6 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 		t.Fatalf("no origin: got %d, want 403", rec.Code)
 	}
 
-	// approve moves pending -> plugins; a second approve finds nothing.
 	body, _ = json.Marshal(map[string]any{"name": "draft"})
 	rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr())
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "approved 'draft'") {
@@ -1035,8 +970,6 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 		t.Fatalf("approve twice: got %d, want 404", rec.Code)
 	}
 
-	// a pending revision of an installed plugin: approve is a 409 until
-	// replace is explicit, then the file is swapped.
 	rev := strings.Replace(src, "draft", "revised", -1)
 	body, _ = json.Marshal(map[string]string{"name": "draft", "source": rev})
 	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusOK {
@@ -1054,7 +987,7 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 	if string(got) != rev {
 		t.Fatalf("replace did not swap the file: %q", string(got))
 	}
-	// a native name never approves.
+
 	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "pending", "read.py"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1062,13 +995,11 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest {
 		t.Fatalf("native approve: got %d, want 400", rec.Code)
 	}
-	// the allow-list: GET on save is a 405.
+
 	if rec = doReq(t, h, "GET", "/api/plugins/save", nil, bearer(tok)); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET save: got %d, want 405", rec.Code)
 	}
 }
-
-// --- the folder browser (SPEC_SERVE 13) ---
 
 func TestBrowseRootedAtHome(t *testing.T) {
 	srv, tok := newTestServer(t)
@@ -1105,7 +1036,7 @@ func TestBrowseRootedAtHome(t *testing.T) {
 		}
 		return out
 	}
-	// the root: folders only, hidden off, no parent.
+
 	if code := get(""); code != http.StatusOK {
 		t.Fatalf("root: got %d", code)
 	}
@@ -1115,8 +1046,7 @@ func TestBrowseRootedAtHome(t *testing.T) {
 	if body.Parent != "" {
 		t.Fatalf("root parent %q, want none", body.Parent)
 	}
-	// hidden on request; a child with its parent; a traversal refused; an
-	// absent path a 404; a file a 400; the wrong method a 405.
+
 	if get("?hidden=true"); !strings.Contains(strings.Join(names(), ","), ".hidden") {
 		t.Fatalf("hidden=true dirs %v, want .hidden", names())
 	}
@@ -1139,8 +1069,6 @@ func TestBrowseRootedAtHome(t *testing.T) {
 		t.Fatalf("POST fs: got %d, want 405", rec.Code)
 	}
 }
-
-// --- the todo's two hands (SPEC_SERVE 15) ---
 
 func TestTodoStartAndComplete(t *testing.T) {
 	srv, tok := newTestServer(t)
@@ -1175,7 +1103,7 @@ func TestTodoStartAndComplete(t *testing.T) {
 	if !strings.Contains(read(true), "t1 [x]") {
 		t.Fatalf("after complete the history must show t1 done: %q", read(true))
 	}
-	// the verb's refusal for an unknown id; a malformed id; the walls.
+
 	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t99"}`), hdr()); rec.Code != http.StatusBadRequest {
 		t.Fatalf("unknown id: got %d, want 400", rec.Code)
 	}

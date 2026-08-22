@@ -2,7 +2,7 @@ package evt
 
 import "context"
 
-type Context interface {
+type Closure interface {
 	Resolve(ctx context.Context)
 }
 

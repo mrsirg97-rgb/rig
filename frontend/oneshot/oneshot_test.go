@@ -20,7 +20,7 @@ func TestOneShotFeedsExactlyOnePromptThenEOFs(t *testing.T) {
 	if p != "do the thing" {
 		t.Fatalf("first input %q", p)
 	}
-	// second pull: the session ends, cleanly
+
 	if _, err := o.Input(context.Background()); !errors.Is(err, io.EOF) {
 		t.Fatalf("second input err %v, want io.EOF", err)
 	}
@@ -38,9 +38,6 @@ func TestOneShotErrPromptNamesTheEmptyConstruction(t *testing.T) {
 	}
 }
 
-// The worker's stdout is the answer: the new events (the reasoning block,
-// the execution bracket, the turn boundary, unknown events) stay out of
-// it. The one-shot's Notify switch has no default case; this is the proof.
 func TestOneShotIgnoresTheNewEvents(t *testing.T) {
 	var sb strings.Builder
 	o := &oneshot.OneShot{Out: &sb}
@@ -59,7 +56,7 @@ func TestOneShotNotifyRendersAssistantTextAndFaultsLoud(t *testing.T) {
 	var sb strings.Builder
 	o := &oneshot.OneShot{Out: &sb}
 	o.Notify(core.TextDelta{Text: "hel"})
-	o.Notify(core.ToolCallEvent{Call: core.ToolCall{Name: "bash"}}) // not the report
+	o.Notify(core.ToolCallEvent{Call: core.ToolCall{Name: "bash"}})
 	o.Notify(core.TextDelta{Text: "lo"})
 	o.Notify(core.Done{})
 	want := "hello\n"

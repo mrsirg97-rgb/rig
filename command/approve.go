@@ -6,11 +6,6 @@ import (
 	"strings"
 )
 
-// approveCmd is the /approve dial (SPEC_MODES 4): auto (today's
-// behavior) or manual (every mutating tool call pauses for the
-// operator's y/n). Effective at the very next tool call — the gate
-// reads the dial at call time; there is no request prefix to move, so
-// no re-prefill cost.
 type approveCmd struct{}
 
 func (approveCmd) Sub() []Sub {

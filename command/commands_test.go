@@ -11,10 +11,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// errStoreFault stands in for the store's close refusal (decision 4).
 var errStoreFault = errors.New("state: session s1: close: the store said no")
 
-// allByName indexes the standard set by name for the tests.
 func allByName(t *testing.T) map[string]core.Command {
 	t.Helper()
 	out := map[string]core.Command{}
@@ -27,8 +25,6 @@ func allByName(t *testing.T) map[string]core.Command {
 	return out
 }
 
-// TestAllIsTheStandardSet (SPEC_COMMANDS, named): the eight commands,
-// each implementing the seam, each with a non-empty description.
 func TestAllIsTheStandardSet(t *testing.T) {
 	byName := allByName(t)
 	want := []string{"approve", "compact", "effort", "models", "new", "plugins", "role", "scheduler", "sessions", "steer", "todo"}
@@ -54,9 +50,6 @@ func names(m map[string]core.Command) []string {
 	return out
 }
 
-// TestCommandEnvRefusedLoud (SPEC_COMMANDS, named): a Run with a foreign
-// env type refuses loud, naming *command.Env — the wiring error named
-// where it is found (decision 2).
 func TestCommandEnvRefusedLoud(t *testing.T) {
 	byName := allByName(t)
 	_, err := byName["compact"].Run(context.Background(), "", struct{ Foreign int }{})
@@ -69,8 +62,6 @@ func TestCommandEnvRefusedLoud(t *testing.T) {
 	}
 }
 
-// fakeSteer is the Steerer seam at the test bench: it records the slot,
-// the liveness fact, and every call.
 type fakeSteer struct {
 	mu         sync.Mutex
 	slot       string

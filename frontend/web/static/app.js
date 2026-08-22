@@ -1,8 +1,3 @@
-// the dashboard's client: the fetch loop, the TUI's shapes, the forms, the
-// forge's editor, the folder browser. Plain JS, no framework, no build
-// step, no external asset. The token rides the cookie (set once by the
-// first ?token= load); same-origin fetch carries it.
-
 const nav = document.getElementById('nav');
 const main = document.getElementById('main');
 const cwdSelect = document.getElementById('cwd');
@@ -14,7 +9,6 @@ const browser = document.getElementById('browser');
 
 const state = { view: 'sessions', cwd: '', transcript: null, pluginZone: 'approved' };
 
-// the TUI's glyph table (frontend/tui theme.go), unicode set.
 const G = {
   pending: '○', active: '◐', done: '●', fail: '✕', ok: '✓',
   compact: '⧉', prompt: '❯', barOn: '▰', barOff: '▱', dot: '·', dir: '▸',
@@ -72,8 +66,6 @@ function button(label, cls, onClick) {
   return b;
 }
 
-// the tool block: the TUI's commit shape — the opening ● name · detail,
-// the body, and the closing name ✓ (frontend/tui commit.go).
 function toolBlock(name, detail) {
   const tb = el('div', 'tb');
   const open = el('div', 'tb-open');
@@ -111,7 +103,6 @@ function setEcho(e, text, isError) {
   e.classList.toggle('err', !!isError);
 }
 
-// the prompt row: ❯ label input (the TUI's input line).
 function promptRow(label, input, mark) {
   const d = el('div', 'prompt');
   d.appendChild(span(mark || G.prompt, 'mark' + (mark ? ' dim' : '')));
@@ -129,8 +120,6 @@ function textInput(placeholder, required) {
   if (required) i.required = true;
   return i;
 }
-
-// --- the TUI's todo render, mirrored (frontend/tui tools_render.go) ---
 
 function parseTodo(reply) {
   const lines = reply.replace(/\n+$/, '').split('\n');
@@ -243,8 +232,6 @@ function todoArea(text, onVerb) {
   return parsed ? todoBodyEl(parsed, onVerb) : verbatimEl(text);
 }
 
-// --- the TUI's scheduler render, mirrored ---
-
 function parseScheduler(reply) {
   const lines = reply.replace(/\n+$/, '').split('\n');
   if (lines.length === 0) return null;
@@ -317,8 +304,6 @@ function schedulerArea(text) {
   const parsed = parseScheduler(text);
   return parsed ? schedulerBodyEl(parsed) : verbatimEl(text);
 }
-
-// --- the sessions view ---
 
 function exitGlyph(exit) {
   switch (exit) {
@@ -460,8 +445,6 @@ async function renderTranscript(id, q) {
   if (u) tb.body.appendChild(u);
 }
 
-// --- the todo view ---
-
 async function renderTodos(q) {
   const data = await api('/api/todo' + q);
   clear();
@@ -529,8 +512,6 @@ async function renderTodos(q) {
   tb.body.appendChild(act);
 }
 
-// --- the scheduler view ---
-
 async function renderScheduler(q) {
   const data = await api('/api/scheduler' + q);
   clear();
@@ -583,8 +564,6 @@ async function renderScheduler(q) {
   tb.body.appendChild(act);
 }
 
-// --- the models view: the /models table's shape (command/models.go) ---
-
 function effortClass(level) {
   const known = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
   return known.includes(level) ? 'effort-' + level : 'accent';
@@ -624,8 +603,6 @@ async function renderModels() {
     tb.body.appendChild(line()).textContent = ' ';
   }
 }
-
-// --- the forge: the python editor (a gutter, a highlighted mirror, the textarea) ---
 
 const PY_KW = new Set(('False None True and as assert async await break class continue def del elif ' +
   'else except finally for from global if import in is lambda nonlocal not or pass raise return try ' +
@@ -717,8 +694,6 @@ const PLUGIN_TEMPLATE = 'DESCRIPTION = "what it does, one line"\n' +
   'SCHEMA = {"type": "object", "properties": {}}\n\n' +
   'def run(args: dict) -> str:\n' +
   '    return "hello " + str(args.get("who") or "world")\n';
-
-// --- the plugins view: approved | pending, the list, the forge ---
 
 async function renderPlugins() {
   const data = await api('/api/plugins');
@@ -849,8 +824,6 @@ async function openForge(host, name, zone) {
   ed.focus();
 }
 
-// --- the cwd picker (the server's list + the operator's additions) ---
-
 const ADDED_KEY = 'rig.serve.addedCwds';
 const CWD_KEY = 'rig.serve.cwd';
 
@@ -910,8 +883,6 @@ function addCwd(path) {
   render();
 }
 
-// --- the folder browser: ls, for the picker ---
-
 async function browseTo(path) {
   let d;
   try {
@@ -951,8 +922,6 @@ function setBrowser(open) {
 }
 
 browseBtn.addEventListener('click', () => setBrowser(browser.hidden));
-
-// --- the mobile drawer ---
 
 function setNavOpen(open) {
   document.body.classList.toggle('nav-open', open);

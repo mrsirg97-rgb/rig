@@ -46,9 +46,6 @@ func TestNonZeroExitIsAFedBackError(t *testing.T) {
 	}
 }
 
-// TestFailureNamesTheCwd (SPEC_UX 3, named): the failing reply gains one
-// trailing line naming the working directory — the "where am I" probe
-// after a path error, one line and only on failure.
 func TestFailureNamesTheCwd(t *testing.T) {
 	dir := t.TempDir()
 	wd, err := os.Getwd()
@@ -56,7 +53,7 @@ func TestFailureNamesTheCwd(t *testing.T) {
 		t.Fatal(err)
 	}
 	tool := bash.New()
-	// the default cwd: the process's working directory
+
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "echo visible; exit 3",
 	}))
@@ -66,7 +63,7 @@ func TestFailureNamesTheCwd(t *testing.T) {
 	if want := "visible\n(cwd " + wd + ")"; got != want {
 		t.Fatalf("the failing reply must name the cwd as its trailing line, got %q", got)
 	}
-	// an explicit cwd: that directory, not the process's
+
 	got, err = tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "false",
 		"cwd":     dir,
@@ -79,9 +76,6 @@ func TestFailureNamesTheCwd(t *testing.T) {
 	}
 }
 
-// TestSuccessStaysByteIdentical (SPEC_UX 3, named): the cwd line is a
-// failure's — the success is the piped golden's bytes, with or without
-// an explicit cwd.
 func TestSuccessStaysByteIdentical(t *testing.T) {
 	tool := bash.New()
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
@@ -206,7 +200,7 @@ func TestBackgroundChildDoesNotHoldTheTurn(t *testing.T) {
 
 func TestOutputIsCapped(t *testing.T) {
 	tool := bash.New()
-	// ~1MiB of zeros; well over any sane bound
+
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "yes | head -c 1048576",
 	}))

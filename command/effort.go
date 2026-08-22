@@ -9,10 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// effortCmd is the /effort dial (SPEC_MODES 1): the row's vocabulary,
-// not a global scale — bare shows the active level and the model's
-// available ones, an argument sets it (effective next turn). A row
-// without efforts is a dial that is off for that row.
 type effortCmd struct {
 	subs func() []Sub
 }
@@ -24,10 +20,6 @@ func (e effortCmd) Sub() []Sub {
 	return e.subs()
 }
 
-// EffortHints wires the effort command's Sub() hints from the Env, the
-// way ModelHints wires /models: the active row's levels, in the row's
-// order, each described with a generic one-liner (the words are the
-// model's; the descriptions are positional).
 func EffortHints(cmds []core.Command, e *Env) {
 	if e == nil || e.Efforts == nil {
 		return
@@ -47,8 +39,6 @@ func EffortHints(cmds []core.Command, e *Env) {
 	}
 }
 
-// effortDesc is the generic one-liner for the i-th level: the words are
-// the model's, so the descriptions are positional, not semantic.
 func effortDesc(i int) string {
 	descs := []string{"the quick pass", "the deliberate pass", "the deep pass"}
 	if i >= len(descs) {

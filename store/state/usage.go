@@ -6,9 +6,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store"
 )
 
-// UsageRow is one landed turn's usage (SPEC_SERVE): the session's usage
-// rows, in transcript order. A typed read beside Resume; the dashboard
-// renders it as structure and never touches the table itself.
 type UsageRow struct {
 	Seq        int64
 	Prompt     int64

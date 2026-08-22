@@ -45,3 +45,6 @@ command reads this same table.
   borrow a role from.
 - `overlay` setter map uses closures over the `m` value; parse failure
   returns the raw error and a zero `Model`.
+- `Efforts` is the model's available effort levels in its own vocabulary
+  and order (SPEC_MODES 1); `Effort` is the row's default, the wire's
+  level when the session's dial is unset.
