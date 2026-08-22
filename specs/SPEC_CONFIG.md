@@ -169,7 +169,7 @@ The embedded defaults (the move is exact — 0.2.0's values):
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
-  "system": "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Remembered notes are suggestions; the code and the spec are the truth. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin.",
+  "system": "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin.",
   "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch"],
   "retries": 3,
   "searxngUrl": "http://127.0.0.1:8888",
@@ -535,7 +535,7 @@ knobs.
 | web caps: search `15s`/`300`/`1MiB`; fetch `5MiB`/`20000`/`30s`/`5` hops/`20s`/`10MiB` | `tool/web` | **KEPT** — caps and bounds |
 | python: `120s` timeout, `4096` stderr tail, `2s` wait delay, host resolution (`~/.pi/…` shared path, then the embedded materialisation) | `tool/python` | **KEPT** — bounds + mechanics; only the interpreter knob moves (`python`) |
 | compact: calibration clamp `0.5–4.0`, the `min(Reserve/4, 256)` floor, split math, the summary prompt file | `policy/compact` | **KEPT** — pinned thresholds and the fold contract |
-| rem `AutoReflect` importance `0.2` | `store/rem` | **KEPT** — pinned threshold |
+| rem `AutoReflect` importance `0.2` | `store/rem` | **CUT** (0.13.0) — the auto-reflection is gone; SPEC_STATE, rem is deliberate |
 | `RIG_FAKE_STATE_DIR`, `RIG_FAKE_MODE` | `cmd/rig` tests | **KEPT** — test seams, not operator config |
 | the `RIG_*` env set | `main.go`, `models`, `tool/*` | **KEPT** — unchanged as a surface (no new env vars); each knob gains a file layer below it |
 

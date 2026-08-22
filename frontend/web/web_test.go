@@ -39,7 +39,7 @@ func seedHome(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Dir(spath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sdb, _, err := store.Open(spath, state.Statements(), state.SchemaVersion)
+	sdb, _, _, err := store.Open(spath, state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func seedHome(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Dir(tpath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	tdb, _, err := store.Open(tpath, todostore.Statements(), todostore.SchemaVersion)
+	tdb, _, _, err := store.Open(tpath, todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func seedHome(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Dir(rpath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rdb, _, err := store.Open(rpath, remstore.Statements(), remstore.SchemaVersion)
+	rdb, _, _, err := store.Open(rpath, remstore.Statements(), remstore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,11 +104,11 @@ func seedHome(t *testing.T) string {
 	if err := os.MkdirAll(shome, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	gdb, _, err := store.Open(sched.StorePathFor(shome, sched.JobKey{Scope: "global"}), sched.Statements(), sched.SchemaVersion)
+	gdb, _, _, err := store.Open(sched.StorePathFor(shome, sched.JobKey{Scope: "global"}), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cdb, _, err := store.Open(sched.StorePathFor(shome, sched.JobKey{Scope: "cwd", Hash: sched.CwdHash(testCWD)}), sched.Statements(), sched.SchemaVersion)
+	cdb, _, _, err := store.Open(sched.StorePathFor(shome, sched.JobKey{Scope: "cwd", Hash: sched.CwdHash(testCWD)}), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

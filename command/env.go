@@ -24,6 +24,18 @@ type SessionRow struct {
 	Current bool
 }
 
+type RemRow struct {
+	ID         int64
+	Kind       string
+	ScopeLabel string
+	CreatedAt  string
+	Strength   float64
+	Importance float64
+	Source     string
+	Superseded *int64
+	Content    string
+}
+
 type Env struct {
 	Session func() *core.Session
 
@@ -47,6 +59,10 @@ type Env struct {
 	Approve    func() string
 	SetApprove func(ctx context.Context, mode string) error
 	Tools      map[string]core.Tool
+
+	RemList   func(ctx context.Context) ([]RemRow, error)
+	RemShow   func(ctx context.Context, id int64) (RemRow, error)
+	RemForget func(ctx context.Context, id int64) error
 
 	Plugins    func() []PluginInfo
 	Reload     func(ctx context.Context) (string, error)

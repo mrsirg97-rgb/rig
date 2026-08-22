@@ -15,8 +15,7 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
 
 - `Passthrough(system)` — the v1 policy: system (when set) + transcript,
   verbatim, pure across repeated assemblies.
-- `compact.New`, `Option`, `WithAutoReflect` — the compact policy and its
-  DI seam.
+- `compact.New` — the compact policy.
 - `compact.Compact` — the forced seam (SPEC_COMMANDS 3).
 - `compact.Estimate` — the raw stdlib estimate (decision 4).
 - `compact.sizeOf`, `clampMaxTokens` — the anchor-aware size and the
@@ -37,14 +36,11 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
 - `Passthrough` and `compact.New` implement `core.ContextPolicy`; the root
   wires one into the kernel.
 - `compact.New` takes the provider, the frontend (the recorder), the
-  session, the assembled system string, a checked `models.Model`, and
-  options. A nil seam or a violating row refuses loud at construction.
+  session, the assembled system string, a checked `models.Model`. A nil
+  seam or a violating row refuses loud at construction.
 - `compact.Decorator` wraps the same inner provider the policy uses; the
   summary call does not pass through it (1), so a fault in it surfaces as
   an `Assemble` error, never recursively.
-- `WithAutoReflect` hands the summary to rem's `AutoReflect` through a
-  named callback (a leaf calling a leaf, the DI seam); absent = the seam
-  off.
 - `compact.Compact` returns `(core.Compacted, bool, error)`; the caller
   owns delivery of the event (the /compact verb), exactly once.
 
@@ -54,8 +50,8 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
   they are exactly the user rows that start with it; grep is the
   interface.
 - `compact` is impure by design: one rewrite, one provider call, one
-  event, one reflection; and not idempotent — a second compaction is a
-  fold (3).
+  event; and not idempotent — a second compaction is a fold (3). The
+  reflection is cut (SPEC_COMPACT 6): the summary is context, not memory.
 - Emission is exactly once per compaction: `Assemble` delivers the event
   to the frontend it holds (the trigger path); the overflow path delivers
   it on the stream instead (decision 5). The `Compacting` cue (the
@@ -91,7 +87,6 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
 - `summarize` uses the row's `Effort` (the one call whose thinking nobody
   reads), `"medium"` the default; the stream must end with `Done` and
   non-empty text, else loud.
-- `AutoReflect` is fire-and-forget: a store failure never fails the turn.
 - `New` baselines the once budget at the transcript length at
   construction — the root builds the session before the policy, so a
   resumed session starts at that baseline.

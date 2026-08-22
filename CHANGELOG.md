@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] — rem is deliberate
 
 - **the dashboard's quick hits**: the plugin listings read every
   DESCRIPTION form — the parenthesized implicit concatenation seventeen
@@ -10,6 +10,60 @@
   failed task carries `retry` beside the hands (`/api/todo/retry`,
   `todo.Retry`); lines hang their wrapped text under the text, not the
   glyph, on phones.
+
+- **rem is deliberate** (`specs/SPEC_STATE.md`): every rem operation is
+  something chose — the model learns/recalls/reflects/prunes through its
+  tool, the operator prunes through the `/rem` verb; nothing is written
+  by a compaction and nothing is read into the prompt by a session
+  start. Two cuts, one new verb surface, one scope change.
+
+- **the injection is cut**: the root's `remembered` segment (the
+  `remstore.Recent` read, `rememberedK`, `renderRemembered`) is gone —
+  no memory is read into the prompt at a session start. The system
+  prompt's "Remembered notes are suggestions…" becomes "Memory is a
+  tool: recall before re-deriving a project fact, learn deliberately
+  what the next session should not re-derive, supersede by id when the
+  code disagrees" (settings.json, the goldens, the config tests).
+
+- **the auto-reflection is cut** (`specs/SPEC_COMPACT.md` 6): the
+  `WithAutoReflect` seam, `store/rem.AutoReflect`, and the
+  `autoReflectionImportance` constant are gone — compaction writes
+  nothing to rem. The summary stays a marked user row in the transcript
+  (context, not memory).
+
+- **scope is a repo identity**: `store/rem` hashes the absolute git
+  common dir of the cwd (`scopeKey`), so two worktrees of one repo share
+  one memory; a non-repo dir scopes by cwd, hashed as today. The schema
+  bump (1 → 2) carries a one-time idempotent migration
+  (`remstore.Migration(cwd)` through `store.Open`'s migration hook):
+  rows under an old cwd-hash scope now inside a repo re-scope to the
+  repo's, and rows with source "session compaction" are removed (never
+  deliberate), counted once on stderr. The migration is one transaction
+  and survives two processes opening the file at once (`INSERT OR
+  IGNORE` on the marker). Known bound: the re-scope is keyed on the
+  launch cwd — rows learned from another directory of the same repo move
+  when rig is next started there, since a hash cannot be walked back to
+  its cwd. The git probe resolves a relative common dir against the cwd
+  and treats an echoed option (git < 2.31 passes `--path-format` through,
+  exit 0) as no path.
+
+- **`store.Open` refuses what it cannot migrate**: an older file opened
+  by a build that passes no migration is a named mismatch, not a silent
+  version stamp; the newer-file refusal runs before any schema statement
+  touches the file; the migrations and the version bump commit together.
+
+- **`/rem forget` is scoped**: ids are file-wide, so a typo must not
+  reach another repo's row — only this project's or a global memory is
+  removed; another project's id is refused by name with its label.
+
+- **the `/rem` command** (`specs/SPEC_COMMANDS.md` 11): `rem [list|show|
+  forget]` over the same store — list the live memories (project then
+  global, one line each), show by id, forget by id. The model's
+  multi-line learn/recall/reflect/prune stays the tool; the operator's
+  read and prune get a typed line. Rejected, named: `rem pin` — importance
+  is only the per-access reinforcement multiplier, so the verb changed
+  nothing the operator could see, and an operator write that is not a
+  prune is off the surface.
 
 ## [0.12.2] — the two bounds
 

@@ -56,11 +56,11 @@ plus one registration line, and the loop never names a concrete type.
 - `kernel.go` (root package `rig`) — the composition kernel: the
   dependency bag the loop drives, assembled from options.
 - `cmd/rig` — the binary and composition root: flag/env/file config
-  resolution, the store wiring, plugin discovery. The only package that
-  imports the whole tree.
+  resolution, the store wiring (the rem migration), plugin discovery.
+  The only package that imports the whole tree.
 - `command` — the user-command leaf: the slash-command set (`compact`,
-  `new`, `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`),
-  testable with fakes: no kernel, no stores, no provider.
+  `new`, `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
+  `rem`), testable with fakes: no kernel, no stores, no provider.
 - `config` — the config-loading layer: four-layer resolution (flags >
   env > file > embedded defaults) and the models table out of code and
   into a file.
@@ -68,7 +68,8 @@ plus one registration line, and the loop never names a concrete type.
   effort; env overlay and loud row invariants.
 - `policy` — the ContextPolicy implementations: the passthrough and
   compact (trigger-based transcript summarization, the once-budget
-  overflow recovery, auto-reflect into the memory store).
+  overflow recovery). Compaction writes nothing to rem: the summary is
+  context, not memory (SPEC_STATE: rem is deliberate).
 - `middleware/perm` — deny-by-default tool allowlist and the plugin
   provenance rule (model writes land in `plugins/pending/`).
 - `middleware/guard` — the retry guard: bounds the model's repeated
@@ -93,7 +94,9 @@ plus one registration line, and the loop never names a concrete type.
   task rows a disposable projection rebuilt every transaction, DAG
   validated at create.
 - `store/rem` — the memory store: recall (FTS plus trigram, rank-fused),
-  consolidation arithmetic, supersession.
+  consolidation arithmetic, supersession; scope is a repo identity
+  (worktrees share), a one-time migration on the schema bump, and every
+  operation is deliberate.
 - `store/scheduler` — the background-jobs store: the event log, the
   crontab as scheduling truth, the worker runner with the bwrap jail
   and the socket proxy.
@@ -115,7 +118,8 @@ plus one registration line, and the loop never names a concrete type.
 - `tool/web` — `web_search` against a local SearXNG and `web_fetch`
   with the SSRF guard and extraction.
 - `tool/todo`, `tool/rem`, `tool/scheduler` — thin adapters over their
-  stores: session attribution and the store's shapes, verbatim.
+  stores: session attribution and the store's shapes, verbatim. The rem
+  tool's description carries the contract sentence (rem is deliberate).
 - `tool/delegate` — the one-shot worker tool (SPEC_DELEGATE): spawn a
   headless worker on a task now, wait, and feed back its last message;
   a recorded run in the cwd-scope scheduler store, a resumable

@@ -20,7 +20,7 @@ type item = todostore.CreateItem
 
 func newDB(t *testing.T) store.DB {
 	t.Helper()
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), tododdl.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), tododdl.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -1569,11 +1569,11 @@ func TestFailedToRetryToStartedAgain(t *testing.T) {
 func TestWorkspaceListsAreIsolated(t *testing.T) {
 	a := filepath.Join(t.TempDir(), "ws-a.sqlite")
 	b := filepath.Join(t.TempDir(), "ws-b.sqlite")
-	dba, _, err := store.Open(a, todostore.Statements(), todostore.SchemaVersion)
+	dba, _, _, err := store.Open(a, todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dbb, _, err := store.Open(b, todostore.Statements(), todostore.SchemaVersion)
+	dbb, _, _, err := store.Open(b, todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

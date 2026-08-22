@@ -46,7 +46,7 @@ func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 	t.Helper()
 	home := t.TempDir()
 	globalPath := filepath.Join(home, "global.sqlite")
-	if _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion); err != nil {
+	if _, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	key, err := sched.ParseKey("cwd-" + sched.CwdHash(cwd) + ":j1")
@@ -54,7 +54,7 @@ func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 		t.Fatal(err)
 	}
 	cwdPath := sched.StorePathFor(home, key)
-	if _, _, err := store.Open(cwdPath, sched.Statements(), sched.SchemaVersion); err != nil {
+	if _, _, _, err := store.Open(cwdPath, sched.Statements(), sched.SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	var (
@@ -62,10 +62,10 @@ func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 		cd store.DB
 	)
 
-	if gd, _, err = store.Open(globalPath, sched.Statements(), sched.SchemaVersion); err != nil {
+	if gd, _, _, err = store.Open(globalPath, sched.Statements(), sched.SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
-	if cd, _, err = store.Open(cwdPath, sched.Statements(), sched.SchemaVersion); err != nil {
+	if cd, _, _, err = store.Open(cwdPath, sched.Statements(), sched.SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	st := sched.Stores{Global: gd, Cwd: cd}

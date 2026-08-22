@@ -12,9 +12,9 @@ the leaf.
 
 - The prefix rule (`IsCommandLine`), the escape (`Unescape`), and the
   line splitter (`Parse`).
-- `All()` — the standard set of eleven commands: `compact`, `new`,
+- `All()` — the standard set of twelve commands: `compact`, `new`,
   `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
-  `effort`, `role`, `approve`.
+  `rem`, `effort`, `role`, `approve`.
 - `Env` — the command's world, built at the root: closures, not handles.
 - `EnvOf` — the type assertion on the dispatcher's env.
 - `Sub` / `Subber` — the TUI's argument-hints door (SPEC_TUI 9).
@@ -54,6 +54,11 @@ the leaf.
 - **todo/scheduler** — a thin shared adapter over one of the model's own
   tools: parse the line into the tool's JSON args, call `Exec` with the
   session threaded, return the reply verbatim.
+- **rem** — the operator's verb over the memory store (SPEC_STATE: rem is
+  deliberate): `rem [list|show|forget]` — list the live memories
+  (project then global, one line each), show by id, forget by id. The
+  model's learn/recall/reflect/prune stays the
+  tool; the operator's read and prune get a typed line.
 - **plugins** — lists the loaded/skipped plugins and the pending zone;
   `approve <name>` installs a pending plugin; `reload` re-registers from
   disk; `create <text>` queues the authoring prompt; `enable <name>` /

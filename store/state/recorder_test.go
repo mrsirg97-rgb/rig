@@ -42,7 +42,7 @@ func (s *scripted) Notify(ev core.Event) {
 }
 
 func TestRecorderLandsTheTranscript(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestRecorderLandsTheTranscript(t *testing.T) {
 }
 
 func TestRecorderForwardsIntact(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestRecorderForwardsIntact(t *testing.T) {
 }
 
 func TestRecorderFaultLands(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestRecorderFaultLands(t *testing.T) {
 }
 
 func TestRecorderObservationErrorsStayLoud(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestRecorderObservationErrorsStayLoud(t *testing.T) {
 }
 
 func TestRecorderLandsToolOnlyTurns(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestRecorderLandsToolOnlyTurns(t *testing.T) {
 }
 
 func TestRecorderFaultDiscardsPartialText(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}

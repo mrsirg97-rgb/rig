@@ -18,6 +18,8 @@ touch core (one interface) and the last before the loop freezes for good.
   returns to the loop. The loop never sees a command.
 - Five runtime commands with named output contracts: `compact`, `new`,
   `sessions`, `models`, `steer`.
+- One operator verb over rem (`rem`: list / show / forget) — the
+  store is a leaf reached through the root's closures, not the tool.
 - Two tool-backed commands — `todo`, `scheduler` — over the same
   `core.Tool` instances the model gets: parse the line into the tool's args,
   call `Exec`, print the reply verbatim. No parallel implementation.
@@ -31,9 +33,10 @@ touch core (one interface) and the last before the loop freezes for good.
 - No TUI, no glass, no styling: the CLI prints plain lines; 10 renders them.
 - No `/help` command: the refusals name the known commands and their shape;
   the TUI owns the discoverable surface.
-- No `rem` command: its arg shape (multi-line content, JSON objects) does
-  not fit a typed line; it stays the model's tool and a 10 candidate over
-  the same seam.
+- The `rem` command is the operator's verb surface: `rem [list|show|
+  forget]` over the same store (SPEC_STATE: rem is deliberate) — the model's
+  multi-line learn/recall/reflect/prune stays the tool; the operator's
+  prune and read get a typed line.
 - No commands that need the loop (pausing mid-execution, injecting into a
   running turn, ordering against a tool call): that is a loop change and
   reopens 7 first (decision 1's stop condition).
@@ -60,6 +63,7 @@ command/              NEW leaf package (stdlib + core + models, nothing else)
   sessions.go         sessions (list / show / resume) + the plain render
   models.go           models (list / switch)
   steer.go            steer
+  rem.go              rem (list / show / forget)
   tools.go            todo + scheduler over core.Tool
   parse_test.go, commands_test.go, compact_test.go, new_test.go,
   sessions_test.go, models_test.go, steer_test.go, tools_test.go
@@ -326,9 +330,10 @@ return the event. The command's output contract:
   inside `Input`); the TUI's mid-turn keypress is the case.
 - args: none. `compact extra` → `compact: usage: compact`.
 
-The summary is handed to rem's `AutoReflect` on this path exactly as on
-the trigger path (the action is shared) — a forced compaction is a
-compaction.
+Nothing is handed to rem on this path, exactly as on the trigger path
+(the action is shared) — a forced compaction is a compaction, and a
+compaction writes no memory (amended 0.13.0, SPEC_STATE: rem is
+deliberate; the `AutoReflect` handoff is cut).
 
 ### 4. `new`: close the row ok, mint fresh, keep the process — and the handoff
 
@@ -661,6 +666,38 @@ roadmap line, not a deliverable-9 side quest.
 - **The loop**: zero diff (no L9). The existing named loop cases pass
   byte-for-byte; `-p` and `run-job` are unchanged (9).
 
+### 11. `rem`: list, show, forget — the operator's verb
+
+**`rem`** — the bare command reads the live memories, project scope then
+global, one plain line each (`m<id> · <kind> · <age> · <strength> · <first
+80 chars>`; a glance, not a browse — the store caps it). **`rem show
+<id>`** — the full memory row (all fields, the source, supersession).
+**`rem forget <id>`** — prune-remove that id (the operator's prune, a
+verb); only this project's or a global memory — ids are file-wide, and a
+typo must not reach another repo's row: `rem: another project's memory:
+m<id> is <label>'s; forget it from there`.
+
+Rejected, named: `rem pin <id>`. Importance is only the per-access
+reinforcement multiplier, so a pin on a live row changed nothing the
+operator could see (the strength kept decaying, the list line kept its
+number), and an operator write that is not a prune is off the surface —
+the keep-this act is the model's learn/reflect. If lived use asks for a
+hold above decay, design a real one (strength reset, a marker the list
+shows) then.
+
+Refusals, named: `rem show` (no id) → `rem: show needs an id (rem show
+<id>)`; `rem show a b` → `rem: show takes one id`; an unknown id →
+`rem: no such memory: <id>` (show and forget both name the gap); `rem
+forget` (no id) → the needs-an-id voice; `rem <other>` →
+`rem: usage: rem [list|show|forget <id>]`.
+
+Why the command and not the tool: the tool's learn/recall/reflect/prune
+is the model's multi-line JSON surface; the operator's read and prune
+want a typed line. The root wires three closures over `store/rem`
+(`List`, `Show`, and `Forget`); `command/` stays a leaf (no store
+import, SPEC_COMMANDS 2). `list` is the bare command's read under a
+name, and the `Sub()` hints are `list`, `show`, `forget` (SPEC_TUI 9).
+
 ## testing
 
 Named cases, failing first (the standing rule). Fakes at the DI seam: a
@@ -702,7 +739,7 @@ crontab spool for the scheduler (the e2e's existing pattern).
   a scripted summary provider: the transcript is rewritten to
   `[summary] + tail`, the `Compacted` event is delivered to the
   recorder (the summary row + usage row land, the tail re-lands),
-  `AutoReflect` is called, the CLI renders the one `⧉` line — and the
+  nothing lands in rem (0.13.0), the CLI renders the one `⧉` line — and the
   once budget is spent behaviorally: with nothing new since the forced
   compact, the next main call's context-length fault surfaces without
   recovery (the transcript has not grown past the compact's key).
@@ -754,6 +791,21 @@ crontab spool for the scheduler (the e2e's existing pattern).
 - `TestSessionsSubHints` — the `Sub()` hints are `list`, `show`,
   `resume`, each one-lined (the TUI's menu door); `sessions list` is the
   bare command's read, not a usage refusal.
+
+**rem:**
+
+- `TestRemListProjectThenGlobal` — seeded project and global live
+  memories: the bare `rem` renders one line each, project rows before
+  global rows, the exact `m<id> · <kind> · <age> · <strength> · <first
+  80 chars>` shape; a superseded memory is not listed.
+- `TestRemShowAndForget` — `rem show <id>` renders the full row;
+  `rem forget <id>` removes it (the row is gone, not superseded).
+- `TestRemRefusalsByName` — `rem show`/`rem forget` (no id),
+  `rem show a b`, an unknown id, and `rem frob` each refuse naming the
+  gap and the usage.
+- `TestRemSubHints` — the `Sub()` hints are `list`, `show`, `forget`,
+  each one-lined; `rem list` is the bare command's read, not a usage
+  refusal.
 
 **models:**
 

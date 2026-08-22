@@ -28,8 +28,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "0.12.2" {
-		t.Fatalf("Version = %q, want 0.12.2 (pre-1.0, feature-complete)", Version)
+	if Version != "0.13.0" {
+		t.Fatalf("Version = %q, want 0.13.0 (pre-1.0, feature-complete)", Version)
 	}
 
 	if !regexp.MustCompile(`^0\.\d+\.\d+$`).MatchString(Version) {
@@ -266,7 +266,7 @@ func TestSessionForResumesOrStartsFresh(t *testing.T) {
 }
 
 func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

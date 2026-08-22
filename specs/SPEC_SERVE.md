@@ -114,8 +114,9 @@ phase reads exactly these verbs:
   sessionCwd, probe, now)` returned as-is and shown in a `<pre>`, drift
   notes included. `probe` reports a held lock (running); `ct` is the real
   crontab.
-- **Memory.** `rem.Recent(ctx, db, cwd, k)` for the selected cwd, shown as
-  a list.
+- **Memory.** `rem.List(ctx, db, cwd, k)` for the selected cwd (the live
+  rows, project then global), shown as a list. (`rem.Recent` is gone with
+  the injection, 0.13.0.)
 - **Models.** `cfg.Models` (the `models.Table` from config), every row with
   its window, effort list, and role, shown as a table.
 - **Plugins.** `plugins.List(home)` (the loaded set) plus the pending zone
@@ -213,7 +214,7 @@ helpers (no behavior change).
 ### 3. Store verbs, never raw SQL.
 
 The named decision, held: the dashboard calls `ListSessions`, `Resume`,
-`SessionUsage`, `Read`, `ReadAll`, `Create`, `scheduler.List`, `Recent`,
+`SessionUsage`, `Read`, `ReadAll`, `Create`, `scheduler.List`, `rem.List`,
 and the `models.Table`/`plugins.List` surfaces. The two small store
 additions (`SessionRow.Cwd`, `SessionUsage`) are typed verbs the dashboard
 consumes, not a SQL leak. When a view outgrows the string (a todo or
@@ -267,8 +268,8 @@ seeded stores (the existing test seams; a real sqlite file, never
   the transcript renders as structure (a golden over a seeded session:
   messages, reasoning, tool calls and results, and the usage rows); todo
   `Read`/`ReadAll` return the store's text verbatim; scheduler `List`
-  returns the store's text (drift included); memory `Recent` returns the
-  cwd's rows; the models table carries every row's effort list and role;
+  returns the store's text (drift included); memory `List` returns the
+  cwd's live rows; the models table carries every row's effort list and role;
   the plugins view lists the loaded and pending sets with DESCRIPTION.
 - **Fail closed.** A cwd that resolves to no store file is a named refusal,
   not an empty 200.

@@ -2,9 +2,6 @@ package compact_test
 
 import (
 	"context"
-	"crypto/sha1"
-	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -437,15 +434,12 @@ func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
 
-	var bodies []string
-	reflect := func(_ context.Context, summary string) error { bodies = append(bodies, summary); return nil }
-
 	prov := &scriptedProvider{turns: []scriptedTurn{
 		{events: []core.Event{core.TextDelta{Text: "SUM1"}, core.Done{}}},
 		{events: []core.Event{core.TextDelta{Text: "SUM2"}, core.Done{}}},
 	}}
 	fe := &captureFrontend{}
-	pol, err := compact.New(prov, fe, s, "S", row, compact.WithAutoReflect(reflect))
+	pol, err := compact.New(prov, fe, s, "S", row)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -478,140 +472,33 @@ func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 	if len(s.Messages) != 2 || s.Messages[0].Content != compact.SummaryMarker+"SUM2" {
 		t.Fatalf("after the second compact the transcript = %+v, want [SUM2 row, the tail]", s.Messages)
 	}
-	if len(bodies) != 2 || bodies[0] != "SUM1" || bodies[1] != "SUM2" {
-		t.Fatalf("the reflection seam = %v, want each new body in order", bodies)
-	}
 }
 
-func TestAutoReflectLandsDedupesAndNeverFails(t *testing.T) {
+func TestCompactionWritesNothingToRem(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
-	cwd := t.TempDir()
-
-	t.Run("the reflection lands with pane's session_compact shape", func(t *testing.T) {
-		rdb, _, err := store.Open(filepath.Join(cwd, "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
-		if err != nil {
-			t.Fatalf("open the rem store: %v", err)
-		}
-		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "REAL SUMMARY"}, core.Done{}}}}}
-		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row, compact.WithAutoReflect(func(ctx context.Context, summary string) error {
-			_, err := remstore.AutoReflect(ctx, rdb, cwd, summary)
-			return err
-		}))
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
-		if _, err := pol.Assemble(context.Background(), s); err != nil {
-			t.Fatalf("Assemble: %v", err)
-		}
-		var (
-			kind       string
-			source     sql.NullString
-			importance float64
-			scope      string
-		)
-		if err := rdb.DB.QueryRow(`SELECT kind, source, importance, scope FROM memories`).Scan(&kind, &source, &importance, &scope); err != nil {
-			t.Fatalf("the memory row: %v", err)
-		}
-
-		d := sha1.Sum([]byte(cwd))
-		wantScope := hex.EncodeToString(d[:])[:12]
-		if kind != "reflection" || source.String != "session compaction" || importance != 0.2 || scope != wantScope {
-			t.Fatalf("memory row = kind %q source %q importance %g scope %q, want reflection / session compaction / 0.2 / the cwd (scope %q)",
-				kind, source.String, importance, scope, wantScope)
-		}
-	})
-
-	t.Run("a replayed body is inert", func(t *testing.T) {
-		rdb, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
-		if err != nil {
-			t.Fatalf("open the rem store: %v", err)
-		}
-		cwd := t.TempDir()
-		reflect := func(ctx context.Context, summary string) error {
-			_, err := remstore.AutoReflect(ctx, rdb, cwd, summary)
-			return err
-		}
-		newSession := func() *core.Session {
-			s := core.NewSession()
-			s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
-			s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
-			return s
-		}
-		for i := 0; i < 2; i++ {
-			s := newSession()
-			prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "SAME BODY"}, core.Done{}}}}}
-			pol, err := compact.New(prov, &captureFrontend{}, s, "S", row, compact.WithAutoReflect(reflect))
-			if err != nil {
-				t.Fatalf("New: %v", err)
-			}
-			if _, err := pol.Assemble(context.Background(), s); err != nil {
-				t.Fatalf("Assemble %d: %v", i, err)
-			}
-		}
-		var n int
-		if err := rdb.DB.QueryRow(`SELECT count(*) FROM memories`).Scan(&n); err != nil {
-			t.Fatal(err)
-		}
-		if n != 1 {
-			t.Fatalf("memories = %d, want 1 (the dedup makes a replayed body inert)", n)
-		}
-	})
-
-	t.Run("a store failure leaves Assemble successful", func(t *testing.T) {
-		rdb, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
-		if err != nil {
-			t.Fatalf("open the rem store: %v", err)
-		}
-		if err := rdb.DB.Close(); err != nil {
-			t.Fatal(err)
-		}
-		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
-		fe := &captureFrontend{}
-		pol, err := compact.New(prov, fe, s, "S", row, compact.WithAutoReflect(func(ctx context.Context, summary string) error {
-			_, err := remstore.AutoReflect(ctx, rdb, cwd, summary)
-			return err
-		}))
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
-		if _, err := pol.Assemble(context.Background(), s); err != nil {
-			t.Fatalf("a store failure must never fail the turn: %v", err)
-		}
-		if len(s.Messages) != 2 || s.Messages[0].Content != compact.SummaryMarker+"S" {
-			t.Fatalf("the compact must have happened: %+v", s.Messages)
-		}
-		if evs := stripCue(fe.snapshot()); len(evs) != 1 {
-			t.Fatalf("the event must have been emitted: %v", evs)
-		}
-	})
-
-	t.Run("the absent seam skips the call and changes nothing else", func(t *testing.T) {
-		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
-		fe := &captureFrontend{}
-		pol, err := compact.New(prov, fe, s, "S", row)
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
-		if _, err := pol.Assemble(context.Background(), s); err != nil {
-			t.Fatalf("Assemble: %v", err)
-		}
-
-		if len(s.Messages) != 2 || s.Messages[0].Content != compact.SummaryMarker+"S" {
-			t.Fatalf("the compact must happen without the seam: %+v", s.Messages)
-		}
-		if evs := stripCue(fe.snapshot()); len(evs) != 1 {
-			t.Fatalf("the event must happen without the seam: %v", evs)
-		}
-	})
+	rdb, _, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open the rem store: %v", err)
+	}
+	defer rdb.DB.Close()
+	s := core.NewSession()
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
+	prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
+	pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := pol.Assemble(context.Background(), s); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	var n int
+	if err := rdb.DB.QueryRow(`SELECT count(*) FROM memories`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("compaction writes nothing to rem (SPEC_STATE: rem is deliberate), memories = %d", n)
+	}
 }
 
 func TestSummaryEffortIsTheRow(t *testing.T) {

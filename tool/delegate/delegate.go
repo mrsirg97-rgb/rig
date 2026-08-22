@@ -170,7 +170,7 @@ func canonicalCwd(path, sessionCwd, rigHome string) (string, error) {
 }
 
 func findSession(ctx context.Context, rigHome, cwd, started string) (string, error) {
-	db, _, err := store.Open(state.StorePath(rigHome, cwd), state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(state.StorePath(rigHome, cwd), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		return "", fmt.Errorf("delegate: session store: %w", err)
 	}

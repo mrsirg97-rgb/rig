@@ -22,12 +22,7 @@ func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
 	summary := []core.Event{core.TextDelta{Text: "SUM"}, core.Done{Usage: core.Usage{Prompt: 812, Completion: 640}}}
 	prov := &scriptedProvider{turns: []scriptedTurn{{events: summary}}}
 	fe := &captureFrontend{}
-	reflected := 0
-	pol, err := compact.New(prov, fe, s, "S", testRow,
-		compact.WithAutoReflect(func(ctx context.Context, sum string) error {
-			reflected++
-			return nil
-		}))
+	pol, err := compact.New(prov, fe, s, "S", testRow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,9 +52,6 @@ func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
 	}
 	if _, ok := evs[0].(core.Compacting); !ok {
 		t.Fatalf("event 0 = %T, want the Compacting cue", evs[0])
-	}
-	if reflected != 1 {
-		t.Fatalf("a forced compaction is a compaction: AutoReflect must be called once, got %d", reflected)
 	}
 	if prov.calls() != 1 {
 		t.Fatalf("exactly one summary call, got %d", prov.calls())

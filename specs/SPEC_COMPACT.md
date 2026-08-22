@@ -13,10 +13,9 @@ policy owns when and how.
 
 The reference for what this should feel like from the transcript side is
 pane's `session_compact` hook: compaction is not a user-facing feature, it
-is a transcript event — one line in the CLI, one row in the state store,
-one deduped low-importance reflection in rem. `store/rem.AutoReflect` is
-the port of that hook, already built and already tested; this spec wires
-it.
+is a transcript event — one line in the CLI, one row in the state store.
+The reflection is cut: the summary is context, not memory (SPEC_STATE:
+rem is deliberate), so compaction writes nothing to rem.
 
 The bug this exists not to inherit (the pi bug, seen 2026-08-15): a global
 reserve larger than the worker's window fires compaction every turn,
@@ -37,8 +36,8 @@ the model's own window, and the case is impossible by construction
 - A named event (`Compacted`) the CLI renders as one line and the TUI (10)
   can show; the recorder lands the summary as a message row; the loop is
   untouched but for L8 (4).
-- The compaction summary becomes a deduped low-importance reflection in
-  rem, scoped to the cwd (pane's `session_compact`, wired).
+- Compaction writes nothing to rem: the summary is a marked user row in
+  the transcript (context, not memory — SPEC_STATE: rem is deliberate).
 - Overflow recovery: a provider fault that names context length triggers
   one compact-and-retry, once, then surfaces. Never a silent loop.
 - `-p` workers get the same policy and the same numbers; a config that
@@ -140,8 +139,7 @@ func (p *policy) Assemble(ctx context.Context, s *core.Session) ([]core.Message,
 
 func Decorator(inner core.Provider, p *policy) core.Provider // decision 7
 type Option func(*options)
-func WithAutoReflect(fn func(ctx context.Context, summary string) error) Option
-                                       // decision 6; absent = the seam off
+                                       // the AutoReflect seam is cut (6): compaction writes nothing to rem
 
 // core, additive (the SPEC_CORE diff at the end):
 type Message struct {
@@ -180,7 +178,7 @@ passthrough output on the new transcript:
    a fault in it surfaces as an `Assemble` error and never recursively
    compacts;
 3. rewrite the session transcript to `[summary message] + tail`;
-4. return `Compacted` (5) and fire `AutoReflect` (6);
+4. return `Compacted` (5); the reflection is cut (6) — rem sees nothing;
 5. return system + the new transcript.
 
 The compact action returns the event; the caller owns the delivery, so a
@@ -593,32 +591,17 @@ SPEC_STATE — rejected here. The `err` and timing columns of re-landed
 calls are copied from the original row where present (the projection
 reads only id, name, args, result — faithful either way).
 
-### 6. The summary is handed to rem's AutoReflect: pane's session_compact, wired
+### 6. The summary is context, not memory: compaction writes nothing to rem
 
-`store/rem.AutoReflect` already exists and is tested: the summary as a
-low-importance reflection (importance 0.2, `kind = "reflection"`), scoped
-to the cwd, deduped by content md5, source "session compaction"; blank
-summaries inert. The root wires the seam as a function — the policy does
-not import `store/rem` (a leaf calling a leaf through a named callback,
-the DI seam, not a dependency):
-
-```go
-compact.WithAutoReflect(func(ctx context.Context, summary string) error {
-    _, err := remstore.AutoReflect(ctx, rdb, cwd, summary)
-    return err
-})
-```
-
-The call is synchronous inside the compact action, after the rewrite and
-the event: one short transaction (millisecond-scale), and a `-p` worker's
-exit comes only after the turn completes, so the reflection is always
-landed before the process dies — a goroutine would race one-shot's exit
-for nothing. Fire-and-forget in pane's sense (its hook catches and
-swallows: "never crash a session over a memory store"): a store failure
-is swallowed and never fails the turn, and the dedup makes a replayed
-compaction inert ("already known mN"). Absent option = seam off: the
-compact, the event, and the row all happen, the reflection does not — the
-tests use this to isolate compaction from the store.
+Cut (SPEC_STATE: rem is deliberate). Pane's `session_compact` reflected
+the summary into rem at importance 0.2; rig's evidence was 36 rows, 33 of
+them compaction reflections, zero ever superseded — auto-reflections were
+deliberate-looking noise. The summary is a marked user row in the
+transcript (5): it rides context, it does not survive as a memory. The
+`WithAutoReflect` seam, `store/rem.AutoReflect`, and the
+`autoReflectionImportance` constant are cut; the root wires no callback.
+The compact, the event, and the row all happen; rem sees nothing. A
+replayed compaction writes no memory, and there is nothing to dedupe.
 
 ### 7. Overflow recovery: a provider decorator, once, then surfaces
 
@@ -716,8 +699,7 @@ The named shapes, each in the tests:
 
 `-p` workers and `run-job` get the same policy and the same numbers: they
 go through the same `wire()` — the row is resolved, the decorator is
-registered, the `AutoReflect` seam is wired (the job's cwd is the store's
-scope, as today). One-shot's silence is unchanged (5): the worker's stdout
+registered. One-shot's silence is unchanged (5): the worker's stdout
 stays the answer.
 
 The start contract, loud before any store is opened (the root's
@@ -830,7 +812,7 @@ in `t.TempDir()` where a case names it.
   (wordlist phrasing), then a healthy stream: the frontend's order is
   `Compacted, TextDelta*, Done`; the first `Fault` never surfaces; the
   second request's messages equal system + `[summary row]` + tail; the
-  session transcript is rewritten; `AutoReflect` is called.
+  session transcript is rewritten; compaction writes nothing to rem (6).
 - `TestOverflowRecoversOnceThenSurfaces` — two classifiable faults: the
   second surfaces (the `Fault` reaches the frontend, the fault row lands);
   a third call never happens; after a new user message (the transcript
@@ -866,12 +848,10 @@ in `t.TempDir()` where a case names it.
   worker would exit non-zero (the reviewer's 11.7k-token-result shape).
 - `TestSecondCompactionFoldsTheFirst` — a long scripted session: the
   second compact's older prefix contains the first summary row; the
-  transcript after equals `[new summary] + tail2`; the reflection dedupes
-  (a new body lands a new memory, a replayed body is inert).
-- `TestAutoReflectLandsDedupesAndNeverFails` — a real rem store: the
-  memory row (kind reflection, importance 0.2, cwd scope, source "session
-  compaction"); a store failure (a closed db) leaves the `Assemble`
-  successful; the absent seam skips the call and changes nothing else.
+  transcript after equals `[new summary] + tail2`.
+- `TestCompactionWritesNothingToRem` — a real rem store: a compaction
+  (trigger or forced) leaves the `memories` table empty; the cut seam
+  never touches the store (SPEC_STATE: rem is deliberate).
 - `TestSteerDuringRetry` — the turn ctx dies in the retry window: the
   decorator returns an error (not a `Fault`), and the loop reads it as the
   existing pre-stream interrupt path.

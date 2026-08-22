@@ -145,7 +145,7 @@ func TestExtraStatementsAreApplied(t *testing.T) {
 		}
 	}
 	path := filepath.Join(t.TempDir(), "x.sqlite")
-	db, _, err := store.Open(path, statements, todo.SchemaVersion)
+	db, _, _, err := store.Open(path, statements, todo.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

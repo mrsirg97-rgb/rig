@@ -64,7 +64,7 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	t.Helper()
 	home := t.TempDir()
 	open := func(name string) sched.DB {
-		db, _, err := store.Open(filepath.Join(home, name), sched.Statements(), sched.SchemaVersion)
+		db, _, _, err := store.Open(filepath.Join(home, name), sched.Statements(), sched.SchemaVersion)
 		if err != nil {
 			t.Fatalf("open %s: %v", name, err)
 		}

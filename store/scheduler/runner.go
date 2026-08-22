@@ -70,7 +70,7 @@ func RunJob(key string, opts RunOpts) error {
 		return err
 	}
 
-	db, quarantined, err := store.Open(StorePathFor(opts.Home, parsed), Statements(), SchemaVersion)
+	db, quarantined, _, err := store.Open(StorePathFor(opts.Home, parsed), Statements(), SchemaVersion)
 	if err != nil {
 		return fmt.Errorf("run-job: store: %w", err)
 	}

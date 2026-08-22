@@ -30,7 +30,7 @@ func (c *storeCache) open(path string, statements []string, version int) (store.
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return store.DB{}, err
 	}
-	db, _, err := store.Open(path, statements, version)
+	db, _, _, err := store.Open(path, statements, version)
 	if err != nil {
 		return store.DB{}, err
 	}
