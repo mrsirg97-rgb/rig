@@ -245,7 +245,7 @@ func parseSettings(data []byte, path string) (Settings, error) {
 			return Settings{}, fmt.Errorf("config: %s: rounds: %v", path, err)
 		}
 		if v < 0 {
-			return Settings{}, fmt.Errorf("config: %s: rounds: expected a positive number (0 = the default), got %d", path, v)
+			return Settings{}, fmt.Errorf("config: %s: rounds: expected a positive number (0 = no cap), got %d", path, v)
 		}
 		if v != 0 {
 			s.Rounds = v
