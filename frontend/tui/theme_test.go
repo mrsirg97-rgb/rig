@@ -9,8 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 )
 
-// --- the shipped tables (decision 7) ---
-
 func TestShippedThemesCarryEverySlot(t *testing.T) {
 	want := []string{"oled", "paper", "p1", "p3"}
 	for _, name := range want {
@@ -65,13 +63,11 @@ func TestGlyphSets(t *testing.T) {
 	}
 }
 
-// --- theme.json schema (decision 7's named cases) ---
-
 func TestThemeJSONSchemaRefusals(t *testing.T) {
 	cases := []struct {
 		name string
 		doc  string
-		want string // a fragment of the refusal voice
+		want string
 	}{
 		{"unknown base", `{"base":"plasma"}`, `unknown base "plasma" (known: oled, p1, p3, paper)`},
 		{"missing base", `{"glyphs":"ascii"}`, `base required (known: oled, p1, p3, paper)`},
@@ -121,8 +117,7 @@ func TestThemeJSONSlotOverrideAndGlyphs(t *testing.T) {
 }
 
 func TestThemeJSONWinsOverSettings(t *testing.T) {
-	// the file is the more specific intent (decision 7, named): with both
-	// set, the file's base wins.
+
 	doc := []byte(`{"base":"p3"}`)
 	th, err := tui.ResolveTheme("paper", json.RawMessage(doc), true)
 	if err != nil {
@@ -144,21 +139,19 @@ func TestSettingsThemeUnknownRefusesNamingKnown(t *testing.T) {
 	}
 }
 
-// --- the 256 downconvert (decision 7's named case) ---
-
 func TestDownconvert256KnownHexes(t *testing.T) {
 	cases := []struct {
 		hex  string
 		want int
 	}{
-		{"#ff0000", 196}, // cube 5,0,0
-		{"#00ff00", 46},  // cube 0,5,0
-		{"#0000ff", 21},  // cube 0,0,5
-		{"#ff8000", 208}, // cube 5,2,0 (nearest: g 128 -> 135)
-		{"#c0c0c0", 250}, // grayscale ramp, nearest step
+		{"#ff0000", 196},
+		{"#00ff00", 46},
+		{"#0000ff", 21},
+		{"#ff8000", 208},
+		{"#c0c0c0", 250},
 		{"#ffffff", 231},
 		{"#000000", 16},
-		{"#585858", 240}, // the ramp step 8+10*8 is exact
+		{"#585858", 240},
 	}
 	for _, c := range cases {
 		if got := tui.Nearest256(c.hex); got != c.want {
@@ -175,8 +168,6 @@ func TestDownconvertRefusesBadHex(t *testing.T) {
 	}
 }
 
-// --- the phosphor ramp (decision 7's named case) ---
-
 func TestPhosphorRampIsFourDistinctBrightnesses(t *testing.T) {
 	for _, name := range []string{"p1", "p3"} {
 		th, err := tui.ResolveTheme(name, nil, true)
@@ -191,8 +182,7 @@ func TestPhosphorRampIsFourDistinctBrightnesses(t *testing.T) {
 		if len(seen) != 4 {
 			t.Fatalf("%s: %d distinct slot values, want the four-brightness ramp %v", name, len(seen), seen)
 		}
-		// the hierarchy is pinned: text brightest, rule/dim deepest,
-		// accent+success the next tier, error+warn+reasoning the middle.
+
 		if th.Slot("text") == th.Slot("dim") || th.Slot("accent") == th.Slot("warn") {
 			t.Fatalf("%s: the hierarchy collapsed: %v", name, seen)
 		}
@@ -208,14 +198,12 @@ func TestPhosphorRampIsFourDistinctBrightnesses(t *testing.T) {
 	}
 }
 
-// --- SGR rendering (ansi) ---
-
 func TestPaintTrueColorAnd256(t *testing.T) {
 	tc, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// accent #61afef: the truecolor sequence is named, not by eye.
+
 	got := tc.Paint("accent", "bash")
 	want := "\x1b[38;2;97;175;239m" + "bash" + "\x1b[0m"
 	if got != want {

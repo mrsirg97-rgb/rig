@@ -4,8 +4,6 @@ import (
 	"testing"
 )
 
-// parseBytes runs the named key sequence through the parser and returns
-// the keys it reports (the keyNone gaps dropped) — the parser's table.
 func parseBytes(t *testing.T, b []byte) []key {
 	t.Helper()
 	var p keyParser
@@ -30,10 +28,6 @@ func eqKeys(got, want []key) bool {
 	return true
 }
 
-// TestKeyParserTable is the named input case (SPEC_TUI's testing
-// section): the arrows, home/end (every common encoding), backspace,
-// delete, the control keys, and the unrecognized sequences consumed and
-// ignored — never a crash on an exotic terminal.
 func TestKeyParserTable(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -63,15 +57,12 @@ func TestKeyParserTable(t *testing.T) {
 		{"end tilde 4", []byte{0x1b, '[', '4', '~'}, []key{keyEnd}},
 		{"end tilde 8", []byte{0x1b, '[', '8', '~'}, []key{keyEnd}},
 		{"delete tilde", []byte{0x1b, '[', '3', '~'}, []key{keyDelete}},
-		// the unrecognized set: consumed, ignored, the line untouched.
+
 		{"page up", []byte{0x1b, '[', '5', '~'}, []key{keyPgUp}},
 		{"page down", []byte{0x1b, '[', '6', '~'}, []key{keyPgDn}},
 		{"unrecognized tilde", []byte{0x1b, '[', '1', '5', '~'}, []key{}},
 		{"two byte escape", []byte{0x1b, '(', 'B'}, []key{}},
-		// a byte after the two-byte mode selection is its own content:
-		// the parser consumes the mode, the text stands.
-		// the designator's final byte is part of the sequence; the
-		// text after it stands on its own.
+
 		{"two byte escape plus text", []byte{0x1b, '(', 'B', 'a'}, []key{keyText}},
 		{"lone escape", []byte{0x1b}, []key{}},
 		{"osc title", []byte{0x1b, ']', '0', ';', 'r', 'i', 'g', 0x07}, []key{}},
@@ -100,9 +91,6 @@ func TestKeyParserTable(t *testing.T) {
 	}
 }
 
-// TestKeyParserWideGlyph is the wide-glyph rule: the multi-byte rune
-// arrives as a single key, so the editor and the backspace see it as
-// one unit.
 func TestKeyParserWideGlyph(t *testing.T) {
 	var p keyParser
 	var keys []key
@@ -119,17 +107,15 @@ func TestKeyParserWideGlyph(t *testing.T) {
 	}
 }
 
-// TestEditorBackspaceAcrossWideGlyph: the rune under the cursor goes,
-// wide glyph whole — the buffer is runes, not bytes.
 func TestEditorBackspaceAcrossWideGlyph(t *testing.T) {
 	var e editor
 	e.buf = []rune("ab你cd")
-	e.pos = 3 // after the wide glyph
+	e.pos = 3
 	e.apply(keyBackspace, 0)
 	if e.text() != "abcd" || e.pos != 2 {
 		t.Fatalf("backspace across the wide glyph: buf=%q pos=%d, want abcd 2", e.text(), e.pos)
 	}
-	// delete, the forward edge of the same rule.
+
 	e.buf = []rune("ab你cd")
 	e.pos = 2
 	e.apply(keyDelete, 0)
@@ -138,9 +124,6 @@ func TestEditorBackspaceAcrossWideGlyph(t *testing.T) {
 	}
 }
 
-// TestEditorCursorAcrossWideGlyph: the edit column is runewidth's — a
-// wide glyph is two columns in the terminal, and the cursor parks
-// after both.
 func TestEditorCursorAcrossWideGlyph(t *testing.T) {
 	var e editor
 	e.buf = []rune("你x")
@@ -150,31 +133,28 @@ func TestEditorCursorAcrossWideGlyph(t *testing.T) {
 	}
 }
 
-// TestEditorHistoryUpDown is the named input case: the session history,
-// up and down, the draft preserved around the trip.
 func TestEditorHistoryUpDown(t *testing.T) {
 	e := newEditor()
 	e.buf = []rune("draft")
 	e.pos = 5
-	// hist in submission order: "second" is the newest.
+
 	e.hist = []string{"first", "second"}
 
-	// up from the draft: the newest entry, the draft saved.
 	e.apply(keyUp, 0)
 	if e.text() != "second" {
 		t.Fatalf("up from the draft = %q, want the newest entry", e.text())
 	}
-	// up again: the older one.
+
 	e.apply(keyUp, 0)
 	if e.text() != "first" {
 		t.Fatalf("up again = %q, want the older entry", e.text())
 	}
-	// up at the top: stays.
+
 	e.apply(keyUp, 0)
 	if e.text() != "first" {
 		t.Fatalf("up at the top moved: %q", e.text())
 	}
-	// down: back toward the draft.
+
 	e.apply(keyDown, 0)
 	if e.text() != "second" {
 		t.Fatalf("down = %q, want the newer entry", e.text())
@@ -183,12 +163,12 @@ func TestEditorHistoryUpDown(t *testing.T) {
 	if e.text() != "draft" {
 		t.Fatalf("down at the newest = %q, want the draft", e.text())
 	}
-	// down past the draft: stays.
+
 	e.apply(keyDown, 0)
 	if e.text() != "draft" {
 		t.Fatalf("down past the draft moved: %q", e.text())
 	}
-	// Enter adds the submitted line to the history.
+
 	line, submitted := e.apply(keyEnter, 0)
 	if !submitted || line != "draft" {
 		t.Fatalf("Enter = (%q, %v), want the draft submitted", line, submitted)
@@ -196,7 +176,7 @@ func TestEditorHistoryUpDown(t *testing.T) {
 	if len(e.hist) != 3 || e.hist[2] != "draft" {
 		t.Fatalf("Enter did not record the draft: %v", e.hist)
 	}
-	// a blank line is not recorded, and not submitted.
+
 	_, submitted = e.apply(keyEnter, 0)
 	if submitted {
 		t.Fatal("the blank line was submitted")
@@ -206,9 +186,6 @@ func TestEditorHistoryUpDown(t *testing.T) {
 	}
 }
 
-// TestEditorKillOps (decision 9's keybinds): Ctrl-U to the start,
-// Ctrl-K to the end, Ctrl-W the word before the cursor, Esc the whole
-// prompt (the history draft with it).
 func TestEditorKillOps(t *testing.T) {
 	e := newEditor()
 	feed := func(s string) {

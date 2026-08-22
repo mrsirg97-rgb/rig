@@ -10,8 +10,6 @@ import (
 
 func ev(id uint64, priority int) evt.Event { return evt.NewEvent(id, priority, nil) }
 
-// test_queue_basic.c: the five events pop priority descending, id
-// ascending.
 func TestQueueBasic(t *testing.T) {
 	q := evt.NewQueue(4)
 	q.Push(ev(100, 3))
@@ -35,8 +33,6 @@ func TestQueueBasic(t *testing.T) {
 	}
 }
 
-// test_queue_empty_pop.c: an empty queue reports absent, never a zero
-// event.
 func TestQueueEmptyPop(t *testing.T) {
 	q := evt.NewQueue(0)
 	if e, ok := q.Pop(); ok || e != nil {
@@ -50,8 +46,6 @@ func TestQueueEmptyPop(t *testing.T) {
 	}
 }
 
-// test_queue_multithread.c: four producers push under an external
-// mutex (the queue is not itself safe); the drain is sorted.
 func TestQueueMultithread(t *testing.T) {
 	const threads, per = 4, 2000
 	q := evt.NewQueue(64)
@@ -76,9 +70,6 @@ func TestQueueMultithread(t *testing.T) {
 	assertSortedDrain(t, q, threads*per)
 }
 
-// test_queue_stress.c: interleaved pushes and pops with random
-// priorities; the heap and the position map agree throughout, and the
-// final drain is sorted.
 func TestQueueStress(t *testing.T) {
 	const n = 100000
 	r := rand.New(rand.NewSource(1))
@@ -132,7 +123,6 @@ func assertSortedDrain(t *testing.T, q evt.Queue, want int) {
 	}
 }
 
-// test_queue_perf.c: the number.
 func BenchmarkQueuePushPop(b *testing.B) {
 	q := evt.NewQueue(1024)
 	r := rand.New(rand.NewSource(1))

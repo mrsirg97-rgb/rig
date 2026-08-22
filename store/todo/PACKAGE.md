@@ -50,3 +50,6 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
   queue; ReadAll returns the history; a transition echo is the affected
   row plus the summary. Create keeps the full (filtered) queue: a
   replacement's point is the new state.
+- `StorePath(home, cwd)`: one file per cwd under `<home>/todo`, keyed by
+  the first twelve sha1 bytes of the cwd — the root's and the
+  dashboard's one source (SPEC_SERVE 2).

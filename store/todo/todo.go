@@ -519,9 +519,6 @@ func lineOf(f *folded, ts *taskState, session string) string {
 	return line
 }
 
-// renderQueue is the actionable render: done rows fold into the summary.
-// all=true keeps every row (the history). A genuinely empty queue still
-// says "(no tasks)".
 func renderQueue(f *folded, session string, all bool) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
@@ -538,8 +535,6 @@ func renderQueue(f *folded, session string, all bool) string {
 	return b.String()
 }
 
-// echoTask is the lean transition echo: the affected line, the summary,
-// and the stale footer when staleness is live.
 func echoTask(f *folded, session, id, note string) string {
 	var b strings.Builder
 	if note != "" {
@@ -634,8 +629,7 @@ func Complete(ctx context.Context, db store.DB, id, session string) (string, err
 		if blocker := blockedBy(f, ts); blocker != "" {
 			return "", fmt.Errorf("'%s' is blocked by '%s' (%s)", id, blocker, blockHint(f, blocker))
 		}
-		// the caller's own unclaimed pending task: complete implicitly
-		// claims and completes — start+complete, both events.
+
 		args, _ := json.Marshal(map[string]any{"id": id})
 		note := "'" + id + "' completed"
 		if ts.status == statusPending {

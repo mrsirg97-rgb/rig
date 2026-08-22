@@ -10,8 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 )
 
-// --- the usage line (decision 2: TurnEnd, pane's shaping) ---
-
 func TestUsageLineExact(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
@@ -22,14 +20,11 @@ func TestUsageLineExact(t *testing.T) {
 	if got != want {
 		t.Fatalf("usage line = %q, want %q", got, want)
 	}
-	// zero usage: the line still commits (the CLI's TurnEnd discipline),
-	// hit 0, no division by zero.
+
 	if got := tui.RenderUsage(th, 0, 0, 0); got != th.Paint("dim", "up 0 down 0 · cache r 0 0%") {
 		t.Fatalf("zero usage = %q", got)
 	}
 }
-
-// --- the compact line (decision 2; the CLI's voice, pane's shaping) ---
 
 func TestCompactedLineExact(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
@@ -47,8 +42,6 @@ func TestCompactedLineExact(t *testing.T) {
 		t.Fatalf("the ascii compact glyph is the = set: %q", got)
 	}
 }
-
-// --- the fault line ---
 
 func TestFaultLine(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
@@ -68,8 +61,6 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
-// --- the tool block (decision 4) ---
-
 func bashArgs() json.RawMessage {
 	return json.RawMessage(`{"command":"go test ./middleware/\n-v"}`)
 }
@@ -88,7 +79,7 @@ func TestToolBlockHeadTailElided(t *testing.T) {
 	}
 	got := tui.RenderToolBlock(th, "bash", bashArgs(), body.String()+"\n", false, 400*time.Millisecond)
 	lines := strings.Split(got, "\n")
-	// head six, the loud hidden marker, tail two, then the close line.
+
 	want := []string{
 		th.Paint("accent", "●") + " " + th.Paint("accent", "bash") + th.Paint("dim", " · ") + th.Paint("text", "$ go test ./middleware/"),
 		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
@@ -107,9 +98,6 @@ func TestToolBlockHeadTailElided(t *testing.T) {
 	}
 }
 
-// the diff block (SPEC_DIFF decision 6): the opening carries the verb
-// (the one toolDetail entry); the rest of the block is the default
-// path (preview, outcome, duration), unchanged.
 func TestToolBlockDiffShowsVerbAndStaysDefaultPath(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
@@ -124,8 +112,7 @@ func TestToolBlockDiffShowsVerbAndStaysDefaultPath(t *testing.T) {
 	}
 	got := tui.RenderToolBlock(th, "diff", json.RawMessage(`{"mode":"files","ref":"base"}`), body.String()+"\n", false, 400*time.Millisecond)
 	lines := strings.Split(got, "\n")
-	// the opening: the accent dot, the name, the verb — then the
-	// default path: head six, the loud hidden marker, tail two, close.
+
 	want := []string{
 		th.Paint("accent", "●") + " " + th.Paint("accent", "diff") + th.Paint("dim", " · ") + th.Paint("text", "files"),
 		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
@@ -142,7 +129,7 @@ func TestToolBlockDiffShowsVerbAndStaysDefaultPath(t *testing.T) {
 			t.Fatalf("line %d = %q, want %q", i, lines[i], want[i])
 		}
 	}
-	// a fed-back failure keeps the default outcome line.
+
 	got = tui.RenderToolBlock(th, "diff", json.RawMessage(`{"mode":"last","tool":"bash"}`), "no earlier observation", true, time.Second)
 	if !strings.Contains(got, th.Paint("error", "✕")) {
 		t.Fatalf("a failed diff block must keep the default failure outcome:\n%s", got)
@@ -189,7 +176,6 @@ func TestToolBlockShortBodyUnhidden(t *testing.T) {
 	}
 }
 
-// decision 4's detail table: one line per tool, name-only when unknown.
 func TestToolDetailTable(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
@@ -212,7 +198,7 @@ func TestToolDetailTable(t *testing.T) {
 		{"web_fetch", `{"url":"https://example.com/x"}`, "https://example.com/x"},
 		{"diff", `{"mode":"files","ref":"base"}`, "files"},
 		{"diff", `{"mode":"last","tool":"bash","args":{"command":"ls"}}`, "last"},
-		{"rem", `{"action":"recall","query":"pty"}`, ""}, // unknown to the table: name-only
+		{"rem", `{"action":"recall","query":"pty"}`, ""},
 	}
 	for _, c := range cases {
 		got := tui.RenderToolBlock(th, c.name, json.RawMessage(c.args), "body", false, time.Second)
@@ -234,11 +220,6 @@ func firstLine(s string) string {
 	return s[:i]
 }
 
-// the write and edit previews (decision 4, amended): the interesting
-// bytes of a write or an edit are its arguments, so the block previews
-// them under the opening line — write the content, edit the old (-) and
-// new (+) sides — with the same head/tail elision as a result body; the
-// tool's own result line follows as ever.
 func TestWriteBlockPreviewsTheContent(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {

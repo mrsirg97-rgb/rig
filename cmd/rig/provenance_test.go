@@ -1,13 +1,5 @@
 package main
 
-// The provenance rule's named cases (SPEC_SANDBOX 2, testing): the
-// model's write into plugins/ refuses with the teaching voice, into
-// plugins/pending/ lands, discovery never loads the pending zone, and
-// the operator's /plugins pending and /plugins approve verbs do their
-// work at the command door. The e2e runs the built binary with a
-// scratch home and a scripted provider; the operator verbs ride the
-// piped CLI (the command door is Frontend-side by construction).
-
 import (
 	"encoding/json"
 	"os"
@@ -19,10 +11,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/plugins"
 )
 
-// TestListPluginFilesIgnoresThePendingZone (SPEC_SANDBOX, named):
-// discovery's listing is the top-level *.py rule — the pending zone is
-// a directory, so it is not listed, whatever it holds. No loader
-// change at all.
 func TestListPluginFilesIgnoresThePendingZone(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
@@ -45,8 +33,6 @@ func TestListPluginFilesIgnoresThePendingZone(t *testing.T) {
 	}
 }
 
-// writeCallArgs is a write tool call's args dict, marshalled for the
-// scripted provider's tool_call.
 func writeCallArgs(t *testing.T, path, content string) string {
 	t.Helper()
 	b, err := json.Marshal(map[string]string{"path": path, "content": content})
@@ -56,13 +42,9 @@ func writeCallArgs(t *testing.T, path, content string) string {
 	return string(b)
 }
 
-// TestModelWriteIntoPluginsRefusesLoud (SPEC_SANDBOX, named): the
-// model's write into plugins/x.py refuses with the teaching voice —
-// the refusal rides back as the tool result, and the file is not
-// created.
 func TestModelWriteIntoPluginsRefusesLoud(t *testing.T) {
 	scratch := t.TempDir()
-	// the refusal needs no python: the write call dies in the chain.
+
 	s := &pluginSrv{replies: []string{
 		toolCallReply("c1", "write", writeCallArgs(t, filepath.Join(scratch, ".rig", "plugins", "evil.py"), "evil = 1")),
 		pongReply,
@@ -92,10 +74,6 @@ func TestModelWriteIntoPluginsRefusesLoud(t *testing.T) {
 	}
 }
 
-// TestModelWriteIntoThePendingZoneLands (SPEC_SANDBOX, named): into
-// plugins/pending/ the same write lands — the zone is created at
-// startup (the write tool makes no directories), and the file is the
-// model's bytes.
 func TestModelWriteIntoThePendingZoneLands(t *testing.T) {
 	s := &pluginSrv{replies: []string{pongReply}}
 	srv := newPluginSrv(t, s)
@@ -136,9 +114,6 @@ def run(args):
 	}
 }
 
-// TestDiscoveryNeverLoadsPending (SPEC_SANDBOX, named): a pending
-// plugin, valid and named like a plugin, is invisible to the wire —
-// the top-level rule is the loader's whole surface.
 func TestDiscoveryNeverLoadsPending(t *testing.T) {
 	py := pluginKernelPy(t)
 	s := &pluginSrv{replies: []string{pongReply}}
@@ -188,9 +163,6 @@ def run(args):
 	}
 }
 
-// pipedCommands runs the binary with command lines on stdin (the piped
-// CLI's dispatch) and returns the stdout the operator sees. No model
-// turn happens: the commands never reach the loop.
 func pipedCommands(t *testing.T, bin string, scratch string, lines ...string) string {
 	t.Helper()
 	cmd := exec.Command(bin, "-base-url", "http://127.0.0.1:1/v1")
@@ -207,10 +179,6 @@ func pipedCommands(t *testing.T, bin string, scratch string, lines ...string) st
 	return string(out)
 }
 
-// TestApproveMovesThePendingPlugin (SPEC_SANDBOX, named): the
-// operator's /plugins approve <name> moves the pending file to the
-// top level — the /plugins pending line before the approve lists it
-// with its DESCRIPTION, and the zone is empty after.
 func TestApproveMovesThePendingPlugin(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()
@@ -237,30 +205,29 @@ def run(args):
 	if len(lines) != 7 {
 		t.Fatalf("the dispatch prints the commands' lines (post-8: the approve's tail is the reload's), got %q", out)
 	}
-	// the listing before: the zone's file with its DESCRIPTION.
+
 	if !strings.Contains(lines[0], "pending") {
 		t.Fatalf("the listing's header must name the pending count, got %q", lines[0])
 	}
 	if !strings.Contains(lines[1], "forge: the fixture forge plugin") {
 		t.Fatalf("the pending listing must carry the DESCRIPTION, got %q", lines[1])
 	}
-	// the approve: the move named.
+
 	if !strings.Contains(lines[2], "approved forge") || !strings.Contains(lines[2], "pending") {
 		t.Fatalf("the approve line must name the move, got %q", lines[2])
 	}
-	// the reload's tail (post-8): the list rebuilt, the forged plugin
-	// loaded from its new top-level home.
+
 	if !strings.Contains(lines[3], "reload: 1 loaded, 0 skipped") {
 		t.Fatalf("the approve's tail must be the reload's (SPEC_SANDBOX, post-8), got %q", lines[3])
 	}
 	if lines[4] != "loaded:" || !strings.Contains(lines[5], "forge: the fixture forge plugin") || strings.Contains(lines[5], "pending") {
 		t.Fatalf("the reload's listing must carry the loaded plugin at its top-level home, got %q", lines[5])
 	}
-	// the listing after: empty.
+
 	if lines[6] != "plugins: no pending plugins" {
 		t.Fatalf("the zone must be empty after the approve, got %q", lines[6])
 	}
-	// the filesystem: moved.
+
 	if _, err := os.Stat(filepath.Join(home, "plugins", "forge.py")); err != nil {
 		t.Fatalf("the approved plugin must be at the top level: %v", err)
 	}
@@ -269,10 +236,6 @@ def run(args):
 	}
 }
 
-// TestApproveNativeCollisionRefusesAtTheNewDoor (SPEC_SANDBOX, named):
-// approve of a name that collides with a native refuses with the
-// existing rule's voice — the pending file stays, nothing lands at the
-// top level.
 func TestApproveNativeCollisionRefusesAtTheNewDoor(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()

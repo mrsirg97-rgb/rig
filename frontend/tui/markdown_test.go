@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// TestWrapSegsAtWords (decision 2, amended): prose breaks at spaces,
-// the paint survives the break, a word wider than the width breaks at
-// the edge, and an empty line is one empty row.
 func TestWrapSegsAtWords(t *testing.T) {
 	th := oledTheme(t)
 	rows := wrapSegs(th, 12, []seg{{slot: SlotText, text: "streaming reasoning that wraps"}})
@@ -20,12 +17,12 @@ func TestWrapSegsAtWords(t *testing.T) {
 			t.Fatalf("row %d = %q, want %q", i, RemoveColor(rows[i]), want[i])
 		}
 	}
-	// the paint per piece survives: a mixed line keeps its slots.
+
 	rows = wrapSegs(th, 10, []seg{{slot: SlotText, text: "plain "}, {slot: SlotEmber, text: "code word"}})
 	if len(rows) != 2 || !strings.Contains(rows[1], th.Paint(SlotEmber, "word")) {
 		t.Fatalf("the paint must survive the break: %q", rows)
 	}
-	// a word wider than the width: the edge break, the terminal's rule.
+
 	rows = wrapSegs(th, 5, []seg{{slot: SlotText, text: "abcdefgh"}})
 	if len(rows) != 2 || RemoveColor(rows[0]) != "abcde" || RemoveColor(rows[1]) != "fgh" {
 		t.Fatalf("the wide word must break at the edge: %q", rows)
@@ -33,7 +30,7 @@ func TestWrapSegsAtWords(t *testing.T) {
 	if rows := wrapSegs(th, 10, nil); len(rows) != 1 || rows[0] != "" {
 		t.Fatalf("an empty line is one empty row: %q", rows)
 	}
-	// every row fits the width.
+
 	for _, r := range wrapSegs(th, 7, []seg{{slot: SlotText, text: "one two three four five six"}}) {
 		if displayWidth(RemoveColor(r)) > 7 {
 			t.Fatalf("a row overflows the width: %q", r)
@@ -41,7 +38,6 @@ func TestWrapSegsAtWords(t *testing.T) {
 	}
 }
 
-// TestMarkdownInline: the inline subset, exactly, and the raw cases.
 func TestMarkdownInline(t *testing.T) {
 	th := oledTheme(t)
 	paint := func(segs []seg) string { return paintSegs(th, segs) }
@@ -55,8 +51,8 @@ func TestMarkdownInline(t *testing.T) {
 		{"unclosed **bold", th.Paint(SlotText, "unclosed **bold")},
 		{"unclosed `code", th.Paint(SlotText, "unclosed `code")},
 		{"escaped \\*star\\*", th.Paint(SlotText, "escaped *star*")},
-		{"2 * 3 * 4", th.Paint(SlotText, "2 * 3 * 4")},                                                      // spaces around: not emphasis
-		{"a `b*c*d` e", th.Paint(SlotText, "a ") + th.Paint(SlotEmber, "b*c*d") + th.Paint(SlotText, " e")}, // marks inside code are text
+		{"2 * 3 * 4", th.Paint(SlotText, "2 * 3 * 4")},
+		{"a `b*c*d` e", th.Paint(SlotText, "a ") + th.Paint(SlotEmber, "b*c*d") + th.Paint(SlotText, " e")},
 	}
 	for _, c := range cases {
 		out, fence, _ := mdLine(th, []seg{{slot: SlotText, text: c.in}})
@@ -69,9 +65,6 @@ func TestMarkdownInline(t *testing.T) {
 	}
 }
 
-// TestMarkdownBlocks: headings, quotes, lists, the fence toggle, and
-// the width invariant (decoration changes paint, not width, except the
-// list bullet and the quote bar which are one glyph for one mark).
 func TestMarkdownBlocks(t *testing.T) {
 	th := oledTheme(t)
 	out, _, _ := mdLine(th, []seg{{slot: SlotText, text: "## Title here"}})
@@ -94,17 +87,13 @@ func TestMarkdownBlocks(t *testing.T) {
 	if !fence || info != "go" {
 		t.Fatalf("fence = %v %q", fence, info)
 	}
-	// reasoning is never decorated.
+
 	out, _, _ = mdLine(th, []seg{{slot: SlotReasoning, text: "**not bold**"}})
 	if got := paintSegs(th, out); got != th.Paint(SlotReasoning, "**not bold**") {
 		t.Fatalf("reasoning must stay raw: %q", got)
 	}
 }
 
-// TestExpandTabs (the code-duplication bug): runewidth gives a tab
-// width zero but the terminal advances to an 8-column stop — tabs
-// expand to spaces at ingestion, tracking the column across deltas,
-// resetting at newlines, so the row math and the terminal agree.
 func TestExpandTabs(t *testing.T) {
 	tu := &tui{}
 	if got := tu.expandTabsLocked("\tx"); got != "        x" {
@@ -114,7 +103,7 @@ func TestExpandTabs(t *testing.T) {
 	if got := tu.expandTabsLocked("ab\tc"); got != "ab      c" {
 		t.Fatalf("tab at col 2 = %q, want six spaces to the stop", got)
 	}
-	// the column carries across deltas and resets at a newline.
+
 	tu.pendCol = 0
 	_ = tu.expandTabsLocked("abcd")
 	if got := tu.expandTabsLocked("\t"); got != "    " {

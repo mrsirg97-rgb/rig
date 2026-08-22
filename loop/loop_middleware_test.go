@@ -1,9 +1,5 @@
 package loop_test
 
-// End-to-end pairing, per the spec: a denied call and a failing tool call are
-// both fed back to the model and bounded by the guard; the loop itself never
-// retries.
-
 import (
 	"context"
 	"encoding/json"
@@ -18,7 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 )
 
-// countingTool fails for its first calls, counting every execution.
 type countingTool struct {
 	name  string
 	fail  int
@@ -58,7 +53,7 @@ func TestDenialIsFedBackAndBounded(t *testing.T) {
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
 		rig.WithMiddleware(
-			perm.Allowlist("read"), // bash is not listed: denied
+			perm.Allowlist("read"),
 			guard.Bound(3),
 		),
 	)
@@ -117,8 +112,6 @@ func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	// each of the model's identical failing issuances executes exactly once;
-	// the fourth is refused without executing.
 	if bash.calls != 3 {
 		t.Fatalf("failing call executed %d times across re-issuance, want exactly the bound of 3", bash.calls)
 	}

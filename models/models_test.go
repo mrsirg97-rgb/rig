@@ -8,11 +8,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/models"
 )
 
-// legalRow is the worker profile from the spec (decision 2).
 var legal = models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive}
 
-// table is the 0.2.0 rows (SPEC_CONFIG 4: the table leaves code for the
-// embedded config/models.json; the test harnesses construct the same rows).
 func table() models.Table {
 	t, err := models.New(
 		models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
@@ -24,8 +21,6 @@ func table() models.Table {
 	return t
 }
 
-// The row invariants by name (SPEC_COMPACT 2): each refused, the id and
-// the field named in the error.
 func TestCheckNamesTheRowInvariants(t *testing.T) {
 	if err := legal.Check(); err != nil {
 		t.Fatalf("a legal row must pass: %v", err)
@@ -65,9 +60,6 @@ func TestCheckNamesTheRowInvariants(t *testing.T) {
 	}
 }
 
-// The role vocabulary (SPEC_CONFIG 4): the two values pass, anything
-// else refuses naming the allowed set. The default is the caller's (the
-// merge and the synthesis path set it); Check refuses the unset field.
 func TestCheckRoleVocabulary(t *testing.T) {
 	for _, role := range []string{models.RoleInteractive, models.RoleWorker} {
 		m := legal
@@ -92,8 +84,6 @@ func TestCheckRoleVocabulary(t *testing.T) {
 	}
 }
 
-// Resolve: a known row comes back as-is when the env sets nothing
-// (SPEC_COMPACT 2).
 func TestResolveReturnsTheKnownRow(t *testing.T) {
 	m, err := models.Resolve(table(), "local", func(string) (string, bool) { return "", false })
 	if err != nil {
@@ -104,10 +94,6 @@ func TestResolveReturnsTheKnownRow(t *testing.T) {
 	}
 }
 
-// Resolve: for the active id, the RIG_MODEL_* env overlays the row's
-// fields — set beats the row, per field (SPEC_CONFIG 4): the precedence
-// chain applied to the row's fields. 0.2.0 consulted the env only for
-// ids the table did not know; this makes the env win for a known id too.
 func TestResolveEnvOverlaysTheActiveRow(t *testing.T) {
 	env := map[string]string{"RIG_MODEL_WINDOW": "32768"}
 	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
@@ -121,7 +107,6 @@ func TestResolveEnvOverlaysTheActiveRow(t *testing.T) {
 		t.Fatalf("Resolve = %+v, want the row with the env's window only (+%d)", m, want.Window-legal.Window)
 	}
 
-	// all four fields: each set env beats its field
 	env = map[string]string{
 		"RIG_MODEL_WINDOW": "40000", "RIG_MODEL_MAX_TOKENS": "10000",
 		"RIG_MODEL_RESERVE": "5000", "RIG_MODEL_KEEP_RECENT": "10000",
@@ -135,14 +120,12 @@ func TestResolveEnvOverlaysTheActiveRow(t *testing.T) {
 		t.Fatalf("Resolve = %+v, want every field the env's", m)
 	}
 
-	// an overlay that breaks the invariants is refused, loud
 	env = map[string]string{"RIG_MODEL_RESERVE": "999999"}
 	lookup = func(k string) (string, bool) { v, ok := env[k]; return v, ok }
 	if _, err := models.Resolve(table(), "local", lookup); err == nil {
 		t.Fatal("an overlay that breaks Reserve < Window must refuse")
 	}
 
-	// a malformed number is refused too
 	env = map[string]string{"RIG_MODEL_WINDOW": "big"}
 	lookup = func(k string) (string, bool) { v, ok := env[k]; return v, ok }
 	if _, err := models.Resolve(table(), "local", lookup); err == nil {
@@ -150,15 +133,10 @@ func TestResolveEnvOverlaysTheActiveRow(t *testing.T) {
 	}
 }
 
-// Resolve: env synthesis — absent fields take the named defaults
-// (MaxTokens 8192, Reserve Window/8, KeepRecent Window/4), then validate
-// (decision 2). This is how a new model on the swap gets a row without a
-// code change.
 func TestResolveSynthesizesFromEnv(t *testing.T) {
 	env := map[string]string{"RIG_MODEL_WINDOW": "262144"}
 	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
 
-	// absent fields: the named defaults
 	m, err := models.Resolve(table(), "brain", lookup)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -171,7 +149,6 @@ func TestResolveSynthesizesFromEnv(t *testing.T) {
 			m.MaxTokens, m.Reserve, m.KeepRecent, 262144/8, 262144/4)
 	}
 
-	// the spec's brain row, spelled out in full
 	env = map[string]string{
 		"RIG_MODEL_WINDOW": "262144", "RIG_MODEL_MAX_TOKENS": "16384",
 		"RIG_MODEL_RESERVE": "16384", "RIG_MODEL_KEEP_RECENT": "32768",
@@ -181,17 +158,13 @@ func TestResolveSynthesizesFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	// the synthesized row carries its role (SPEC_CONFIG 4): the env path
-	// has no file to borrow one from, and the default is interactive.
+
 	want := models.Model{ID: "brain", Window: 262144, MaxTokens: 16384, Reserve: 16384, KeepRecent: 32768, Role: models.RoleInteractive}
 	if !reflect.DeepEqual(m, want) {
 		t.Fatalf("row = %+v, want %+v", m, want)
 	}
 }
 
-// Resolve: the unknown-id synthesis path names the role (SPEC_CONFIG 4,
-// named): the env path has no file to borrow one from, and the default
-// is interactive; effort is empty — the policy's medium default.
 func TestResolveSynthesizedRowCarriesInteractive(t *testing.T) {
 	env := map[string]string{"RIG_MODEL_WINDOW": "65536"}
 	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
@@ -204,9 +177,6 @@ func TestResolveSynthesizedRowCarriesInteractive(t *testing.T) {
 	}
 }
 
-// Resolve: an env mistake is loud at start, not a slow death on the first
-// turn (decision 2): a synthesized row that violates the invariants is
-// refused with the invariants' voice; a malformed number is refused too.
 func TestResolveRefusesBadSynthesis(t *testing.T) {
 	cases := map[string]map[string]string{
 		"reserve over window":   {"RIG_MODEL_WINDOW": "100", "RIG_MODEL_RESERVE": "100"},
@@ -225,8 +195,6 @@ func TestResolveRefusesBadSynthesis(t *testing.T) {
 	}
 }
 
-// Resolve: an unknown id with no env — the refusal names the id, the
-// table's known ids, and the env (decision 2's voice, quoted).
 func TestResolveRefusalNamesTheKnownIdsAndEnv(t *testing.T) {
 	_, err := models.Resolve(table(), "ghost", func(string) (string, bool) { return "", false })
 	if err == nil {
@@ -240,7 +208,6 @@ func TestResolveRefusalNamesTheKnownIdsAndEnv(t *testing.T) {
 	}
 }
 
-// Known: stable order for the refusal voice.
 func TestKnownIsStable(t *testing.T) {
 	tbl, err := models.New(
 		models.Model{ID: "zeta", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},

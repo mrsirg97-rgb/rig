@@ -16,14 +16,10 @@ const (
 	cookieName    = "rig_serve"
 )
 
-// tokenPath resolves the dashboard's credential (SPEC_SERVE 5):
-// <home>/serve.token, 0600, minted once and printed once.
 func tokenPath(home string) string {
 	return filepath.Join(home, tokenFileName)
 }
 
-// LoadToken reads the minted credential; an absent file is a clean no, a
-// present-but-empty or unreadable one is a named refusal (SPEC_SERVE 5).
 func LoadToken(home string) (string, error) {
 	data, err := os.ReadFile(tokenPath(home))
 	if err != nil {
@@ -39,7 +35,6 @@ func LoadToken(home string) (string, error) {
 	return tok, nil
 }
 
-// MintToken writes a fresh credential (0600) and returns it (SPEC_SERVE 5).
 func MintToken(home string) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -52,8 +47,6 @@ func MintToken(home string) (string, error) {
 	return tok, nil
 }
 
-// EnsureToken returns the credential, minting it on first run (SPEC_SERVE
-// 5); the bool reports a fresh mint (the one print).
 func EnsureToken(home string) (string, bool, error) {
 	tok, err := LoadToken(home)
 	if err != nil {
@@ -69,7 +62,6 @@ func EnsureToken(home string) (string, bool, error) {
 	return fresh, true, nil
 }
 
-// tokenMatch is the constant-time compare (SPEC_SERVE 5).
 func tokenMatch(got, want string) bool {
 	if got == "" || want == "" {
 		return false
@@ -77,9 +69,6 @@ func tokenMatch(got, want string) bool {
 	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }
 
-// gate is the token wall (SPEC_SERVE 5): the Authorization: Bearer header,
-// the one-time ?token= (which then sets the cookie), or the cookie itself.
-// No credential, or a wrong one, is a 401; the token never rides a body.
 func gate(token string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := bearerToken(r)

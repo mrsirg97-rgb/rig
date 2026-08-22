@@ -1,8 +1,5 @@
 package store_test
 
-// External test package: the seam's concurrency cases may reach the todo
-// verbs; an internal one would cycle (store/todo already imports store).
-
 import (
 	"context"
 	"fmt"
@@ -16,9 +13,6 @@ import (
 	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
 )
 
-// Concurrent writers against one workspace file must serialize inside the
-// lock window, not drop each other: an interactive session and a scheduler
-// worker are two Opens of the same file.
 func TestConcurrentCreatesSerialize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
 	var dbs []store.DB
@@ -29,9 +23,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 		}
 		dbs = append(dbs, db)
 	}
-	// true parallelism: several goroutines per DB, each driving its own
-	// pooled connections — a pragma applied to one connection must not be
-	// the only one holding it.
+
 	const (
 		perDB = 40
 		gor   = 10
@@ -76,7 +68,6 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 	}
 }
 
-// The same posture over the mutate verbs: disjoint completes, two writers.
 func TestConcurrentCompletesSerialize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
 	d1, _, err := store.Open(path, tododdl.Statements(), 1)
@@ -92,7 +83,7 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open two: %v", err)
 	}
-	// true parallelism within each store, as the creates probe.
+
 	const (
 		gor   = 10
 		slice = 2

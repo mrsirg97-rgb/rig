@@ -11,11 +11,6 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
-// storeCache opens the rig home's store files the way the root does
-// (SPEC_SERVE 2) and caches them per file: the dashboard is a reader of
-// the same SQLite files a live session is writing, never a second copy.
-// The per-cwd path formulas are the stores' own (one source, shared with
-// the root).
 type storeCache struct {
 	home string
 	mu   sync.Mutex

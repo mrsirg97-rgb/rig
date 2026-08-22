@@ -36,19 +36,14 @@ type Env struct {
 	SessionResume func(ctx context.Context, id string) error
 	Models        func() models.Table
 	ActiveModel   func() string
-	// SwitchModel switches the active model; the string is the switch's
-	// note (SPEC_MODES 1, amended: the effort dial's reset when the new
-	// row does not name the level), appended to the reply — empty when
-	// the switch has nothing to say.
+
 	SwitchModel func(ctx context.Context, id string) (string, error)
-	Effort      func() string   // the active effort ("" = the server default, SPEC_MODES 1)
-	Efforts     func() []string // the active row's available levels (empty = the dial is off)
+	Effort      func() string
+	Efforts     func() []string
 	SetEffort   func(ctx context.Context, level string) error
-	Role        func() string // the active stance ("" = default)
+	Role        func() string
 	SetRole     func(ctx context.Context, name string) error
-	// Approve is the tool-approval dial (SPEC_MODES 4): auto or manual.
-	// SetApprove refuses manual when the frontend cannot ask (the root's
-	// door rule) — the refusal is the reply.
+
 	Approve    func() string
 	SetApprove func(ctx context.Context, mode string) error
 	Tools      map[string]core.Tool

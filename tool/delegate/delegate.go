@@ -1,10 +1,3 @@
-// Package delegate is the one-shot worker tool (SPEC_DELEGATE): spawn a
-// headless worker on a task now, in a cwd, wait, and feed back its last
-// message. It is one tool over the existing runner (the jail, the socket
-// proxy, the busy rule, the worker command), a recorded run in the
-// cwd-scope scheduler store under a minted ad-hoc key, and a resumable
-// transcript in the state store. One in flight per session; a worker
-// cannot delegate (the RIG_DELEGATE marker).
 package delegate
 
 import (
@@ -26,12 +19,6 @@ import (
 
 const outputCap = 256 * 1024
 
-// Opts is the tool's wiring (the root's composition): the session's
-// cwd-scope scheduler store and its home (the log dirs), the operator's
-// rig home and state-store directory (the jail's resumable-transcript
-// bind), the worker command (the root's self), the default worker model,
-// the sandbox, and the operator's allow-list (the worker's omits
-// delegate). Fetch and Spawn are the runner's seams, injected for tests.
 type Opts struct {
 	DB           sched.DB
 	Home         string
@@ -166,9 +153,6 @@ func capOutput(s string) string {
 	return s[:outputCap] + "\n[TRUNCATED: " + fmt.Sprintf("%d", len(s)) + " bytes total]"
 }
 
-// canonicalCwd canonicalizes the cwd (absolute and clean, the file tools'
-// shape) and refuses anything outside the session's cwd or the rig home,
-// by name.
 func canonicalCwd(path, sessionCwd, rigHome string) (string, error) {
 	cwd := path
 	if abs, err := filepath.Abs(path); err == nil {
@@ -187,9 +171,6 @@ func canonicalCwd(path, sessionCwd, rigHome string) (string, error) {
 	return "", fmt.Errorf("delegate: cwd %q is outside the session's cwd (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
 }
 
-// findSession names the worker's session in the state store: the worker
-// is a fresh -p one-shot, so its row is the newest started after the
-// spawn (the operator's own session predates it).
 func findSession(ctx context.Context, rigHome, cwd, started string) (string, error) {
 	db, _, err := store.Open(state.StorePath(rigHome, cwd), state.Statements(), state.SchemaVersion)
 	if err != nil {

@@ -16,8 +16,6 @@ import (
 
 var updateGoldens = flag.Bool("update", false, "rewrite the golden stream files")
 
-// scriptInput is the test's stdin: one byte at a time off a channel, so
-// the feed is explicit and the reader's processing is observable.
 type scriptInput struct {
 	ch chan byte
 }
@@ -41,14 +39,6 @@ func (s *scriptInput) feed(text string) {
 
 func (s *scriptInput) close() { close(s.ch) }
 
-// scriptedSession drives the Frontend the way the loop does: Input
-// (delivered from a goroutine, the result awaited with a deadline),
-// Notify for the turn's events, EOF at the end. The out buffer is the
-// whole byte stream of the session — the golden's subject.
-// lockBuf is the harness's out buffer: the frontend's goroutines write
-// it and the test's goroutine reads it, so both sides lock. writes
-// records each Write's size — the write boundaries the tty delivers —
-// so the harness can feed the stream write by write.
 type lockBuf struct {
 	mu     sync.Mutex
 	b      bytes.Buffer
@@ -62,8 +52,6 @@ func (l *lockBuf) Write(p []byte) (int, error) {
 	return l.b.Write(p)
 }
 
-// writeChunks splits the buffer into its Write chunks (the tty's
-// delivery boundaries, in order).
 func (l *lockBuf) writeChunks() []string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -117,8 +105,6 @@ func newScriptedSession(t *testing.T, opts ...Option) *scriptedSession {
 	return &scriptedSession{t: t, fe: fe, si: si, out: out, ctx: ctx, cancel: cancel}
 }
 
-// await blocks until the out buffer contains want (the reader and the
-// draw are async; the test orders itself on the bytes).
 func (s *scriptedSession) await(want string) {
 	s.t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
@@ -130,7 +116,6 @@ func (s *scriptedSession) await(want string) {
 	}
 }
 
-// input starts one Input in a goroutine and awaits its result.
 func (s *scriptedSession) input() (string, error) {
 	s.t.Helper()
 	ch := make(chan struct {
@@ -153,10 +138,6 @@ func (s *scriptedSession) input() (string, error) {
 	}
 }
 
-// goldenStream is the named golden case (SPEC_TUI's testing section):
-// a scripted event stream — a prompt, a reasoning and text stream, a
-// tool round trip, a compaction, a turn end, a second prompt, EOF —
-// the exact bytes.
 func goldenStream(t *testing.T, th Theme, width int, news string) string {
 	t.Helper()
 	s := newScriptedSession(t,
@@ -169,10 +150,9 @@ func goldenStream(t *testing.T, th Theme, width int, news string) string {
 			}
 		}),
 		WithNews(func(ctx context.Context) string { return news }),
-		WithTicks(make(chan time.Time)), // a manual clock: the test is tick-free
+		WithTicks(make(chan time.Time)),
 	)
 
-	// turn one.
 	in := make(chan string, 1)
 	go func() {
 		line, err := s.input()
@@ -181,8 +161,7 @@ func goldenStream(t *testing.T, th Theme, width int, news string) string {
 		}
 		in <- line
 	}()
-	// the startup block's settled state: its last row (the session
-	// totals) stands on the stream before the first prompt lands.
+
 	s.await(th.Paint(SlotDim, "up 214k down 18k · cache r 187k 87%"))
 	s.si.feed("hello\n")
 	if line := <-in; line != "hello" {
@@ -208,7 +187,6 @@ func goldenStream(t *testing.T, th Theme, width int, news string) string {
 	})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
-	// turn two, then EOF.
 	in2 := make(chan string, 1)
 	go func() {
 		line, err := s.input()
@@ -273,10 +251,6 @@ func TestGoldenStream(t *testing.T) {
 	}
 }
 
-// TestGoldenStreamProtocol is the same stream through the escape-
-// capture harness: the whole session's bytes must obey the live-region
-// invariant (the cursor never reaches a committed row) and the escape
-// vocabulary (text, LF, nA, nG, 2K, m — nothing else).
 func TestGoldenStreamProtocol(t *testing.T) {
 	oled, err := ResolveTheme("oled", nil, true)
 	if err != nil {

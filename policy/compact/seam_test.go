@@ -11,13 +11,8 @@ import (
 	compact "github.com/mrsirg97-rgb/rig/policy/compact"
 )
 
-// TestPolicyCompactSeamForcesBelowTrigger (SPEC_COMMANDS 3, named): the
-// forced seam runs the same internal action as the trigger path — split,
-// summarize, rewrite, reflect — below the trigger, where the trigger
-// would pass through; it spends the once budget as the trigger path
-// does; the caller owns delivery (the action never emits, decision 5).
 func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
-	// below the trigger: size (no anchor) est(2x1000B = 500) <= 900
+
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 800)})
 	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400)})
@@ -44,20 +39,18 @@ func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
 	if !compacted {
 		t.Fatal("the forced seam must compact a transcript with an older prefix")
 	}
-	// the rewrite: [summary row] + tail
+
 	if len(s.Messages) == 0 || s.Messages[0].Role != core.RoleUser || !strings.HasPrefix(s.Messages[0].Content, "[compaction] ") {
 		t.Fatalf("the transcript must be rewritten to [summary] + tail: %+v", s.Messages)
 	}
 	if !strings.Contains(s.Messages[0].Content, "SUM") {
 		t.Fatalf("the summary must carry the model's text: %+v", s.Messages)
 	}
-	// the event, for the caller to deliver
+
 	if ev.Summary == "" || ev.Usage.Prompt != 812 {
 		t.Fatalf("the event must carry the summary and the usage: %+v", ev)
 	}
-	// the caller owns Compacted's delivery (decision 5); the Compacting
-	// cue is the action's own (5, amended) - the verb door needs the
-	// loader too, and the cue is progress, not transcript.
+
 	evs := fe.snapshot()
 	if len(evs) != 1 {
 		t.Fatalf("the action emits exactly the cue (the caller delivers Compacted), got %v", evs)
@@ -73,9 +66,6 @@ func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
 	}
 }
 
-// TestPolicyCompactNothingToDrop (SPEC_COMMANDS 3): the action's own
-// boundary — an empty older prefix is 'nothing to drop', the transcript
-// untouched.
 func TestPolicyCompactNothingToDrop(t *testing.T) {
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: "one small message"})
@@ -100,19 +90,15 @@ func TestPolicyCompactNothingToDrop(t *testing.T) {
 	}
 }
 
-// TestPolicyCompactSpendsTheBudget (SPEC_COMMANDS 3, named): the forced
-// compact spends the once budget as the trigger path does — the next
-// context-length fault, with the transcript not grown past the compact's
-// key, surfaces without recovery.
 func TestPolicyCompactSpendsTheBudget(t *testing.T) {
-	// a fixture with an older prefix, under the trigger.
+
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 800)})
 	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400)})
 
 	summary := []core.Event{core.TextDelta{Text: "SUM"}, core.Done{}}
 	fault := []core.Event{core.Fault{Err: errors.New("prompt is too long: context length exceeded")}}
-	// call order: the forced summary, then the next main call (fault).
+
 	prov := &scriptedProvider{turns: []scriptedTurn{{events: summary}, {events: fault}}}
 	pol, err := compact.New(prov, &captureFrontend{}, s, "S", testRow)
 	if err != nil {
@@ -122,8 +108,6 @@ func TestPolicyCompactSpendsTheBudget(t *testing.T) {
 		t.Fatalf("the forced compact must run: %v", err)
 	}
 
-	// the next main call faults with context length; the transcript has
-	// not grown past the compact's key — the recovery is not owed.
 	provider := compact.Decorator(prov, pol)
 	msgs, err := pol.Assemble(context.Background(), s)
 	if err != nil {
@@ -149,14 +133,12 @@ func TestPolicyCompactSpendsTheBudget(t *testing.T) {
 	if !sawFault {
 		t.Fatalf("the context-length fault must surface (no recovery), got %v", events)
 	}
-	// one summary call only: the forced one — the budget is spent.
+
 	if prov.calls() != 2 {
 		t.Fatalf("exactly the forced summary call plus the faulted main call, got %d calls", prov.calls())
 	}
 }
 
-// TestPolicyCompactSummaryInputDoesNotFit (SPEC_COMMANDS 3): the
-// action's loud refusal, the numbers named.
 func TestPolicyCompactSummaryInputDoesNotFit(t *testing.T) {
 	small := models.Model{Role: models.RoleInteractive, ID: "local", Window: 300, MaxTokens: 100, Reserve: 50, KeepRecent: 50}
 	s := core.NewSession()

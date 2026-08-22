@@ -22,9 +22,6 @@ var listRows = []command.SessionRow{
 	{ID: "01j3b19eaa55", Started: t3, Exit: "fault", Turns: 1},
 }
 
-// TestSessionsList (SPEC_COMMANDS, named): the exact lines — newest
-// first, the current session marked, 'exit open' the render of a row
-// not yet closed (the one place the word appears).
 func TestSessionsList(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -42,9 +39,6 @@ func TestSessionsList(t *testing.T) {
 	}
 }
 
-// TestSessionsSubHints (SPEC_TUI 9, named): the verb commands carry
-// Sub() hints for the TUI's selectable, scrollable menu — the list
-// verb first, then the id-taking show and resume.
 func TestSessionsSubHints(t *testing.T) {
 	byName := allByName(t)
 	subber, ok := byName["sessions"].(interface{ Sub() []command.Sub })
@@ -66,9 +60,6 @@ func TestSessionsSubHints(t *testing.T) {
 	}
 }
 
-// TestSessionsListVerb (SPEC_COMMANDS 5, amended): the list verb is
-// the bare command's read — the menu accepts it without a usage
-// refusal.
 func TestSessionsListVerb(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -86,8 +77,6 @@ func TestSessionsListVerb(t *testing.T) {
 	}
 }
 
-// TestSessionsListNone (SPEC_COMMANDS 5): an empty store prints the
-// named line.
 func TestSessionsListNone(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -99,10 +88,6 @@ func TestSessionsListNone(t *testing.T) {
 	}
 }
 
-// TestSessionsShow (SPEC_COMMANDS, named): the exact render of the
-// projection — [n] headers, multi-line content verbatim (unindented),
-// thinking and calls indented, the compaction summary an ordinary user
-// row.
 func TestSessionsShow(t *testing.T) {
 	byName := allByName(t)
 	s := &core.Session{ID: "s1", Messages: []core.Message{
@@ -138,7 +123,6 @@ func TestSessionsShow(t *testing.T) {
 	}
 }
 
-// TestSessionsShowRefusals (SPEC_COMMANDS 5): the named refusals.
 func TestSessionsShowRefusals(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -160,8 +144,6 @@ func TestSessionsShowRefusals(t *testing.T) {
 	}
 }
 
-// TestSessionsUsage (SPEC_COMMANDS, named): a foreign sub-verb is the
-// usage line.
 func TestSessionsUsage(t *testing.T) {
 	byName := allByName(t)
 	_, err := byName["sessions"].Run(context.Background(), "frob", &command.Env{})
@@ -170,8 +152,6 @@ func TestSessionsUsage(t *testing.T) {
 	}
 }
 
-// TestSessionsResumeLiveTurn (SPEC_COMMANDS 5, named order step 1): the
-// live-turn refusal, before anything is touched.
 func TestSessionsResumeLiveTurn(t *testing.T) {
 	byName := allByName(t)
 	fs := &fakeSteer{live: true}
@@ -195,8 +175,6 @@ func TestSessionsResumeLiveTurn(t *testing.T) {
 	}
 }
 
-// TestSessionsResumeCurrentId (SPEC_COMMANDS 5, named order step 2):
-// resuming the current session refuses, naming the id.
 func TestSessionsResumeCurrentId(t *testing.T) {
 	byName := allByName(t)
 	touched := false
@@ -218,9 +196,6 @@ func TestSessionsResumeCurrentId(t *testing.T) {
 	}
 }
 
-// TestSessionsResumeUnknownIdBeforeTouch (SPEC_COMMANDS 5, named order
-// step 3): the unknown id is loud from the seam, and the current row is
-// still open (the closure refused before closing).
 func TestSessionsResumeUnknownIdBeforeTouch(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -237,8 +212,6 @@ func TestSessionsResumeUnknownIdBeforeTouch(t *testing.T) {
 	}
 }
 
-// TestSessionsResumeLine (SPEC_COMMANDS 5): the output names the id and
-// the projection's message count; the slot is dropped.
 func TestSessionsResumeLine(t *testing.T) {
 	byName := allByName(t)
 	fs := &fakeSteer{slot: "queued", hasSlot: true}
@@ -251,7 +224,7 @@ func TestSessionsResumeLine(t *testing.T) {
 		Steer:   fs,
 		Session: func() *core.Session { return cur },
 		SessionResume: func(ctx context.Context, id string) error {
-			cur = s2 // the swap
+			cur = s2
 			return nil
 		},
 	}
@@ -264,5 +237,4 @@ func TestSessionsResumeLine(t *testing.T) {
 	}
 }
 
-// raw is a small json.RawMessage helper for the test sessions.
 func raw(s string) []byte { return []byte(s) }

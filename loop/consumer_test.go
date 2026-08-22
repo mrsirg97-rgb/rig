@@ -13,9 +13,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/loop"
 )
 
-// overlapFrontend fails if two Notify calls ever overlap, or if Input is
-// asked while a turn is live: the consumer is one goroutine, and the
-// prompt is only ever posted between turns.
 type overlapFrontend struct {
 	inputs    chan string
 	events    []core.Event
@@ -52,10 +49,6 @@ func (f *overlapFrontend) Notify(ev core.Event) {
 	f.inNotify.Store(0)
 }
 
-// SPEC_EVT 2b: the loop is the engine's one consumer. A concurrent run
-// of slow tools completing out of order, with a streaming model call
-// after it, never produces overlapping Notify calls, and the prompt is
-// never asked while a turn is live.
 func TestConsumerIsOneGoroutine(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 40), timedCall("c2", "read", 5), timedCall("c3", "read", 20), timedCall("c4", "read", 1)}
@@ -102,8 +95,6 @@ func TestConsumerIsOneGoroutine(t *testing.T) {
 	}
 }
 
-// turnMarking marks the live turn from the loop's own events so the
-// frontend can tell a prompt during a turn from one between turns.
 type turnMarking struct{ *overlapFrontend }
 
 func (m *turnMarking) Input(ctx context.Context) (string, error) {
@@ -114,9 +105,6 @@ func (m *turnMarking) Input(ctx context.Context) (string, error) {
 	return line, err
 }
 
-// A tool that posts its completion after the turn has already ended
-// (a stale completion) is ignored by the consumer: the turn identity is
-// checked on every event.
 func TestStaleCompletionIsIgnored(t *testing.T) {
 	slow := &slowCancelTool{delay: 50 * time.Millisecond}
 	call := core.ToolCall{ID: "c1", Name: "slow", Args: json.RawMessage(`{}`)}

@@ -14,14 +14,10 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// RunJob(key, opts) over fake fetch/spawn/crontab seams. TZ is UTC-pinned
-// package-wide.
-
 var runnerNow = time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
 
 const logName = "2026-08-15T12-00-00-000Z.log"
 
-// modelsFixture: catalog ids with llama-swap aliases.
 var modelsFixture = []struct {
 	ID     string
 	Alias  []string
@@ -70,7 +66,6 @@ func runningJSON(models ...string) string {
 	return string(b)
 }
 
-// fakeFetch: payloads by URL suffix.
 type fetchOpts struct {
 	failing  string
 	statuses map[string]string
@@ -97,7 +92,6 @@ func (e jsonErr) Error() string { return string(e) }
 
 func jsonError(s string) error { return jsonErr(s) }
 
-// fakeSpawn records calls and replays the pinned result.
 type fakeSpawn struct {
 	calls  []fakeCall
 	result sched.SpawnResult
@@ -114,7 +108,6 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched
 	return f.result, f.err
 }
 
-// setupJob: a job created in a scratch home, its key derived.
 func setupJob(t *testing.T, cwd, scope string, mutate func(in *sched.CreateInput)) (h *harness, key string) {
 	t.Helper()
 	h = newHarness(t, cwd)
@@ -138,8 +131,7 @@ func setupJob(t *testing.T, cwd, scope string, mutate func(in *sched.CreateInput
 }
 
 func runOpts(h *harness, running []string, spawn *fakeSpawn, extra fetchOpts) sched.RunOpts {
-	// Sandbox off: these cases pin the unjailed argv (byte-identical to
-	// pre-0.6.0); the jailed profile's argv is the sandbox suite's pin.
+
 	return sched.RunOpts{
 		Home:      h.home,
 		Crontab:   h.ct,
@@ -152,15 +144,13 @@ func runOpts(h *harness, running []string, spawn *fakeSpawn, extra fetchOpts) sc
 	}
 }
 
-// runEvents: the op='run' events, oldest first.
 func runEvents(t *testing.T, h *harness, scope string) []struct {
 	TS      string
 	Args    map[string]any
 	Session string
 } {
 	t.Helper()
-	// "" scopes to the cwd store: these tests' jobs are cwd-scope; global
-	// requires an explicit scope.
+
 	db := h.st.Cwd
 	if scope == "global" {
 		db = h.st.Global
@@ -197,8 +187,6 @@ func runEvents(t *testing.T, h *harness, scope string) []struct {
 	return out
 }
 
-// --- key parsing ---
-
 func TestParseKeyGlobalAndCwdKeysGarbageRefuses(t *testing.T) {
 	g, err := sched.ParseKey("j1")
 	if err != nil || g.Scope != "global" || g.Hash != "" || g.ID != "j1" {
@@ -214,8 +202,6 @@ func TestParseKeyGlobalAndCwdKeysGarbageRefuses(t *testing.T) {
 		}
 	}
 }
-
-// --- busy matrix ---
 
 func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) {
 	h, key := setupJob(t, "/ws/r1", "", nil)
@@ -243,9 +229,7 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 	if len(tail) != 2 || tail[0] != "-model" || tail[1] != "qwen3.8-workers" {
 		t.Fatalf("argv tail %v", tail)
 	}
-	// the worker's endpoint is the runner's swap (+/v1), not another
-	// default: two defaults for the same server is how the worker
-	// faults every tick while the busy check passes.
+
 	baseIdx := -1
 	for i, a := range c.Argv {
 		if a == "-base-url" {
@@ -337,7 +321,7 @@ func TestOwnModelLoadedIdleWhileAnotherResidentRuns(t *testing.T) {
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
 		statuses: map[string]string{"qwen3.8-27b-workers": "loaded"},
 	}))
-	mustOK(t, err) // own slot already allocated: concurrent is safe
+	mustOK(t, err)
 	if len(spawn.calls) != 1 {
 		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
 	}
@@ -378,8 +362,6 @@ func TestBusyCheckFetchFailureFailsClosedWithReason(t *testing.T) {
 		t.Fatal("no spawn")
 	}
 }
-
-// --- run outcomes ---
 
 func TestWorkerExitNonZeroRecordsFailWithExitLogCarriesStderr(t *testing.T) {
 	h, key := setupJob(t, "/ws/r8", "", nil)
@@ -445,11 +427,9 @@ func TestOnceWithFailingWorkerDoneWithFailNoRetry(t *testing.T) {
 	}
 }
 
-// --- zombie / drift self-heal ---
-
 func TestZombieLineWithMissingRowLineDeletedSkipRecorded(t *testing.T) {
 	h, key := setupJob(t, "/ws/z1", "", nil)
-	// drop the projection row: the line outlives its job
+
 	if _, err := h.st.Cwd.DB.Exec(`DELETE FROM jobs WHERE id = 'j1'`); err != nil {
 		t.Fatal(err)
 	}
@@ -497,8 +477,6 @@ func TestPausedRowLineDriftedActiveSkipLineUntouched(t *testing.T) {
 	}
 }
 
-// --- logs ---
-
 func TestLogsPruneToTheNewestTwenty(t *testing.T) {
 	h, key := setupJob(t, "/ws/p1", "", nil)
 	dir := filepath.Join(h.home, "runs", "cwd-"+sched.CwdHash("/ws/p1"), "j1")
@@ -543,8 +521,6 @@ func TestLogsPruneToTheNewestTwenty(t *testing.T) {
 	}
 }
 
-// --- lock contention (the flock mechanism, held in-process) ---
-
 func TestLockHeldRecordsSkipWithoutRunningTheWorker(t *testing.T) {
 	h, key := setupJob(t, "/ws/l1", "", nil)
 	lockDir := filepath.Join(h.home, "locks")
@@ -577,8 +553,6 @@ func TestLockHeldRecordsSkipWithoutRunningTheWorker(t *testing.T) {
 	}
 }
 
-// --- loud failures ---
-
 func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
 	h, key := setupJob(t, "/ws/l2", "", nil)
 	fc := failingCrontab{listErr: jsonErr("crontab list failed (exit 1): PAM: user not authorized")}
@@ -601,8 +575,6 @@ func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
 		t.Fatal("crontab must be untouched")
 	}
 }
-
-// --- plumbing ---
 
 func toString(v any) string {
 	if s, ok := v.(string); ok {

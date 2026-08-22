@@ -1,11 +1,5 @@
 package command_test
 
-// The provenance verbs (SPEC_SANDBOX 2): /plugins pending lists the
-// forge's landing zone with each file's DESCRIPTION so the operator
-// reads before blessing; /plugins approve <name> moves one to the top
-// level (the operator's verb, Frontend-side by construction). Approval
-// never runs from a tool call.
-
 import (
 	"context"
 	"encoding/json"
@@ -18,8 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// homeWithZone builds a scratch rig home with the given pending files
-// (name -> body) and, when named, an installed top-level plugin.
 func homeWithZone(t *testing.T, pending map[string]string, installed ...string) string {
 	t.Helper()
 	home := t.TempDir()
@@ -47,10 +39,6 @@ def run(args):
     return "forged"
 `
 
-// TestPluginsPendingListsTheZoneWithDescriptions (SPEC_SANDBOX,
-// named): /plugins pending lists the zone with each file's
-// DESCRIPTION, in filename order; a file without one is named as
-// absent; non-*.py files and subdirectories are not the zone's files.
 func TestPluginsPendingListsTheZoneWithDescriptions(t *testing.T) {
 	home := homeWithZone(t, map[string]string{
 		"echo.py":   goodPending,
@@ -76,9 +64,6 @@ func TestPluginsPendingListsTheZoneWithDescriptions(t *testing.T) {
 	}
 }
 
-// TestPluginsPendingEmptyAndAbsentZone (SPEC_SANDBOX, named companion):
-// an empty zone and a zone the home never grew are the same line —
-// nothing to bless.
 func TestPluginsPendingEmptyAndAbsentZone(t *testing.T) {
 	for _, home := range []string{
 		func() string {
@@ -88,7 +73,7 @@ func TestPluginsPendingEmptyAndAbsentZone(t *testing.T) {
 			}
 			return h
 		}(),
-		t.TempDir(), // no zone at all
+		t.TempDir(),
 	} {
 		out, err := pluginsCmd(t).Run(context.Background(), "pending", &command.Env{
 			Plugins:    func() []command.PluginInfo { return nil },
@@ -100,8 +85,6 @@ func TestPluginsPendingEmptyAndAbsentZone(t *testing.T) {
 	}
 }
 
-// TestPluginsPendingNilSeam: Env without the seam — the no-seam voice,
-// as the listing has.
 func TestPluginsPendingNilSeam(t *testing.T) {
 	_, err := pluginsCmd(t).Run(context.Background(), "pending", &command.Env{})
 	if err == nil || !strings.Contains(err.Error(), "no plugins seam") {
@@ -109,8 +92,6 @@ func TestPluginsPendingNilSeam(t *testing.T) {
 	}
 }
 
-// namedTool is a named seam tool for the collision check (the model's
-// world is what a plugin name collides with).
 type namedTool struct{ name string }
 
 func (n namedTool) Name() string                                                   { return n.name }
@@ -118,10 +99,6 @@ func (n namedTool) Description() string                                         
 func (n namedTool) Schema() json.RawMessage                                        { return json.RawMessage(`{"type":"object"}`) }
 func (n namedTool) Exec(ctx context.Context, args json.RawMessage) (string, error) { return "", nil }
 
-// TestPluginsApproveMovesThePendingFile (SPEC_SANDBOX, named):
-// approve moves pending/<name>.py to the top level — the file is
-// gone from the zone, the success line names both sides, and a second
-// approve of the same name refuses (nothing pending anymore).
 func TestPluginsApproveMovesThePendingFile(t *testing.T) {
 	home := homeWithZone(t, map[string]string{"forge.py": goodPending})
 	pluginsDir := filepath.Join(home, "plugins")
@@ -156,10 +133,6 @@ func TestPluginsApproveMovesThePendingFile(t *testing.T) {
 	}
 }
 
-// TestPluginsApproveNativeCollisionRefuses (SPEC_SANDBOX, named):
-// approve of a name that collides with a native refuses — the
-// existing rule at the new door, the same voice the startup
-// collision carries, and nothing moves.
 func TestPluginsApproveNativeCollisionRefuses(t *testing.T) {
 	home := homeWithZone(t, map[string]string{"bash.py": goodPending})
 	pluginsDir := filepath.Join(home, "plugins")
@@ -180,10 +153,6 @@ func TestPluginsApproveNativeCollisionRefuses(t *testing.T) {
 	}
 }
 
-// TestPluginsApproveInstalledCollisionRefuses: a top-level file of the
-// same name is already installed — the move would clobber it, and a
-// clobber is not an operator's verb by accident: refuse, naming the
-// installed file.
 func TestPluginsApproveInstalledCollisionRefuses(t *testing.T) {
 	home := homeWithZone(t, map[string]string{"echo.py": goodPending}, "echo.py")
 	pluginsDir := filepath.Join(home, "plugins")
@@ -200,8 +169,6 @@ func TestPluginsApproveInstalledCollisionRefuses(t *testing.T) {
 	}
 }
 
-// TestPluginsApproveBadNames: the name is the filename stem — a missing
-// name is usage, an extra argument is usage, and a path is not a name.
 func TestPluginsApproveBadNames(t *testing.T) {
 	home := homeWithZone(t, map[string]string{"echo.py": goodPending})
 	pluginsDir := filepath.Join(home, "plugins")
@@ -214,8 +181,6 @@ func TestPluginsApproveBadNames(t *testing.T) {
 	}
 }
 
-// TestPluginsUnknownVerbUsage: a verb the set does not carry refuses
-// with the full usage line — the verbs the set does carry are named.
 func TestPluginsUnknownVerbUsage(t *testing.T) {
 	home := t.TempDir()
 	_, err := pluginsCmd(t).Run(context.Background(), "frobnicate", &command.Env{

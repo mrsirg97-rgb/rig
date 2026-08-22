@@ -11,17 +11,13 @@ import (
 	"github.com/mrsirg97-rgb/rig/models"
 )
 
-// scriptedTurn is one canned provider response, in call order.
 type scriptedTurn struct {
 	events  []core.Event
-	err     error // pre-stream transport error (after the signal/block)
+	err     error
 	signal  func()
-	blockOn chan struct{} // block until closed (a steer dies in the window)
+	blockOn chan struct{}
 }
 
-// scriptedProvider is a fake core.Provider with scripted streams and
-// request capture. The DI seam: the policy's compact action and the
-// decorator's retry both cross it.
 type scriptedProvider struct {
 	mu       sync.Mutex
 	turns    []scriptedTurn
@@ -66,23 +62,18 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 	return out, nil
 }
 
-// calls is the number of provider calls so far (main and summary both).
 func (p *scriptedProvider) calls() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.n
 }
 
-// reqs is the captured requests, in call order (read after the streams
-// the tests drive are drained: the channel close orders them).
 func (p *scriptedProvider) reqs() []core.Request {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]core.Request(nil), p.captured...)
 }
 
-// captureFrontend records the event order; Input EOFs (the policy's
-// trigger path does not pull input).
 type captureFrontend struct {
 	mu     sync.Mutex
 	events []core.Event
@@ -102,15 +93,8 @@ func (f *captureFrontend) snapshot() []core.Event {
 	return append([]core.Event(nil), f.events...)
 }
 
-// overflowRow is the overflow-recovery fixture row: a wider window than
-// testRow so the older prefix (decision 3's summary input) fits the
-// summary window when a fault-driven compact runs on a transcript far
-// over the trigger. KeepRecent 200 keeps the split's tail at the last
-// message, the atomic pair kept whole in TestKeepRecentCutsAtPairBoundary.
 var overflowRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
 
-// compactFixture is a transcript over the trigger of the test row, with
-// an older prefix that is worth summarizing.
 func compactFixture() *core.Session {
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
@@ -122,12 +106,8 @@ func compactFixture() *core.Session {
 	return s
 }
 
-// stringify names an event for failure messages.
 func stringify(ev core.Event) string { return fmt.Sprintf("%T %+v", ev, ev) }
 
-// stripCue drops the Compacting cues (SPEC_COMPACT 5, amended): most
-// tests assert the transcript-bearing events; TestCompactingCueOrder
-// owns the cue's contract.
 func stripCue(evs []core.Event) []core.Event {
 	out := evs[:0:0]
 	for _, ev := range evs {

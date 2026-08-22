@@ -14,8 +14,6 @@ import (
 	adapter "github.com/mrsirg97-rgb/rig/tool/scheduler"
 )
 
-// fakeCrontab: the surgical seam, mutex-guarded (the adapter tests drive
-// single-threaded calls; the guard keeps future concurrency honest).
 type fakeCrontab struct {
 	mu   sync.Mutex
 	text string
@@ -44,8 +42,6 @@ func newHarness(t *testing.T, cwd string) *harness {
 	return newHarnessModel(t, cwd, "qwen3.8-workers")
 }
 
-// newHarnessModel is the harness with an explicit default job model:
-// the constructor's parameter the root passes (SPEC_CONFIG 5).
 func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 	t.Helper()
 	home := t.TempDir()
@@ -65,7 +61,7 @@ func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 		gd store.DB
 		cd store.DB
 	)
-	// re-open for live handles (the first Opens validated the schema)
+
 	if gd, _, err = store.Open(globalPath, sched.Statements(), sched.SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
@@ -187,11 +183,6 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 	}
 }
 
-// TestDefaultJobModelRidesTheSurface (SPEC_CONFIG 5, named): the
-// default job model is the constructor's parameter — the description,
-// the schema text, and the job the tool creates are all built from the
-// passed value (the file's defaultJobModel at the root); an explicit
-// model arg beats it, as 0.2.0.
 func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 	h := newHarnessModel(t, "/ws/sa-model", "brain")
 	d := h.tool.Description()
@@ -208,7 +199,7 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 	if got, _ := model["description"].(string); got != "pi model id (default brain)." {
 		t.Fatalf("schema model description %q, want the passed default named", got)
 	}
-	// create with no model: the job row carries the passed default
+
 	reply, err := exec(t, h, map[string]any{
 		"action": "create", "name": "defaulted", "prompt": "p",
 		"cron": "0 5 * * *", "scope": "cwd",
@@ -223,7 +214,7 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 	if m != "brain" {
 		t.Fatalf("the job's model = %q, want the passed default brain", m)
 	}
-	// an explicit model still beats it
+
 	reply, err = exec(t, h, map[string]any{
 		"action": "create", "name": "explicit", "prompt": "p",
 		"cron": "0 6 * * *", "scope": "cwd", "model": "qwen3.8-workers",
@@ -241,7 +232,7 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 
 func TestExecAttributionFallsBackToAnon(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
-	// unthreaded ctx: attribution lands as anon, store write still proceeds
+
 	reply, err := exec(t, h, map[string]any{
 		"action": "create", "name": "anon-case", "prompt": "p",
 		"cron": "0 4 * * *", "scope": "cwd",

@@ -1,6 +1,3 @@
-// The web_search and web_fetch named cases plus the rig-side cases.
-// Every case runs against httptest servers and
-// injected seams; no live SearXNG, no live proxy, no required trafilatura.
 package web_test
 
 import (
@@ -21,13 +18,10 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-// ---- seams and small fakes -------------------------------------------
-
 func ptr[T any](v T) *T { return &v }
 
 func off() *string { var s string = ""; return &s }
 
-// httpResp is a hand-built response for the Do seam.
 func httpResp(status int, headers map[string]string, body string) *http.Response {
 	h := http.Header{}
 	for k, v := range headers {
@@ -50,7 +44,6 @@ func privateLookup(host string) ([]string, error) {
 	return []string{"10.9.8.7"}, nil
 }
 
-// schema checks: the hand-written JSON, not a validator library.
 type schema struct {
 	Properties map[string]map[string]any `json:"properties"`
 	Required   []string                  `json:"required"`
@@ -73,8 +66,6 @@ func has(t *testing.T, s string, sub string) {
 		t.Fatalf("%q does not contain %q", s, sub)
 	}
 }
-
-// ---- web-fetch named cases --------------------------------------------
 
 func TestIPisPrivateV4Table(t *testing.T) {
 	priv := []string{
@@ -317,8 +308,7 @@ func TestE2ERealServerThroughTheSeamHTMLExtracted(t *testing.T) {
 		t.Fatal(err)
 	}
 	has(t, got.Body, "real e2e body")
-	// the Guarded body is the raw, unextracted HTML — the script is still
-	// in it; extraction (and the script's removal) happens in Exec.
+
 	has(t, got.Body, "<script>")
 	if want := strings.TrimSuffix(srv.URL, "/") + "/page"; got.FinalURL != want {
 		t.Fatalf("final URL = %q, want %q", got.FinalURL, want)
@@ -372,8 +362,6 @@ func TestToolRegistrationNameRequiredURLGuidelinesExist(t *testing.T) {
 	}
 	has(t, f.Description(), "search finds, fetch reads")
 }
-
-// ---- web-search named cases -------------------------------------------
 
 func TestQueryIsEncodedAndSentToLocalSearXNGJSONAPI(t *testing.T) {
 	var seen *http.Request
@@ -509,7 +497,6 @@ func TestSearXNGBeingDownSurfacesAsALoudError(t *testing.T) {
 		t.Fatalf("want the 502 voice, got %v", err)
 	}
 
-	// a refused connection stays loud
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -536,8 +523,6 @@ func TestSchemaRequiresQueryAndBoundsMaxResults(t *testing.T) {
 		t.Fatalf("maxResults bounds = %v, want 1..20", mr)
 	}
 }
-
-// ---- the rig-side named cases ---------------------------------------
 
 func TestTheEgressProxyIsUsedWhenSet(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -602,7 +587,6 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// explicit off: the stdlib pass must say so in the content
 	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Trafilatura: off()})
 	content, err := f.Exec(context.Background(), json.RawMessage(`{"url":`+`"`+srv.URL+`"}`))
 	if err != nil {
@@ -613,7 +597,6 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 		t.Fatalf("the fallback is not announced: %q", content)
 	}
 
-	// a present binary: the content is trafilatura's, no announcement
 	if web.DefaultTrafilatura() == "" {
 		t.Skip("no trafilatura on this box")
 	}
@@ -656,17 +639,14 @@ func TestTrafilaturaResolutionSharedVenvFirstThenPATHExplicitWins(t *testing.T) 
 		t.Fatalf("PATH must be the fallback: %q", got)
 	}
 
-	// explicit wins over both: the seam takes it without resolution
 	explicit := web.NewFetch(web.FetchConfig{Trafilatura: ptr("/opt/traf")})
 	_ = explicit
 }
 
-// The 15s search budget is a constant, not a knob; a hanging endpoint must
-// not hang the turn forever.
 func TestTheSearchBudgetBitesOnAHangingEndpoint(t *testing.T) {
 	start := time.Now()
 	s := web.NewSearch(web.SearchConfig{
-		// a real transport honours the request context; so must the seam
+
 		Do: func(req *http.Request) (*http.Response, error) {
 			select {
 			case <-req.Context().Done():

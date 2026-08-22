@@ -18,7 +18,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-// scripted is a capturing inner frontend: queued inputs, recorded notifies.
 type scripted struct {
 	mu      sync.Mutex
 	inputs  []string
@@ -60,13 +59,12 @@ func TestRecorderLandsTheTranscript(t *testing.T) {
 	rec.Notify(core.TextDelta{Text: "bash"})
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}})
 	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 5, Completion: 2}})
-	// execution lands after the stream completes, from the loop's event
+
 	rec.Notify(core.ToolResult{ID: "c1", Content: "out-1", Err: nil})
 	if err := rec.Close("ok"); err != nil {
 		t.Fatalf("close: %v", err)
 	}
 
-	// this transcript's mint order: user first (seq 1), assistant second (seq 2)
 	user := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewMessageDomain().GetMessage(c, 1).Row()
 	}).(*domain.Message)
@@ -133,7 +131,7 @@ func TestRecorderFaultLands(t *testing.T) {
 	if err := rec.Close("fault"); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	// the fault minted first under this isolated file is seq 1
+
 	f := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewFaultDomain().GetFault(c, 1).Row()
 	}).(*domain.Fault)
@@ -179,12 +177,11 @@ func TestRecorderLandsToolOnlyTurns(t *testing.T) {
 	if _, err := rec.Input(ctx); err != nil {
 		t.Fatal(err)
 	}
-	// two calls, no prose: the normal xhigh case
+
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}})
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c2", Name: "ls", Args: json.RawMessage(`{}`)}})
 	rec.Notify(core.Done{StopReason: "end_turn"})
 
-	// results land quietly, against attributed rows
 	old := os.Stderr
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -242,7 +239,7 @@ func TestRecorderFaultDiscardsPartialText(t *testing.T) {
 	if err := rec.Close("fault"); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	// the partial never lands; the next turn's row is its own
+
 	first := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewMessageDomain().GetMessage(c, 1).Row()
 	}).(*domain.Message)

@@ -28,13 +28,10 @@ type Settings struct {
 	Theme           string
 	Sandbox         string
 	SandboxBinds    []string
-	Approve         string          // the approval dial's default (SPEC_MODES 4): "auto" or "manual"
-	Plugins         SettingsPlugins // the plugin cap (SPEC_GROWTH 9, amended): the switch is plugins/disabled/
+	Approve         string
+	Plugins         SettingsPlugins
 }
 
-// SettingsPlugins is the operator's plugin cap: Max caps the door's name
-// enum at the top Max live plugins (file order); 0 = no cap. The on/off
-// switch is the directory (plugins/disabled/), never a list here.
 type SettingsPlugins struct {
 	Max int
 }

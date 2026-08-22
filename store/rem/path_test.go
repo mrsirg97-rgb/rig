@@ -11,9 +11,6 @@ import (
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 )
 
-// TestFilePathRoundTrip (SPEC_SERVE 2, named): the rem path helper resolves
-// to the same file the root opens — open via the helper, learn a memory,
-// read it back. The root and the dashboard share one source.
 func TestFilePathRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	cwd := "/workspace/roundtrip"

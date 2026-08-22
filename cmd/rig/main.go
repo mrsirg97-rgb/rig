@@ -109,12 +109,10 @@ const defaultResultCap = 64 * 1024
 func wire(r *root) *rig.Kernel {
 
 	if r.live == nil {
-		// The door tools hold the table as their Live seam (SPEC_GROWTH 9);
-		// build the empty table first, construct the doors over it, then
-		// fill it from the natives (the doors among them) and the plugins.
+
 		r.live = toolset.New()
 		if r.tools["plugin"] == nil {
-			// the door's redo seam (SPEC_STREAMLINE 4): no home, no redo
+
 			var redo func(ctx context.Context) error
 			if r.pluginsHome != "" {
 				redo = r.redoPlugins
@@ -501,8 +499,6 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 	return command.RenderPlugins(infos, "reload"), nil
 }
 
-// pluginNames are the names of the startup-discovered plugins (the
-// seed; reloads own the live table's plugin set afterwards).
 func (r *root) pluginNames() []string {
 	out := make([]string, 0, len(r.pluginTools))
 	for _, t := range r.pluginTools {
@@ -511,18 +507,12 @@ func (r *root) pluginNames() []string {
 	return out
 }
 
-// pluginDoor is the allow-list's second door over the live plugin
-// table: it admits a currently-live plugin only, never a native (the
-// collision rule keeps the sets disjoint). A nil live table answers
-// nothing — the nil-door, today-only behavior.
 func (r *root) pluginDoor() func(string) bool {
 	return func(name string) bool {
 		return r.live != nil && r.live.IsPlugin(name)
 	}
 }
 
-// redoPlugins is the door's redo seam (SPEC_STREAMLINE 4): the error half
-// of the reload — the door needs the swap, not the listing.
 func (r *root) redoPlugins(ctx context.Context) error {
 	_, err := r.reloadPlugins(ctx)
 	return err
@@ -857,8 +847,7 @@ func main() {
 		}
 		pluginInfos = append(pluginInfos, info)
 		if info.Skipped {
-			// the discovery's loud skips, and the enablement's (SPEC_GROWTH
-			// 9): a broken file and a disabled one are both named, one line.
+
 			fmt.Fprintf(os.Stderr, "rig: plugins: %s: %s\n", filepath.Base(rep.File), info.Reason)
 			continue
 		}

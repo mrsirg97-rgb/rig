@@ -6,9 +6,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/command"
 )
 
-// TestParseCommandShape (SPEC_COMMANDS, named): the name is the first
-// token; the args are the remainder after that one separator run — the
-// leading run of blanks stripped, the interior verbatim.
 func TestParseCommandShape(t *testing.T) {
 	cases := []struct {
 		line, name, args string
@@ -28,9 +25,6 @@ func TestParseCommandShape(t *testing.T) {
 	}
 }
 
-// TestParsePrefixEdge (SPEC_COMMANDS, named): '/' alone is the command
-// line with the empty name; '//' lines are escaped prompts, the escape
-// consuming one slash.
 func TestParsePrefixEdge(t *testing.T) {
 	if !command.IsCommandLine("/") {
 		t.Fatal("'/' alone must be a command line (the empty name)")

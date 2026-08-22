@@ -13,7 +13,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/cli"
 )
 
-// lineReader serves whole lines from a channel; close = EOF.
 type lineReader struct{ lines chan string }
 
 func (r lineReader) Read(p []byte) (int, error) {
@@ -90,22 +89,19 @@ func TestInputCancellationBeforeRead(t *testing.T) {
 }
 
 func TestInputServesTheSteeringSlotBeforeBlocking(t *testing.T) {
-	// a queued message is delivered on the next Input without touching
-	// stdin: the slot is checked before the reader path.
+
 	r := build(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// turn one, live:
 	r.in <- "one\n"
 	if line, err := r.fe.Input(core.WithInterrupt(ctx, cancel)); err != nil || line != "one" {
 		t.Fatalf("first input: %q %v", line, err)
 	}
-	// steer during the live turn: the line lands in the slot and the
-	// handle fires.
+
 	r.in <- "steer\n"
 	waitFor(t, func() bool { return ctx.Err() != nil }, "the live turn must be interrupted")
-	// the re-entry delivers the queued line without a stdin read:
+
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
 	line, err := r.fe.Input(core.WithInterrupt(ctx2, cancel2))
@@ -129,16 +125,13 @@ func waitFor(t *testing.T, cond func() bool, what string) {
 func TestSteeringBetweenTurnsQueuesWithoutCancellingTheNextTurn(t *testing.T) {
 	r := build(t, "one\n")
 
-	// turn one, live: the loop handed its cancel with the Input ctx.
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	if line, err := r.fe.Input(core.WithInterrupt(ctx1, cancel1)); err != nil || line != "one" {
 		t.Fatalf("first input: %q %v", line, err)
 	}
-	// turn one ends: the loop cancels the turn's context at the exit.
+
 	cancel1()
 
-	// a line that lands between turns queues: the held handle is the dead
-	// turn's (a no-op cancel), so the next turn's context is untouched.
 	r.in <- "between\n"
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -157,13 +150,11 @@ func TestSlotIsSingleLatestWins(t *testing.T) {
 	if line, err := r.fe.Input(core.WithInterrupt(ctx, cancel)); err != nil || line != "first" {
 		t.Fatalf("first input: %q %v", line, err)
 	}
-	// live turn: two lines arrive; the slot holds at most one (the latest),
-	// anything the reader had in flight lands direct. The latest intent is
-	// never lost and an older line never lands after it.
+
 	r.in <- "a\n"
 	r.in <- "b\n"
 	waitFor(t, func() bool { return ctx.Err() != nil }, "the first steering line must interrupt the turn")
-	close(r.in) // the reader drains the rest, then EOFs: no pull may block forever
+	close(r.in)
 
 	var delivered []string
 	for i := 0; i < 2; i++ {
@@ -191,11 +182,6 @@ func TestSlotIsSingleLatestWins(t *testing.T) {
 	}
 }
 
-// --- the rendering -------------------------------------------------------
-
-// The bracket replaced the [call] line (SPEC_HARDENING decision 1): the
-// model's intent (ToolCallEvent) and its execution (the bracket) are
-// distinct, and the CLI renders the execution rows from events alone.
 func TestNotifyRendersTheTurnStream(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash"}})
@@ -234,22 +220,16 @@ func TestNotifyRendersReasoningVerbatim(t *testing.T) {
 	}
 }
 
-// One usage line at the explicit turn boundary; totals accumulate across
-// the turn's model calls and reset per turn.
 func TestTurnEndPrintsTheUsageLine(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 922, Completion: 10, CacheRead: 918}})
 	r.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	// hit = CacheRead / Prompt: 918/922 = 99% (the wire reports cached
-	// tokens as a subset of prompt)
+
 	if !strings.HasSuffix(r.out.String(), "\n↑922 ↓10 · cache 918 99%\n") {
 		t.Fatalf("usage line = %q", r.out.String())
 	}
 }
 
-// TestNotifyRendersCompactionOneLine (SPEC_COMPACT 5): a Compacted
-// renders as one greppable line, the numbers shaped by pane's
-// formatTokens — the CLI's one line, the TUI styles it later (10).
 func TestNotifyRendersCompactionOneLine(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.Compacted{Summary: "[compaction] s", Dropped: 800, Kept: 1200, Usage: core.Usage{Prompt: 812, Completion: 640}})
@@ -260,11 +240,11 @@ func TestNotifyRendersCompactionOneLine(t *testing.T) {
 
 func TestUsageTotalsAccumulateAcrossTheTurn(t *testing.T) {
 	r := build(t)
-	// two model calls in the turn: the Frontend sums what it observes
+
 	r.fe.Notify(core.Done{Usage: core.Usage{Prompt: 5, Completion: 2, CacheRead: 4}})
 	r.fe.Notify(core.Done{Usage: core.Usage{Prompt: 5, Completion: 3}})
 	r.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	// the next turn starts fresh
+
 	r.fe.Notify(core.Done{Usage: core.Usage{Prompt: 7, Completion: 1}})
 	r.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
@@ -291,8 +271,6 @@ func TestNotifyRendersFaults(t *testing.T) {
 	}
 }
 
-// decision 8: an event the CLI does not name is noise — no output, no
-// panic, ordering intact.
 func TestNotifyIgnoresUnknownEvents(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.TestEvent{Name: "x"})

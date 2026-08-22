@@ -9,20 +9,11 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// Live is the root's live plugin table (SPEC_GROWTH 9): the door resolves a
-// named plugin and the schema tool reads its contract. middleware/toolset's
-// Table implements it; the leaf never imports the middleware.
 type Live interface {
-	PluginNames() []string              // the live plugin names, sorted
-	Tool(name string) (core.Tool, bool) // the named tool, if the table carries it
+	PluginNames() []string
+	Tool(name string) (core.Tool, bool)
 }
 
-// Door is the plugin dispatch tool (SPEC_GROWTH 9): one native tool that
-// collapses all plugin schemas to one request entry — the context fix for
-// a grown table. The schema's name field carries the live plugin names'
-// enum; args pass through to the named plugin's Exec. An unknown name
-// runs the redo seam once (the root's reload) and re-resolves
-// (SPEC_STREAMLINE 4); a nil redo keeps the plain refusal.
 type Door struct {
 	Live Live
 	redo func(ctx context.Context) error
@@ -77,10 +68,6 @@ func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	return tool.Exec(ctx, body)
 }
 
-// SchemaDoor is the plugin_schema tool (SPEC_GROWTH 9): returns one live
-// plugin's description and schema verbatim — the model fetches the args
-// it needs before a non-trivial call, so the request can carry the door
-// alone.
 type SchemaDoor struct {
 	Live Live
 	redo func(ctx context.Context) error

@@ -1,10 +1,5 @@
 package state_test
 
-// The SPEC_COMPACT 5 named cases: the recorder lands the compaction
-// (the summary row + usage row), re-lands the kept tail after it, and
-// the resume projection starts from the last [compaction] row — so the
-// compacted shape rebuilds, not the full history.
-
 import (
 	"context"
 	"encoding/json"
@@ -17,10 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-// TestRecorderLandsCompactedSummary (named): the Compacted event lands a
-// message row (role "user", the content verbatim with the marker) plus a
-// usage row against that row's seq, seq before the assistant row the next
-// Done lands.
 func TestRecorderLandsCompactedSummary(t *testing.T) {
 	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
@@ -41,8 +32,6 @@ func TestRecorderLandsCompactedSummary(t *testing.T) {
 	rec.Notify(core.TextDelta{Text: "post"})
 	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 9, Completion: 4}})
 
-	// the summary row is seq 1 (the first row under this isolated file),
-	// the post-compaction assistant lands seq 2 — the summary first.
 	s := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewMessageDomain().GetMessage(c, 1).Row()
 	}).(*domain.Message)
@@ -63,10 +52,6 @@ func TestRecorderLandsCompactedSummary(t *testing.T) {
 	}
 }
 
-// TestRecorderRelandsTheKeptTail (named): after the summary row the kept
-// tail is re-landed — fresh seqs, the assistant calls with fresh ids (the
-// tool_calls.id primary key), name/args/result verbatim, the original rows
-// intact as the autopsy.
 func TestRecorderRelandsTheKeptTail(t *testing.T) {
 	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
@@ -77,7 +62,7 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
 	}
-	// the original history (the autopsy): a user, an assistant call c1, its result
+
 	if _, err := state.RecordMessage(ctx, db, sid, "user", "old", nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +76,6 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// the compacted session: [summary row, the kept tail]
 	sess := core.NewSession()
 	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] sum"})
 	sess.Append(core.Message{Role: core.RoleUser, Content: "tail user"})
@@ -101,7 +85,6 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", sid, sess)
 	rec.Notify(core.Compacted{Summary: "[compaction] sum", Usage: core.Usage{Prompt: 1, Completion: 1}})
 
-	// the summary is seq 3; the tail's user seq 4, assistant seq 5.
 	s := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewMessageDomain().GetMessage(c, 3).Row()
 	}).(*domain.Message)
@@ -120,14 +103,14 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 	if ta.Role != "assistant" || ta.Content != "tail asst" || ta.ToolId == nil || *ta.ToolId != "c2" {
 		t.Fatalf("the tail's assistant row not re-landed: %+v", ta)
 	}
-	// the fresh call row: c2-r1, name/args/result verbatim
+
 	fresh := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewToolCallDomain().GetToolCall(c, "c2-r1").Row()
 	}).(*domain.ToolCall)
 	if fresh.Name != "edit" || fresh.Args != `{"p":1}` || fresh.Result == nil || *fresh.Result != "tail result" {
 		t.Fatalf("the fresh call row: %+v", fresh)
 	}
-	// the original c1 row stays as the autopsy
+
 	orig := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewToolCallDomain().GetToolCall(c, "c1").Row()
 	}).(*domain.ToolCall)
@@ -136,11 +119,6 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 	}
 }
 
-// TestResumeAfterCompactionRebuildsTheCompactedShape (named): the store
-// holds the full history, the original tail rows, the summary, the
-// re-landed tail, and the post-compaction rows; Resume rebuilds exactly
-// [summary + tail + post-compaction] (call/result pairs consistent under
-// the fresh ids), not the full history.
 func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
 	db := openState(t)
 	sid := "resume-compact"
@@ -148,7 +126,7 @@ func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
 	}
-	// the original full history
+
 	if _, err := state.RecordMessage(ctx, db, sid, "user", "u1", nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +140,6 @@ func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// the compacted session: [summary row, the kept tail]
 	sess := core.NewSession()
 	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] SUM"})
 	sess.Append(core.Message{Role: core.RoleUser, Content: "u2"})
@@ -171,7 +148,7 @@ func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
 	sess.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: "r2"})
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", sid, sess)
 	rec.Notify(core.Compacted{Summary: "[compaction] SUM", Usage: core.Usage{Prompt: 2, Completion: 1}})
-	// a post-compaction turn
+
 	rec.Notify(core.TextDelta{Text: "post"})
 	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 5, Completion: 2}})
 

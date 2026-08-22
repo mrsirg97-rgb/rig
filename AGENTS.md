@@ -18,10 +18,14 @@ plus one registration line, and the loop never names a concrete type.
   Read it before touching the package and keep it current when behavior
   changes. The governing specs live in `specs/`, written and agreed
   before the code; the `PACKAGE.md` points at its spec.
-- No comments in implementation code; comments in tests are allowed.
-  When reaching for a comment, first ask whether it belongs in the
-  `PACKAGE.md` instead: design rationale lives in the spec, not inline.
-  Only load-bearing notes stay in code.
+- No comments in Go, implementation or tests: one rule everywhere,
+  because a small model reads the repository as one corpus and cannot
+  hold "allowed here, forbidden there" — it sees commented tests and
+  writes commented code. A test's name carries its invariant; the
+  `PACKAGE.md` carries the English; design rationale lives in the spec.
+  The only `//` lines are compiler directives (`//go:embed`). Exempt:
+  generated code, and the `metadata` packages — generation input whose
+  doc comments lift reads.
 - Follow Go best practices and design interface first when applicable.
   Interfaces make rig modular, which is the goal: depend on the seams in
   `core`, wire once at the root, swap at registration with zero consumer

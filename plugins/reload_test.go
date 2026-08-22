@@ -1,5 +1,3 @@
-// The reload's named cases (SPEC_PLUGINS 8, testing): the leaf, fake
-// kernel — no python required. The e2e (real kernel) lives in cmd/rig.
 package plugins
 
 import (
@@ -12,9 +10,6 @@ import (
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 )
 
-// TestReloadToolSurfacesAreTheNativeContract (SPEC_PLUGINS 8, named):
-// Name is plugins_reload, the schema the empty object, the description
-// names the re-discovery and the next-turn effect.
 func TestReloadToolSurfacesAreTheNativeContract(t *testing.T) {
 	tool := NewReload("/h", map[string]bool{"bash": true, "plugins_reload": true}, &fakeKernel{}, func(ctx context.Context, reports []Report) (string, error) {
 		return "plugins: reload: 0 loaded, 0 skipped", nil
@@ -31,10 +26,6 @@ func TestReloadToolSurfacesAreTheNativeContract(t *testing.T) {
 	}
 }
 
-// TestReloadToolExecRediscoversAndHandsOff (SPEC_PLUGINS 8, named): a
-// canned report (one loaded, one skipped) — the swap receives the
-// reports in file order, the reply is the swap's verbatim, and the
-// kernel's cell is the discovery's (the files embedded).
 func TestReloadToolExecRediscoversAndHandsOff(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
@@ -75,11 +66,6 @@ func TestReloadToolExecRediscoversAndHandsOff(t *testing.T) {
 	}
 }
 
-// TestReloadToolEmptyDirectoryNeverStartsTheKernel (SPEC_PLUGINS 8,
-// named): no top-level file — zero kernel cells, the swap receives the
-// empty report (the list rebuilds to the natives — removal free), the
-// reply names the empty list. Both shapes: an empty directory, and a
-// home without the directory at all.
 func TestReloadToolEmptyDirectoryNeverStartsTheKernel(t *testing.T) {
 	for _, home := range []string{t.TempDir(), emptyPluginsHome(t)} {
 		k := &fakeKernel{}
@@ -104,7 +90,6 @@ func TestReloadToolEmptyDirectoryNeverStartsTheKernel(t *testing.T) {
 	}
 }
 
-// emptyPluginsHome is a scratch home with no plugins/ directory.
 func emptyPluginsHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -114,10 +99,6 @@ func emptyPluginsHome(t *testing.T) string {
 	return home
 }
 
-// TestReloadToolCollisionRefusesBeforeTheSwap (SPEC_PLUGINS 8, named):
-// a loaded report named like a native (the set includes plugins_reload
-// itself) — the refusal is the startup collision's voice, and the swap
-// is never called.
 func TestReloadToolCollisionRefusesBeforeTheSwap(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
@@ -149,9 +130,6 @@ func TestReloadToolCollisionRefusesBeforeTheSwap(t *testing.T) {
 	}
 }
 
-// TestReloadToolKernelFailureIsTheError (SPEC_PLUGINS 8, named): a
-// non-OK reply — the error carries the kernel's reason under the
-// reload's prefix, and the swap is never called.
 func TestReloadToolKernelFailureIsTheError(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
@@ -181,10 +159,6 @@ func TestReloadToolKernelFailureIsTheError(t *testing.T) {
 	}
 }
 
-// TestListIsTopLevelPyOnly (SPEC_PLUGINS 8, named): the listing rule —
-// the pending zone, a subdirectory, and a non-.py file are not the
-// listing's, and the order is filename order. No directory, or an empty
-// one, is the no-op (the kernel's never-starting, 2's rule).
 func TestListIsTopLevelPyOnly(t *testing.T) {
 	home := t.TempDir()
 	plugins := filepath.Join(home, "plugins")
@@ -225,9 +199,6 @@ func TestListIsTopLevelPyOnly(t *testing.T) {
 	}
 }
 
-// TestCheckVoicesTheCollision (SPEC_PLUGINS 8, named): the shared
-// refusal (the startup's and the reload's one rule) — the voice, and a
-// skipped report never collides (it is not a tool).
 func TestCheckVoicesTheCollision(t *testing.T) {
 	natives := map[string]bool{"bash": true, "plugins_reload": true}
 	report := Report{Name: "bash", File: "/h/plugins/bash.py", Skipped: false}
@@ -248,8 +219,6 @@ func TestCheckVoicesTheCollision(t *testing.T) {
 	}
 }
 
-// SPEC_GROWTH 9 (amended): the zones are directories. List reads the
-// root only; Zone reads one zone; a disabled plugin is never discovered.
 func TestZonesAreDirectoriesAndListSkipsThem(t *testing.T) {
 	home := t.TempDir()
 	for _, p := range []string{"plugins/live.py", "plugins/pending/draft.py", "plugins/disabled/off.py"} {

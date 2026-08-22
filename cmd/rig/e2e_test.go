@@ -1,12 +1,5 @@
 package main
 
-// The cold-shell end-to-end case: the built binary, driven through argv
-// and env only, fires a job with every seam scripted — fake crontab on
-// PATH, scratch config home, scripted swap endpoint, dead worker
-// endpoint. The worker faults (no model), exits non-zero, and the run
-// records as a failure with its log — the full record path through real
-// processes.
-
 import (
 	"context"
 	"encoding/json"
@@ -26,8 +19,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
-
-// --- scripted seams ---
 
 func writeFakeCrontab(t *testing.T, binDir, spool string) {
 	t.Helper()
@@ -125,8 +116,6 @@ func countRows(t *testing.T, st sched.Stores, query string) int {
 
 func containsStr(hay, needle string) bool { return strings.Contains(hay, needle) }
 
-// --- the case ---
-
 func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -145,8 +134,6 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 
 	swap := newSwapServer(t)
 
-	// the job: created in-process through the real verb with scripted
-	// seams, exactly as the agent-side tool would create it.
 	home := filepath.Join(scratch, ".rig", "scheduler")
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, "/ws/e2e")
@@ -164,9 +151,8 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	if err := os.WriteFile(spool, []byte(fake.text_()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sandboxOff(t, scratch) // the operator's explicit choice: the test pins the cold shell, not the jail
+	sandboxOff(t, scratch)
 
-	// the cold shell: argv plus env only.
 	cmd := exec.Command(bin, "run-job", key)
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(),
@@ -174,14 +160,13 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
 		"RIG_SWAP_URL="+swap.URL,
-		"RIG_BASE_URL=http://127.0.0.1:1/v1", // dead endpoint: the worker faults
+		"RIG_BASE_URL=http://127.0.0.1:1/v1",
 	)
 	out, runErr := cmd.CombinedOutput()
 	if runErr != nil {
 		t.Fatalf("run-job exited non-zero (recorded outcomes exit 0): %v\n%s", runErr, out)
 	}
 
-	// the record: a failed run, logged, attributed to the job.
 	if runs := countRows(t, st, `SELECT count(*) FROM runs`); runs != 1 {
 		t.Fatalf("runs rows = %d, want 1", runs)
 	}
@@ -197,7 +182,6 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 		t.Fatalf("last_exit %v, want non-zero", exit)
 	}
 
-	// the worker's fault voice survives in the run log.
 	logDir := filepath.Join(home, "runs", "cwd-"+sched.CwdHash("/ws/e2e"), "j1")
 	entries, err := filepath.Glob(filepath.Join(logDir, "*.log"))
 	if err != nil || len(entries) != 1 {
@@ -214,9 +198,6 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	}
 }
 
-// TestRowResolutionRefusalIsLoudBeforeStores (SPEC_COMPACT 2, 8): an
-// unknown model id with no env is refused at start — loud, naming the id
-// and the known ids, before any store is opened.
 func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -229,9 +210,7 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	}
 	cmd := exec.Command(bin, "-p", "hi", "-model", "nope")
 	cmd.Dir = t.TempDir()
-	// the scratch home (rigEnv): the real ~/.rig must not leak its
-	// models into the known list, nor the leftover-home line into the
-	// output (XDG_CONFIG_HOME stopped isolating at the ~/.rig move).
+
 	cmd.Env = rigEnv(t.TempDir(), "")
 	out, runErr := cmd.CombinedOutput()
 	if runErr == nil {
@@ -242,13 +221,6 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	}
 }
 
-// TestOneShotCompactsAndRecoversMidTurn (SPEC_COMPACT, named): a -p run
-// that crosses the trigger mid-turn — a large prompt that fits the
-// window, then a large tool result that pushes the transcript past it;
-// the next model call faults, the recovery compacts the older prefix, and
-// the retry succeeds. The worker stdout is the final assistant text only;
-// the state store carries the summary row + usage row + a session closed
-// ok; exit 0.
 func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -262,10 +234,6 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 
-	// the scripted swap: the main call returns a bash tool call; the call
-	// carrying a tool result faults with context length; the summary call
-	// (the short summary role) returns the summary; the retry (a
-	// [compaction] row present) returns the final answer.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var req struct {
@@ -322,7 +290,6 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 		t.Fatalf("the swallowed fault must never reach stdout: %q", out)
 	}
 
-	// the state store: the summary row + its usage row + a session closed ok.
 	glob, _ := filepath.Glob(filepath.Join(scratch, ".rig", "sessions", "*.sqlite"))
 	if len(glob) != 1 {
 		t.Fatalf("sessions store = %v, want one", glob)

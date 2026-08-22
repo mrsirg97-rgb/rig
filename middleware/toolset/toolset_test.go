@@ -1,9 +1,3 @@
-// The toolset's named cases (SPEC_PLUGINS 8, testing): the live tool
-// table's two ends — the exec's Resolve and the request's Carry — with
-// a swap in between. Pure core: no kernel, no python, no root. The
-// table is the root's per-turn fact (the models-switch's semantics,
-// SPEC_COMMANDS 6): a swap takes effect on the next call, never the
-// in-flight one.
 package toolset
 
 import (
@@ -16,7 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// stubTool is a named core.Tool that records its calls.
 type stubTool struct {
 	name   string
 	result string
@@ -39,10 +32,6 @@ var unknownExec = func(ctx context.Context, call core.ToolCall) (string, error) 
 	return msg, errors.New(msg)
 }
 
-// TestResolveServesTheTableAndFallsThrough (SPEC_PLUGINS 8, named): a
-// name the table carries runs the table's tool (the args and the
-// result, verbatim); a name the table does not carry falls through to
-// the inner exec (the loop's own, the unknown-tool voice).
 func TestResolveServesTheTableAndFallsThrough(t *testing.T) {
 	bash := &stubTool{name: "bash", result: "bash ran"}
 	tbl := New(bash)
@@ -67,15 +56,10 @@ func TestResolveServesTheTableAndFallsThrough(t *testing.T) {
 	}
 }
 
-// TestResolveSeesASwapOnTheNextCall (SPEC_PLUGINS 8, named): a tool
-// absent before a Set executes after it (the next turn's exec), and a
-// tool the swap dropped does not (the list rebuilds from the table —
-// removal free). The exec closure outlives the swap: it is built once,
-// as the loop's chain is.
 func TestResolveSeesASwapOnTheNextCall(t *testing.T) {
 	bash := &stubTool{name: "bash", result: "bash ran"}
 	tbl := New(bash)
-	exec := Resolve(tbl).Wrap(unknownExec) // built before the swaps
+	exec := Resolve(tbl).Wrap(unknownExec)
 	ctx := context.Background()
 
 	if _, err := exec(ctx, core.ToolCall{Name: "forged"}); err == nil {
@@ -92,7 +76,7 @@ func TestResolveSeesASwapOnTheNextCall(t *testing.T) {
 		t.Fatalf("the surviving tool must keep executing: (%q, %v)", out, err)
 	}
 
-	tbl.Set([]core.Tool{bash}) // the swap drops forged
+	tbl.Set([]core.Tool{bash})
 	if _, err := exec(ctx, core.ToolCall{Name: "forged"}); err == nil {
 		t.Fatal("a dropped tool must not execute after the swap")
 	}
@@ -101,7 +85,6 @@ func TestResolveSeesASwapOnTheNextCall(t *testing.T) {
 	}
 }
 
-// recordingProvider records each request's tools array as stamped.
 type recordingProvider struct {
 	stamped [][]core.ToolSpec
 }
@@ -122,11 +105,6 @@ func names(specs []core.ToolSpec) []string {
 	return out
 }
 
-// TestCarryStampsTheRequestPerCall (SPEC_PLUGINS 8, named): the
-// request's tools array is the table's specs at call time — the
-// loop's own (startup) list is a bootstrap, a Set changes the next
-// call's array, and a call made before the Set keeps the list it was
-// stamped with (next turn, never mid-turn).
 func TestCarryStampsTheRequestPerCall(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	forged := &stubTool{name: "forged"}
@@ -135,7 +113,6 @@ func TestCarryStampsTheRequestPerCall(t *testing.T) {
 	prov := Carry(tbl, inner)
 	ctx := context.Background()
 
-	// the loop's request carries its own (stale) list; the stamp wins.
 	stale := []core.ToolSpec{{Name: "stale"}}
 	if ch, err := prov.Stream(ctx, core.Request{Tools: stale}); err != nil {
 		t.Fatal(err)
@@ -162,14 +139,11 @@ func TestCarryStampsTheRequestPerCall(t *testing.T) {
 		t.Fatalf("the spec carries the tool's description, got %q", spec.Description)
 	}
 
-	// the in-flight (first) call keeps the list it was stamped with.
 	if got := names(inner.stamped[0]); len(got) != 1 || got[0] != "bash" {
 		t.Fatalf("the earlier call's array changed after the Set: %v", got)
 	}
 }
 
-// TestSetIsAtomic: a reader never sees a partial list — one snapshot or
-// the next, never a mix of the two (the swap is one write).
 func TestSetIsAtomic(t *testing.T) {
 	a := &stubTool{name: "a"}
 	b := &stubTool{name: "b"}
@@ -184,10 +158,6 @@ func TestSetIsAtomic(t *testing.T) {
 	}
 }
 
-// TestIsPluginTracksTheSwap (SPEC_PLUGINS 7, the presence reversal):
-// the live plugin table answers membership — a SetPlugins-approved
-// plugin is a plugin, a native never is (the sets are disjoint), and a
-// reload that drops the name stops admitting it (deleted-after-reload).
 func TestIsPluginTracksTheSwap(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	tbl := New(bash)
@@ -198,7 +168,7 @@ func TestIsPluginTracksTheSwap(t *testing.T) {
 		t.Fatal("a native must never answer as a plugin")
 	}
 
-	tbl.SetPlugins("forged") // the approved plugin goes live
+	tbl.SetPlugins("forged")
 	if !tbl.IsPlugin("forged") {
 		t.Fatal("an approved plugin must answer live")
 	}
@@ -206,15 +176,12 @@ func TestIsPluginTracksTheSwap(t *testing.T) {
 		t.Fatal("the door must not admit a native")
 	}
 
-	tbl.SetPlugins() // the reload dropped it (removal free)
+	tbl.SetPlugins()
 	if tbl.IsPlugin("forged") {
 		t.Fatal("a dropped plugin must stop being admitted")
 	}
 }
 
-// TestNativeSpecsExcludesPlugins (SPEC_GROWTH 9, named): the request's
-// tool list is the natives plus the door, never the per-plugin schemas —
-// NativeSpecs drops the plugin tools, PluginNames carries their names.
 func TestNativeSpecsExcludesPlugins(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	networth := &stubTool{name: "networth"}
@@ -227,7 +194,7 @@ func TestNativeSpecsExcludesPlugins(t *testing.T) {
 	if got := tbl.PluginNames(); len(got) != 1 || got[0] != "networth" {
 		t.Fatalf("PluginNames = %v, want the live plugin", got)
 	}
-	// the swap adds a plugin: NativeSpecs still drops it, PluginNames grows.
+
 	flip := &stubTool{name: "flip_calc"}
 	tbl.Set([]core.Tool{bash, networth, flip})
 	tbl.SetPlugins("networth", "flip_calc")
@@ -236,8 +203,6 @@ func TestNativeSpecsExcludesPlugins(t *testing.T) {
 	}
 }
 
-// TestGetResolvesTheTable (SPEC_GROWTH 9, named): the door's lookup — Get
-// returns the table's tool for a live name and nil for an absent one.
 func TestGetResolvesTheTable(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	tbl := New(bash)

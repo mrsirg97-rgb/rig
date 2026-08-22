@@ -7,7 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// The widened seam: a plain function adapts and wraps exactly as before.
 func TestToolMiddlewareFuncAdaptsToTheSeam(t *testing.T) {
 	wrapped := false
 	f := core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
@@ -33,8 +32,6 @@ var (
 	_ core.GuidelineContributor = bothCaps{}
 )
 
-// The optional capabilities are assertion-checked, not forced: a plain
-// adapter has neither, a participant can carry both.
 func TestOptionalCapabilitiesAreAssertions(t *testing.T) {
 	var mw core.ToolMiddleware = core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec { return next })
 	if _, ok := mw.(core.TurnObserver); ok {
@@ -45,7 +42,6 @@ func TestOptionalCapabilitiesAreAssertions(t *testing.T) {
 	}
 }
 
-// The interrupt handle: threaded under a typed key, recovered by identity.
 func TestInterruptThreadsAndRecoversByIdentity(t *testing.T) {
 	base, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -57,7 +53,7 @@ func TestInterruptThreadsAndRecoversByIdentity(t *testing.T) {
 	if !ok {
 		t.Fatal("the handle must recover from the threaded ctx")
 	}
-	back() // a different function would not reach the same cancel
+	back()
 	if base.Err() == nil {
 		t.Fatal("the recovered handle must cancel the same context")
 	}
@@ -65,8 +61,6 @@ func TestInterruptThreadsAndRecoversByIdentity(t *testing.T) {
 
 type foreignKey struct{}
 
-// A foreign value under a foreign key is not a handle: the assertion
-// returns false and the Frontend is unaffected.
 func TestInterruptIgnoresForeignValues(t *testing.T) {
 	if _, ok := core.InterruptFrom(context.WithValue(context.Background(), foreignKey{}, "not a cancel")); ok {
 		t.Fatal("a foreign ctx value must not read as an interrupt handle")
@@ -76,8 +70,6 @@ func TestInterruptIgnoresForeignValues(t *testing.T) {
 	}
 }
 
-// The hardening vocabulary exists, is Event, and carries the named
-// reasons. Consumers (loop, frontends, recorder) switch on these.
 func TestHardeningVocabulary(t *testing.T) {
 	var (
 		_ core.Event = core.ReasoningDelta{Text: "t"}
@@ -85,15 +77,14 @@ func TestHardeningVocabulary(t *testing.T) {
 		_ core.Event = core.ToolResult{ID: "c1", Content: "out"}
 		_ core.Event = core.TurnEnd{Reason: core.TurnOver}
 		_ core.Event = core.TestEvent{Name: "x"}
-		_ core.Event = core.Compacted{Summary: "s"} // SPEC_COMPACT 5: additive, the compat rule holds
-		_ core.Event = core.Compacting{}            // SPEC_COMPACT 5 amended: the loader's cue, same door
+		_ core.Event = core.Compacted{Summary: "s"}
+		_ core.Event = core.Compacting{}
 	)
 	if core.TurnOver != "over" || core.TurnFault != "fault" || core.TurnInterrupt != "interrupt" {
 		t.Fatalf("turn reasons = %q/%q/%q, want over/fault/interrupt", core.TurnOver, core.TurnFault, core.TurnInterrupt)
 	}
 }
 
-// Usage carries the cache fields; zero is the pre-transport value.
 func TestUsageCarriesCacheFields(t *testing.T) {
 	u := core.Usage{Prompt: 922, Completion: 10, CacheRead: 918, CacheWrite: 0}
 	if u.Prompt != 922 || u.Completion != 10 || u.CacheRead != 918 || u.CacheWrite != 0 {
@@ -104,8 +95,6 @@ func TestUsageCarriesCacheFields(t *testing.T) {
 	}
 }
 
-// Message carries the reasoning block; assistant turns only, empty when the
-// model did not think.
 func TestMessageCarriesReasoning(t *testing.T) {
 	m := core.Message{Role: core.RoleAssistant, Content: "answer", Reasoning: "thought"}
 	if m.Reasoning != "thought" || m.Content != "answer" {
@@ -113,8 +102,6 @@ func TestMessageCarriesReasoning(t *testing.T) {
 	}
 }
 
-// Message carries the anchor (SPEC_COMPACT 4, L8): the server-reported
-// prompt+completion on an assistant message; 0 when unreported.
 func TestMessageCarriesContextTokens(t *testing.T) {
 	m := core.Message{Role: core.RoleAssistant, Content: "answer", ContextTokens: 1234}
 	if m.ContextTokens != 1234 {
@@ -125,8 +112,6 @@ func TestMessageCarriesContextTokens(t *testing.T) {
 	}
 }
 
-// Request carries MaxTokens (SPEC_COMPACT 8): 0 = the provider's default;
-// a provider that does not know it ignores it.
 func TestRequestCarriesMaxTokens(t *testing.T) {
 	r := core.Request{MaxTokens: 8192}
 	if r.MaxTokens != 8192 {

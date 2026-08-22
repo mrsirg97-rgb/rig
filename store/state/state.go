@@ -14,8 +14,6 @@ import (
 
 const SchemaVersion = 1
 
-///go:generate GOGEN=$PWD; cd ../../../lift/cmd && go run main.go -config=$GOGEN/gen.json -source=$GOGEN/source.json
-
 func Statements() []string {
 	return ddl.Statements()
 }

@@ -28,14 +28,8 @@ const (
 	defaultPage   = 200
 )
 
-// pluginNameRe is the plugin name's wall (the filename stem): lowercase,
-// digits and underscores, a leading letter, bounded in length.
 var pluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-// router is the allow-list (SPEC_SERVE posture): every (method, path) is
-// named; an unknown path is a 404 and a known path with the wrong method
-// is a 405 (with the Allow header). There is no catch-all beyond the named
-// static assets.
 func (s *Server) router() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -53,8 +47,6 @@ func (s *Server) router() http.Handler {
 	})
 }
 
-// allowed maps a path to its allowed methods (the allow-list); unknown
-// paths have no entry (a 404).
 func (s *Server) allowed(path string) (map[string]bool, bool) {
 	switch {
 	case path == "/":
@@ -147,18 +139,12 @@ func transcriptID(path string) string {
 	return id
 }
 
-// --- the read views ---
-
 func (s *Server) handleCwds(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	writeJSON(w, http.StatusOK, map[string]any{"cwds": s.workspaces(ctx)})
 }
 
-// workspaces is the picker's list (SPEC_SERVE): the serve process's cwd
-// first, then the workspaces that have sessions (each a state file),
-// alphabetical. A workspace with no sessions is not named (a read of it is
-// the named refusal).
 func (s *Server) workspaces(ctx context.Context) []string {
 	seen := map[string]bool{}
 	var others []string
@@ -390,8 +376,6 @@ func pluginRows(ps []Plugin) []pluginJSON {
 	return out
 }
 
-// --- the writes (the todo, scheduler, and plugin creates) ---
-
 func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
@@ -432,11 +416,6 @@ func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
-// handleSchedulerCreate is the scheduler's create (SPEC_SERVE phase 2,
-// decision 7): the same verb a live session's scheduler tool calls, with
-// session dashboard, the runner command the root wired, and the page's
-// cwd as the session cwd. The verb's refusal is the refusal (the store's
-// voice is the contract).
 func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
@@ -479,11 +458,6 @@ func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
-// handlePluginsCreate is the plugin's create (SPEC_SERVE phase 2, decision
-// 7): one file into the pending zone, the provenance rule's landing zone.
-// The file is the plugin contract — a DESCRIPTION, an empty SCHEMA object,
-// and a run(args) whose body the form supplies. A name in either zone is a
-// named refusal (no overwrite); the name is the filename stem.
 func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
@@ -579,8 +553,6 @@ func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "file": path, "reply": reply})
 }
 
-// --- the static assets ---
-
 func (s *Server) serveStatic(w http.ResponseWriter, name, ct string) {
 	data, err := fs.ReadFile(s.static, name)
 	if err != nil {
@@ -605,9 +577,6 @@ func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, name st
 	_, _ = w.Write(data)
 }
 
-// --- small helpers ---
-
-// readCtx bounds each read (and the one write) (SPEC_SERVE posture).
 func (s *Server) readCtx(r *http.Request) (context.Context, context.CancelFunc) {
 	to := s.readTO
 	if to <= 0 {
@@ -616,15 +585,11 @@ func (s *Server) readCtx(r *http.Request) (context.Context, context.CancelFunc) 
 	return context.WithTimeout(r.Context(), to)
 }
 
-// stateFile reports whether the workspace's state store is on disk (the
-// fail-closed read: no file, a named refusal — SPEC_SERVE).
 func (s *Server) stateFile(cwd string) bool {
 	_, err := os.Stat(state.StorePath(s.home, cwd))
 	return err == nil
 }
 
-// originOK is the write's Origin wall (SPEC_SERVE posture): the request's
-// Origin must name the bound address (same-origin only, no CORS).
 func (s *Server) originOK(r *http.Request) bool {
 	o := r.Header.Get("Origin")
 	if o == "" {
@@ -706,8 +671,6 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
-
-// --- the JSON shapes (structure for sessions, verbatim text for the rest) ---
 
 type sessionJSON struct {
 	ID      string `json:"id"`

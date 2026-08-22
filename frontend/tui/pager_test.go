@@ -6,12 +6,9 @@ import (
 	"testing"
 )
 
-// TestPagerFrameGeometry: the view is bottom-anchored, whole lines
-// only, a wrapped line counts its rows, and the offset clamps at the
-// document's edges.
 func TestPagerFrameGeometry(t *testing.T) {
 	th := oledTheme(t)
-	p := newPager([]string{"one", "two", "three", "four", "five"}, 10, 4) // budget 3
+	p := newPager([]string{"one", "two", "three", "four", "five"}, 10, 4)
 	f := RemoveColor(p.frame(th))
 	if !strings.Contains(f, "five") || !strings.Contains(f, "three") || strings.Contains(f, "two") {
 		t.Fatalf("the tail frame = %q, want three..five", f)
@@ -31,13 +28,13 @@ func TestPagerFrameGeometry(t *testing.T) {
 	if p.offset != 0 {
 		t.Fatalf("the offset floor = %d, want 0", p.offset)
 	}
-	// a wrapped line: 20 cols at width 10 is two rows of the budget.
+
 	p2 := newPager([]string{"aaaaaaaaaaaaaaaaaaaa", "tail"}, 10, 4)
 	f = RemoveColor(p2.frame(th))
 	if !strings.Contains(f, "aaaa") || !strings.Contains(f, "tail") {
 		t.Fatalf("the wrapped frame = %q, want both lines (3 rows fit)", f)
 	}
-	// one row short: the wrapped line no longer fits above the tail.
+
 	p3 := newPager([]string{"aaaaaaaaaaaaaaaaaaaa", "mid", "tail"}, 10, 4)
 	f = RemoveColor(p3.frame(th))
 	if strings.Contains(f, "aaaa") || !strings.Contains(f, "mid") {
@@ -45,10 +42,6 @@ func TestPagerFrameGeometry(t *testing.T) {
 	}
 }
 
-// TestLiveSuspendResume: a suspended region keeps its bookkeeping and
-// writes nothing; the resume replays what committed meanwhile and
-// re-emits the current region. The history records committed lines
-// throughout.
 func TestLiveSuspendResume(t *testing.T) {
 	var buf bytes.Buffer
 	l := newLive(&buf, 20)

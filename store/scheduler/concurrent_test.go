@@ -11,13 +11,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// Concurrent writers against one store file must serialize inside the
-// lock window, not drop each other: an interactive session and a scheduler
-// worker are two Opens of the same file. Ordering between true-parallel
-// goroutines is not asserted (the database layer does not promise it);
-// completeness is. The external seams are isolated per writer: this case
-// probes the database-layer serialization, not shared-fixture races.
-
 func TestConcurrentCreatesSerialize(t *testing.T) {
 	h := newHarness(t, "/ws/cc")
 	const (
@@ -64,7 +57,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 	if want := 2 * gor * slice; jobs != want {
 		t.Fatalf("live jobs = %d, want %d", jobs, want)
 	}
-	// the event spine stays strictly increasing
+
 	var maxGap int64
 	rows, err := h.st.Cwd.DB.Query(`SELECT seq FROM events WHERE op = 'create' ORDER BY seq`)
 	if err != nil {
@@ -138,7 +131,7 @@ func TestConcurrentRunRecordsSerialize(t *testing.T) {
 	if want := 2 * gor * slice; events != want || runs != want {
 		t.Fatalf("run events = %d, runs rows = %d, want %d (no lost writes)", events, runs, want)
 	}
-	// the jobs row's last_* reflects one of the writers, coherently set
+
 	var lastStatus string
 	var lastSet int64
 	if err := h.st.Cwd.DB.QueryRow(`SELECT last_status, last_exit IS NOT NULL FROM jobs WHERE id = 'j1'`).Scan(&lastStatus, &lastSet); err != nil {

@@ -11,8 +11,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// pluginsCmd pulls the /plugins entry out of the standard set (the
-// same seam the frontends dispatch).
 func pluginsCmd(t *testing.T) core.Command {
 	t.Helper()
 	for _, c := range command.All() {
@@ -24,10 +22,6 @@ func pluginsCmd(t *testing.T) core.Command {
 	return nil
 }
 
-// TestPluginsListRendersLoadedAndSkipped (SPEC_PLUGINS, named): Env
-// with loaded and skipped rows — the exact rendering: the header's
-// counts, the loaded rows' name/description/file, the skipped rows'
-// file/reason, in file order.
 func TestPluginsListRendersLoadedAndSkipped(t *testing.T) {
 	env := &command.Env{Plugins: func() []command.PluginInfo {
 		return []command.PluginInfo{
@@ -52,8 +46,6 @@ skipped:
 	}
 }
 
-// TestPluginsNoArgsRefusal (SPEC_PLUGINS, named): args the set does
-// not carry — the usage voice.
 func TestPluginsNoArgsRefusal(t *testing.T) {
 	_, err := pluginsCmd(t).Run(context.Background(), "reload extra", &command.Env{Plugins: func() []command.PluginInfo { return nil }})
 	if err == nil || !strings.Contains(err.Error(), "usage: plugins") {
@@ -61,8 +53,6 @@ func TestPluginsNoArgsRefusal(t *testing.T) {
 	}
 }
 
-// TestPluginsNilSeamRefusal (SPEC_PLUGINS, named): Env.Plugins nil —
-// the no-seam voice.
 func TestPluginsNilSeamRefusal(t *testing.T) {
 	_, err := pluginsCmd(t).Run(context.Background(), "", &command.Env{})
 	if err == nil || !strings.Contains(err.Error(), "no plugins seam") {
@@ -70,8 +60,6 @@ func TestPluginsNilSeamRefusal(t *testing.T) {
 	}
 }
 
-// TestPluginsNone (SPEC_PLUGINS, named): an empty (non-nil) slice —
-// plugins: none.
 func TestPluginsNone(t *testing.T) {
 	out, err := pluginsCmd(t).Run(context.Background(), "", &command.Env{Plugins: func() []command.PluginInfo { return []command.PluginInfo{} }})
 	if err != nil || out != "plugins: none" {
@@ -79,10 +67,6 @@ func TestPluginsNone(t *testing.T) {
 	}
 }
 
-// SPEC_GROWTH 9 (amended): the switch is a directory. disable moves the
-// file into plugins/disabled/ and reloads; enable moves it back; both
-// refuse by name when the file is not where the verb expects it, or
-// when the destination is taken.
 func TestPluginsDisableAndEnableMoveTheFileAndReload(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "echo.py"), []byte("DESCRIPTION = \"echo\"\n"), 0o644); err != nil {

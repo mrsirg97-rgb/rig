@@ -1,8 +1,3 @@
-// Package web is the local dashboard (SPEC_SERVE): a reader of the rig
-// home's stores, wired once at the root. It opens the same SQLite files a
-// live session is writing (the same rig home, the same pragmas) and calls
-// the same store verbs, rendered over loopback HTTP behind a minted token.
-// One file plus a registration line at the root; the loop never names it.
 package web
 
 import (
@@ -19,39 +14,25 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// sessionName is the todo create's attribution (SPEC_SERVE 4): the event
-// log carries it, the operator's create is distinguishable from the
-// model's.
 const sessionName = "dashboard"
 
-// Options carries the dashboard's static inputs (the cwd-independent
-// things): the rig home, the serve cwd, the models table, the crontab.
 type Options struct {
 	Home string
 	CWD  string
-	// Models is the models table from config (every row, the effort lists
-	// and roles); an empty table is a valid "no models" page.
+
 	Models models.Table
-	// Crontab is the scheduler's crontab (the drift read); nil = the real
-	// crontab (injected in tests).
+
 	Crontab sched.Crontab
-	// RunnerCmd is the scheduler create's runner command (the crontab
-	// line's command column); the root wires <self> run-job, the store's
-	// own voice when empty.
+
 	RunnerCmd string
-	// ReadTimeout bounds each read (and the writes); 0 = the default.
+
 	ReadTimeout time.Duration
-	// Natives is the native tool set: a plugin save or approve under one
-	// of these names is the collision refusal.
+
 	Natives []string
-	// Root is the folder browser's root (directories under it only); empty
-	// = the user's home directory.
+
 	Root string
 }
 
-// Server is the dashboard: the token, the allowed origins, the store cache,
-// and the static assets. It is built by New and served by
-// ListenAndServe.
 type Server struct {
 	home      string
 	cwd       string
@@ -68,10 +49,6 @@ type Server struct {
 	static  fs.FS
 }
 
-// New builds the dashboard (SPEC_SERVE 1): it roots the static assets. It
-// opens no store and mints no token; those happen on first use and at
-// serve, respectively. The plugin listing is live (decision 8): read per
-// request, never cached here.
 func New(opts Options) (*Server, error) {
 	if opts.Home == "" {
 		return nil, errors.New("web: home is required (the rig home)")
@@ -110,7 +87,6 @@ func New(opts Options) (*Server, error) {
 	}, nil
 }
 
-// Token returns the credential (minting it on first use), the one print.
 func (s *Server) Token() (string, bool, error) {
 	if s.token != "" {
 		return s.token, false, nil
@@ -123,8 +99,6 @@ func (s *Server) Token() (string, bool, error) {
 	return tok, minted, nil
 }
 
-// Handler is the full router: the token gate over the allow-list (SPEC_SERVE
-// 5). It mints the token on first use.
 func (s *Server) Handler() http.Handler {
 	tok, _, err := s.Token()
 	if err != nil {
@@ -135,9 +109,6 @@ func (s *Server) Handler() http.Handler {
 	return gate(tok, s.router())
 }
 
-// ListenAndServe refuses a non-loopback bind by name, mints (and prints
-// once) the token, sets the allowed origins from the bound address, and
-// serves until ctx is done (SPEC_SERVE 5).
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	if err := Loopback(addr); err != nil {
 		return err
@@ -180,15 +151,11 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	}
 }
 
-// Close releases the store cache (the open DBs).
 func (s *Server) Close() error {
 	s.stores.closeAll()
 	return nil
 }
 
-// Loopback is the bind wall (SPEC_SERVE 5): the addr must name a loopback
-// interface (127.0.0.1, ::1, or localhost); a non-loopback bind is refused
-// by name (tailscale serve is the way out).
 func Loopback(addr string) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {

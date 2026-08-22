@@ -8,13 +8,8 @@ import (
 	"testing"
 )
 
-// Tagged-line surgery is surgical — foreign lines byte-identical before
-// and after — and the production shim fails closed against a temp spool,
-// never a live crontab.
-
 const RUNNER = "/x/rig run-job"
 
-// A crontab full of foreign lines that must survive byte-identical.
 var foreign = strings.Join([]string{
 	"# foreign comment at top",
 	"SHELL=/bin/bash",
@@ -226,8 +221,6 @@ func TestNormalizeExactlyOneTrailingNewline(t *testing.T) {
 		}
 	}
 }
-
-// ---- real shim: against a fake crontab binary on a temp spool ----
 
 func writeFakeCrontab(t *testing.T, dir, body string) string {
 	t.Helper()

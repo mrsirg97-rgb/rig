@@ -1,10 +1,5 @@
 package scheduler_test
 
-// The worker jail's named cases (SPEC_SANDBOX 1, 5, testing): the
-// profile, exactly (the argv is the spec's block, verbatim), the
-// binds' rw rule, the fail-closed voices, and the socket proxy's one
-// destination.
-
 import (
 	"strings"
 	"testing"
@@ -12,11 +7,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-// TestJailArgvIsTheSpecProfileVerbatim (SPEC_SANDBOX 1): the composed
-// command line is the spec's block, line for line, in order — the
-// unshare-all, the ro system, the proc/dev/tmpfs, the job's cwd rw,
-// the kernel and the binary ro, the socket's one bind, the chdir, and
-// the worker payload.
 func TestJailArgvIsTheSpecProfileVerbatim(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:     "/usr/bin/bwrap",
@@ -64,9 +54,6 @@ func TestJailArgvIsTheSpecProfileVerbatim(t *testing.T) {
 	}
 }
 
-// TestJailArgvNoKernelLineWhenTheKernelDirIsAbsent (SPEC_SANDBOX 1):
-// the kernel bind is the operator's home's kernel directory — absent
-// (an unset RigHome) means the line is absent, not a bind of "/kernel".
 func TestJailArgvNoKernelLineWhenTheKernelDirIsAbsent(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",
@@ -88,9 +75,6 @@ func TestJailArgvNoKernelLineWhenTheKernelDirIsAbsent(t *testing.T) {
 	}
 }
 
-// TestJailArgvBindsFollowTheRwSuffix (SPEC_SANDBOX 5): the operator's
-// extra binds ride their own line each, ro by default, rw when the
-// entry ends ":rw" — and the suffix is stripped from the path.
 func TestJailArgvBindsFollowTheRwSuffix(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:     "/usr/bin/bwrap",
@@ -122,9 +106,6 @@ func TestJailArgvBindsFollowTheRwSuffix(t *testing.T) {
 	}
 }
 
-// TestJailArgvRefusesRelativeBinds (SPEC_SANDBOX 5, fail closed): a
-// relative bind source is the operator's typo — the refusal names the
-// entry and the path.
 func TestJailArgvRefusesRelativeBinds(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",
@@ -143,10 +124,6 @@ func TestJailArgvRefusesRelativeBinds(t *testing.T) {
 	}
 }
 
-// TestSandboxProfileNormalizesAndRefuses (SPEC_SANDBOX 1, 5): the
-// profile vocabulary is two words; empty descends to the default
-// (jailed — fail closed is the default); anything else refuses,
-// naming the known values.
 func TestSandboxProfileNormalizesAndRefuses(t *testing.T) {
 	if got, err := sched.SandboxProfile(""); err != nil || got != "jailed" {
 		t.Fatalf("SandboxProfile(\"\") = (%q, %v), want (jailed, nil)", got, err)
@@ -163,10 +140,6 @@ func TestSandboxProfileNormalizesAndRefuses(t *testing.T) {
 	}
 }
 
-// TestJailRefusalVoices (SPEC_SANDBOX 1, 5): the fail-closed voices,
-// pinned — the platform refusal names the platform and the profile;
-// the bwrap refusal names bwrap and the profile, and teaches both
-// settings keys.
 func TestJailRefusalVoices(t *testing.T) {
 	v := sched.PlatformRefusal("darwin")
 	if !strings.Contains(v, "darwin") || !strings.Contains(v, "linux") || !strings.Contains(v, "jailed") {

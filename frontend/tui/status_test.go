@@ -9,9 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 )
 
-// The status line and the startup block (decision 3, amended): the
-// block's two rows, dim, no rules; the live row's format and 70/90
-// marks.
 func statusInput() tui.StatusIn {
 	return tui.StatusIn{
 		Model: "huihui3.8", Effort: "xhigh",
@@ -31,11 +28,11 @@ func TestStatusBlockExactBytes(t *testing.T) {
 		th.Paint("ember", "█▀▄ █ █▀▀") + "\n" +
 		th.Paint("ember", "█▀▄ █ █ █") + "\n" +
 		th.Paint("ember", "▀ ▀ ▀ ▀▀▀") + "\n" +
-		th.Paint("dim", "session 2f9a1c0e77b3") + "\n" // the first twelve
+		th.Paint("dim", "session 2f9a1c0e77b3") + "\n"
 	if got != want {
 		t.Fatalf("the startup block:\ngot  %q\nwant %q", got, want)
 	}
-	// no dotted rules (they enclosed the deleted banner).
+
 	if strings.Contains(got, "··") || strings.Contains(got, "···") {
 		t.Fatalf("the block must not draw rules:\n%q", got)
 	}
@@ -55,8 +52,7 @@ func TestStatusBlockRowsFitTheWidth(t *testing.T) {
 }
 
 func TestStatusBlockNoEffortOmitsTheSegment(t *testing.T) {
-	// the block carries no model row now (the status line does); the
-	// case is the block without a session: the greeting alone, one row.
+
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
@@ -94,11 +90,11 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 	}
 	cases := []struct {
 		used int
-		want string // the slot the context part is painted with
+		want string
 	}{
-		{84000, "dim"},    // 32%: quiet
-		{140000, "warn"},  // 70%: the warn tier
-		{180000, "error"}, // 90%: the error tier
+		{84000, "dim"},
+		{140000, "warn"},
+		{180000, "error"},
 	}
 	for _, c := range cases {
 		got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", c.used, 200000, true, 214000, 3200, 187000)
@@ -109,7 +105,7 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		if !strings.HasPrefix(got, th.Paint("text", "huihui3.8")+th.Paint("dim", " · ")) {
 			t.Errorf("used=%d: the model part is not text (white), the dot dim:\n%s", c.used, got)
 		}
-		// the second row: the session's totals and the hit rate.
+
 		if !strings.HasSuffix(got, "\n"+th.Paint("dim", "up 214k down 3.2k · cache r 187k 87%")) {
 			t.Errorf("used=%d: the usage row is not the second row:\n%s", c.used, got)
 		}
@@ -126,8 +122,6 @@ func TestStatusLineEmptyModelIsEmpty(t *testing.T) {
 	}
 }
 
-// fmtTokens: raw under 1000, one-decimal k under 10k, rounded k under
-// 1M, else M — the CLI's formatTokens, mirrored here.
 func fmtTokens(n int) string {
 	switch {
 	case n < 1000:
@@ -141,9 +135,6 @@ func fmtTokens(n int) string {
 	}
 }
 
-// TestStatusThreeRowShape (SPEC_MODES 3 and 4, amended): the status is
-// three rows — model · context / effort · role · approve / usage — the
-// effort in its ramp color, the role abbreviated, manual in the warn.
 func TestStatusThreeRowShape(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
@@ -166,9 +157,6 @@ func TestStatusThreeRowShape(t *testing.T) {
 	}
 }
 
-// TestStatusLineRoleAbbreviations (SPEC_MODES 3, amended): architect ->
-// arch, reviewer -> rev, default (and the empty state) -> default — the
-// stance always shows, in the stance row; auto rides dim beside it.
 func TestStatusLineRoleAbbreviations(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
@@ -187,9 +175,6 @@ func TestStatusLineRoleAbbreviations(t *testing.T) {
 	}
 }
 
-// TestStatusLineEffortColorsAndFallback (SPEC_MODES 3, amended): each
-// ramp level paints its own slot (pane's footer colors); a level the
-// ramp does not name paints accent; an empty effort drops the segment.
 func TestStatusLineEffortColorsAndFallback(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {

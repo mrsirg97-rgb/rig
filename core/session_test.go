@@ -11,8 +11,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// The session must survive a JSON round trip byte-for-byte in meaning:
-// transcript intact, file provenance intact, order intact.
 func TestSessionRoundTripsThroughJSON(t *testing.T) {
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: "hello"})
@@ -45,8 +43,6 @@ func TestSessionRoundTripsThroughJSON(t *testing.T) {
 	}
 }
 
-// A saved session without provenance must load with an empty, usable Files
-// map, not nil.
 func TestSessionLoadNormalizesMissingProvenance(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "session.json")
 	s := core.NewSession()
@@ -55,7 +51,6 @@ func TestSessionLoadNormalizesMissingProvenance(t *testing.T) {
 		t.Fatalf("save: %v", err)
 	}
 
-	// hand-edit the JSON away to drop Files entirely
 	if err := rewriteNoFiles(path); err != nil {
 		t.Fatal(err)
 	}
@@ -68,8 +63,6 @@ func TestSessionLoadNormalizesMissingProvenance(t *testing.T) {
 	}
 }
 
-// rewriteNoFiles drops the Files key from a saved session's JSON, to
-// exercise the missing-provenance load path.
 func rewriteNoFiles(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -87,8 +80,6 @@ func rewriteNoFiles(path string) error {
 	return os.WriteFile(path, out, 0o600)
 }
 
-// Day-one context threading: the session rides ctx into the exec chain and
-// back, keyed to identity.
 func TestSessionThreadingRoundTrips(t *testing.T) {
 	ctx := context.Background()
 	if _, ok := core.SessionFrom(ctx); ok {

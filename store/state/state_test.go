@@ -106,14 +106,14 @@ func TestStateKillMidTurnLeavesCompletedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	killed, cancel := context.WithCancel(live)
-	cancel() // the kill lands here: result and message two never land
+	cancel()
 	if err := state.RecordToolResult(killed, db, "call_2", "never", nil); err == nil {
 		t.Fatal("record under a cancelled context succeeded")
 	}
 	if err := state.CloseSession(killed, db, "s2", "cancelled"); err == nil {
 		t.Fatal("close under a cancelled context succeeded")
 	}
-	// every row that completed before the kill stays readable
+
 	m := mustRead(t, db, func(c context.Context) (any, error) {
 		return domain.NewMessageDomain().GetMessage(c, seq1).Row()
 	}).(*domain.Message)

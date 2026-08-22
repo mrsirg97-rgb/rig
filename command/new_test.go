@@ -15,8 +15,6 @@ func TestNewUsageRefusal(t *testing.T) {
 	}
 }
 
-// TestNewRefusesLiveTurn (SPEC_COMMANDS, named): a dispatcher reporting
-// LiveTurn true refuses; the swap never happens.
 func TestNewRefusesLiveTurn(t *testing.T) {
 	byName := allByName(t)
 	fs := &fakeSteer{live: true}
@@ -37,9 +35,6 @@ func TestNewRefusesLiveTurn(t *testing.T) {
 	}
 }
 
-// TestNewSuccessLineAndSlotClear (SPEC_COMMANDS 4): the fresh id on the
-// line, and the queued steer dropped — a steer queued for the old
-// session is not delivered into the new one.
 func TestNewSuccessLineAndSlotClear(t *testing.T) {
 	byName := allByName(t)
 	fs := &fakeSteer{slot: "queued steer", hasSlot: true}
@@ -61,9 +56,6 @@ func TestNewSuccessLineAndSlotClear(t *testing.T) {
 	}
 }
 
-// TestNewRefusedCloseKeepsTheCurrent (SPEC_COMMANDS 4): a refused close
-// (store fault) is loud and the swap does not happen — the current
-// session continues.
 func TestNewRefusedCloseKeepsTheCurrent(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{

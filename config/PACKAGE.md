@@ -65,3 +65,5 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `readTheme` validates well-formedness only — no fields, no keys, no
   schema: the moment it named a field it would own 10's territory.
 - `sandbox` must be `"jailed"` or `"off"` (SPEC_SANDBOX 5).
+- `approve` is the approval dial's default (SPEC_MODES 4): `auto` or
+  `manual`; anything else refuses at load.

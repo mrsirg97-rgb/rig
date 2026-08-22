@@ -7,23 +7,19 @@ import (
 	"time"
 )
 
-// Deterministic dates: pin UTC before any time arithmetic (Go reads TZ
-// lazily on first local-time use).
 func init() { os.Setenv("TZ", "UTC") }
-
-// --- ValidateCron: acceptance ---
 
 func TestValidateCronAcceptsStandardExpressions(t *testing.T) {
 	for _, expr := range []string{
-		"0 */4 * * *", // the watchdog line
+		"0 */4 * * *",
 		"*/15 9-17 * * 1-5",
 		"5 4 * * 0",
 		"0 0 1 1 *",
 		"30 14 15 8 *",
 		"1,2,3 0 * * *",
 		"1-30/2 0 1 * *",
-		"0 0 * * 7",       // 7 == Sunday
-		"  0   * * * *  ", // surrounding/multi whitespace
+		"0 0 * * 7",
+		"  0   * * * *  ",
 		"* * * * *",
 	} {
 		if _, err := ValidateCron(expr); err != nil {
@@ -66,7 +62,7 @@ func TestValidateCronIsStarTracksTheStar(t *testing.T) {
 		want bool
 	}{
 		{"* * * * *", true},
-		{"* * */2 * *", true}, // */2 is unrestricted
+		{"* * */2 * *", true},
 		{"* * 5 * *", false},
 		{"* * 1-5 * *", false},
 	}
@@ -87,8 +83,6 @@ func TestValidateCronIsStarTracksTheStar(t *testing.T) {
 		t.Error("* * * * 7: dow.IsStar must be false")
 	}
 }
-
-// --- ValidateCron: rejection, by boundary name ---
 
 func TestValidateCronRejectsWrongFieldCounts(t *testing.T) {
 	for _, expr := range []string{"* * * *", "* * * * * *", ""} {
@@ -132,7 +126,7 @@ func TestValidateCronRejectsWrapRangesZeroStepsAndBareNumberSteps(t *testing.T) 
 	cases := []struct{ expr, re string }{
 		{"5-1 * * * *", `wrap`},
 		{"*/0 * * * *", `step`},
-		{"1/5 * * * *", `step`}, // vixie: step after * or range only
+		{"1/5 * * * *", `step`},
 	}
 	for _, c := range cases {
 		_, err := ValidateCron(c.expr)
@@ -152,8 +146,6 @@ func TestValidateCronRejectsMalformedListsAndRanges(t *testing.T) {
 		matchRe(t, err, c.re)
 	}
 }
-
-// --- NextFire: exactness ---
 
 func TestNextFireOfTheWatchdogLineFromJustAfterAFire(t *testing.T) {
 	p, err := ValidateCron("0 */4 * * *")
@@ -201,24 +193,24 @@ func TestNextFireImpossibleDayHasNoNextFire(t *testing.T) {
 }
 
 func TestNextFireDomDowUnionRestrictedDomOrRestrictedDow(t *testing.T) {
-	// 12:00 on the 13th OR on a Friday. 2026-08-15 is a Saturday.
+
 	p, err := ValidateCron("0 12 13 * 5")
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertFire(t, p, ut(2026, 8, 15, 0, 0), ut(2026, 8, 21, 12, 0)) // Fri the 21st
+	assertFire(t, p, ut(2026, 8, 15, 0, 0), ut(2026, 8, 21, 12, 0))
 	assertFire(t, p, ut(2026, 8, 13, 12, 0, 0), ut(2026, 8, 14, 12, 0))
-	assertFire(t, p, ut(2026, 9, 14, 0, 0), ut(2026, 9, 18, 12, 0)) // Fri the 18th
+	assertFire(t, p, ut(2026, 9, 14, 0, 0), ut(2026, 9, 18, 12, 0))
 }
 
 func TestNextFireDomDowUnionAStarFieldDoesNotRestrict(t *testing.T) {
-	// dom restricted, dow free -> only dom governs.
+
 	p, err := ValidateCron("0 12 13 * *")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertFire(t, p, ut(2026, 8, 15, 0, 0), ut(2026, 9, 13, 12, 0))
-	// dow restricted, dom free -> only dow governs (Friday).
+
 	q, err := ValidateCron("0 12 * * 5")
 	if err != nil {
 		t.Fatal(err)
@@ -240,11 +232,9 @@ func TestNextFireHourRolloverCarriesIntoTheNextDay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertFire(t, p, ut(2026, 8, 15, 0, 0, 0), ut(2026, 8, 16, 0, 0)) // strictly after
+	assertFire(t, p, ut(2026, 8, 15, 0, 0, 0), ut(2026, 8, 16, 0, 0))
 	assertFire(t, p, ut(2026, 8, 15, 23, 59, 0), ut(2026, 8, 16, 0, 0))
 }
-
-// --- test plumbing ---
 
 func ints(lo, hi int) []int {
 	out := make([]int, 0, hi-lo+1)
@@ -254,8 +244,6 @@ func ints(lo, hi int) []int {
 	return out
 }
 
-// ut: a UTC instant, carried as local (pinned UTC by init), seconds
-// defaulted; deterministic under the pin.
 func ut(y int, mo time.Month, d, h, mi int, s ...int) time.Time {
 	sec := 0
 	if len(s) > 0 {

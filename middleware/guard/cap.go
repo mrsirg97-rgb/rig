@@ -9,9 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// cap is the result bound: every tool result is bounded before it reaches
-// the transcript, in one place. An oversized result truncates to the head
-// and the tail with the loud [TRUNCATED] marker naming the full size.
 type cap struct {
 	bytes int
 }

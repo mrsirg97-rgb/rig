@@ -43,3 +43,5 @@ fts rowid bookkeeping).
 - Supersession pairs a nullable alias with its self-link (the pairing that
   keeps the FK out of the generated INSERT); the SET NULL behaviour lives
   in the store's prune.
+- `FilePath(home)`: one file under `<home>/rem`, cwd-scoped by a column
+  inside (SPEC_STATE); the root and the dashboard share it (SPEC_SERVE 2).

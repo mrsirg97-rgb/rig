@@ -10,8 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// TestCompactUsageRefusal (SPEC_COMMANDS, named): args are refused,
-// naming the shape.
 func TestCompactUsageRefusal(t *testing.T) {
 	byName := allByName(t)
 	out, err := byName["compact"].Run(context.Background(), "extra", &command.Env{})
@@ -20,9 +18,6 @@ func TestCompactUsageRefusal(t *testing.T) {
 	}
 }
 
-// TestCompactRefusesLiveTurn (SPEC_COMMANDS, named): a dispatcher
-// reporting LiveTurn true refuses; the transcript is untouched (the fake
-// Compact is never called), no event, no row.
 func TestCompactRefusesLiveTurn(t *testing.T) {
 	byName := allByName(t)
 	fs := &fakeSteer{live: true}
@@ -48,8 +43,6 @@ func TestCompactRefusesLiveTurn(t *testing.T) {
 	}
 }
 
-// TestCompactNothingToDrop (SPEC_COMMANDS, named): the action reports
-// nothing to drop — the named line, no event (the caller delivered none).
 func TestCompactNothingToDrop(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
@@ -63,8 +56,6 @@ func TestCompactNothingToDrop(t *testing.T) {
 	}
 }
 
-// TestCompactRefusedIsVerbatim (SPEC_COMMANDS, named): the action's
-// error is the command's output, verbatim — the command owns its voice.
 func TestCompactRefusedIsVerbatim(t *testing.T) {
 	byName := allByName(t)
 	voice := "compact: local: the summary input alone does not fit the window: window 65536, estimate 71000"
@@ -79,9 +70,6 @@ func TestCompactRefusedIsVerbatim(t *testing.T) {
 	}
 }
 
-// TestCompactDeliveredEventIsTheOutput (SPEC_COMMANDS 3): on a compact
-// the command prints no second line — the event's delivery (the ⧉ line,
-// rendered by the frontend) is the output, so Run returns no reply text.
 func TestCompactDeliveredEventIsTheOutput(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{

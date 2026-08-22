@@ -1,6 +1,3 @@
-// Package plugins tests: the discovery and call semantics against a
-// fake kernel (SPEC_PLUGINS, testing) — no python required; the e2e
-// (real kernel) lives in cmd/rig.
 package plugins
 
 import (
@@ -13,8 +10,6 @@ import (
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 )
 
-// fakeKernel is the DI seam's stand-in: it records every cell and
-// returns the canned replies in order.
 type fakeKernel struct {
 	cells   []string
 	replies []pythontool.Reply
@@ -47,9 +42,6 @@ func errReply(tail, out string) pythontool.Reply {
 	return r
 }
 
-// TestDiscoverParsesTheKernelReport (SPEC_PLUGINS, named): a canned
-// report (one loaded, one skipped) — the Reports carry the fields, in
-// file order.
 func TestDiscoverParsesTheKernelReport(t *testing.T) {
 	report := `
 [
@@ -77,9 +69,6 @@ func TestDiscoverParsesTheKernelReport(t *testing.T) {
 	}
 }
 
-// TestDiscoverKernelFailureIsTheError (SPEC_PLUGINS, named): a non-OK
-// reply — the error carries the kernel's reason; a report that is not
-// a JSON list — the error names the shape.
 func TestDiscoverKernelFailureIsTheError(t *testing.T) {
 	t.Run("the kernel's reason rides the error", func(t *testing.T) {
 		k := &fakeKernel{replies: []pythontool.Reply{errReply("kernel exited (code 1)", "")}}
@@ -104,9 +93,6 @@ func TestDiscoverKernelFailureIsTheError(t *testing.T) {
 	})
 }
 
-// TestDiscoverCellCarriesTheFiles (SPEC_PLUGINS, named): the cell the
-// kernel would receive — the files embedded (quotes and spaces in a
-// path survive), the three names validated, the registration named.
 func TestDiscoverCellCarriesTheFiles(t *testing.T) {
 	k := &fakeKernel{replies: []pythontool.Reply{okReply("[]")}}
 	_, err := Discover(context.Background(), k, []string{`/h/my dir/we'ird.py`, "/h/ok.py"})
@@ -135,9 +121,6 @@ func TestDiscoverCellCarriesTheFiles(t *testing.T) {
 	}
 }
 
-// TestCallCellIsTotal (SPEC_PLUGINS, named): the call cell for args
-// with quotes, newlines, and unicode — the re-marshalled JSON is
-// compact (no raw newlines) and the embedding parses.
 func TestCallCellIsTotal(t *testing.T) {
 	tt := &fakeKernel{}
 	tool := New("echo", "echoes", "/h/plugins/echo.py", json.RawMessage(`{"type":"object"}`), tt)
@@ -149,8 +132,7 @@ func TestCallCellIsTotal(t *testing.T) {
 		t.Fatalf("cells = %d, want 1", len(tt.cells))
 	}
 	cell := tt.cells[0]
-	// the args literal: compact JSON (no raw newline), embedded in a
-	// single-quoted python literal with the quote and backslash doubled.
+
 	if strings.Contains(cell, "\n\"") {
 		t.Fatalf("the args literal must be compact (no raw newlines):\n%s", cell)
 	}
@@ -168,9 +150,6 @@ func TestCallCellIsTotal(t *testing.T) {
 	}
 }
 
-// TestToolExecRoundTripsArgsAndResult (SPEC_PLUGINS, named): a canned
-// OK reply (the printed value) — the result is the value, the trailing
-// newline dropped; the error nil.
 func TestToolExecRoundTripsArgsAndResult(t *testing.T) {
 	k := &fakeKernel{replies: []pythontool.Reply{okReply("echo: hello rig\n")}}
 	tool := New("echo", "echoes", "/h/plugins/echo.py", json.RawMessage(`{"type":"object"}`), k)
@@ -191,10 +170,6 @@ func TestToolExecRoundTripsArgsAndResult(t *testing.T) {
 	})
 }
 
-// TestToolExecErrorCarriesTheTracebackTail (SPEC_PLUGINS, named): a
-// non-OK reply with the exception tail (and partial output) — the
-// error is name: tail, the content carries the partial output plus
-// the tail (the loop's content-over-error contract).
 func TestToolExecErrorCarriesTheTracebackTail(t *testing.T) {
 	k := &fakeKernel{replies: []pythontool.Reply{errReply("ValueError: bad args", "partial output\n")}}
 	tool := New("boom", "explodes", "/h/plugins/boom.py", json.RawMessage(`{}`), k)
@@ -229,8 +204,6 @@ func TestToolExecErrorCarriesTheTracebackTail(t *testing.T) {
 	})
 }
 
-// TestToolSurfacesCarryTheFileContract (SPEC_PLUGINS, named): Name /
-// Description / Schema are the report's — the wire's three, verbatim.
 func TestToolSurfacesCarryTheFileContract(t *testing.T) {
 	schema := json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}}}`)
 	tool := New("echo", "the fixture echo plugin", "/h/plugins/echo.py", schema, &fakeKernel{})

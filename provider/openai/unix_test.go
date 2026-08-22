@@ -1,10 +1,5 @@
 package openai_test
 
-// The unix-socket base URL (SPEC_SANDBOX 1): the jailed worker's
-// model calls ride the one bound socket — the provider dials the
-// named socket, and the request's path is the OpenAI suffix, clean
-// (the socket path is the transport's, not the wire's).
-
 import (
 	"context"
 	"io"
@@ -19,9 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/provider/openai"
 )
 
-// unixSrv serves one SSE completion on a unix socket and records what
-// it was asked for (the socket proxy's destination, in the test's
-// place).
 type unixSrv struct {
 	mu    sync.Mutex
 	paths []string
@@ -57,9 +49,6 @@ func (s *unixSrv) saw() []string {
 	return append([]string(nil), s.paths...)
 }
 
-// TestUnixBaseURLDialsTheSocket (SPEC_SANDBOX 1): a unix: base URL
-// dials the named socket; the stream flows; the destination sees the
-// OpenAI path, clean (no socket path on the wire).
 func TestUnixBaseURLDialsTheSocket(t *testing.T) {
 	srv, sock := newUnixSrv(t)
 	p := openai.New("unix:"+sock, "qwen3.8-workers")

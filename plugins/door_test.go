@@ -10,7 +10,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-// stubLive is the door's Live seam: a tiny table with one plugin.
 type stubLive struct {
 	names []string
 	tool  core.Tool
@@ -33,9 +32,6 @@ func (s *stubTool) Exec(ctx context.Context, args json.RawMessage) (string, erro
 	return "ran " + s.name + ": " + string(args), nil
 }
 
-// TestDoorSurfacesAreTheNativeContract (SPEC_GROWTH 9, named): `plugin`
-// and `plugin_schema` are natives with the small schemas; the door's
-// schema carries the live names' enum.
 func TestDoorSurfacesAreTheNativeContract(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
 	door := NewDoor(live, nil)
@@ -56,7 +52,7 @@ func TestDoorSurfacesAreTheNativeContract(t *testing.T) {
 	if len(params.Properties.Name.Enum) != 1 || params.Properties.Name.Enum[0] != "networth" {
 		t.Fatalf("the door's enum = %v, want the live names", params.Properties.Name.Enum)
 	}
-	// the enum reflects the live table (a swap changes the next schema).
+
 	live.names = []string{"networth", "flip_calc"}
 	if err := json.Unmarshal(door.Schema(), &params); err != nil {
 		t.Fatal(err)
@@ -66,10 +62,6 @@ func TestDoorSurfacesAreTheNativeContract(t *testing.T) {
 	}
 }
 
-// TestDoorExecResolvesAndCalls (SPEC_GROWTH 9, named): `plugin` with
-// {name, args} calls the named plugin (args verbatim, result verbatim);
-// an unknown name is a loud tool error naming the live plugins;
-// `plugin_schema` returns the plugin's description and schema.
 func TestDoorExecResolvesAndCalls(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
 	door := NewDoor(live, nil)
@@ -93,8 +85,6 @@ func TestDoorExecResolvesAndCalls(t *testing.T) {
 	}
 }
 
-// deferredLive is the out-of-band install at the Live seam: the name is
-// absent until the redo's discovery lands it.
 type deferredLive struct {
 	name    string
 	tool    core.Tool
@@ -126,8 +116,6 @@ func (d *deferredLive) redo(ctx context.Context) error {
 	return nil
 }
 
-// TestDoorRedisoversOnceOnUnknownName (SPEC_STREAMLINE 4): an unknown name
-// runs the redo once, the resolved plugin executes with the args verbatim.
 func TestDoorRedisoversOnceOnUnknownName(t *testing.T) {
 	live := &deferredLive{name: "forged", tool: &stubTool{name: "forged"}}
 	door := NewDoor(live, live.redo)
@@ -140,8 +128,6 @@ func TestDoorRedisoversOnceOnUnknownName(t *testing.T) {
 	}
 }
 
-// TestDoorSkipsRedoOnKnownName (SPEC_STREAMLINE 4): a name the table
-// already resolves never runs the redo.
 func TestDoorSkipsRedoOnKnownName(t *testing.T) {
 	live := &deferredLive{name: "forged", tool: &stubTool{name: "forged"}, ready: true}
 	door := NewDoor(live, live.redo)
@@ -153,8 +139,6 @@ func TestDoorSkipsRedoOnKnownName(t *testing.T) {
 	}
 }
 
-// TestDoorNamesRedoFailure (SPEC_STREAMLINE 4): a failing redo refuses with
-// the re-discovery failure named.
 func TestDoorNamesRedoFailure(t *testing.T) {
 	live := &deferredLive{name: "forged", tool: &stubTool{name: "forged"}}
 	live.redoErr = errors.New("the kernel said no")
@@ -165,8 +149,6 @@ func TestDoorNamesRedoFailure(t *testing.T) {
 	}
 }
 
-// TestDoorNilRedoKeepsTheRefusal (SPEC_STREAMLINE 4): a nil redo is
-// today's voice, the live list from SPEC_GROWTH 9.
 func TestDoorNilRedoKeepsTheRefusal(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
 	door := NewDoor(live, nil)
@@ -176,9 +158,6 @@ func TestDoorNilRedoKeepsTheRefusal(t *testing.T) {
 	}
 }
 
-// TestSchemaDoorCarriesTheSameSelfHeal (SPEC_STREAMLINE 4): the schema
-// door redisovers once on an unknown name, skips it on a known one, names
-// the failing redo, and keeps the refusal with a nil redo.
 func TestSchemaDoorCarriesTheSameSelfHeal(t *testing.T) {
 	ctx := context.Background()
 

@@ -7,9 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state"
 )
 
-// TestSessionUsageReturnsRows (SPEC_SERVE, named): the typed usage read
-// beside Resume returns the session's usage rows, in transcript order; a
-// session with no usage rows returns an empty slice, not an error.
 func TestSessionUsageReturnsRows(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
@@ -45,9 +42,6 @@ func TestSessionUsageReturnsRows(t *testing.T) {
 	}
 }
 
-// TestListSessionsCarriesCwd (SPEC_SERVE, named): SessionRow.Cwd is
-// populated so the dashboard groups by workspace and the cwd picker can
-// enumerate the workspaces that have sessions.
 func TestListSessionsCarriesCwd(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()

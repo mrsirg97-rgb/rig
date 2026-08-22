@@ -7,9 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 )
 
-// decision 6: the todo and scheduler blocks are one renderer on both
-// doors. The golden asserts byte equality minus the opening line.
-
 const todoReply = "→ t3 started\n" +
 	"2/5 done · next: t4\n" +
 	"  t1 [x] wire the models table\n" +
@@ -78,8 +75,7 @@ func TestTodoBlockExactBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", todoReply)
-	// the progress bar: three of five filled (two done plus one in
-	// progress), the pane head, one row per task, the store's voice kept.
+
 	if !strings.Contains(got, th.Paint("accent", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t4")) {
 		t.Fatalf("the progress head is missing or wrong:\n%s", got)
 	}
@@ -114,13 +110,12 @@ func TestTodoBlockParseFailureDegradesToRaw(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// a future voice change: no count head, no markers. The raw reply
-	// commits as-is: degrade to the CLI, never hide (decision 6).
+
 	raw := "all good, queue is healthy"
 	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != raw {
 		t.Fatalf("an unparseable reply commits raw, got:\n%s", got)
 	}
-	// a half-parsed reply (a head but a malformed task row) degrades too.
+
 	raw = "2/2 done\n  t1 ?? text"
 	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != raw {
 		t.Fatalf("a malformed task row degrades to raw, got:\n%s", got)
@@ -167,7 +162,7 @@ func TestSchedulerListBlockExact(t *testing.T) {
 	if !strings.Contains(got, th.Paint("dim", "  cwd: no jobs")) {
 		t.Fatalf("the empty section stays dim:\n%s", got)
 	}
-	// a paused job takes the open circle.
+
 	paused := "global:\nj1 nightly paused · at passed\n  scope global · cron once · at 2026-04-19T00:00:00Z · qwen3.8-workers · /home/ng\ncwd: no jobs\n"
 	got = tui.RenderSchedulerBlock(th, "OPEN", paused)
 	if !strings.Contains(got, th.Paint("dim", "○")+" "+th.SGR("text")+"j1 nightly paused") {

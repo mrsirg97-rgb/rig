@@ -11,37 +11,25 @@ import (
 	compact "github.com/mrsirg97-rgb/rig/policy/compact"
 )
 
-// TestKeepRecentCutsAtPairBoundary (SPEC_COMPACT, named): a budget
-// landing inside a multi-call batch slides to the batch's assistant
-// message (the tail never starts at a result); the single-call pair is
-// atomic; the overrun is bounded by one batch; a tail of the last
-// message alone — the older prefix is empty, the compact is skipped, the
-// passthrough returned.
 func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 	t.Run("budget inside a multi-call batch slides to the batch's assistant", func(t *testing.T) {
-		// window 900 / reserve 150 (was 850 / 100; the trigger stays 750):
-		// the older prefix's summary input is ~849, and the summary floor
-		// (SPEC_COMPACT 3, amended) wants room for a summary, not a token
-		// — at 850 the prefix would be sliced; the cut this case pins is
-		// the tail's, unchanged.
+
 		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 900, MaxTokens: 500, Reserve: 150, KeepRecent: 120}
 		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)}) // 500, the older bulk
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})  // 50
-		s.Append(core.Message{                                                          // 50, a single-call assistant
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)})
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})
+		s.Append(core.Message{
 			Role: core.RoleAssistant, Content: strings.Repeat("a", 100),
 			ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{}`)}},
 		})
-		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 200)}) // 50
-		s.Append(core.Message{                                                                       // 75, the multi-call batch the budget lands inside
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 200)})
+		s.Append(core.Message{
 			Role: core.RoleAssistant, Content: strings.Repeat("b", 100),
 			ToolCalls: []core.ToolCall{{ID: "c2", Name: "bash", Args: []byte(`{}`)}, {ID: "c3", Name: "bash", Args: []byte(`{}`)}},
 		})
-		s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: strings.Repeat("r", 200)}) // 50
-		s.Append(core.Message{Role: core.RoleTool, ToolID: "c3", Content: strings.Repeat("r", 200)}) // 50
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: strings.Repeat("r", 200)})
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c3", Content: strings.Repeat("r", 200)})
 
-		// the budget (120) takes the last two results (100) but not the
-		// batch's assistant (175) — so the naive tail starts at a result.
 		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		fe := &captureFrontend{}
 		pol, err := compact.New(prov, fe, s, "S", row)
@@ -52,15 +40,14 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Assemble: %v", err)
 		}
-		// the tail never starts at a result: it is the batch, whole.
+
 		if len(out) != 5 {
 			t.Fatalf("assembled = %d messages, want system + summary + the batch (3)", len(out))
 		}
 		if out[2].Role != core.RoleAssistant || len(out[2].ToolCalls) != 2 {
 			t.Fatalf("the tail must start at the batch's assistant: %+v", out[2])
 		}
-		// the batch is atomic and the overrun is bounded by one batch:
-		// the kept estimate is the batch's 175, 55 over the 120 budget.
+
 		evs := stripCue(fe.snapshot())
 		if len(evs) != 1 {
 			t.Fatalf("frontend events = %v", evs)
@@ -75,9 +62,7 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 		if c.Dropped != 627 {
 			t.Fatalf("Dropped = %d, want the older prefix's estimate (500 + 50 + 27 + 50)", c.Dropped)
 		}
-		// the older prefix ends before the batch: the quoted transcript
-		// (the 3 shape's user message) carries up to the first pair's
-		// result, not the batch.
+
 		reqs := prov.reqs()
 		if len(reqs) != 1 {
 			t.Fatalf("summary calls = %d, want 1", len(reqs))
@@ -100,26 +85,21 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 	})
 
 	t.Run("the single-call pair is atomic", func(t *testing.T) {
-		// the window is the summary input's estimate (the prompt file plus
-		// the older prefix, 550) plus a margin of budget, and still over
-		// the transcript's trigger estimate (726 > window - reserve): both
-		// margins hold as the prompt file grows, because the input's size
-		// is computed from the file the test sits beside, not a constant.
+
 		prompt, err := os.ReadFile("summary_prompt.txt")
 		if err != nil {
 			t.Fatalf("read the prompt file: %v", err)
 		}
 		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: (len(prompt)+3)/4 + 550 + 71, MaxTokens: 500, Reserve: 100, KeepRecent: 120}
 		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)}) // 500
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})  // 50
-		s.Append(core.Message{                                                          // 75
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("x", 2000)})
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 200)})
+		s.Append(core.Message{
 			Role: core.RoleAssistant, Content: strings.Repeat("a", 300),
 			ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{}`)}},
 		})
-		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)}) // 100
-		// the budget (120) takes the result (100) but not the assistant
-		// (75): the pair stays whole.
+		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)})
+
 		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
@@ -140,9 +120,8 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 	t.Run("a single oversized last message skips the compact", func(t *testing.T) {
 		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 8000)}) // 2000
-		// the tail is the last message alone: the older prefix is empty,
-		// there is nothing to summarize — the passthrough is returned.
+		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 8000)})
+
 		prov := &scriptedProvider{}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {

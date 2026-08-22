@@ -40,8 +40,6 @@ func (pluginsCmd) Sub() []Sub {
 
 const usage = "plugins: usage: plugins | plugins pending | plugins disabled | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
 
-// the tail is SPEC_STREAMLINE 5's: the operator's approve and the door's
-// call, not the reload (the door self-heals, SPEC_STREAMLINE 4).
 const createTemplate = "author a plugin: %s; the contract is DESCRIPTION, SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending directory (SPEC_SANDBOX); the operator installs it with /plugins approve; then call it through the plugin door and test it with one call."
 
 func (pluginsCmd) Run(ctx context.Context, args string, env any) (string, error) {

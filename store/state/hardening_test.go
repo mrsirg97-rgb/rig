@@ -1,10 +1,5 @@
 package state_test
 
-// The SPEC_HARDENING named cases (decisions 1, 4, 5): the recorder's taps
-// move to the loop's events (the Observe tap is retired, the TurnEnd rule
-// subsumes the Fault discard, the reasoning and cache columns land, the
-// files snapshot upserts at the boundary) — and the Resume projection.
-
 import (
 	"context"
 	"encoding/json"
@@ -30,8 +25,6 @@ func openState(t *testing.T) store.DB {
 	return db
 }
 
-// decision 1: the recorder lands tool results from the loop's event, not
-// from the retired Observe tap in the chain.
 func TestRecorderLandsResultsFromTheEvent(t *testing.T) {
 	db := openState(t)
 	sid := "rec-event"
@@ -44,7 +37,7 @@ func TestRecorderLandsResultsFromTheEvent(t *testing.T) {
 	}
 	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}})
 	rec.Notify(core.Done{StopReason: "end_turn"})
-	// execution lands after the stream completes, as the loop's event
+
 	rec.Notify(core.ToolResult{ID: "c1", Content: "out-1", Err: nil})
 	if err := rec.Close("ok"); err != nil {
 		t.Fatal(err)
@@ -58,7 +51,6 @@ func TestRecorderLandsResultsFromTheEvent(t *testing.T) {
 	}
 }
 
-// decision 1: a fed-back failure (Err non-nil) lands as a failure row.
 func TestRecorderLandsGuardedFailuresFromTheEvent(t *testing.T) {
 	db := openState(t)
 	sid := "rec-fail"
@@ -78,16 +70,12 @@ func TestRecorderLandsGuardedFailuresFromTheEvent(t *testing.T) {
 	}
 }
 
-// decision 4: the recorder rule — an unlanded partial at any TurnEnd is a
-// partial and is discarded (the "PARTIAL fresh" bug reversed: an
-// interrupted mid-stream turn has no Fault, and its partial must not
-// persist).
 func TestRecorderTurnEndDiscardsTheUnlandedPartial(t *testing.T) {
 	db := openState(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-turnend", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "PARTIAL "})
 	rec.Notify(core.ReasoningDelta{Text: "PARTIAL thinking "})
-	rec.Notify(core.TurnEnd{Reason: core.TurnInterrupt}) // the interrupt: no Fault
+	rec.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
 	rec.Notify(core.TextDelta{Text: "fresh"})
 	rec.Notify(core.Done{StopReason: "end_turn"})
 	if err := rec.Close("ok"); err != nil {
@@ -110,7 +98,6 @@ func TestRecorderTurnEndDiscardsTheUnlandedPartial(t *testing.T) {
 	}
 }
 
-// decision 2: the reasoning block lands in the existing column.
 func TestRecorderLandsReasoning(t *testing.T) {
 	db := openState(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-reason", core.NewSession())
@@ -132,8 +119,6 @@ func TestRecorderLandsReasoning(t *testing.T) {
 	}
 }
 
-// decision 3: the cache columns land from Done (they rode at zero until
-// the transport reported them).
 func TestRecorderLandsCacheUsage(t *testing.T) {
 	db := openState(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-cache", core.NewSession())
@@ -153,10 +138,6 @@ func TestRecorderLandsCacheUsage(t *testing.T) {
 	}
 }
 
-// decision 5: the named gap — RecordFile had no production caller. The
-// recorder holds the session reference and upserts a full files snapshot
-// at each turn boundary (on Done and on Input): idempotent, so a changed
-// mtime replaces the row and a new path inserts.
 func TestRecorderUpsertsFilesAtTheBoundary(t *testing.T) {
 	db := openState(t)
 	sid := "rec-files"
@@ -175,8 +156,6 @@ func TestRecorderUpsertsFilesAtTheBoundary(t *testing.T) {
 		t.Fatalf("the files snapshot must land at the Input boundary: %+v", f)
 	}
 
-	// the tool mutates the file (a new hash and mtime), then a new file
-	// appears; the Done boundary upserts both.
 	session.Files["/tmp/a.txt"] = core.FileState{Hash: "h2", Mtime: 200}
 	session.Files["/tmp/b.txt"] = core.FileState{Hash: "hb", Mtime: 300}
 	rec.Notify(core.TextDelta{Text: "done"})
@@ -198,7 +177,6 @@ func TestRecorderUpsertsFilesAtTheBoundary(t *testing.T) {
 	}
 }
 
-// decision 1: the observation failure stays loud (the event-sourced path).
 func TestRecorderEventErrorsStayLoud(t *testing.T) {
 	db := openState(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-loud2", core.NewSession())
@@ -223,8 +201,6 @@ func TestRecorderEventErrorsStayLoud(t *testing.T) {
 	}
 }
 
-// The forwarding stays intact across the new vocabulary (the recorder
-// observes, then forwards; the loop's events flow through untouched).
 func TestRecorderForwardsTheHardeningEventsIntact(t *testing.T) {
 	db := openState(t)
 	inner := &scripted{}
@@ -243,19 +219,17 @@ func TestRecorderForwardsTheHardeningEventsIntact(t *testing.T) {
 	}
 }
 
-// --- the Resume projection (decision 5) ---------------------------------
-
 func seedSession(t *testing.T, db store.DB, sid string) {
 	t.Helper()
 	ctx := context.Background()
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
 	}
-	// user
+
 	if _, err := state.RecordMessage(ctx, db, sid, "user", "do it", nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	// assistant with reasoning and two calls (one landed, one dangling)
+
 	ra := "the thinking behind the calls"
 	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", &ra, nil); err != nil {
 		t.Fatal(err)
@@ -270,12 +244,11 @@ func seedSession(t *testing.T, db store.DB, sid string) {
 	if err := state.RecordToolResult(ctx, db, "c1", out, nil); err != nil {
 		t.Fatal(err)
 	}
-	// c2 is the kill-mid-turn shape: the result never landed
-	// the files rows
+
 	if err := state.RecordFile(ctx, db, sid, "/tmp/a.txt", "h1", 100); err != nil {
 		t.Fatal(err)
 	}
-	// a later completed turn
+
 	if _, err := state.RecordMessage(ctx, db, sid, "user", "again", nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -323,8 +296,7 @@ func TestResumeRebuildsTheTranscript(t *testing.T) {
 	if tool.Role != core.RoleTool || tool.ToolID != "c1" || tool.Content != "total 1" {
 		t.Fatalf("message 2 = %+v, want the landed result as a tool message", tool)
 	}
-	// the dangling call (c2) has no tool message: the projection is
-	// faithful, the transcript is not rewritten.
+
 	if want[3].Role != core.RoleUser || want[3].Content != "again" {
 		t.Fatalf("message 3 = %+v", want[3])
 	}

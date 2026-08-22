@@ -12,12 +12,6 @@ func Allowlist(names ...string) core.ToolMiddleware {
 	return allowlist(names, nil)
 }
 
-// AllowlistWithDoor is the allow-list's second door (SPEC_PLUGINS 7,
-// the presence reversal): a name the live plugin table carries passes
-// though it is absent from the static list. The door speaks for
-// plugins only — a native is never admitted by it (the collision rule
-// keeps the sets disjoint). A nil door is today: the static list alone
-// decides, the same as Allowlist.
 func AllowlistWithDoor(names []string, door func(string) bool) core.ToolMiddleware {
 	return allowlist(names, door)
 }

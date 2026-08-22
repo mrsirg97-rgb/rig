@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// roleCmd is the /role stance dial (SPEC_MODES 2): default (no
-// injection), architect, or reviewer — the stance sits between the
-// system prompt and AGENTS.md, effective next turn.
 type roleCmd struct{}
 
 func (roleCmd) Sub() []Sub { return RoleHints() }

@@ -84,3 +84,8 @@ sees core and models and nothing else.
 - One-shot fault propagation: a faulted turn ends the session non-zero
   (the worker's run record derives status from exit); the REPL keeps
   its continue-on-fault semantics.
+- The plugin door's redo seam (SPEC_STREAMLINE 4) is the error half of
+  the reload — the door needs the swap, not the listing; no home, no
+  redo. The door tools hold the live table as their seam, so the root
+  builds the empty table first, the doors over it, then fills it from
+  the natives (the doors among them) and the plugins.

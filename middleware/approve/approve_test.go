@@ -30,8 +30,6 @@ func call(name, args string) core.ToolCall {
 	return core.ToolCall{ID: "c1", Name: name, Args: json.RawMessage(args)}
 }
 
-// TestAutoNeverAsks (SPEC_MODES 4, named): auto is today's behavior —
-// every call executes, the door never opens.
 func TestAutoNeverAsks(t *testing.T) {
 	var asked []string
 	exec, calls := gateExec("auto", false, &asked)
@@ -41,8 +39,6 @@ func TestAutoNeverAsks(t *testing.T) {
 	}
 }
 
-// TestManualReadSetPassesSilently (SPEC_MODES 4, named): manual asks
-// only for the mutating set — the read set executes without a pause.
 func TestManualReadSetPassesSilently(t *testing.T) {
 	var asked []string
 	exec, calls := gateExec("manual", false, &asked)
@@ -52,9 +48,6 @@ func TestManualReadSetPassesSilently(t *testing.T) {
 	}
 }
 
-// TestManualMutatingAsksAndRuns (SPEC_MODES 4, named): a mutating call
-// in manual mode pauses for the answer; yes runs it, the prompt names
-// the tool and previews the arguments.
 func TestManualMutatingAsksAndRuns(t *testing.T) {
 	var asked []string
 	exec, calls := gateExec("manual", true, &asked)
@@ -67,9 +60,6 @@ func TestManualMutatingAsksAndRuns(t *testing.T) {
 	}
 }
 
-// TestManualDeclineIsATeachingRefusal (SPEC_MODES 4, named): no is a
-// model-visible result, not an error — the model reads the named
-// refusal and adapts; nothing executes.
 func TestManualDeclineIsATeachingRefusal(t *testing.T) {
 	exec, calls := gateExec("manual", false, nil)
 	out, err := exec(context.Background(), call("write", `{"path":"x"}`))
@@ -84,9 +74,6 @@ func TestManualDeclineIsATeachingRefusal(t *testing.T) {
 	}
 }
 
-// TestNilAskDoorFailsClosed (SPEC_MODES 4, named): manual with no door
-// declines with the named reason rather than executing unasked — the
-// production root never wires this shape, and the gate still refuses.
 func TestNilAskDoorFailsClosed(t *testing.T) {
 	calls := 0
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -100,8 +87,6 @@ func TestNilAskDoorFailsClosed(t *testing.T) {
 	}
 }
 
-// TestDialReadAtCallTime (SPEC_MODES 4, named): the mode closure is
-// read per call — a flip applies to the very next call, no rebuild.
 func TestDialReadAtCallTime(t *testing.T) {
 	mode := "auto"
 	calls := 0
@@ -123,8 +108,6 @@ func TestDialReadAtCallTime(t *testing.T) {
 	}
 }
 
-// TestModeVocabulary (SPEC_MODES 4, named): empty descends to auto;
-// auto and manual pass; anything else refuses.
 func TestModeVocabulary(t *testing.T) {
 	if m, ok := approve.Mode(""); !ok || m != "auto" {
 		t.Fatalf("empty must descend to auto: (%q, %v)", m, ok)
@@ -139,8 +122,6 @@ func TestModeVocabulary(t *testing.T) {
 	}
 }
 
-// TestPromptPreviewTruncates (SPEC_MODES 4, named): the ask row is one
-// glance — long arguments truncate, empty ones drop.
 func TestPromptPreviewTruncates(t *testing.T) {
 	long := `{"cmd":"` + strings.Repeat("a", 300) + `"}`
 	p := approve.Prompt(call("bash", long))
@@ -152,9 +133,6 @@ func TestPromptPreviewTruncates(t *testing.T) {
 	}
 }
 
-// TestDelegatePromptShowsTheTaskFirstLine (SPEC_DELEGATE 7, named): a
-// delegate call's ask row renders "delegate · <first line>", not the
-// args JSON — the operator glances the work.
 func TestDelegatePromptShowsTheTaskFirstLine(t *testing.T) {
 	p := approve.Prompt(call("delegate", `{"task":"sweep the /tmp tree\nand report","cwd":"/ws"}`))
 	if p != "delegate · sweep the /tmp tree" {

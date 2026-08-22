@@ -16,9 +16,6 @@ import (
 	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
 )
 
-// The named cases (SPEC_STATE, testing): fold, create upsert, DAG
-// planning, replay integrity. Refusals loud, in a teaching voice.
-
 type item = todostore.CreateItem
 
 func newDB(t *testing.T) store.DB {
@@ -32,8 +29,7 @@ func newDB(t *testing.T) store.DB {
 
 func rawQuery(t *testing.T, db store.DB, q string, args ...any) *sql.Rows {
 	t.Helper()
-	// reads ride the pool: a rolled-back transaction invalidates its rows
-	// before the caller can consume them, so no transaction here
+
 	rows, err := db.Query(q, args...)
 	if err != nil {
 		t.Fatalf("query: %v", err)
@@ -107,8 +103,6 @@ func eventRows(t *testing.T, db store.DB) [][2]any {
 	rows.Close()
 	return out
 }
-
-// --- create: minting, order, idempotence ---
 
 func TestCreateMintsIdsAndReadsBack(t *testing.T) {
 	db := newDB(t)
@@ -185,8 +179,6 @@ func TestExplicitClearStillEmptiesTheQueue(t *testing.T) {
 		t.Errorf("clear left rows:\n%s", reply)
 	}
 }
-
-// --- DAG planning ---
 
 func TestSameBatchChainCreatesATaskTree(t *testing.T) {
 	db := newDB(t)
@@ -301,8 +293,6 @@ func TestACreateCannotPushAnAcyclicQueueIntoACycle(t *testing.T) {
 	}
 }
 
-// --- upsert link semantics ---
-
 func TestRecreateOmittedKeepsTheLink(t *testing.T) {
 	db := newDB(t)
 	d := func(s string) *string { return &s }
@@ -374,14 +364,12 @@ func TestFirstOccurrenceWinsWithinABatch(t *testing.T) {
 		{Text: "a"},
 		{Text: "x"},
 		{Text: "b", DependsOn: d("a")},
-		{Text: "b", DependsOn: d("x")}, // duplicate text: ignored entirely
+		{Text: "b", DependsOn: d("x")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("first-occurrence: %v", err)
 	}
 }
-
-// --- replay integrity ---
 
 func TestDanglingDependencyFromACorruptCreateEventDropsOnReplay(t *testing.T) {
 	db := newDB(t)
@@ -464,15 +452,11 @@ func TestEventArgsMirrorTheCall(t *testing.T) {
 
 var _ = fmt.Sprintf
 
-// --- move, claim, compaction, dependency gating and presence. Voices
-// asserted verbatim.
-
 const (
 	sessA = "sess-a"
 	sessB = "sess-b"
 )
 
-// projTextOrder reads the projection in queue order, as an operator would.
 func projTextOrder(t *testing.T, db store.DB) []string {
 	t.Helper()
 	rows := rawQuery(t, db, "SELECT text FROM tasks ORDER BY pos, created_seq")
@@ -503,8 +487,6 @@ func projStatus(t *testing.T, db store.DB, text string) string {
 	return s
 }
 
-// projDep resolves a task's dependency through task_deps (rig's
-// substrate carries links there, not in tasks).
 func projDep(t *testing.T, db store.DB, text string) string {
 	t.Helper()
 	rows := rawQuery(t, db, "SELECT depends_on FROM task_deps WHERE task_id = (SELECT id FROM tasks WHERE text = ?)", text)
@@ -519,8 +501,6 @@ func projDep(t *testing.T, db store.DB, text string) string {
 	return dep.String
 }
 
-// taskIDText resolves the minted id of the task line carrying exact text,
-// by scanning a reply the way an operator would.
 func taskIDText(t *testing.T, reply, text string) string {
 	t.Helper()
 	re := regexp.MustCompile(`\bt(\d+)\b \[[~x! ]\] ` + regexp.QuoteMeta(text))
@@ -531,8 +511,6 @@ func taskIDText(t *testing.T, reply, text string) string {
 	return ""
 }
 
-// age appends n ghost start events (replay no-ops) to push the seq forward:
-// deterministic aging, synthetic events, not sleeps.
 func age(t *testing.T, db store.DB, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
@@ -566,8 +544,6 @@ func compactTasks(t *testing.T, db store.DB) []map[string]any {
 	}
 	return payload.Tasks
 }
-
-// --- move: reordering ---
 
 func TestMoveRenumbersDeterministically(t *testing.T) {
 	db := newDB(t)
@@ -783,8 +759,6 @@ func TestSequentialMovesComposeDeterministically(t *testing.T) {
 	}
 }
 
-// --- claim semantics ---
-
 func TestEveryMutationEventRecordsTheSession(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -975,11 +949,6 @@ func TestForeignClaimsShowInRenders(t *testing.T) {
 	}
 }
 
-// --- the lean complete (decision 9): completing the caller's own
-// unclaimed pending task implicitly claims and completes — start+complete,
-// both events, the echo noting the auto-start. Foreign-claim and
-// blocked-by-dependency refusals stay.
-
 func TestCompleteOnOwnPendingAutoStartsAndCompletes(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -1057,8 +1026,6 @@ func TestStartReplyAlreadyCarriesTheClaim(t *testing.T) {
 		t.Errorf("own claim labeled in start reply:\n%s", started)
 	}
 }
-
-// --- compaction ---
 
 func TestMutationPastThresholdCompacts(t *testing.T) {
 	db := newDB(t)
@@ -1171,7 +1138,7 @@ func TestClaimsSurviveCompaction(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, id, sessA); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	age(t, db, 1010) // the start event will be compacted away
+	age(t, db, 1010)
 	if _, err := todostore.Complete(ctx, db, id, sessB); err == nil {
 		t.Fatal("foreign complete succeeded")
 	} else if !strings.Contains(err.Error(), "claimed by "+sessA) {
@@ -1215,7 +1182,7 @@ func TestStalenessEpochResetsAfterCompaction(t *testing.T) {
 	}
 	id := taskIDText(t, reply, "ancient")
 	age(t, db, 1010)
-	if _, err := todostore.Start(ctx, db, id, "s1"); err != nil { // triggers the compaction
+	if _, err := todostore.Start(ctx, db, id, "s1"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	age(t, db, 210)
@@ -1240,10 +1207,6 @@ func TestReadNeverCompacts(t *testing.T) {
 	}
 }
 
-// TestCompactNamesTheSnapshotInTheReply (SPEC_STREAMLINE 2): the reply of
-// the operation that causes the compaction carries the footer with the
-// folded count; the log folds to the snapshot; the following operation,
-// below the threshold, is footer-free.
 func TestCompactNamesTheSnapshotInTheReply(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -1253,7 +1216,7 @@ func TestCompactNamesTheSnapshotInTheReply(t *testing.T) {
 	}
 	a := taskIDText(t, reply, "alpha")
 	b := taskIDText(t, reply, "beta")
-	age(t, db, 1010) // 1011 events: the next operation crosses the threshold
+	age(t, db, 1010)
 	got, err := todostore.Start(ctx, db, b, "s1")
 	if err != nil {
 		t.Fatalf("start: %v", err)
@@ -1273,7 +1236,7 @@ func TestCompactNamesTheSnapshotInTheReply(t *testing.T) {
 	if got := projStatus(t, db, "alpha"); got != "pending" {
 		t.Errorf("alpha = %v, want pending", got)
 	}
-	quiet, err := todostore.Start(ctx, db, a, "s1") // below the threshold now
+	quiet, err := todostore.Start(ctx, db, a, "s1")
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -1282,8 +1245,6 @@ func TestCompactNamesTheSnapshotInTheReply(t *testing.T) {
 	}
 }
 
-// TestUnknownIdNamesMinting (SPEC_STREAMLINE 3): every verb's unknown-id
-// refusal carries the minted-id voice, the no-task prefix intact.
 func TestUnknownIdNamesMinting(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -1305,8 +1266,6 @@ func TestUnknownIdNamesMinting(t *testing.T) {
 	}
 }
 
-// --- stale footer ---
-
 func TestStaleTasksAppendFooterFreshOmit(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -1323,8 +1282,6 @@ func TestStaleTasksAppendFooterFreshOmit(t *testing.T) {
 		t.Errorf("stale footer missing:\n%s", stale)
 	}
 }
-
-// --- completion gating ---
 
 func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	db := newDB(t)
@@ -1364,7 +1321,7 @@ func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	} else if got := err.Error(); got != want("failed; retry it first") {
 		t.Fatalf("blocked voice (failed):\n%q", got)
 	}
-	// retry -> start -> complete unblocks the dependent
+
 	if _, err := todostore.Retry(ctx, db, gate, "s1"); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
@@ -1402,8 +1359,6 @@ func TestStartOnBlockedTaskIsLegal(t *testing.T) {
 		t.Errorf("started marker:\n%s", started)
 	}
 }
-
-// --- next: presence ---
 
 func TestNextSkipsBlockedTasks(t *testing.T) {
 	db := newDB(t)
@@ -1469,16 +1424,11 @@ func ptrTo(s string) *string {
 	return &q
 }
 
-// needMove is a thin indirection so move-order assertions share one choke point.
 func needMove(t *testing.T, ctx context.Context, db store.DB, id string, pos int) (string, error) {
 	t.Helper()
 	return todostore.Move(ctx, db, id, pos, "s1")
 }
 
-// --- dependency resolution ---
-
-// A minted id must not shadow a matching text: existing ids resolve
-// id-first, batch-internal references resolve by text only.
 func TestMintedIdDoesNotShadowMatchingText(t *testing.T) {
 	db := newDB(t)
 	d := func(s string) *string { return &s }
@@ -1489,8 +1439,7 @@ func TestMintedIdDoesNotShadowMatchingText(t *testing.T) {
 	if _, err := todostore.Create(ctx, db, []item{{Text: "t3"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	// beta mints t3; the dep must land on the existing task by text, not on
-	// beta's own fresh id (a self-cycle).
+
 	if _, err := todostore.Create(ctx, db, []item{{Text: "beta", DependsOn: d("t3")}}, "s1"); err != nil {
 		t.Fatalf("text match shadowed by the minted id: %v", err)
 	}
@@ -1499,7 +1448,6 @@ func TestMintedIdDoesNotShadowMatchingText(t *testing.T) {
 	}
 }
 
-// Three-node cycles within one batch refuse with the path, atomically.
 func TestThreeNodeCyclesRefuseWithPath(t *testing.T) {
 	db := newDB(t)
 	d := func(s string) *string { return &s }
@@ -1520,9 +1468,6 @@ func TestThreeNodeCyclesRefuseWithPath(t *testing.T) {
 	}
 }
 
-// --- lifecycle voices and workspace isolation ---
-
-// Done tasks never report a blocker: the status gate lands first.
 func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	db := newDB(t)
 	d := func(s string) *string { return &s }
@@ -1530,7 +1475,7 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	if _, err := todostore.Create(ctx, db, []item{{Text: "dep"}, {Text: "outer", DependsOn: d("dep")}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	// both done through the claim path
+
 	if _, err := todostore.Start(ctx, db, "t1", "s1"); err != nil {
 		t.Fatal(err)
 	}
@@ -1543,7 +1488,7 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, "t2", "s1"); err != nil {
 		t.Fatal(err)
 	}
-	// now dep points at a pending task, via the recreate's link update
+
 	if _, err := todostore.Create(ctx, db, []item{{Text: "c"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
@@ -1563,7 +1508,6 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	}
 }
 
-// pending -> in_progress -> done; done is read-only for complete and start.
 func TestLifecycleDoneIsReadOnly(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -1590,7 +1534,6 @@ func TestLifecycleDoneIsReadOnly(t *testing.T) {
 	}
 }
 
-// failed -> retry -> started again: the chain walks back and completes.
 func TestFailedToRetryToStartedAgain(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -1623,8 +1566,6 @@ func TestFailedToRetryToStartedAgain(t *testing.T) {
 	}
 }
 
-// Workspace lists are isolated per working directory: one file per
-// workspace, and a workspace's read never sees another's tasks.
 func TestWorkspaceListsAreIsolated(t *testing.T) {
 	a := filepath.Join(t.TempDir(), "ws-a.sqlite")
 	b := filepath.Join(t.TempDir(), "ws-b.sqlite")
@@ -1651,10 +1592,6 @@ func TestWorkspaceListsAreIsolated(t *testing.T) {
 		t.Fatalf("workspace b's render must be empty:\n%s", reply)
 	}
 }
-
-// --- the lean render (SPEC_TODO_LEAN): the actionable queue, the summary
-// fold, and the per-transition echo. Done rows are hidden by default;
-// every transition echo is the affected line plus the summary.
 
 var rowRE = regexp.MustCompile(`^\s+t\d+ \[`)
 
