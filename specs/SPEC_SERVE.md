@@ -470,6 +470,16 @@ editor (the operator's hand is the approve verb, not the save; one door
 for promotion keeps the provenance rule one rule); executing the plugin
 from the page (the shared kernel is a session's; phase 4).
 
+### 12b. The disabled zone (0.12.1).
+
+The plugins page lists three zones — approved | pending | disabled —
+the three directories (SPEC_GROWTH 9, amended). A disabled plugin
+opens in the editor like any other (its zone is `disabled` for
+`source`); a save is a pending revision as ever. The page does not
+move files between zones: that is the session's `/plugins
+enable|disable` verb (an operator act the dashboard could carry later,
+named).
+
 ### 13. The folder browser, rooted at home.
 
 The picker's "add a workspace" gains a browser: `GET /api/fs?path` lists

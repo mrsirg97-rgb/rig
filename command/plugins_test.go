@@ -2,6 +2,8 @@ package command_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,5 +76,60 @@ func TestPluginsNone(t *testing.T) {
 	out, err := pluginsCmd(t).Run(context.Background(), "", &command.Env{Plugins: func() []command.PluginInfo { return []command.PluginInfo{} }})
 	if err != nil || out != "plugins: none" {
 		t.Fatalf("(out, err) = (%q, %v), want (\"plugins: none\", nil)", out, err)
+	}
+}
+
+// SPEC_GROWTH 9 (amended): the switch is a directory. disable moves the
+// file into plugins/disabled/ and reloads; enable moves it back; both
+// refuse by name when the file is not where the verb expects it, or
+// when the destination is taken.
+func TestPluginsDisableAndEnableMoveTheFileAndReload(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "echo.py"), []byte("DESCRIPTION = \"echo\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reloads := 0
+	env := &command.Env{PluginsDir: dir, Reload: func(ctx context.Context) (string, error) { reloads++; return "plugins: reload: ok", nil }}
+	out, err := pluginsCmd(t).Run(context.Background(), "disable echo", env)
+	if err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+	if !strings.Contains(out, "plugins: disabled echo") || !strings.Contains(out, "reload: ok") {
+		t.Fatalf("disable reply %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "disabled", "echo.py")); err != nil {
+		t.Fatalf("the file must be in plugins/disabled/: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "echo.py")); !os.IsNotExist(err) {
+		t.Fatal("the file must be gone from plugins/")
+	}
+	out, err = pluginsCmd(t).Run(context.Background(), "disabled", env)
+	if err != nil || !strings.Contains(out, "1 disabled") || !strings.Contains(out, "echo: echo") {
+		t.Fatalf("the disabled zone listing: %q %v", out, err)
+	}
+	if _, err := pluginsCmd(t).Run(context.Background(), "disable echo", env); err == nil || !strings.Contains(err.Error(), "no plugin") {
+		t.Fatalf("a second disable must refuse by name, got %v", err)
+	}
+	out, err = pluginsCmd(t).Run(context.Background(), "enable echo", env)
+	if err != nil || !strings.Contains(out, "plugins: enabled echo") {
+		t.Fatalf("enable: %q %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "echo.py")); err != nil {
+		t.Fatalf("the file must be back in plugins/: %v", err)
+	}
+	if reloads != 2 {
+		t.Fatalf("each move reloads once, got %d", reloads)
+	}
+	if _, err := pluginsCmd(t).Run(context.Background(), "enable echo", env); err == nil || !strings.Contains(err.Error(), "no plugin") {
+		t.Fatalf("enabling a live plugin must refuse by name, got %v", err)
+	}
+	if _, err := pluginsCmd(t).Run(context.Background(), "disable ../x", env); err == nil || !strings.Contains(err.Error(), "not a plugin name") {
+		t.Fatalf("a path is not a name, got %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "disabled", "echo.py"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pluginsCmd(t).Run(context.Background(), "disable echo", env); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("a taken destination must refuse, got %v", err)
 	}
 }

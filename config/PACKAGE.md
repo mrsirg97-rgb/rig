@@ -15,8 +15,9 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   default; returns `*Config`.
 - `Config` — `Settings`, `Models` (`models.Table`), `Agents`, `Theme`.
   `Settings.Plugins` (`SettingsPlugins{Enabled, Max}`) is the plugin
-  enablement (SPEC_GROWTH 9): the operator's `plugins.enabled` list and
-  the `max` cap, parsed in `parseSettings`.
+- `plugins`: `max` caps the door's enum; `enabled` is retired (SPEC_GROWTH 9,
+  amended) — a non-empty one refuses at load naming the directory switch
+  (`plugins/disabled/`), an empty one is dropped.
 - `loadSettings` / `parseSettings` / `mergeSettings` — the settings
   chain's file-over-embedded layer.
 - `loadModels` / `parseRows` / `mergeRows` — the model table out of code.

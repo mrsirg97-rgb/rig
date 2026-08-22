@@ -27,15 +27,14 @@ type Settings struct {
 	Sandbox         string
 	SandboxBinds    []string
 	Approve         string          // the approval dial's default (SPEC_MODES 4): "auto" or "manual"
-	Plugins         SettingsPlugins // the plugin enablement (SPEC_GROWTH 9): the hide/turn-off surface
+	Plugins         SettingsPlugins // the plugin cap (SPEC_GROWTH 9, amended): the switch is plugins/disabled/
 }
 
-// SettingsPlugins is the operator's plugin enablement: a name in Enabled
-// is live, absent names are hidden (not wired, not callable); Max caps the
-// door's name enum at the top Max live plugins (file order). Empty = all.
+// SettingsPlugins is the operator's plugin cap: Max caps the door's name
+// enum at the top Max live plugins (file order); 0 = no cap. The on/off
+// switch is the directory (plugins/disabled/), never a list here.
 type SettingsPlugins struct {
-	Enabled []string
-	Max     int
+	Max int
 }
 
 var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
@@ -118,9 +117,6 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.Approve != "" {
 		out.Approve = file.Approve
-	}
-	if file.Plugins.Enabled != nil {
-		out.Plugins.Enabled = file.Plugins.Enabled
 	}
 	if file.Plugins.Max != 0 {
 		out.Plugins.Max = file.Plugins.Max
@@ -262,7 +258,9 @@ func parseSettings(data []byte, path string) (Settings, error) {
 			if err != nil {
 				return Settings{}, fmt.Errorf("config: %s: %v", path, err)
 			}
-			s.Plugins.Enabled = v
+			if len(v) > 0 {
+				return Settings{}, fmt.Errorf("config: %s: plugins.enabled is retired (it inverted the default: enabling one hid the rest); the switch is the directory — /plugins disable <name> moves a plugin into plugins/disabled/, enable moves it back; delete the key", path)
+			}
 		}
 		if m, ok := obj["max"]; ok {
 			v, err := jsonInt(m)

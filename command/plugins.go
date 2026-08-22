@@ -23,7 +23,7 @@ type pluginsCmd struct{}
 func (pluginsCmd) Name() string { return "plugins" }
 
 func (pluginsCmd) Description() string {
-	return "list the python plugins: the loaded and the skipped ones, and the pending zone; approve <name> installs a pending plugin; reload re-registers from disk (the next turn); create <text> queues the authoring prompt"
+	return "list the python plugins: the loaded and the skipped ones, the pending zone, and the disabled zone; approve <name> installs a pending plugin; disable <name> / enable <name> move a plugin between plugins/ and plugins/disabled/; reload re-registers from disk (the next turn); create <text> queues the authoring prompt"
 }
 
 func (pluginsCmd) Sub() []Sub {
@@ -32,12 +32,13 @@ func (pluginsCmd) Sub() []Sub {
 		{Name: "approve", Desc: "approve <name>: move the pending plugin to the top level (the operator's verb)"},
 		{Name: "reload", Desc: "re-run the discovery; the new list is registered on the next turn"},
 		{Name: "create", Desc: "create <text>: queue the authoring prompt (the plugin lands in the pending zone)"},
-		{Name: "enable", Desc: "enable <name>: turn a plugin on (settings.json plugins.enabled), next turn"},
-		{Name: "disable", Desc: "disable <name>: turn a plugin off (hidden, not callable), next turn"},
+		{Name: "disabled", Desc: "list the disabled zone (plugins/disabled/), with each file's DESCRIPTION"},
+		{Name: "enable", Desc: "enable <name>: move a plugin from plugins/disabled/ back to plugins/ (live next turn)"},
+		{Name: "disable", Desc: "disable <name>: move a plugin into plugins/disabled/ (hidden, not callable, next turn)"},
 	}
 }
 
-const usage = "plugins: usage: plugins | plugins pending | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
+const usage = "plugins: usage: plugins | plugins pending | plugins disabled | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
 
 // the tail is SPEC_STREAMLINE 5's: the operator's approve and the door's
 // call, not the reload (the door self-heals, SPEC_STREAMLINE 4).
@@ -49,7 +50,9 @@ func (pluginsCmd) Run(ctx context.Context, args string, env any) (string, error)
 	case len(fields) == 0:
 		return listPlugins(env)
 	case len(fields) == 1 && fields[0] == "pending":
-		return pendingList(env)
+		return zoneList(env, "pending")
+	case len(fields) == 1 && fields[0] == "disabled":
+		return zoneList(env, "disabled")
 	case len(fields) == 1 && fields[0] == "reload":
 		return reload(env, ctx)
 	case len(fields) == 1 && fields[0] == "create":
@@ -58,22 +61,52 @@ func (pluginsCmd) Run(ctx context.Context, args string, env any) (string, error)
 		return create(env, ctx, strings.TrimSpace(strings.TrimPrefix(args, "create")))
 	case len(fields) == 2 && fields[0] == "approve":
 		return approve(ctx, env, fields[1])
-	case len(fields) == 2 && (fields[0] == "enable" || fields[0] == "disable"):
-		return setPlugins(ctx, env, fields[0] == "enable", fields[1])
+	case len(fields) == 2 && fields[0] == "disable":
+		return move(ctx, env, "disable", fields[1], "", "disabled")
+	case len(fields) == 2 && fields[0] == "enable":
+		return move(ctx, env, "enable", fields[1], "disabled", "")
 	default:
 		return "", errors.New(usage)
 	}
 }
 
-func setPlugins(ctx context.Context, env any, enabled bool, name string) (string, error) {
+func move(ctx context.Context, env any, verb, name, from, to string) (string, error) {
 	e, err := EnvOf(env)
 	if err != nil {
 		return "", err
 	}
-	if e.SetPlugins == nil {
-		return "", errors.New("plugins: no enablement seam (the root did not wire one)")
+	if e.PluginsDir == "" {
+		return "", errors.New("plugins: no plugins seam (the root did not wire one)")
 	}
-	return e.SetPlugins(ctx, name, enabled)
+	if name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
+		return "", fmt.Errorf("plugins: %s: %q is not a plugin name (the filename stem)", verb, name)
+	}
+	src := filepath.Join(e.PluginsDir, from, name+".py")
+	dst := filepath.Join(e.PluginsDir, to, name+".py")
+	if _, err := os.Stat(src); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("plugins: %s: no plugin %q at %s", verb, name, src)
+		}
+		return "", fmt.Errorf("plugins: %s: %v", verb, err)
+	}
+	if _, err := os.Stat(dst); err == nil {
+		return "", fmt.Errorf("plugins: %s: %q already exists at %s (remove one)", verb, name, dst)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return "", fmt.Errorf("plugins: %s: %v", verb, err)
+	}
+	if err := os.Rename(src, dst); err != nil {
+		return "", fmt.Errorf("plugins: %s: %v", verb, err)
+	}
+	line := fmt.Sprintf("plugins: %sd %s (%s -> %s)", verb, name, src, dst)
+	if e.Reload == nil {
+		return line + "; the discovery applies it at the next start", nil
+	}
+	reply, err := e.Reload(ctx)
+	if err != nil {
+		return "", fmt.Errorf("%s; the reload failed: %v", line, err)
+	}
+	return line + "\n" + reply, nil
 }
 
 func listPlugins(env any) (string, error) {
@@ -156,7 +189,7 @@ func create(env any, ctx context.Context, text string) (string, error) {
 	return "plugins: create: queued " + line, nil
 }
 
-func pendingList(env any) (string, error) {
+func zoneList(env any, zone string) (string, error) {
 	e, err := EnvOf(env)
 	if err != nil {
 		return "", err
@@ -164,13 +197,13 @@ func pendingList(env any) (string, error) {
 	if e.PluginsDir == "" {
 		return "", errors.New("plugins: no plugins seam (the root did not wire one)")
 	}
-	zone := filepath.Join(e.PluginsDir, "pending")
-	entries, err := os.ReadDir(zone)
+	dir := filepath.Join(e.PluginsDir, zone)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "plugins: no pending plugins", nil
+			return "plugins: no " + zone + " plugins", nil
 		}
-		return "", fmt.Errorf("plugins: pending: %v", err)
+		return "", fmt.Errorf("plugins: %s: %v", zone, err)
 	}
 	var rows []string
 	for _, en := range entries {
@@ -178,13 +211,13 @@ func pendingList(env any) (string, error) {
 			continue
 		}
 		name := strings.TrimSuffix(en.Name(), ".py")
-		path := filepath.Join(zone, en.Name())
+		path := filepath.Join(dir, en.Name())
 		rows = append(rows, fmt.Sprintf("  %s: %s (%s)", name, descriptionOf(path), path))
 	}
 	if len(rows) == 0 {
-		return "plugins: no pending plugins", nil
+		return "plugins: no " + zone + " plugins", nil
 	}
-	return fmt.Sprintf("plugins: %d pending\n%s\n", len(rows), strings.Join(rows, "\n")), nil
+	return fmt.Sprintf("plugins: %d %s\n%s\n", len(rows), zone, strings.Join(rows, "\n")), nil
 }
 
 var (
