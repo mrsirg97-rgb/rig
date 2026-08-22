@@ -57,7 +57,8 @@ the leaf.
 - **plugins** — lists the loaded/skipped plugins and the pending zone;
   `approve <name>` installs a pending plugin; `reload` re-registers from
   disk; `create <text>` queues the authoring prompt; `enable <name>` /
-  `disable <name>` toggle settings.json's `plugins.enabled` and reload
+  `disable <name>` move the file between `plugins/` and `plugins/disabled/`
+  and reload (SPEC_GROWTH 9, amended); `disabled` lists that zone
   (SPEC_GROWTH 9, the hide/turn-off surface).
 
 ## Gotchas

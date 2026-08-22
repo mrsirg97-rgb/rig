@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"path/filepath"
 
@@ -53,11 +52,12 @@ import (
 const Version = "0.12.1"
 
 type root struct {
-	baseURL string
-	system  string
-	agents  string
-	allow   []string
-	retries int
+	pluginMax int
+	baseURL   string
+	system    string
+	agents    string
+	allow     []string
+	retries   int
 
 	middleware []core.ToolMiddleware
 
@@ -431,7 +431,28 @@ func (r *root) switchRole(ctx context.Context, name string) error {
 	return nil
 }
 
+func capPlugins(reports []plugins.Report, max int) []plugins.Report {
+	if max <= 0 {
+		return reports
+	}
+	out := make([]plugins.Report, 0, len(reports))
+	live := 0
+	for _, rep := range reports {
+		if !rep.Skipped {
+			if live >= max {
+				rep.Skipped = true
+				rep.Reason = "disabled: over the settings.json plugins.max cap"
+			} else {
+				live++
+			}
+		}
+		out = append(out, rep)
+	}
+	return out
+}
+
 func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (string, error) {
+	reports = capPlugins(reports, r.pluginMax)
 	infos := make([]command.PluginInfo, 0, len(reports))
 	tools := r.nativeTools()
 	for _, rep := range reports {
@@ -498,66 +519,6 @@ func (r *root) reloadPlugins(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return r.swapPlugins(ctx, reports)
-}
-
-// setPluginEnabled toggles a plugin's enablement (SPEC_GROWTH 9): edits
-// settings.json's plugins.enabled array (preserving the rest of the file),
-// then reloads — the next-turn semantics, exactly.
-func (r *root) setPluginEnabled(ctx context.Context, name string, enabled bool) (string, error) {
-	path := filepath.Join(r.pluginsHome, "settings.json")
-	raw := []byte("{}")
-	if data, err := os.ReadFile(path); err == nil {
-		raw = data
-	} else if !os.IsNotExist(err) {
-		return "", fmt.Errorf("plugins: enable: %v", err)
-	}
-	var obj map[string]any
-	if err := json.Unmarshal(raw, &obj); err != nil {
-		return "", fmt.Errorf("plugins: enable: %s: %v", path, err)
-	}
-	pl, _ := obj["plugins"].(map[string]any)
-	if pl == nil {
-		pl = map[string]any{}
-	}
-	enabledList, _ := pl["enabled"].([]any)
-	if enabled {
-		present := false
-		for _, n := range enabledList {
-			if n == name {
-				present = true
-			}
-		}
-		if !present {
-			enabledList = append(enabledList, name)
-			pl["enabled"] = enabledList
-		}
-	} else {
-		filtered := make([]any, 0, len(enabledList))
-		for _, n := range enabledList {
-			if n != name {
-				filtered = append(filtered, n)
-			}
-		}
-		pl["enabled"] = filtered
-	}
-	obj["plugins"] = pl
-	out, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("plugins: enable: %v", err)
-	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return "", fmt.Errorf("plugins: enable: %v", err)
-	}
-	verb := "enabled"
-	if !enabled {
-		verb = "disabled"
-	}
-	line := fmt.Sprintf("plugins: %s %s", verb, name)
-	reply, err := r.reloadPlugins(ctx)
-	if err != nil {
-		return "", fmt.Errorf("%s; the reload failed: %v", line, err)
-	}
-	return line + "\n" + reply, nil
 }
 
 func runtimeTable(t models.Table, active string, resolved models.Model) models.Table {
@@ -845,29 +806,11 @@ func main() {
 	}
 	pluginTools := make([]core.Tool, 0, len(pluginReports))
 	pluginInfos := make([]command.PluginInfo, 0, len(pluginReports))
-	enabled := cfg.Settings.Plugins.Enabled
-	enabledSet := make(map[string]bool, len(enabled))
-	for _, n := range enabled {
-		enabledSet[n] = true
-	}
-	enabledN := 0
+	pluginReports = capPlugins(pluginReports, cfg.Settings.Plugins.Max)
 	for _, rep := range pluginReports {
 		info := command.PluginInfo{
 			Name: rep.Name, Description: rep.Description, File: rep.File,
 			Skipped: rep.Skipped, Reason: rep.Reason,
-		}
-		if !rep.Skipped && (len(enabledSet) == 0 || enabledSet[rep.Name]) {
-			// the enablement (SPEC_GROWTH 9): an enabled plugin wires; a
-			// cap (max) keeps only the top Max in file order (the door's enum).
-			if cfg.Settings.Plugins.Max > 0 && enabledN >= cfg.Settings.Plugins.Max {
-				info.Skipped = true
-				info.Reason = "disabled: over the settings.json plugins.max cap"
-			} else {
-				enabledN++
-			}
-		} else if !rep.Skipped {
-			info.Skipped = true
-			info.Reason = "disabled: not in settings.json plugins.enabled"
 		}
 		pluginInfos = append(pluginInfos, info)
 		if info.Skipped {
@@ -964,6 +907,7 @@ func main() {
 	}
 
 	r := &root{
+		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
 		system:     systemPrompt,
 		agents:     cfg.Agents,
@@ -1040,7 +984,6 @@ func main() {
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
 		Reload:        r.reloadPlugins,
 		PluginsDir:    pluginsDir,
-		SetPlugins:    r.setPluginEnabled,
 	}
 
 	var fe core.Frontend

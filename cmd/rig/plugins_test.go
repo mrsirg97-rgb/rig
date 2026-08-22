@@ -9,6 +9,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/mrsirg97-rgb/rig/plugins"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -760,5 +761,24 @@ func TestBothHomesPresentIsNamed(t *testing.T) {
 	}
 	if strings.Contains(string(out), "migrated the config home") {
 		t.Fatalf("the migration must not fire with the home present:\n%s", out)
+	}
+}
+
+// SPEC_GROWTH 9 (amended): the cap applies on every reload, not only at
+// wiring — capPlugins is the one function both paths call.
+func TestCapPluginsAppliesInFileOrderAndNamesTheReason(t *testing.T) {
+	reps := []plugins.Report{{Name: "a"}, {Name: "b", Skipped: true, Reason: "broken"}, {Name: "c"}, {Name: "d"}}
+	out := capPlugins(reps, 2)
+	if out[0].Skipped || out[2].Skipped {
+		t.Fatal("the first two live plugins stay live")
+	}
+	if !out[1].Skipped || out[1].Reason != "broken" {
+		t.Fatal("a discovery skip keeps its own reason")
+	}
+	if !out[3].Skipped || !strings.Contains(out[3].Reason, "plugins.max") {
+		t.Fatalf("the third live plugin is over the cap: %+v", out[3])
+	}
+	if got := capPlugins(reps, 0); got[3].Skipped {
+		t.Fatal("no cap, nothing skipped")
 	}
 }
