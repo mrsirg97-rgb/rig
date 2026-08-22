@@ -220,3 +220,23 @@ func TestToolSurfacesCarryTheFileContract(t *testing.T) {
 		t.Fatalf("File = %q, want the file's path", tool.File())
 	}
 }
+
+func TestStaticDescriptionReadsEveryForm(t *testing.T) {
+	cases := map[string]string{
+		`DESCRIPTION = "plain"`:                                            "plain",
+		`DESCRIPTION = 'single'`:                                           "single",
+		"DESCRIPTION = \"\"\"triple\nline\"\"\"":                           "triple\nline",
+		"DESCRIPTION = (\"one, \"\n                 \"two\")\nSCHEMA = {}": "one, two",
+		"DESCRIPTION = (\n    'a '  # a note\n    'b'\n)":                  "a b",
+		`DESCRIPTION = "esc \"q\" and \\n"`:                                "esc \"q\" and \\n",
+		`DESCRIPTION = ("x" "y") + "z"`:                                    "xy",
+		`DESCRIPTION = f"computed {x}"`:                                    "computed {x}",
+		`NAME = "n"`:                                                       "",
+		`DESCRIPTION = ("unterminated`:                                     "",
+	}
+	for src, want := range cases {
+		if got := StaticDescription(src); got != want {
+			t.Errorf("%q -> %q, want %q", src, got, want)
+		}
+	}
+}

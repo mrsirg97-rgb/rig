@@ -214,11 +214,12 @@ function todoBodyEl(p, onVerb) {
     l.appendChild(span(' ' + t.text, t.status === 'done' ? 'dim' : 'text'));
     if (t.waits) l.appendChild(span(' ' + G.dot + ' waits on ' + t.waits, 'dim'));
     if (t.claim) l.appendChild(span(' ' + G.dot + ' claimed by ' + t.claim, 'dim'));
-    if (onVerb && (t.status === 'pending' || t.status === 'active')) {
+    if (onVerb && (t.status === 'pending' || t.status === 'active' || t.status === 'failed')) {
       const acts = el('span', 'taskact');
       acts.appendChild(span('  ', 'dim'));
       if (t.status === 'pending') acts.appendChild(button('start', null, () => onVerb('start', t.id)));
-      acts.appendChild(button('done', null, () => onVerb('complete', t.id)));
+      if (t.status === 'failed') acts.appendChild(button('retry', null, () => onVerb('retry', t.id)));
+      else acts.appendChild(button('done', null, () => onVerb('complete', t.id)));
       l.appendChild(acts);
     }
     e.appendChild(l);
@@ -586,9 +587,7 @@ async function renderModels() {
     head.appendChild(span('  ' + m.role, 'ember'));
     tb.body.appendChild(head);
     const ctx = line('dim');
-    ctx.textContent = '  window ' + m.window + ' ' + G.dot + ' max ' + m.max_tokens + ' ' + G.dot +
-      ' reserve ' + m.reserve + ' ' + G.dot + ' keep ' + m.keep_recent + ' ' + G.dot +
-      ' trigger ' + (m.window - m.reserve);
+    ctx.textContent = '  context ' + m.window + ' ' + G.dot + ' output ' + m.max_tokens;
     tb.body.appendChild(ctx);
     const eff = line();
     eff.appendChild(span('  effort ', 'dim'));

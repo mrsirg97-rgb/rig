@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
+
+	"github.com/mrsirg97-rgb/rig/plugins"
 )
 
 type PluginInfo struct {
@@ -218,22 +219,15 @@ func zoneList(env any, zone string) (string, error) {
 	return fmt.Sprintf("plugins: %d %s\n%s\n", len(rows), zone, strings.Join(rows, "\n")), nil
 }
 
-var (
-	descriptionDouble = regexp.MustCompile(`(?m)^[ \t]*DESCRIPTION[ \t]*=[ \t]*"((?:\\.|[^\\"])*?)"`)
-	descriptionSingle = regexp.MustCompile(`(?m)^[ \t]*DESCRIPTION[ \t]*=[ \t]*'((?:\\.|[^\\'])*)?'`)
-)
-
 func descriptionOf(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Sprintf("(read: %v)", err)
-	}
-	for _, re := range []*regexp.Regexp{descriptionDouble, descriptionSingle} {
-		if m := re.FindSubmatch(data); m != nil && m[1] != nil && string(m[1]) != "" {
-			return strings.NewReplacer(`\\`, `\`, `\"`, `"`, `\'`, "'").Replace(string(m[1]))
+	d := plugins.DescriptionOf(path)
+	if d == "" {
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Sprintf("(read: %v)", err)
 		}
+		return "(no DESCRIPTION)"
 	}
-	return "(no DESCRIPTION)"
+	return d
 }
 
 func approve(ctx context.Context, env any, name string) (string, error) {

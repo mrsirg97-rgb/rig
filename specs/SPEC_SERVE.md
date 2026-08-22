@@ -520,15 +520,15 @@ class-hidden toggle, and the effort ramp.
 
 ### 15. The todo's two hands.
 
-The operator can start and complete a task from the page: `POST
-/api/todo/start {id}` and `POST /api/todo/complete {id}` call
-`todo.Start` and `todo.Complete` with session `dashboard` — the same
+The operator can start, complete, and retry a task from the page: `POST
+/api/todo/start {id}`, `POST /api/todo/complete {id}`, and `POST
+/api/todo/retry {id}` call `todo.Start`, `todo.Complete`, and `todo.Retry` with session `dashboard` — the same
 verbs the tool calls, the same walls as every write (POST, Origin, the
 body cap), the id checked to the tool's shape (`tN`). The reply is the
 store's voice, the queue re-read after; a task the model claimed
 refuses as it would for any foreign session (fail it first to take
 over), and the page shows that refusal, never works around it. Named
-non-goals: fail and retry from the page (the operator's judgment calls,
+non-goals: fail from the page (the operator's judgment calls,
 the TUI's), reordering (move), editing a task's text (the event log has
 no such event). Cases, failing first: start marks the seeded task
 active and complete marks it done (the read carries `[~]` then `[x]`);

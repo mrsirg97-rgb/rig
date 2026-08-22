@@ -1117,3 +1117,41 @@ func TestTodoStartAndComplete(t *testing.T) {
 		t.Fatalf("GET complete: got %d, want 405", rec.Code)
 	}
 }
+
+func TestPluginListingReadsParenthesizedDescriptions(t *testing.T) {
+	srv, tok := newTestServer(t)
+	src := "DESCRIPTION = (\"The box, read-only: \"\n               \"users and groups.\")\nSCHEMA = {\"type\": \"object\"}\n\ndef run(args):\n    return \"ok\"\n"
+	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "paren.py"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := doReq(t, srv.Handler(), "GET", "/api/plugins", nil, bearer(tok))
+	if !strings.Contains(rec.Body.String(), "The box, read-only: users and groups.") {
+		t.Fatalf("the parenthesized DESCRIPTION must be read whole: %s", rec.Body.String())
+	}
+}
+
+func TestTodoRetryFromTheDashboard(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+	hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+	hdr.Set("Content-Type", "application/json")
+	if rec := doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t1"}`), hdr); rec.Code != http.StatusOK {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body.String())
+	}
+	db, err := srv.stores.todo(testCWD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Fail(context.Background(), db, "t1", "dashboard"); err != nil {
+		t.Fatal(err)
+	}
+	rec := doReq(t, h, "POST", "/api/todo/retry"+q, strings.NewReader(`{"id":"t1"}`), hdr)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("retry: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, h, "GET", "/api/todo"+q, nil, bearer(tok))
+	if !strings.Contains(rec.Body.String(), "t1 [ ]") {
+		t.Fatalf("after retry the task is pending again: %s", rec.Body.String())
+	}
+}
