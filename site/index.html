@@ -65,11 +65,13 @@ a:hover { text-decoration: underline; }
 .tbar .name { color: var(--ember); }
 .tbar .dots { letter-spacing: .3em; }
 .tbar .ver { margin-left: auto; }
-.tr { padding: 1.15rem 1.25rem 1.35rem; font-size: 13px; line-height: 1.7; }
-.ln { white-space: pre-wrap; word-wrap: break-word; }
-.msg { margin: 0; white-space: normal; }
+.tr { padding: 1.2rem 1.4rem 1.4rem; font-size: 13px; line-height: 1.7; }
+.ln { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2.2ch; text-indent: -2.2ch; }
+.ln.out, .ln.py { padding-left: 4ch; text-indent: -2ch; }
+.msg { margin: 0; white-space: normal; max-width: 72ch; overflow-wrap: anywhere; }
 .dim { color: var(--dim); }
-.gap { height: .95rem; }
+.gap { height: 1.1rem; }
+.gap.sm { height: .55rem; }
 .boot { color: var(--dim); }
 .logo {
   margin: 0;
@@ -99,18 +101,22 @@ a:hover { text-decoration: underline; }
 .act { color: var(--accent); }
 .doneg { color: var(--ok); }
 .task-text { color: var(--text); }
-.tl { color: var(--dim); }
+.tl { color: var(--dim); display: grid; grid-template-columns: 15ch 1fr; column-gap: 1ch; padding-left: 0; text-indent: 0; }
 .tl .tn { color: var(--ember); }
+.tl .td { overflow-wrap: anywhere; }
+.cmd { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1rem; padding-left: 0; text-indent: 0; }
+.cmd .cmdtext { flex: 1 1 20ch; min-width: 0; padding-left: 2.2ch; text-indent: -2.2ch; overflow-wrap: anywhere; }
 .copy {
   font: inherit; font-size: 11px;
   color: var(--dim);
   background: none;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  padding: 0 .5rem;
-  margin-left: .7rem;
+  padding: .05rem .6rem;
+  margin-left: auto;
   cursor: pointer;
-  vertical-align: baseline;
+  white-space: nowrap;
+  line-height: 1.6;
 }
 .copy:hover { color: var(--text); border-color: var(--dim); }
 .copy.done { color: var(--ok); border-color: var(--ok); }
@@ -121,10 +127,25 @@ a:hover { text-decoration: underline; }
 .cursor::after { content: "█"; color: var(--ember); animation: blink 1.06s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 footer { border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1.1rem; color: var(--dim); font-size: 13px; text-align: center; }
-footer .links { margin: .4rem 0; }
+footer .links { margin: .5rem 0; display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem 0; }
+footer .links a { padding: .15rem .55rem; }
+footer .links a + a::before { content: "·"; color: var(--faint); margin-right: 1.1rem; }
 .signoff { color: var(--faint); }
 html.js .reveal { opacity: 0; transform: translateY(6px); transition: opacity .4s ease, transform .4s ease; }
 html.js .reveal.in { opacity: 1; transform: none; }
+@media (max-width: 600px) {
+  .frame { padding: 1.4rem .6rem 2rem; }
+  .tr { padding: .95rem .8rem 1.1rem; font-size: 12.5px; line-height: 1.65; }
+  .logo { font-size: 15px; }
+  .term { border-radius: 6px; }
+  .tbar { padding: .45rem .8rem; }
+  .cmd .copy { flex: 0 0 auto; margin-left: 2.2ch; min-height: 30px; padding: .15rem .8rem; }
+  .cmd .cmdtext { flex-basis: 100%; }
+  .tl { grid-template-columns: 1fr; row-gap: 0; }
+  .tl .td { padding-left: 2.2ch; margin-bottom: .25rem; }
+  .msg { max-width: none; }
+  footer .links a + a::before { margin-right: .9rem; }
+}
 @media (prefers-reduced-motion: reduce) {
   .cursor::after { animation: none; }
   html.js .reveal { transition: none; }
@@ -186,7 +207,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command">copy</button></div>
+    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span></span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command">copy</button></div>
     <div class="ln out reveal">  rig {{RIG_VERSION}}</div>
     <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.9s</span></div>
 
@@ -203,7 +224,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="msg reveal">point it at any OpenAI-compatible endpoint: a local box, a gateway, or a hosted API.</div>
 
     <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ rig --base-url $ENDPOINT --model $NAME</span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command">copy</button></div>
+    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ rig --base-url $ENDPOINT --model $NAME</span></span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command">copy</button></div>
     <div class="ln out reveal">  rig {{RIG_VERSION}} ready</div>
     <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
 
@@ -240,17 +261,17 @@ html.js .reveal.in { opacity: 1; transform: none; }
 
     <div class="gap reveal"></div>
     <div class="msg reveal">eleven native tools ship in the box.</div>
-    <div class="ln tl reveal"><span class="tn">bash</span>   real subprocesses; output surfaced and bounded</div>
-    <div class="ln tl reveal"><span class="tn">file</span>   read · write · edit; edits drift-checked against what you read</div>
-    <div class="ln tl reveal"><span class="tn">fs</span>     ls · find · grep; small schemas a local model can reach</div>
-    <div class="ln tl reveal"><span class="tn">diff</span>   the working tree vs HEAD, or the last observation of the same call</div>
-    <div class="ln tl reveal"><span class="tn">python</span> a persistent IPython kernel; state persists across calls</div>
-    <div class="ln tl reveal"><span class="tn">web</span>    search and fetch; the fetch carries the SSRF guard</div>
-    <div class="ln tl reveal"><span class="tn">todo</span>   the task queue; event-sourced, DAG-validated at create</div>
-    <div class="ln tl reveal"><span class="tn">rem</span>    memory; recall by intent, consolidation arithmetic</div>
-    <div class="ln tl reveal"><span class="tn">scheduler</span>   background jobs on cron; the worker runs in a bwrap jail</div>
-    <div class="ln tl reveal"><span class="tn">delegate</span>   one-shot worker; run a task on a fresh session, get back its last message</div>
-    <div class="ln tl reveal"><span class="tn">plugins_reload</span>   re-discover from disk; the swap takes effect next turn</div>
+    <div class="ln tl reveal"><span class="tn">bash</span><span class="td">real subprocesses; output surfaced and bounded</span></div>
+    <div class="ln tl reveal"><span class="tn">file</span><span class="td">read · write · edit; edits drift-checked against what you read</span></div>
+    <div class="ln tl reveal"><span class="tn">fs</span><span class="td">ls · find · grep; small schemas a local model can reach</span></div>
+    <div class="ln tl reveal"><span class="tn">diff</span><span class="td">the working tree vs HEAD, or the last observation of the same call</span></div>
+    <div class="ln tl reveal"><span class="tn">python</span><span class="td">a persistent IPython kernel; state persists across calls</span></div>
+    <div class="ln tl reveal"><span class="tn">web</span><span class="td">search and fetch; the fetch carries the SSRF guard</span></div>
+    <div class="ln tl reveal"><span class="tn">todo</span><span class="td">the task queue; event-sourced, DAG-validated at create</span></div>
+    <div class="ln tl reveal"><span class="tn">rem</span><span class="td">memory; recall by intent, consolidation arithmetic</span></div>
+    <div class="ln tl reveal"><span class="tn">scheduler</span><span class="td">background jobs on cron; the worker runs in a bwrap jail</span></div>
+    <div class="ln tl reveal"><span class="tn">delegate</span><span class="td">one-shot worker; run a task on a fresh session, get back its last message</span></div>
+    <div class="ln tl reveal"><span class="tn">plugins_reload</span><span class="td">re-discover from disk; the swap takes effect next turn</span></div>
 
     <div class="gap reveal"></div>
     <div class="msg reveal">the python kernel is persistent. define a value in one call, use it in the next.</div>
@@ -310,11 +331,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
   <footer class="reveal">
     <div>rig {{RIG_VERSION}} · a minimal agentic loop harness</div>
     <div class="links">
-      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a> ·
-      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a> ·
-      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/docs">docs/</a> ·
-      <a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a> ·
-      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/docs">docs/</a><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a><a href="https://github.com/mrsirg97-rgb/rig">github</a>
     </div>
     <div class="signoff">not a framework. a harness.</div>
   </footer>
