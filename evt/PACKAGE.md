@@ -12,10 +12,11 @@ or `loop/`).
 
 ## What it includes
 
-- `Context` — the closure: `Resolve(ctx)`; `Func` adapts a
-  `func(context.Context)`.
-- `Event` — `ID`, `Priority`, `Context`, `UpdatePriority`; `NewEvent`;
-  `Execute(e, ctx)` resolves its context.
+- `Closure` — the unit of work: `Resolve(ctx)`; `Func` adapts a
+  `func(context.Context)`. (libevt's `Context`; renamed, since in Go
+  that word is `context.Context`.)
+- `Event` — `ID`, `Priority`, `Closure`, `UpdatePriority`; `NewEvent`;
+  `Execute(e, ctx)` resolves its closure.
 - `Clock` — `Step() uint64` mints ids: `Counter()` (the default, a
   strictly increasing atomic) and `Monotonic()` (wall nanoseconds, as
   libevt's `clock_step`; collisions possible, named).

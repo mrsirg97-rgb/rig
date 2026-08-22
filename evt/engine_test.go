@@ -25,7 +25,7 @@ func TestEngineExecutesByPriorityThenArrival(t *testing.T) {
 	e := evt.NewEngine()
 	var mu sync.Mutex
 	var order []int
-	record := func(n int) evt.Context {
+	record := func(n int) evt.Closure {
 		return evt.Func(func(context.Context) {
 			mu.Lock()
 			order = append(order, n)
@@ -158,7 +158,7 @@ func TestEngineUpdateRaisesAPendingEvent(t *testing.T) {
 	e := evt.NewEngine()
 	var mu sync.Mutex
 	var order []string
-	record := func(s string) evt.Context {
+	record := func(s string) evt.Closure {
 		return evt.Func(func(context.Context) {
 			mu.Lock()
 			order = append(order, s)
