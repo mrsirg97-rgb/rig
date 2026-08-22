@@ -61,7 +61,7 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 		return setOf("GET"), true
 	case path == "/api/todo":
 		return setOf("GET", "POST"), true
-	case path == "/api/todo/start" || path == "/api/todo/complete":
+	case path == "/api/todo/start" || path == "/api/todo/complete" || path == "/api/todo/retry":
 		return setOf("POST"), true
 	case path == "/api/scheduler":
 		return setOf("GET", "POST"), true
@@ -101,6 +101,8 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleTodoVerb(w, r, "start")
 	case path == "/api/todo/complete":
 		s.handleTodoVerb(w, r, "complete")
+	case path == "/api/todo/retry":
+		s.handleTodoVerb(w, r, "retry")
 	case path == "/api/scheduler" && r.Method == "GET":
 		s.handleScheduler(w, r)
 	case path == "/api/scheduler" && r.Method == "POST":

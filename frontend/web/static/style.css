@@ -123,7 +123,9 @@ main { flex: 1; padding: 18px 22px 40px; overflow: auto; min-width: 0; }
 .tb-open { white-space: pre-wrap; word-break: break-word; }
 .tb-body { padding: 2px 0 2px 2ch; white-space: pre-wrap; word-break: break-word; }
 .tb-close { color: var(--dim); }
-.line { white-space: pre-wrap; word-break: break-word; }
+.line { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; }
+.line.detail { padding-left: 4ch; text-indent: -2ch; }
+.taskact { white-space: normal; }
 .line.click { cursor: pointer; }
 .line.click:hover { background: rgba(97, 175, 239, 0.07); }
 .bar-on { color: var(--accent); letter-spacing: 0.08em; }
@@ -150,7 +152,7 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 .seg button.active { color: var(--text); border-bottom-color: var(--ember); }
 .seg button.active::before { content: "❯ "; color: var(--ember); }
 
-.sess { padding: 2px 0; cursor: pointer; white-space: pre-wrap; word-break: break-word; }
+.sess { padding: 2px 0; cursor: pointer; white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; }
 .sess:hover { background: rgba(97, 175, 239, 0.07); }
 .exit-open { color: var(--ember); }
 .exit-ok { color: var(--success); }
@@ -255,6 +257,15 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
   nav button { padding: 12px 20px; font-size: 14px; }
   main { padding: 12px 10px 40px; }
   .prompt .label { width: 7ch; }
+  .tb-body { padding-left: 1ch; }
+  .line, .sess { padding-left: 2ch; text-indent: -2ch; }
+  .line.detail { padding-left: 3ch; text-indent: -1ch; }
+  .taskact { display: block; padding-left: 2ch; text-indent: 0; margin: 2px 0 4px; }
+  .taskact > .dim:first-child { display: none; }
+  .actions { margin-left: 0; }
+  .echo { margin-left: 0; }
+  .seg { margin-left: 0; }
+  .tool pre, .toolres { padding-left: 1ch; }
   .browse-list { columns: 1; }
   .editor { height: 300px; }
   button { min-height: 36px; }

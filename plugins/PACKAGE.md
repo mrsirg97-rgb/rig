@@ -75,3 +75,11 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   refusal and the reload's are this one rule.
 - On a reload, a discovery failure leaves the table and the wire untouched
   (the swap never ran).
+- `DescriptionOf(path)` / `StaticDescription(src)` — the read-only
+  DESCRIPTION read the listings use (no kernel, no execution): a plain,
+  single-, or triple-quoted literal, or the parenthesized
+  implicit-concatenation form (`DESCRIPTION = ("a " "b")`, comments
+  between the pieces allowed); an `f`/`r`/`b` prefix is read as its
+  literal text. Seventeen of the operator's twenty-one plugins used the
+  parenthesized form and listed as "(no DESCRIPTION)" until this read
+  existed; the dashboard and `/plugins` share it.

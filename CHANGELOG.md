@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+- **the dashboard's quick hits**: the plugin listings read every
+  DESCRIPTION form — the parenthesized implicit concatenation seventeen
+  of the operator's plugins use listed as "(no DESCRIPTION)" (one static
+  extractor in `plugins`, shared by the dashboard and `/plugins`); the
+  models view shows the context window and the output length only; a
+  failed task carries `retry` beside the hands (`/api/todo/retry`,
+  `todo.Retry`); lines hang their wrapped text under the text, not the
+  glyph, on phones.
+
 ## [0.12.2] — the two bounds
 
 - **the description's shape** (`specs/SPEC_CORE.md`, the Tool section):
