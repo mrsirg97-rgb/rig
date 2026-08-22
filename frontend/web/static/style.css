@@ -1,6 +1,3 @@
-/* the TUI, in a browser: the oled palette's values (frontend/tui theme.go)
-   and its grammar — no panels, no boxes; lines on the terminal's ground,
-   tool blocks that open with ● and close with ✓, the ❯ prompt for input. */
 :root {
   --bg: #050505;
   --text: #d8d8d8;
@@ -34,7 +31,6 @@ body {
 ::selection { background: rgba(232, 168, 107, 0.28); }
 a { color: var(--accent); text-decoration: none; }
 
-/* the header: the TUI's first row */
 header {
   display: flex;
   align-items: center;
@@ -60,7 +56,6 @@ h1 .sub { color: var(--dim); font-weight: 400; }
 .cwdpick { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 #cwd-add { width: 200px; }
 
-/* the controls: the TUI's input — no box, a rule underneath */
 select, textarea, input, button {
   font: inherit;
   color: var(--text);
@@ -89,7 +84,6 @@ button::before { content: "[ "; color: var(--faint); }
 button::after { content: " ]"; color: var(--faint); }
 .nav-toggle::before, .nav-toggle::after, nav button::before, nav button::after, .seg button::before, .seg button::after { content: none; }
 
-/* the layout */
 .layout { display: flex; min-height: calc(100vh - 45px); }
 nav { width: 150px; flex-shrink: 0; border-right: 1px solid var(--rule); padding: 12px 0; }
 nav button {
@@ -106,7 +100,6 @@ nav button.active { color: var(--text); border-left-color: var(--ember); }
 nav button.active::before { content: "❯ "; color: var(--ember); }
 main { flex: 1; padding: 18px 22px 40px; overflow: auto; min-width: 0; }
 
-/* slots */
 .dim { color: var(--dim); }
 .faint { color: var(--faint); }
 .error { color: var(--error); }
@@ -126,7 +119,6 @@ main { flex: 1; padding: 18px 22px 40px; overflow: auto; min-width: 0; }
 .effort-max { color: var(--effort-max); }
 .effort-on { text-decoration: underline; text-underline-offset: 3px; }
 
-/* the tool block: ● name · detail / body / name ✓ */
 .tb { margin: 0 0 22px; }
 .tb-open { white-space: pre-wrap; word-break: break-word; }
 .tb-body { padding: 2px 0 2px 2ch; white-space: pre-wrap; word-break: break-word; }
@@ -140,10 +132,8 @@ main { flex: 1; padding: 18px 22px 40px; overflow: auto; min-width: 0; }
 .detail.drift { color: var(--warn); }
 .hint { color: var(--dim); margin: 6px 0 0; }
 
-/* the verbatim fallback: the TUI's raw block */
 pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--text); }
 
-/* the prompt rows: the TUI's input line */
 .prompt { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; }
 .prompt .mark { color: var(--ember); padding-top: 3px; flex-shrink: 0; }
 .prompt .mark.dim { color: var(--dim); }
@@ -152,17 +142,14 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 .prompt .label { color: var(--dim); width: 9ch; flex-shrink: 0; padding-top: 3px; }
 .actions { margin: 10px 0 0 2ch; display: flex; flex-wrap: wrap; gap: 4px 10px; }
 
-/* the echo: the store's voice, the → line */
 .echo { margin: 8px 0 0 2ch; white-space: pre-wrap; word-break: break-word; color: var(--success); }
 .echo.err { color: var(--error); }
 
-/* the segmented toggle: the TUI's menu row */
 .seg { display: flex; gap: 14px; margin: 0 0 8px 2ch; }
 .seg button { padding: 2px 0; color: var(--dim); border-bottom: 1px solid transparent; }
 .seg button.active { color: var(--text); border-bottom-color: var(--ember); }
 .seg button.active::before { content: "❯ "; color: var(--ember); }
 
-/* the sessions and the transcript */
 .sess { padding: 2px 0; cursor: pointer; white-space: pre-wrap; word-break: break-word; }
 .sess:hover { background: rgba(97, 175, 239, 0.07); }
 .exit-open { color: var(--ember); }
@@ -185,7 +172,6 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 }
 .usage-line { margin: 6px 0 0; }
 
-/* the editor: a gutter, a highlighted mirror, a transparent textarea */
 .editor {
   position: relative;
   display: grid;
@@ -234,14 +220,12 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 .hl-const { color: var(--warn); }
 .hl-b { color: var(--effort-medium); }
 
-/* the folder browser: a ls-shaped panel under the header */
 #browser { padding: 10px 22px 12px; border-bottom: 1px solid var(--rule); }
 #browser[hidden] { display: none; }
 .browse-path { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .browse-list { margin: 6px 0 0 2ch; columns: 3; column-gap: 2ch; }
 .browse-list .line { break-inside: avoid; }
 
-/* the mobile drawer */
 #backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.55); }
 #backdrop[hidden] { display: none; }
 
