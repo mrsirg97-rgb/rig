@@ -75,7 +75,10 @@ width) — no core or loop line (decision 10).
   stale width.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
-  exactly at the last column across a write boundary (the tear).
+  exactly at the last column across a write boundary (the tear). The
+  pager's entry is one write too — the alternate-screen switch and the
+  first frame together; written apart, a reader (the copy-mode case,
+  under `-race` on CI) could see the switch before the history.
 - Tabs expand at ingestion (runewidth gives a tab width zero; the
   terminal advances to an 8-column stop), or the pending line's row math
   breaks and every repaint leaves a copy.
