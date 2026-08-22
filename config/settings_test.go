@@ -153,6 +153,8 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries type", `{"retries": "three"}`, `retries: expected an integer, got "three"`},
 		{"rounds type", `{"rounds": "many"}`, `rounds: expected an integer, got "many"`},
 		{"resultCap type", `{"resultCap": "big"}`, `resultCap: expected an integer, got "big"`},
+		{"rounds negative", `{"rounds": -3}`, `rounds: expected a positive number (0 = the default), got -3`},
+		{"resultCap negative", `{"resultCap": -1}`, `resultCap: expected a positive number (0 = the default), got -1`},
 		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},

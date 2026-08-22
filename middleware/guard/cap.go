@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/core"
 )
@@ -41,6 +42,12 @@ func truncate(content string, cap int) string {
 	}
 	head := avail / 2
 	tail := avail - head
+	for head > 0 && !utf8.RuneStart(content[head]) {
+		head--
+	}
+	for tail > 0 && !utf8.RuneStart(content[n-tail]) {
+		tail--
+	}
 	var b strings.Builder
 	b.WriteString(content[:head])
 	b.WriteString(marker)

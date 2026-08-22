@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
@@ -78,5 +79,19 @@ func TestCapBoundsTheRefusalContent(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("the marker must survive a tiny cap and name the size, got %q", content)
 		}
+	}
+}
+
+// The cut lands on rune boundaries: a multibyte character at either edge
+// is dropped whole, never split into invalid UTF-8.
+func TestCapCutsOnRuneBoundaries(t *testing.T) {
+	content := strings.Repeat("é", 400)
+	exec := guard.Cap(200).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) { return content, nil })
+	out, _ := exec(context.Background(), core.ToolCall{Name: "read"})
+	if !utf8.ValidString(out) {
+		t.Fatalf("the truncation produced invalid UTF-8")
+	}
+	if !strings.Contains(out, "[TRUNCATED]") {
+		t.Fatal("the marker is missing")
 	}
 }

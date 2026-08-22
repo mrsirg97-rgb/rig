@@ -247,6 +247,9 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		if err != nil {
 			return Settings{}, fmt.Errorf("config: %s: rounds: %v", path, err)
 		}
+		if v < 0 {
+			return Settings{}, fmt.Errorf("config: %s: rounds: expected a positive number (0 = the default), got %d", path, v)
+		}
 		if v != 0 {
 			s.Rounds = v
 		}
@@ -255,6 +258,9 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		v, err := jsonInt(raw)
 		if err != nil {
 			return Settings{}, fmt.Errorf("config: %s: resultCap: %v", path, err)
+		}
+		if v < 0 {
+			return Settings{}, fmt.Errorf("config: %s: resultCap: expected a positive number (0 = the default), got %d", path, v)
 		}
 		if v != 0 {
 			s.ResultCap = v
