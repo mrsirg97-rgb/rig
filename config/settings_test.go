@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/config"
@@ -280,4 +281,28 @@ func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {
 			t.Fatalf("absent trafilatura = %v, want nil (auto)", cfg.Settings.Trafilatura)
 		}
 	})
+}
+
+// SPEC_GROWTH 9 (amended): plugins.enabled is retired. A non-empty list
+// refuses at load naming the directory switch; an empty one (the
+// residue of the old disable, which meant "all") is dropped.
+func TestPluginsEnabledKeyIsRetired(t *testing.T) {
+	home := t.TempDir()
+	write := func(body string) {
+		if err := os.WriteFile(filepath.Join(home, "settings.json"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(`{"plugins": {"enabled": ["x"]}}`)
+	if _, err := config.Load(home, t.TempDir()); err == nil || !strings.Contains(err.Error(), "retired") || !strings.Contains(err.Error(), "plugins/disabled/") {
+		t.Fatalf("a non-empty enabled list must refuse naming the move, got %v", err)
+	}
+	write(`{"plugins": {"enabled": [], "max": 3}}`)
+	cfg, err := config.Load(home, t.TempDir())
+	if err != nil {
+		t.Fatalf("an empty enabled list is dropped, got %v", err)
+	}
+	if cfg.Settings.Plugins.Max != 3 {
+		t.Fatalf("max survives beside it: %d", cfg.Settings.Plugins.Max)
+	}
 }

@@ -12,6 +12,24 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
+func Zone(home, zone string) ([]string, error) {
+	dir := filepath.Join(home, "plugins", zone)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".py") {
+			files = append(files, filepath.Join(dir, e.Name()))
+		}
+	}
+	return files, nil
+}
+
 func List(home string) ([]string, error) {
 	dir := filepath.Join(home, "plugins")
 	entries, err := os.ReadDir(dir)

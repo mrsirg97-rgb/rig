@@ -247,3 +247,30 @@ func TestCheckVoicesTheCollision(t *testing.T) {
 		t.Fatalf("the empty report never collides, got %v", err)
 	}
 }
+
+// SPEC_GROWTH 9 (amended): the zones are directories. List reads the
+// root only; Zone reads one zone; a disabled plugin is never discovered.
+func TestZonesAreDirectoriesAndListSkipsThem(t *testing.T) {
+	home := t.TempDir()
+	for _, p := range []string{"plugins/live.py", "plugins/pending/draft.py", "plugins/disabled/off.py"} {
+		full := filepath.Join(home, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("DESCRIPTION = \"x\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	live, err := List(home)
+	if err != nil || len(live) != 1 || filepath.Base(live[0]) != "live.py" {
+		t.Fatalf("List = %v, %v; want live.py only", live, err)
+	}
+	off, err := Zone(home, "disabled")
+	if err != nil || len(off) != 1 || filepath.Base(off[0]) != "off.py" {
+		t.Fatalf("Zone(disabled) = %v, %v", off, err)
+	}
+	none, err := Zone(home, "nope")
+	if err != nil || len(none) != 0 {
+		t.Fatalf("an absent zone is empty, not an error: %v, %v", none, err)
+	}
+}

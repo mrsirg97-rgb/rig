@@ -17,6 +17,8 @@ func (s *Server) pluginPath(name, zone string) (string, bool) {
 		return filepath.Join(s.home, "plugins", name+".py"), true
 	case "pending":
 		return filepath.Join(s.home, "plugins", "pending", name+".py"), true
+	case "disabled":
+		return filepath.Join(s.home, "plugins", "disabled", name+".py"), true
 	}
 	return "", false
 }
@@ -38,7 +40,7 @@ func (s *Server) handlePluginSource(w http.ResponseWriter, r *http.Request) {
 	}
 	path, ok := s.pluginPath(name, zone)
 	if !ok {
-		writeErr(w, http.StatusBadRequest, "zone is loaded or pending (got "+strconv.Quote(zone)+")")
+		writeErr(w, http.StatusBadRequest, "zone is loaded, pending, or disabled (got "+strconv.Quote(zone)+")")
 		return
 	}
 	data, err := os.ReadFile(path)

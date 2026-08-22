@@ -728,8 +728,9 @@ async function renderPlugins() {
   main.appendChild(tb.el);
 
   const seg = el('div', 'seg');
-  for (const z of ['approved', 'pending']) {
-    const b = button(z + ' ' + (z === 'approved' ? (data.loaded || []).length : (data.pending || []).length), z === zone ? 'active' : '', () => {
+  const count = (d, z) => (z === 'approved' ? (d.loaded || []) : z === 'pending' ? (d.pending || []) : (d.disabled || [])).length;
+  for (const z of ['approved', 'pending', 'disabled']) {
+    const b = button(z + ' ' + count(data, z), z === zone ? 'active' : '', () => {
       state.pluginZone = z;
       renderPlugins();
     });
@@ -737,26 +738,27 @@ async function renderPlugins() {
   }
   tb.body.appendChild(seg);
 
-  const list = zone === 'approved' ? (data.loaded || []) : (data.pending || []);
+  const list = zone === 'approved' ? (data.loaded || []) : zone === 'pending' ? (data.pending || []) : (data.disabled || []);
   const listEl = el('div');
   if (!list.length) {
     listEl.appendChild(line('dim')).textContent = zone === 'approved'
       ? 'no approved plugins (~/.rig/plugins/)'
-      : 'nothing pending (~/.rig/plugins/pending/)';
+      : zone === 'pending' ? 'nothing pending (~/.rig/plugins/pending/)' : 'nothing disabled (~/.rig/plugins/disabled/)';
   }
   for (const p of list) {
     const row = line('click');
-    row.appendChild(span((zone === 'approved' ? G.done : G.pending) + ' ', zone === 'approved' ? 'ok' : 'warn'));
-    row.appendChild(span(p.name, 'accent'));
+    row.appendChild(span((zone === 'approved' ? G.done : zone === 'pending' ? G.pending : G.fail) + ' ', zone === 'approved' ? 'ok' : zone === 'pending' ? 'warn' : 'dim'));
+    row.appendChild(span(p.name, zone === 'disabled' ? 'dim' : 'accent'));
     row.appendChild(span(' ' + G.dot + ' ' + (p.description || '(no DESCRIPTION)'), 'dim'));
-    row.addEventListener('click', () => openForge(forge, p.name, zone === 'approved' ? 'loaded' : 'pending'));
+    row.addEventListener('click', () => openForge(forge, p.name, zone === 'approved' ? 'loaded' : zone));
     listEl.appendChild(row);
   }
   tb.body.appendChild(listEl);
   const hint = el('div', 'hint');
   hint.textContent = zone === 'approved'
     ? 'click a plugin to read it; an edit saves a pending revision, approve (replace) swaps it in'
-    : 'click a plugin to edit it; approve moves it into plugins/ — a live session loads it at its next plugins_reload';
+    : zone === 'pending' ? 'click a plugin to edit it; approve moves it into plugins/ — a live session loads it at its next plugins_reload'
+    : 'disabled plugins live in ~/.rig/plugins/disabled/; /plugins enable <name> in a session moves one back';
   tb.body.appendChild(hint);
 
   const act = el('div', 'actions');
@@ -840,7 +842,7 @@ async function openForge(host, name, zone) {
       const d = await api('/api/plugins');
       for (const b of main.querySelectorAll('.seg button')) {
         const z = b.textContent.split(' ')[0];
-        b.textContent = z + ' ' + (z === 'approved' ? (d.loaded || []).length : (d.pending || []).length);
+        b.textContent = z + ' ' + (z === 'approved' ? (d.loaded || []) : z === 'pending' ? (d.pending || []) : (d.disabled || [])).length;
       }
     } catch (_) {}
   }

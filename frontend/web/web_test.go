@@ -768,6 +768,33 @@ func TestPluginsListing(t *testing.T) {
 	if body.Pending[0].Description != "the pending plugin" {
 		t.Fatalf("pending description %q, want the file's DESCRIPTION", body.Pending[0].Description)
 	}
+	// the disabled zone (SPEC_SERVE 12b): a file in plugins/disabled/ is
+	// listed there and nowhere else.
+	if err := os.MkdirAll(filepath.Join(srv.home, "plugins", "disabled"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "disabled", "off_one.py"), []byte("DESCRIPTION = \"the off plugin\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec = doReq(t, srv.Handler(), "GET", "/api/plugins", nil, bearer(tok))
+	var body2 struct {
+		Loaded []struct {
+			Name string `json:"name"`
+		} `json:"loaded"`
+		Disabled []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"disabled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body2); err != nil {
+		t.Fatal(err)
+	}
+	if len(body2.Disabled) != 1 || body2.Disabled[0].Name != "off_one" || body2.Disabled[0].Description != "the off plugin" {
+		t.Fatalf("disabled %v, want off_one with its DESCRIPTION", body2.Disabled)
+	}
+	if len(body2.Loaded) != 1 {
+		t.Fatalf("a disabled plugin is not loaded: %v", body2.Loaded)
+	}
 }
 
 // --- the plugin create (SPEC_SERVE phase 2, decision 7) ---

@@ -25,7 +25,7 @@ import (
 const createTemplate = "author a plugin: %s; the contract is DESCRIPTION, SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending directory (SPEC_SANDBOX); the operator installs it with /plugins approve; then call it through the plugin door and test it with one call."
 
 func wantUsage() string {
-	return "plugins: usage: plugins | plugins pending | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
+	return "plugins: usage: plugins | plugins pending | plugins disabled | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
 }
 
 // TestPluginsReloadVerbPassesTheReplyThrough (SPEC_PLUGINS 8, named):

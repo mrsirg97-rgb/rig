@@ -370,14 +370,15 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
-	loaded, pending, err := listPlugins(s.home)
+	loaded, pending, disabled, err := listPlugins(s.home)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"loaded":  pluginRows(loaded),
-		"pending": pluginRows(pending),
+		"loaded":   pluginRows(loaded),
+		"pending":  pluginRows(pending),
+		"disabled": pluginRows(disabled),
 	})
 }
 
@@ -516,10 +517,16 @@ func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "the run body is required (a run with no body is no plugin)")
 		return
 	}
-	loaded, pending, err := listPlugins(s.home)
+	loaded, pending, disabled, err := listPlugins(s.home)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	for _, p := range disabled {
+		if p.Name == name {
+			writeErr(w, http.StatusBadRequest, "a plugin named '"+name+"' already exists (disabled); enable or remove it first")
+			return
+		}
 	}
 	for _, p := range loaded {
 		if p.Name == name {

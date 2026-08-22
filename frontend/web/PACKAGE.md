@@ -31,8 +31,9 @@ framework, no build step, no external asset: `go build` alone ships it.
 - **The read views** — sessions (the list, grouped by workspace, and the
   transcript as structure: messages, reasoning, tool calls and results,
   and the usage rows), todo and scheduler (the store's own text, verbatim),
-  models (every row: window, effort list, role), plugins (the loaded set
-  and the pending zone, each with the file's DESCRIPTION). The memory
+  models (every row: window, effort list, role), plugins (the loaded set,
+  the pending zone, and the disabled zone, each with the file's
+  DESCRIPTION). The memory
   view is gone (SPEC_SERVE 11): rem is the model's, read in the TUI.
 - **The writes** (SPEC_SERVE phase 2) — a todo create (one task per
   line, `todo.Create`), a scheduler create (`scheduler.Create`, the

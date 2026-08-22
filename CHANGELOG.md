@@ -10,6 +10,15 @@
   default), which is the daily driver's. The two names are in the
   default now, and a named case pins the rule the bug broke: the
   embedded allow is the native set, exactly.
+- **the plugin switch is a directory** (`specs/SPEC_GROWTH.md` 9,
+  amended): `settings.json`'s `plugins.enabled` inverted the default —
+  on a home with no list, `disable` changed nothing and `enable X` hid
+  every other plugin — and its filter ran only at wiring, so a reload
+  undid a toggle until the next start. Retired. `/plugins disable
+  <name>` moves the file into `plugins/disabled/` and reloads; `enable`
+  moves it back; `plugins disabled` lists the zone; the dashboard shows
+  all three zones; `max` now applies on every reload. A non-empty
+  `plugins.enabled` refuses at load naming the move.
 
 ## [0.12.0] — the event loop
 
