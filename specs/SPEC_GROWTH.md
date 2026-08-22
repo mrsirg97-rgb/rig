@@ -158,6 +158,13 @@ The door's descriptions are the operator's, stated once in the schema:
 "plugins run via the `plugin` door; `plugin_schema <name>` shows a
 plugin's contract."
 
+**The door is a native, so it is allow-listed as one** (amended 0.12.1:
+the door round added `plugin` and `plugin_schema` to the native set and
+not to the embedded `allow` default, and every door call on a default
+home was refused as `plugin is not in the allow-list` — the presence
+door vouches for plugin names, never for the door; the embedded allow
+is the native set, exactly, and a case in `cmd/rig` pins it).
+
 **Carry stamps natives + the door.** `toolset.Table` gains
 `NativeSpecs()` (the non-plugin tools, as today) and `PluginNames()`;
 `Carry` stamps `NativeSpecs()` plus the door's two specs into every

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.1] — the door is allowed
+
+- **the plugin door was never allow-listed** (`specs/SPEC_GROWTH.md` 9,
+  amended): `plugin` and `plugin_schema` joined the native set in the
+  door round but not the embedded `allow` default, so every plugin call
+  through the door since 0.9.0 was `permission denied: plugin is not in
+  the allow-list` — on a home without an `allow` key (the embedded
+  default), which is the daily driver's. The two names are in the
+  default now, and a named case pins the rule the bug broke: the
+  embedded allow is the native set, exactly.
+
 ## [0.12.0] — the event loop
 
 - **the loop is the engine's consumer** (`specs/SPEC_EVT.md` 7, the
