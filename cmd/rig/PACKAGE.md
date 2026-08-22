@@ -51,7 +51,8 @@ sees core and models and nothing else.
   cut: compaction writes nothing to rem (SPEC_COMPACT 6).
 - The rem store opens with `remstore.Migration(cwd)` (SPEC_STATE: rem is
   deliberate) — the one-time idempotent re-scope and compaction-row
-  removal, reported once on stderr.
+  removal, reported once on stderr. `/rem forget` passes the cwd so the
+  store can refuse another project's id.
 - The `command.Env` is closures over the root, read at call time: a
   swap is visible with no re-wiring. The Steer seam is the frontend's;
   the dispatcher fills it in its `WithCommands`.

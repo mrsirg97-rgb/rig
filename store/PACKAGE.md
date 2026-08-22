@@ -10,9 +10,13 @@ seams the generated stack executes through.
 
 ## What it includes
 
-- `Open(path, statements, wantVersion)` — opens (or creates) the sqlite
-  file, applies the pragmas, reads integrity, checks `meta.schema_version`
-  against `wantVersion`, then applies the schema statements in order.
+- `Open(path, statements, wantVersion, migrate...)` — opens (or creates)
+  the sqlite file, applies the pragmas, reads integrity, reads
+  `meta.schema_version` and refuses before any statement runs when the
+  file is newer than the build or older with no migration passed, then
+  applies the schema statements in order and runs the migrations in one
+  transaction (the version bump commits with them). Returns the
+  migrations' report beside the handle.
 - `DB = sqlx.DB` — the store handle.
 - `lazy` — the deferred result under direct accessor execution.
 - `sqlx` — the stdlib `sql` seam: serializable transactions on the ctx,
@@ -37,5 +41,5 @@ seams the generated stack executes through.
   and a fresh one created; quarantined names the aside so callers surface
   it. Never silently truncated. A schema/policy error surfaces and is
   never quarantined.
-- `apply` inserts `schema_version` on first open; a mismatch refuses
-  loudly naming both.
+- `readVersion` inserts `schema_version` on first open; a mismatch refuses
+  loudly naming both, and an upgrade without a migration is a mismatch.

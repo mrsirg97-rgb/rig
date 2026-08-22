@@ -40,13 +40,20 @@ nothing is read into the prompt by a session start.
 - Scope is a repo identity, not a cwd: `scopeKey(cwd)` hashes the
   absolute git common dir (two worktrees of one repo share one memory)
   or the cwd itself outside a repo. The `scopePath` git probe is memoized
-  per cwd (pure, deterministic).
+  per cwd (pure, deterministic); a relative common dir resolves against
+  the cwd, and an echoed option (old git passes unknown flags through,
+  exit 0) is not a path — the cwd stands in.
 - The schema bump (1 → 2) carries `Migration(cwd)`: a one-time idempotent
   re-scope of rows under the old cwd-hash to the repo's, and a file-wide
   removal of `source = 'session compaction'` rows (never deliberate),
   counted once on stderr. The per-cwd re-scope is keyed on a `meta`
-  marker (`migrated:<oldScope>`), so a shared file's other cwds migrate
-  on their own next open.
+  marker (`migrated:<oldScope>`, `INSERT OR IGNORE`), so a shared file's
+  other cwds migrate on their own next open and two openers racing the
+  first migration both succeed; the whole step runs in `store.Open`'s
+  migration transaction.
+- `Forget(ctx, db, cwd, id)` removes only this project's or a global row;
+  ids are file-wide, so another project's id is `ErrOtherProject`, named
+  with its label.
 - Recall's effective computation uses exactly the consolidation inputs, so
   the two paths agree: effective-at-recall equals what consolidate would
   persist, and consolidating later cannot double-count.

@@ -258,16 +258,24 @@ deliverable 9) or plain `sqlite3`.
   the prompt by a session start (the root's remembered segment, cut; the
   system prompt names the rule).
 - **Scope is a repo identity, not a cwd.** scope = the absolute git common
-  dir of the cwd (`git rev-parse --git-common-dir`), so two worktrees of
-  one repo share one memory; outside a repo, the cwd itself, hashed as
-  today (`shortHash`). The schema bump (1 → 2) carries a one-time
-  idempotent migration: rows under an old cwd-hash scope now inside a repo
-  re-scope to the repo's, and rows with source "session compaction" are
-  removed (never deliberate), counted once on stderr. Rejected: reading
-  both scopes forever.
+  dir of the cwd (`git rev-parse --git-common-dir`, resolved against the
+  cwd when git prints it relative; an echoed option or an empty line is
+  not a path and falls back to the cwd), so two worktrees of one repo
+  share one memory; outside a repo, the cwd itself, hashed as today
+  (`shortHash`). The schema bump (1 → 2) carries a one-time idempotent
+  migration, one transaction per open: rows under an old cwd-hash scope
+  now inside a repo re-scope to the repo's, and rows with source "session
+  compaction" are removed (never deliberate), counted once on stderr. The
+  re-scope is keyed on the launch cwd — rows learned from another
+  directory of the same repo move when rig is next started there (a hash
+  cannot be walked back to its cwd). Two processes opening the same file
+  at once both succeed (the marker insert is `OR IGNORE`; the transaction
+  serialises them). Rejected: reading both scopes forever.
 - The `/rem` command (SPEC_COMMANDS 11): `rem [list|show|forget|pin]` over
   the same store — list the live memories (project then global, one line
-  each), show by id, forget by id, pin by id (importance 1).
+  each), show by id, forget by id (this project's or global only — ids
+  are file-wide, so another project's id is refused by name), pin by id
+  (importance 1).
 - lift's `cmd/rem` is a different design (postgres, mesh, episodes and
   associations). Its recall projection and testkit are worth reading; its
   schema is not the one being ported. pane's rem is.

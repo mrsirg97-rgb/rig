@@ -102,7 +102,9 @@ func TestRemShowAndForgetAndPin(t *testing.T) {
 func TestRemRefusalsByName(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
-		RemShow:   func(ctx context.Context, id int64) (command.RemRow, error) { return command.RemRow{}, errors.New("rem: no such memory: 99") },
+		RemShow: func(ctx context.Context, id int64) (command.RemRow, error) {
+			return command.RemRow{}, errors.New("rem: no such memory: 99")
+		},
 		RemForget: func(ctx context.Context, id int64) error { return errors.New("rem: no such memory: 99") },
 		RemPin:    func(ctx context.Context, id int64) error { return errors.New("rem: no such memory: 99") },
 	}

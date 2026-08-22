@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -20,7 +21,7 @@ var pragmas = []string{
 	"PRAGMA foreign_keys=ON",
 }
 
-func Open(path string, statements []string, wantVersion int, migrate ...func(*sql.DB, int, int) (string, error)) (sqlx.DB, string, string, error) {
+func Open(path string, statements []string, wantVersion int, migrate ...func(*sql.Tx, int, int) (string, error)) (sqlx.DB, string, string, error) {
 	existing, _ := fileSize(path)
 	var quarantined string
 	for attempt := 0; attempt < 2; attempt++ {
@@ -42,7 +43,7 @@ func Open(path string, statements []string, wantVersion int, migrate ...func(*sq
 			existing = 0
 			continue
 		}
-		from, err := apply(raw, statements, wantVersion)
+		from, err := readVersion(raw, wantVersion)
 		if err != nil {
 			_ = raw.Close()
 			return sqlx.DB{}, quarantined, "", err
@@ -51,27 +52,37 @@ func Open(path string, statements []string, wantVersion int, migrate ...func(*sq
 			_ = raw.Close()
 			return sqlx.DB{}, quarantined, "", fmt.Errorf("schema version mismatch: the file carries %d, this build wants %d", from, wantVersion)
 		}
+		if from < wantVersion && len(migrate) == 0 {
+			_ = raw.Close()
+			return sqlx.DB{}, quarantined, "", fmt.Errorf("schema version mismatch: the file carries %d, this build wants %d and carries no migration", from, wantVersion)
+		}
+		if err := apply(raw, statements); err != nil {
+			_ = raw.Close()
+			return sqlx.DB{}, quarantined, "", err
+		}
 		report, err := migrateNow(raw, from, wantVersion, migrate)
 		if err != nil {
 			_ = raw.Close()
 			return sqlx.DB{}, quarantined, "", err
-		}
-		if from < wantVersion {
-			if _, err := raw.Exec(`UPDATE meta SET value = ? WHERE key = 'schema_version'`, strconv.Itoa(wantVersion)); err != nil {
-				_ = raw.Close()
-				return sqlx.DB{}, quarantined, "", fmt.Errorf("schema_version: %w", err)
-			}
 		}
 		return sqlx.DB{DB: raw}, quarantined, report, nil
 	}
 	return sqlx.DB{}, quarantined, "", fmt.Errorf("unreachable")
 }
 
-func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.DB, int, int) (string, error)) (string, error) {
+func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.Tx, int, int) (string, error)) (string, error) {
+	if len(migrate) == 0 {
+		return "", nil
+	}
+	tx, err := raw.BeginTx(context.Background(), nil)
+	if err != nil {
+		return "", fmt.Errorf("migration: %w", err)
+	}
 	report := ""
 	for _, fn := range migrate {
-		r, err := fn(raw, from, to)
+		r, err := fn(tx, from, to)
 		if err != nil {
+			_ = tx.Rollback()
 			return "", err
 		}
 		if r != "" {
@@ -80,6 +91,15 @@ func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.DB, int, int) (st
 			}
 			report += r
 		}
+	}
+	if from < to {
+		if _, err := tx.Exec(`UPDATE meta SET value = ? WHERE key = 'schema_version'`, strconv.Itoa(to)); err != nil {
+			_ = tx.Rollback()
+			return "", fmt.Errorf("schema_version: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("migration: %w", err)
 	}
 	return report, nil
 }
@@ -97,34 +117,37 @@ func integrity(raw *sql.DB) error {
 	return nil
 }
 
-func apply(raw *sql.DB, statements []string, wantVersion int) (int, error) {
+func readVersion(raw *sql.DB, wantVersion int) (int, error) {
 	if _, err := raw.Exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"); err != nil {
 		return 0, fmt.Errorf("meta: %w", err)
 	}
 	row := raw.QueryRow("SELECT value FROM meta WHERE key='schema_version'")
 	var stored string
 	err := row.Scan(&stored)
-	from := 0
 	switch {
 	case err == sql.ErrNoRows:
-		if _, err := raw.Exec("INSERT INTO meta (key, value) VALUES ('schema_version', ?)", strconv.Itoa(wantVersion)); err != nil {
+		if _, err := raw.Exec("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)", strconv.Itoa(wantVersion)); err != nil {
 			return 0, fmt.Errorf("schema_version: %w", err)
 		}
+		return wantVersion, nil
 	case err == nil:
 		v, perr := strconv.Atoi(stored)
 		if perr != nil {
 			return 0, fmt.Errorf("schema_version: %w", perr)
 		}
-		from = v
+		return v, nil
 	default:
 		return 0, fmt.Errorf("schema_version: %w", err)
 	}
+}
+
+func apply(raw *sql.DB, statements []string) error {
 	for _, s := range statements {
 		if _, err := raw.Exec(s); err != nil {
-			return 0, fmt.Errorf("schema: %w", err)
+			return fmt.Errorf("schema: %w", err)
 		}
 	}
-	return from, nil
+	return nil
 }
 
 func fileSize(path string) (int64, bool) {

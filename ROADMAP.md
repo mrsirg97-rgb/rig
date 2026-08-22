@@ -229,9 +229,9 @@ would hide it.
   rig; note it, do not design around it.
 - Overflow recovery: a provider fault that names context length triggers
   one compact-and-retry, once, then surfaces. Never a silent loop.
-- The compaction summary is handed to rem's `AutoReflect` (already in
-  `store/rem`, unwired): a low-importance reflection scoped to the cwd,
-  deduped by content, fire-and-forget. pane's session_compact hook, here.
+- The compaction summary is context, not memory: nothing is handed to
+  rem (the `AutoReflect` handoff was built, then cut in 0.13.0 —
+  SPEC_STATE, rem is deliberate).
 - Headless: `-p` workers get the same policy with the same per-model
   numbers; a job that would compact every turn is a config error surfaced
   at start, not a slow death.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -1210,7 +1211,6 @@ func TestListEmptyStoreIsAbsent(t *testing.T) {
 	}
 }
 
-
 func gitInit(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed"), 0o644); err != nil {
@@ -1339,5 +1339,116 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 	}
 	if sc != scopeKey(cwd) {
 		t.Fatalf("the re-open must not re-scope: %q", sc)
+	}
+}
+
+func TestForgetRefusesAnotherProjectsMemory(t *testing.T) {
+	db := newDB(t)
+	here := t.TempDir()
+	there := t.TempDir()
+	learn(t, db, there, "theirs", we())
+	learn(t, db, here, "mine", we())
+	mems, err := List(context.Background(), db, there, 10)
+	if err != nil || len(mems) != 1 {
+		t.Fatalf("list there: %v %+v", err, mems)
+	}
+	err = Forget(context.Background(), db, here, mems[0].ID)
+	if !errors.Is(err, ErrOtherProject) {
+		t.Fatalf("forget across projects must refuse by name, got %v", err)
+	}
+	if !strings.Contains(err.Error(), filepath.Base(there)) {
+		t.Fatalf("the refusal must name the owning project: %v", err)
+	}
+	if rest, _ := List(context.Background(), db, there, 10); len(rest) != 1 {
+		t.Fatalf("the refused row must survive: %+v", rest)
+	}
+	mine, _ := List(context.Background(), db, here, 10)
+	if err := Forget(context.Background(), db, here, mine[0].ID); err != nil {
+		t.Fatalf("forget own: %v", err)
+	}
+	if rest, _ := List(context.Background(), db, here, 10); len(rest) != 0 {
+		t.Fatalf("own row must be gone: %+v", rest)
+	}
+}
+
+func TestMigrationSurvivesTwoOpeners(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	path := filepath.Join(repo, "rem.sqlite")
+	db, _, _, err := store.Open(path, Statements(), 1)
+	if err != nil {
+		t.Fatalf("v1 open: %v", err)
+	}
+	insert := `INSERT INTO memories (id, scope, scope_label, kind, content, source, importance, strength, access_count, created_at, last_consolidated_at, content_md5)
+		VALUES (?, ?, 'mem', 'fact', ?, ?, ?, ?, ?, ?, ?, ?)`
+	if _, err := db.DB.Exec(insert, 1, shortHash(repo), "the old fact", "s1", 0.5, 0.5, 0, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", "md5-old"); err != nil {
+		t.Fatal(err)
+	}
+	db.DB.Close()
+
+	const openers = 4
+	var wg sync.WaitGroup
+	errs := make([]error, openers)
+	for i := 0; i < openers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			d, _, _, err := store.Open(path, Statements(), SchemaVersion, Migration(repo))
+			if err == nil {
+				d.DB.Close()
+			}
+			errs[i] = err
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("opener %d failed the migration race: %v", i, err)
+		}
+	}
+	d, _, _, err := store.Open(path, Statements(), SchemaVersion, Migration(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.DB.Close()
+	var sc string
+	if err := d.DB.QueryRow(`SELECT scope FROM memories WHERE id = 1`).Scan(&sc); err != nil {
+		t.Fatal(err)
+	}
+	if sc != scopeKey(repo) {
+		t.Fatalf("the row must carry the repo scope after the race: %q != %q", sc, scopeKey(repo))
+	}
+}
+
+func TestScopeResolvesRelativeGitOutput(t *testing.T) {
+	bin := t.TempDir()
+	fake := filepath.Join(bin, "git")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho ../.git\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cwd := filepath.Join(t.TempDir(), "sub")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Clean(filepath.Join(cwd, "../.git"))
+	if got := scopePath(cwd); got != want {
+		t.Fatalf("a relative common dir must resolve against the cwd: %q != %q", got, want)
+	}
+	if !filepath.IsAbs(scopePath(cwd)) {
+		t.Fatal("the scope path must be absolute")
+	}
+}
+
+func TestScopeIgnoresEchoedOptions(t *testing.T) {
+	bin := t.TempDir()
+	fake := filepath.Join(bin, "git")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho -- --path-format=absolute\necho .git\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cwd := t.TempDir()
+	if got := scopePath(cwd); got != cwd {
+		t.Fatalf("an echoed option is not a path; the scope must fall back to the cwd: %q", got)
 	}
 }

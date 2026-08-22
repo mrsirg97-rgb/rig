@@ -75,13 +75,16 @@ func scopePath(cwd string) string {
 	if v, ok := scopeCache.vals[cwd]; ok {
 		return v
 	}
-	out, err := exec.Command("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
-	if err != nil {
-		v := cwd
-		scopeCache.vals[cwd] = v
-		return v
+	v := cwd
+	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-common-dir").Output(); err == nil {
+		p := strings.TrimSpace(string(out))
+		if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(cwd, p)
+			}
+			v = filepath.Clean(p)
+		}
 	}
-	v := strings.TrimSpace(string(out))
 	scopeCache.vals[cwd] = v
 	return v
 }
@@ -695,6 +698,8 @@ func renderHits(hits []Hit) string {
 
 var ErrNoSuchMemory = errors.New("rem: no such memory")
 
+var ErrOtherProject = errors.New("rem: another project's memory")
+
 type LiveMemory struct {
 	ID         int64
 	ScopeLabel string
@@ -774,7 +779,7 @@ func Pin(ctx context.Context, db store.DB, id int64) error {
 	return err
 }
 
-func Forget(ctx context.Context, db store.DB, id int64) error {
+func Forget(ctx context.Context, db store.DB, cwd string, id int64) error {
 	_, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (struct{}, error) {
 		row, err := remdom.NewMemoryDomain().GetMemory(bound, id).Row()
 		if err != nil {
@@ -782,6 +787,9 @@ func Forget(ctx context.Context, db store.DB, id int64) error {
 		}
 		if row == nil {
 			return struct{}{}, ErrNoSuchMemory
+		}
+		if row.Scope != "global" && row.Scope != scopeKey(cwd) {
+			return struct{}{}, fmt.Errorf("%w: m%d is %s's; forget it from there", ErrOtherProject, id, row.ScopeLabel)
 		}
 		if _, err := removeMemories(bound, PruneInput{Verb: "remove", IDs: []int64{id}}, ""); err != nil {
 			return struct{}{}, fmt.Errorf("rem: forget: %w", err)
@@ -791,10 +799,10 @@ func Forget(ctx context.Context, db store.DB, id int64) error {
 	return err
 }
 
-func Migration(cwd string) func(*sql.DB, int, int) (string, error) {
-	return func(db *sql.DB, from, to int) (string, error) {
+func Migration(cwd string) func(*sql.Tx, int, int) (string, error) {
+	return func(db *sql.Tx, from, to int) (string, error) {
 		removed := 0
-		if from < to {
+		if from == 1 && to > from {
 			n, err := removeCompactionRows(db)
 			if err != nil {
 				return "", err
@@ -813,7 +821,7 @@ func Migration(cwd string) func(*sql.DB, int, int) (string, error) {
 					return "", err
 				}
 				rescoped = n
-				if _, err := db.Exec(`INSERT INTO meta (key, value) VALUES (?, ?)`, "migrated:"+oldScope, newScope); err != nil {
+				if _, err := db.Exec(`INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)`, "migrated:"+oldScope, newScope); err != nil {
 					return "", fmt.Errorf("rem: migration: %w", err)
 				}
 			} else if err != nil {
@@ -827,7 +835,7 @@ func Migration(cwd string) func(*sql.DB, int, int) (string, error) {
 	}
 }
 
-func removeCompactionRows(db *sql.DB) (int, error) {
+func removeCompactionRows(db *sql.Tx) (int, error) {
 	var n int
 	if err := db.QueryRow(`SELECT count(*) FROM memories WHERE source = 'session compaction'`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("rem: migration: %w", err)
@@ -844,7 +852,7 @@ func removeCompactionRows(db *sql.DB) (int, error) {
 	return n, nil
 }
 
-func rescopeRows(db *sql.DB, oldScope, newScope, label string) (int, error) {
+func rescopeRows(db *sql.Tx, oldScope, newScope, label string) (int, error) {
 	res, err := db.Exec(`UPDATE memories SET scope = ?, scope_label = ? WHERE scope = ?`, newScope, label, oldScope)
 	if err != nil {
 		return 0, fmt.Errorf("rem: migration: %w", err)

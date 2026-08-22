@@ -535,7 +535,7 @@ knobs.
 | web caps: search `15s`/`300`/`1MiB`; fetch `5MiB`/`20000`/`30s`/`5` hops/`20s`/`10MiB` | `tool/web` | **KEPT** — caps and bounds |
 | python: `120s` timeout, `4096` stderr tail, `2s` wait delay, host resolution (`~/.pi/…` shared path, then the embedded materialisation) | `tool/python` | **KEPT** — bounds + mechanics; only the interpreter knob moves (`python`) |
 | compact: calibration clamp `0.5–4.0`, the `min(Reserve/4, 256)` floor, split math, the summary prompt file | `policy/compact` | **KEPT** — pinned thresholds and the fold contract |
-| rem `AutoReflect` importance `0.2` | `store/rem` | **KEPT** — pinned threshold |
+| rem `AutoReflect` importance `0.2` | `store/rem` | **CUT** (0.13.0) — the auto-reflection is gone; SPEC_STATE, rem is deliberate |
 | `RIG_FAKE_STATE_DIR`, `RIG_FAKE_MODE` | `cmd/rig` tests | **KEPT** — test seams, not operator config |
 | the `RIG_*` env set | `main.go`, `models`, `tool/*` | **KEPT** — unchanged as a surface (no new env vars); each knob gains a file layer below it |
 

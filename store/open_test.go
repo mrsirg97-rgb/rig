@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,8 +30,17 @@ func TestOpenInitializesSchemaVersion(t *testing.T) {
 		t.Fatalf("re-open same version: %v", err)
 	}
 
-	if _, _, _, err := Open(path, probeDDL, 8); err != nil {
-		t.Fatalf("an upgrade (7 -> 8) must open: %v", err)
+	if _, _, _, err := Open(path, probeDDL, 8); err == nil {
+		t.Fatal("an upgrade (7 -> 8) with no migration must refuse")
+	} else if !strings.Contains(err.Error(), "no migration") {
+		t.Errorf("the refusal must name the missing migration: %v", err)
+	}
+	ran := 0
+	if _, _, _, err := Open(path, probeDDL, 8, func(*sql.Tx, int, int) (string, error) { ran++; return "", nil }); err != nil {
+		t.Fatalf("an upgrade (7 -> 8) with a migration must open: %v", err)
+	}
+	if ran != 1 {
+		t.Fatalf("the migration ran %d times, want 1", ran)
 	}
 	if _, _, _, err := Open(path, probeDDL, 7); err == nil {
 		t.Fatal("version mismatch not refused")

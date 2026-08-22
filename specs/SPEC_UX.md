@@ -51,7 +51,9 @@ The findings, verbatim (condensed):
   is loudness and a guard, not partition.
 - No rem auto-learn beyond what exists (AutoReflect at compaction
   stays the write path): the round fixes the read path. A session-end
-  reflection is named as a later candidate, not built.
+  reflection is named as a later candidate, not built. (Amended 0.13.0:
+  both the auto-reflection and the session-start read below are cut —
+  SPEC_STATE, rem is deliberate.)
 - No TUI one-shot mode (`--tui --once`): the reporter self-rejected it
   as scope creep; recorded here as a future idea, not a demand.
 - No changes to the untouched surfaces (scheduler, python, web): the
@@ -109,6 +111,10 @@ plan nobody wrote); per-session queues with a shared view (partition
 kills the one-plan property that makes the queue worth reading).
 
 ### 2. rem: the recall at session start
+
+*Amended 0.13.0: cut. Nothing is read into the prompt by a session start;
+memory is a tool the model recalls from deliberately (SPEC_STATE: rem is
+deliberate). The section stands as the round's record.*
 
 The session-start prompt assembly (SPEC_CONFIG 6, SPEC_MODES 2's
 ordering) gains one optional segment, after AGENTS.md, before the

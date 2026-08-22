@@ -50,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.12.2"
+const Version = "0.13.0"
 
 type root struct {
 	pluginMax int
@@ -1006,7 +1006,7 @@ func main() {
 			if r.remDB.DB == nil {
 				return errors.New("rem: no rem store")
 			}
-			if err := remstore.Forget(ctx, r.remDB, id); err != nil {
+			if err := remstore.Forget(ctx, r.remDB, r.cwd, id); err != nil {
 				if errors.Is(err, remstore.ErrNoSuchMemory) {
 					return fmt.Errorf("rem: no such memory: %d", id)
 				}

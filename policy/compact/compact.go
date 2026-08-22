@@ -29,7 +29,6 @@ type policy struct {
 	lastKey int
 }
 
-
 func New(provider core.Provider, fe core.Frontend, s *core.Session, system string, m models.Model) (*policy, error) {
 	if provider == nil {
 		return nil, errors.New("compact: nil provider")

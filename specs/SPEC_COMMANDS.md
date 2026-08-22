@@ -330,9 +330,10 @@ return the event. The command's output contract:
   inside `Input`); the TUI's mid-turn keypress is the case.
 - args: none. `compact extra` → `compact: usage: compact`.
 
-The summary is handed to rem's `AutoReflect` on this path exactly as on
-the trigger path (the action is shared) — a forced compaction is a
-compaction.
+Nothing is handed to rem on this path, exactly as on the trigger path
+(the action is shared) — a forced compaction is a compaction, and a
+compaction writes no memory (amended 0.13.0, SPEC_STATE: rem is
+deliberate; the `AutoReflect` handoff is cut).
 
 ### 4. `new`: close the row ok, mint fresh, keep the process — and the handoff
 
@@ -672,7 +673,9 @@ global, one plain line each (`m<id> · <kind> · <age> · <strength> · <first
 80 chars>`; a glance, not a browse — the store caps it). **`rem show
 <id>`** — the full memory row (all fields, the source, supersession).
 **`rem forget <id>`** — prune-remove that id (the operator's prune, a
-verb). **`rem pin <id>`** — importance to 1 (a pin is a deliberate
+verb); only this project's or a global memory — ids are file-wide, and a
+typo must not reach another repo's row: `rem: another project's memory:
+m<id> is <label>'s; forget it from there`. **`rem pin <id>`** — importance to 1 (a pin is a deliberate
 read-keeping, SPEC_STATE: rem is deliberate).
 
 Refusals, named: `rem show` (no id) → `rem: show needs an id (rem show
@@ -730,7 +733,7 @@ crontab spool for the scheduler (the e2e's existing pattern).
   a scripted summary provider: the transcript is rewritten to
   `[summary] + tail`, the `Compacted` event is delivered to the
   recorder (the summary row + usage row land, the tail re-lands),
-  `AutoReflect` is called, the CLI renders the one `⧉` line — and the
+  nothing lands in rem (0.13.0), the CLI renders the one `⧉` line — and the
   once budget is spent behaviorally: with nothing new since the forced
   compact, the next main call's context-length fault surfaces without
   recovery (the transcript has not grown past the compact's key).

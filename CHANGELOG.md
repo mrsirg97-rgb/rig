@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] — rem is deliberate
 
 - **the dashboard's quick hits**: the plugin listings read every
   DESCRIPTION form — the parenthesized implicit concatenation seventeen
@@ -38,7 +38,23 @@
   (`remstore.Migration(cwd)` through `store.Open`'s migration hook):
   rows under an old cwd-hash scope now inside a repo re-scope to the
   repo's, and rows with source "session compaction" are removed (never
-  deliberate), counted once on stderr.
+  deliberate), counted once on stderr. The migration is one transaction
+  and survives two processes opening the file at once (`INSERT OR
+  IGNORE` on the marker). Known bound: the re-scope is keyed on the
+  launch cwd — rows learned from another directory of the same repo move
+  when rig is next started there, since a hash cannot be walked back to
+  its cwd. The git probe resolves a relative common dir against the cwd
+  and treats an echoed option (git < 2.31 passes `--path-format` through,
+  exit 0) as no path.
+
+- **`store.Open` refuses what it cannot migrate**: an older file opened
+  by a build that passes no migration is a named mismatch, not a silent
+  version stamp; the newer-file refusal runs before any schema statement
+  touches the file; the migrations and the version bump commit together.
+
+- **`/rem forget` is scoped**: ids are file-wide, so a typo must not
+  reach another repo's row — only this project's or a global memory is
+  removed; another project's id is refused by name with its label.
 
 - **the `/rem` command** (`specs/SPEC_COMMANDS.md` 11): `rem [list|show|
   forget|pin]` over the same store — list the live memories (project
