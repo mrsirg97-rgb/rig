@@ -12,6 +12,9 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 
 ## What it includes
 
+- `Zone(home, zone)` — the files of one zone (`pending`, `disabled`):
+  the directories under `plugins/`, the same `.py` filter as `List`.
+
 - `Discover` — imports every file through the kernel and reports each, in
   file order.
 - `Report` — one plugin file's discovery outcome.

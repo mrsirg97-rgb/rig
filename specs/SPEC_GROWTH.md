@@ -183,6 +183,30 @@ cap to the table; `/plugins enable <name>` / `/plugins disable <name>`
 (decision 8's verbs, the same door as the reload) toggle a name in the
 file and reload — the models-switch semantics, next-turn, exactly.
 
+**The switch is a directory (amended 0.12.1).** `settings.json`'s
+`plugins.enabled` is retired: it inverted the default. The filter read
+an empty list as "all live", so on a home with no list `/plugins
+disable X` removed X from nothing and changed nothing, and `/plugins
+enable X` wrote `["X"]` and hid every other plugin; and the filter ran
+only at wiring, so a toggle took effect at the next start while any
+reload in between undid it. None of its named cases had been written.
+The on/off state now lives where the install state already lives — in
+the filesystem: `plugins/disabled/` beside `plugins/pending/`.
+`/plugins disable <name>` renames `plugins/<name>.py` into it and
+reloads; `enable` renames it back; `plugins disabled` lists the zone
+with each file's DESCRIPTION; discovery reads `plugins/` root only, so
+a disabled plugin is not wired, not in the door's enum, not callable —
+hidden entirely. The dashboard shows the three zones. `max` stays in
+`settings.json` and applies on every reload, not only at wiring (the
+cap's second bug). A present, non-empty `plugins.enabled` refuses at
+load naming the move; an empty one is dropped (it meant "all").
+Rejected, named: a `disabled` list in `settings.json` (a second truth
+beside the directory that can drift from it — the exact desync the
+model reported, by construction); a generated store as the registry
+(the same second truth with a schema: the registry has no history
+worth querying, and the day an approval audit is wanted it is an event
+log *beside* the directory, never the truth of what is installed).
+
 **The costs, named.** A reload at deep context is still one full
 re-prefill (decision 8, unchanged). The door's enum is a per-request
 re-read of the table (the swap's atomicity, unchanged). A model that

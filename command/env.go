@@ -56,9 +56,6 @@ type Env struct {
 	Plugins    func() []PluginInfo
 	Reload     func(ctx context.Context) (string, error)
 	PluginsDir string
-	// SetPlugins toggles a plugin's enablement (SPEC_GROWTH 9): the
-	// /plugins enable|disable verbs' door. Nil = the pre-9 root.
-	SetPlugins func(ctx context.Context, name string, enabled bool) (string, error)
 }
 
 func EnvOf(env any) (*Env, error) {

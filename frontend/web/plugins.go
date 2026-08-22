@@ -1,7 +1,6 @@
 package web
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,31 +20,32 @@ type Plugin struct {
 // listPlugins reads the loaded set (plugins.List) and the pending zone
 // (home/plugins/pending), each with the file's DESCRIPTION (SPEC_SERVE).
 // A read-only description read, not discovery: no kernel, no execution.
-func listPlugins(home string) (loaded, pending []Plugin, err error) {
+func listPlugins(home string) (loaded, pending, disabled []Plugin, err error) {
 	files, err := plugins.List(home)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	loaded = make([]Plugin, 0, len(files))
 	for _, f := range files {
 		loaded = append(loaded, pluginRow(f, false))
 	}
-	pdir := filepath.Join(home, "plugins", "pending")
-	entries, err := os.ReadDir(pdir)
+	pfiles, err := plugins.Zone(home, "pending")
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, nil, err
-		}
-		return loaded, nil, nil
+		return nil, nil, nil, err
 	}
-	pending = make([]Plugin, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".py") {
-			continue
-		}
-		pending = append(pending, pluginRow(filepath.Join(pdir, e.Name()), true))
+	pending = make([]Plugin, 0, len(pfiles))
+	for _, f := range pfiles {
+		pending = append(pending, pluginRow(f, true))
 	}
-	return loaded, pending, nil
+	dfiles, err := plugins.Zone(home, "disabled")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	disabled = make([]Plugin, 0, len(dfiles))
+	for _, f := range dfiles {
+		disabled = append(disabled, pluginRow(f, false))
+	}
+	return loaded, pending, disabled, nil
 }
 
 func pluginRow(file string, pending bool) Plugin {
