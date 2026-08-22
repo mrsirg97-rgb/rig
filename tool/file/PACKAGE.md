@@ -5,11 +5,15 @@
 The read, write, and edit tools. Edit is exact-match string replacement
 with loud, specific failure messages; provenance from the threaded
 session makes edit-after-external-change fail loudly instead of
-clobbering.
+clobbering. Read gains `offset`/`limit` line arguments (SPEC_HARDENING
+decision 9): a narrower read exists to reach for when a capped result's
+"re-read a narrower range" is the teaching.
 
 ## What it includes
 
 - `read`, `write`, `edit` — a `core.Tool` each, over `os`/`path/filepath`.
+- read's `offset`/`limit`: select a 0-based line range; `offset` past the
+  end and a negative `offset`/`limit` refuse loud, naming the line count.
 - `normalizePath` — canonicalizes at the boundary so `a.go` and `./a.go`
   are the same key (without it the drift check can be silently bypassed by
   path spelling).

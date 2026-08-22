@@ -15,7 +15,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: test
-        run: make test
+        run: go vet ./... && go test -race ./...
       - name: fmt-check
         run: make fmt-check
       - name: shellcheck install.sh

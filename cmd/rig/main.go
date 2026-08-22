@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.12.1"
+const Version = "0.12.2"
 
 type root struct {
 	pluginMax int
@@ -58,6 +58,8 @@ type root struct {
 	agents    string
 	allow     []string
 	retries   int
+	rounds    int
+	resultCap int
 
 	middleware []core.ToolMiddleware
 
@@ -101,6 +103,9 @@ type root struct {
 	compactFn func(ctx context.Context) (core.Compacted, bool, error)
 }
 
+const defaultRounds = 200
+const defaultResultCap = 64 * 1024
+
 func wire(r *root) *rig.Kernel {
 
 	if r.live == nil {
@@ -136,10 +141,20 @@ func wire(r *root) *rig.Kernel {
 		if r.askDoor != nil {
 			mw = append(mw, approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating))
 		}
+		rounds := r.rounds
+		if rounds == 0 {
+			rounds = defaultRounds
+		}
+		resultCap := r.resultCap
+		if resultCap == 0 {
+			resultCap = defaultResultCap
+		}
 		mw = append(mw,
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
+			guard.Rounds(rounds),
+			guard.Cap(resultCap),
 		)
 	}
 
@@ -164,10 +179,20 @@ func wire(r *root) *rig.Kernel {
 func (r *root) buildSystem() string {
 	mw := r.middleware
 	if mw == nil {
+		rounds := r.rounds
+		if rounds == 0 {
+			rounds = defaultRounds
+		}
+		resultCap := r.resultCap
+		if resultCap == 0 {
+			resultCap = defaultResultCap
+		}
 		mw = []core.ToolMiddleware{
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
+			guard.Rounds(rounds),
+			guard.Cap(resultCap),
 		}
 	}
 	parts := make([]string, 0, 5)
@@ -759,6 +784,24 @@ func main() {
 	if passed["retries"] {
 		retriesN = *retries
 	}
+	roundsN := cfg.Settings.Rounds
+	if v := os.Getenv("RIG_ROUNDS"); v != "" {
+		if n, aerr := strconv.Atoi(v); aerr == nil {
+			roundsN = n
+		} else {
+			fmt.Fprintf(os.Stderr, "rig: RIG_ROUNDS: expected an integer, got %q\n", v)
+			os.Exit(1)
+		}
+	}
+	resultCapN := cfg.Settings.ResultCap
+	if v := os.Getenv("RIG_RESULT_CAP"); v != "" {
+		if n, aerr := strconv.Atoi(v); aerr == nil {
+			resultCapN = n
+		} else {
+			fmt.Fprintf(os.Stderr, "rig: RIG_RESULT_CAP: expected an integer, got %q\n", v)
+			os.Exit(1)
+		}
+	}
 
 	row := resolveModel(modelID, cfg.Models)
 
@@ -913,6 +956,8 @@ func main() {
 		agents:     cfg.Agents,
 		allow:      allowList,
 		retries:    retriesN,
+		rounds:     roundsN,
+		resultCap:  resultCapN,
 		sdb:        sdb,
 		remDB:      rdb,
 		cwd:        cwd,

@@ -41,8 +41,8 @@ func TestVersionIsTheFreeze(t *testing.T) {
 	// 0.8.2 the allow-list's presence reversal (SPEC_PLUGINS 7, amended);
 	// 0.8.0 the modes (SPEC_MODES). pre-1.0 — the 1.0 tag waits for lived
 	// use (a worker soak, the TUI field-tested as the daily driver).
-	if Version != "0.12.1" {
-		t.Fatalf("Version = %q, want 0.12.1 (pre-1.0, feature-complete)", Version)
+	if Version != "0.12.2" {
+		t.Fatalf("Version = %q, want 0.12.2 (pre-1.0, feature-complete)", Version)
 	}
 	// pre-1.0 the major is 0 by definition: a dropped zero ("11.0.0" for
 	// 0.11.0) shipped once and the release assert would have demanded a
@@ -212,8 +212,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if got := k.SortedToolNames(); len(got) != 18 || got[0] != "bash" || got[1] != "delegate" || got[2] != "diff" || got[3] != "edit" || got[6] != "ls" || got[7] != "plugin" || got[8] != "plugin_schema" || got[9] != "plugins_reload" || got[10] != "python" || got[11] != "read" || got[12] != "rem" || got[13] != "scheduler" || got[14] != "todo" || got[15] != "web_fetch" || got[16] != "web_search" || got[17] != "write" {
 		t.Fatalf("registered tools = %v, want bash,delegate,diff,edit,find,grep,ls,plugin,plugin_schema,plugins_reload,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
 	}
-	if len(k.Middleware) != 4 {
-		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, and the bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	if len(k.Middleware) != 6 {
+		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decision 9; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
 	}
 }
 

@@ -540,6 +540,42 @@ func (TestEvent) event() {}
 The CLI and one-shot `Notify` switches already have no default case: the
 rule is written down, not invented.
 
+### 9. The two bounds (amended: the round cap and the result bound)
+
+Amended after 8, both middleware beside `guard.Bound`, neither touching
+`core/` or `loop/` (both frozen again at 0.12.0). `middleware/guard` and
+`tool/file` already sit on the freeze allowlist.
+
+**The round cap** (`guard.Rounds(n)`, settings `rounds`, default 200,
+`RIG_ROUNDS` env, the loud invalid-value refusal): counts every call in a
+turn on the widened seam (`TurnStart` clears it, like the bound) and past
+`n` refuses every further call without executing, in a teaching voice
+naming the cap and what to do — stop and report, or ask the operator; the
+one thing the model can still do is answer. It caps total induced work,
+including the alternation decision 7's bound does not (the named
+consequence) and a runaway batch: a concurrent run of 50 reads counts 50,
+the cap on calls, not turns of the loop. The counter is under a mutex:
+a concurrent run calls the chain from many goroutines (SPEC_EVT 6).
+Rejected, named: a loop change (frozen), a wall-clock cap (the model is
+not slow on purpose), a token cap (compaction already bounds context).
+
+**The result bound** (`guard.Cap(bytes)`, settings `resultCap`, default
+64 KiB): every tool result is bounded before it reaches the transcript,
+in one place. An oversized result is truncated with the loud marker bash
+already uses (`[TRUNCATED]` naming the full size and what was kept: the
+head and the tail, the middle elided) and the teaching line "re-read a
+narrower range". `tool/file`'s read gains `offset`/`limit` line arguments
+so a narrower read exists to reach for, with the description saying so.
+The field failure, named: a single 287 KB read result fed the compaction
+fault of 2026-08-21 and sat in context for the rest of the session; every
+tool's own cap stays, this is the wall behind them. Rejected, named: a
+per-tool cap only (a new tool forgets), dropping the tail (the error is
+usually at the end), summarizing (a second model call in a tool path).
+
+**Wiring**: both in the root's chain, innermost after the bound (first-
+listed is innermost); workers and delegated workers get the same. The TUI
+shows a capped result's marker the way it shows bash's.
+
 ## testing
 
 The contract: every existing named case passes byte-for-byte, or its

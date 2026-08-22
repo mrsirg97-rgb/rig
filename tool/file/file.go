@@ -94,21 +94,25 @@ func Read() core.Tool { return &readTool{} }
 func (readTool) Name() string { return "read" }
 
 func (readTool) Description() string {
-	return "read a file; remembers its disk state for drift-checked edits"
+	return "read a file (offset/limit select a narrower line range); remembers its disk state for drift-checked edits"
 }
 
 func (readTool) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"path": {"type": "string", "description": "the file to read"}
+			"path":   {"type": "string", "description": "the file to read"},
+			"offset": {"type": "integer", "description": "the 0-based line to start at (default 0); past the end refuses"},
+			"limit":  {"type": "integer", "description": "the number of lines to read (default the rest of the file); negative refuses"}
 		},
 		"required": ["path"]
 	}`)
 }
 
 type readArgs struct {
-	Path string `json:"path"`
+	Path   string `json:"path"`
+	Offset *int   `json:"offset"`
+	Limit  *int   `json:"limit"`
 }
 
 func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -117,13 +121,38 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		return "", fmt.Errorf("read: args: %w", err)
 	}
 	a.Path = normalizePath(a.Path)
+	offset := 0
+	if a.Offset != nil {
+		if *a.Offset < 0 {
+			return "", fmt.Errorf("read: offset %d is negative", *a.Offset)
+		}
+		offset = *a.Offset
+	}
+	limit := -1
+	if a.Limit != nil {
+		if *a.Limit < 0 {
+			return "", fmt.Errorf("read: limit %d is negative", *a.Limit)
+		}
+		limit = *a.Limit
+	}
 	fileData, err := os.ReadFile(a.Path)
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
 	}
 	recordState(ctx, a.Path, fileData)
 	rememberContent(a.Path, string(fileData))
-	content := string(fileData)
+	lines := strings.Split(string(fileData), "\n")
+	if offset >= len(lines) {
+		return "", fmt.Errorf("read: offset %d is past the end (%d lines)", offset, len(lines))
+	}
+	end := len(lines)
+	if limit >= 0 {
+		end = offset + limit
+		if end > len(lines) {
+			end = len(lines)
+		}
+	}
+	content := strings.Join(lines[offset:end], "\n")
 	if len(content) > readCap {
 		content = content[:readCap] + "\n[output truncated]"
 	}

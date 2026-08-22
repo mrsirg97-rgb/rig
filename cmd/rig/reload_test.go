@@ -392,9 +392,9 @@ def run(args: dict) -> str:
 		t.Fatalf("the table after the swap = %d tools, want the natives plus the swapped-in one", got)
 	}
 	// the chain carries the router (the provenance rule, the allow-list,
-	// and the bound, in the root's order).
-	if len(h.r.k.Middleware) != 4 {
-		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, and the bound", len(h.r.k.Middleware))
+	// the bound, the round cap, and the result bound, in the root's order).
+	if len(h.r.k.Middleware) != 6 {
+		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound", len(h.r.k.Middleware))
 	}
 	// the python tool's instance survives (the shared kernel, the
 	// per-process state): the loop's "python" is the kernel the reload

@@ -96,6 +96,12 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.Retries != 3 {
 		t.Fatalf("retries = %d, want the 0.2.0 default 3", s.Retries)
 	}
+	if s.Rounds != 200 {
+		t.Fatalf("rounds = %d, want the embedded default 200", s.Rounds)
+	}
+	if s.ResultCap != 65536 {
+		t.Fatalf("resultCap = %d, want the embedded default 64 KiB (65536)", s.ResultCap)
+	}
 	if s.SearXNG != "http://127.0.0.1:8888" {
 		t.Fatalf("searxngUrl = %q, want the 0.2.0 default", s.SearXNG)
 	}
@@ -145,7 +151,11 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		want    string
 	}{
 		{"retries type", `{"retries": "three"}`, `retries: expected an integer, got "three"`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, retries, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
+		{"rounds type", `{"rounds": "many"}`, `rounds: expected an integer, got "many"`},
+		{"resultCap type", `{"resultCap": "big"}`, `resultCap: expected an integer, got "big"`},
+		{"rounds negative", `{"rounds": -3}`, `rounds: expected a positive number (0 = the default), got -3`},
+		{"resultCap negative", `{"resultCap": -1}`, `resultCap: expected a positive number (0 = the default), got -1`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed" or "off", got "maybe"`},

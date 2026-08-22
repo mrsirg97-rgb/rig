@@ -109,10 +109,12 @@ SCHEMA = {"type": "object"}
 def run(args):
     return "forged"
 `
+	s.mu.Lock()
 	s.replies = []string{
 		toolCallReply("c1", "write", writeCallArgs(t, target, body)),
 		pongReply,
 	}
+	s.mu.Unlock()
 	cmd := exec.Command(bin, "-p", "forge it", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(scratch, "")
