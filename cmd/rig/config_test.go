@@ -927,6 +927,40 @@ func TestMalformedConfigRefusesBeforeStores(t *testing.T) {
 	}
 }
 
+// TestRoundsAndResultCapEnvRefuseLoud (SPEC_HARDENING decision 9, named):
+// RIG_ROUNDS and RIG_RESULT_CAP refuse an invalid value loudly — unlike
+// RIG_RETRIES, which descends silently, the two new knobs are the wall,
+// so a typo is a refusal, not a quiet default.
+func TestRoundsAndResultCapEnvRefuseLoud(t *testing.T) {
+	for _, tc := range []struct {
+		env   string
+		voice string
+	}{
+		{"RIG_ROUNDS", "rig: RIG_ROUNDS: expected an integer, got \"many\""},
+		{"RIG_RESULT_CAP", "rig: RIG_RESULT_CAP: expected an integer, got \"big\""},
+	} {
+		t.Run(tc.env, func(t *testing.T) {
+			bin := buildBin(t, t.TempDir())
+			cmd := exec.Command(bin, "-p", "hello")
+			cmd.Dir = t.TempDir()
+			env := rigEnv(t.TempDir(), "")
+			if tc.env == "RIG_RESULT_CAP" {
+				env = append(env, tc.env+"=big")
+			} else {
+				env = append(env, tc.env+"=many")
+			}
+			cmd.Env = env
+			out, runErr := cmd.CombinedOutput()
+			if runErr == nil {
+				t.Fatalf("an invalid %s must refuse: %q", tc.env, out)
+			}
+			if !strings.Contains(string(out), tc.voice) {
+				t.Fatalf("the voice = %q, want %q", out, tc.voice)
+			}
+		})
+	}
+}
+
 // TestModelsFileRowListsAndSwitches (SPEC_CONFIG 4, named): a
 // file-added row — /models lists it with its role, models <id>
 // switches, and the next turn's request carries its model.

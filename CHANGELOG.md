@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.12.2] — the two bounds
+
+- **the round cap** (`specs/SPEC_HARDENING.md` 9): `guard.Rounds(n)` counts
+  every tool call in a turn (settings `rounds`, default 200, `RIG_ROUNDS`
+  env with a loud invalid-value refusal) and past `n` refuses every
+  further call without executing, in a teaching voice naming the cap and
+  what to do — stop and report, or ask the operator. It caps the
+  alternation the retry bound's per-args streak does not (SPEC_HARDENING
+  7's named consequence) and a runaway batch: a concurrent run of 50
+  reads counts 50, the cap on calls, not turns. The counter sits under a
+  mutex (SPEC_EVT 6's concurrent chain) and `TurnStart` clears it like
+  the bound. `core/` and `loop/` stay frozen at 0.12.0.
+- **the result bound** (`specs/SPEC_HARDENING.md` 9): `guard.Cap(bytes)`
+  (settings `resultCap`, default 64 KiB) bounds every tool result before
+  the transcript, in one place — an oversized result truncates to the
+  head and the tail with the loud `[TRUNCATED]` marker naming the full
+  size and the teaching line "re-read a narrower range"; a small result
+  is byte-identical. It closes the named field failure: a 287 KB read
+  result that fed the 2026-08-21 compaction fault and sat in context all
+  session. Every tool's own cap stays; this is the wall behind them.
+- **read's narrower range**: `tool/file`'s read gains `offset`/`limit`
+  line arguments (past-the-end and negative refusals loud), so the
+  teaching has a real door.
+- **wiring**: both are innermost after the bound (first-listed is
+  innermost) in the root's chain; workers and delegated workers run the
+  same `wire()`. The TUI shows a capped result's marker the way it shows
+  bash's.
+- **test-only data races closed**: `cmd/rig/plugins_test.go:87` (the fake
+  plugin server read `replies` the test set without the mutex; the write
+  now holds it) and `tool/delegate`'s in-flight wait (`len(spawn.calls)`
+  read without the mutex while the spawn goroutine appends; the read now
+  goes through a locked `count()`). CI's test step runs `go vet ./... &&
+  go test -race ./...` so a race cannot return.
+
 ## [0.12.1] — the door is allowed
 
 - **the plugin door was never allow-listed** (`specs/SPEC_GROWTH.md` 9,

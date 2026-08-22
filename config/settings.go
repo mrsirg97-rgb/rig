@@ -17,6 +17,8 @@ type Settings struct {
 	System          string
 	Allow           []string
 	Retries         int
+	Rounds          int
+	ResultCap       int
 	Python          string
 	SearXNG         string
 	WebFetchProxy   *string
@@ -37,7 +39,7 @@ type SettingsPlugins struct {
 	Max int
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "retries", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -87,6 +89,12 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.Retries != 0 {
 		out.Retries = file.Retries
+	}
+	if file.Rounds != 0 {
+		out.Rounds = file.Rounds
+	}
+	if file.ResultCap != 0 {
+		out.ResultCap = file.ResultCap
 	}
 	if file.Python != "" {
 		out.Python = file.Python
@@ -232,6 +240,24 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		}
 		if v != 0 {
 			s.Retries = v
+		}
+	}
+	if raw, ok := keys["rounds"]; ok {
+		v, err := jsonInt(raw)
+		if err != nil {
+			return Settings{}, fmt.Errorf("config: %s: rounds: %v", path, err)
+		}
+		if v != 0 {
+			s.Rounds = v
+		}
+	}
+	if raw, ok := keys["resultCap"]; ok {
+		v, err := jsonInt(raw)
+		if err != nil {
+			return Settings{}, fmt.Errorf("config: %s: resultCap: %v", path, err)
+		}
+		if v != 0 {
+			s.ResultCap = v
 		}
 	}
 	if raw, ok := keys["webFetchProxy"]; ok {

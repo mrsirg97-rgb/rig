@@ -92,6 +92,12 @@ type fakeCall struct {
 	Ctx  context.Context
 }
 
+func (f *fakeSpawn) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.SpawnResult, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
@@ -273,9 +279,10 @@ func TestDelegateOneInFlightRefuses(t *testing.T) {
 		}
 		first <- out
 	}()
-	// wait for the first spawn to be in flight
+	// wait for the first spawn to be in flight (the read is under the
+	// mutex: the spawn goroutine appends under it)
 	deadline := time.Now().Add(2 * time.Second)
-	for len(spawn.calls) == 0 {
+	for spawn.count() == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("first spawn never started")
 		}

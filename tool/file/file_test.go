@@ -64,6 +64,78 @@ func TestReadRefusesUnknownArg(t *testing.T) {
 	}
 }
 
+func readLines(t *testing.T, content string) []string {
+	t.Helper()
+	return strings.Split(content, "\n")
+}
+
+// The narrower read exists to reach for (SPEC_HARDENING decision 9): read
+// gains offset/limit line arguments, so a capped result's "re-read a
+// narrower range" has a real door.
+func TestReadOffsetLimitReturnsTheRange(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	content := strings.Join([]string{
+		"line 00", "line 01", "line 02", "line 03", "line 04",
+		"line 05", "line 06", "line 07", "line 08", "line 09",
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+		"path": path, "offset": 2, "limit": 3,
+	}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	want := strings.Join([]string{"line 02", "line 03", "line 04"}, "\n")
+	if got != want {
+		t.Fatalf("offset/limit range = %q, want %q", got, want)
+	}
+}
+
+func TestReadOffsetPastTheEndRefusesLoud(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+		"path": path, "offset": 9,
+	}))
+	if err == nil || !strings.Contains(err.Error(), "past the end") {
+		t.Fatalf("an offset past the end must refuse loud naming the file's lines, got %v", err)
+	}
+}
+
+func TestReadOffsetNegativeRefusesLoud(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+		"path": path, "offset": -1,
+	}))
+	if err == nil || !strings.Contains(err.Error(), "negative") {
+		t.Fatalf("a negative offset must refuse loud, got %v", err)
+	}
+}
+
+func TestReadLimitNegativeRefusesLoud(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+		"path": path, "limit": -1,
+	}))
+	if err == nil || !strings.Contains(err.Error(), "negative") {
+		t.Fatalf("a negative limit must refuse loud, got %v", err)
+	}
+}
+
 func TestWriteCreatesAndOverwrites(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "note.txt")
