@@ -18,29 +18,19 @@ const SummaryMarker = "[compaction] "
 var summaryPrompt string
 
 type policy struct {
-	provider    core.Provider
-	fe          core.Frontend
-	s           *core.Session
-	system      string
-	row         models.Model
-	autoReflect func(ctx context.Context, summary string) error
+	provider core.Provider
+	fe       core.Frontend
+	s        *core.Session
+	system   string
+	row      models.Model
 
 	mu      sync.Mutex
 	factor  float64
 	lastKey int
 }
 
-type options struct {
-	autoReflect func(ctx context.Context, summary string) error
-}
 
-type Option func(*options)
-
-func WithAutoReflect(fn func(ctx context.Context, summary string) error) Option {
-	return func(o *options) { o.autoReflect = fn }
-}
-
-func New(provider core.Provider, fe core.Frontend, s *core.Session, system string, m models.Model, opts ...Option) (*policy, error) {
+func New(provider core.Provider, fe core.Frontend, s *core.Session, system string, m models.Model) (*policy, error) {
 	if provider == nil {
 		return nil, errors.New("compact: nil provider")
 	}
@@ -53,19 +43,14 @@ func New(provider core.Provider, fe core.Frontend, s *core.Session, system strin
 	if err := m.Check(); err != nil {
 		return nil, err
 	}
-	o := options{}
-	for _, opt := range opts {
-		opt(&o)
-	}
 	return &policy{
-		provider:    provider,
-		fe:          fe,
-		s:           s,
-		system:      system,
-		row:         m,
-		autoReflect: o.autoReflect,
-		factor:      1.0,
-		lastKey:     len(s.Messages),
+		provider: provider,
+		fe:       fe,
+		s:        s,
+		system:   system,
+		row:      m,
+		factor:   1.0,
+		lastKey:  len(s.Messages),
 	}, nil
 }
 
@@ -147,9 +132,6 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 		Dropped: int(float64(Estimate(older)) * factor),
 		Kept:    int(float64(Estimate(tail)) * factor),
 		Usage:   usage,
-	}
-	if p.autoReflect != nil {
-		_ = p.autoReflect(ctx, summary)
 	}
 	return ev, true, nil
 }

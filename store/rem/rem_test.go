@@ -37,7 +37,7 @@ type probe struct {
 
 func newDB(t *testing.T) store.DB {
 	t.Helper()
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), Statements(), SchemaVersion)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), Statements(), SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestCorruptStoreQuarantinesAndReadsEmpty(t *testing.T) {
 	if err := os.WriteFile(path, []byte("not sqlite"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, quarantined, err := store.Open(path, Statements(), SchemaVersion)
+	db, quarantined, _, err := store.Open(path, Statements(), SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -722,48 +722,6 @@ func reflectIn(t *testing.T, db store.DB, cwd, content string, importance float6
 	return reply, mem, existing
 }
 
-func TestAutoReflectDedupesAndIgnoresBadEvents(t *testing.T) {
-	db := newDB(t)
-	cwd := "/ws1"
-	summary := "compacted session: fixed the render path and its tests"
-	if _, err := AutoReflect(context.Background(), db, cwd, summary); err != nil {
-		t.Fatalf("auto-reflect: %v", err)
-	}
-	if _, err := AutoReflect(context.Background(), db, cwd, summary); err != nil {
-		t.Fatalf("replay: %v", err)
-	}
-	got := memRow(t, db, summary)
-	if got == nil {
-		t.Fatal("compaction reflection absent")
-	}
-	if got.Kind != "reflection" {
-		t.Fatalf("kind %q", got.Kind)
-	}
-	if got.Importance != autoReflectionImportance {
-		t.Fatalf("importance %v, want %v", got.Importance, autoReflectionImportance)
-	}
-	if got.Scope != shortHash(cwd) {
-		t.Fatalf("scope %q", got.Scope)
-	}
-	if got.Source == nil || !strings.Contains(*got.Source, "compaction") {
-		t.Fatalf("source %v", got.Source)
-	}
-
-	if _, err := AutoReflect(context.Background(), db, cwd, ""); err != nil {
-		t.Fatalf("empty summary: %v", err)
-	}
-	if _, err := AutoReflect(context.Background(), db, cwd, "   "); err != nil {
-		t.Fatalf("blank summary: %v", err)
-	}
-	var n int
-	if err := db.QueryRow(`SELECT count(*) FROM memories`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Fatalf("memories = %d, want the single deduped one", n)
-	}
-}
-
 func TestPruneConsolidateIdempotentDecaysAged(t *testing.T) {
 	db := newDB(t)
 	_, mem, _ := learn(t, db, "/ws1", "consolidate me", nil)
@@ -1001,11 +959,11 @@ func TestPruneRemoveByIdsIgnoresScope(t *testing.T) {
 func TestConcurrentCallsSerialize(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
-	db1, _, err := store.Open(path, Statements(), SchemaVersion)
+	db1, _, _, err := store.Open(path, Statements(), SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	db2, _, err := store.Open(path, Statements(), SchemaVersion)
+	db2, _, _, err := store.Open(path, Statements(), SchemaVersion)
 	if err != nil {
 		t.Fatalf("open two: %v", err)
 	}
@@ -1203,54 +1161,183 @@ func TestExtraAndFtsStatementsAreApplied(t *testing.T) {
 	}
 }
 
-func TestRecentIsTheCwdsNewestLiveNotes(t *testing.T) {
+func TestListShowsLiveProjectThenGlobal(t *testing.T) {
 	db := newDB(t)
-	cwd := "/ws/recent"
-	for i := 1; i <= 10; i++ {
+	cwd := "/ws/list"
+	for i := 1; i <= 3; i++ {
 		learn(t, db, cwd, fmt.Sprintf("note %02d", i), we())
 	}
+	learn(t, db, cwd, "a global note", map[string]any{"scope": "global"})
 	learn(t, db, "/ws/other", "foreign note", we())
-	learn(t, db, cwd, "global-ish note", map[string]any{"scope": "global"})
-	notes, err := Recent(context.Background(), db, cwd, 8)
+	mems, err := List(context.Background(), db, cwd, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(notes) != 8 {
-		t.Fatalf("K=8 caps the read, got %d: %v", len(notes), notes)
+	if len(mems) != 4 {
+		t.Fatalf("live project then global, got %d: %+v", len(mems), mems)
 	}
-	want := []string{"note 10", "note 09", "note 08", "note 07", "note 06", "note 05", "note 04", "note 03"}
-	for i := range want {
-		if notes[i] != want[i] {
-			t.Fatalf("newest first, newest K only, got: %v", notes)
-		}
+	if mems[3].ScopeLabel != "global" || mems[3].Content != "a global note" {
+		t.Fatalf("the global note rides last, got %+v", mems)
 	}
-	joined := strings.Join(notes, "\n")
-	if strings.Contains(joined, "foreign note") || strings.Contains(joined, "global-ish note") {
-		t.Fatalf("another scope's notes must not ride: %v", notes)
+	joined := strings.Join([]string{mems[0].Content, mems[1].Content, mems[2].Content}, " ")
+	if strings.Contains(joined, "foreign") {
+		t.Fatalf("another scope's notes must not ride: %v", mems)
 	}
 }
 
-func TestRecentSkipsSuperseded(t *testing.T) {
+func TestListSkipsSuperseded(t *testing.T) {
 	db := newDB(t)
 	cwd := "/ws/super"
 	learn(t, db, cwd, "old fact", we())
 	learn(t, db, cwd, "new fact", map[string]any{"supersedes": int64(1)})
-	notes, err := Recent(context.Background(), db, cwd, 8)
+	mems, err := List(context.Background(), db, cwd, 8)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(notes) != 1 || notes[0] != "new fact" {
-		t.Fatalf("the superseded note must not ride, got: %v", notes)
+	if len(mems) != 1 || mems[0].Content != "new fact" {
+		t.Fatalf("the superseded note must not list, got: %+v", mems)
 	}
 }
 
-func TestRecentEmptyStoreIsAbsent(t *testing.T) {
+func TestListEmptyStoreIsAbsent(t *testing.T) {
 	db := newDB(t)
-	notes, err := Recent(context.Background(), db, "/ws/empty", 8)
+	mems, err := List(context.Background(), db, "/ws/empty", 8)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(notes) != 0 {
-		t.Fatalf("an empty store reads empty, got: %v", notes)
+	if len(mems) != 0 {
+		t.Fatalf("an empty store lists empty, got: %+v", mems)
+	}
+}
+
+
+func gitInit(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", dir, "init", "-q")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, out)
+	}
+	cmd = exec.Command("git", "-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "add", "-A")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v (%s)", err, out)
+	}
+	cmd = exec.Command("git", "-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "commit", "-q", "-m", "seed")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v (%s)", err, out)
+	}
+}
+
+func TestTwoWorktreesOfOneRepoShareMemory(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	a := filepath.Join(repo, "a")
+	b := filepath.Join(repo, "b")
+	if out, err := exec.Command("git", "-C", repo, "worktree", "add", "-q", a).CombinedOutput(); err != nil {
+		t.Fatalf("worktree add a: %v (%s)", err, out)
+	}
+	if out, err := exec.Command("git", "-C", repo, "worktree", "add", "-q", b).CombinedOutput(); err != nil {
+		t.Fatalf("worktree add b: %v (%s)", err, out)
+	}
+	db := newDB(t)
+	learn(t, db, a, "shared across worktrees", we())
+	mems, err := List(context.Background(), db, b, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mems) != 1 || mems[0].Content != "shared across worktrees" {
+		t.Fatalf("worktree b must read worktree a's memory: %+v", mems)
+	}
+	if scopeKey(a) != scopeKey(b) {
+		t.Fatalf("two worktrees of one repo must share one scope: %q != %q", scopeKey(a), scopeKey(b))
+	}
+}
+
+func TestNonRepoDirScopesByCwd(t *testing.T) {
+	db := newDB(t)
+	d1 := filepath.Join(t.TempDir(), "one")
+	d2 := filepath.Join(t.TempDir(), "two")
+	os.MkdirAll(d1, 0o755)
+	os.MkdirAll(d2, 0o755)
+	learn(t, db, d1, "only in one", we())
+	mems, err := List(context.Background(), db, d2, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mems) != 0 {
+		t.Fatalf("a non-repo dir scopes by cwd, the other dir must not read: %+v", mems)
+	}
+	if scopeKey(d1) != shortHash(d1) {
+		t.Fatalf("outside a repo the scope is the cwd, hashed as today: %q != %q", scopeKey(d1), shortHash(d1))
+	}
+}
+
+func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	cwd := filepath.Join(repo, "src")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(repo, "rem.sqlite")
+	db, _, _, err := store.Open(path, Statements(), 1)
+	if err != nil {
+		t.Fatalf("v1 open: %v", err)
+	}
+	oldScope := shortHash(cwd)
+	insert := `INSERT INTO memories (id, scope, scope_label, kind, content, source, importance, strength, access_count, created_at, last_consolidated_at, content_md5)
+		VALUES (?, ?, 'mem', 'fact', ?, ?, ?, ?, ?, ?, ?, ?)`
+	if _, err := db.DB.Exec(insert, 1, oldScope, "the old fact", "s1", 0.5, 0.5, 0, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", "md5-old"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DB.Exec(insert, 2, oldScope, "a compacted summary", "session compaction", 0.2, 0.2, 0, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", "md5-comp"); err != nil {
+		t.Fatal(err)
+	}
+	db.DB.Close()
+
+	db2, _, report, err := store.Open(path, Statements(), SchemaVersion, Migration(cwd))
+	if err != nil {
+		t.Fatalf("migrated open: %v", err)
+	}
+	defer db2.DB.Close()
+	if !strings.Contains(report, "removed 1 compaction reflections") || !strings.Contains(report, "re-scoped 1 memories") {
+		t.Fatalf("the migration must count once: %q", report)
+	}
+	var rows []probe
+	rs, err := db2.DB.Query(`SELECT id, scope, scope_label, kind, content, source, importance, strength, access_count, superseded_by, created_at, last_accessed_at, last_consolidated_at, content_md5 FROM memories ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rs.Close()
+	for rs.Next() {
+		var p probe
+		if err := rs.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source, &p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt, &p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+			t.Fatal(err)
+		}
+		rows = append(rows, p)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("the compaction row is removed (never deliberate), got %d rows", len(rows))
+	}
+	if rows[0].Scope != scopeKey(cwd) || rows[0].Scope == oldScope {
+		t.Fatalf("the old row must re-scope to the repo's: %q != %q", rows[0].Scope, scopeKey(cwd))
+	}
+
+	db3, _, report2, err := store.Open(path, Statements(), SchemaVersion, Migration(cwd))
+	if err != nil {
+		t.Fatalf("re-open: %v", err)
+	}
+	defer db3.DB.Close()
+	if report2 != "" {
+		t.Fatalf("the migration must be idempotent, second open reports %q", report2)
+	}
+	var sc string
+	if err := db3.DB.QueryRow(`SELECT scope FROM memories WHERE id = 1`).Scan(&sc); err != nil {
+		t.Fatal(err)
+	}
+	if sc != scopeKey(cwd) {
+		t.Fatalf("the re-open must not re-scope: %q", sc)
 	}
 }

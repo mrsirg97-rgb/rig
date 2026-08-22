@@ -266,7 +266,7 @@ func TestSessionForResumesOrStartsFresh(t *testing.T) {
 }
 
 func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

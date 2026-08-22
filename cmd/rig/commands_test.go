@@ -149,12 +149,12 @@ func commandEnv(r *root) *command.Env {
 func newHarness(t *testing.T, row models.Model, activeID string, runtime models.Table) *harness {
 	t.Helper()
 	dir := t.TempDir()
-	db, _, err := store.Open(filepath.Join(dir, "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(filepath.Join(dir, "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.DB.Close() })
-	remDB, _, err := store.Open(filepath.Join(dir, "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
+	remDB, _, _, err := store.Open(filepath.Join(dir, "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,12 +470,8 @@ func TestCompactForcesTheAction(t *testing.T) {
 	}
 
 	var memories int
-	if err := h.remDB.DB.QueryRow(`SELECT count(*) FROM memories`).Scan(&memories); err != nil || memories < 1 {
-		t.Fatalf("AutoReflect must have landed a memory: %d (%v)", memories, err)
-	}
-	var content string
-	if err := h.remDB.DB.QueryRow(`SELECT content FROM memories LIMIT 1`).Scan(&content); err != nil || !strings.Contains(content, "SUM") {
-		t.Fatalf("the reflected memory must carry the summary: %q (%v)", content, err)
+	if err := h.remDB.DB.QueryRow(`SELECT count(*) FROM memories`).Scan(&memories); err != nil || memories != 0 {
+		t.Fatalf("compaction writes nothing to rem (SPEC_STATE: rem is deliberate): %d (%v)", memories, err)
 	}
 }
 
@@ -618,7 +614,7 @@ func TestModelsRuntimeTableIncludesSynthesizedRow(t *testing.T) {
 
 func TestOneShotCommandShapedPromptIsAPrompt(t *testing.T) {
 	dir := t.TempDir()
-	db, _, err := store.Open(filepath.Join(dir, "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(filepath.Join(dir, "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -786,7 +782,7 @@ func TestREPLCommands(t *testing.T) {
 	if len(glob) != 1 {
 		t.Fatalf("sessions store = %v, want one", glob)
 	}
-	db, _, err := store.Open(glob[0], state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(glob[0], state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

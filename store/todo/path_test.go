@@ -24,7 +24,7 @@ func TestStorePathRoundTrip(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion)
+	db, _, _, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

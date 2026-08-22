@@ -124,7 +124,7 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	if err := os.MkdirAll(filepath.Join(rigHome, "sessions"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := store.Open(filepath.Join(home, sched.CwdHash(sessionCwd)+".sqlite"), sched.Statements(), sched.SchemaVersion)
+	db, _, _, err := store.Open(filepath.Join(home, sched.CwdHash(sessionCwd)+".sqlite"), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open scheduler store: %v", err)
 	}
@@ -149,7 +149,7 @@ func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) co
 
 func seedSession(t *testing.T, rigHome, cwd string) string {
 	t.Helper()
-	db, _, err := store.Open(state.StorePath(rigHome, cwd), state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(state.StorePath(rigHome, cwd), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open state store: %v", err)
 	}

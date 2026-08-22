@@ -27,7 +27,7 @@ func allByName(t *testing.T) map[string]core.Command {
 
 func TestAllIsTheStandardSet(t *testing.T) {
 	byName := allByName(t)
-	want := []string{"approve", "compact", "effort", "models", "new", "plugins", "role", "scheduler", "sessions", "steer", "todo"}
+	want := []string{"approve", "compact", "effort", "models", "new", "plugins", "rem", "role", "scheduler", "sessions", "steer", "todo"}
 	if len(byName) != len(want) {
 		t.Fatalf("the standard set has %d commands, want %d: %v", len(byName), len(want), names(byName))
 	}

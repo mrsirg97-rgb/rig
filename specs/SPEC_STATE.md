@@ -251,8 +251,23 @@ deliverable 9) or plain `sqlite3`.
   These are Go over the generated substrate plus the two raw arms
   (`memory_fts` MATCH and the trigram join), which are the only raw queries
   the store owns and are named as such.
-- `AutoReflect` ships in the store with no caller yet; compaction wires
-  it (roadmap deliverable 8).
+- **Rem is deliberate.** Every rem operation is something chose: the model
+  learns/recalls/reflects/prunes through its tool, the operator prunes
+  through the `/rem` verb. Nothing is written by a compaction — the summary
+  is context, not memory (SPEC_COMPACT 6, cut) — and nothing is read into
+  the prompt by a session start (the root's remembered segment, cut; the
+  system prompt names the rule).
+- **Scope is a repo identity, not a cwd.** scope = the absolute git common
+  dir of the cwd (`git rev-parse --git-common-dir`), so two worktrees of
+  one repo share one memory; outside a repo, the cwd itself, hashed as
+  today (`shortHash`). The schema bump (1 → 2) carries a one-time
+  idempotent migration: rows under an old cwd-hash scope now inside a repo
+  re-scope to the repo's, and rows with source "session compaction" are
+  removed (never deliberate), counted once on stderr. Rejected: reading
+  both scopes forever.
+- The `/rem` command (SPEC_COMMANDS 11): `rem [list|show|forget|pin]` over
+  the same store — list the live memories (project then global, one line
+  each), show by id, forget by id, pin by id (importance 1).
 - lift's `cmd/rem` is a different design (postgres, mesh, episodes and
   associations). Its recall projection and testkit are worth reading; its
   schema is not the one being ported. pane's rem is.

@@ -6,10 +6,13 @@ import (
 	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,7 +23,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 func DDL() []string { return remdd.Statements() }
 
@@ -51,9 +54,40 @@ func ftsEnabled() bool {
 	return true
 }
 
-func shortHash(cwd string) string {
-	d := sha1.Sum([]byte(cwd))
+func shortHash(s string) string {
+	d := sha1.Sum([]byte(s))
 	return hex.EncodeToString(d[:])[:12]
+}
+
+type scopeCacheT struct {
+	mu   sync.Mutex
+	vals map[string]string
+}
+
+var scopeCache = scopeCacheT{vals: map[string]string{}}
+
+func scopePath(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	scopeCache.mu.Lock()
+	defer scopeCache.mu.Unlock()
+	if v, ok := scopeCache.vals[cwd]; ok {
+		return v
+	}
+	out, err := exec.Command("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
+	if err != nil {
+		v := cwd
+		scopeCache.vals[cwd] = v
+		return v
+	}
+	v := strings.TrimSpace(string(out))
+	scopeCache.vals[cwd] = v
+	return v
+}
+
+func scopeKey(cwd string) string {
+	return shortHash(scopePath(cwd))
 }
 
 func writeScope(scope, cwd string) (key, label string, err error) {
@@ -67,7 +101,7 @@ func writeScope(scope, cwd string) (key, label string, err error) {
 	if label == "." || label == "" {
 		label = "root"
 	}
-	return shortHash(cwd), label, nil
+	return scopeKey(cwd), label, nil
 }
 
 func readScopes(scope, cwd string) ([]string, error) {
@@ -75,9 +109,9 @@ func readScopes(scope, cwd string) ([]string, error) {
 	case "global":
 		return []string{"global"}, nil
 	case "all":
-		return []string{shortHash(cwd), "global"}, nil
+		return []string{scopeKey(cwd), "global"}, nil
 	case "", "project":
-		return []string{shortHash(cwd)}, nil
+		return []string{scopeKey(cwd)}, nil
 	}
 	return nil, fmt.Errorf("rem: scope must be project, global, or all")
 }
@@ -161,40 +195,6 @@ func applySupersedes(bound context.Context, byID int64, targets []int64) error {
 		}
 	}
 	return nil
-}
-
-func Recent(ctx context.Context, db store.DB, cwd string, k int) ([]string, error) {
-	if k <= 0 {
-		k = 1
-	}
-	key := shortHash(cwd)
-	out, err := transact(ctx, db, func(bound context.Context, _ *sql.Tx) ([]string, error) {
-		tx, err := sqlx.TxFrom(bound)
-		if err != nil {
-			return nil, err
-		}
-		rows, err := tx.QueryContext(bound,
-			`SELECT content FROM memories
-			 WHERE scope = $1 AND superseded_by IS NULL
-			 ORDER BY id DESC LIMIT $2`, key, k)
-		if err != nil {
-			return nil, fmt.Errorf("rem: recent: %w", err)
-		}
-		defer rows.Close()
-		var res []string
-		for rows.Next() {
-			var c string
-			if err := rows.Scan(&c); err != nil {
-				return nil, fmt.Errorf("rem: recent: %w", err)
-			}
-			res = append(res, c)
-		}
-		return res, rows.Err()
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 type LearnInput struct {
@@ -286,18 +286,6 @@ func Reflect(ctx context.Context, db store.DB, cwd string, in ReflectInput) (str
 		return "", nil, false, err
 	}
 	return res.reply, res.mem, res.existing, nil
-}
-
-func AutoReflect(ctx context.Context, db store.DB, cwd, summary string) (string, error) {
-	if strings.TrimSpace(summary) == "" {
-		return "", nil
-	}
-	reply, _, _, err := Reflect(ctx, db, cwd, ReflectInput{
-		Content:    summary,
-		Importance: autoReflectionImportance,
-		Source:     "session compaction",
-	})
-	return reply, err
 }
 
 type writeShape struct {
@@ -703,4 +691,167 @@ func renderHits(hits []Hit) string {
 		b.WriteString(renderMemoryLine(h))
 	}
 	return b.String()
+}
+
+var ErrNoSuchMemory = errors.New("rem: no such memory")
+
+type LiveMemory struct {
+	ID         int64
+	ScopeLabel string
+	Kind       string
+	Content    string
+	CreatedAt  string
+	Strength   float64
+}
+
+func List(ctx context.Context, db store.DB, cwd string, k int) ([]LiveMemory, error) {
+	if k <= 0 {
+		k = 50
+	}
+	proj := scopeKey(cwd)
+	out, err := transact(ctx, db, func(bound context.Context, _ *sql.Tx) ([]LiveMemory, error) {
+		tx, err := sqlx.TxFrom(bound)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := tx.QueryContext(bound,
+			`SELECT id, scope_label, kind, content, created_at, strength FROM memories
+			 WHERE superseded_by IS NULL AND scope IN ($1, $2)
+			 ORDER BY CASE WHEN scope = $1 THEN 0 ELSE 1 END, id DESC LIMIT $3`,
+			proj, "global", k)
+		if err != nil {
+			return nil, fmt.Errorf("rem: list: %w", err)
+		}
+		defer rows.Close()
+		var res []LiveMemory
+		for rows.Next() {
+			var m LiveMemory
+			if err := rows.Scan(&m.ID, &m.ScopeLabel, &m.Kind, &m.Content, &m.CreatedAt, &m.Strength); err != nil {
+				return nil, fmt.Errorf("rem: list: %w", err)
+			}
+			res = append(res, m)
+		}
+		return res, rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func Show(ctx context.Context, db store.DB, id int64) (*remdom.Memory, error) {
+	out, err := transact(ctx, db, func(bound context.Context, _ *sql.Tx) (*remdom.Memory, error) {
+		row, err := remdom.NewMemoryDomain().GetMemory(bound, id).Row()
+		if err != nil {
+			return nil, fmt.Errorf("rem: show: %w", err)
+		}
+		if row == nil {
+			return nil, ErrNoSuchMemory
+		}
+		return row, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func Pin(ctx context.Context, db store.DB, id int64) error {
+	_, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (struct{}, error) {
+		row, err := remdom.NewMemoryDomain().GetMemory(bound, id).Row()
+		if err != nil {
+			return struct{}{}, fmt.Errorf("rem: pin: %w", err)
+		}
+		if row == nil {
+			return struct{}{}, ErrNoSuchMemory
+		}
+		row.Importance = 1
+		if _, err := remdom.NewMemoryDomain().UpdateMemory(bound, *row); err != nil {
+			return struct{}{}, fmt.Errorf("rem: pin: %w", err)
+		}
+		return struct{}{}, nil
+	})
+	return err
+}
+
+func Forget(ctx context.Context, db store.DB, id int64) error {
+	_, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (struct{}, error) {
+		row, err := remdom.NewMemoryDomain().GetMemory(bound, id).Row()
+		if err != nil {
+			return struct{}{}, fmt.Errorf("rem: forget: %w", err)
+		}
+		if row == nil {
+			return struct{}{}, ErrNoSuchMemory
+		}
+		if _, err := removeMemories(bound, PruneInput{Verb: "remove", IDs: []int64{id}}, ""); err != nil {
+			return struct{}{}, fmt.Errorf("rem: forget: %w", err)
+		}
+		return struct{}{}, nil
+	})
+	return err
+}
+
+func Migration(cwd string) func(*sql.DB, int, int) (string, error) {
+	return func(db *sql.DB, from, to int) (string, error) {
+		removed := 0
+		if from < to {
+			n, err := removeCompactionRows(db)
+			if err != nil {
+				return "", err
+			}
+			removed = n
+		}
+		rescoped := 0
+		oldScope := shortHash(cwd)
+		newScope := scopeKey(cwd)
+		if newScope != oldScope {
+			var marker string
+			err := db.QueryRow(`SELECT value FROM meta WHERE key = ?`, "migrated:"+oldScope).Scan(&marker)
+			if err == sql.ErrNoRows {
+				n, err := rescopeRows(db, oldScope, newScope, filepath.Base(cwd))
+				if err != nil {
+					return "", err
+				}
+				rescoped = n
+				if _, err := db.Exec(`INSERT INTO meta (key, value) VALUES (?, ?)`, "migrated:"+oldScope, newScope); err != nil {
+					return "", fmt.Errorf("rem: migration: %w", err)
+				}
+			} else if err != nil {
+				return "", fmt.Errorf("rem: migration: %w", err)
+			}
+		}
+		if removed > 0 || rescoped > 0 {
+			return fmt.Sprintf("rem migration: removed %d compaction reflections, re-scoped %d memories", removed, rescoped), nil
+		}
+		return "", nil
+	}
+}
+
+func removeCompactionRows(db *sql.DB) (int, error) {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM memories WHERE source = 'session compaction'`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	if _, err := db.Exec(`DELETE FROM trigrams WHERE memory_id IN (SELECT id FROM memories WHERE source = 'session compaction')`); err != nil {
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	if _, err := db.Exec(`DELETE FROM memory_fts WHERE rowid IN (SELECT id FROM memories WHERE source = 'session compaction')`); err != nil {
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	if _, err := db.Exec(`DELETE FROM memories WHERE source = 'session compaction'`); err != nil {
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	return n, nil
+}
+
+func rescopeRows(db *sql.DB, oldScope, newScope, label string) (int, error) {
+	res, err := db.Exec(`UPDATE memories SET scope = ?, scope_label = ? WHERE scope = ?`, newScope, label, oldScope)
+	if err != nil {
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	return int(n), nil
 }

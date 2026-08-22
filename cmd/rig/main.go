@@ -34,6 +34,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/provider/openai"
 	"github.com/mrsirg97-rgb/rig/store"
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
+	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
@@ -203,58 +204,18 @@ func (r *root) buildSystem() string {
 	if r.agents != "" {
 		parts = append(parts, r.agents)
 	}
-	if seg := r.remembered(); seg != "" {
-		parts = append(parts, seg)
-	}
 	if g := guidelinesOf(mw); g != "" {
 		parts = append(parts, g)
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-const rememberedK = 8
-
-func (r *root) remembered() string {
-	if r.remDB.DB == nil || r.cwd == "" {
-		return ""
+func remRow(m remdom.Memory) command.RemRow {
+	var src string
+	if m.Source != nil {
+		src = *m.Source
 	}
-	notes, err := remstore.Recent(context.Background(), r.remDB, r.cwd, rememberedK)
-	if err != nil || len(notes) == 0 {
-		return ""
-	}
-	return renderRemembered(notes)
-}
-
-func renderRemembered(notes []string) string {
-	const capChars = 1500
-	header := "remembered (this directory):"
-	var lines []string
-	for _, n := range notes {
-		if n = strings.Join(strings.Fields(n), " "); n != "" {
-			lines = append(lines, "- "+n)
-		}
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	chars := func(s string) int { return len([]rune(s)) }
-	seg := func(l []string) string { return header + "\n" + strings.Join(l, "\n") }
-	if chars(seg(lines)) <= capChars {
-		return seg(lines)
-	}
-	for len(lines) > 1 && chars(seg(lines)) > capChars {
-		lines = lines[:len(lines)-1]
-	}
-	if chars(seg(lines)) <= capChars {
-		return seg(lines)
-	}
-
-	budget := capChars - chars(header) - 1 - 2 - 1
-	line := []rune(strings.TrimPrefix(lines[0], "- "))
-	if len(line) > budget {
-		line = line[:budget]
-	}
-	return header + "\n- " + string(line) + "…"
+	return command.RemRow{ID: m.Id, Kind: m.Kind, ScopeLabel: m.ScopeLabel, CreatedAt: m.CreatedAt, Strength: m.Strength, Importance: m.Importance, Source: src, Superseded: m.SupersededBy, Content: m.Content}
 }
 
 func (r *root) nativeTools() []core.Tool {
@@ -267,14 +228,7 @@ func (r *root) nativeTools() []core.Tool {
 
 func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 	inner := openai.New(r.baseURL, r.activeID)
-	opts := []compact.Option{}
-	if r.remDB.DB != nil && r.cwd != "" {
-		opts = append(opts, compact.WithAutoReflect(func(ctx context.Context, summary string) error {
-			_, err := remstore.AutoReflect(ctx, r.remDB, r.cwd, summary)
-			return err
-		}))
-	}
-	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row, opts...)
+	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row)
 	if err != nil {
 		panic("rig: wire: " + err.Error())
 	}
@@ -864,7 +818,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	sdb, quarantined, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion)
+	sdb, quarantined, _, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: state store:", err)
 		os.Exit(1)
@@ -879,7 +833,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	tdb, todoQuarantined, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion)
+	tdb, todoQuarantined, _, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion)
 	if todoErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo store:", todoErr)
 		os.Exit(1)
@@ -894,13 +848,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	rdb, remQuarantined, remErr := store.Open(remPath, remstore.Statements(), remstore.SchemaVersion)
+	rdb, remQuarantined, remReport, remErr := store.Open(remPath, remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
 	if remErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: rem store:", remErr)
 		os.Exit(1)
 	}
 	if remQuarantined != "" {
 		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt rem file: %s\n", remQuarantined)
+	}
+	if remReport != "" {
+		fmt.Fprintf(os.Stderr, "rig: %s\n", remReport)
 	}
 	defer rdb.DB.Close()
 
@@ -909,7 +866,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	sgdb, sgQuarantined, sgErr := store.Open(sched.StorePathFor(schedHome, sched.JobKey{Scope: "global"}), sched.Statements(), sched.SchemaVersion)
+	sgdb, sgQuarantined, _, sgErr := store.Open(sched.StorePathFor(schedHome, sched.JobKey{Scope: "global"}), sched.Statements(), sched.SchemaVersion)
 	if sgErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sgErr)
 		os.Exit(1)
@@ -918,7 +875,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler global file: %s\n", sgQuarantined)
 	}
 	defer sgdb.DB.Close()
-	scdb, scQuarantined, scErr := store.Open(sched.StorePathFor(schedHome, sched.JobKey{Scope: "cwd", Hash: sched.CwdHash(cwd)}), sched.Statements(), sched.SchemaVersion)
+	scdb, scQuarantined, _, scErr := store.Open(sched.StorePathFor(schedHome, sched.JobKey{Scope: "cwd", Hash: sched.CwdHash(cwd)}), sched.Statements(), sched.SchemaVersion)
 	if scErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: scheduler store:", scErr)
 		os.Exit(1)
@@ -1018,6 +975,57 @@ func main() {
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
 		Reload:        r.reloadPlugins,
 		PluginsDir:    pluginsDir,
+		RemList: func(ctx context.Context) ([]command.RemRow, error) {
+			if r.remDB.DB == nil {
+				return []command.RemRow{}, nil
+			}
+			mems, err := remstore.List(ctx, r.remDB, r.cwd, 50)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]command.RemRow, len(mems))
+			for i, m := range mems {
+				out[i] = command.RemRow{ID: m.ID, Kind: m.Kind, ScopeLabel: m.ScopeLabel, CreatedAt: m.CreatedAt, Strength: m.Strength, Content: m.Content}
+			}
+			return out, nil
+		},
+		RemShow: func(ctx context.Context, id int64) (command.RemRow, error) {
+			if r.remDB.DB == nil {
+				return command.RemRow{}, errors.New("rem: no rem store")
+			}
+			m, err := remstore.Show(ctx, r.remDB, id)
+			if err != nil {
+				if errors.Is(err, remstore.ErrNoSuchMemory) {
+					return command.RemRow{}, fmt.Errorf("rem: no such memory: %d", id)
+				}
+				return command.RemRow{}, err
+			}
+			return remRow(*m), nil
+		},
+		RemForget: func(ctx context.Context, id int64) error {
+			if r.remDB.DB == nil {
+				return errors.New("rem: no rem store")
+			}
+			if err := remstore.Forget(ctx, r.remDB, id); err != nil {
+				if errors.Is(err, remstore.ErrNoSuchMemory) {
+					return fmt.Errorf("rem: no such memory: %d", id)
+				}
+				return err
+			}
+			return nil
+		},
+		RemPin: func(ctx context.Context, id int64) error {
+			if r.remDB.DB == nil {
+				return errors.New("rem: no rem store")
+			}
+			if err := remstore.Pin(ctx, r.remDB, id); err != nil {
+				if errors.Is(err, remstore.ErrNoSuchMemory) {
+					return fmt.Errorf("rem: no such memory: %d", id)
+				}
+				return err
+			}
+			return nil
+		},
 	}
 
 	var fe core.Frontend

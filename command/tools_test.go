@@ -29,7 +29,7 @@ func runCmd(t *testing.T, name, args string, env *command.Env) (string, error) {
 
 func openTodo(t *testing.T) store.DB {
 	t.Helper()
-	db, _, err := store.Open(t.TempDir()+"/todo.sqlite", todostore.Statements(), todostore.SchemaVersion)
+	db, _, _, err := store.Open(t.TempDir()+"/todo.sqlite", todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,11 +233,11 @@ func schedStores(t *testing.T, home, cwd string) sched.Stores {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	global, _, err := store.Open(home+"/global.sqlite", sched.Statements(), sched.SchemaVersion)
+	global, _, _, err := store.Open(home+"/global.sqlite", sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cw, _, err := store.Open(home+"/cwd.sqlite", sched.Statements(), sched.SchemaVersion)
+	cw, _, _, err := store.Open(home+"/cwd.sqlite", sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

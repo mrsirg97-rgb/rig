@@ -14,7 +14,7 @@ var probeDDL = []string{"CREATE TABLE IF NOT EXISTS probe (x INTEGER PRIMARY KEY
 
 func TestOpenInitializesSchemaVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "probe.sqlite")
-	db, quarantined, err := Open(path, probeDDL, 7)
+	db, quarantined, _, err := Open(path, probeDDL, 7)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -25,13 +25,16 @@ func TestOpenInitializesSchemaVersion(t *testing.T) {
 		t.Fatalf("schema statements not applied: %v", err)
 	}
 
-	if _, _, err := Open(path, probeDDL, 7); err != nil {
+	if _, _, _, err := Open(path, probeDDL, 7); err != nil {
 		t.Fatalf("re-open same version: %v", err)
 	}
 
-	if _, _, err := Open(path, probeDDL, 8); err == nil {
+	if _, _, _, err := Open(path, probeDDL, 8); err != nil {
+		t.Fatalf("an upgrade (7 -> 8) must open: %v", err)
+	}
+	if _, _, _, err := Open(path, probeDDL, 7); err == nil {
 		t.Fatal("version mismatch not refused")
-	} else if !strings.Contains(err.Error(), "7") || !strings.Contains(err.Error(), "8") {
+	} else if !strings.Contains(err.Error(), "8") || !strings.Contains(err.Error(), "7") {
 		t.Errorf("mismatch did not name both versions: %v", err)
 	}
 }
@@ -42,7 +45,7 @@ func TestOpenQuarantinesCorruptFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("definitely not a sqlite file"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	db, quarantined, err := Open(path, probeDDL, 1)
+	db, quarantined, _, err := Open(path, probeDDL, 1)
 	if err != nil {
 		t.Fatalf("open over quarantined corrupt file: %v", err)
 	}
@@ -68,7 +71,7 @@ func TestTxFromFailsClosed(t *testing.T) {
 		t.Fatal("TxFrom without a transaction succeeded")
 	}
 	path := filepath.Join(t.TempDir(), "tx.sqlite")
-	db, _, err := Open(path, probeDDL, 1)
+	db, _, _, err := Open(path, probeDDL, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

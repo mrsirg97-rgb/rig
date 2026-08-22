@@ -21,7 +21,7 @@ func TestFilePathRoundTrip(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, _, err := store.Open(path, remstore.Statements(), remstore.SchemaVersion)
+	db, _, _, err := store.Open(path, remstore.Statements(), remstore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,11 +30,11 @@ func TestFilePathRoundTrip(t *testing.T) {
 	if _, _, _, err := remstore.Learn(ctx, db, cwd, remstore.LearnInput{Content: "a fact"}); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := remstore.Recent(ctx, db, cwd, 10)
+	mems, err := remstore.List(ctx, db, cwd, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || !strings.Contains(rows[0], "a fact") {
-		t.Fatalf("round-trip recent %v, want the learned memory", rows)
+	if len(mems) != 1 || !strings.Contains(mems[0].Content, "a fact") {
+		t.Fatalf("round-trip list %+v, want the learned memory", mems)
 	}
 }

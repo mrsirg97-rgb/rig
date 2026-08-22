@@ -27,7 +27,7 @@ func mustRead(t *testing.T, db store.DB, get func(ctx context.Context) (any, err
 
 func openStore(t *testing.T) store.DB {
 	t.Helper()
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

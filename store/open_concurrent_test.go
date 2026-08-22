@@ -17,7 +17,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
 	var dbs []store.DB
 	for i := 0; i < 2; i++ {
-		db, _, err := store.Open(path, tododdl.Statements(), 1)
+		db, _, _, err := store.Open(path, tododdl.Statements(), 1)
 		if err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
@@ -70,7 +70,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 
 func TestConcurrentCompletesSerialize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
-	d1, _, err := store.Open(path, tododdl.Statements(), 1)
+	d1, _, _, err := store.Open(path, tododdl.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 			t.Fatalf("seed %d: %v", i, err)
 		}
 	}
-	d2, _, err := store.Open(path, tododdl.Statements(), 1)
+	d2, _, _, err := store.Open(path, tododdl.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open two: %v", err)
 	}

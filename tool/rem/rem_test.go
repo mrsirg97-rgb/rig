@@ -19,7 +19,7 @@ func newDB(t *testing.T) store.DB {
 	statements := remdd.Statements()
 	statements = append(statements, remmeta.ExtraStatements()...)
 	statements = append(statements, remmeta.FtsStatements()...)
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), statements, 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), statements, 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

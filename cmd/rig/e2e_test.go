@@ -88,7 +88,7 @@ func scratchStores(t *testing.T, home, cwd string) sched.Stores {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	global, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	global, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func scratchStores(t *testing.T, home, cwd string) sched.Stores {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cw, _, err := store.Open(sched.StorePathFor(home, key), sched.Statements(), sched.SchemaVersion)
+	cw, _, _, err := store.Open(sched.StorePathFor(home, key), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 	if len(glob) != 1 {
 		t.Fatalf("sessions store = %v, want one", glob)
 	}
-	db, _, err := store.Open(glob[0], state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(glob[0], state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

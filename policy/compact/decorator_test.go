@@ -35,11 +35,7 @@ func TestOverflowRecoversOnce(t *testing.T) {
 			healthyTurn("retry answer", core.Usage{Prompt: 100, Completion: 5}),
 		}}
 		fe := &captureFrontend{}
-		var bodies []string
-		pol, err := compact.New(prov, fe, s, "S", overflowRow, compact.WithAutoReflect(func(_ context.Context, b string) error {
-			bodies = append(bodies, b)
-			return nil
-		}))
+		pol, err := compact.New(prov, fe, s, "S", overflowRow)
 		if err != nil {
 			t.Fatalf("New: %v", err)
 		}
@@ -95,9 +91,6 @@ func TestOverflowRecoversOnce(t *testing.T) {
 
 		if len(s.Messages) != 2 || s.Messages[0].Content != compact.SummaryMarker+"SUMMARY" {
 			t.Fatalf("session = %+v, want [summary, the kept tail]", s.Messages)
-		}
-		if len(bodies) != 1 || bodies[0] != "SUMMARY" {
-			t.Fatalf("AutoReflect = %v, want the summary", bodies)
 		}
 	})
 

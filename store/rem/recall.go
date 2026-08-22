@@ -27,8 +27,6 @@ const (
 	importanceDefault    = 0.5
 	reflectionImportance = 0.3
 
-	autoReflectionImportance = 0.2
-
 	kindReflection = "reflection"
 )
 

@@ -11,6 +11,41 @@
   `todo.Retry`); lines hang their wrapped text under the text, not the
   glyph, on phones.
 
+- **rem is deliberate** (`specs/SPEC_STATE.md`): every rem operation is
+  something chose — the model learns/recalls/reflects/prunes through its
+  tool, the operator prunes through the `/rem` verb; nothing is written
+  by a compaction and nothing is read into the prompt by a session
+  start. Two cuts, one new verb surface, one scope change.
+
+- **the injection is cut**: the root's `remembered` segment (the
+  `remstore.Recent` read, `rememberedK`, `renderRemembered`) is gone —
+  no memory is read into the prompt at a session start. The system
+  prompt's "Remembered notes are suggestions…" becomes "Memory is a
+  tool: recall before re-deriving a project fact, learn deliberately
+  what the next session should not re-derive, supersede by id when the
+  code disagrees" (settings.json, the goldens, the config tests).
+
+- **the auto-reflection is cut** (`specs/SPEC_COMPACT.md` 6): the
+  `WithAutoReflect` seam, `store/rem.AutoReflect`, and the
+  `autoReflectionImportance` constant are gone — compaction writes
+  nothing to rem. The summary stays a marked user row in the transcript
+  (context, not memory).
+
+- **scope is a repo identity**: `store/rem` hashes the absolute git
+  common dir of the cwd (`scopeKey`), so two worktrees of one repo share
+  one memory; a non-repo dir scopes by cwd, hashed as today. The schema
+  bump (1 → 2) carries a one-time idempotent migration
+  (`remstore.Migration(cwd)` through `store.Open`'s migration hook):
+  rows under an old cwd-hash scope now inside a repo re-scope to the
+  repo's, and rows with source "session compaction" are removed (never
+  deliberate), counted once on stderr.
+
+- **the `/rem` command** (`specs/SPEC_COMMANDS.md` 11): `rem [list|show|
+  forget|pin]` over the same store — list the live memories (project
+  then global, one line each), show by id, forget by id, pin by id
+  (importance 1). The model's multi-line learn/recall/reflect/prune
+  stays the tool; the operator's read and prune get a typed line.
+
 ## [0.12.2] — the two bounds
 
 - **the description's shape** (`specs/SPEC_CORE.md`, the Tool section):

@@ -104,12 +104,12 @@ func newReloadHarnessWith(t *testing.T, home string, kernel plugins.Kernel, srv 
 	t.Helper()
 
 	dir := t.TempDir()
-	db, _, err := store.Open(filepath.Join(dir, "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(filepath.Join(dir, "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.DB.Close() })
-	remDB, _, err := store.Open(filepath.Join(dir, "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
+	remDB, _, _, err := store.Open(filepath.Join(dir, "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

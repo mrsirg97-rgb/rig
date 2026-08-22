@@ -23,11 +23,12 @@ sees core and models and nothing else.
   state the command's closures read and rewrite at call time, so a swap
   (new, a resume, a model switch) is visible to every closure with no
   re-wiring.
-- **The seam closures**: `buildSystem` (prompt assembly), `remembered`
-  (the recall segment), `buildPair` (the provider+policy rebuild),
-  `swapIn`, `compactNow`, `newSession`, `sessionList/Show/Resume`,
-  `switchModel`, `switchEffort`, `switchRole`, `switchApprove`,
-  `reloadPlugins` / `swapPlugins`, `nativeTools`, `runtimeTable`.
+- **The seam closures**: `buildSystem` (prompt assembly), `buildPair`
+  (the provider+policy rebuild), `swapIn`, `compactNow`, `newSession`,
+  `sessionList/Show/Resume`, `switchModel`, `switchEffort`, `switchRole`,
+  `switchApprove`, `reloadPlugins` / `swapPlugins`, `nativeTools`,
+  `runtimeTable`, and the `/rem` command's closures
+  (`RemList`/`RemShow`/`RemForget`/`RemPin` over `store/rem`).
 - **Resolution helpers**: `rigHome` (the migration), `resolveModel`,
   `tuiTrueColor`, `tuiStatusIn`, `tuiNews`, `sessionFor`,
   `checkOneShot`, `splitCSV`, `firstNonEmpty`, `hasLevel`,
@@ -46,7 +47,11 @@ sees core and models and nothing else.
   policy pair, the live tool table (SPEC_PLUGINS 8), and the
   middleware chain — [router, approve? (when a frontend can ask),
   perm.Plugins, perm.Allowlist, guard.Bound]. Swapping a seam is a
-  change here and nowhere else.
+  change here and nowhere else. The compaction `AutoReflect` seam is
+  cut: compaction writes nothing to rem (SPEC_COMPACT 6).
+- The rem store opens with `remstore.Migration(cwd)` (SPEC_STATE: rem is
+  deliberate) — the one-time idempotent re-scope and compaction-row
+  removal, reported once on stderr.
 - The `command.Env` is closures over the root, read at call time: a
   swap is visible with no re-wiring. The Steer seam is the frontend's;
   the dispatcher fills it in its `WithCommands`.

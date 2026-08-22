@@ -16,7 +16,7 @@ import (
 
 func newDB(t *testing.T) store.DB {
 	t.Helper()
-	db, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), tododdl.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), tododdl.Statements(), 1)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
