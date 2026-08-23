@@ -196,3 +196,23 @@ func TestUpdateAheadOfLatestSaysSo(t *testing.T) {
 		t.Fatalf("update err = %v, want the ahead-of-latest refusal", err)
 	}
 }
+
+func TestDefaultUpdateCfgNamesTheRunningBinary(t *testing.T) {
+	cfg, err := defaultUpdateCfg()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.bin == "" || !filepath.IsAbs(cfg.bin) {
+		t.Fatalf("bin = %q, want the running binary's absolute path", cfg.bin)
+	}
+	if _, err := os.Stat(cfg.bin); err != nil {
+		t.Fatalf("bin must exist: %v", err)
+	}
+}
+
+func TestUpdateWithNoBinRefusesBeforeAnyRequest(t *testing.T) {
+	err := update(context.Background(), updateCfg{version: "0.1.0"})
+	if err == nil || !strings.Contains(err.Error(), "no binary path") {
+		t.Fatalf("an empty bin must refuse by name, got %v", err)
+	}
+}

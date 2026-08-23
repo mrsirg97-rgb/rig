@@ -30,19 +30,30 @@ type updateCfg struct {
 	client  *http.Client
 }
 
-func defaultUpdateCfg() updateCfg {
+func defaultUpdateCfg() (updateCfg, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return updateCfg{}, fmt.Errorf("resolve the running binary: %v", err)
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
 	return updateCfg{
 		base:    githubBase,
 		repo:    updateRepo,
 		version: Version,
+		bin:     exe,
 		goos:    runtime.GOOS,
 		arch:    runtime.GOARCH,
 		out:     os.Stdout,
 		client:  http.DefaultClient,
-	}
+	}, nil
 }
 
 func update(ctx context.Context, cfg updateCfg) error {
+	if cfg.bin == "" {
+		return fmt.Errorf("update: no binary path to replace")
+	}
 	if cfg.out == nil {
 		cfg.out = os.Stdout
 	}

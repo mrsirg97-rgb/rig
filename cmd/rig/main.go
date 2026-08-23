@@ -657,8 +657,11 @@ func main() {
 	}
 
 	if *updateFlag {
-		cfg := defaultUpdateCfg()
-		if err := update(context.Background(), cfg); err != nil {
+		cfg, err := defaultUpdateCfg()
+		if err == nil {
+			err = update(context.Background(), cfg)
+		}
+		if err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
 		}
