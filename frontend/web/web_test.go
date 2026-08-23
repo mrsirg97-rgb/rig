@@ -858,6 +858,118 @@ func TestPluginsCreate(t *testing.T) {
 	}
 }
 
+func TestPluginDisableEnableDoors(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	hdr := func() http.Header {
+		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+		x.Set("Content-Type", "application/json")
+		return x
+	}
+	list := func() map[string]string {
+		rec := doReq(t, h, "GET", "/api/plugins", nil, bearer(tok))
+		var body map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		out := map[string]string{}
+		for _, z := range []string{"loaded", "pending", "disabled"} {
+			rows, _ := body[z].([]any)
+			names := []string{}
+			for _, r := range rows {
+				m, _ := r.(map[string]any)
+				names = append(names, m["name"].(string))
+			}
+			out[z] = strings.Join(names, ",")
+		}
+		return out
+	}
+
+	rec := doReq(t, h, "POST", "/api/plugins/disable", strings.NewReader(`{"name":"loaded_one"}`), hdr())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("disable: got %d %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	reply, _ := body["reply"].(string)
+	if !strings.Contains(reply, "disabled 'loaded_one' (plugins -> plugins/disabled); hidden next turn") {
+		t.Fatalf("disable: reply %q, want the command's voice", reply)
+	}
+	if _, err := os.Stat(filepath.Join(srv.home, "plugins", "loaded_one.py")); err == nil {
+		t.Fatal("disable: the file must leave plugins/")
+	}
+	if _, err := os.Stat(filepath.Join(srv.home, "plugins", "disabled", "loaded_one.py")); err != nil {
+		t.Fatalf("disable: the file must land in plugins/disabled/: %v", err)
+	}
+	got := list()
+	if got["loaded"] != "" || got["disabled"] != "loaded_one" {
+		t.Fatalf("list after disable: loaded=%q disabled=%q, want loaded_one moved", got["loaded"], got["disabled"])
+	}
+
+	rec = doReq(t, h, "POST", "/api/plugins/enable", strings.NewReader(`{"name":"loaded_one"}`), hdr())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("enable: got %d %s", rec.Code, rec.Body.String())
+	}
+	body = map[string]any{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	reply, _ = body["reply"].(string)
+	if !strings.Contains(reply, "enabled 'loaded_one' (plugins/disabled -> plugins); live at the next plugins reload") {
+		t.Fatalf("enable: reply %q, want the command's voice", reply)
+	}
+	if _, err := os.Stat(filepath.Join(srv.home, "plugins", "loaded_one.py")); err != nil {
+		t.Fatalf("enable: the file must return to plugins/: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(srv.home, "plugins", "disabled", "loaded_one.py")); err == nil {
+		t.Fatal("enable: the file must leave plugins/disabled/")
+	}
+	got = list()
+	if got["loaded"] != "loaded_one" || got["disabled"] != "" {
+		t.Fatalf("list after enable: loaded=%q disabled=%q, want loaded_one back", got["loaded"], got["disabled"])
+	}
+
+	rec = doReq(t, h, "POST", "/api/plugins/disable", strings.NewReader(`{"name":"pending_one"}`), hdr())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("disable of a pending plugin: got %d, want 404", rec.Code)
+	}
+	if rec = doReq(t, h, "POST", "/api/plugins/disable", strings.NewReader(`{"name":"loaded_one"}`), hdr()); rec.Code != http.StatusOK {
+		t.Fatalf("disable again: got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = doReq(t, h, "POST", "/api/plugins/disable", strings.NewReader(`{"name":"loaded_one"}`), hdr()); rec.Code != http.StatusNotFound {
+		t.Fatalf("disable an already-disabled plugin: got %d, want 404 (no such plugin in plugins/)", rec.Code)
+	}
+	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "loaded_one.py"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if rec = doReq(t, h, "POST", "/api/plugins/disable", strings.NewReader(`{"name":"loaded_one"}`), hdr()); rec.Code != http.StatusConflict {
+		t.Fatalf("disable with a stale duplicate: got %d, want 409 (already in the disabled zone)", rec.Code)
+	}
+	if err := os.Remove(filepath.Join(srv.home, "plugins", "loaded_one.py")); err != nil {
+		t.Fatal(err)
+	}
+	if rec = doReq(t, h, "POST", "/api/plugins/enable", strings.NewReader(`{"name":"loaded_one"}`), hdr()); rec.Code != http.StatusOK {
+		t.Fatalf("enable again: got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = doReq(t, h, "POST", "/api/plugins/enable", strings.NewReader(`{"name":"loaded_one"}`), hdr()); rec.Code != http.StatusNotFound {
+		t.Fatalf("enable an already-loaded plugin: got %d, want 404 (no such plugin in plugins/disabled/)", rec.Code)
+	}
+	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "disabled", "loaded_one.py"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if rec = doReq(t, h, "POST", "/api/plugins/enable", strings.NewReader(`{"name":"loaded_one"}`), hdr()); rec.Code != http.StatusConflict {
+		t.Fatalf("enable with a stale duplicate: got %d, want 409 (already in the plugins zone)", rec.Code)
+	}
+
+	rec = doReq(t, h, "POST", "/api/plugins/disable", strings.NewReader(`{"name":"loaded_one"}`), bearer(tok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("no origin: got %d, want 403", rec.Code)
+	}
+	if rec = doReq(t, h, "GET", "/api/plugins/disable", nil, bearer(tok)); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET disable: got %d, want 405", rec.Code)
+	}
+}
+
 func TestStaticAssets(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
@@ -876,6 +988,8 @@ func TestStaticAssets(t *testing.T) {
 			"openForge",
 			"browseTo",
 			"toolBlock",
+			"plugins/disable",
+			"plugins/enable",
 		},
 		"/static/style.css": {"--accent", "@media (max-width: 720px)", ".nav-open", ".nav-toggle {\n  display: none;", ".editor", "--effort-xhigh"},
 	} {

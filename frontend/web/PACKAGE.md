@@ -60,7 +60,12 @@ framework, no build step, no external asset: `go build` alone ships it.
   `DESCRIPTION`, `SCHEMA`, `def run(` — checked; a native name refused),
   `POST /api/plugins/approve` (pending → `plugins/`, the command's
   verb; a native name refused; an installed name a 409 until `replace`
-  is explicit). Same walls as every write.
+  is explicit), `POST /api/plugins/disable` and `POST
+  /api/plugins/enable` (the command's move between `plugins/` and
+  `plugins/disabled/`, each calling `plugins.Move`, each replying in
+  the command's voice; a plugin not in the source zone is the named
+  404, a duplicate in the target zone the named 409). Same walls as
+  every write.
 - **The folder browser** (`browse.go`, SPEC_SERVE 13) — `GET /api/fs`:
   directories only, rooted at `Options.Root` (the user's home by
   default), symlinks resolved before the root check, hidden entries off
@@ -75,11 +80,13 @@ framework, no build step, no external asset: `go build` alone ships it.
   `tools_render.go` rules mirrored in JS (decision 10; unparseable text
   falls back to the verbatim `<pre>`), the models view in the `/models`
   table's shape with the effort list in the ramp's colors, the plugins
-  view split approved | pending with the forge's editor (a gutter, a
-  highlighted mirror over a transparent textarea; Tab indents, Enter
-  keeps the indent), the folder browser under the header, the mobile
-  drawer below 720px (its toggle hidden on desktop), the cwd picker
-  with the new-workspace add (client state, decision 9).
+  view split approved | pending | disabled with the forge's editor (a
+  gutter, a highlighted mirror over a transparent textarea; Tab
+  indents, Enter keeps the indent), the phone rule (every loaded row a
+  disable control, every disabled row an enable one, the list re-read
+  after the move — 12c), the folder browser under the header, the
+  mobile drawer below 720px (its toggle hidden on desktop), the cwd
+  picker with the new-workspace add (client state, decision 9).
 
 ## How it is consumed
 
@@ -167,7 +174,10 @@ the loopback refusal (accepts and refuses by name); the allow-list (404,
 405 with `Allow`); the writes' walls (Origin, body cap, empty body, the
 verbatim reply, the upsert — for the todo, the scheduler, and the plugin
 creates, plus the scheduler's duplicate/cron/once refusals, the plugin's
-name/duplicate/empty-body refusals, and the live listing); the reads (the
+name/duplicate/empty-body refusals, and the live listing); the
+disable/enable doors (both move the file and reply in the command's
+voice, a disable of a pending plugin refuses, a duplicate in the target
+zone the named 409, the Origin wall, the 405); the reads (the
 cwds, the sessions list and cwd, the transcript golden — messages,
 reasoning, tool calls and results, and the usage rows — the
 todo/scheduler verbatim text, the memory, the models rows with effort and

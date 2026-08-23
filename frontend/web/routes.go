@@ -75,6 +75,8 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 		return setOf("POST"), true
 	case path == "/api/plugins/approve":
 		return setOf("POST"), true
+	case path == "/api/plugins/disable" || path == "/api/plugins/enable":
+		return setOf("POST"), true
 	case path == "/api/fs":
 		return setOf("GET"), true
 	}
@@ -119,6 +121,10 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handlePluginSave(w, r)
 	case path == "/api/plugins/approve":
 		s.handlePluginApprove(w, r)
+	case path == "/api/plugins/disable":
+		s.handlePluginDisable(w, r)
+	case path == "/api/plugins/enable":
+		s.handlePluginEnable(w, r)
 	case path == "/api/fs":
 		s.handleBrowse(w, r)
 	}

@@ -372,6 +372,8 @@ function toolDetail(name, argsStr) {
     case 'diff': if (s('mode')) return s('mode'); break;
     case 'todo': case 'scheduler': case 'rem': case 'plugins_reload':
       if (s('action')) return s('action') + (s('id') ? ' ' + s('id') : ''); break;
+    case 'plugin': case 'plugins':
+      if (s('action')) return s('action') + (s('name') ? ' ' + s('name') : ''); break;
   }
   return '';
 }
@@ -725,13 +727,36 @@ async function renderPlugins() {
     row.appendChild(span(p.name, zone === 'disabled' ? 'dim' : 'accent'));
     row.appendChild(span(' ' + G.dot + ' ' + (p.description || '(no DESCRIPTION)'), 'dim'));
     row.addEventListener('click', () => openForge(forge, p.name, zone === 'approved' ? 'loaded' : zone));
+    if (zone === 'approved') {
+      row.appendChild(button('disable', 'rowact', async (e) => {
+        e.stopPropagation();
+        try {
+          const r = await post('/api/plugins/disable', { name: p.name });
+          listEl.appendChild(note(G.ok + ' ' + r.reply, 'ok'));
+          renderPlugins();
+        } catch (e) {
+          listEl.appendChild(note(G.fail + ' ' + e.message, 'error'));
+        }
+      }));
+    } else if (zone === 'disabled') {
+      row.appendChild(button('enable', 'rowact', async (e) => {
+        e.stopPropagation();
+        try {
+          const r = await post('/api/plugins/enable', { name: p.name });
+          listEl.appendChild(note(G.ok + ' ' + r.reply, 'ok'));
+          renderPlugins();
+        } catch (e) {
+          listEl.appendChild(note(G.fail + ' ' + e.message, 'error'));
+        }
+      }));
+    }
     listEl.appendChild(row);
   }
   tb.body.appendChild(listEl);
   const hint = el('div', 'hint');
   hint.textContent = zone === 'approved'
     ? 'click a plugin to read it; an edit saves a pending revision, approve (replace) swaps it in'
-    : zone === 'pending' ? 'click a plugin to edit it; approve moves it into plugins/ — a live session loads it at its next plugins_reload'
+    : zone === 'pending' ? 'click a plugin to edit it; approve moves it into plugins/ — a live session loads it at its next plugins reload'
     : 'disabled plugins live in ~/.rig/plugins/disabled/; /plugins enable <name> in a session moves one back';
   tb.body.appendChild(hint);
 

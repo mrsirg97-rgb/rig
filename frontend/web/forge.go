@@ -138,3 +138,45 @@ func (s *Server) handlePluginApprove(w http.ResponseWriter, r *http.Request) {
 	reply := verb + " '" + name + "' (pending -> plugins); a live session loads it at its next plugins reload"
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "file": dst, "reply": reply})
 }
+
+func (s *Server) handlePluginDisable(w http.ResponseWriter, r *http.Request) {
+	s.handlePluginMove(w, r, "disable", "", "disabled")
+}
+
+func (s *Server) handlePluginEnable(w http.ResponseWriter, r *http.Request) {
+	s.handlePluginMove(w, r, "enable", "disabled", "")
+}
+
+func (s *Server) handlePluginMove(w http.ResponseWriter, r *http.Request, verb, from, to string) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if !s.writeBody(w, r, &in) {
+		return
+	}
+	name := strings.TrimSpace(in.Name)
+	if !pluginNameOK(w, name) {
+		return
+	}
+	zone := func(z string) string {
+		if z == "" {
+			return "plugins"
+		}
+		return "plugins/" + z
+	}
+	if _, _, err := plugins.Move(filepath.Join(s.home, "plugins"), name, from, to); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			writeErr(w, http.StatusConflict, "'"+name+"' is already in the "+zone(to)+" zone")
+			return
+		}
+		writeErr(w, http.StatusNotFound, "no plugin '"+name+"' in "+zone(from))
+		return
+	}
+	var reply string
+	if verb == "disable" {
+		reply = "disabled '" + name + "' (plugins -> plugins/disabled); hidden next turn"
+	} else {
+		reply = "enabled '" + name + "' (plugins/disabled -> plugins); live at the next plugins reload"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"name": name, "reply": reply})
+}
