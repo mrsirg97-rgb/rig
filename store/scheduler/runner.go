@@ -67,6 +67,9 @@ func RunJob(key string, opts RunOpts) error {
 
 	id, err := ParseKey(key)
 	if err != nil {
+		if strings.HasPrefix(key, "cwd-") {
+			return fmt.Errorf("key: legacy key '%s': the scheduler is one store now; start rig once, in any directory, to fold it and rewrite this line", key)
+		}
 		return err
 	}
 

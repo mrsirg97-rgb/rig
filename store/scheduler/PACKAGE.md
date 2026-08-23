@@ -22,10 +22,10 @@ written before the store commit; drift is surfaced in list.
   over the one `global.sqlite`; the crontab key is `jN` for every job,
   `name` unique store-wide, ids one sequence.
 - `migration.go` — the one-time schema-1→2 migration: folds every
-  `cwd-<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
+  `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
   `jN`), moves the old files aside as `<hash>.sqlite.migrated`, and is a
-  no-op on the second open (no `cwd-*.sqlite` remains).
+  no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
 - `runner.go` — the job runner (the worker spawn, bwrap jail, socket
   proxy).
 - `delegate.go` — the one-shot worker spawn (SPEC_DELEGATE): the busy

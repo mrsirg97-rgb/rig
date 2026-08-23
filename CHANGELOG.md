@@ -9,7 +9,7 @@
   command's grammar (`cwd` stays the job's own field). `list` is one
   list grouped by each job's `cwd`, this directory first; an empty list
   names the store. A one-time schema-1→2 migration folds every
-  `cwd-<hash>.sqlite` into `global.sqlite` (re-minted ids, runs
+  `<hash>.sqlite` into `global.sqlite` (re-minted ids, runs
   re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
   `jN`, old files moved aside as `<hash>.sqlite.migrated`), counted once
   on stderr and a no-op on the second open. Run logs live under

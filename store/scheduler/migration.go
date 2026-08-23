@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -15,13 +16,15 @@ import (
 
 const legacySchemaVersion = 1
 
+var legacyStoreRe = regexp.MustCompile(`^([0-9a-f]{12})\.sqlite$`)
+
 func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) {
 	return func(tx *sql.Tx, from, to int) (string, error) {
-		if from >= to {
-			return "", nil
-		}
 		entries, err := os.ReadDir(home)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return "", nil
+			}
 			return "", fmt.Errorf("scheduler: migration: %w", err)
 		}
 		var files []string
@@ -29,7 +32,7 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 			if e.IsDir() {
 				continue
 			}
-			if strings.HasPrefix(e.Name(), "cwd-") && strings.HasSuffix(e.Name(), ".sqlite") {
+			if legacyStoreRe.MatchString(e.Name()) {
 				files = append(files, e.Name())
 			}
 		}
@@ -52,7 +55,7 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 		repl := map[string]string{}
 
 		for _, name := range files {
-			hash := strings.TrimSuffix(strings.TrimPrefix(name, "cwd-"), ".sqlite")
+			hash := strings.TrimSuffix(name, ".sqlite")
 			path := filepath.Join(home, name)
 			cdb, _, _, err := store.Open(path, Statements(), legacySchemaVersion)
 			if err != nil {
@@ -71,7 +74,12 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 			}
 			_ = bound
 
+			ids := make([]string, 0, len(cf.jobs))
 			for id := range cf.jobs {
+				ids = append(ids, id)
+			}
+			sort.Slice(ids, func(a, b int) bool { return jobNum(ids[a]) < jobNum(ids[b]) })
+			for _, id := range ids {
 				j := cf.jobs[id]
 				if j.State == "removed" {
 					continue
@@ -128,10 +136,7 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 			if err != nil {
 				return "", fmt.Errorf("scheduler: migration: %w", err)
 			}
-			next := text
-			for oldKey, newID := range repl {
-				next = strings.ReplaceAll(next, oldKey, newID)
-			}
+			next := rewriteKeys(text, repl)
 			if next != text {
 				if err := ct.Install(next); err != nil {
 					return "", fmt.Errorf("scheduler: migration: %w", err)
@@ -140,9 +145,14 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 		}
 
 		for _, name := range files {
-			hash := strings.TrimSuffix(strings.TrimPrefix(name, "cwd-"), ".sqlite")
-			if err := os.Rename(filepath.Join(home, name), filepath.Join(home, hash+".sqlite.migrated")); err != nil {
-				return "", fmt.Errorf("scheduler: migration: %w", err)
+			for _, suffix := range []string{"", "-wal", "-shm"} {
+				src := filepath.Join(home, name+suffix)
+				if _, err := os.Stat(src); err != nil {
+					continue
+				}
+				if err := os.Rename(src, filepath.Join(home, name+".migrated"+suffix)); err != nil {
+					return "", fmt.Errorf("scheduler: migration: %w", err)
+				}
 			}
 		}
 
@@ -151,4 +161,28 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 		}
 		return "", nil
 	}
+}
+
+func rewriteKeys(text string, repl map[string]string) string {
+	olds := make([]string, 0, len(repl))
+	for k := range repl {
+		olds = append(olds, k)
+	}
+	sort.Strings(olds)
+	for _, old := range olds {
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(old) + `\b`)
+		text = re.ReplaceAllLiteralString(text, repl[old])
+	}
+	return text
+}
+
+func jobNum(id string) int {
+	n := 0
+	for _, c := range strings.TrimPrefix(id, "j") {
+		if c < '0' || c > '9' {
+			return 0
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n
 }

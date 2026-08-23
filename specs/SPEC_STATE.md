@@ -301,7 +301,7 @@ post-merge corrections)
   that job's crontab line from `cwd-<hash>:jN` to the new `jN` (the lock
   key follows the crontab key), then move the old file aside as
   `<hash>.sqlite.migrated`. A file with no live jobs moves aside with no
-  row written. Idempotent: a second open finds no `cwd-*.sqlite` and does
+  row written. Idempotent: a second open finds no `<hash>.sqlite` and does
   nothing. Rejected, named: reading both layouts forever; a `scope` that
   defaults to global but stays in the schema.
 - `events`: seq, ts, op (create|pause|resume|remove|run|compact), args,
