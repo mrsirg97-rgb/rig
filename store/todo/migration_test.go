@@ -169,8 +169,8 @@ func eventsCount(t *testing.T, db store.DB) int {
 func TestFoldPreservesBothQueuesByteForByteAndIsNoOpOnSecondOpen(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(dir, 0o755)
-	seedLegacy(t, dir, "aaaa1111bbbb", []string{"from-a", "a-two"})
-	seedLegacy(t, dir, "cccc2222dddd", []string{"from-b"})
+	seedLegacy(t, dir, "aaaa1111bbbb2222cccc3333", []string{"from-a", "a-two"})
+	seedLegacy(t, dir, "cccc2222dddd4444eeee5555", []string{"from-b"})
 
 	path := filepath.Join(dir, "todo.sqlite")
 	db, _, report, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion, todostore.Migration("", dir))
@@ -182,14 +182,14 @@ func TestFoldPreservesBothQueuesByteForByteAndIsNoOpOnSecondOpen(t *testing.T) {
 		t.Fatalf("migration report %q, want the fold counted", report)
 	}
 	ctx := context.Background()
-	ra, err := todostore.Read(ctx, db, todostore.Project{Key: "aaaa1111bbbb", Label: "a"}, "s1")
+	ra, err := todostore.Read(ctx, db, todostore.Project{Key: "aaaa1111bbbb2222cccc3333", Label: "a"}, "s1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(ra, "from-a") || !strings.Contains(ra, "a-two") || !strings.Contains(ra, "t1") || !strings.Contains(ra, "t2") {
 		t.Fatalf("queue a lost:\n%s", ra)
 	}
-	rb, err := todostore.Read(ctx, db, todostore.Project{Key: "cccc2222dddd", Label: "b"}, "s1")
+	rb, err := todostore.Read(ctx, db, todostore.Project{Key: "cccc2222dddd4444eeee5555", Label: "b"}, "s1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestFoldPreservesBothQueuesByteForByteAndIsNoOpOnSecondOpen(t *testing.T) {
 	if strings.Contains(rb, "a-two") {
 		t.Fatalf("queue b must not see queue a:\n%s", rb)
 	}
-	for _, name := range []string{"aaaa1111bbbb.sqlite.migrated", "cccc2222dddd.sqlite.migrated"} {
+	for _, name := range []string{"aaaa1111bbbb2222cccc3333.sqlite.migrated", "cccc2222dddd4444eeee5555.sqlite.migrated"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Fatalf("old store not moved aside: %s", name)
 		}
@@ -227,7 +227,7 @@ func TestLazyRescopeMovesCwdHashQueueToRepoOnce(t *testing.T) {
 	}
 	dir := t.TempDir()
 	os.MkdirAll(dir, 0o755)
-	oldScope := scope.ShortHash(cwd)
+	oldScope := todostore.LegacyScope(cwd)
 	seedLegacy(t, dir, oldScope, []string{"old queue"})
 
 	path := filepath.Join(dir, "todo.sqlite")

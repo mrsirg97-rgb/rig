@@ -2,7 +2,9 @@ package todo
 
 import (
 	"context"
+	"crypto/sha1"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,7 +18,12 @@ import (
 
 const legacySchemaVersion = 1
 
-var legacyStoreRe = regexp.MustCompile(`^([0-9a-f]{12})\.sqlite$`)
+var legacyStoreRe = regexp.MustCompile(`^([0-9a-f]{24})\.sqlite$`)
+
+func LegacyScope(cwd string) string {
+	sum := sha1.Sum([]byte(cwd))
+	return hex.EncodeToString(sum[:12])
+}
 
 func Migration(cwd, dir string) func(*sql.Tx, int, int) (string, error) {
 	return func(tx *sql.Tx, from, to int) (string, error) {
@@ -25,7 +32,7 @@ func Migration(cwd, dir string) func(*sql.Tx, int, int) (string, error) {
 			return "", err
 		}
 		rescoped := 0
-		oldScope := scope.ShortHash(cwd)
+		oldScope := LegacyScope(cwd)
 		newScope := scope.Key(cwd)
 		if newScope != oldScope {
 			var marker string
