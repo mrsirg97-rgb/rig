@@ -5,13 +5,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strconv"
 
 	"github.com/mrsirg97-rgb/rig/store/lazy"
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
 type Task struct {
+	Scope      string `db:"scope"`
 	Id         string `db:"id"`
 	CreatedSeq int64  `db:"created_seq"`
 	Pos        int64  `db:"pos"`
@@ -21,10 +21,11 @@ type Task struct {
 }
 
 type TaskDomain interface {
-	GetTask(ctx context.Context, id string) *lazy.Lazy[Task]
-	GetTaskBatch(ctx context.Context, keys []string) *lazy.Lazy[Task]
+	GetTask(ctx context.Context, scope string, id string) *lazy.Lazy[Task]
+	WindowTaskByScope(ctx context.Context, scope string, from string, to string, limit int32) *lazy.Lazy[Task]
+	PageTaskByScope(ctx context.Context, scope string, after string, limit int32) *lazy.Lazy[Task]
 	InsertTask(ctx context.Context, row Task) (*Task, error)
-	DeleteTask(ctx context.Context, id string) (*Task, error)
+	DeleteTask(ctx context.Context, scope string, id string) (*Task, error)
 	UpdateTask(ctx context.Context, row Task) (*Task, error)
 }
 
@@ -37,6 +38,7 @@ func NewTaskDomain() *taskDomain {
 func ScanTask(row lazy.ScanRow) (Task, error) {
 	var out Task
 	err := row.Scan(
+		&out.Scope,
 		&out.Id,
 		&out.CreatedSeq,
 		&out.Pos,
@@ -59,7 +61,7 @@ func (d *taskDomain) one(rows *sql.Rows) (*Task, error) {
 	return &out, nil
 }
 
-func (d *taskDomain) GetTask(ctx context.Context, id string) *lazy.Lazy[Task] {
+func (d *taskDomain) GetTask(ctx context.Context, scope string, id string) *lazy.Lazy[Task] {
 	l := lazy.New(ScanTask)
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
@@ -67,7 +69,8 @@ func (d *taskDomain) GetTask(ctx context.Context, id string) *lazy.Lazy[Task] {
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "id", "created_seq", "pos", "status", "text", "updated_seq" FROM "tasks" WHERE "id" = $1`,
+		`SELECT "scope", "id", "created_seq", "pos", "status", "text", "updated_seq" FROM "tasks" WHERE "scope" = $1 AND "id" = $2`,
+		scope,
 		id,
 	)
 	out, err := ScanTask(row)
@@ -83,28 +86,52 @@ func (d *taskDomain) GetTask(ctx context.Context, id string) *lazy.Lazy[Task] {
 	return l
 }
 
-func (d *taskDomain) GetTaskBatch(ctx context.Context, keys []string) *lazy.Lazy[Task] {
+func (d *taskDomain) WindowTaskByScope(ctx context.Context, scope string, from string, to string, limit int32) *lazy.Lazy[Task] {
 	l := lazy.New(ScanTask)
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
 	}
-	if len(keys) == 0 {
-		l.FillAll(nil, nil)
+	rows, err := tx.QueryContext(ctx,
+		`SELECT "scope", "id", "created_seq", "pos", "status", "text", "updated_seq" FROM "tasks" WHERE "scope" = $1 AND "id" >= $2 AND "id" < $3 ORDER BY "scope", "id" LIMIT $4`,
+		scope,
+		from, to, limit,
+	)
+	if err != nil {
+		l.FillAll(nil, err)
 		return l
 	}
-	// one numbered placeholder per key: portable across database/sql
-	// drivers (postgres and sqlite alike); ANY($1) is postgres-only.
-	ph := "$1"
-	args := make([]any, len(keys))
-	args[0] = keys[0]
-	for i := 1; i < len(keys); i++ {
-		ph += ", $" + strconv.Itoa(i+1)
-		args[i] = keys[i]
+	defer rows.Close()
+	var out []Task
+	for rows.Next() {
+		row, err := ScanTask(rows)
+		if err != nil {
+			l.FillAll(nil, err)
+			return l
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		l.FillAll(nil, err)
+		return l
+	}
+	l.FillAll(out, nil)
+	return l
+}
+
+func (d *taskDomain) PageTaskByScope(ctx context.Context, scope string, after string, limit int32) *lazy.Lazy[Task] {
+	l := lazy.New(ScanTask)
+	tx, err := sqlx.TxFrom(ctx)
+	if err != nil {
+		l.FillAll(nil, err)
+		return l
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "created_seq", "pos", "status", "text", "updated_seq" FROM "tasks" WHERE "id" IN (`+ph+`)`, args...)
+		`SELECT "scope", "id", "created_seq", "pos", "status", "text", "updated_seq" FROM "tasks" WHERE "scope" = $1 AND "id" > $2 ORDER BY "scope", "id" LIMIT $3`,
+		scope,
+		after, limit,
+	)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -132,7 +159,8 @@ func (d *taskDomain) InsertTask(ctx context.Context, row Task) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "tasks" ("id", "created_seq", "pos", "status", "text", "updated_seq") VALUES ($1, $2, $3, $4, $5, $6) RETURNING "id", "created_seq", "pos", "status", "text", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "tasks" ("scope", "id", "created_seq", "pos", "status", "text", "updated_seq") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING "scope", "id", "created_seq", "pos", "status", "text", "updated_seq"`,
+		row.Scope,
 		row.Id,
 		row.CreatedSeq,
 		row.Pos,
@@ -146,12 +174,13 @@ func (d *taskDomain) InsertTask(ctx context.Context, row Task) (*Task, error) {
 	return d.one(rows)
 }
 
-func (d *taskDomain) DeleteTask(ctx context.Context, id string) (*Task, error) {
+func (d *taskDomain) DeleteTask(ctx context.Context, scope string, id string) (*Task, error) {
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "tasks" WHERE "id" = $1 RETURNING "id", "created_seq", "pos", "status", "text", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "tasks" WHERE "scope" = $1 AND "id" = $2 RETURNING "scope", "id", "created_seq", "pos", "status", "text", "updated_seq"`,
+		scope,
 		id,
 	)
 	if err != nil {
@@ -165,12 +194,13 @@ func (d *taskDomain) UpdateTask(ctx context.Context, row Task) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "tasks" SET "created_seq" = $1, "pos" = $2, "status" = $3, "text" = $4, "updated_seq" = $5 WHERE "id" = $6 RETURNING "id", "created_seq", "pos", "status", "text", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "tasks" SET "created_seq" = $1, "pos" = $2, "status" = $3, "text" = $4, "updated_seq" = $5 WHERE "scope" = $6 AND "id" = $7 RETURNING "scope", "id", "created_seq", "pos", "status", "text", "updated_seq"`,
 		row.CreatedSeq,
 		row.Pos,
 		row.Status,
 		row.Text,
 		row.UpdatedSeq,
+		row.Scope,
 		row.Id,
 	)
 	if err != nil {

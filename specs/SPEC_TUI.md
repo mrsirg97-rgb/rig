@@ -411,7 +411,10 @@ The blocks are pane's:
 The renderers parse the tools' own reply text (the queue the reply
 already carries): no new tool surface, no reaching into stores from
 the render path. If parsing fails (a future voice change), the raw
-reply commits as-is: degrade to the CLI, never hide.
+reply commits as-is: degrade to the CLI, never hide. An empty todo
+queue is one such raw case: the reply `(no tasks in <label>'s queue)`
+names the queue it read (SPEC_CORE) and commits as-is through both
+doors — no renderer structure sees new text, so no golden moves.
 
 One ambient line, only one: at session start, in the startup block
 (decision 3), if the scheduler store has news since the last session in

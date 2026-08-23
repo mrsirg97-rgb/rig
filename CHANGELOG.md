@@ -1,5 +1,36 @@
 # Changelog
 
+## [Unreleased] — the queue is the project
+
+- **todo is one store, scoped by project** (`specs/SPEC_STATE.md`,
+  amended): the per-cwd partition is gone — one `todo/todo.sqlite`,
+  every event row carries its `scope`, and the identity is never a
+  filename. The scope is the repo (the short sha1 of the git common
+  dir, extracted into `store/scope`), falling back to the cwd hash
+  outside a repo: a session started in `~/Projects/working on
+  ~/Projects/rig` files into the right queue, a renamed directory keeps
+  its queue, and two worktrees of one repo share a plan. Minted ids stay
+  `tN` per scope (two projects both have a `t1`); reads, folds, drift,
+  and claims all filter by scope; the fold's compact and stale footer
+  stay per scope. Bare read/create/every verb still resolves the scope
+  from the session cwd, so the human and the agents in a directory share
+  one plan.
+- **the deliberate door**: every todo action gains an optional `project`
+  (a path, resolved through `store/scope`; `~` expands at the
+  `middleware/paths` boundary), and the operator gets `todo project
+  <path>` — a one-off read of that project's queue, writes staying the
+  model's or the session's own bare verbs. The empty reply names the
+  queue it read (`(no tasks in <label>'s queue)`, SPEC_CORE).
+- **migration, lossless**: every `<12-hex>.sqlite` in the todo dir folds
+  into `todo.sqlite` with `scope = <that hash>` verbatim, in filename
+  order (identity preserved without walking a hash back to a path), the
+  legacy files and their `-wal`/`-shm` moved aside as `.migrated`; then
+  rem's lazy re-scope moves a cwd-hash queue to the repo scope once, the
+  `migrated:<oldScope>` marker, one transaction, counted once on stderr,
+  and a no-op on the second open (the fold keys on the files existing).
+  The dashboard's `/api/todo?cwd=` routes resolve through the same
+  scope. Goldens regenerated (the schema grew `project`).
+
 ## [0.15.1] — the binary updates itself
 
 - **`rig -update`** (`specs/SPEC_BUILD.md` 5): the binary's own

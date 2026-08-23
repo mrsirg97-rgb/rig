@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
@@ -48,6 +50,10 @@ const schemaJSON = `{
 		"all": {
 			"type": "boolean",
 			"description": "read all:true returns the full history (done rows included); the default read is the actionable queue."
+		},
+		"project": {
+			"type": "string",
+			"description": "the queue's project (default: this directory's repo)"
 		}
 	}
 }`
@@ -68,11 +74,12 @@ func (a adapter) Schema() json.RawMessage {
 }
 
 type given struct {
-	Action string           `json:"action"`
-	Tasks  []map[string]any `json:"tasks"`
-	ID     string           `json:"id"`
-	Pos    *int             `json:"pos"`
-	All    *bool            `json:"all"`
+	Action  string           `json:"action"`
+	Tasks   []map[string]any `json:"tasks"`
+	ID      string           `json:"id"`
+	Pos     *int             `json:"pos"`
+	All     *bool            `json:"all"`
+	Project *string          `json:"project"`
 }
 
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
@@ -84,6 +91,13 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if s, ok := core.SessionFrom(ctx); ok && s != nil {
 		session = s.ID
 	}
+	cwd := ""
+	if g.Project != nil && *g.Project != "" {
+		cwd = *g.Project
+	} else if wd, err := os.Getwd(); err == nil {
+		cwd = wd
+	}
+	p := todostore.Project{Key: scope.Key(cwd), Label: scope.Label(cwd)}
 	switch g.Action {
 	case "":
 		return "", fmt.Errorf("todo: action required")
@@ -92,20 +106,20 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if err != nil {
 			return "", err
 		}
-		return todostore.Create(ctx, a.db, items, session)
+		return todostore.Create(ctx, a.db, p, items, session)
 	case "start", "complete", "fail", "retry":
 		if g.ID == "" {
 			return "", fmt.Errorf("action '%s' requires id", g.Action)
 		}
 		switch g.Action {
 		case "start":
-			return todostore.Start(ctx, a.db, g.ID, session)
+			return todostore.Start(ctx, a.db, p, g.ID, session)
 		case "complete":
-			return todostore.Complete(ctx, a.db, g.ID, session)
+			return todostore.Complete(ctx, a.db, p, g.ID, session)
 		case "fail":
-			return todostore.Fail(ctx, a.db, g.ID, session)
+			return todostore.Fail(ctx, a.db, p, g.ID, session)
 		default:
-			return todostore.Retry(ctx, a.db, g.ID, session)
+			return todostore.Retry(ctx, a.db, p, g.ID, session)
 		}
 	case "move":
 		if g.ID == "" {
@@ -114,12 +128,12 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.Pos == nil {
 			return "", fmt.Errorf("action 'move' requires pos")
 		}
-		return todostore.Move(ctx, a.db, g.ID, *g.Pos, session)
+		return todostore.Move(ctx, a.db, p, g.ID, *g.Pos, session)
 	case "read":
 		if g.All != nil && *g.All {
-			return todostore.ReadAll(ctx, a.db, session)
+			return todostore.ReadAll(ctx, a.db, p, session)
 		}
-		return todostore.Read(ctx, a.db, session)
+		return todostore.Read(ctx, a.db, p, session)
 	default:
 		return "", fmt.Errorf("todo: unknown action %q", g.Action)
 	}

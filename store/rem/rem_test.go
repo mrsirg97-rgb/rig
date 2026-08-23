@@ -17,6 +17,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/store"
 	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 )
 
 type probe struct {
@@ -232,8 +233,8 @@ func TestLearnStoresContentWithScopeKindImportance(t *testing.T) {
 	if got := memRow(t, db, mem.Content); got == nil {
 		t.Fatal("memory absent")
 	} else {
-		if got.Scope != shortHash(cwd) {
-			t.Errorf("scope %q, want %q", got.Scope, shortHash(cwd))
+		if got.Scope != scope.ShortHash(cwd) {
+			t.Errorf("scope %q, want %q", got.Scope, scope.ShortHash(cwd))
 		}
 		if got.ScopeLabel != "ws1" {
 			t.Errorf("scope_label %q, want ws1", got.ScopeLabel)
@@ -1250,8 +1251,8 @@ func TestTwoWorktreesOfOneRepoShareMemory(t *testing.T) {
 	if len(mems) != 1 || mems[0].Content != "shared across worktrees" {
 		t.Fatalf("worktree b must read worktree a's memory: %+v", mems)
 	}
-	if scopeKey(a) != scopeKey(b) {
-		t.Fatalf("two worktrees of one repo must share one scope: %q != %q", scopeKey(a), scopeKey(b))
+	if scope.Key(a) != scope.Key(b) {
+		t.Fatalf("two worktrees of one repo must share one scope: %q != %q", scope.Key(a), scope.Key(b))
 	}
 }
 
@@ -1269,8 +1270,8 @@ func TestNonRepoDirScopesByCwd(t *testing.T) {
 	if len(mems) != 0 {
 		t.Fatalf("a non-repo dir scopes by cwd, the other dir must not read: %+v", mems)
 	}
-	if scopeKey(d1) != shortHash(d1) {
-		t.Fatalf("outside a repo the scope is the cwd, hashed as today: %q != %q", scopeKey(d1), shortHash(d1))
+	if scope.Key(d1) != scope.ShortHash(d1) {
+		t.Fatalf("outside a repo the scope is the cwd, hashed as today: %q != %q", scope.Key(d1), scope.ShortHash(d1))
 	}
 }
 
@@ -1286,7 +1287,7 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("v1 open: %v", err)
 	}
-	oldScope := shortHash(cwd)
+	oldScope := scope.ShortHash(cwd)
 	insert := `INSERT INTO memories (id, scope, scope_label, kind, content, source, importance, strength, access_count, created_at, last_consolidated_at, content_md5)
 		VALUES (?, ?, 'mem', 'fact', ?, ?, ?, ?, ?, ?, ?, ?)`
 	if _, err := db.DB.Exec(insert, 1, oldScope, "the old fact", "s1", 0.5, 0.5, 0, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", "md5-old"); err != nil {
@@ -1321,8 +1322,8 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("the compaction row is removed (never deliberate), got %d rows", len(rows))
 	}
-	if rows[0].Scope != scopeKey(cwd) || rows[0].Scope == oldScope {
-		t.Fatalf("the old row must re-scope to the repo's: %q != %q", rows[0].Scope, scopeKey(cwd))
+	if rows[0].Scope != scope.Key(cwd) || rows[0].Scope == oldScope {
+		t.Fatalf("the old row must re-scope to the repo's: %q != %q", rows[0].Scope, scope.Key(cwd))
 	}
 
 	db3, _, report2, err := store.Open(path, Statements(), SchemaVersion, Migration(cwd))
@@ -1337,7 +1338,7 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 	if err := db3.DB.QueryRow(`SELECT scope FROM memories WHERE id = 1`).Scan(&sc); err != nil {
 		t.Fatal(err)
 	}
-	if sc != scopeKey(cwd) {
+	if sc != scope.Key(cwd) {
 		t.Fatalf("the re-open must not re-scope: %q", sc)
 	}
 }
@@ -1381,7 +1382,7 @@ func TestMigrationSurvivesTwoOpeners(t *testing.T) {
 	}
 	insert := `INSERT INTO memories (id, scope, scope_label, kind, content, source, importance, strength, access_count, created_at, last_consolidated_at, content_md5)
 		VALUES (?, ?, 'mem', 'fact', ?, ?, ?, ?, ?, ?, ?, ?)`
-	if _, err := db.DB.Exec(insert, 1, shortHash(repo), "the old fact", "s1", 0.5, 0.5, 0, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", "md5-old"); err != nil {
+	if _, err := db.DB.Exec(insert, 1, scope.ShortHash(repo), "the old fact", "s1", 0.5, 0.5, 0, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", "md5-old"); err != nil {
 		t.Fatal(err)
 	}
 	db.DB.Close()
@@ -1415,40 +1416,7 @@ func TestMigrationSurvivesTwoOpeners(t *testing.T) {
 	if err := d.DB.QueryRow(`SELECT scope FROM memories WHERE id = 1`).Scan(&sc); err != nil {
 		t.Fatal(err)
 	}
-	if sc != scopeKey(repo) {
-		t.Fatalf("the row must carry the repo scope after the race: %q != %q", sc, scopeKey(repo))
-	}
-}
-
-func TestScopeResolvesRelativeGitOutput(t *testing.T) {
-	bin := t.TempDir()
-	fake := filepath.Join(bin, "git")
-	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho ../.git\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	cwd := filepath.Join(t.TempDir(), "sub")
-	if err := os.MkdirAll(cwd, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	want := filepath.Clean(filepath.Join(cwd, "../.git"))
-	if got := scopePath(cwd); got != want {
-		t.Fatalf("a relative common dir must resolve against the cwd: %q != %q", got, want)
-	}
-	if !filepath.IsAbs(scopePath(cwd)) {
-		t.Fatal("the scope path must be absolute")
-	}
-}
-
-func TestScopeIgnoresEchoedOptions(t *testing.T) {
-	bin := t.TempDir()
-	fake := filepath.Join(bin, "git")
-	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho -- --path-format=absolute\necho .git\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	cwd := t.TempDir()
-	if got := scopePath(cwd); got != cwd {
-		t.Fatalf("an echoed option is not a path; the scope must fall back to the cwd: %q", got)
+	if sc != scope.Key(repo) {
+		t.Fatalf("the row must carry the repo scope after the race: %q != %q", sc, scope.Key(repo))
 	}
 }

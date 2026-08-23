@@ -3,7 +3,10 @@
 ## What it is
 
 Adapts `store/todo` to the loop's tool surface: session attribution from
-the threaded ctx; replies exactly as the store shapes them.
+the threaded ctx; replies exactly as the store shapes them. The optional
+`project` field resolves a queue's scope (the repo, `store/scope`, or
+the cwd hash outside a repo) from the given path, defaulting to the
+session cwd; `~` is expanded at the `middleware/paths` boundary.
 
 ## What it includes
 
@@ -17,6 +20,10 @@ the threaded ctx; replies exactly as the store shapes them.
 
 - Replies are the store's shapes, verbatim — the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
+- `project` is resolved through `scope.Key`/`scope.Label`: a subdirectory
+  and a second worktree read the repo's one queue, a non-repo directory
+  its own; the empty reply names the queue it read (`(no tasks in
+  <label>'s queue)`, SPEC_CORE).
 - Complete on your own unclaimed pending task implicitly claims and
   completes (auto-started); foreign-claim and blocked-by-dependency
   refusals carry through unchanged.

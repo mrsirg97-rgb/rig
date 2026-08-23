@@ -16,7 +16,7 @@ import (
 	todometa "github.com/mrsirg97-rgb/rig/store/todo/metadata"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 func DDL() []string { return tododdl.Statements() }
 
@@ -26,6 +26,11 @@ func Statements() []string {
 }
 
 const anon = "anon"
+
+type Project struct {
+	Key   string
+	Label string
+}
 
 type CreateItem struct {
 	Text      string
@@ -64,6 +69,7 @@ type folded struct {
 	maxSeq     int64
 	maxPos     int
 	maxIdNum   int
+	globalSeq  int64
 }
 
 func newFolded() *folded {
@@ -94,12 +100,18 @@ func (f *folded) nextPos() int {
 	return f.maxPos
 }
 
+func (f *folded) nextSeq() int64 {
+	f.globalSeq++
+	return f.globalSeq
+}
+
 type eventRow struct {
 	seq     int64
 	op      string
 	args    string
 	session string
 	ts      string
+	scope   string
 }
 
 func attrOf(e eventRow) string {
@@ -112,6 +124,9 @@ func attrOf(e eventRow) string {
 func (f *folded) apply(e eventRow) {
 	if e.seq > f.maxSeq {
 		f.maxSeq = e.seq
+	}
+	if e.seq > f.globalSeq {
+		f.globalSeq = e.seq
 	}
 	switch e.op {
 	case "create":
@@ -519,10 +534,10 @@ func lineOf(f *folded, ts *taskState, session string) string {
 	return line
 }
 
-func renderQueue(f *folded, session string, all bool) string {
+func renderQueue(f *folded, session string, all bool, label string) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
-		return "(no tasks in this directory's queue)"
+		return fmt.Sprintf("(no tasks in %s's queue)", label)
 	}
 	var b strings.Builder
 	b.WriteString(summaryOf(f))
@@ -550,12 +565,12 @@ func echoTask(f *folded, session, id, note string) string {
 	return b.String()
 }
 
-func Create(ctx context.Context, db store.DB, items []CreateItem, session string) (string, error) {
+func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, session string) (string, error) {
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		foot, e := maybeCompact(bound, tx, f, session)
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
 		}
@@ -570,23 +585,23 @@ func Create(ctx context.Context, db store.DB, items []CreateItem, session string
 			note = "queue cleared"
 		}
 		args, _ := json.Marshal(map[string]any{"tasks": asGiven(items)})
-		seq, e := appendEvent(bound, f.maxSeq+1, "create", string(args), session)
-		if e != nil {
+		seq := f.nextSeq()
+		if e := appendEvent(bound, seq, "create", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		for _, ts := range modified {
 			ts.updatedSeq = seq
 			ts.updatedTs = nowRFC3339()
 		}
-		if e := rewrite(tx, f); e != nil {
+		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(replyText(f, session, note, false), foot), nil
+		return withFoot(replyText(f, session, note, false, p.Label), foot), nil
 	})
 }
 
-func Start(ctx context.Context, db store.DB, id, session string) (string, error) {
-	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
+func Start(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		switch ts.status {
 		case statusPending:
 			return true, ""
@@ -604,12 +619,12 @@ func Start(ctx context.Context, db store.DB, id, session string) (string, error)
 	}, "start", statusActive, "'"+id+"' started")
 }
 
-func Complete(ctx context.Context, db store.DB, id, session string) (string, error) {
+func Complete(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		foot, e := maybeCompact(bound, tx, f, session)
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
 		}
@@ -633,38 +648,37 @@ func Complete(ctx context.Context, db store.DB, id, session string) (string, err
 		args, _ := json.Marshal(map[string]any{"id": id})
 		note := "'" + id + "' completed"
 		if ts.status == statusPending {
-			startSeq, e := appendEvent(bound, f.maxSeq+1, "start", string(args), session)
-			if e != nil {
+			startSeq := f.nextSeq()
+			if e := appendEvent(bound, startSeq, "start", string(args), session, p.Key); e != nil {
 				return "", e
 			}
 			ts.status = statusActive
 			ts.owner = session
 			ts.updatedSeq = startSeq
 			ts.updatedTs = nowRFC3339()
-			f.maxSeq = startSeq
 			note = "'" + id + "' auto-started and completed"
 		}
-		seq, e := appendEvent(bound, f.maxSeq+1, "complete", string(args), session)
-		if e != nil {
+		seq := f.nextSeq()
+		if e := appendEvent(bound, seq, "complete", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		ts.status = statusDone
 		ts.owner = ""
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
-		if e := rewrite(tx, f); e != nil {
+		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
 		return withFoot(echoTask(f, session, id, note), foot), nil
 	})
 }
 
-func Fail(ctx context.Context, db store.DB, id, session string) (string, error) {
+func Fail(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		foot, e := maybeCompact(bound, tx, f, session)
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
 		}
@@ -693,23 +707,23 @@ func Fail(ctx context.Context, db store.DB, id, session string) (string, error) 
 			note += " (released from " + released + ")"
 		}
 		args, _ := json.Marshal(map[string]any{"id": id})
-		seq, e := appendEvent(bound, f.maxSeq+1, "fail", string(args), session)
-		if e != nil {
+		seq := f.nextSeq()
+		if e := appendEvent(bound, seq, "fail", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		ts.status = statusFailed
 		ts.owner = ""
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
-		if e := rewrite(tx, f); e != nil {
+		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
 		return withFoot(echoTask(f, session, id, note), foot), nil
 	})
 }
 
-func Retry(ctx context.Context, db store.DB, id, session string) (string, error) {
-	return verb(ctx, db, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
+func Retry(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		if ts.status == statusFailed {
 			return true, ""
 		}
@@ -717,12 +731,12 @@ func Retry(ctx context.Context, db store.DB, id, session string) (string, error)
 	}, "retry", statusPending, "'"+id+"' back to pending")
 }
 
-func Move(ctx context.Context, db store.DB, id string, pos int, session string) (string, error) {
+func Move(ctx context.Context, db store.DB, p Project, id string, pos int, session string) (string, error) {
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		foot, e := maybeCompact(bound, tx, f, session)
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
 		}
@@ -734,44 +748,45 @@ func Move(ctx context.Context, db store.DB, id string, pos int, session string) 
 			return "", fmt.Errorf("move position for '%s' must be between 1 and %d, got %d", id, len(f.tasks), pos)
 		}
 		args, _ := json.Marshal(map[string]any{"id": id, "pos": pos})
-		seq, e := appendEvent(bound, f.maxSeq+1, "move", string(args), session)
-		if e != nil {
+		seq := f.nextSeq()
+		if e := appendEvent(bound, seq, "move", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		if appliedMove(f, ts, pos) {
 			ts.updatedSeq = seq
 			ts.updatedTs = nowRFC3339()
 		}
-		if e := rewrite(tx, f); e != nil {
+		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
 		return withFoot(echoTask(f, session, id, "'"+id+"' moved to position "+strconv.Itoa(pos)), foot), nil
 	})
 }
 
-func Read(ctx context.Context, db store.DB, session string) (string, error) {
-	return read(ctx, db, session, false)
+func Read(ctx context.Context, db store.DB, p Project, session string) (string, error) {
+	return read(ctx, db, p, session, false)
 }
 
-func ReadAll(ctx context.Context, db store.DB, session string) (string, error) {
-	return read(ctx, db, session, true)
+func ReadAll(ctx context.Context, db store.DB, p Project, session string) (string, error) {
+	return read(ctx, db, p, session, true)
 }
 
-func read(ctx context.Context, db store.DB, session string, all bool) (string, error) {
+func read(ctx context.Context, db store.DB, p Project, session string, all bool) (string, error) {
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := rewrite(tx, f); e != nil {
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return replyText(f, session, "", all), nil
+		return replyText(f, session, "", all, p.Label), nil
 	})
 }
 
 func verb(
 	ctx context.Context,
 	db store.DB,
+	p Project,
 	session, id string,
 	check func(f *folded, ts *taskState) (ok bool, voice string),
 	op, toStatus, note string,
@@ -779,8 +794,8 @@ func verb(
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		foot, e := maybeCompact(bound, tx, f, session)
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
 		}
@@ -793,8 +808,8 @@ func verb(
 			return "", fmt.Errorf("%s", voice)
 		}
 		args, _ := json.Marshal(map[string]any{"id": id})
-		seq, e := appendEvent(bound, f.maxSeq+1, op, string(args), session)
-		if e != nil {
+		seq := f.nextSeq()
+		if e := appendEvent(bound, seq, op, string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		ts.status = toStatus
@@ -809,19 +824,19 @@ func verb(
 		} else {
 			ts.owner = ""
 		}
-		if e := rewrite(tx, f); e != nil {
+		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
 		return withFoot(echoTask(f, session, id, note), foot), nil
 	})
 }
 
-func replyText(f *folded, session, note string, all bool) string {
+func replyText(f *folded, session, note string, all bool, label string) string {
 	var b strings.Builder
 	if note != "" {
 		fmt.Fprintf(&b, "\u2192 %s\n", note)
 	}
-	b.WriteString(renderQueue(f, session, all))
+	b.WriteString(renderQueue(f, session, all, label))
 	if foot := staleFooter(f); foot != "" {
 		b.WriteString("\n" + foot)
 	}
@@ -833,14 +848,14 @@ const (
 	COMPACT_THRESHOLD_EVENTS = 1000
 )
 
-func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
+func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session, scope string) (string, error) {
 	if f.maxSeq-f.compactSeq < COMPACT_THRESHOLD_EVENTS {
 		return "", nil
 	}
 	folded := f.maxSeq - f.compactSeq
 	args, _ := json.Marshal(map[string]any{"tasks": snapshotOf(f)})
-	seq, e := appendEvent(bound, f.maxSeq+1, "compact", string(args), session)
-	if e != nil {
+	seq := f.nextSeq()
+	if e := appendEvent(bound, seq, "compact", string(args), session, scope); e != nil {
 		return "", e
 	}
 	f.compactSeq = seq
@@ -849,7 +864,7 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session string) 
 	for _, ts := range f.tasks {
 		ts.createdSeq, ts.updatedSeq, ts.updatedTs = seq, seq, tsStr
 	}
-	if _, e := tx.Exec("DELETE FROM events WHERE seq < ?", seq); e != nil {
+	if _, e := tx.Exec("DELETE FROM events WHERE scope = ? AND seq < ?", scope, seq); e != nil {
 		return "", fmt.Errorf("todo: compact: %w", e)
 	}
 	return fmt.Sprintf("\u00b7 log compacted (%d events folded into the snapshot)", folded), nil
@@ -983,13 +998,13 @@ func withFoot(reply, foot string) string {
 	return reply + "\n" + foot
 }
 
-func mutate(ctx context.Context, db store.DB, act func(bound context.Context, tx *sql.Tx, f *folded) (string, error)) (string, error) {
+func mutate(ctx context.Context, db store.DB, p Project, act func(bound context.Context, tx *sql.Tx, f *folded) (string, error)) (string, error) {
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback()
-	f, err := eventsOf(tx)
+	f, err := eventsOf(tx, p.Key)
 	if err != nil {
 		return "", err
 	}
@@ -1003,8 +1018,8 @@ func mutate(ctx context.Context, db store.DB, act func(bound context.Context, tx
 	return reply, nil
 }
 
-func eventsOf(tx *sql.Tx) (*folded, error) {
-	rows, err := tx.Query("SELECT seq, op, args, session, ts FROM events ORDER BY seq")
+func eventsOf(tx *sql.Tx, scope string) (*folded, error) {
+	rows, err := tx.Query("SELECT seq, op, args, session, ts, scope FROM events ORDER BY seq")
 	if err != nil {
 		return nil, fmt.Errorf("todo: event log: %w", err)
 	}
@@ -1013,10 +1028,14 @@ func eventsOf(tx *sql.Tx) (*folded, error) {
 	for rows.Next() {
 		var e eventRow
 		var session sql.NullString
-		if err := rows.Scan(&e.seq, &e.op, &e.args, &session, &e.ts); err != nil {
+		if err := rows.Scan(&e.seq, &e.op, &e.args, &session, &e.ts, &e.scope); err != nil {
 			return nil, fmt.Errorf("todo: event log: %w", err)
 		}
 		e.session = session.String
+		f.globalSeq = e.seq
+		if e.scope != scope {
+			continue
+		}
 		f.apply(e)
 	}
 	if err := rows.Err(); err != nil {
@@ -1025,26 +1044,26 @@ func eventsOf(tx *sql.Tx) (*folded, error) {
 	return f, nil
 }
 
-func appendEvent(bound context.Context, seq int64, op, args, session string) (int64, error) {
+func appendEvent(bound context.Context, seq int64, op, args, session, scope string) error {
 	if session == "" {
 		session = anon
 	}
 	s := session
 	sess := &s
-	ev, err := tododomain.NewEventDomain().InsertEvent(bound, tododomain.Event{
-		Seq: seq, Ts: nowRFC3339(), Op: op, Args: args, Session: sess,
+	_, err := tododomain.NewEventDomain().InsertEvent(bound, tododomain.Event{
+		Seq: seq, Ts: nowRFC3339(), Op: op, Args: args, Session: sess, Scope: scope,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("todo: event append: %w", err)
+		return fmt.Errorf("todo: event append: %w", err)
 	}
-	return ev.Seq, nil
+	return nil
 }
 
-func rewrite(tx *sql.Tx, f *folded) error {
-	if _, err := tx.Exec("DELETE FROM task_deps"); err != nil {
+func rewrite(tx *sql.Tx, f *folded, scope string) error {
+	if _, err := tx.Exec("DELETE FROM task_deps WHERE scope = ?", scope); err != nil {
 		return fmt.Errorf("todo: rewrite: %w", err)
 	}
-	if _, err := tx.Exec("DELETE FROM tasks"); err != nil {
+	if _, err := tx.Exec("DELETE FROM tasks WHERE scope = ?", scope); err != nil {
 		return fmt.Errorf("todo: rewrite: %w", err)
 	}
 	var order []*taskState
@@ -1064,16 +1083,16 @@ func rewrite(tx *sql.Tx, f *folded) error {
 			dep = &d
 		}
 		_, err := tx.Exec(
-			"INSERT INTO tasks (id, text, status, pos, created_seq, updated_seq) VALUES (?, ?, ?, ?, ?, ?)",
-			ts.id, ts.text, ts.status, ts.pos, ts.createdSeq, ts.updatedSeq,
+			"INSERT INTO tasks (scope, id, text, status, pos, created_seq, updated_seq) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			scope, ts.id, ts.text, ts.status, ts.pos, ts.createdSeq, ts.updatedSeq,
 		)
 		if err != nil {
 			return fmt.Errorf("todo: rewrite: %w", err)
 		}
 		if dep != nil {
 			_, err := tx.Exec(
-				"INSERT INTO task_deps (task_id, depends_on, created_seq) VALUES (?, ?, ?)",
-				ts.id, ts.dep, ts.updatedSeq,
+				"INSERT INTO task_deps (scope, task_id, depends_on, created_seq) VALUES (?, ?, ?, ?)",
+				scope, ts.id, ts.dep, ts.updatedSeq,
 			)
 			if err != nil {
 				return fmt.Errorf("todo: rewrite: %w", err)

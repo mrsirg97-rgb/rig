@@ -53,7 +53,10 @@ the leaf.
   only.
 - **todo/scheduler** — a thin shared adapter over one of the model's own
   tools: parse the line into the tool's JSON args, call `Exec` with the
-  session threaded, return the reply verbatim.
+  session threaded, return the reply verbatim. `todo project <path>` is
+  a one-off read of another project's queue (the path resolves through
+  `store/scope`); writes stay the model's or the session's own bare
+  verbs, and an unknown path's empty queue names the scope it read.
 - **rem** — the operator's verb over the memory store (SPEC_STATE: rem is
   deliberate): `rem [list|show|forget]` — list the live memories
   (project then global, one line each), show by id, forget by id. The

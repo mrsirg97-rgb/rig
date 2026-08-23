@@ -12,9 +12,10 @@ sees core and models and nothing else.
 ## What it includes
 
 - **main()** — the REPL path: flag parse, the config load, the rig
-  home, the stores (state, todo, rem, the one scheduler
-  `global.sqlite`, opened with its one-time migration folding the old
-  `cwd-*.sqlite` files), the python
+  home, the stores (state, rem, todo — one `todo.sqlite`, opened with
+  its one-time migration folding the old `<12-hex>.sqlite` files — and
+  the one scheduler `global.sqlite`, opened with its one-time migration
+  folding the old `cwd-*.sqlite` files), the python
   kernel, the web tools, the plugin discovery, the root's wiring, the
   frontend selection (`-tui` auto / oneshot / plain CLI), the loop, and
   the session closure with the run's exit status.

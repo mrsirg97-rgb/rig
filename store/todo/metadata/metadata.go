@@ -21,17 +21,20 @@ type Meta struct {
 // table:"events"
 //
 // Seq is minted by sqlite's rowid semantics on omission: events is
-// append-only and strictly increasing by construction.
+// append-only and strictly increasing by construction. Every event
+// carries its scope: the queue's identity partition, never a filename.
 type Event struct {
 	Seq     int64   `primary:"true" alias:"name=seq,nullable=false"`
 	Ts      string  `alias:"name=ts,nullable=false"`
 	Op      string  `alias:"name=op,nullable=false"`
 	Args    string  `alias:"name=args,nullable=false"`
 	Session *string `alias:"name=session,nullable=true"`
+	Scope   string  `alias:"name=scope,nullable=false"`
 }
 
 // table:"tasks"
 type Task struct {
+	Scope        string `primary:"true" alias:"name=scope,nullable=false"`
 	ID           string `primary:"true" alias:"name=id,nullable=false"`
 	Text         string `alias:"name=text,nullable=false"`
 	Status       string `alias:"name=status,nullable=false"`
@@ -44,8 +47,10 @@ type Task struct {
 
 // table:"task_deps"
 //
-// Composite primary (task_id + depends_on); both sides reference tasks.
+// Composite primary (scope + task_id + depends_on); both sides reference
+// tasks within the same scope.
 type TaskDep struct {
+	Scope        string `primary:"true" alias:"name=scope,nullable=false"`
 	TaskID       string `primary:"true" alias:"name=task_id,nullable=false"`
 	Task         Task   `link:"from=Task,on=id,many=false"`
 	DependsOn    string `primary:"true" alias:"name=depends_on,nullable=false"`

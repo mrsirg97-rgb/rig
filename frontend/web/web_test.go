@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store"
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
@@ -70,7 +72,7 @@ func seedHome(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	tpath := todostore.StorePath(home, testCWD)
+	tpath := todostore.FilePath(home)
 	if err := os.MkdirAll(filepath.Dir(tpath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +80,7 @@ func seedHome(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Create(ctx, tdb, []todostore.CreateItem{{Text: "seeded task"}}, "seed"); err != nil {
+	if _, err := todostore.Create(ctx, tdb, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, []todostore.CreateItem{{Text: "seeded task"}}, "seed"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tdb.DB.Close(); err != nil {
@@ -1247,7 +1249,7 @@ func TestTodoRetryFromTheDashboard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Fail(context.Background(), db, "t1", "dashboard"); err != nil {
+	if _, err := todostore.Fail(context.Background(), db, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, "t1", "dashboard"); err != nil {
 		t.Fatal(err)
 	}
 	rec := doReq(t, h, "POST", "/api/todo/retry"+q, strings.NewReader(`{"id":"t1"}`), hdr)
@@ -1290,5 +1292,50 @@ func TestWriteFromTheRequestsOwnFrontIsSameOrigin(t *testing.T) {
 				t.Fatalf("got %d %s, want %d", rec.Code, rec.Body.String(), c.want)
 			}
 		})
+	}
+}
+
+func gitInitWeb(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", dir, "init", "-q")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, out)
+	}
+	cmd = exec.Command("git", "-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "add", "-A")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v (%s)", err, out)
+	}
+	cmd = exec.Command("git", "-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "commit", "-q", "-m", "seed")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v (%s)", err, out)
+	}
+}
+
+func TestTodoRoutesResolveThroughTheRepoScope(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	repo := t.TempDir()
+	gitInitWeb(t, repo)
+	sub := filepath.Join(repo, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := srv.stores.todo(testCWD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Create(context.Background(), db, todostore.Project{Key: scope.Key(repo), Label: scope.Label(repo)}, []todostore.CreateItem{{Text: "repo plan"}}, "seed"); err != nil {
+		t.Fatal(err)
+	}
+	rec := doReq(t, h, "GET", "/api/todo?cwd="+sub, nil, bearer(tok))
+	if !strings.Contains(rec.Body.String(), "repo plan") {
+		t.Fatalf("a subdirectory of the repo must read the repo's queue: %s", rec.Body.String())
+	}
+	rec = doReq(t, h, "GET", "/api/todo?cwd="+testCWD, nil, bearer(tok))
+	if strings.Contains(rec.Body.String(), "repo plan") {
+		t.Fatalf("another workspace must not see the repo queue: %s", rec.Body.String())
 	}
 }

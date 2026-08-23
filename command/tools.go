@@ -38,6 +38,7 @@ func (t toolCmd) Sub() []Sub {
 			{Name: "done", Desc: "mark a task complete: done <id>"},
 			{Name: "fail", Desc: "mark a task failed: fail <id>"},
 			{Name: "retry", Desc: "put a failed task back: retry <id>"},
+			{Name: "project", Desc: "show another project's queue: project <path>"},
 		}
 	case "scheduler":
 		return []Sub{
@@ -105,10 +106,12 @@ func todoArgs(args string) (json.RawMessage, error) {
 			return nil, fmt.Errorf("todo: %q: not a position (todo move <id> <pos>)", fields[2])
 		}
 		return json.Marshal(map[string]any{"action": "move", "id": fields[1], "pos": pos})
+	case fields[0] == "project" && len(fields) == 2:
+		return json.Marshal(map[string]any{"action": "read", "project": fields[1]})
 	}
 	switch {
 	case len(fields) == 0:
-		return nil, errors.New("todo: usage: todo read|create <text…>|start|complete|fail|retry <id>|move <id> <pos>")
+		return nil, errors.New("todo: usage: todo read|create <text…>|start|complete|fail|retry <id>|move <id> <pos>|project <path>")
 	case fields[0] == "read":
 		return nil, errors.New("todo: read takes no args (todo read)")
 	case fields[0] == "create":
@@ -117,6 +120,8 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":
 		return nil, errors.New("todo: move takes an id and a position (todo move <id> <pos>)")
+	case fields[0] == "project":
+		return nil, errors.New("todo: project takes a path (todo project <path>)")
 	default:
 		return nil, fmt.Errorf("todo: unknown action %q (todo read|create <text…>|start|complete|fail|retry <id>|move <id> <pos>)", fields[0])
 	}

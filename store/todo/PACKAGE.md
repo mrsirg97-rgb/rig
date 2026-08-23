@@ -25,7 +25,10 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 ## What it includes
 
 - `todo.go` — the store: operations, replay, position minting, the DAG
-  validation.
+  validation, per-scope folds and one shared event-log sequence.
+- `migration.go` — the one-time 1→2 migration: folds the legacy
+  per-cwd stores into `todo.sqlite` (scope = the file's hash) and rem's
+  lazy re-scope of the launch cwd's hash to the repo scope.
 - `metadata/metadata.go` — hand-written metadata (plus `extra.sql`).
 
 ## How it is consumed
@@ -46,10 +49,20 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
   the auto-start. Foreign-claim and blocked-by-dependency refusals stay.
 - The read contract is lean (SPEC_TODO_LEAN): Read renders the
   actionable queue — done rows fold into the unconditional summary line
-  `(N/M done · next: tN · K failed)`, never "(no tasks in this directory's queue)" on an all-done
-  queue; ReadAll returns the history; a transition echo is the affected
-  row plus the summary. Create keeps the full (filtered) queue: a
-  replacement's point is the new state.
-- `StorePath(home, cwd)`: one file per cwd under `<home>/todo`, keyed by
-  the first twelve sha1 bytes of the cwd — the root's and the
-  dashboard's one source (SPEC_SERVE 2).
+  `(N/M done · next: tN · K failed)`, never "(no tasks in <label>'s queue)"
+  on an all-done queue; ReadAll returns the history; a transition echo is
+  the affected row plus the summary. Create keeps the full (filtered)
+  queue: a replacement's point is the new state.
+- One store, every row scoped: `FilePath(home)` is the one `todo.sqlite`,
+  and every operation takes a `Project{Key, Label}` — the queue's
+  identity (the repo's scope, `store/scope`, or the cwd hash outside a
+  repo) and its display label. A bare read/create resolves the key and
+  label from the session cwd; the tool's `project` field and the
+  `todo project <path>` command resolve another queue. Ids stay `tN` per
+  scope; minted event seq is one sequence across scopes; compact folds
+  and stale footers are per scope.
+- Migration (SPEC_STATE §todo): folds every `<12-hex>.sqlite` in the
+  todo dir into `todo.sqlite` with `scope = <that hash>` verbatim, then
+  re-scopes the launch cwd's hash to the repo scope once (the
+  `migrated:<oldScope>` marker), one transaction, counted on stderr. The
+  fold keys on the files existing and is a no-op on the second open.

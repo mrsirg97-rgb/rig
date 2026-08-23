@@ -594,6 +594,7 @@ todo    read
 todo    create <text…>          the whole remainder, one task's text
 todo    start|complete|fail|retry <id>
 todo    move <id> <pos>
+todo    project <path>         show that project's queue (a one-off read)
 scheduler list
 scheduler create <name> <prompt…> <cron>     5-field vixie, or
 scheduler create <name> <prompt…> once <ISO>
@@ -615,6 +616,12 @@ scheduler runs <id> [n]
   (`action 'create' requires tasks: array of {text}`) teaches that the
   queue is replaced; clearing it (`tasks: []`) is a model-side call —
   the line shape has no spelling for an empty array, and that is fine.
+- `todo project <path>` is a one-off read of that project's queue: the
+  path resolves through the same scope law as the model's `project` tool
+  field (SPEC_STATE), writes stay the model's or the session's own bare
+  verbs. An unknown path's empty queue renders `(no tasks in <label>'s
+  queue)` — the empty reply names the scope it read (SPEC_CORE). A bare
+  `todo project` refuses naming the shape.
 - the int slot is parse-checked: `todo start t1 extra` →
   `todo: start takes an id (todo start <id>)`; `scheduler runs j2 x` →
   `scheduler: "x": not an integer (scheduler runs <id> [n])`.

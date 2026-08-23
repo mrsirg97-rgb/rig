@@ -35,13 +35,14 @@ func (s *Server) handleTodoVerb(w http.ResponseWriter, r *http.Request, verb str
 		return
 	}
 	var reply string
+	proj := todoProject(cwd)
 	switch verb {
 	case "start":
-		reply, err = todostore.Start(ctx, db, id, sessionName)
+		reply, err = todostore.Start(ctx, db, proj, id, sessionName)
 	case "complete":
-		reply, err = todostore.Complete(ctx, db, id, sessionName)
+		reply, err = todostore.Complete(ctx, db, proj, id, sessionName)
 	case "retry":
-		reply, err = todostore.Retry(ctx, db, id, sessionName)
+		reply, err = todostore.Retry(ctx, db, proj, id, sessionName)
 	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())

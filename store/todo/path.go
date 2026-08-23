@@ -1,12 +1,7 @@
 package todo
 
-import (
-	"crypto/sha1"
-	"encoding/hex"
-	"path/filepath"
-)
+import "path/filepath"
 
-func StorePath(home, cwd string) string {
-	sum := sha1.Sum([]byte(cwd))
-	return filepath.Join(home, "todo", hex.EncodeToString(sum[:12])+".sqlite")
+func FilePath(home string) string {
+	return filepath.Join(home, "todo", "todo.sqlite")
 }

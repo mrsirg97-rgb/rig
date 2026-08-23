@@ -18,6 +18,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/core"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
@@ -301,13 +302,14 @@ func (s *Server) handleTodoRead(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	proj := todoProject(cwd)
 	var (
 		text string
 	)
 	if r.URL.Query().Get("all") == "true" {
-		text, err = todostore.ReadAll(ctx, db, sessionName)
+		text, err = todostore.ReadAll(ctx, db, proj, sessionName)
 	} else {
-		text, err = todostore.Read(ctx, db, sessionName)
+		text, err = todostore.Read(ctx, db, proj, sessionName)
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -411,7 +413,7 @@ func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	reply, err := todostore.Create(ctx, db, items, sessionName)
+	reply, err := todostore.Create(ctx, db, todoProject(cwd), items, sessionName)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -757,4 +759,8 @@ func messageJSONOf(m core.Message) messageJSON {
 		}
 	}
 	return out
+}
+
+func todoProject(cwd string) todostore.Project {
+	return todostore.Project{Key: scope.Key(cwd), Label: scope.Label(cwd)}
 }
