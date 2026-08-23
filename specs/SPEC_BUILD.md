@@ -197,6 +197,18 @@ into a `mktemp` dir (`curl -fsSL`, `wget` fallback), verifies with
 runs `rig -version`. Every failure names what it was doing. The ci job
 shellchecks it.
 
+**The self-update** (`cmd/rig/update.go`), the binary's own installer
+beside `-version`: `rig -update` resolves the latest release the same way
+the installer does (the `releases/latest` redirect, no API call), maps
+`GOOS`/`GOARCH` into `rig_<os>_<arch>`, downloads `checksums.txt` and the
+asset, verifies the sha256 **before anything moves**, and renames a
+0755 temp file in the resolved executable's directory over the binary —
+atomic on one filesystem, so a running rig keeps its old inode and the
+scheduler's next fire gets the new one. A directory that cannot be
+written names itself and the sudo line; a platform with no asset and a
+build whose `Version` has no release tag each say so rather than
+downgrading.
+
 **The site** (`site/`, published by `.github/workflows/pages.yml` on
 `push` to `main`). One static page: no build step, no JS framework, no
 external assets. The page carries the name, one line on what rig is

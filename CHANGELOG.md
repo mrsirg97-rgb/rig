@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+- **`rig -update`** (`specs/SPEC_BUILD.md` 5): the binary's own
+  installer beside `-version` — resolves the latest release by the
+  `releases/latest` redirect (no API call), maps the platform into
+  `rig_<os>_<arch>`, verifies the sha256 against `checksums.txt`
+  before anything moves, and renames a 0755 temp over the resolved
+  executable — atomic on one filesystem, a running rig keeps its old
+  inode and the scheduler's next fire gets the new one. Already-latest
+  is a no-op; an unwritable directory names itself and the sudo line;
+  a platform with no asset and a build with no release tag each say
+  so rather than downgrading.
+
 ## [0.15.0] — one store
 
 - **the scheduler is one store** (`specs/SPEC_STATE.md`, amended): the
