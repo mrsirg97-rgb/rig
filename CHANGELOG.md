@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+- **an empty reply names its scope** (`specs/SPEC_CORE.md`, amended):
+  `grep` with a root that defaulted to a subdirectory answered "(no
+  matches)" and a model read it as "does not exist", then spent four
+  turns doubting a file it had just read. `ls` names the directory
+  (`(empty: /abs/dir)`); `find` and `grep` the pattern, the absolute
+  root and the glob (`(no matches for /re/ under /abs/root, glob
+  '*.md')`); `web_search` the query; `rem` recall the scopes and the
+  query (`(no memories in rig, nor global for 'q')`); `todo` that the
+  queue is this directory's; `/plugins` and `plugins list` the
+  directory. The `ls`/`find`/`grep` schemas say the default root is the
+  working directory. Goldens regenerated.
+
 ## [0.14.1] — the path boundary
 
 - **`~` is the home at the tool boundary** (`specs/SPEC_FS.md`, amended):

@@ -100,12 +100,15 @@ func listPlugins(env any) (string, error) {
 	if e.Plugins == nil {
 		return "", errors.New("plugins: no plugins seam (the root did not wire one)")
 	}
-	return RenderPlugins(e.Plugins(), ""), nil
+	return RenderPlugins(e.Plugins(), "", e.PluginsDir), nil
 }
 
-func RenderPlugins(infos []PluginInfo, verb string) string {
+func RenderPlugins(infos []PluginInfo, verb, dir string) string {
 	if len(infos) == 0 && verb == "" {
-		return "plugins: none"
+		if dir == "" {
+			return "plugins: none"
+		}
+		return "plugins: none in " + dir
 	}
 	loaded, skipped := 0, 0
 	for _, p := range infos {

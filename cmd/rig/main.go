@@ -443,7 +443,7 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 	r.live.Set(tools)
 	r.live.SetPlugins(names...)
 	r.pluginInfos = infos
-	return command.RenderPlugins(infos, "reload"), nil
+	return command.RenderPlugins(infos, "reload", r.pluginsHome), nil
 }
 
 func (r *root) pluginNames() []string {
@@ -946,7 +946,7 @@ func main() {
 		r.natives[name] = true
 	}
 	r.tools["plugins"] = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
-		return command.RenderPlugins(r.pluginInfos, ""), nil
+		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
 
 	env := &command.Env{

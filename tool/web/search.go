@@ -144,7 +144,7 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		})
 	}
 	if len(out) == 0 {
-		return "no results", nil
+		return fmt.Sprintf("no results for %q", p.Query), nil
 	}
 	b, err := json.MarshalIndent(out, "", " ")
 	if err != nil {

@@ -12,7 +12,7 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
 - web_search: SearXNG JSON over net/http; endpoint from env
   (RIG_SEARXNG_URL, default pane's http://127.0.0.1:8888); results
   mapped to title/url/snippet with the 300-char snippet cap and the
-  maxResults slice (1..20, default 5), loud "no results".
+  maxResults slice (1..20, default 5), loud `no results for "<query>"`.
 - web_fetch: pane's guarded fetch verbatim — http(s) only, DNS resolution
   refuses private and link-local space with a readable error, every
   redirect hop re-checked, hop cap, textual content types only, declared

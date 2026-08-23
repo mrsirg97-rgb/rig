@@ -481,8 +481,8 @@ func TestMissingFieldsDegradeToEmptyStringsEmptyResultsSaySo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "no results" {
-		t.Fatalf("empty results = %q, want %q", got, "no results")
+	if !strings.HasPrefix(got, "no results for \"") {
+		t.Fatalf("empty results = %q, want the query named: no results for \"…\"", got)
 	}
 }
 

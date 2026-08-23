@@ -161,8 +161,8 @@ func TestGrepSkipsGitAndBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grep: %v", err)
 	}
-	if content != "(no matches)" {
-		t.Errorf("grep = %q, want (no matches): .git and binary skips", content)
+	if !strings.HasPrefix(content, "(no matches for ") || !strings.Contains(content, " under ") {
+		t.Errorf("grep = %q, want (no matches for … under <root>): .git and binary skips", content)
 	}
 }
 
@@ -318,4 +318,21 @@ func tail(s string) string {
 		return "..." + s[len(s)-200:]
 	}
 	return s
+}
+
+func TestEmptyRepliesNameTheirScope(t *testing.T) {
+	root := t.TempDir()
+	mk(t, root, map[string]string{"a.txt": "alpha\n"}, []string{"empty"})
+	content, err := exec(t, fs.LS(), fmt.Sprintf(`{"path":%q}`, filepath.Join(root, "empty")))
+	if err != nil || content != "(empty: "+filepath.Join(root, "empty")+")" {
+		t.Fatalf("ls of an empty dir must name the dir: %q %v", content, err)
+	}
+	content, err = exec(t, fs.Find(), fmt.Sprintf(`{"root":%q,"pattern":"*.go"}`, root))
+	if err != nil || content != "(no matches for '*.go' under "+root+")" {
+		t.Fatalf("find with no match must name the pattern and the root: %q %v", content, err)
+	}
+	content, err = exec(t, fs.Grep(), fmt.Sprintf(`{"root":%q,"pattern":"### 12b|### 13\\.","glob":"*.md"}`, root))
+	if err != nil || content != "(no matches for /### 12b|### 13\\./ under "+root+", glob '*.md')" {
+		t.Fatalf("grep with no match must name the pattern, the root and the glob: %q %v", content, err)
+	}
 }

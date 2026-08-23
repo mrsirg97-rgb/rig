@@ -65,7 +65,13 @@ accordingly and is named in the PR.
   report — half its path habits worked — and its own shape for the fix:
   at the boundary, not per call, or the drift just relocates.
 - `ls` sorts within its level (ReadDir order); an empty directory prints
-  `(empty)`; missing or non-directory paths are loud errors.
+  `(empty: /abs/dir)`; missing or non-directory paths are loud errors.
+- An empty `find` or `grep` names the pattern and the absolute root it
+  searched (and the glob): `(no matches for '*.go' under /abs/root)`,
+  `(no matches for /re/ under /abs/root, glob '*.md')` — a root that
+  defaulted to a subdirectory must not read as "the file does not exist"
+  (SPEC_CORE, an empty reply names its scope). The schemas say the
+  default root is the working directory.
 - `grep` long lines: reader-based line iteration; matched-line text capped
   as above.
 - Cancellation: `ctx` checked at the walk boundary; a cancelled walk

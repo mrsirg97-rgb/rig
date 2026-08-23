@@ -143,7 +143,7 @@ func newReloadHarnessWith(t *testing.T, home string, kernel plugins.Kernel, srv 
 		natives[n] = true
 	}
 	r.natives = natives
-	r.tools["plugins"] = plugins.NewEcosystem(home, natives, kernel, r.swapPlugins, func() (string, error) { return command.RenderPlugins(r.pluginInfos, ""), nil })
+	r.tools["plugins"] = plugins.NewEcosystem(home, natives, kernel, r.swapPlugins, func() (string, error) { return command.RenderPlugins(r.pluginInfos, "", home), nil })
 
 	r.session = core.NewSession()
 	in := make(chan string, 8)
