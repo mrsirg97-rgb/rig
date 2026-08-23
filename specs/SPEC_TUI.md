@@ -719,8 +719,9 @@ where the CI box allows and skip cleanly where not.
   line; no news renders nothing; the read is read-only (no store
   mutation; asserted on the store file's bytes).
 - the freeze gate: the PR's diff outside `frontend/tui` and the
-  allowlist's named work surfaces (last: the build surface — `Makefile`,
-  `.github/`, `.gitignore`, `README.md`, SPEC_BUILD) is empty; `core/`
+  allowlist's named work surfaces (last: `middleware/paths`, the path
+  boundary, SPEC_FS; before it the build surface — `Makefile`, `.github/`, `.gitignore`, `README.md`,
+  SPEC_BUILD) is empty; `core/`
   and `loop/` are identical with the fork point modulo gofmt (each side
   formatted, compared byte-exact — gofmt never touches string contents,
   so a voice's spacing still shows) (the formatting-only drift is the

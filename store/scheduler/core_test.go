@@ -318,7 +318,7 @@ func TestListRendersBothScopesCleanJobsHaveNullDrift(t *testing.T) {
 	}
 	list, _ := h.list()
 	contains(t, list, "global:")
-	contains(t, list, "cwd:")
+	contains(t, list, "cwd "+h.sessCwd+":")
 	contains(t, list, "j1")
 }
 

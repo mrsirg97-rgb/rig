@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.14.1] — the path boundary
+
+- **`~` is the home at the tool boundary** (`specs/SPEC_FS.md`, amended):
+  one chain link, `middleware/paths`, expands a leading `~`, `~/…`, or
+  `~user/…` in the path-shaped arguments (`path`, `root`, `cwd`) before
+  any tool runs — read/write/edit, ls/find/grep, and bash's, delegate's
+  and the scheduler's `cwd` inherit it; the tools stay pure. A model
+  named the footgun from inside rig (`ls ~/Projects/x` failed where the
+  absolute path worked) and the fix's shape: at the boundary, not per
+  call. Bytes pass untouched when nothing expands.
+
+- **the scheduler's cwd section names its directory**: `cwd
+  /home/x/proj: no jobs` instead of `cwd: no jobs`, so an empty section
+  reads as "none here", not "none anywhere" — a model read the old line
+  as a lie. The description says another directory's jobs are listed
+  from there.
+
 ## [0.14.0] — plugin and plugins
 
 - **no round cap by default** (`specs/SPEC_HARDENING.md` 9, amended):

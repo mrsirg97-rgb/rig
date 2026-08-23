@@ -103,7 +103,7 @@ func jobLines(j *jobState, scope string, line *TaggedLine, running bool, now fun
 	return lines
 }
 
-func renderJobs(global, cwd []jobLineSet) string {
+func renderJobs(global, cwd []jobLineSet, sessionCwd string) string {
 	section := func(scope string, jobs []jobLineSet) string {
 		if len(jobs) == 0 {
 			return scope + ": no jobs"
@@ -118,7 +118,7 @@ func renderJobs(global, cwd []jobLineSet) string {
 		}
 		return b.String()
 	}
-	return section("global", global) + "\n" + section("cwd", cwd)
+	return section("global", global) + "\n" + section("cwd "+sessionCwd, cwd)
 }
 
 type jobLineSet struct {
@@ -198,5 +198,5 @@ func List(ctx context.Context, st Stores, ct Crontab, sessionCwd string, probe f
 		global = reflag(global)
 		cwd = reflag(cwd)
 	}
-	return renderJobs(global, cwd), nil
+	return renderJobs(global, cwd, sessionCwd), nil
 }

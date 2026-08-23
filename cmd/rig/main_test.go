@@ -28,8 +28,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "0.14.0" {
-		t.Fatalf("Version = %q, want 0.14.0 (pre-1.0, feature-complete)", Version)
+	if Version != "0.14.1" {
+		t.Fatalf("Version = %q, want 0.14.1 (pre-1.0, feature-complete)", Version)
 	}
 
 	if !regexp.MustCompile(`^0\.\d+\.\d+$`).MatchString(Version) {
@@ -185,8 +185,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if got := k.SortedToolNames(); len(got) != 17 || got[0] != "bash" || got[1] != "delegate" || got[2] != "diff" || got[3] != "edit" || got[6] != "ls" || got[7] != "plugin" || got[8] != "plugins" || got[9] != "python" || got[10] != "read" || got[11] != "rem" || got[12] != "scheduler" || got[13] != "todo" || got[14] != "web_fetch" || got[15] != "web_search" || got[16] != "write" {
 		t.Fatalf("registered tools = %v, want bash,delegate,diff,edit,find,grep,ls,plugin,plugins,python,read,rem,scheduler,todo,web_fetch,web_search,write", got)
 	}
-	if len(k.Middleware) != 6 {
-		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decision 9; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	if len(k.Middleware) != 7 {
+		t.Fatalf("middleware = %d links, want the path boundary, the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decision 9; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
 	}
 }
 
