@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.14.0] — plugin and plugins
 
 - **no round cap by default** (`specs/SPEC_HARDENING.md` 9, amended):
   `rounds` is `0` in the embedded settings and `guard.Rounds(0)` counts
