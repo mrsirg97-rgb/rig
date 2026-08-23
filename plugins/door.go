@@ -28,7 +28,7 @@ func NewDoor(live Live, redo func(ctx context.Context) error) *Door {
 func (d *Door) Name() string { return "plugin" }
 
 func (d *Door) Description() string {
-	return "run a live plugin by name with its args. Guidelines: the name enum is the live set; call plugin_schema first when you do not know a plugin's args; an unknown name re-discovers once, then refuses. Reply: the plugin's text. Plugins are also importable from python by name."
+	return "run a live plugin by name with its args, or fetch its contract: {\"action\": \"run\"|\"schema\", \"name\": ..., \"args\": ...}. Both arms are non-mutating. Guidelines: the name enum is the live set; call schema first when you do not know a plugin's args; an unknown name re-discovers once, then refuses. Reply: the plugin's text, or its description and schema. Plugins are also importable from python by name."
 }
 
 func (d *Door) Schema() json.RawMessage {
@@ -37,19 +37,26 @@ func (d *Door) Schema() json.RawMessage {
 	if err != nil {
 		enum = []byte("[]")
 	}
-	return json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{"name":{"type":"string","enum":%s,"description":"the live plugin to run"},"args":{"type":"object","description":"the plugin's args, pass-through"}},"required":["name"]}`, enum))
+	return json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{"action":{"enum":["run","schema"],"description":"run the plugin, or fetch its contract"},"name":{"type":"string","enum":%s,"description":"the live plugin"},"args":{"type":"object","description":"the plugin's args, pass-through (run)"}},"required":["action","name"]}`, enum))
 }
 
 func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var in struct {
-		Name string          `json:"name"`
-		Args json.RawMessage `json:"args"`
+		Action string          `json:"action"`
+		Name   string          `json:"name"`
+		Args   json.RawMessage `json:"args"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
-		return "", fmt.Errorf("plugin: bad call (want {name, args}): %v", err)
+		return "", fmt.Errorf("plugin: bad call (want {action, name, args}): %v", err)
+	}
+	if in.Action == "" {
+		return "", fmt.Errorf("plugin: no action (want {action, name, args})")
 	}
 	if in.Name == "" {
-		return "", fmt.Errorf("plugin: no name (want {name, args})")
+		return "", fmt.Errorf("plugin: no name (want {action, name, args})")
+	}
+	if in.Action != "run" && in.Action != "schema" {
+		return "", fmt.Errorf("plugin: unknown action %q (want run or schema)", in.Action)
 	}
 	tool, ok := d.Live.Tool(in.Name)
 	if !ok && d.redo != nil {
@@ -61,53 +68,14 @@ func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("plugin: unknown plugin %q (live: %s)", in.Name, strings.Join(d.Live.PluginNames(), ", "))
 	}
-	body := in.Args
-	if body == nil {
-		body = json.RawMessage("{}")
-	}
-	return tool.Exec(ctx, body)
-}
-
-type SchemaDoor struct {
-	Live Live
-	redo func(ctx context.Context) error
-}
-
-var _ core.Tool = (*SchemaDoor)(nil)
-
-func NewSchemaDoor(live Live, redo func(ctx context.Context) error) *SchemaDoor {
-	return &SchemaDoor{Live: live, redo: redo}
-}
-
-func (d *SchemaDoor) Name() string { return "plugin_schema" }
-
-func (d *SchemaDoor) Description() string {
-	return "show a live plugin's contract. Guidelines: before the first call of a plugin whose args you do not know. Reply: its description and JSON schema, verbatim."
-}
-
-func (d *SchemaDoor) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","description":"the plugin name"}},"required":["name"]}`)
-}
-
-func (d *SchemaDoor) Exec(ctx context.Context, args json.RawMessage) (string, error) {
-	var in struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(args, &in); err != nil {
-		return "", fmt.Errorf("plugin_schema: bad call (want {name}): %v", err)
-	}
-	if in.Name == "" {
-		return "", fmt.Errorf("plugin_schema: no name (want {name})")
-	}
-	tool, ok := d.Live.Tool(in.Name)
-	if !ok && d.redo != nil {
-		if err := d.redo(ctx); err != nil {
-			return "", fmt.Errorf("plugin_schema: unknown plugin %q; re-discovery failed: %v", in.Name, err)
+	switch in.Action {
+	case "schema":
+		return fmt.Sprintf("%s\nschema: %s", tool.Description(), tool.Schema()), nil
+	default:
+		body := in.Args
+		if body == nil {
+			body = json.RawMessage("{}")
 		}
-		tool, ok = d.Live.Tool(in.Name)
+		return tool.Exec(ctx, body)
 	}
-	if !ok {
-		return "", fmt.Errorf("plugin_schema: unknown plugin %q (live: %s)", in.Name, strings.Join(d.Live.PluginNames(), ", "))
-	}
-	return fmt.Sprintf("%s\nschema: %s", tool.Description(), tool.Schema()), nil
 }

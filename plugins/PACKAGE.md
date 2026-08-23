@@ -19,22 +19,26 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   file order.
 - `Report` — one plugin file's discovery outcome.
 - `Tool` — one loaded plugin on the Tool seam.
-- `Reload` + `NewReload` — the `plugins_reload` native tool (SPEC_PLUGINS
-  8): re-discovery over the home's plugins/ and the hand-off to the root's
-  swap.
+- `Ecosystem` + `NewEcosystem` — the `plugins` native (SPEC_PLUGINS 8,
+  amended): one mutating tool over the ecosystem, an `action` enum —
+  `list` (the loaded and the skipped, through a root-wired listing seam),
+  `create` (writes a pending plugin, untrusted), `delete` (removes a
+  loaded plugin), `reload` (re-discovery over the home's plugins/ and the
+  hand-off to the root's swap).
 - `List` — the home's plugin listing (top-level `*.py`).
-- `Check` — the collision refusal (a loaded plugin named like a native).
+- `Check` — the collision refusal (a loaded plugin named like a native;
+  `plugin` and `plugins` are natives, so both are reserved).
 - `Kernel` — the shared-kernel seam (one code cell, the host's raw reply).
 - `Live` — the live plugin table's seam (SPEC_GROWTH 9): `PluginNames`
   and `Tool(name)`, implemented by `middleware/toolset`'s Table.
-- `Door` + `NewDoor` — the `plugin` native (SPEC_GROWTH 9): one dispatch
-  tool collapsing all plugin schemas to one request entry; the schema's
-  `name` enum is the live plugin names; `Exec` resolves and calls. An
-  unknown name runs the `redo` seam once (the root's reload) and
-  re-resolves; a nil redo keeps the plain refusal (SPEC_STREAMLINE 4).
-- `SchemaDoor` + `NewSchemaDoor` — the `plugin_schema` native: returns a
-  live plugin's description and schema verbatim (the model fetches args
-  on demand); the same redo seam (SPEC_STREAMLINE 4).
+- `Door` + `NewDoor` — the `plugin` native (SPEC_GROWTH 9, amended): one
+  dispatch tool collapsing all plugin schemas to one request entry; an
+  `action` enum — `run` (resolves and calls) and `schema` (returns a
+  live plugin's description and schema verbatim, the model fetches args
+  on demand), both non-mutating. The schema's `name` enum is the live
+  plugin names. An unknown name runs the `redo` seam once (the root's
+  reload) and re-resolves; a nil redo keeps the plain refusal
+  (SPEC_STREAMLINE 4).
 
 ## How it is consumed
 
@@ -43,8 +47,10 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   fake, no python required.
 - `New` wraps one discovery report as a `core.Tool`; the root registers it
   alongside native tools.
-- `NewReload` is wired as a native tool; `Reload.Exec` lists, discovers,
-  checks collisions, and hands off to the root's swap.
+- `NewEcosystem` is wired as a native tool; the `reload` arm lists,
+  discovers, checks collisions, and hands off to the root's swap; `list`
+  rides a root-wired listing seam (`command.RenderPlugins`), so the leaf
+  never imports the command package.
 - The root's swap takes effect on the next turn, never mid-turn (the
   root's table, the loop's per-turn reads).
 

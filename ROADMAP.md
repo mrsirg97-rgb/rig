@@ -334,6 +334,6 @@ recall at start, bash's cwd, edit's drift diff, the menu's
 navigation-intent Enter) implements FIRST — the field test's harvest
 before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is the worker's
 > boundary now (the provenance rule is the workflow beside it).
-> SPEC_PLUGINS 8 landed (0.7.0): the reload (`plugins_reload`) and the
+> SPEC_PLUGINS 8 landed (0.7.0): the reload (`plugins`) and the
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.

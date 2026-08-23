@@ -41,7 +41,7 @@ new tools execute, by construction — the models-switch's semantics
 - `Carry` wraps the provider (compact's decorator); it stamps the table's
   `NativeSpecs()` into the request's tools array before delegating, per
   call — the natives plus the door, the plugin schemas behind
-  `plugin_schema` (SPEC_GROWTH 9).
+  `plugin`'s `schema` arm (SPEC_GROWTH 9).
 - `IsPlugin` feeds the allow-list's second door (`perm.AllowlistWithDoor`,
   SPEC_PLUGINS 7): a name the table carries as a plugin passes the
   allow-list though absent from the static list.

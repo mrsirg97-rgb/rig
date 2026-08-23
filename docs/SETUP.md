@@ -260,7 +260,7 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   never a tool call; a name that collides with a built-in tool refuses
   with the startup collision's voice, and an already-installed file of
   the name refuses too.
-- **`plugins_reload`** — the fifteenth native tool (`specs/SPEC_PLUGINS.md`
+- **`plugins`** — the ecosystem native tool (`specs/SPEC_PLUGINS.md`
   8): re-runs the discovery over `plugins/` and swaps the kernel's tool
   list, so a plugin registers without a restart; removal is free (the
   list rebuilds from disk). `/plugins reload` is the operator's same verb
@@ -269,7 +269,7 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   a turn), the model's `write` lands the file in `plugins/pending/`, and
   `approve` installs it. The `plugin` door self-heals (SPEC_STREAMLINE
   4): an unknown name re-discovers once before refusing, so an
-  out-of-band install is callable without a reload call; `plugins_reload`
+  out-of-band install is callable without a reload call; `plugins`
   stays the operator's explicit verb.
 - **The sandbox** — the provenance rule is the workflow (SPEC_SANDBOX
   2); the worker jail is the boundary (SPEC_SANDBOX 1, 3, 5): a scheduled

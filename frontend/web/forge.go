@@ -158,6 +158,6 @@ func (s *Server) handlePluginApprove(w http.ResponseWriter, r *http.Request) {
 	if in.Replace {
 		verb = "approved and replaced"
 	}
-	reply := verb + " '" + name + "' (pending -> plugins); a live session loads it at its next plugins_reload"
+	reply := verb + " '" + name + "' (pending -> plugins); a live session loads it at its next plugins reload"
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "file": dst, "reply": reply})
 }

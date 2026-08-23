@@ -214,7 +214,7 @@ The pieces, each holding a frozen surface untouched:
   one-shot and the plain CLI offer no door.
 - **The mutating set**: the natives that change the world outside
   rig's own stores — bash, write, edit, python, scheduler,
-  plugins_reload — and every plugin (arbitrary python is mutating by
+  plugins — and every plugin (arbitrary python is mutating by
   nature). The read set (read, ls, find, grep, the web pair) and the
   store tools (todo, rem, diff) pass silently: manual is a gate, not
   a turnstile.

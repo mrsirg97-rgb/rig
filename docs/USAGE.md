@@ -51,7 +51,7 @@ is a loud line naming the known set, never silently a prompt.
   file), the skipped ones with their reasons, and the pending zone —
   `pending` lists the model's authoring with each file's DESCRIPTION,
   `approve <name>` installs one (the operator's verb), `reload`
-  re-registers from disk (the `plugins_reload` tool's command door),
+  re-registers from disk (the `plugins` tool's command door),
   `create <text>` queues the authoring prompt.
 
 Context compacts automatically at the active model's own trigger (the

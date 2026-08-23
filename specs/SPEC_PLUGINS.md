@@ -136,19 +136,23 @@ func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error)
 // description and schema are the file's, the call rides the kernel.
 func New(name, description, file string, schema json.RawMessage, k Kernel) core.Tool
 
-// Reload is the plugins_reload tool (8): the one new primitive —
-// re-runs the discovery over the home's plugins/ (the same loud
-// skips, the same collision refusal, removal free) and hands the
-// reports to the root's swap, which takes effect on the next turn
-// (never mid-turn). Name is "plugins_reload"; the schema is the
-// empty object (no arguments).
-type Reload struct {
+// Ecosystem is the plugins tool (8, amended): the one new primitive —
+// one mutating native over the ecosystem, an action enum — list (the
+// loaded and the skipped, through a root-wired listing seam), create
+// (writes a pending plugin, untrusted), delete (removes a loaded
+// plugin), reload (re-runs the discovery over the home's plugins/,
+// the same loud skips, the same collision refusal, removal free) and
+// hands the reports to the root's swap, which takes effect on the
+// next turn (never mid-turn). Name is "plugins"; the schema is the
+// action enum.
+type Ecosystem struct {
 	Home    string            // the rig home (the listing is its top-level *.py)
 	Kernel  Kernel
-	Natives map[string]bool   // the collision set (the native tools, including plugins_reload)
+	Natives map[string]bool   // the collision set (the native tools, including plugin and plugins)
 	Swap    func(ctx context.Context, reports []Report) (string, error) // the root's rebuild
+	List    func() (string, error) // the root's listing seam (RenderPlugins)
 }
-func NewReload(home string, natives map[string]bool, k Kernel, swap func(ctx context.Context, reports []Report) (string, error)) *Reload
+func NewEcosystem(home string, natives map[string]bool, k Kernel, swap func(ctx context.Context, reports []Report) (string, error), list func() (string, error)) *Ecosystem
 
 package command
 
@@ -447,7 +451,8 @@ is the point of writing both specs together.
 
 The pieces:
 
-- **`plugins_reload`, a native tool** (the one new primitive): re-runs
+- **`plugins`, a native tool** (the one new primitive, amended: the
+  `plugins_reload` one is folded into an action-enum ecosystem): re-runs
   the discovery over `~/.rig/plugins/` — the same loud skips, the same
   collision refusal, removal free (the list rebuilds from disk) — and
   swaps the kernel's tool list at the root, the models-switch
@@ -455,13 +460,16 @@ The pieces:
   request already carries its list). The reload imports into the
   running kernel, so a new plugin's functions are callable from the
   python tool immediately, and callable as a tool on the next turn.
+  `list` is a management read; `create` writes a pending plugin
+  (untrusted, SPEC_SANDBOX); `delete` removes a loaded one. `plugins` is
+  a mutating native, so every arm pauses at the gate.
 - **`/plugins reload`**, the operator's verb: the same re-discovery,
   the same next-turn registration, from the command door.
 - **`/plugins create <text>`**, a prompt template on the steer
   precedent (the command queues a line; it never dispatches a turn
   itself): "author a plugin: <text>; the contract is DESCRIPTION,
   SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending
-  directory (SPEC_SANDBOX); call plugins_reload; test it with one
+  directory (SPEC_SANDBOX); call plugins reload; test it with one
   call." The command is sugar over capabilities the model has.
 - **Promotion**, the flow that motivated this: kernel code the model
   keeps reusing becomes a plugin on request — and the rule is
@@ -487,7 +495,7 @@ The costs, named:
   listed first, so innermost, first-listed is innermost — resolves a
   call against the table before the chain's participants bound its
   result, falling through to the loop's own exec for a name the
-  table does not carry. A swap (the `plugins_reload`'s, the `/plugins
+  table does not carry. A swap (the `plugins`'s, the `/plugins
   reload`'s, the approve's tail) is one atomic write to that table:
   the next turn's request carries the new list and the new tools
   execute, by construction — the models-switch's semantics, zero
@@ -614,9 +622,9 @@ a good plugin, a broken-import one, a missing-SCHEMA one):**
 
 plugins (the leaf, fake kernel — no python required):
 
-- `TestReloadToolSurfacesAreTheNativeContract` — Name is
-  `plugins_reload`, the schema the empty object, the description
-  names the re-discovery and the next-turn effect.
+- `TestEcosystemSurfacesAreTheNativeContract` — Name is `plugins`,
+  the schema the action enum (list, create, delete, reload), the
+  description names the four verbs and the next-turn effect.
 - `TestReloadToolExecRediscoversAndHandsOff` — a canned report
   (one loaded, one skipped): the swap receives the reports in file
   order, the reply is the swap's verbatim, and the kernel's cell is
@@ -626,7 +634,7 @@ plugins (the leaf, fake kernel — no python required):
   report (the list rebuilds to the natives — removal free), the
   reply names the empty list.
 - `TestReloadToolCollisionRefusesBeforeTheSwap` — a loaded report
-  named like a native (the set includes `plugins_reload` itself):
+  named like a native (the set includes `plugins` itself):
   the refusal is the startup collision's voice, and the swap is
   never called.
 - `TestReloadToolKernelFailureIsTheError` — a non-OK reply: the
@@ -668,7 +676,7 @@ on a usable python as the plugin suite's):
   keep executing (the fall-through); loop/ and core/ stay
   byte-frozen against the branch's base.
 - `TestPluginsReloadToolRebuildsTheList` — the model calls
-  `plugins_reload`: the reply is the reload's (the loud skips in
+  `plugins` reload: the reply is the reload's (the loud skips in
   it), the next turn's wire carries the new plugin (its
   DESCRIPTION and SCHEMA verbatim) and it executes (the round
   trip); a second reload over a removed file rebuilds the list
@@ -679,7 +687,7 @@ on a usable python as the plugin suite's):
 - `TestReloadE2ERegistersAForgedPluginNextTurn` — the real kernel
   (gated): the provider's first request lands a new file in
   `plugins/` (the scripted clock), the model calls
-  `plugins_reload`, the reply carries the loaded line, the next
+  `plugins` reload, the reply carries the loaded line, the next
   turn's wire carries the plugin, and the model's call of it
   round-trips through the shared namespace (the import is the
   reload's, the call is the next turn's).
@@ -688,7 +696,7 @@ on a usable python as the plugin suite's):
   line, and the next `/plugins` listing shows it loaded (the root's
   state swapped, the command's listing follows).
 - the no-plugins wire (the golden pin's companion): the native
-  set, `plugins_reload` among them (15, in order), and the golden
+  set, `plugins` among them (17, in order), and the golden
   fixtures regenerated in place (the directory is the 0.2.0 wire
   baseline, the bytes the current native set — the pin moves with
   the set, as the earlier releases' did).
@@ -729,7 +737,7 @@ Decision 8's diffs (the reload and the forge, `0.6.0` → `0.7.0`):
 - **SPEC_SANDBOX**: decision 2's usage line gains the two new verbs,
   and the approve's tail is the reload's (post-8).
 - **SPEC_CONFIG**: the built-in `allow` default gains
-  `plugins_reload` (a native the model must be able to call without
+  `plugins` (a native the model must be able to call without
   an operator line), and the golden fixtures regenerate in place.
 - **`middleware/toolset`**: NEW leaf (the seam, named in 8's costs).
 - **`plugins`**: gains `List`, `Check`, and the `Reload` tool; the
