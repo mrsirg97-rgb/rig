@@ -85,7 +85,7 @@ store/          the SQLite stores (state, todo, rem, scheduler) and the state
 tool/           Tool implementations: bash(1); file read/write/edit; fs ls/find/grep;
                 todo the job queue; rem memory; scheduler background jobs; python the
                 persistent IPython kernel; web search and fetch; diff the observation
-                diff; plugins_reload the live reload
+                diff; plugins the ecosystem (list/create/delete/reload)
 frontend/       Frontend implementations: cli (the piped reference), tui (the
                 terminal default), oneshot (-p worker)
 specs/          the specs, written and agreed before the code (SPEC_CORE first)

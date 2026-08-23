@@ -68,7 +68,7 @@ Surfaces reviewed: the embedded system prompt (`config/settings.json`
   is done" — fine as written; no change.
 - `createTemplate` is terse to a fault: it references `SPEC_SANDBOX` (a
   spec label the model may not have) and assumes the model knows the
-  `plugins_reload` contract. It is a steer prompt, not the system prompt;
+  `plugins` contract. It is a steer prompt, not the system prompt;
   the reload's own Description carries the contract the model sees on the
   wire. Leave as-is — tightening would cost the model context it already
   gets from the tool descriptions.

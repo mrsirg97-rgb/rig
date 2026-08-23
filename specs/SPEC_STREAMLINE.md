@@ -15,7 +15,7 @@ the on-contact teaching, and removes the step.
   descriptions stop double-teaching it.
 - The `plugin` door (SPEC_GROWTH 9) is total over discovery: a name the
   model has reason to believe exists is callable without a preceding
-  `plugins_reload` call. The authoring dance is: write to the pending
+  `plugins` reload call. The authoring dance is: write to the pending
   zone, the operator approves, the model calls it through the door.
 - The two new response facts are named: the todo store names the
   compaction when its own call caused it, and the unknown-id refusal
@@ -91,7 +91,8 @@ assertions hold; the parenthetical is the teaching, on contact.
 
 ### 4. The door's self-heal
 
-`plugin` and `plugin_schema` take a `redo` seam at construction:
+the `plugin` door takes a `redo` seam at construction; both arms
+(run and schema) resolve through it:
 
 ```go
 type Door struct {
@@ -128,7 +129,7 @@ failure instead of pretending the table is the truth.
 ### 5. The authoring dance loses the reload step
 
 `/plugins create`'s template ends with the operator's approve and the
-door's call, not `plugins_reload`:
+door's call, not `plugins` reload:
 
     author a plugin: %s; the contract is DESCRIPTION, SCHEMA,
     run(args) -> str; write it SELF-CONTAINED to the pending
@@ -136,7 +137,7 @@ door's call, not `plugins_reload`:
     /plugins approve; then call it through the plugin door and test
     it with one call.
 
-`plugins_reload` stays a native, in the allow-list default: it is the
+`plugins` stays a native, in the allow-list default: it is the
 operator's explicit verb (removal detection, the collision report), not
 the authoring flow's. This amends SPEC_PLUGINS 8's testing clause,
 named.
@@ -171,7 +172,7 @@ Named cases, failing first, in the leaves that carry them.
 seam, SPEC_PLUGINS 8's harness):**
 
 - `TestDoorSelfHealsAnOutOfBandInstall` — a plugin file lands in
-  the home after the wire and no `plugins_reload` is called; the model
+  the home after the wire and no `plugins` reload is called; the model
   calls `plugin {name}` directly; the door re-discovers, executes, and
   the result rides back verbatim; the following request carries the
   name in the door's enum.

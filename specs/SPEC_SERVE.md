@@ -462,7 +462,7 @@ the name wall):
 - `POST /api/plugins/approve {name, replace?}` — the command's verb,
   verbatim: pending → `plugins/`; a native name refused; an installed
   name a 409 naming `replace` until it is explicit, then the swap. The
-  reply names what a live session needs: its next `plugins_reload`.
+  reply names what a live session needs: its next `plugins reload`.
 
 The phase-2 create form (`POST /api/plugins`, the run body wrapped)
 stays as a door; the page now uses the editor with the contract's

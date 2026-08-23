@@ -24,7 +24,7 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
                                         │
                                         ▼
              tool/bash · tool/file · tool/fs · tool/todo · tool/rem · tool/scheduler
-             · tool/python · tool/web · tool/diff · plugins_reload
+             · tool/python · tool/web · tool/diff · plugins
 
  cmd/rig (composition root): wires every seam once at startup; flags and env only.
  store/state: the recorder wraps the Frontend — it sources its rows from the

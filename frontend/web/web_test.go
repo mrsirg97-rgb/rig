@@ -949,6 +949,10 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "DESCRIPTION") {
 		t.Fatalf("no contract: got %d %s", rec.Code, rec.Body.String())
 	}
+	body, _ = json.Marshal(map[string]string{"name": "My Plugin", "source": src})
+	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filename stem") {
+		t.Fatalf("bad name: got %d %s", rec.Code, rec.Body.String())
+	}
 	body, _ = json.Marshal(map[string]string{"name": "bash", "source": src})
 	if rec = doReq(t, h, "POST", "/api/plugins/save", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "native") {
 		t.Fatalf("native collision: got %d %s", rec.Code, rec.Body.String())

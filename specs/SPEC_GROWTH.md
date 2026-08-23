@@ -28,8 +28,9 @@ changes.
   (scheduled now) and the weekly security sweep (proposed).
 - **The plugin door + enable/disable** (the harness amendment): one
   `plugin` tool collapses all plugin schemas to one request entry, so a
-  grown table stops blowing context; `plugin_schema` fetches one plugin's
-  spec on demand; `/plugins enable|disable` is the hide/turn-off surface.
+  grown table stops blowing context; its `schema` arm fetches one
+  plugin's spec on demand; `/plugins enable|disable` is the
+  hide/turn-off surface.
 
 ## non-goals
 
@@ -145,21 +146,21 @@ before it can act. The fix is a **door**, not nesting: the plugins stay
 real `core.Tool`s in the table, and the request carries natives plus one
 `plugin` door.
 
-**The door.** A new native tool `plugin`, schema `{"name": string, "args":
-object}`: `Exec` resolves the named plugin in the live table and calls
-it. An unknown name is a loud tool error naming the live plugins. The
-`name` field's `enum` is the live plugin names (the swap's own list) —
-the model sees what is callable, cheap, no per-plugin schemas. A second
-native `plugin_schema`, schema `{"name": string}`, returns one plugin's
-description and schema verbatim: the model fetches the args it needs
-when it calls a non-trivial plugin. The two doors' schemas are small and
-known; the request drops twenty large plugin schemas for two small ones.
-The door's descriptions are the operator's, stated once in the schema:
-"plugins run via the `plugin` door; `plugin_schema <name>` shows a
-plugin's contract."
+**The door.** A new native tool `plugin`, schema `{"action": "run"|"schema",
+"name": string, "args": object}` (amended: the `plugin_schema` native is
+folded into the `schema` arm): `Exec` resolves the named plugin in the
+live table and calls it (run) or returns its description and schema
+verbatim (schema — the model fetches the args it needs when it calls a
+non-trivial plugin). Both arms are non-mutating. An unknown name is a
+loud tool error naming the live plugins. The `name` field's `enum` is
+the live plugin names (the swap's own list) — the model sees what is
+callable, cheap, no per-plugin schemas. One door, one small schema; the
+request drops twenty large plugin schemas for one small one. The door's
+description states the contract once: "plugins run via the `plugin`
+door's `run` arm; `schema <name>` shows a plugin's contract."
 
 **The door is a native, so it is allow-listed as one** (amended 0.12.1:
-the door round added `plugin` and `plugin_schema` to the native set and
+the door round added `plugin` (run + schema) to the native set and
 not to the embedded `allow` default, and every door call on a default
 home was refused as `plugin is not in the allow-list` — the presence
 door vouches for plugin names, never for the door; the embedded allow
@@ -218,7 +219,7 @@ enablement is the operator's (SPEC_SANDBOX 2's ownership), and a
 capability the model switches on itself is the auto-promotion shape
 decision 8 rejected. A purely-freeform `args` with no schema door: the
 model needs the args shape to call `flip_calc` correctly, and
-`plugin_schema` is the cheap answer. A hard cap that drops plugins
+`plugin`'s `schema` arm is the cheap answer. A hard cap that drops plugins
 without a door: an invisible tool is uncallable; the door keeps every
 enabled plugin reachable.
 
@@ -239,13 +240,13 @@ existing leaves.
 
 **plugins (the leaf, fake kernel — no python required):**
 
-- `TestDoorSurfacesAreTheNativeContract` — `plugin` and `plugin_schema`
-  are natives: Name, the small schemas, the descriptions naming the
-  doors; `plugin`'s schema carries the live names' enum.
-- `TestDoorExecResolvesAndCalls` — `plugin` with `{name, args}` calls
-  the named plugin's Exec (args verbatim, result verbatim); an unknown
-  name is a loud tool error naming the live plugins; `plugin_schema`
-  returns the named plugin's description and schema verbatim.
+- `TestDoorSurfacesAreTheNativeContract` — `plugin` is a native: Name,
+  the small schema, the description naming the door; `plugin`'s schema
+  carries the `action` enum (run, schema) and the live names' enum.
+- `TestDoorExecResolvesAndCalls` — `plugin` with `{action: run, name,
+  args}` calls the named plugin's Exec (args verbatim, result verbatim);
+  `{action: schema, name}` returns the description and schema verbatim;
+  an unknown name is a loud tool error naming the live plugins.
 
 **command (the leaf, fakes at the Env seam):**
 
@@ -256,7 +257,7 @@ existing leaves.
 **cmd/rig (root + e2e):**
 
 - `TestDoorWireStampsNativesPlusTheDoor` — the request's tools array is
-  the natives plus `plugin` and `plugin_schema` (no per-plugin schemas);
+  the natives plus `plugin` and `plugins` (no per-plugin schemas);
   the door's `name` enum carries the live plugin names.
 - `TestEnablementHidesAndCaps` — `settings.json` `plugins.enabled` drops
   a plugin from the door's enum (not callable, loud unknown); `max` caps

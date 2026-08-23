@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,23 +11,35 @@ import (
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 )
 
-func TestReloadToolSurfacesAreTheNativeContract(t *testing.T) {
-	tool := NewReload("/h", map[string]bool{"bash": true, "plugins_reload": true}, &fakeKernel{}, func(ctx context.Context, reports []Report) (string, error) {
+func TestEcosystemSurfacesAreTheNativeContract(t *testing.T) {
+	tool := NewEcosystem("/h", map[string]bool{"bash": true, "plugins": true}, &fakeKernel{}, func(ctx context.Context, reports []Report) (string, error) {
 		return "plugins: reload: 0 loaded, 0 skipped", nil
+	}, func() (string, error) {
+		return "plugins: none", nil
 	})
-	if tool.Name() != "plugins_reload" {
-		t.Fatalf("Name = %q, want plugins_reload (a native tool)", tool.Name())
+	if tool.Name() != "plugins" {
+		t.Fatalf("Name = %q, want plugins (a native tool)", tool.Name())
 	}
-	if string(tool.Schema()) != `{"type":"object"}` {
-		t.Fatalf("the schema = %s, want the empty object (no arguments)", tool.Schema())
+	var params struct {
+		Properties struct {
+			Action struct {
+				Enum []string `json:"enum"`
+			} `json:"action"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema(), &params); err != nil {
+		t.Fatalf("the schema is not JSON: %v", err)
+	}
+	if len(params.Properties.Action.Enum) != 4 || params.Properties.Action.Enum[0] != "list" || params.Properties.Action.Enum[1] != "create" || params.Properties.Action.Enum[2] != "delete" || params.Properties.Action.Enum[3] != "reload" {
+		t.Fatalf("the action enum = %v, want list, create, delete, reload", params.Properties.Action.Enum)
 	}
 	desc := tool.Description()
-	if !strings.Contains(desc, "discovery") || !strings.Contains(desc, "next turn") {
-		t.Fatalf("the description must name the re-discovery and the next-turn effect, got %q", desc)
+	if !strings.Contains(desc, "list") || !strings.Contains(desc, "create") || !strings.Contains(desc, "delete") || !strings.Contains(desc, "reload") {
+		t.Fatalf("the description must name the four ecosystem verbs, got %q", desc)
 	}
 }
 
-func TestReloadToolExecRediscoversAndHandsOff(t *testing.T) {
+func TestEcosystemExecReloadRediscoversAndHandsOff(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
 		t.Fatal(err)
@@ -45,8 +58,8 @@ func TestReloadToolExecRediscoversAndHandsOff(t *testing.T) {
 		got = reports
 		return "plugins: reload: 1 loaded, 1 skipped", nil
 	}
-	tool := NewReload(home, map[string]bool{"bash": true}, k, swap)
-	out, err := tool.Exec(context.Background(), nil)
+	tool := NewEcosystem(home, map[string]bool{"bash": true}, k, swap, nil)
+	out, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"reload"}`))
 	if err != nil {
 		t.Fatalf("Exec: %v", err)
 	}
@@ -66,18 +79,138 @@ func TestReloadToolExecRediscoversAndHandsOff(t *testing.T) {
 	}
 }
 
-func TestReloadToolEmptyDirectoryNeverStartsTheKernel(t *testing.T) {
+func TestEcosystemExecListReadsTheSeam(t *testing.T) {
+	tool := NewEcosystem("/h", map[string]bool{}, &fakeKernel{}, nil, func() (string, error) {
+		return "plugins: 2 loaded, 0 skipped", nil
+	})
+	out, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"list"}`))
+	if err != nil || out != "plugins: 2 loaded, 0 skipped" {
+		t.Fatalf("the list = (%q, %v), want the listing seam's verbatim", out, err)
+	}
+	missing := NewEcosystem("/h", map[string]bool{}, &fakeKernel{}, nil, nil)
+	_, err = missing.Exec(context.Background(), json.RawMessage(`{"action":"list"}`))
+	if err == nil || !strings.Contains(err.Error(), "no listing seam") {
+		t.Fatalf("a missing list seam must refuse by name, got %v", err)
+	}
+}
+
+func TestEcosystemExecCreateWritesPending(t *testing.T) {
+	home := t.TempDir()
+	tool := NewEcosystem(home, map[string]bool{"bash": true, "plugins": true}, &fakeKernel{}, nil, nil)
+	good := `{"action":"create","name":"echo","source":"DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"}`
+	out, err := tool.Exec(context.Background(), json.RawMessage(good))
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if !strings.Contains(out, "plugins: create: created echo") {
+		t.Fatalf("the create reply = %q, want the created voice", out)
+	}
+	path := filepath.Join(home, "plugins", "pending", "echo.py")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the created plugin must land in plugins/pending/: %v", err)
+	}
+	out, err = tool.Exec(context.Background(), json.RawMessage(good))
+	if err != nil {
+		t.Fatalf("re-create: %v", err)
+	}
+	if !strings.Contains(out, "plugins: create: updated echo") {
+		t.Fatalf("a second write must report updated, got %q", out)
+	}
+	for _, bad := range []string{`{"action":"create","name":"","source":"x"}`, `{"action":"create","name":"a/b","source":"x"}`, `{"action":"create","name":"My Plugin","source":"x"}`, `{"action":"create","name":"bash","source":"x"}`, `{"action":"create","name":"plugins","source":"x"}`, `{"action":"create","name":"echo","source":"x = 1\n"}`} {
+		_, err := tool.Exec(context.Background(), json.RawMessage(bad))
+		if err == nil {
+			t.Fatalf("create %s must refuse", bad)
+		}
+	}
+}
+
+func TestEcosystemExecDeleteMovesToDisabled(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "echo.py")
+	if err := os.WriteFile(path, []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tool := NewEcosystem(home, map[string]bool{}, &fakeKernel{}, nil, nil)
+	out, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"delete","name":"echo"}`))
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if !strings.Contains(out, "plugins: delete: echo") {
+		t.Fatalf("the delete reply = %q", out)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("the loaded file must be gone from plugins/")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "disabled", "echo.py")); err != nil {
+		t.Fatalf("the file must land in plugins/disabled/ (nothing unlinked): %v", err)
+	}
+	_, err = tool.Exec(context.Background(), json.RawMessage(`{"action":"delete","name":"echo"}`))
+	if err == nil || !strings.Contains(err.Error(), "no plugin \"echo\"") {
+		t.Fatalf("a second delete must refuse by name, got %v", err)
+	}
+}
+
+func TestWritePendingSharesTheForgeRule(t *testing.T) {
+	natives := map[string]bool{"bash": true}
+	src := "DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"
+	home := t.TempDir()
+	path, created, err := WritePending(home, natives, "echo", src)
+	if err != nil || !created || filepath.Base(path) != "echo.py" {
+		t.Fatalf("(path, created, err) = (%q, %v, %v), want the pending write", path, created, err)
+	}
+	_, created, err = WritePending(home, natives, "echo", src)
+	if err != nil || created {
+		t.Fatalf("a second write must report updated, got (created=%v, err=%v)", created, err)
+	}
+	cases := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{"My Plugin", src, "the name is the filename stem"},
+		{"a/b", src, "the name is the filename stem"},
+		{"bash", src, "name collision"},
+		{"echo", "x = 1\n", "missing DESCRIPTION"},
+		{"echo", src, ""},
+	}
+	for _, c := range cases {
+		_, _, err := WritePending(t.TempDir(), natives, c.name, c.source)
+		if c.want == "" {
+			if err != nil {
+				t.Fatalf("WritePending(%q): %v", c.name, err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("WritePending(%q) = %v, want %q named", c.name, err, c.want)
+		}
+	}
+}
+
+func TestEcosystemExecUnknownActionRefuses(t *testing.T) {
+	tool := NewEcosystem("/h", map[string]bool{}, &fakeKernel{}, nil, nil)
+	_, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"sideways"}`))
+	if err == nil || !strings.Contains(err.Error(), `unknown action "sideways"`) {
+		t.Fatalf("an unknown action must refuse by name, got %v", err)
+	}
+}
+
+func TestEcosystemReloadEmptyDirectoryNeverStartsTheKernel(t *testing.T) {
 	for _, home := range []string{t.TempDir(), emptyPluginsHome(t)} {
 		k := &fakeKernel{}
 		called := false
-		tool := NewReload(home, map[string]bool{}, k, func(ctx context.Context, reports []Report) (string, error) {
+		tool := NewEcosystem(home, map[string]bool{}, k, func(ctx context.Context, reports []Report) (string, error) {
 			called = true
 			if len(reports) != 0 {
 				t.Fatalf("the empty listing's swap got %d reports, want 0", len(reports))
 			}
 			return "plugins: reload: 0 loaded, 0 skipped", nil
-		})
-		out, err := tool.Exec(context.Background(), nil)
+		}, nil)
+		out, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"reload"}`))
 		if err != nil || out != "plugins: reload: 0 loaded, 0 skipped" {
 			t.Fatalf("(out, err) = (%q, %v), want the empty list (removal free)", out, err)
 		}
@@ -99,12 +232,12 @@ func emptyPluginsHome(t *testing.T) string {
 	return home
 }
 
-func TestReloadToolCollisionRefusesBeforeTheSwap(t *testing.T) {
+func TestEcosystemCollisionRefusesBeforeTheSwap(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"bash", "plugins_reload"} {
+	for _, name := range []string{"bash", "plugins"} {
 		file := filepath.Join(home, "plugins", name+".py")
 		if err := os.WriteFile(file, []byte("x = 1\n"), 0o644); err != nil {
 			t.Fatal(err)
@@ -112,11 +245,11 @@ func TestReloadToolCollisionRefusesBeforeTheSwap(t *testing.T) {
 		report := `[{"name":"` + name + `","file":"` + file + `","ok":true,"description":"shadow","schema":{"type":"object"}}]`
 		k := &fakeKernel{replies: []pythontool.Reply{okReply(report)}}
 		called := false
-		tool := NewReload(home, map[string]bool{"bash": true, "plugins_reload": true}, k, func(ctx context.Context, reports []Report) (string, error) {
+		tool := NewEcosystem(home, map[string]bool{"bash": true, "plugins": true}, k, func(ctx context.Context, reports []Report) (string, error) {
 			called = true
 			return "plugins: reload: 1 loaded, 0 skipped", nil
-		})
-		_, err := tool.Exec(context.Background(), nil)
+		}, nil)
+		_, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"reload"}`))
 		if err == nil {
 			t.Fatalf("%s.py must refuse (a native name)", name)
 		}
@@ -130,7 +263,7 @@ func TestReloadToolCollisionRefusesBeforeTheSwap(t *testing.T) {
 	}
 }
 
-func TestReloadToolKernelFailureIsTheError(t *testing.T) {
+func TestEcosystemKernelFailureIsTheError(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
 		t.Fatal(err)
@@ -140,11 +273,11 @@ func TestReloadToolKernelFailureIsTheError(t *testing.T) {
 	}
 	k := &fakeKernel{replies: []pythontool.Reply{errReply("kernel exited (code 1)", "")}}
 	called := false
-	tool := NewReload(home, map[string]bool{}, k, func(ctx context.Context, reports []Report) (string, error) {
+	tool := NewEcosystem(home, map[string]bool{}, k, func(ctx context.Context, reports []Report) (string, error) {
 		called = true
 		return "plugins: reload: 0 loaded, 0 skipped", nil
-	})
-	_, err := tool.Exec(context.Background(), nil)
+	}, nil)
+	_, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"reload"}`))
 	if err == nil {
 		t.Fatal("a discovery failure must be the error")
 	}
@@ -200,7 +333,7 @@ func TestListIsTopLevelPyOnly(t *testing.T) {
 }
 
 func TestCheckVoicesTheCollision(t *testing.T) {
-	natives := map[string]bool{"bash": true, "plugins_reload": true}
+	natives := map[string]bool{"bash": true, "plugins": true}
 	report := Report{Name: "bash", File: "/h/plugins/bash.py", Skipped: false}
 	err := Check([]Report{report}, natives)
 	if err == nil {

@@ -78,7 +78,7 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.System != "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin." {
 		t.Fatalf("system = %q, want the 0.2.0 default system prompt", s.System)
 	}
-	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugin_schema", "plugins_reload"}
+	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins"}
 	if !reflect.DeepEqual(s.Allow, wantAllow) {
 		t.Fatalf("allow = %v, want the 0.2.0 default list %v", s.Allow, wantAllow)
 	}

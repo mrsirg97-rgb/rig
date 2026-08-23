@@ -118,7 +118,6 @@ func wire(r *root) *rig.Kernel {
 				redo = r.redoPlugins
 			}
 			r.tools["plugin"] = plugins.NewDoor(r.live, redo)
-			r.tools["plugin_schema"] = plugins.NewSchemaDoor(r.live, redo)
 		}
 		r.live.Set(append(r.nativeTools(), r.pluginTools...))
 	}
@@ -365,7 +364,7 @@ var concurrentNatives = map[string]bool{
 
 var mutatingNatives = map[string]bool{
 	"bash": true, "write": true, "edit": true, "python": true,
-	"scheduler": true, "plugins_reload": true, "delegate": true,
+	"scheduler": true, "plugins": true, "delegate": true,
 }
 
 func (r *root) isMutating(name string) bool {
@@ -530,7 +529,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugin_schema", "plugins_reload"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins"}
 
 func rigHome() (string, error) {
 	if v := os.Getenv("RIG_HOME"); v != "" {
@@ -943,7 +942,9 @@ func main() {
 	for _, name := range nativeToolNames {
 		r.natives[name] = true
 	}
-	r.tools["plugins_reload"] = plugins.NewReload(cfgDir, r.natives, py, r.swapPlugins)
+	r.tools["plugins"] = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
+		return command.RenderPlugins(r.pluginInfos, ""), nil
+	})
 
 	env := &command.Env{
 		Session:       func() *core.Session { return r.session },
