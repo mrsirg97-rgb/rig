@@ -223,11 +223,19 @@ func parseScheduler(reply string) (schedParsed, bool) {
 		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "global:") || strings.HasPrefix(line, "cwd:") || strings.HasPrefix(line, "cwd /") {
+		if strings.HasSuffix(line, ":") && !schedJobHead.MatchString(line) {
 			flushJob()
-			name := strings.TrimSuffix(strings.TrimSuffix(line, ": no jobs"), ":")
-			empty := strings.HasSuffix(line, ": no jobs")
-			p.Sections = append(p.Sections, schedSection{Name: name, Empty: empty})
+			p.Sections = append(p.Sections, schedSection{Name: strings.TrimSuffix(line, ":")})
+			cur = &p.Sections[len(p.Sections)-1]
+			continue
+		}
+		if strings.Contains(line, ": no jobs") {
+			flushJob()
+			name := line
+			if i := strings.Index(name, ": no jobs"); i >= 0 {
+				name = name[:i]
+			}
+			p.Sections = append(p.Sections, schedSection{Name: name, Empty: true})
 			cur = &p.Sections[len(p.Sections)-1]
 			continue
 		}

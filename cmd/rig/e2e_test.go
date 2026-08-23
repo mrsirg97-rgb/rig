@@ -83,32 +83,24 @@ func (f *fakeCrontabTest) text_() string {
 	return f.text
 }
 
-func scratchStores(t *testing.T, home, cwd string) sched.Stores {
+func scratchStores(t *testing.T, home, cwd string) sched.DB {
 	t.Helper()
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	global, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := sched.ParseKey("cwd-" + sched.CwdHash(cwd) + ":j1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cw, _, _, err := store.Open(sched.StorePathFor(home, key), sched.Statements(), sched.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return sched.Stores{Global: global, Cwd: cw}
+	return db
 }
 
 var fixedNow = func() time.Time { return time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC) }
 
-func countRows(t *testing.T, st sched.Stores, query string) int {
+func countRows(t *testing.T, db sched.DB, query string) int {
 	t.Helper()
 	var n int
-	if err := st.Cwd.DB.QueryRow(query).Scan(&n); err != nil {
+	if err := db.DB.QueryRow(query).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -138,13 +130,13 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, "/ws/e2e")
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-		Name: "e2e", Prompt: "say hi", Cron: "0 5 * * *", Scope: "cwd",
+		Name: "e2e", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
 	}, "/ws/e2e", "sess-e2e", bin+" run-job", fixedNow)
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
-	key := "cwd-" + sched.CwdHash("/ws/e2e") + ":j1"
+	key := "j1"
 	if !containsStr(fake.text_(), "0 5 * * * "+bin+" run-job "+key) {
 		t.Fatalf("crontab line missing: %q", fake.text_())
 	}
@@ -172,7 +164,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	}
 	var status string
 	var exit any
-	if err := st.Cwd.DB.QueryRow(`SELECT last_status, last_exit FROM jobs WHERE id = 'j1'`).Scan(&status, &exit); err != nil {
+	if err := st.DB.QueryRow(`SELECT last_status, last_exit FROM jobs WHERE id = 'j1'`).Scan(&status, &exit); err != nil {
 		t.Fatal(err)
 	}
 	if status != "fail" {
@@ -182,7 +174,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 		t.Fatalf("last_exit %v, want non-zero", exit)
 	}
 
-	logDir := filepath.Join(home, "runs", "cwd-"+sched.CwdHash("/ws/e2e"), "j1")
+	logDir := filepath.Join(home, "runs", "j1")
 	entries, err := filepath.Glob(filepath.Join(logDir, "*.log"))
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("run log entries = %v (%v)", entries, err)
@@ -191,7 +183,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"== stdout ==", "rig: fault:", "key=cwd-"} {
+	for _, want := range []string{"== stdout ==", "rig: fault:", "key=j1"} {
 		if !containsStr(string(log), want) {
 			t.Fatalf("run log missing %q:\n%s", want, log)
 		}

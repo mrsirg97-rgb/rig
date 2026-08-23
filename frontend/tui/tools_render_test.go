@@ -27,11 +27,12 @@ const todoReplyStale = "3/3 done · next: t4\n" +
 	"  t3 [x] three\n" +
 	"· 2 unresolved since 2026-04-18 (recovered from log)\n"
 
-const schedListReply = "global:\n" +
+const schedListReply = "/home/ng/Projects/rig:\n" +
 	"j2 weekly-report active · next 2026-04-19T00:00:00Z · ok exit 0 2026-04-18T22:00:00Z\n" +
-	"  scope global · cron 0 0 * * 1 · qwen3.8-workers · /home/ng\n" +
-	"  drift: no crontab line\n" +
-	"cwd /home/ng/Projects/rig: no jobs\n"
+	"  cron 0 0 * * 1 · qwen3.8-workers · /home/ng/Projects/rig\n" +
+	"  drift: no crontab line\n"
+
+const schedEmptyReply = "scheduler: no jobs (global.sqlite)\n"
 
 const schedRunsReply = "j2 · 3 runs (oldest first):\n" +
 	"2026-04-16T00:00:01Z  ok  exit 0 12000ms /home/ng/.config/rig/scheduler/runs/j2-1.log\n" +
@@ -159,14 +160,25 @@ func TestSchedulerListBlockExact(t *testing.T) {
 	if !strings.Contains(got, th.Paint("dim", "  drift: no crontab line")+"") && !strings.Contains(got, "drift: no crontab line") {
 		t.Fatalf("the drift is named:\n%s", got)
 	}
-	if !strings.Contains(got, th.Paint("dim", "  cwd /home/ng/Projects/rig: no jobs")) {
-		t.Fatalf("the empty section stays dim:\n%s", got)
+	if !strings.Contains(got, th.Paint("dim", "  /home/ng/Projects/rig:")) {
+		t.Fatalf("the directory section header stays dim:\n%s", got)
 	}
 
-	paused := "global:\nj1 nightly paused · at passed\n  scope global · cron once · at 2026-04-19T00:00:00Z · qwen3.8-workers · /home/ng\ncwd /home/ng: no jobs\n"
+	paused := "/home/ng:\nj1 nightly paused · at passed\n  cron once · at 2026-04-19T00:00:00Z · qwen3.8-workers · /home/ng\n"
 	got = tui.RenderSchedulerBlock(th, "OPEN", paused)
 	if !strings.Contains(got, th.Paint("dim", "○")+" "+th.SGR("text")+"j1 nightly paused") {
 		t.Fatalf("a paused job carries the dim open circle:\n%s", got)
+	}
+}
+
+func TestSchedulerEmptyListNamesTheStore(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderSchedulerBlock(th, "OPEN", schedEmptyReply)
+	if !strings.Contains(got, th.Paint("dim", "  scheduler: no jobs")) {
+		t.Fatalf("the empty store renders one dim line:\n%s", got)
 	}
 }
 

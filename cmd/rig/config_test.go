@@ -206,13 +206,13 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		fake := newFakeCrontab()
 		st := scratchStores(t, home, "/ws/golden")
 		reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-			Name: "golden", Prompt: "say hi", Cron: "0 5 * * *", Scope: "cwd",
+			Name: "golden", Prompt: "say hi", Cron: "0 5 * * *",
 			Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
 		}, "/ws/golden", "sess-golden", bin+" run-job", fixedNow)
 		if err != nil {
 			t.Fatalf("create: %v (%s)", err, reply)
 		}
-		key := "cwd-" + sched.CwdHash("/ws/golden") + ":j1"
+		key := "j1"
 		if err := os.WriteFile(filepath.Join(scratch, "spool"),
 			[]byte("0 5 * * * "+bin+" run-job # pane-scheduler:"+key+"\n"), 0o644); err != nil {
 			t.Fatal(err)
@@ -486,13 +486,13 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		fake := newFakeCrontab()
 		st := scratchStores(t, home, "/ws/swap")
 		reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-			Name: "swap", Prompt: "say hi", Cron: "0 5 * * *", Scope: "cwd",
+			Name: "swap", Prompt: "say hi", Cron: "0 5 * * *",
 			Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
 		}, "/ws/swap", "sess-swap", bin+" run-job", fixedNow)
 		if err != nil {
 			t.Fatalf("create: %v (%s)", err, reply)
 		}
-		return "cwd-" + sched.CwdHash("/ws/swap") + ":j1", workDir
+		return "j1", workDir
 	}
 	fire := func(t *testing.T, binDir, bin, scratch, key, workDir, swapURL string) {
 		t.Helper()
@@ -699,13 +699,13 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, workDir)
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-		Name: "agents", Prompt: "say hi", Cron: "0 5 * * *", Scope: "cwd",
+		Name: "agents", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
 	}, workDir, "sess-agents", bin+" run-job", fixedNow)
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
-	key := "cwd-" + sched.CwdHash(workDir) + ":j1"
+	key := "j1"
 	if err := os.WriteFile(filepath.Join(scratch, "spool"),
 		[]byte("0 5 * * * "+bin+" run-job # pane-scheduler:"+key+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -823,7 +823,7 @@ func TestDefaultJobModelFromSettings(t *testing.T) {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
 	var m string
-	if err := st.Cwd.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
+	if err := st.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
 	if m != "brain" {

@@ -16,7 +16,6 @@ type DelegateInput struct {
 	DB           DB
 	Home         string
 	Session      string
-	StoreCwd     string
 	Cwd          string
 	Task         string
 	Model        string
@@ -173,8 +172,8 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	durationMs := ended.Sub(started).Milliseconds()
 
 	logName := strings.NewReplacer(":", "-", ".", "-").Replace(in.Now().UTC().Format("2006-01-02T15:04:05.000Z")) + ".log"
-	logRel := filepath.Join("runs", ScopeDir(JobKey{Scope: "cwd", Hash: CwdHash(in.StoreCwd), ID: id}), id, logName)
-	dir := filepath.Join(in.Home, "runs", ScopeDir(JobKey{Scope: "cwd", Hash: CwdHash(in.StoreCwd), ID: id}), id)
+	logRel := filepath.Join("runs", id, logName)
+	dir := filepath.Join(in.Home, "runs", id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: log dir: %w", err)
 	}

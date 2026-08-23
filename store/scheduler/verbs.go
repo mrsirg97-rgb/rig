@@ -2,11 +2,8 @@ package scheduler
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -15,84 +12,13 @@ import (
 	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
 
-type Stores struct {
-	Global DB
-	Cwd    DB
-}
+var jobKeyRe = regexp.MustCompile(`^(j\d+)$`)
 
-type JobKey struct {
-	Scope string
-	Hash  string
-	ID    string
-}
-
-var (
-	keyRe       = regexp.MustCompile(`^cwd-([0-9a-f]{12}):(j\d+)$`)
-	globalKeyRe = regexp.MustCompile(`^(j\d+)$`)
-	hashRe      = regexp.MustCompile(`^[0-9a-f]{12}$`)
-)
-
-func KeyOf(scope, hash, id string) (string, error) {
-	if scope == "global" {
-		return id, nil
+func ParseKey(key string) (string, error) {
+	if !jobKeyRe.MatchString(key) {
+		return "", fmt.Errorf("key: bad key '%s' (want j<n>)", key)
 	}
-	if !hashRe.MatchString(hash) {
-		return "", fmt.Errorf("key: cwd scope needs a 12-hex hash, got '%s'", hash)
-	}
-	return fmt.Sprintf("cwd-%s:%s", hash, id), nil
-}
-
-func ParseKey(key string) (JobKey, error) {
-	var out JobKey
-	if m := keyRe.FindStringSubmatch(key); m != nil {
-		out.Scope, out.Hash, out.ID = "cwd", m[1], m[2]
-		return out, nil
-	}
-	if m := globalKeyRe.FindStringSubmatch(key); m != nil {
-		out.Scope, out.ID = "global", m[1]
-		return out, nil
-	}
-	return out, fmt.Errorf("key: bad key '%s' (want j<n> or cwd-<12hex>:j<n>)", key)
-}
-
-func StorePathFor(home string, key JobKey) string {
-	if key.Hash != "" {
-		return filepath.Join(home, key.Hash+".sqlite")
-	}
-	return filepath.Join(home, "global.sqlite")
-}
-
-func ScopeDir(key JobKey) string {
-	if key.Hash != "" {
-		return "cwd-" + key.Hash
-	}
-	return "global"
-}
-
-func CwdHash(cwd string) string {
-	sum := sha1.Sum([]byte(cwd))
-	return hex.EncodeToString(sum[:])[:12]
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
-
-func scopeName(scope string) string {
-	if scope == "global" {
-		return "global"
-	}
-	return "cwd"
-}
-
-func scopeHash(scope, sessionCwd string) string {
-	if scope == "global" {
-		return ""
-	}
-	return CwdHash(sessionCwd)
+	return key, nil
 }
 
 type CreateInput struct {
@@ -100,7 +26,6 @@ type CreateInput struct {
 	Prompt string
 	Cron   string
 	At     string
-	Scope  string
 	Cwd    string
 	Model  string
 	Busy   string
@@ -112,7 +37,7 @@ func schedErr(format string, a ...any) error {
 	return fmt.Errorf("scheduler: "+format, a...)
 }
 
-func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionCwd, session, runnerCmd string, now func() time.Time) (string, error) {
+func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, session, runnerCmd string, now func() time.Time) (string, error) {
 	if now == nil {
 		now = time.Now
 	}
@@ -123,11 +48,6 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 	prompt := in.Prompt
 	if prompt == "" {
 		return "", schedErr("create requires a non-empty prompt")
-	}
-	scope := scopeName(in.Scope)
-	db := st.Cwd
-	if scope == "global" {
-		db = st.Global
 	}
 
 	jobCwd := in.Cwd
@@ -178,14 +98,11 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 	}
 	for _, j := range f.jobs {
 		if j.State != "removed" && j.Name == name {
-			return "", schedErr("a job named '%s' already exists in scope '%s' (state: %s); remove it first", name, scope, j.State)
+			return "", schedErr("a job named '%s' already exists (state: %s); remove it first", name, j.State)
 		}
 	}
 	candidateID := f.mintID()
-	key, err := KeyOf(scope, scopeHash(scope, sessionCwd), candidateID)
-	if err != nil {
-		return "", err
-	}
+	key := candidateID
 
 	text, err := ct.List()
 	if err != nil {
@@ -218,16 +135,9 @@ func Create(ctx context.Context, st Stores, ct Crontab, in CreateInput, sessionC
 	if err := tx.Commit(); err != nil {
 		return "", err
 	}
-	drift := ""
-	if created.ID != candidateID {
-		drift = fmt.Sprintf("  drift: crontab line carries key for %s, store row is %s (concurrent create); remove and re-create", candidateID, created.ID)
-	}
 	line := TaggedLine{Key: key, Cron: created.Cron, Paused: false}
-	lines := jobLines(created, scope, &line, false, now)
-	if drift != "" {
-		lines = append(lines, drift)
-	}
-	return replyText(fmt.Sprintf("created %s '%s' (%s)", created.ID, created.Name, scope), lines), nil
+	lines := jobLines(created, &line, false, now)
+	return replyText(fmt.Sprintf("created %s '%s'", created.ID, created.Name), lines), nil
 }
 
 func createdRow(f *fold, seq int64) *jobState {
@@ -239,30 +149,33 @@ func createdRow(f *fold, seq int64) *jobState {
 	return nil
 }
 
-func Pause(ctx context.Context, st Stores, ct Crontab, id, scope, sessionCwd, session string) (string, error) {
-	return stateAction(ctx, st, ct, id, scope, sessionCwd, session, "pause")
+func Pause(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session string) (string, error) {
+	return stateAction(ctx, db, ct, id, sessionCwd, session, "pause")
 }
 
-func Resume(ctx context.Context, st Stores, ct Crontab, id, scope, sessionCwd, session string) (string, error) {
-	return stateAction(ctx, st, ct, id, scope, sessionCwd, session, "resume")
+func Resume(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session string) (string, error) {
+	return stateAction(ctx, db, ct, id, sessionCwd, session, "resume")
 }
 
-func Remove(ctx context.Context, st Stores, ct Crontab, id, scope, sessionCwd, session string) (string, error) {
-	return stateAction(ctx, st, ct, id, scope, sessionCwd, session, "remove")
+func Remove(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session string) (string, error) {
+	return stateAction(ctx, db, ct, id, sessionCwd, session, "remove")
 }
 
-func stateAction(ctx context.Context, st Stores, ct Crontab, id, scope, sessionCwd, session, action string) (string, error) {
-	db, job, found, err := resolveJob(ctx, st, id, scope)
+func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, action string) (string, error) {
+	_, rtx, err := db.TxReadOnly(ctx)
 	if err != nil {
 		return "", err
 	}
+	f, err := eventsOf(rtx)
+	if err != nil {
+		rtx.Rollback()
+		return "", err
+	}
+	rtx.Rollback()
+	job, found := f.jobs[id]
 	if !found {
-		if scope != "" {
-			return "", schedErr("no job '%s' in scope '%s'", id, scopeName(scope))
-		}
 		return "", schedErr("no job '%s'", id)
 	}
-	jobScope := jobScopeOf(st, db)
 	switch action {
 	case "pause":
 		if job.State == "paused" {
@@ -281,11 +194,7 @@ func stateAction(ctx context.Context, st Stores, ct Crontab, id, scope, sessionC
 		}
 	}
 
-	key, err := KeyOf(jobScope, scopeHash(jobScope, sessionCwd), id)
-	if err != nil {
-		return "", err
-	}
-
+	key := id
 	text, err := ct.List()
 	if err != nil {
 		return "", err
@@ -311,7 +220,7 @@ func stateAction(ctx context.Context, st Stores, ct Crontab, id, scope, sessionC
 		return "", err
 	}
 	defer tx.Rollback()
-	f, err := eventsOf(tx)
+	f, err = eventsOf(tx)
 	if err != nil {
 		return "", err
 	}
@@ -335,15 +244,8 @@ func stateAction(ctx context.Context, st Stores, ct Crontab, id, scope, sessionC
 	if action != "remove" {
 		line = &TaggedLine{Key: key, Cron: row.Cron, Paused: action == "pause"}
 	}
-	lines := jobLines(row, jobScope, line, false, time.Now)
+	lines := jobLines(row, line, false, time.Now)
 	return replyText(fmt.Sprintf("%s %s -> %s", row.ID, row.Name, row.State), lines), nil
-}
-
-func jobScopeOf(st Stores, db DB) string {
-	if db.DB == st.Global.DB {
-		return "global"
-	}
-	return "cwd"
 }
 
 type RunRecordInput struct {
@@ -421,6 +323,13 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 	return seq, nil
 }
 
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
 func statusOf(s string) string {
 	switch s {
 	case "ok", "fail", "skip":
@@ -439,28 +348,25 @@ type runRecord struct {
 	LogPath    *string
 }
 
-func Runs(ctx context.Context, st Stores, id, scope string, n int) (string, error) {
+func Runs(ctx context.Context, db DB, id string, n int) (string, error) {
 	if n <= 0 {
 		n = 5
 	}
 	if n < 1 || n > 100 {
 		return "", schedErr("runs count must be an integer 1-100, got %d", n)
 	}
-	db, _, found, err := resolveJob(ctx, st, id, scope)
-	if err != nil {
-		return "", err
-	}
-	if !found {
-		if scope != "" {
-			return "", schedErr("no job '%s' in scope '%s'", id, scopeName(scope))
-		}
-		return "", schedErr("no job '%s'", id)
-	}
 	_, tx, err := db.TxReadOnly(ctx)
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback()
+	f, err := eventsOf(tx)
+	if err != nil {
+		return "", err
+	}
+	if _, ok := f.jobs[id]; !ok {
+		return "", schedErr("no job '%s'", id)
+	}
 
 	rows, err := tx.Query(`SELECT seq, started_at, status, exit, duration_ms, reason, log_path FROM runs WHERE job_id = ? ORDER BY seq DESC LIMIT ?`, id, n)
 	if err != nil {
@@ -508,62 +414,4 @@ func runDetail(r runRecord) string {
 		bits = append(bits, *r.LogPath)
 	}
 	return strings.Join(bits, " ")
-}
-
-func resolveJob(ctx context.Context, st Stores, id, scope string) (DB, *jobState, bool, error) {
-	var dbs []struct {
-		scope string
-		db    DB
-	}
-	switch scope {
-	case "global":
-		dbs = []struct {
-			scope string
-			db    DB
-		}{{"global", st.Global}}
-	case "cwd":
-		dbs = []struct {
-			scope string
-			db    DB
-		}{{"cwd", st.Cwd}}
-	default:
-
-		dbs = []struct {
-			scope string
-			db    DB
-		}{
-			{"global", st.Global},
-			{"cwd", st.Cwd},
-		}
-	}
-	var hits []struct {
-		db  DB
-		job *jobState
-	}
-	for _, d := range dbs {
-		_, tx, err := d.db.TxReadOnly(ctx)
-		if err != nil {
-			return DB{}, nil, false, err
-		}
-		f, err := eventsOf(tx)
-		if err != nil {
-			tx.Rollback()
-			return DB{}, nil, false, err
-		}
-		tx.Rollback()
-		if j, ok := f.jobs[id]; ok {
-			hits = append(hits, struct {
-				db  DB
-				job *jobState
-			}{d.db, j})
-		}
-	}
-	switch len(hits) {
-	case 0:
-		return DB{}, nil, false, nil
-	case 1:
-		return hits[0].db, hits[0].job, true, nil
-	default:
-		return DB{}, nil, false, schedErr("'%s' is ambiguous: it exists in both scopes; pass scope ('global' or 'cwd')", id)
-	}
 }

@@ -33,7 +33,7 @@ func (f *fakeCrontab) Install(text string) error {
 }
 
 type harness struct {
-	st   sched.Stores
+	db   sched.DB
 	ct   *fakeCrontab
 	tool core.Tool
 }
@@ -46,32 +46,13 @@ func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 	t.Helper()
 	home := t.TempDir()
 	globalPath := filepath.Join(home, "global.sqlite")
-	if _, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion); err != nil {
-		t.Fatal(err)
-	}
-	key, err := sched.ParseKey("cwd-" + sched.CwdHash(cwd) + ":j1")
+	db, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cwdPath := sched.StorePathFor(home, key)
-	if _, _, _, err := store.Open(cwdPath, sched.Statements(), sched.SchemaVersion); err != nil {
-		t.Fatal(err)
-	}
-	var (
-		gd store.DB
-		cd store.DB
-	)
-
-	if gd, _, _, err = store.Open(globalPath, sched.Statements(), sched.SchemaVersion); err != nil {
-		t.Fatal(err)
-	}
-	if cd, _, _, err = store.Open(cwdPath, sched.Statements(), sched.SchemaVersion); err != nil {
-		t.Fatal(err)
-	}
-	st := sched.Stores{Global: gd, Cwd: cd}
 	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
-	tool := adapter.New(st, ct, "/x/rig run-job", defModel)
-	return &harness{st: st, ct: ct, tool: tool}
+	tool := adapter.New(db, ct, "/x/rig run-job", defModel)
+	return &harness{db: db, ct: ct, tool: tool}
 }
 
 func exec(t *testing.T, h *harness, args map[string]any) (string, error) {
@@ -94,6 +75,7 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 		"until the note clears",
 		"re-create it to retry",
 		"self-deletes after one fire",
+		"running in its own cwd",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing voice fragment: %q", want)
@@ -101,7 +83,7 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	}
 }
 
-func TestSchemaCarriesTheParameterVoices(t *testing.T) {
+func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	var schema struct {
 		Type       string         `json:"type"`
@@ -123,6 +105,9 @@ func TestSchemaCarriesTheParameterVoices(t *testing.T) {
 				t.Fatalf("action enum[%d] %v", i, enum)
 			}
 		}
+	}
+	if _, ok := schema.Properties["scope"]; ok {
+		t.Fatal("the scope arg must be gone from the schema")
 	}
 	id, _ := schema.Properties["id"].(map[string]any)
 	if got, _ := id["description"].(string); got != "Job id jN (as shown by list). Required for pause/resume/remove/runs." {
@@ -147,24 +132,21 @@ func TestExecVoices(t *testing.T) {
 	if _, err := exec(t, h, map[string]any{"action": "runs"}); err == nil || !strings.Contains(err.Error(), "scheduler: runs requires 'id' (jN)") {
 		t.Fatalf("runs-id voice: %v", err)
 	}
-	if _, err := exec(t, h, map[string]any{"action": "list", "scope": "everywhere"}); err == nil || !strings.Contains(err.Error(), "scheduler: scope must be 'global' or 'cwd', got 'everywhere'") {
-		t.Fatalf("scope voice: %v", err)
-	}
 }
 
 func TestExecMappingLandsInTheStore(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	reply, err := exec(t, h, map[string]any{
 		"action": "create", "name": "surface", "prompt": "do the thing",
-		"cron": "0 3 * * *", "scope": "cwd",
+		"cron": "0 3 * * *",
 	})
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
-	if !strings.HasPrefix(reply, "created j1 'surface' (cwd)") {
+	if !strings.HasPrefix(reply, "created j1 'surface'") {
 		t.Fatalf("create reply %q", reply)
 	}
-	if !strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job") {
+	if !strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job j1  # pane-scheduler:j1") {
 		t.Fatalf("crontab line missing: %q", h.ct.text)
 	}
 	list, err := exec(t, h, map[string]any{"action": "list"})
@@ -174,7 +156,7 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 	if !strings.Contains(list, "j1") || !strings.Contains(list, "surface") {
 		t.Fatalf("list reply %q", list)
 	}
-	paused, err := exec(t, h, map[string]any{"action": "pause", "id": "j1", "scope": "cwd"})
+	paused, err := exec(t, h, map[string]any{"action": "pause", "id": "j1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,13 +184,13 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 
 	reply, err := exec(t, h, map[string]any{
 		"action": "create", "name": "defaulted", "prompt": "p",
-		"cron": "0 5 * * *", "scope": "cwd",
+		"cron": "0 5 * * *",
 	})
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
 	var m string
-	if err := h.st.Cwd.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
 	if m != "brain" {
@@ -217,12 +199,12 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 
 	reply, err = exec(t, h, map[string]any{
 		"action": "create", "name": "explicit", "prompt": "p",
-		"cron": "0 6 * * *", "scope": "cwd", "model": "qwen3.8-workers",
+		"cron": "0 6 * * *", "model": "qwen3.8-workers",
 	})
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
-	if err := h.st.Cwd.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j2'`).Scan(&m); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j2'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
 	if m != "qwen3.8-workers" {
@@ -235,13 +217,13 @@ func TestExecAttributionFallsBackToAnon(t *testing.T) {
 
 	reply, err := exec(t, h, map[string]any{
 		"action": "create", "name": "anon-case", "prompt": "p",
-		"cron": "0 4 * * *", "scope": "cwd",
+		"cron": "0 4 * * *",
 	})
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
 	var sess any
-	if err := h.st.Cwd.DB.QueryRow(`SELECT session FROM events WHERE op = 'create' ORDER BY seq DESC LIMIT 1`).Scan(&sess); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT session FROM events WHERE op = 'create' ORDER BY seq DESC LIMIT 1`).Scan(&sess); err != nil {
 		t.Fatal(err)
 	}
 	if sess != "anon" {

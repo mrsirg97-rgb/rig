@@ -8,8 +8,8 @@ tool, `delegate`, that spawns a worker on a task now, waits for it,
 and feeds the worker's last message back into the turn.
 
 It is a one-shot over the existing runner (SPEC_SANDBOX's jail, the
-socket proxy, the busy rule), a recorded run in the cwd-scope
-scheduler store, and a resumable transcript in the state store. It
+socket proxy, the busy rule), a recorded run in the one scheduler
+store, and a resumable transcript in the state store. It
 adds no new process topology: the worker is a `rig -p` subprocess the
 delegate spawns, exactly as `run-job` spawns one.
 
@@ -25,7 +25,7 @@ delegate spawns, exactly as `run-job` spawns one.
   a poll-and-await seam for a result the turn can get by spawning; it
   is the async/fan-out non-goal of this phase, named.
 - **Not a scheduler.** No crontab line is written; nothing fires on a
-  schedule. The run is recorded in the cwd-scope scheduler store so
+  schedule. The run is recorded in the one scheduler store so
   `scheduler runs` and the dashboard show it beside cron runs, but
   nothing ever fires it.
 - **Not async, no fan-out, no nesting.** One delegation in flight per
@@ -39,8 +39,8 @@ delegate spawns, exactly as `run-job` spawns one.
   sandbox setting (fail closed exactly as workers do), the socket
   proxy, the worker command, the GPU busy rule with `busy:skip`
   semantics.
-- Every delegation is a recorded run in the cwd-scope scheduler store
-  — the event log is the spine — under a minted ad-hoc key, so
+- Every delegation is a recorded run in the one scheduler store — the
+  event log is the spine — under a minted ad-hoc key, so
   `scheduler runs <id>` and the dashboard show it beside cron runs
   with its log path.
 - The worker's transcript is its own session in the state store; the
@@ -154,16 +154,15 @@ operator's own session predates the spawn). The tool result names it.
 
 ### 4. The record: a minted ad-hoc run
 
-Every delegation is a recorded run in the cwd-scope scheduler store,
-the event log as the spine, under a minted ad-hoc key — not a crontab
+Every delegation is a recorded run in the one scheduler store, the
+event log as the spine, under a minted ad-hoc key — not a crontab
 line, nothing scheduled.
 
-- The delegate mints a cwd-scope job id via the fold's `mintID()`
-  (`jN`, forward over tombstones, the id space shared with cron jobs
-  so they never collide), key `cwd-<hash>:jN` (the `KeyOf` shape),
-  and appends a `create` event — **without** writing a crontab line
-  (the store gains a create-without-crontab path; nothing is
-  scheduled).
+- The delegate mints a job id via the fold's `mintID()` (`jN`, forward
+  over tombstones, the id space shared with cron jobs so they never
+  collide — the one store's single sequence), key `jN`, and appends a
+  `create` event — **without** writing a crontab line (the store gains
+  a create-without-crontab path; nothing is scheduled).
 - The job row's `Name` is `delegate:<task first line>` (the first
   line, truncated — the approval prompt's shape, decision 7), `Cron`
   `once` with `At` = the spawn start (so the list renders "at
@@ -171,7 +170,7 @@ line, nothing scheduled.
   `Model` = the delegate model, `Busy` = `skip`. The list shows it
   with `drift: no crontab line` — the clear non-cron marker.
 - The run is `RecordRun` with the ad-hoc id, status from the worker's
-  exit, duration, and the log path (`runs/<scope>/<id>/<timestamp>.log`,
+  exit, duration, and the log path (`runs/<id>/<timestamp>.log`,
   written like `run-job`'s, pruned the same way). `scheduler runs
   <id>` resolves it (the ad-hoc job row exists) and lists it beside
   cron runs; the dashboard's `sched.List` shows the job row.
@@ -245,7 +244,7 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
 - **The happy path**: a fake `Spawn` returns an exit-0 worker; the
   result is fed back (the worker's stdout capped, the trailer line's
   shape — exit, duration, session id, log path), the run is recorded
-  in the cwd-scope scheduler store, and the session id is named.
+  in the one scheduler store, and the session id is named.
 - **The cwd refusal**: a `cwd` outside the session cwd or the rig
   home refuses by name.
 - **The busy refusal**: a held GPU refuses loudly naming the holder

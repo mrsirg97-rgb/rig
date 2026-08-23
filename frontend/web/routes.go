@@ -324,17 +324,12 @@ func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "cwd is required")
 		return
 	}
-	global, err := s.stores.schedulerGlobal()
+	sdb, err := s.stores.scheduler()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	cwdDB, err := s.stores.schedulerCwd(cwd)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	text, err := sched.List(ctx, sched.Stores{Global: global, Cwd: cwdDB}, s.crontab, cwd, nil, time.Now)
+	text, err := sched.List(ctx, sdb, s.crontab, cwd, nil, time.Now)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -444,20 +439,15 @@ func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	var in sched.CreateInput
 	if err := json.Unmarshal(body, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "a JSON body {name, prompt, cron, at?, scope?} is required: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "a JSON body {name, prompt, cron, at?, cwd?} is required: "+err.Error())
 		return
 	}
-	global, err := s.stores.schedulerGlobal()
+	sdb, err := s.stores.scheduler()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	cwdDB, err := s.stores.schedulerCwd(cwd)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	reply, err := sched.Create(ctx, sched.Stores{Global: global, Cwd: cwdDB}, s.crontab,
+	reply, err := sched.Create(ctx, sdb, s.crontab,
 		in, cwd, sessionName, s.runnerCmd, time.Now)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())

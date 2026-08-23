@@ -403,7 +403,10 @@ The blocks are pane's:
   `· waits on tN` dim when blocked, `· claimed by <sid8>` dim only
   when the claim is foreign (another session);
 - scheduler `list`: `●`/`○`/`✕` per job state with cron, last, next,
-  and drift named; `runs`: the run lines with tail previews.
+  and drift named. The sections are directories (SPEC_STATE's one-store
+  list): this cwd's jobs first, then the rest grouped by the job's own
+  `cwd`; an empty store is one line naming it (`scheduler: no jobs`).
+  `runs`: the run lines with tail previews.
 
 The renderers parse the tools' own reply text (the queue the reply
 already carries): no new tool surface, no reaching into stores from
@@ -411,10 +414,10 @@ the render path. If parsing fails (a future voice change), the raw
 reply commits as-is: degrade to the CLI, never hide.
 
 One ambient line, only one: at session start, in the startup block
-(decision 3), if the workspace scheduler store has news since the last
-session in this cwd (a failed or first-completed run), one dim line:
+(decision 3), if the scheduler store has news since the last session in
+this cwd (a failed or first-completed run in this cwd), one dim line:
 `· j5 failed 14:30 · scheduler runs j5`. Absent news, nothing. This
-is a read of the store the root already opens, the exact analog of
+is a read of the one store the root already opens, the exact analog of
 todo's stale footer; it is the only place the TUI reads a store, and
 it is read-only.
 
@@ -682,6 +685,9 @@ where the CI box allows and skip cleanly where not.
   points only.
 - both doors: the todo and scheduler blocks byte-equal between the
   tool-result path and the command path, minus the opening line.
+- the scheduler renderer golden over the new list shape: directory
+  sections (this cwd first), the state glyphs, the drift, the empty
+  store's `scheduler: no jobs` line.
 - the live region: an escape-capture harness asserts the redraw is
   cursor-up/clear/reprint over at most the region's cap (decision 2),
   and that committed bytes are never rewritten (the immutability

@@ -62,7 +62,7 @@ The `delegate` tool (SPEC_DELEGATE) spawns a headless worker on a task
 now — a bounded sub-task whose result is a message, not a conversation
 — on the worker model, in a cwd under your session's or the rig home.
 It waits, feeds back the worker's last message, and records the run in
-the cwd-scope scheduler store under an ad-hoc key, so `scheduler runs`
+the one scheduler store under an ad-hoc key, so `scheduler runs`
 shows it beside cron runs; the worker's transcript is resumable with
 `sessions resume <id>`.
 

@@ -12,12 +12,15 @@ sees core and models and nothing else.
 ## What it includes
 
 - **main()** — the REPL path: flag parse, the config load, the rig
-  home, the stores (state, todo, rem, the scheduler pair), the python
+  home, the stores (state, todo, rem, the one scheduler
+  `global.sqlite`, opened with its one-time migration folding the old
+  `cwd-*.sqlite` files), the python
   kernel, the web tools, the plugin discovery, the root's wiring, the
   frontend selection (`-tui` auto / oneshot / plain CLI), the loop, and
   the session closure with the run's exit status.
-- **runJob** — the scheduler verb's cold-shell path: its own stores,
-  its own record, the busy policy, the worker jail (SPEC_SANDBOX 1, 5).
+- **runJob** — the scheduler verb's cold-shell path: opens the one
+  `global.sqlite`, parses the crontab key `jN` only, its own record, the
+  busy policy, the worker jail (SPEC_SANDBOX 1, 5).
 - **root** — the process's mutable wiring state (SPEC_COMMANDS 2): the
   active model, the row, the recorder, the session, the dials — the
   state the command's closures read and rewrite at call time, so a swap

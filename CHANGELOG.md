@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- **the scheduler is one store** (`specs/SPEC_STATE.md`, amended): the
+  cwd partition is gone — `scheduler/global.sqlite` holds every job, the
+  crontab key is `jN` for all, ids are one sequence, `name` unique
+  store-wide, and the `scope` arg leaves the tool's schema and the
+  command's grammar (`cwd` stays the job's own field). `list` is one
+  list grouped by each job's `cwd`, this directory first; an empty list
+  names the store. A one-time schema-1→2 migration folds every
+  `cwd-<hash>.sqlite` into `global.sqlite` (re-minted ids, runs
+  re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
+  `jN`, old files moved aside as `<hash>.sqlite.migrated`), counted once
+  on stderr and a no-op on the second open. Run logs live under
+  `runs/<id>/`. Goldens regenerated (the schema is on the wire).
+
 - **a dashboard write from its own front is same-origin**
   (`specs/SPEC_SERVE.md`, amended): the Origin check accepted only the
   bound address (`127.0.0.1`/`localhost`), so behind `tailscale serve`
