@@ -476,10 +476,33 @@ from the page (the shared kernel is a session's; phase 4).
 The plugins page lists three zones — approved | pending | disabled —
 the three directories (SPEC_GROWTH 9, amended). A disabled plugin
 opens in the editor like any other (its zone is `disabled` for
-`source`); a save is a pending revision as ever. The page does not
-move files between zones: that is the session's `/plugins
-enable|disable` verb (an operator act the dashboard could carry later,
-named).
+`source`); a save is a pending revision as ever. The disabled zone is
+listed like the pending zone is, each file with its DESCRIPTION, and
+every row in the phone's hand carries a control: a loaded row a
+disable, a disabled row an enable (12c).
+
+### 12c. The disable/enable doors, and the phone rule.
+
+The dashboard carries the session's `/plugins enable|disable` verb, two
+doors beside `approve`: `POST /api/plugins/disable {name}` and `POST
+/api/plugins/enable {name}`, each calling `plugins.Move` (the same
+shared move the command and the plugins tool's delete use) — `disable`
+moves `plugins/` → `plugins/disabled/`, `enable` moves it back. The
+same walls as every write (POST, Origin, the body cap), the same name
+wall (`pluginNameOK`), and the same refusals by name: a plugin that is
+not in the source zone, or already in the target zone, is the named
+refusal (the move's own, wrapped — `no such plugin`, `already in that
+zone`). The reply is the command's voice, verbatim:
+`disabled 'x' (plugins -> plugins/disabled); hidden next turn` and
+`enabled 'x' (plugins/disabled -> plugins); live at the next plugins
+reload`. The list re-reads after the move — no page reload.
+
+The phone rule: every loaded row in the plugins view carries a disable
+control, every disabled row an enable one; the operator's hand on the
+phone can turn a plugin off and on without the TUI, the same
+`plugins.Move` one verb, the same live re-read. The pending zone is
+not in this hand — pending is the authoring door, promote it with
+approve, disable it once it is loaded.
 
 ### 13. The folder browser, rooted at home.
 
@@ -517,7 +540,11 @@ refuses a native; the browser's root listing (folders only, hidden off,
 no parent), hidden on request, a child with its parent, the outside-root
 and traversal 403s, the absent 404, the file 400, the 405; the static
 assets carry the forge, the browser, the tool-block renderer, the
-class-hidden toggle, and the effort ramp.
+class-hidden toggle, and the effort ramp; the disable/enable doors
+move the file and reply in the command's voice, a disable of a pending
+plugin refuses (pending is not in this hand), the list re-reads after,
+and the page carries a disable control on every loaded row and an
+enable on every disabled row.
 
 ### 15. The todo's two hands.
 

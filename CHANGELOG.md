@@ -14,6 +14,16 @@
   directory. The `ls`/`find`/`grep` schemas say the default root is the
   working directory. Goldens regenerated.
 
+- **the dashboard's disable/enable doors** (`specs/SPEC_SERVE.md`, 12c):
+  `POST /api/plugins/disable {name}` and `POST /api/plugins/enable {name}`
+  beside `approve`, each calling `plugins.Move` and replying in the
+  command's voice (`disabled 'x' (plugins -> plugins/disabled); hidden
+  next turn`, `enabled 'x' (plugins/disabled -> plugins); live at the
+  next plugins reload`), the same walls and name refusals as every
+  write. The plugins page carries the phone rule: every loaded row a
+  disable control, every disabled row an enable one, the list re-read
+  after the move.
+
 ## [0.14.1] — the path boundary
 
 - **`~` is the home at the tool boundary** (`specs/SPEC_FS.md`, amended):

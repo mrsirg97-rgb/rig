@@ -725,6 +725,27 @@ async function renderPlugins() {
     row.appendChild(span(p.name, zone === 'disabled' ? 'dim' : 'accent'));
     row.appendChild(span(' ' + G.dot + ' ' + (p.description || '(no DESCRIPTION)'), 'dim'));
     row.addEventListener('click', () => openForge(forge, p.name, zone === 'approved' ? 'loaded' : zone));
+    if (zone === 'approved') {
+      row.appendChild(button('disable', '', async () => {
+        try {
+          const r = await post('/api/plugins/disable', { name: p.name });
+          listEl.appendChild(note(G.ok + ' ' + r.reply, 'ok'));
+          renderPlugins();
+        } catch (e) {
+          listEl.appendChild(note(G.fail + ' ' + e.message, 'error'));
+        }
+      }));
+    } else if (zone === 'disabled') {
+      row.appendChild(button('enable', '', async () => {
+        try {
+          const r = await post('/api/plugins/enable', { name: p.name });
+          listEl.appendChild(note(G.ok + ' ' + r.reply, 'ok'));
+          renderPlugins();
+        } catch (e) {
+          listEl.appendChild(note(G.fail + ' ' + e.message, 'error'));
+        }
+      }));
+    }
     listEl.appendChild(row);
   }
   tb.body.appendChild(listEl);
