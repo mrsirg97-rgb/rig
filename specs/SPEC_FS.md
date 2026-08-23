@@ -55,6 +55,15 @@ accordingly and is named in the PR.
   `[line truncated]` marker, so one match cannot carry a minified bundle.
 - Paths in results are relative to the walked root, slash-separated; results
   sorted by path then line number.
+- A leading `~`, `~/…`, or `~user/…` in a path-shaped argument (`path`,
+  `root`, `cwd`) is the home, expanded once at the tool boundary —
+  `middleware/paths`, innermost in the root's chain — so read/write/edit,
+  ls/find/grep, bash's and delegate's and the scheduler's `cwd` all
+  inherit it and no tool carries its own copy. The tools stay pure. A `~`
+  anywhere else, an unknown user, or an unset home stand as given; the
+  shell expands its own command line. Amended 2026-08-23 on a model's own
+  report — half its path habits worked — and its own shape for the fix:
+  at the boundary, not per call, or the drift just relocates.
 - `ls` sorts within its level (ReadDir order); an empty directory prints
   `(empty)`; missing or non-directory paths are loud errors.
 - `grep` long lines: reader-based line iteration; matched-line text capped

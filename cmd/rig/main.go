@@ -25,6 +25,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/middleware/toolset"
 	"github.com/mrsirg97-rgb/rig/models"
@@ -50,7 +51,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.14.0"
+const Version = "0.14.1"
 
 type root struct {
 	pluginMax int
@@ -143,6 +144,7 @@ func wire(r *root) *rig.Kernel {
 			resultCap = defaultResultCap
 		}
 		mw = append(mw,
+			paths.Middleware(),
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
@@ -177,6 +179,7 @@ func (r *root) buildSystem() string {
 			resultCap = defaultResultCap
 		}
 		mw = []core.ToolMiddleware{
+			paths.Middleware(),
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),

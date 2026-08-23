@@ -346,8 +346,8 @@ def run(args: dict) -> str:
 		t.Fatalf("the table after the swap = %d tools, want the natives plus the swapped-in one", got)
 	}
 
-	if len(h.r.k.Middleware) != 6 {
-		t.Fatalf("middleware = %d links, want the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound", len(h.r.k.Middleware))
+	if len(h.r.k.Middleware) != 7 {
+		t.Fatalf("middleware = %d links, want the path boundary, the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound", len(h.r.k.Middleware))
 	}
 
 	for _, tl := range h.r.k.Tools {

@@ -18,7 +18,7 @@ func description(defModel string) string {
 }
 
 const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D Mo DOW', or once + at:<ISO>, which " +
-	"self-deletes after one fire); list shows both scopes with any drift between store and crontab; " +
+	"self-deletes after one fire); list shows global and this directory's jobs (another directory's are listed from there) with any drift between store and crontab; " +
 	"pause/resume/remove; runs is the audit trail. Reply: the job row or the list; ids (jN, per scope) " +
 	"are minted — copy from list, never invent. busy:skip (default) skips a fire while another model holds " +
 	"the GPU, force evicts it — only when the user wants the GPU now; a drifting job is not trustworthy " +

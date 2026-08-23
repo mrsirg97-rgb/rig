@@ -223,7 +223,7 @@ func parseScheduler(reply string) (schedParsed, bool) {
 		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "global:") || strings.HasPrefix(line, "cwd:") {
+		if strings.HasPrefix(line, "global:") || strings.HasPrefix(line, "cwd:") || strings.HasPrefix(line, "cwd /") {
 			flushJob()
 			name := strings.TrimSuffix(strings.TrimSuffix(line, ": no jobs"), ":")
 			empty := strings.HasSuffix(line, ": no jobs")
