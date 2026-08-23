@@ -125,7 +125,7 @@ directory's project file, not the creating session's.
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
 | allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 15 built-in tools |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
-| round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `200`; per-turn tool-call cap (SPEC_HARDENING 9) |
+| round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
 | resume        | `--resume <id>`| —                      | —               | fresh session (refuses with `-p`; one-shot stays one-shot) |
 | terminal      | `--tui` (auto/true/false) | — | — | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |

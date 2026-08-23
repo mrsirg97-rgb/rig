@@ -20,9 +20,10 @@ that bounds every tool result before the transcript.
 - `bound` (unexported) — the per-turn state: `limit`, `counts` (tool
   name -> consecutive identical failures this turn), and `lastFailed`
   (tool name -> the args of the last failure; the streak's identity).
-- `Rounds(n)` — the round cap: counts every call in a turn, past `n`
-  refuses without executing (a teaching voice naming the cap and what to
-  do), cleared at `TurnStart`. It caps the alternation the bound does not
+- `Rounds(n)` — the round cap: counts every call in a turn and, when
+  `n > 0`, past `n` refuses without executing (a teaching voice naming
+  the cap and what to do), cleared at `TurnStart`; `n <= 0` is no cap
+  (the default). It caps the alternation the bound does not
   (SPEC_HARDENING 7's named consequence) and a runaway batch (a
   concurrent run of 50 reads counts 50; the cap is on calls, not turns).
 - `Cap(bytes)` — the result bound: truncates an oversized result to the
@@ -37,8 +38,9 @@ that bounds every tool result before the transcript.
   innermost, `Rounds` wraps it (it sees every call, including the bound's
   refusals), and `Cap` wraps both (the wall behind the whole chain).
   `r.retries`, `r.rounds`, and `r.resultCap` are the numbers; a zero
-  round/result-cap in a directly-constructed root descends to the
-  defaults (200 and 64 KiB), the config layer always resolves one.
+  `rounds` is no cap, and a zero result-cap in a directly-constructed
+  root descends to the default (64 KiB), the config layer always
+  resolves one.
 - Each is one object on the widened seam: it wraps (`Wrap`, producing the
   refusal and the note shape `(content, err)` on the way out) and
   observes (`TurnStart` clears the budget). Not two hooks.
@@ -69,7 +71,7 @@ that bounds every tool result before the transcript.
   content, or replaces it when the content is blank.
 - The refusal returns the same message as both `content` and `error`;
   consumers must not assume the error is a distinct event.
-- `Rounds`: `n < 1` clamps to 1; the counter sits under a mutex (a
+- `Rounds`: `n <= 0` is no cap; the counter sits under a mutex (a
   concurrent batch calls the chain from many goroutines). The n+1th call
   and every call after it is refused without executing, and the refusal
   is both `content` and `error`.

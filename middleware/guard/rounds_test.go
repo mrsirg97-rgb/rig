@@ -139,3 +139,22 @@ func TestRoundCapCountsAConcurrentRunRaceFree(t *testing.T) {
 		t.Fatal("the 51st call must refuse after a concurrent run of 50")
 	}
 }
+
+func TestRoundCapZeroIsUnbounded(t *testing.T) {
+	e := &countingExec{}
+	exec := guard.Rounds(0).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+		return e.Exec(ctx, call)
+	})
+	call := core.ToolCall{ID: "c", Name: "read", Args: json.RawMessage(`{}`)}
+	for i := 0; i < 500; i++ {
+		if content, er := exec(context.Background(), call); er != nil || content != "ran" {
+			t.Fatalf("with no cap every call executes, call %d: %q %v", i+1, content, er)
+		}
+	}
+	if e.total != 500 {
+		t.Fatalf("executions %d, want 500 (0 = no cap)", e.total)
+	}
+	if _, er := guard.Rounds(-7).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) { return "ran", nil })(context.Background(), call); er != nil {
+		t.Fatalf("a negative n is no cap, not a cap of one: %v", er)
+	}
+}

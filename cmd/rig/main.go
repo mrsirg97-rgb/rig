@@ -104,7 +104,6 @@ type root struct {
 	compactFn func(ctx context.Context) (core.Compacted, bool, error)
 }
 
-const defaultRounds = 200
 const defaultResultCap = 64 * 1024
 
 func wire(r *root) *rig.Kernel {
@@ -140,10 +139,6 @@ func wire(r *root) *rig.Kernel {
 		if r.askDoor != nil {
 			mw = append(mw, approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating))
 		}
-		rounds := r.rounds
-		if rounds == 0 {
-			rounds = defaultRounds
-		}
 		resultCap := r.resultCap
 		if resultCap == 0 {
 			resultCap = defaultResultCap
@@ -152,7 +147,7 @@ func wire(r *root) *rig.Kernel {
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
-			guard.Rounds(rounds),
+			guard.Rounds(r.rounds),
 			guard.Cap(resultCap),
 		)
 	}
@@ -178,10 +173,6 @@ func wire(r *root) *rig.Kernel {
 func (r *root) buildSystem() string {
 	mw := r.middleware
 	if mw == nil {
-		rounds := r.rounds
-		if rounds == 0 {
-			rounds = defaultRounds
-		}
 		resultCap := r.resultCap
 		if resultCap == 0 {
 			resultCap = defaultResultCap
@@ -190,7 +181,7 @@ func (r *root) buildSystem() string {
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
-			guard.Rounds(rounds),
+			guard.Rounds(r.rounds),
 			guard.Cap(resultCap),
 		}
 	}

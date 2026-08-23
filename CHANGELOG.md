@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+- **no round cap by default** (`specs/SPEC_HARDENING.md` 9, amended):
+  `rounds` is `0` in the embedded settings and `guard.Rounds(0)` counts
+  but never refuses — a one-shot turn with a large model on a real task
+  legitimately exceeds 200 calls now that reads overlap, and a cap that
+  ends a correct run mid-work is worse than the runaway it guards
+  against. The retry bound and compaction still stand. `rounds: N` (or
+  `RIG_ROUNDS=N`) caps the turn for an operator who wants the wall.
+
 ## [0.13.0] — rem is deliberate
 
 - **the dashboard's quick hits**: the plugin listings read every

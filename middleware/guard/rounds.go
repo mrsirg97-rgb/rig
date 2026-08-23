@@ -16,8 +16,8 @@ type rounds struct {
 }
 
 func Rounds(n int) core.ToolMiddleware {
-	if n < 1 {
-		n = 1
+	if n < 0 {
+		n = 0
 	}
 	return &rounds{limit: n}
 }
@@ -26,7 +26,7 @@ func (r *rounds) Wrap(next core.ToolExec) core.ToolExec {
 	return func(ctx context.Context, call core.ToolCall) (string, error) {
 		r.mu.Lock()
 		r.count++
-		if r.count > r.limit {
+		if r.limit > 0 && r.count > r.limit {
 			r.mu.Unlock()
 			msg := fmt.Sprintf("round cap: %d tool calls is this turn's limit; stop calling tools and report, or ask the operator to raise it", r.limit)
 			return msg, errors.New(msg)

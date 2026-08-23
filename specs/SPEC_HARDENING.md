@@ -546,18 +546,28 @@ Amended after 8, both middleware beside `guard.Bound`, neither touching
 `core/` or `loop/` (both frozen again at 0.12.0). `middleware/guard` and
 `tool/file` already sit on the freeze allowlist.
 
-**The round cap** (`guard.Rounds(n)`, settings `rounds`, default 200,
-`RIG_ROUNDS` env, the loud invalid-value refusal): counts every call in a
-turn on the widened seam (`TurnStart` clears it, like the bound) and past
-`n` refuses every further call without executing, in a teaching voice
-naming the cap and what to do — stop and report, or ask the operator; the
-one thing the model can still do is answer. It caps total induced work,
-including the alternation decision 7's bound does not (the named
-consequence) and a runaway batch: a concurrent run of 50 reads counts 50,
-the cap on calls, not turns of the loop. The counter is under a mutex:
-a concurrent run calls the chain from many goroutines (SPEC_EVT 6).
-Rejected, named: a loop change (frozen), a wall-clock cap (the model is
-not slow on purpose), a token cap (compaction already bounds context).
+**The round cap** (`guard.Rounds(n)`, settings `rounds`, `RIG_ROUNDS`
+env, the loud invalid-value refusal; **amended: no cap by default**):
+counts every call in a turn on the widened seam (`TurnStart` clears it,
+like the bound) and, when `n > 0`, past `n` refuses every further call
+without executing, in a teaching voice naming the cap and what to do —
+stop and report, or ask the operator; the one thing the model can still
+do is answer. `n = 0` (the embedded default, and a negative `n`) is no
+cap: the middleware stays in the chain, counts, never refuses. It caps
+total induced work when set, including the alternation decision 7's
+bound does not (the named consequence) and a runaway batch: a concurrent
+run of 50 reads counts 50, the cap on calls, not turns of the loop. The
+counter is under a mutex: a concurrent run calls the chain from many
+goroutines (SPEC_EVT 6). The default moved from 200 to none on
+2026-08-22: a one-shot (`-p`) turn with a large model on a real task
+legitimately exceeds 200 calls now that reads overlap (SPEC_EVT 2a), and
+a cap that ends a correct run mid-work is worse than the runaway it
+guards against — the retry bound still catches the identical-call loop,
+and compaction still bounds context. An operator who wants the wall
+(a jailed worker, an overnight job) sets `rounds`. Rejected, named: a
+loop change (frozen), a wall-clock cap (the model is not slow on
+purpose), a token cap (compaction already bounds context), a higher
+number (every number is the wrong number for some task).
 
 **The result bound** (`guard.Cap(bytes)`, settings `resultCap`, default
 64 KiB): every tool result is bounded before it reaches the transcript,
