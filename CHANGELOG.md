@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.15.0] — one store
 
 - **the scheduler is one store** (`specs/SPEC_STATE.md`, amended): the
   cwd partition is gone — `scheduler/global.sqlite` holds every job, the
