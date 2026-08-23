@@ -71,6 +71,10 @@ go install github.com/mrsirg97-rgb/rig/cmd/rig@master   # today (no tag yet)
 go install github.com/mrsirg97-rgb/rig/cmd/rig@latest   # once tagged
 ```
 
+A built release binary updates itself in place: `rig -update` fetches,
+verifies, and atomically renames the latest release over the running
+binary (a running rig keeps the old file until restarted).
+
 `make install` is the same build landed locally: `$(go env GOBIN)` when
 set, else `~/.local/bin`; `BINDIR=...` names the directory.
 

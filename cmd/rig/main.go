@@ -648,10 +648,20 @@ func main() {
 	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows)")
 	tuiMode := flag.String("tui", "auto", "the terminal frontend: auto (default; when stdout is a terminal), true (force it), false (the piped CLI)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	updateFlag := flag.Bool("update", false, "update the binary to the latest release and exit")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Printf("rig %s\n", Version)
+		return
+	}
+
+	if *updateFlag {
+		cfg := defaultUpdateCfg()
+		if err := update(context.Background(), cfg); err != nil {
+			fmt.Fprintln(os.Stderr, "rig:", err)
+			os.Exit(1)
+		}
 		return
 	}
 
