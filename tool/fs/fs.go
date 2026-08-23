@@ -64,7 +64,7 @@ func LS() core.Tool {
 	return &tool{
 		name:        "ls",
 		description: "list one level of a directory: kind, name, size. Guidelines: orientation; a search by name -> find, by content -> grep. Reply: one entry per line, capped.",
-		schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"directory to list (default .)"},"hidden":{"type":"boolean","description":"include dot-entries"}}}`),
+		schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"directory to list (default: the working directory)"},"hidden":{"type":"boolean","description":"include dot-entries"}}}`),
 		exec:        lsExec,
 	}
 }
@@ -73,7 +73,7 @@ func Find() core.Tool {
 	return &tool{
 		name:        "find",
 		description: "find files by a name glob, or a path glob with / (** spans directories), under a root. Guidelines: locating files by name; by content -> grep. Reply: one path per line, capped.",
-		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"a name glob (matches the file name) or a path glob with / (** spans directories)"},"root":{"type":"string","description":"root to search (default .)"}},"required":["pattern"]}`),
+		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"a name glob (matches the file name) or a path glob with / (** spans directories)"},"root":{"type":"string","description":"root to search (default: the working directory)"}},"required":["pattern"]}`),
 		exec:        findExec,
 	}
 }
@@ -81,8 +81,8 @@ func Find() core.Tool {
 func Grep() core.Tool {
 	return &tool{
 		name:        "grep",
-		description: "search file lines under a root with a Go regexp. Guidelines: locating code by content, narrowed with glob; one file's whole text -> read. Reply: path:line: text, capped.",
-		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Go regexp matched per line"},"root":{"type":"string","description":"root to search (default .)"},"glob":{"type":"string","description":"restrict matches to a path glob"}},"required":["pattern"]}`),
+		description: "search file lines under a root with a Go regexp. Guidelines: locating code by content, narrowed with glob; one file's whole text -> read. Reply: path:line: text, capped; no matches names the root searched.",
+		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Go regexp matched per line"},"root":{"type":"string","description":"root to search (default: the working directory)"},"glob":{"type":"string","description":"restrict matches to a path glob"}},"required":["pattern"]}`),
 		exec:        grepExec,
 	}
 }
@@ -114,7 +114,7 @@ func lsExec(_ context.Context, data json.RawMessage) (string, error) {
 		lines = append(lines, line)
 	}
 	if len(lines) == 0 {
-		return "(empty)", nil
+		return "(empty: " + dir + ")", nil
 	}
 	if total := len(lines); total > lsCap {
 		lines = append(lines[:lsCap], fmt.Sprintf("[truncated: %d of %d]", lsCap, total))
@@ -153,7 +153,7 @@ func findExec(ctx context.Context, data json.RawMessage) (string, error) {
 	}
 	out := matched
 	if total == 0 {
-		out = []string{"(no matches)"}
+		out = []string{fmt.Sprintf("(no matches for '%s' under %s)", a.Pattern, root)}
 	}
 	if total > findCap {
 		out = append(out, fmt.Sprintf("[truncated: %d of %d]", findCap, total))
@@ -239,7 +239,11 @@ func grepExec(ctx context.Context, data json.RawMessage) (string, error) {
 	}
 	out := lines
 	if total == 0 {
-		out = []string{"(no matches)"}
+		where := fmt.Sprintf("(no matches for /%s/ under %s", a.Pattern, root)
+		if a.Glob != "" {
+			where += fmt.Sprintf(", glob '%s'", a.Glob)
+		}
+		out = []string{where + ")"}
 	}
 	if total > grepCap {
 		out = append(out, fmt.Sprintf("[truncated: %d of %d]", grepCap, total))

@@ -682,9 +682,9 @@ func renderMemoryLine(h Hit) string {
 	return head + "\n" + indent(h.Content)
 }
 
-func renderHits(hits []Hit) string {
+func renderHits(hits []Hit, where string) string {
 	if len(hits) == 0 {
-		return "(no memories)"
+		return "(no memories " + where + ")"
 	}
 	var b strings.Builder
 	for i, h := range hits {

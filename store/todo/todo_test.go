@@ -1588,7 +1588,7 @@ func TestWorkspaceListsAreIsolated(t *testing.T) {
 	if strings.Contains(reply, "only in workspace a") {
 		t.Fatalf("workspace b saw workspace a's tasks:\n%s", reply)
 	}
-	if !strings.Contains(reply, "(no tasks)") {
+	if !strings.Contains(reply, "(no tasks in this directory's queue)") {
 		t.Fatalf("workspace b's render must be empty:\n%s", reply)
 	}
 }
@@ -1655,8 +1655,8 @@ func TestAllDoneQueueRendersSummaryOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if strings.Contains(read, "(no tasks)") {
-		t.Errorf("an all-done queue must never say '(no tasks)':\n%s", read)
+	if strings.Contains(read, "(no tasks") {
+		t.Errorf("an all-done queue must never say '(no tasks…)':\n%s", read)
 	}
 	if !strings.Contains(read, "2/2 done") {
 		t.Errorf("summary fold missing:\n%s", read)

@@ -200,7 +200,7 @@ func TestCorruptStoreQuarantinesAndReadsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recall: %v", err)
 	}
-	if len(hits) != 0 || !strings.Contains(reply, "(no memories)") {
+	if len(hits) != 0 || !strings.Contains(reply, "(no memories in ") {
 		t.Fatalf("recall over the fresh store: %q", reply)
 	}
 }
@@ -414,7 +414,7 @@ func TestNoMatchRendersEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recall: %v", err)
 	}
-	if len(hits) != 0 || !strings.Contains(reply, "(no memories)") {
+	if len(hits) != 0 || !strings.Contains(reply, "(no memories in ") {
 		t.Fatalf("reply %q", reply)
 	}
 }

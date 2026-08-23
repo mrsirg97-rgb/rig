@@ -46,7 +46,7 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
   the auto-start. Foreign-claim and blocked-by-dependency refusals stay.
 - The read contract is lean (SPEC_TODO_LEAN): Read renders the
   actionable queue — done rows fold into the unconditional summary line
-  `(N/M done · next: tN · K failed)`, never "(no tasks)" on an all-done
+  `(N/M done · next: tN · K failed)`, never "(no tasks in this directory's queue)" on an all-done
   queue; ReadAll returns the history; a transition echo is the affected
   row plus the summary. Create keeps the full (filtered) queue: a
   replacement's point is the new state.

@@ -9,6 +9,8 @@ fumbles quoting. Stdlib only: `WalkDir`, `regexp`, `path.Match`.
 ## What it includes
 
 - `ls`, `find`, `grep` — a `core.Tool` each, over the stdlib fs surface.
+  An empty reply names its scope: the directory, or the pattern and the
+  absolute root (and glob) searched (SPEC_CORE).
 
 ## How it is consumed
 

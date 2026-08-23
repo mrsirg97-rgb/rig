@@ -522,7 +522,7 @@ func lineOf(f *folded, ts *taskState, session string) string {
 func renderQueue(f *folded, session string, all bool) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
-		return "(no tasks)"
+		return "(no tasks in this directory's queue)"
 	}
 	var b strings.Builder
 	b.WriteString(summaryOf(f))

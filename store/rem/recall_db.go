@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -97,8 +98,25 @@ func Recall(ctx context.Context, db store.DB, cwd string, in RecallInput) (strin
 			}
 		}
 	}
-	reply := fmt.Sprintf("recall: %d memories\n%s", len(hits), renderHits(hits))
+	reply := fmt.Sprintf("recall: %d memories\n%s", len(hits), renderHits(hits, recallWhere(cwd, in)))
 	return reply, hits, nil
+}
+
+func recallWhere(cwd string, in RecallInput) string {
+	label := filepath.Base(cwd)
+	var scope string
+	switch in.Scope {
+	case "global":
+		scope = "in global"
+	case "all":
+		scope = "in " + label + " or global"
+	default:
+		scope = "in " + label + ", nor global"
+	}
+	if q := strings.TrimSpace(in.Query); q != "" {
+		return scope + " for '" + q + "'"
+	}
+	return scope
 }
 
 func minInt(a, b int) int {
