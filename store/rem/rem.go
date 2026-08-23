@@ -3,16 +3,13 @@ package rem
 import (
 	"context"
 	"crypto/md5"
-	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +17,7 @@ import (
 	remdd "github.com/mrsirg97-rgb/rig/store/rem/ddl"
 	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
 	remmeta "github.com/mrsirg97-rgb/rig/store/rem/metadata"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
@@ -54,43 +52,8 @@ func ftsEnabled() bool {
 	return true
 }
 
-func shortHash(s string) string {
-	d := sha1.Sum([]byte(s))
-	return hex.EncodeToString(d[:])[:12]
-}
-
-type scopeCacheT struct {
-	mu   sync.Mutex
-	vals map[string]string
-}
-
-var scopeCache = scopeCacheT{vals: map[string]string{}}
-
-func scopePath(cwd string) string {
-	if cwd == "" {
-		return ""
-	}
-	scopeCache.mu.Lock()
-	defer scopeCache.mu.Unlock()
-	if v, ok := scopeCache.vals[cwd]; ok {
-		return v
-	}
-	v := cwd
-	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-common-dir").Output(); err == nil {
-		p := strings.TrimSpace(string(out))
-		if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(cwd, p)
-			}
-			v = filepath.Clean(p)
-		}
-	}
-	scopeCache.vals[cwd] = v
-	return v
-}
-
 func scopeKey(cwd string) string {
-	return shortHash(scopePath(cwd))
+	return scope.Key(cwd)
 }
 
 func writeScope(scope, cwd string) (key, label string, err error) {
@@ -792,7 +755,7 @@ func Migration(cwd string) func(*sql.Tx, int, int) (string, error) {
 			removed = n
 		}
 		rescoped := 0
-		oldScope := shortHash(cwd)
+		oldScope := scope.ShortHash(cwd)
 		newScope := scopeKey(cwd)
 		if newScope != oldScope {
 			var marker string

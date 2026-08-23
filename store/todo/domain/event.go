@@ -15,6 +15,7 @@ type Event struct {
 	Seq     int64   `db:"seq"`
 	Args    string  `db:"args"`
 	Op      string  `db:"op"`
+	Scope   string  `db:"scope"`
 	Session *string `db:"session"`
 	Ts      string  `db:"ts"`
 }
@@ -39,6 +40,7 @@ func ScanEvent(row lazy.ScanRow) (Event, error) {
 		&out.Seq,
 		&out.Args,
 		&out.Op,
+		&out.Scope,
 		&out.Session,
 		&out.Ts,
 	)
@@ -65,7 +67,7 @@ func (d *eventDomain) GetEvent(ctx context.Context, seq int64) *lazy.Lazy[Event]
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "seq", "args", "op", "session", "ts" FROM "events" WHERE "seq" = $1`,
+		`SELECT "seq", "args", "op", "scope", "session", "ts" FROM "events" WHERE "seq" = $1`,
 		seq,
 	)
 	out, err := ScanEvent(row)
@@ -102,7 +104,7 @@ func (d *eventDomain) GetEventBatch(ctx context.Context, keys []int64) *lazy.Laz
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "seq", "args", "op", "session", "ts" FROM "events" WHERE "seq" IN (`+ph+`)`, args...)
+		`SELECT "seq", "args", "op", "scope", "session", "ts" FROM "events" WHERE "seq" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -130,10 +132,11 @@ func (d *eventDomain) InsertEvent(ctx context.Context, row Event) (*Event, error
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "events" ("seq", "args", "op", "session", "ts") VALUES ($1, $2, $3, $4, $5) RETURNING "seq", "args", "op", "session", "ts"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "events" ("seq", "args", "op", "scope", "session", "ts") VALUES ($1, $2, $3, $4, $5, $6) RETURNING "seq", "args", "op", "scope", "session", "ts"`,
 		row.Seq,
 		row.Args,
 		row.Op,
+		row.Scope,
 		row.Session,
 		row.Ts,
 	)
@@ -148,7 +151,7 @@ func (d *eventDomain) DeleteEvent(ctx context.Context, seq int64) (*Event, error
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "events" WHERE "seq" = $1 RETURNING "seq", "args", "op", "session", "ts"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "events" WHERE "seq" = $1 RETURNING "seq", "args", "op", "scope", "session", "ts"`,
 		seq,
 	)
 	if err != nil {
@@ -162,9 +165,10 @@ func (d *eventDomain) UpdateEvent(ctx context.Context, row Event) (*Event, error
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "events" SET "args" = $1, "op" = $2, "session" = $3, "ts" = $4 WHERE "seq" = $5 RETURNING "seq", "args", "op", "session", "ts"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "events" SET "args" = $1, "op" = $2, "scope" = $3, "session" = $4, "ts" = $5 WHERE "seq" = $6 RETURNING "seq", "args", "op", "scope", "session", "ts"`,
 		row.Args,
 		row.Op,
+		row.Scope,
 		row.Session,
 		row.Ts,
 		row.Seq,

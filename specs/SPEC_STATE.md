@@ -106,8 +106,9 @@ func TxFrom(ctx context.Context) (*sql.Tx, error)                               
   typed keys, two values, no collision. The loop is untouched.
 - Each store is its own sqlite file and its own `sqlx.DB`, opened once at the
   root and handed to the tool constructor: `todo.New(db)`. Paths follow pane:
-  `<home>/todo/<sha1(cwd)[:12]>.sqlite` per workspace, `global.sqlite` where
-  pane has a global scope (rem), and the scheduler's one
+  one `todo/todo.sqlite` (every row carries its project scope; its section's
+  migration folds the old per-workspace files), `global.sqlite` where pane
+  has a global scope (rem), and the scheduler's one
   `scheduler/global.sqlite` (its section's migration folds the old
   per-workspace files).
 - `Open` sets `journal_mode=WAL`, `busy_timeout=5000`, `foreign_keys=ON`,
@@ -204,29 +205,52 @@ deliverable 9) or plain `sqlite3`.
 
 ### todo (port; TODO_SPEC.md A, Rev 2, TASK_TREE_SPEC.md A)
 
+One store, every row scoped (the project identity, SPEC_STATE's scope
+law; see the migration section): a queue is the repo's, not the
+directory rig happened to start in, and the identity partition is never
+a filename — it is the short sha1 of the git common dir (`store/scope`),
+falling back to the cwd hash outside a repo.
+
 - `meta`: key (primary), value.
 - `events`: seq (primary, minted, strictly increasing), ts, op
   (create|start|complete|fail|retry|move|compact), args (TEXT json), session
-  (nullable).
-- `tasks`: id (primary, `tN`), text (unique via extra.sql), status
-  (pending|in_progress|done|failed), pos, created_seq (link events),
-  updated_seq (link events).
-- `task_deps`: task_id + depends_on (primary; both link tasks), created_seq.
-- `extra.sql`: `tasks_pos_seq` index on (pos, created_seq); the unique index
-  on text.
-- Semantics kept verbatim: projection rebuilt from the log on every call and
-  never trusted; replay is total and skips inapplicable rows; positions
-  minted never mutated; move via events; claim semantics (start claims,
-  foreign complete refuses, fail frees; completing your own unclaimed
-  pending task implicitly claims and completes — start+complete, both
-  events, the echo noting auto-started); compaction past 1000 events
+  (nullable), scope (the queue's identity, nullable-false).
+- `tasks`: scope + id (primary, `tN` per scope), text (unique per scope via
+  extra.sql), status (pending|in_progress|done|failed), pos, created_seq
+  (link events), updated_seq (link events).
+- `task_deps`: scope + task_id + depends_on (primary; both link tasks within
+  one scope), created_seq.
+- `extra.sql`: `tasks_pos_seq` index on (scope, pos, created_seq); the unique
+  index on (scope, text).
+- Semantics kept verbatim, per scope: projection rebuilt from the log on
+  every call and never trusted; replay is total and skips inapplicable rows;
+  positions minted never mutated; move via events; claim semantics (start
+  claims, foreign complete refuses, fail frees; completing your own
+  unclaimed pending task implicitly claims and completes — start+complete,
+  both events, the echo noting auto-started); compaction past 1000 events
   snapshots the queue and resets the epoch; dependsOn DAG validated at the
   boundary, cycles refused, completion gated, blocked skipped by `next`.
+  Minted seq is one sequence across scopes (a shared events table), while
+  ids stay `tN` per scope; the compact fold and stale footer are per scope.
+- The empty reply names the queue it read (`(no tasks in <label>'s queue)`),
+  never "this directory's queue" (SPEC_CORE's empty-reply rule).
 - The FSM lives in `store/todo/todo.go` as Go, errors in pane's teaching
   voice; the generated domain is only the substrate it writes through.
   Two raw arms are owned and named as such: the event scan that rebuilds
   the fold (no ordered scan accessor is generated) and the projection
   rewrite (no bulk-replace accessor is generated).
+- **Migration (1 → 2), lossless.** Todo rows carried no cwd — the filename
+  was the identity — so the fold keys on the files existing (the
+  scheduler's lesson: a fresh `todo.sqlite` folds too): every
+  `<12-hex>.sqlite` in the todo dir folds into `todo.sqlite` with
+  `scope = <that hash>`, verbatim, rows in event order, the legacy files
+  and their `-wal`/`-shm` moved aside as `.migrated`. Rejected: walking a
+  hash back to a path to re-key (a renamed directory orphans its queue).
+  Then rem's lazy re-scope, the same shape exactly: on open, if
+  `scope.Key(cwd) != scope.ShortHash(cwd)` and no `migrated:<oldScope>`
+  marker, that cwd-hash's rows re-scope to the repo scope, `INSERT OR
+  IGNORE` the marker, counted once on stderr, one transaction. The fold is
+  in filename order, rows in event order — reproducible.
 
 ### rem (port; REM_SPEC.md D, E, F, G)
 

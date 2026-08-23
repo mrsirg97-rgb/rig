@@ -11,17 +11,18 @@ import (
 )
 
 type TaskDep struct {
+	Scope      string `db:"scope"`
 	TaskId     string `db:"task_id"`
 	DependsOn  string `db:"depends_on"`
 	CreatedSeq int64  `db:"created_seq"`
 }
 
 type TaskDepDomain interface {
-	GetTaskDep(ctx context.Context, taskId string, dependsOn string) *lazy.Lazy[TaskDep]
-	WindowTaskDepByTaskId(ctx context.Context, taskId string, from string, to string, limit int32) *lazy.Lazy[TaskDep]
-	PageTaskDepByTaskId(ctx context.Context, taskId string, after string, limit int32) *lazy.Lazy[TaskDep]
+	GetTaskDep(ctx context.Context, scope string, taskId string, dependsOn string) *lazy.Lazy[TaskDep]
+	WindowTaskDepByScopeTaskId(ctx context.Context, scope string, taskId string, from string, to string, limit int32) *lazy.Lazy[TaskDep]
+	PageTaskDepByScopeTaskId(ctx context.Context, scope string, taskId string, after string, limit int32) *lazy.Lazy[TaskDep]
 	InsertTaskDep(ctx context.Context, row TaskDep) (*TaskDep, error)
-	DeleteTaskDep(ctx context.Context, taskId string, dependsOn string) (*TaskDep, error)
+	DeleteTaskDep(ctx context.Context, scope string, taskId string, dependsOn string) (*TaskDep, error)
 	UpdateTaskDep(ctx context.Context, row TaskDep) (*TaskDep, error)
 }
 
@@ -34,6 +35,7 @@ func NewTaskDepDomain() *taskDepDomain {
 func ScanTaskDep(row lazy.ScanRow) (TaskDep, error) {
 	var out TaskDep
 	err := row.Scan(
+		&out.Scope,
 		&out.TaskId,
 		&out.DependsOn,
 		&out.CreatedSeq,
@@ -53,7 +55,7 @@ func (d *taskDepDomain) one(rows *sql.Rows) (*TaskDep, error) {
 	return &out, nil
 }
 
-func (d *taskDepDomain) GetTaskDep(ctx context.Context, taskId string, dependsOn string) *lazy.Lazy[TaskDep] {
+func (d *taskDepDomain) GetTaskDep(ctx context.Context, scope string, taskId string, dependsOn string) *lazy.Lazy[TaskDep] {
 	l := lazy.New(ScanTaskDep)
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
@@ -61,7 +63,8 @@ func (d *taskDepDomain) GetTaskDep(ctx context.Context, taskId string, dependsOn
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "task_id", "depends_on", "created_seq" FROM "task_deps" WHERE "task_id" = $1 AND "depends_on" = $2`,
+		`SELECT "scope", "task_id", "depends_on", "created_seq" FROM "task_deps" WHERE "scope" = $1 AND "task_id" = $2 AND "depends_on" = $3`,
+		scope,
 		taskId,
 		dependsOn,
 	)
@@ -78,7 +81,7 @@ func (d *taskDepDomain) GetTaskDep(ctx context.Context, taskId string, dependsOn
 	return l
 }
 
-func (d *taskDepDomain) WindowTaskDepByTaskId(ctx context.Context, taskId string, from string, to string, limit int32) *lazy.Lazy[TaskDep] {
+func (d *taskDepDomain) WindowTaskDepByScopeTaskId(ctx context.Context, scope string, taskId string, from string, to string, limit int32) *lazy.Lazy[TaskDep] {
 	l := lazy.New(ScanTaskDep)
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
@@ -86,7 +89,8 @@ func (d *taskDepDomain) WindowTaskDepByTaskId(ctx context.Context, taskId string
 		return l
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "task_id", "depends_on", "created_seq" FROM "task_deps" WHERE "task_id" = $1 AND "depends_on" >= $2 AND "depends_on" < $3 ORDER BY "task_id", "depends_on" LIMIT $4`,
+		`SELECT "scope", "task_id", "depends_on", "created_seq" FROM "task_deps" WHERE "scope" = $1 AND "task_id" = $2 AND "depends_on" >= $3 AND "depends_on" < $4 ORDER BY "scope", "task_id", "depends_on" LIMIT $5`,
+		scope,
 		taskId,
 		from, to, limit,
 	)
@@ -112,7 +116,7 @@ func (d *taskDepDomain) WindowTaskDepByTaskId(ctx context.Context, taskId string
 	return l
 }
 
-func (d *taskDepDomain) PageTaskDepByTaskId(ctx context.Context, taskId string, after string, limit int32) *lazy.Lazy[TaskDep] {
+func (d *taskDepDomain) PageTaskDepByScopeTaskId(ctx context.Context, scope string, taskId string, after string, limit int32) *lazy.Lazy[TaskDep] {
 	l := lazy.New(ScanTaskDep)
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
@@ -120,7 +124,8 @@ func (d *taskDepDomain) PageTaskDepByTaskId(ctx context.Context, taskId string, 
 		return l
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "task_id", "depends_on", "created_seq" FROM "task_deps" WHERE "task_id" = $1 AND "depends_on" > $2 ORDER BY "task_id", "depends_on" LIMIT $3`,
+		`SELECT "scope", "task_id", "depends_on", "created_seq" FROM "task_deps" WHERE "scope" = $1 AND "task_id" = $2 AND "depends_on" > $3 ORDER BY "scope", "task_id", "depends_on" LIMIT $4`,
+		scope,
 		taskId,
 		after, limit,
 	)
@@ -151,7 +156,8 @@ func (d *taskDepDomain) InsertTaskDep(ctx context.Context, row TaskDep) (*TaskDe
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "task_deps" ("task_id", "depends_on", "created_seq") VALUES ($1, $2, $3) RETURNING "task_id", "depends_on", "created_seq"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "task_deps" ("scope", "task_id", "depends_on", "created_seq") VALUES ($1, $2, $3, $4) RETURNING "scope", "task_id", "depends_on", "created_seq"`,
+		row.Scope,
 		row.TaskId,
 		row.DependsOn,
 		row.CreatedSeq,
@@ -162,12 +168,13 @@ func (d *taskDepDomain) InsertTaskDep(ctx context.Context, row TaskDep) (*TaskDe
 	return d.one(rows)
 }
 
-func (d *taskDepDomain) DeleteTaskDep(ctx context.Context, taskId string, dependsOn string) (*TaskDep, error) {
+func (d *taskDepDomain) DeleteTaskDep(ctx context.Context, scope string, taskId string, dependsOn string) (*TaskDep, error) {
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "task_deps" WHERE "task_id" = $1 AND "depends_on" = $2 RETURNING "task_id", "depends_on", "created_seq"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "task_deps" WHERE "scope" = $1 AND "task_id" = $2 AND "depends_on" = $3 RETURNING "scope", "task_id", "depends_on", "created_seq"`,
+		scope,
 		taskId,
 		dependsOn,
 	)
@@ -182,8 +189,9 @@ func (d *taskDepDomain) UpdateTaskDep(ctx context.Context, row TaskDep) (*TaskDe
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "task_deps" SET "created_seq" = $1 WHERE "task_id" = $2 AND "depends_on" = $3 RETURNING "task_id", "depends_on", "created_seq"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "task_deps" SET "created_seq" = $1 WHERE "scope" = $2 AND "task_id" = $3 AND "depends_on" = $4 RETURNING "scope", "task_id", "depends_on", "created_seq"`,
 		row.CreatedSeq,
+		row.Scope,
 		row.TaskId,
 		row.DependsOn,
 	)

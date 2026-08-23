@@ -12,6 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/store"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 	schedapi "github.com/mrsirg97-rgb/rig/tool/scheduler"
 	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
@@ -238,4 +239,38 @@ func schedStores(t *testing.T, home, cwd string) sched.DB {
 		t.Fatal(err)
 	}
 	return db
+}
+
+func TestTodoProjectCommand(t *testing.T) {
+	db := openTodo(t)
+	env := &command.Env{
+		Session: func() *core.Session { return core.NewSession() },
+		Tools:   map[string]core.Tool{"todo": todoapi.New(db)},
+	}
+	proj := t.TempDir()
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, todostore.Project{Key: scope.Key(proj), Label: scope.Label(proj)}, []todostore.CreateItem{{Text: "elsewhere"}}, "seed"); err != nil {
+		t.Fatal(err)
+	}
+	rendered, err := runCmd(t, "todo", "project "+proj, env)
+	if err != nil {
+		t.Fatalf("todo project: %v", err)
+	}
+	if !strings.Contains(rendered, "elsewhere") {
+		t.Fatalf("todo project must render that project's queue:\n%s", rendered)
+	}
+
+	unknown := t.TempDir()
+	empty, err := runCmd(t, "todo", "project "+unknown, env)
+	if err != nil {
+		t.Fatalf("todo project unknown: %v", err)
+	}
+	if !strings.Contains(empty, "(no tasks in "+scope.Label(unknown)+"'s queue)") {
+		t.Fatalf("an unknown path's empty queue must refuse naming its scope:\n%s", empty)
+	}
+
+	_, err = runCmd(t, "todo", "project", env)
+	if err == nil || err.Error() != "todo: project takes a path (todo project <path>)" {
+		t.Fatalf("a bare project must refuse naming the shape, got %v", err)
+	}
 }

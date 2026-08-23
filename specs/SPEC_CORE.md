@@ -256,7 +256,9 @@ Every empty reply says what it searched and where: `ls` names the
 directory (`(empty: /abs/dir)`), `find` and `grep` the pattern and the
 root (`(no matches for /re/ under /abs/root, glob 'g')`), `web_search`
 the query, `rem` recall the scopes and the query (`(no memories in rig,
-nor global for 'q')`), `todo` that the queue is this directory's,
+nor global for 'q')`), `todo` the queue it read (`(no tasks in
+<label>'s queue)` — a subdirectory, a second worktree, and a `project`
+override all name the queue they read, never "this directory's"),
 `/plugins` the directory. The schemas say whose `.` a default root is
 ("the working directory"). The rule generalises: a reply that could be
 read two ways carries the word that picks one. Edit is exact-match string replacement with

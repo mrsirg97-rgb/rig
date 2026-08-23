@@ -834,18 +834,21 @@ func main() {
 	}
 	defer sdb.DB.Close()
 
-	todoPath := todostore.StorePath(cfgDir, cwd)
+	todoPath := todostore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(todoPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	tdb, todoQuarantined, _, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion)
+	tdb, todoQuarantined, todoReport, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)))
 	if todoErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo store:", todoErr)
 		os.Exit(1)
 	}
 	if todoQuarantined != "" {
 		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt todo file: %s\n", todoQuarantined)
+	}
+	if todoReport != "" {
+		fmt.Fprintf(os.Stderr, "rig: %s\n", todoReport)
 	}
 	defer tdb.DB.Close()
 

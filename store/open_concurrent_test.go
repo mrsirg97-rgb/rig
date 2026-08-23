@@ -10,14 +10,15 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/store"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
-	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
 )
+
+var p = todostore.Project{Key: "ws", Label: "ws"}
 
 func TestConcurrentCreatesSerialize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
 	var dbs []store.DB
 	for i := 0; i < 2; i++ {
-		db, _, _, err := store.Open(path, tododdl.Statements(), 1)
+		db, _, _, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion)
 		if err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
@@ -41,7 +42,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 				defer wg.Done()
 				for i := 0; i < slice; i++ {
 					_, err := todostore.Create(context.Background(), db,
-						[]todostore.CreateItem{{Text: fmt.Sprintf("w%d-g%d-%d", wi, g, i)}},
+						p, []todostore.CreateItem{{Text: fmt.Sprintf("w%d-g%d-%d", wi, g, i)}},
 						fmt.Sprintf("s%dg%d", wi, g))
 					if err != nil {
 						mu.Lock()
@@ -57,7 +58,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 		t.Fatalf("%d of %d concurrent creates failed: %v", len(errs), perDB*len(dbs), errs[0])
 	}
 	for wi, db := range dbs {
-		reply, err := todostore.Read(context.Background(), db, "")
+		reply, err := todostore.Read(context.Background(), db, p, "")
 		if err != nil {
 			t.Fatalf("read %d: %v", wi, err)
 		}
@@ -70,16 +71,16 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 
 func TestConcurrentCompletesSerialize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "shared.sqlite")
-	d1, _, _, err := store.Open(path, tododdl.Statements(), 1)
+	d1, _, _, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	for i := 1; i <= 40; i++ {
-		if _, err := todostore.Create(context.Background(), d1, []todostore.CreateItem{{Text: fmt.Sprintf("task-%d", i)}}, "s0"); err != nil {
+		if _, err := todostore.Create(context.Background(), d1, p, []todostore.CreateItem{{Text: fmt.Sprintf("task-%d", i)}}, "s0"); err != nil {
 			t.Fatalf("seed %d: %v", i, err)
 		}
 	}
-	d2, _, _, err := store.Open(path, tododdl.Statements(), 1)
+	d2, _, _, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open two: %v", err)
 	}
@@ -101,13 +102,13 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 				for i := 0; i < slice; i++ {
 					id := fmt.Sprintf("t%d", wi*20+g*slice+i+1)
 					sess := fmt.Sprintf("s%dg%d", wi, g)
-					if _, err := todostore.Start(context.Background(), db, id, sess); err != nil {
+					if _, err := todostore.Start(context.Background(), db, p, id, sess); err != nil {
 						mu.Lock()
 						errs = append(errs, err)
 						mu.Unlock()
 						continue
 					}
-					if _, err := todostore.Complete(context.Background(), db, id, sess); err != nil {
+					if _, err := todostore.Complete(context.Background(), db, p, id, sess); err != nil {
 						mu.Lock()
 						errs = append(errs, err)
 						mu.Unlock()
@@ -120,7 +121,7 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("%d of 40 concurrent completes failed: %v", len(errs), errs[0])
 	}
-	reply, err := todostore.Read(context.Background(), d1, "")
+	reply, err := todostore.Read(context.Background(), d1, p, "")
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}

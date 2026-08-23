@@ -11,15 +11,14 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
-func TestStorePathRoundTrip(t *testing.T) {
+func TestFilePathIsOneStoreUnderTodo(t *testing.T) {
 	home := t.TempDir()
-	cwd := "/workspace/roundtrip"
-	path := todostore.StorePath(home, cwd)
+	path := todostore.FilePath(home)
+	if filepath.Base(path) != "todo.sqlite" {
+		t.Fatalf("path %q, want one todo.sqlite", path)
+	}
 	if filepath.Dir(path) != filepath.Join(home, "todo") {
 		t.Fatalf("path %q, want it under %s/todo", path, home)
-	}
-	if again := todostore.StorePath(home, cwd); again != path {
-		t.Fatalf("StorePath not stable: %q vs %q", again, path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -30,10 +29,11 @@ func TestStorePathRoundTrip(t *testing.T) {
 	}
 	defer db.DB.Close()
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, []todostore.CreateItem{{Text: "a task"}}, "seed"); err != nil {
+	p := todostore.Project{Key: "scope-a", Label: "a"}
+	if _, err := todostore.Create(ctx, db, p, []todostore.CreateItem{{Text: "a task"}}, "seed"); err != nil {
 		t.Fatal(err)
 	}
-	text, err := todostore.Read(ctx, db, "seed")
+	text, err := todostore.Read(ctx, db, p, "seed")
 	if err != nil {
 		t.Fatal(err)
 	}

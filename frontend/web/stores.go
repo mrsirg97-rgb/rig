@@ -1,6 +1,7 @@
 package web
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"sync"
@@ -21,7 +22,7 @@ func newStoreCache(home string) *storeCache {
 	return &storeCache{home: home, dbs: map[string]store.DB{}}
 }
 
-func (c *storeCache) open(path string, statements []string, version int) (store.DB, error) {
+func (c *storeCache) open(path string, statements []string, version int, migrate ...func(*sql.Tx, int, int) (string, error)) (store.DB, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if db, ok := c.dbs[path]; ok {
@@ -30,7 +31,7 @@ func (c *storeCache) open(path string, statements []string, version int) (store.
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return store.DB{}, err
 	}
-	db, _, _, err := store.Open(path, statements, version)
+	db, _, _, err := store.Open(path, statements, version, migrate...)
 	if err != nil {
 		return store.DB{}, err
 	}
@@ -43,7 +44,8 @@ func (c *storeCache) state(cwd string) (store.DB, error) {
 }
 
 func (c *storeCache) todo(cwd string) (store.DB, error) {
-	return c.open(todostore.StorePath(c.home, cwd), todostore.Statements(), todostore.SchemaVersion)
+	path := todostore.FilePath(c.home)
+	return c.open(path, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(path)))
 }
 
 func (c *storeCache) scheduler() (store.DB, error) {

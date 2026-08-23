@@ -114,11 +114,13 @@ through the same listing.
 
 ## Gotchas
 
-- The per-cwd path formulas are the stores' own: `state.StorePath`,
-  `todo.StorePath`, `rem.FilePath`, and the scheduler's one
+- The path formulas are the stores' own: `state.StorePath`, the one
+  `todo.FilePath`, `rem.FilePath`, and the scheduler's one
   `<home>/scheduler/global.sqlite` (the root's home, not the rig home
   directly). The root's inline formulas were replaced by these helpers
-  (one source).
+  (one source). The todo store is one file, and `/api/todo?cwd=`
+  resolves the selected cwd's scope through the same law as the model's
+  tool (SPEC_STATE).
 - `todo.Create` is an upsert (it adds the given tasks and keeps the
   existing queue); the reply is the store's voice, shown verbatim. The
   dashboard does not assert a replace — it shows what the verb says.

@@ -14,6 +14,7 @@ func Statements() []string {
   "seq" INTEGER NOT NULL,
   "args" TEXT NOT NULL,
   "op" TEXT NOT NULL,
+  "scope" TEXT NOT NULL,
   "session" TEXT,
   "ts" TEXT NOT NULL,
   PRIMARY KEY ("seq")
@@ -24,19 +25,21 @@ func Statements() []string {
   PRIMARY KEY ("key")
 )`,
 		`CREATE TABLE IF NOT EXISTS "tasks" (
+  "scope" TEXT NOT NULL,
   "id" TEXT NOT NULL,
   "created_seq" INTEGER NOT NULL,
   "pos" INTEGER NOT NULL,
   "status" TEXT NOT NULL,
   "text" TEXT NOT NULL,
   "updated_seq" INTEGER NOT NULL,
-  PRIMARY KEY ("id")
+  PRIMARY KEY ("scope", "id")
 )`,
 		`CREATE TABLE IF NOT EXISTS "task_deps" (
+  "scope" TEXT NOT NULL,
   "task_id" TEXT NOT NULL,
   "depends_on" TEXT NOT NULL,
   "created_seq" INTEGER NOT NULL,
-  PRIMARY KEY ("task_id", "depends_on")
+  PRIMARY KEY ("scope", "task_id", "depends_on")
 )`,
 	}
 }

@@ -80,7 +80,9 @@ cmd/rig/
 store/
   state/                 +SessionRow.Cwd, +SessionUsage (the typed usage
                          read), +StorePath (home, cwd -> the file)
-  todo/                  +StorePath (home, cwd -> the file)
+  todo/                  +FilePath (home -> one todo.sqlite, scoped by
+                         project; the dashboard's /api/todo?cwd= routes
+                         resolve scope through the same law as the tool)
   rem/                   +FilePath (home -> the file)
 frontend/tui/
   freeze_test.go         +frontend/web to the allow-list, with the round's
@@ -106,10 +108,13 @@ phase reads exactly these verbs:
   structure; `state.SessionUsage(ctx, db, id)` for the session's usage rows.
   `SessionRow` gains `Cwd` so the list groups by workspace and the cwd
   picker can enumerate the workspaces that have sessions.
-- **Todo (the model's own text).** `todo.Read(ctx, db, "dashboard")` and
-  `todo.ReadAll` returned as-is and shown in a `<pre>`; the operator sees
-  exactly what the model sees, stale footer included. The one write:
-  `todo.Create(ctx, db, items, "dashboard")`, the reply verbatim.
+- **Todo (the model's own text).** `todo.Read(ctx, db, proj, "dashboard")`
+  and `todo.ReadAll` returned as-is and shown in a `<pre>`; the operator
+  sees exactly what the model sees, stale footer included. The one write:
+  `todo.Create(ctx, db, proj, items, "dashboard")`, the reply verbatim.
+  `proj` resolves the selected `cwd` through the store's scope law
+  (SPEC_STATE): a subdirectory and a second worktree read the repo's one
+  queue, a non-repo workspace its own.
 - **Scheduler (the model's own text).** `scheduler.List(ctx, db, ct,
   sessionCwd, probe, now)` returned as-is and shown in a `<pre>`, drift
   notes included. The dashboard opens the one `scheduler/global.sqlite`
@@ -126,15 +131,17 @@ phase reads exactly these verbs:
 
 The store is opened the way the root opens it: `store.Open(path,
 Statements(), SchemaVersion)` over the same file, the same pragmas. The
-dashboard's cwd picker re-resolves the per-cwd paths (`state.StorePath`,
-`todo.StorePath`, and `rem.FilePath`) and the scheduler's one
-`scheduler/global.sqlite`, and caches the open DBs per file.
+dashboard's cwd picker re-resolves the per-cwd path (`state.StorePath`)
+and the one `todo/`/`rem/` files (`todo.FilePath`, `rem.FilePath`) and the
+scheduler's one `scheduler/global.sqlite`, and caches the open DBs per
+file.
 
 ## the one write
 
 A todo create: a form of one task per line. The handler trims blank lines,
 builds `[]todo.CreateItem` (text only; no dependsOn in phase 1), and calls
-`todo.Create(ctx, db, items, "dashboard")`. The reply string (the store's
+`todo.Create(ctx, db, proj, items, "dashboard")` with `proj` resolving the
+selected cwd's scope. The reply string (the store's
 note and the queue, the store's own voice) is returned verbatim to the page.
 An empty form is a loud refusal (no create with zero tasks). No other route
 mutates anything in this phase; the write is the only `db.Tx` (not
@@ -217,10 +224,11 @@ It opens the same SQLite files (the same rig home, the same pragmas, the
 same `store.Open`) and reads them with the same verbs. WAL plus
 busy_timeout is the cross-process story; the dashboard never copies or
 forks a store, and a live session's writes are visible on the dashboard's
-next read. The per-cwd path formulas move into the stores
-(`state.StorePath`, `todo.StorePath`, `rem.FilePath`) so the root and the
-dashboard share one source; the root's inline formulas are replaced by the
-helpers (no behavior change).
+next read. The path formulas move into the stores (`state.StorePath`, `todo.FilePath`,
+`rem.FilePath`) so the root and the dashboard share one source; the root's
+inline formulas are replaced by the helpers (no behavior change). The todo
+store is one file: its rows carry the project scope, and the dashboard
+resolves a selected cwd's scope through the same law as the model's tool.
 
 ### 3. Store verbs, never raw SQL.
 
@@ -297,7 +305,9 @@ pure Go over the stores, the config, and the plugin files.
 
 - **`store/state`**: `SessionRow` gains `Cwd`; `SessionUsage` (the typed
   usage read); `StorePath(home, cwd)`.
-- **`store/todo`**: `StorePath(home, cwd)`.
+- **`store/todo`**: `FilePath(home)` (the one `todo.sqlite`; the
+  dashboard resolves a selected cwd's scope through the store's scope
+  law).
 - **`store/rem`**: `FilePath(home)`.
 - **`frontend/web`**: the new leaf (server, auth, routes, the store cache,
   the plugins listing, the embedded assets) plus its `PACKAGE.md`.

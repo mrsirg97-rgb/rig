@@ -4,19 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/store"
-	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
+	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
 )
 
 func newDB(t *testing.T) store.DB {
 	t.Helper()
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), tododdl.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -236,5 +238,69 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	}
 	if !strings.Contains(history, "[x] drop") {
 		t.Errorf("all:true lost the done marker:\n%s", history)
+	}
+}
+
+func TestProjectReadsAndWritesAnotherQueue(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db)
+	proj := t.TempDir()
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	reply, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "over there"}}, "project": proj,
+	})
+	if err != nil {
+		t.Fatalf("create in project: %v", err)
+	}
+	if !strings.Contains(reply, "over there") {
+		t.Fatalf("create reply lost the task:\n%s", reply)
+	}
+	read, err := exec(t, tool, ctx, map[string]any{"action": "read", "project": proj})
+	if err != nil {
+		t.Fatalf("read project: %v", err)
+	}
+	if !strings.Contains(read, "over there") {
+		t.Fatalf("a project queue must read from anywhere:\n%s", read)
+	}
+	def, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("read default: %v", err)
+	}
+	if strings.Contains(def, "over there") {
+		t.Fatalf("the default (cwd) queue must not see the project's:\n%s", def)
+	}
+}
+
+func TestProjectExpandsTildeAtTheBoundary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	proj := filepath.Join(home, "p")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db := newDB(t)
+	tool := todoapi.New(db)
+	wrapped := paths.Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+		return tool.Exec(ctx, call.Args)
+	})
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	args := map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "tilde task"}}, "project": "~/p"}
+	payload, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply, err := wrapped(ctx, core.ToolCall{ID: "c1", Name: "todo", Args: payload})
+	if err != nil {
+		t.Fatalf("create via ~: %v", err)
+	}
+	if !strings.Contains(reply, "tilde task") {
+		t.Fatalf("create reply lost the task:\n%s", reply)
+	}
+	read, err := exec(t, tool, ctx, map[string]any{"action": "read", "project": proj})
+	if err != nil {
+		t.Fatalf("read the expanded project: %v", err)
+	}
+	if !strings.Contains(read, "tilde task") {
+		t.Fatalf("~ must expand to the project at the boundary:\n%s", read)
 	}
 }
