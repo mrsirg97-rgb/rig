@@ -1273,3 +1273,36 @@ func TestTodoRetryFromTheDashboard(t *testing.T) {
 		t.Fatalf("after retry the task is pending again: %s", rec.Body.String())
 	}
 }
+
+func TestWriteFromTheRequestsOwnFrontIsSameOrigin(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+	for _, c := range []struct {
+		name string
+		hdr  http.Header
+		host string
+		want int
+	}{
+		{"tailnet name as Host", both(bearer(tok), "Origin", "http://battlestation:7777"), "battlestation:7777", http.StatusOK},
+		{"forwarded host + https", both(both(bearer(tok), "Origin", "https://battlestation.tailb0b3f5.ts.net"), "X-Forwarded-Host", "battlestation.tailb0b3f5.ts.net"), "127.0.0.1:7777", http.StatusOK},
+		{"foreign origin, real host", both(bearer(tok), "Origin", "http://evil.example"), "battlestation:7777", http.StatusForbidden},
+		{"origin names another front", both(bearer(tok), "Origin", "http://battlestation:7777"), "127.0.0.1:7777", http.StatusForbidden},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if c.name == "forwarded host + https" {
+				c.hdr.Set("X-Forwarded-Proto", "https")
+			}
+			req := httptest.NewRequest("POST", "/api/todo"+q, strings.NewReader("alpha\n"))
+			for k, v := range c.hdr {
+				req.Header[k] = v
+			}
+			req.Host = c.host
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != c.want {
+				t.Fatalf("got %d %s, want %d", rec.Code, rec.Body.String(), c.want)
+			}
+		})
+	}
+}

@@ -154,9 +154,17 @@ mutates anything in this phase; the write is the only `db.Tx` (not
   `WWW-Authenticate: Bearer`). The comparison is constant time. The token
   is never echoed into a response body or a log line.
 - **The write is bounded.** The create route is POST only, Origin-checked
-  against the bound address (same-origin only, no CORS), and the body is
-  size-capped (`MaxBytesReader`). A read route that receives a POST, or a
-  write from a foreign Origin, is a refusal, not a silent no-op.
+  (same-origin only, no CORS), and the body is size-capped
+  (`MaxBytesReader`). A read route that receives a POST, or a write from a
+  foreign Origin, is a refusal, not a silent no-op. Same-origin is the
+  browser's definition (amended 2026-08-23): the `Origin` equals the bound
+  address, or the request's own front — `X-Forwarded-Proto`/`-Host` when a
+  proxy sets them, else `http://` + `Host`. Behind `tailscale serve` the
+  page is `http://battlestation:7777` and its writes carried that Origin
+  against an allow-list of `127.0.0.1`/`localhost`; every tap on the phone
+  was `origin mismatch`. A cross-site request still fails: the victim's
+  browser sends the real `Host` and the attacker's `Origin`. The bearer
+  token stands in front of all of it.
 - **The handler set is an allow-list.** Every (method, path) is named; an
   unknown path is a 404 and a known path with the wrong method is a 405
   (with the `Allow` header). There is no catch-all beyond the named static

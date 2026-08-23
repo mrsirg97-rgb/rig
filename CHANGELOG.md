@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **a dashboard write from its own front is same-origin**
+  (`specs/SPEC_SERVE.md`, amended): the Origin check accepted only the
+  bound address (`127.0.0.1`/`localhost`), so behind `tailscale serve`
+  every POST from the phone was `origin mismatch (same-origin only)`.
+  Same-origin is now the browser's definition — the bound address, or
+  the request's own front (`X-Forwarded-Proto`/`-Host`, else `http://` +
+  `Host`). A foreign Origin against the real Host still refuses.
+
 - **an empty reply names its scope** (`specs/SPEC_CORE.md`, amended):
   `grep` with a root that defaulted to a subdirectory answered "(no
   matches)" and a model read it as "does not exist", then spent four
