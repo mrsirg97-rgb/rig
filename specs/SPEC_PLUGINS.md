@@ -139,8 +139,9 @@ func New(name, description, file string, schema json.RawMessage, k Kernel) core.
 // Ecosystem is the plugins tool (8, amended): the one new primitive —
 // one mutating native over the ecosystem, an action enum — list (the
 // loaded and the skipped, through a root-wired listing seam), create
-// (writes a pending plugin, untrusted), delete (removes a loaded
-// plugin), reload (re-runs the discovery over the home's plugins/,
+// (writes a pending plugin, untrusted), delete (moves a loaded plugin
+// into plugins/disabled/ — disable, not rm, reversible with /plugins
+// enable), reload (re-runs the discovery over the home's plugins/,
 // the same loud skips, the same collision refusal, removal free) and
 // hands the reports to the root's swap, which takes effect on the
 // next turn (never mid-turn). Name is "plugins"; the schema is the
@@ -461,8 +462,9 @@ The pieces:
   running kernel, so a new plugin's functions are callable from the
   python tool immediately, and callable as a tool on the next turn.
   `list` is a management read; `create` writes a pending plugin
-  (untrusted, SPEC_SANDBOX); `delete` removes a loaded one. `plugins` is
-  a mutating native, so every arm pauses at the gate.
+  (untrusted, SPEC_SANDBOX); `delete` is disable — it moves a loaded
+  plugin into `plugins/disabled/`, reversible with `/plugins enable`,
+  one `Move` shared with the `/plugins` command (never an unlink).
 - **`/plugins reload`**, the operator's verb: the same re-discovery,
   the same next-turn registration, from the command door.
 - **`/plugins create <text>`**, a prompt template on the steer

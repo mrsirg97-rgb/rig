@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/core"
 )
+
+var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 func Zone(home, zone string) ([]string, error) {
 	dir := filepath.Join(home, "plugins", zone)
@@ -60,6 +63,65 @@ func Check(reports []Report, natives map[string]bool) error {
 	return nil
 }
 
+func Move(dir, name, from, to string) (src, dst string, err error) {
+	if name == "" {
+		return "", "", fmt.Errorf("no name")
+	}
+	if name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
+		return "", "", fmt.Errorf("%q is not a plugin name (the filename stem)", name)
+	}
+	src = filepath.Join(dir, from, name+".py")
+	dst = filepath.Join(dir, to, name+".py")
+	if _, statErr := os.Stat(src); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return "", "", fmt.Errorf("no plugin %q at %s", name, src)
+		}
+		return "", "", fmt.Errorf("the move: %v", statErr)
+	}
+	if _, statErr := os.Stat(dst); statErr == nil {
+		return "", "", fmt.Errorf("%q already exists at %s (remove one)", name, dst)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return "", "", fmt.Errorf("the move: %v", err)
+	}
+	if err := os.Rename(src, dst); err != nil {
+		return "", "", fmt.Errorf("the move: %v", err)
+	}
+	return src, dst, nil
+}
+
+func WritePending(home string, natives map[string]bool, name, source string) (path string, created bool, err error) {
+	if name == "" {
+		return "", false, fmt.Errorf("no name")
+	}
+	if !PluginNameRe.MatchString(name) {
+		return "", false, fmt.Errorf("the name is the filename stem: lowercase, digits and underscores, a leading letter (got %q)", name)
+	}
+	if natives[name] {
+		return "", false, fmt.Errorf("name collision: %q is a native tool", name)
+	}
+	if strings.TrimSpace(source) == "" {
+		return "", false, fmt.Errorf("the source is required")
+	}
+	for _, want := range []string{"DESCRIPTION", "SCHEMA", "def run("} {
+		if !strings.Contains(source, want) {
+			return "", false, fmt.Errorf("the plugin contract is a DESCRIPTION, a SCHEMA, and a run(args): missing %s", want)
+		}
+	}
+	dir := filepath.Join(home, "plugins", "pending")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", false, fmt.Errorf("the write: %v", err)
+	}
+	path = filepath.Join(dir, name+".py")
+	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+		created = true
+	}
+	if err := os.WriteFile(path, []byte(strings.TrimRight(source, " \t\r\n")+"\n"), 0o644); err != nil {
+		return "", false, fmt.Errorf("the write: %v", err)
+	}
+	return path, created, nil
+}
+
 type Ecosystem struct {
 	home    string
 	Kernel  Kernel
@@ -77,7 +139,7 @@ func NewEcosystem(home string, natives map[string]bool, k Kernel, swap func(ctx 
 func (e *Ecosystem) Name() string { return "plugins" }
 
 func (e *Ecosystem) Description() string {
-	return "the plugin ecosystem, one mutating native: {\"action\": \"list\"|\"create\"|\"delete\"|\"reload\", ...}. list shows the loaded and the skipped; create <name, source> writes a new plugin into plugins/pending/; delete <name> removes a loaded plugin; reload re-runs the discovery over plugins/. Guidelines: a created plugin lands in plugins/pending/ untrusted — the operator installs it with /plugins approve; every verb pauses at the gate. Reply: the listing, the write/remove, or the discovery's list — loaded, and skipped with reasons."
+	return "the plugin ecosystem: {\"action\": \"list\"|\"create\"|\"delete\"|\"reload\", ...}. list shows the loaded and the skipped; create <name, source> writes a new plugin into plugins/pending/; delete <name> moves a loaded plugin into plugins/disabled/; reload re-runs the discovery over plugins/. Guidelines: a created plugin lands in plugins/pending/ untrusted — the operator installs it with /plugins approve. Reply: the listing, the write/disable, or the discovery's list — loaded, and skipped with reasons."
 }
 
 func (e *Ecosystem) Schema() json.RawMessage {
@@ -98,7 +160,7 @@ func (e *Ecosystem) Exec(ctx context.Context, args json.RawMessage) (string, err
 	}
 	switch in.Action {
 	case "list":
-		return e.listList(ctx)
+		return e.listEcosystem(ctx)
 	case "create":
 		return e.create(ctx, in.Name, in.Source)
 	case "delete":
@@ -110,7 +172,7 @@ func (e *Ecosystem) Exec(ctx context.Context, args json.RawMessage) (string, err
 	}
 }
 
-func (e *Ecosystem) listList(ctx context.Context) (string, error) {
+func (e *Ecosystem) listEcosystem(ctx context.Context) (string, error) {
 	if e.list == nil {
 		return "", fmt.Errorf("plugins: list: no listing seam (the root did not wire one)")
 	}
@@ -118,44 +180,23 @@ func (e *Ecosystem) listList(ctx context.Context) (string, error) {
 }
 
 func (e *Ecosystem) create(ctx context.Context, name, source string) (string, error) {
-	if name == "" {
-		return "", fmt.Errorf("plugins: create: no name")
-	}
-	if name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
-		return "", fmt.Errorf("plugins: create: %q is not a plugin name (the filename stem)", name)
-	}
-	if e.natives[name] {
-		return "", fmt.Errorf("plugins: create: name collision: %q is already a native tool", name)
-	}
-	if strings.TrimSpace(source) == "" {
-		return "", fmt.Errorf("plugins: create: the source is required")
-	}
-	dir := filepath.Join(e.home, "plugins", "pending")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	path, created, err := WritePending(e.home, e.natives, name, source)
+	if err != nil {
 		return "", fmt.Errorf("plugins: create: %v", err)
 	}
-	path := filepath.Join(dir, name+".py")
-	if err := os.WriteFile(path, []byte(strings.TrimRight(source, " \t\r\n")+"\n"), 0o644); err != nil {
-		return "", fmt.Errorf("plugins: create: %v", err)
+	verb := "updated"
+	if created {
+		verb = "created"
 	}
-	return "plugins: create: wrote " + name + " (" + path + "; the operator installs it with /plugins approve)", nil
+	return "plugins: create: " + verb + " " + name + " (" + path + "; the operator installs it with /plugins approve)", nil
 }
 
 func (e *Ecosystem) delete(ctx context.Context, name string) (string, error) {
-	if name == "" {
-		return "", fmt.Errorf("plugins: delete: no name")
-	}
-	if name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
-		return "", fmt.Errorf("plugins: delete: %q is not a plugin name (the filename stem)", name)
-	}
-	path := filepath.Join(e.home, "plugins", name+".py")
-	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("plugins: delete: no plugin %q at %s", name, path)
-		}
+	src, dst, err := Move(filepath.Join(e.home, "plugins"), name, "", "disabled")
+	if err != nil {
 		return "", fmt.Errorf("plugins: delete: %v", err)
 	}
-	return "plugins: delete: removed " + name + " (" + path + "; a reload re-registers without it)", nil
+	return "plugins: delete: " + name + " (" + src + " -> " + dst + "; a reload re-registers without it; /plugins enable brings it back)", nil
 }
 
 func (e *Ecosystem) reload(ctx context.Context) (string, error) {

@@ -97,18 +97,26 @@ func TestEcosystemExecListReadsTheSeam(t *testing.T) {
 func TestEcosystemExecCreateWritesPending(t *testing.T) {
 	home := t.TempDir()
 	tool := NewEcosystem(home, map[string]bool{"bash": true, "plugins": true}, &fakeKernel{}, nil, nil)
-	out, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"create","name":"echo","source":"DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"}`))
+	good := `{"action":"create","name":"echo","source":"DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"}`
+	out, err := tool.Exec(context.Background(), json.RawMessage(good))
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(out, "plugins: create: wrote echo") {
-		t.Fatalf("the create reply = %q", out)
+	if !strings.Contains(out, "plugins: create: created echo") {
+		t.Fatalf("the create reply = %q, want the created voice", out)
 	}
 	path := filepath.Join(home, "plugins", "pending", "echo.py")
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("the created plugin must land in plugins/pending/: %v", err)
 	}
-	for _, bad := range []string{`{"action":"create","name":"","source":"x"}`, `{"action":"create","name":"a/b","source":"x"}`, `{"action":"create","name":"bash","source":"x"}`, `{"action":"create","name":"plugins","source":"x"}`, `{"action":"create","name":"echo","source":"  "}`} {
+	out, err = tool.Exec(context.Background(), json.RawMessage(good))
+	if err != nil {
+		t.Fatalf("re-create: %v", err)
+	}
+	if !strings.Contains(out, "plugins: create: updated echo") {
+		t.Fatalf("a second write must report updated, got %q", out)
+	}
+	for _, bad := range []string{`{"action":"create","name":"","source":"x"}`, `{"action":"create","name":"a/b","source":"x"}`, `{"action":"create","name":"My Plugin","source":"x"}`, `{"action":"create","name":"bash","source":"x"}`, `{"action":"create","name":"plugins","source":"x"}`, `{"action":"create","name":"echo","source":"x = 1\n"}`} {
 		_, err := tool.Exec(context.Background(), json.RawMessage(bad))
 		if err == nil {
 			t.Fatalf("create %s must refuse", bad)
@@ -116,7 +124,7 @@ func TestEcosystemExecCreateWritesPending(t *testing.T) {
 	}
 }
 
-func TestEcosystemExecDeleteRemovesTheLoaded(t *testing.T) {
+func TestEcosystemExecDeleteMovesToDisabled(t *testing.T) {
 	home := t.TempDir()
 	dir := filepath.Join(home, "plugins")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -131,15 +139,55 @@ func TestEcosystemExecDeleteRemovesTheLoaded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if !strings.Contains(out, "plugins: delete: removed echo") {
+	if !strings.Contains(out, "plugins: delete: echo") {
 		t.Fatalf("the delete reply = %q", out)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("the loaded plugin must be gone: %v", err)
+		t.Fatal("the loaded file must be gone from plugins/")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "disabled", "echo.py")); err != nil {
+		t.Fatalf("the file must land in plugins/disabled/ (nothing unlinked): %v", err)
 	}
 	_, err = tool.Exec(context.Background(), json.RawMessage(`{"action":"delete","name":"echo"}`))
 	if err == nil || !strings.Contains(err.Error(), "no plugin \"echo\"") {
 		t.Fatalf("a second delete must refuse by name, got %v", err)
+	}
+}
+
+func TestWritePendingSharesTheForgeRule(t *testing.T) {
+	natives := map[string]bool{"bash": true}
+	src := "DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"
+	home := t.TempDir()
+	path, created, err := WritePending(home, natives, "echo", src)
+	if err != nil || !created || filepath.Base(path) != "echo.py" {
+		t.Fatalf("(path, created, err) = (%q, %v, %v), want the pending write", path, created, err)
+	}
+	_, created, err = WritePending(home, natives, "echo", src)
+	if err != nil || created {
+		t.Fatalf("a second write must report updated, got (created=%v, err=%v)", created, err)
+	}
+	cases := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{"My Plugin", src, "the name is the filename stem"},
+		{"a/b", src, "the name is the filename stem"},
+		{"bash", src, "name collision"},
+		{"echo", "x = 1\n", "missing DESCRIPTION"},
+		{"echo", src, ""},
+	}
+	for _, c := range cases {
+		_, _, err := WritePending(t.TempDir(), natives, c.name, c.source)
+		if c.want == "" {
+			if err != nil {
+				t.Fatalf("WritePending(%q): %v", c.name, err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("WritePending(%q) = %v, want %q named", c.name, err, c.want)
+		}
 	}
 }
 

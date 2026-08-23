@@ -22,9 +22,19 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 - `Ecosystem` + `NewEcosystem` — the `plugins` native (SPEC_PLUGINS 8,
   amended): one mutating tool over the ecosystem, an `action` enum —
   `list` (the loaded and the skipped, through a root-wired listing seam),
-  `create` (writes a pending plugin, untrusted), `delete` (removes a
-  loaded plugin), `reload` (re-discovery over the home's plugins/ and the
-  hand-off to the root's swap).
+  `create` (writes a pending plugin, untrusted, through `WritePending`),
+  `delete` (moves a loaded plugin into `plugins/disabled/` — disable, not
+  rm, reversible with `/plugins enable`, through `Move`), `reload`
+  (re-discovery over the home's plugins/ and the hand-off to the root's
+  swap).
+- `Move(dir, name, from, to)` — the one file-move shared with the
+  `/plugins` disable/enable command: name-voice validation, src/dst
+  refusals, the mkdir + rename; never an unlink.
+- `WritePending(home, natives, name, source)` — the one pending-write
+  shared with the web forge's save: the `PluginNameRe` filename-stem
+  rule, the native collision, the DESCRIPTION/SCHEMA/def run contract,
+  `created` from a prior stat. Each surface keeps its own reply voice.
+- `PluginNameRe` — the filename-stem rule (`^[a-z][a-z0-9_]{0,63}$`).
 - `List` — the home's plugin listing (top-level `*.py`).
 - `Check` — the collision refusal (a loaded plugin named like a native;
   `plugin` and `plugins` are natives, so both are reserved).

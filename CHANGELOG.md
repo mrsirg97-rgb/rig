@@ -10,6 +10,21 @@
   against. The retry bound and compaction still stand. `rounds: N` (or
   `RIG_ROUNDS=N`) caps the turn for an operator who wants the wall.
 
+- **the plugin surface is two natives** (`plugin` run|schema, `plugins`
+  list|create|delete|reload; `plugin_schema` and `plugins_reload` fold
+  in): delete is disable — the loaded file moves into `plugins/disabled/`
+  (reversible with `/plugins enable`), one `Move` shared with the
+  `/plugins` command; create and the web forge share one
+  `plugins.WritePending` (the filename-stem rule, the native collision,
+  the DESCRIPTION/SCHEMA/def run contract — a bad name, a missing
+  contract, and a collision refuse identically through both doors).
+
+- **a settings-file allow list needs `plugins`**: a home whose
+  `settings.json` writes an `allow` key replaces the embedded default
+  (which is the native set), so it must carry `plugins` or every
+  `plugins` call is `permission denied` — the same rule that landed
+  `plugin`/`plugin_schema` in 0.12.1.
+
 ## [0.13.0] — rem is deliberate
 
 - **the dashboard's quick hits**: the plugin listings read every

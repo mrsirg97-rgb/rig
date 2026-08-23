@@ -28,7 +28,7 @@ func NewDoor(live Live, redo func(ctx context.Context) error) *Door {
 func (d *Door) Name() string { return "plugin" }
 
 func (d *Door) Description() string {
-	return "run a live plugin by name with its args, or fetch its contract: {\"action\": \"run\"|\"schema\", \"name\": ..., \"args\": ...}. Both arms are non-mutating. Guidelines: the name enum is the live set; call schema first when you do not know a plugin's args; an unknown name re-discovers once, then refuses. Reply: the plugin's text, or its description and schema. Plugins are also importable from python by name."
+	return "run a live plugin by name with its args, or fetch its contract: {\"action\": \"run\"|\"schema\", \"name\": ..., \"args\": ...}. Guidelines: the name enum is the live set; call schema first when you do not know a plugin's args; an unknown name re-discovers once, then refuses. Reply: the plugin's text, or its description and schema. Plugins are also importable from python by name."
 }
 
 func (d *Door) Schema() json.RawMessage {

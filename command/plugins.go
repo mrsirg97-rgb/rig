@@ -77,24 +77,8 @@ func move(ctx context.Context, env any, verb, name, from, to string) (string, er
 	if e.PluginsDir == "" {
 		return "", errors.New("plugins: no plugins seam (the root did not wire one)")
 	}
-	if name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
-		return "", fmt.Errorf("plugins: %s: %q is not a plugin name (the filename stem)", verb, name)
-	}
-	src := filepath.Join(e.PluginsDir, from, name+".py")
-	dst := filepath.Join(e.PluginsDir, to, name+".py")
-	if _, err := os.Stat(src); err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("plugins: %s: no plugin %q at %s", verb, name, src)
-		}
-		return "", fmt.Errorf("plugins: %s: %v", verb, err)
-	}
-	if _, err := os.Stat(dst); err == nil {
-		return "", fmt.Errorf("plugins: %s: %q already exists at %s (remove one)", verb, name, dst)
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return "", fmt.Errorf("plugins: %s: %v", verb, err)
-	}
-	if err := os.Rename(src, dst); err != nil {
+	src, dst, err := plugins.Move(e.PluginsDir, name, from, to)
+	if err != nil {
 		return "", fmt.Errorf("plugins: %s: %v", verb, err)
 	}
 	line := fmt.Sprintf("plugins: %sd %s (%s -> %s)", verb, name, src, dst)
