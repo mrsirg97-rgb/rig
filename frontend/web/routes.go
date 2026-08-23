@@ -608,7 +608,22 @@ func (s *Server) originOK(r *http.Request) bool {
 			return true
 		}
 	}
-	return false
+	return strings.EqualFold(o, requestFront(r))
+}
+
+func requestFront(r *http.Request) string {
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	if host == "" {
+		return ""
+	}
+	scheme := r.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		scheme = "http"
+	}
+	return scheme + "://" + host
 }
 
 func pageParams(r *http.Request) (limit, offset int) {
