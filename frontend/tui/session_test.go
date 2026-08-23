@@ -374,6 +374,7 @@ func TestMidTurnLinesSteer(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	waitSlot(t, s.fe, "c")
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
 	s.ctx = saved
 	line, err := s.input()
@@ -1579,5 +1580,22 @@ func TestAskDoor(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("the ask must resolve when the context ends")
+	}
+}
+
+func waitSlot(t *testing.T, tu *tui, want string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		tu.mu.Lock()
+		got, has := tu.slot, tu.hasSlot
+		tu.mu.Unlock()
+		if has && got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the slot never held %q (last %q)", want, got)
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
