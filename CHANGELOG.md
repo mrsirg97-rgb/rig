@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.15.1] — the binary updates itself
 
 - **`rig -update`** (`specs/SPEC_BUILD.md` 5): the binary's own
   installer beside `-version` — resolves the latest release by the
