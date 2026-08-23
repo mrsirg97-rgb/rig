@@ -107,7 +107,9 @@ func TxFrom(ctx context.Context) (*sql.Tx, error)                               
 - Each store is its own sqlite file and its own `sqlx.DB`, opened once at the
   root and handed to the tool constructor: `todo.New(db)`. Paths follow pane:
   `<home>/todo/<sha1(cwd)[:12]>.sqlite` per workspace, `global.sqlite` where
-  pane has a global scope (scheduler, rem).
+  pane has a global scope (rem), and the scheduler's one
+  `scheduler/global.sqlite` (its section's migration folds the old
+  per-workspace files).
 - `Open` sets `journal_mode=WAL`, `busy_timeout=5000`, `foreign_keys=ON`,
   runs `ddl.Statements()` then `extra.sql`, then checks
   `meta.schema_version`; a mismatch is a loud refusal naming both versions.
@@ -284,7 +286,24 @@ deliverable 9) or plain `sqlite3`.
 ### scheduler (port; SCHEDULER_SPEC.md, scheduler/store.ts, and the
 post-merge corrections)
 
-- Two files: `global.sqlite` and `<sha1(cwd)[:12]>.sqlite`, same as pane.
+- One file: `scheduler/global.sqlite`. The cwd partition is gone: the
+  job's own `cwd` field (never empty, defaults to the creating session's
+  cwd) decides where it runs and how the list groups, not a store
+  partition keyed by the launch cwd. Every crontab key is `jN`; `name` is
+  unique across the one store; ids are one sequence. The old
+  `cwd-<12hex>:jN` keys and `<sha1(cwd)[:12]>.sqlite` files are migrated
+  once on the schema bump (see the migration paragraph below).
+- Migration (schema 1 → 2, one-time, counted once on stderr): for every
+  `cwd-<12hex>.sqlite` under `scheduler/`, fold its live jobs
+  (state != `removed`) into `global.sqlite` — re-mint ids (`j1`×N → the
+  next free `jN` in the global fold), keep each job's `cwd` (it is on the
+  row), bring each job's `runs` rows along re-keyed to the new id, rewrite
+  that job's crontab line from `cwd-<hash>:jN` to the new `jN` (the lock
+  key follows the crontab key), then move the old file aside as
+  `<hash>.sqlite.migrated`. A file with no live jobs moves aside with no
+  row written. Idempotent: a second open finds no `<hash>.sqlite` and does
+  nothing. Rejected, named: reading both layouts forever; a `scope` that
+  defaults to global but stays in the schema.
 - `events`: seq, ts, op (create|pause|resume|remove|run|compact), args,
   session.
 - `jobs`: id (primary, `jN`), name (unique among live jobs only, enforced in
@@ -383,6 +402,12 @@ pane's promptGuidelines, lowercase, terse.
   DAG cases, REM_SPEC's recall and prune cases, scheduler-core and
   scheduler-runner tests. A ported test keeps pane's name so coverage can be
   compared side by side.
+- Scheduler one-store: a job created from `/a` is listed and pausable from
+  `/b` under the same `jN`; ids are one sequence; list from `/a` puts `/a`'s
+  jobs first; the crontab line is `jN`; the migration folds two cwd stores
+  with colliding `j1`s into distinct ids with their cwds intact and their
+  crontab lines rewritten, then is a no-op on the second open; `run-job jN`
+  fires the folded job in its own cwd.
 - Recorder: kill a `-p` run mid-turn (context cancel inside a scripted tool)
   and assert every row that completed before the kill is readable; assert
   the session row is closed with `exit=cancelled` on the clean path.

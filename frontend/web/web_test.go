@@ -104,23 +104,16 @@ func seedHome(t *testing.T) string {
 	if err := os.MkdirAll(shome, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	gdb, _, _, err := store.Open(sched.StorePathFor(shome, sched.JobKey{Scope: "global"}), sched.Statements(), sched.SchemaVersion)
+	scdb, _, _, err := store.Open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cdb, _, _, err := store.Open(sched.StorePathFor(shome, sched.JobKey{Scope: "cwd", Hash: sched.CwdHash(testCWD)}), sched.Statements(), sched.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := sched.Create(ctx, sched.Stores{Global: gdb, Cwd: cdb}, &fakeCrontab{},
-		sched.CreateInput{Name: "digest", Prompt: "the digest", Cron: "30 7 * * *", Scope: "cwd", Cwd: testCWD},
+	if _, err := sched.Create(ctx, scdb, &fakeCrontab{},
+		sched.CreateInput{Name: "digest", Prompt: "the digest", Cron: "30 7 * * *", Cwd: testCWD},
 		testCWD, "seed", "rig run-job", time.Now); err != nil {
 		t.Fatal(err)
 	}
-	if err := gdb.DB.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := cdb.DB.Close(); err != nil {
+	if err := scdb.DB.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -542,8 +535,8 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 	reply, _ := created["reply"].(string)
-	if !strings.Contains(reply, "nightly") || !strings.Contains(reply, "cwd") {
-		t.Fatalf("create: reply %q, want the job named in its scope", reply)
+	if !strings.Contains(reply, "nightly") || !strings.Contains(reply, testCWD) {
+		t.Fatalf("create: reply %q, want the job named with its cwd", reply)
 	}
 	rec = doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
 	var after map[string]string
@@ -593,16 +586,9 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("empty prompt: got %d, want 400", rec.Code)
 	}
 
-	rec = post(`{"name":"gjob","prompt":"p","cron":"0 8 * * *","scope":"global"}`)
+	rec = post(`{"name":"gjob","prompt":"p","cron":"0 8 * * *"}`)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("global create: got %d (body %s)", rec.Code, rec.Body.String())
-	}
-	var gcreated map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &gcreated); err != nil {
-		t.Fatal(err)
-	}
-	if g, _ := gcreated["reply"].(string); !strings.Contains(g, "global") {
-		t.Fatalf("global create: reply %q, want the global scope", g)
+		t.Fatalf("create: got %d (body %s)", rec.Code, rec.Body.String())
 	}
 	rec = doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
 	var gbody map[string]string
@@ -610,7 +596,7 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(gbody["text"], "gjob") {
-		t.Fatalf("global job missing from the list: %q", gbody["text"])
+		t.Fatalf("job missing from the list: %q", gbody["text"])
 	}
 
 	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"x","prompt":"p","cron":"0 9 * * *"}`), bearer(tok))

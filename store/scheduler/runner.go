@@ -65,12 +65,15 @@ func RunJob(key string, opts RunOpts) error {
 		timeout = DefaultRunTimeout
 	}
 
-	parsed, err := ParseKey(key)
+	id, err := ParseKey(key)
 	if err != nil {
+		if strings.HasPrefix(key, "cwd-") {
+			return fmt.Errorf("key: legacy key '%s': the scheduler is one store now; start rig once, in any directory, to fold it and rewrite this line", key)
+		}
 		return err
 	}
 
-	db, quarantined, _, err := store.Open(StorePathFor(opts.Home, parsed), Statements(), SchemaVersion)
+	db, quarantined, _, err := store.Open(filepath.Join(opts.Home, "global.sqlite"), Statements(), SchemaVersion)
 	if err != nil {
 		return fmt.Errorf("run-job: store: %w", err)
 	}
@@ -86,7 +89,7 @@ func RunJob(key string, opts RunOpts) error {
 	if held {
 		defer releaseLock(lockFD)
 	} else {
-		if e := recordSkip(db, parsed.ID, "lock held (previous run still active)"); e != nil {
+		if e := recordSkip(db, id, "lock held (previous run still active)"); e != nil {
 			return e
 		}
 		return nil
@@ -97,7 +100,7 @@ func RunJob(key string, opts RunOpts) error {
 		return err
 	}
 	if !hasLine(text, key) {
-		if e := recordSkip(db, parsed.ID, "no crontab line (drift)"); e != nil {
+		if e := recordSkip(db, id, "no crontab line (drift)"); e != nil {
 			return e
 		}
 		return nil
@@ -107,30 +110,30 @@ func RunJob(key string, opts RunOpts) error {
 	if err != nil {
 		return fmt.Errorf("run-job: job row: %w", err)
 	}
-	job, err := scheddomain.NewJobDomain().GetJob(bound, parsed.ID).Row()
+	job, err := scheddomain.NewJobDomain().GetJob(bound, id).Row()
 	tx.Rollback()
 	if err != nil {
 		return fmt.Errorf("run-job: job row: %w", err)
 	}
 	if job == nil {
-		if e := recordSkip(db, parsed.ID, "no job row (zombie line)"); e != nil {
+		if e := recordSkip(db, id, "no job row (zombie line)"); e != nil {
 			return e
 		}
 		return installRemoved(opts.Crontab, text, key)
 	}
 	switch job.State {
 	case "done":
-		if e := recordSkip(db, parsed.ID, "job already done (crash between run and line delete)"); e != nil {
+		if e := recordSkip(db, id, "job already done (crash between run and line delete)"); e != nil {
 			return e
 		}
 		return installRemoved(opts.Crontab, text, key)
 	case "removed":
-		if e := recordSkip(db, parsed.ID, "job removed (stale line)"); e != nil {
+		if e := recordSkip(db, id, "job removed (stale line)"); e != nil {
 			return e
 		}
 		return installRemoved(opts.Crontab, text, key)
 	case "paused":
-		if e := recordSkip(db, parsed.ID, "store says paused (line drifted active)"); e != nil {
+		if e := recordSkip(db, id, "store says paused (line drifted active)"); e != nil {
 			return e
 		}
 		return nil
@@ -139,13 +142,13 @@ func RunJob(key string, opts RunOpts) error {
 	st := busyState(opts.Fetch, opts.SwapURL, job.Model)
 	switch st.kind {
 	case "error":
-		if e := recordSkip(db, parsed.ID, st.reason); e != nil {
+		if e := recordSkip(db, id, st.reason); e != nil {
 			return e
 		}
 		return nil
 	case "busy":
 		if job.Busy != "force" {
-			if e := recordSkip(db, parsed.ID, "busy: "+st.names+" resident (policy skip)"); e != nil {
+			if e := recordSkip(db, id, "busy: "+st.names+" resident (policy skip)"); e != nil {
 				return e
 			}
 			return nil
@@ -186,7 +189,7 @@ func RunJob(key string, opts RunOpts) error {
 			return fmt.Errorf("run-job: jail: %w", err)
 		}
 		if refuse != "" {
-			if e := recordSkip(db, parsed.ID, refuse); e != nil {
+			if e := recordSkip(db, id, refuse); e != nil {
 				return e
 			}
 			return nil
@@ -218,8 +221,8 @@ func RunJob(key string, opts RunOpts) error {
 	durationMs := opts.Now().UTC().Sub(startedTime).Milliseconds()
 
 	logName := strings.NewReplacer(":", "-", ".", "-").Replace(opts.Now().UTC().Format("2006-01-02T15:04:05.000Z")) + ".log"
-	logRel := filepath.Join("runs", ScopeDir(parsed), parsed.ID, logName)
-	dir := filepath.Join(opts.Home, "runs", ScopeDir(parsed), parsed.ID)
+	logRel := filepath.Join("runs", id, logName)
+	dir := filepath.Join(opts.Home, "runs", id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("run-job: log dir: %w", err)
 	}
@@ -240,7 +243,7 @@ func RunJob(key string, opts RunOpts) error {
 	exit := int64(res.Exit)
 	duration := durationMs
 	seq, err := RecordRun(context.Background(), db, RunRecordInput{
-		ID: parsed.ID, Status: status, Exit: &exit, Duration: &duration,
+		ID: id, Status: status, Exit: &exit, Duration: &duration,
 		Log: logRel, Started: started, Ended: ended,
 	})
 	if err != nil {

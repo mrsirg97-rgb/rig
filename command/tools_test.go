@@ -228,18 +228,14 @@ func (f *fakeCron) text_() string {
 	return f.text
 }
 
-func schedStores(t *testing.T, home, cwd string) sched.Stores {
+func schedStores(t *testing.T, home, cwd string) sched.DB {
 	t.Helper()
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	global, _, _, err := store.Open(home+"/global.sqlite", sched.Statements(), sched.SchemaVersion)
+	db, _, _, err := store.Open(home+"/global.sqlite", sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cw, _, _, err := store.Open(home+"/cwd.sqlite", sched.Statements(), sched.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return sched.Stores{Global: global, Cwd: cw}
+	return db
 }

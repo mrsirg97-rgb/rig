@@ -629,6 +629,11 @@ executes (the root puts the live `todoTool` / `schedTool` in), so a
 same queue, same session attribution (the live session's id, or `anon`
 unthreaded — the tools' existing behavior), same store.
 
+Scheduler ids are one sequence across the single store (SPEC_STATE): a
+`jN` names the same job from any directory, the grammar has no `scope`
+(the tool's schema lost it), and `name` is unique store-wide. `list` is
+one list grouped by the job's own `cwd`, this directory first.
+
 ### 9. One-shot and run-job: commands are interactive-only
 
 `-p` and `run-job` do not dispatch: the one-shot frontend takes no

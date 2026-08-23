@@ -166,7 +166,7 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 	requireJailBox(t)
 	bin := sharedRigBin(t)
 	cwd := t.TempDir()
-	h, key := setupJob(t, cwd, "", nil)
+	h, key := setupJob(t, cwd, nil)
 
 	opHome := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(opHome, "kernel"), 0o755); err != nil {

@@ -240,15 +240,18 @@ function parseScheduler(reply) {
   const p = { sections: [] };
   let cur = null;
   let job = null;
+  const jobHeadRe = /^(j\d+)(?: .+)?$/;
   for (const l of lines) {
     if (l === '') continue;
-    if (l.startsWith('global:') || l.startsWith('cwd:')) {
+    if (l.endsWith(':') && !jobHeadRe.test(l)) {
       job = null;
-      cur = {
-        name: l.endsWith(': no jobs') ? l.slice(0, -': no jobs'.length) : l.slice(0, -1),
-        empty: l.endsWith(': no jobs'),
-        jobs: [],
-      };
+      cur = { name: l.slice(0, -1), empty: false, jobs: [] };
+      p.sections.push(cur);
+      continue;
+    }
+    if (l.includes(': no jobs')) {
+      job = null;
+      cur = { name: l.slice(0, l.indexOf(': no jobs')), empty: true, jobs: [] };
       p.sections.push(cur);
       continue;
     }
@@ -258,7 +261,7 @@ function parseScheduler(reply) {
       job.detail.push(l.slice(2));
       continue;
     }
-    if (!/^(j\d+)(?: .+)?$/.test(l) || cur.empty) return null;
+    if (!jobHeadRe.test(l) || cur.empty) return null;
     job = { head: l, detail: [] };
     cur.jobs.push(job);
   }

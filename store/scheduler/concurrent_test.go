@@ -45,10 +45,10 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 		t.Fatalf("%d of %d concurrent creates failed: %v", len(errs), 2*gor*slice, errs[0])
 	}
 	var events, jobs int
-	if err := h.st.Cwd.DB.QueryRow(`SELECT count(*) FROM events WHERE op = 'create'`).Scan(&events); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT count(*) FROM events WHERE op = 'create'`).Scan(&events); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.st.Cwd.DB.QueryRow(`SELECT count(*) FROM jobs WHERE state != 'removed'`).Scan(&jobs); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT count(*) FROM jobs WHERE state != 'removed'`).Scan(&jobs); err != nil {
 		t.Fatal(err)
 	}
 	if want := 2 * gor * slice; events != want {
@@ -59,7 +59,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 	}
 
 	var maxGap int64
-	rows, err := h.st.Cwd.DB.Query(`SELECT seq FROM events WHERE op = 'create' ORDER BY seq`)
+	rows, err := h.db.DB.Query(`SELECT seq FROM events WHERE op = 'create' ORDER BY seq`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 }
 
 func schedCreate(ctx context.Context, h *harness, ct *fakeCrontab, name string) (string, error) {
-	return sched.Create(ctx, h.st, ct, sched.CreateInput{
+	return sched.Create(ctx, h.db, ct, sched.CreateInput{
 		Name: name, Prompt: "p", Cron: "0 0 * * *",
 	}, h.sessCwd, "sess-x", runnerCmd, func() time.Time { return nowFixed })
 }
@@ -106,7 +106,7 @@ func TestConcurrentRunRecordsSerialize(t *testing.T) {
 			go func(wi, g int) {
 				defer wg.Done()
 				for i := 0; i < slice; i++ {
-					if _, err := sched.RecordRun(context.Background(), h.st.Cwd, sched.RunRecordInput{
+					if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{
 						ID: "j1", Status: "skip", Reason: fmt.Sprintf("w%d-g%d-%d", wi, g, i),
 					}); err != nil {
 						mu.Lock()
@@ -122,10 +122,10 @@ func TestConcurrentRunRecordsSerialize(t *testing.T) {
 		t.Fatalf("%d of %d concurrent records failed: %v", len(errs), 2*gor*slice, errs[0])
 	}
 	var events, runs int
-	if err := h.st.Cwd.DB.QueryRow(`SELECT count(*) FROM events WHERE op = 'run'`).Scan(&events); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT count(*) FROM events WHERE op = 'run'`).Scan(&events); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.st.Cwd.DB.QueryRow(`SELECT count(*) FROM runs`).Scan(&runs); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT count(*) FROM runs`).Scan(&runs); err != nil {
 		t.Fatal(err)
 	}
 	if want := 2 * gor * slice; events != want || runs != want {
@@ -134,7 +134,7 @@ func TestConcurrentRunRecordsSerialize(t *testing.T) {
 
 	var lastStatus string
 	var lastSet int64
-	if err := h.st.Cwd.DB.QueryRow(`SELECT last_status, last_exit IS NOT NULL FROM jobs WHERE id = 'j1'`).Scan(&lastStatus, &lastSet); err != nil {
+	if err := h.db.DB.QueryRow(`SELECT last_status, last_exit IS NOT NULL FROM jobs WHERE id = 'j1'`).Scan(&lastStatus, &lastSet); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.EqualFold(lastStatus, "skip") {

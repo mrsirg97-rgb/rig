@@ -859,22 +859,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	sgdb, sgQuarantined, _, sgErr := store.Open(sched.StorePathFor(schedHome, sched.JobKey{Scope: "global"}), sched.Statements(), sched.SchemaVersion)
-	if sgErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sgErr)
+	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, sched.RealCrontab("")))
+	if sErr != nil {
+		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sErr)
 		os.Exit(1)
 	}
-	if sgQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler global file: %s\n", sgQuarantined)
+	if sQuarantined != "" {
+		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler file: %s\n", sQuarantined)
 	}
-	defer sgdb.DB.Close()
-	scdb, scQuarantined, _, scErr := store.Open(sched.StorePathFor(schedHome, sched.JobKey{Scope: "cwd", Hash: sched.CwdHash(cwd)}), sched.Statements(), sched.SchemaVersion)
-	if scErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: scheduler store:", scErr)
-		os.Exit(1)
-	}
-	if scQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler workspace file: %s\n", scQuarantined)
+	if sReport != "" {
+		fmt.Fprintf(os.Stderr, "rig: %s\n", sReport)
 	}
 	defer scdb.DB.Close()
 
@@ -912,7 +906,7 @@ func main() {
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": todoapi.New(tdb), "rem": remapi.New(rdb),
 
-			"scheduler": schedapi.New(sched.Stores{Global: sgdb, Cwd: scdb}, sched.RealCrontab(""), self+" run-job", cfg.Settings.DefaultJobModel),
+			"scheduler": schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", cfg.Settings.DefaultJobModel),
 			"delegate": delegate.New(delegate.Opts{
 				DB:           scdb,
 				Home:         schedHome,

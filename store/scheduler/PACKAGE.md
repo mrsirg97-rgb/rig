@@ -18,7 +18,14 @@ written before the store commit; drift is surfaced in list.
   the `DB` alias.
 - `cron.go` — the vixie cron parser and matcher.
 - `crontab.go` — the tagged-lines crontab edit/merge.
-- `verbs.go` — the command verbs (list/create/pause/resume/remove/runs).
+- `verbs.go` — the command verbs (list/create/pause/resume/remove/runs)
+  over the one `global.sqlite`; the crontab key is `jN` for every job,
+  `name` unique store-wide, ids one sequence.
+- `migration.go` — the one-time schema-1→2 migration: folds every
+  `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
+  runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
+  `jN`), moves the old files aside as `<hash>.sqlite.migrated`, and is a
+  no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
 - `runner.go` — the job runner (the worker spawn, bwrap jail, socket
   proxy).
 - `delegate.go` — the one-shot worker spawn (SPEC_DELEGATE): the busy
@@ -28,7 +35,9 @@ written before the store commit; drift is surfaced in list.
 - `jail.go` — the bwrap jail argv composition.
 - `proxy.go` — the unix-socket proxy (the jail's one hole).
 - `fold.go` — the fold/replay over the event log.
-- `render.go` — the list/rendering.
+- `render.go` — the list/rendering: one list grouped by each job's own
+  `cwd` (this directory first, then the rest by path), the empty store
+  named (`scheduler: no jobs (global.sqlite)`).
 - `metadata/scheduler.go` — hand-written metadata.
 
 ## How it is consumed
@@ -47,3 +56,6 @@ written before the store commit; drift is surfaced in list.
 - Runs are chain reads over their own container; run history survives
   compaction (an event-args-only shape would have dropped it).
 - Crontab is written before the store commit; drift is surfaced in list.
+- One store, `global.sqlite`: `cwd` is a job field (where it runs and how
+  the list groups), not a storage partition; `ParseKey` accepts `jN` only
+  (the migration rewrites the old `cwd-<hash>:jN` crontab keys).

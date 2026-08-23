@@ -14,13 +14,12 @@ import (
 
 func description(defModel string) string {
 	return "background jobs on the user's crontab: each job is a headless worker session on the worker " +
-		"model (default: " + defModel + "), in scope cwd (this directory, the default) or global."
+		"model (default: " + defModel + "), running in its own cwd."
 }
 
 const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D Mo DOW', or once + at:<ISO>, which " +
-	"self-deletes after one fire); list shows global and this directory's jobs (another directory's are listed from there) with any drift between store and crontab; " +
-	"pause/resume/remove; runs is the audit trail. Reply: the job row or the list; ids (jN, per scope) " +
-	"are minted — copy from list, never invent. busy:skip (default) skips a fire while another model holds " +
+	"self-deletes after one fire); list is one list, this directory first, the rest grouped by each job's cwd, with any drift between store and crontab; " +
+	"pause/resume/remove; runs is the audit trail. Reply: the job row or the list; ids (jN) are minted — copy from list, never invent. busy:skip (default) skips a fire while another model holds " +
 	"the GPU, force evicts it — only when the user wants the GPU now; a drifting job is not trustworthy " +
 	"until the note clears; a failed once job is done — re-create it to retry."
 
@@ -34,7 +33,7 @@ func schemaJSON(defModel string) string {
 		},
 		"name": {
 			"type": "string",
-			"description": "Unique job name per scope. Required for create."
+			"description": "Unique job name. Required for create."
 		},
 		"prompt": {
 			"type": "string",
@@ -47,10 +46,6 @@ func schemaJSON(defModel string) string {
 		"at": {
 			"type": "string",
 			"description": "ISO time; required when cron is 'once'."
-		},
-		"scope": {
-			"type": "string",
-			"enum": ["global", "cwd"]
 		},
 		"model": {
 			"type": "string",
@@ -84,7 +79,6 @@ type given struct {
 	Prompt string `json:"prompt"`
 	Cron   string `json:"cron"`
 	At     string `json:"at"`
-	Scope  string `json:"scope"`
 	Model  string `json:"model"`
 	Busy   string `json:"busy"`
 	Cwd    string `json:"cwd"`
@@ -93,14 +87,14 @@ type given struct {
 }
 
 type adapter struct {
-	st        sched.Stores
+	db        sched.DB
 	ct        sched.Crontab
 	runnerCmd string
 	defModel  string
 }
 
-func New(st sched.Stores, ct sched.Crontab, runnerCmd, defModel string) core.Tool {
-	return adapter{st: st, ct: ct, runnerCmd: runnerCmd, defModel: defModel}
+func New(db sched.DB, ct sched.Crontab, runnerCmd, defModel string) core.Tool {
+	return adapter{db: db, ct: ct, runnerCmd: runnerCmd, defModel: defModel}
 }
 
 func (a adapter) Name() string { return "scheduler" }
@@ -125,11 +119,6 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		return "", fmt.Errorf("scheduler: %v", err)
 	}
 
-	scope, err := scopeCheck(g.Scope)
-	if err != nil {
-		return "", err
-	}
-
 	switch g.Action {
 	case "create":
 		name := strings.TrimSpace(g.Name)
@@ -150,23 +139,23 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.Busy == "force" {
 			busy = "force"
 		}
-		return sched.Create(ctx, a.st, a.ct, sched.CreateInput{
+		return sched.Create(ctx, a.db, a.ct, sched.CreateInput{
 			Name: name, Prompt: g.Prompt, Cron: g.Cron, At: g.At,
-			Scope: scope, Model: model, Busy: busy, Cwd: g.Cwd,
+			Model: model, Busy: busy, Cwd: g.Cwd,
 		}, cwd, session, a.runnerCmd, time.Now)
 	case "list":
-		return sched.List(ctx, a.st, a.ct, cwd, nil, time.Now)
+		return sched.List(ctx, a.db, a.ct, cwd, nil, time.Now)
 	case "pause", "resume", "remove":
 		if g.ID == "" {
 			return "", fmt.Errorf("scheduler: %s requires 'id' (jN)", g.Action)
 		}
 		switch g.Action {
 		case "pause":
-			return sched.Pause(ctx, a.st, a.ct, g.ID, scope, cwd, session)
+			return sched.Pause(ctx, a.db, a.ct, g.ID, cwd, session)
 		case "resume":
-			return sched.Resume(ctx, a.st, a.ct, g.ID, scope, cwd, session)
+			return sched.Resume(ctx, a.db, a.ct, g.ID, cwd, session)
 		default:
-			return sched.Remove(ctx, a.st, a.ct, g.ID, scope, cwd, session)
+			return sched.Remove(ctx, a.db, a.ct, g.ID, cwd, session)
 		}
 	case "runs":
 		if g.ID == "" {
@@ -176,15 +165,8 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.N != nil {
 			n = *g.N
 		}
-		return sched.Runs(ctx, a.st, g.ID, scope, n)
+		return sched.Runs(ctx, a.db, g.ID, n)
 	default:
 		return "", fmt.Errorf("scheduler: unknown action '%s'", g.Action)
 	}
-}
-
-func scopeCheck(scope string) (string, error) {
-	if scope == "" || scope == "global" || scope == "cwd" {
-		return scope, nil
-	}
-	return "", fmt.Errorf("scheduler: scope must be 'global' or 'cwd', got '%s'", scope)
 }

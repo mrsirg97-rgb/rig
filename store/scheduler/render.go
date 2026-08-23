@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -69,7 +70,7 @@ func driftOf(j *jobState, line *TaggedLine) string {
 	return strings.Join(notes, "; ")
 }
 
-func jobLines(j *jobState, scope string, line *TaggedLine, running bool, now func() time.Time) []string {
+func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time) []string {
 	head := fmt.Sprintf("%s %s %s", j.ID, j.Name, j.State)
 	if s := nextText(j, now); s != "" {
 		head += " · " + s
@@ -77,8 +78,8 @@ func jobLines(j *jobState, scope string, line *TaggedLine, running bool, now fun
 	if s := lastText(j); s != "" {
 		head += " · " + s
 	}
-	line2 := fmt.Sprintf("  scope %s · cron %s%s · %s%s · %s",
-		scope, j.Cron,
+	line2 := fmt.Sprintf("  cron %s%s · %s%s · %s",
+		j.Cron,
 		func() string {
 			if j.At != "" {
 				return " · at " + j.At
@@ -103,29 +104,11 @@ func jobLines(j *jobState, scope string, line *TaggedLine, running bool, now fun
 	return lines
 }
 
-func renderJobs(global, cwd []jobLineSet, sessionCwd string) string {
-	section := func(scope string, jobs []jobLineSet) string {
-		if len(jobs) == 0 {
-			return scope + ": no jobs"
-		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "%s:\n", scope)
-		for i, j := range jobs {
-			if i > 0 {
-				b.WriteString("\n")
-			}
-			b.WriteString(strings.Join(j.lines, "\n"))
-		}
-		return b.String()
-	}
-	return section("global", global) + "\n" + section("cwd "+sessionCwd, cwd)
-}
-
 type jobLineSet struct {
 	lines []string
 }
 
-func List(ctx context.Context, st Stores, ct Crontab, sessionCwd string, probe func(key string) bool, now func() time.Time) (string, error) {
+func List(ctx context.Context, db DB, ct Crontab, sessionCwd string, probe func(key string) bool, now func() time.Time) (string, error) {
 	var lines map[string]TaggedLine
 	if text, err := ct.List(); err == nil {
 		lines = map[string]TaggedLine{}
@@ -135,68 +118,88 @@ func List(ctx context.Context, st Stores, ct Crontab, sessionCwd string, probe f
 	} else {
 		lines = nil
 	}
-	scopeOf := func(db DB) string {
-		if db.DB == st.Global.DB {
-			return "global"
-		}
-		return "cwd"
+	_, tx, err := db.TxReadOnly(ctx)
+	if err != nil {
+		return "", err
 	}
-	read := func(db DB) ([]jobLineSet, error) {
-		_, tx, err := db.TxReadOnly(ctx)
-		if err != nil {
-			return nil, err
-		}
-		f, err := eventsOf(tx)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
+	f, err := eventsOf(tx)
+	if err != nil {
 		tx.Rollback()
-		var out []jobLineSet
-		scope := scopeOf(db)
-		for id := range f.jobs {
-			j := f.jobs[id]
-			if j.State == "removed" {
-				continue
-			}
-			key, err := KeyOf(scope, scopeHash(scope, sessionCwd), id)
-			if err != nil {
-				return nil, err
-			}
-			running := false
-			if probe != nil {
-				running = probe(key)
-			}
-			var line *TaggedLine
-			if lines != nil {
-				if l, ok := lines[key]; ok {
-					line = &l
-				}
-			}
-			out = append(out, jobLineSet{lines: jobLines(j, scope, line, running, now)})
+		return "", err
+	}
+	tx.Rollback()
+
+	groups := map[string][]jobLineSet{}
+	for id := range f.jobs {
+		j := f.jobs[id]
+		if j.State == "removed" {
+			continue
 		}
-		return out, nil
-	}
-	global, err := read(st.Global)
-	if err != nil {
-		return "", err
-	}
-	cwd, err := read(st.Cwd)
-	if err != nil {
-		return "", err
+		running := false
+		if probe != nil {
+			running = probe(id)
+		}
+		var line *TaggedLine
+		if lines != nil {
+			if l, ok := lines[id]; ok {
+				line = &l
+			}
+		}
+		out := jobLines(j, line, running, now)
+		groups[j.Cwd] = append(groups[j.Cwd], jobLineSet{lines: out})
 	}
 
 	if lines == nil {
-		reflag := func(jobs []jobLineSet) []jobLineSet {
-			for i := range jobs {
-				if !strings.Contains(strings.Join(jobs[i].lines, "\n"), "drift: ") {
-					jobs[i].lines = append(jobs[i].lines, "  drift: crontab unreadable")
+		for cwd, g := range groups {
+			for i := range g {
+				if !strings.Contains(strings.Join(g[i].lines, "\n"), "drift: ") {
+					g[i].lines = append(g[i].lines, "  drift: crontab unreadable")
 				}
 			}
-			return jobs
+			groups[cwd] = g
 		}
-		global = reflag(global)
-		cwd = reflag(cwd)
 	}
-	return renderJobs(global, cwd, sessionCwd), nil
+
+	if len(groups) == 0 {
+		return "scheduler: no jobs (global.sqlite)", nil
+	}
+	var dirs []string
+	if g, ok := groups[sessionCwd]; ok && len(g) > 0 {
+		dirs = append(dirs, sessionCwd)
+	}
+	for d := range groups {
+		if d != sessionCwd {
+			dirs = append(dirs, d)
+		}
+	}
+	sort.Strings(dirs)
+	if sessionCwd != "" {
+		head := []string{}
+		if _, ok := groups[sessionCwd]; ok {
+			head = []string{sessionCwd}
+		}
+		var rest []string
+		for _, d := range dirs {
+			if d != sessionCwd {
+				rest = append(rest, d)
+			}
+		}
+		dirs = append(head, rest...)
+	}
+
+	var b strings.Builder
+	for i, d := range dirs {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "%s:\n", d)
+		group := groups[d]
+		for j, g := range group {
+			if j > 0 {
+				b.WriteString("\n")
+			}
+			b.WriteString(strings.Join(g.lines, "\n"))
+		}
+	}
+	return b.String(), nil
 }

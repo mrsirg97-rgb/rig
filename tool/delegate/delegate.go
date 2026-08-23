@@ -104,7 +104,6 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		DB:           a.DB,
 		Home:         a.Home,
 		Session:      session,
-		StoreCwd:     sessionCwd,
 		Cwd:          cwd,
 		Task:         g.Task,
 		Model:        model,

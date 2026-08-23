@@ -46,14 +46,9 @@ func (c *storeCache) todo(cwd string) (store.DB, error) {
 	return c.open(todostore.StorePath(c.home, cwd), todostore.Statements(), todostore.SchemaVersion)
 }
 
-func (c *storeCache) schedulerGlobal() (store.DB, error) {
+func (c *storeCache) scheduler() (store.DB, error) {
 	shome := filepath.Join(c.home, "scheduler")
-	return c.open(sched.StorePathFor(shome, sched.JobKey{Scope: "global"}), sched.Statements(), sched.SchemaVersion)
-}
-
-func (c *storeCache) schedulerCwd(cwd string) (store.DB, error) {
-	shome := filepath.Join(c.home, "scheduler")
-	return c.open(sched.StorePathFor(shome, sched.JobKey{Scope: "cwd", Hash: sched.CwdHash(cwd)}), sched.Statements(), sched.SchemaVersion)
+	return c.open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
 }
 
 func (c *storeCache) closeAll() {

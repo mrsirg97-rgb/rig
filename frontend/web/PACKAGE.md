@@ -115,9 +115,10 @@ through the same listing.
 ## Gotchas
 
 - The per-cwd path formulas are the stores' own: `state.StorePath`,
-  `todo.StorePath`, `rem.FilePath`, and the scheduler's `StorePathFor`
-  under `<home>/scheduler` (the root's home, not the rig home directly).
-  The root's inline formulas were replaced by these helpers (one source).
+  `todo.StorePath`, `rem.FilePath`, and the scheduler's one
+  `<home>/scheduler/global.sqlite` (the root's home, not the rig home
+  directly). The root's inline formulas were replaced by these helpers
+  (one source).
 - `todo.Create` is an upsert (it adds the given tasks and keeps the
   existing queue); the reply is the store's voice, shown verbatim. The
   dashboard does not assert a replace — it shows what the verb says.
@@ -134,8 +135,10 @@ through the same listing.
   time (set directly in tests).
 - The scheduler create rides `scheduler.Create` verbatim: the crontab is
   the scheduling truth, so a create installs a line in the real crontab
-  (the runner command the root wired); a duplicate name in the same
-  scope is the verb's named refusal, and the reply is the store's voice.
+  (the runner command the root wired); a duplicate name store-wide is the
+  verb's named refusal, and the reply is the store's voice. The selected
+  `cwd` is passed to `List`/`Create` only for the job's own `cwd` field
+  and the list's this-directory-first ordering.
 - The plugin create is the operator's authoring door, not the model's:
   the file lands in `plugins/pending/` (the provenance rule's landing
   zone), never in `plugins/` — promotion (move it up, reload) stays the

@@ -56,7 +56,7 @@ func captureStderrRun(t *testing.T, f func()) string {
 
 func TestJailedRunRefusesLoudWithoutBwrap(t *testing.T) {
 	cwd := t.TempDir()
-	h, key := setupJob(t, cwd, "", nil)
+	h, key := setupJob(t, cwd, nil)
 	t.Setenv("PATH", t.TempDir())
 	spawn := &envSpawn{}
 	before := h.ct.text
@@ -82,7 +82,7 @@ func TestJailedRunRefusesLoudWithoutBwrap(t *testing.T) {
 
 func TestSandboxOffRunsUnjailedWithTheOneLoudLine(t *testing.T) {
 	cwd := t.TempDir()
-	h, key := setupJob(t, cwd, "", nil)
+	h, key := setupJob(t, cwd, nil)
 	spawn := &envSpawn{result: sched.SpawnResult{Exit: 0}}
 
 	stderr := captureStderrRun(t, func() {
@@ -114,7 +114,7 @@ func TestSandboxOffRunsUnjailedWithTheOneLoudLine(t *testing.T) {
 
 func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 	cwd := t.TempDir()
-	h, key := setupJob(t, cwd, "", nil)
+	h, key := setupJob(t, cwd, nil)
 
 	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
 		t.Fatal(err)

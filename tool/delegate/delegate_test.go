@@ -124,7 +124,7 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	if err := os.MkdirAll(filepath.Join(rigHome, "sessions"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, _, _, err := store.Open(filepath.Join(home, sched.CwdHash(sessionCwd)+".sqlite"), sched.Statements(), sched.SchemaVersion)
+	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open scheduler store: %v", err)
 	}

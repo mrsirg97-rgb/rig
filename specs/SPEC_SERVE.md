@@ -110,9 +110,11 @@ phase reads exactly these verbs:
   `todo.ReadAll` returned as-is and shown in a `<pre>`; the operator sees
   exactly what the model sees, stale footer included. The one write:
   `todo.Create(ctx, db, items, "dashboard")`, the reply verbatim.
-- **Scheduler (the model's own text).** `scheduler.List(ctx, st, ct,
+- **Scheduler (the model's own text).** `scheduler.List(ctx, db, ct,
   sessionCwd, probe, now)` returned as-is and shown in a `<pre>`, drift
-  notes included. `probe` reports a held lock (running); `ct` is the real
+  notes included. The dashboard opens the one `scheduler/global.sqlite`
+  store and passes the selected `cwd` only for the list's ordering (this
+  cwd first); `probe` reports a held lock (running); `ct` is the real
   crontab.
 - **Memory.** `rem.List(ctx, db, cwd, k)` for the selected cwd (the live
   rows, project then global), shown as a list. (`rem.Recent` is gone with
@@ -125,8 +127,8 @@ phase reads exactly these verbs:
 The store is opened the way the root opens it: `store.Open(path,
 Statements(), SchemaVersion)` over the same file, the same pragmas. The
 dashboard's cwd picker re-resolves the per-cwd paths (`state.StorePath`,
-`todo.StorePath`, `scheduler.StorePathFor` + `scheduler.CwdHash`, and
-`rem.FilePath`) and caches the open DBs per file.
+`todo.StorePath`, and `rem.FilePath`) and the scheduler's one
+`scheduler/global.sqlite`, and caches the open DBs per file.
 
 ## the one write
 
@@ -187,7 +189,8 @@ todo/rem/scheduler/sessions views:
 - **Todos.** The selected cwd's queue, the actionable view by default and a
   history toggle for `ReadAll`; the create form (one task per line) and the
   verbatim reply.
-- **Scheduler.** The list, both scopes, drift notes included.
+- **Scheduler.** The one list, grouped by directory (the selected cwd
+  first), drift notes included.
 - **Memory.** The selected cwd's recent memories.
 - **Models.** Every row: id, window, max tokens, reserve, keep-recent,
   role, effort, and the effort list.
@@ -329,9 +332,9 @@ TUI — each view renders the way the TUI renders that tool's output.
 - **The scheduler create.** `POST /api/scheduler` calls
   `scheduler.Create` with session `dashboard`, the same verb a live
   session's `scheduler` tool calls. The form carries name, prompt, cron
-  (five fields, or `once` plus an ISO `at`), and the scope (the page's
-  cwd by default, global on request). The verb's reply is shown
-  verbatim, the list re-read after.
+  (five fields, or `once` plus an ISO `at`), and the `cwd` (the page's
+  cwd by default — the job runs where its `cwd` says, no scope arg).
+  The verb's reply is shown verbatim, the list re-read after.
 - **The plugin create.** `POST /api/plugins` writes one file into the
   pending zone (`plugins/pending/<name>.py`), the provenance rule's
   landing zone (SPEC_SANDBOX 2): the operator's creation is reviewable,

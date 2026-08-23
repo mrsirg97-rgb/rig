@@ -72,12 +72,12 @@ func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, "/ws/door2")
 	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-		Name: "door2", Prompt: "say hi", Cron: "0 5 * * *", Scope: "cwd",
+		Name: "door2", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: t.TempDir(), Model: "qwen3.8-workers", Busy: "skip",
 	}, "/ws/door2", "sess-door2", bin+" run-job", fixedNow); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	key := "cwd-" + sched.CwdHash("/ws/door2") + ":j1"
+	key := "j1"
 	if err := os.WriteFile(spooDir, []byte(fake.text_()), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -95,10 +95,10 @@ func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
 		t.Fatalf("runs rows = %d, want 1 (the refusal is a record, not a fault)", rows)
 	}
 	var status, reason string
-	if err := st.Cwd.DB.QueryRow(`SELECT last_status FROM jobs WHERE id = 'j1'`).Scan(&status); err != nil {
+	if err := st.DB.QueryRow(`SELECT last_status FROM jobs WHERE id = 'j1'`).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Cwd.DB.QueryRow(`SELECT reason FROM runs ORDER BY seq DESC LIMIT 1`).Scan(&reason); err != nil {
+	if err := st.DB.QueryRow(`SELECT reason FROM runs ORDER BY seq DESC LIMIT 1`).Scan(&reason); err != nil {
 		t.Fatal(err)
 	}
 	if status != "skip" {
@@ -130,12 +130,12 @@ func TestRunJobDoorSandboxOffRunsUnjailed(t *testing.T) {
 	st := scratchStores(t, home, "/ws/door3")
 	workDir := t.TempDir()
 	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-		Name: "door3", Prompt: "say hi", Cron: "0 5 * * *", Scope: "cwd",
+		Name: "door3", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
 	}, "/ws/door3", "sess-door3", bin+" run-job", fixedNow); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	key := "cwd-" + sched.CwdHash("/ws/door3") + ":j1"
+	key := "j1"
 	if err := os.WriteFile(spooDir, []byte(fake.text_()), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestRunJobDoorSandboxOffRunsUnjailed(t *testing.T) {
 		t.Fatalf("sandbox off must never invoke bwrap (the shim fired: stat %v)", err)
 	}
 	var status string
-	if err := st.Cwd.DB.QueryRow(`SELECT last_status FROM jobs WHERE id = 'j1'`).Scan(&status); err != nil {
+	if err := st.DB.QueryRow(`SELECT last_status FROM jobs WHERE id = 'j1'`).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
 	if status != "fail" {
