@@ -56,8 +56,8 @@ sees core and models and nothing else.
   empty.
 - `wire(r)` assembles the kernel: the provider, the compact+effort
   policy pair, the live tool table (SPEC_PLUGINS 8), and the
-  middleware chain — [paths (the `~` boundary, innermost), router,
-  approve? (when a frontend can ask), perm.Plugins, perm.Allowlist,
+  middleware chain — [toolset.Resolve, approve? (when a frontend can
+  ask), paths (the `~` boundary), perm.Plugins, perm.Allowlist,
   guard.Bound, guard.Rounds, guard.Cap]. Swapping a seam is a
   change here and nowhere else. The compaction `AutoReflect` seam is
   cut: compaction writes nothing to rem (SPEC_COMPACT 6).
