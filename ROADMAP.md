@@ -337,3 +337,37 @@ before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is th
 > SPEC_PLUGINS 8 landed (0.7.0): the reload (`plugins`) and the
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.
+
+## the post-hardening rounds (0.8.2 → 0.16.0)
+
+Spec-first as always; the freeze discipline holds (`core/` and `loop/`
+open to extension, closed to modification — the one named loop change
+since is 0.12.0's, carried by name in the freeze gate). One line each,
+in order:
+
+- **the plugin growth surface** (0.8.2 → 0.9.2): the plugin door and
+  the enablement, the streamlined contract, the self-healing door
+  (SPEC_GROWTH, SPEC_STREAMLINE).
+- **the dashboard** (0.10.0 → 0.10.2): `rig serve`, loopback-only,
+  the TUI's grammar, the todo's hands (SPEC_SERVE).
+- **the delegate** (0.11.0): the one-shot worker tool (SPEC_DELEGATE).
+- **the event loop** (0.12.0): the turn runtime becomes the evt
+  engine's consumer; the batch of concurrent tool calls lands
+  (SPEC_EVT phase 2).
+- **the two bounds** (0.12.2): the round cap and the result wall
+  (SPEC_HARDENING 9; amended in 0.14.0: no round cap by default).
+- **rem is deliberate** (0.13.0): the AutoReflect handoff cut;
+  compaction writes nothing to rem (SPEC_STATE).
+- **the plugin surface is two natives** (0.14.0): `plugin`
+  run|schema, `plugins` list|create|delete|reload; delete is disable
+  (SPEC_PLUGINS 8, amended).
+- **the path boundary** (0.14.1): the `~` expansion at the boundary,
+  not per tool.
+- **one store** (0.15.0): the todo and rem stores fold to one file
+  each, rows carrying the scope (SPEC_STATE, amended).
+- **the binary updates itself** (0.15.1): `-update` (SPEC_BUILD 5).
+- **every row a project** (0.16.0): the scope is the repo, worktrees
+  share; the `project` door on the todo and rem tools and commands
+  (SPEC_STATE, SPEC_COMMANDS, amended).
+
+The queue's next lives in the CHANGELOG's `[Unreleased]`.

@@ -9,9 +9,9 @@ work bounded. Not a framework: a harness for one job, built closed.
 leaf dependency is `modernc.org/sqlite` (pure-Go driver) for the stores —
 justified in `specs/SPEC_STATE.md`.
 
-Status: feature-complete runtime, version `0.9.0`. The freeze discipline
-holds on `core/` and `loop/`; the 1.0 tag waits for lived use (a worker
-soak, the TUI field-tested as the daily driver).
+Status: feature-complete runtime, version `0.16.0`. The freeze
+discipline holds on `core/` and `loop/`; the 1.0 tag waits for lived
+use (a worker soak, the TUI field-tested as the daily driver).
 
 ## quickstart
 
@@ -25,10 +25,11 @@ then talk. Configuration and verification: `docs/SETUP.md`.
 ## dashboard
 
 `rig serve` opens a loopback-only dashboard on the rig home's stores
-(sessions, todo, scheduler, memory, models, plugins) with three writes —
-todo create, scheduler create, and plugin create into the pending zone —
-rendered in the TUI's design language and mobile-ready: open the printed
-address with the printed token (`specs/SPEC_SERVE.md`, phase 2).
+(sessions, todo, scheduler, models, plugins) with writes — todo
+create, start, and complete, scheduler create, and the plugin forge
+(source read and save into the pending zone) — rendered in the TUI's
+design language and mobile-ready: open the printed address with the
+printed token (`specs/SPEC_SERVE.md`, phase 2).
 
 ## install
 
@@ -63,6 +64,7 @@ go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 | `docs/DESIGN.md`   | architecture, the seams, turn semantics, extension guide |
 | `docs/SETUP.md`    | build, configuration, verification               |
 | `docs/USAGE.md`    | running a session; session and failure semantics |
+| `docs/PLUGINS.md`  | the python plugins: the contract, the zones, creating and consuming |
 
 ## layout
 
@@ -70,6 +72,8 @@ go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 cmd/rig      composition root — wires every seam once; flags and env only
 core            the seams, wire types, and the streaming-event vocabulary
 loop            the concrete turn runtime (fault/cancel-aware)
+evt             the event loop (SPEC_EVT): one consumer, many producers; the
+                turn runtime's engine
 kernel.go       the composition kernel
 command/        the user commands (/compact, /models, /sessions, /effort, ...)
 config/         the four-layer config resolution (flag > env > file > embedded)
@@ -77,24 +81,31 @@ models/         the per-model table (window, compaction numbers, role, effort)
 policy/         ContextPolicy implementations: compact (per-model trigger),
                 effort (the reasoning dial's provider decorator)
 middleware/     ToolMiddleware: toolset (the live table), approve (the gate),
-                perm (deny by default + plugin provenance), guard.Bound (the bound)
+                paths (the ~ boundary), perm (deny by default + plugin
+                provenance), guard (the bound, the round cap, the result cap)
 provider/       Provider implementations (the openai-compatible SSE adapter)
-plugins/        python plugin discovery (one file, one tool)
-store/          the SQLite stores (state, todo, rem, scheduler) and the state
-                recorder; -resume projects a session back from the state rows
-tool/           Tool implementations: bash(1); file read/write/edit; fs ls/find/grep;
-                todo the job queue; rem memory; scheduler background jobs; python the
-                persistent IPython kernel; web search and fetch; diff the observation
-                diff; plugins the ecosystem (list/create/delete/reload)
+plugins/        python plugin discovery (one file, one tool) and the plugin
+                door (run/schema) and the ecosystem (list/create/delete/reload)
+store/          the SQLite stores (state, todo, rem, scheduler), the sqlx
+                transaction seam, the project scope identity (store/scope);
+                -resume projects a session back from the state rows
+tool/           Tool implementations: bash(1); file read/write/edit; fs
+                ls/find/grep; todo the job queue; rem memory; scheduler
+                background jobs; delegate the one-shot worker; python the
+                persistent IPython kernel; web search and fetch; diff the
+                observation diff
 frontend/       Frontend implementations: cli (the piped reference), tui (the
-                terminal default), oneshot (-p worker)
+                terminal default), oneshot (-p worker), web (the serve
+                dashboard)
 specs/          the specs, written and agreed before the code (SPEC_CORE first)
-docs/           DESIGN (architecture), SETUP (build/config), USAGE (running)
+docs/           DESIGN (architecture), SETUP (build/config), USAGE (running),
+                PLUGINS (the python plugins)
 ```
 
 ## extending
 
 The design test, enforced structurally: adding a tool, a provider, a context
 policy, a frontend, or a tool middleware is **one file plus one registration
-line** at the composition root — the loop never names a concrete type. How:
-`docs/DESIGN.md`.
+line** at the composition root — the loop never names a concrete type. Or no
+Go at all: a python plugin is one file under the rig home's `plugins/` and
+one tool (`docs/PLUGINS.md`). How: `docs/DESIGN.md`.

@@ -50,9 +50,9 @@ plus one registration line, and the loop never names a concrete type.
 - `loop` — the turn runtime: the one place turn ordering is written
   down; fault- and cancel-aware.
 - `evt` — the event loop (SPEC_EVT): libevt's shape, Go-centric — one
-  consumer, many producers, closures ordered by priority then arrival;
-  a leaf consumed by nothing until phase 2 makes the turn loop its
-  consumer.
+  consumer, many producers, closures ordered by priority then arrival.
+  The turn loop is its consumer (phase 2, 0.12.0): every step of a turn
+  is a closure on the loop goroutine.
 - `kernel.go` (root package `rig`) — the composition kernel: the
   dependency bag the loop drives, assembled from options.
 - `cmd/rig` — the binary and composition root: flag/env/file config
@@ -60,7 +60,8 @@ plus one registration line, and the loop never names a concrete type.
   The only package that imports the whole tree.
 - `command` — the user-command leaf: the slash-command set (`compact`,
   `new`, `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
-  `rem`), testable with fakes: no kernel, no stores, no provider.
+  `rem`, `effort`, `role`, `approve`), testable with fakes: no kernel,
+  no stores, no provider.
 - `config` — the config-loading layer: four-layer resolution (flags >
   env > file > embedded defaults) and the models table out of code and
   into a file.
@@ -70,11 +71,19 @@ plus one registration line, and the loop never names a concrete type.
   compact (trigger-based transcript summarization, the once-budget
   overflow recovery). Compaction writes nothing to rem: the summary is
   context, not memory (SPEC_STATE: rem is deliberate).
+- `middleware/approve` — the manual tool-approval gate (SPEC_MODES 4):
+  in manual mode a mutating call pauses for the operator's y/n at the
+  frontend's ask door; a denial is a teaching refusal the model reads.
 - `middleware/perm` — deny-by-default tool allowlist and the plugin
   provenance rule (model writes land in `plugins/pending/`).
 - `middleware/guard` — the retry guard: bounds the model's repeated
   failing re-issuance of a tool per turn; the streak keys on identical
-  args, a corrected call always executes.
+  args, a corrected call always executes. Beside it the two bounds
+  (SPEC_HARDENING 9): `Rounds`, the per-turn cap on tool calls, and
+  `Cap`, the wall that bounds every tool result.
+- `middleware/paths` — the `~`-expansion boundary: one chain link that
+  expands a leading `~` in the path-shaped arguments before any tool
+  sees them, so every tool inherits it.
 - `middleware/toolset` — the root's live tool table: a per-turn fact,
   swapped atomically so a plugin reload or model switch takes effect on
   the next turn.
@@ -85,6 +94,9 @@ plus one registration line, and the loop never names a concrete type.
   kernel.
 - `store` — the SQLite persistence substrate: the open path, the
   pragmas, schema versioning, corrupt-file quarantine.
+- `store/scope` — the project identity: the repo (the short sha1 of the
+  git common dir, worktrees share) with a cwd-hash fallback; the
+  partition key of the todo and rem stores.
 - `store/sqlx` — the `database/sql` seam: serializable transactions that
   ride the context; fails closed on an unbound read.
 - `store/lazy` — the deferred results the generated accessors hand back.
@@ -92,7 +104,8 @@ plus one registration line, and the loop never names a concrete type.
   frontend, the `-resume` projection, the sessions listing.
 - `store/todo` — the task-queue store: the event log is the spine, the
   task rows a disposable projection rebuilt every transaction, DAG
-  validated at create.
+  validated at create; one file for every project, rows carrying the
+  project scope.
 - `store/rem` — the memory store: recall (FTS plus trigram, rank-fused),
   consolidation arithmetic, supersession; scope is a repo identity
   (worktrees share), a one-time migration on the schema bump, and every
@@ -126,9 +139,15 @@ plus one registration line, and the loop never names a concrete type.
   transcript.
 - `frontend/cli` — the stdin/stdout frontend and the piped reference:
   plain text, command dispatch, the steering seam.
+- `frontend/oneshot` — the one-shot (`-p`) worker frontend: the single
+  prompt runs once, a faulted turn ends non-zero (the scheduler's
+  worker path).
 - `frontend/tui` — the terminal UI: the same events and commands in a
   live-region design; adds to the CLI's bytes, never changes them.
+- `frontend/web` — the `rig serve` dashboard (SPEC_SERVE): loopback-only
+  net/http over the rig home's stores, token-gated, with the todo,
+  scheduler, and plugin-forge writes.
 - `specs/` — the specs, written and agreed before the code (SPEC_CORE
   first); the governing documents the `PACKAGE.md` files cite.
-- `docs/` — the architecture (`DESIGN.md`), setup, usage, TUI design,
-  and the consolidation notes.
+- `docs/` — the architecture (`DESIGN.md`), setup, usage, the plugins
+  guide (`PLUGINS.md`), TUI design, and the consolidation notes.

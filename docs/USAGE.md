@@ -47,16 +47,25 @@ is a loud line naming the known set, never silently a prompt.
 - `/approve` — `/approve auto` (today's behavior) or `/approve manual`:
   manual pauses every mutating tool call for the operator's y/n at the
   TUI ask row; a denial is a model-visible teaching refusal.
+- `/rem` — the memory store's operator verbs: bare lists the live
+  memories, `show <id>` renders one, `forget <id>` drops it, `project
+  <path>` shows another project's memories.
 - `/plugins` — the python plugins: the loaded ones (name, description,
   file), the skipped ones with their reasons, and the pending zone —
   `pending` lists the model's authoring with each file's DESCRIPTION,
-  `approve <name>` installs one (the operator's verb), `reload`
-  re-registers from disk (the `plugins` tool's command door),
-  `create <text>` queues the authoring prompt.
+  `approve <name>` installs one (the operator's verb), `disabled`
+  lists the disabled zone, `disable <name>` and `enable <name>` move
+  a plugin across it, `reload` re-registers from disk (the `plugins`
+  tool's command door), `create <text>` queues the authoring prompt.
+- `/todo project <path>`, `/rem project <path>` — a one-off read of
+  another project's queue or memories: the path resolves to a repo
+  identity (worktrees share), and writes stay the bare verbs'
+  (`specs/SPEC_STATE.md`).
 
 Context compacts automatically at the active model's own trigger (the
-models table); the `⧉` line reports it and the summary lands in the
-transcript and in rem.
+models table); the `⧉` line reports it. The summary lands in the
+transcript only — context, not memory: compaction writes nothing to
+rem (`specs/SPEC_STATE.md`: rem is deliberate).
 
 The `delegate` tool (SPEC_DELEGATE) spawns a headless worker on a task
 now — a bounded sub-task whose result is a message, not a conversation
@@ -138,7 +147,7 @@ rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits the 15 built-in
+refusal goes back to the model. The default permits the 17 built-in
 tools. Python plugins (outside the default) are admitted by their
 presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7) — an installed
 plugin's own allow-list entry — not by an `allow` line; a plugin still

@@ -41,7 +41,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.8.0
+./rig --version        # rig 0.16.0
 ```
 
 The install paths, three (`specs/SPEC_BUILD.md` 5):
@@ -62,13 +62,11 @@ chmod +x rig
 ./rig --version
 ```
 
-**go install** — pre-tag `@master` works today, `@latest` once tagged;
-the one prerequisite is Go ≥ 1.26 (the toolchain line pulls the newest
+**go install** (needs Go ≥ 1.26; the toolchain line pulls the newest
 matching patch automatically):
 
 ```sh
-go install github.com/mrsirg97-rgb/rig/cmd/rig@master   # today (no tag yet)
-go install github.com/mrsirg97-rgb/rig/cmd/rig@latest   # once tagged
+go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 ```
 
 A built release binary updates itself in place: `rig -update` fetches,
@@ -127,7 +125,7 @@ directory's project file, not the creating session's.
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 15 built-in tools |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 17 built-in tools |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
@@ -197,8 +195,10 @@ starts fresh: the guard's counts and the steering slot are not persisted.
 
 **On the allow-list** — it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
-permits the 15 built-in tools because a default-deny CLI would ship a
-dead agent; narrow with `--allow read` or similar. Python plugins
+permits the 17 built-in tools because a default-deny CLI would ship a
+dead agent; narrow with `--allow read` or similar. A `settings.json` that
+writes its own `allow` key replaces that default whole, so it must carry
+`plugin` and `plugins` or every door call is refused. Python plugins
 (`~/.rig/plugins/`) are **not** in the default — but a plugin sitting in
 `plugins/` root is itself an allow-list entry (SPEC_PLUGINS 7): the
 provenance rule forces a model's writes into `plugins/pending/`, so an
@@ -229,8 +229,9 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
       return "echo: " + args["text"]
   ```
 
-  The tool's name is the filename stem (`echo.py` → `echo`); the
-  description and schema ride the wire verbatim.
+  The tool's name is the filename stem (`echo.py` → `echo`), matching
+  `^[a-z][a-z0-9_]{0,63}$`; the description and schema ride the wire
+  verbatim.
 - **Discovery at startup** — the files are imported through the shared
   python kernel (the same persistent kernel as the `python` tool: the
   namespace is shared on purpose, so the model's python can call plugin
@@ -243,6 +244,12 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   args dict; the return value is the tool result; an exception is a
   tool error carrying the traceback tail, and the kernel stays alive
   (it is the model's kernel too).
+- **The wire** — a loaded plugin is a real tool on the execution chain,
+  but the request carries the built-in tools plus one `plugin` door;
+  the per-plugin schemas stay behind it, so a grown table stops
+  blowing context (SPEC_GROWTH 9). The model fetches a plugin's
+  contract with the door's `schema` arm and calls it with `run`; the
+  python tool's imports reach the loaded plugins by the stem.
 - **The provenance rule** (SPEC_SANDBOX 2) — the model's `write` and
   `edit` refuse a target inside `plugins/` that is not inside
   `plugins/pending/`; the refusal teaches the shape: `permission
@@ -263,23 +270,43 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   `approve <name>` moves one to the top level — the operator's verb,
   never a tool call; a name that collides with a built-in tool refuses
   with the startup collision's voice, and an already-installed file of
-  the name refuses too.
-- **`plugins`** — the ecosystem native tool (`specs/SPEC_PLUGINS.md`
-  8): re-runs the discovery over `plugins/` and swaps the kernel's tool
-  list, so a plugin registers without a restart; removal is free (the
-  list rebuilds from disk). `/plugins reload` is the operator's same verb
-  from the command door; `/plugins create <text>` queues the authoring
-  prompt (the steer precedent: the command queues a line, never dispatches
-  a turn), the model's `write` lands the file in `plugins/pending/`, and
-  `approve` installs it. The `plugin` door self-heals (SPEC_STREAMLINE
-  4): an unknown name re-discovers once before refusing, so an
-  out-of-band install is callable without a reload call; `plugins`
-  stays the operator's explicit verb.
+  the name refuses too. `disabled` lists the disabled zone;
+  `disable <name>` moves a loaded plugin into `plugins/disabled/`
+  (hidden, not callable, the next turn); `enable <name>` brings it
+  back.
+- **`plugins`** — the ecosystem native tool
+  (`specs/SPEC_PLUGINS.md` 8): `list` (the loaded and the skipped),
+  `create` (name plus source into `plugins/pending/`, the same checks
+  as the command door's forge), `delete` (a move into
+  `plugins/disabled/`, reversible with `/plugins enable`), and
+  `reload` (re-runs the discovery over `plugins/` and swaps the
+  kernel's tool table, so a plugin registers without a restart; the
+  swap takes effect on the next turn). `/plugins reload` is the
+  operator's same verb from the command door; `/plugins create <text>`
+  queues the authoring prompt (the steer precedent: the command queues
+  a line, never dispatches a turn), the model's `write` lands the file
+  in `plugins/pending/`, and `approve` installs it. The `plugin` door
+  self-heals (SPEC_STREAMLINE 4): an unknown name re-discovers once
+  before refusing, so an out-of-band install is callable without a
+  reload call; `plugins` stays the operator's explicit verb.
 - **The sandbox** — the provenance rule is the workflow (SPEC_SANDBOX
   2); the worker jail is the boundary (SPEC_SANDBOX 1, 3, 5): a scheduled
   worker's plugins run jailed under bwrap. In the interactive REPL the
   plugins run with rig's privileges, in the operator's kernel — trust
   them as you trust your own python.
+
+## dashboard
+
+`rig serve` opens a loopback-only dashboard on the rig home's stores
+(`specs/SPEC_SERVE.md`): sessions (the list, grouped by workspace, and
+the transcripts), todo, scheduler, models, and the plugins' three
+zones, with writes — todo create, start, and complete, scheduler
+create, and the plugin forge's source read and save into the pending
+zone. It is a loopback bind (a non-loopback address is refused by
+name) behind a token minted and printed once; open the printed address
+with the printed token. It renders in the TUI's design language and is
+mobile-ready; the memory view is gone (rem is the model's, read in the
+TUI).
 
 ## terminal
 
@@ -320,7 +347,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.8.0
+./rig --version                 # prints: rig 0.16.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
