@@ -41,7 +41,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.16.0
+./rig --version        # rig 0.17.0
 ```
 
 The install paths, three (`specs/SPEC_BUILD.md` 5):
@@ -347,7 +347,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.16.0
+./rig --version                 # prints: rig 0.17.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

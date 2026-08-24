@@ -1,30 +1,6 @@
 # Changelog
 
-## [0.16.1] — the kernel knows where it is
-
-- **the python kernel is born in the session's working directory**: it
-  inherited the rig process's cwd, so a session started one directory
-  up ran kernel code whose relative paths silently pointed at the wrong
-  place — a model named it from inside. `SetCwd` on the tool, wired at
-  the root; the description says so.
-
-- **grep's glob names its rule**: the schema line reads "a path glob
-  (** spans directories; * does not cross /)" — `*.go` matching nothing
-  cost a model a call; find already advertised the rule, grep now does.
-
-
-## [0.16.0] — every row a project
-
-- **no colored inline text in a response** (`specs/SPEC_TUI.md` 11,
-  amended): `*em*` and `` `code` `` render in the text color, marks
-  dropped — bold keeps its weight, headings their accent, lists and
-  quotes their furniture. The operator's call: the coloring read
-  inconsistent, plain reads better. And the status row paints `auto`
-  in the warn color beside `manual` — the permissive mode is the one
-  worth a glance.
-
-
-## [Unreleased] — the queue is the project
+## [0.17.0] — the soak's vitals
 
 - **sessions, the soak's vitals** (`specs/SPEC_STATE.md` and
   `specs/SPEC_COMMANDS.md`, amended): a read-only native tool (the
@@ -43,6 +19,23 @@
   (it never pauses at the gate) and from the concurrent read set (it
   opens a store, like todo/rem/scheduler, so it is not a pure
   observation).
+
+
+## [0.16.1] — the kernel knows where it is
+
+- **the python kernel is born in the session's working directory**: it
+  inherited the rig process's cwd, so a session started one directory
+  up ran kernel code whose relative paths silently pointed at the wrong
+  place — a model named it from inside. `SetCwd` on the tool, wired at
+  the root; the description says so.
+
+- **grep's glob names its rule**: the schema line reads "a path glob
+  (** spans directories; * does not cross /)" — `*.go` matching nothing
+  cost a model a call; find already advertised the rule, grep now does.
+
+
+## [0.16.0] — every row a project
+
 - **rem, the deliberate project** (`specs/SPEC_STATE.md` and
   `specs/SPEC_COMMANDS.md`, amended): learn/reflect/recall/prune gain an
   optional `project` — a path, resolved through `store/scope`, replacing
@@ -83,6 +76,14 @@
   and a no-op on the second open (the fold keys on the files existing).
   The dashboard's `/api/todo?cwd=` routes resolve through the same
   scope. Goldens regenerated (the schema grew `project`).
+- **no colored inline text in a response** (`specs/SPEC_TUI.md` 11,
+  amended): `*em*` and `` `code` `` render in the text color, marks
+  dropped — bold keeps its weight, headings their accent, lists and
+  quotes their furniture. The operator's call: the coloring read
+  inconsistent, plain reads better. And the status row paints `auto`
+  in the warn color beside `manual` — the permissive mode is the one
+  worth a glance.
+
 
 ## [0.15.1] — the binary updates itself
 

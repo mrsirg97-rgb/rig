@@ -338,7 +338,7 @@ before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is th
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.
 
-## the post-hardening rounds (0.8.2 → 0.16.0)
+## the post-hardening rounds (0.8.2 → 0.17.0)
 
 Spec-first as always; the freeze discipline holds (`core/` and `loop/`
 open to extension, closed to modification — the one named loop change
@@ -368,6 +368,12 @@ in order:
 - **the binary updates itself** (0.15.1): `-update` (SPEC_BUILD 5).
 - **every row a project** (0.16.0): the scope is the repo, worktrees
   share; the `project` door on the todo and rem tools and commands
+  (SPEC_STATE, SPEC_COMMANDS, amended).
+- **the kernel knows where it is** (0.16.1): the python kernel is born
+  in the session's working directory; grep's glob names its rule
+  (SPEC_PYTHON, SPEC_FS).
+- **the soak's vitals** (0.17.0): `sessions`, a read-only native over
+  the session store — the recent sessions and the soak's vitals
   (SPEC_STATE, SPEC_COMMANDS, amended).
 
 The queue's next lives in the CHANGELOG's `[Unreleased]`.
