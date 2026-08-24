@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.16.0] — every row a project
 
 - **no colored inline text in a response** (`specs/SPEC_TUI.md` 11,
   amended): `*em*` and `` `code` `` render in the text color, marks
