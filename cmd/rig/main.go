@@ -37,6 +37,7 @@ import (
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
@@ -980,11 +981,15 @@ func main() {
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
 		Reload:        r.reloadPlugins,
 		PluginsDir:    pluginsDir,
-		RemList: func(ctx context.Context) ([]command.RemRow, error) {
+		RemList: func(ctx context.Context, project string) ([]command.RemRow, error) {
 			if r.remDB.DB == nil {
 				return []command.RemRow{}, nil
 			}
-			mems, err := remstore.List(ctx, r.remDB, r.cwd, 50)
+			proj := r.cwd
+			if project != "" {
+				proj = paths.Expand(project)
+			}
+			mems, err := remstore.List(ctx, r.remDB, proj, 50)
 			if err != nil {
 				return nil, err
 			}
@@ -1018,6 +1023,9 @@ func main() {
 				return err
 			}
 			return nil
+		},
+		RemLabel: func(ctx context.Context, project string) (string, error) {
+			return scope.Label(paths.Expand(project)), nil
 		},
 	}
 

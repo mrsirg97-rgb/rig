@@ -58,10 +58,12 @@ the leaf.
   `store/scope`); writes stay the model's or the session's own bare
   verbs, and an unknown path's empty queue names the scope it read.
 - **rem** — the operator's verb over the memory store (SPEC_STATE: rem is
-  deliberate): `rem [list|show|forget]` — list the live memories
-  (project then global, one line each), show by id, forget by id. The
-  model's learn/recall/reflect/prune stays the
-  tool; the operator's read and prune get a typed line.
+  deliberate): `rem [list|show|forget|project <path>]` — list the live
+  memories (project then global, one line each), show by id, forget by
+  id, and `project <path>` a one-off read of that project's memories in
+  `rem list`'s shape (empty names the project). The model's
+  learn/recall/reflect/prune stays the tool; the operator's read and
+  prune get a typed line.
 - **plugins** — lists the loaded/skipped plugins and the pending zone;
   `approve <name>` installs a pending plugin; `reload` re-registers from
   disk; `create <text>` queues the authoring prompt; `enable <name>` /

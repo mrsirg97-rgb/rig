@@ -15,6 +15,7 @@ func (remCmd) Sub() []Sub {
 		{Name: "list", Desc: "show the live memories"},
 		{Name: "show", Desc: "show a memory: show <id>"},
 		{Name: "forget", Desc: "forget a memory: forget <id>"},
+		{Name: "project", Desc: "show another project's memories: project <path>"},
 	}
 }
 
@@ -35,9 +36,28 @@ func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		if e.RemList == nil {
 			return "", errors.New("rem: no rem seam (the root did not wire one)")
 		}
-		rows, err := e.RemList(ctx)
+		rows, err := e.RemList(ctx, "")
 		if err != nil {
 			return "", err
+		}
+		return renderRemList(rows), nil
+	case fields[0] == "project" && len(fields) == 2:
+		if e.RemList == nil {
+			return "", errors.New("rem: no rem seam (the root did not wire one)")
+		}
+		rows, err := e.RemList(ctx, fields[1])
+		if err != nil {
+			return "", err
+		}
+		if len(rows) == 0 {
+			if e.RemLabel == nil {
+				return "", errors.New("rem: no rem seam (the root did not wire one)")
+			}
+			label, err := e.RemLabel(ctx, fields[1])
+			if err != nil {
+				return "", err
+			}
+			return "rem: no memories in " + label, nil
 		}
 		return renderRemList(rows), nil
 	case fields[0] == "show" && len(fields) == 2:
@@ -77,8 +97,13 @@ func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
 			return "", errors.New("rem: forget needs an id (rem forget <id>)")
 		}
 		return "", errors.New("rem: forget takes one id")
+	case len(fields) > 0 && fields[0] == "project":
+		if len(fields) == 1 {
+			return "", errors.New("rem: project takes a path (rem project <path>)")
+		}
+		return "", errors.New("rem: project takes one path")
 	default:
-		return "", errors.New("rem: usage: rem [list|show|forget <id>]")
+		return "", errors.New("rem: usage: rem [list|show|forget <id>|project <path>]")
 	}
 }
 

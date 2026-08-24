@@ -43,6 +43,10 @@ nothing is read into the prompt by a session start.
   per cwd (pure, deterministic); a relative common dir resolves against
   the cwd, and an echoed option (old git passes unknown flags through,
   exit 0) is not a path — the cwd stands in.
+- The deliberate project (SPEC_STATE) is resolved at the tool adapter,
+  not here: `tool/rem` hands the store a `project` path as its `cwd`, so
+  `writeScope`/`readScopes` are unchanged — the project a fact belongs
+  to is a choice, not an accident of where rig started.
 - The schema bump (1 → 2) carries `Migration(cwd)`: a one-time idempotent
   re-scope of rows under the old cwd-hash to the repo's, and a file-wide
   removal of `source = 'session compaction'` rows (never deliberate),

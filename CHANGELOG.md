@@ -2,6 +2,18 @@
 
 ## [Unreleased] — the queue is the project
 
+- **rem, the deliberate project** (`specs/SPEC_STATE.md` and
+  `specs/SPEC_COMMANDS.md`, amended): learn/reflect/recall/prune gain an
+  optional `project` — a path, resolved through `store/scope`, replacing
+  the session cwd for that call (worktree-safe, `~` expands at the
+  `middleware/paths` boundary), so a session in `~/Projects` learning
+  about `~/Projects/rig` files facts into a scope the repo recalls.
+  `project` + `scope: global` refuses by name; the description carries
+  one short Guidelines clause ("name project when the fact belongs to a
+  repo you did not start in"). The operator gets `rem project <path>`:
+  that project's live memories in `rem list`'s shape (empty names the
+  project); show/forget stay id-addressed and file-wide — the 0.13.0
+  forget wall stands.
 - **todo is one store, scoped by project** (`specs/SPEC_STATE.md`,
   amended): the per-cwd partition is gone — one `todo/todo.sqlite`,
   every event row carries its `scope`, and the identity is never a

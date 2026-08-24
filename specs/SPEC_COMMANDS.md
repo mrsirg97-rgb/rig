@@ -687,7 +687,11 @@ global, one plain line each (`m<id> · <kind> · <age> · <strength> · <first
 **`rem forget <id>`** — prune-remove that id (the operator's prune, a
 verb); only this project's or a global memory — ids are file-wide, and a
 typo must not reach another repo's row: `rem: another project's memory:
-m<id> is <label>'s; forget it from there`.
+m<id> is <label>'s; forget it from there`. **`rem project <path>`** — that
+project's live memories, `rem list`'s shape (project then global, one
+plain line each); the empty reply names the project (`rem: no memories in
+<label>`). Show and forget stay id-addressed and file-wide — the 0.13.0
+forget wall stands, so `rem project` is a read only.
 
 Rejected, named: `rem pin <id>`. Importance is only the per-access
 reinforcement multiplier, so a pin on a live row changed nothing the
@@ -700,15 +704,20 @@ shows) then.
 Refusals, named: `rem show` (no id) → `rem: show needs an id (rem show
 <id>)`; `rem show a b` → `rem: show takes one id`; an unknown id →
 `rem: no such memory: <id>` (show and forget both name the gap); `rem
-forget` (no id) → the needs-an-id voice; `rem <other>` →
-`rem: usage: rem [list|show|forget <id>]`.
+forget` (no id) → the needs-an-id voice; `rem project` (no path) →
+`rem: project takes a path (rem project <path>)`; `rem <other>` →
+`rem: usage: rem [list|show|forget <id>|project <path>]`.
 
 Why the command and not the tool: the tool's learn/recall/reflect/prune
 is the model's multi-line JSON surface; the operator's read and prune
-want a typed line. The root wires three closures over `store/rem`
-(`List`, `Show`, and `Forget`); `command/` stays a leaf (no store
-import, SPEC_COMMANDS 2). `list` is the bare command's read under a
-name, and the `Sub()` hints are `list`, `show`, `forget` (SPEC_TUI 9).
+want a typed line. The root wires four closures over `store/rem`
+(`List`, `Show`, `Forget`, and `Label` — the last for the empty-project
+naming); `command/` stays a leaf (no store import, SPEC_COMMANDS 2).
+`list` is the bare command's read under a name, and the `Sub()` hints
+are `list`, `show`, `forget`, `project` (SPEC_TUI 9). `rem project` is
+the same `List` closure with a project path: the root resolves it through
+`store/scope` (`~` expands at the boundary), so `command/` never touches
+a store.
 
 ## testing
 
@@ -813,11 +822,14 @@ crontab spool for the scheduler (the e2e's existing pattern).
 - `TestRemShowAndForget` — `rem show <id>` renders the full row;
   `rem forget <id>` removes it (the row is gone, not superseded).
 - `TestRemRefusalsByName` — `rem show`/`rem forget` (no id),
-  `rem show a b`, an unknown id, and `rem frob` each refuse naming the
-  gap and the usage.
+  `rem show a b`, `rem project` (no path), an unknown id, and `rem frob`
+  each refuse naming the gap and the usage.
+- `TestRemProjectRendersAndNames` — `rem project <path>` renders that
+  project's live memories in `rem list`'s shape (project then global);
+  an empty project names it (`rem: no memories in <label>`).
 - `TestRemSubHints` — the `Sub()` hints are `list`, `show`, `forget`,
-  each one-lined; `rem list` is the bare command's read, not a usage
-  refusal.
+  `project`, each one-lined; `rem list` is the bare command's read, not
+  a usage refusal.
 
 **models:**
 
