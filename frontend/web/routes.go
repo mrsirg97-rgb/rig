@@ -175,7 +175,7 @@ func (s *Server) workspaces(ctx context.Context) []string {
 			if err != nil {
 				continue
 			}
-			rows, err := state.ListSessions(ctx, db)
+			rows, err := state.ListSessions(ctx, db, state.ListCap)
 			if err != nil || len(rows) == 0 {
 				continue
 			}
@@ -214,7 +214,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	rows, err := state.ListSessions(ctx, db)
+	rows, err := state.ListSessions(ctx, db, state.ListCap)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

@@ -186,19 +186,28 @@ recorder-minted fresh ids (the `tool_calls.id` primary key), name/args/
 result verbatim, the earlier rows staying as the autopsy. No schema
 change: the marker is the contract, and the rows are existing shapes.
 
-Deliverable 9 (SPEC_COMMANDS) reads this store from the `sessions`
-command, one owed read landed there: `ListSessions` — the workspace's
-session rows, newest first, capped at 50 (a glance, not an archive),
-each with the turns count defined as the session's `role = 'user'` rows
-minus the `[compaction] ` summary rows (transcript machinery, not
-prompts), an unclosed row (`ended_at` NULL) rendered as `exit open` —
-the one place that word appears; the store's exit vocabulary stays
-`ok | fault | cancelled`. And two small recorder additions for the
-`new` / `sessions resume` handoff (SPEC_COMMANDS 4): `Ensure` (the
-session row exists before any row lands under the id, idempotent) and
-`Retarget` (the retiring recorder is re-pointed before its in-flight
-`Input` completes, so that row lands under the new session). No schema
-change: the rows are existing shapes.
+The `sessions` command (deliverable 9, SPEC_COMMANDS) and the `sessions`
+tool (`tool/sessions`) both read this store, and both are thin adapters
+over the same verbs — no SQL in either. The verbs: `ListSessions(ctx, db,
+limit)` returns the workspace's session rows, newest first, each carrying
+the model, the version, the turns count (the session's `role = 'user'`
+rows minus the `[compaction] ` summary rows — transcript machinery, not
+prompts), and the fault count. `limit` is named; `state.ListCap` (50) is
+the default and the maximum (a glance, not an archive). An unclosed row
+(`ended_at` NULL) renders as `exit open` — the one place that word
+appears; the store's exit vocabulary stays `ok | fault | cancelled`.
+`SessionFaults(ctx, db, sessionId)` returns one session's fault rows,
+newest first, and `SessionUsage(ctx, db, sessionId)` its usage total. The
+tool's `summary` action aggregates over the recent `n` sessions: the
+session and turn counts, the distinct models with their versions, the
+fault count with the latest fault's first line, and the aggregate cache
+ratio (`cache_read*100/prompt`, the status row's arithmetic). Two small
+recorder additions for the `new` / `sessions resume` handoff (SPEC_COMMANDS
+4): `Ensure` (the session row exists before any row lands under the id,
+idempotent) and `Retarget` (the retiring recorder is re-pointed before
+its in-flight `Input` completes, so that row lands under the new
+session). No schema change: the rows are existing shapes; the new verbs
+are reads over them.
 
 `-p` workers get their autopsy from this: the `sessions` command (roadmap
 deliverable 9) or plain `sqlite3`.
@@ -380,8 +389,11 @@ The tool adapter is the only hand-written surface the model sees, and it
 is pane's tool surface verbatim: `todo {create|start|complete|fail|retry|
 move|read}` (`next` is not a verb: its semantics ride the render's next
 pointer, blocked-skipping), `rem {learn|recall|reflect|prune}`, `scheduler {create|
-list|pause|resume|remove|runs}`. Descriptions and schema property text are
-pane's promptGuidelines, lowercase, terse.
+list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
+not pane's: a read-only introspection of the session store, absent from
+the root's `mutatingNatives` and from the concurrent read set — it opens
+a store, like `todo`/`rem`/`scheduler`, so it is not a pure observation).
+Descriptions and schema property text are pane's promptGuidelines, lowercase, terse.
 
 ## decisions
 

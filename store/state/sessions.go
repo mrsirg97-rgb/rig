@@ -10,25 +10,35 @@ import (
 
 var ErrNoSuchSession = errors.New("no such session")
 
+const ListCap = 50
+
 type SessionRow struct {
 	ID      string
 	Cwd     string
+	Model   string
+	Version string
 	Started time.Time
 	Exit    string
 	Turns   int
+	Faults  int
 }
 
-func ListSessions(ctx context.Context, db store.DB) ([]SessionRow, error) {
+func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error) {
+	if n <= 0 || n > ListCap {
+		n = ListCap
+	}
 	rows, err := db.DB.QueryContext(ctx, `
 		SELECT s."id", s."cwd", s."started_at",
 			CASE WHEN s."ended_at" IS NULL THEN 'open' ELSE s."exit" END,
+			s."model", s."version",
 			(SELECT count(*) FROM "messages" m
 			 WHERE m."session_id" = s."id"
 				   AND m."role" = 'user'
-				   AND m."content" NOT LIKE '[compaction] %')
+				   AND m."content" NOT LIKE '[compaction] %'),
+			(SELECT count(*) FROM "faults" f WHERE f."session_id" = s."id")
 		FROM "sessions" s
 		ORDER BY s."started_at" DESC
-		LIMIT 50`)
+		LIMIT $1`, n)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +46,7 @@ func ListSessions(ctx context.Context, db store.DB) ([]SessionRow, error) {
 	var out []SessionRow
 	for rows.Next() {
 		var r SessionRow
-		if err := rows.Scan(&r.ID, &r.Cwd, &r.Started, &r.Exit, &r.Turns); err != nil {
+		if err := rows.Scan(&r.ID, &r.Cwd, &r.Started, &r.Exit, &r.Model, &r.Version, &r.Turns, &r.Faults); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

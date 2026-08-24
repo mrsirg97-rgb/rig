@@ -2,7 +2,9 @@ package command_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,7 +48,7 @@ func TestSessionsSubHints(t *testing.T) {
 		t.Fatal("sessions must carry Sub hints (the TUI's menu door)")
 	}
 	subs := subber.Sub()
-	want := []string{"list", "show", "resume"}
+	want := []string{"list", "summary", "show", "resume"}
 	if len(subs) != len(want) {
 		t.Fatalf("Sub() = %d hints, want %d", len(subs), len(want))
 	}
@@ -85,6 +87,44 @@ func TestSessionsListNone(t *testing.T) {
 	out, err := byName["sessions"].Run(context.Background(), "", env)
 	if err != nil || out != "sessions: none" {
 		t.Fatalf("an empty store must print the named line, got (%q, %v)", out, err)
+	}
+}
+
+func TestSessionsSummaryVerbCallsTheTool(t *testing.T) {
+	byName := allByName(t)
+	var sawArgs string
+	fake := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
+		sawArgs = string(args)
+		return "vitals: 2 sessions, 2 turns\nmodels: local 0.16.1\nfaults: 0\ncache ratio: 46% (cache_read 140 / prompt 300)", nil
+	})
+	env := &command.Env{Tools: map[string]core.Tool{"sessions": fake}}
+	out, err := byName["sessions"].Run(context.Background(), "summary", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sawArgs != `{"action":"summary"}` {
+		t.Fatalf("the verb must call the tool with the summary action, got %s", sawArgs)
+	}
+	if !strings.Contains(out, "cache ratio") {
+		t.Fatalf("the reply must pass through verbatim, got %q", out)
+	}
+}
+
+func TestSessionsSummaryVerbRefusals(t *testing.T) {
+	byName := allByName(t)
+	if _, err := byName["sessions"].Run(context.Background(), "summary extra", &command.Env{
+		Tools: map[string]core.Tool{"sessions": fakeExecFunc(func(context.Context, json.RawMessage) (string, error) { return "x", nil })},
+	}); err == nil || err.Error() != "sessions: summary takes no args (sessions summary)" {
+		t.Fatalf("summary with extra args must refuse the shape, got %v", err)
+	}
+	if _, err := byName["sessions"].Run(context.Background(), "summary", &command.Env{}); err == nil ||
+		err.Error() != "sessions: no tools seam (the root did not wire one)" {
+		t.Fatalf("summary without the tools seam must refuse, got %v", err)
+	}
+	if _, err := byName["sessions"].Run(context.Background(), "summary", &command.Env{
+		Tools: map[string]core.Tool{},
+	}); err == nil || err.Error() != "sessions: no sessions tool (the root did not put it in Env.Tools)" {
+		t.Fatalf("summary without the sessions tool must refuse, got %v", err)
 	}
 }
 
@@ -147,7 +187,7 @@ func TestSessionsShowRefusals(t *testing.T) {
 func TestSessionsUsage(t *testing.T) {
 	byName := allByName(t)
 	_, err := byName["sessions"].Run(context.Background(), "frob", &command.Env{})
-	if err == nil || err.Error() != "sessions: usage: sessions [list|show|resume <id>]" {
+	if err == nil || err.Error() != "sessions: usage: sessions [list|summary|show|resume <id>]" {
 		t.Fatalf("a foreign sub-verb must be the usage line, got %v", err)
 	}
 }

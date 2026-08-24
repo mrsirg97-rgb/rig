@@ -30,6 +30,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
 	"github.com/mrsirg97-rgb/rig/tool/fs"
+	sessionstool "github.com/mrsirg97-rgb/rig/tool/sessions"
 )
 
 type scriptSrv struct {
@@ -182,8 +183,9 @@ func newHarness(t *testing.T, row models.Model, activeID string, runtime models.
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": &fakePython{},
 			"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
-			"diff":    diff.New(db),
-			"plugins": fakePlugins{},
+			"diff":     diff.New(db),
+			"sessions": sessionstool.New("", dir),
+			"plugins":  fakePlugins{},
 		},
 	}
 	r.session = core.NewSession()

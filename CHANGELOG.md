@@ -26,6 +26,23 @@
 
 ## [Unreleased] — the queue is the project
 
+- **sessions, the soak's vitals** (`specs/SPEC_STATE.md` and
+  `specs/SPEC_COMMANDS.md`, amended): a read-only native tool (the
+  eighteenth) over the session store — `list` is the recent sessions
+  (id, started, model, version, turns, faults; newest first), `summary`
+  the vitals over the same slice (session and turn counts, the models
+  with their versions, the fault count with the latest fault's first
+  line, the aggregate cache ratio). The store gains the typed fault read
+  (`SessionFaults`); `ListSessions` takes a named limit (`ListCap` the
+  default and the maximum) and `SessionRow` carries the model, the
+  version, and the fault count. `project` names another workspace (the
+  state file is cwd-keyed, one per workspace — a subdirectory or a
+  second worktree reads its own file); `n` caps the slice at 1..50.
+  The operator gets `sessions summary` (this workspace, the tool's
+  reply verbatim). Read-only: absent from the root's `mutatingNatives`
+  (it never pauses at the gate) and from the concurrent read set (it
+  opens a store, like todo/rem/scheduler, so it is not a pure
+  observation).
 - **rem, the deliberate project** (`specs/SPEC_STATE.md` and
   `specs/SPEC_COMMANDS.md`, amended): learn/reflect/recall/prune gain an
   optional `project` — a path, resolved through `store/scope`, replacing
