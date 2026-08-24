@@ -76,7 +76,7 @@ func TestStatusLineModelAloneBeforeFirstUsage(t *testing.T) {
 	}
 	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 0, 262144, false, 0, 0, 0)
 	want := th.Paint("text", "huihui3.8") +
-		"\n" + th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("dim", "auto") +
+		"\n" + th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("warn", "auto") +
 		"\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
 	if got != want {
 		t.Fatalf("before the first usage: the model alone, the stance row, the zero totals:\ngot  %q\nwant %q", got, want)
@@ -168,7 +168,7 @@ func TestStatusLineRoleAbbreviations(t *testing.T) {
 	for _, c := range cases {
 		got := tui.RenderStatusLine(th, "huihui3.8", "", c.role, "", 41200, 262144, true, 214000, 3200, 187000)
 		rows := strings.Split(got, "\n")
-		want := th.Paint("dim", c.want) + th.Paint("dim", " · ") + th.Paint("dim", "auto")
+		want := th.Paint("dim", c.want) + th.Paint("dim", " · ") + th.Paint("warn", "auto")
 		if len(rows) != 3 || rows[1] != want {
 			t.Errorf("role %q: the stance row must be %q:\n%q", c.role, want, rows[1])
 		}
@@ -192,7 +192,7 @@ func TestStatusLineEffortColorsAndFallback(t *testing.T) {
 	}
 	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000)
 	rows := strings.Split(got, "\n")
-	if len(rows) != 3 || rows[1] != th.Paint("dim", "default")+th.Paint("dim", " · ")+th.Paint("dim", "auto") {
+	if len(rows) != 3 || rows[1] != th.Paint("dim", "default")+th.Paint("dim", " · ")+th.Paint("warn", "auto") {
 		t.Fatalf("an empty effort must drop the segment from the stance row:\n%q", got)
 	}
 }

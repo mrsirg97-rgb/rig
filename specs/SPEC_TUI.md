@@ -629,8 +629,11 @@ The model's text renders with inline markdown decorated for the human,
 on the committed-line path — per closed line, when it commits — without
 buffering: the streaming and the scrollback-native design are not
 renegotiated. The subset, exactly: `**bold**` (the text color, SGR
-bold: a derived pseudo-slot, not a palette entry), `*em*`/`_em_` (dim),
-`` `code` `` (ember), `# `..`### ` headings (accent, marks dropped),
+bold: a derived pseudo-slot, not a palette entry), `*em*`/`_em_` and
+`` `code` `` (marks dropped, the text color — amended 2026-08-23, the
+operator's call: no colored inline text in a response; the coloring
+read inconsistent and plain reads better), `# `..`### ` headings
+(accent, marks dropped),
 `- `/`* `/`N. ` list items (the dot glyph for the bullet; the number
 kept, dim), `> ` quotes (dim, the bar glyph), and fenced code: a line
 that is ``` toggles a code mode — lines inside commit preformatted

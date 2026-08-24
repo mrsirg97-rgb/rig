@@ -72,7 +72,7 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, wi
 	if approveMode == "manual" {
 		row2 += t.Paint(SlotWarn, "manual")
 	} else {
-		row2 += t.Paint(SlotDim, "auto")
+		row2 += t.Paint(SlotWarn, "auto")
 	}
 	hit := 0
 	if up > 0 {
