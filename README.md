@@ -9,7 +9,7 @@ work bounded. Not a framework: a harness for one job, built closed.
 leaf dependency is `modernc.org/sqlite` (pure-Go driver) for the stores —
 justified in `specs/SPEC_STATE.md`.
 
-Status: feature-complete runtime, version `0.16.0`. The freeze
+Status: feature-complete runtime, version `0.17.0`. The freeze
 discipline holds on `core/` and `loop/`; the 1.0 tag waits for lived
 use (a worker soak, the TUI field-tested as the daily driver).
 
@@ -93,7 +93,7 @@ tool/           Tool implementations: bash(1); file read/write/edit; fs
                 ls/find/grep; todo the job queue; rem memory; scheduler
                 background jobs; delegate the one-shot worker; python the
                 persistent IPython kernel; web search and fetch; diff the
-                observation diff
+                observation diff; sessions the soak's vitals
 frontend/       Frontend implementations: cli (the piped reference), tui (the
                 terminal default), oneshot (-p worker), web (the serve
                 dashboard)

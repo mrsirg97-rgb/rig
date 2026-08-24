@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ type sessionsCmd struct{}
 func (sessionsCmd) Sub() []Sub {
 	return []Sub{
 		{Name: "list", Desc: "show the sessions"},
+		{Name: "summary", Desc: "show the soak's vitals over the recent sessions"},
 		{Name: "show", Desc: "show a session's transcript: show <id>"},
 		{Name: "resume", Desc: "resume a session: resume <id>"},
 	}
@@ -23,7 +25,7 @@ func (sessionsCmd) Sub() []Sub {
 func (sessionsCmd) Name() string { return "sessions" }
 
 func (sessionsCmd) Description() string {
-	return "list, show, or resume the workspace sessions"
+	return "list, summarize, show, or resume the workspace sessions"
 }
 
 func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error) {
@@ -45,6 +47,20 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 			return "sessions: none", nil
 		}
 		return renderList(rows), nil
+	case len(fields) == 1 && fields[0] == "summary":
+		if e.Tools == nil {
+			return "", errors.New("sessions: no tools seam (the root did not wire one)")
+		}
+		tool, ok := e.Tools["sessions"]
+		if !ok {
+			return "", errors.New("sessions: no sessions tool (the root did not put it in Env.Tools)")
+		}
+		if e.Session != nil {
+			if s := e.Session(); s != nil {
+				ctx = core.WithSession(ctx, s)
+			}
+		}
+		return tool.Exec(ctx, json.RawMessage(`{"action":"summary"}`))
 	case fields[0] == "show" && len(fields) == 2:
 		if e.SessionShow == nil {
 			return "", errors.New("sessions: no sessions seam (the root did not wire one)")
@@ -77,6 +93,8 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 		return fmt.Sprintf("sessions: resumed %s (%d messages)", fields[1], n), nil
 	}
 	switch {
+	case len(fields) > 0 && fields[0] == "summary":
+		return "", errors.New("sessions: summary takes no args (sessions summary)")
 	case len(fields) > 0 && fields[0] == "show":
 		if len(fields) == 1 {
 			return "", errors.New("sessions: show needs an id (sessions show <id>)")
@@ -88,7 +106,7 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 		}
 		return "", errors.New("sessions: resume takes one id")
 	default:
-		return "", errors.New("sessions: usage: sessions [list|show|resume <id>]")
+		return "", errors.New("sessions: usage: sessions [list|summary|show|resume <id>]")
 	}
 }
 

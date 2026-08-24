@@ -60,7 +60,7 @@ command/              NEW leaf package (stdlib + core + models, nothing else)
   commands.go         the standard set: All()
   compact.go          compact
   new.go              new
-  sessions.go         sessions (list / show / resume) + the plain render
+  sessions.go         sessions (list / summary / show / resume) + the plain render
   models.go           models (list / switch)
   steer.go            steer
   rem.go              rem (list / show / forget)
@@ -231,7 +231,8 @@ root — not `*rig.Kernel`.
 
 What the commands need, and where each comes from: the live session
 (thread it onto the tool `Exec` ctx, as the loop does), the state store's
-read side (sessions list/show/resume), the models table plus the active
+read side (sessions list/show/resume), the tool seam (sessions summary),
+the models table plus the active
 row plus the switch, the policy's Compact seam, the steering slot and
 handle. The Kernel carries five of those as fields (provider, frontend,
 policy, tools, session) and none of the rest — the store, the recorder,
@@ -385,10 +386,11 @@ The output contract:
 - a refused close (store fault) is loud and the swap does not happen:
   the current session continues (`new: <error>`).
 
-### 5. `sessions`: list, show, resume — over the rows that exist
+### 5. `sessions`: list, summary, show, resume — over the rows that exist
 
-All three read the workspace state store (the file is already
-workspace-keyed by cwd, SPEC_STATE's paths — no cwd filter needed).
+`list`, `show`, and `resume` read the workspace state store directly (the
+file is already workspace-keyed by cwd, SPEC_STATE's paths — no cwd filter
+needed); `summary` reads it through the `sessions` tool (SPEC_STATE).
 
 **`sessions`** — the list, newest first, capped at 50 (a glance, not an
 archive; `show` is the deep read). One plain line per row, the current
@@ -411,6 +413,18 @@ transcript machinery, not prompts). One `ListSessions` read in
 `store/state` (the layout's owed line): the rows plus that count as a
 scalar subquery, `ORDER BY started_at DESC LIMIT 50`. No rows:
 `sessions: none`.
+
+**`sessions summary`** — the soak's vitals over the recent sessions: the
+command calls the `sessions` tool (SPEC_STATE) with `{"action":"summary"}`
+and passes the reply through verbatim (the tool owns the shape: the
+session and turn counts, the models with their versions, the fault count
+with the latest fault's first line, the aggregate cache ratio). This
+workspace at the default `n` — the verb takes no args, so the operator's
+glance is this project's soak. Refusals, named: `sessions summary extra`
+→ `sessions: summary takes no args (sessions summary)`; no tools seam →
+`sessions: no tools seam (the root did not wire one)`; a tools seam that
+lacks the sessions tool → `sessions: no sessions tool (the root did not
+put it in Env.Tools)`.
 
 **`sessions show <id>`** — the transcript projection (the same
 `state.Resume` function `-resume` uses — one projection, one truth)
@@ -463,10 +477,10 @@ next — adoption is idempotent, named.
 Output: `sessions: resumed <id> (<N> messages)`, N the projection's
 message count.
 
-Usage: `sessions <other>` → `sessions: usage: sessions [list|show|resume
+Usage: `sessions <other>` → `sessions: usage: sessions [list|summary|show|resume
 <id>]`. `list` is the bare command's read under a name — the verb the
-TUI's menu (10) accepts — and the `Sub()` hints are `list`, `show`,
-`resume`, one-lined, so `/sessions` opens the same selectable, scrollable
+TUI's menu (10) accepts — and the `Sub()` hints are `list`, `summary`,
+`show`, `resume`, one-lined, so `/sessions` opens the same selectable, scrollable
 verb menu as `todo` and `scheduler` (SPEC_TUI 9).
 
 ### 6. `models`: the table, and the switch that takes effect next turn

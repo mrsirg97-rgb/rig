@@ -48,11 +48,12 @@ import (
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 	remapi "github.com/mrsirg97-rgb/rig/tool/rem"
 	schedapi "github.com/mrsirg97-rgb/rig/tool/scheduler"
+	sessionstool "github.com/mrsirg97-rgb/rig/tool/sessions"
 	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.16.1"
+const Version = "0.17.0"
 
 type root struct {
 	pluginMax int
@@ -273,7 +274,7 @@ func (r *root) newSession(ctx context.Context) (string, error) {
 }
 
 func (r *root) sessionList(ctx context.Context) ([]command.SessionRow, error) {
-	rows, err := state.ListSessions(ctx, r.sdb)
+	rows, err := state.ListSessions(ctx, r.sdb, state.ListCap)
 	if err != nil {
 		return nil, fmt.Errorf("sessions: %v", err)
 	}
@@ -533,7 +534,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
 
 func rigHome() (string, error) {
 	if v := os.Getenv("RIG_HOME"); v != "" {
@@ -941,7 +942,7 @@ func main() {
 			}),
 			"python": py, "web_search": webSearch, "web_fetch": webFetch,
 
-			"diff": diff.New(sdb),
+			"diff": diff.New(sdb), "sessions": sessionstool.New(cfgDir, cwd),
 		},
 		pluginTools: pluginTools,
 		py:          py,

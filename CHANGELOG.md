@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.17.0] — the soak's vitals
+
+- **sessions, the soak's vitals** (`specs/SPEC_STATE.md` and
+  `specs/SPEC_COMMANDS.md`, amended): a read-only native tool (the
+  eighteenth) over the session store — `list` is the recent sessions
+  (id, started, model, version, turns, faults; newest first), `summary`
+  the vitals over the same slice (session and turn counts, the models
+  with their versions, the fault count with the latest fault's first
+  line, the aggregate cache ratio). The store gains the typed fault read
+  (`SessionFaults`); `ListSessions` takes a named limit (`ListCap` the
+  default and the maximum) and `SessionRow` carries the model, the
+  version, and the fault count. `project` names another workspace (the
+  state file is cwd-keyed, one per workspace — a subdirectory or a
+  second worktree reads its own file); `n` caps the slice at 1..50.
+  The operator gets `sessions summary` (this workspace, the tool's
+  reply verbatim). Read-only: absent from the root's `mutatingNatives`
+  (it never pauses at the gate) and from the concurrent read set (it
+  opens a store, like todo/rem/scheduler, so it is not a pure
+  observation).
+
+
 ## [0.16.1] — the kernel knows where it is
 
 - **the python kernel is born in the session's working directory**: it
@@ -14,17 +35,6 @@
 
 
 ## [0.16.0] — every row a project
-
-- **no colored inline text in a response** (`specs/SPEC_TUI.md` 11,
-  amended): `*em*` and `` `code` `` render in the text color, marks
-  dropped — bold keeps its weight, headings their accent, lists and
-  quotes their furniture. The operator's call: the coloring read
-  inconsistent, plain reads better. And the status row paints `auto`
-  in the warn color beside `manual` — the permissive mode is the one
-  worth a glance.
-
-
-## [Unreleased] — the queue is the project
 
 - **rem, the deliberate project** (`specs/SPEC_STATE.md` and
   `specs/SPEC_COMMANDS.md`, amended): learn/reflect/recall/prune gain an
@@ -66,6 +76,14 @@
   and a no-op on the second open (the fold keys on the files existing).
   The dashboard's `/api/todo?cwd=` routes resolve through the same
   scope. Goldens regenerated (the schema grew `project`).
+- **no colored inline text in a response** (`specs/SPEC_TUI.md` 11,
+  amended): `*em*` and `` `code` `` render in the text color, marks
+  dropped — bold keeps its weight, headings their accent, lists and
+  quotes their furniture. The operator's call: the coloring read
+  inconsistent, plain reads better. And the status row paints `auto`
+  in the warn color beside `manual` — the permissive mode is the one
+  worth a glance.
+
 
 ## [0.15.1] — the binary updates itself
 

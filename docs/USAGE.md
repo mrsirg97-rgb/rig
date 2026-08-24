@@ -31,8 +31,9 @@ is a loud line naming the known set, never silently a prompt.
 - `/compact` — force a compaction now (the `⧉` line reports dropped/kept),
   or `compact: nothing to drop`.
 - `/new` — close the session row ok, mint a fresh session, same process.
-- `/sessions` — list; `show <id>` renders a transcript; `resume <id>` swaps
-  to it in-process.
+- `/sessions` — list; `summary` shows the soak's vitals over the recent
+  sessions (models, faults, the cache ratio); `show <id>` renders a
+  transcript; `resume <id>` swaps to it in-process.
 - `/models` — the per-model table with the active row marked; `/models <id>`
   switches for the next turn.
 - `/steer <text>` — queue for the next boundary (interrupts a live turn);

@@ -3,6 +3,7 @@ package state_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -66,7 +67,11 @@ func TestListSessionsCountsTurnsExcludingSummary(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	rows, err := state.ListSessions(ctx, db)
+	if _, e := state.RecordFault(ctx, db, "b", time.Now(), "provider: the stream died\nsecond line"); e != nil {
+		t.Fatal(e)
+	}
+
+	rows, err := state.ListSessions(ctx, db, 50)
 	if err != nil {
 		t.Fatalf("ListSessions: %v", err)
 	}
@@ -90,6 +95,36 @@ func TestListSessionsCountsTurnsExcludingSummary(t *testing.T) {
 	if rows[0].Exit != "open" {
 		t.Fatalf("the unclosed row must render as open, got %q", rows[0].Exit)
 	}
+	if rows[1].Model != "m" || rows[1].Version != "v" {
+		t.Fatalf("the row must carry the session's model and version, got %q %q", rows[1].Model, rows[1].Version)
+	}
+	if rows[1].Faults != 1 {
+		t.Fatalf("faults = %d, want 1 (the recorded fault)", rows[1].Faults)
+	}
+	if rows[0].Faults != 0 || rows[2].Faults != 0 {
+		t.Fatalf("faultless sessions must count 0, got %d %d", rows[0].Faults, rows[2].Faults)
+	}
+}
+
+func TestListSessionsHonorsN(t *testing.T) {
+	db := openStore(t)
+	ctx := context.Background()
+	for i := 0; i < 10; i++ {
+		if e := state.RecordSession(ctx, db, fmt.Sprintf("s%02d", i), "/w", "m", "v"); e != nil {
+			t.Fatal(e)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	rows, err := state.ListSessions(ctx, db, 3)
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("n must cap the list, got %d rows, want 3", len(rows))
+	}
+	if rows[0].ID != "s09" || rows[1].ID != "s08" || rows[2].ID != "s07" {
+		t.Fatalf("the cap keeps the newest first, got %v %v %v", rows[0].ID, rows[1].ID, rows[2].ID)
+	}
 }
 
 func TestListSessionsCapped(t *testing.T) {
@@ -101,7 +136,7 @@ func TestListSessionsCapped(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	rows, err := state.ListSessions(ctx, db)
+	rows, err := state.ListSessions(ctx, db, 50)
 	if err != nil {
 		t.Fatalf("ListSessions: %v", err)
 	}

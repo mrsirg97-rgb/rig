@@ -48,7 +48,7 @@ func TestListSessionsCarriesCwd(t *testing.T) {
 	if err := state.RecordSession(ctx, db, "s1", "/workspace/alpha", "m", "v"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := state.ListSessions(ctx, db)
+	rows, err := state.ListSessions(ctx, db, 50)
 	if err != nil {
 		t.Fatal(err)
 	}

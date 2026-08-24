@@ -29,7 +29,7 @@ func TestStorePathRoundTrip(t *testing.T) {
 	if err := state.RecordSession(ctx, db, "s1", cwd, "m", "v"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := state.ListSessions(ctx, db)
+	rows, err := state.ListSessions(ctx, db, state.ListCap)
 	if err != nil {
 		t.Fatal(err)
 	}
