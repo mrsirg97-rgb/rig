@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>rig: a minimal agentic loop harness</title>
-<meta name="description" content="A minimalist agentic harness, built closed. Stdlib-only core, eleven native tools, one-file python plugins, the walls named. Install rig in one line.">
+<meta name="description" content="A minimalist agentic harness. A frozen 169-line loop behind five seams, parallel tool calls on an event loop, named walls, deliberate memory, one self-updating binary. Install in one line.">
 <meta name="theme-color" content="#050505">
 <meta property="og:title" content="rig: a minimal agentic loop harness">
 <meta property="og:description" content="A minimalist agentic harness, built closed. Install in one line; extend with one file.">
@@ -99,19 +99,27 @@ a:hover { text-decoration: underline; }
 .cmd { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1rem; padding-left: 0; text-indent: 0; }
 .cmd .cmdtext { flex: 1 1 20ch; min-width: 0; padding-left: 2.2ch; text-indent: -2.2ch; overflow-wrap: anywhere; }
 .copy {
-  font: inherit; font-size: 11px;
+  display: inline-flex; align-items: center; justify-content: center;
   color: var(--dim);
   background: none;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: .05rem .6rem;
+  border: none;
+  border-radius: 4px;
+  padding: .15rem .35rem;
   margin-left: auto;
   cursor: pointer;
-  white-space: nowrap;
-  line-height: 1.6;
+  line-height: 1;
 }
-.copy:hover { color: var(--text); border-color: var(--dim); }
-.copy.done { color: var(--ok); border-color: var(--ok); }
+.copy svg { width: 15px; height: 15px; display: block; }
+.copy .ck { display: none; font-size: 13px; line-height: 1; }
+.copy:hover { color: var(--text); background: rgba(255,255,255,.05); }
+.copy.done { color: var(--ok); }
+.copy.done svg { display: none; }
+.copy.done .ck { display: block; }
+.li { color: var(--text); padding-left: 2.2ch; text-indent: -2.2ch; max-width: 76ch; }
+.li .lg { color: var(--dim); }
+.sect { color: var(--faint); letter-spacing: .08em; padding-left: 0; text-indent: 0; }
+.sect b { color: var(--ember); font-weight: normal; }
+.note { color: var(--dim); padding-left: 4ch; text-indent: -2ch; max-width: 72ch; }
 .py { color: var(--text); }
 .py .k { color: var(--accent); }
 .py .s { color: var(--ok); }
@@ -128,11 +136,13 @@ html.js .reveal.in { opacity: 1; transform: none; }
 @media (max-width: 600px) {
   .frame { padding: 1.4rem .6rem 2rem; }
   .tr { padding: .95rem .8rem 1.1rem; font-size: 12.5px; line-height: 1.65; }
-  .logo { font-size: 15px; }
+  .logo { font-size: 13px; }
+  .sect { font-size: 11px; overflow: hidden; white-space: nowrap; }
   .term { border-radius: 6px; }
   .tbar { padding: .45rem .8rem; }
-  .cmd .copy { flex: 0 0 auto; margin-left: 2.2ch; min-height: 30px; padding: .15rem .8rem; }
-  .cmd .cmdtext { flex-basis: 100%; }
+  .cmd .copy { flex: 0 0 auto; min-height: 40px; min-width: 40px; }
+  .li { max-width: none; }
+  .note { max-width: none; }
   .tl { grid-template-columns: 1fr; row-gap: 0; }
   .tl .td { padding-left: 2.2ch; margin-bottom: .25rem; }
   .msg { max-width: none; }
@@ -186,8 +196,17 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="tname-done">web_search</span>   <span class="ok">✓</span>   <span class="dim">0.6s</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">rig is a minimalist agentic harness. one job: the turn. assemble context,
-    run the tools, feed the result back, repeat.</div>
+    <div class="msg reveal">rig is a minimalist agentic harness. one job: the turn — assemble context,
+    run the tools, feed the results back, repeat. what makes it not another framework:</div>
+    <div class="gap sm reveal"></div>
+    <div class="ln li reveal"><span class="lg">•</span> the loop is 169 lines and frozen. growth happens behind five seams — provider, frontend, tools, middleware, policy — never in the loop. a gate in the test suite refuses a diff that touches it.</div>
+    <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel on an event loop: goroutines post completions, one consumer applies them in call order. no locks, no races, the transcript stays ordered.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the walls are named. an allowlist, a retry guard, an approval gate, result bounds, a plugin landing zone, a bwrap jail for background workers — and every refusal says why, so the model adjusts instead of flailing.</div>
+    <div class="ln li reveal"><span class="lg">•</span> memory is deliberate. nothing writes itself into your prompt; the model recalls, learns, and supersedes by id. tasks, memory, and schedule are scoped to the repo — worktrees share one plan.</div>
+    <div class="ln li reveal"><span class="lg">•</span> every behavior is a sentence in specs/ with a test pinning it; the wire is byte-pinned against golden request bodies. specs first, then failing tests, then code.</div>
+    <div class="ln li reveal"><span class="lg">•</span> one static binary, stdlib-only core. a TUI, a piped CLI, a phone-sized dashboard. rig -update replaces it in place.</div>
+    <div class="gap sm reveal"></div>
+    <div class="msg reveal dim">the models that run in rig work on rig. most of what you just read was built that way.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t1</span></div>
@@ -199,7 +218,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span></span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command">copy</button></div>
+    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span></span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
     <div class="ln out reveal">  rig {{RIG_VERSION}}</div>
     <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.9s</span></div>
 
@@ -216,30 +235,47 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="msg reveal">point it at any OpenAI-compatible endpoint: a local box, a gateway, or a hosted API.</div>
 
     <div class="gap reveal"></div>
-    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ rig --base-url $ENDPOINT --model $NAME</span></span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command">copy</button></div>
+    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ rig --base-url $ENDPOINT --model $NAME</span></span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
     <div class="ln out reveal">  rig {{RIG_VERSION}} ready</div>
     <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">flags are per-run. the durable config lives in ~/.rig: models.json carries
-    each model's window and reserves, settings.json names the default. precedence
-    is flag, env, file, then embedded.</div>
+    <div class="ln sect reveal">── <b>config</b> ─────────────────────────────</div>
+    <div class="gap sm reveal"></div>
+    <div class="msg reveal">two files under ~/.rig, both optional — rig runs on its embedded defaults
+    until you say otherwise. precedence is flag, env, file, then embedded.</div>
+    <div class="gap sm reveal"></div>
+    <div class="msg reveal"><span class="tname">models.json</span> — the model table, merged by id over the embedded rows.
+    a row is the model's contract: the context window, the output cap, the compaction
+    reserve, what survives a compaction, and the effort vocabulary the /effort dial offers.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">write</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/models.json</span></div>
     <div class="ln py reveal">  [</div>
-    <div class="ln py reveal">    {"id": <span class="s">"big-ctx"</span>, "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 65536, "role": <span class="s">"interactive"</span>}</div>
+    <div class="ln py reveal">    {"id": <span class="s">"big-ctx"</span>, "window": 262144, "maxTokens": 16384,</div>
+    <div class="ln py reveal">     "reserve": 16384, "keepRecent": 65536,</div>
+    <div class="ln py reveal">     "role": <span class="s">"interactive"</span>, "efforts": [<span class="s">"low"</span>, <span class="s">"medium"</span>, <span class="s">"high"</span>, <span class="s">"xhigh"</span>]}</div>
     <div class="ln py reveal">  ]</div>
     <div class="ln out reveal">  models.json written: big-ctx added, embedded rows kept</div>
     <div class="ln reveal"><span class="tname-done">write</span>   <span class="ok">✓</span>   <span class="dim">0.4s</span></div>
 
+    <div class="gap sm reveal"></div>
+    <div class="msg reveal"><span class="tname">settings.json</span> — the harness. the endpoint, the default model, and the walls:
+    which tools are allowed, whether mutations pause for you, how many identical
+    failures before the guard steps in.</div>
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">edit</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/settings.json</span></div>
     <div class="ln py reveal">  {</div>
     <div class="ln py reveal">    <span class="s">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,</div>
-    <div class="ln py reveal">    <span class="s">"model"</span>: <span class="s">"big-ctx"</span></div>
+    <div class="ln py reveal">    <span class="s">"model"</span>: <span class="s">"big-ctx"</span>,</div>
+    <div class="ln py reveal">    <span class="s">"approve"</span>: <span class="s">"auto"</span>,</div>
+    <div class="ln py reveal">    <span class="s">"allow"</span>: [<span class="s">"bash"</span>, <span class="s">"read"</span>, <span class="s">"write"</span>, <span class="s">"edit"</span>, <span class="s">"..."</span>],</div>
+    <div class="ln py reveal">    <span class="s">"retries"</span>: 3,</div>
+    <div class="ln py reveal">    <span class="s">"sandbox"</span>: <span class="s">"jailed"</span></div>
     <div class="ln py reveal">  }</div>
-    <div class="ln out reveal">  settings.json: endpoint + default model</div>
+    <div class="ln out reveal">  settings.json: the endpoint, the default, the walls</div>
+    <div class="ln note reveal">  approve "manual" pauses every mutation for you; allow is the tool set;</div>
+    <div class="ln note reveal">  retries bounds identical failing calls; the jail is bwrap, workers only.</div>
     <div class="ln reveal"><span class="tname-done">edit</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
 
     <div class="gap reveal"></div>
@@ -252,7 +288,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">eleven native tools ship in the box.</div>
+    <div class="msg reveal">seventeen native tools ship in the box, small schemas a local model can drive.</div>
     <div class="ln tl reveal"><span class="tn">bash</span><span class="td">real subprocesses; output surfaced and bounded</span></div>
     <div class="ln tl reveal"><span class="tn">file</span><span class="td">read · write · edit; edits drift-checked against what you read</span></div>
     <div class="ln tl reveal"><span class="tn">fs</span><span class="td">ls · find · grep; small schemas a local model can reach</span></div>
@@ -260,10 +296,11 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln tl reveal"><span class="tn">python</span><span class="td">a persistent IPython kernel; state persists across calls</span></div>
     <div class="ln tl reveal"><span class="tn">web</span><span class="td">search and fetch; the fetch carries the SSRF guard</span></div>
     <div class="ln tl reveal"><span class="tn">todo</span><span class="td">the task queue; event-sourced, DAG-validated at create</span></div>
-    <div class="ln tl reveal"><span class="tn">rem</span><span class="td">memory; recall by intent, consolidation arithmetic</span></div>
+    <div class="ln tl reveal"><span class="tn">rem</span><span class="td">memory, deliberate; recall by intent, supersede by id, scoped to the repo</span></div>
     <div class="ln tl reveal"><span class="tn">scheduler</span><span class="td">background jobs on cron; the worker runs in a bwrap jail</span></div>
     <div class="ln tl reveal"><span class="tn">delegate</span><span class="td">one-shot worker; run a task on a fresh session, get back its last message</span></div>
-    <div class="ln tl reveal"><span class="tn">plugins_reload</span><span class="td">re-discover from disk; the swap takes effect next turn</span></div>
+    <div class="ln tl reveal"><span class="tn">plugin</span><span class="td">run a plugin, or read its contract; the hot path never pauses</span></div>
+    <div class="ln tl reveal"><span class="tn">plugins</span><span class="td">the ecosystem: list · create · delete · reload; a new plugin lands untrusted in the pending zone until you approve it</span></div>
 
     <div class="gap reveal"></div>
     <div class="msg reveal">the python kernel is persistent. define a value in one call, use it in the next.</div>
@@ -313,7 +350,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">all five done. rig {{RIG_VERSION}} is installed and pointed at your endpoint. you're in.</div>
+    <div class="msg reveal">all five done. rig {{RIG_VERSION}} is installed, configured, and pointed at your endpoint. from here it updates itself: rig -update. you're in.</div>
 
     <div class="gap reveal"></div>
     <div class="ln in reveal"><span class="ps">❯</span>  <span class="cursor" aria-hidden="true"></span></div>
@@ -346,21 +383,21 @@ html.js .reveal.in { opacity: 1; transform: none; }
       btn.addEventListener("click", function () {
         var text = btn.getAttribute("data-cmd");
         if (!text) { return; }
-        function done(label) {
-          btn.textContent = label;
+        function done() {
           btn.classList.add("done");
-          setTimeout(function () { btn.textContent = "copy"; btn.classList.remove("done"); }, 1600);
+          setTimeout(function () { btn.classList.remove("done"); }, 1600);
         }
         function fallback() {
+          var row = btn.parentNode.querySelector(".cmdtext");
           var r = document.createRange();
-          r.selectNodeContents(btn);
+          r.selectNodeContents(row || btn.parentNode);
           var s = window.getSelection();
           s.removeAllRanges();
           s.addRange(r);
-          done("selected");
+          done();
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () { done("copied \u2713"); }, fallback);
+          navigator.clipboard.writeText(text).then(done, fallback);
         } else { fallback(); }
       });
     })(btns[b]);
