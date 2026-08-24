@@ -7,11 +7,17 @@ with loud, specific failure messages; provenance from the threaded
 session makes edit-after-external-change fail loudly instead of
 clobbering. Read gains `offset`/`limit` line arguments (SPEC_HARDENING
 decision 9): a narrower read exists to reach for when a capped result's
-"re-read a narrower range" is the teaching.
+"re-read a narrower range" is the teaching. A read that finds a stale
+observation (SPEC_CORE: "a read that finds a stale observation names it")
+prepends `[changed since your observation]` before the content, so the
+model is told its prior read is stale before it acts on it.
 
 ## What it includes
 
 - `read`, `write`, `edit` — a `core.Tool` each, over `os`/`path/filepath`.
+- The stale-observation note on read: compared against the recorded
+  `FileState` *before* the read re-records it, so an external or
+  cross-session change is named once and the fresh bytes still ride it.
 - read's `offset`/`limit`: select a 0-based line range; `offset` past the
   end and a negative `offset`/`limit` refuse loud, naming the line count.
 - `normalizePath` — canonicalizes at the boundary so `a.go` and `./a.go`

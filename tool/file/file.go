@@ -139,6 +139,13 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
 	}
+	stale := false
+	if recorded, seen := stateOf(ctx, a.Path); seen {
+		sum := sha256.Sum256(fileData)
+		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
+			stale = true
+		}
+	}
 	recordState(ctx, a.Path, fileData)
 	rememberContent(a.Path, string(fileData))
 	lines := strings.Split(string(fileData), "\n")
@@ -155,6 +162,9 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	content := strings.Join(lines[offset:end], "\n")
 	if len(content) > readCap {
 		content = content[:readCap] + "\n[output truncated]"
+	}
+	if stale {
+		content = "[changed since your observation] " + a.Path + " — re-read before acting on it\n" + content
 	}
 	return content, nil
 }

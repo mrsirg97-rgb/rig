@@ -57,6 +57,52 @@ func TestReadRecordsProvenanceWhenThreaded(t *testing.T) {
 	}
 }
 
+func TestReadNotesStaleObservation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("first"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	session := core.NewSession()
+	ctx := core.WithSession(context.Background(), session)
+	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("second"), 0o644); err != nil { // external change, no session call
+		t.Fatal(err)
+	}
+	got, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(got, "changed since your observation") {
+		t.Fatalf("a stale observation must be named, got %q", got)
+	}
+	if !strings.Contains(got, "second") {
+		t.Fatalf("the fresh content must still ride the note, got %q", got)
+	}
+}
+
+func TestReadFreshObservationStaysQuiet(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("same"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	session := core.NewSession()
+	ctx := core.WithSession(context.Background(), session)
+	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	got, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(got, "changed since your observation") {
+		t.Fatalf("a fresh read must stay quiet, got %q", got)
+	}
+}
+
 func TestReadRefusesUnknownArg(t *testing.T) {
 	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": "/tmp/x", "extra": 1}))
 	if err == nil {
