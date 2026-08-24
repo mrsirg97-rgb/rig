@@ -79,16 +79,21 @@ Kept); `new` and `resume` reset it with the session.
 News is the latest run since the previous session in this cwd that failed
 or is the job's first successful completion, one dim line, read-only.
 
-## settings.theme
+## theme
 
-The `theme` key in settings.json is the TUI's (SPEC_TUI decision 7 calls
-it the config's key; the frozen config loader still refuses it as
-unknown). The root extracts it before the config load: if the user file
-carries the key, the root rewrites the file without it into a shadow dir
-alongside copies of the other config files and loads from there, so the
-config package sees exactly the keys it owns. The value must be a string
-(config's voice); the TUI's resolution validates it against the shipped
-names and names the known.
+Two files, one resolver (`tui.ResolveTheme`): `theme.json` in the rig
+home, and the `theme` string key in settings.json. The config package
+carries both raw (`Config.Theme` is the theme.json document;
+`Config.Settings.Theme` is the string) and the TUI owns the schemas:
+`theme.json` is `base` (required, one of the shipped names), `slots`
+(any of the eight slot names to a `#rrggbb`), and `glyphs`
+(`unicode` or `ascii`), unknown keys refused in the TUI's voice; the
+settings key must name a shipped palette (config's voice for a wrong
+type, the TUI's for an unknown name). Base resolution: the settings
+key, then theme.json's `base` (required when the file is present),
+then the shipped default (`oled`); the slots and glyphs come from
+theme.json alone. A malformed theme.json refuses at start, naming the
+file and the key.
 
 ## the key table
 

@@ -18,13 +18,15 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
                   │  ├─ seam: ContextPolicy ─► policy        (per-turn Assemble)
                   │  └─ seam: Provider      ─► provider/openai (stream out, events in)
                   └─ seam: Tool ─► ToolMiddleware chain
-                                   └─ toolset.Resolve → approve.Gate → perm.Plugins
-                                       → perm.Allowlist → guard.Bound
+                                   └─ toolset.Resolve → approve.Gate → paths
+                                       → perm.Plugins → perm.Allowlist
+                                       → guard.Bound → guard.Rounds → guard.Cap
                                        (first-listed = innermost)
                                         │
                                         ▼
-             tool/bash · tool/file · tool/fs · tool/todo · tool/rem · tool/scheduler
-             · tool/python · tool/web · tool/diff · plugins
+             tool/bash · tool/file · tool/fs · tool/todo · tool/rem
+             · tool/scheduler · tool/delegate · tool/python · tool/web
+             · tool/diff · plugins
 
  cmd/rig (composition root): wires every seam once at startup; flags and env only.
  store/state: the recorder wraps the Frontend — it sources its rows from the
@@ -68,6 +70,14 @@ Every turn exit inside the run emits `TurnEnd{Reason}` (`over`, `fault`,
 The loop fans out `TurnStart` to registered observers before the first
 Assemble, once per turn.
 
+Tool calls execute in batches (`specs/SPEC_EVT.md` 2a): a call the
+kernel's `Concurrent` predicate admits runs beside its admitted
+neighbours, bounded by the kernel's `Parallel` (default 8); any other
+call is a barrier in call order, and results are emitted and appended in
+the order the model asked. The root admits the pure reads (`read`,
+`ls`, `find`, `grep`, `web_search`, `web_fetch`, `diff`); everything
+with effects, a store, or the shared kernel stays sequential.
+
 Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 - **Fault/transport error** (provider fault, stream error, *and* a failing
@@ -90,20 +100,21 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 ### middleware composition
 
-The root's chain `WithMiddleware(toolset, approve, perm.Plugins,
-perm.Allowlist, guard.Bound)` composes **first-listed innermost**: the
-chain executes toolset first (the live table resolves a call), then the
-approve gate, then the two perm rules, and guard last. This is a deliberate
+The root's chain `WithMiddleware(toolset.Resolve, approve?, paths,
+perm.Plugins, perm.Allowlist, guard.Bound, guard.Rounds, guard.Cap)`
+composes **first-listed innermost**: the chain executes the live-table
+resolve first (it resolves a call), then the approve gate (when a
+frontend can ask), then the `~`-expansion boundary, then the two perm
+rules, and the bounds last. This is a deliberate
 inversion of the common `http.Handler` convention, chosen so that the listing
-order reads as the execution order (`[resolve, deny, bound]` = resolve runs
-first, bound outermost). It is what makes the spec's pairing workable — the
-bound must sit outside the denial to count it.
+order reads as the execution order. It is what makes the spec's pairing
+workable — the bound must sit outside the denial to count it.
 
-### guard semantics (`guard.Bound`)
+### guard semantics (`middleware/guard`)
 
 Per the spec, every tool call executes exactly once, always — the guard never
-retries silently. What it bounds is the *model's* re-issuance of a failing
-*tool*, aligned to pane's retry guard:
+retries silently. What `Bound` bounds is the *model's* re-issuance of a
+failing *tool*, aligned to pane's retry guard:
 
 - keyed by **tool name**, with the streak per args — the bound strikes
   identical retries only, and a corrected call (args differing from the
@@ -111,9 +122,18 @@ retries silently. What it bounds is the *model's* re-issuance of a failing
 - **cleared at the start of every turn** (the loop's `TurnStart` fan-out)
   and on success: the bound tracks streaks within a turn, not history;
 - the limit-th consecutive failure of a tool carries a note — the error is
-  above, read it and change the call, or stop calling the tool — appended to
-  the model-visible result, never replacing it;
+  above, read it and change the call, or stop calling the tool — appended
+  to the model-visible result, replacing it only when the result is blank;
 - the next re-issuance is refused without executing, naming the bound.
+
+Beside the bound, the same package carries two more
+(`specs/SPEC_HARDENING.md` 9): `Rounds`, the per-turn cap on tool calls
+(`settings.json` `rounds`, default 0 = no cap; the alternation the
+bound's per-args streak does not cap, and a runaway batch), and `Cap`,
+the wall that bounds every tool result before the transcript
+(`settings.json` `resultCap`, default 64 KiB; an oversized result
+truncates to head and tail with the loud `[TRUNCATED]` marker naming
+the full size, and every tool's own cap stays).
 
 Denials are attributed (refusal string plus error) so they are countable; that
 attribution is what makes the spec's two sentences — refusal fed back to the
@@ -123,7 +143,10 @@ model, repetition bounded — simultaneously true.
 
 The session is an in-memory transcript with a minted, stable id; its
 persistence is the state store (`specs/SPEC_STATE.md`), SQLite under the
-config dir, WAL and a corruption quarantine. The **recorder** is a Frontend
+rig home, WAL and a corruption quarantine. The todo and rem stores are
+single SQLite files whose rows carry a project scope — the repo's
+identity, shared by worktrees (`store/scope`) — and the scheduler store
+is one global file beside the crontab, the scheduling truth. The **recorder** is a Frontend
 wrapper (wired at the root, not the loop): it sources its rows from the loop's
 events — transcript, tool calls and their guarded results, usage with the
 cache fields, reasoning — appending per event in short transactions, so a
@@ -148,6 +171,8 @@ so `a.go` and `./a.go` are one key.
 | bash output      | 256 KiB, naming the truncation                                 |
 | bash lifecycle   | `WaitDelay` (background children can't hold the turn), process-group teardown on cancellation |
 | file read        | 1 MiB, naming the truncation                                    |
+| every tool result | `resultCap` (default 64 KiB): head and tail with the loud `[TRUNCATED]` marker naming the full size, before the transcript |
+| a turn's calls   | `rounds` (default 0 = no cap): the n+1th call is refused without executing |
 
 ## extending
 
@@ -176,6 +201,10 @@ and the loop never names a concrete type.
    Optionally implement the assertion-checked capabilities: `TurnStart`
    (observe the turn boundary; the guard clears its counts here) and
    `Guidelines` (contribute system-prompt prose; the root collects it).
+7. **A plugin** — no Go at all: one python file under the rig home's
+   `plugins/`, one tool, discovered at startup and callable through the
+   `plugin` door; the operator installs it by approve. How:
+   `docs/PLUGINS.md`.
 
 ## constraints
 

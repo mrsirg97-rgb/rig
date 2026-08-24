@@ -5,10 +5,10 @@
 The event loop (SPEC_EVT): libevt's shape (`~/Projects/libtrdr`,
 `src/libevt`) made Go-centric. One consumer, many producers; work
 arrives as closures ordered by priority then arrival; the consumer
-executes one at a time outside the queue's lock. A leaf, stdlib only,
-consumed by nothing yet — SPEC_EVT phase 2 makes the turn loop its
-consumer (that reopens SPEC_CORE; this package does not touch `core/`
-or `loop/`).
+executes one at a time outside the queue's lock. A leaf, stdlib only;
+the turn loop is its consumer (SPEC_EVT phase 2): every step of a turn
+is a closure on the loop goroutine, and `loop` is the one package that
+imports this one.
 
 ## What it includes
 

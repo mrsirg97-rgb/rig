@@ -1,10 +1,12 @@
 # consolidation note
 
-Result of the per-package refactor pass (rig-*-refactor branches) and the
-post-refactor review of this codebase. Each package now carries its own
-`PACKAGE.md` — the package spec and gotchas, with the prose removed from
-the code. This note is the consolidation read: what streamlines, what
-does not, the system-prompt audit, and the runtime security audit.
+A point-in-time read: the result of the per-package refactor pass
+(rig-*-refactor branches) and the post-refactor review of this codebase.
+Each package now carries its own `PACKAGE.md` — the package spec and
+gotchas, with the prose removed from the code. This note is the
+consolidation read: what streamlines, what does not, the system-prompt
+audit, and the runtime security audit. Everything it lists as remaining
+(store/, tool/) has since been spec'd with its own `PACKAGE.md`.
 
 ## package map (where each spec lives)
 
@@ -21,7 +23,7 @@ does not, the system-prompt audit, and the runtime security audit.
 | policy | policy/PACKAGE.md | prompt assembly: the passthrough and the compact policy + overflow decorator. |
 | provider/openai | provider/openai/PACKAGE.md | the OpenAI-compatible SSE adapter, unix-socket dial included. |
 | plugins | plugins/PACKAGE.md | the python plugin surface: discovery, the tool seam, the reload. |
-| store/, tool/ | (not yet spec'd) | persistence and the toolset. Out of scope of this pass. |
+| store/, tool/ | their own PACKAGE.md files | persistence and the toolset. Out of scope of this pass; spec'd since. |
 
 ## streamlining read
 
