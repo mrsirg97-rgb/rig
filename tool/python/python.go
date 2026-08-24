@@ -37,7 +37,7 @@ const description = "run Python in a persistent IPython kernel: variables, impor
 
 const guidelines = "Guidelines: arithmetic, data shaping, parsing, bulk text -> compute here, never estimate; " +
 	"compute once, query it in later calls. Reply: stdout and the last expression's value; action vars " +
-	"lists the namespace, reset clears it."
+	"lists the namespace, reset clears it. The kernel is born in the session's working directory."
 
 const schemaJSON = `{
 	"type": "object",
@@ -83,6 +83,8 @@ func NewWith(python, host string) *Tool {
 }
 
 func (t *Tool) Host() string { return t.k.host }
+
+func (t *Tool) SetCwd(cwd string) { t.k.cwd = cwd }
 
 func (t *Tool) Name() string { return "python" }
 
@@ -148,6 +150,7 @@ func (t *Tool) Run(ctx context.Context, code string, timeoutMs int) (Reply, erro
 type kernel struct {
 	python string
 	host   string
+	cwd    string
 
 	queue chan struct{}
 
@@ -181,6 +184,7 @@ type proc struct {
 
 func (k *kernel) start() (*proc, error) {
 	cmd := exec.Command(k.python, k.host)
+	cmd.Dir = k.cwd
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = waitDelay

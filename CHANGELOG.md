@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+- **the python kernel is born in the session's working directory**: it
+  inherited the rig process's cwd, so a session started one directory
+  up ran kernel code whose relative paths silently pointed at the wrong
+  place — a model named it from inside. `SetCwd` on the tool, wired at
+  the root; the description says so.
+
+- **grep's glob names its rule**: the schema line reads "a path glob
+  (** spans directories; * does not cross /)" — `*.go` matching nothing
+  cost a model a call; find already advertised the rule, grep now does.
+
+
 ## [0.16.0] — every row a project
 
 - **no colored inline text in a response** (`specs/SPEC_TUI.md` 11,

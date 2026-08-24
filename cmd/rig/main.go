@@ -760,6 +760,7 @@ func main() {
 	if python := envOr("RIG_PYTHON", cfg.Settings.Python); python != "" {
 		py = pythontool.NewWith(python, pythontool.DefaultHost())
 	}
+	py.SetCwd(cwd)
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
 

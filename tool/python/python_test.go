@@ -562,3 +562,27 @@ func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) 
 		t.Fatalf("Host() = %q, want the explicit host", seam.Host())
 	}
 }
+
+func TestKernelIsBornInTheConfiguredCwd(t *testing.T) {
+	requireKernel(t)
+	dir := t.TempDir()
+	tool := New()
+	tool.SetCwd(dir)
+	defer tool.Close()
+	payload, _ := json.Marshal(map[string]any{"code": "import os; os.getcwd()"})
+	text, err := tool.Exec(context.Background(), payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, dir) {
+		t.Fatalf("the kernel must be born in the configured cwd %s, got:\n%s", dir, text)
+	}
+}
+
+func TestSetCwdSeam(t *testing.T) {
+	seam := New()
+	seam.SetCwd("/x/y")
+	if seam.k.cwd != "/x/y" {
+		t.Fatalf("cwd = %q", seam.k.cwd)
+	}
+}
