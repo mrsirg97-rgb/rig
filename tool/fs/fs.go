@@ -82,7 +82,7 @@ func Grep() core.Tool {
 	return &tool{
 		name:        "grep",
 		description: "search file lines under a root with a Go regexp. Guidelines: locating code by content, narrowed with glob; one file's whole text -> read. Reply: path:line: text, capped; no matches names the root searched.",
-		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Go regexp matched per line"},"root":{"type":"string","description":"root to search (default: the working directory)"},"glob":{"type":"string","description":"restrict matches to a path glob"}},"required":["pattern"]}`),
+		schema:      json.RawMessage(`{"type":"object","properties":{"pattern":{"type":"string","description":"Go regexp matched per line"},"root":{"type":"string","description":"root to search (default: the working directory)"},"glob":{"type":"string","description":"restrict matches to a path glob (** spans directories; * does not cross /)"}},"required":["pattern"]}`),
 		exec:        grepExec,
 	}
 }
