@@ -43,6 +43,10 @@ const schemaJSON = `{
 		"scope": {
 			"enum": ["project", "global", "all"]
 		},
+		"project": {
+			"type": "string",
+			"description": "The repo a fact belongs to when you did not start in it: a path, resolved through store/scope (worktree-safe; ~ expands at the boundary)"
+		},
 		"k": {
 			"type": "integer",
 			"minimum": 1,
@@ -78,8 +82,9 @@ const schemaJSON = `{
 const description = "memory across sessions: learn commits a fact or constraint (idempotent), recall finds past " +
 	"solutions by intent (project scope first, global fill), reflect stores a distilled memory with its source, " +
 	"prune removes, reduces, or consolidates. Guidelines: recall before re-deriving a project fact; learn " +
-	"deliberately what the next session should not re-derive; supersede by id when the code disagrees. Reply: " +
-	"the hits with their ids (mN) and strength, or the written row; copy ids, never invent; no query is a browse."
+	"deliberately what the next session should not re-derive; supersede by id when the code disagrees; name " +
+	"project when the fact belongs to a repo you did not start in. Reply: the hits with their ids (mN) and " +
+	"strength, or the written row; copy ids, never invent; no query is a browse."
 
 type adapter struct{ db store.DB }
 
@@ -99,6 +104,7 @@ type given struct {
 	Kind              *string  `json:"kind"`
 	Importance        *float64 `json:"importance"`
 	Scope             *string  `json:"scope"`
+	Project           *string  `json:"project"`
 	K                 *int     `json:"k"`
 	Verb              *string  `json:"verb"`
 	IDs               []any    `json:"ids"`
@@ -112,9 +118,18 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if err := json.Unmarshal(args, &g); err != nil {
 		return "", fmt.Errorf("rem: %v", err)
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("rem: %v", err)
+	cwd := ""
+	if g.Project != nil && *g.Project != "" {
+		cwd = *g.Project
+	} else {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("rem: %v", err)
+		}
+		cwd = wd
+	}
+	if g.Project != nil && *g.Project != "" && g.Scope != nil && *g.Scope == "global" {
+		return "", fmt.Errorf("rem: project + scope:global: a global memory has no project")
 	}
 	switch g.Action {
 	case "":

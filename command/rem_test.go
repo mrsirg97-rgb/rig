@@ -3,6 +3,7 @@ package command_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,10 @@ func recentISO() string {
 
 func remListEnv(rows []command.RemRow) *command.Env {
 	return &command.Env{
-		RemList: func(ctx context.Context) ([]command.RemRow, error) { return rows, nil },
+		RemList: func(ctx context.Context, project string) ([]command.RemRow, error) { return rows, nil },
+		RemLabel: func(ctx context.Context, project string) (string, error) {
+			return filepath.Base(project), nil
+		},
 	}
 }
 
@@ -104,7 +108,8 @@ func TestRemRefusalsByName(t *testing.T) {
 		{"forget", "rem: forget needs an id (rem forget <id>)"},
 		{"forget 99", "rem: no such memory: 99"},
 		{"show abc", "rem: the id must be a memory id (m<N> or <N>)"},
-		{"frob", "rem: usage: rem [list|show|forget <id>]"},
+		{"project", "rem: project takes a path (rem project <path>)"},
+		{"frob", "rem: usage: rem [list|show|forget <id>|project <path>]"},
 	}
 	for _, c := range cases {
 		_, err := byName["rem"].Run(context.Background(), c.args, env)
@@ -121,7 +126,7 @@ func TestRemSubHints(t *testing.T) {
 		t.Fatal("rem must carry Sub hints (the TUI's menu door)")
 	}
 	subs := subber.Sub()
-	want := []string{"list", "show", "forget"}
+	want := []string{"list", "show", "forget", "project"}
 	if len(subs) != len(want) {
 		t.Fatalf("Sub() = %d hints, want %d", len(subs), len(want))
 	}
@@ -132,5 +137,40 @@ func TestRemSubHints(t *testing.T) {
 		if s.Desc == "" {
 			t.Fatalf("Sub() %d (%s) must carry a one-liner", i, s.Name)
 		}
+	}
+}
+
+func TestRemProjectRendersAndNames(t *testing.T) {
+	byName := allByName(t)
+	env := remListEnv([]command.RemRow{
+		{ID: 1, Kind: "fact", CreatedAt: recentISO(), Strength: 0.5, Content: "project note", ScopeLabel: "rig"},
+		{ID: 2, Kind: "fact", CreatedAt: recentISO(), Strength: 0.5, Content: "global note", ScopeLabel: "global"},
+	})
+	var seen string
+	orig := env.RemList
+	env.RemList = func(ctx context.Context, project string) ([]command.RemRow, error) {
+		seen = project
+		return orig(ctx, "")
+	}
+	out, err := byName["rem"].Run(context.Background(), "project /a/b/rig", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seen != "/a/b/rig" {
+		t.Fatalf("the project path must ride to the list closure, got %q", seen)
+	}
+	if !strings.Contains(out, "project note") || !strings.Contains(out, "global note") {
+		t.Fatalf("rem project must render that project's memories in list shape:\n%s", out)
+	}
+	if strings.Contains(out, "m1") && !strings.Contains(out, "m1 · fact") {
+		t.Fatalf("the shape is rem list's (m<id> · kind · age · strength):\n%s", out)
+	}
+	empty := remListEnv(nil)
+	out, err = byName["rem"].Run(context.Background(), "project /a/b/rig", empty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "rem: no memories in rig" {
+		t.Fatalf("an empty project must name it, got %q", out)
 	}
 }

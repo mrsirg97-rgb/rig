@@ -283,6 +283,20 @@ falling back to the cwd hash outside a repo.
   is context, not memory (SPEC_COMPACT 6, cut) — and nothing is read into
   the prompt by a session start (the root's remembered segment, cut; the
   system prompt names the rule).
+- **The project a fact belongs to is a choice, not an accident of where
+  rig started.** The model says the project the way it already says
+  scope: `project` is a path on learn/reflect/recall/prune, resolved
+  through `store/scope` and replacing the session cwd in
+  `writeScope`/`readScopes` for that call (worktree-safe; `~` expands at
+  the `middleware/paths` boundary). The why is the failure it fixes: a
+  session in `~/Projects` learning about `~/Projects/rig` files facts
+  into a scope nobody recalls from inside the repo — the directory rig
+  happened to start in, not the repo the fact describes. `project` +
+  `scope: global` refuses by name (a global memory has no project), and
+  the label stays the resolved path's base name. The description carries
+  one Guidelines clause: name `project` when the fact belongs to a repo
+  you did not start in (mind the menu-budget case — the clause is short
+  by design).
 - **Scope is a repo identity, not a cwd.** scope = the absolute git common
   dir of the cwd (`git rev-parse --git-common-dir`, resolved against the
   cwd when git prints it relative; an echoed option or an empty line is

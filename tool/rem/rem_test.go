@@ -3,14 +3,18 @@ package rem_test
 import (
 	"context"
 	"encoding/json"
+	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/store"
 	remdd "github.com/mrsirg97-rgb/rig/store/rem/ddl"
 	remmeta "github.com/mrsirg97-rgb/rig/store/rem/metadata"
+	"github.com/mrsirg97-rgb/rig/store/scope"
 	remapi "github.com/mrsirg97-rgb/rig/tool/rem"
 )
 
@@ -248,7 +252,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 		t.Fatalf("name %q", tool.Name())
 	}
 	d := tool.Description()
-	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "ids (mN)"} {
+	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "ids (mN)", "name project when the fact belongs to a repo you did not start in"} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing %q:\n%s", want, d)
 		}
@@ -274,5 +278,154 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 	}
 	if got := schema.Props["verb"].Enum; len(got) != 3 || got[0] != "remove" {
 		t.Fatalf("verb enum %v", got)
+	}
+	if _, ok := schema.Props["project"]; !ok {
+		t.Fatal("the schema must carry a project field (the deliberate project)")
+	}
+}
+
+func gitInit(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := osexec.Command("git", "-C", dir, "init", "-q")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v (%s)", err, out)
+	}
+	cmd = osexec.Command("git", "-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "add", "-A")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v (%s)", err, out)
+	}
+	cmd = osexec.Command("git", "-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "commit", "-q", "-m", "seed")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v (%s)", err, out)
+	}
+}
+
+func TestLearnWithProjectFromNonRepoCwdRecallsFromRepoAndWorktree(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	wt := filepath.Join(repo, "wt")
+	if out, err := osexec.Command("git", "-C", repo, "worktree", "add", "-q", wt).CombinedOutput(); err != nil {
+		t.Fatalf("worktree add: %v (%s)", err, out)
+	}
+	t.Chdir(t.TempDir())
+	db := newDB(t)
+	tool := remapi.New(db)
+	if _, err := exec(t, tool, context.Background(), map[string]any{
+		"action": "learn", "content": "a fact about the repo", "project": repo,
+	}); err != nil {
+		t.Fatalf("learn with project: %v", err)
+	}
+	for _, proj := range []string{repo, wt} {
+		reply, err := exec(t, tool, context.Background(), map[string]any{
+			"action": "recall", "query": "fact about the repo", "project": proj,
+		})
+		if err != nil {
+			t.Fatalf("recall %s: %v", proj, err)
+		}
+		if !strings.Contains(reply, "a fact about the repo") {
+			t.Fatalf("a project learned from a non-repo cwd must recall from %s:\n%s", proj, reply)
+		}
+		if !strings.Contains(reply, filepath.Base(repo)) {
+			t.Fatalf("the recall from %s must carry the repo's label:\n%s", proj, reply)
+		}
+	}
+}
+
+func TestRecallWithProjectFillsFromGlobalAfter(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	t.Chdir(t.TempDir())
+	db := newDB(t)
+	tool := remapi.New(db)
+	if _, err := exec(t, tool, context.Background(), map[string]any{
+		"action": "learn", "content": "widget local lore", "project": repo,
+	}); err != nil {
+		t.Fatalf("learn project: %v", err)
+	}
+	if _, err := exec(t, tool, context.Background(), map[string]any{
+		"action": "learn", "content": "widget global lore", "scope": "global",
+	}); err != nil {
+		t.Fatalf("learn global: %v", err)
+	}
+	reply, err := exec(t, tool, context.Background(), map[string]any{
+		"action": "recall", "query": "widget", "project": repo,
+	})
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	var memLines []string
+	for _, line := range strings.Split(strings.TrimSuffix(reply, "\n"), "\n") {
+		if strings.HasPrefix(line, "m") {
+			memLines = append(memLines, line)
+		}
+	}
+	if len(memLines) != 2 {
+		t.Fatalf("project recall must fill from global after, got:\n%s", reply)
+	}
+	if !strings.Contains(memLines[0], filepath.Base(repo)) {
+		t.Fatalf("the project row must lead with its label:\n%s", reply)
+	}
+	localAt := strings.Index(reply, "widget local lore")
+	globalAt := strings.Index(reply, "widget global lore")
+	if localAt < 0 || globalAt < 0 || localAt > globalAt {
+		t.Fatalf("the project row must lead, the global fill after:\n%s", reply)
+	}
+}
+
+func TestProjectPlusGlobalRefuses(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	db := newDB(t)
+	tool := remapi.New(db)
+	for _, action := range []map[string]any{
+		{"action": "learn", "content": "x", "project": repo, "scope": "global"},
+		{"action": "reflect", "content": "x", "project": repo, "scope": "global"},
+		{"action": "recall", "query": "x", "project": repo, "scope": "global"},
+		{"action": "prune", "verb": "consolidate", "project": repo, "scope": "global"},
+	} {
+		if _, err := exec(t, tool, context.Background(), action); err == nil {
+			t.Fatalf("project + global succeeded: %v", action)
+		} else if !strings.Contains(err.Error(), "project") || !strings.Contains(err.Error(), "global") {
+			t.Errorf("voice:\n%q", err.Error())
+		}
+	}
+}
+
+func TestRelativeAndTildeProjectResolveIdentically(t *testing.T) {
+	home := t.TempDir()
+	repo := filepath.Join(home, "repo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitInit(t, repo)
+	t.Setenv("HOME", home)
+	db := newDB(t)
+	tool := remapi.New(db)
+	mwExec := paths.Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+		return tool.Exec(ctx, call.Args)
+	})
+	tilearn, err := mwExec(context.Background(), core.ToolCall{
+		Name: "rem", Args: json.RawMessage(`{"action":"learn","content":"tilde fact","project":"~/repo"}`),
+	})
+	if err != nil {
+		t.Fatalf("tilde learn: %v", err)
+	}
+	abslearn, err := mwExec(context.Background(), core.ToolCall{
+		Name: "rem", Args: json.RawMessage(`{"action":"learn","content":"tilde fact","project":"` + repo + `"}`),
+	})
+	if err != nil {
+		t.Fatalf("abs learn: %v", err)
+	}
+	if !strings.Contains(tilearn, "learned m") {
+		t.Fatalf("the tilde learn must land:\n%s", tilearn)
+	}
+	if !strings.Contains(abslearn, "already known") {
+		t.Fatalf("a ~ path and its absolute twin must be one scope (the second learn dedups):\n%s", abslearn)
+	}
+	if scope.Key(repo) != scope.Key(filepath.Join(home, "repo")) {
+		t.Fatalf("the two paths must share one scope")
 	}
 }
