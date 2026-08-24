@@ -14,10 +14,16 @@ loop already emits; the read side rebuilds a session from the log.
 - `resume.go` — the read-side projection: rebuild a `core.Session` from
   the log (SPEC_HARDENING decision 5).
 - `sessions.go` — the sessions list rows (`ErrNoSuchSession`,
-  `SessionRow`), `ListSessions(ctx, db, limit)` (the named limit,
-  `ListCap` the default and the maximum), and `SessionUsage`.
+  `SessionRow`) and `ListSessions(ctx, db, limit)` (the named limit,
+  `ListCap` the default and the maximum).
 - `faults.go` — `SessionFaults(ctx, db, sessionId)`, the typed read of
   one session's fault rows, newest first.
+- `path.go` — `StorePath(home, cwd)`, the workspace state file: one
+  file per cwd under `<home>/sessions`, keyed by the first six sha1
+  bytes of the cwd.
+- `usage.go` — `UsageRow` and `SessionUsage(ctx, db, sessionID)`, the
+  typed usage read (prompt/completion/cache tokens per message,
+  transcript order) the dashboard and the `sessions` tool build from.
 - `metadata/state.go` — hand-written metadata.
 
 ## How it is consumed

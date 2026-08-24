@@ -26,6 +26,7 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 
 - `todo.go` — the store: operations, replay, position minting, the DAG
   validation, per-scope folds and one shared event-log sequence.
+- `path.go` — `FilePath(home)`, the store's file: `<home>/todo/todo.sqlite`.
 - `migration.go` — the one-time 1→2 migration: folds the legacy
   per-cwd stores into `todo.sqlite` (scope = the file's hash) and rem's
   lazy re-scope of the launch cwd's hash to the repo scope.
