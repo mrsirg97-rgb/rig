@@ -255,3 +255,29 @@ func TestSessionsShape(t *testing.T) {
 		}
 	}
 }
+
+func TestRelativeProjectResolvesToTheAbsoluteWorkspace(t *testing.T) {
+	home := t.TempDir()
+	ws := t.TempDir()
+	openProject(t, home, ws, seedSpec{id: "sess-rel", model: "m1", version: "0.16.1", turns: 1})
+	sub := filepath.Join(ws, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(ws); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(wd)
+	tool := sessions.New(home, sub)
+	out, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"list","project":"."}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "sess-rel") {
+		t.Fatalf("a relative project must resolve to the absolute workspace:\n%s", out)
+	}
+}

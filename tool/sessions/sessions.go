@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -67,6 +68,9 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	project := a.cwd
 	if g.Project != nil && *g.Project != "" {
 		project = *g.Project
+		if abs, err := filepath.Abs(project); err == nil {
+			project = abs
+		}
 	}
 	n := defaultN
 	if g.N != nil {
