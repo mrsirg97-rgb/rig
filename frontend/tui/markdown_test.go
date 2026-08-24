@@ -46,13 +46,13 @@ func TestMarkdownInline(t *testing.T) {
 		want string
 	}{
 		{"a **bold** word", th.Paint(SlotText, "a ") + th.Paint(SlotBold, "bold") + th.Paint(SlotText, " word")},
-		{"an *em* word", th.Paint(SlotText, "an ") + th.Paint(SlotDim, "em") + th.Paint(SlotText, " word")},
-		{"a `code` word", th.Paint(SlotText, "a ") + th.Paint(SlotEmber, "code") + th.Paint(SlotText, " word")},
+		{"an *em* word", th.Paint(SlotText, "an em word")},
+		{"a `code` word", th.Paint(SlotText, "a code word")},
 		{"unclosed **bold", th.Paint(SlotText, "unclosed **bold")},
 		{"unclosed `code", th.Paint(SlotText, "unclosed `code")},
 		{"escaped \\*star\\*", th.Paint(SlotText, "escaped *star*")},
 		{"2 * 3 * 4", th.Paint(SlotText, "2 * 3 * 4")},
-		{"a `b*c*d` e", th.Paint(SlotText, "a ") + th.Paint(SlotEmber, "b*c*d") + th.Paint(SlotText, " e")},
+		{"a `b*c*d` e", th.Paint(SlotText, "a b*c*d e")},
 	}
 	for _, c := range cases {
 		out, fence, _ := mdLine(th, []seg{{slot: SlotText, text: c.in}})

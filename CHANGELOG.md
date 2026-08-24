@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+- **no colored inline text in a response** (`specs/SPEC_TUI.md` 11,
+  amended): `*em*` and `` `code` `` render in the text color, marks
+  dropped — bold keeps its weight, headings their accent, lists and
+  quotes their furniture. The operator's call: the coloring read
+  inconsistent, plain reads better. And the status row paints `auto`
+  in the warn color beside `manual` — the permissive mode is the one
+  worth a glance.
+
+
 ## [Unreleased] — the queue is the project
 
 - **todo is one store, scoped by project** (`specs/SPEC_STATE.md`,

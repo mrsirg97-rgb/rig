@@ -78,8 +78,7 @@ func mdInline(line string, base string) []seg {
 				j++
 			}
 			if j < len(rs) && j > i+1 {
-				flush(base)
-				out = append(out, seg{slot: SlotEmber, text: string(rs[i+1 : j])})
+				cur.WriteString(string(rs[i+1 : j]))
 				i = j + 1
 			} else {
 				cur.WriteRune(r)
@@ -106,8 +105,7 @@ func mdInline(line string, base string) []seg {
 				j++
 			}
 			if j < len(rs) && j > i+1 && rs[j-1] != ' ' {
-				flush(base)
-				out = append(out, seg{slot: SlotDim, text: string(rs[i+1 : j])})
+				cur.WriteString(string(rs[i+1 : j]))
 				i = j + 1
 			} else {
 				cur.WriteRune(r)
