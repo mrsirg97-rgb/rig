@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.16.1] — the kernel knows where it is
 
 - **the python kernel is born in the session's working directory**: it
   inherited the rig process's cwd, so a session started one directory
