@@ -28,7 +28,9 @@ func TestStatusBlockExactBytes(t *testing.T) {
 		th.Paint("ember", "█▀▄ █ █▀▀") + "\n" +
 		th.Paint("ember", "█▀▄ █ █ █") + "\n" +
 		th.Paint("ember", "▀ ▀ ▀ ▀▀▀") + "\n" +
-		th.Paint("dim", "session 2f9a1c0e77b3") + "\n"
+		th.Paint("dim", "session 2f9a1c0e77b3") + "\n" +
+		th.Paint("dim", "workers: none") + "\n" +
+		th.Paint("dim", "chat with your model, or type / for commands") + "\n"
 	if got != want {
 		t.Fatalf("the startup block:\ngot  %q\nwant %q", got, want)
 	}
@@ -63,9 +65,11 @@ func TestStatusBlockNoEffortOmitsTheSegment(t *testing.T) {
 	want := th.Paint("dim", "welcome to") + "\n" +
 		th.Paint("ember", "█▀▄ █ █▀▀") + "\n" +
 		th.Paint("ember", "█▀▄ █ █ █") + "\n" +
-		th.Paint("ember", "▀ ▀ ▀ ▀▀▀") + "\n"
+		th.Paint("ember", "▀ ▀ ▀ ▀▀▀") + "\n" +
+		th.Paint("dim", "workers: none") + "\n" +
+		th.Paint("dim", "chat with your model, or type / for commands") + "\n"
 	if got != want {
-		t.Fatalf("no session: the title alone:\n%q", got)
+		t.Fatalf("no session: the title, the fleet, the hint:\n%q", got)
 	}
 }
 
@@ -74,10 +78,9 @@ func TestStatusLineModelAloneBeforeFirstUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", "", 0, 262144, false, 0, 0, 0)
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 0, 262144, false, 0, 0, 0)
 	want := th.Paint("text", "huihui3.8") +
 		"\n" + th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("warn", "auto") +
-		th.Paint("dim", " · ") + th.Paint("dim", "workers: none") +
 		"\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
 	if got != want {
 		t.Fatalf("before the first usage: the model alone, the stance row, the zero totals:\ngot  %q\nwant %q", got, want)
@@ -98,7 +101,7 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		{180000, "error"},
 	}
 	for _, c := range cases {
-		got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", "", c.used, 200000, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", c.used, 200000, true, 214000, 3200, 187000)
 		part := fmtTokens(c.used) + "/" + fmtTokens(200000)
 		if !strings.Contains(got, th.Paint(c.want, part)) {
 			t.Errorf("used=%d: the context part is not painted %s:\n%s", c.used, c.want, got)
@@ -118,7 +121,7 @@ func TestStatusLineEmptyModelIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := tui.RenderStatusLine(th, "", "", "", "", "", 100, 1000, true, 1, 1, 1); got != "" {
+	if got := tui.RenderStatusLine(th, "", "", "", "", 100, 1000, true, 1, 1, 1); got != "" {
 		t.Fatalf("no model, no row: %q", got)
 	}
 }
@@ -141,7 +144,7 @@ func TestStatusThreeRowShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "xhigh", "architect", "manual", "", 41200, 262144, true, 214000, 3200, 187000)
+	got := tui.RenderStatusLine(th, "huihui3.8", "xhigh", "architect", "manual", 41200, 262144, true, 214000, 3200, 187000)
 	sep := th.Paint("dim", " · ")
 	rows := strings.Split(got, "\n")
 	if len(rows) != 3 {
@@ -150,7 +153,7 @@ func TestStatusThreeRowShape(t *testing.T) {
 	if want := th.Paint("text", "huihui3.8") + sep + th.Paint("dim", "41k/262k"); rows[0] != want {
 		t.Fatalf("row1 (identity):\ngot  %q\nwant %q", rows[0], want)
 	}
-	if want := th.Paint("effortXhigh", "xhigh") + sep + th.Paint("dim", "arch") + sep + th.Paint("warn", "manual") + sep + th.Paint("dim", "workers: none"); rows[1] != want {
+	if want := th.Paint("effortXhigh", "xhigh") + sep + th.Paint("dim", "arch") + sep + th.Paint("warn", "manual"); rows[1] != want {
 		t.Fatalf("row2 (stance):\ngot  %q\nwant %q", rows[1], want)
 	}
 	if !strings.Contains(rows[2], "up 214k") {
@@ -167,9 +170,9 @@ func TestStatusLineRoleAbbreviations(t *testing.T) {
 		{"architect", "arch"}, {"reviewer", "rev"}, {"default", "default"}, {"", "default"},
 	}
 	for _, c := range cases {
-		got := tui.RenderStatusLine(th, "huihui3.8", "", c.role, "", "", 41200, 262144, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", "", c.role, "", 41200, 262144, true, 214000, 3200, 187000)
 		rows := strings.Split(got, "\n")
-		want := th.Paint("dim", c.want) + th.Paint("dim", " · ") + th.Paint("warn", "auto") + th.Paint("dim", " · ") + th.Paint("dim", "workers: none")
+		want := th.Paint("dim", c.want) + th.Paint("dim", " · ") + th.Paint("warn", "auto")
 		if len(rows) != 3 || rows[1] != want {
 			t.Errorf("role %q: the stance row must be %q:\n%q", c.role, want, rows[1])
 		}
@@ -186,14 +189,14 @@ func TestStatusLineEffortColorsAndFallback(t *testing.T) {
 		{"medium", "effortMedium"}, {"high", "effortHigh"}, {"xhigh", "effortXhigh"},
 		{"max", "effortMax"}, {"galactic", "accent"},
 	} {
-		got := tui.RenderStatusLine(th, "huihui3.8", c.level, "", "", "", 41200, 262144, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", c.level, "", "", 41200, 262144, true, 214000, 3200, 187000)
 		if !strings.Contains(got, th.Paint(c.slot, c.level)) {
 			t.Errorf("level %q must paint %s:\n%s", c.level, c.slot, got)
 		}
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", "", 41200, 262144, true, 214000, 3200, 187000)
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000)
 	rows := strings.Split(got, "\n")
-	if len(rows) != 3 || rows[1] != th.Paint("dim", "default")+th.Paint("dim", " · ")+th.Paint("warn", "auto")+th.Paint("dim", " · ")+th.Paint("dim", "workers: none") {
+	if len(rows) != 3 || rows[1] != th.Paint("dim", "default")+th.Paint("dim", " · ")+th.Paint("warn", "auto") {
 		t.Fatalf("an empty effort must drop the segment from the stance row:\n%q", got)
 	}
 }
@@ -203,9 +206,9 @@ func TestStatusLineNamesTheFleetModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", "qwen3.8-workers", 41200, 262144, true, 214000, 3200, 187000)
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000)
 	rows := strings.Split(got, "\n")
-	want := th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("warn", "auto") + th.Paint("dim", " · ") + th.Paint("dim", "workers: qwen3.8-workers")
+	want := th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("warn", "auto")
 	if len(rows) != 3 || rows[1] != want {
 		t.Fatalf("the stance row must name the fleet's model:\ngot  %q\nwant %q", rows[1], want)
 	}

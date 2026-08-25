@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **the startup block says the fleet, and how to begin**
+  (`specs/SPEC_TUI.md` 3, amended): under the session id, `workers:
+  <model>` or `workers: none`, then `chat with your model, or type /
+  for commands`. The live status row loses its `workers:` segment — a
+  static fact reads once at start; the row is for what changes under
+  you. The scheduler news line leaves the block too (SPEC_TUI 6, cut):
+  identity and invitation only; a job's failure has `/scheduler` and
+  the dashboard.
+
 - **the workers file is the fleet** (`specs/SPEC_CONFIG.md`):
   `~/.rig/workers.json` is `{"model": "<merged-table id>", "slots": 1}` —
   `model` is required and must resolve against the merged models table,

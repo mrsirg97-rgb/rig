@@ -732,7 +732,7 @@ absent from the native set, from the default allow-list, and from the
 wire; the `/scheduler` command refuses by name (`scheduler: no workers
 configured (~/.rig/workers.json names the model)`), the dashboard's
 scheduler view says the same instead of a create form (SPEC_SERVE),
-and the TUI status line shows `workers: none`. With the file, both
+and the TUI's startup block shows `workers: none`. With the file, both
 tools appear: the scheduler tool's `create` default and the delegate
 tool's model default are the fleet's `model`; a job that names its own
 model keeps it (the row carries it, `run-job` fires the row's model).
