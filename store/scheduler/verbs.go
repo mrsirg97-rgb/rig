@@ -37,6 +37,16 @@ func schedErr(format string, a ...any) error {
 	return fmt.Errorf("scheduler: "+format, a...)
 }
 
+func onceFields(at string) (string, string, error) {
+	t, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		return "", "", schedErr("'at' must be a valid ISO time, got '%s'", at)
+	}
+	norm := t.UTC().Format(time.RFC3339)
+	lt := t.Local()
+	return norm, fmt.Sprintf("%d %d %d %d *", lt.Minute(), lt.Hour(), lt.Day(), int(lt.Month())), nil
+}
+
 func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, session, runnerCmd string, now func() time.Time) (string, error) {
 	if now == nil {
 		now = time.Now
@@ -72,15 +82,12 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 		if in.At == "" {
 			return "", schedErr("cron 'once' requires 'at' (ISO time)")
 		}
-		t, err := time.Parse(time.RFC3339, in.At)
+		norm, five, err := onceFields(in.At)
 		if err != nil {
-			return "", schedErr("'at' must be a valid ISO time, got '%s'", in.At)
+			return "", err
 		}
-		norm := t.UTC().Format(time.RFC3339)
 		at = &norm
-
-		lt := t.Local()
-		cron = fmt.Sprintf("%d %d %d %d *", lt.Minute(), lt.Hour(), lt.Day(), int(lt.Month()))
+		cron = five
 	} else {
 		if _, err := ValidateCron(cron); err != nil {
 			return "", err
@@ -246,6 +253,144 @@ func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session
 	}
 	lines := jobLines(row, line, false, time.Now)
 	return replyText(fmt.Sprintf("%s %s -> %s", row.ID, row.Name, row.State), lines), nil
+}
+
+type UpdateInput struct {
+	ID     string
+	Name   string
+	Prompt string
+	Cron   string
+	At     string
+	Cwd    string
+	Model  string
+	Busy   string
+}
+
+func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, runnerCmd string, now func() time.Time) (string, error) {
+	if now == nil {
+		now = time.Now
+	}
+	name := strings.TrimSpace(in.Name)
+	prompt := in.Prompt
+	model := strings.TrimSpace(in.Model)
+	cwd := strings.TrimSpace(in.Cwd)
+	cron := strings.TrimSpace(in.Cron)
+	at := in.At
+	busy := in.Busy
+
+	var newCron, newAt string
+	switch {
+	case cron != "" && at != "" && cron != "once":
+		return "", schedErr("update got both a cron and an at (one cadence per update)")
+	case cron == "once":
+		if at == "" {
+			return "", schedErr("cron 'once' requires 'at' (ISO time)")
+		}
+		norm, five, err := onceFields(at)
+		if err != nil {
+			return "", err
+		}
+		newCron, newAt = five, norm
+	case cron != "":
+		if _, err := ValidateCron(cron); err != nil {
+			return "", err
+		}
+		newCron = cron
+	case at != "":
+		norm, five, err := onceFields(at)
+		if err != nil {
+			return "", err
+		}
+		newCron, newAt = five, norm
+	}
+
+	bound, tx, err := db.Tx(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	f, err := eventsOf(tx)
+	if err != nil {
+		return "", err
+	}
+	job, found := f.jobs[in.ID]
+	if !found {
+		return "", schedErr("no job '%s'", in.ID)
+	}
+	if job.State == "removed" {
+		return "", schedErr("job '%s' is removed", in.ID)
+	}
+	if name == "" && prompt == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" {
+		return "", schedErr("update needs a change")
+	}
+	if busy != "" && busy != "skip" && busy != "force" {
+		return "", schedErr("busy must be 'skip' or 'force', got '%s'", busy)
+	}
+	if name != "" && name != job.Name {
+		for _, j := range f.jobs {
+			if j.State != "removed" && j.ID != in.ID && j.Name == name {
+				return "", schedErr("a job named '%s' already exists (state: %s); remove it first", name, j.State)
+			}
+		}
+	}
+	cadenceChanged := (cron != "" || at != "") && (newCron != job.Cron || newAt != job.At)
+	if cadenceChanged {
+		text, err := ct.List()
+		if err != nil {
+			return "", err
+		}
+		next, _ := UpsertLine(text, in.ID, newCron, runnerCmd)
+		if job.State == "paused" {
+			next, _ = SetPaused(next, in.ID, true)
+		}
+		if err := ct.Install(next); err != nil {
+			return "", err
+		}
+	}
+
+	if err := maybeCompact(bound, tx, f, session); err != nil {
+		return "", err
+	}
+	args := map[string]any{"id": in.ID}
+	if name != "" {
+		args["name"] = name
+	}
+	if prompt != "" {
+		args["prompt"] = prompt
+	}
+	if model != "" {
+		args["model"] = model
+	}
+	if cwd != "" {
+		args["cwd"] = cwd
+	}
+	if busy != "" {
+		args["busy"] = busy
+	}
+	if cadenceChanged {
+		args["cron"] = newCron
+		var atPtr *string
+		if newAt != "" {
+			atPtr = &newAt
+		}
+		args["at"] = atPtr
+	}
+	argsJSON, _ := json.Marshal(args)
+	seq, err := appendEvent(bound, f.maxSeq+1, "update", string(argsJSON), session)
+	if err != nil {
+		return "", err
+	}
+	f.apply(eventRow{seq: seq, ts: nowRFC3339(), op: "update", args: string(argsJSON)})
+	row := f.jobs[in.ID]
+	if err := rewrite(tx, f); err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+	line := &TaggedLine{Key: in.ID, Cron: row.Cron, Paused: row.State == "paused"}
+	lines := jobLines(row, line, false, now)
+	return replyText(fmt.Sprintf("updated %s '%s'", row.ID, row.Name), lines), nil
 }
 
 type RunRecordInput struct {

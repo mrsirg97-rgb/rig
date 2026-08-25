@@ -29,7 +29,7 @@ func schemaJSON(defModel string) string {
 	"properties": {
 		"action": {
 			"type": "string",
-			"enum": ["create", "list", "pause", "resume", "remove", "runs"]
+			"enum": ["create", "update", "list", "pause", "resume", "remove", "runs"]
 		},
 		"name": {
 			"type": "string",
@@ -143,6 +143,14 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			Name: name, Prompt: g.Prompt, Cron: g.Cron, At: g.At,
 			Model: model, Busy: busy, Cwd: g.Cwd,
 		}, cwd, session, a.runnerCmd, time.Now)
+	case "update":
+		if g.ID == "" {
+			return "", fmt.Errorf("scheduler: update requires 'id' (jN)")
+		}
+		return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
+			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Cron: g.Cron,
+			At: g.At, Cwd: g.Cwd, Model: g.Model, Busy: g.Busy,
+		}, session, a.runnerCmd, time.Now)
 	case "list":
 		return sched.List(ctx, a.db, a.ct, cwd, nil, time.Now)
 	case "pause", "resume", "remove":

@@ -18,9 +18,10 @@ written before the store commit; drift is surfaced in list.
   the `DB` alias.
 - `cron.go` — the vixie cron parser and matcher.
 - `crontab.go` — the tagged-lines crontab edit/merge.
-- `verbs.go` — the command verbs (list/create/pause/resume/remove/runs)
-  over the one `global.sqlite`; the crontab key is `jN` for every job,
-  `name` unique store-wide, ids one sequence.
+- `verbs.go` — the command verbs
+  (list/create/update/pause/resume/remove/runs) over the one
+  `global.sqlite`; the crontab key is `jN` for every job, `name` unique
+  store-wide, ids one sequence.
 - `migration.go` — the one-time schema-1→2 migration: folds every
   `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
@@ -56,6 +57,12 @@ written before the store commit; drift is surfaced in list.
 - Runs are chain reads over their own container; run history survives
   compaction (an event-args-only shape would have dropped it).
 - Crontab is written before the store commit; drift is surfaced in list.
+- `update` is the definition change: one `update` op overlays only the
+  fields the args carry — the id and the runs stay (remove + create
+  re-mints the id and orphans the runs); a cadence change rewrites the
+  one crontab line under the same key, a paused job's line rewritten
+  commented and the new line landing on resume; `update` never changes
+  the state (pause/resume stay their own ops).
 - One store, `global.sqlite`: `cwd` is a job field (where it runs and how
   the list groups), not a storage partition; `ParseKey` accepts `jN` only
   (the migration rewrites the old `cwd-<hash>:jN` crontab keys).

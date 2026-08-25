@@ -351,8 +351,8 @@ post-merge corrections)
   row written. Idempotent: a second open finds no `<hash>.sqlite` and does
   nothing. Rejected, named: reading both layouts forever; a `scope` that
   defaults to global but stays in the schema.
-- `events`: seq, ts, op (create|pause|resume|remove|run|compact), args,
-  session.
+- `events`: seq, ts, op (create|update|pause|resume|remove|run|compact),
+  args, session.
 - `jobs`: id (primary, `jN`), name (unique among live jobs only, enforced in
   Go, no unique index), prompt, cron, at (nullable), cwd (never empty;
   defaults to the creating session's cwd), model, busy (skip|force), state
@@ -366,6 +366,22 @@ post-merge corrections)
   a small Go binary or the rig binary itself with a `run-job` verb; it
   needs `-p` one-shot mode (landed with the scheduler) and llama-swap's
   `/running` and `/v1/models` for the busy policy, unchanged.
+- `update` is the verb that changes a live job's definition, in place: any
+  of `prompt`, `model`, `cwd`, `busy`, `name`, and the cadence. The cadence
+  is a 5-field cron, or an `at` that makes the job `once`; create's
+  refusals apply verbatim (a bad ISO, an invalid cron, a `once` without its
+  `at`), and a 5-field cron and an `at` in the same call are mutually
+  exclusive, refused by name. No fields → `update needs a change`; an
+  unknown id, or a removed one, is refused by name; a `name` change keeps
+  the store-wide uniqueness (the job's own name is not a collision). One
+  `update` op is appended and the fold overlays only the fields the args
+  carry: the id and the runs stay. Rejected, named: remove + create — the
+  id re-mints, the runs orphan, and two crontab moves express one change;
+  the trail surviving an edit is the point of having one. A cadence change
+  rewrites the job's one crontab line under the same key; a paused job
+  stays paused (its line is rewritten commented) and the new line lands on
+  resume. `pause` and `resume` stay their own ops; `update` never changes
+  the state.
 - The `defaultModel` fallback constant stays in the store, named (SPEC_CONFIG
   5, 8): the tool's default job model moved to the config chain (the file's
   `defaultJobModel` over the embedded value), and the tool always passes a
@@ -389,7 +405,7 @@ The tool adapter is the only hand-written surface the model sees, and it
 is pane's tool surface verbatim: `todo {create|start|complete|fail|retry|
 move|read}` (`next` is not a verb: its semantics ride the render's next
 pointer, blocked-skipping), `rem {learn|recall|reflect|prune}`, `scheduler {create|
-list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
+update|list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
 not pane's: a read-only introspection of the session store, absent from
 the root's `mutatingNatives` and from the concurrent read set — it opens
 a store, like `todo`/`rem`/`scheduler`, so it is not a pure observation).

@@ -10,7 +10,7 @@ seams).
 ## What it includes
 
 - `Tool` — a `core.Tool` over the scheduler store's verbs
-  (list/create/pause/resume/remove/runs), consuming the opened
+  (list/create/update/pause/resume/remove/runs), consuming the opened
   `sched.DB` (the one `global.sqlite`), `sched.Crontab`, the runner
   command, and the default model.
 
