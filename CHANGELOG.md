@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+- **the scheduler's doors come to the dashboard** (`specs/SPEC_SERVE.md`):
+  `POST /api/scheduler/pause|resume|remove|update` and `GET
+  /api/scheduler/runs?id=jN&n=` stand beside the create — each calls
+  the store verb the `scheduler` tool calls (`Pause`/`Resume`/`Remove`/
+  `Update`/`Runs`) with the `dashboard` attribution, behind the same
+  walls as every write (POST, the Origin check, the body cap, the id
+  checked to the tool's shape `jN`, the store's refusals by name: an
+  unknown id, a removed one, an update with no change), and the reply
+  is the store's voice, verbatim. The phone gets the row's hand: every
+  job row carries its controls (pause or resume by state, remove, and
+  the runs' audit trail) beside an update form that opens in place
+  with the row's current fields (cadence, prompt, model, cwd, busy)
+  and submits only what changed; the list re-reads after a move, no
+  page reload. Below 720px the row stacks under full-width 44px tap
+  targets (`.rowact`), the form is one column, the buttons stop
+  propagation so a tap never opens two things, and remove asks once,
+  in-page.
+
 - **the scheduler gets `update`: change a job without losing its
   trail** (`specs/SPEC_STATE.md`): `{"action": "update", "id": "jN", …}`
   is partial — any of `prompt`, `cron`/`at` (mutually exclusive in one

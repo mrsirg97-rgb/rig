@@ -66,6 +66,11 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 		return setOf("POST"), true
 	case path == "/api/scheduler":
 		return setOf("GET", "POST"), true
+	case path == "/api/scheduler/pause" || path == "/api/scheduler/resume" ||
+		path == "/api/scheduler/remove" || path == "/api/scheduler/update":
+		return setOf("POST"), true
+	case path == "/api/scheduler/runs":
+		return setOf("GET"), true
 	case path == "/api/models":
 		return setOf("GET"), true
 	case path == "/api/plugins":
@@ -110,6 +115,16 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleScheduler(w, r)
 	case path == "/api/scheduler" && r.Method == "POST":
 		s.handleSchedulerCreate(w, r)
+	case path == "/api/scheduler/pause":
+		s.handleSchedulerVerb(w, r, "pause")
+	case path == "/api/scheduler/resume":
+		s.handleSchedulerVerb(w, r, "resume")
+	case path == "/api/scheduler/remove":
+		s.handleSchedulerVerb(w, r, "remove")
+	case path == "/api/scheduler/update":
+		s.handleSchedulerUpdate(w, r)
+	case path == "/api/scheduler/runs":
+		s.handleSchedulerRuns(w, r)
 	case path == "/api/models":
 		s.handleModels(w, r)
 	case path == "/api/plugins" && r.Method == "GET":

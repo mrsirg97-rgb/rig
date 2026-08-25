@@ -233,6 +233,32 @@ function todoArea(text, onVerb) {
   return parsed ? todoBodyEl(parsed, onVerb) : verbatimEl(text);
 }
 
+const SCHED_STATES = ['active', 'paused', 'done', 'removed'];
+
+function parseSchedHead(l) {
+  const f = l.split(/\s+/);
+  if (f.length < 3 || !/^j\d+$/.test(f[0])) return null;
+  let si = -1;
+  for (let i = 2; i < f.length; i++) {
+    if (SCHED_STATES.includes(f[i])) { si = i; break; }
+  }
+  if (si < 0) return null;
+  return { id: f[0], name: f.slice(1, si).join(' '), state: f[si] };
+}
+
+function parseSchedDetail(l) {
+  if (!l.startsWith('cron ')) return null;
+  const parts = l.slice('cron '.length).split(' · ');
+  if (parts.length < 3) return null;
+  const d = { cron: parts[0], at: '', model: '', cwd: '', busy: 'skip' };
+  let base = 1;
+  if (parts[1].startsWith('at ')) { d.at = parts[1].slice(3); base = 2; }
+  d.model = parts[base];
+  if (parts[base + 1] === 'busy force') d.busy = 'force';
+  d.cwd = parts[parts.length - 1];
+  return d;
+}
+
 function parseScheduler(reply) {
   const lines = reply.replace(/\n+$/, '').split('\n');
   if (lines.length === 0) return null;
@@ -258,11 +284,15 @@ function parseScheduler(reply) {
     if (!cur) return null;
     if (l.startsWith('  ')) {
       if (!job) return null;
-      job.detail.push(l.slice(2));
+      const d = l.slice(2);
+      job.detail.push(d);
+      if (!job.fields && d.startsWith('cron ')) job.fields = parseSchedDetail(d);
       continue;
     }
     if (!jobHeadRe.test(l) || cur.empty) return null;
-    job = { head: l, detail: [] };
+    const head = parseSchedHead(l);
+    if (!head) return null;
+    job = { head: l, detail: [], id: head.id, name: head.name, state: head.state, fields: null, slot: null };
     cur.jobs.push(job);
   }
   return p;
@@ -276,7 +306,108 @@ function schedGlyph(head) {
   return [G.pending, 'dim'];
 }
 
-function schedulerBodyEl(p) {
+const SCHED_DOORS = {
+  pause: '/api/scheduler/pause',
+  resume: '/api/scheduler/resume',
+  remove: '/api/scheduler/remove',
+  update: '/api/scheduler/update',
+};
+
+function schedActsEl(j, onAction) {
+  const acts = el('div', 'schedacts');
+  const tap = (verb) => (e) => { e.stopPropagation(); onAction(verb, j); };
+  if (j.state === 'active') acts.appendChild(button('pause', 'rowact', tap('pause')));
+  if (j.state === 'paused') acts.appendChild(button('resume', 'rowact', tap('resume')));
+  acts.appendChild(button('remove', 'rowact', tap('remove')));
+  acts.appendChild(button('runs', 'rowact', tap('runs')));
+  return acts;
+}
+
+function schedConfirmEl(job, onDecision) {
+  const w = el('div', 'schedconfirm');
+  w.appendChild(line('dim')).textContent = 'remove ' + job.id + ' ' + job.name + ' (the runs stay in the trail)?';
+  const acts = el('div', 'schedacts');
+  acts.appendChild(button('yes, remove', 'rowact', (e) => { e.stopPropagation(); onDecision(true); }));
+  acts.appendChild(button('keep', 'rowact', (e) => { e.stopPropagation(); onDecision(false); }));
+  w.appendChild(acts);
+  return w;
+}
+
+function schedUpdateFormEl(job, out, q, onSaved) {
+  const f = el('div', 'schedup');
+  f.appendChild(line('dim')).textContent = 'update ' + job.id + ' ' + job.name + ' — only what you change is sent';
+  const cur = job.fields || { cron: '', at: '', model: '', cwd: '', busy: 'skip' };
+  const cron = textInput('30 7 * * *  (five fields, or once)', true);
+  cron.value = cur.cron;
+  const at = textInput('2026-01-02T03:04:05Z', false);
+  at.value = cur.at;
+  const atRow = promptRow('at', at, G.dot);
+  const atVisible = () => cron.value.trim() === 'once' || cur.at !== '';
+  atRow.hidden = !atVisible();
+  const prompt = el('textarea');
+  prompt.rows = 2;
+  prompt.placeholder = 'keep the current prompt (type to replace it)';
+  prompt.spellcheck = false;
+  const model = textInput('worker model id');
+  model.value = cur.model;
+  const cwdIn = textInput('working directory');
+  cwdIn.value = cur.cwd;
+  const busy = el('select');
+  busy.appendChild(new Option('skip', 'skip'));
+  busy.appendChild(new Option('force', 'force'));
+  busy.value = cur.busy;
+  const diff = () => {
+    const b = {};
+    if (cron.value.trim() !== cur.cron) b.cron = cron.value.trim();
+    if (at.value.trim() !== cur.at) b.at = at.value.trim();
+    if (prompt.value.trim() !== '') b.prompt = prompt.value.trim();
+    if (model.value.trim() !== cur.model) b.model = model.value.trim();
+    if (cwdIn.value.trim() !== cur.cwd) b.cwd = cwdIn.value.trim();
+    if (busy.value !== cur.busy) b.busy = busy.value;
+    return b;
+  };
+  const save = button('update', 'primary');
+  const cancel = button('cancel', null);
+  const sync = () => { save.disabled = Object.keys(diff()).length === 0; };
+  for (const i of [cron, at, prompt, model, cwdIn, busy]) {
+    i.addEventListener('input', () => { atRow.hidden = !atVisible(); sync(); });
+    i.addEventListener('change', () => { atRow.hidden = !atVisible(); sync(); });
+  }
+  const act = el('div', 'schedup-act');
+  act.appendChild(save);
+  act.appendChild(cancel);
+  f.appendChild(promptRow('cron', cron, G.dot));
+  f.appendChild(atRow);
+  const pr = promptRow('prompt', prompt, G.dot);
+  pr.classList.add('span2');
+  f.appendChild(pr);
+  f.appendChild(promptRow('model', model, G.dot));
+  f.appendChild(promptRow('cwd', cwdIn, G.dot));
+  f.appendChild(promptRow('busy', busy, G.dot));
+  f.appendChild(act);
+  cancel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    job.slot.innerHTML = '';
+  });
+  save.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const b = diff();
+    if (Object.keys(b).length === 0) return;
+    save.disabled = true;
+    try {
+      const r = await post(SCHED_DOORS.update + q, Object.assign({ id: job.id }, b));
+      onSaved(r.reply);
+    } catch (err) {
+      setEcho(out, err.message, true);
+    } finally {
+      sync();
+    }
+  });
+  sync();
+  return f;
+}
+
+function schedulerBodyEl(p, onAction) {
   const e = el('div');
   if (p.runs) {
     for (const l of p.runs) e.appendChild(line('dim')).textContent = l;
@@ -289,24 +420,28 @@ function schedulerBodyEl(p) {
     }
     e.appendChild(line('dim')).textContent = sec.name + ':';
     for (const j of sec.jobs) {
-      const row = line();
+      const row = line('click');
       const [g, cls] = schedGlyph(j.head);
       row.appendChild(span(g + ' ', cls));
       row.appendChild(span(j.head, 'text'));
+      row.addEventListener('click', () => onAction('edit', j));
       e.appendChild(row);
       for (const d of j.detail) {
         const dl = line(d.startsWith('drift: ') ? 'detail drift' : 'detail');
         dl.textContent = '  ' + d;
         e.appendChild(dl);
       }
+      e.appendChild(schedActsEl(j, onAction));
+      j.slot = el('div', 'schedslot');
+      e.appendChild(j.slot);
     }
   }
   return e;
 }
 
-function schedulerArea(text) {
+function schedulerArea(text, onAction) {
   const parsed = parseScheduler(text);
-  return parsed ? schedulerBodyEl(parsed) : verbatimEl(text);
+  return parsed ? schedulerBodyEl(parsed, onAction) : verbatimEl(text);
 }
 
 function exitGlyph(exit) {
@@ -524,8 +659,82 @@ async function renderScheduler(q) {
   const tb = toolBlock('scheduler', 'list');
   main.appendChild(tb.el);
   const area = el('div');
-  area.appendChild(schedulerArea(data.text));
   tb.body.appendChild(area);
+  const out = echoEl();
+  tb.body.appendChild(out);
+
+  const paint = (text) => {
+    area.innerHTML = '';
+    area.appendChild(schedulerArea(text, onAction));
+  };
+
+  const refresh = async () => {
+    const d = await api('/api/scheduler' + q);
+    paint(d.text);
+  };
+
+  async function onAction(action, job) {
+    const move = async (verb) => {
+      try {
+        const r = await post(SCHED_DOORS[verb] + q, { id: job.id });
+        setEcho(out, r.reply);
+        await refresh();
+      } catch (e) {
+        setEcho(out, e.message, true);
+      }
+    };
+    if (action === 'pause' || action === 'resume') {
+      move(action);
+      return;
+    }
+    if (action === 'remove') {
+      job.slot.innerHTML = '';
+      job.slot.appendChild(schedConfirmEl(job, (go) => {
+        if (go) move('remove');
+        else job.slot.innerHTML = '';
+      }));
+      return;
+    }
+    if (action === 'edit') {
+      if (job.slot.querySelector('.schedup')) {
+        job.slot.innerHTML = '';
+        return;
+      }
+      job.slot.innerHTML = '';
+      job.slot.appendChild(schedUpdateFormEl(job, out, q, (reply) => {
+        setEcho(out, reply);
+        refresh().catch((e) => setEcho(out, e.message, true));
+      }));
+      return;
+    }
+    if (action === 'runs') {
+      job.slot.innerHTML = '';
+      job.slot.appendChild(line('dim')).textContent = 'loading runs…';
+      let d;
+      try {
+        d = await api('/api/scheduler/runs?id=' + encodeURIComponent(job.id) + '&n=10');
+      } catch (e) {
+        job.slot.innerHTML = '';
+        setEcho(out, e.message, true);
+        return;
+      }
+      job.slot.innerHTML = '';
+      const p = parseScheduler(d.text);
+      if (p && p.runs) {
+        for (const l of p.runs) job.slot.appendChild(line('detail')).textContent = l;
+      } else {
+        job.slot.appendChild(verbatimEl(d.text));
+      }
+      const acts = el('div', 'schedacts');
+      acts.appendChild(button('close runs', 'rowact', (e) => { e.stopPropagation(); job.slot.innerHTML = ''; }));
+      job.slot.appendChild(acts);
+    }
+  }
+
+  paint(data.text);
+  const hint = el('div', 'hint');
+  hint.textContent = 'tap a job to update its fields in place; the list re-reads after a move';
+  tb.body.appendChild(hint);
 
   const name = textInput('name (e.g. nightly-digest)', true);
   const prompt = el('textarea');
@@ -545,8 +754,6 @@ async function renderScheduler(q) {
   tb.body.appendChild(promptRow('cron', cron, G.dot));
   tb.body.appendChild(atRow);
   tb.body.appendChild(promptRow('scope', scope, G.dot));
-  const out = echoEl();
-  tb.body.appendChild(out);
   const act = el('div', 'actions');
   const btn = button('create', 'primary', async () => {
     btn.disabled = true;
@@ -558,8 +765,7 @@ async function renderScheduler(q) {
       setEcho(out, r.reply);
       name.value = ''; prompt.value = ''; cron.value = ''; at.value = '';
       const d = await api('/api/scheduler' + q);
-      area.innerHTML = '';
-      area.appendChild(schedulerArea(d.text));
+      paint(d.text);
     } catch (e) {
       setEcho(out, e.message, true);
     } finally {

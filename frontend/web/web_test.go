@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -625,6 +626,210 @@ func TestSchedulerCreate(t *testing.T) {
 	}
 }
 
+func TestSchedulerDoors(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+	hdr := func() http.Header {
+		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+		x.Set("Content-Type", "application/json")
+		return x
+	}
+	list := func() string {
+		rec := doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("list: got %d", rec.Code)
+		}
+		var body map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body["text"]
+	}
+	verb := func(target, id string) *httptest.ResponseRecorder {
+		return doReq(t, h, "POST", target+q, strings.NewReader(`{"id":"`+id+`"}`), hdr())
+	}
+	say := func(rec *httptest.ResponseRecorder) string {
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if r, ok := body["reply"].(string); ok {
+			return r
+		}
+		if e, ok := body["error"].(string); ok {
+			return e
+		}
+		return rec.Body.String()
+	}
+
+	rec := verb("/api/scheduler/pause", "j99")
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "no job 'j99'") {
+		t.Fatalf("pause of an unknown id: got %d %q, want 400 with the store's refusal", rec.Code, say(rec))
+	}
+	rec = verb("/api/scheduler/pause", "../x")
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "jN") {
+		t.Fatalf("pause of a malformed id: got %d %q, want 400 naming the tool's shape", rec.Code, say(rec))
+	}
+	rec = verb("/api/scheduler/pause", "")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("pause with no id: got %d, want 400", rec.Code)
+	}
+
+	rec = doReq(t, h, "POST", "/api/scheduler/pause"+q, strings.NewReader(`{"id":"j1"}`), bearer(tok))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("no origin: got %d, want 403", rec.Code)
+	}
+	foreign := http.Header{"Origin": {"http://evil.example"}, "Authorization": {"Bearer " + tok}}
+	rec = doReq(t, h, "POST", "/api/scheduler/resume"+q, strings.NewReader(`{"id":"j1"}`), foreign)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("foreign origin: got %d, want 403", rec.Code)
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/update"+q, strings.NewReader(strings.Repeat("x", maxWriteBytes+1)), hdr())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("over-cap update: got %d, want 400", rec.Code)
+	}
+	rec = doReq(t, h, "GET", "/api/scheduler/pause"+q, nil, bearer(tok))
+	if rec.Code != http.StatusMethodNotAllowed || !strings.Contains(rec.Header().Get("Allow"), "POST") {
+		t.Fatalf("GET on a door: got %d allow %q, want 405 naming POST", rec.Code, rec.Header().Get("Allow"))
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/runs?id=j1", nil, hdr())
+	if rec.Code != http.StatusMethodNotAllowed || !strings.Contains(rec.Header().Get("Allow"), "GET") {
+		t.Fatalf("POST on runs: got %d allow %q, want 405 naming GET", rec.Code, rec.Header().Get("Allow"))
+	}
+
+	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"doorjob","prompt":"p","cron":"0 3 * * *"}`), hdr())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	idRe := regexp.MustCompile(`j\d+`)
+	jobID := idRe.FindString(created["reply"].(string))
+	if jobID == "" {
+		t.Fatalf("create: no id in the reply %q", created["reply"])
+	}
+
+	rec = verb("/api/scheduler/pause", jobID)
+	if rec.Code != http.StatusOK || !strings.Contains(say(rec), jobID+" doorjob -> paused") {
+		t.Fatalf("pause: got %d %q, want the store's voice naming the new state", rec.Code, say(rec))
+	}
+	if !strings.Contains(list(), jobID+" doorjob paused") {
+		t.Fatalf("list after pause: %q, want the job paused", list())
+	}
+	rec = verb("/api/scheduler/pause", jobID)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "already paused") {
+		t.Fatalf("pause of a paused job: got %d %q, want the named refusal", rec.Code, say(rec))
+	}
+	rec = verb("/api/scheduler/resume", jobID)
+	if rec.Code != http.StatusOK || !strings.Contains(say(rec), jobID+" doorjob -> active") {
+		t.Fatalf("resume: got %d %q, want the store's voice", rec.Code, say(rec))
+	}
+	if !strings.Contains(list(), jobID+" doorjob active") {
+		t.Fatalf("list after resume: %q, want the job active", list())
+	}
+	rec = verb("/api/scheduler/resume", jobID)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "not paused") {
+		t.Fatalf("resume of an active job: got %d %q, want the named refusal", rec.Code, say(rec))
+	}
+
+	rec = doReq(t, h, "POST", "/api/scheduler/update"+q, strings.NewReader(`{"id":"`+jobID+`","model":"worker-test"}`), hdr())
+	if rec.Code != http.StatusOK || !strings.Contains(say(rec), "updated "+jobID+" 'doorjob'") {
+		t.Fatalf("update: got %d %q, want the store's voice", rec.Code, say(rec))
+	}
+	if !strings.Contains(list(), "worker-test") {
+		t.Fatalf("list after update: %q, want the new model", list())
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/update"+q, strings.NewReader(`{"id":"`+jobID+`"}`), hdr())
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "update needs a change") {
+		t.Fatalf("update with no change: got %d %q, want the named refusal", rec.Code, say(rec))
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/update"+q, strings.NewReader(`{"id":"`+jobID+`","cron":"bogus"}`), hdr())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("update with a bad cron: got %d %q, want the verb's refusal", rec.Code, say(rec))
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/update"+q, strings.NewReader(`{"id":"j99","model":"x"}`), hdr())
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "no job 'j99'") {
+		t.Fatalf("update of an unknown id: got %d %q, want the named refusal", rec.Code, say(rec))
+	}
+
+	rec = verb("/api/scheduler/remove", jobID)
+	if rec.Code != http.StatusOK || !strings.Contains(say(rec), jobID+" doorjob -> removed") {
+		t.Fatalf("remove: got %d %q, want the store's voice", rec.Code, say(rec))
+	}
+	if strings.Contains(list(), "doorjob") {
+		t.Fatalf("list after remove: %q, want the job gone", list())
+	}
+	rec = verb("/api/scheduler/remove", jobID)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "already removed") {
+		t.Fatalf("remove of a removed job: got %d %q, want the named refusal", rec.Code, say(rec))
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/update"+q, strings.NewReader(`{"id":"`+jobID+`","model":"x"}`), hdr())
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "is removed") {
+		t.Fatalf("update of a removed id: got %d %q, want the named refusal", rec.Code, say(rec))
+	}
+	rec = verb("/api/scheduler/resume", jobID)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "not paused") {
+		t.Fatalf("resume of a removed id: got %d %q, want the named refusal", rec.Code, say(rec))
+	}
+
+	i64 := func(v int64) *int64 { return &v }
+	sdb, err := srv.stores.scheduler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sched.RecordRun(context.Background(), sdb, sched.RunRecordInput{
+		ID: "j1", Status: "ok", Exit: i64(0), Duration: i64(10), Log: "runs/x/a.log",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sched.RecordRun(context.Background(), sdb, sched.RunRecordInput{
+		ID: "j1", Status: "skip", Reason: "busy",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec = doReq(t, h, "GET", "/api/scheduler/runs?id=j1", nil, bearer(tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("runs: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	var runsBody map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &runsBody); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(runsBody["text"], "j1") || !strings.Contains(runsBody["text"], "runs") ||
+		!strings.Contains(runsBody["text"], "ok") || !strings.Contains(runsBody["text"], "busy") {
+		t.Fatalf("runs: %q, want the audit trail (the seeded statuses)", runsBody["text"])
+	}
+	rec = doReq(t, h, "GET", "/api/scheduler/runs?id=j1&n=1", nil, bearer(tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("runs n=1: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	var one map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &one); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(one["text"], "1 run") || !strings.Contains(one["text"], "busy") || strings.Contains(one["text"], "ok") {
+		t.Fatalf("runs n=1: %q, want exactly the newest run", one["text"])
+	}
+	for _, bad := range []string{"n=0", "n=101", "n=x"} {
+		rec = doReq(t, h, "GET", "/api/scheduler/runs?id=j1&"+bad, nil, bearer(tok))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("runs %s: got %d, want 400", bad, rec.Code)
+		}
+	}
+	rec = doReq(t, h, "GET", "/api/scheduler/runs?id=j99", nil, bearer(tok))
+	if rec.Code != http.StatusNotFound || !strings.Contains(say(rec), "no job 'j99'") {
+		t.Fatalf("runs of an unknown id: got %d %q, want the named 404", rec.Code, say(rec))
+	}
+	rec = doReq(t, h, "GET", "/api/scheduler/runs?id=../x", nil, bearer(tok))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("runs of a malformed id: got %d, want 400", rec.Code)
+	}
+}
+
 func TestMemoryRouteIsGone(t *testing.T) {
 	srv, tok := newTestServer(t)
 	rec := doReq(t, srv.Handler(), "GET", "/api/memory?cwd="+testCWD, nil, bearer(tok))
@@ -978,8 +1183,16 @@ func TestStaticAssets(t *testing.T) {
 			"toolBlock",
 			"plugins/disable",
 			"plugins/enable",
+			"/api/scheduler/pause",
+			"/api/scheduler/resume",
+			"/api/scheduler/remove",
+			"/api/scheduler/update",
+			"/api/scheduler/runs",
+			"schedacts",
+			"schedup",
+			"schedconfirm",
 		},
-		"/static/style.css": {"--accent", "@media (max-width: 720px)", ".nav-open", ".nav-toggle {\n  display: none;", ".editor", "--effort-xhigh"},
+		"/static/style.css": {"--accent", "@media (max-width: 720px)", ".nav-open", ".nav-toggle {\n  display: none;", ".editor", "--effort-xhigh", ".schedacts", ".schedup"},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))
 		if rec.Code != http.StatusOK {
