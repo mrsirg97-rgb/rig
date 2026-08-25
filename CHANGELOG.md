@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.18.0] — the job's whole life
 
 - **the scheduler's doors come to the dashboard** (`specs/SPEC_SERVE.md`):
   `POST /api/scheduler/pause|resume|remove|update` and `GET
