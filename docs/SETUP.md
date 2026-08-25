@@ -41,7 +41,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.17.0
+./rig --version        # rig 0.18.0
 ```
 
 The install paths, three (`specs/SPEC_BUILD.md` 5):
@@ -125,7 +125,7 @@ directory's project file, not the creating session's.
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 17 built-in tools |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 18 built-in tools |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
@@ -195,7 +195,7 @@ starts fresh: the guard's counts and the steering slot are not persisted.
 
 **On the allow-list** — it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
-permits the 17 built-in tools because a default-deny CLI would ship a
+permits the 18 built-in tools because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar. A `settings.json` that
 writes its own `allow` key replaces that default whole, so it must carry
 `plugin` and `plugins` or every door call is refused. Python plugins
@@ -347,7 +347,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.17.0
+./rig --version                 # prints: rig 0.18.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
