@@ -1,5 +1,33 @@
 # Changelog
 
+## [Unreleased]
+
+- **the workers file is the fleet** (`specs/SPEC_CONFIG.md`):
+  `~/.rig/workers.json` is `{"model": "<merged-table id>", "slots": 1}` —
+  `model` is required and must resolve against the merged models table,
+  `slots` defaults to `1` and gates concurrent `delegate` calls per
+  session. The embedded `models.json` sheds its `qwen3.8-workers` row
+  (`local` alone), `settings.json`'s `defaultJobModel` is cut — the
+  first start mints `workers.json` from it once and says so, later
+  starts nag until the key is deleted, a disagreement refuses —
+  and the default allow sheds `scheduler` and `delegate`, growing them
+  back only when a fleet stands and the operator named no allow of
+  their own. Absence of the file is absence of workers: no
+  `scheduler`/`delegate` on the wire, a named `/scheduler` refusal
+  (no fleet configured, the file's path in the voice), a dashboard
+  refusal in place of the create form, and `workers: none` on the
+  status row (a configured fleet names its model there instead).
+  `store/scheduler` drops its `defaultModel` constant: `Create` takes
+  the model from the caller and an empty one refuses by name, the
+  scheduler tool's default and the `run-job`'s model both ride the
+  fleet or the job's own row. The delegate's single per-session flock
+  becomes one lock per slot: the standing "already in flight" voice at
+  one slot, "the session's delegate slots are full (slots N)" at the
+  full set. The dashboard's `GET /api/scheduler` carries the fleet's
+  model (`worker`, empty when absent) so the view renders its half,
+  and `POST /api/scheduler` refuses 400 without a fleet, supplying the
+  fleet's model when a body names none.
+
 ## [0.18.0] — the job's whole life
 
 - **the scheduler's doors come to the dashboard** (`specs/SPEC_SERVE.md`):

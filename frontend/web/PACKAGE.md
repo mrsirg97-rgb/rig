@@ -31,14 +31,18 @@ framework, no build step, no external asset: `go build` alone ships it.
   `Allow` header); the static assets are the only non-API surface.
 - **The read views** — sessions (the list, grouped by workspace, and the
   transcript as structure: messages, reasoning, tool calls and results,
-  and the usage rows), todo and scheduler (the store's own text, verbatim),
-  models (every row: window, effort list, role), plugins (the loaded set,
-  the pending zone, and the disabled zone, each with the file's
-  DESCRIPTION). The memory
+  and the usage rows), todo and scheduler (the store's own text,
+  verbatim; the scheduler reply carries the fleet's model as `worker`,
+  empty when no fleet stands, so the view renders the create form or
+  the no-fleet refusal in its place), models (every row: window, effort
+  list, role), plugins (the loaded set, the pending zone, and the
+  disabled zone, each with the file's DESCRIPTION). The memory
   view is gone (SPEC_SERVE 11): rem is the model's, read in the TUI.
 - **The writes** (SPEC_SERVE phase 2) — a todo create (one task per
   line, `todo.Create`), a scheduler create (`scheduler.Create`, the
-  runner command the root wired), and a plugin create (one file into
+  runner command the root wired; no fleet refuses 400 naming the
+  `workers.json` move, a present fleet supplies the model when the
+  body names none), and a plugin create (one file into
   `plugins/pending/`, the contract's `DESCRIPTION`/`SCHEMA`/`run`). Each
   is Origin-checked (same-origin only), body-capped, POST-only, the
   reply verbatim; the only `db.Tx` (not `TxReadOnly`) the dashboard

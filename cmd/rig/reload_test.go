@@ -319,7 +319,7 @@ def run(args: dict) -> str:
 		t.Fatalf("requests = %d, want 5 (the scripted schedule)", len(bodies))
 	}
 
-	if got := toolNames(bodies[0]); !sameOrder(got, nativeToolNames) {
+	if got := toolNames(bodies[0]); !sameOrder(got, effectiveNativeNames(nil)) {
 		t.Fatalf("turn 1's wire = %v, want the native set in order", got)
 	}
 
@@ -340,10 +340,10 @@ def run(args: dict) -> str:
 		t.Fatalf("the new tool's result = %q, want the round trip (\"forged: hi\")", got)
 	}
 
-	if len(h.r.k.Tools) != len(nativeToolNames) {
+	if len(h.r.k.Tools) != len(effectiveNativeNames(nil)) {
 		t.Fatalf("the loop's snapshot changed by the swap: %d entries", len(h.r.k.Tools))
 	}
-	if got := len(h.r.live.List()); got != len(nativeToolNames)+1 {
+	if got := len(h.r.live.List()); got != len(effectiveNativeNames(nil))+1 {
 		t.Fatalf("the table after the swap = %d tools, want the natives plus the swapped-in one", got)
 	}
 
@@ -415,7 +415,7 @@ def run(args):
 	if got := toolMessageOf(t, bodies[3]); got != "plugins: reload: 0 loaded, 0 skipped" {
 		t.Fatalf("the down reload's reply = %q, want the empty list (removal free)", got)
 	}
-	if got := toolNames(bodies[4]); !sameOrder(got, nativeToolNames) {
+	if got := toolNames(bodies[4]); !sameOrder(got, effectiveNativeNames(nil)) {
 		t.Fatalf("the final wire = %v, want the native set (the list rebuilt down)", got)
 	}
 }
@@ -449,10 +449,10 @@ def run(args):
 		t.Fatalf("the tool error = %q, want the collision's voice", got)
 	}
 
-	if got := toolNames(bodies[2]); !sameOrder(got, nativeToolNames) {
+	if got := toolNames(bodies[2]); !sameOrder(got, effectiveNativeNames(nil)) {
 		t.Fatalf("the wire = %v, want the pre-reload list, whole", got)
 	}
-	if got := len(h.r.live.List()); got != len(nativeToolNames) {
+	if got := len(h.r.live.List()); got != len(effectiveNativeNames(nil)) {
 		t.Fatalf("the table = %d tools, want the pre-reload list (the swap refused)", got)
 	}
 }
@@ -651,7 +651,7 @@ def run(args: dict) -> str:
 		t.Fatalf("kernel cells = %d, want the discovery plus the call", got)
 	}
 
-	if got := len(h.r.live.List()); got != len(nativeToolNames)+1 {
+	if got := len(h.r.live.List()); got != len(effectiveNativeNames(nil))+1 {
 		t.Fatalf("the table after the self-heal = %d tools, want the natives plus the swapped-in one", got)
 	}
 }

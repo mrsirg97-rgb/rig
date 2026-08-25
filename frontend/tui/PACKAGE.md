@@ -25,9 +25,11 @@ width) — no core or loop line (decision 10).
   first — the content, the `-`/`+` sides — decision 4 amended), command
   output, the usage, the compact line, the fault line.
 - **The status line and startup block** (`status.go`): the live row
-  (`RenderStatusLine`, three rows — identity / effort · role · approve /
-  usage), the one-shot startup block (`RenderStatus`), and the snapshot's
-  refresh points (start, `/new`, `sessions resume`, a `models` switch).
+  (`RenderStatusLine`, three rows — identity / effort · role · approve ·
+  workers / usage; the stance row always ends with the fleet's model or
+  `workers: none`), the one-shot startup block (`RenderStatus`), and the
+  snapshot's refresh points (start, `/new`, `sessions resume`, a
+  `models` switch).
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,
   both doors — the tool-result path and the command path commit
   byte-equal blocks minus the opening line (decision 6).

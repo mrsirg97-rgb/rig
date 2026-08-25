@@ -79,6 +79,7 @@ type tui struct {
 	statusEffort  string
 	statusRole    string
 	statusApprove string
+	statusWorkers string
 	statusWindow  int
 	statusUsed    int
 	statusHasUsed bool
@@ -942,7 +943,7 @@ func (t *tui) askLineLocked() string {
 }
 
 func (t *tui) statusLineLocked() string {
-	st := RenderStatusLine(t.theme, t.statusModel, t.statusEffort, t.statusRole, t.statusApprove, t.statusUsed, t.statusWindow, t.statusHasUsed,
+	st := RenderStatusLine(t.theme, t.statusModel, t.statusEffort, t.statusRole, t.statusApprove, t.statusWorkers, t.statusUsed, t.statusWindow, t.statusHasUsed,
 		t.statusUp, t.statusDown, t.statusCache)
 	if st == "" {
 		return ""
@@ -959,6 +960,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusEffort = in.Effort
 		t.statusRole = in.Role
 		t.statusApprove = in.Approve
+		t.statusWorkers = in.Workers
 		t.statusWindow = in.Window
 		t.statusUsed = 0
 		t.statusHasUsed = false
@@ -1024,6 +1026,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		t.statusEffort = in.Effort
 		t.statusRole = in.Role
 		t.statusApprove = in.Approve
+		t.statusWorkers = in.Workers
 		t.statusWindow = in.Window
 		if fresh {
 			t.statusUsed = 0

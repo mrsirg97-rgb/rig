@@ -73,7 +73,7 @@ func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
 	st := scratchStores(t, home, "/ws/door2")
 	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "door2", Prompt: "say hi", Cron: "0 5 * * *",
-		Cwd: t.TempDir(), Model: "qwen3.8-workers", Busy: "skip",
+		Cwd: t.TempDir(), Model: "local", Busy: "skip",
 	}, "/ws/door2", "sess-door2", bin+" run-job", fixedNow); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestRunJobDoorSandboxOffRunsUnjailed(t *testing.T) {
 	workDir := t.TempDir()
 	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "door3", Prompt: "say hi", Cron: "0 5 * * *",
-		Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
+		Cwd: workDir, Model: "local", Busy: "skip",
 	}, "/ws/door3", "sess-door3", bin+" run-job", fixedNow); err != nil {
 		t.Fatalf("create: %v", err)
 	}

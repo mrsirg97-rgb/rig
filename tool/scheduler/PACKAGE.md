@@ -12,12 +12,14 @@ seams).
 - `Tool` — a `core.Tool` over the scheduler store's verbs
   (list/create/update/pause/resume/remove/runs), consuming the opened
   `sched.DB` (the one `global.sqlite`), `sched.Crontab`, the runner
-  command, and the default model.
+  command, and the fleet's model (the create default the root supplies;
+  the tool carries no worker default of its own).
 
 ## How it is consumed
 
-- Registered at the root as a native tool (wired with the opened store,
-  `RealCrontab`, and `self+" run-job"`).
+- Registered at the root as a native tool only while a fleet is
+  configured (wired with the opened store, `RealCrontab`,
+  `self+" run-job"`, and the fleet's model).
 
 ## Gotchas
 

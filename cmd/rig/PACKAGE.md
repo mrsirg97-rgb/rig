@@ -113,3 +113,9 @@ sees core and models and nothing else.
   store, like `todo`/`rem`/`scheduler`, so it is not a pure observation);
   `tool/sessions.New(cfgDir, cwd)` is wired in the root's tools map and
   in the embedded `allow` default.
+- The worker tools are fleet-gated (SPEC_CONFIG 12): `effectiveNativeNames`
+  drops `scheduler` and `delegate` from the registered native set when
+  `Config.Workers` is nil, so a no-fleet start wires sixteen natives
+  instead of eighteen, and the tools map builds the two only when a
+  fleet stands (the scheduler fed the fleet's model, the delegate its
+  slots). The `serve` path threads `cfg.Workers` into the web server.

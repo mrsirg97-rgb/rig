@@ -31,8 +31,6 @@ type CreateInput struct {
 	Busy   string
 }
 
-const defaultModel = "qwen3.8-workers"
-
 func schedErr(format string, a ...any) error {
 	return fmt.Errorf("scheduler: "+format, a...)
 }
@@ -69,7 +67,7 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	}
 	model := in.Model
 	if model == "" {
-		model = defaultModel
+		return "", schedErr("create requires a non-empty model (the fleet's model, or the job's own)")
 	}
 	busy := busyOf(in.Busy)
 

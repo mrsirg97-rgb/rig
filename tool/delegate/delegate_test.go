@@ -98,10 +98,10 @@ func (f *fakeSpawn) count() int {
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.SpawnResult, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
-	f.mu.Unlock()
 	if d, ok := ctx.Deadline(); ok {
 		f.deadline = time.Until(d)
 	}
+	f.mu.Unlock()
 	if f.block != nil {
 		<-f.block
 	}
@@ -133,6 +133,11 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 
 func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) core.Tool {
 	t.Helper()
+	return h.newToolSlots(t, 0, fetch, spawn)
+}
+
+func (h *harness) newToolSlots(t *testing.T, slots int, fetch sched.Fetch, spawn sched.Spawn) core.Tool {
+	t.Helper()
 	return delegate.New(delegate.Opts{
 		DB:           h.db,
 		Home:         h.home,
@@ -141,6 +146,7 @@ func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) co
 		SwapURL:      "http://127.0.0.1:8090",
 		WorkerCmd:    []string{"/x/rig"},
 		DefaultModel: "qwen3.8-workers",
+		Slots:        slots,
 		Sandbox:      "off",
 		Fetch:        fetch,
 		Spawn:        spawn,
@@ -281,6 +287,67 @@ func TestDelegateOneInFlightRefuses(t *testing.T) {
 	out, err := tool.Exec(context.Background(), runArgs("t2"))
 	if err == nil || !strings.Contains(err.Error(), "already in flight") {
 		t.Fatalf("the second call must refuse: (%q, %v)", out, err)
+	}
+	close(block)
+	<-first
+}
+
+func TestDelegateSlotsGateCounts(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	block := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
+	tool := h.newToolSlots(t, 2, fakeFetch(""), spawn.spawn)
+	done := make(chan struct{}, 2)
+	for _, task := range []string{"t1", "t2"} {
+		go func(task string) {
+			out, err := tool.Exec(context.Background(), runArgs(task))
+			if err != nil {
+				t.Logf("call %s: %v (%s)", task, err, out)
+			}
+			done <- struct{}{}
+		}(task)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for spawn.count() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("both slots never started (count %d)", spawn.count())
+		}
+		time.Sleep(time.Millisecond)
+	}
+	out, err := tool.Exec(context.Background(), runArgs("t3"))
+	if err == nil || !strings.Contains(err.Error(), "delegate slots are full (slots 2)") {
+		t.Fatalf("the third call must refuse naming the full set: (%q, %v)", out, err)
+	}
+	close(block)
+	<-done
+	<-done
+	if spawn.count() != 2 {
+		t.Fatalf("exactly the slots' worth may run, got %d spawns", spawn.count())
+	}
+}
+
+func TestDelegateSlotsOneKeepsTheStandingVoice(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	block := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
+	tool := h.newToolSlots(t, 1, fakeFetch(""), spawn.spawn)
+	first := make(chan struct{}, 1)
+	go func() {
+		_, _ = tool.Exec(context.Background(), runArgs("t"))
+		first <- struct{}{}
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for spawn.count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("spawn never started")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	out, err := tool.Exec(context.Background(), runArgs("t2"))
+	if err == nil || !strings.Contains(err.Error(), "a delegation is already in flight (this session)") {
+		t.Fatalf("slots 1 must keep the standing voice: (%q, %v)", out, err)
 	}
 	close(block)
 	<-first

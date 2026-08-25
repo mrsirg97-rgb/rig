@@ -82,13 +82,14 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 
 func schedCreate(ctx context.Context, h *harness, ct *fakeCrontab, name string) (string, error) {
 	return sched.Create(ctx, h.db, ct, sched.CreateInput{
-		Name: name, Prompt: "p", Cron: "0 0 * * *",
+		Model: "w",
+		Name:  name, Prompt: "p", Cron: "0 0 * * *",
 	}, h.sessCwd, "sess-x", runnerCmd, func() time.Time { return nowFixed })
 }
 
 func TestConcurrentRunRecordsSerialize(t *testing.T) {
 	h := newHarness(t, "/ws/rr")
-	if _, err := h.create(sched.CreateInput{Name: "busy", Prompt: "p", Cron: "0 8 * * *"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "busy", Prompt: "p", Cron: "0 8 * * *"}); err != nil {
 		t.Fatal(err)
 	}
 	const (

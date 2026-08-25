@@ -36,7 +36,8 @@ func legacyStore(t *testing.T, home, hash string, ct *fakeCrontab, jobs []legacy
 	}
 	for _, j := range jobs {
 		if _, err := sched.Create(context.Background(), db, ct, sched.CreateInput{
-			Name: j.Name, Prompt: j.Prompt, Cron: j.Cron, Cwd: j.Cwd,
+			Model: "w",
+			Name:  j.Name, Prompt: j.Prompt, Cron: j.Cron, Cwd: j.Cwd,
 		}, "/sess", "sess-legacy", runnerCmd, func() time.Time { return nowFixed }); err != nil {
 			t.Fatalf("legacy create: %v", err)
 		}
@@ -128,7 +129,8 @@ func TestMigrationKeepsExistingGlobalJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := sched.Create(context.Background(), gdb, ct, sched.CreateInput{
-		Name: "global-job", Prompt: "p", Cron: "0 2 * * *", Cwd: "/global",
+		Model: "w",
+		Name:  "global-job", Prompt: "p", Cron: "0 2 * * *", Cwd: "/global",
 	}, "/sess", "sess", runnerCmd, func() time.Time { return nowFixed }); err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +196,8 @@ func TestMigrationMovesEmptyFileAsideWithNoRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := sched.Create(context.Background(), db, ct, sched.CreateInput{
-		Name: "gone", Prompt: "p", Cron: "0 0 * * *", Cwd: "/dir-a",
+		Model: "w",
+		Name:  "gone", Prompt: "p", Cron: "0 0 * * *", Cwd: "/dir-a",
 	}, "/sess", "sess", runnerCmd, func() time.Time { return nowFixed }); err != nil {
 		t.Fatal(err)
 	}

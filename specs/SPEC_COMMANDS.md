@@ -650,6 +650,17 @@ executes (the root puts the live `todoTool` / `schedTool` in), so a
 same queue, same session attribution (the live session's id, or `anon`
 unthreaded — the tools' existing behavior), same store.
 
+- **No fleet, no `/scheduler`** (SPEC_CONFIG 12's presence rule): with
+  no `workers.json` the root registers no `scheduler` tool, and the
+  command refuses by name before the tool lookup: `scheduler: no
+  workers configured (~/.rig/workers.json names the model)` — the same
+  string the dashboard's scheduler view shows (SPEC_SERVE). The
+  refusal is the command's, not the generic no-tool voice: the
+  operator is told what is missing (the file, and its job — it names
+  the model), not only that a tool is absent. The fleet's model and
+  file path ride on the command env, so the refusal names the home the
+  root actually read, not a hardcoded path.
+
 Scheduler ids are one sequence across the single store (SPEC_STATE): a
 `jN` names the same job from any directory, the grammar has no `scope`
 (the tool's schema lost it), and `name` is unique store-wide. `list` is
@@ -887,6 +898,11 @@ crontab spool for the scheduler (the e2e's existing pattern).
   lines or the no-runs voice), `scheduler list extra` (the shape
   refusal), `scheduler create short` (the create refusal naming the
   shape).
+- `TestSchedulerCommandNoFleetRefuses` — no fleet on the env
+  (`Env.Workers` absent): any `scheduler …` line refuses by name, the
+  command's voice (`scheduler: no workers configured (… names the
+  model)`), the file path the home the root read; the generic
+  no-tool voice is not the one.
 - `TestToolCommandThreadsTheLiveSession` — a fake tool asserting
   `core.SessionFrom(ctx)` returns the live session's id (post-`/new`).
 - `TestCommandEnvRefusedLoud` — a `Run` with a foreign env type: the

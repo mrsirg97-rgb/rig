@@ -12,24 +12,26 @@ import (
 )
 
 type Settings struct {
-	BaseURL         string
-	Model           string
-	System          string
-	Allow           []string
-	Retries         int
-	Rounds          int
-	ResultCap       int
-	Python          string
-	SearXNG         string
-	WebFetchProxy   *string
-	Trafilatura     *string
-	SwapURL         string
-	DefaultJobModel string
-	Theme           string
-	Sandbox         string
-	SandboxBinds    []string
-	Approve         string
-	Plugins         SettingsPlugins
+	BaseURL       string
+	Model         string
+	System        string
+	Allow         []string
+	Retries       int
+	Rounds        int
+	ResultCap     int
+	Python        string
+	SearXNG       string
+	WebFetchProxy *string
+	Trafilatura   *string
+	SwapURL       string
+	Theme         string
+	Sandbox       string
+	SandboxBinds  []string
+	Approve       string
+	Plugins       SettingsPlugins
+
+	legacyJobModel string
+	legacyJobKey   bool
 }
 
 type SettingsPlugins struct {
@@ -46,28 +48,30 @@ var knownSettingsSet = func() map[string]bool {
 	return m
 }()
 
-func loadSettings(dir string) (Settings, error) {
+func loadSettings(dir string) (Settings, bool, error) {
 	embeddedData, err := embedded.ReadFile("settings.json")
 	if err != nil {
 		panic("config: embedded settings.json: " + err.Error())
 	}
 	base, err := parseSettings(embeddedData, "config/settings.json (embedded)")
 	if err != nil {
-		return Settings{}, err
+		return Settings{}, false, err
 	}
 	p := filepath.Join(dir, "settings.json")
 	data, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return base, nil
+			return base, false, nil
 		}
-		return Settings{}, readErr(p, err)
+		return Settings{}, false, readErr(p, err)
 	}
 	file, err := parseSettings(data, p)
 	if err != nil {
-		return Settings{}, err
+		return Settings{}, false, err
 	}
-	return mergeSettings(base, file), nil
+	out := mergeSettings(base, file)
+	out.legacyJobModel, out.legacyJobKey = file.legacyJobModel, file.legacyJobKey
+	return out, len(file.Allow) > 0, nil
 }
 
 func mergeSettings(base, file Settings) Settings {
@@ -107,9 +111,6 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.SwapURL != "" {
 		out.SwapURL = file.SwapURL
-	}
-	if file.DefaultJobModel != "" {
-		out.DefaultJobModel = file.DefaultJobModel
 	}
 	if file.Theme != "" {
 		out.Theme = file.Theme
@@ -188,8 +189,9 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	}
 	if v, ok, err := str("defaultJobModel"); err != nil {
 		return Settings{}, err
-	} else if ok && v != "" {
-		s.DefaultJobModel = v
+	} else if ok {
+		s.legacyJobModel = v
+		s.legacyJobKey = true
 	}
 	if v, ok, err := str("theme"); err != nil {
 		return Settings{}, err

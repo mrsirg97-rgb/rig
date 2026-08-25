@@ -175,7 +175,7 @@ func index(t *testing.T, hay, needle string) int {
 
 func TestCreateMintsJ1WritesStoreAndTaggedLineForeignIntact(t *testing.T) {
 	h := newHarness(t, "/ws/a")
-	reply, err := h.create(sched.CreateInput{Name: "nightly", Prompt: "do it", Cron: "0 */4 * * *"})
+	reply, err := h.create(sched.CreateInput{Model: "w", Name: "nightly", Prompt: "do it", Cron: "0 */4 * * *"})
 	mustOK(t, err)
 	contains(t, reply, "created j1 'nightly'")
 
@@ -190,11 +190,11 @@ func TestCreateMintsJ1WritesStoreAndTaggedLineForeignIntact(t *testing.T) {
 
 func TestCreateExplicitCwdIsTheJobField(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
-	reply, err := h.create(sched.CreateInput{Name: "gw", Prompt: "p", Cron: "0 0 * * *"})
+	reply, err := h.create(sched.CreateInput{Model: "w", Name: "gw", Prompt: "p", Cron: "0 0 * * *"})
 	mustOK(t, err)
 	contains(t, reply, "/ws/sess")
 
-	_, err = h.create(sched.CreateInput{Name: "gw2", Prompt: "p", Cron: "1 0 * * *", Cwd: "/shop/make-money"})
+	_, err = h.create(sched.CreateInput{Model: "w", Name: "gw2", Prompt: "p", Cron: "1 0 * * *", Cwd: "/shop/make-money"})
 	mustOK(t, err)
 	if got := jobsRow(t, h, "j2")["cwd"]; got != "/shop/make-money" {
 		t.Fatalf("explicit cwd not honored: %v", got)
@@ -205,12 +205,12 @@ func TestCreateExplicitCwdIsTheJobField(t *testing.T) {
 
 func TestRemovedJobsNameMayBeRecreatedIdsStillMintForward(t *testing.T) {
 	h := newHarness(t, "/ws/nm")
-	_, err := h.create(sched.CreateInput{Name: "recycle", Prompt: "p", Cron: "0 11 * * *"})
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "recycle", Prompt: "p", Cron: "0 11 * * *"})
 	mustOK(t, err)
 	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = h.create(sched.CreateInput{Name: "recycle", Prompt: "q", Cron: "1 11 * * *"})
+	_, err = h.create(sched.CreateInput{Model: "w", Name: "recycle", Prompt: "q", Cron: "1 11 * * *"})
 	mustOK(t, err)
 	row := jobsRow(t, h, "j2")
 	if row == nil || row["name"] != "recycle" || row["state"] != "active" {
@@ -220,11 +220,11 @@ func TestRemovedJobsNameMayBeRecreatedIdsStillMintForward(t *testing.T) {
 
 func TestCreateRefusesDuplicateNameNothingWritten(t *testing.T) {
 	h := newHarness(t, "/ws/b")
-	if _, err := h.create(sched.CreateInput{Name: "nightly", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "nightly", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
 		t.Fatal(err)
 	}
 	before := h.ct.text
-	_, err := h.create(sched.CreateInput{Name: "nightly", Prompt: "q", Cron: "1 0 * * *"})
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "nightly", Prompt: "q", Cron: "1 0 * * *"})
 	mustErr(t, err, `already exists`)
 	if h.ct.text != before {
 		t.Fatal("crontab must be untouched")
@@ -238,10 +238,27 @@ func TestCreateRefusesDuplicateNameNothingWritten(t *testing.T) {
 	}
 }
 
+func TestCreateWithoutModelRefusesNamingTheCaller(t *testing.T) {
+	h := newHarness(t, "/ws/d2")
+	before := h.ct.text
+	_, err := h.create(sched.CreateInput{Name: "nomodel", Prompt: "p", Cron: "0 0 * * *"})
+	mustErr(t, err, `create requires a non-empty model \(the fleet's model, or the job's own\)`)
+	if h.ct.text != before {
+		t.Fatal("crontab must be untouched")
+	}
+	var n int
+	if err := h.db.QueryRow(`SELECT COUNT(*) FROM jobs`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("jobs = %d rows, want none (the refusal is before the write)", n)
+	}
+}
+
 func TestCreateValidatesCronBeforeWritingAnything(t *testing.T) {
 	h := newHarness(t, "/ws/d")
 	before := h.ct.text
-	_, err := h.create(sched.CreateInput{Name: "bad", Prompt: "p", Cron: "* * * * "})
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "bad", Prompt: "p", Cron: "* * * * "})
 	mustErr(t, err, `cron:`)
 	if h.ct.text != before {
 		t.Fatal("crontab must be untouched")
@@ -250,9 +267,9 @@ func TestCreateValidatesCronBeforeWritingAnything(t *testing.T) {
 
 func TestCreateOnceTranslatesToCronFieldsMissingAtRefuses(t *testing.T) {
 	h := newHarness(t, "/ws/e")
-	_, err := h.create(sched.CreateInput{Name: "soon", Prompt: "p", Cron: "once"})
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "soon", Prompt: "p", Cron: "once"})
 	mustErr(t, err, `at`)
-	_, err = h.create(sched.CreateInput{Name: "soon", Prompt: "p", Cron: "once", At: "2026-08-16T03:07:00Z"})
+	_, err = h.create(sched.CreateInput{Model: "w", Name: "soon", Prompt: "p", Cron: "once", At: "2026-08-16T03:07:00Z"})
 	mustOK(t, err)
 	row := jobsRow(t, h, "j1")
 	if row["cron"] != "7 3 16 8 *" {
@@ -266,10 +283,10 @@ func TestCreateOnceTranslatesToCronFieldsMissingAtRefuses(t *testing.T) {
 
 func TestListGroupsByDirectoryThisCwdFirst(t *testing.T) {
 	h := newHarness(t, "/ws/f")
-	if _, err := h.create(sched.CreateInput{Name: "cw", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/f"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "cw", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/f"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.create(sched.CreateInput{Name: "other", Prompt: "p", Cron: "0 1 * * *", Cwd: "/other"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "other", Prompt: "p", Cron: "0 1 * * *", Cwd: "/other"}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ := h.list()
@@ -288,7 +305,7 @@ func TestEmptyListNamesTheStore(t *testing.T) {
 
 func TestJobListedAndPausableFromAnotherDirectory(t *testing.T) {
 	h := newHarness(t, "/a")
-	if _, err := h.create(sched.CreateInput{Name: "shared", Prompt: "p", Cron: "0 0 * * *", Cwd: "/a"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "shared", Prompt: "p", Cron: "0 0 * * *", Cwd: "/a"}); err != nil {
 		t.Fatal(err)
 	}
 	list, err := sched.List(context.Background(), h.db, h.ct, "/b", nil, func() time.Time { return nowFixed })
@@ -305,10 +322,10 @@ func TestJobListedAndPausableFromAnotherDirectory(t *testing.T) {
 
 func TestIdsAreOneSequenceAcrossDirectories(t *testing.T) {
 	h := newHarness(t, "/a")
-	if _, err := h.create(sched.CreateInput{Name: "one", Prompt: "p", Cron: "0 0 * * *", Cwd: "/a"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "one", Prompt: "p", Cron: "0 0 * * *", Cwd: "/a"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.create(sched.CreateInput{Name: "two", Prompt: "p", Cron: "0 1 * * *", Cwd: "/b"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "two", Prompt: "p", Cron: "0 1 * * *", Cwd: "/b"}); err != nil {
 		t.Fatal(err)
 	}
 	contains(t, h.ct.text, "j2  # pane-scheduler:j2")
@@ -319,10 +336,10 @@ func TestIdsAreOneSequenceAcrossDirectories(t *testing.T) {
 
 func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 	h := newHarness(t, "/ws/g")
-	if _, err := h.create(sched.CreateInput{Name: "one", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/g"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "one", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/g"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.create(sched.CreateInput{Name: "two", Prompt: "p", Cron: "0 2 * * *", Cwd: "/ws/g"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "two", Prompt: "p", Cron: "0 2 * * *", Cwd: "/ws/g"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -350,7 +367,7 @@ func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 
 func TestListMarksAJobRunningWhenItsLockIsHeld(t *testing.T) {
 	h := newHarness(t, "/ws/h")
-	if _, err := h.create(sched.CreateInput{Name: "locked", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/h"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "locked", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/h"}); err != nil {
 		t.Fatal(err)
 	}
 	list, err := sched.List(context.Background(), h.db, h.ct, h.sessCwd, func(key string) bool {
@@ -363,7 +380,7 @@ func TestListMarksAJobRunningWhenItsLockIsHeld(t *testing.T) {
 func TestPauseCommentsTheLineAndResumeRestoresByteIdentical(t *testing.T) {
 	h := newHarness(t, "/ws/i")
 	_, err := sched.Create(context.Background(), h.db, h.ct,
-		sched.CreateInput{Name: "p", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/i"}, "/ws/i", "sess-core", runnerCmd, func() time.Time { return nowFixed })
+		sched.CreateInput{Model: "w", Name: "p", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/i"}, "/ws/i", "sess-core", runnerCmd, func() time.Time { return nowFixed })
 	mustOK(t, err)
 	activeLine := ""
 	for _, l := range strings.Split(h.ct.text, "\n") {
@@ -412,7 +429,7 @@ func TestPauseCommentsTheLineAndResumeRestoresByteIdentical(t *testing.T) {
 
 func TestPauseOnPausedRefusesResumeOnActiveRefuses(t *testing.T) {
 	h := newHarness(t, "/ws/j")
-	if _, err := h.create(sched.CreateInput{Name: "p", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/j"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "p", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/j"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core")
@@ -439,7 +456,7 @@ func TestUnknownIdRefuses(t *testing.T) {
 
 func TestRemoveTombstonesTheRowAndRunsSurvive(t *testing.T) {
 	h := newHarness(t, "/ws/l")
-	_, err := h.create(sched.CreateInput{Name: "doomed", Prompt: "p", Cron: "0 7 * * *", Cwd: "/ws/l"})
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "doomed", Prompt: "p", Cron: "0 7 * * *", Cwd: "/ws/l"})
 	mustOK(t, err)
 
 	if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{
@@ -467,7 +484,7 @@ func TestRemoveTombstonesTheRowAndRunsSurvive(t *testing.T) {
 
 func TestRunsReturnsTheLastNInChronologicalOrder(t *testing.T) {
 	h := newHarness(t, "/ws/m")
-	_, err := h.create(sched.CreateInput{Name: "busy", Prompt: "p", Cron: "0 8 * * *", Cwd: "/ws/m"})
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "busy", Prompt: "p", Cron: "0 8 * * *", Cwd: "/ws/m"})
 	mustOK(t, err)
 	rec := func(status string, exit *int64, reason string) {
 		if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{
@@ -501,7 +518,8 @@ func TestCrontabInstallFailureRefusesAndLeavesTheStoreUntouched(t *testing.T) {
 	h := newHarness(t, "/ws/n")
 	fc := failingCrontab{installErr: errors.New("crontab install failed (exit 2): boom")}
 	_, err := sched.Create(context.Background(), h.db, fc, sched.CreateInput{
-		Name: "x", Prompt: "p", Cron: "0 9 * * *", Cwd: "/ws/n",
+		Model: "w",
+		Name:  "x", Prompt: "p", Cron: "0 9 * * *", Cwd: "/ws/n",
 	}, "/ws/n", "sess-core", runnerCmd, func() time.Time { return nowFixed })
 	mustErr(t, err, `crontab install failed`)
 	var n int
@@ -517,7 +535,8 @@ func TestCrontabListFailureRefusesLoudlyBeforeAnythingIsWritten(t *testing.T) {
 	h := newHarness(t, "/ws/o")
 	fc := failingCrontab{listErr: errors.New("crontab: binary not found")}
 	_, err := sched.Create(context.Background(), h.db, fc, sched.CreateInput{
-		Name: "x", Prompt: "p", Cron: "0 10 * * *", Cwd: "/ws/o",
+		Model: "w",
+		Name:  "x", Prompt: "p", Cron: "0 10 * * *", Cwd: "/ws/o",
 	}, "/ws/o", "sess-core", runnerCmd, func() time.Time { return nowFixed })
 	mustErr(t, err, `binary not found`)
 	var n int

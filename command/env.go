@@ -36,7 +36,16 @@ type RemRow struct {
 	Content    string
 }
 
+type Workers struct {
+	Model      string
+	Slots      int
+	File       string
+	Configured bool
+}
+
 type Env struct {
+	Workers Workers
+
 	Session func() *core.Session
 
 	Steer Steerer

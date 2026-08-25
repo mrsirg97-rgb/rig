@@ -61,8 +61,8 @@ func TestModelsMergesOverEmbeddedRowByRow(t *testing.T) {
 		if m.Effort != "" {
 			t.Fatalf("a new row's effort = %q, want the default (the policy's medium)", m.Effort)
 		}
-		if got := len(cfg.Models.Known()); got != 3 {
-			t.Fatalf("merged table = %d rows, want the embedded two plus the new one (%v)", got, cfg.Models.Known())
+		if got := len(cfg.Models.Known()); got != 2 {
+			t.Fatalf("merged table = %d rows, want the embedded local plus the new one (%v)", got, cfg.Models.Known())
 		}
 	})
 	t.Run("role and effort are the file's when set", func(t *testing.T) {
@@ -79,9 +79,9 @@ func TestModelsMergesOverEmbeddedRowByRow(t *testing.T) {
 	})
 	t.Run("unlisted embedded row kept", func(t *testing.T) {
 		dir := t.TempDir()
-		write(t, dir, "models.json", `[{"id": "local", "window": 32768}]`)
+		write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768}]`)
 		cfg := load(t, dir, t.TempDir())
-		m, ok := cfg.Models.Get("qwen3.8-workers")
+		m, ok := cfg.Models.Get("local")
 		if !ok {
 			t.Fatalf("the unlisted embedded row must be kept (the file is an overlay, not a replacement)")
 		}

@@ -197,7 +197,17 @@ todo/rem/scheduler/sessions views:
   history toggle for `ReadAll`; the create form (one task per line) and the
   verbatim reply.
 - **Scheduler.** The one list, grouped by directory (the selected cwd
-  first), drift notes included.
+  first), drift notes included. The list renders even with no fleet —
+  jobs created before the fleet was removed keep firing (the row
+  carries its model, `run-job` needs no `workers.json`). With no
+  fleet, the view says the same refusal the `/scheduler` command
+  says, in place of the create form: `no workers configured
+  (~/.rig/workers.json names the model)` — the operator reads the
+  file's job (it names the model) and writes it, instead of a form
+  that could only mint jobs with no fleet to run them. The `GET
+  /api/scheduler` reply carries the fleet's model (`worker`, empty
+  when absent) so the view knows which half to render; the `POST`
+  create gate rides the same fact.
 - **Memory.** The selected cwd's recent memories.
 - **Models.** Every row: id, window, max tokens, reserve, keep-recent,
   role, effort, and the effort list.
@@ -344,7 +354,12 @@ TUI — each view renders the way the TUI renders that tool's output.
   session's `scheduler` tool calls. The form carries name, prompt, cron
   (five fields, or `once` plus an ISO `at`), and the `cwd` (the page's
   cwd by default — the job runs where its `cwd` says, no scope arg).
-  The verb's reply is shown verbatim, the list re-read after.
+  The create body's model defaults to the fleet's model (SPEC_CONFIG
+  12): the server fills it when the body names none, and a job that
+  names its own model keeps it. The verb's reply is shown verbatim, the
+  list re-read after. With no fleet (`workers.json` absent), the POST
+  refuses by name (400, the command's voice) — the view says the same
+  instead of offering the form (the view's refusal, below).
 - **The plugin create.** `POST /api/plugins` writes one file into the
   pending zone (`plugins/pending/<name>.py`), the provenance rule's
   landing zone (SPEC_SANDBOX 2): the operator's creation is reviewable,
@@ -420,11 +435,16 @@ seeded temp home):
 
 - **The scheduler create.** A same-Origin `POST /api/scheduler` with
   name/prompt/cron returns the verb's reply (`created jN 'name'
-  (scope)`) and the list carries the job; a `once` plus a valid `at`
+  (scope)`) and the list carries the job; the job's model is the
+  fleet's model when the body names none (the server fills it), and a
+  body that names its own model keeps it; a `once` plus a valid `at`
   lands; a duplicate name in the same scope is a named refusal; a bad
   cron is the verb's refusal; a no-Origin or foreign-Origin write is a
   403; an over-cap body is a 400; `DELETE /api/scheduler` is a 405 with
-  `Allow` naming POST.
+  `Allow` naming POST. With no fleet, the POST is a 400 by the command's
+  voice (the same string the `/scheduler` command refuses with), and the
+  `GET` reply's `worker` field is empty (the view's refusal renders in
+  place of the form).
 - **The plugin create.** A same-Origin `POST /api/plugins` with
   name/description/code writes `plugins/pending/<name>.py` carrying the
   `DESCRIPTION`, a `SCHEMA` object, and a `def run(args):`; the pending

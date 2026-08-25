@@ -736,6 +736,13 @@ async function renderScheduler(q) {
   hint.textContent = 'tap a job to update its fields in place; the list re-reads after a move';
   tb.body.appendChild(hint);
 
+  if (!data.worker) {
+    const refusal = el('div', 'hint');
+    refusal.textContent = 'scheduler: no workers configured (~/.rig/workers.json names the model)';
+    tb.body.appendChild(refusal);
+    return;
+  }
+
   const name = textInput('name (e.g. nightly-digest)', true);
   const prompt = el('textarea');
   prompt.rows = 2;

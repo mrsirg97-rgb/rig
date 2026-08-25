@@ -61,6 +61,9 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 	}
 	tool, ok := e.Tools[t.name]
 	if !ok {
+		if t.name == "scheduler" && !e.Workers.Configured {
+			return "", fmt.Errorf("scheduler: no workers configured (%s names the model)", e.Workers.File)
+		}
 		return "", fmt.Errorf("%s: no %s tool (the root did not put it in Env.Tools)", t.name, t.name)
 	}
 	raw, err := t.parse(args)

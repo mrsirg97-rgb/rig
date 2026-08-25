@@ -13,31 +13,34 @@ the state store.
 
 ## What it includes
 
-- `delegate.go` — `Opts` (the root's wiring) and `New`, the adapter
-  with the description, schema, and `Exec`; the cwd canonicalization
-  and the outside-the-session/rig-home refusal; the output cap (bash's
-  256 KiB shape, the loud `[TRUNCATED: N bytes]` marker) and the
-  trailer line (exit, duration, session id, log path); the worker
-  session-id discovery in the state store.
+- `delegate.go` — `Opts` (the root's wiring, carrying the fleet's
+  `Slots`) and `New`, the adapter with the description (the in-flight
+  bound phrased by the slot count), schema, and `Exec`; the cwd
+  canonicalization and the outside-the-session/rig-home refusal; the
+  output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
+  marker) and the trailer line (exit, duration, session id, log path);
+  the worker session-id discovery in the state store.
 - `delegate_test.go` — the failing-first named cases over a fake
   `Spawn` and `Fetch` (happy path, cwd refusal, busy refusal, timeout,
   one-in-flight, no-recursion, the cap).
 
 ## How it is consumed
 
-- Registered at the root as a native tool (SPEC_DELEGATE): wired with
-  the session's cwd-scope scheduler store, the scheduler home, the
-  operator's rig home and state-store directory, the swap URL, `self`
-  as the worker command, the default worker model, the sandbox, and
-  the operator's allow-list (the worker's omits `delegate`).
+- Registered at the root as a native tool only while a fleet is
+  configured (SPEC_DELEGATE): wired with the session's cwd-scope
+  scheduler store, the scheduler home, the operator's rig home and
+  state-store directory, the swap URL, `self` as the worker command,
+  the fleet's model, the fleet's slots, the sandbox, and the
+  operator's allow-list (the worker's omits `delegate`).
 
 ## Gotchas
 
-- The no-recursion marker (`RIG_DELEGATE`) and the one-in-flight flock
+- The no-recursion marker (`RIG_DELEGATE`) and the per-slot flocks
   live in `store/scheduler`'s `Delegate`, not here: a worker's
   inherited marker refuses by name, and a concurrent operator call
-  refuses "already in flight" first (the lock check precedes the
-  marker).
+  that holds every slot refuses first (the lock check precedes the
+  marker) — the standing "already in flight" voice at one slot, the
+  full-set "slots are full (slots N)" voice otherwise.
 - The jailed worker's transcript lands at the operator's state-store
   path via `jailSpawn`'s sessions-dir bind (SPEC_DELEGATE 3); the
   session id is read back as the newest row started after the spawn.

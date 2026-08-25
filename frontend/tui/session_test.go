@@ -728,7 +728,7 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 
 		"huihui3.8 · 12/262k",
 		"xhigh · default · au",
-		"to",
+		"to · workers: none",
 
 		"up 10 down 2 · cache",
 		" r 0 0%",
@@ -883,7 +883,7 @@ func TestCompletionMenu(t *testing.T) {
 		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
 	}
 	status := "huihui3.8"
-	stance := "xhigh · default · auto"
+	stance := "xhigh · default · auto · workers: none"
 	usage := "up 214k down 18k · cache r 187k 87%"
 	hint := "tab/↓ pick · enter runs"
 
@@ -971,7 +971,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	digits := strings.Repeat("0123456789", 5) + "01234567XY"
 
 	statusRows := 1
-	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "xhigh", "", "", 0, 262144, false,
+	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "xhigh", "", "", "", 0, 262144, false,
 		214000, 18200, 187000)), "\n") {
 		statusRows += (displayWidth(r) + 9) / 10
 	}
@@ -1145,9 +1145,9 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	s.await(promptMark(th))
 	s.si.feed("/mo")
 
-	s.awaitScreen(30, 15, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187", "k 87%"})
+	s.awaitScreen(30, 16, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "xhigh · default · auto · worke", "rs: none", "up 214k down 18k · cache r 187", "k 87%"})
 	rows := screenLines(t, s, 30)
-	menuRow := rows[len(rows)-9]
+	menuRow := rows[len(rows)-10]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
 		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
 	}
@@ -1187,10 +1187,10 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 
-	s.awaitScreen(50, 17, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 17, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto · workers: none", "up 214k down 18k · cache r 187k 87%"})
 
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
-	s.awaitScreen(50, 18, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 18, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto · workers: none", "up 214k down 18k · cache r 187k 87%"})
 }
 
 func TestSpacingRule(t *testing.T) {
@@ -1293,7 +1293,7 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 		"create  the queue, the task's text",
 		"done  a task's id",
 		"tab/↓ pick · enter runs",
-		"❯ /todo", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%",
+		"❯ /todo", "", "huihui3.8", "xhigh · default · auto · workers: none", "up 214k down 18k · cache r 187k 87%",
 	})
 
 	s.si.feed("\t\n")
@@ -1312,17 +1312,17 @@ func TestMargins(t *testing.T) {
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
 	s.await(promptMark(th))
-	s.awaitScreen(60, 11, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 11, []string{"session 2f9a1c0e77b3", "", "❯ ", "", "huihui3.8", "xhigh · default · auto · workers: none", "up 214k down 18k · cache r 187k 87%"})
 	s.si.feed("go\n")
 	<-in
 	s.fe.Notify(core.TextDelta{Text: "text"})
 
-	s.awaitScreen(60, 17, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 17, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto · workers: none", "up 214k down 18k · cache r 187k 87%"})
 	s.fe.Notify(core.TextDelta{Text: "\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
-	s.awaitScreen(60, 15, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "xhigh · default · auto", "up 10 down 2 · cache r 0 0%"})
+	s.awaitScreen(60, 15, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "xhigh · default · auto · workers: none", "up 10 down 2 · cache r 0 0%"})
 	rows := screenLines(t, s, 60)
 	for i := 1; i < len(rows); i++ {
 		if rows[i] == "" && rows[i-1] == "" {

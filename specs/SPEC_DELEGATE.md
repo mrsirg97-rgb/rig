@@ -87,12 +87,18 @@ delegate spawns, exactly as `run-job` spawns one.
   canonicalization mirrors `middleware/perm`'s `normalizePath` (the
   file tools' absolute-and-clean), so the path test and the worker's
   chdir agree on the same directory.
-- `model` (default the settings' `defaultJobModel`): the worker row,
-  exactly as `scheduler create` defaults.
+- `model` (default the workers file's `model` — SPEC_CONFIG 12's
+  fleet): the worker row, exactly as `scheduler create` defaults. The
+  fleet's model is a row of the operator's models table; there is no
+  fallback baked into the binary.
 - `timeoutMs` (default 10 minutes): capped at the runner's
   `DefaultRunTimeout` (30 minutes) — the ceiling, named; a larger
   value clamps to it. The timeout bounds the work an untrusted caller
   can induce.
+- The tool registers only when the fleet is configured (SPEC_CONFIG
+  12's presence rule): no `workers.json`, no `delegate` on the wire —
+  there is no worker to spawn, and a tool that can only refuse is
+  menu weight.
 
 The description teaches when to delegate: a bounded sub-task whose
 result is a message, not a conversation — a long compute, a sweep, a
@@ -198,14 +204,21 @@ has the session id and log path.
 
 ### 6. Bounds, named
 
-- **One in flight per session**: the delegate takes a non-blocking
-  flock on a per-session lock file in the scheduler home before
-  spawning, releases it after. A second call while one runs refuses:
-  `delegate: a delegation is already in flight (this session)`.
-  Sequential delivery makes the overlap rare in the loop; the lock
-  also guards a stale worker from an interrupted turn (the flock
-  releases on death). It is the run-job `acquireLock` shape, keyed
-  per session.
+- **The fleet's slots gate the in-flight count (SPEC_CONFIG 12)**:
+  `slots` (the fleet's, default 1) is how many delegates may run at
+  once per session. The delegate takes a non-blocking flock on the
+  per-session slot lock files in the scheduler home (one file per
+  slot, `delegate:<session>:<i>`), trying the slots in order and
+  taking the first free, releasing it after. A call beyond the slots
+  refuses: with `slots` 1 the voice is the standing one (`delegate: a
+  delegation is already in flight (this session)`); with `slots` > 1
+  it names the full set (`delegate: the session's delegate slots are
+  full (slots N)`). Sequential delivery makes the overlap rare in the
+  loop; the flocks also guard stale workers from interrupted turns
+  (they release on death). It is the run-job `acquireLock` shape,
+  keyed per session per slot. One slot today, the pool later — the
+  gate already counts, so raising `slots` is a file edit, not a code
+  change.
 - **No recursion**: the delegate sets `RIG_DELEGATE=1` on the worker's
   spawn (the `RIG_HOME` pattern, decision 2). The delegate tool's
   Exec refuses by name when the marker is set: `delegate: a worker
@@ -254,18 +267,25 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
   timed-out result; the error names the timeout, and the fake
   `Spawn` saw the deadline kill.
 - **The one-in-flight refusal**: two concurrent Execs; one runs, the
-  second refuses naming the in-flight delegation.
+  second refuses naming the in-flight delegation (slots 1, the
+  default).
+- **The slots gate**: `slots` 2 — two concurrent Execs run, a third
+  refuses naming the full set; the gate counts, not just blocks.
 - **The no-recursion refusal**: `RIG_DELEGATE=1` set, Exec refuses by
   name.
 - **The approval prompt shape**: `approve.Prompt` for `delegate`
   renders `delegate · <first line>`; the raw-args fallback for other
   tools is unchanged.
 
-Freeze: the embedded allow default gains `delegate`;
-`middleware/approve` gains the `delegate` branch;
+Freeze: `middleware/approve` gains the `delegate` branch;
 `frontend/tui`'s freeze allowlist gains `tool/delegate`; the native
-set grows to 18 (`TestWireRegistersEverySeam` and the goldens
-regenerate in place). `core/` and `loop/` byte-identical.
+set grows to 18 when the fleet is configured, and the goldens
+regenerate in place (SPEC_CONFIG 12: the set follows
+`workers.json` — no fleet, the two worker tools are off the wire and
+the goldens are the 16-tool bytes). `core/` and `loop/`
+byte-identical. The embedded allow default does not carry the worker
+tools; the default allow grows by them when a fleet is configured and
+no operator allow stands (SPEC_CONFIG 12).
 
 ## scope
 
