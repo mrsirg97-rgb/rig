@@ -264,6 +264,15 @@ override all name the queue they read, never "this directory's"),
 read two ways carries the word that picks one. Edit is exact-match string replacement with
 loud, specific failure messages; a fuzzy edit tool silently corrupts files.
 
+**A read that finds a stale observation names it** (amended for the
+daily driver): when the path was recorded in the threaded session's
+`Files` and the on-disk hash or mtime differs, the read prepends
+`[changed since your observation]` to the content before the bytes, so
+the model is told its prior read is stale before it acts on it — the
+push that `diff last` would otherwise force the model to go ask for.
+The note rides the content it already returns; nothing new is written,
+and a fresh observation re-records as usual.
+
 ### ToolMiddleware
 
 ```go
