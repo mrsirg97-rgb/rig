@@ -66,8 +66,8 @@ narrow it with `--allow`:
 | `python` | a persistent IPython kernel — variables and imports survive |
 | `web_search` | a local SearXNG instance |
 | `web_fetch` | a URL as readable text; private addresses refused |
-| `todo` | the task queue for the working directory |
-| `rem` | memory across sessions: learn, recall, prune |
+| `todo` | the task queue, scoped to the project (a repo's worktrees share one) |
+| `rem` | memory across sessions: learn, recall, reflect, prune — scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
 | `delegate` | a one-shot headless worker for a bounded subtask |
 | `sessions` | read-only vitals of the session store |
