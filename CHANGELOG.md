@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.19.0] — the workers file is the fleet
 
 - **the startup block says the fleet, and how to begin**
   (`specs/SPEC_TUI.md` 3, amended): under the session id, `workers:
