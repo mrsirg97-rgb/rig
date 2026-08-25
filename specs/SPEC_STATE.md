@@ -382,11 +382,20 @@ post-merge corrections)
   stays paused (its line is rewritten commented) and the new line lands on
   resume. `pause` and `resume` stay their own ops; `update` never changes
   the state.
-- The `defaultModel` fallback constant stays in the store, named (SPEC_CONFIG
-  5, 8): the tool's default job model moved to the config chain (the file's
-  `defaultJobModel` over the embedded value), and the tool always passes a
-  non-empty model — the constant is the direct-`Create` path's safety net,
-  not a second source. No schema change, no path change.
+- The `defaultModel` fallback constant is cut (SPEC_CONFIG 12, with
+  the settings' `defaultJobModel` key): `Create` takes the model from
+  its caller, never a literal — the tool passes the fleet's model
+  (SPEC_CONFIG 12) or the job's own, the dashboard's create fills the
+  fleet's model (SPEC_SERVE) — and a direct `Create` with an empty
+  model refuses by name. The worker's model is the operator's: named
+  by `workers.json`, defined by the operator's `models.json` row,
+  baked into no binary. No schema change, no path change: the job row
+  carries its model (set at create), and `run-job` fires the row's
+  model — a fire needs no `workers.json`, so a fleet removed after
+  jobs were created leaves them firing on their recorded model. The
+  tools follow the config: no fleet, no worker tools registered
+  (SPEC_CONFIG 12's presence rule) — the store and the runner are
+  unchanged underneath.
 
 ## interfaces
 

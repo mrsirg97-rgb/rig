@@ -45,7 +45,7 @@ func newSwapServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/models", func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"data":[{"id":"qwen3.8-workers","status":{"value":"unloaded"}}]}`))
+		w.Write([]byte(`{"data":[{"id":"local","status":{"value":"unloaded"}}]}`))
 	})
 	mux.HandleFunc("/running", func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(`{"running":[]}`))
@@ -131,7 +131,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	st := scratchStores(t, home, "/ws/e2e")
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "e2e", Prompt: "say hi", Cron: "0 5 * * *",
-		Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
+		Cwd: workDir, Model: "local", Busy: "skip",
 	}, "/ws/e2e", "sess-e2e", bin+" run-job", fixedNow)
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
@@ -208,7 +208,7 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	if runErr == nil {
 		t.Fatalf("an unknown model with no env must refuse: %q", out)
 	}
-	if !strings.Contains(string(out), `no row for "nope"`) || !strings.Contains(string(out), "known: local, qwen3.8-workers") {
+	if !strings.Contains(string(out), `no row for "nope"`) || !strings.Contains(string(out), "known: local") {
 		t.Fatalf("the refusal must name the id and the known ids: %q", out)
 	}
 }

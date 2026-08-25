@@ -111,8 +111,9 @@ the file is a contract, not a filter.
 
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
-| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix) |
+| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut — a present one refuses at start, naming the move to `workers.json` |
 | `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) and `efforts` (the model's available effort levels — `low`, `medium`, `xhigh` — the `/effort` dial's vocabulary) |
+| `workers.json`    | the fleet: `{"model": "<id>", "slots": N}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's theme (`specs/SPEC_TUI.md` 7): `base` (one of `oled`, `paper`, `p1`, `p3`, required), optional `slots` (the eight slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema |
 
@@ -125,7 +126,7 @@ directory's project file, not the creating session's.
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 18 built-in tools |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 16 non-worker built-in tools (grows by `scheduler` and `delegate` when a fleet is configured and no operator allow stands) |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
@@ -135,12 +136,12 @@ directory's project file, not the creating session's.
 | web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
-| scheduler job |                | —                      | `defaultJobModel` | `qwen3.8-workers`; a job's explicit `model` arg beats it |
+| fleet model   |                | —                      | `workers.json` → `model` | none without the file (the worker tools are absent); a job's explicit `model` arg beats the fleet's |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
 | approval dial  |                | —                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox | —              | —                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds | —              | —                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
-| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the two-row table |
+| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the one-row table (`local`) |
 
 **On the worker sandbox** — `sandbox` is the scheduled worker's jail
 (`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the default — fail closed)

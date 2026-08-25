@@ -27,6 +27,7 @@ type Opts struct {
 	SwapURL      string
 	WorkerCmd    []string
 	DefaultModel string
+	Slots        int
 	Sandbox      string
 	SandboxBinds []string
 	Allow        []string
@@ -41,9 +42,13 @@ type adapter struct{ Opts }
 func (a adapter) Name() string { return "delegate" }
 
 func (a adapter) Description() string {
+	stance := "one in flight per session"
+	if a.Slots > 1 {
+		stance = fmt.Sprintf("up to %d in flight per session", a.Slots)
+	}
 	return "spawn a headless worker on a task now, wait, and return its last message. Guidelines: a bounded " +
-		"sub-task whose result is a message — a long compute, a sweep, a review — never a conversation; one " +
-		"in flight per session. Reply: the worker's message plus a trailer (exit, duration, session id, log); " +
+		"sub-task whose result is a message — a long compute, a sweep, a review — never a conversation; " +
+		stance + ". Reply: the worker's message plus a trailer (exit, duration, session id, log); " +
 		"a held GPU refuses naming the holder. cwd must be under the session's cwd or the rig home; the model " +
 		"defaults to " + a.DefaultModel + "; the timeout to 10 minutes (ceiling 30)."
 }
@@ -107,6 +112,7 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		Cwd:          cwd,
 		Task:         g.Task,
 		Model:        model,
+		Slots:        a.Slots,
 		Fetch:        a.Fetch,
 		Spawn:        a.Spawn,
 		WorkerCmd:    a.WorkerCmd,

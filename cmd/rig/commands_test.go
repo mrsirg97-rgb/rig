@@ -542,12 +542,21 @@ func TestSessionsResume(t *testing.T) {
 }
 
 func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
-	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	local := defaultRow()
+	other := models.Model{Role: models.RoleWorker, ID: "e2e", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 1000}
+	if err := other.Check(); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := models.New(local, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness(t, local, "local", runtime)
 	done := h.startRun()
 	h.in <- "one\n"
 	h.waitCount("pong", 1)
-	h.in <- "/models qwen3.8-workers\n"
-	h.waitOut("models: active is now qwen3.8-workers")
+	h.in <- "/models e2e\n"
+	h.waitOut("models: active is now e2e")
 	h.in <- "two\n"
 	h.waitCount("pong", 2)
 	h.finish(done)
@@ -559,7 +568,7 @@ func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 	if modelNames[0] != "local" {
 		t.Fatalf("the first request is the startup model: %v", modelNames)
 	}
-	if modelNames[1] != "qwen3.8-workers" {
+	if modelNames[1] != "e2e" {
 		t.Fatalf("the switch takes effect on the next turn's request: %v", modelNames)
 	}
 	if !strings.Contains(bodies[0], "one") {
@@ -569,10 +578,10 @@ func TestModelsSwitchTakesEffectNextTurn(t *testing.T) {
 	if !strings.Contains(bodies[1], "two") {
 		t.Fatalf("the second request carries the second prompt: %q", bodies[1])
 	}
-	if h.r.activeID != "qwen3.8-workers" {
+	if h.r.activeID != "e2e" {
 		t.Fatalf("ActiveModel reports the new id: %q", h.r.activeID)
 	}
-	row, ok := defaultsTable(t).Get("qwen3.8-workers")
+	row, ok := runtime.Get("e2e")
 	if !ok || !reflect.DeepEqual(h.r.row, row) {
 		t.Fatalf("the new policy is built with the new row: %+v (want %+v)", h.r.row, row)
 	}
@@ -593,15 +602,15 @@ func TestModelsRuntimeTableIncludesSynthesizedRow(t *testing.T) {
 	h.in <- "/models e2e\n"
 	h.waitOut("models: active is now e2e")
 	h.in <- "/models nope\n"
-	h.waitOut(`models: no row for "nope" (known: e2e, local, qwen3.8-workers)`)
+	h.waitOut(`models: no row for "nope" (known: e2e, local)`)
 	h.finish(done)
 
 	out := h.out.String()
 	if !strings.Contains(out, "e2e") || !strings.Contains(out, "window 4000  max 500") {
 		t.Fatalf("the synthesized row must list: %q", out)
 	}
-	if !strings.Contains(out, "local") || !strings.Contains(out, "qwen3.8-workers") {
-		t.Fatalf("Defaults must list beside the synthesized row: %q", out)
+	if !strings.Contains(out, "local") {
+		t.Fatalf("the defaults row must list beside the synthesized row: %q", out)
 	}
 	if h.r.activeID != "e2e" {
 		t.Fatalf("the switch back must land: %q", h.r.activeID)

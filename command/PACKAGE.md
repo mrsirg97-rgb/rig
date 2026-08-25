@@ -15,7 +15,10 @@ the leaf.
 - `All()` — the standard set of twelve commands: `compact`, `new`,
   `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
   `rem`, `effort`, `role`, `approve`.
-- `Env` — the command's world, built at the root: closures, not handles.
+- `Env` — the command's world, built at the root: closures, not
+  handles. `Env.Workers` carries the fleet (the model, the slots, the
+  file, the configured fact) and is what a missing `scheduler` tool
+  refuses by when no fleet stands.
 - `EnvOf` — the type assertion on the dispatcher's env.
 - `Sub` / `Subber` — the TUI's argument-hints door (SPEC_TUI 9).
 - `Steerer` — the frontend-owned seam (the slot, the interrupt handle,
@@ -57,6 +60,9 @@ the leaf.
   a one-off read of another project's queue (the path resolves through
   `store/scope`); writes stay the model's or the session's own bare
   verbs, and an unknown path's empty queue names the scope it read.
+  With no fleet the `scheduler` seam is absent, and the command
+  refuses by name (`no workers configured`, the file's path in the
+  voice) instead of falling to the generic no-tool line.
 - **rem** — the operator's verb over the memory store (SPEC_STATE: rem is
   deliberate): `rem [list|show|forget|project <path>]` — list the live
   memories (project then global, one line each), show by id, forget by

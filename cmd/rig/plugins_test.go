@@ -456,10 +456,11 @@ def run(args):
 	}
 
 	tools := wireTools(t, s.body(0))
-	if len(tools) != len(nativeToolNames) {
-		t.Fatalf("tools = %d, want %d (the native set; the plugins live behind the door)", len(tools), len(nativeToolNames))
+	want := effectiveNativeNames(nil)
+	if len(tools) != len(want) {
+		t.Fatalf("tools = %d, want %d (no fleet: the worker tools stay off the wire; the plugins live behind the door)", len(tools), len(want))
 	}
-	for i, name := range nativeToolNames {
+	for i, name := range want {
 		if tools[i].Name != name {
 			t.Fatalf("the wire's head must be the native set in order; position %d = %q, want %q", i, tools[i].Name, name)
 		}
@@ -637,10 +638,11 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
 	tools := wireTools(t, s.last())
-	if len(tools) != len(nativeToolNames) {
-		t.Fatalf("tools = %d, want the native set (no plugins directory, no plugins)", len(tools))
+	want := effectiveNativeNames(nil)
+	if len(tools) != len(want) {
+		t.Fatalf("tools = %d, want the native set (no fleet: no worker tools; no plugins directory, no plugins)", len(tools))
 	}
-	for i, name := range nativeToolNames {
+	for i, name := range want {
 		if tools[i].Name != name {
 			t.Fatalf("position %d = %q, want %q (the 0.2.0 order)", i, tools[i].Name, name)
 		}

@@ -7,10 +7,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 const DelegateEnv = "RIG_DELEGATE"
+
+var (
+	delegateDepth    int32
+	delegatePrevHome string
+	delegateHadHome  bool
+	delegatePrevSet  bool
+)
 
 type DelegateInput struct {
 	DB           DB
@@ -19,6 +27,7 @@ type DelegateInput struct {
 	Cwd          string
 	Task         string
 	Model        string
+	Slots        int
 	Fetch        Fetch
 	Spawn        Spawn
 	WorkerCmd    []string
@@ -70,12 +79,26 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: fetch and spawn seams are required")
 	}
 
-	lockFD, held, err := acquireLock(in.Home, "delegate:"+in.Session)
-	if err != nil {
-		return DelegateResult{}, fmt.Errorf("delegate: lock: %w", err)
+	slots := in.Slots
+	if slots < 1 {
+		slots = 1
 	}
-	if !held {
-		return DelegateResult{}, fmt.Errorf("delegate: a delegation is already in flight (this session)")
+	var lockFD *os.File
+	for i := 0; i < slots; i++ {
+		fd, held, err := acquireLock(in.Home, fmt.Sprintf("delegate:%s:%d", in.Session, i))
+		if err != nil {
+			return DelegateResult{}, fmt.Errorf("delegate: lock: %w", err)
+		}
+		if held {
+			lockFD = fd
+			break
+		}
+	}
+	if lockFD == nil {
+		if slots == 1 {
+			return DelegateResult{}, fmt.Errorf("delegate: a delegation is already in flight (this session)")
+		}
+		return DelegateResult{}, fmt.Errorf("delegate: the session's delegate slots are full (slots %d)", slots)
 	}
 	defer releaseLock(lockFD)
 
@@ -143,24 +166,27 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 
-	prevHome, hadHome := os.LookupEnv("RIG_HOME")
-	if homeEnv != "" {
-		os.Setenv("RIG_HOME", homeEnv)
-	}
-	prevDel, hadDel := os.LookupEnv(DelegateEnv)
-	os.Setenv(DelegateEnv, "1")
-	defer func() {
+	depth := atomic.AddInt32(&delegateDepth, 1)
+	if depth == 1 {
+		delegatePrevHome, delegateHadHome = os.LookupEnv("RIG_HOME")
+		delegatePrevSet = os.Getenv(DelegateEnv) != ""
 		if homeEnv != "" {
-			if hadHome {
-				os.Setenv("RIG_HOME", prevHome)
+			os.Setenv("RIG_HOME", homeEnv)
+		}
+		os.Setenv(DelegateEnv, "1")
+	}
+	defer func() {
+		if atomic.AddInt32(&delegateDepth, -1) == 0 {
+			if delegateHadHome {
+				os.Setenv("RIG_HOME", delegatePrevHome)
 			} else {
 				os.Unsetenv("RIG_HOME")
 			}
-		}
-		if hadDel {
-			os.Setenv(DelegateEnv, prevDel)
-		} else {
-			os.Unsetenv(DelegateEnv)
+			if delegatePrevSet {
+				os.Setenv(DelegateEnv, "1")
+			} else {
+				os.Unsetenv(DelegateEnv)
+			}
 		}
 	}()
 

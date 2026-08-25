@@ -205,9 +205,13 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		home := filepath.Join(cfgDir(t, scratch), "scheduler")
 		fake := newFakeCrontab()
 		st := scratchStores(t, home, "/ws/golden")
+		if err := os.WriteFile(filepath.Join(cfgDir(t, scratch), "models.json"),
+			[]byte(`[{"id": "brain", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "worker"}]`), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 			Name: "golden", Prompt: "say hi", Cron: "0 5 * * *",
-			Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
+			Cwd: workDir, Model: "brain", Busy: "skip",
 		}, "/ws/golden", "sess-golden", bin+" run-job", fixedNow)
 		if err != nil {
 			t.Fatalf("create: %v (%s)", err, reply)
@@ -254,7 +258,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		if !foundUser {
 			t.Fatal("the worker request carries no user message")
 		}
-		if req.Model != "qwen3.8-workers" {
+		if req.Model != "brain" {
 			t.Fatalf("the worker's model = %q, want the job's model (the argv's -model)", req.Model)
 		}
 
@@ -487,7 +491,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		st := scratchStores(t, home, "/ws/swap")
 		reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 			Name: "swap", Prompt: "say hi", Cron: "0 5 * * *",
-			Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
+			Cwd: workDir, Model: "local", Busy: "skip",
 		}, "/ws/swap", "sess-swap", bin+" run-job", fixedNow)
 		if err != nil {
 			t.Fatalf("create: %v (%s)", err, reply)
@@ -700,7 +704,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	st := scratchStores(t, home, workDir)
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "agents", Prompt: "say hi", Cron: "0 5 * * *",
-		Cwd: workDir, Model: "qwen3.8-workers", Busy: "skip",
+		Cwd: workDir, Model: "local", Busy: "skip",
 	}, workDir, "sess-agents", bin+" run-job", fixedNow)
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
@@ -787,29 +791,106 @@ func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	}
 }
 
-func TestDefaultJobModelFromSettings(t *testing.T) {
+func TestDefaultJobModelPresenceRefusesAtStart(t *testing.T) {
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	dir := cfgDir(t, scratch)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(p, []byte(`{"defaultJobModel": "local"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "-p", "hello")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "")
+	out, runErr := cmd.CombinedOutput()
+	if runErr == nil {
+		t.Fatalf("a present defaultJobModel must refuse at start: %q", out)
+	}
+	want := `defaultJobModel moved to workers.json`
+	if !strings.Contains(string(out), want) {
+		t.Fatalf("the voice = %q, want it to name the move to %q", out, want)
+	}
+	glob, _ := filepath.Glob(filepath.Join(dir, "sessions", "*.sqlite"))
+	if len(glob) != 0 {
+		t.Fatalf("the state store was created despite the refusal: %v", glob)
+	}
+}
+
+func TestOneshotWireCarriesTheWorkerToolsWithAFleet(t *testing.T) {
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	dir := cfgDir(t, scratch)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
+		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the run must succeed: %v\n%s", err, out)
+	}
+	for _, want := range []string{"scheduler", "delegate"} {
+		if !hasToolName(s.last(), want) {
+			t.Fatalf("a configured fleet must put %s on the wire: %v", want, toolNames(s.last()))
+		}
+	}
+}
+
+func TestUnresolvedFleetModelRefusesAtStart(t *testing.T) {
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	dir := cfgDir(t, scratch)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
+		[]byte(`{"model": "ghost", "slots": 1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "-p", "hello")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "")
+	out, runErr := cmd.CombinedOutput()
+	if runErr == nil {
+		t.Fatalf("an unresolved fleet model must refuse at start: %q", out)
+	}
+	if !strings.Contains(string(out), `model "ghost": no row in the models table`) {
+		t.Fatalf("the voice = %q, want it to name the missing row", out)
+	}
+}
+
+func TestSchedulerCreateDefaultsToTheFleetModel(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "settings.json"),
-		[]byte(`{"defaultJobModel": "brain"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
+		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := config.Load(dir, t.TempDir())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Settings.DefaultJobModel != "brain" {
-		t.Fatalf("defaultJobModel = %q, want the file's brain", cfg.Settings.DefaultJobModel)
+	if cfg.Workers == nil {
+		t.Fatal("Load: the workers.json fleet is nil")
 	}
 
 	home := t.TempDir()
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
-	tool := schedapi.New(st, ct, "rig run-job", cfg.Settings.DefaultJobModel)
-	if !strings.Contains(tool.Description(), "(default: brain)") {
-		t.Fatalf("the tool description must name the file's default: %q", tool.Description())
+	tool := schedapi.New(st, ct, "rig run-job", cfg.Workers.Model)
+	if !strings.Contains(tool.Description(), "(default: "+cfg.Workers.Model+")") {
+		t.Fatalf("the tool description must name the fleet's model: %q", tool.Description())
 	}
 	raw, err := json.Marshal(map[string]any{
 		"action": "create", "name": "defaulted", "prompt": "p",
@@ -826,8 +907,8 @@ func TestDefaultJobModelFromSettings(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
-	if m != "brain" {
-		t.Fatalf("the job's model = %q, want the file's default brain", m)
+	if m != cfg.Workers.Model {
+		t.Fatalf("the job's model = %q, want the fleet's model %q", m, cfg.Workers.Model)
 	}
 }
 
@@ -947,9 +1028,9 @@ func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 	for _, n := range cfg.Settings.Allow {
 		allowed[n] = true
 	}
-	for _, n := range nativeToolNames {
+	for _, n := range effectiveNativeNames(nil) {
 		if !allowed[n] {
-			t.Errorf("native %q is not in the embedded allow default", n)
+			t.Errorf("native %q is not in the embedded allow default (no fleet: the worker tools stay out)", n)
 		}
 	}
 	natives := map[string]bool{}
@@ -960,6 +1041,52 @@ func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 		if !natives[n] {
 			t.Errorf("embedded allow names %q, which is not a native", n)
 		}
+	}
+}
+
+func TestEmbeddedAllowGrowsWithTheFleet(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
+		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(dir, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{}
+	for _, n := range cfg.Settings.Allow {
+		allowed[n] = true
+	}
+	for _, n := range workerToolNames {
+		if !allowed[n] {
+			t.Errorf("worker tool %q is not in the allow default once a fleet stands", n)
+		}
+	}
+}
+
+func TestOperatorAllowStandsAsWritten(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
+		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"),
+		[]byte(`{"allow": ["bash", "read"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(dir, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"bash", "read"}; !reflect.DeepEqual(cfg.Settings.Allow, want) {
+		t.Fatalf("the operator's allow stands as written: %v, want %v", cfg.Settings.Allow, want)
 	}
 }
 

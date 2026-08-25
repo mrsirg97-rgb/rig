@@ -85,6 +85,33 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSchedulerCommandNoFleetRefuses(t *testing.T) {
+	file := "/home/op/.rig/workers.json"
+	env := &command.Env{
+		Workers: command.Workers{File: file},
+		Tools:   map[string]core.Tool{},
+	}
+	out, err := runCmd(t, "scheduler", "list", env)
+	if err == nil {
+		t.Fatalf("no fleet: the command must refuse, got %q", out)
+	}
+	want := "scheduler: no workers configured (" + file + " names the model)"
+	if err.Error() != want {
+		t.Fatalf("the voice = %q, want %q (the command's, not the generic no-tool)", err.Error(), want)
+	}
+}
+
+func TestSchedulerCommandMissingToolWithFleetKeepsTheGenericVoice(t *testing.T) {
+	env := &command.Env{
+		Workers: command.Workers{Model: "w", Slots: 1, File: "/x/workers.json", Configured: true},
+		Tools:   map[string]core.Tool{},
+	}
+	_, err := runCmd(t, "scheduler", "list", env)
+	if err == nil || !strings.Contains(err.Error(), "no scheduler tool (the root did not put it in Env.Tools)") {
+		t.Fatalf("fleet configured but the tool absent: the generic voice must name the missing tool, got %v", err)
+	}
+}
+
 func TestToolCommandThreadsTheLiveSession(t *testing.T) {
 	type seen struct {
 		mu   sync.Mutex

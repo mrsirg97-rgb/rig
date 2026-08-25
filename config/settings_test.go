@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/config"
+	"github.com/mrsirg97-rgb/rig/models"
 )
 
 func write(t *testing.T, dir, name, content string) string {
@@ -78,9 +79,9 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.System != "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin." {
 		t.Fatalf("system = %q, want the 0.2.0 default system prompt", s.System)
 	}
-	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
+	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
 	if !reflect.DeepEqual(s.Allow, wantAllow) {
-		t.Fatalf("allow = %v, want the 0.2.0 default list %v", s.Allow, wantAllow)
+		t.Fatalf("allow = %v, want the non-worker default list %v (the two worker tools join it only when workers.json names a fleet)", s.Allow, wantAllow)
 	}
 	if s.Retries != 3 {
 		t.Fatalf("retries = %d, want the 0.2.0 default 3", s.Retries)
@@ -106,25 +107,24 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.SwapURL != "http://127.0.0.1:8090" {
 		t.Fatalf("swapUrl = %q, want the 0.2.0 runner default", s.SwapURL)
 	}
-	if s.DefaultJobModel != "qwen3.8-workers" {
-		t.Fatalf("defaultJobModel = %q, want the 0.2.0 scheduler default", s.DefaultJobModel)
+	m, ok := cfg.Models.Get("local")
+	if !ok {
+		t.Fatal("the embedded table has no row for local")
 	}
-
-	want := map[string]string{"local": "interactive", "qwen3.8-workers": "worker"}
-	for _, id := range []string{"local", "qwen3.8-workers"} {
-		m, ok := cfg.Models.Get(id)
-		if !ok {
-			t.Fatalf("the embedded table has no row for %q", id)
-		}
-		if m.Window != 65536 || m.MaxTokens != 8192 || m.Reserve != 8192 || m.KeepRecent != 16384 {
-			t.Fatalf("row %q = %+v, want the 0.2.0 numbers", id, m)
-		}
-		if m.Role != want[id] {
-			t.Fatalf("row %q role = %q, want %q (4's named roles)", id, m.Role, want[id])
-		}
+	if m.Window != 65536 || m.MaxTokens != 8192 || m.Reserve != 8192 || m.KeepRecent != 16384 {
+		t.Fatalf("row local = %+v, want the 0.2.0 numbers", m)
 	}
-	if got := len(cfg.Models.Known()); got != 2 {
-		t.Fatalf("the embedded table = %d rows, want the two 0.2.0 rows (%v)", got, cfg.Models.Known())
+	if m.Role != models.RoleInteractive {
+		t.Fatalf("row local role = %q, want interactive (4's named roles)", m.Role)
+	}
+	if _, ok := cfg.Models.Get("qwen3.8-workers"); ok {
+		t.Fatalf("the embedded table still carries the qwen3.8-workers row (12 cut it: the worker's model is the operator's)")
+	}
+	if got := len(cfg.Models.Known()); got != 1 {
+		t.Fatalf("the embedded table = %d rows, want the one local row (%v)", got, cfg.Models.Known())
+	}
+	if cfg.Workers != nil {
+		t.Fatalf("Workers = %+v, want nil with no workers.json (no fleet, no worker tools)", cfg.Workers)
 	}
 }
 

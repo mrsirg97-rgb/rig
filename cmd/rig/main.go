@@ -89,6 +89,8 @@ type root struct {
 	rec     *state.Recorder
 	tools   map[string]core.Tool
 
+	workers *config.Workers
+
 	pluginTools []core.Tool
 
 	live *toolset.Table
@@ -126,8 +128,8 @@ func wire(r *root) *rig.Kernel {
 	}
 	r.live.SetPlugins(r.pluginNames()...)
 	if r.natives == nil {
-		r.natives = make(map[string]bool, len(nativeToolNames))
-		for _, name := range nativeToolNames {
+		r.natives = make(map[string]bool)
+		for _, name := range effectiveNativeNames(r.workers) {
 			r.natives[name] = true
 		}
 	}
@@ -214,8 +216,9 @@ func remRow(m remdom.Memory) command.RemRow {
 }
 
 func (r *root) nativeTools() []core.Tool {
-	out := make([]core.Tool, 0, len(nativeToolNames))
-	for _, name := range nativeToolNames {
+	names := effectiveNativeNames(r.workers)
+	out := make([]core.Tool, 0, len(names))
+	for _, name := range names {
 		out = append(out, r.tools[name])
 	}
 	return out
@@ -536,6 +539,29 @@ func userHome() string {
 
 var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
 
+var workerToolNames = []string{"scheduler", "delegate"}
+
+func effectiveNativeNames(workers *config.Workers) []string {
+	drop := workers == nil
+	out := make([]string, 0, len(nativeToolNames))
+	for _, name := range nativeToolNames {
+		if drop && isWorkerTool(name) {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+func isWorkerTool(name string) bool {
+	for _, n := range workerToolNames {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 func rigHome() (string, error) {
 	if v := os.Getenv("RIG_HOME"); v != "" {
 		return v, nil
@@ -582,6 +608,9 @@ func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 			eff = r.row.Effort
 		}
 		b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve}
+		if r.workers != nil {
+			b.Workers = r.workers.Model
+		}
 		if r.session == nil {
 			return b
 		}
@@ -796,8 +825,8 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	native := make(map[string]bool, len(nativeToolNames))
-	for _, name := range nativeToolNames {
+	native := make(map[string]bool)
+	for _, name := range effectiveNativeNames(cfg.Workers) {
 		native[name] = true
 	}
 	pluginTools := make([]core.Tool, 0, len(pluginReports))
@@ -924,45 +953,52 @@ func main() {
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": todoapi.New(tdb), "rem": remapi.New(rdb),
-
-			"scheduler": schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", cfg.Settings.DefaultJobModel),
-			"delegate": delegate.New(delegate.Opts{
-				DB:           scdb,
-				Home:         schedHome,
-				RigHome:      cfgDir,
-				StateDir:     filepath.Join(cfgDir, "sessions"),
-				SwapURL:      swapURL,
-				WorkerCmd:    []string{self},
-				DefaultModel: cfg.Settings.DefaultJobModel,
-				Sandbox:      cfg.Settings.Sandbox,
-				SandboxBinds: cfg.Settings.SandboxBinds,
-				Allow:        allowList,
-				Fetch:        sched.RealFetch(0),
-				Spawn:        sched.RealSpawn,
-			}),
 			"python": py, "web_search": webSearch, "web_fetch": webFetch,
-
 			"diff": diff.New(sdb), "sessions": sessionstool.New(cfgDir, cwd),
 		},
+		workers:     cfg.Workers,
 		pluginTools: pluginTools,
 		py:          py,
 		pluginsHome: cfgDir,
 		pluginInfos: pluginInfos,
 	}
 
+	if workers := cfg.Workers; workers != nil {
+		r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", workers.Model)
+		r.tools["delegate"] = delegate.New(delegate.Opts{
+			DB:           scdb,
+			Home:         schedHome,
+			RigHome:      cfgDir,
+			StateDir:     filepath.Join(cfgDir, "sessions"),
+			SwapURL:      swapURL,
+			WorkerCmd:    []string{self},
+			DefaultModel: workers.Model,
+			Slots:        workers.Slots,
+			Sandbox:      cfg.Settings.Sandbox,
+			SandboxBinds: cfg.Settings.SandboxBinds,
+			Allow:        allowList,
+			Fetch:        sched.RealFetch(0),
+			Spawn:        sched.RealSpawn,
+		})
+	}
+
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t
 	}
 
-	r.natives = make(map[string]bool, len(nativeToolNames))
-	for _, name := range nativeToolNames {
-		r.natives[name] = true
-	}
+	r.natives = native
 	r.tools["plugins"] = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
 
+	workersEnv := command.Workers{File: filepath.Join(cfgDir, "workers.json")}
+	if cfg.Workers != nil {
+		workersEnv.Model = cfg.Workers.Model
+		workersEnv.Slots = cfg.Workers.Slots
+		workersEnv.Configured = true
+	}
 	env := &command.Env{
+		Workers:       workersEnv,
 		Session:       func() *core.Session { return r.session },
 		Compact:       r.compactNow,
 		NewSession:    r.newSession,

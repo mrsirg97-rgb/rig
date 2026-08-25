@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/config"
 	"github.com/mrsirg97-rgb/rig/models"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
@@ -21,6 +22,8 @@ type Options struct {
 	CWD  string
 
 	Models models.Table
+
+	Workers *config.Workers
 
 	Crontab sched.Crontab
 
@@ -37,6 +40,7 @@ type Server struct {
 	home      string
 	cwd       string
 	models    models.Table
+	workers   *config.Workers
 	crontab   sched.Crontab
 	runnerCmd string
 	readTO    time.Duration
@@ -77,6 +81,7 @@ func New(opts Options) (*Server, error) {
 		home:      opts.Home,
 		cwd:       opts.CWD,
 		models:    opts.Models,
+		workers:   opts.Workers,
 		crontab:   ct,
 		runnerCmd: runner,
 		readTO:    opts.ReadTimeout,

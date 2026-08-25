@@ -11,6 +11,7 @@ type StatusIn struct {
 	Window    int
 	Role      string
 	Approve   string
+	Workers   string
 	Session   string
 	Up        int
 	Down      int
@@ -47,7 +48,7 @@ var titleRows = []string{
 	"▀ ▀ ▀ ▀▀▀",
 }
 
-func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, window int, hasUsed bool, up, down, cacheRead int) string {
+func RenderStatusLine(t Theme, model, effort, role, approveMode, workers string, used, window int, hasUsed bool, up, down, cacheRead int) string {
 	if model == "" {
 		return ""
 	}
@@ -73,6 +74,11 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, wi
 		row2 += t.Paint(SlotWarn, "manual")
 	} else {
 		row2 += t.Paint(SlotWarn, "auto")
+	}
+	if workers == "" {
+		row2 += sep + t.Paint(SlotDim, "workers: none")
+	} else {
+		row2 += sep + t.Paint(SlotDim, "workers: "+workers)
 	}
 	hit := 0
 	if up > 0 {

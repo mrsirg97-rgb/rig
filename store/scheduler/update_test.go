@@ -39,7 +39,7 @@ func eventOps(t *testing.T, h *harness) []string {
 
 func TestUpdateKeepsTheIdAndTheRuns(t *testing.T) {
 	h := newHarness(t, "/ws/u1")
-	if _, err := h.create(sched.CreateInput{Name: "keep", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u1"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "keep", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{
@@ -77,10 +77,10 @@ func TestUpdateKeepsTheIdAndTheRuns(t *testing.T) {
 
 func TestUpdateRewritesTheOneLineUnderTheSameKey(t *testing.T) {
 	h := newHarness(t, "/ws/u2")
-	if _, err := h.create(sched.CreateInput{Name: "one", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u2"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "one", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u2"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.create(sched.CreateInput{Name: "two", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/u2"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "two", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/u2"}); err != nil {
 		t.Fatal(err)
 	}
 	foreignLine := `0 4 * * * ` + runnerCmd + ` j2  # pane-scheduler:j2`
@@ -98,7 +98,7 @@ func TestUpdateRewritesTheOneLineUnderTheSameKey(t *testing.T) {
 
 func TestPausedUpdateStaysPausedAndLandsOnResume(t *testing.T) {
 	h := newHarness(t, "/ws/u3")
-	if _, err := h.create(sched.CreateInput{Name: "p", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u3"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "p", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u3"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
@@ -130,10 +130,10 @@ func TestPausedUpdateStaysPausedAndLandsOnResume(t *testing.T) {
 
 func TestUpdateRefusalsNameTheFaultAndWriteNothing(t *testing.T) {
 	h := newHarness(t, "/ws/u4")
-	if _, err := h.create(sched.CreateInput{Name: "a", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u4"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "a", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u4"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.create(sched.CreateInput{Name: "b", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/u4"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "b", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/u4"}); err != nil {
 		t.Fatal(err)
 	}
 	before := h.ct.text
@@ -170,7 +170,7 @@ func TestUpdateRefusalsNameTheFaultAndWriteNothing(t *testing.T) {
 
 func TestUpdateCadenceRefusalsAreCreatesVerbatim(t *testing.T) {
 	h := newHarness(t, "/ws/u5")
-	if _, err := h.create(sched.CreateInput{Name: "c", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u5"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "c", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u5"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := h.update(sched.UpdateInput{ID: "j1", Cron: "once"})
@@ -183,7 +183,7 @@ func TestUpdateCadenceRefusalsAreCreatesVerbatim(t *testing.T) {
 
 func TestUpdateAtMakesTheJobOnceAndCronClearsTheAt(t *testing.T) {
 	h := newHarness(t, "/ws/u6")
-	if _, err := h.create(sched.CreateInput{Name: "r", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u6"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "r", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u6"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := h.update(sched.UpdateInput{ID: "j1", At: "2026-08-16T03:07:00Z"})
@@ -211,7 +211,7 @@ func TestUpdateAtMakesTheJobOnceAndCronClearsTheAt(t *testing.T) {
 
 func TestUpdateOnADoneJobIsAllowedAndRestoresTheLine(t *testing.T) {
 	h := newHarness(t, "/ws/u11")
-	if _, err := h.create(sched.CreateInput{Name: "once", Prompt: "p", Cron: "once", At: "2026-08-16T03:07:00Z", Cwd: "/ws/u11"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "once", Prompt: "p", Cron: "once", At: "2026-08-16T03:07:00Z", Cwd: "/ws/u11"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.db.DB.Exec(`UPDATE jobs SET state = 'done' WHERE id = 'j1'`); err != nil {
@@ -224,7 +224,7 @@ func TestUpdateOnADoneJobIsAllowedAndRestoresTheLine(t *testing.T) {
 
 func TestDriftStaysHonestAfterAnUpdate(t *testing.T) {
 	h := newHarness(t, "/ws/u7")
-	if _, err := h.create(sched.CreateInput{Name: "d", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u7"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "d", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u7"}); err != nil {
 		t.Fatal(err)
 	}
 	h.ct.mu.Lock()
@@ -248,7 +248,7 @@ func TestDriftStaysHonestAfterAnUpdate(t *testing.T) {
 
 func TestListShowsTheUpdatedFields(t *testing.T) {
 	h := newHarness(t, "/ws/u8")
-	if _, err := h.create(sched.CreateInput{Name: "oldname", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u8"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "oldname", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u8"}); err != nil {
 		t.Fatal(err)
 	}
 	reply, err := h.update(sched.UpdateInput{ID: "j1", Name: "newname", Model: "brain", Busy: "force", Cwd: "/else/where"})
@@ -267,7 +267,7 @@ func TestListShowsTheUpdatedFields(t *testing.T) {
 
 func TestUpdateWithoutACadenceChangeLeavesTheCrontabByteIdentical(t *testing.T) {
 	h := newHarness(t, "/ws/u9")
-	if _, err := h.create(sched.CreateInput{Name: "s", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u9"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "s", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u9"}); err != nil {
 		t.Fatal(err)
 	}
 	before := h.ct.text
@@ -280,7 +280,7 @@ func TestUpdateWithoutACadenceChangeLeavesTheCrontabByteIdentical(t *testing.T) 
 
 func TestUpdateArgsCarryOnlyTheChangedFieldsAndReplaySurvivesReopen(t *testing.T) {
 	h := newHarness(t, "/ws/u10")
-	if _, err := h.create(sched.CreateInput{Name: "ev", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u10"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "ev", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u10"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := h.update(sched.UpdateInput{ID: "j1", Model: "brain"})
@@ -313,7 +313,7 @@ func TestUpdateArgsCarryOnlyTheChangedFieldsAndReplaySurvivesReopen(t *testing.T
 
 func TestCrontabInstallFailureOnUpdateLeavesTheStoreUntouched(t *testing.T) {
 	h := newHarness(t, "/ws/u12")
-	if _, err := h.create(sched.CreateInput{Name: "f", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u12"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "f", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u12"}); err != nil {
 		t.Fatal(err)
 	}
 	fc := failingCrontab{installErr: errors.New("crontab install failed (exit 2): boom")}
@@ -332,7 +332,7 @@ func TestCrontabInstallFailureOnUpdateLeavesTheStoreUntouched(t *testing.T) {
 
 func TestUpdateRefusesAnUnknownBusy(t *testing.T) {
 	h := newHarness(t, "/ws/upd")
-	if _, err := h.create(sched.CreateInput{Name: "b", Prompt: "p", Cron: "0 1 * * *"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "b", Prompt: "p", Cron: "0 1 * * *"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := sched.Update(context.Background(), h.db, h.ct, sched.UpdateInput{ID: "j1", Busy: "banana"}, "sess", runnerCmd, func() time.Time { return nowFixed })

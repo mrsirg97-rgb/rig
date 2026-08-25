@@ -9,13 +9,20 @@ import (
 )
 
 func Load(dir, cwd string) (*Config, error) {
-	s, err := loadSettings(dir)
+	s, fileAllow, err := loadSettings(dir)
 	if err != nil {
 		return nil, err
 	}
 	t, err := loadModels(dir)
 	if err != nil {
 		return nil, err
+	}
+	w, err := loadWorkers(dir, t)
+	if err != nil {
+		return nil, err
+	}
+	if w != nil && !fileAllow {
+		s.Allow = appendWorkerTools(s.Allow)
 	}
 	th, err := readTheme(dir)
 	if err != nil {
@@ -25,12 +32,13 @@ func Load(dir, cwd string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Config{Settings: s, Models: t, Agents: ag, Theme: th}, nil
+	return &Config{Settings: s, Models: t, Workers: w, Agents: ag, Theme: th}, nil
 }
 
 type Config struct {
 	Settings Settings
 	Models   models.Table
+	Workers  *Workers
 	Agents   string
 	Theme    json.RawMessage
 }

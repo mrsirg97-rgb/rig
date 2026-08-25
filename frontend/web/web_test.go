@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/config"
 	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/store"
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
@@ -112,7 +113,7 @@ func seedHome(t *testing.T) string {
 		t.Fatal(err)
 	}
 	if _, err := sched.Create(ctx, scdb, &fakeCrontab{},
-		sched.CreateInput{Name: "digest", Prompt: "the digest", Cron: "30 7 * * *", Cwd: testCWD},
+		sched.CreateInput{Name: "digest", Prompt: "the digest", Cron: "30 7 * * *", Cwd: testCWD, Model: "worker-test"},
 		testCWD, "seed", "rig run-job", time.Now); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,7 @@ func modelsTable(t *testing.T) models.Table {
 func newTestServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := seedHome(t)
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home})
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Workers: &config.Workers{Model: "worker-test", Slots: 1}, Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -623,6 +624,82 @@ func TestSchedulerCreate(t *testing.T) {
 	}
 	if allow := rec.Header().Get("Allow"); !strings.Contains(allow, "GET") || !strings.Contains(allow, "POST") {
 		t.Fatalf("DELETE: Allow %q, want GET and POST", allow)
+	}
+}
+
+func TestSchedulerNoFleetRefusesCreateAndNamesTheFile(t *testing.T) {
+	home := seedHome(t)
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { srv.Close() })
+	tok, _, err := srv.Token()
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.origins = []string{"http://127.0.0.1:7777"}
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+
+	rec := doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	var got map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["worker"] != "" {
+		t.Fatalf("no fleet: the worker field = %q, want empty (the view renders the refusal)", got["worker"])
+	}
+
+	hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+	hdr.Set("Content-Type", "application/json")
+	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"x","prompt":"p","cron":"0 9 * * *"}`), hdr)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("no-fleet create: got %d, want 400 (body %s)", rec.Code, rec.Body.String())
+	}
+	var errBody map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &errBody); err != nil {
+		t.Fatal(err)
+	}
+	want := "scheduler: no workers configured (" + filepath.Join(home, "workers.json") + " names the model)"
+	if errBody["error"] != want {
+		t.Fatalf("the voice = %q, want %q", errBody["error"], want)
+	}
+}
+
+func TestSchedulerCreateDefaultsToTheFleetModel(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+
+	rec := doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
+	var got map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["worker"] != "worker-test" {
+		t.Fatalf("the GET reply carries the fleet's model: worker = %q, want worker-test", got["worker"])
+	}
+
+	hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+	hdr.Set("Content-Type", "application/json")
+	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"fleetdefault","prompt":"p","cron":"0 9 * * *"}`), hdr)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("fleet create: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	sdb, err := srv.stores.scheduler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m string
+	if err := sdb.DB.QueryRow(`SELECT model FROM jobs WHERE name = 'fleetdefault'`).Scan(&m); err != nil {
+		t.Fatal(err)
+	}
+	if m != "worker-test" {
+		t.Fatalf("the job's model = %q, want the fleet's model worker-test", m)
 	}
 }
 

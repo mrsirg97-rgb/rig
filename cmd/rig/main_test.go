@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -183,11 +184,22 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	if got := k.SortedToolNames(); len(got) != 18 || got[0] != "bash" || got[1] != "delegate" || got[2] != "diff" || got[3] != "edit" || got[6] != "ls" || got[7] != "plugin" || got[8] != "plugins" || got[9] != "python" || got[10] != "read" || got[11] != "rem" || got[12] != "scheduler" || got[13] != "sessions" || got[14] != "todo" || got[15] != "web_fetch" || got[16] != "web_search" || got[17] != "write" {
-		t.Fatalf("registered tools = %v, want bash,delegate,diff,edit,find,grep,ls,plugin,plugins,python,read,rem,scheduler,sessions,todo,web_fetch,web_search,write", got)
+	want := []string{"bash", "diff", "edit", "find", "grep", "ls", "plugin", "plugins", "python", "read", "rem", "sessions", "todo", "web_fetch", "web_search", "write"}
+	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("no fleet: the worker tools must stay unregistered: %v, want %v", got, want)
 	}
 	if len(k.Middleware) != 7 {
 		t.Fatalf("middleware = %d links, want the path boundary, the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decision 9; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	}
+}
+
+func TestWireWithAConfiguredFleetRegistersTheWorkerTools(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.workers = &config.Workers{Model: "local", Slots: 1}
+	k := wire(r)
+	want := []string{"bash", "delegate", "diff", "edit", "find", "grep", "ls", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web_fetch", "web_search", "write"}
+	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("a configured fleet must register the worker tools: %v, want %v", got, want)
 	}
 }
 

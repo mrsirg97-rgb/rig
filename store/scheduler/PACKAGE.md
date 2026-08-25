@@ -21,7 +21,9 @@ written before the store commit; drift is surfaced in list.
 - `verbs.go` — the command verbs
   (list/create/update/pause/resume/remove/runs) over the one
   `global.sqlite`; the crontab key is `jN` for every job, `name` unique
-  store-wide, ids one sequence.
+  store-wide, ids one sequence. `Create` takes the model from the
+  caller (there is no package default anymore): an empty model refuses,
+  naming the fleet's model and the job's own.
 - `migration.go` — the one-time schema-1→2 migration: folds every
   `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
@@ -31,8 +33,9 @@ written before the store commit; drift is surfaced in list.
   proxy).
 - `delegate.go` — the one-shot worker spawn (SPEC_DELEGATE): the busy
   rule, the ad-hoc record (a minted job row with no crontab line), the
-  state-store bind for the resumable transcript, the one-in-flight
-  flock and the no-recursion marker.
+  state-store bind for the resumable transcript, the per-session
+  delegate-slot flock (one slot per `slots`, the full set refusing
+  naming the count) and the no-recursion marker.
 - `jail.go` — the bwrap jail argv composition.
 - `proxy.go` — the unix-socket proxy (the jail's one hole).
 - `fold.go` — the fold/replay over the event log.

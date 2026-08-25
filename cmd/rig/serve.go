@@ -43,6 +43,7 @@ func serve(args []string) int {
 		Home:      home,
 		CWD:       cwd,
 		Models:    cfg.Models,
+		Workers:   cfg.Workers,
 		Crontab:   sched.RealCrontab(""),
 		RunnerCmd: self + " run-job",
 		Natives:   nativeToolNames,

@@ -13,13 +13,21 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `Load(dir, cwd)` — reads the user files under `dir` (the rig home)
   and the AGENTS.md pair (`dir` + `cwd`), each merged over its embedded
   default; returns `*Config`.
-- `Config` — `Settings`, `Models` (`models.Table`), `Agents`, `Theme`.
+- `Config` — `Settings`, `Models` (`models.Table`), `Workers`,
+  `Agents`, `Theme`. `Workers` (`*Workers`) is the fleet from
+  `workers.json`, `nil` when the file is absent (SPEC_CONFIG 12: no
+  fleet, no worker tools, no worker entries in the default allow).
   `Settings.Plugins` (`SettingsPlugins{Enabled, Max}`) is the plugin
 - `plugins`: `max` caps the door's enum; `enabled` is retired (SPEC_GROWTH 9,
   amended) — a non-empty one refuses at load naming the directory switch
   (`plugins/disabled/`), an empty one is dropped.
 - `loadSettings` / `parseSettings` / `mergeSettings` — the settings
-  chain's file-over-embedded layer.
+  chain's file-over-embedded layer. The chain also reports whether the
+  file named its own allow; a present `defaultJobModel` refuses, naming
+  the move to `workers.json`.
+- `loadWorkers` — the `workers.json` fleet: `model` required, must
+  resolve in the merged models table; `slots` defaults to 1 and must be
+  a positive integer; unknown keys refuse naming `model, slots`.
 - `loadModels` / `parseRows` / `mergeRows` — the model table out of code.
 - `readAgents` — the AGENTS.md pair.
 - `readTheme` — the theme.json read.
@@ -42,8 +50,14 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - Absent files are silent (3); present-but-malformed or unreadable files
   refuse loud, naming the file and, for JSON, the field (3).
 - The read order is fixed — the first malformed file wins,
-  deterministically: settings.json, models.json, theme.json, AGENTS.md
-  (global, then project). `Load` never creates a file.
+  deterministically: settings.json, models.json, workers.json,
+  theme.json, AGENTS.md (global, then project). `Load` never creates a
+  file.
+- The embedded allow is the non-worker native set (16 names); a present
+  fleet grows it by `scheduler` and `delegate`, and only when the
+  operator named no allow of their own (their list stands as written).
+  The embedded models table carries `local` alone — the worker row left
+  code for `workers.json`.
 - The settings chain is embedded < file, with the flag/env layers applied
   by the root above; zero means unset at the file layer (an empty string
   or zero descends), except the two presence-aware keys
