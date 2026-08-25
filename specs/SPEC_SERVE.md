@@ -583,3 +583,66 @@ no such event). Cases, failing first: start marks the seeded task
 active and complete marks it done (the read carries `[~]` then `[x]`);
 an unknown id is the verb's refusal; a malformed id is a 400; the
 Origin wall holds; a GET on the verb is a 405.
+
+### 16. The scheduler's four doors, and the row's hand.
+
+The phone could list and create; the TUI held the rest of the job's
+life. This pass puts the four doors beside the create, each calling
+the store verb the `scheduler` tool calls, with the selected cwd as
+the session cwd (as the create carries) and the attribution
+`dashboard`, behind the same walls as every write (POST, the Origin
+check, the body cap), and replying in the store's voice, verbatim:
+
+- `POST /api/scheduler/pause {id}`, `POST /api/scheduler/resume {id}`,
+  `POST /api/scheduler/remove {id}` — `scheduler.Pause`, `Resume`, and
+  `Remove`. The id is checked to the tool's shape (`jN`; a bad id is
+  a 400) and the store's refusals ride through by name: an unknown
+  id, a removed id (a resume of it is not paused, a second remove is
+  already removed), a pause of a paused, a pause of a done.
+- `POST /api/scheduler/update {id, …}` — `scheduler.Update` with the
+  same partial fields the tool carries (any of `prompt`, `cron`/`at`,
+  `model`, `cwd`, `busy`, `name`) and the runner command the root
+  wired (as the create). The store's refusals ride through: an
+  unknown id, a removed id, no fields (the verb's "update needs a
+  change"), the cadence's exclusivity.
+- `GET /api/scheduler/runs?id=jN&n=` — the audit trail, `scheduler.
+  Runs`. A read, as the list: the read timeout, no Origin wall. `n`
+  is the 1-100 cap the tool carries (absent is the verb's default);
+  an unknown id is the named 404; the verb's text verbatim (oldest
+  first, a skip's reason, the log paths).
+
+The list re-reads after a move — no page reload.
+
+The phone rule: every job row carries its controls beside it — pause
+or resume by state (a done row neither), remove, and runs — and an
+update form that opens in place with the row's current fields
+(cadence, prompt, model, cwd, busy; the row carries no prompt, so an
+empty one is no change) and submits only what changed. Remove asks
+once, in-page (a confirm and a keep, no reload). Below 720px the row
+stacks under full-width 44px tap targets (the `.rowact` class, as the
+plugins' controls), the update form is one column, and the buttons
+stop propagation so a tap never opens two things.
+
+### testing
+
+The phase 1 and 2 cases stay green, plus (failing first): each door
+moves the store (pause marks the job paused in the next list read,
+resume marks it active, remove drops it from the list, update changes
+the field the reply names) and replies in the store's voice verbatim;
+the runs read returns the audit trail (a seeded run's status, `n`
+capping the window, the unknown id the named 404); the walls hold (a
+no-Origin or foreign-Origin write a 403, an over-cap body a 400, a
+bad id a 400, a GET on a door a 405 with `Allow` naming POST, a POST
+on runs a 405 with `Allow` naming GET); the page carries the
+controls (the row's pause/resume, remove, and runs buttons, the
+in-place update form, the stacked phone layout, in the shipped
+assets).
+
+### the diffs this phase implies
+
+- **`frontend/web`**: the four door handlers and the runs read
+  (a `schedulerverbs.go` beside the `todoverbs.go`, the allow-list's
+  lines), the static assets' row controls and the in-place update
+  form (the phone rule), the `PACKAGE.md` update.
+- **`specs/SPEC_SERVE.md`**: this section.
+- **`CHANGELOG.md`**: the entry under [Unreleased].

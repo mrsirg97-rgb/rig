@@ -133,6 +133,12 @@ main { flex: 1; padding: 18px 22px 40px; overflow: auto; min-width: 0; }
 .detail { color: var(--dim); }
 .detail.drift { color: var(--warn); }
 .hint { color: var(--dim); margin: 6px 0 0; }
+.schedacts { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 2px 0 8px 2ch; }
+.schedslot { margin: 0 0 8px; }
+.schedup { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 2px 0 12px 2ch; }
+.schedup .span2 { grid-column: 1 / -1; }
+.schedup-act { grid-column: 1 / -1; display: flex; gap: 10px; margin-top: 4px; }
+.schedconfirm { margin: 2px 0 10px 2ch; }
 
 pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--text); }
 
@@ -239,6 +245,11 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
   #cwd-add { flex: 1 1 40%; min-width: 0; width: auto; }
   .taskact { display: inline; }
   .rowact { display: inline-block; min-height: 44px; padding: 10px 12px; }
+  .schedacts { flex-direction: column; margin-left: 2ch; }
+  .schedacts .rowact { display: block; width: 100%; min-height: 44px; }
+  .schedslot { margin-left: 2ch; }
+  .schedup { grid-template-columns: 1fr; margin-left: 2ch; }
+  .schedconfirm { margin-left: 2ch; }
   .layout { min-height: auto; }
   nav {
     position: fixed;

@@ -5,9 +5,10 @@
 The local dashboard (SPEC_SERVE): a loopback-only `net/http` server that
 reads the rig home's stores and renders them as one embedded page. It is
 a *reader* of the same SQLite files a live session is writing — the same
-rig home, the same pragmas, the same store verbs — and it carries three
-writes (a todo create, a scheduler create, and a plugin create into the
-pending zone), each attributed to `dashboard` and riding the existing
+rig home, the same pragmas, the same store verbs — and it carries the
+operator's writes beside the model's tools (the todo create and two
+hands, the scheduler create and four doors, the plugin create and the
+forge's doors), each attributed to `dashboard` and riding the existing
 verb or the provenance rule's landing zone. It is a leaf package wired
 once at the root, beside `cli`/`tui`; the loop never names it. No
 framework, no build step, no external asset: `go build` alone ships it.
@@ -54,6 +55,20 @@ framework, no build step, no external asset: `go build` alone ships it.
   `todo.Complete` attributed to `dashboard`, the id checked to the
   tool's shape, the reply verbatim (a model-claimed task refuses in the
   store's voice). Same walls as every write.
+- **The scheduler's four doors** (`schedulerverbs.go`, SPEC_SERVE 16) —
+  `POST /api/scheduler/pause`, `/resume`, `/remove` (`{id}`) and
+  `POST /api/scheduler/update` (`{id, …}`, the same partial fields the
+  tool carries), plus the read `GET /api/scheduler/runs?id=jN&n=` (the
+  audit trail). Each door calls the store verb the `scheduler` tool
+  calls (`scheduler.Pause`/`Resume`/`Remove`/`Update`/`Runs`) with the
+  selected cwd as the session cwd, the attribution `dashboard`, and the
+  runner command the root wired (for `update`); the id is checked to
+  the tool's shape (`jN`, a bad id a 400) and the store's refusals ride
+  through by name (an unknown id, a removed one, an update with no
+  change). The POST doors ride the write's walls (Origin, the body
+  cap); `runs` rides the read's (the read timeout, `n` capped at 1-100,
+  an unknown id the named 404). The reply is the store's voice,
+  verbatim.
 - **The forge** (`forge.go`, SPEC_SERVE 12) — `GET /api/plugins/source`
   (a plugin's file, by name and zone), `POST /api/plugins/save` (the
   full source into the pending zone, create or update; the contract —
@@ -84,9 +99,17 @@ framework, no build step, no external asset: `go build` alone ships it.
   gutter, a highlighted mirror over a transparent textarea; Tab
   indents, Enter keeps the indent), the phone rule (every loaded row a
   disable control, every disabled row an enable one, the list re-read
-  after the move — 12c), the folder browser under the header, the
-  mobile drawer below 720px (its toggle hidden on desktop), the cwd
-  picker with the new-workspace add (client state, decision 9).
+  after the move — 12c), the scheduler view's row hand (16: every job
+  row carries its controls — pause or resume by state, remove, and
+  runs — beside an update form that opens in place with the row's
+  current fields (cadence, prompt, model, cwd, busy) and submits only
+  what changed; remove asks once, in-page; the list re-reads after a
+  move, no page reload; below 720px the row stacks under full-width
+  44px tap targets, the form is one column, and the buttons stop
+  propagation so a tap never opens two things), the folder browser
+  under the header, the mobile drawer below 720px (its toggle hidden on
+  desktop), the cwd picker with the new-workspace add (client state,
+  decision 9).
 
 ## How it is consumed
 
@@ -105,12 +128,14 @@ framework, no build step, no external asset: `go build` alone ships it.
 The dashboard calls store verbs, never domain accessors and never raw SQL
 (SPEC_SERVE 3): `state.ListSessions`, `state.Resume`,
 `state.SessionUsage`, `todo.Read`, `todo.ReadAll`, `todo.Create`,
-`scheduler.List`, `scheduler.Create`, `rem.Recent`, and the
-`models.Table` / `plugins.List` surfaces. The two small store additions
-(`SessionRow.Cwd`, `SessionUsage`) are typed verbs the dashboard
-consumes, not a SQL leak. The plugin create writes the file the
-provenance rule already blesses (`plugins/pending/`), then reads it back
-through the same listing.
+`todo.Start`, `todo.Complete`, `todo.Retry`, `scheduler.List`,
+`scheduler.Create`, `scheduler.Pause`, `scheduler.Resume`,
+`scheduler.Remove`, `scheduler.Update`, `scheduler.Runs`, `rem.Recent`,
+`plugins.Move`, and the `models.Table` / `plugins.List` surfaces. The
+two small store additions (`SessionRow.Cwd`, `SessionUsage`) are typed
+verbs the dashboard consumes, not a SQL leak. The plugin create writes
+the file the provenance rule already blesses (`plugins/pending/`), then
+reads it back through the same listing.
 
 ## Gotchas
 
@@ -141,6 +166,14 @@ through the same listing.
   verb's named refusal, and the reply is the store's voice. The selected
   `cwd` is passed to `List`/`Create` only for the job's own `cwd` field
   and the list's this-directory-first ordering.
+- The scheduler's doors ride their verbs the same way (16): the selected
+  `cwd` is the session cwd the verbs take, and the store's refusals ride
+  through by name — the dashboard invents no refusal of its own beyond
+  the id's shape (`jN`) and the `runs` read's `n` cap (1-100). `update`
+  is partial: only the fields the body carries change, so the page
+  submits only what the operator changed (the row carries no prompt, so
+  an empty prompt is no change). `runs` is a read of the one global
+  store: no `cwd`, no Origin wall, the audit trail verbatim.
 - The plugin create is the operator's authoring door, not the model's:
   the file lands in `plugins/pending/` (the provenance rule's landing
   zone), never in `plugins/` — promotion (move it up, reload) stays the
@@ -182,13 +215,21 @@ creates, plus the scheduler's duplicate/cron/once refusals, the plugin's
 name/duplicate/empty-body refusals, and the live listing); the
 disable/enable doors (both move the file and reply in the command's
 voice, a disable of a pending plugin refuses, a duplicate in the target
-zone the named 409, the Origin wall, the 405); the reads (the
+zone the named 409, the Origin wall, the 405); the scheduler's doors
+(each moves the store and replies in the store's voice verbatim — pause
+marks the job paused in the next list read, remove drops it, update
+changes the field the reply names — the runs read returns the seeded
+audit trail with the `n` cap and the unknown id the named 404, the
+store's refusals by name: an unknown id, a removed one, an update with
+no change; the walls: Origin, the body cap, a bad id, the 405s); the
+reads (the
 cwds, the sessions list and cwd, the transcript golden — messages,
 reasoning, tool calls and results, and the usage rows — the
 todo/scheduler verbatim text, the memory, the models rows with effort and
 role, the plugins with DESCRIPTION); and the static assets (served, 404,
 traversal refused, the drawer's toggle, the picker's add, the homage's
-parsers and bar). The store additions carry their own cases in
+parsers and bar, the scheduler's row controls and the in-place update
+form with the stacked phone layout). The store additions carry their own cases in
 `store/{state,todo,rem}`. The JS parsers' parity with the Go ones is
 checked by hand against the same seeded text (the node harness, not a
 suite member).
