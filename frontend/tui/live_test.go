@@ -237,7 +237,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	}
 
 	want := []string{
-		paintFree(blockLines[0]), paintFree(blockLines[1]), paintFree(blockLines[2]), paintFree(blockLines[3]),
+		paintFree(blockLines[0]), paintFree(blockLines[1]), paintFree(blockLines[2]), paintFree(blockLines[3]), paintFree(blockLines[4]), paintFree(blockLines[5]),
 		"hello",
 		"",
 		"thinking...",

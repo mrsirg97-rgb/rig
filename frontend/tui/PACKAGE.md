@@ -27,7 +27,8 @@ width) — no core or loop line (decision 10).
 - **The status line and startup block** (`status.go`): the live row
   (`RenderStatusLine`, three rows — identity / effort · role · approve ·
   workers / usage; the stance row always ends with the fleet's model or
-  `workers: none`), the one-shot startup block (`RenderStatus`), and the
+  the one-shot startup block (`RenderStatus`: the title, the session, the
+  fleet as `workers: <model|none>`, and the hint line), and the
   snapshot's refresh points (start, `/new`, `sessions resume`, a
   `models` switch).
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,

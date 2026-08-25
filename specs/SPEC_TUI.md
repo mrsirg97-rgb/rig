@@ -277,7 +277,11 @@ glyphs in the ember, the one piece of retro texture the block keeps
 (decision 8: it spells the same word the plain row would; the ascii
 glyph set gets the plain row) — the session id under it (its first twelve
 characters, git's short-hash habit; `/sessions` lists the full ids),
-and the scheduler news line (decision 6) when there is one — no
+the fleet under it (`workers: <model>`, or `workers: none` — amended
+2026-08-25: a static fact reads once at start, never in the live row,
+which is for what changes under you), and the invitation (`chat with
+your model, or type / for commands` — the `/` menu is the discoverable
+surface, SPEC_TUI 9) — no scheduler news line (cut, decision 6), no
 dotted rules (they enclosed the banner, and the banner is gone). The
 model and usage rows are the live status now, under the input:
 
@@ -287,7 +291,8 @@ welcome to
 █▀▄ █ █ █
 ▀ ▀ ▀ ▀▀▀
 session 2f9a1c0e77b3
-· j5 failed 14:30 · scheduler runs j5
+workers: qwen3.8-workers
+chat with your model, or type / for commands
 
 ❯
 
@@ -416,13 +421,12 @@ queue is one such raw case: the reply `(no tasks in <label>'s queue)`
 names the queue it read (SPEC_CORE) and commits as-is through both
 doors — no renderer structure sees new text, so no golden moves.
 
-One ambient line, only one: at session start, in the startup block
-(decision 3), if the scheduler store has news since the last session in
-this cwd (a failed or first-completed run in this cwd), one dim line:
-`· j5 failed 14:30 · scheduler runs j5`. Absent news, nothing. This
-is a read of the one store the root already opens, the exact analog of
-todo's stale footer; it is the only place the TUI reads a store, and
-it is read-only.
+The ambient scheduler news line that lived here — one dim line at
+session start when the store had news since the last session — is
+**cut** (amended 2026-08-25, the operator's call: the startup block is
+identity and invitation, and a job's failure has `/scheduler` and the
+dashboard). With it goes the TUI's only store read; the block is built
+from the root's closures alone.
 
 ### 7. Themes: the palette table, the glyph table, theme.json
 
@@ -681,8 +685,8 @@ where the CI box allows and skip cleanly where not.
   stream through the plain CLI still matches the CLI's goldens (the
   TUI adds, never changes, the CLI).
 - the startup block and the status line: the block's exact bytes from
-  a scripted session (the identity row, the session row, the news line
-  when there is one), committed exactly once at start and by no other
+  a scripted session (the identity row, the session row, the fleet, the
+  hint), committed exactly once at start and by no other
   event or command; the status row is the model alone before the
   first usage, `model · used/window` after a `Done` (its
   Prompt + Completion), and the compact's `Kept` after a `Compacted`;
@@ -727,9 +731,8 @@ where the CI box allows and skip cleanly where not.
   downconvert (a known hex to a known index); the p1 ramp renders
   every state distinctly (the monochrome legibility test, asserted on
   distinct SGR sequences, not by eye).
-- the scheduler news line: news since last session renders one dim
-  line; no news renders nothing; the read is read-only (no store
-  mutation; asserted on the store file's bytes).
+- the scheduler news line is cut (decision 6): no test, no store read
+  from the TUI.
 - the freeze gate: the PR's diff outside `frontend/tui` and the
   allowlist's named work surfaces (last: `middleware/paths`, the path
   boundary, SPEC_FS; before it the build surface — `Makefile`, `.github/`, `.gitignore`, `README.md`,

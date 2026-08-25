@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/mrsirg97-rgb/rig"
 	"github.com/mrsirg97-rgb/rig/command"
@@ -625,35 +624,6 @@ func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 	}
 }
 
-func tuiNews(stateDB, schedDB store.DB, cwd string) func(context.Context) string {
-	return func(ctx context.Context) string {
-		var last any
-		if err := stateDB.QueryRowContext(ctx,
-			`SELECT MAX(ended_at) FROM sessions WHERE cwd = ? AND ended_at IS NOT NULL`, cwd).Scan(&last); err != nil {
-			return ""
-		}
-		cutoff := ""
-		switch v := last.(type) {
-		case time.Time:
-			cutoff = v.UTC().Format(time.RFC3339)
-		case string:
-			cutoff = v
-		}
-		var name, status, ended string
-		if err := schedDB.QueryRowContext(ctx,
-			`SELECT j.name, r.status, r.ended_at
-			 FROM runs r JOIN jobs j ON j.id = r.job_id
-			 WHERE r.ended_at > ? ORDER BY r.seq DESC LIMIT 1`, cutoff).Scan(&name, &status, &ended); err != nil {
-			return ""
-		}
-		at := ended
-		if t, err := time.Parse(time.RFC3339, ended); err == nil {
-			at = t.UTC().Format("15:04")
-		}
-		return fmt.Sprintf("· %s %s %s · scheduler runs %s", name, status, at, name)
-	}
-}
-
 func sessionFor(resumeID string, resume func(id string) (*core.Session, error)) (*core.Session, error) {
 	if resumeID == "" {
 		return core.NewSession(), nil
@@ -1087,7 +1057,6 @@ func main() {
 		fe = tui.New(os.Stdin, os.Stdout,
 			tui.WithTheme(th),
 			tui.WithStatus(tuiStatusIn(r, sdb)),
-			tui.WithNews(tuiNews(sdb, scdb, cwd)),
 			tui.WithCommands(command.All(), env),
 		)
 

@@ -138,7 +138,7 @@ func (s *scriptedSession) input() (string, error) {
 	}
 }
 
-func goldenStream(t *testing.T, th Theme, width int, news string) string {
+func goldenStream(t *testing.T, th Theme, width int) string {
 	t.Helper()
 	s := newScriptedSession(t,
 		WithTheme(th),
@@ -149,7 +149,6 @@ func goldenStream(t *testing.T, th Theme, width int, news string) string {
 				Up: 214000, Down: 18200, CacheRead: 187000,
 			}
 		}),
-		WithNews(func(ctx context.Context) string { return news }),
 		WithTicks(make(chan time.Time)),
 	)
 
@@ -229,7 +228,7 @@ func TestGoldenStream(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := goldenStream(t, tc.th, tc.width, "")
+			got := goldenStream(t, tc.th, tc.width)
 			if *updateGoldens {
 				if err := os.MkdirAll("testdata", 0o755); err != nil {
 					t.Fatal(err)
@@ -264,7 +263,7 @@ func TestGoldenStreamProtocol(t *testing.T) {
 		th    Theme
 		width int
 	}{{oled, 50}, {oled, 100}, {p1ascii, 50}, {p1ascii, 100}} {
-		got := goldenStream(t, tc.th, tc.width, "")
+		got := goldenStream(t, tc.th, tc.width)
 		v := newVT(tc.width)
 		v.feed([]byte(got))
 		if v.err != "" {

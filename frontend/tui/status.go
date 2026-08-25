@@ -28,6 +28,12 @@ func RenderStatus(t Theme, in StatusIn) string {
 		}
 		b += t.Paint(SlotDim, "session "+id) + "\n"
 	}
+	if in.Workers == "" {
+		b += t.Paint(SlotDim, "workers: none") + "\n"
+	} else {
+		b += t.Paint(SlotDim, "workers: "+in.Workers) + "\n"
+	}
+	b += t.Paint(SlotDim, "chat with your model, or type / for commands") + "\n"
 	return b
 }
 
@@ -48,7 +54,7 @@ var titleRows = []string{
 	"▀ ▀ ▀ ▀▀▀",
 }
 
-func RenderStatusLine(t Theme, model, effort, role, approveMode, workers string, used, window int, hasUsed bool, up, down, cacheRead int) string {
+func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, window int, hasUsed bool, up, down, cacheRead int) string {
 	if model == "" {
 		return ""
 	}
@@ -74,11 +80,6 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode, workers string,
 		row2 += t.Paint(SlotWarn, "manual")
 	} else {
 		row2 += t.Paint(SlotWarn, "auto")
-	}
-	if workers == "" {
-		row2 += sep + t.Paint(SlotDim, "workers: none")
-	} else {
-		row2 += sep + t.Paint(SlotDim, "workers: "+workers)
 	}
 	hit := 0
 	if up > 0 {
