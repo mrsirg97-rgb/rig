@@ -7,8 +7,9 @@
   `model` is required and must resolve against the merged models table,
   `slots` defaults to `1` and gates concurrent `delegate` calls per
   session. The embedded `models.json` sheds its `qwen3.8-workers` row
-  (`local` alone), `settings.json`'s `defaultJobModel` is cut — a
-  present one refuses at start by naming the move to `workers.json` —
+  (`local` alone), `settings.json`'s `defaultJobModel` is cut — the
+  first start mints `workers.json` from it once and says so, later
+  starts nag until the key is deleted, a disagreement refuses —
   and the default allow sheds `scheduler` and `delegate`, growing them
   back only when a fleet stands and the operator named no allow of
   their own. Absence of the file is absence of workers: no

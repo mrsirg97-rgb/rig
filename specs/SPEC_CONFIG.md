@@ -320,7 +320,7 @@ rig: config: ~/.rig/workers.json: model "brain": no row in the models table (kno
 rig: config: ~/.rig/workers.json: slots: expected an integer, got "two"
 rig: config: ~/.rig/workers.json: slots: expected a positive number, got 0
 rig: config: ~/.rig/workers.json: unknown key "slot" (known: model, slots)
-rig: config: ~/.rig/settings.json: defaultJobModel moved to workers.json (the fleet's "model"; delete the key)
+rig: config: ~/.rig/settings.json: defaultJobModel "x" disagrees with workers.json's model "y"; delete the key
 rig: config: ~/.rig/theme.json: invalid character 'x' after object key:value pair
 rig: config: ~/.rig/AGENTS.md: permission denied
 ```
@@ -346,13 +346,16 @@ Rules that make the voice total:
 - `AGENTS.md`: ENOENT is silent; every other read error (permission, a
   directory by that name, I/O) refuses with the OS reason, the path
   named once.
-- **A cut key is a break the refusal names.** `settings.json`'s
-  `defaultJobModel` is cut by 12: a file that still carries the key
-  refuses at start, naming the move (`defaultJobModel moved to
-  workers.json`) — the presence is the refusal, whatever the value
-  (no silent honoring), and the key stays in the known list so the
-  cut's voice, not the generic unknown-key voice, is the one that
-  names it.
+- **A cut key migrates once, then nags.** `settings.json`'s
+  `defaultJobModel` is cut by 12, and a box that updates in place must
+  keep starting: with no `workers.json`, the first start mints one from
+  the key (`{"model": …}`, the model checked against the table — a
+  model the table lacks refuses, naming it, minting nothing) and says so
+  once on stderr; every later start ignores the key with a one-line
+  notice until it is deleted. Two truths refuse: a key that disagrees
+  with `workers.json`'s model names both. An empty value is the notice
+  only. The key stays in the known list so the cut's voice, not the
+  generic unknown-key voice, names it.
 
 ### 4. models.json: the table out of code
 
@@ -838,11 +841,12 @@ case names one, the built binary for the e2e.
   an operator `allow` (file): the operator's list stands as written
   (no worker tools appended when the operator narrowed); the env
   `RIG_ALLOW` and `-allow` layers stand likewise.
-- `TestDefaultJobModelInSettingsRefusesNamingTheMove` — a
-  `settings.json` carrying `defaultJobModel` (any value, including
-  empty) refuses at start naming the move to `workers.json`; no silent
-  honoring, and the key is not the generic unknown-key voice (it stays
-  in the known list, the cut names it).
+- `TestDefaultJobModelMigratesOnceIntoWorkersJSON` — a
+  `settings.json` carrying `defaultJobModel` and no `workers.json`
+  mints the fleet file with that model once (the notice names the
+  mint), and the second start ignores the key with a notice;
+  `…DisagreeingWithTheFleetRefuses`, `…UnknownToTheTableRefuses`
+  (nothing minted), `…EmptyDefaultJobModelIsANotice`.
 - `TestEmbeddedDefaults` (amended) — the embedded allow is the 16
   non-worker natives, the embedded table is the one `local` row
   (no `qwen3.8-workers`), and the embedded settings carry no

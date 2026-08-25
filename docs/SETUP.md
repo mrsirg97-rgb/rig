@@ -111,7 +111,7 @@ the file is a contract, not a filter.
 
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
-| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut — a present one refuses at start, naming the move to `workers.json` |
+| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut — a present one mints `workers.json` once at start (the notice says so), then nags until deleted |
 | `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) and `efforts` (the model's available effort levels — `low`, `medium`, `xhigh` — the `/effort` dial's vocabulary) |
 | `workers.json`    | the fleet: `{"model": "<id>", "slots": N}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |

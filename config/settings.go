@@ -29,6 +29,9 @@ type Settings struct {
 	SandboxBinds  []string
 	Approve       string
 	Plugins       SettingsPlugins
+
+	legacyJobModel string
+	legacyJobKey   bool
 }
 
 type SettingsPlugins struct {
@@ -66,7 +69,9 @@ func loadSettings(dir string) (Settings, bool, error) {
 	if err != nil {
 		return Settings{}, false, err
 	}
-	return mergeSettings(base, file), len(file.Allow) > 0, nil
+	out := mergeSettings(base, file)
+	out.legacyJobModel, out.legacyJobKey = file.legacyJobModel, file.legacyJobKey
+	return out, len(file.Allow) > 0, nil
 }
 
 func mergeSettings(base, file Settings) Settings {
@@ -182,8 +187,11 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	} else if ok && v != "" {
 		s.SwapURL = v
 	}
-	if _, ok := keys["defaultJobModel"]; ok {
-		return Settings{}, fmt.Errorf("config: %s: defaultJobModel moved to workers.json (the fleet's \"model\"; delete the key)", path)
+	if v, ok, err := str("defaultJobModel"); err != nil {
+		return Settings{}, err
+	} else if ok {
+		s.legacyJobModel = v
+		s.legacyJobKey = true
 	}
 	if v, ok, err := str("theme"); err != nil {
 		return Settings{}, err

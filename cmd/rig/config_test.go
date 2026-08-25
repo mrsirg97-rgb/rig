@@ -791,7 +791,7 @@ func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	}
 }
 
-func TestDefaultJobModelPresenceRefusesAtStart(t *testing.T) {
+func TestDefaultJobModelMintsTheFleetAtStart(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()
 	dir := cfgDir(t, scratch)
@@ -805,17 +805,14 @@ func TestDefaultJobModelPresenceRefusesAtStart(t *testing.T) {
 	cmd := exec.Command(bin, "-p", "hello")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(scratch, "")
-	out, runErr := cmd.CombinedOutput()
-	if runErr == nil {
-		t.Fatalf("a present defaultJobModel must refuse at start: %q", out)
-	}
-	want := `defaultJobModel moved to workers.json`
+	out, _ := cmd.CombinedOutput()
+	want := `defaultJobModel moved to workers.json — minted`
 	if !strings.Contains(string(out), want) {
-		t.Fatalf("the voice = %q, want it to name the move to %q", out, want)
+		t.Fatalf("the start must mint the fleet once and say so: %q", out)
 	}
-	glob, _ := filepath.Glob(filepath.Join(dir, "sessions", "*.sqlite"))
-	if len(glob) != 0 {
-		t.Fatalf("the state store was created despite the refusal: %v", glob)
+	b, err := os.ReadFile(filepath.Join(dir, "workers.json"))
+	if err != nil || !strings.Contains(string(b), `"model": "local"`) {
+		t.Fatalf("workers.json must carry the legacy model: %q (%v)", b, err)
 	}
 }
 

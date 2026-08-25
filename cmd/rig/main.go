@@ -728,6 +728,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
+	if cfg.Notice != "" {
+		fmt.Fprintln(os.Stderr, "rig:", cfg.Notice)
+	}
 
 	passed := map[string]bool{}
 	flag.Visit(func(f *flag.Flag) { passed[f.Name] = true })
@@ -1169,6 +1172,9 @@ func runJob(args []string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
+	}
+	if cfg.Notice != "" {
+		fmt.Fprintln(os.Stderr, "rig:", cfg.Notice)
 	}
 	swapURL := cfg.Settings.SwapURL
 	if v := os.Getenv("RIG_SWAP_URL"); v != "" {

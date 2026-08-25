@@ -1,7 +1,10 @@
 package config_test
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/config"
@@ -121,15 +124,64 @@ func TestWorkersAllowGrowsOnlyOverTheDefault(t *testing.T) {
 	}
 }
 
-func TestDefaultJobModelInSettingsRefusesNamingTheMove(t *testing.T) {
-	for _, content := range []string{`{"defaultJobModel": "brain"}`, `{"defaultJobModel": ""}`} {
-		dir := t.TempDir()
-		p := write(t, dir, "settings.json", content)
-		err := loadErr(t, dir, t.TempDir())
-		want := `config: ` + p + `: defaultJobModel moved to workers.json (the fleet's "model"; delete the key)`
-		if err.Error() != want {
-			t.Fatalf("content %s: the voice = %q, want %q (the move named, presence the refusal)", content, err.Error(), want)
-		}
+func TestDefaultJobModelMigratesOnceIntoWorkersJSON(t *testing.T) {
+	dir := t.TempDir()
+	sp := write(t, dir, "settings.json", `{"defaultJobModel": "local"}`)
+	cfg := load(t, dir, t.TempDir())
+	wp := filepath.Join(dir, "workers.json")
+	if cfg.Workers == nil || cfg.Workers.Model != "local" || cfg.Workers.Slots != 1 {
+		t.Fatalf("the legacy key must mint the fleet: %+v", cfg.Workers)
+	}
+	b, err := os.ReadFile(wp)
+	if err != nil || string(b) != "{\"model\": \"local\"}\n" {
+		t.Fatalf("workers.json minted = %q (%v)", b, err)
+	}
+	want := "config: " + sp + ": defaultJobModel moved to workers.json — minted " + wp + " with model \"local\"; delete the key"
+	if cfg.Notice != want {
+		t.Fatalf("notice = %q, want %q", cfg.Notice, want)
+	}
+	again := load(t, dir, t.TempDir())
+	if again.Notice != "config: "+sp+": defaultJobModel is ignored (workers.json names the fleet); delete the key" {
+		t.Fatalf("the second start ignores the key with a notice, got %q", again.Notice)
+	}
+	if b2, _ := os.ReadFile(wp); string(b2) != string(b) {
+		t.Fatal("the mint must happen once")
+	}
+}
+
+func TestDefaultJobModelDisagreeingWithTheFleetRefuses(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "other", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}]`)
+	write(t, dir, "workers.json", `{"model": "other"}`)
+	sp := write(t, dir, "settings.json", `{"defaultJobModel": "local"}`)
+	err := loadErr(t, dir, t.TempDir())
+	want := "config: " + sp + ": defaultJobModel \"local\" disagrees with workers.json's model \"other\"; delete the key"
+	if err.Error() != want {
+		t.Fatalf("two truths must refuse: %q, want %q", err.Error(), want)
+	}
+}
+
+func TestDefaultJobModelUnknownToTheTableRefuses(t *testing.T) {
+	dir := t.TempDir()
+	sp := write(t, dir, "settings.json", `{"defaultJobModel": "ghost"}`)
+	err := loadErr(t, dir, t.TempDir())
+	if !strings.HasPrefix(err.Error(), "config: "+sp+": defaultJobModel \"ghost\": no row in the models table") {
+		t.Fatalf("a legacy model the table lacks must refuse naming it: %q", err.Error())
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "workers.json")); statErr == nil {
+		t.Fatal("nothing minted on a refusal")
+	}
+}
+
+func TestEmptyDefaultJobModelIsANotice(t *testing.T) {
+	dir := t.TempDir()
+	sp := write(t, dir, "settings.json", `{"defaultJobModel": ""}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Workers != nil {
+		t.Fatal("an empty legacy key mints nothing")
+	}
+	if cfg.Notice != "config: "+sp+": defaultJobModel is cut (the fleet is workers.json); delete the key" {
+		t.Fatalf("notice = %q", cfg.Notice)
 	}
 }
 

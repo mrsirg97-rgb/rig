@@ -23,8 +23,9 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   (`plugins/disabled/`), an empty one is dropped.
 - `loadSettings` / `parseSettings` / `mergeSettings` — the settings
   chain's file-over-embedded layer. The chain also reports whether the
-  file named its own allow; a present `defaultJobModel` refuses, naming
-  the move to `workers.json`.
+  file named its own allow; a present `defaultJobModel` is carried to
+  `Load`, which mints `workers.json` from it once (`Config.Notice`
+  says so), ignores it with a notice after, and refuses a disagreement.
 - `loadWorkers` — the `workers.json` fleet: `model` required, must
   resolve in the merged models table; `slots` defaults to 1 and must be
   a positive integer; unknown keys refuse naming `model, slots`.
