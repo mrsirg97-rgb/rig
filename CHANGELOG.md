@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.1] — a read names its staleness
+
+- **a read that finds a stale observation names it** (`specs/SPEC_CORE.md`):
+  when the session's recorded FileState for a path no longer matches
+  on-disk, the read's content opens with `[changed since your
+  observation] <path> — re-read before acting on it`, and the fresh read
+  re-records so it says it once — the drift refusal moved from the edit
+  to the moment the model can still act on it.
+
 ## [0.17.0] — the soak's vitals
 
 - **sessions, the soak's vitals** (`specs/SPEC_STATE.md` and
