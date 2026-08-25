@@ -194,10 +194,50 @@ func (f *fold) applyVerb(e eventRow) {
 			j.LastExit = int64(*a.Exit)
 			j.LastExitSet = true
 		}
+	case "update":
+		j.applyUpdate(e.args)
 	default:
 		return
 	}
 	j.UpdatedSeq = e.seq
+}
+
+func (j *jobState) applyUpdate(args string) {
+	var u struct {
+		Name   string  `json:"name"`
+		Prompt string  `json:"prompt"`
+		Cron   string  `json:"cron"`
+		At     *string `json:"at"`
+		Cwd    string  `json:"cwd"`
+		Model  string  `json:"model"`
+		Busy   string  `json:"busy"`
+	}
+	if json.Unmarshal([]byte(args), &u) != nil {
+		return
+	}
+	if u.Name != "" {
+		j.Name = u.Name
+	}
+	if u.Prompt != "" {
+		j.Prompt = u.Prompt
+	}
+	if u.Cron != "" {
+		j.Cron = u.Cron
+		if u.At == nil {
+			j.At = ""
+		} else {
+			j.At = *u.At
+		}
+	}
+	if u.Cwd != "" {
+		j.Cwd = u.Cwd
+	}
+	if u.Model != "" {
+		j.Model = u.Model
+	}
+	if u.Busy != "" {
+		j.Busy = busyOf(u.Busy)
+	}
 }
 
 type compactJob struct {

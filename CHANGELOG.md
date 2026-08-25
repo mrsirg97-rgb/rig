@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+- **the scheduler gets `update`: change a job without losing its
+  trail** (`specs/SPEC_STATE.md`): `{"action": "update", "id": "jN", …}`
+  is partial — any of `prompt`, `cron`/`at` (mutually exclusive in one
+  call, refused by name; create's refusals apply verbatim: a bad ISO, an
+  invalid cron, a `once` without its `at`), `model`, `cwd`, `busy`,
+  `name`. No fields → `update needs a change`; an unknown id, or a
+  removed one, refuses by name; `name` keeps its store-wide uniqueness.
+  One `update` op is appended and the fold overlays only the fields it
+  carries: the id and the runs stay — remove + create is the rejected
+  alternative (the id re-mints, the runs orphan, two crontab moves
+  express one change; the trail surviving an edit is the point of having
+  one). A cadence change rewrites the job's one crontab line under the
+  same key; a paused job stays paused (its line rewritten commented) and
+  the new line lands on resume; `pause`/`resume` stay their own ops and
+  `update` never changes the state. The `/scheduler` line takes the verb
+  free (the command is tool-backed): `update <id> [name <n>]
+  [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>]
+  [busy <skip|force>]`. The tool menu's cost is the one enum word.
+
 ## [0.17.1] — a read names its staleness
 
 - **a read that finds a stale observation names it** (`specs/SPEC_CORE.md`):

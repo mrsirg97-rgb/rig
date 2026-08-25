@@ -23,7 +23,7 @@ func (t toolCmd) Description() string {
 	case "todo":
 		return "the task queue: read it, add a task, or move one (start, done, fail, retry)"
 	case "scheduler":
-		return "the cron jobs: list, create, pause, resume, remove, or show a job's runs"
+		return "the cron jobs: list, create, update, pause, resume, remove, or show a job's runs"
 	}
 	return "over the same " + t.name + " tool the model gets: the line is parsed into the tool's args, the reply printed verbatim"
 }
@@ -44,6 +44,7 @@ func (t toolCmd) Sub() []Sub {
 		return []Sub{
 			{Name: "list", Desc: "show the jobs"},
 			{Name: "create", Desc: "add a job: create <name> <prompt…> <cron>"},
+			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>] [busy <skip|force>]"},
 			{Name: "runs", Desc: "show a job's runs: runs <id> [n]"},
 			{Name: "pause", Desc: "pause a job: pause <id>"},
 			{Name: "resume", Desc: "resume a paused job: resume <id>"},
@@ -127,6 +128,8 @@ func todoArgs(args string) (json.RawMessage, error) {
 	}
 }
 
+const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>] [busy <skip|force>]|pause|resume|remove <id>|runs <id> [n]"
+
 func schedulerArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
 	switch {
@@ -134,6 +137,8 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 		return json.RawMessage(`{"action":""}`), nil
 	case fields[0] == "list" && len(fields) == 1:
 		return json.RawMessage(`{"action":"list"}`), nil
+	case fields[0] == "update" && len(fields) >= 2:
+		return schedulerUpdate(fields)
 	case (fields[0] == "pause" || fields[0] == "resume" || fields[0] == "remove") && len(fields) == 2:
 		return json.Marshal(map[string]any{"action": fields[0], "id": fields[1]})
 	case fields[0] == "runs" && (len(fields) == 2 || len(fields) == 3):
@@ -151,16 +156,59 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 	}
 	switch {
 	case len(fields) == 0:
-		return nil, errors.New("scheduler: usage: scheduler list|create <name> <prompt…> <cron>|pause|resume|remove <id>|runs <id> [n]")
+		return nil, errors.New("scheduler: usage: scheduler " + schedulerVerbs)
 	case fields[0] == "list":
 		return nil, errors.New("scheduler: list takes no args (scheduler list)")
+	case fields[0] == "update":
+		return nil, errors.New("scheduler: update takes an id and named fields (scheduler " + schedulerVerbs)
 	case fields[0] == "pause" || fields[0] == "resume" || fields[0] == "remove":
 		return nil, fmt.Errorf("scheduler: %s takes an id (scheduler %s <id>)", fields[0], fields[0])
 	case fields[0] == "runs":
 		return nil, errors.New("scheduler: runs takes an id and an optional n (scheduler runs <id> [n])")
 	default:
-		return nil, fmt.Errorf("scheduler: unknown action %q (scheduler list|create <name> <prompt…> <cron>|pause|resume|remove <id>|runs <id> [n])", fields[0])
+		return nil, fmt.Errorf("scheduler: unknown action %q (scheduler %s)", fields[0], schedulerVerbs)
 	}
+}
+
+func isUpdateKey(s string) bool {
+	switch s {
+	case "name", "prompt", "cron", "at", "model", "cwd", "busy":
+		return true
+	}
+	return false
+}
+
+func schedulerUpdate(fields []string) (json.RawMessage, error) {
+	const keys = "name, prompt, cron, at, model, cwd, busy"
+	const shape = "scheduler update <id> [name <n>] [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>] [busy <skip|force>]"
+	m := map[string]any{"action": "update", "id": fields[1]}
+	rest := fields[2:]
+	i := 0
+	for i < len(rest) {
+		key := rest[i]
+		i++
+		switch key {
+		case "prompt", "cron":
+			var val []string
+			for i < len(rest) && !isUpdateKey(rest[i]) {
+				val = append(val, rest[i])
+				i++
+			}
+			if len(val) == 0 {
+				return nil, fmt.Errorf("scheduler: update: %q needs a value (%s)", key, shape)
+			}
+			m[key] = strings.Join(val, " ")
+		case "name", "at", "model", "cwd", "busy":
+			if i >= len(rest) {
+				return nil, fmt.Errorf("scheduler: update: %q needs a value (%s)", key, shape)
+			}
+			m[key] = rest[i]
+			i++
+		default:
+			return nil, fmt.Errorf("scheduler: update: unknown key %q (keys: %s)", key, keys)
+		}
+	}
+	return json.Marshal(m)
 }
 
 func schedulerCreate(fields []string) (json.RawMessage, error) {

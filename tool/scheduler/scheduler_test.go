@@ -97,7 +97,7 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("schema missing action")
 	}
 	enum, _ := action["enum"].([]any)
-	if want := []string{"create", "list", "pause", "resume", "remove", "runs"}; len(enum) != len(want) {
+	if want := []string{"create", "update", "list", "pause", "resume", "remove", "runs"}; len(enum) != len(want) {
 		t.Fatalf("action enum %v", enum)
 	} else {
 		for i, v := range want {
@@ -131,6 +131,55 @@ func TestExecVoices(t *testing.T) {
 	}
 	if _, err := exec(t, h, map[string]any{"action": "runs"}); err == nil || !strings.Contains(err.Error(), "scheduler: runs requires 'id' (jN)") {
 		t.Fatalf("runs-id voice: %v", err)
+	}
+	if _, err := exec(t, h, map[string]any{"action": "update"}); err == nil || !strings.Contains(err.Error(), "scheduler: update requires 'id' (jN)") {
+		t.Fatalf("update-id voice: %v", err)
+	}
+}
+
+func TestExecUpdateLandsInTheStore(t *testing.T) {
+	h := newHarness(t, "/ws/sa")
+	if _, err := exec(t, h, map[string]any{
+		"action": "create", "name": "upd", "prompt": "old prompt",
+		"cron": "0 3 * * *",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := h.ct.text
+	reply, err := exec(t, h, map[string]any{
+		"action": "update", "id": "j1", "prompt": "new prompt", "model": "brain",
+	})
+	if err != nil {
+		t.Fatalf("update: %v (%s)", err, reply)
+	}
+	if !strings.HasPrefix(reply, "updated j1 'upd'") {
+		t.Fatalf("update reply %q", reply)
+	}
+	if h.ct.text != before {
+		t.Fatalf("a non-cadence update must not touch the crontab: %q", h.ct.text)
+	}
+	var prompt, model string
+	if err := h.db.DB.QueryRow(`SELECT prompt, model FROM jobs WHERE id = 'j1'`).Scan(&prompt, &model); err != nil {
+		t.Fatal(err)
+	}
+	if prompt != "new prompt" || model != "brain" {
+		t.Fatalf("fields not overlaid: %q %q", prompt, model)
+	}
+
+	reply, err = exec(t, h, map[string]any{
+		"action": "update", "id": "j1", "cron": "0 4 * * *",
+	})
+	if err != nil {
+		t.Fatalf("cadence update: %v (%s)", err, reply)
+	}
+	if !strings.Contains(h.ct.text, "0 4 * * * /x/rig run-job j1  # pane-scheduler:j1") {
+		t.Fatalf("the line must be rewritten: %q", h.ct.text)
+	}
+	if strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job j1") {
+		t.Fatalf("the old line must be gone: %q", h.ct.text)
+	}
+	if _, err := exec(t, h, map[string]any{"action": "update", "id": "j9"}); err == nil || !strings.Contains(err.Error(), "no job 'j9'") {
+		t.Fatalf("unknown-id voice: %v", err)
 	}
 }
 

@@ -181,6 +181,14 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 	if _, err := runCmd(t, "scheduler", "resume j1", env); err != nil {
 		t.Fatalf("resume: %v", err)
 	}
+
+	updated, err := runCmd(t, "scheduler", "update j1 prompt do the nightly thing model brain", env)
+	if err != nil || !strings.Contains(updated, "updated j1") {
+		t.Fatalf("update must land in the store verbatim:\n%s\n%v", updated, err)
+	}
+	if _, err := runCmd(t, "scheduler", "update j1 cron 1 3 * * *", env); err != nil {
+		t.Fatalf("cadence update: %v", err)
+	}
 	runs, err := runCmd(t, "scheduler", "runs j1 2", env)
 	if err != nil || !strings.Contains(runs, "0 runs") {
 		t.Fatalf("runs with no runs must carry the no-runs voice:\n%s\n%v", runs, err)
@@ -200,6 +208,14 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 	_, err = runCmd(t, "scheduler", "runs j2 x", env)
 	if err == nil || err.Error() != `scheduler: "x": not an integer (scheduler runs <id> [n])` {
 		t.Fatalf("a non-integer n must refuse, got %v", err)
+	}
+	_, err = runCmd(t, "scheduler", "update", env)
+	if err == nil || !strings.Contains(err.Error(), "scheduler: update takes an id") {
+		t.Fatalf("a bare update must refuse naming the shape, got %v", err)
+	}
+	_, err = runCmd(t, "scheduler", "update j1 bogus brain", env)
+	if err == nil || !strings.Contains(err.Error(), "unknown key") {
+		t.Fatalf("an unknown key must refuse, got %v", err)
 	}
 }
 
