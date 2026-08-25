@@ -98,10 +98,10 @@ func (f *fakeSpawn) count() int {
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.SpawnResult, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
-	f.mu.Unlock()
 	if d, ok := ctx.Deadline(); ok {
 		f.deadline = time.Until(d)
 	}
+	f.mu.Unlock()
 	if f.block != nil {
 		<-f.block
 	}
