@@ -17,9 +17,10 @@
   same key; a paused job stays paused (its line rewritten commented) and
   the new line lands on resume; `pause`/`resume` stay their own ops and
   `update` never changes the state. The `/scheduler` line takes the verb
-  free (the command is tool-backed): `update <id> [name <n>]
-  [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>]
-  [busy <skip|force>]`. The tool menu's cost is the one enum word.
+  free (the command is tool-backed): `update <id> [name <n>] [model <m>]
+  [cwd <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>]
+  [prompt <the rest of the line>]` — prompt is last so a prompt that
+  says "model" keeps its tail. The tool menu's cost is the one enum word.
 
 ## [0.17.1] — a read names its staleness
 

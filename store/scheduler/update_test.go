@@ -329,3 +329,14 @@ func TestCrontabInstallFailureOnUpdateLeavesTheStoreUntouched(t *testing.T) {
 		t.Fatalf("events = %d, want 1 (the create)", n)
 	}
 }
+
+func TestUpdateRefusesAnUnknownBusy(t *testing.T) {
+	h := newHarness(t, "/ws/upd")
+	if _, err := h.create(sched.CreateInput{Name: "b", Prompt: "p", Cron: "0 1 * * *"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := sched.Update(context.Background(), h.db, h.ct, sched.UpdateInput{ID: "j1", Busy: "banana"}, "sess", runnerCmd, func() time.Time { return nowFixed })
+	if err == nil || !strings.Contains(err.Error(), "busy must be") {
+		t.Fatalf("an unknown busy must refuse by name, got %v", err)
+	}
+}

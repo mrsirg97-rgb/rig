@@ -182,7 +182,7 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 		t.Fatalf("resume: %v", err)
 	}
 
-	updated, err := runCmd(t, "scheduler", "update j1 prompt do the nightly thing model brain", env)
+	updated, err := runCmd(t, "scheduler", "update j1 model brain prompt do the nightly thing", env)
 	if err != nil || !strings.Contains(updated, "updated j1") {
 		t.Fatalf("update must land in the store verbatim:\n%s\n%v", updated, err)
 	}
@@ -288,5 +288,32 @@ func TestTodoProjectCommand(t *testing.T) {
 	_, err = runCmd(t, "todo", "project", env)
 	if err == nil || err.Error() != "todo: project takes a path (todo project <path>)" {
 		t.Fatalf("a bare project must refuse naming the shape, got %v", err)
+	}
+}
+
+func TestSchedulerUpdatePromptKeepsKeyWords(t *testing.T) {
+	var got map[string]any
+	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
+		got = map[string]any{}
+		if err := json.Unmarshal(args, &got); err != nil {
+			return "", err
+		}
+		return "updated", nil
+	})
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"scheduler": capture}}
+	if _, err := runCmd(t, "scheduler", "update j1 model brain prompt check the model config at 9", env); err != nil {
+		t.Fatal(err)
+	}
+	if got["prompt"] != "check the model config at 9" || got["model"] != "brain" {
+		t.Fatalf("prompt must take the rest of the line, key words included: %v", got)
+	}
+	if _, err := runCmd(t, "scheduler", "update j1 cron 1 3 * * * prompt x", env); err != nil {
+		t.Fatal(err)
+	}
+	if got["cron"] != "1 3 * * *" || got["prompt"] != "x" {
+		t.Fatalf("cron takes five fields, then prompt: %v", got)
+	}
+	if _, err := runCmd(t, "scheduler", "update j1 cron 1 3 *", env); err == nil || !strings.Contains(err.Error(), "five fields") {
+		t.Fatalf("a short cron must refuse by name, got %v", err)
 	}
 }

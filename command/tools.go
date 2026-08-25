@@ -44,7 +44,7 @@ func (t toolCmd) Sub() []Sub {
 		return []Sub{
 			{Name: "list", Desc: "show the jobs"},
 			{Name: "create", Desc: "add a job: create <name> <prompt…> <cron>"},
-			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>] [busy <skip|force>]"},
+			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [model <m>] [cwd <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"},
 			{Name: "runs", Desc: "show a job's runs: runs <id> [n]"},
 			{Name: "pause", Desc: "pause a job: pause <id>"},
 			{Name: "resume", Desc: "resume a paused job: resume <id>"},
@@ -128,7 +128,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 	}
 }
 
-const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>] [busy <skip|force>]|pause|resume|remove <id>|runs <id> [n]"
+const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>] [cwd <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]"
 
 func schedulerArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -180,7 +180,7 @@ func isUpdateKey(s string) bool {
 
 func schedulerUpdate(fields []string) (json.RawMessage, error) {
 	const keys = "name, prompt, cron, at, model, cwd, busy"
-	const shape = "scheduler update <id> [name <n>] [prompt <p…>] [cron <c…>] [at <ISO>] [model <m>] [cwd <dir>] [busy <skip|force>]"
+	const shape = "scheduler update <id> [name <n>] [model <m>] [cwd <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"
 	m := map[string]any{"action": "update", "id": fields[1]}
 	rest := fields[2:]
 	i := 0
@@ -188,16 +188,22 @@ func schedulerUpdate(fields []string) (json.RawMessage, error) {
 		key := rest[i]
 		i++
 		switch key {
-		case "prompt", "cron":
-			var val []string
-			for i < len(rest) && !isUpdateKey(rest[i]) {
-				val = append(val, rest[i])
-				i++
-			}
-			if len(val) == 0 {
+		case "prompt":
+			if i >= len(rest) {
 				return nil, fmt.Errorf("scheduler: update: %q needs a value (%s)", key, shape)
 			}
-			m[key] = strings.Join(val, " ")
+			m[key] = strings.Join(rest[i:], " ")
+			i = len(rest)
+		case "cron":
+			want := 5
+			if i < len(rest) && rest[i] == "once" {
+				want = 1
+			}
+			if i+want > len(rest) {
+				return nil, fmt.Errorf("scheduler: update: %q needs five fields or once (%s)", key, shape)
+			}
+			m[key] = strings.Join(rest[i:i+want], " ")
+			i += want
 		case "name", "at", "model", "cwd", "busy":
 			if i >= len(rest) {
 				return nil, fmt.Errorf("scheduler: update: %q needs a value (%s)", key, shape)

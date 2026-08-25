@@ -323,6 +323,9 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if name == "" && prompt == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" {
 		return "", schedErr("update needs a change")
 	}
+	if busy != "" && busy != "skip" && busy != "force" {
+		return "", schedErr("busy must be 'skip' or 'force', got '%s'", busy)
+	}
 	if name != "" && name != job.Name {
 		for _, j := range f.jobs {
 			if j.State != "removed" && j.ID != in.ID && j.Name == name {
