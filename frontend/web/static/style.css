@@ -245,8 +245,6 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
   #cwd-add { flex: 1 1 40%; min-width: 0; width: auto; }
   .taskact { display: inline; }
   .rowact { display: inline-block; min-height: 44px; padding: 10px 12px; }
-  .schedacts { flex-direction: column; margin-left: 2ch; }
-  .schedacts .rowact { display: block; width: 100%; min-height: 44px; }
   .schedslot { margin-left: 2ch; }
   .schedup { grid-template-columns: 1fr; margin-left: 2ch; }
   .schedconfirm { margin-left: 2ch; }

@@ -638,10 +638,11 @@ or resume by state (a done row neither), remove, and runs — and an
 update form that opens in place with the row's current fields
 (cadence, prompt, model, cwd, busy; the row carries no prompt, so an
 empty one is no change) and submits only what changed. Remove asks
-once, in-page (a confirm and a keep, no reload). Below 720px the row
-stacks under full-width 44px tap targets (the `.rowact` class, as the
-plugins' controls), the update form is one column, and the buttons
-stop propagation so a tap never opens two things.
+once, in-page (a confirm and a keep, no reload). Below 720px the
+row's controls stay the horizontal flex row (wrapping when the width
+forces it) of 44px tap targets — the `.rowact` class, as the plugins'
+controls — never a full-width stack; the update form is one column,
+and the buttons stop propagation so a tap never opens two things.
 
 ### testing
 
@@ -655,8 +656,8 @@ no-Origin or foreign-Origin write a 403, an over-cap body a 400, a
 bad id a 400, a GET on a door a 405 with `Allow` naming POST, a POST
 on runs a 405 with `Allow` naming GET); the page carries the
 controls (the row's pause/resume, remove, and runs buttons, the
-in-place update form, the stacked phone layout, in the shipped
-assets).
+in-place update form, the horizontal phone row of controls, in the
+shipped assets).
 
 ### the diffs this phase implies
 

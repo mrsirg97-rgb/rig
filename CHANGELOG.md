@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+- **the scheduler page's phone controls go horizontal**
+  (`specs/SPEC_SERVE.md` 16): below 720px the job row's controls
+  (pause/resume, remove, runs) no longer stack into full-width
+  blocks — they keep the base flex row, wrapping, with the 44px tap
+  targets (the `.rowact` class) intact. The remove-confirm and the
+  runs row share the rule; the update form stays one column.
+
 ## [0.19.0] — the workers file is the fleet
 
 - **the startup block says the fleet, and how to begin**
