@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.19.1] — the phone row goes horizontal
 
 - **the scheduler page's phone controls go horizontal**
   (`specs/SPEC_SERVE.md` 16): below 720px the job row's controls

@@ -129,8 +129,9 @@ page sets its own cookie.
 
 Every write is attributed to `dashboard` and rides the store verb the
 matching tool calls; the reply is the store's voice, verbatim. Below
-720px the view is phone-first: rows stack, the controls become
-full-width 44px tap targets. Spec: `specs/SPEC_SERVE.md`.
+720px the view is phone-first: the job row's controls stay a
+horizontal row of 44px tap targets, wrapping when the width forces
+it. Spec: `specs/SPEC_SERVE.md`.
 
 ## docs
 
