@@ -1293,6 +1293,18 @@ func TestStaticAssets(t *testing.T) {
 	}
 }
 
+func TestStaticAssetsSchedulerPhoneRow(t *testing.T) {
+	srv, tok := newTestServer(t)
+	rec := doReq(t, srv.Handler(), "GET", "/static/style.css", nil, bearer(tok))
+	body := rec.Body.String()
+	if !strings.Contains(body, ".rowact { display: inline-block; min-height: 44px; padding: 10px 12px; }") {
+		t.Fatal("phone: the 44px tap target rule is gone")
+	}
+	if strings.Contains(body, "flex-direction: column") {
+		t.Fatal("phone: the job row still stacks its controls")
+	}
+}
+
 func TestForgeSourceSaveApprove(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()

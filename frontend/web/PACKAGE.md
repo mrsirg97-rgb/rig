@@ -108,9 +108,10 @@ framework, no build step, no external asset: `go build` alone ships it.
   runs — beside an update form that opens in place with the row's
   current fields (cadence, prompt, model, cwd, busy) and submits only
   what changed; remove asks once, in-page; the list re-reads after a
-  move, no page reload; below 720px the row stacks under full-width
-  44px tap targets, the form is one column, and the buttons stop
-  propagation so a tap never opens two things), the folder browser
+  move, no page reload; below 720px the row's controls stay a
+  horizontal wrapping row of 44px tap targets — never a full-width
+  stack — the form is one column, and the buttons stop propagation so
+  a tap never opens two things), the folder browser
   under the header, the mobile drawer below 720px (its toggle hidden on
   desktop), the cwd picker with the new-workspace add (client state,
   decision 9).
@@ -233,7 +234,7 @@ todo/scheduler verbatim text, the memory, the models rows with effort and
 role, the plugins with DESCRIPTION); and the static assets (served, 404,
 traversal refused, the drawer's toggle, the picker's add, the homage's
 parsers and bar, the scheduler's row controls and the in-place update
-form with the stacked phone layout). The store additions carry their own cases in
+form with the horizontal phone row of controls). The store additions carry their own cases in
 `store/{state,todo,rem}`. The JS parsers' parity with the Go ones is
 checked by hand against the same seeded text (the node harness, not a
 suite member).
