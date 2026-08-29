@@ -281,6 +281,18 @@ func TestOneShotAndResumeRefuseAtConstruction(t *testing.T) {
 	}
 }
 
+func TestSessionIDAndResumeRefuseAtConstruction(t *testing.T) {
+	if err := checkSessionID("worker", ""); err != nil {
+		t.Fatalf("a worker identity alone must pass: %v", err)
+	}
+	if err := checkSessionID("", "res-1"); err != nil {
+		t.Fatalf("resume alone must pass: %v", err)
+	}
+	if !errors.Is(checkSessionID("worker", "res-1"), ErrSessionIDWithResume) {
+		t.Fatal("a worker identity and resume must refuse at construction")
+	}
+}
+
 func TestSessionForResumesOrStartsFresh(t *testing.T) {
 	fresh, err := sessionFor("", nil)
 	if err != nil || fresh.ID == "" {

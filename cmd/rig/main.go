@@ -521,10 +521,18 @@ func guidelinesOf(ms []core.ToolMiddleware) string {
 }
 
 var ErrResumeWithPrompt = errors.New("rig: -resume is not available with -p (one-shot stays one-shot)")
+var ErrSessionIDWithResume = errors.New("rig: -session-id and -resume cannot be combined")
 
 func checkOneShot(prompt, resumeID string) error {
 	if prompt != "" && resumeID != "" {
 		return ErrResumeWithPrompt
+	}
+	return nil
+}
+
+func checkSessionID(sessionID, resumeID string) error {
+	if sessionID != "" && resumeID != "" {
+		return ErrSessionIDWithResume
 	}
 	return nil
 }
@@ -647,6 +655,7 @@ func main() {
 	retries := flag.Int("retries", 0, "repetition bound on identical failing calls (cleared on success); precedence: flag > RIG_RETRIES > settings.json retries > the embedded default")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
 	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows)")
+	sessionID := flag.String("session-id", "", "set the fresh session identity (worker use)")
 	tuiMode := flag.String("tui", "auto", "the terminal frontend: auto (default; when stdout is a terminal), true (force it), false (the piped CLI)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	updateFlag := flag.Bool("update", false, "update the binary to the latest release and exit")
@@ -679,6 +688,10 @@ func main() {
 
 	if err := checkOneShot(*prompt, *resumeID); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(2)
+	}
+	if err := checkSessionID(*sessionID, *resumeID); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 
@@ -1073,6 +1086,9 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
+	}
+	if *sessionID != "" {
+		session.ID = *sessionID
 	}
 	r.session = session
 	r.fe = fe
