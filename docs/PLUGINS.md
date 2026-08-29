@@ -33,7 +33,9 @@ def run(args: dict) -> str:
 
 The module is imported through the shared python kernel and kept
 importable under the stem, so the `python` tool's imports reach the
-loaded plugins and plugin state persists across calls.
+loaded plugins and plugin state persists across calls. Reload replaces
+the module in both the live table and `sys.modules`; disabled or removed
+plugin modules leave both tables.
 
 ## the zones
 
@@ -79,8 +81,9 @@ Discovery's failure voices, the same on every door:
   file and the field; startup and the reload continue (a broken plugin
   must not brick the harness);
 - a name colliding with a native tool refuses loud (native-wins would
-  be silent shadowing); `plugin` and `plugins` are natives, so both
-  are reserved.
+  be silent shadowing), before the file executes; `plugin` and `plugins`
+  are natives, so both are reserved;
+- an invalid manually-installed filename is skipped before execution.
 
 ## consuming a plugin
 

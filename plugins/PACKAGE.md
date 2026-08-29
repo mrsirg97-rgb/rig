@@ -15,8 +15,9 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 - `Zone(home, zone)` — the files of one zone (`pending`, `disabled`):
   the directories under `plugins/`, the same `.py` filter as `List`.
 
-- `Discover` — imports every file through the kernel and reports each, in
-  file order.
+- `Discover` — imports every eligible file through the kernel and reports
+  each, in file order. `DiscoverChecked` preflights filename validity and
+  native collisions before any top-level plugin code executes.
 - `Report` — one plugin file's discovery outcome.
 - `Tool` — one loaded plugin on the Tool seam.
 - `Ecosystem` + `NewEcosystem` — the `plugins` native (SPEC_PLUGINS 8,
@@ -73,7 +74,8 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   never the error — a broken plugin must not brick the harness.
 - The discovery cell keeps modules in the user namespace
   (`__rig_plugins__`) and `sys.modules` under the stem, so the python
-  tool's imports reach the loaded plugins (the shared namespace).
+  tool's imports reach the loaded plugins (the shared namespace). Reload
+  replaces both tables together and removes modules no longer live.
 - `compactJSON` re-marshals args compactly so the embedded literal is
   total (`pyLiteral`); the args must parse as JSON.
 - `pyLiteral` escapes backslash and single-quote; JSON text has no raw
@@ -91,6 +93,9 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   refusal and the reload's are this one rule.
 - On a reload, a discovery failure leaves the table and the wire untouched
   (the swap never ran).
+- Pending writes and zone moves refuse symlink files; provenance checks
+  resolve existing symlinks and the deepest existing parent before deciding
+  whether a file is live, pending, or foreign.
 - `DescriptionOf(path)` / `StaticDescription(src)` — the read-only
   DESCRIPTION read the listings use (no kernel, no execution): a plain,
   single-, or triple-quoted literal, or the parenthesized

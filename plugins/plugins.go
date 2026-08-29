@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/core"
@@ -63,10 +64,45 @@ func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error) {
 	return reports, nil
 }
 
+func DiscoverChecked(ctx context.Context, k Kernel, files []string, natives map[string]bool) ([]Report, error) {
+	eligible := make([]string, 0, len(files))
+	skipped := make(map[string]Report)
+	for _, file := range files {
+		name := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+		switch {
+		case !PluginNameRe.MatchString(name):
+			skipped[file] = Report{Name: name, File: file, Skipped: true, Reason: "invalid plugin name (want lowercase, digits and underscores, a leading letter)"}
+		case natives[name]:
+			return nil, nameCollisionError{name: name, file: file}
+		default:
+			eligible = append(eligible, file)
+		}
+	}
+	loaded := make(map[string]Report)
+	if len(eligible) > 0 {
+		reports, err := Discover(ctx, k, eligible)
+		if err != nil {
+			return nil, err
+		}
+		for _, report := range reports {
+			loaded[report.File] = report
+		}
+	}
+	out := make([]Report, 0, len(files))
+	for _, file := range files {
+		if report, ok := skipped[file]; ok {
+			out = append(out, report)
+		} else if report, ok := loaded[file]; ok {
+			out = append(out, report)
+		}
+	}
+	return out, nil
+}
+
 func discoveryCell(files []string) string {
 	paths, _ := json.Marshal(files)
 	return `import importlib.util as _rig_iu, json as _rig_j, os as _rig_os, sys as _rig_sys
-__rig_plugins__ = {}
+_rig_next_plugins = {}
 _rig_report = []
 for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
     _rig_n = _rig_os.path.basename(_rig_p)[:-3]
@@ -86,8 +122,7 @@ for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
             raise TypeError("SCHEMA must be a dict")
         if not callable(_rig_m.run):
             raise TypeError("run must be callable")
-        _rig_sys.modules.setdefault(_rig_n, _rig_m)
-        __rig_plugins__[_rig_n] = _rig_m
+        _rig_next_plugins[_rig_n] = _rig_m
         _rig_e["ok"] = True
         _rig_e["description"] = _rig_m.DESCRIPTION
         _rig_e["schema"] = _rig_m.SCHEMA
@@ -95,6 +130,11 @@ for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
         _rig_e["ok"] = False
         _rig_e["error"] = type(_rig_ex).__name__ + ": " + str(_rig_ex)
     _rig_report.append(_rig_e)
+for _rig_n in set(globals().get("__rig_plugins__", {})) - set(_rig_next_plugins):
+    _rig_sys.modules.pop(_rig_n, None)
+for _rig_n, _rig_m in _rig_next_plugins.items():
+    _rig_sys.modules[_rig_n] = _rig_m
+__rig_plugins__ = _rig_next_plugins
 print(_rig_j.dumps(_rig_report))
 `
 }

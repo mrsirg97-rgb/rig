@@ -191,6 +191,46 @@ func TestWritePendingSharesTheForgeRule(t *testing.T) {
 	}
 }
 
+func TestWritePendingRefusesASymlinkTarget(t *testing.T) {
+	home := t.TempDir()
+	pending := filepath.Join(home, "plugins", "pending")
+	if err := os.MkdirAll(pending, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "outside.py")
+	if err := os.WriteFile(target, []byte("outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(pending, "echo.py")); err != nil {
+		t.Fatal(err)
+	}
+	src := "DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"
+	if _, _, err := WritePending(home, nil, "echo", src); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("a pending symlink must refuse: %v", err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil || string(data) != "outside\n" {
+		t.Fatalf("the symlink target changed: %q, %v", data, err)
+	}
+}
+
+func TestMoveRefusesASymlinkPlugin(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "outside.py")
+	if err := os.WriteFile(target, []byte("outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "echo.py")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Move(dir, "echo", "", "disabled"); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("a symlink plugin must not move into another zone: %v", err)
+	}
+}
+
 func TestEcosystemExecUnknownActionRefuses(t *testing.T) {
 	tool := NewEcosystem("/h", map[string]bool{}, &fakeKernel{}, nil, nil)
 	_, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"sideways"}`))
@@ -233,11 +273,11 @@ func emptyPluginsHome(t *testing.T) string {
 }
 
 func TestEcosystemCollisionRefusesBeforeTheSwap(t *testing.T) {
-	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	for _, name := range []string{"bash", "plugins"} {
+		home := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
+			t.Fatal(err)
+		}
 		file := filepath.Join(home, "plugins", name+".py")
 		if err := os.WriteFile(file, []byte("x = 1\n"), 0o644); err != nil {
 			t.Fatal(err)
@@ -259,6 +299,9 @@ func TestEcosystemCollisionRefusesBeforeTheSwap(t *testing.T) {
 		}
 		if called {
 			t.Fatalf("the swap ran on a refused reload (the list would have changed)")
+		}
+		if len(k.cells) != 0 {
+			t.Fatalf("the colliding plugin executed %d discovery cells", len(k.cells))
 		}
 	}
 }

@@ -65,6 +65,37 @@ func TestPluginsRuleAllowsThePendingZone(t *testing.T) {
 	}
 }
 
+func TestPluginsRuleResolvesSymlinksBeforeApplyingTheZone(t *testing.T) {
+	home := t.TempDir()
+	pluginsDir := filepath.Join(home, "plugins")
+	pending := filepath.Join(pluginsDir, "pending")
+	if err := os.MkdirAll(pending, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	link := filepath.Join(pending, "escape")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(link, "x.py")
+	calls, _, err := pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, target)+`, "content": "x"}`)
+	if err != nil || calls != 1 {
+		t.Fatalf("a resolved target outside the plugin root is foreign and must pass through, got %d calls / %v", calls, err)
+	}
+	liveTarget := filepath.Join(pluginsDir, "live.py")
+	if err := os.WriteFile(liveTarget, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	liveLink := filepath.Join(outside, "live.py")
+	if err := os.Symlink(liveTarget, liveLink); err != nil {
+		t.Fatal(err)
+	}
+	calls, _, err = pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, liveLink)+`, "content": "x"}`)
+	if err == nil || calls != 0 {
+		t.Fatalf("a foreign spelling that resolves into live plugins must refuse, got %d calls / %v", calls, err)
+	}
+}
+
 func TestPluginsRuleIgnoresOtherTools(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")
