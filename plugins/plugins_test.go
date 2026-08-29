@@ -69,6 +69,26 @@ func TestDiscoverParsesTheKernelReport(t *testing.T) {
 	}
 }
 
+func TestDiscoverCheckedPreflightsBeforeExecution(t *testing.T) {
+	k := &fakeKernel{}
+	_, err := DiscoverChecked(context.Background(), k, []string{"/h/plugins/bash.py"}, map[string]bool{"bash": true})
+	if err == nil || !strings.Contains(err.Error(), "name collision") {
+		t.Fatalf("a native collision must refuse before discovery: %v", err)
+	}
+	if len(k.cells) != 0 {
+		t.Fatalf("the colliding file executed %d cells", len(k.cells))
+	}
+
+	k = &fakeKernel{}
+	reports, err := DiscoverChecked(context.Background(), k, []string{"/h/plugins/Bad-Name.py"}, nil)
+	if err != nil || len(reports) != 1 || !reports[0].Skipped || !strings.Contains(reports[0].Reason, "invalid plugin name") {
+		t.Fatalf("the invalid filename must become a skipped report: %+v, %v", reports, err)
+	}
+	if len(k.cells) != 0 {
+		t.Fatalf("the invalid filename executed %d cells", len(k.cells))
+	}
+}
+
 func TestDiscoverKernelFailureIsTheError(t *testing.T) {
 	t.Run("the kernel's reason rides the error", func(t *testing.T) {
 		k := &fakeKernel{replies: []pythontool.Reply{errReply("kernel exited (code 1)", "")}}
@@ -111,7 +131,8 @@ func TestDiscoverCellCarriesTheFiles(t *testing.T) {
 		"DESCRIPTION must be a str",
 		"SCHEMA must be a dict",
 		"run must be callable",
-		"sys.modules.setdefault",
+		"_rig_sys.modules[_rig_n] = _rig_m",
+		`set(globals().get("__rig_plugins__", {})) - set(_rig_next_plugins)`,
 		"__rig_plugins__",
 		`_rig_j.dumps(_rig_report)`,
 	} {

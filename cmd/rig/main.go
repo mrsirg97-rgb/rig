@@ -476,8 +476,11 @@ func (r *root) reloadPlugins(ctx context.Context) (string, error) {
 	}
 	reports := make([]plugins.Report, 0)
 	if len(files) > 0 {
-		reports, err = plugins.Discover(ctx, r.py, files)
+		reports, err = plugins.DiscoverChecked(ctx, r.py, files, r.natives)
 		if err != nil {
+			if plugins.IsNameCollision(err) {
+				return "", err
+			}
 			return "", fmt.Errorf("plugins: reload: %v", err)
 		}
 	}
@@ -790,17 +793,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
+	native := make(map[string]bool)
+	for _, name := range effectiveNativeNames(cfg.Workers) {
+		native[name] = true
+	}
 	pluginReports := make([]plugins.Report, 0)
 	if len(pluginFiles) > 0 {
-		pluginReports, err = plugins.Discover(context.Background(), py, pluginFiles)
+		pluginReports, err = plugins.DiscoverChecked(context.Background(), py, pluginFiles, native)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
 		}
-	}
-	native := make(map[string]bool)
-	for _, name := range effectiveNativeNames(cfg.Workers) {
-		native[name] = true
 	}
 	pluginTools := make([]core.Tool, 0, len(pluginReports))
 	pluginInfos := make([]command.PluginInfo, 0, len(pluginReports))

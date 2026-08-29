@@ -23,6 +23,10 @@ discovery is then a no-op that never starts the kernel. `core/` and
   JSON schema), `run(args: dict) -> str`.
 - Discovery at startup through the python kernel host: import each
   file, read the three names, register a tool on the `Tool` seam.
+- Filename validity and native collisions are checked before import, so
+  code that cannot become a plugin never executes. Reload replaces the
+  live module map and its `sys.modules` entries together and evicts names
+  no longer live.
 - A file missing a piece, or failing import, is a loud skip naming the
   file and the field — one line, startup continues. A broken plugin
   must not brick the harness.

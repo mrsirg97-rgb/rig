@@ -15,6 +15,20 @@ import (
 
 var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
+type nameCollisionError struct {
+	name string
+	file string
+}
+
+func (e nameCollisionError) Error() string {
+	return fmt.Sprintf("plugins: name collision: %q (%s) is already a native tool", e.name, filepath.Base(e.file))
+}
+
+func IsNameCollision(err error) bool {
+	var collision nameCollisionError
+	return errors.As(err, &collision)
+}
+
 func Zone(home, zone string) ([]string, error) {
 	dir := filepath.Join(home, "plugins", zone)
 	entries, err := os.ReadDir(dir)
@@ -57,7 +71,7 @@ func Check(reports []Report, natives map[string]bool) error {
 			continue
 		}
 		if natives[rep.Name] {
-			return fmt.Errorf("plugins: name collision: %q (%s) is already a native tool", rep.Name, filepath.Base(rep.File))
+			return nameCollisionError{name: rep.Name, file: rep.File}
 		}
 	}
 	return nil
@@ -77,6 +91,9 @@ func Move(dir, name, from, to string) (src, dst string, err error) {
 			return "", "", fmt.Errorf("no plugin %q at %s", name, src)
 		}
 		return "", "", fmt.Errorf("the move: %v", statErr)
+	}
+	if info, statErr := os.Lstat(src); statErr != nil || info.Mode()&os.ModeSymlink != 0 {
+		return "", "", fmt.Errorf("%q is a symlink; plugin zone moves require regular files", src)
 	}
 	if _, statErr := os.Stat(dst); statErr == nil {
 		return "", "", fmt.Errorf("%q already exists at %s (remove one)", name, dst)
@@ -113,6 +130,11 @@ func WritePending(home string, natives map[string]bool, name, source string) (pa
 		return "", false, fmt.Errorf("the write: %v", err)
 	}
 	path = filepath.Join(dir, name+".py")
+	if info, statErr := os.Lstat(path); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", false, fmt.Errorf("the write: %s is a symlink", path)
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		return "", false, fmt.Errorf("the write: %v", statErr)
+	}
 	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 		created = true
 	}
@@ -206,8 +228,11 @@ func (e *Ecosystem) reload(ctx context.Context) (string, error) {
 	}
 	reports := make([]Report, 0)
 	if len(files) > 0 {
-		reports, err = Discover(ctx, e.Kernel, files)
+		reports, err = DiscoverChecked(ctx, e.Kernel, files, e.natives)
 		if err != nil {
+			if IsNameCollision(err) {
+				return "", err
+			}
 			return "", fmt.Errorf("plugins: reload: %v", err)
 		}
 	}

@@ -19,10 +19,8 @@ attributed so downstream guards can bound the repetition.
   (never a native); a nil door is `Allowlist`.
 - `Plugins(pluginsDir)` — the plugin provenance rule (SPEC_SANDBOX 2)
   for `write` and `edit`.
-- `Plugins(pluginsDir)` — the plugin provenance rule (SPEC_SANDBOX 2)
-  for `write` and `edit`.
-- `normalizePath` (unexported) — canonicalizes a path the way the file
-  tools do.
+- `resolvedPath` (unexported) — resolves symlinks through the deepest
+  existing ancestor before applying the zone boundary.
 
 ## How it is consumed
 
@@ -40,8 +38,9 @@ attributed so downstream guards can bound the repetition.
 - `Plugins` applies only to `write`/`edit`; a malformed `path` arg falls
   through to the tool, as does a target outside the rig home's plugins/
   or inside plugins/pending/ (the forge's landing zone).
-- `normalizePath` mirrors tool/file's, so the rule's path test and the
-  tool agree on the same file (absolute + clean).
+- `resolvedPath` prevents an alternate symlink spelling from turning a
+  pending path into a live write or hiding a live target behind a foreign
+  path. Missing final components remain legal for new pending files.
 - The rule guards the honest path, not the boundary: bash can still move
   a file into plugins/ (the operator's shell is the operator's); the
   worker jail is the boundary, the provenance rule is the workflow.
