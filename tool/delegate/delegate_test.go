@@ -186,7 +186,7 @@ func TestDelegateHappyPathFeedsBackAndRecords(t *testing.T) {
 	if !strings.Contains(out, "the answer") {
 		t.Fatalf("the last message must be fed back:\n%s", out)
 	}
-	if !strings.Contains(out, "delegate: exit 0 · ") || !strings.Contains(out, "· session sess-delegate · log runs/") {
+	if !strings.Contains(out, "delegate: exit 0 · ") || !strings.Contains(out, "· session ") || !strings.Contains(out, " · log runs/") {
 		t.Fatalf("the trailer must carry exit, duration, session id, log path:\n%s", out)
 	}
 	c := spawn.calls[0]
@@ -195,6 +195,15 @@ func TestDelegateHappyPathFeedsBackAndRecords(t *testing.T) {
 	}
 	if !strings.Contains(c.Argv[2], "do the sweep") {
 		t.Fatalf("the prompt must carry the task: %q", c.Argv[2])
+	}
+	foundSession := false
+	for i := range c.Argv[:len(c.Argv)-1] {
+		if c.Argv[i] == "-session-id" && c.Argv[i+1] != "" && strings.Contains(out, "· session "+c.Argv[i+1]+" ·") {
+			foundSession = true
+		}
+	}
+	if !foundSession {
+		t.Fatalf("the worker argv and trailer must carry the same explicit session: %v\n%s", c.Argv, out)
 	}
 
 	var name, cron, state string
@@ -227,6 +236,34 @@ func TestDelegateCwdRefusalNamesThePath(t *testing.T) {
 	}
 	if len(spawn.calls) != 0 {
 		t.Fatal("no spawn on a refused cwd")
+	}
+}
+
+func TestDelegateCwdSymlinkEscapeRefuses(t *testing.T) {
+	h := newHarness(t, "")
+	root := t.TempDir()
+	outside := t.TempDir()
+	link := filepath.Join(root, "escape")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
+	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": link})
+	_, err = tool.Exec(context.Background(), b)
+	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+		t.Fatalf("the resolved symlink escape must refuse: %v", err)
+	}
+	if spawn.count() != 0 {
+		t.Fatal("no spawn on a symlink escape")
 	}
 }
 

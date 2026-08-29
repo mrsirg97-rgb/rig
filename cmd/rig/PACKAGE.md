@@ -80,6 +80,10 @@ sees core and models and nothing else.
   (own stores, own record) and must not touch the REPL's closure order.
 - The `-p`/`-resume` conflict is refused loud before any store is
   opened (`ErrResumeWithPrompt`: one-shot stays one-shot).
+- `-session-id` is the worker-only identity seam: delegate mints it before
+  spawn, and a fresh one-shot records under it instead of discovering a
+  concurrent worker's session after the fact. It cannot combine with
+  `-resume`.
 - The compaction row is resolved loud before the stores — a job whose
   window minus reserve leaves too little to work with fails at start.
 - `rigHome` migration is once and deterministic, and a **default-path

@@ -12,9 +12,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/store/state"
 )
 
 const outputCap = 256 * 1024
@@ -106,35 +104,32 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	}
 
 	res, err := sched.Delegate(sched.DelegateInput{
-		DB:           a.DB,
-		Home:         a.Home,
-		Session:      session,
-		Cwd:          cwd,
-		Task:         g.Task,
-		Model:        model,
-		Slots:        a.Slots,
-		Fetch:        a.Fetch,
-		Spawn:        a.Spawn,
-		WorkerCmd:    a.WorkerCmd,
-		SwapURL:      a.SwapURL,
-		Timeout:      timeout,
-		Sandbox:      a.Sandbox,
-		SandboxBinds: a.SandboxBinds,
-		RigHome:      a.RigHome,
-		StateDir:     a.StateDir,
-		Allow:        a.Allow,
+		DB:            a.DB,
+		Home:          a.Home,
+		Session:       session,
+		Cwd:           cwd,
+		Task:          g.Task,
+		Model:         model,
+		WorkerSession: core.NewSession().ID,
+		Slots:         a.Slots,
+		Fetch:         a.Fetch,
+		Spawn:         a.Spawn,
+		WorkerCmd:     a.WorkerCmd,
+		SwapURL:       a.SwapURL,
+		Timeout:       timeout,
+		Sandbox:       a.Sandbox,
+		SandboxBinds:  a.SandboxBinds,
+		RigHome:       a.RigHome,
+		StateDir:      a.StateDir,
+		Allow:         a.Allow,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	sessionID, err := findSession(ctx, a.RigHome, cwd, res.Started)
-	if err != nil {
-		return "", err
-	}
 	content := capOutput(res.Stdout)
 	trailer := fmt.Sprintf("delegate: exit %d · %dms · session %s · log %s",
-		res.Exit, res.Duration.Milliseconds(), sessionID, res.LogRel)
+		res.Exit, res.Duration.Milliseconds(), res.SessionID, res.LogRel)
 	if res.Note != "" {
 		trailer += " · " + res.Note
 	}
@@ -157,16 +152,32 @@ func capOutput(s string) string {
 }
 
 func canonicalCwd(path, sessionCwd, rigHome string) (string, error) {
-	cwd := path
-	if abs, err := filepath.Abs(path); err == nil {
-		cwd = abs
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("delegate: cwd %q: %v", path, err)
 	}
-	cwd = filepath.Clean(cwd)
-	under := func(root string) bool {
-		if root == "" {
+	lexicallyUnder := func(root string) bool {
+		rootAbs, err := filepath.Abs(root)
+		if err != nil {
 			return false
 		}
-		return cwd == root || strings.HasPrefix(cwd, root+string(filepath.Separator))
+		rel, err := filepath.Rel(rootAbs, abs)
+		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	if !lexicallyUnder(sessionCwd) && !lexicallyUnder(rigHome) {
+		return "", fmt.Errorf("delegate: cwd %q is outside the session's cwd (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
+	}
+	cwd, err := canonicalPath(path)
+	if err != nil {
+		return "", fmt.Errorf("delegate: cwd %q: %v", path, err)
+	}
+	under := func(root string) bool {
+		canonicalRoot, err := canonicalPath(root)
+		if err != nil {
+			return false
+		}
+		rel, err := filepath.Rel(canonicalRoot, cwd)
+		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 	}
 	if under(sessionCwd) || under(rigHome) {
 		return cwd, nil
@@ -174,21 +185,16 @@ func canonicalCwd(path, sessionCwd, rigHome string) (string, error) {
 	return "", fmt.Errorf("delegate: cwd %q is outside the session's cwd (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
 }
 
-func findSession(ctx context.Context, rigHome, cwd, started string) (string, error) {
-	db, _, _, err := store.Open(state.StorePath(rigHome, cwd), state.Statements(), state.SchemaVersion)
+func canonicalPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
 	if err != nil {
-		return "", fmt.Errorf("delegate: session store: %w", err)
+		return "", err
 	}
-	defer db.DB.Close()
-	after, err := time.Parse(time.RFC3339, started)
+	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
-		return "", fmt.Errorf("delegate: spawn start: %w", err)
+		return "", err
 	}
-	id, err := state.NewestSince(ctx, db, cwd, after)
-	if err != nil {
-		return "", fmt.Errorf("delegate: no worker session recorded (%v)", err)
-	}
-	return id, nil
+	return filepath.Clean(resolved), nil
 }
 
 func strictDecode(data json.RawMessage, out any) error {

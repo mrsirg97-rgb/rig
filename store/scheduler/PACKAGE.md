@@ -33,7 +33,7 @@ written before the store commit; drift is surfaced in list.
   proxy).
 - `delegate.go` — the one-shot worker spawn (SPEC_DELEGATE): the busy
   rule, the ad-hoc record (a minted job row with no crontab line), the
-  state-store bind for the resumable transcript, the per-session
+  state-store bind and explicit identity for the resumable transcript, the per-session
   delegate-slot flock (one slot per `slots`, the full set refusing
   naming the count) and the no-recursion marker.
 - `jail.go` — the bwrap jail argv composition.

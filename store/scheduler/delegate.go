@@ -21,36 +21,38 @@ var (
 )
 
 type DelegateInput struct {
-	DB           DB
-	Home         string
-	Session      string
-	Cwd          string
-	Task         string
-	Model        string
-	Slots        int
-	Fetch        Fetch
-	Spawn        Spawn
-	WorkerCmd    []string
-	SwapURL      string
-	Timeout      time.Duration
-	Sandbox      string
-	SandboxBinds []string
-	RigHome      string
-	StateDir     string
-	Allow        []string
-	Now          func() time.Time
+	DB            DB
+	Home          string
+	Session       string
+	Cwd           string
+	Task          string
+	Model         string
+	WorkerSession string
+	Slots         int
+	Fetch         Fetch
+	Spawn         Spawn
+	WorkerCmd     []string
+	SwapURL       string
+	Timeout       time.Duration
+	Sandbox       string
+	SandboxBinds  []string
+	RigHome       string
+	StateDir      string
+	Allow         []string
+	Now           func() time.Time
 }
 
 type DelegateResult struct {
-	Exit     int
-	Stdout   string
-	Stderr   string
-	TimedOut bool
-	Duration time.Duration
-	ID       string
-	LogRel   string
-	Started  string
-	Note     string
+	Exit      int
+	Stdout    string
+	Stderr    string
+	TimedOut  bool
+	Duration  time.Duration
+	ID        string
+	LogRel    string
+	Started   string
+	SessionID string
+	Note      string
 }
 
 func delegateInput(in DelegateInput) DelegateInput {
@@ -77,6 +79,9 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	in = delegateInput(in)
 	if in.Fetch == nil || in.Spawn == nil {
 		return DelegateResult{}, fmt.Errorf("delegate: fetch and spawn seams are required")
+	}
+	if in.WorkerSession == "" {
+		return DelegateResult{}, fmt.Errorf("delegate: worker session is required")
 	}
 
 	slots := in.Slots
@@ -145,6 +150,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = append(append([]string{}, workerCmd...),
 			"-p", prompt,
+			"-session-id", in.WorkerSession,
 			"-base-url", in.SwapURL+"/v1",
 			"-model", in.Model)
 		if allow != "" {
@@ -158,6 +164,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		if refuse != "" {
 			return DelegateResult{}, fmt.Errorf("delegate: %s", refuse)
 		}
+		argv = append(argv, "-session-id", in.WorkerSession)
 		defer proxy.Close()
 	}
 
@@ -229,7 +236,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	return DelegateResult{
 		Exit: res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
 		TimedOut: res.TimedOut, Duration: ended.Sub(started),
-		ID: id, LogRel: logRel, Started: startedStr, Note: note,
+		ID: id, LogRel: logRel, Started: startedStr, SessionID: in.WorkerSession, Note: note,
 	}, nil
 }
 

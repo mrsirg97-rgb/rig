@@ -84,9 +84,8 @@ delegate spawns, exactly as `run-job` spawns one.
 - `task` (required): the prompt the worker runs.
 - `cwd` (default the session's cwd): canonicalized, must be under the
   session's cwd or the rig home — anything else refuses by name. The
-  canonicalization mirrors `middleware/perm`'s `normalizePath` (the
-  file tools' absolute-and-clean), so the path test and the worker's
-  chdir agree on the same directory.
+  requested path and both allowed roots resolve symlinks before the
+  containment check, so a lexical child cannot escape through a link.
 - `model` (default the workers file's `model` — SPEC_CONFIG 12's
   fleet): the worker row, exactly as `scheduler create` defaults. The
   fleet's model is a row of the operator's models table; there is no
@@ -152,11 +151,11 @@ the message is the deliverable, the transcript is the resumable
 exception). `sandbox: "off"` needs no bind: the worker runs with the
 operator's home and writes the state store directly.
 
-The tool finds the worker's session id after the spawn: the worker is
-a fresh `-p` one-shot, so its session row is the newest in the
-cwd-hash state file started after the spawn — the delegate reads the
-state store for it (deterministic: one delegate in flight, the
-operator's own session predates the spawn). The tool result names it.
+The tool mints the worker's session id before the spawn and passes it to
+the fresh `-p` worker through the worker-only `-session-id` flag. The
+recorder therefore lands under an identity already owned by the delegate,
+and the tool result names it directly. Concurrent slots in one cwd cannot
+misattribute one another by querying for the newest session.
 
 ### 4. The record: a minted ad-hoc run
 

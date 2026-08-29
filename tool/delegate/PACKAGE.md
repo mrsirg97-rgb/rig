@@ -19,7 +19,7 @@ the state store.
   canonicalization and the outside-the-session/rig-home refusal; the
   output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
-  the worker session-id discovery in the state store.
+  the explicit worker session id threaded through the spawn.
 - `delegate_test.go` — the failing-first named cases over a fake
   `Spawn` and `Fetch` (happy path, cwd refusal, busy refusal, timeout,
   one-in-flight, no-recursion, the cap).
@@ -43,6 +43,10 @@ the state store.
   full-set "slots are full (slots N)" voice otherwise.
 - The jailed worker's transcript lands at the operator's state-store
   path via `jailSpawn`'s sessions-dir bind (SPEC_DELEGATE 3); the
-  session id is read back as the newest row started after the spawn.
+  parent mints its id and passes it as `-session-id`, so concurrent
+  delegates cannot claim one another's transcript.
+- `cwd` containment resolves symlinks in the requested directory and both
+  allowed roots before the worker starts; a lexical child that resolves
+  outside refuses.
 - `Exec` reads `os.Getwd()` for the session cwd, so the tests pin the
   real test cwd, not a fixture path.
