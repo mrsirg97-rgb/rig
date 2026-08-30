@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig: a daily-driver agent harness for local models</title>
-<meta name="description" content="A daily-driver agent harness for local models. Persistent sessions, deliberate memory, jailed workers, one-file plugins, and a small frozen loop. Install in one line.">
+<title>rig: a minimum agent runtime</title>
+<meta name="description" content="A daily-driver coding agent for local models. 27k lines of Go, a 371-line loop, 98-99% cache hits across long sessions. Persistent sessions, deliberate memory, jailed workers, one-file plugins. One static binary, one-line install.">
 <meta name="theme-color" content="#050505">
-<meta property="og:title" content="rig: a daily-driver agent harness for local models">
-<meta property="og:description" content="Persistent sessions. Deliberate memory. Jailed workers. One binary, built for all-day use.">
+<meta property="og:title" content="rig: the agent harness that built itself on a local model">
+<meta property="og:description" content="27k lines of Go. A 371-line frozen loop. 98-99% cache hits. Designed from a phone; a local model built the rest inside it. One binary, one-line install.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
 <style>
@@ -65,6 +65,19 @@ a:hover { text-decoration: underline; }
 .proof { color: var(--dim); max-width: 72ch; }
 .proof strong { color: var(--ok); font-weight: normal; }
 .dim { color: var(--dim); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem .7rem; padding-left: 0; text-indent: 0; max-width: 76ch; }
+.stat { border: 1px solid var(--rule); border-radius: 6px; padding: .5rem .7rem; background: rgba(255,255,255,.012); }
+.stat .n { display: block; color: var(--ember); font-size: 17px; line-height: 1.2; text-shadow: 0 0 14px rgba(232,168,107,.25); }
+.stat .l { display: block; color: var(--dim); font-size: 12px; line-height: 1.4; margin-top: .15rem; }
+.origin { color: var(--text); max-width: 72ch; }
+.origin em { color: var(--ember); font-style: normal; }
+.plat { color: var(--dim); padding-left: 0; text-indent: 0; }
+.plat b { color: var(--text); font-weight: normal; }
+.alt { color: var(--faint); padding-left: 4ch; text-indent: -2ch; }
+.alt code { color: var(--dim); }
+.fit { color: var(--dim); padding-left: 0; text-indent: 0; max-width: 72ch; }
+.fit b { color: var(--text); font-weight: normal; }
+.fit .no { color: var(--faint); }
 .gap { height: 1.1rem; }
 .gap.sm { height: .55rem; }
 .boot { color: var(--dim); }
@@ -150,6 +163,8 @@ html.js .reveal.in { opacity: 1; transform: none; }
   .tl .td { padding-left: 2.2ch; margin-bottom: .25rem; }
   .msg { max-width: none; }
   .hero { font-size: 14px; }
+  .stats { grid-template-columns: repeat(2, 1fr); gap: .45rem; }
+  .stat .n { font-size: 15px; }
   footer .links a + a::before { margin-right: .9rem; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -167,7 +182,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <span class="ver">{{RIG_VERSION}}</span>
   </div>
   <div class="tr">
-<h2 class="sr">rig: a daily-driver agent harness for local models</h2>
+<h2 class="sr">rig: the agent harness that built itself on a local model</h2>
 
     <div class="ln boot reveal">welcome to</div>
     <pre class="logo reveal" aria-label="rig, in the 3x3 block face">█▀▄ █ █▀▀
@@ -180,12 +195,28 @@ html.js .reveal.in { opacity: 1; transform: none; }
 
     <div class="gap reveal"></div>
     <div class="msg hero reveal">your local model deserves more than a prompt box.</div>
-    <div class="msg proof reveal">rig gives it persistent sessions, bounded tools, deliberate memory,
-    jailed workers, and one-file plugins. <strong>daily-driver soak: 98-99% cache hits.</strong></div>
+    <div class="msg proof reveal">rig is a coding agent you run all day: persistent sessions, bounded tools,
+    deliberate memory, jailed workers, one-file plugins. one static binary, stdlib-only core.</div>
+    <div class="msg proof reveal"><strong>daily-driver soak: 98-99% cache hits.</strong></div>
+
+    <div class="gap sm reveal"></div>
+    <div class="ln stats reveal" aria-label="rig in numbers">
+      <div class="stat"><span class="n">98-99%</span><span class="l">cache hits, steady state, across compactions</span></div>
+      <div class="stat"><span class="n">371 lines</span><span class="l">the turn loop.</span></div>
+      <div class="stat"><span class="n">27k / 37k</span><span class="l">lines of logic / lines of tests (1.35:1)</span></div>
+      <div class="stat"><span class="n">285 commits</span><span class="l">most written by rig, inside rig</span></div>
+    </div>
+
+    <div class="gap sm reveal"></div>
+    <div class="msg origin reveal">the origin: the core was written in another harness. the moment rig could hold a turn,
+    <em>every layer above it was built by a local model running inside rig</em>, a 284B and a 27B on one
+    desktop, driven from a phone over SSH. the git log is the receipt.</div>
 
     <div class="gap reveal"></div>
     <div class="ln cmd reveal"><span class="cmdtext"><span class="ps">❯</span>  curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
     <div class="ln out reveal">  rig {{RIG_VERSION}} installed to ~/.local/bin/rig</div>
+    <div class="ln plat reveal"><b>linux</b> · <b>macOS</b> · amd64 · arm64 · no Go, no sudo, no runtime · <b>rig -update</b> replaces itself in place</div>
+    <div class="ln alt reveal">  or <code>go install github.com/mrsirg97-rgb/rig/cmd/rig@latest</code> · or grab the binary from releases</div>
 
     <div class="gap reveal"></div>
     <div class="ln in reveal"><span class="ps">❯</span>  inspect this repository, delegate the test sweep, and remember what matters</div>
@@ -212,18 +243,23 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="msg reveal">the shape is clear. rig is one closed machine: assemble context, stream the model,
     execute its calls, return the results, repeat.</div>
     <div class="gap sm reveal"></div>
-    <div class="ln li reveal"><span class="lg">•</span> the loop is small, frozen, and protected by a structural test. growth stays behind typed seams.</div>
-    <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel on an event loop: goroutines post completions, one consumer applies them in call order. no locks, no races, the transcript stays ordered.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the loop is 371 lines and frozen; a structural test refuses any diff that touches it. everything else lives behind five typed seams: provider, frontend, tools, middleware, policy. adding one is one file plus one registration line.</div>
+    <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel on a priority event loop ported from a C trading engine: a 4-ary heap, one consumer, goroutines post completions, results applied in call order. one writer touches the session. no locks on the hot path, the transcript stays ordered.</div>
     <div class="ln li reveal"><span class="lg">•</span> the walls are named. an allowlist, a retry guard, an approval gate, result bounds, a plugin landing zone, a bwrap jail for background workers, and every refusal says why, so the model adjusts instead of flailing.</div>
-    <div class="ln li reveal"><span class="lg">•</span> memory is deliberate. nothing writes itself into your prompt; the model recalls, learns, and supersedes by id. tasks, memory, and schedule are scoped to the repo; worktrees share one plan.</div>
+    <div class="ln li reveal"><span class="lg">•</span> memory is deliberate. nothing writes itself into your prompt; the model recalls, learns, and supersedes by id. tasks, memory, and schedule are scoped to the repo; worktrees share one plan. the prefix stays stable, which is where the cache number comes from.</div>
     <div class="ln li reveal"><span class="lg">•</span> every behavior is a sentence in specs/ with a test pinning it; the wire is byte-pinned against golden request bodies. specs first, then failing tests, then code.</div>
-    <div class="ln li reveal"><span class="lg">•</span> one static binary, stdlib-only core. TUI, piped CLI, headless workers, and a phone-sized dashboard share the same stores.</div>
+    <div class="ln li reveal"><span class="lg">•</span> one static binary, stdlib-only core, one leaf dependency (sqlite). TUI, piped CLI, headless workers, and a phone-sized dashboard read the same stores on disk. close the laptop; resume from the phone.</div>
     <div class="gap sm reveal"></div>
     <div class="msg reveal dim">the models running inside rig build rig. this page describes the harness they use.</div>
+    <div class="gap sm reveal"></div>
+    <div class="ln fit reveal"><b>for:</b> anyone running a local model who wants a real runtime under it, not a prompt box. anyone who reads the loop before trusting it. <span class="no">not: a framework, a cloud, a wrapper.</span></div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t1</span></div>
     <div class="ln reveal"><span class="bar-on">▰</span><span class="bar-off">▱▱</span> <span class="dim">1/3 · next t2</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">delegate</span>   <span class="dim">·</span>   <span class="toolargs">run the full test sweep and report only actionable failures</span></div>
@@ -234,6 +270,9 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t2</span></div>
     <div class="ln reveal"><span class="bar-on">▰▰</span><span class="bar-off">▱</span> <span class="dim">2/3 · next t3</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">rem</span>   <span class="dim">·</span>   <span class="toolargs">learn</span></div>
@@ -243,6 +282,9 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t3</span></div>
     <div class="ln reveal"><span class="bar-on">▰▰▰</span> <span class="dim">3/3</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
+    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
 
     <div class="gap reveal"></div>
     <div class="msg reveal">done. the parent session stayed focused, the worker kept its own resumable transcript,
@@ -252,7 +294,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln sect reveal">── <b>the surface</b> ────────────────────────</div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">eighteen native tools ship in the box, small schemas a local model can drive.</div>
+    <div class="msg reveal">eighteen native tools included out of the box, each with a digestible surface area.</div>
     <div class="ln tl reveal"><span class="tn">bash</span><span class="td">real subprocesses; output surfaced and bounded</span></div>
     <div class="ln tl reveal"><span class="tn">file</span><span class="td">read · write · edit; edits drift-checked against what you read</span></div>
     <div class="ln tl reveal"><span class="tn">fs</span><span class="td">ls · find · grep; small schemas a local model can reach</span></div>
@@ -285,8 +327,9 @@ html.js .reveal.in { opacity: 1; transform: none; }
 
     <div class="gap reveal"></div>
     <div class="msg hero reveal">one machine. built closed. ready to work.</div>
-    <div class="msg proof reveal">point rig at any OpenAI-compatible endpoint. sessions persist across restarts.
-    <span class="ok">rig -update</span> replaces the binary in place.</div>
+    <div class="msg proof reveal">point rig at any OpenAI-compatible endpoint: a local box, a gateway, a hosted API.
+    sessions persist across restarts. <strong>98-99% cache hits</strong> steady; the compaction turn dips to ~55-60%
+    and is back over 90% within two turns. measured on the daily-driver soak, not a benchmark.</div>
 
     <div class="gap reveal"></div>
     <div class="ln cmd reveal"><span class="cmdtext"><span class="ps">❯</span>  rig --base-url $ENDPOINT --model $NAME</span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
@@ -297,9 +340,9 @@ html.js .reveal.in { opacity: 1; transform: none; }
 </div>
 
   <footer class="reveal">
-    <div>rig {{RIG_VERSION}} · a daily-driver agent harness for local models</div>
+    <div>rig {{RIG_VERSION}} · a daily-driver coding agent for local models · MIT</div>
     <div class="links">
-      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/docs">docs/</a><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a><a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/DESIGN.md">DESIGN</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/PLUGINS.md">plugins</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/CHANGELOG.md">changelog</a><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a><a href="https://github.com/mrsirg97-rgb/rig">github ★</a>
     </div>
     <div class="signoff">not a framework. a harness.</div>
   </footer>
