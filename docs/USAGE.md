@@ -17,10 +17,10 @@ command (below); `//` escapes it back into a prompt.
 A session outlives the process. `--resume <id>` continues an earlier one:
 the transcript, the file provenance, and the identity are rebuilt from the
 state store in one read-only transaction (dangling tool calls are kept; an
-unknown id is loud). The per-process state — the guard's counts, the steering
-slot — starts fresh, and the session's id is the one to look up in the
+unknown id is loud). The per-process state; the guard's counts, the steering
+slot; starts fresh, and the session's id is the one to look up in the
 `sessions` table of the state store (`~/.rig/sessions/*.sqlite` under the
-rig home — `$RIG_HOME` over `~/.rig`). `-p` one-shot and `--resume` refuse at construction: one-shot
+rig home; `$RIG_HOME` over `~/.rig`). `-p` one-shot and `--resume` refuse at construction: one-shot
 stays one-shot.
 
 ## commands
@@ -28,49 +28,49 @@ stays one-shot.
 Typed lines with a `/` prefix; the loop never sees them. An unknown command
 is a loud line naming the known set, never silently a prompt.
 
-- `/compact` — force a compaction now (the `⧉` line reports dropped/kept),
+- `/compact`: force a compaction now (the `⧉` line reports dropped/kept),
   or `compact: nothing to drop`.
-- `/new` — close the session row ok, mint a fresh session, same process.
-- `/sessions` — list; `summary` shows the soak's vitals over the recent
+- `/new`: close the session row ok, mint a fresh session, same process.
+- `/sessions`: list; `summary` shows the soak's vitals over the recent
   sessions (models, faults, the cache ratio); `show <id>` renders a
   transcript; `resume <id>` swaps to it in-process.
-- `/models` — the per-model table with the active row marked; `/models <id>`
+- `/models`: the per-model table with the active row marked; `/models <id>`
   switches for the next turn.
-- `/steer <text>` — queue for the next boundary (interrupts a live turn);
+- `/steer <text>`: queue for the next boundary (interrupts a live turn);
   bare `/steer` interrupts only.
-- `/todo`, `/scheduler` — the same tools the model gets, same queue, same
+- `/todo`, `/scheduler`: the same tools the model gets, same queue, same
   store; the tool's own refusals teach the shape.
-- `/effort` — the reasoning dial: bare shows the active level and the
+- `/effort`: the reasoning dial: bare shows the active level and the
   model's available ones; `/effort <level>` sets it for subsequent turns
   (`specs/SPEC_MODES.md`).
-- `/role` — the stance: `/role <default|architect|reviewer>` sets the
+- `/role`: the stance: `/role <default|architect|reviewer>` sets the
   session's role prose between the system prompt and AGENTS.md.
-- `/approve` — `/approve auto` (today's behavior) or `/approve manual`:
+- `/approve`: `/approve auto` (today's behavior) or `/approve manual`:
   manual pauses every mutating tool call for the operator's y/n at the
   TUI ask row; a denial is a model-visible teaching refusal.
-- `/rem` — the memory store's operator verbs: bare lists the live
+- `/rem`: the memory store's operator verbs: bare lists the live
   memories, `show <id>` renders one, `forget <id>` drops it, `project
   <path>` shows another project's memories.
-- `/plugins` — the python plugins: the loaded ones (name, description,
-  file), the skipped ones with their reasons, and the pending zone —
+- `/plugins`: the python plugins: the loaded ones (name, description,
+  file), the skipped ones with their reasons, and the pending zone:
   `pending` lists the model's authoring with each file's DESCRIPTION,
   `approve <name>` installs one (the operator's verb), `disabled`
   lists the disabled zone, `disable <name>` and `enable <name>` move
   a plugin across it, `reload` re-registers from disk (the `plugins`
   tool's command door), `create <text>` queues the authoring prompt.
-- `/todo project <path>`, `/rem project <path>` — a one-off read of
+- `/todo project <path>`, `/rem project <path>`: a one-off read of
   another project's queue or memories: the path resolves to a repo
   identity (worktrees share), and writes stay the bare verbs'
   (`specs/SPEC_STATE.md`).
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it. The summary lands in the
-transcript only — context, not memory: compaction writes nothing to
+transcript only; context, not memory: compaction writes nothing to
 rem (`specs/SPEC_STATE.md`: rem is deliberate).
 
 The `delegate` tool (SPEC_DELEGATE) spawns a headless worker on a task
-now — a bounded sub-task whose result is a message, not a conversation
-— on the worker model, in a cwd under your session's or the rig home.
+now; a bounded sub-task whose result is a message, not a conversation
+- on the worker model, in a cwd under your session's or the rig home.
 It waits, feeds back the worker's last message, and records the run in
 the one scheduler store under an ad-hoc key, so `scheduler runs`
 shows it beside cron runs; the worker's transcript is resumable with
@@ -79,7 +79,7 @@ shows it beside cron runs; the worker's transcript is resumable with
 ## what you see
 
 The piped CLI's rendering is deliberately plain and greppable (the
-terminal default is the TUI — see `docs/SETUP.md`; the CLI stays the byte
+terminal default is the TUI; see `docs/SETUP.md`; the CLI stays the byte
 reference):
 
 ```
@@ -95,19 +95,19 @@ bash ✓ 12ms
   thinking when it reports any (the reasoning round-trips with the
   transcript, so interleaved-thinking tool turns keep theirs);
 - each tool invocation renders as `● NAME` around its output, closed by
-  `NAME ✓ <duration>` (`✕` when it failed) — what executed is visible, not
+  `NAME ✓ <duration>` (`✕` when it failed); what executed is visible, not
   implied; a guarded refusal fails the row and says so;
 - the usage line closes every turn: `↑prompt ↓completion · cache read hit%`
-  — the turn's totals across its model calls, pane's token shaping, the hit
+ ; the turn's totals across its model calls, pane's token shaping, the hit
   rate as cached-over-prompt;
-- faults render as `[fault] <reason>` and the turn stops there; the session
+- faults render as `[fault] <reason>` and the turn stops there: the session
   survives and the next prompt resumes at the last complete message.
 
 ## session behavior
 
-- **The conversation persists** across turns within a run; after a fault or
+- **The conversation persists** across turns within a run: after a fault or
   interruption the loop returns to awaiting input rather than dying.
-- **A failed tool call is fed back to the model once** — the loop never
+- **A failed tool call is fed back to the model once**: the loop never
   retries silently. The bound (`--retries`) tracks the model's re-issuance of
   a failing *tool*, keyed by tool name with the streak per args, and
   cleared at the start of every turn: the bound strikes identical retries
@@ -116,21 +116,21 @@ bash ✓ 12ms
   failure of a call carries a note telling the model to read the error and
   change the call, or stop calling the tool; the next re-issuance of that
   call is refused without executing, naming the bound. A successful call
-  clears the count — the bound tracks streaks, not history. Practical
+  clears the count; the bound tracks streaks, not history. Practical
   effect: persistent flapping on one broken tool gets a named refusal, not
   an infinite loop.
-- **Unknown tool names** are fed back as errors; the turn continues.
+- **Unknown tool names** are fed back as errors: the turn continues.
 - **Denials** (a tool outside the allow-list) are attributed with the reason
-  and are countable by the bound — that pairing is the spec's core invariant
+  and are countable by the bound; that pairing is the spec's core invariant
   and is proven by the suite, not trusted.
 
 ## interruption and failure semantics
 
-- **Steering** — a line typed while a turn is live interrupts the turn and is
+- **Steering**: a line typed while a turn is live interrupts the turn and is
   delivered as the next user message when the loop re-enters the prompt (one
   slot, latest wins); a line typed between turns is served directly. The
   interrupt is the turn's own context, threaded onto the Input ctx
-  (`core.WithInterrupt`) — there is no mailbox.
+  (`core.WithInterrupt`); there is no mailbox.
 - **Ctrl-C** ends the session once the in-flight step unwinds: a mid-tool
   turn unwinds quickly (the tool's process group is killed), a mid-stream
   turn waits for the server's stream to close (the process stays alive in
@@ -150,8 +150,8 @@ rig --allow bash,read            # run things, inspect things, change nothing
 Anything not named is refused at the boundary with the reason named, and the
 refusal goes back to the model. The default permits the 18 built-in
 tools. Python plugins (outside the default) are admitted by their
-presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7) — an installed
-plugin's own allow-list entry — not by an `allow` line; a plugin still
+presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7); an installed
+plugin's own allow-list entry; not by an `allow` line; a plugin still
 in `plugins/pending/` stays refused until approved (the approve's reload
 lands it live, SPEC_STREAMLINE 4).
 Narrowing is always available and compose-order-agnostic.
@@ -159,7 +159,7 @@ Narrowing is always available and compose-order-agnostic.
 ## working-directory discipline
 
 The file tools normalize paths before any provenance decision, and `edit`
-validates that the file is still what it was when last read — external drift
+validates that the file is still what it was when last read; external drift
 is named and the write is refused; ambiguous old-strings ("occurs N times")
 are refused, never guessed at. Outputs are capped (bash 256 KiB, read 1 MiB)
 and the truncation is named in the output.

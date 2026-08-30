@@ -3,8 +3,8 @@
 rig's turn loop is sequential by construction: a turn's tool calls run
 one after another, each awaited, the events emitted in that order, and
 every participant (the recorder, the guard, the approval gate, the
-compaction anchor) leans on that order. That is the right property —
-one thread touches the session — and the wrong mechanism for the day the
+compaction anchor) leans on that order. That is the right property:
+one thread touches the session, and the wrong mechanism for the day the
 agent wants five `read`s at once, or an operator on the phone steering
 while a delegated worker reports back, or a timer firing into a live
 turn.
@@ -24,7 +24,7 @@ is a scope plus a function, and a scheduler that is the thread harness.
 This spec takes that **exact shape** and makes it Go-centric: the five
 parts keep their names and contracts; the mechanism becomes what Go has
 for it. Phase 1 ships the package and its tests. Phase 2a (decision 6) puts
-the batch in the turn loop — concurrent reads, ordered emission — the
+the batch in the turn loop; concurrent reads, ordered emission; the
 named reopening of the frozen loop. Phase 2b (decision 7) makes the
 loop the engine's consumer: every step of a turn is an event on one
 goroutine; everything that waits on the world posts.
@@ -32,9 +32,9 @@ goroutine; everything that waits on the world posts.
 ## goals
 
 - A leaf package, `evt`, stdlib-only, with libevt's five parts as Go
-  types: `Closure` (libevt's `Context` — the one rename, since in Go
+  types: `Closure` (libevt's `Context`; the one rename, since in Go
   that word is `context.Context`), `Event`, `Queue`, `Engine`,
-  `Scheduler` — plus the `Clock` that mints ids.
+  `Scheduler`; plus the `Clock` that mints ids.
 - The queue's order, verbatim: priority descending, then id ascending
   (earlier arrival first). A 4-ary max-heap, as in C.
 - The engine's contract, verbatim: a single consumer pops and executes
@@ -43,7 +43,7 @@ goroutine; everything that waits on the world posts.
 - The scheduler's contract, verbatim: start spawns the loop, schedule
   is the multi-producer door, stop stops and joins; the C return codes
   become named errors.
-- One addition, named: `Update(id, priority)` — reprioritize a pending
+- One addition, named: `Update(id, priority)`: reprioritize a pending
   event in place (the "latest steer wins" rule the TUI keeps by hand).
 - libevt's tests, by name, in Go: basic order, empty pop, multithread,
   stress, perf; plus the Go-only cases (cancel, re-entrancy, update).
@@ -56,7 +56,7 @@ goroutine; everything that waits on the world posts.
 - **No timers inside the engine.** libevt has none: a timer is a
   producer (a goroutine that posts at fire time), never engine state.
   Keeping the engine timer-free keeps it one thing.
-- **No result channel.** Events are closures; a result flows back by
+- **No result channel.** Events are closures: a result flows back by
   the closure capturing where it goes (phase 2's completion events carry
   the tool result that way). The engine never learns what an event
   returns.
@@ -106,7 +106,7 @@ malloc/free lifecycle (the GC). Rejected, named: porting the spin (a
 spin in Go burns a P and the scheduler already parks goroutines);
 porting `engine_destroy`'s one-event drain (an accident, not a
 contract); five interfaces with five implementations behind DI seams
-(lift's law — the package is consumed as `NewEngine` and `Add`; the
+(lift's law; the package is consumed as `NewEngine` and `Add`; the
 interfaces exist so phase 2's loop can be faked, not for swapping).
 
 ### 2. The order is (priority desc, id asc); the id is a counter.
@@ -146,20 +146,20 @@ the engine's.
 `Stop` sets running false and wakes the consumer; the event in flight
 finishes, nothing further runs, and `Pending` shows what was left
 (sorted, a snapshot). `Start(ctx)` returns when `Stop` is called or ctx
-is done — the ctx is the Go-centric stop, so a scheduler's `Stop` is a
+is done; the ctx is the Go-centric stop, so a scheduler's `Stop` is a
 cancel plus a join on `Done`. Named: a second `Start` on a running
 engine refuses (`ErrStarted` at the scheduler; the engine itself is
-single-consumer by contract and does not guard against two `Start`s —
+single-consumer by contract and does not guard against two `Start`s:
 the scheduler is the door that does).
 
-### 6. Phase 2a, the batch — built.
+### 6. Phase 2a, the batch: built.
 
 The turn loop's L5 ("for each call, in order: start, execute, result,
 append") becomes the batch (`loop/batch.go`): the kernel carries a
 predicate, `Concurrent(call) bool`, and a bound, `Parallel`. Walking the
 calls in order, a run of consecutive admitted calls is dispatched as
 goroutines (at most `Parallel` in flight, default 8); a refused call is
-a barrier — everything before it has been awaited, it runs alone on the
+a barrier; everything before it has been awaited, it runs alone on the
 loop goroutine, and the calls after it wait. Emission never changes
 shape: for call *i* the loop emits `ToolStart`, waits for *i*'s result,
 emits `ToolResult` with *i*'s own duration, appends *i*'s tool message.
@@ -169,19 +169,19 @@ no frontend, recorder, or golden changes. A nil predicate is the loop of
 0.11, byte-for-byte.
 
 The root's predicate is **narrower than "not mutating"**: the pure reads
-— `read`, `ls`, `find`, `grep`, `web_search`, `web_fetch`, `diff` — and
+- `read`, `ls`, `find`, `grep`, `web_search`, `web_fetch`, `diff`: and
 nothing else. `todo` and `rem` write SQLite (serialized transactions
 would collide inside one batch), `python` and every plugin share one
 kernel, `bash`/`write`/`edit`/`scheduler`/`delegate` have effects whose
 order the model chose. Rejected, named: reordering execution (a `bash`
-that ran, ran — only emission is ordered); `!isMutating` as the
+that ran, ran; only emission is ordered); `!isMutating` as the
 predicate (the approval gate's notion, not a concurrency-safety one);
 a settings key for the bound in this phase (the default is the loop's;
 a key is a config round when lived use asks).
 
 What sequential delivery used to buy, and who now pays: `guard.Bound`
 keeps its maps under a mutex (the duplicates in one run may all execute
-— each passed the check before any had failed; they are not retries,
+- each passed the check before any had failed: they are not retries,
 and the bound strikes the re-issuance after, a named case); the file
 tool's `Session.Files` writes go through a package mutex (the session
 type stays frozen; the tool that writes it locks); `toolset` was already
@@ -200,7 +200,7 @@ bytes against the next fork point. Not the `-refactor` branch bypass.
 The form, for every future reopening: open by name in the PR that
 changes the loop, close by name in the PR right after its merge.
 
-### 7. Phase 2b, the loop as the consumer — built.
+### 7. Phase 2b, the loop as the consumer: built.
 
 `loop.Run` is the engine's consumer: it wires the tools and the chain
 as before, posts the first prompt, and blocks in `engine.Start`. Every
@@ -216,32 +216,32 @@ that waits on the world is a producer goroutine that posts:
 - **The model.** `model` runs `Assemble` and opens the stream on the
   loop goroutine (a compaction's summary call blocks here, as before);
   a producer drains the stream channel and posts each event (priority
-  50, arrival order — the stream stays in order), then a `streamEnd`.
+  50, arrival order; the stream stays in order), then a `streamEnd`.
 - **The tools.** `streamEnd` appends the assistant message and builds
-  the batch (2a); `advance` walks the cursor — `ToolStart` when the
+  the batch (2a); `advance` walks the cursor; `ToolStart` when the
   cursor reaches a call, its run dispatched then, `ToolResult` and the
-  tool message when its completion has landed — and each tool goroutine
+  tool message when its completion has landed, and each tool goroutine
   posts its completion (priority 50). When the cursor passes the last
   call, `model` again. A barrier runs in a goroutine too: the loop
   goroutine never blocks on a tool.
 - **The end.** `end` cancels the turn context, emits `TurnEnd`, drops
   the turn, posts the prompt. The run ends only from a handler (`stop`):
   EOF or a dead run context at the prompt, the provider-closed-without-
-  Done fault, a dead run context at a stream's end — the engine runs on
+  Done fault, a dead run context at a stream's end; the engine runs on
   a background context so the loop's own boundary rule decides, exactly
   as the sequential loop did.
 
 Every event captures its turn and checks it is still the live one; a
 stale completion or stream event (a turn ended while a producer was
 still posting) is ignored by name, never misapplied. Every `Notify` and
-every `Append` happens on the loop goroutine — the consumer is one
+every `Append` happens on the loop goroutine; the consumer is one
 goroutine, which is the property the recorder, the guard's counting,
 and the compaction anchor rely on (a named case pins it).
 
 Priorities, fixed: input 90, stream 50, tool completion 50. Input
 outranks the work of a turn, but is never pending during one (the
 prompt is posted between turns), so today the numbers only order
-arrivals; they are the seam the later producers use — a delegated
+arrivals; they are the seam the later producers use; a delegated
 worker's async completion below tool completions, a timer below that,
 the interrupt above input via `Update`. Those producers are the next
 decisions, each one file plus a post.
@@ -253,7 +253,7 @@ through the turn context (the Frontend's handle), not through an event.
 Making them producers is a later decision if a real case wants the
 loop responsive while a summary call runs.
 
-Rejected, named: calling `Input` continuously (steering as an event) —
+Rejected, named: calling `Input` continuously (steering as an event):
 it would move the steering slot from the Frontend into the loop and
 reopen SPEC_COMMANDS 2 and every frontend; the engine stopping on the
 run context (it would drop the drain of a torn stream and the boundary
@@ -262,8 +262,8 @@ turn is an object the events carry).
 
 The gate: the `reopened` clause named 2b; the re-freeze PR after the
 merge deleted it. `loop/` is frozen at 0.12.0's bytes: the event loop
-work is closed end to end — phase 1 the engine, 2a the batch, 2b the
-consumer — and the next change to the loop opens it by name again.
+work is closed end to end; phase 1 the engine, 2a the batch, 2b the
+consumer, and the next change to the loop opens it by name again.
 
 ## testing
 
@@ -272,8 +272,8 @@ order followed by a streaming call never overlaps two `Notify` calls
 and never asks `Input` during a live turn (the consumer is one
 goroutine; the prompt is between turns); a completion that lands before
 the run ends is in the transcript, one that would land after is
-ignored. Every pre-2b loop case — the thirty of the sequential loop and
-2a's six — passes unchanged under `-race`: the contract is the same
+ignored. Every pre-2b loop case; the thirty of the sequential loop and
+2a's six; passes unchanged under `-race`: the contract is the same
 bytes.
 
 Phase 2a (`loop/batch_test.go`, `middleware/guard`, `tool/file`):
@@ -290,7 +290,7 @@ without a race. Every pre-2a loop case passes unchanged under `-race`.
 libevt's cases, by name, in Go (`evt/queue_test.go`):
 
 - **basic**: the five events of `test_queue_basic.c` pop as
-  `(5,80) (5,90) (4,60) (3,100) (1,50)` — priority descending, id
+  `(5,80) (5,90) (4,60) (3,100) (1,50)`; priority descending, id
   ascending.
 - **empty pop**: `Pop` and `Peek` on an empty queue report absent,
   never a zero event.
@@ -315,7 +315,7 @@ The Go cases (`evt/queue_test.go`, `engine_test.go`,
   when idle and the default blocks without spinning; `Stop` leaves the
   pending set visible; `Start(ctx)` returns on cancel; a negative
   priority clamps to 0.
-- The scheduler: `Start` twice is `ErrStarted`; a nil engine is
+- The scheduler: `Start` twice is `ErrStarted`: a nil engine is
   `ErrNoEngine`; `Stop` joins (`Done` is closed); `Schedule` before
   `Start` is queued and runs after.
 
@@ -325,5 +325,5 @@ The Go cases (`evt/queue_test.go`, `engine_test.go`,
   the CHANGELOG entry, AGENTS.md's package list. `core/` and `loop/`
   byte-frozen.
 - Prior art, credited: `~/Projects/libtrdr/src/libevt` (queue, event,
-  context, engine, scheduler, clock) — the C is the reference
+  context, engine, scheduler, clock); the C is the reference
   implementation; a divergence is a named decision above.

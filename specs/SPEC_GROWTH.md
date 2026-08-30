@@ -1,4 +1,4 @@
-# rig: the growth surface — pending plugins, scheduled jobs, and the plugin door (pre-1.0)
+# rig: the growth surface: pending plugins, scheduled jobs, and the plugin door (pre-1.0)
 
 The plugins are live and the count is growing (0.8.2, 20 loaded). This
 spec is the next surface, written while the field test is on the daily
@@ -7,7 +7,7 @@ driver: three pending plugins that read the shared business (the
 calculator, a scheduled-job menu, and the harness amendment that keeps a
 grown plugin table from blowing the request context. It is the first
 harness change SPEC_PLUGINS 7 named as "a later decision once the count
-grows" — the count has grown; this is that decision.
+grows"; the count has grown; this is that decision.
 
 The baseline is 0.8.2 (main at the plugins land). The fixture runs (no
 plugins directory) keep the 0.2.0 wire byte-exact: the natives' specs
@@ -75,7 +75,7 @@ cmd/rig/
 
 ## the pending plugin set
 
-The files land in `plugins/pending/` — invisible to discovery (the
+The files land in `plugins/pending/`; invisible to discovery (the
 listing is top-level `*.py`), refused by the allow-list until the
 operator's `/plugins approve` moves them up (SPEC_SANDBOX 2). The
 operator reviews the spec here and the files there, then blesses.
@@ -85,7 +85,7 @@ operator reviews the spec here and the files there, then blesses.
 The shared business's money standing, read-only over the project's own
 files. `wallet.json` (the seed's public key) and `crypto-state.json`
 (the lane's own updated ledger: `sol_balance`, `btc_held`, `farm_msol`,
-`last_action`) — the balances are the lane's on-chain ledger, no RPC.
+`last_action`); the balances are the lane's on-chain ledger, no RPC.
 The USD values need live prices (SOL and mSOL are not the state's
 `btc_price`), so the plugin makes one bounded call to CoinGecko's
 simple-price for `solana,bitcoin,msol`; fail-closed, a fetch error still
@@ -126,11 +126,11 @@ home and calls them as tools. Reports land through rem (scoped to the
 cwd) and `notify`.
 
 - **daily digest** (scheduled now, ~07:30): GPU health, system health,
-  networth, deal_pulse — the morning report. Bounded, read-only, one
+  networth, deal_pulse; the morning report. Bounded, read-only, one
   worker slot.
 - **weekly security sweep** (proposed): Monday morning, `cron_audit`,
   `secret_scan`, `listen`/`net_conn` drift, `cert_check` on the operator's
-  domains — the walls' weekly look. Not scheduled: the operator reviews
+  domains; the walls' weekly look. Not scheduled: the operator reviews
   the menu before more background work commits.
 
 ## decisions
@@ -150,10 +150,10 @@ real `core.Tool`s in the table, and the request carries natives plus one
 "name": string, "args": object}` (amended: the `plugin_schema` native is
 folded into the `schema` arm): `Exec` resolves the named plugin in the
 live table and calls it (run) or returns its description and schema
-verbatim (schema — the model fetches the args it needs when it calls a
+verbatim (schema; the model fetches the args it needs when it calls a
 non-trivial plugin). Both arms are non-mutating. An unknown name is a
 loud tool error naming the live plugins. The `name` field's `enum` is
-the live plugin names (the swap's own list) — the model sees what is
+the live plugin names (the swap's own list); the model sees what is
 callable, cheap, no per-plugin schemas. One door, one small schema; the
 request drops twenty large plugin schemas for one small one. The door's
 description states the contract once: "plugins run via the `plugin`
@@ -162,7 +162,7 @@ door's `run` arm; `schema <name>` shows a plugin's contract."
 **The door is a native, so it is allow-listed as one** (amended 0.12.1:
 the door round added `plugin` (run + schema) to the native set and
 not to the embedded `allow` default, and every door call on a default
-home was refused as `plugin is not in the allow-list` — the presence
+home was refused as `plugin is not in the allow-list`; the presence
 door vouches for plugin names, never for the door; the embedded allow
 is the native set, exactly, and a case in `cmd/rig` pins it).
 
@@ -175,34 +175,34 @@ reaches it by `import` (the shared namespace, unchanged).
 
 **Enablement is the hide/turn-off surface.** `settings.json` gains a
 `plugins` object (the config layer, SPEC_CONFIG): `{"enabled": ["networth",
-...], "max": 8}` — a disabled name is not wired as a tool (the door's
+...], "max": 8}`; a disabled name is not wired as a tool (the door's
 enum carries enabled plugins only), so it is hidden entirely, not
 callable. `max` caps the door's enum at the top `max` live plugins in
-file order (the deterministic order, decision 2) — the "show a certain
+file order (the deterministic order, decision 2); the "show a certain
 number" knob. The root reads `enabled`/`max` at wiring and applies the
 cap to the table; `/plugins enable <name>` / `/plugins disable <name>`
 (decision 8's verbs, the same door as the reload) toggle a name in the
-file and reload — the models-switch semantics, next-turn, exactly.
+file and reload; the models-switch semantics, next-turn, exactly.
 
 **The switch is a directory (amended 0.12.1).** `settings.json`'s
 `plugins.enabled` is retired: it inverted the default. The filter read
 an empty list as "all live", so on a home with no list `/plugins
 disable X` removed X from nothing and changed nothing, and `/plugins
-enable X` wrote `["X"]` and hid every other plugin; and the filter ran
+enable X` wrote `["X"]` and hid every other plugin, and the filter ran
 only at wiring, so a toggle took effect at the next start while any
 reload in between undid it. None of its named cases had been written.
-The on/off state now lives where the install state already lives — in
+The on/off state now lives where the install state already lives; in
 the filesystem: `plugins/disabled/` beside `plugins/pending/`.
 `/plugins disable <name>` renames `plugins/<name>.py` into it and
 reloads; `enable` renames it back; `plugins disabled` lists the zone
 with each file's DESCRIPTION; discovery reads `plugins/` root only, so
-a disabled plugin is not wired, not in the door's enum, not callable —
+a disabled plugin is not wired, not in the door's enum, not callable:
 hidden entirely. The dashboard shows the three zones. `max` stays in
 `settings.json` and applies on every reload, not only at wiring (the
 cap's second bug). A present, non-empty `plugins.enabled` refuses at
 load naming the move; an empty one is dropped (it meant "all").
 Rejected, named: a `disabled` list in `settings.json` (a second truth
-beside the directory that can drift from it — the exact desync the
+beside the directory that can drift from it; the exact desync the
 model reported, by construction); a generated store as the registry
 (the same second truth with a schema: the registry has no history
 worth querying, and the day an approval audit is wanted it is an event
@@ -211,7 +211,7 @@ log *beside* the directory, never the truth of what is installed).
 **The costs, named.** A reload at deep context is still one full
 re-prefill (decision 8, unchanged). The door's enum is a per-request
 re-read of the table (the swap's atomicity, unchanged). A model that
-calls `plugin` with a disabled name gets the loud unknown-name voice —
+calls `plugin` with a disabled name gets the loud unknown-name voice:
 the disable is total, never a soft miss.
 
 **Rejected, named.** A per-plugin toggle tool the model drives: the
@@ -226,44 +226,44 @@ enabled plugin reachable.
 ## testing
 
 Named cases, failing first. The pending plugins are reviewed by eye and
-executed against the real files (no unit harness — they are python, the
+executed against the real files (no unit harness; they are python, the
 kernel is the seam). The door and the enablement are Go, tested in the
 existing leaves.
 
 **toolset (the seam, pure core):**
 
-- `TestNativeSpecsExcludesPlugins` — the table with a native and a
+- `TestNativeSpecsExcludesPlugins`: the table with a native and a
   plugin: `NativeSpecs()` carries the native's spec only; `PluginNames()`
   carries the plugin's name; a swap updates both.
-- `TestGetResolvesTheTable` — `Get` returns the table's tool for a
+- `TestGetResolvesTheTable`: `Get` returns the table's tool for a
   live name and nil for an absent one (the door's exec).
 
-**plugins (the leaf, fake kernel — no python required):**
+**plugins (the leaf, fake kernel; no python required):**
 
-- `TestDoorSurfacesAreTheNativeContract` — `plugin` is a native: Name,
+- `TestDoorSurfacesAreTheNativeContract`: `plugin` is a native: Name,
   the small schema, the description naming the door; `plugin`'s schema
   carries the `action` enum (run, schema) and the live names' enum.
-- `TestDoorExecResolvesAndCalls` — `plugin` with `{action: run, name,
+- `TestDoorExecResolvesAndCalls`: `plugin` with `{action: run, name,
   args}` calls the named plugin's Exec (args verbatim, result verbatim);
   `{action: schema, name}` returns the description and schema verbatim;
   an unknown name is a loud tool error naming the live plugins.
 
 **command (the leaf, fakes at the Env seam):**
 
-- `TestPluginsEnableDisableToggleTheFileAndReload` — the enable verb
+- `TestPluginsEnableDisableToggleTheFileAndReload`: the enable verb
   adds a name, the disable verb removes it, the file writes, the reload
   seam's reply rides through; a nil seam refuses with the no-seam voice.
 
 **cmd/rig (root + e2e):**
 
-- `TestDoorWireStampsNativesPlusTheDoor` — the request's tools array is
+- `TestDoorWireStampsNativesPlusTheDoor`: the request's tools array is
   the natives plus `plugin` and `plugins` (no per-plugin schemas);
   the door's `name` enum carries the live plugin names.
-- `TestEnablementHidesAndCaps` — `settings.json` `plugins.enabled` drops
+- `TestEnablementHidesAndCaps`: `settings.json` `plugins.enabled` drops
   a plugin from the door's enum (not callable, loud unknown); `max` caps
   the enum at the top names in file order; the python tool still imports
   the enabled plugins (the shared namespace).
-- `TestDoorRoundTripsNextTurn` — a reload's swap adds a plugin; the next
+- `TestDoorRoundTripsNextTurn`: a reload's swap adds a plugin; the next
   turn's request carries it in the door's enum and `plugin` executes it;
   the natives keep executing.
 
@@ -274,10 +274,10 @@ schema; the no-plugins wire is natives + the two doors).
 
 ## the diffs this spec implies
 
-- **SPEC_PLUGINS**: decision 9 (the door and the enablement) — the amend
+- **SPEC_PLUGINS**: decision 9 (the door and the enablement): the amend
   this spec rides; the goals, the non-goals, decision 7's cross-reference.
 - **SPEC_CONFIG**: `settings.json` gains the `plugins` object (`enabled`,
-  `max`) — the enablement's config layer.
+  `max`); the enablement's config layer.
 - **`middleware/toolset`**: `NativeSpecs`, `PluginNames`, `Get`;
   `Carry` stamps natives + the door.
 - **`plugins`**: the door's `Exec` and `PluginSchema`, the `PluginNames`
@@ -294,7 +294,7 @@ What this is not:
 - The creative plugins are pending, not live: the operator's `/plugins
   approve` is the gate, and this spec's review is the operator's
   checklist.
-- The scheduled jobs are the existing scheduler path, composed — no new
+- The scheduled jobs are the existing scheduler path, composed: no new
   machinery; the sweep is proposed, not scheduled.
 - The door is not a sandbox, not a manifest, not a dependency story:
   unchanged.

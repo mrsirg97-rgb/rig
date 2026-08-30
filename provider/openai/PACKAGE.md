@@ -8,19 +8,19 @@ adapter's problem; the loop sees `core.Event` only.
 
 ## What it includes
 
-- `New(baseURL, model)` — builds the `core.Provider`. `baseURL` may carry
+- `New(baseURL, model)`: builds the `core.Provider`. `baseURL` may carry
   a path prefix such as `/v1`; it joins `/chat/completions`.
-- `Stream(ctx, req)` — encodes the request, posts, streams SSE, and emits
+- `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
   `core.Event`s.
 - The wire shapes (`wireRequest`, `wireMessage`, `wireTool`,
-  `streamChunk`, `wireUsage`, etc.) — named types so a field typo fails
+  `streamChunk`, `wireUsage`, etc.); named types so a field typo fails
   at compile time.
 - Helpers: `sseData`, `accumulate`, `sortedPending`, `wireMessages`,
   `wireTools`, `endpoint`.
 
 ## How it is consumed
 
-- `New` is wired at the root as the kernel's `core.Provider`; the loop
+- `New` is wired at the root as the kernel's `core.Provider`: the loop
   calls `Stream` per turn.
 - A `unix:` base URL (the runner's socket proxy, SPEC_SANDBOX 1) dials the
   named socket instead: the socket path is the transport's business, and
@@ -41,8 +41,8 @@ adapter's problem; the loop sees `core.Event` only.
 - `usage` is read from the usage chunk (the `stream_options.include_usage`
   request); cached tokens are a subset of `prompt` on this wire, and
   `total_tokens` is read and ignored.
-- Tool calls accumulate by index across deltas (`accumulate`); incomplete
-  calls are discarded — a missing finish marker faults "stream truncated",
+- Tool calls accumulate by index across deltas (`accumulate`): incomplete
+  calls are discarded; a missing finish marker faults "stream truncated",
   and a length-capped stream that cut a call's args mid-JSON drops the
   call and faults naming the cause (never poison the transcript).
 - The scanner buffer is bounded (64 KiB initial, 4 MiB max).

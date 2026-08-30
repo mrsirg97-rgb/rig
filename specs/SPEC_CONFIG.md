@@ -3,9 +3,9 @@
 Config loading as a first-class runtime component: the knobs that are
 today flags, env vars, and constants become a four-layer resolution with
 a user file in it, and the models table leaves code for a file. This
-deliberately reverses the non-goal SPEC_COMMANDS named — "No config:
+deliberately reverses the non-goal SPEC_COMMANDS named; "No config:
 the commands are code plus one registration line; the models table stays
-8's (code plus env at the root)" — and the header comment in
+8's (code plus env at the root)", and the header comment in
 `cmd/rig/main.go` ("Flags and env only; no config files"). It does so
 scope-limited: `core/` and `loop/` keep zero diff (the freeze holds),
 a new `config/` leaf parses, the root consumes, and every entry mode
@@ -21,12 +21,12 @@ TDD.
 - One load, every entry mode: REPL, `-p`, and `run-job` resolve config
   the same way, once, before any store is opened or seam wired. The
   worker the runner spawns is a `rig -p`, so it inherits the same load
-  in its own cwd — a job inherits its cwd's `AGENTS.md` (6).
+  in its own cwd; a job inherits its cwd's `AGENTS.md` (6).
 - The files, one home: `models.json`, `settings.json`, `workers.json`,
   and `theme.json` (reserved) under the rig home (11: `~/.rig`,
-  `$RIG_HOME` over it) — the same home the stores use (`sessions/`,
+  `$RIG_HOME` over it); the same home the stores use (`sessions/`,
   `todo/`, `rem/`, `scheduler/` next to the files) and the plugins'
-  `plugins/` (`specs/SPEC_PLUGINS.md`) — plus `AGENTS.md`, global
+  `plugins/` (`specs/SPEC_PLUGINS.md`); plus `AGENTS.md`, global
   there, project in `<cwd>`. `workers.json` names the worker fleet
   (12): its presence is what registers the worker tools (`delegate`,
   `scheduler`); absent, there are no workers and no worker tools.
@@ -38,11 +38,11 @@ TDD.
   effort where a call sets one: the compaction summary's).
 - The existing knobs by their env names, flat: `baseUrl`, `model`,
   `system`, `allow`, `retries`, `python`, `searxngUrl`,
-  `webFetchProxy`, `trafilatura`, `swapUrl` — plus `defaultJobModel`,
+  `webFetchProxy`, `trafilatura`, `swapUrl`; plus `defaultJobModel`,
   the scheduler's job-model default moved by the sweep (5, 8), and
   `theme`, the shipped-theme name SPEC_TUI 7 selects by (the loader
   carries the string; the TUI owns the vocabulary and the refusal).
-- JSON only, stdlib `encoding/json`; a YAML dep is rejected, named (1).
+- JSON only, stdlib `encoding/json`: a YAML dep is rejected, named (1).
 - A malformed or unreadable file is a loud refusal at start naming the
   file and the field; an absent file is silent (3).
 - Precedence, one rule stated once and tested: flags > env > file >
@@ -54,7 +54,7 @@ TDD.
 
 ## non-goals
 
-- No YAML (or TOML): JSON only, stdlib; the rejection is named (1).
+- No YAML (or TOML): JSON only, stdlib: the rejection is named (1).
 - No per-cwd settings: the cwd carries `AGENTS.md` only.
   `settings.json` and `models.json` are global (the config home).
   Project-level knobs are a 10 candidate, not this.
@@ -64,14 +64,14 @@ TDD.
   the refusal teaches the shape. The TUI (10) may display, over the
   same `Config`.
 - No schema versioning in the files: an unknown key is a loud refusal
-  (3) — that is the version signal. Adding keys is forward-compatible;
+  (3); that is the version signal. Adding keys is forward-compatible;
   removing one is a break the refusal names.
 - No env expansion in file values: the file is data, no `$HOME`.
-- No new env vars (8) — one amendment, named: `RIG_HOME`, the home's
+- No new env vars (8): one amendment, named: `RIG_HOME`, the home's
   override (11). Every other `RIG_*` means what it meant in 0.2.0, with
   a file layer below it.
-- No new `core/` or `loop/` line (10); no new dependencies (1).
-- No TUI palette: `theme.json` is read raw; 10 owns its schema (7).
+- No new `core/` or `loop/` line (10): no new dependencies (1).
+- No TUI palette: `theme.json` is read raw: 10 owns its schema (7).
 
 ## layout
 
@@ -83,14 +83,14 @@ config/               NEW leaf (stdlib + models, nothing else):
                       the refusal voice
   modelsfile.go       the models.json parse, the row-by-row overlay
                       over the embedded table
-  workers.go          the workers.json parse (12: the fleet — model
+  workers.go          the workers.json parse (12: the fleet; model
                       required, slots default 1), the id resolution
                       over the merged table, the allow-default growth
   agents.go           the AGENTS.md pair (global + project)
   theme.go            the theme.json read (raw; 10 owns the schema)
-  settings.json       EMBED: the embedded settings — the 0.2.0 flag
+  settings.json       EMBED: the embedded settings; the 0.2.0 flag
                       defaults, moved out of main.go (5)
-  models.json         EMBED: the embedded table — the 0.2.0
+  models.json         EMBED: the embedded table; the 0.2.0
                       models.Defaults rows, moved out of models/ (4)
   config_test.go, settings_test.go, modelsfile_test.go,
   agents_test.go, theme_test.go
@@ -119,12 +119,12 @@ each. Zero loop lines. `core/` zero diff.
 ```go
 package config
 
-// Load reads the user files under dir (the rig home, e.g. ~/.rig —
+// Load reads the user files under dir (the rig home, e.g. ~/.rig:
 // 11) and the AGENTS.md pair (dir + cwd), each merged over its
 // embedded default. Absent files are silent.
 // Present-but-malformed or unreadable files refuse loud, naming the
 // file and, for JSON, the field (3). Load never creates a file. The
-// root computes dir ($RIG_HOME, else ~/.rig — 11, as it does for the
+// root computes dir ($RIG_HOME, else ~/.rig; 11, as it does for the
 // stores) and passes it: config/ reads paths, not env.
 func Load(dir, cwd string) (*Config, error)
 
@@ -132,7 +132,7 @@ type Config struct {
 	Settings Settings
 	Models   models.Table // file rows over embedded rows, checked (4)
 	Workers  *Workers     // the fleet (12); nil when workers.json is
-	                   // absent — no workers, no worker tools
+	                   // absent; no workers, no worker tools
 	Agents   string       // global then project, "\n\n"-joined, empty
 	                   // segments skipped; "" when neither (6)
 	Theme    json.RawMessage // theme.json as written; nil when absent (7)
@@ -149,11 +149,11 @@ type Workers struct {
 
 // Settings: the existing knobs by their env names, lowerCamel
 // (RIG_BASE_URL -> baseUrl). defaultJobModel is cut (12): the
-// scheduler's default job model moved to workers.json's model — a
+// scheduler's default job model moved to workers.json's model; a
 // settings.json that still carries the key refuses at start naming
 // the move, its presence the refusal (no silent honoring).
 // WebFetchProxy and Trafilatura are presence-aware: their empty value
-// is a choice (direct egress, the stdlib pass) — 0.2.0's documented
+// is a choice (direct egress, the stdlib pass); 0.2.0's documented
 // "set empty" env semantics, extended to the file layer (2, 5).
 type Settings struct {
 	BaseURL       string
@@ -178,7 +178,7 @@ type Settings struct {
 	           // "" = the policy's "medium"
 ```
 
-The embedded defaults (the move is exact — 0.2.0's values):
+The embedded defaults (the move is exact; 0.2.0's values):
 
 `config/settings.json`:
 
@@ -186,7 +186,7 @@ The embedded defaults (the move is exact — 0.2.0's values):
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
-  "system": "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin.",
+  "system": "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls; an allowlist, a retry guard, an approval gate, a plugin landing zone, and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin.",
   "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web_search", "web_fetch"],
   "retries": 3,
   "searxngUrl": "http://127.0.0.1:8888",
@@ -199,7 +199,7 @@ The embedded defaults (the move is exact — 0.2.0's values):
 (`python` and `trafilatura` are absent: no default, as in 0.2.0.)
 
 Amended by 12: the embedded `allow` loses the two worker tools
-(`scheduler`, `delegate` — they register only when `workers.json` is
+(`scheduler`, `delegate`; they register only when `workers.json` is
 present, and the default allow grows by them then), and
 `defaultJobModel` is cut (moved to `workers.json`'s `model`).
 
@@ -211,8 +211,8 @@ present, and the default allow grows by them then), and
 ]
 ```
 
-(No `role` / `effort`: the field defaults apply — `interactive`, the
-policy's `medium`.) Amended by 12: the `qwen3.8-workers` row is cut —
+(No `role` / `effort`: the field defaults apply; `interactive`, the
+policy's `medium`.) Amended by 12: the `qwen3.8-workers` row is cut:
 the worker's model is the operator's (named by `workers.json`, defined
 by the operator's `models.json` row), not a row baked into the binary.
 
@@ -220,17 +220,17 @@ by the operator's `models.json` row), not a row baked into the binary.
 
 ### 1. The shape: one leaf, one load, every entry mode
 
-`config/` is a leaf (stdlib plus `models`, nothing else — no `core`, no
+`config/` is a leaf (stdlib plus `models`, nothing else; no `core`, no
 store types) that **parses**; `cmd/rig` **consumes**. The root calls
 `config.Load(dir, cwd)` exactly once per process, after flag parse and
-before any store is opened or seam is wired — the same position
+before any store is opened or seam is wired; the same position
 `resolveModel`'s refusal holds today (loud before the stores). The same
 call sits on the `run-job` path (which needs the resolved `swapUrl`
 before it spawns), and the worker the runner spawns is a plain `rig
 -p`, so it runs the same load in its own cwd. One load function, three
 entry modes, no per-mode config code.
 
-The config home is the same directory the stores use: the rig home —
+The config home is the same directory the stores use: the rig home:
 `$RIG_HOME` if set, else `~/.rig` (11, amended; the `.pi`/`.omp`
 convention, not the XDG one). The root already computes it for
 `sessions/`, `todo/`, `rem/`, `scheduler/`; it passes it to `Load`.
@@ -246,7 +246,7 @@ every other path loads.
 a format the operator can already write in JSON; rig's leaves are
 stdlib-only by taste (the one non-stdlib leaf dep is the sqlite driver,
 decided once in SPEC_STATE); the files are small and structural (a table
-and a flat knob set), where JSON's shape is the shape; and the stdlib
+and a flat knob set), where JSON's shape is the shape, and the stdlib
 gives field-named errors and unknown-key detection natively, while the
 YAML libraries' error voices are looser. One format, one parser, no
 dep.
@@ -270,22 +270,22 @@ operator set nothing.
 
 **"Set" is defined once, per layer and key.** For **flags**, set means
 **passed** (`flag.Visit` reports exactly which were): a flag the
-operator typed always wins, whatever its value — `-system ""` runs with
+operator typed always wins, whatever its value; `-system ""` runs with
 an empty system prompt and `-retries 0` reaches the guard's floor
 (clamped to 1), exactly as 0.2.0 behaves. Flags are inherently
 presence-aware; defining them by value would silently change both.
 For **env and file**, set means **non-empty / non-zero** at that layer
-— an empty string or zero descends, exactly as 0.2.0's `envOr` behaves
-today — except for two keys that are **presence-aware at every layer**:
+- an empty string or zero descends, exactly as 0.2.0's `envOr` behaves
+today; except for two keys that are **presence-aware at every layer**:
 `webFetchProxy` and `trafilatura`. For them the
-empty value is itself the choice — direct egress, the stdlib text pass —
+empty value is itself the choice; direct egress, the stdlib text pass:
 and 0.2.0 already documents it ("set empty means the variable is
 present but empty … presence is the signal, the value is the choice").
 For these two, set means **present at that layer** (env: `os.LookupEnv`
 ok, even empty; file: the key exists in the JSON, even `""`). This
 extends the documented 0.2.0 env semantics to the file layer; the other
 keys keep the 0.2.0 env semantics. No key changes meaning between 0.2.0
-and this spec — the flag-presence rule above is what preserves that for
+and this spec; the flag-presence rule above is what preserves that for
 explicitly-empty flags.
 
 The rule is tested at every boundary, not re-stated per key (testing):
@@ -327,29 +327,29 @@ rig: config: ~/.rig/AGENTS.md: permission denied
 
 Rules that make the voice total:
 
-- **Unknown keys refuse** — the parser decodes against the known key
+- **Unknown keys refuse**: the parser decodes against the known key
   set and names the unknown key with the known list (sorted). A typo'd
   key is a silent no-op otherwise; refusal is the fail-closed reading,
   and it is the version signal (non-goal: no schema versioning).
 - **The field is the operator's spelling** (the JSON key), not a Go
   struct name: each known key is decoded individually, so a type error
   names `retries`, not `Settings.Retries`.
-- **Row errors name the row** (1-based) and the field; post-merge
+- **Row errors name the row** (1-based) and the field: post-merge
   invariant errors name the row id and the invariant clause (the
-  `models.Check` voice), with the file — the violation is in the merged
+  `models.Check` voice), with the file; the violation is in the merged
   row, and the merged row's file is the one the operator wrote.
 - **Read order is fixed** (the first malformed file wins,
   deterministically): `settings.json`, `models.json`, `workers.json`
-  (12 — it validates its id against the merged table, so it reads
+  (12; it validates its id against the merged table, so it reads
   after `models.json`), `theme.json`, `AGENTS.md` (global, then
   project).
-- `AGENTS.md`: ENOENT is silent; every other read error (permission, a
+- `AGENTS.md`: ENOENT is silent: every other read error (permission, a
   directory by that name, I/O) refuses with the OS reason, the path
   named once.
 - **A cut key migrates once, then nags.** `settings.json`'s
   `defaultJobModel` is cut by 12, and a box that updates in place must
   keep starting: with no `workers.json`, the first start mints one from
-  the key (`{"model": …}`, the model checked against the table — a
+  the key (`{"model": …}`, the model checked against the table; a
   model the table lacks refuses, naming it, minting nothing) and says so
   once on stderr; every later start ignores the key with a one-line
   notice until it is deleted. Two truths refuse: a key that disagrees
@@ -361,11 +361,11 @@ Rules that make the voice total:
 
 **The move.** `models.Defaults` (the `var` in `models/`) leaves code:
 the two 0.2.0 rows become `config/models.json` (go:embed, the content
-above — the same ids, the same numbers, nothing else). `config/` parses
+above; the same ids, the same numbers, nothing else). `config/` parses
 it with the same parser as the user file, into the same `models.Table`.
 The `Defaults` variable is removed; the root and the tests take the
 table from `Load` (the test harnesses that name it construct it from
-the same rows). The embedded file is the 0.2.0 table, exactly — pinned
+the same rows). The embedded file is the 0.2.0 table, exactly; pinned
 by `TestEmbeddedDefaultsAreTheV020Values`.
 
 **The row schema.** A JSON array of row objects, each:
@@ -385,14 +385,14 @@ by `TestEmbeddedDefaultsAreTheV020Values`.
 the allowed set) and stored on `models.Model`. `effort` is consumed by
 exactly one call: `policy/compact`'s summary call sets
 `ReasoningEffort` to the row's `Effort`, falling back to `"medium"`
-when empty — the 0.2.0 behavior, now the field's default. The policy
+when empty; the 0.2.0 behavior, now the field's default. The policy
 keeps the fallback line so a row constructed without the default never
 loses it; providers that don't know the field ignore it, as today.
 
 **The merge, stated once.** The user file **merges over the embedded
 table row by row**, keyed by `id`:
 
-- a user row for an **embedded id**: per-field overlay — each field the
+- a user row for an **embedded id**: per-field overlay: each field the
   user set (non-zero / non-empty) replaces the embedded value; each
   field the user left unset keeps the embedded value. A row the user
   writes with only `window` keeps the embedded `maxTokens`, `reserve`,
@@ -408,26 +408,26 @@ table row by row**, keyed by `id`:
   carry it; an embedded id cannot. Named as the cost of the rule, not
   worth presence-aware row fields.
 - the merged table is then built through `models.New` (each row
-  checked, duplicates refused) — a violation refuses with the voice
+  checked, duplicates refused); a violation refuses with the voice
   above.
 
 **The active id: env still wins.** `models.Resolve` keeps its contract
 (given a table, an id, and an env lookup: the row for the id else the
 `RIG_MODEL_*` synthesis else a loud refusal), and gains the rule the
 precedence chain implies for the row's fields: **for the active id, the
-`RIG_MODEL_*` env overlays the row's fields** — `RIG_MODEL_WINDOW` /
+`RIG_MODEL_*` env overlays the row's fields**; `RIG_MODEL_WINDOW` /
 `_MAX_TOKENS` / `_RESERVE` / `_KEEP_RECENT`, per field, set beats the
 row. 0.2.0 consulted the env only for ids the table did not know; this
 makes the env win for a known id too, exactly as the chain says (flags >
 env > file > embedded). The synthesis path (unknown id, `RIG_MODEL_
 WINDOW` set) is unchanged, except the synthesized row now carries
-`Role: interactive`. Rows other than the active one are the table's —
+`Role: interactive`. Rows other than the active one are the table's:
 the env overlay is the active id's at startup; `models <id>` switches
 read the table (0.2.0's switch semantics).
 
 **The runtime table and `/models`.** The runtime table (what `models`
 lists) is the merged table, with the active row replaced by the
-**resolved** row when resolution overlaid or synthesized it — so
+**resolved** row when resolution overlaid or synthesized it, so
 `/models` shows what is in effect, and `models <id>` can switch back to
 it (0.2.0's synthesized-row behavior, generalized). `renderTable`
 gains the **role column** after the id:
@@ -437,14 +437,14 @@ local            interactive  window 65536  max 8192  reserve 8192  keep 16384  
 qwen3.8-workers  worker       window 65536  max 8192  reserve 8192  keep 16384  trigger 57344
 ```
 
-File rows list like any others — same columns, same switch, same
+File rows list like any others; same columns, same switch, same
 refusal voice for unknown ids. The listing order is stable: sorted by
 id (the table's `Known()` order), so the golden lines do not depend on
 merge order.
 
 ### 5. settings.json: the existing knobs, flat, by their env names
 
-One flat object — no nesting — carrying **the existing knobs by their
+One flat object; no nesting; carrying **the existing knobs by their
 env names**, lowerCamel of the env minus the `RIG_` prefix:
 
 | key             | env                 | 0.2.0 default (the embedded value) |
@@ -457,18 +457,18 @@ env names**, lowerCamel of the env minus the `RIG_` prefix:
 | `python`        | `RIG_PYTHON`        | (none: the default interpreter)    |
 | `searxngUrl`    | `RIG_SEARXNG_URL`   | `http://127.0.0.1:8888`            |
 | `webFetchProxy` | `RIG_WEB_FETCH_PROXY`| `http://127.0.0.1:8889` (presence key) |
-| `trafilatura`   | `RIG_TRAFILATURA`   | (none: auto — presence key)        |
+| `trafilatura`   | `RIG_TRAFILATURA`   | (none: auto; presence key)        |
 | `swapUrl`       | `RIG_SWAP_URL`      | `http://127.0.0.1:8090`            |
 
 Shapes: `allow` is a **JSON array of tool names** in the file (the env
-stays CSV — the 0.2.0 env surface is unchanged); the rest are strings
+stays CSV; the 0.2.0 env surface is unchanged); the rest are strings
 or the integer `retries`. `allow`'s array elements are strings; a
 non-string refuses (`allow[2]: …`).
 
-**`defaultJobModel`** — the one key without an env name (the sweep's
+**`defaultJobModel`**; the one key without an env name (the sweep's
 move, 8): the scheduler's default job model, moved to the embedded
 settings in 0.3.0 and **cut by 12**: the worker's model is the
-operator's — `workers.json`'s `model` names it (a row of the operator's
+operator's; `workers.json`'s `model` names it (a row of the operator's
 models table), and the key has no embedded value any more. A
 `settings.json` that still carries the key refuses at start naming the
 move (3's cut-key rule): the presence is the refusal, whatever the
@@ -494,15 +494,15 @@ line between them (empty segments skipped):
 <project AGENTS.md>
 ```
 
-The content is the files as written — no markers, no headers, no
+The content is the files as written; no markers, no headers, no
 indentation: the file is the contract, and the assembled prompt stays
-greppable. Absent files are silent (3); the cwd is the process's cwd —
+greppable. Absent files are silent (3); the cwd is the process's cwd:
 the REPL's cwd, or the worker's job cwd (below).
 
 **The placement, named against the middleware Guidelines.** The root
 already assembles `system + "\n\n" + guidelines`, where `guidelines` is
 the `core.GuidelineContributor` prose of the middleware participants
-(SPEC_HARDENING decision 6's collection — today no participant
+(SPEC_HARDENING decision 6's collection; today no participant
 contributes; `perm` and `guard` are wrap-only). AGENTS.md sits
 **between the system prompt and the participant guidelines**:
 
@@ -521,12 +521,12 @@ present.
 **Every entry mode loads it.** The REPL and `-p` get it in the root's
 assembly; **the worker inherits its own cwd's `AGENTS.md`**: `run-job`
 spawns the worker with `cwd = job.Cwd`, and the worker is a `rig -p`
-that runs the same load — so the job's system prompt carries the global
+that runs the same load, so the job's system prompt carries the global
 `AGENTS.md` plus the project `AGENTS.md` **of the job's working
 directory**, not the creating session's cwd. The creating session's
 project file is the session's context, not the job's; the job's context
 is its cwd. (The job's `system` otherwise resolves the same chain the
-REPL's does — the worker's own flag/env/file/embedded resolution, the
+REPL's does; the worker's own flag/env/file/embedded resolution, the
 worker's env being the fire engine's env.)
 
 ### 7. theme.json: reserved for SPEC_TUI
@@ -537,7 +537,7 @@ loader's contract is total-but-shallow: present → it must decode as one
 well-formed JSON value, else the loud refusal (3); the decoded raw bytes
 are exposed on `Config.Theme` (`json.RawMessage`), verbatim as written;
 absent → `Theme` is nil, silent. The loader validates well-formedness
-only — no fields, no keys, no schema: the moment it named a field it
+only; no fields, no keys, no schema: the moment it named a field it
 would own 10's territory. 10 decodes `Config.Theme` with its own schema
 and its own tests.
 
@@ -546,7 +546,7 @@ and its own tests.
 Every config-shaped value still in code, named. **MOVED** = out of code
 into the embedded defaults (and overridable by the file layer);
 **DELIBERATELY KEPT** = caps, bounds, pinned thresholds, derivation
-rules, mechanics, and prompt text — the values that are not operator
+rules, mechanics, and prompt text; the values that are not operator
 knobs.
 
 | value | 0.2.0 location | verdict |
@@ -562,30 +562,30 @@ knobs.
 | default fetch proxy `http://127.0.0.1:8889` | `tool/web/web.go` | **MOVED** → `settings.webFetchProxy` |
 | default swap URL `http://127.0.0.1:8090` | `store/scheduler/runner.go` | **MOVED** → `settings.swapUrl` |
 | default job model `qwen3.8-workers` | `tool/scheduler` + `store/scheduler` | **MOVED** → `settings.defaultJobModel` (0.3.0), then **cut by 12** → `workers.json`'s `model` (the operator's fleet row); the store's constant goes with the key, `Create` takes the model from its caller |
-| row invariants (`Reserve < Window`, `KeepRecent < Window-Reserve`, …) | `models.Check` | **KEPT** — the construction-time brake, not a knob |
-| synthesis formulas (`MaxTokens 8192`, `Reserve Window/8`, `KeepRecent Window/4`) | `models.Resolve` | **KEPT** — derivation rules for the `RIG_MODEL_*` path, not values |
-| `RIG_MODEL_*` env synthesis | `models.Resolve` | **KEPT** — the operator surface stays; it now also overlays the active row's fields (4) |
-| retries floor (`< 1` → `1`) | `middleware/guard` | **KEPT** — bound |
-| session list cap `50`, turns formula | `store/state` | **KEPT** — cap + formula |
-| runs count `1–100` (default `5`) | `store/scheduler` | **KEPT** — cap + arg default in the tool's voice |
-| job store event compaction `1000` | `store/scheduler` | **KEPT** — pinned threshold |
-| log prune `20`; digest prefixes (`6`/`12` hex); key shape `cwd-<12hex>:jN` | `store/scheduler`, `main.go` | **KEPT** — mechanics of the store's location and history |
-| run timeout `30m`; busy-check fetch `5s`; busy policy; `ReportBack` text; the worker argv shape | `store/scheduler/runner.go` | **KEPT** — bounds, policy, prompt text, spawn mechanics |
-| web caps: search `15s`/`300`/`1MiB`; fetch `5MiB`/`20000`/`30s`/`5` hops/`20s`/`10MiB` | `tool/web` | **KEPT** — caps and bounds |
-| python: `120s` timeout, `4096` stderr tail, `2s` wait delay, host resolution (`~/.pi/…` shared path, then the embedded materialisation) | `tool/python` | **KEPT** — bounds + mechanics; only the interpreter knob moves (`python`) |
-| compact: calibration clamp `0.5–4.0`, the `min(Reserve/4, 256)` floor, split math, the summary prompt file | `policy/compact` | **KEPT** — pinned thresholds and the fold contract |
-| rem `AutoReflect` importance `0.2` | `store/rem` | **CUT** (0.13.0) — the auto-reflection is gone; SPEC_STATE, rem is deliberate |
-| `RIG_FAKE_STATE_DIR`, `RIG_FAKE_MODE` | `cmd/rig` tests | **KEPT** — test seams, not operator config |
-| the `RIG_*` env set | `main.go`, `models`, `tool/*` | **KEPT** — unchanged as a surface (no new env vars); each knob gains a file layer below it |
+| row invariants (`Reserve < Window`, `KeepRecent < Window-Reserve`, …) | `models.Check` | **KEPT**; the construction-time brake, not a knob |
+| synthesis formulas (`MaxTokens 8192`, `Reserve Window/8`, `KeepRecent Window/4`) | `models.Resolve` | **KEPT**; derivation rules for the `RIG_MODEL_*` path, not values |
+| `RIG_MODEL_*` env synthesis | `models.Resolve` | **KEPT**; the operator surface stays; it now also overlays the active row's fields (4) |
+| retries floor (`< 1` → `1`) | `middleware/guard` | **KEPT**; bound |
+| session list cap `50`, turns formula | `store/state` | **KEPT**; cap + formula |
+| runs count `1–100` (default `5`) | `store/scheduler` | **KEPT**; cap + arg default in the tool's voice |
+| job store event compaction `1000` | `store/scheduler` | **KEPT**; pinned threshold |
+| log prune `20`; digest prefixes (`6`/`12` hex); key shape `cwd-<12hex>:jN` | `store/scheduler`, `main.go` | **KEPT**; mechanics of the store's location and history |
+| run timeout `30m`; busy-check fetch `5s`; busy policy; `ReportBack` text; the worker argv shape | `store/scheduler/runner.go` | **KEPT**; bounds, policy, prompt text, spawn mechanics |
+| web caps: search `15s`/`300`/`1MiB`; fetch `5MiB`/`20000`/`30s`/`5` hops/`20s`/`10MiB` | `tool/web` | **KEPT**; caps and bounds |
+| python: `120s` timeout, `4096` stderr tail, `2s` wait delay, host resolution (`~/.pi/…` shared path, then the embedded materialisation) | `tool/python` | **KEPT**; bounds + mechanics; only the interpreter knob moves (`python`) |
+| compact: calibration clamp `0.5–4.0`, the `min(Reserve/4, 256)` floor, split math, the summary prompt file | `policy/compact` | **KEPT**; pinned thresholds and the fold contract |
+| rem `AutoReflect` importance `0.2` | `store/rem` | **CUT** (0.13.0); the auto-reflection is gone; SPEC_STATE, rem is deliberate |
+| `RIG_FAKE_STATE_DIR`, `RIG_FAKE_MODE` | `cmd/rig` tests | **KEPT**; test seams, not operator config |
+| the `RIG_*` env set | `main.go`, `models`, `tool/*` | **KEPT**; unchanged as a surface (no new env vars); each knob gains a file layer below it |
 
 ### 9. The invariant: no user files, 0.2.0 byte-identical
 
-**With no user files present — no `settings.json`, no `models.json`, no
-`theme.json`, no `AGENTS.md` anywhere — every entry mode behaves
+**With no user files present; no `settings.json`, no `models.json`, no
+`theme.json`, no `AGENTS.md` anywhere; every entry mode behaves
 byte-identically to 0.2.0.** Stated once, tested per entry mode:
 
 - **REPL**: the request body sent to the provider for a fixed prompt is
-  the 0.2.0 bytes — the system message (the default system prompt, no
+  the 0.2.0 bytes; the system message (the default system prompt, no
   AGENTS.md, no guidelines participant), the model, the tools spec
   (including the scheduler description's `Default model:
   qwen3.8-workers`), the messages. A golden fixture pins the exact
@@ -600,22 +600,22 @@ byte-identically to 0.2.0.** Stated once, tested per entry mode:
   rows carry no `effort`; the policy's default applies).
 - **The refusals**: the unknown-model-id refusal names the same known
   ids and the env, as 0.2.0.
-- **The named exception**: `/models` gains the role column (4) — a new
+- **The named exception**: `/models` gains the role column (4): a new
   feature on a new surface, not part of the 0.2.0 wire; the existing
   `/models` assertion updates with the column.
 
 Two companions: **an empty config directory** (the directory exists,
-no files) is silent — the same bytes as the absent case; and **success
-prints nothing** — the load is invisible when it is right (the
+no files) is silent; the same bytes as the absent case, and **success
+prints nothing**; the load is invisible when it is right (the
 `rig: python kernel host:` line stays, as 0.2.0).
 
 ### 10. The freeze and the touched surface
 
 - **`core/` and `loop/`: zero diff.** The freeze holds: no event, no
   wire type, no seam, no loop line. The config is root-owned state the
-  loop never reads — exactly as the models table is today.
+  loop never reads; exactly as the models table is today.
 - **No new dependencies**: `encoding/json`, `go:embed`, `os`,
-  `path/filepath` — stdlib.
+  `path/filepath`; stdlib.
 - **Touched, named**: `config/` (new leaf + the two embedded files),
   `models/` (`Model` +`Role`/`Effort`, `Check`'s role vocabulary,
   `Resolve`'s env-overlay and synthesized-row role, `Defaults`
@@ -625,39 +625,39 @@ prints nothing** — the load is invisible when it is right (the
   description/schema built from it), `cmd/rig` (the load, the chain,
   the row resolution, the assembly, the tool wiring), the tests that
   name `models.Defaults` (they take the table from the same rows).
-- **The RIG_* env surface is unchanged** — every env var means exactly
+- **The RIG_* env surface is unchanged**: every env var means exactly
   what it meant in 0.2.0, with a file layer below it (8).
-- **Version**: PR B bumps `0.2.0` → `0.3.0` (additive; the runtime is
-  still pre-1.0 — the freeze's discipline, the tag's criterion,
+- **Version**: PR B bumps `0.2.0` → `0.3.0` (additive: the runtime is
+  still pre-1.0; the freeze's discipline, the tag's criterion,
   unchanged) and updates `TestVersionIsTheFreeze` with it.
 
 ### 11. The home: ~/.rig (amended, 0.4.0)
 
-**The move.** The config home is `~/.rig` — the `.pi`/`.omp`
+**The move.** The config home is `~/.rig`; the `.pi`/`.omp`
 convention, the agent's dot-home, not the XDG one (`~/.config/rig`).
 Everything that lived under the old home rides it: `settings.json`,
 `models.json`, `theme.json`, `AGENTS.md`, the stores (`sessions/`,
 `todo/`, `rem/`, `scheduler/`), the python kernel's materialised host
-(`kernel/kernel_host.py`), and — new — `plugins/`
+(`kernel/kernel_host.py`), and; new; `plugins/`
 (`specs/SPEC_PLUGINS.md`).
 
 **The resolution, stated once: `$RIG_HOME` > `~/.rig`.** `RIG_HOME`
 set (non-empty) is the home, the operator's spelling used as-is;
 unset, the home is `~/.rig` (`$HOME` + `.rig`). `XDG_CONFIG_HOME` is
-no longer consulted — the agent's dot-home is the convention, and the
+no longer consulted; the agent's dot-home is the convention, and the
 override is the escape. `RIG_HOME` is the one new env var (the
 non-goal's named amendment); it has no file layer: it is the home, and
 the home is not a knob. The resolution is the root's (`Load` keeps its
-`(dir, cwd)` seam — `config/` reads paths, not env), and it is applied
+`(dir, cwd)` seam; `config/` reads paths, not env), and it is applied
 at every entry mode: REPL, `-p`, and `run-job`, as the chain is. The
-two sites that resolve it — the root and `tool/python`'s host
-materialisation — carry the same one rule, named in
+two sites that resolve it; the root and `tool/python`'s host
+materialisation; carry the same one rule, named in
 `specs/SPEC_PLUGINS.md`.
 
 **The migration, once and deterministic.** At startup, before any file
 is read or store opened: if the resolved home is **absent** and the
 old `~/.config/rig` **exists**, the old directory is **renamed** to
-the resolved home (atomic on the same filesystem — both live under
+the resolved home (atomic on the same filesystem; both live under
 `$HOME`), and exactly one line says so:
 
 ```
@@ -665,11 +665,11 @@ rig: migrated the config home: /home/u/.config/rig -> /home/u/.rig
 ```
 
 The condition is total and idempotent: after the rename the old
-directory is gone, so the migration never fires twice; with the old
-directory absent it is a no-op; with the home already present (a fresh
-install) it is a no-op — a present home wins, whatever the old
+directory is gone, so the migration never fires twice, with the old
+directory absent it is a no-op, with the home already present (a fresh
+install) it is a no-op; a present home wins, whatever the old
 directory contains, and deletion is the operator's act, never the
-runtime's — and the leftover is named (amended, the field: a dev
+runtime's, and the leftover is named (amended, the field: a dev
 build's half-birthed `~/.rig` blocked a real migration in silence):
 with both homes present, one stderr line says the old home still
 exists and which home won, so the operator merges or prunes by hand
@@ -679,7 +679,7 @@ one to boot on).
 
 **The `$RIG_HOME` edge, named: the migration never runs under an
 override.** An explicit override is an **isolation mechanism**, not a
-move order — `RIG_HOME=$(mktemp -d) rig -p ...` is the shape scripts
+move order; `RIG_HOME=$(mktemp -d) rig -p ...` is the shape scripts
 and tests use, and under it the override is the home, used as-is,
 whatever it holds (present or absent), and the old `~/.config/rig`
 stays where it is. "The data follows the home" would turn every such
@@ -691,7 +691,7 @@ a run where the default home is absent and lets the rename do it).
 **The invariant's companion holds.** With no user files in either
 home, the entry modes are the 0.2.0 bytes (9): the home's location is
 a user-config fact, and the fixture runs' scratch home has neither
-`~/.rig` nor `~/.config/rig` — the golden fixtures are untouched
+`~/.rig` nor `~/.config/rig`; the golden fixtures are untouched
 (`specs/SPEC_PLUGINS.md` pins the same for the plugins' absence).
 
 ### 12. workers.json: the worker fleet (0.19.0)
@@ -703,7 +703,7 @@ embedded `settings.json`'s `defaultJobModel`, and a row in the embedded
 first scheduled job targeted a model only one basement's models table
 knew. The worker is a role; its name is the operator's.
 
-**The file.** `workers.json` under the rig home — the fifth file:
+**The file.** `workers.json` under the rig home; the fifth file:
 
 ```json
 {
@@ -715,7 +715,7 @@ knew. The worker is a role; its name is the operator's.
 - `model` (required): a row id of the merged models table (the
   embedded table overlaid by the operator's `models.json`). The id
   must resolve there or start refuses loud, naming the file and the
-  missing id with the table's known ids — the worker's model is a row
+  missing id with the table's known ids; the worker's model is a row
   the operator has defined, not a guess. There is **no embedded
   `workers.json`**: absent file means no workers, and that is the
   default.
@@ -724,7 +724,7 @@ knew. The worker is a role; its name is the operator's.
   negative, or non-integer refuses naming the value.
 - Unknown keys refuse (3's rule), naming the known list (`model`,
   `slots`). Present-but-malformed refuses as every other file (3);
-  absent is silent — the layer simply does not contribute.
+  absent is silent; the layer simply does not contribute.
 
 **The presence rule: no workers, no worker tools.** With no
 `workers.json`, `delegate` and `scheduler` are **not registered**:
@@ -741,7 +741,7 @@ model keeps it (the row carries it, `run-job` fires the row's model).
 loses `scheduler` and `delegate` (16 tools: the non-worker natives).
 When `workers.json` is present **and the operator's own allow is
 absent** (no `allow` key in the file, no `RIG_ALLOW`, no `-allow`),
-the default allow grows by the two worker tools — the allow default is
+the default allow grows by the two worker tools; the allow default is
 the native set, and the native set is the fleet's when the fleet is
 configured. An operator-written allow (any layer) stands as written,
 whole, as today: the file is a contract, not a filter.
@@ -753,13 +753,13 @@ with it: `Create` takes the model from its caller, never a literal
 (SPEC_STATE's scheduler section). The embedded `models.json` loses
 the `qwen3.8-workers` row (4's amendment): a `go install` user's
 embedded table is `local` alone, and the worker's row arrives with
-the operator's `models.json` — the fleet names it, the table defines
+the operator's `models.json`; the fleet names it, the table defines
 it.
 
 **What does not move.** The stores, the crontab, the runner, and
 `run-job` are unchanged in shape: a job row carries its model (set at
 create from the fleet's default or the job's own), and the runner
-fires the row's model. A `run-job` fire needs no `workers.json` — the
+fires the row's model. A `run-job` fire needs no `workers.json`; the
 row is the source of truth, so a fleet removed after jobs were created
 leaves the jobs firing on their recorded model. The `delegate`
 record, the ad-hoc job row, and the resume path are unchanged; only
@@ -779,41 +779,41 @@ Named cases, failing first (the standing rule). Fakes at the DI seam:
 `httptest` provider for the wire, real stores in `t.TempDir()` where a
 case names one, the built binary for the e2e.
 
-**config — the parse and the overlay:**
+**config; the parse and the overlay:**
 
-- `TestLoadAbsentFilesIsSilent` — no dir, no files, no AGENTS.md:
+- `TestLoadAbsentFilesIsSilent`: no dir, no files, no AGENTS.md:
   `Config` with the embedded values, `Theme` nil, `Agents` "".
-- `TestLoadEmptyDirIsSilent` — the dir exists, no files: the same
+- `TestLoadEmptyDirIsSilent`: the dir exists, no files: the same
   result (the directory's presence is not an event).
-- `TestEmbeddedDefaultsAreTheV020Values` — the embedded settings equal
+- `TestEmbeddedDefaultsAreTheV020Values`: the embedded settings equal
   the 0.2.0 flag defaults key by key (baseUrl, model, the system text,
   the 13-tool allow, retries 3, searxng, proxy, swap); the embedded
   table equals the 0.2.0 `models.Defaults` row by row (ids, window,
-  maxTokens, reserve, keepRecent) — the move is exact.
-- `TestSettingsMalformedNamesFileAndField` — subtests pinning each
+  maxTokens, reserve, keepRecent); the move is exact.
+- `TestSettingsMalformedNamesFileAndField`: subtests pinning each
   voice from 3: the retries type, the unknown key (the known list,
   sorted), the top-level not an object, the allow element.
-- `TestSettingsZeroDescendsToEmbedded` — `"retries": 0`,
+- `TestSettingsZeroDescendsToEmbedded`: `"retries": 0`,
   `"model": ""`: the embedded values (zero = unset, 2).
-- `TestSettingsPresenceKeysInFileAreExplicit` —
+- `TestSettingsPresenceKeysInFileAreExplicit`:
   `"webFetchProxy": ""` → direct (the empty choice beats the
   embedded); `"trafilatura": ""` → set empty; the keys absent →
   the embedded / nil (2, 5).
-- `TestModelsMalformedNamesFileRowAndField` — subtests: the top-level
+- `TestModelsMalformedNamesFileRowAndField`: subtests: the top-level
   not an array, a row not an object, the missing id, the duplicate id,
   the unknown role, the bad int, the unknown row key.
-- `TestModelsMergesOverEmbeddedRowByRow` — a user row for `local` with
+- `TestModelsMergesOverEmbeddedRowByRow`: a user row for `local` with
   only `window`: the user's window, the embedded maxTokens/reserve/
   keepRecent/role; a new row `brain` (full numbers): added,
   `role interactive` (the default), `effort ""`; the unlisted
   embedded row kept (4).
-- `TestModelsMergeViolationRefuses` — an overlay that breaks
+- `TestModelsMergeViolationRefuses`: an overlay that breaks
   `Reserve < Window`: the refusal names the file, the id, the clause.
-- `TestAgentsGlobalThenProject` — global `G` + project `P` →
+- `TestAgentsGlobalThenProject`: global `G` + project `P` →
   `"G\n\nP"`; `TestAgentsProjectOnly`, `TestAgentsGlobalOnly` (each
   alone, no stray blank line).
-- `TestAgentsUnreadableRefuses` — `chmod 000` (skipped when running
-  root): the voice names the path; `TestAgentsDirectoryRefuses` — a
+- `TestAgentsUnreadableRefuses`: `chmod 000` (skipped when running
+  root): the voice names the path; `TestAgentsDirectoryRefuses`; a
   directory named `AGENTS.md`: the `is a directory` refusal.
 - `TestThemeAbsentNil`, `TestThemeRawIsTheFileBytes` (the raw
   document round-trips, as written), `TestThemeMalformedRefuses` (the
@@ -821,124 +821,124 @@ case names one, the built binary for the e2e.
 
 **workers (12):**
 
-- `TestWorkersAbsentIsNoWorkers` — no file: `Config.Workers` is nil,
+- `TestWorkersAbsentIsNoWorkers`: no file: `Config.Workers` is nil,
   the default allow is the 16 non-worker natives (the two worker tools
   absent from the default allow-list).
-- `TestWorkersFileNamesTheFleet` — `{"model": "local"}`:
+- `TestWorkersFileNamesTheFleet`: `{"model": "local"}`:
   `Workers{Model: "local", Slots: 1}` (slots defaults to 1); the
   default allow grows to the 18 natives (the two worker tools present).
-- `TestWorkersModelIsRequired` — `{}` and `{"slots": 1}` refuse
+- `TestWorkersModelIsRequired`: `{}` and `{"slots": 1}` refuse
   naming the missing `model`; `{"model": ""}` refuses the same.
-- `TestWorkersModelMustResolveInTheTable` — `{"model": "brain"}` with
+- `TestWorkersModelMustResolveInTheTable`: `{"model": "brain"}` with
   no `models.json` row refuses loud, naming the file, the missing id,
-  and the table's known ids; with a `models.json` row for `brain` the
+  and the table's known ids, with a `models.json` row for `brain` the
   load succeeds and `Workers.Model` is `brain`.
-- `TestWorkersSlotsValidation` — `slots: 2` is kept; `slots: 0`,
+- `TestWorkersSlotsValidation`: `slots: 2` is kept; `slots: 0`,
   `slots: -1`, and `slots: "two"` each refuse naming the value.
-- `TestWorkersUnknownKeyRefuses` — the voice names the unknown key
+- `TestWorkersUnknownKeyRefuses`: the voice names the unknown key
   with the known list (`model`, `slots`).
-- `TestWorkersAllowGrowsOnlyOverTheDefault` — a `workers.json` plus
+- `TestWorkersAllowGrowsOnlyOverTheDefault`: a `workers.json` plus
   an operator `allow` (file): the operator's list stands as written
   (no worker tools appended when the operator narrowed); the env
   `RIG_ALLOW` and `-allow` layers stand likewise.
-- `TestDefaultJobModelMigratesOnceIntoWorkersJSON` — a
+- `TestDefaultJobModelMigratesOnceIntoWorkersJSON`: a
   `settings.json` carrying `defaultJobModel` and no `workers.json`
   mints the fleet file with that model once (the notice names the
   mint), and the second start ignores the key with a notice;
   `…DisagreeingWithTheFleetRefuses`, `…UnknownToTheTableRefuses`
   (nothing minted), `…EmptyDefaultJobModelIsANotice`.
-- `TestEmbeddedDefaults` (amended) — the embedded allow is the 16
+- `TestEmbeddedDefaults` (amended): the embedded allow is the 16
   non-worker natives, the embedded table is the one `local` row
   (no `qwen3.8-workers`), and the embedded settings carry no
   `defaultJobModel` key.
 
 **models:**
 
-- `TestCheckRoleVocabulary` — `"boss"` refuses (the voice);
+- `TestCheckRoleVocabulary`: `"boss"` refuses (the voice);
   `interactive` / `worker` pass; `""` refuses (the default is the
   caller's, 4).
-- `TestResolveEnvOverlaysTheActiveRow` — a table row plus
+- `TestResolveEnvOverlaysTheActiveRow`: a table row plus
   `RIG_MODEL_WINDOW`: the window is the env's, the rest the row's (4's
-  rule — new behavior, named).
-- `TestResolveSynthesizedRowCarriesInteractive` — the unknown-id +
+  rule; new behavior, named).
+- `TestResolveSynthesizedRowCarriesInteractive`: the unknown-id +
   env path: `Role: interactive`, `Effort: ""`.
 
 **policy/compact:**
 
-- `TestSummaryEffortIsTheRow` — a row with `Effort: "low"`: the
+- `TestSummaryEffortIsTheRow`: a row with `Effort: "low"`: the
   summary request carries `low` (both wire shapes, the adapter test's
   assertion); a row with `Effort: ""`: `medium` (the 0.2.0 bytes).
 
 **command:**
 
-- `TestModelsListShowsRoleColumn` — two rows (one `worker`), the exact
+- `TestModelsListShowsRoleColumn`: two rows (one `worker`), the exact
   lines including the column and the active marker.
 
 **cmd/rig (root + e2e, scratch homes, scripted provider):**
 
-- `TestNoUserFilesIsByteIdenticalToV020` — subtests `repl` /
+- `TestNoUserFilesIsByteIdenticalToV020`: subtests `repl` /
   `oneshot` / `runjob` against the golden request-body fixtures
   (9): the exact bytes, the worker argv, the refusal voice for an
   unknown model id.
-- `TestPrecedenceFlagOverEnvOverFileOverEmbedded` — one key
+- `TestPrecedenceFlagOverEnvOverFileOverEmbedded`: one key
   (`system`), four runs: each layer wins when the layers above are
   absent (2's rule, tested at every boundary).
-- `TestFlagPresenceWins` — `-system ""` runs with the empty system
+- `TestFlagPresenceWins`: `-system ""` runs with the empty system
   prompt (not the embedded default); `-retries 0` reaches the guard's
   floor (the clamp to 1, not the embedded 3): a passed flag wins,
   whatever its value (2's flag rule, the 0.2.0 semantics preserved).
-- `TestPrecedencePresenceKeyEnvEmptyBeatsFile` —
+- `TestPrecedencePresenceKeyEnvEmptyBeatsFile`:
   `RIG_WEB_FETCH_PROXY=""` + a file value: direct wins (2).
-- `TestRunJobSwapUrlChain` — the file's `swapUrl` reaches the busy
+- `TestRunJobSwapUrlChain`: the file's `swapUrl` reaches the busy
   check; `RIG_SWAP_URL` beats it; neither: the embedded (via the
   scripted busy endpoint).
-- `TestRunJobWorkerInheritsJobCwdAgents` — a job cwd with
+- `TestRunJobWorkerInheritsJobCwdAgents`: a job cwd with
   `AGENTS.md` (`JOB`) and a session cwd with `AGENTS.md` (`SESS`):
   the worker's system message carries `JOB` and the global, not
   `SESS` (6's worker semantics, named).
-- `TestAgentsOrderAgainstGuidelines` — a root with a
+- `TestAgentsOrderAgainstGuidelines`: a root with a
   guideline-contributing middleware plus both AGENTS files:
   `fullSystem` is `system + "\n\n" + agents + "\n\n" + guidelines`
   exactly (6's order, pinned); the existing
   `TestGuidelinesAreCollectedIntoTheSystemPrompt` (no AGENTS.md)
   stays green.
-- `TestRowEnvBeatsFileForActiveID` — a file row for the active id
+- `TestRowEnvBeatsFileForActiveID`: a file row for the active id
   plus `RIG_MODEL_WINDOW`: the in-effect row (and the `/models` line)
   carries the env's window; the file row lists under its id (4).
-- `TestDefaultJobModelFromSettings` — `scheduler create` with no
+- `TestDefaultJobModelFromSettings`: `scheduler create` with no
   model: the job row and the reply carry the file's
   `defaultJobModel`; the tool description names it (5).
-- `TestMalformedConfigRefusesBeforeStores` — a malformed
+- `TestMalformedConfigRefusesBeforeStores`: a malformed
   `settings.json`: exit 1, the voice, and no state store created
   (the refusal is before any store, 3).
-- `TestModelsFileRowListsAndSwitches` — a file-added row: `/models`
+- `TestModelsFileRowListsAndSwitches`: a file-added row: `/models`
   lists it with its role; `models <id>` switches; the next turn's
   request carries its model (4).
 
-**cmd/rig — the home (11):**
+**cmd/rig; the home (11):**
 
-- `TestRigHomeResolvesEnvOverDefault` — `RIG_HOME` set (non-empty):
+- `TestRigHomeResolvesEnvOverDefault`: `RIG_HOME` set (non-empty):
   the home is it, whatever `~/.rig` holds; unset: `~/.rig` under the
   process `$HOME`; the resolution never reads `XDG_CONFIG_HOME` (set to
   a third directory, the home is still `~/.rig`).
-- `TestMigrationRenamesTheOldHomeOnce` — old `~/.config/rig` with a
+- `TestMigrationRenamesTheOldHomeOnce`: old `~/.config/rig` with a
   marker file, `~/.rig` absent: the run starts, the marker is read from
   the new home (the config load sees it), the old directory is gone,
   and exactly one migration line is printed; the second start prints
   none (the migration is once, by construction).
-- `TestMigrationNoOps` — subtests: the old home absent (nothing to
+- `TestMigrationNoOps`: subtests: the old home absent (nothing to
   migrate, silent); the home already present (the old directory left
   intact, silent); a failed rename (a file where the home would be)
   refuses the startup loud (the rename's reason, the two paths).
-- `TestRigHomeOverrideBeatsTheOldHome` (e2e) — `RIG_HOME` pointing at
+- `TestRigHomeOverrideBeatsTheOldHome` (e2e): `RIG_HOME` pointing at
   a home with `settings.json` (`FROM-RIG-HOME`) while `~/.config/rig`
   holds a different one (`FROM-OLD`): the request carries
   `FROM-RIG-HOME`, and the old directory is left intact (the present
   home wins).
-- `TestMigrationNeverRunsUnderAnOverride` — `RIG_HOME` set to an
+- `TestMigrationNeverRunsUnderAnOverride`: `RIG_HOME` set to an
   **absent** directory, the old `~/.config/rig` present: no rename, no
   migration line, and the old home untouched (the marker file still
-  there) — the override is isolation, not a move order (the
+  there); the override is isolation, not a move order (the
   `RIG_HOME=$(mktemp -d)` shape), whatever the override holds.
 
 The suite is green on a box with no model loaded: every case is
@@ -950,21 +950,21 @@ PR A carries this spec file only; the diffs below land with PR B.
 
 - **SPEC_CORE**: the layout gains `config/` (the leaf, the two
   embedded files). Nothing else: `core/` zero diff (10).
-- **SPEC_COMPACT**: 2 — the row gains `role` / `effort`;
+- **SPEC_COMPACT**: 2: the row gains `role` / `effort`;
   `models.Defaults` leaves code for the embedded `config/models.json`;
   `Resolve`'s env overlays the active row's fields and the
-  synthesized row carries its role. 3 — the summary call's effort is
+  synthesized row carries its role. 3; the summary call's effort is
   the row's, `"medium"` the field's default. The testing section gains
   the named cases.
-- **SPEC_COMMANDS**: the non-goal "No config" is reversed, named; 6 —
+- **SPEC_COMMANDS**: the non-goal "No config" is reversed, named: 6:
   the `/models` line gains the role column; the table's source is the
   merged table plus the resolved active row.
-- **SPEC_HARDENING**: 6's guidelines collection — the AGENTS.md
+- **SPEC_HARDENING**: 6's guidelines collection: the AGENTS.md
   placement is named against it (system → AGENTS.md → guidelines, 6).
-- **SPEC_STATE**: one named line — the scheduler store keeps its
+- **SPEC_STATE**: one named line: the scheduler store keeps its
   `defaultModel` constant as the direct-`Create` fallback (5, 8); no
   schema change, no path change. Amended by 12: the constant is cut
-  with the key — `Create` takes the model from its caller (a job's own
+  with the key; `Create` takes the model from its caller (a job's own
   or the fleet's), never a literal; the tools follow the config (no
   workers, no worker tools), and `run-job` still fires the row's
   model (the row is the source of truth, no `workers.json` needed at
@@ -994,7 +994,7 @@ PR A carries this spec file only; the diffs below land with PR B.
   configured), and the embedded table is the one `local` row.
 - **CHANGELOG + Version**: `0.2.0` → `0.3.0`, the test updated (10).
   12 lands under `[Unreleased]` (the worker fleet, the cut key, the
-  presence rule, the regenerated goldens) — a 0.19.0 bump is the
+  presence rule, the regenerated goldens); a 0.19.0 bump is the
   release's, not this change's.
 - **SPEC_PLUGINS** (new, 0.4.0): the plugins' home is this spec's
   decision 11 (`~/.rig/plugins`); the kernel host's materialisation
@@ -1009,17 +1009,17 @@ What this is not:
   exposed; 10 owns its schema and its rendering (7).
 - A per-cwd `settings.json` (the cwd carries `AGENTS.md` only) and a
   `/config` command (the file is the interface; the refusal teaches).
-- Config reload: the files are read once at start; the `models`
+- Config reload: the files are read once at start: the `models`
   switch and the `new` handoff read the runtime table and the root's
   state, not the file.
 - A config schema version (the unknown-key refusal is the version
   signal) and env expansion in file values (the file is data).
 - New env vars, new flags, or a new dep: the `RIG_*` surface and the
   flag names are unchanged (8, 10); JSON only, stdlib (1).
-- The loop: zero diff through this — if the TUI (10) needs a loop
+- The loop: zero diff through this: if the TUI (10) needs a loop
   change because of config, the freeze was premature and 7 or 9 is
   reopened first, per the roadmap.
 
-The loop at the end of this is the loop of the end of 9: L1–L8 —
+The loop at the end of this is the loop of the end of 9: L1–L8:
 byte-identical. The runtime becomes 0.3.0: config-shaped, still
 frozen.

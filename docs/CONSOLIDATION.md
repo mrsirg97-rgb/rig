@@ -2,7 +2,7 @@
 
 A point-in-time read: the result of the per-package refactor pass
 (rig-*-refactor branches) and the post-refactor review of this codebase.
-Each package now carries its own `PACKAGE.md` — the package spec and
+Each package now carries its own `PACKAGE.md`; the package spec and
 gotchas, with the prose removed from the code. This note is the
 consolidation read: what streamlines, what does not, the system-prompt
 audit, and the runtime security audit. Everything it lists as remaining
@@ -45,7 +45,7 @@ little structural consolidation that is both safe and beneficial.
   is a smell. The duplication is trivial. Keep.
 - `toolset.Table.List()` and `plugins.Tool.File()` are exported but used
   only by tests. They are reasonable accessors; keep.
-- The store/ and tool/ packages are untouched by this pass; they are the
+- The store/ and tool/ packages are untouched by this pass: they are the
   remaining refactor candidates (store/state, store/rem, store/scheduler,
   store/todo, and the tool/* leaves), each a separate rig-<pkg>-refactor
   branch when the process resumes.
@@ -63,26 +63,26 @@ Surfaces reviewed: the embedded system prompt (`config/settings.json`
   coding agent. Use the provided tools to inspect, change, and run things
   in the working directory. Answer in plain text when done." It states the
   contract (tool use), the domain (the working directory), and the output
-  shape (plain text). No change — good is good.
+  shape (plain text). No change; good is good.
 - `summary_prompt.txt` is clear: third-person factual summary, fold prior
   summaries, "answer with the summary only". The one ambiguity worth
   noting: it tells the model to keep "what is still true" and drop "what
-  is done" — fine as written; no change.
+  is done"; fine as written; no change.
 - `createTemplate` is terse to a fault: it references `SPEC_SANDBOX` (a
   spec label the model may not have) and assumes the model knows the
   `plugins` contract. It is a steer prompt, not the system prompt;
   the reload's own Description carries the contract the model sees on the
-  wire. Leave as-is — tightening would cost the model context it already
+  wire. Leave as-is; tightening would cost the model context it already
   gets from the tool descriptions.
 
 ## runtime security audit
 
 Findings (green unless noted):
 
-- **Deny by default**: `perm.Allowlist` refuses unlisted tool names; the
+- **Deny by default**: `perm.Allowlist` refuses unlisted tool names: the
   embedded allow-list is the tool surface. `AllowlistWithDoor` adds the
   second door (SPEC_PLUGINS 7): a name the live plugin table carries as a
-  plugin passes though absent from the static list — an installed plugin's
+  plugin passes though absent from the static list; an installed plugin's
   presence in `plugins/` root is its own admission. Denials return the
   message as both content and error so `guard.Bound` can bound the
   repetition.

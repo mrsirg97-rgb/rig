@@ -4,22 +4,22 @@
 
 The sqlite persistence layer: every store package names its context with
 `DB` (a `sqlx.DB` alias) and opens its own schema file. The substrate is
-the generated accessors (the `ddl`/`domain` projections — generated, not
+the generated accessors (the `ddl`/`domain` projections; generated, not
 edited); this package owns the handwritten open path and the `sqlx`/`lazy`
 seams the generated stack executes through.
 
 ## What it includes
 
-- `Open(path, statements, wantVersion, migrate...)` — opens (or creates)
+- `Open(path, statements, wantVersion, migrate...)`: opens (or creates)
   the sqlite file, applies the pragmas, reads integrity, reads
   `meta.schema_version` and refuses before any statement runs when the
   file is newer than the build or older with no migration passed, then
   applies the schema statements in order and runs the migrations in one
   transaction (the version bump commits with them). Returns the
   migrations' report beside the handle.
-- `DB = sqlx.DB` — the store handle.
-- `lazy` — the deferred result under direct accessor execution.
-- `sqlx` — the stdlib `sql` seam: serializable transactions on the ctx,
+- `DB = sqlx.DB`: the store handle.
+- `lazy`: the deferred result under direct accessor execution.
+- `sqlx`: the stdlib `sql` seam: serializable transactions on the ctx,
   and the array scanner.
 
 ## How it is consumed
@@ -33,7 +33,7 @@ seams the generated stack executes through.
 ## Gotchas
 
 - The pragmas ride the DSN (`_pragma=…`), applied by the driver at
-  connection init — a pragma `Exec`'d against one pooled connection would
+  connection init; a pragma `Exec`'d against one pooled connection would
   leave every other connection without it. The cross-process posture (a
   runner writing while a session reads) is WAL + busy_timeout +
   `_txlock=immediate` (every transaction takes the RESERVED lock at begin).
@@ -41,5 +41,5 @@ seams the generated stack executes through.
   and a fresh one created; quarantined names the aside so callers surface
   it. Never silently truncated. A schema/policy error surfaces and is
   never quarantined.
-- `readVersion` inserts `schema_version` on first open; a mismatch refuses
+- `readVersion` inserts `schema_version` on first open: a mismatch refuses
   loudly naming both, and an upgrade without a migration is a mismatch.

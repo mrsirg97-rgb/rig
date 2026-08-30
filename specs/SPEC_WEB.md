@@ -9,11 +9,11 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
 
 ## goals
 
-- web_search: SearXNG JSON over net/http; endpoint from env
+- web_search: SearXNG JSON over net/http: endpoint from env
   (RIG_SEARXNG_URL, default pane's http://127.0.0.1:8888); results
   mapped to title/url/snippet with the 300-char snippet cap and the
   maxResults slice (1..20, default 5), loud `no results for "<query>"`.
-- web_fetch: pane's guarded fetch verbatim — http(s) only, DNS resolution
+- web_fetch: pane's guarded fetch verbatim: http(s) only, DNS resolution
   refuses private and link-local space with a readable error, every
   redirect hop re-checked, hop cap, textual content types only, declared
   Content-Length and streaming byte cap (5 MiB) with loud truncation,
@@ -32,14 +32,14 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
 - No new dependencies: `go.mod` unchanged (net/http + os/exec are
   stdlib).
 - No loop change: no new events, no middleware, no hooks.
-- No caching, no cookie jar, no TLS pinning, no streaming to the model —
+- No caching, no cookie jar, no TLS pinning, no streaming to the model:
   fetch returns one capped text blob, as pane's does.
 - No bundled trafilatura: no venv rig owns, no pip install. Extraction
   is a soft dependency and degrades loudly instead of bootstrapping.
 - No live-network tests: every case runs against httptest servers and
   injected seams; the suite is green on a box with no SearXNG and no
   trafilatura.
-- No search-side guard: SearXNG is loopback by design (127.0.0.1); the
+- No search-side guard: SearXNG is loopback by design (127.0.0.1): the
   fetch tool carries the guard.
 
 ## layout
@@ -61,12 +61,12 @@ tool/web/
 pattern):
 
 ```go
-// search.go — concrete types unexported with named constructors,
+// search.go; concrete types unexported with named constructors,
 // the core/tool.go house shape
 const DefaultSearXNG = "http://127.0.0.1:8888" // pane's PI_SEARXNG_URL default
 type search struct{ /* searchURL, transport, the 15s budget */ }
 func Search() *search                     // pane's default: the web-tools compose
-func NewSearch(cfg SearchConfig) *search  // cfg: BaseURL (pane appends /search; so does this), Do seam
+func NewSearch(cfg SearchConfig) *search  // cfg: BaseURL (pane appends /search, so does this), Do seam
 func (s *search) Name() string            // "web_search"
 
 // fetch.go
@@ -110,8 +110,8 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
   capability family plus registration lines at the root. tool/file's
   three tools set the precedent.
 - **Extraction: the documented external, not a bundled dependency.**
-  trafilatura is a soft dependency — without it the tool still works
-  (pane's htmlToText is a real path, not a stub) — so it degrades loudly
+  trafilatura is a soft dependency; without it the tool still works
+  (pane's htmlToText is a real path, not a stub), so it degrades loudly
   instead of bootstrapping. The python kernel's venv exists because the
   kernel is a hard dependency with no fallback; installing trafilatura
   would add a second venv (or grow pane's), a pip-install side effect on
@@ -120,7 +120,7 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
   `~/.pi/agent/kernel-venv/bin/trafilatura` first (interop with pane,
   the same venv the python kernel prefers), then `trafilatura` on PATH.
   `RIG_TRAFILATURA` is the operator's explicit choice (a path, or
-  empty to disable) — the RIG_PYTHON pattern. Pane's
+  empty to disable); the RIG_PYTHON pattern. Pane's
   `string | null | undefined` opts map onto `*string` exactly: nil =
   default resolution, non-nil = explicit (empty = off).
 - **The fallback says so (rig over pane).** pane falls back to
@@ -134,12 +134,12 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
   non-greedy patterns (equivalent for matched pairs, the only sane HTML);
   the named case exercises the same input.
 - **The guard is check-and-use, per hop.** resolve, check all
-  addresses, dial — and the Location of every redirect hop re-runs the
+  addresses, dial, and the Location of every redirect hop re-runs the
   same guardedUrl against the previous URL as base, before the next
   fetch. A redirect into private space is refused with the same voice as
   the first hop (pane's named case). The proxy is not guarded: it is
   loopback by construction, and guarding it would need a second policy.
-- **Timeout is the whole fetch, all hops included** — pane's signal is
+- **Timeout is the whole fetch, all hops included**: pane's signal is
   created once outside the loop; Go's ctx carries the same shape
   (WithTimeout over the fetchGuarded call). A cancelled caller ctx
   returns the context error; the timeout voice names the ms and the
@@ -155,7 +155,7 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
   `SearXNG search failed: HTTP <status>`; the fetch errors keep the
   `web_fetch: ` prefix pane's execute wraps. One named port difference:
   a refused connection is Go's voice (`dial tcp ...: connect:
-  connection refused`), not Node's ECONNREFUSED — the named case asserts
+  connection refused`), not Node's ECONNREFUSED; the named case asserts
   the loud shape, not the OS string.
 - **Query strings are built by hand**, in pane's order
   (`?q=<escaped>&format=json`), not url.Values (which would sort the

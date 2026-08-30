@@ -4,18 +4,18 @@
 
 The web tools: `web_search` (the local SearXNG instance over net/http) and
 `web_fetch` (a guarded HTTP reader with trafilatura extraction and a
-stdlib text pass). Stdlib only — no third-party Go client, no new venv.
+stdlib text pass). Stdlib only; no third-party Go client, no new venv.
 
 ## What it includes
 
-- `web_search` — a `core.Tool` over the SearXNG `/search` JSON.
-- `web_fetch` — a `core.Tool`: resolves the host, refuses private
+- `web_search`: a `core.Tool` over the SearXNG `/search` JSON.
+- `web_fetch`: a `core.Tool`: resolves the host, refuses private
   addresses (SSRF guard), follows redirects with re-checks and a hop cap,
   extracts via trafilatura or the stdlib text pass.
 
 ## How it is consumed
 
-- Registered at the root as native tools; `WebFetchProxy`/`Trafilatura`
+- Registered at the root as native tools: `WebFetchProxy`/`Trafilatura`
   presence-aware settings feed the fetch path.
 
 ## Gotchas

@@ -9,27 +9,27 @@ surface (the natural-key dedup seek, the recall arms, the browse
 ordering, the prune selection, the supersession-clearing UPDATE, and the
 fts rowid bookkeeping).
 
-Rem is deliberate (SPEC_STATE): every rem operation is something chose —
+Rem is deliberate (SPEC_STATE): every rem operation is something chose:
 the model learns/recalls/reflects/prunes through its tool, the operator
 prunes through the `/rem` verb; nothing is written by a compaction and
 nothing is read into the prompt by a session start.
 
 ## What it includes
 
-- `rem.go` — the store: write/read operations, id minting, the raw
+- `rem.go`: the store: write/read operations, id minting, the raw
   statements, prune and supersession, the repo scope, the migration, and
   the `/rem` command's reads (`List`, `Show`, `Forget`).
-- `path.go` — `FilePath(home)`, the store's file: `<home>/rem/rem.sqlite`.
-- `recall.go` — the pure core: consolidation arithmetic, the lexical
+- `path.go`: `FilePath(home)`, the store's file: `<home>/rem/rem.sqlite`.
+- `recall.go`: the pure core: consolidation arithmetic, the lexical
   shapes of the two arms (FTS and trigram), reciprocal rank fusion
   (RRF, k=60). Zero I/O.
-- `recall_db.go` — recall's DB-level path: the two named raw arms, fusion
+- `recall_db.go`: recall's DB-level path: the two named raw arms, fusion
   over their rankings, browse, and the effective-strength blend.
-- `metadata/rem.go` — hand-written metadata for the rem store.
+- `metadata/rem.go`: hand-written metadata for the rem store.
 
 ## How it is consumed
 
-- `tool/rem` calls the read/write operations; the `/rem` command's
+- `tool/rem` calls the read/write operations: the `/rem` command's
   closures (`List`/`Show`/`Forget`) are wired at the root
   (SPEC_COMMANDS 11). The compaction reflection seam is cut.
 - Ids are minted from a meta counter inside the caller's transaction:
@@ -43,10 +43,10 @@ nothing is read into the prompt by a session start.
   or the cwd itself outside a repo. The `scopePath` git probe is memoized
   per cwd (pure, deterministic); a relative common dir resolves against
   the cwd, and an echoed option (old git passes unknown flags through,
-  exit 0) is not a path — the cwd stands in.
+  exit 0) is not a path; the cwd stands in.
 - The deliberate project (SPEC_STATE) is resolved at the tool adapter,
   not here: `tool/rem` hands the store a `project` path as its `cwd`, so
-  `writeScope`/`readScopes` are unchanged — the project a fact belongs
+  `writeScope`/`readScopes` are unchanged; the project a fact belongs
   to is a choice, not an accident of where rig started.
 - The schema bump (1 → 2) carries `Migration(cwd)`: a one-time idempotent
   re-scope of rows under the old cwd-hash to the repo's, and a file-wide
@@ -62,7 +62,7 @@ nothing is read into the prompt by a session start.
 - Recall's effective computation uses exactly the consolidation inputs, so
   the two paths agree: effective-at-recall equals what consolidate would
   persist, and consolidating later cannot double-count.
-- The trigram arm uses the pg_trgm convention (two-space padding); the
+- The trigram arm uses the pg_trgm convention (two-space padding): the
   fuzzy arm enforces a minimum absolute overlap and a containment floor.
 - Fusion is reciprocal rank (k=60) over the arms' rankings, deduped by
   memory id, annotated with the reaching arm.

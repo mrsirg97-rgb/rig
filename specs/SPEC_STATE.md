@@ -124,7 +124,7 @@ Metadata is written by hand in lift's four-tag grammar (`primary`, `alias`,
 `link`, `dictionary`) with `// table:"..."` on the struct. Copy the syntax
 from `lift/cmd/rem/metadata/*.go`. Every link pairs with a plain alias on
 the same column: the domain camera skips `HasLink` properties in the
-column list and expects the paired alias to carry it — an unpaired link
+column list and expects the paired alias to carry it; an unpaired link
 silently drops the FK from the generated INSERT. It is lift working as
 designed, and the pairing is how every dbmeta-generated metadata file is
 shaped. Column names and types below are pane's;
@@ -148,7 +148,7 @@ The session transcript as rows. One file per session under
 - `messages`: seq (primary), session_id (link sessions), role, content,
   reasoning (nullable; filled by the recorder, deliverable 7), tool_id (nullable),
   created_at.
-- `tool_calls`: id (primary; the provider's call id), message_seq (link
+- `tool_calls`: id (primary: the provider's call id), message_seq (link
   messages), name, args (TEXT json), result (TEXT, nullable until it lands),
   err (nullable), started_at, ended_at.
 - `usage`: message_seq (primary, link messages), prompt, completion,
@@ -156,45 +156,45 @@ The session transcript as rows. One file per session under
 - `files`: session_id + path (primary), hash, mtime. `Session.Files`
   persisted, so a resumed session keeps its drift checks. `files` pairs its
   composite primary with `session_id` directly and carries no Session link
-  while its siblings do — harmless (no FK is emitted) but named for
+  while its siblings do; harmless (no FK is emitted) but named for
   consistency. Tool results live on `tool_calls`, not as role=tool rows.
   Session resume (deliverable 7's `state.Resume`, the root's `-resume`)
-  projects `[]core.Message` back from the transcript rows — no schema
+  projects `[]core.Message` back from the transcript rows; no schema
   change was owed, and none was taken; deliverable 9's `sessions` command
   reads the same rows. After a compaction (SPEC_COMPACT 5) the marker is
   the projection interface: resume starts from the last `[compaction]`
-  row when one exists — the window is the summary row and everything
-  after it — so the compacted shape rebuilds, not the full history with a
+  row when one exists; the window is the summary row and everything
+  after it, so the compacted shape rebuilds, not the full history with a
   summary after the tail it summarizes.
 - `faults`: seq (primary), session_id, at, message.
 
 The recorder is a leaf that receives what the loop already emits: it wraps
 the `Frontend` (an observing Frontend that forwards to the real one) and
-sources its rows from the loop's events — the transcript, `ToolStart`/
+sources its rows from the loop's events; the transcript, `ToolStart`/
 `ToolResult` (the guarded result, as the loop appends it), reasoning, usage
 with the cache fields. It appends a row per event inside its own short
 transaction, so a kill leaves every completed row readable. A `TurnEnd`
 discards the unlanded partial of a turned turn; each turn boundary upserts
-the file provenance. No loop change — and, with the middleware tap retired
+the file provenance. No loop change, and, with the middleware tap retired
 (deliverable 7), the schema did not change either.
 
 SPEC_COMPACT 5: a `Compacted` event lands the summary as a marked user
 row (`role = "user"`, the content verbatim with the `[compaction] `
 marker) plus a usage row against that row's seq, then re-lands the kept
-tail after it — fresh rows (fresh seqs), the assistant calls with
+tail after it; fresh rows (fresh seqs), the assistant calls with
 recorder-minted fresh ids (the `tool_calls.id` primary key), name/args/
 result verbatim, the earlier rows staying as the autopsy. No schema
 change: the marker is the contract, and the rows are existing shapes.
 
 The `sessions` command (deliverable 9, SPEC_COMMANDS) and the `sessions`
 tool (`tool/sessions`) both read this store, and both are thin adapters
-over the same verbs — no SQL in either. The verbs: `ListSessions(ctx, db,
+over the same verbs; no SQL in either. The verbs: `ListSessions(ctx, db,
 limit)` returns the workspace's session rows, newest first, each carrying
 the model, the version, the turns count (the session's `role = 'user'`
-rows minus the `[compaction] ` summary rows — transcript machinery, not
+rows minus the `[compaction] ` summary rows; transcript machinery, not
 prompts), and the fault count. `limit` is named; `state.ListCap` (50) is
 the default and the maximum (a glance, not an archive). An unclosed row
-(`ended_at` NULL) renders as `exit open` — the one place that word
+(`ended_at` NULL) renders as `exit open`; the one place that word
 appears; the store's exit vocabulary stays `ok | fault | cancelled`.
 `SessionFaults(ctx, db, sessionId)` returns one session's fault rows,
 newest first, and `SessionUsage(ctx, db, sessionId)` its usage total. The
@@ -217,7 +217,7 @@ deliverable 9) or plain `sqlite3`.
 One store, every row scoped (the project identity, SPEC_STATE's scope
 law; see the migration section): a queue is the repo's, not the
 directory rig happened to start in, and the identity partition is never
-a filename — it is the short sha1 of the git common dir (`store/scope`),
+a filename; it is the short sha1 of the git common dir (`store/scope`),
 falling back to the cwd hash outside a repo.
 
 - `meta`: key (primary), value.
@@ -227,15 +227,15 @@ falling back to the cwd hash outside a repo.
 - `tasks`: scope + id (primary, `tN` per scope), text (unique per scope via
   extra.sql), status (pending|in_progress|done|failed), pos, created_seq
   (link events), updated_seq (link events).
-- `task_deps`: scope + task_id + depends_on (primary; both link tasks within
+- `task_deps`: scope + task_id + depends_on (primary: both link tasks within
   one scope), created_seq.
-- `extra.sql`: `tasks_pos_seq` index on (scope, pos, created_seq); the unique
+- `extra.sql`: `tasks_pos_seq` index on (scope, pos, created_seq): the unique
   index on (scope, text).
 - Semantics kept verbatim, per scope: projection rebuilt from the log on
   every call and never trusted; replay is total and skips inapplicable rows;
   positions minted never mutated; move via events; claim semantics (start
   claims, foreign complete refuses, fail frees; completing your own
-  unclaimed pending task implicitly claims and completes — start+complete,
+  unclaimed pending task implicitly claims and completes; start+complete,
   both events, the echo noting auto-started); compaction past 1000 events
   snapshots the queue and resets the epoch; dependsOn DAG validated at the
   boundary, cycles refused, completion gated, blocked skipped by `next`.
@@ -248,8 +248,8 @@ falling back to the cwd hash outside a repo.
   Two raw arms are owned and named as such: the event scan that rebuilds
   the fold (no ordered scan accessor is generated) and the projection
   rewrite (no bulk-replace accessor is generated).
-- **Migration (1 → 2), lossless.** Todo rows carried no cwd — the filename
-  was the identity — so the fold keys on the files existing (the
+- **Migration (1 → 2), lossless.** Todo rows carried no cwd: the filename
+  was the identity, so the fold keys on the files existing (the
   scheduler's lesson: a fresh `todo.sqlite` folds too): every
   `<12-hex>.sqlite` in the todo dir folds into `todo.sqlite` with
   `scope = <that hash>`, verbatim, rows in event order, the legacy files
@@ -259,7 +259,7 @@ falling back to the cwd hash outside a repo.
   `scope.Key(cwd) != scope.ShortHash(cwd)` and no `migrated:<oldScope>`
   marker, that cwd-hash's rows re-scope to the repo scope, `INSERT OR
   IGNORE` the marker, counted once on stderr, one transaction. The fold is
-  in filename order, rows in event order — reproducible.
+  in filename order, rows in event order; reproducible.
 
 ### rem (port; REM_SPEC.md D, E, F, G)
 
@@ -270,8 +270,8 @@ falling back to the cwd hash outside a repo.
   nullable), created_at, last_accessed_at, last_consolidated_at,
   content_md5.
 - `trigrams`: memory_id (link memories) + gram.
-- `extra.sql`: unique (scope, content_md5); (scope, created_at); trigram
-  indexes; and the ON DELETE SET NULL behaviour of `superseded_by` (the DDL
+- `extra.sql`: unique (scope, content_md5): (scope, created_at); trigram
+  indexes, and the ON DELETE SET NULL behaviour of `superseded_by` (the DDL
   camera leaves foreign keys off by design, so the store's prune clears
   supersession references itself before deleting, in the same transaction;
   named test).
@@ -279,7 +279,7 @@ falling back to the cwd hash outside a repo.
   the insert/update/delete triggers pinned in REM_SPEC E. FTS5 is compiled
   into modernc's sqlite; recall's shipped policy on capability absence
   degrades to fuzzy-only (REM_SPEC's named case), and a driver without
-  the table fails loudly at schema application — unreachable under the
+  the table fails loudly at schema application; unreachable under the
   bundled driver.
 - Recall stays two arms plus reciprocal rank fusion, project-first
   global-fill, effective strength at recall, checkpointed decay at prune.
@@ -288,8 +288,8 @@ falling back to the cwd hash outside a repo.
   the store owns and are named as such.
 - **Rem is deliberate.** Every rem operation is something chose: the model
   learns/recalls/reflects/prunes through its tool, the operator prunes
-  through the `/rem` verb. Nothing is written by a compaction — the summary
-  is context, not memory (SPEC_COMPACT 6, cut) — and nothing is read into
+  through the `/rem` verb. Nothing is written by a compaction; the summary
+  is context, not memory (SPEC_COMPACT 6, cut), and nothing is read into
   the prompt by a session start (the root's remembered segment, cut; the
   system prompt names the rule).
 - **The project a fact belongs to is a choice, not an accident of where
@@ -299,12 +299,12 @@ falling back to the cwd hash outside a repo.
   `writeScope`/`readScopes` for that call (worktree-safe; `~` expands at
   the `middleware/paths` boundary). The why is the failure it fixes: a
   session in `~/Projects` learning about `~/Projects/rig` files facts
-  into a scope nobody recalls from inside the repo — the directory rig
+  into a scope nobody recalls from inside the repo; the directory rig
   happened to start in, not the repo the fact describes. `project` +
   `scope: global` refuses by name (a global memory has no project), and
   the label stays the resolved path's base name. The description carries
   one Guidelines clause: name `project` when the fact belongs to a repo
-  you did not start in (mind the menu-budget case — the clause is short
+  you did not start in (mind the menu-budget case; the clause is short
   by design).
 - **Scope is a repo identity, not a cwd.** scope = the absolute git common
   dir of the cwd (`git rev-parse --git-common-dir`, resolved against the
@@ -315,14 +315,14 @@ falling back to the cwd hash outside a repo.
   migration, one transaction per open: rows under an old cwd-hash scope
   now inside a repo re-scope to the repo's, and rows with source "session
   compaction" are removed (never deliberate), counted once on stderr. The
-  re-scope is keyed on the launch cwd — rows learned from another
+  re-scope is keyed on the launch cwd; rows learned from another
   directory of the same repo move when rig is next started there (a hash
   cannot be walked back to its cwd). Two processes opening the same file
   at once both succeed (the marker insert is `OR IGNORE`; the transaction
   serialises them). Rejected: reading both scopes forever.
 - The `/rem` command (SPEC_COMMANDS 11): `rem [list|show|forget]` over
-  the same store — list the live memories (project then global, one line
-  each), show by id, forget by id (this project's or global only — ids
+  the same store; list the live memories (project then global, one line
+  each), show by id, forget by id (this project's or global only; ids
   are file-wide, so another project's id is refused by name). A pin verb
   was rejected there: the operator reads and prunes; keeping is the
   model's learn/reflect.
@@ -342,7 +342,7 @@ post-merge corrections)
   once on the schema bump (see the migration paragraph below).
 - Migration (schema 1 → 2, one-time, counted once on stderr): for every
   `cwd-<12hex>.sqlite` under `scheduler/`, fold its live jobs
-  (state != `removed`) into `global.sqlite` — re-mint ids (`j1`×N → the
+  (state != `removed`) into `global.sqlite`; re-mint ids (`j1`×N → the
   next free `jN` in the global fold), keep each job's `cwd` (it is on the
   row), bring each job's `runs` rows along re-keyed to the new id, rewrite
   that job's crontab line from `cwd-<hash>:jN` to the new `jN` (the lock
@@ -375,7 +375,7 @@ post-merge corrections)
   unknown id, or a removed one, is refused by name; a `name` change keeps
   the store-wide uniqueness (the job's own name is not a collision). One
   `update` op is appended and the fold overlays only the fields the args
-  carry: the id and the runs stay. Rejected, named: remove + create — the
+  carry: the id and the runs stay. Rejected, named: remove + create; the
   id re-mints, the runs orphan, and two crontab moves express one change;
   the trail surviving an edit is the point of having one. A cadence change
   rewrites the job's one crontab line under the same key; a paused job
@@ -384,17 +384,17 @@ post-merge corrections)
   the state.
 - The `defaultModel` fallback constant is cut (SPEC_CONFIG 12, with
   the settings' `defaultJobModel` key): `Create` takes the model from
-  its caller, never a literal — the tool passes the fleet's model
+  its caller, never a literal; the tool passes the fleet's model
   (SPEC_CONFIG 12) or the job's own, the dashboard's create fills the
-  fleet's model (SPEC_SERVE) — and a direct `Create` with an empty
+  fleet's model (SPEC_SERVE), and a direct `Create` with an empty
   model refuses by name. The worker's model is the operator's: named
   by `workers.json`, defined by the operator's `models.json` row,
   baked into no binary. No schema change, no path change: the job row
   carries its model (set at create), and `run-job` fires the row's
-  model — a fire needs no `workers.json`, so a fleet removed after
+  model; a fire needs no `workers.json`, so a fleet removed after
   jobs were created leaves them firing on their recorded model. The
   tools follow the config: no fleet, no worker tools registered
-  (SPEC_CONFIG 12's presence rule) — the store and the runner are
+  (SPEC_CONFIG 12's presence rule); the store and the runner are
   unchanged underneath.
 
 ## interfaces
@@ -416,7 +416,7 @@ move|read}` (`next` is not a verb: its semantics ride the render's next
 pointer, blocked-skipping), `rem {learn|recall|reflect|prune}`, `scheduler {create|
 update|list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
 not pane's: a read-only introspection of the session store, absent from
-the root's `mutatingNatives` and from the concurrent read set — it opens
+the root's `mutatingNatives` and from the concurrent read set; it opens
 a store, like `todo`/`rem`/`scheduler`, so it is not a pure observation).
 Descriptions and schema property text are pane's promptGuidelines, lowercase, terse.
 
@@ -450,8 +450,8 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   function in the store package is the implementer's choice per store;
   either way it is one function, tested by replaying pane's fixture logs.
 - **The state store is a recorder, not a dependency of the loop.** It hangs
-  off `Frontend.Notify`; with deliverable 7's loop events the tool rows are
-  event-sourced and the middleware tap is retired — the schema had already
+  off `Frontend.Notify`, with deliverable 7's loop events the tool rows are
+  event-sourced and the middleware tap is retired; the schema had already
   been designed for that day (tool_calls has started_at/ended_at, messages
   has reasoning), so nothing in the store changed.
 - **One transaction per tool call, serializable, opened in the adapter.**
@@ -462,7 +462,7 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   and todo's claim semantics attribute to it. This is the one `core/` change
   in this spec and is named as such in its PR (SPEC_CORE session section
   updated in the same PR).
-- **Generated getters return `(nil, nil)` on absent keys** — lazy.go's
+- **Generated getters return `(nil, nil)` on absent keys**: lazy.go's
   absent-read, by design; no panic. state.go additionally guards the nil
   row at its boundary with a named error (`state: …: no such row`).
 
@@ -486,7 +486,7 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
 - Recorder: kill a `-p` run mid-turn (context cancel inside a scripted tool)
   and assert every row that completed before the kill is readable; assert
   the session row is closed with `exit=cancelled` on the clean path.
-- Corruption: a truncated file at Open is quarantined and named; FTS5
+- Corruption: a truncated file at Open is quarantined and named: FTS5
   absence at Open is a loud refusal.
 - `go build ./...` from a clean clone of rig is a test: no lift import
   survives generation.

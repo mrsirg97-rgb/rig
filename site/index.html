@@ -196,15 +196,15 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="tname-done">web_search</span>   <span class="ok">✓</span>   <span class="dim">0.6s</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">rig is a minimalist agentic harness. one job: the turn — assemble context,
+    <div class="msg reveal">rig is a minimalist agentic harness. one job: the turn; assemble context,
     run the tools, feed the results back, repeat. what makes it not another framework:</div>
     <div class="gap sm reveal"></div>
-    <div class="ln li reveal"><span class="lg">•</span> the loop is 371 lines and frozen. growth happens behind five seams — provider, frontend, tools, middleware, policy — never in the loop. a gate in the test suite refuses a diff that touches it.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the loop is 371 lines and frozen. growth happens behind five seams; provider, frontend, tools, middleware, policy; never in the loop. a gate in the test suite refuses a diff that touches it.</div>
     <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel on an event loop: goroutines post completions, one consumer applies them in call order. no locks, no races, the transcript stays ordered.</div>
-    <div class="ln li reveal"><span class="lg">•</span> the walls are named. an allowlist, a retry guard, an approval gate, result bounds, a plugin landing zone, a bwrap jail for background workers — and every refusal says why, so the model adjusts instead of flailing.</div>
-    <div class="ln li reveal"><span class="lg">•</span> memory is deliberate. nothing writes itself into your prompt; the model recalls, learns, and supersedes by id. tasks, memory, and schedule are scoped to the repo — worktrees share one plan.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the walls are named. an allowlist, a retry guard, an approval gate, result bounds, a plugin landing zone, a bwrap jail for background workers, and every refusal says why, so the model adjusts instead of flailing.</div>
+    <div class="ln li reveal"><span class="lg">•</span> memory is deliberate. nothing writes itself into your prompt; the model recalls, learns, and supersedes by id. tasks, memory, and schedule are scoped to the repo; worktrees share one plan.</div>
     <div class="ln li reveal"><span class="lg">•</span> every behavior is a sentence in specs/ with a test pinning it; the wire is byte-pinned against golden request bodies. specs first, then failing tests, then code.</div>
-    <div class="ln li reveal"><span class="lg">•</span> one static binary, stdlib-only core. a TUI, a piped CLI, a phone-sized dashboard. sessions persist and resume across restarts — it's a daily driver, not a one-shot; rig -update replaces it in place.</div>
+    <div class="ln li reveal"><span class="lg">•</span> one static binary, stdlib-only core. a TUI, a piped CLI, a phone-sized dashboard. sessions persist and resume across restarts; it's a daily driver, not a one-shot; rig -update replaces it in place.</div>
     <div class="gap sm reveal"></div>
     <div class="msg reveal dim">the models that run in rig work on rig. most of what you just read was built that way.</div>
 
@@ -242,10 +242,10 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="gap reveal"></div>
     <div class="ln sect reveal">── <b>config</b> ─────────────────────────────</div>
     <div class="gap sm reveal"></div>
-    <div class="msg reveal">two files under ~/.rig, both optional — rig runs on its embedded defaults
+    <div class="msg reveal">two files under ~/.rig, both optional; rig runs on its embedded defaults
     until you say otherwise. precedence is flag, env, file, then embedded.</div>
     <div class="gap sm reveal"></div>
-    <div class="msg reveal"><span class="tname">models.json</span> — the model table, merged by id over the embedded rows.
+    <div class="msg reveal"><span class="tname">models.json</span>; the model table, merged by id over the embedded rows.
     a row is the model's contract: the context window, the output cap, the compaction
     reserve, what survives a compaction, and the effort vocabulary the /effort dial offers.</div>
 
@@ -260,7 +260,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln reveal"><span class="tname-done">write</span>   <span class="ok">✓</span>   <span class="dim">0.4s</span></div>
 
     <div class="gap sm reveal"></div>
-    <div class="msg reveal"><span class="tname">settings.json</span> — the harness. the endpoint, the default model, and the walls:
+    <div class="msg reveal"><span class="tname">settings.json</span>; the harness. the endpoint, the default model, and the walls:
     which tools are allowed, whether mutations pause for you, how many identical
     failures before the guard steps in.</div>
     <div class="gap reveal"></div>
@@ -301,7 +301,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln tl reveal"><span class="tn">delegate</span><span class="td">one-shot worker; run a task on a fresh session, get back its last message</span></div>
     <div class="ln tl reveal"><span class="tn">plugin</span><span class="td">run a plugin, or read its contract; the hot path never pauses</span></div>
     <div class="ln tl reveal"><span class="tn">plugins</span><span class="td">the ecosystem: list · create · delete · reload; a new plugin lands untrusted in the pending zone until you approve it</span></div>
-    <div class="ln tl reveal"><span class="tn">sessions</span><span class="td">the session store, read-only: the recent sessions and the soak's vitals — the models, the faults, the cache ratio</span></div>
+    <div class="ln tl reveal"><span class="tn">sessions</span><span class="td">the session store, read-only: the recent sessions and the soak's vitals; the models, the faults, the cache ratio</span></div>
 
     <div class="gap reveal"></div>
     <div class="msg reveal">the python kernel is persistent. define a value in one call, use it in the next.</div>

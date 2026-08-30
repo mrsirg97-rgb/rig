@@ -1,10 +1,8 @@
 # rig design
 
-rig is a minimal agentic harness: it executes the agent loop against the
-seams you wire in, exactly once, faithfully. It is not a framework. What it is
-a harness for, in one sentence: a faithful turn loop — assemble context, stream
-the provider's output, execute what it asks for, feed it back, repeat — with
-every dependency held at a typed seam.
+rig is a minimal agent harness, not a framework. It assembles context, streams
+the provider, executes tool calls, returns results, and repeats. Every
+dependency sits behind a typed seam.
 
 The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree.
 
@@ -29,7 +27,7 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
              · tool/diff · tool/sessions · plugins
 
  cmd/rig (composition root): wires every seam once at startup; flags and env only.
- store/state: the recorder wraps the Frontend — it sources its rows from the
+ store/state: the recorder wraps the Frontend; it sources its rows from the
               loop's events, and -resume rebuilds a session from the state store.
 ```
 
@@ -88,7 +86,7 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
   Input ctx as the interrupt handle (`core.WithInterrupt`/`InterruptFrom`).
   A steer reads as an interrupt at every seam: at the prompt the loop
   re-enters awaiting input (no Fault); mid-stream it breaks the turn; at the
-  pre-stream seams (`Assemble`, the `Stream` call — a provider or policy
+  pre-stream seams (`Assemble`, the `Stream` call; a provider or policy
   that checks its context at call time) it is `TurnEnd{interrupt}` with no
   Fault, because the model never started. The run re-prompts; the delivered
   line is the next user message.
@@ -96,7 +94,7 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
   a loud error (a provider bug). Silent termination is not an option.
 - **Cancellation** (run-ctx teardown, e.g. Ctrl-C): the session ends once
   the in-flight step unwinds, cleanly (`nil`); the loop never names which
-  step — it only observes the context.
+  step; it only observes the context.
 
 ### middleware composition
 
@@ -108,21 +106,21 @@ frontend can ask), then the `~`-expansion boundary, then the two perm
 rules, and the bounds last. This is a deliberate
 inversion of the common `http.Handler` convention, chosen so that the listing
 order reads as the execution order. It is what makes the spec's pairing
-workable — the bound must sit outside the denial to count it.
+workable; the bound must sit outside the denial to count it.
 
 ### guard semantics (`middleware/guard`)
 
-Per the spec, every tool call executes exactly once, always — the guard never
+Per the spec, every tool call executes exactly once, always; the guard never
 retries silently. What `Bound` bounds is the *model's* re-issuance of a
 failing *tool*, aligned to pane's retry guard:
 
-- keyed by **tool name**, with the streak per args — the bound strikes
+- keyed by **tool name**, with the streak per args: the bound strikes
   identical retries only, and a corrected call (args differing from the
   last failed args) resets its own streak and always executes;
 - **cleared at the start of every turn** (the loop's `TurnStart` fan-out)
   and on success: the bound tracks streaks within a turn, not history;
-- the limit-th consecutive failure of a tool carries a note — the error is
-  above, read it and change the call, or stop calling the tool — appended
+- the limit-th consecutive failure of a tool carries a note: the error is
+  above, read it and change the call, or stop calling the tool; appended
   to the model-visible result, replacing it only when the result is blank;
 - the next re-issuance is refused without executing, naming the bound.
 
@@ -136,26 +134,26 @@ truncates to head and tail with the loud `[TRUNCATED]` marker naming
 the full size, and every tool's own cap stays).
 
 Denials are attributed (refusal string plus error) so they are countable; that
-attribution is what makes the spec's two sentences — refusal fed back to the
-model, repetition bounded — simultaneously true.
+attribution is what makes the spec's two sentences; refusal fed back to the
+model, repetition bounded; simultaneously true.
 
 ### session and persistence
 
 The session is an in-memory transcript with a minted, stable id; its
 persistence is the state store (`specs/SPEC_STATE.md`), SQLite under the
 rig home, WAL and a corruption quarantine. The todo and rem stores are
-single SQLite files whose rows carry a project scope — the repo's
-identity, shared by worktrees (`store/scope`) — and the scheduler store
+single SQLite files whose rows carry a project scope; the repo's
+identity, shared by worktrees (`store/scope`), and the scheduler store
 is one global file beside the crontab, the scheduling truth. The **recorder** is a Frontend
 wrapper (wired at the root, not the loop): it sources its rows from the loop's
-events — transcript, tool calls and their guarded results, usage with the
-cache fields, reasoning — appending per event in short transactions, so a
+events; transcript, tool calls and their guarded results, usage with the
+cache fields, reasoning; appending per event in short transactions, so a
 kill leaves every completed row readable. A `TurnEnd` discards the unlanded
 partial of a turned turn (the old Fault-time discard, subsumed), and each turn
 boundary upserts the file provenance. `rig --resume <id>` projects the
-session back from the store in one read-only transaction — transcript in seq
+session back from the store in one read-only transaction; transcript in seq
 order, assistant reasoning and calls (row order), landed results, dangling
-calls kept, files rebuilt — and the recorder adopts the existing row, so one
+calls kept, files rebuilt, and the recorder adopts the existing row, so one
 identity serves todo's claims and rem's sources. The JSON Save/Load pair is
 the test seam now, not the persistence path.
 
@@ -180,46 +178,46 @@ The design test: adding a tool, a provider, a policy, a frontend, or a
 middleware is **one file plus one registration line** at the composition root,
 and the loop never names a concrete type.
 
-1. **A tool** — implement `core.Tool` in `tool/<name>/<name>.go` (stdlib-
+1. **A tool**; implement `core.Tool` in `tool/<name>/<name>.go` (stdlib-
    agnostic exec; loud at the boundary); register in `cmd/rig`'s
    `WithTools(...)`, and in the default allow-list if it should be permitted.
-2. **A provider** — implement `core.Provider` (every stream ends in Done or
+2. **A provider**; implement `core.Provider` (every stream ends in Done or
    Fault, ctx teardown excepted); `WithProvider(...)`.
-3. **A context policy** — implement `core.ContextPolicy`; `WithPolicy(...)`.
+3. **A context policy**; implement `core.ContextPolicy`; `WithPolicy(...)`.
    The compaction policy (`policy/compact`, per-model trigger) wraps the
    passthrough, and `policy/effort` decorates the provider with the
-   reasoning dial; a policy may rewrite the session transcript — the
+   reasoning dial; a policy may rewrite the session transcript; the
    one named mutation the seam carries.
-4. **A frontend** — implement `core.Frontend`'s two methods (a TUI can sit
+4. **A frontend**; implement `core.Frontend`'s two methods (a TUI can sit
    beside the CLI); `WithFrontend(...)`.
-5. **A tool middleware** — implement `core.ToolMiddleware` (or adapt a plain
+5. **A tool middleware**; implement `core.ToolMiddleware` (or adapt a plain
    `func(core.ToolExec) core.ToolExec` with `ToolMiddlewareFunc`), registered
    in listing order with its intended position (first-listed innermost).
-6. **A command** — implement `core.Command` (a user verb, dispatched by the
+6. **A command**; implement `core.Command` (a user verb, dispatched by the
    Frontend before the loop sees the line); `WithCommands(...)`. One file in
    `command/` plus one registration line.
    Optionally implement the assertion-checked capabilities: `TurnStart`
    (observe the turn boundary; the guard clears its counts here) and
    `Guidelines` (contribute system-prompt prose; the root collects it).
-7. **A plugin** — no Go at all: one python file under the rig home's
+7. **A plugin**; no Go at all: one python file under the rig home's
    `plugins/`, one tool, discovered at startup and callable through the
    `plugin` door; the operator installs it by approve. How:
    `docs/PLUGINS.md`.
 
 ## constraints
 
-- **Stdlib-only core.** `core/` and `loop/` carry no dependencies; a leaf
+- **Stdlib-only core.** `core/` and `loop/` carry no dependencies: a leaf
   dependency is justified in its spec first. The store's one is
   `modernc.org/sqlite` (pure-Go driver, `specs/SPEC_STATE.md`); everything
-  else — providers, tools, middleware, frontends — is stdlib.
-- **Closed, typed seams.** Dependencies are compile-time explicit; nothing is
+  else; providers, tools, middleware, frontends; is stdlib.
+- **Closed, typed seams.** Dependencies are compile-time explicit: nothing is
   loaded, discovered, or reflected at runtime. Unknown at a seam is a loud
   error, never a guess.
-- **One process.** Modular monolith; cross-process only when demanded.
+- **One process.** Modular monolith: cross-process only when demanded.
 - **Default-deny at the boundary.** Tools execute only through the registered
   middleware chain; the root's default allow-list exists because a default-
-  deny CLI would ship a dead agent — narrowing is the operator's act.
-- **The loop never retries.** Repetition is the model's act; the loop's duty
+  deny CLI would ship a dead agent; narrowing is the operator's act.
+- **The loop never retries.** Repetition is the model's act: the loop's duty
   is faithful surfacing plus the bound.
 
 ## non-goals

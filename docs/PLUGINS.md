@@ -26,7 +26,7 @@ def run(args: dict) -> str:
 - **DESCRIPTION** (str) rides the wire verbatim: write it for the
   model.
 - **SCHEMA** (dict) is the tool's JSON schema.
-- **run(args: dict) -> str** receives the model's args dict; the return
+- **run(args: dict) -> str** receives the model's args dict: the return
   value is the tool result. An exception is a tool error carrying the
   traceback tail, and the kernel stays alive (it is the model's kernel
   too).
@@ -109,7 +109,7 @@ The operator's verbs, at `/plugins`:
 - `approve <name>`: move a pending plugin to the top level;
 - `disabled`, `disable <name>`, `enable <name>`: the off switch;
 - `create <text>`: queue the authoring prompt;
-- `reload`: re-run the discovery; the new list is live on the next
+- `reload`: re-run the discovery: the new list is live on the next
   turn, and a failed reload leaves the table and the wire untouched.
 
 The model's `plugins` tool carries its own verbs (`list`, `create`,
@@ -118,7 +118,7 @@ an unlink.
 
 ## the allow-list
 
-- The built-in default permits the built-in tools only; a plugin is not
+- The built-in default permits the built-in tools only: a plugin is not
   in it.
 - An installed plugin's presence in `plugins/` root is its own
   allow-list entry: the operator's approve put it there, and the
