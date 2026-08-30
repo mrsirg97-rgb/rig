@@ -8,11 +8,11 @@ stdio; no third-party Go client.
 
 ## goals
 
-- One persistent kernel per session; state survives across calls.
+- One persistent kernel per session: state survives across calls.
 - Pane's surface verbatim: description, promptGuidelines, schema, and every
   runtime voice (timeout, death note, `[stderr]`, `(no output)`, ...).
-- Timeout kills the whole kernel and says so; an unexpected death is
-  announced on the next call — once — with exit description and stderr tail.
+- Timeout kills the whole kernel and says so: an unexpected death is
+  announced on the next call; once, with exit description and stderr tail.
 - Process-group discipline from tool/bash: `Setpgid`, `WaitDelay`, group
   kill on teardown.
 - Output capped by the host, truncation named (`... [N chars elided] ...`).
@@ -24,7 +24,7 @@ stdio; no third-party Go client.
 - No loop change: no new events, no middleware, no hooks. Kernel teardown
   until deliverable 7's hooks is one `Close()` call at the root.
 - No new dependencies. `go.mod` is unchanged.
-- No parallel tool execution (the loop stays sequential in v1); the kernel
+- No parallel tool execution (the loop stays sequential in v1): the kernel
   client is still safe under concurrent `Exec` (queue plus id routing),
   which pane's tests exercise directly.
 - No Go-side output cap beyond the host's: the wire protocol already
@@ -48,7 +48,7 @@ tool/python/
 
 `core.Tool` as-is: `Name() "python"`, `Description()` (pane's voice),
 `Schema()` (pane's parameters, hand-written), `Exec(ctx, args)`. Plus one
-lifecycle method the root calls on the way out — pane's
+lifecycle method the root calls on the way out; pane's
 `session_shutdown` hook with no hook yet:
 
 ```go
@@ -74,7 +74,7 @@ default path and keeps it.
   session with no shared package state. A registry would be shared mutable
   state the design test exists to keep out of leaves.
 - **The host is embedded and materialised.** `kernel_host.py` ships inside
-  the binary (`//go:embed`); `New()` resolves pane's order — pane's
+  the binary (`//go:embed`); `New()` resolves pane's order; pane's
   installed path `~/.pi/agent/kernel/kernel_host.py` if present (interop),
   else the embedded source written to `cfgDir/rig/kernel/kernel_host.py`
   (idempotent, temp+rename). The binary stays single-file; the host stays
@@ -83,7 +83,7 @@ default path and keeps it.
   host: ...`), one line, so pane's and rig's hosts cannot drift
   silently.
 - **The interpreter is pane's shared venv.**
-  `~/.pi/agent/kernel-venv/bin/python` — numpy and pandas live there. If it
+  `~/.pi/agent/kernel-venv/bin/python`; numpy and pandas live there. If it
   is missing, the first call bootstraps it lazily, single-flight:
   `python3 -m venv` then `pip install ipython numpy pandas`, 300s per step,
   the failure re-tryable on the next call (pane clears its bootstrap
@@ -91,7 +91,7 @@ default path and keeps it.
   network): ...` verbatim. Stdlib only: it is `os/exec`, not a Go dep.
   The bootstrap is the default path's policy, not the seam's: a silent
   pip-install on first use wants an explicit out, so `main` reads
-  `RIG_PYTHON` and passes the operator's interpreter to `NewWith` —
+  `RIG_PYTHON` and passes the operator's interpreter to `NewWith`:
   an explicit choice is an explicit choice, and the bootstrap is
   skipped with it.
 - **Queue, then dispatch.** One dispatch at a time (pane's promise chain).
@@ -103,7 +103,7 @@ default path and keeps it.
   dying call itself already saw `kernel exited (code|signal N)` with the
   stderr tail. A deliberate teardown (timeout restart, `Close`) nulls the
   current process before killing, so the exit observer sees a foreign
-  process and leaves no note — pane's exact `isCurrent()` trick.
+  process and leaves no note; pane's exact `isCurrent()` trick.
 - **Protocol state is per process.** The line buffer, the pending-id map,
   and the stderr tail live on the process object, so a restart is a fresh
   object: no stale buffer can swallow the next kernel's reply, and no dead
@@ -113,7 +113,7 @@ default path and keeps it.
   deliver into a buffered-1 channel with non-blocking sends; whichever
   happens first answers the id, the other is dropped. A call is never
   answered twice and a reply is never lost by a late write.
-- **Process-group discipline.** `Setpgid` on spawn; `WaitDelay` (2s)
+- **Process-group discipline.** `Setpgid` on spawn: `WaitDelay` (2s)
   bounds the pipe wait when a cell's background descendants hold the pipes
   after the host exits; teardown kills the group (`-pid`, SIGKILL), never
   just the leader. The discipline of tool/bash, applied to a child that
@@ -143,7 +143,7 @@ default path and keeps it.
   a model sent `action: "code"` with its code on every call, the old
   dispatch forwarded the unknown cmd without the code, the host's
   fallthrough ran the empty string, and 457 calls in one session came
-  back `(no output)` ok — a silent success that ran nothing, the one
+  back `(no output)` ok; a silent success that ran nothing, the one
   reply shape the harness must never produce. Rejected, named: teaching
   the model out of `code` by description alone (the enum is the teaching;
   the obvious word should work), and refusing `code` (it is the obvious
@@ -160,7 +160,7 @@ suite kernel, so the order-dependent state cases hold as in pane's file):
 - vars lists user-defined names only
 - reset clears the namespace
 - empty call fails loudly with a clear message
-- action code runs the code; an unknown action refuses loud before the
+- action code runs the code: an unknown action refuses loud before the
   kernel (added 2026-08-21)
 - runtime errors are reported as errors with traceback text
 - oversized output is clipped with an elision marker
@@ -178,7 +178,7 @@ suite kernel, so the order-dependent state cases hold as in pane's file):
 - a dirty death leaves no stale buffer that swallows the next kernel's reply
 - a dead kernel's stderr does not leak into the next kernel's death message
 - timeout message describes the lazy restart accurately
-- NewWith skips the default-venv bootstrap; the default path keeps it
+- NewWith skips the default-venv bootstrap: the default path keeps it
 
 The skip gate: the real-kernel cases skip cleanly when neither the venv
 interpreter nor `python3` on PATH can import IPython, numpy, and pandas,

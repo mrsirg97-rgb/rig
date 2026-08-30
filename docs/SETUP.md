@@ -1,9 +1,8 @@
 # rig setup
 
-rig's core is **stdlib-only**: `core/`, `loop/`, the provider, the tools,
-and the frontends carry no dependencies. The one leaf dependency is
-`modernc.org/sqlite` (pure-Go driver) for the stores, justified in
-`specs/SPEC_STATE.md`. Setup is fetch, configure, build.
+rig's core uses only the standard library. Stores use the pure-Go
+`modernc.org/sqlite` driver. Setup requires a model endpoint, Go for source
+builds, and bubblewrap for jailed workers.
 
 ## prerequisites
 
@@ -13,7 +12,7 @@ and the frontends carry no dependencies. The one leaf dependency is
 - An **OpenAI-compatible** chat-completions endpoint (SSE streaming): a local
   model server, a gateway, or the hosted API. rig speaks the wire protocol
   only; vendor specifics live in your endpoint configuration.
-- **bubblewrap** (the `bwrap` binary) for the scheduler's jailed workers —
+- **bubblewrap** (the `bwrap` binary) for the scheduler's jailed workers:
   the one environment dependency of that path, as git is the diff tool's
   (`specs/SPEC_SANDBOX.md`). Linux only; the run refuses on other platforms
   and names the profile. It is the only dependency the *scheduled worker*
@@ -25,7 +24,7 @@ and the frontends carry no dependencies. The one leaf dependency is
   sudo apt-get install bubblewrap
   ```
 
-  **Ubuntu 24.04 and friends** — the box ships
+  **Ubuntu 24.04 and friends**; the box ships
   `kernel.apparmor_restrict_unprivileged_userns=1`, and AppArmor then
   blocks the unprivileged user namespace's netns setup: bwrap fails with
   `loopback: Failed RTM_NEWADDR: Operation not permitted`. The box's
@@ -41,20 +40,18 @@ and the frontends carry no dependencies. The one leaf dependency is
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.18.0
+./rig --version        # rig 0.20.0
 ```
 
-The install paths, three (`specs/SPEC_BUILD.md` 5):
+Choose an install path (`specs/SPEC_BUILD.md` 5):
 
-**Installer** (POSIX sh, no Go, no sudo — lands in `~/.local/bin`):
+**Installer** (POSIX sh, no Go, no sudo; installs to `~/.local/bin`):
 
 ```sh
 curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh
 ```
 
-**Release binary** — the same asset the installer fetches, downloaded
-directly (no script): pick `rig_<os>_<arch>` from `releases/latest`;
-the version lives in the URL, not the name.
+**Release binary** from `releases/latest`. Choose `rig_<os>_<arch>`:
 
 ```sh
 curl -fsSL https://github.com/mrsirg97-rgb/rig/releases/latest/download/rig_linux_amd64 -o rig
@@ -69,9 +66,8 @@ matching patch automatically):
 go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 ```
 
-A built release binary updates itself in place: `rig -update` fetches,
-verifies, and atomically renames the latest release over the running
-binary (a running rig keeps the old file until restarted).
+`rig -update` fetches, verifies, and atomically installs the latest release.
+The running process keeps the old binary until restart.
 
 `make install` is the same build landed locally: `$(go env GOBIN)` when
 set, else `~/.local/bin`; `BINDIR=...` names the directory.
@@ -91,19 +87,19 @@ Every knob is a four-layer resolution, per key:
 set at any layer beats the layers below; an unset layer descends. A flag
 you typed always wins, whatever its value; an empty env or file value
 descends, except the two presence keys (below). No file present is the
-0.2.0 behavior, exactly — the embedded layer is the 0.2.0 values moved
+0.2.0 behavior, exactly; the embedded layer is the 0.2.0 values moved
 out of code.
 
-The files live in the rig home, `~/.rig/` — the same directory the
+The files live in the rig home, `~/.rig/`; the same directory the
 stores use (the `.pi`/`.omp` convention, not the XDG one). The home
 resolves `$RIG_HOME` > `~/.rig`: the env var, when set (non-empty), is
-the home — the operator's spelling, used as-is. The one-time
+the home; the operator's spelling, used as-is. The one-time
 migration: on a start where the resolved home is absent and the old
 `~/.config/rig` exists, the old directory is renamed to the resolved
 home and one line says so; after that the old directory is gone and
 the migration is a no-op. A present home wins, whatever the old
 directory holds. The migration never runs under an explicit
-`RIG_HOME` — the override is isolation, not a move order: an absent
+`RIG_HOME`; the override is isolation, not a move order: an absent
 override stays absent, and the old home stays put. Every file is optional; a present-but-malformed file is
 a loud refusal at start naming the file and the field (exit 1, before
 any store is opened), and an absent one is silent. Unknown keys refuse:
@@ -111,14 +107,14 @@ the file is a contract, not a filter.
 
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
-| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut — a present one mints `workers.json` once at start (the notice says so), then nags until deleted |
-| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) and `efforts` (the model's available effort levels — `low`, `medium`, `xhigh` — the `/effort` dial's vocabulary) |
+| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut; a present one mints `workers.json` once at start (the notice says so), then nags until deleted |
+| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`) and `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary) |
 | `workers.json`    | the fleet: `{"model": "<id>", "slots": N}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's theme (`specs/SPEC_TUI.md` 7): `base` (one of `oled`, `paper`, `p1`, `p3`, required), optional `slots` (the eight slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema |
 
 `<cwd>/AGENTS.md` is read from the working directory: the REPL's cwd, or,
-for a scheduled worker, the job's cwd — the job inherits its own working
+for a scheduled worker, the job's cwd; the job inherits its own working
 directory's project file, not the creating session's.
 
 | knob          | flag           | env                    | file key        | embedded default |
@@ -130,21 +126,21 @@ directory's project file, not the creating session's.
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
-| resume        | `--resume <id>`| —                      | —               | fresh session (refuses with `-p`; one-shot stays one-shot) |
-| terminal      | `--tui` (auto/true/false) | — | — | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
+| resume        | `--resume <id>`|;                      |;               | fresh session (refuses with `-p`; one-shot stays one-shot) |
+| terminal      | `--tui` (auto/true/false) |; |; | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
 | python kernel |                | `RIG_PYTHON`           | `python`        | the default interpreter |
 | web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
-| fleet model   |                | —                      | `workers.json` → `model` | none without the file (the worker tools are absent); a job's explicit `model` arg beats the fleet's |
+| fleet model   |                |;                      | `workers.json` → `model` | none without the file (the worker tools are absent); a job's explicit `model` arg beats the fleet's |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
-| approval dial  |                | —                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
-| worker sandbox | —              | —                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
-| sandbox binds | —              | —                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
+| approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
+| worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
+| sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
 | model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the one-row table (`local`) |
 
-**On the worker sandbox** — `sandbox` is the scheduled worker's jail
-(`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the default — fail closed)
+**On the worker sandbox**; `sandbox` is the scheduled worker's jail
+(`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the default; fail closed)
 spawns the worker under bwrap's unshare-all profile, netless except
 the one bound socket its model calls ride, with its home a scratch
 directory inside the job's cwd; `off` runs the worker as before and
@@ -155,13 +151,13 @@ rides the profile as extra binds (the operator's need, e.g. a python
 venv): absolute paths, read-only by default, `:rw` opts one in. The
 profile is the spec's block, verbatim (`store/scheduler/jail.go`).
 
-**On the presence keys** — `RIG_WEB_FETCH_PROXY` and `RIG_TRAFILATURA`
+**On the presence keys**; `RIG_WEB_FETCH_PROXY` and `RIG_TRAFILATURA`
 are presence-aware at every layer: "set empty" means present but empty,
 an explicit choice (direct egress / the stdlib text pass), while an
 unset value descends to the next layer. Presence is the signal, the
 value is the choice.
 
-**On the model row** — compaction is per-model: the active model must
+**On the model row**; compaction is per-model: the active model must
 resolve to a row (window, max tokens, reserve, keep-recent). The table
 is the embedded rows overlaid by `models.json`, merged by id: fields you
 set replace the embedded row's, fields you leave unset keep it, a new id
@@ -171,13 +167,13 @@ synthesizes a row for an id the table does not know (a loud refusal
 naming the known ids otherwise). `/models` lists the runtime table with
 its role column and switches the active model.
 
-**On the `models.json` zero edge** — zero means unset at the overlay
+**On the `models.json` zero edge**; zero means unset at the overlay
 layer, so a zero numeric field on an embedded id is unreachable (a new
 row can carry it, an embedded id cannot): the named cost of the rule.
 
-**On `RIG_RETRIES`** — read before tuning: the value does **not** permit
+**On `RIG_RETRIES`**; read before tuning: the value does **not** permit
 silent re-execution. Every tool call executes exactly once; the value bounds
-the *model's* re-issuance of a failing *tool* — keyed by tool name, with
+the *model's* re-issuance of a failing *tool*; keyed by tool name, with
 the streak per args: the bound strikes identical retries only, and a
 corrected call (args differing from the last failed args) resets its own
 streak and always executes; the bound is cleared at the start of every turn.
@@ -187,20 +183,20 @@ re-issuance of that call is refused without executing, naming the
 bound. A successful call clears the count: the bound tracks streaks within
 a turn, not history. It is a brake on repetition, not a retry allowance.
 
-**On `--resume`** — it rebuilds the session from the state store (the
+**On `--resume`**; it rebuilds the session from the state store (the
 transcript in order, assistant reasoning, the tool calls, the file
 provenance, the identity) in one read-only transaction; dangling tool calls
 are kept, an unknown id is loud, and the recorder adopts the existing row so
 one identity serves todo's claims and rem's sources. The per-process state
 starts fresh: the guard's counts and the steering slot are not persisted.
 
-**On the allow-list** — it is default-deny below it: any tool not named is
+**On the allow-list**; it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
 permits the 18 built-in tools because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar. A `settings.json` that
 writes its own `allow` key replaces that default whole, so it must carry
 `plugin` and `plugins` or every door call is refused. Python plugins
-(`~/.rig/plugins/`) are **not** in the default — but a plugin sitting in
+(`~/.rig/plugins/`) are **not** in the default, but a plugin sitting in
 `plugins/` root is itself an allow-list entry (SPEC_PLUGINS 7): the
 provenance rule forces a model's writes into `plugins/pending/`, so an
 installed plugin got there by the operator's `/plugins` approve, and that
@@ -213,14 +209,14 @@ and the allow-list either way.
 
 Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
 
-- **The directory** — `~/.rig/plugins/` (the rig home's, top-level
+- **The directory**: `~/.rig/plugins/` (the rig home's, top-level
   `*.py` only, in filename order). No directory, or an empty one, is a
-  no-op that never starts the kernel; with no plugins the wire is the
+  no-op that never starts the kernel, with no plugins the wire is the
   built-in tools' bytes exactly. `plugins/pending/` is the forge's
   landing zone (the model's authoring): invisible to discovery by the
-  top-level rule, and a fact of the home — created at startup, silent
+  top-level rule, and a fact of the home; created at startup, silent
   and idempotent.
-- **The file's contract** — three names:
+- **The file's contract**: three names:
 
   ```python
   DESCRIPTION = "what the tool does, for the model"
@@ -233,7 +229,7 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   The tool's name is the filename stem (`echo.py` → `echo`), matching
   `^[a-z][a-z0-9_]{0,63}$`; the description and schema ride the wire
   verbatim.
-- **Discovery at startup** — the files are imported through the shared
+- **Discovery at startup**: the files are imported through the shared
   python kernel (the same persistent kernel as the `python` tool: the
   namespace is shared on purpose, so the model's python can call plugin
   functions directly, and plugin state persists across calls). A file
@@ -241,17 +237,17 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   file and the field; startup continues); a name colliding with a
   built-in tool refuses the start loud (native-wins would be silent
   shadowing).
-- **The call** — the kernel invokes the module's `run` with the model's
+- **The call**: the kernel invokes the module's `run` with the model's
   args dict; the return value is the tool result; an exception is a
   tool error carrying the traceback tail, and the kernel stays alive
   (it is the model's kernel too).
-- **The wire** — a loaded plugin is a real tool on the execution chain,
+- **The wire**: a loaded plugin is a real tool on the execution chain,
   but the request carries the built-in tools plus one `plugin` door;
   the per-plugin schemas stay behind it, so a grown table stops
   blowing context (SPEC_GROWTH 9). The model fetches a plugin's
   contract with the door's `schema` arm and calls it with `run`; the
   python tool's imports reach the loaded plugins by the stem.
-- **The provenance rule** (SPEC_SANDBOX 2) — the model's `write` and
+- **The provenance rule** (SPEC_SANDBOX 2): the model's `write` and
   `edit` refuse a target inside `plugins/` that is not inside
   `plugins/pending/`; the refusal teaches the shape: `permission
   denied: <path> is in plugins/ outside plugins/pending/ (plugins
@@ -260,22 +256,22 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   the boundary: bash can still move a file into `plugins/` (the
   operator's shell is the operator's); the worker jail (SPEC_SANDBOX
   1) is the boundary, the provenance rule is the workflow.
-- **The allow-list** — a plugin is not in the built-in default, but an
+- **The allow-list**: a plugin is not in the built-in default, but an
   installed plugin's presence in `plugins/` root is itself its allow-list
   entry (SPEC_PLUGINS 7): the operator's approve put it there, and the
   allow-list's second door (the live plugin table) admits it without an
   `allow` line.
-- **`/plugins`** — the loaded plugins (name, description, file) and the
+- **`/plugins`**: the loaded plugins (name, description, file) and the
   skipped ones with their reasons. `pending` lists the pending zone
   with each file's DESCRIPTION (read without running the file);
-  `approve <name>` moves one to the top level — the operator's verb,
+  `approve <name>` moves one to the top level; the operator's verb,
   never a tool call; a name that collides with a built-in tool refuses
   with the startup collision's voice, and an already-installed file of
   the name refuses too. `disabled` lists the disabled zone;
   `disable <name>` moves a loaded plugin into `plugins/disabled/`
   (hidden, not callable, the next turn); `enable <name>` brings it
   back.
-- **`plugins`** — the ecosystem native tool
+- **`plugins`**: the ecosystem native tool
   (`specs/SPEC_PLUGINS.md` 8): `list` (the loaded and the skipped),
   `create` (name plus source into `plugins/pending/`, the same checks
   as the command door's forge), `delete` (a move into
@@ -290,10 +286,10 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   self-heals (SPEC_STREAMLINE 4): an unknown name re-discovers once
   before refusing, so an out-of-band install is callable without a
   reload call; `plugins` stays the operator's explicit verb.
-- **The sandbox** — the provenance rule is the workflow (SPEC_SANDBOX
+- **The sandbox**: the provenance rule is the workflow (SPEC_SANDBOX
   2); the worker jail is the boundary (SPEC_SANDBOX 1, 3, 5): a scheduled
   worker's plugins run jailed under bwrap. In the interactive REPL the
-  plugins run with rig's privileges, in the operator's kernel — trust
+  plugins run with rig's privileges, in the operator's kernel; trust
   them as you trust your own python.
 
 ## dashboard
@@ -301,7 +297,7 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
 `rig serve` opens a loopback-only dashboard on the rig home's stores
 (`specs/SPEC_SERVE.md`): sessions (the list, grouped by workspace, and
 the transcripts), todo, scheduler, models, and the plugins' three
-zones, with writes — todo create, start, and complete, scheduler
+zones, with writes; todo create, start, and complete, scheduler
 create, and the plugin forge's source read and save into the pending
 zone. It is a loopback bind (a non-loopback address is refused by
 name) behind a token minted and printed once; open the printed address
@@ -312,9 +308,9 @@ TUI).
 ## terminal
 
 The default REPL is the terminal frontend (`specs/SPEC_TUI.md`): the
-same session, the same commands, the same exits — themed, with the
-three-row status — identity (`model · used/window`), the stance
-(`effort · role · auto|manual`), and the usage totals — the live region (the
+same session, the same commands, the same exits; themed, with the
+three-row status; identity (`model · used/window`), the stance
+(`effort · role · auto|manual`), and the usage totals; the live region (the
 activity row and the input line, redrawn in place), the todo and
 scheduler blocks, and the usage line at every turn's end. The piped CLI
 is unchanged and is the reference: pipe, `-p`, and `--tui=false` all
@@ -323,15 +319,15 @@ speak the CLI's bytes.
 - `--tui auto` (the default) picks by the terminal: stdout a terminal
   → the TUI; piped or redirected → the CLI. `--tui=true` forces the
   TUI (a pty, `tmux capture-pane`); `--tui=false` forces the CLI.
-- **Theme** — `~/.rig/theme.json`, three keys: `base` (the
+- **Theme**: `~/.rig/theme.json`, three keys: `base` (the
   shipped palette: `oled`, `paper`, `p1`, `p3`), `slots` (any of the
-  eight — `accent`, `dim`, `error`, `reasoning`, `rule`, `success`,
-  `text`, `warn` — mapped to a `#rrggbb` color), `glyphs` (`unicode`,
+  eight; `accent`, `dim`, `error`, `reasoning`, `rule`, `success`,
+  `text`, `warn`; mapped to a `#rrggbb` color), `glyphs` (`unicode`,
   the default, or `ascii` for the bracket/`>`/`#` set). Color depth is
   the terminal's, not yours: `COLORTERM` 24-bit → truecolor, else the
   nearest 256 index. A malformed file refuses at start, naming the
   file and the key.
-- **Input** — the line's arrows and Home/End move the cursor;
+- **Input**: the line's arrows and Home/End move the cursor;
   Backspace and Delete cross a wide glyph whole; Up/Down walk the
   session's history (in memory, the draft preserved around a trip).
   **Ctrl-T** toggles the rendering of reasoning for the rest of the
@@ -348,14 +344,14 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.18.0
+./rig --version                 # prints: rig 0.20.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
 then type a prompt. A line typed while a turn is live steers (it interrupts
 the turn and is delivered at the next prompt; latest wins); Ctrl-C ends the
 session once the in-flight step unwinds; Ctrl-D exits at the prompt. If
-nothing streams, check the endpoint first — rig surfaces provider faults
+nothing streams, check the endpoint first; rig surfaces provider faults
 verbatim and loudly; it does not hide them.
 
 The terminal's verify: the three-row status (identity, stance, usage),

@@ -27,7 +27,7 @@ the on-contact teaching, and removes the step.
   sets are untouched.
 - No change to discovery, the pending zone, the provenance rule, or the
   approve flow (SPEC_PLUGINS, SPEC_SANDBOX stand).
-- No new tool, no new command, no new middleware; `loop/` and `core/`
+- No new tool, no new command, no new middleware: `loop/` and `core/`
   stay byte-frozen against the branch's base (the freeze gate, as
   usual).
 - The rem, todo, and scheduler reply bodies are untouched beyond the two
@@ -148,30 +148,30 @@ Named cases, failing first, in the leaves that carry them.
 
 **store/todo:**
 
-- `TestCompactNamesTheSnapshotInTheReply` — seed past the threshold
+- `TestCompactNamesTheSnapshotInTheReply`: seed past the threshold
   with real operations; the next operation's reply carries the compact
   footer with the folded count, the event table folds to the snapshot,
   and the tasks with their statuses are intact; the following operation,
   below the threshold, carries no footer.
-- `TestUnknownIdNamesMinting` — each verb's unknown-id refusal
+- `TestUnknownIdNamesMinting`: each verb's unknown-id refusal
   (start, complete, fail, retry, move) carries the minted-id voice.
 
 **plugins (fake kernel and fake Live, no python):**
 
-- `TestDoorRedisoversOnceOnUnknownName` — Live misses the name at
+- `TestDoorRedisoversOnceOnUnknownName`: Live misses the name at
   first, `redo` installs it, the call runs with the args verbatim, and
   `redo` ran exactly once.
-- `TestDoorSkipsRedoOnKnownName` — a known name never runs `redo`.
-- `TestDoorNamesRedoFailure` — a failing `redo` refuses with the
+- `TestDoorSkipsRedoOnKnownName`: a known name never runs `redo`.
+- `TestDoorNamesRedoFailure`: a failing `redo` refuses with the
   re-discovery failure named.
-- `TestDoorNilRedoKeepsTheRefusal` — a nil `redo` refuses an unknown
+- `TestDoorNilRedoKeepsTheRefusal`: a nil `redo` refuses an unknown
   name with the live list, the voice from SPEC_GROWTH 9.
 - The schema door carries the same cases under one test.
 
 **cmd/rig (the root over the real loop, the fake kernel at the DI
 seam, SPEC_PLUGINS 8's harness):**
 
-- `TestDoorSelfHealsAnOutOfBandInstall` — a plugin file lands in
+- `TestDoorSelfHealsAnOutOfBandInstall`: a plugin file lands in
   the home after the wire and no `plugins` reload is called; the model
   calls `plugin {name}` directly; the door re-discovers, executes, and
   the result rides back verbatim; the following request carries the
@@ -186,9 +186,9 @@ seam, SPEC_PLUGINS 8's harness):**
 ## scope
 
 - `specs/SPEC_STREAMLINE.md` (this file).
-- `store/todo`: the footer and the voice; `maybeCompact` returns the
+- `store/todo`: the footer and the voice: `maybeCompact` returns the
   note; the five operation closures append it.
-- `plugins/door.go`: the `redo` seam on both doors; `command/plugins.go`
+- `plugins/door.go`: the `redo` seam on both doors: `command/plugins.go`
   template; the root's wiring.
 - `tool/todo`, `tool/scheduler`, `tool/rem`: the trimmed descriptions;
   `tool/scheduler`'s guidelines de-duplicated.
@@ -198,6 +198,6 @@ seam, SPEC_PLUGINS 8's harness):**
   `frontend/tui`'s freeze allowlist (the tool/scheduler line).
 - `PACKAGE.md`: store/todo, plugins, tool/todo.
 - `docs/USAGE.md`, `docs/SETUP.md`: the dance's tail, named.
-- `CHANGELOG.md`: the 0.9.2 entry; the version 0.9.2.
-- `loop/` and `core/` frozen; the middleware set unchanged; the native
+- `CHANGELOG.md`: the 0.9.2 entry: the version 0.9.2.
+- `loop/` and `core/` frozen: the middleware set unchanged; the native
   set unchanged (17).

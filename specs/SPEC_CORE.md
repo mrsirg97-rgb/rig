@@ -21,7 +21,7 @@ registration line. If it touches the loop, the interfaces are wrong.
 ## non-goals (v1)
 
 - No TUI, no scrollback, no rendering beyond stdout.
-- No compaction. `ContextPolicy` exists; v1 ships the passthrough.
+- No compaction. `ContextPolicy` exists: v1 ships the passthrough.
 - No subagents, no queues, no background tasks.
 - No config files. Flags and env only (`flag`, `os`).
 - No registry with runtime lookup. Slices passed to a constructor. Wiring is
@@ -166,7 +166,7 @@ Provider-stream events (`TextDelta`, `ReasoningDelta`, `ToolCallEvent`,
 (`ToolStart`, `ToolResult`, `TurnEnd`) bracket execution and close the
 turn; they are emitted by the loop. Policy events (`Compacted`,
 SPEC_COMPACT) are emitted at `Assemble` or on-stream by the policy's
-decorator — the third emitter category; the loop forwards them in its
+decorator; the third emitter category; the loop forwards them in its
 existing default, and the recorder lands them (SPEC_STATE). `TurnEnd` fires at every turn exit
 (`over` / `fault` / `interrupt`), after the turn's last other event; a
 run-context cancel ends the run, not a turn, and does not emit it. The
@@ -208,9 +208,9 @@ type Request struct {
 	Messages  []Message
 	Tools     []ToolSpec // name, description, schema; execution stays in the kernel
 	MaxTokens int        // 0 = the provider's default (additive; a provider that
-				// does not know it ignores it — SPEC_COMPACT 8's request-side reserve)
+				// does not know it ignores it; SPEC_COMPACT 8's request-side reserve)
 	ReasoningEffort string // the reasoning budget asked for; empty = the provider's
-				// default (additive — SPEC_COMPACT 3's summary effort, "medium")
+				// default (additive; SPEC_COMPACT 3's summary effort, "medium")
 }
 ```
 
@@ -232,15 +232,15 @@ Schemas are authored by hand next to the tool. Reflection-derived schemas
 drift from intent and add deps.
 
 **The description's shape** (amended 0.12.2): every description is the
-same four parts, in order — *what* it does (one sentence); *when* to
-reach for it and when not (a `Guidelines:` sentence, on every tool — it
+same four parts, in order; *what* it does (one sentence); *when* to
+reach for it and when not (a `Guidelines:` sentence, on every tool; it
 is the sentence that changes behavior, and it was missing from 13 of
 18); the *reply's* shape (one clause); at most *one gotcha*. Storage
 mechanics and implementation notes live in the package's `PACKAGE.md`,
 never on the wire: the model needs the reply contract, not the event
 log's compaction rule. Refusals and descriptions share vocabulary (the
 pending zone, approve, the door), so the model meets each word in both
-places. The whole menu — every native's description plus schema — is
+places. The whole menu; every native's description plus schema; is
 pinned under 14,000 characters by a case in `cmd/rig` over the wire
 golden (13.1k at the amendment: 5.5k of description, 7.5k of schema),
 so growth is a decision; the schemas of `rem`, `scheduler`, `todo`, and
@@ -257,7 +257,7 @@ directory (`(empty: /abs/dir)`), `find` and `grep` the pattern and the
 root (`(no matches for /re/ under /abs/root, glob 'g')`), `web_search`
 the query, `rem` recall the scopes and the query (`(no memories in rig,
 nor global for 'q')`), `todo` the queue it read (`(no tasks in
-<label>'s queue)` — a subdirectory, a second worktree, and a `project`
+<label>'s queue)`; a subdirectory, a second worktree, and a `project`
 override all name the queue they read, never "this directory's"),
 `/plugins` the directory. The schemas say whose `.` a default root is
 ("the working directory"). The rule generalises: a reply that could be
@@ -268,7 +268,7 @@ loud, specific failure messages; a fuzzy edit tool silently corrupts files.
 daily driver): when the path was recorded in the threaded session's
 `Files` and the on-disk hash or mtime differs, the read prepends
 `[changed since your observation]` to the content before the bytes, so
-the model is told its prior read is stale before it acts on it — the
+the model is told its prior read is stale before it acts on it; the
 push that `diff last` would otherwise force the model to go ask for.
 The note rides the content it already returns; nothing new is written,
 and a fresh observation re-records as usual.
@@ -350,13 +350,13 @@ default), per the compat rule.
 **User commands (deliverable 9, SPEC_COMMANDS).** A Frontend may dispatch
 commands: a line that starts with `/` is checked against the registered
 set before `Input` returns it to the loop, and a dispatch consumes the
-line — the loop never sees a command. `//` escapes the prefix (one slash
+line; the loop never sees a command. `//` escapes the prefix (one slash
 consumed, the rest is a prompt), and a `/` line that is not a known
 command is a loud refusal naming the known set, never a silent prompt.
 Dispatching is optional: a Frontend without it (one-shot, the test
 drivers) never dispatches, its `/` lines stay prompts, and nothing is
 hijacked from it. The command's output is the Frontend's stdout; no new
-`Event` is needed for any command. The loop is untouched — dispatch is
+`Event` is needed for any command. The loop is untouched; dispatch is
 the Frontend's business, exactly as the steering slot is.
 
 ## the loop
@@ -365,8 +365,8 @@ The loop is a concrete function, not an interface. It is the one place turn
 ordering is written down; making it pluggable would make ordering emergent
 and undebuggable. Since SPEC_EVT 2b it is the `evt` engine's consumer:
 each step below is a closure executed on the loop goroutine, and what
-waits on the world — the Frontend's `Input`, the provider's stream, a
-tool's execution — is a producer goroutine that posts. One goroutine
+waits on the world; the Frontend's `Input`, the provider's stream, a
+tool's execution; is a producer goroutine that posts. One goroutine
 touches the session; the steps and their order are unchanged.
 
 ```go
@@ -399,8 +399,8 @@ argument):
    goroutine never blocks on a tool. A nil predicate is the sequential
    order, byte-identical.
 
-L8 (SPEC_COMPACT 4): the loop stamps the assistant message it appends —
-in both the no-calls and the tool-calls branch — with `Done.Usage`'s
+L8 (SPEC_COMPACT 4): the loop stamps the assistant message it appends:
+in both the no-calls and the tool-calls branch, with `Done.Usage`'s
 prompt+completion as `Message.ContextTokens` (0 when the `Done` reported
 none). A named line with its own loop test; it is the anchor the
 compaction trigger reads. No other loop change.
@@ -410,7 +410,7 @@ State machine per turn: `awaiting_input -> awaiting_model -> executing_tools
 additions are inside the states. Tool execution was sequential through
 0.11; SPEC_EVT 2a (the batch) is the named loop change that admits
 concurrent runs inside `executing_tools` while keeping emission and the
-transcript in call order — the one reopening of the frozen loop, with
+transcript in call order; the one reopening of the frozen loop, with
 its own gate clause and re-freeze.
 
 Faults: a `Fault` event or transport error aborts the turn, surfaces the
@@ -455,7 +455,7 @@ changes. An extension is anything registered by an option (a tool, a
 provider, a middleware participant, a command); there is no extension
 type, lifecycle, or discovery mechanism. `WithCommands` registers the
 user commands (deliverable 9, SPEC_COMMANDS) on the same seam: the loop
-ignores the registry — dispatch is the Frontend's, and a kernel without
+ignores the registry; dispatch is the Frontend's, and a kernel without
 `WithCommands` is byte-identical (the compat rule). Duplicate command
 names are a wiring error, refused at construction like duplicate tools.
 
@@ -491,7 +491,7 @@ the loop consumes. No third-party line; the stdlib-only rule holds.
   The fakes live at the DI seam, nowhere else.
 - Tools: real filesystem in `t.TempDir()`, real subprocesses for bash. No
   mocked syscalls.
-- Middleware: table tests on the chain; the retry guard test proves the
+- Middleware: table tests on the chain: the retry guard test proves the
   bounded-repetition invariant by exhausting it.
 - Provider adapter: `httptest.Server` replaying recorded llama.cpp SSE
   bodies; malformed and truncated streams are named cases.
@@ -507,7 +507,7 @@ the loop consumes. No third-party line; the stdlib-only rule holds.
   per-turn clear, and bound-th note; the compat rule (`TestEvent`
   forwarded untouched by the loop, ignored by the frontends); the resume
   projection (full transcript, dangling calls kept, unknown id loud).
-- Deliverable 8 (SPEC_COMPACT): the row invariants by name; the trigger
+- Deliverable 8 (SPEC_COMPACT): the row invariants by name: the trigger
   boundary at exactly `Window - Reserve` (anchored, 4); the pair-boundary
   cut; the once recovery and the surfaced second fault; `Compacted` compat
   (forwarded untouched by the loop, rendered one line by the CLI, ignored

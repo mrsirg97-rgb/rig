@@ -13,7 +13,7 @@ The runtime is feature-complete (0.3.0 with config loading): seams,
 events, commands, stores, and config, and everything that could ask for a
 loop change has already asked. From then on core/ and loop/ are open to extension and closed to
 modification as a discipline (models are sensitive to the loop; a frozen
-loop is a controlled variable); the v1.0.0 tag waits for lived use — a
+loop is a controlled variable); the v1.0.0 tag waits for lived use; a
 worker soak on 0.2.x and the TUI (10) field-tested as the daily driver.
 10 is the first consumer of the frozen runtime and the freeze's first
 test: if the TUI needs loop.go, the freeze was premature. (It lives in
@@ -54,7 +54,7 @@ edit. Named tools with small schemas are what a local model reaches for;
   terse, in pane's promptGuidelines voice. This is the one seam change in
   this deliverable; it is what makes named tools worth having.
 - Root: three registration lines and the allow-list default grows.
-- Tests: real filesystem in `t.TempDir()`; caps and truncation by name; the
+- Tests: real filesystem in `t.TempDir()`: caps and truncation by name; the
   bash tool is not used to implement any of it.
 
 Done when: the loop is byte-identical, `Description` reaches the wire as
@@ -71,7 +71,7 @@ Deliverable: pane's todo, same design, ported. Reference: `pane/TODO_SPEC.md`,
   `database/sql` + `modernc.org/sqlite`, the `sqlx` transaction seam on the
   ctx, one transaction per tool call. This deliverable is the first tool
   adapter over that substrate; it does not re-decide storage.
-- Enforced FSM (pending -> in_progress -> done | failed; failed -> retry),
+- Enforced FSM (pending -> in_progress -> done | failed: failed -> retry),
   minted ids, several tasks in flight, batched transitions serialized against
   fresh state, illegal transitions returning errors that teach the protocol.
 - dependsOn task trees: completion gated by dependencies, cycles refused,
@@ -96,7 +96,7 @@ Deliverable: pane's rem, ported. Reference: `pane/docs/REM_SPEC.md`,
   prune (strength decay, remove/reduce).
 - Hybrid single-file store topology, corruption quarantined aside and never
   deleted, effective strength at recall with a checkpointed pass at prune.
-- Uses `store/` from SPEC_STATE; FTS5 and trigram bookkeeping pinned as
+- Uses `store/` from SPEC_STATE: FTS5 and trigram bookkeeping pinned as
   in the spec.
 
 Done when: recall quality on pane's fixture set matches, and quarantine is a
@@ -128,8 +128,8 @@ job fires from a cold shell with only cron-env.
 Deliverable: pane's python, ported. Reference: `pane/extensions/python-kernel.ts`,
 `python-kernel.types.ts`.
 
-- One persistent IPython kernel per session; state survives across calls.
-- Timeout kills the whole kernel and says so; an unexpected death is
+- One persistent IPython kernel per session: state survives across calls.
+- Timeout kills the whole kernel and says so: an unexpected death is
   announced on the next call with exit description and stderr tail.
 - Process-group discipline from tool/bash (Setpgid, WaitDelay, group kill).
 - Stdlib only: `os/exec` and the kernel wire protocol over stdio, no
@@ -147,7 +147,7 @@ Deliverable: pane's web_search and web_fetch, ported. Reference:
 - SearXNG search over `net/http`. Guarded fetch: DNS refusal of private
   address space with readable errors, redirects re-checked hop by hop, byte
   and char caps with loud truncation markers, optional egress proxy.
-- Extraction: pane uses trafilatura; the port either shells to it (a
+- Extraction: pane uses trafilatura: the port either shells to it (a
   documented external, like bash and the python kernel) or ships a stdlib
   readability pass. Decide in the spec; do not add a Go HTML dep for it.
 
@@ -222,7 +222,7 @@ would hide it.
   to what the window actually has left.
 - Estimation is stdlib: bytes/4 with the provider's last reported prompt
   usage as the correction when present. Named as approximate in the spec.
-- The compacted prefix invalidates the server-side prompt cache; the policy
+- The compacted prefix invalidates the server-side prompt cache: the policy
   logs the reprocess cost (tokens dropped, tokens kept) through `Notify` as
   a named event so the operator can see it in a footer later. On DeltaNet
   hybrids the rollback is bounded by the server's checkpoints, not by
@@ -230,12 +230,12 @@ would hide it.
 - Overflow recovery: a provider fault that names context length triggers
   one compact-and-retry, once, then surfaces. Never a silent loop.
 - The compaction summary is context, not memory: nothing is handed to
-  rem (the `AutoReflect` handoff was built, then cut in 0.13.0 —
+  rem (the `AutoReflect` handoff was built, then cut in 0.13.0:
   SPEC_STATE, rem is deliberate).
 - Headless: `-p` workers get the same policy with the same per-model
   numbers; a job that would compact every turn is a config error surfaced
   at start, not a slow death.
-- Tests: scripted provider, fixture transcripts at known sizes; trigger
+- Tests: scripted provider, fixture transcripts at known sizes: trigger
   math by name for a 64k model and a 262k model with one shared config;
   pair-boundary cut; overflow-recovery once; the summary call's clamped
   max_tokens.
@@ -270,8 +270,8 @@ the same tool.
   have. No parallel implementation, no goal or loop verb: the queue is the
   plan. Both tools have landed (SPEC_STATE), so they attach in this
   deliverable alongside the runtime commands.
-- Rendering stays plain in the CLI (greppable lines); the render kit is 10.
-- Tests: dispatch by prefix with the loop never invoked; each runtime
+- Rendering stays plain in the CLI (greppable lines): the render kit is 10.
+- Tests: dispatch by prefix with the loop never invoked: each runtime
   command by name against a scripted kernel; `steer` delivered at the
   boundary and not before.
 
@@ -309,7 +309,7 @@ Deliverable: the extension surface, specced in `specs/SPEC_PLUGINS.md`
 migration from `~/.config/rig`, loud and deterministic), and the python
 plugins ride it: one file under `~/.rig/plugins/`, one tool per file,
 discovered at startup through the shared python kernel (the same
-persistent kernel as the `python` tool — the namespace shared on
+persistent kernel as the `python` tool; the namespace shared on
 purpose), registered on the existing `core.Tool` seam. Loud skip on a
 broken file, loud refusal on a native-name collision, `/plugins` the
 listing, allow-list subject and not in the default, sandbox named and
@@ -331,17 +331,17 @@ PR C (the worker jail) closes the oldest unpaid debt. The build round
 (Makefile + CI) may land in parallel; the forge lands last.
 SPEC_UX (the first user's findings: todo's guard and add, rem's
 recall at start, bash's cwd, edit's drift diff, the menu's
-navigation-intent Enter) implements FIRST — the field test's harvest
+navigation-intent Enter) implements FIRST; the field test's harvest
 before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is the worker's
 > boundary now (the provenance rule is the workflow beside it).
 > SPEC_PLUGINS 8 landed (0.7.0): the reload (`plugins`) and the
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.
 
-## the post-hardening rounds (0.8.2 → 0.18.0)
+## the post-hardening rounds (0.8.2 → 0.20.0)
 
 Spec-first as always; the freeze discipline holds (`core/` and `loop/`
-open to extension, closed to modification — the one named loop change
+open to extension, closed to modification; the one named loop change
 since is 0.12.0's, carried by name in the freeze gate). One line each,
 in order:
 
@@ -373,13 +373,21 @@ in order:
   in the session's working directory; grep's glob names its rule
   (SPEC_PYTHON, SPEC_FS).
 - **the soak's vitals** (0.17.0): `sessions`, a read-only native over
-  the session store — the recent sessions and the soak's vitals
+  the session store; the recent sessions and the soak's vitals
   (SPEC_STATE, SPEC_COMMANDS, amended).
-- **the job's whole life** (0.18.0): the scheduler's `update` — a
+- **the job's whole life** (0.18.0): the scheduler's `update`: a
   partial change that keeps the id and the runs, rewrites the job's
-  one crontab line, and never changes the state — and the dashboard's
+  one crontab line, and never changes the state, and the dashboard's
   four doors (pause, resume, remove, update) beside the create, the
   `runs` read, and the phone's row hand (SPEC_STATE, SPEC_SERVE,
   amended).
+- **the worker fleet** (0.19.0): `workers.json` names the worker model and
+  delegate slots. Worker-backed tools appear only when the fleet exists
+  (SPEC_CONFIG, SPEC_TUI).
+- **the hardening pass** (0.19.1): delegate paths resolve symlinks, worker
+  sessions carry explicit identities, and plugin reload and provenance fail
+  closed.
+- **the documentation release** (0.20.0): public docs, package docs, specs,
+  and website copy use direct prose and conventional punctuation.
 
 The queue's next lives in the CHANGELOG's `[Unreleased]`.

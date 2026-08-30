@@ -14,31 +14,31 @@ model is told its prior read is stale before it acts on it.
 
 ## What it includes
 
-- `read`, `write`, `edit` — a `core.Tool` each, over `os`/`path/filepath`.
+- `read`, `write`, `edit`: a `core.Tool` each, over `os`/`path/filepath`.
 - The stale-observation note on read: compared against the recorded
   `FileState` *before* the read re-records it, so an external or
   cross-session change is named once and the fresh bytes still ride it.
-- read's `offset`/`limit`: select a 0-based line range; `offset` past the
+- read's `offset`/`limit`: select a 0-based line range: `offset` past the
   end and a negative `offset`/`limit` refuse loud, naming the line count.
-- `normalizePath` — canonicalizes at the boundary so `a.go` and `./a.go`
+- `normalizePath`: canonicalizes at the boundary so `a.go` and `./a.go`
   are the same key (without it the drift check can be silently bypassed by
   path spelling).
-- `recordState` / `stateOf` — the `FileState` provenance maintained on the
+- `recordState` / `stateOf`: the `FileState` provenance maintained on the
   threaded session.
 
 ## How it is consumed
 
-- Registered at the root as native tools; `middleware/perm`'s provenance
+- Registered at the root as native tools: `middleware/perm`'s provenance
   rule mirrors `normalizePath` so the rule's path test and the tool agree
   on the same file.
 - `edit` reads `core.SessionFrom` to keep `FileState` per path.
 
 ## Gotchas
 
-- `normalizePath` canonicalizes (absolute + clean); a symlinked path that
+- `normalizePath` canonicalizes (absolute + clean): a symlinked path that
   bypasses the spelling still keys on the canonical string.
 - The drift check refuses when the file's hash or mtime differs from the
-  recorded `FileState` — edit-after-external-change never silently
+  recorded `FileState`; edit-after-external-change never silently
   clobbers.
 - A standalone exec (no threaded session) skips provenance maintenance.
 - `Session.Files` is written under a package mutex (`filesMu`): reads in

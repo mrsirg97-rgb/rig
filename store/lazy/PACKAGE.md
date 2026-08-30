@@ -3,15 +3,15 @@
 ## What it is
 
 The deferred result under direct accessor execution: a domain runs the
-query on the tx and hands back a filled `Lazy` — the result decorated,
+query on the tx and hands back a filled `Lazy`; the result decorated,
 the error carried through the fill path.
 
 ## What it includes
 
-- `ScanRow` — the minimal row the accessors scan (one `Scan` method,
+- `ScanRow`: the minimal row the accessors scan (one `Scan` method,
   satisfied by stdlib and pgx rows); the scanners stay decoupled from the
   wire layer.
-- `Lazy[T]` — `New`, `Fill` (single row), `FillAll` (a whole result),
+- `Lazy[T]`: `New`, `Fill` (single row), `FillAll` (a whole result),
   `Row`, `Rows`.
 
 ## How it is consumed

@@ -14,35 +14,35 @@ written before the store commit; drift is surfaced in list.
 
 ## What it includes
 
-- `scheduler.go` — the package doc, `SchemaVersion`, `Statements`,
+- `scheduler.go`: the package doc, `SchemaVersion`, `Statements`,
   the `DB` alias.
-- `cron.go` — the vixie cron parser and matcher.
-- `crontab.go` — the tagged-lines crontab edit/merge.
-- `verbs.go` — the command verbs
+- `cron.go`: the vixie cron parser and matcher.
+- `crontab.go`: the tagged-lines crontab edit/merge.
+- `verbs.go`: the command verbs
   (list/create/update/pause/resume/remove/runs) over the one
   `global.sqlite`; the crontab key is `jN` for every job, `name` unique
   store-wide, ids one sequence. `Create` takes the model from the
   caller (there is no package default anymore): an empty model refuses,
   naming the fleet's model and the job's own.
-- `migration.go` — the one-time schema-1→2 migration: folds every
+- `migration.go`: the one-time schema-1→2 migration: folds every
   `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
   `jN`), moves the old files aside as `<hash>.sqlite.migrated`, and is a
   no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
-- `runner.go` — the job runner (the worker spawn, bwrap jail, socket
+- `runner.go`: the job runner (the worker spawn, bwrap jail, socket
   proxy).
-- `delegate.go` — the one-shot worker spawn (SPEC_DELEGATE): the busy
+- `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE): the busy
   rule, the ad-hoc record (a minted job row with no crontab line), the
   state-store bind and explicit identity for the resumable transcript, the per-session
   delegate-slot flock (one slot per `slots`, the full set refusing
   naming the count) and the no-recursion marker.
-- `jail.go` — the bwrap jail argv composition.
-- `proxy.go` — the unix-socket proxy (the jail's one hole).
-- `fold.go` — the fold/replay over the event log.
-- `render.go` — the list/rendering: one list grouped by each job's own
+- `jail.go`: the bwrap jail argv composition.
+- `proxy.go`: the unix-socket proxy (the jail's one hole).
+- `fold.go`: the fold/replay over the event log.
+- `render.go`: the list/rendering: one list grouped by each job's own
   `cwd` (this directory first, then the rest by path), the empty store
   named (`scheduler: no jobs (global.sqlite)`).
-- `metadata/scheduler.go` — hand-written metadata.
+- `metadata/scheduler.go`: hand-written metadata.
 
 ## How it is consumed
 
@@ -57,11 +57,11 @@ written before the store commit; drift is surfaced in list.
   inside every transaction.
 - Removed jobs stay as tombstones (ids and names are never reused, remove
   survives compaction).
-- Runs are chain reads over their own container; run history survives
+- Runs are chain reads over their own container: run history survives
   compaction (an event-args-only shape would have dropped it).
-- Crontab is written before the store commit; drift is surfaced in list.
+- Crontab is written before the store commit: drift is surfaced in list.
 - `update` is the definition change: one `update` op overlays only the
-  fields the args carry — the id and the runs stay (remove + create
+  fields the args carry; the id and the runs stay (remove + create
   re-mints the id and orphans the runs); a cadence change rewrites the
   one crontab line under the same key, a paused job's line rewritten
   commented and the new line landing on resume; `update` never changes

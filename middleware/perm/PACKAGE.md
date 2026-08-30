@@ -11,15 +11,15 @@ attributed so downstream guards can bound the repetition.
 
 ## What it includes
 
-- `Allowlist(names...)` — permits exactly the listed tool names;
+- `Allowlist(names...)`: permits exactly the listed tool names;
   everything else is denied. This is the nil-door today.
-- `AllowlistWithDoor(names, door)` — the allow-list plus a second door
+- `AllowlistWithDoor(names, door)`: the allow-list plus a second door
   (the live plugin table's membership): a name the door admits passes
   though absent from the static list. The door speaks for plugins only
   (never a native); a nil door is `Allowlist`.
-- `Plugins(pluginsDir)` — the plugin provenance rule (SPEC_SANDBOX 2)
+- `Plugins(pluginsDir)`: the plugin provenance rule (SPEC_SANDBOX 2)
   for `write` and `edit`.
-- `resolvedPath` (unexported) — resolves symlinks through the deepest
+- `resolvedPath` (unexported): resolves symlinks through the deepest
   existing ancestor before applying the zone boundary.
 
 ## How it is consumed
@@ -35,7 +35,7 @@ attributed so downstream guards can bound the repetition.
 
 - A denied call returns the same message as both `content` and `error`
   (attributed), so the retry guard can bound the repetition.
-- `Plugins` applies only to `write`/`edit`; a malformed `path` arg falls
+- `Plugins` applies only to `write`/`edit`: a malformed `path` arg falls
   through to the tool, as does a target outside the rig home's plugins/
   or inside plugins/pending/ (the forge's landing zone).
 - `resolvedPath` prevents an alternate symlink spelling from turning a

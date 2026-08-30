@@ -9,7 +9,7 @@ command reads this same table.
 
 ## What it includes
 
-- `Model`: one row — `ID`, `Window`, `MaxTokens`, `Reserve`, `KeepRecent`,
+- `Model`: one row: `ID`, `Window`, `MaxTokens`, `Reserve`, `KeepRecent`,
   `Role`, `Effort` (the compaction summary call's request effort; `""` =
   the policy's "medium").
 - `Table`: id -> row, built by `New` with every row checked.
@@ -20,7 +20,7 @@ command reads this same table.
 
 ## How it is consumed
 
-- `New(rows...)` builds the table from checked rows; a violating row or a
+- `New(rows...)` builds the table from checked rows: a violating row or a
   duplicate id is refused at construction.
 - `Resolve(t, id, env)` returns the table row with `RIG_MODEL_*` overlaid
   and re-checked; else, if `RIG_MODEL_WINDOW` is set, a synthesized row for
@@ -39,11 +39,11 @@ command reads this same table.
   fires at every estimate.
 - `KeepRecent` must be in `[0, Window-Reserve)`: the usable window must
   leave room for the summary beside the tail, or compaction can never help.
-- Env precedence is env over file over embedded; the overlay makes the env
+- Env precedence is env over file over embedded: the overlay makes the env
   win for a known id too (0.2.0 consulted the env only for unknown ids).
 - The synthesized row carries `Role: RoleInteractive`: there is no file to
   borrow a role from.
-- `overlay` setter map uses closures over the `m` value; parse failure
+- `overlay` setter map uses closures over the `m` value: parse failure
   returns the raw error and a zero `Model`.
 - `Efforts` is the model's available effort levels in its own vocabulary
   and order (SPEC_MODES 1); `Effort` is the row's default, the wire's

@@ -11,7 +11,7 @@ store: the transcript is the snapshot.
 The gripe it answers, verbatim, from the model that felt it:
 
 > no native ‘run this and diff against my previous observation'
-> primitive — I get by with git and explicit state, but a
+> primitive; I get by with git and explicit state, but a
 > workspace-level before/after would kill a whole class of 'did my
 > change actually apply' drift.
 
@@ -37,7 +37,7 @@ Schema, Exec), two verbs in one schema, selected by a required `mode`
 - `files`: the working tree against HEAD (or `ref`, optional). The tool
   shells out to `git diff --no-color -U3` in the session's cwd (the
   process's cwd; the tool takes no cwd argument) and says so in its
-  description; with `ref` the form is `git diff --no-color -U3
+  description, with `ref` the form is `git diff --no-color -U3
   <ref>`, the one-dot ref-vs-working-tree diff, never `ref..HEAD`. A
   non-git cwd refuses loud, naming the reason. Optional
   `paths` restricts the diff. This is git being honest, not rig
@@ -79,7 +79,7 @@ Rejected, named:
 - The `last` reply is one header line, then the body. The header names
   the two observations (started_at, message_seq): the model sees which
   calls were compared, not just what changed.
-- The body is capped at N lines, N = 100, a named constant; the house
+- The body is capped at N lines, N = 100, a named constant: the house
   rule holds (SPEC_TUI 8): rig truncates only tool output, and does so
   loudly. Over the cap: the first N-1 lines are
   kept and the tail is the marker `… K more lines`, K the count of
@@ -99,7 +99,7 @@ Rejected, named:
   the exit-code footgun (git: 1 = files differ), the temp-file
   lifecycle, a second external voice to learn. The `files` verb already
   carries the shell-out contract; `last` does not need git.
-- A third-party diff library: `go.mod` is unchanged; a dependency is
+- A third-party diff library: `go.mod` is unchanged: a dependency is
   attack surface not written here.
 - A fancier diff algorithm (patience, histogram, a middle-snake
   divide-and-conquer): the plain LCS table is the engine, and its
@@ -107,7 +107,7 @@ Rejected, named:
   the reply is capped at 100 lines, so the bound is the one the cap
   already imposes, and the machinery it would save is never in the
   output.
-- ANSI in the reply: the model reads bytes; the TUI preview already
+- ANSI in the reply: the model reads bytes: the TUI preview already
   styles what it shows (decision 6).
 - A tail-keeping cap: the head is where the first hunk names the
   change; the tail is what the model re-reads directly.
@@ -184,7 +184,7 @@ Rejected, named:
   there is no capture to add.
 - No watch: no tailing, no polling, no subscription. One call, one
   reply.
-- No diff of arbitrary strings: that is `python`; this tool names its
+- No diff of arbitrary strings: that is `python`: this tool names its
   inputs by tool + args, not by pasting blobs into the wire.
 - No diffing across compaction: the world boundary is the session's
   last `[compaction]` marker row (SPEC_COMPACT 5: the marker is a user
@@ -251,7 +251,7 @@ frontend/tui/     at most the one toolDetail entry (decision 6)
 - Registered at the root, once, at the seam: `diff.New(sdb)` takes the
   state DB the way `todo.New(tdb)` does; the session comes from ctx,
   so the tool takes no session argument.
-- The freeze holds: `core/` and `loop/` byte-identical; no
+- The freeze holds: `core/` and `loop/` byte-identical: no
   middleware, no new loop events, no command.
 - The tool description text is part of the wire and is pinned by a
   golden: the `golden_020` fixtures carry the request bodies
@@ -389,8 +389,8 @@ in a single second).
 
 Success:
 
-- `identical` (both verbs; the empty diff)
-- `no earlier observation` (`last`; zero or one matching row)
+- `identical` (both verbs: the empty diff)
+- `no earlier observation` (`last`: zero or one matching row)
 - the header, then the body:
 
 ```text
@@ -428,7 +428,7 @@ order.
 - canonical form ignores key order and whitespace, and values matter:
   a property over key permutations and re-spacing of one JSON (all
   equal), and over one value changed (unequal)
-- `1` vs `"1"` is different; `{"a":1}` vs `{"a":null}` is different;
+- `1` vs `"1"` is different: `{"a":1}` vs `{"a":null}` is different;
   `{"a":1}` vs `{}` is different
 - RecordToolCall stores the canonical form: `{"b":1, "a":2}` lands as
   `{"a":2,"b":1}`
@@ -467,9 +467,9 @@ last:
 - an identical pair replies `identical`
 - exactly one matching call replies `no earlier observation`
 - zero matching calls replies `no earlier observation`
-- n=2 picks the second-previous row; an n beyond what is available
+- n=2 picks the second-previous row: an n beyond what is available
   replies `no earlier observation`
-- key order and whitespace in the query args do not matter; the
+- key order and whitespace in the query args do not matter: the
   gripe's case named: a `bash` call with the same command IS the same
   observation
 - a value changed (`ls` vs `ls -la`) is a different observation: no
@@ -499,7 +499,7 @@ the wire:
 
 the TUI (only if decision 6's table entry is taken):
 
-- the diff block's opening shows the verb; the rest of the block is
+- the diff block's opening shows the verb: the rest of the block is
   the default path (preview, outcome, duration), unchanged
 
 ## scope

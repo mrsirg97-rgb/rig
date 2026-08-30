@@ -6,16 +6,16 @@ fumbles quoting. One leaf package, three tools, stdlib only.
 
 ## goals
 
-- `ls`: one directory level — entry kind, name, size; hidden optional.
-- `find`: glob by name under a root; `**` spans directories.
+- `ls`: one directory level: entry kind, name, size; hidden optional.
+- `find`: glob by name under a root: `**` spans directories.
 - `grep`: Go regexp over content under a root, `path:line: text`, optional
   glob filter.
-- `Description` on the wire as `function.description` — the one seam change in
+- `Description` on the wire as `function.description`: the one seam change in
   this deliverable, and what makes named tools worth having.
 
 ## non-goals
 
-- No fuzzy or semantic search; Go regexp only, syntax errors surfaced.
+- No fuzzy or semantic search: Go regexp only, syntax errors surfaced.
 - No symlink following (`filepath.WalkDir` does not).
 - No content indexing, watch modes, or anything stateful.
 
@@ -40,59 +40,59 @@ accordingly and is named in the PR.
 
 - Stdlib only: `filepath.WalkDir`, `regexp`, `path/filepath.Match`, plus a
   hand-rolled `**` segment matcher on top of `path.Match`; a bare pattern (no
-  `/` and no `**`) names the file name itself — the find -name reading —
+  `/` and no `**`) names the file name itself; the find -name reading:
   anything else globs the root-relative path.
-- Skips, unconditional: `.git` subtrees under a walked root; binary content
+- Skips, unconditional: `.git` subtrees under a walked root: binary content
   (a NUL byte within the first 8 KiB). Unreadable entries (an unreadable
-  directory pruned, an unreadable file skipped — at walk time or at use
+  directory pruned, an unreadable file skipped; at walk time or at use
   time) are counted and named in the output as `[skipped: N unreadable]`
-  — loud, never a silent abort and never a silent swallow. A missing or
+ ; loud, never a silent abort and never a silent swallow. A missing or
   unreadable ROOT is a loud error, not a search that found nothing.
 - Caps, hard and loud: `ls` 1000 entries, `find` 1000 paths, `grep` 500 match
-  lines. Truncation is named in the output — `[truncated: N of M]` — never
+  lines. Truncation is named in the output; `[truncated: N of M]`; never
   silent. Memory stays bounded: matches beyond the cap count, not
   accumulate. A matched line's text is capped at 512 bytes with a
   `[line truncated]` marker, so one match cannot carry a minified bundle.
-- Paths in results are relative to the walked root, slash-separated; results
+- Paths in results are relative to the walked root, slash-separated: results
   sorted by path then line number.
 - A leading `~`, `~/…`, or `~user/…` in a path-shaped argument (`path`,
-  `root`, `cwd`) is the home, expanded once at the tool boundary —
-  `middleware/paths`, innermost in the root's chain — so read/write/edit,
+  `root`, `cwd`) is the home, expanded once at the tool boundary:
+  `middleware/paths`, innermost in the root's chain, so read/write/edit,
   ls/find/grep, bash's and delegate's and the scheduler's `cwd` all
   inherit it and no tool carries its own copy. The tools stay pure. A `~`
   anywhere else, an unknown user, or an unset home stand as given; the
   shell expands its own command line. Amended 2026-08-23 on a model's own
-  report — half its path habits worked — and its own shape for the fix:
+  report; half its path habits worked, and its own shape for the fix:
   at the boundary, not per call, or the drift just relocates.
-- `ls` sorts within its level (ReadDir order); an empty directory prints
+- `ls` sorts within its level (ReadDir order): an empty directory prints
   `(empty: /abs/dir)`; missing or non-directory paths are loud errors.
 - An empty `find` or `grep` names the pattern and the absolute root it
   searched (and the glob): `(no matches for '*.go' under /abs/root)`,
-  `(no matches for /re/ under /abs/root, glob '*.md')` — a root that
+  `(no matches for /re/ under /abs/root, glob '*.md')`; a root that
   defaulted to a subdirectory must not read as "the file does not exist"
   (SPEC_CORE, an empty reply names its scope). The schemas say the
   default root is the working directory.
-- `grep` long lines: reader-based line iteration; matched-line text capped
+- `grep` long lines: reader-based line iteration: matched-line text capped
   as above.
-- Cancellation: `ctx` checked at the walk boundary; a cancelled walk
+- Cancellation: `ctx` checked at the walk boundary: a cancelled walk
   surfaces the context error, never a partial result.
 
 ## testing
 
 Named cases against the real filesystem in `t.TempDir()`:
 
-- ls: kind/size rendering; hidden excluded by default, included on ask; the
+- ls: kind/size rendering: hidden excluded by default, included on ask; the
   cap names its truncation.
-- find: nested globs including `**`; bare patterns (no `/`, no `**`) reaching
+- find: nested globs including `**`: bare patterns (no `/`, no `**`) reaching
   nested files by name; missing pattern refused loud.
 - walk accounting: an unreadable directory's subtree and an unreadable
   file at use time reported as `[skipped: N unreadable]`, readable matches
   still delivered (find and grep alike); a missing or unreadable root is a
   loud error from both; a cancelled context surfaces loudly from both.
 - grep: the matched-line byte cap named by its marker.
-- grep: multi-file `path:line: text`; glob filter; `.git` and binary skips;
+- grep: multi-file `path:line: text`: glob filter; `.git` and binary skips;
   the cap marker with true totals.
-- Description: present on every fs tool (asserted); the adapter's spec→wire
+- Description: present on every fs tool (asserted): the adapter's spec→wire
   mapping carries it (shape test extended).
 
 The bash tool is not used to implement any of it.

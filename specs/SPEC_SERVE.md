@@ -54,7 +54,7 @@ shell, and the plugin forge.
 - No multi-user. One operator, one token, one machine.
 - No TLS, no WebSocket, no SSE, no streaming. Plain request/response over
   loopback HTTP.
-- No new dependencies. `go.mod` unchanged; the assets are embedded text.
+- No new dependencies. `go.mod` unchanged: the assets are embedded text.
 
 ## layout
 
@@ -167,18 +167,18 @@ mutates anything in this phase; the write is the only `db.Tx` (not
   (`MaxBytesReader`). A read route that receives a POST, or a write from a
   foreign Origin, is a refusal, not a silent no-op. Same-origin is the
   browser's definition (amended 2026-08-23): the `Origin` equals the bound
-  address, or the request's own front — `X-Forwarded-Proto`/`-Host` when a
+  address, or the request's own front; `X-Forwarded-Proto`/`-Host` when a
   proxy sets them, else `http://` + `Host`. Behind `tailscale serve` the
   page is `http://battlestation:7777` and its writes carried that Origin
   against an allow-list of `127.0.0.1`/`localhost`; every tap on the phone
   was `origin mismatch`. A cross-site request still fails: the victim's
   browser sends the real `Host` and the attacker's `Origin`. The bearer
   token stands in front of all of it.
-- **The handler set is an allow-list.** Every (method, path) is named; an
+- **The handler set is an allow-list.** Every (method, path) is named: an
   unknown path is a 404 and a known path with the wrong method is a 405
   (with the `Allow` header). There is no catch-all beyond the named static
   assets.
-- **Reads are bounded.** Each read handler runs under a read timeout; the
+- **Reads are bounded.** Each read handler runs under a read timeout: the
   transcript is paginated (a limit and offset over `Resume`'s messages, not
   the whole history every call).
 - **Fail closed.** A store that will not open, a cwd that resolves to no
@@ -197,12 +197,12 @@ todo/rem/scheduler/sessions views:
   history toggle for `ReadAll`; the create form (one task per line) and the
   verbatim reply.
 - **Scheduler.** The one list, grouped by directory (the selected cwd
-  first), drift notes included. The list renders even with no fleet —
+  first), drift notes included. The list renders even with no fleet:
   jobs created before the fleet was removed keep firing (the row
   carries its model, `run-job` needs no `workers.json`). With no
   fleet, the view says the same refusal the `/scheduler` command
   says, in place of the create form: `no workers configured
-  (~/.rig/workers.json names the model)` — the operator reads the
+  (~/.rig/workers.json names the model)`; the operator reads the
   file's job (it names the model) and writes it, instead of a form
   that could only mint jobs with no fleet to run them. The `GET
   /api/scheduler` reply carries the fleet's model (`worker`, empty
@@ -280,18 +280,18 @@ Named cases, failing first, against `httptest` over a temp rig home with
 seeded stores (the existing test seams; a real sqlite file, never
 `:memory:`):
 
-- **The token gate.** No credential is a 401; a wrong token is a 401; the
+- **The token gate.** No credential is a 401: a wrong token is a 401; the
   minted token (header) is a 200; `?token=` sets the `HttpOnly
   SameSite=Strict` cookie and then reads as the cookie; the token file is
   0600 and is not re-minted on a second open.
 - **The loopback refusal.** `127.0.0.1`, `::1`, and `localhost` are
   accepted; a non-loopback `-addr` is refused by name before the listener
   opens.
-- **The write's walls.** The create route is POST only (a GET is a 405); a
+- **The write's walls.** The create route is POST only (a GET is a 405): a
   foreign `Origin` is refused; a same-Origin POST succeeds and returns the
   verb's reply verbatim; an over-cap body is refused; the create lands one
   event attributed to `dashboard`.
-- **The allow-list.** An unknown path is a 404; a known path with the wrong
+- **The allow-list.** An unknown path is a 404: a known path with the wrong
   method is a 405 with the `Allow` header.
 - **The reads.** The sessions list groups by workspace and carries the cwd;
   the transcript renders as structure (a golden over a seeded session:
@@ -313,9 +313,9 @@ pure Go over the stores, the config, and the plugin files.
 
 ## the diffs this spec implies
 
-- **`store/state`**: `SessionRow` gains `Cwd`; `SessionUsage` (the typed
+- **`store/state`**: `SessionRow` gains `Cwd`: `SessionUsage` (the typed
   usage read); `StorePath(home, cwd)`.
-- **`store/todo`**: `FilePath(home)` (the one `todo.sqlite`; the
+- **`store/todo`**: `FilePath(home)` (the one `todo.sqlite`: the
   dashboard resolves a selected cwd's scope through the store's scope
   law).
 - **`store/rem`**: `FilePath(home)`.
@@ -345,7 +345,7 @@ Phase 1 shipped the read dashboard and the one write. This round is the
 polish: two more writes through the existing verbs (the named phase 2
 scheduler create and the plugin forge's first cut), the page made mobile,
 and the page's design language turned into a deliberate homage to the
-TUI — each view renders the way the TUI renders that tool's output.
+TUI; each view renders the way the TUI renders that tool's output.
 
 ### goals
 
@@ -353,17 +353,17 @@ TUI — each view renders the way the TUI renders that tool's output.
   `scheduler.Create` with session `dashboard`, the same verb a live
   session's `scheduler` tool calls. The form carries name, prompt, cron
   (five fields, or `once` plus an ISO `at`), and the `cwd` (the page's
-  cwd by default — the job runs where its `cwd` says, no scope arg).
+  cwd by default; the job runs where its `cwd` says, no scope arg).
   The create body's model defaults to the fleet's model (SPEC_CONFIG
   12): the server fills it when the body names none, and a job that
   names its own model keeps it. The verb's reply is shown verbatim, the
   list re-read after. With no fleet (`workers.json` absent), the POST
-  refuses by name (400, the command's voice) — the view says the same
+  refuses by name (400, the command's voice); the view says the same
   instead of offering the form (the view's refusal, below).
 - **The plugin create.** `POST /api/plugins` writes one file into the
   pending zone (`plugins/pending/<name>.py`), the provenance rule's
   landing zone (SPEC_SANDBOX 2): the operator's creation is reviewable,
-  never silently live. The file is the plugin contract (SPEC_PLUGINS) —
+  never silently live. The file is the plugin contract (SPEC_PLUGINS):
   a `DESCRIPTION`, a `SCHEMA` (an empty object until the operator
   promotes and extends it), and a `run(args)` whose body the form
   supplies. The name is the filename stem: lowercase, digits and
@@ -399,7 +399,7 @@ body-capped, and ride the existing verbs (`scheduler.Create`; a file
 write into the pending zone the plugin rule already blesses). The
 attribution is `dashboard`, as with the todo create. The scheduler
 create's runner command is the root's own (`<self> run-job`), injected
-through `web.Options.RunnerCmd` exactly as the crontab is — the page
+through `web.Options.RunnerCmd` exactly as the crontab is; the page
 never assembles the command line.
 
 ### 8. The plugin listing is live.
@@ -408,7 +408,7 @@ never assembles the command line.
 caching the `New`-time list: a file created by the form, promoted by
 the operator, or dropped by another tab is visible on the next read,
 with no reload of the serve process. The listing stays a read of the
-files (name from the stem, the file's `DESCRIPTION`), not discovery —
+files (name from the stem, the file's `DESCRIPTION`), not discovery:
 no kernel, no execution.
 
 ### 9. The new-workspace picker is client state.
@@ -423,7 +423,7 @@ state store is the named 404, unchanged.
 
 The page parses the store's verbatim text with the TUI's own rules and
 renders it in the oled slots; the wire keeps the store's voice
-(phase 1's decision 6 holds — the text is unchanged, only the
+(phase 1's decision 6 holds; the text is unchanged, only the
 presentation is structured). The JS parsers mirror the Go parsers line
 for line; a parse failure is the verbatim fallback, never a broken
 page. No new endpoint, no new verb, no new dependency.
@@ -483,7 +483,7 @@ matters. A per-workspace list of recent notes on a dashboard was noise
 beside the views the operator acts on; the route (`/api/memory`) and the
 tab are removed, the seed stays in the tests (the store is unchanged).
 Rejected, named: a read-only rem browser (it would want search, scopes,
-and supersession to be honest — a fourth phase, if ever).
+and supersession to be honest; a fourth phase, if ever).
 
 ### 12. The forge: source, save, approve.
 
@@ -494,13 +494,13 @@ Enter keeps the indent and adds one after a colon), no dependency.
 Three doors, the same walls as every write (POST, Origin, the body cap,
 the name wall):
 
-- `GET /api/plugins/source?name&zone` — the file, verbatim, by zone.
-- `POST /api/plugins/save {name, source}` — the full source into
+- `GET /api/plugins/source?name&zone`: the file, verbatim, by zone.
+- `POST /api/plugins/save {name, source}`: the full source into
   `plugins/pending/<name>.py`, create or update; the contract is checked
   by presence (`DESCRIPTION`, `SCHEMA`, `def run(`); a native name is
   the collision refusal. An edit of an approved plugin saves a pending
-  revision under the same name — nothing reaches `plugins/` by saving.
-- `POST /api/plugins/approve {name, replace?}` — the command's verb,
+  revision under the same name; nothing reaches `plugins/` by saving.
+- `POST /api/plugins/approve {name, replace?}`: the command's verb,
   verbatim: pending → `plugins/`; a native name refused; an installed
   name a 409 naming `replace` until it is explicit, then the swap. The
   reply names what a live session needs: its next `plugins reload`.
@@ -514,7 +514,7 @@ from the page (the shared kernel is a session's; phase 4).
 
 ### 12b. The disabled zone (0.12.1).
 
-The plugins page lists three zones — approved | pending | disabled —
+The plugins page lists three zones; approved | pending | disabled:
 the three directories (SPEC_GROWTH 9, amended). A disabled plugin
 opens in the editor like any other (its zone is `disabled` for
 `source`); a save is a pending revision as ever. The disabled zone is
@@ -527,22 +527,22 @@ disable, a disabled row an enable (12c).
 The dashboard carries the session's `/plugins enable|disable` verb, two
 doors beside `approve`: `POST /api/plugins/disable {name}` and `POST
 /api/plugins/enable {name}`, each calling `plugins.Move` (the same
-shared move the command and the plugins tool's delete use) — `disable`
+shared move the command and the plugins tool's delete use); `disable`
 moves `plugins/` → `plugins/disabled/`, `enable` moves it back. The
 same walls as every write (POST, Origin, the body cap), the same name
 wall (`pluginNameOK`), and the same refusals by name: a plugin that is
 not in the source zone, or already in the target zone, is the named
-refusal (the move's own, wrapped — `no such plugin`, `already in that
+refusal (the move's own, wrapped; `no such plugin`, `already in that
 zone`). The reply is the command's voice, verbatim:
 `disabled 'x' (plugins -> plugins/disabled); hidden next turn` and
 `enabled 'x' (plugins/disabled -> plugins); live at the next plugins
-reload`. The list re-reads after the move — no page reload.
+reload`. The list re-reads after the move; no page reload.
 
 The phone rule: every loaded row in the plugins view carries a disable
 control, every disabled row an enable one; the operator's hand on the
 phone can turn a plugin off and on without the TUI, the same
 `plugins.Move` one verb, the same live re-read. The pending zone is
-not in this hand — pending is the authoring door, promote it with
+not in this hand; pending is the authoring door, promote it with
 approve, disable it once it is loaded.
 
 ### 13. The folder browser, rooted at home.
@@ -559,7 +559,7 @@ files (the picker wants folders), following links out of home.
 
 ### 14. The page speaks the TUI's grammar.
 
-Every view is a tool block — `● name · detail`, the body, `name ✓` —
+Every view is a tool block; `● name · detail`, the body, `name ✓`:
 the shape `frontend/tui` commits (commit.go); input is a `❯` prompt row
 with a rule under it, never a boxed field; the nav marks the active view
 with `❯`; nothing sits in a panel. The models view takes the `/models`
@@ -568,7 +568,7 @@ the ramp's slots, the row's default underlined. The sessions list is
 rows you click, the transcript's tool calls open `● name · detail` like
 the TUI's and show raw args only when no detail parses. The mobile nav
 toggle is hidden above 720px by its class (the first round's button
-carried only the id and showed on desktop — the one bug in the list).
+carried only the id and showed on desktop; the one bug in the list).
 
 ### testing
 
@@ -591,7 +591,7 @@ enable on every disabled row.
 
 The operator can start, complete, and retry a task from the page: `POST
 /api/todo/start {id}`, `POST /api/todo/complete {id}`, and `POST
-/api/todo/retry {id}` call `todo.Start`, `todo.Complete`, and `todo.Retry` with session `dashboard` — the same
+/api/todo/retry {id}` call `todo.Start`, `todo.Complete`, and `todo.Retry` with session `dashboard`; the same
 verbs the tool calls, the same walls as every write (POST, Origin, the
 body cap), the id checked to the tool's shape (`tN`). The reply is the
 store's voice, the queue re-read after; a task the model claimed
@@ -614,34 +614,34 @@ the session cwd (as the create carries) and the attribution
 check, the body cap), and replying in the store's voice, verbatim:
 
 - `POST /api/scheduler/pause {id}`, `POST /api/scheduler/resume {id}`,
-  `POST /api/scheduler/remove {id}` — `scheduler.Pause`, `Resume`, and
+  `POST /api/scheduler/remove {id}`; `scheduler.Pause`, `Resume`, and
   `Remove`. The id is checked to the tool's shape (`jN`; a bad id is
   a 400) and the store's refusals ride through by name: an unknown
   id, a removed id (a resume of it is not paused, a second remove is
   already removed), a pause of a paused, a pause of a done.
-- `POST /api/scheduler/update {id, …}` — `scheduler.Update` with the
+- `POST /api/scheduler/update {id, …}`: `scheduler.Update` with the
   same partial fields the tool carries (any of `prompt`, `cron`/`at`,
   `model`, `cwd`, `busy`, `name`) and the runner command the root
   wired (as the create). The store's refusals ride through: an
   unknown id, a removed id, no fields (the verb's "update needs a
   change"), the cadence's exclusivity.
-- `GET /api/scheduler/runs?id=jN&n=` — the audit trail, `scheduler.
+- `GET /api/scheduler/runs?id=jN&n=`: the audit trail, `scheduler.
   Runs`. A read, as the list: the read timeout, no Origin wall. `n`
   is the 1-100 cap the tool carries (absent is the verb's default);
   an unknown id is the named 404; the verb's text verbatim (oldest
   first, a skip's reason, the log paths).
 
-The list re-reads after a move — no page reload.
+The list re-reads after a move; no page reload.
 
-The phone rule: every job row carries its controls beside it — pause
-or resume by state (a done row neither), remove, and runs — and an
+The phone rule: every job row carries its controls beside it; pause
+or resume by state (a done row neither), remove, and runs, and an
 update form that opens in place with the row's current fields
 (cadence, prompt, model, cwd, busy; the row carries no prompt, so an
 empty one is no change) and submits only what changed. Remove asks
 once, in-page (a confirm and a keep, no reload). Below 720px the
 row's controls stay the horizontal flex row (wrapping when the width
-forces it) of 44px tap targets — the `.rowact` class, as the plugins'
-controls — never a full-width stack; the update form is one column,
+forces it) of 44px tap targets; the `.rowact` class, as the plugins'
+controls; never a full-width stack; the update form is one column,
 and the buttons stop propagation so a tap never opens two things.
 
 ### testing

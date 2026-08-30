@@ -3,7 +3,7 @@
 The first sustained user of the harness that was not its author filed
 a report: the agent that builds rig, on its experience working inside
 it. The verdict was the design philosophy holds ("closed, typed seams,
-boring, loud — I disappeared into the style"); the findings are five
+boring, loud; I disappeared into the style"); the findings are five
 frictions, each small, each real, each named below with the reporter's
 own words as provenance. This spec wraps them into one round. No new
 surfaces: every fix lands on an existing seam, `core/` and `loop/`
@@ -17,7 +17,7 @@ The findings, verbatim (condensed):
 
 > rem underused: recall has to be cheaper than re-derivation. I
 > re-derived the repo's location, the ssh key quirk, the spec voice,
-> the commit style — each a "learn" candidate. Cheap fix: a standing
+> the commit style; each a "learn" candidate. Cheap fix: a standing
 > recall at session start.
 
 > bash's cwd surprise: a pwd line in the failure message would have
@@ -26,7 +26,7 @@ The findings, verbatim (condensed):
 > edit's drift after a bash sed: defensible, but a message that names
 > the diff would save the re-read.
 
-> the TUI's Enter-accepts: I typed /models and Enter — it filled in
+> the TUI's Enter-accepts: I typed /models and Enter; it filled in
 > "deepriver" instead of dispatching. As a first user, the one moment
 > I fought the input model rather than reading it.
 
@@ -52,12 +52,12 @@ The findings, verbatim (condensed):
 - No rem auto-learn beyond what exists (AutoReflect at compaction
   stays the write path): the round fixes the read path. A session-end
   reflection is named as a later candidate, not built. (Amended 0.13.0:
-  both the auto-reflection and the session-start read below are cut —
+  both the auto-reflection and the session-start read below are cut:
   SPEC_STATE, rem is deliberate.)
 - No TUI one-shot mode (`--tui --once`): the reporter self-rejected it
   as scope creep; recorded here as a future idea, not a demand.
 - No changes to the untouched surfaces (scheduler, python, web): the
-  report notes they carried none of the round's work — "either the
+  report notes they carried none of the round's work; "either the
   core loop is well-scoped or those surfaces need a pull I don't feel
   yet." Watched, not acted on.
 
@@ -68,13 +68,13 @@ The findings, verbatim (condensed):
 The review's live smoke discovered the premise false: `create` never
 replaced. The fold upserts by text (main and the branch alike;
 verified on main: two creates, the reply says "queue replaced with 1
-tasks" while the queue grows to 2) — the tool's description and reply
+tasks" while the queue grows to 2); the tool's description and reply
 have claimed replacement since the store shipped, and the field
 report's "I wiped the 43 old tasks" was the claim believed: nothing
 was wiped. The reporter's footgun was the reply lying in the safe
 direction.
 
-The operator's call: revert this decision's fixes whole — the count
+The operator's call: revert this decision's fixes whole; the count
 and the guard decorated drops that cannot happen, and `add` duplicated
 what `create` truthfully already does (upsert one task by text). The
 behavior was fine; the voice was the bug, and the voice fix is a later
@@ -87,9 +87,9 @@ The original decision, kept for the record:
 
 #### 1 (as specced, not implemented): the replacement counted, guarded, add
 
-`create` keeps its semantics — the full-replacement plan is the
+`create` keeps its semantics; the full-replacement plan is the
 planning gesture, and changing it under the model's feet breaks the
-tool's own description — but it stops being silent or unguarded:
+tool's own description, but it stops being silent or unguarded:
 
 - The reply counts the loss: `queue replaced: 5 tasks (dropped 43: 40
   open, 3 in progress)`. The count is the confirmation the reporter
@@ -102,7 +102,7 @@ tool's own description — but it stops being silent or unguarded:
   claims); the guard is the same rule at the replacement door. Own
   in-progress tasks do not refuse (replacing your own plan mid-flight
   is a choice, counted in the reply).
-- `add` (new verb, both doors — the tool's action and the command's
+- `add` (new verb, both doors: the tool's action and the command's
   Sub()): append one task to the queue, no replacement semantics at
   all. The parallel-session-safe verb.
 
@@ -125,15 +125,15 @@ remembered (this directory):
 - <the cwd's most recent K rem notes, one line each>
 ```
 
-- K = 8, capped at 1500 characters total (oldest trimmed first); the
+- K = 8, capped at 1500 characters total (oldest trimmed first): the
   cwd's notes only (rem is already cwd-scoped); absent notes = absent
   segment (today's bytes exactly).
 - Recall is a store read at session start and the refresh points
   (new, resume), never per turn. The segment rides the prefix: its
-  cost is prefix tokens, named — 1500 chars is the cap because the
+  cost is prefix tokens, named; 1500 chars is the cap because the
   memory must stay cheaper than what it saves.
 - The model's own habit fix rides the description: rem's tool
-  description gains one line — "your notes from this directory are in
+  description gains one line; "your notes from this directory are in
   your context at session start; learn what the next session should
   not re-derive."
 
@@ -152,13 +152,13 @@ am I" probes after a path error.
 
 The refusal today says the file changed since the read. Amended: it
 appends the unified diff of the remembered read against the current
-bytes — the diff tool's own engine (`tool/diff`'s Diff, a pure
+bytes; the diff tool's own engine (`tool/diff`'s Diff, a pure
 function, already in the tree), capped at 20 lines with the loud
 elision marker. The re-read the reporter paid becomes unnecessary
 exactly when the drift is small (a bash sed), and the cap keeps a
 rewritten file from flooding the reply.
 
-Rejected, named: naming the drift's author ("external: bash sed") —
+Rejected, named: naming the drift's author ("external: bash sed"):
 the tool cannot know who changed the bytes, and guessing is a lie
 with a confident voice.
 
@@ -172,15 +172,15 @@ The fix is the navigation-intent rule:
   the menu this input (Tab, Shift-Tab, or an arrow moved the
   selection). Navigation is the intent to pick.
 - Enter with no navigation DISPATCHES when the typed line is a
-  complete command (with or without arguments) — `/models` + Enter
-  lists the models; `/todo add x` + Enter runs it — and otherwise
+  complete command (with or without arguments); `/models` + Enter
+  lists the models; `/todo add x` + Enter runs it, and otherwise
   keeps today's behavior (the ghost's Enter completes-then-submits,
   SPEC_TUI 9; an incomplete prefix with a menu open and no navigation
   dispatches the unknown-command refusal it always meant).
 - The menu's hint row (the `… N more` tail's row, or a dim trailing
   segment) names the rule: `tab/↓ pick · enter runs`.
 
-This amends the pinned "Enter accepts, never dispatches" — the safe
+This amends the pinned "Enter accepts, never dispatches"; the safe
 first cut, revisited with field data: the first user fought it, and
 the navigation-intent rule keeps the safety (no accidental dispatch
 of a half-picked candidate: picking requires navigation, and
@@ -204,7 +204,7 @@ edit: the file changed since the read:
  …
 … 12 more lines
 remembered (this directory):
-- the repo lives in ~/Projects/rig; push with GIT_SSH_COMMAND=…
+- the repo lives in ~/Projects/rig: push with GIT_SSH_COMMAND=…
 ```
 
 ## testing
@@ -216,12 +216,12 @@ remembered (this directory):
 - rem: the segment present with notes and absent without (the golden
   holds); the K and character caps; the refresh points re-read; the
   cwd scoping (another directory's notes never ride).
-- bash: the failure carries the cwd line; the success is
+- bash: the failure carries the cwd line: the success is
   byte-identical to the golden.
-- edit: the refusal carries the capped diff; a one-line drift shows
+- edit: the refusal carries the capped diff: a one-line drift shows
   whole; a rewrite elides loudly; the diff engine is the shared one
   (no second differ).
-- the menu: /models + Enter with no navigation dispatches; Tab then
+- the menu: /models + Enter with no navigation dispatches: Tab then
   Enter accepts; arrow then Enter accepts; the ghost's
   complete-then-submit unchanged; the hint row names the rule.
 

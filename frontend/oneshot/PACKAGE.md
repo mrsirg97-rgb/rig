@@ -9,14 +9,14 @@ prompt, the process's stdout is the response.
 
 ## What it includes
 
-- `New(prompt, out)` — refuses an empty prompt at construction
+- `New(prompt, out)`: refuses an empty prompt at construction
   (`ErrOneShot`): a one-shot with no prompt is a construction error, not
   an empty turn (the loop's blank-line skip would otherwise swallow it).
-- `Input` — the prompt once, then EOF.
-- `Notify` — assistant text straight through, faults loud. Tool events
+- `Input`: the prompt once, then EOF.
+- `Notify`: assistant text straight through, faults loud. Tool events
   stay out of the worker's stdout: their results are the turn's
   substance, not its report.
-- `Faulted` — whether any fault crossed the session. The run-job record
+- `Faulted`: whether any fault crossed the session. The run-job record
   derives status from the exit code, so a faulted worker must exit
   non-zero or the run logs as ok.
 

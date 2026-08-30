@@ -10,7 +10,7 @@ session cwd; `~` is expanded at the `middleware/paths` boundary.
 
 ## What it includes
 
-- `Tool` — a `core.Tool` over the todo store's verbs.
+- `Tool`: a `core.Tool` over the todo store's verbs.
 
 ## How it is consumed
 
@@ -18,7 +18,7 @@ session cwd; `~` is expanded at the `middleware/paths` boundary.
 
 ## Gotchas
 
-- Replies are the store's shapes, verbatim — the adapter does not
+- Replies are the store's shapes, verbatim: the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
 - `project` is resolved through `scope.Key`/`scope.Label`: a subdirectory
   and a second worktree read the repo's one queue, a non-repo directory
@@ -30,8 +30,8 @@ session cwd; `~` is expanded at the `middleware/paths` boundary.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
   actionable queue (done folds into the summary line), read all:true
   returns the history, and a transition echo is the affected row plus
-  the summary — never the full queue. Create keeps the full (filtered)
+  the summary; never the full queue. Create keeps the full (filtered)
   queue because a replacement's point is the new state.
 - The description is shape only (SPEC_STREAMLINE 1): the state machine,
-  the claim rules, and the compaction rule ride the store's voices — the
+  the claim rules, and the compaction rule ride the store's voices; the
   replies teach on contact, the standing context does not double-teach.

@@ -21,7 +21,7 @@ one fan-out call at the turn boundary.
   (`ReasoningDelta`), survives in the transcript (`Message.Reasoning`), and
   goes back over the wire (`reasoning_content`), so interleaved-thinking
   tool turns keep their context and the user does not see silence.
-- Usage carries cache-read and cache-write; per-turn totals are computable
+- Usage carries cache-read and cache-write: per-turn totals are computable
   by the Frontend from the events it already receives.
 - Steering: input during a turn is queued and delivered on the next Input;
   an interrupt is a turn cancel plus re-entry into awaiting_input.
@@ -32,15 +32,15 @@ one fan-out call at the turn boundary.
   participant.
 - The retry guard matches pane: bound keyed by tool name, the streak per
   args (identical retries only), cleared per turn.
-- The compat rule is written down: events are added, never changed; a
+- The compat rule is written down: events are added, never changed: a
   Frontend must tolerate events it does not know. This is what lets 1.0
   freeze.
 
 ## non-goals
 
 - No TUI, no rendering kit, no styling: the CLI renders plain text lines.
-- No compaction (that is 8; the `ContextPolicy` seam is untouched).
-- No commands (that is 9; the `steer` command of 9 is this steering path
+- No compaction (that is 8: the `ContextPolicy` seam is untouched).
+- No commands (that is 9: the `steer` command of 9 is this steering path
   made a verb).
 - No new dependencies. `core/` and `loop/` stay standard library.
 - No change to `-p` one-shot or `run-job` semantics: the worker's stdout is
@@ -107,7 +107,7 @@ The state machine is unchanged. The changes:
   (a policy or provider that checks its context at call time reports it;
   the steer's own cancellation can land in that window). The loop reads it
   the same way the stream-loop's fault case does: `TurnEnd{interrupt}`, no
-  `Fault` — the model never started — and the run re-prompts. A dead run
+  `Fault`; the model never started, and the run re-prompts. A dead run
   ctx still ends the session cleanly at the boundary, as today.
 - **L4, tool-exec events.** Around each `exec` call the loop emits
   `ToolStart{Call}` before and `ToolResult{ID, Content, Err, Duration}`
@@ -244,7 +244,7 @@ cache-write is `usage.prompt_tokens_details.cache_write_tokens` when the
 server reports it, else 0. `total_tokens` is read and ignored (Prompt +
 Completion suffice; named). Grounded too: OpenAI and llama.cpp emit the
 usage chunk on a stream only when the request carries
-`stream_options: {"include_usage": true}` — the adapter sends it on every
+`stream_options: {"include_usage": true}`; the adapter sends it on every
 streaming request, and the wire-shape test asserts it the way it asserts
 `parameters` is an object. Without it, `Done.Usage` is all zeros and the
 per-turn line reads zero. `Done` keeps its shape: the fields ride the struct. The
@@ -357,9 +357,9 @@ the recorder.
 func Resume(ctx context.Context, db store.DB, sessionID string) (*core.Session, error)
 ```
 
-- The session row must exist; unknown id fails loud:
+- The session row must exist: unknown id fails loud:
   `resume: no such session: <id>`.
-- Messages are rebuilt in seq order: user rows to `RoleUser`; assistant
+- Messages are rebuilt in seq order: user rows to `RoleUser`: assistant
   rows to `RoleAssistant` with `Reasoning` (the column) and their
   `tool_calls` (id, name, args re-parsed to `json.RawMessage`); each call's
   result (nullable until it landed) to a `RoleTool` message with
@@ -386,7 +386,7 @@ reference (the root passes it; the session is root-owned) and upserts a
 full `files` snapshot at each turn boundary (on `Done` and on `Input`).
 Idempotent upserts, short transactions, as every other row. Without this,
 SPEC_STATE's "a resumed session keeps its drift checks" is owed by the
-schema and unmet by the writer; with it, resume restores what the session
+schema and unmet by the writer, with it, resume restores what the session
 actually had.
 
 ### 6. One extension mechanism: the middleware seam, widened
@@ -434,7 +434,7 @@ collects `Guidelines()` into the system prompt before it builds the policy
 prompt, and the prompt string is the root's). The collection's placement
 is named against SPEC_CONFIG 6: the root assembles
 `system → AGENTS.md (global then project) → Guidelines`, joining non-empty
-segments with a blank line — descending proximity, the operator's prompt,
+segments with a blank line; descending proximity, the operator's prompt,
 then the user's contract, then the participants' prose.
 
 Why this and not `core.Hooks`:
@@ -471,7 +471,7 @@ dataflow for result mutation).
   failed args resets the count before the guard check. So the bound
   strikes identical retries only, and the "change the call" teaching is
   never followed by blocking the changed call. Pane keys by
-  `event.toolName`; so do we.
+  `event.toolName`, so do we.
 - Rejected, named: **name keying with a shared budget** (this decision's
   first form). Its reason was that drifting args must not dodge the bound;
   in the field it blocked the corrected call the note had just asked for,
@@ -550,7 +550,7 @@ Amended after 8, both middleware beside `guard.Bound`, neither touching
 env, the loud invalid-value refusal; **amended: no cap by default**):
 counts every call in a turn on the widened seam (`TurnStart` clears it,
 like the bound) and, when `n > 0`, past `n` refuses every further call
-without executing, in a teaching voice naming the cap and what to do —
+without executing, in a teaching voice naming the cap and what to do:
 stop and report, or ask the operator; the one thing the model can still
 do is answer. `n = 0` (the embedded default, and a negative `n`) is no
 cap: the middleware stays in the chain, counts, never refuses. It caps
@@ -562,7 +562,7 @@ goroutines (SPEC_EVT 6). The default moved from 200 to none on
 2026-08-22: a one-shot (`-p`) turn with a large model on a real task
 legitimately exceeds 200 calls now that reads overlap (SPEC_EVT 2a), and
 a cap that ends a correct run mid-work is worse than the runaway it
-guards against — the retry bound still catches the identical-call loop,
+guards against; the retry bound still catches the identical-call loop,
 and compaction still bounds context. An operator who wants the wall
 (a jailed worker, an overnight job) sets `rounds`. Rejected, named: a
 loop change (frozen), a wall-clock cap (the model is not slow on

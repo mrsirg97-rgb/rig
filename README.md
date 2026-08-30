@@ -1,29 +1,23 @@
 # rig
 
-A coding agent you can use every day: one binary, a model endpoint, a
-terminal.
+A daily-driver coding agent. One binary. One model endpoint. One terminal.
 
-rig runs the agent loop faithfully — assemble context, stream the
-model's output, execute what it asks for, feed the results back,
-repeat — with every dependency at a typed seam. It is a terminal UI by
-default, a piped CLI when stdout is not a terminal, and a headless
-worker for scheduled jobs. And what it does is on disk: the session
-store, the todo queue, memory, and the scheduler's crontab, read the
-same way by the TUI, the CLI, and the dashboard.
+rig assembles context, streams the model, executes tool calls, returns
+results, and repeats. Every dependency sits behind a typed seam. The TUI,
+piped CLI, headless worker, and dashboard share the same session, task,
+memory, and scheduler stores.
 
 ## install
 
-Three paths, pick one:
+Choose one:
 
-**Installer** (POSIX sh, no Go, no sudo — lands in `~/.local/bin`):
+**Installer** (POSIX sh, no Go, no sudo; installs to `~/.local/bin`):
 
 ```sh
 curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh
 ```
 
-**Release binary** — the same asset the installer fetches, straight
-from `releases/latest`; pick your `<os>_<arch>` (the version lives in
-the URL, not the name):
+**Release binary** from `releases/latest`. Choose your `<os>_<arch>`:
 
 ```sh
 curl -fsSL https://github.com/mrsirg97-rgb/rig/releases/latest/download/rig_linux_amd64 -o rig
@@ -36,9 +30,8 @@ chmod +x rig
 go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 ```
 
-A built release updates itself in place: `rig -update` fetches,
-verifies, and atomically renames the latest release over the running
-binary (a running rig keeps the old file until restarted).
+`rig -update` fetches, verifies, and atomically installs the latest release.
+The running process keeps the old binary until restart.
 
 ## first run
 
@@ -46,16 +39,14 @@ binary (a running rig keeps the old file until restarted).
 ./rig --base-url $ENDPOINT --model $NAME
 ```
 
-An OpenAI-compatible SSE endpoint and a model id are the minimum.
-Defaults: endpoint `http://127.0.0.1:8090/v1`, model `local`, the
-terminal UI when stdout is a terminal, the piped CLI otherwise. For
-scripts, one-shot: `./rig -p "the task"`. Configure, and verify:
-`docs/SETUP.md`.
+rig needs an OpenAI-compatible SSE endpoint and a model ID. It defaults to
+`http://127.0.0.1:8090/v1`, model `local`, and the TUI when stdout is a
+terminal. Otherwise it uses the piped CLI. For scripts, run
+`./rig -p "the task"`. See `docs/SETUP.md` for configuration.
 
 ## the tools
 
-18 built-in tools ship on, and the allow-list names every one —
-narrow it with `--allow`:
+rig ships 18 built-in tools. Restrict them with `--allow`:
 
 | tool | what it does |
 |------|--------------|
@@ -63,34 +54,30 @@ narrow it with `--allow`:
 | `read` / `write` / `edit` | files; edits are exact-match, provenance-checked |
 | `ls` / `find` / `grep` | the filesystem, by name and by content |
 | `diff` | the working tree against HEAD, or a tool's two latest observations |
-| `python` | a persistent IPython kernel — variables and imports survive |
+| `python` | a persistent IPython kernel; variables and imports survive |
 | `web_search` | a local SearXNG instance |
 | `web_fetch` | a URL as readable text; private addresses refused |
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one) |
-| `rem` | memory across sessions: learn, recall, reflect, prune — scoped to the project |
+| `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
 | `delegate` | a one-shot headless worker for a bounded subtask |
 | `sessions` | read-only vitals of the session store |
 | `plugin` / `plugins` | the door into your python plugins, and their ecosystem |
 
-The work the model can induce is bounded: a result cap on every tool
-output, a retry bound on identical re-issues, an optional round cap —
-and a failing call executes exactly once, never silently re-run.
+Every tool result is capped. Repeated identical failures are bounded. An
+optional round cap limits calls per turn. A failed call executes once.
 
 ## plugins
 
-A python plugin is one file under `~/.rig/plugins/` and one tool: a
-`run`, a `schema`, no build step. The model can draft plugins into
-`~/.rig/plugins/pending/` (the provenance rule keeps its writes
-there), and the `/plugins` command — or the dashboard's forge —
-approves, disables, and reloads them. The contract and worked
-examples: `docs/PLUGINS.md`.
+A Python plugin is one file and one tool. It provides `run` and `schema`.
+There is no build step. Model-authored plugins land in
+`~/.rig/plugins/pending/`. Approve, disable, and reload them with `/plugins`
+or the dashboard. See `docs/PLUGINS.md`.
 
 ## configuration
 
-Everything lives in the rig home, `~/.rig/` (override with
-`$RIG_HOME`). Every file is optional; a present-but-bad one is a loud
-refusal at start, naming the file and the field.
+Configuration lives in `~/.rig/`. Set `$RIG_HOME` to move it. Every file is
+optional. Invalid files fail startup and name the file and field.
 
 | file | what it holds |
 |------|---------------|
@@ -100,11 +87,9 @@ refusal at start, naming the file and the field.
 | `theme.json` | the terminal theme: base, slot colors, glyph set |
 | `plugins/` | your python plugins (top-level files are live) |
 
-Every knob resolves per key, flag > env > file > built-in default:
-what you typed on the line wins, and an unset key descends. `/models`
-lists the runtime table and switches the active model; `/effort` dials
-the reasoning effort the model uses. The full table, the presence
-keys, and the sandbox: `docs/SETUP.md`.
+Each key resolves in this order: flag, environment, file, built-in default.
+`/models` lists and switches models. `/effort` changes reasoning effort. See
+`docs/SETUP.md` for configuration and sandbox settings.
 
 ## the dashboard
 
@@ -112,19 +97,17 @@ keys, and the sandbox: `docs/SETUP.md`.
 rig serve
 ```
 
-A loopback-only server on the rig home's stores — the same files a
-live session is writing, read through the same store verbs. It
-prints the address and, on a first mint, a token (kept in the home,
-`0600`, printed once); open the printed link with the token and the
-page sets its own cookie.
+The dashboard serves the rig stores on loopback only. On first run it prints
+an access token, stores it with mode `0600`, and includes it in the URL. The
+page exchanges the token for a cookie.
 
-- **sessions** — list them per workspace, and resume one mid-work
-- **todo** — the queue, with create, start, complete, and retry
-- **scheduler** — the jobs, with create, pause, resume, remove, an
+- **sessions**: list them per workspace, and resume one mid-work
+- **todo**: the queue, with create, start, complete, and retry
+- **scheduler**: the jobs, with create, pause, resume, remove, an
   in-place update form that opens with the job's current fields, and
   each job's run audit trail
-- **models** — the table, with the effort dial
-- **plugins** — approved, pending, disabled; the forge reads and
+- **models**: the table, with the effort dial
+- **plugins**: approved, pending, disabled; the forge reads and
   saves a plugin's source into the pending zone
 
 Every write is attributed to `dashboard` and rides the store verb the
@@ -145,7 +128,7 @@ it. Spec: `specs/SPEC_SERVE.md`.
 ## layout
 
 ```
-cmd/rig      composition root — wires every seam once; flags and env only
+cmd/rig      composition root; wires every seam once; flags and env only
 core            the seams, wire types, and the streaming-event vocabulary
 loop            the concrete turn runtime (fault/cancel-aware)
 evt             the event loop (SPEC_EVT): one consumer, many producers; the
@@ -180,18 +163,12 @@ docs/           DESIGN (architecture), SETUP (build/config), USAGE (running),
 
 ## extending
 
-The design test, enforced structurally: adding a tool, a provider, a
-context policy, a frontend, or a tool middleware is **one file plus
-one registration line** at the composition root — the loop never names
-a concrete type. Or no Go at all: a python plugin is one file under
-the rig home's `plugins/` and one tool (`docs/PLUGINS.md`). How:
-`docs/DESIGN.md`.
+The structural test is simple: add one file and one registration line. The
+loop never names a concrete tool, provider, policy, frontend, or middleware.
+A Python plugin needs no Go. See `docs/DESIGN.md` and `docs/PLUGINS.md`.
 
 ## under the hood
 
-`core/` and `loop/` are stdlib-only; the one leaf dependency is
-`modernc.org/sqlite` (pure-Go driver) for the stores, justified in
-`specs/SPEC_STATE.md`. Status: feature-complete runtime, version
-`0.18.0`; the freeze discipline holds on `core/` and `loop/`, and the
-1.0 tag waits for lived use (a worker soak, the TUI field-tested as
-the daily driver).
+`core/` and `loop/` use only the standard library. Stores use the pure-Go
+`modernc.org/sqlite` driver. Version `0.20.0` remains pre-1.0 while the worker
+fleet and TUI continue daily-driver soak testing.
