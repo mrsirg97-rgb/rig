@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig: a minimal agentic loop harness</title>
-<meta name="description" content="A minimalist agentic harness. A frozen 371-line loop behind five seams, parallel tool calls on an event loop, named walls, deliberate memory, one self-updating binary. Install in one line.">
+<title>rig: a daily-driver agent harness for local models</title>
+<meta name="description" content="A daily-driver agent harness for local models. Persistent sessions, deliberate memory, jailed workers, one-file plugins, and a small frozen loop. Install in one line.">
 <meta name="theme-color" content="#050505">
-<meta property="og:title" content="rig: a minimal agentic loop harness">
-<meta property="og:description" content="A minimalist agentic harness, built closed. Install in one line; extend with one file.">
+<meta property="og:title" content="rig: a daily-driver agent harness for local models">
+<meta property="og:description" content="Persistent sessions. Deliberate memory. Jailed workers. One binary, built for all-day use.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
 <style>
@@ -61,6 +61,9 @@ a:hover { text-decoration: underline; }
 .ln { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2.2ch; text-indent: -2.2ch; }
 .ln.out, .ln.py { padding-left: 4ch; text-indent: -2ch; }
 .msg { margin: 0; white-space: normal; max-width: 72ch; overflow-wrap: anywhere; }
+.hero { color: var(--text); font-size: 16px; line-height: 1.55; max-width: 62ch; }
+.proof { color: var(--dim); max-width: 72ch; }
+.proof strong { color: var(--ok); font-weight: normal; }
 .dim { color: var(--dim); }
 .gap { height: 1.1rem; }
 .gap.sm { height: .55rem; }
@@ -146,6 +149,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
   .tl { grid-template-columns: 1fr; row-gap: 0; }
   .tl .td { padding-left: 2.2ch; margin-bottom: .25rem; }
   .msg { max-width: none; }
+  .hero { font-size: 14px; }
   footer .links a + a::before { margin-right: .9rem; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -163,129 +167,89 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <span class="ver">{{RIG_VERSION}}</span>
   </div>
   <div class="tr">
-<h2 class="sr">a rig session: figure out how to install rig</h2>
+<h2 class="sr">rig: a daily-driver agent harness for local models</h2>
 
     <div class="ln boot reveal">welcome to</div>
     <pre class="logo reveal" aria-label="rig, in the 3x3 block face">█▀▄ █ █▀▀
 █▀▄ █ █ █
 ▀ ▀ ▀ ▀▀▀</pre>
     <div class="gap reveal"></div>
-    <div class="ln model reveal">huihui3.8</div>
+    <div class="ln model reveal">local model · long session · real repository</div>
     <div class="ln reveal"><span class="xhigh">xhigh</span><span class="dim"> · default · auto</span></div>
-    <div class="ln dim reveal">up 214k down 18k · cache r 187k 87%</div>
+    <div class="ln dim reveal">up 214k down 18k · cache r 211k 99%</div>
 
     <div class="gap reveal"></div>
-    <div class="ln in reveal"><span class="ps">❯</span>  figure out how to install rig</div>
+    <div class="msg hero reveal">your local model deserves more than a prompt box.</div>
+    <div class="msg proof reveal">rig gives it persistent sessions, bounded tools, deliberate memory,
+    jailed workers, and one-file plugins. <strong>daily-driver soak: 98-99% cache hits.</strong></div>
+
+    <div class="gap reveal"></div>
+    <div class="ln cmd reveal"><span class="cmdtext"><span class="ps">❯</span>  curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
+    <div class="ln out reveal">  rig {{RIG_VERSION}} installed to ~/.local/bin/rig</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln in reveal"><span class="ps">❯</span>  inspect this repository, delegate the test sweep, and remember what matters</div>
 
     <div class="gap reveal"></div>
     <div class="ln think reveal">| thinking</div>
-    <div class="ln reason reveal">let me plan this before I do it.</div>
+    <div class="ln reason reveal">map the system, split the independent work, keep the durable result.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">create</span></div>
-    <div class="ln reveal"><span class="bar-off">▱▱▱▱▱</span> <span class="dim">0/5 · next t1</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+    <div class="ln reveal"><span class="bar-off">▱▱▱</span> <span class="dim">0/3 · next t1</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
+    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
 
     <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">web_search</span>   <span class="dim">·</span>   <span class="toolargs">rig minimal agent harness install</span></div>
-    <div class="ln out reveal">  rig: a minimal agentic harness. stdlib-only core, install in one line.</div>
-    <div class="ln reveal"><span class="tname-done">web_search</span>   <span class="ok">✓</span>   <span class="dim">0.6s</span></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">read</span>   <span class="dim">·</span>   <span class="toolargs">AGENTS.md</span></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">find</span>   <span class="dim">·</span>   <span class="toolargs">PACKAGE.md</span></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">grep</span>   <span class="dim">·</span>   <span class="toolargs">interface ./core</span></div>
+    <div class="ln out reveal">  three reads admitted together · results applied in call order</div>
+    <div class="ln reveal"><span class="tname-done">batch</span>   <span class="ok">✓</span>   <span class="dim">0.08s</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">rig is a minimalist agentic harness. one job: the turn; assemble context,
-    run the tools, feed the results back, repeat. what makes it not another framework:</div>
+    <div class="msg reveal">the shape is clear. rig is one closed machine: assemble context, stream the model,
+    execute its calls, return the results, repeat.</div>
     <div class="gap sm reveal"></div>
-    <div class="ln li reveal"><span class="lg">•</span> the loop is 371 lines and frozen. growth happens behind five seams; provider, frontend, tools, middleware, policy; never in the loop. a gate in the test suite refuses a diff that touches it.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the loop is small, frozen, and protected by a structural test. growth stays behind typed seams.</div>
     <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel on an event loop: goroutines post completions, one consumer applies them in call order. no locks, no races, the transcript stays ordered.</div>
     <div class="ln li reveal"><span class="lg">•</span> the walls are named. an allowlist, a retry guard, an approval gate, result bounds, a plugin landing zone, a bwrap jail for background workers, and every refusal says why, so the model adjusts instead of flailing.</div>
     <div class="ln li reveal"><span class="lg">•</span> memory is deliberate. nothing writes itself into your prompt; the model recalls, learns, and supersedes by id. tasks, memory, and schedule are scoped to the repo; worktrees share one plan.</div>
     <div class="ln li reveal"><span class="lg">•</span> every behavior is a sentence in specs/ with a test pinning it; the wire is byte-pinned against golden request bodies. specs first, then failing tests, then code.</div>
-    <div class="ln li reveal"><span class="lg">•</span> one static binary, stdlib-only core. a TUI, a piped CLI, a phone-sized dashboard. sessions persist and resume across restarts; it's a daily driver, not a one-shot; rig -update replaces it in place.</div>
+    <div class="ln li reveal"><span class="lg">•</span> one static binary, stdlib-only core. TUI, piped CLI, headless workers, and a phone-sized dashboard share the same stores.</div>
     <div class="gap sm reveal"></div>
-    <div class="msg reveal dim">the models that run in rig work on rig. most of what you just read was built that way.</div>
+    <div class="msg reveal dim">the models running inside rig build rig. this page describes the harness they use.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t1</span></div>
-    <div class="ln reveal"><span class="bar-on">▰</span><span class="bar-off">▱▱▱▱</span> <span class="dim">1/5 · next t2</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+    <div class="ln reveal"><span class="bar-on">▰</span><span class="bar-off">▱▱</span> <span class="dim">1/3 · next t2</span></div>
 
     <div class="gap reveal"></div>
-    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span></span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
-    <div class="ln out reveal">  rig {{RIG_VERSION}}</div>
-    <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.9s</span></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">delegate</span>   <span class="dim">·</span>   <span class="toolargs">run the full test sweep and report only actionable failures</span></div>
+    <div class="ln out reveal">  worker w1 · fresh session · jailed · cwd /rig</div>
+    <div class="ln out reveal">  suite green · platform-only checks reported separately · no regression</div>
+    <div class="ln reveal"><span class="tname-done">delegate</span>   <span class="ok">✓</span>   <span class="dim">2m14s</span></div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t2</span></div>
-    <div class="ln reveal"><span class="bar-on">▰▰</span><span class="bar-off">▱▱▱</span> <span class="dim">2/5 · next t3</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+    <div class="ln reveal"><span class="bar-on">▰▰</span><span class="bar-off">▱</span> <span class="dim">2/3 · next t3</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">point it at any OpenAI-compatible endpoint: a local box, a gateway, or a hosted API.</div>
-
-    <div class="gap reveal"></div>
-    <div class="ln cmd reveal"><span class="cmdtext"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ rig --base-url $ENDPOINT --model $NAME</span></span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
-    <div class="ln out reveal">  rig {{RIG_VERSION}} ready</div>
-    <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
-
-    <div class="gap reveal"></div>
-    <div class="ln sect reveal">── <b>config</b> ─────────────────────────────</div>
-    <div class="gap sm reveal"></div>
-    <div class="msg reveal">two files under ~/.rig, both optional; rig runs on its embedded defaults
-    until you say otherwise. precedence is flag, env, file, then embedded.</div>
-    <div class="gap sm reveal"></div>
-    <div class="msg reveal"><span class="tname">models.json</span>; the model table, merged by id over the embedded rows.
-    a row is the model's contract: the context window, the output cap, the compaction
-    reserve, what survives a compaction, and the effort vocabulary the /effort dial offers.</div>
-
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">write</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/models.json</span></div>
-    <div class="ln py reveal">  [</div>
-    <div class="ln py reveal">    {"id": <span class="s">"big-ctx"</span>, "window": 262144, "maxTokens": 16384,</div>
-    <div class="ln py reveal">     "reserve": 16384, "keepRecent": 65536,</div>
-    <div class="ln py reveal">     "role": <span class="s">"interactive"</span>, "efforts": [<span class="s">"low"</span>, <span class="s">"medium"</span>, <span class="s">"high"</span>, <span class="s">"xhigh"</span>]}</div>
-    <div class="ln py reveal">  ]</div>
-    <div class="ln out reveal">  models.json written: big-ctx added, embedded rows kept</div>
-    <div class="ln reveal"><span class="tname-done">write</span>   <span class="ok">✓</span>   <span class="dim">0.4s</span></div>
-
-    <div class="gap sm reveal"></div>
-    <div class="msg reveal"><span class="tname">settings.json</span>; the harness. the endpoint, the default model, and the walls:
-    which tools are allowed, whether mutations pause for you, how many identical
-    failures before the guard steps in.</div>
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">edit</span>   <span class="dim">·</span>   <span class="toolargs">~/.rig/settings.json</span></div>
-    <div class="ln py reveal">  {</div>
-    <div class="ln py reveal">    <span class="s">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,</div>
-    <div class="ln py reveal">    <span class="s">"model"</span>: <span class="s">"big-ctx"</span>,</div>
-    <div class="ln py reveal">    <span class="s">"approve"</span>: <span class="s">"auto"</span>,</div>
-    <div class="ln py reveal">    <span class="s">"allow"</span>: [<span class="s">"bash"</span>, <span class="s">"read"</span>, <span class="s">"write"</span>, <span class="s">"edit"</span>, <span class="s">"..."</span>],</div>
-    <div class="ln py reveal">    <span class="s">"retries"</span>: 3,</div>
-    <div class="ln py reveal">    <span class="s">"sandbox"</span>: <span class="s">"jailed"</span></div>
-    <div class="ln py reveal">  }</div>
-    <div class="ln out reveal">  settings.json: the endpoint, the default, the walls</div>
-    <div class="ln note reveal">  approve "manual" pauses every mutation for you; allow is the tool set;</div>
-    <div class="ln note reveal">  retries bounds identical failing calls; the jail is bwrap, workers only.</div>
-    <div class="ln reveal"><span class="tname-done">edit</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
+    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">rem</span>   <span class="dim">·</span>   <span class="toolargs">learn</span></div>
+    <div class="ln out reveal">  m42 · core and loop are frozen; growth lands behind typed seams at cmd/rig</div>
+    <div class="ln reveal"><span class="tname-done">rem</span>   <span class="ok">✓</span>   <span class="dim">0.03s</span></div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t3</span></div>
-    <div class="ln reveal"><span class="bar-on">▰▰▰</span><span class="bar-off">▱▱</span> <span class="dim">3/5 · next t4</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+    <div class="ln reveal"><span class="bar-on">▰▰▰</span> <span class="dim">3/3</span></div>
+
+    <div class="gap reveal"></div>
+    <div class="msg reveal">done. the parent session stayed focused, the worker kept its own resumable transcript,
+    and the project fact will be recalled next time only when asked.</div>
+
+    <div class="gap reveal"></div>
+    <div class="ln sect reveal">── <b>the surface</b> ────────────────────────</div>
 
     <div class="gap reveal"></div>
     <div class="msg reveal">eighteen native tools ship in the box, small schemas a local model can drive.</div>
@@ -304,32 +268,10 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln tl reveal"><span class="tn">sessions</span><span class="td">the session store, read-only: the recent sessions and the soak's vitals; the models, the faults, the cache ratio</span></div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">the python kernel is persistent. define a value in one call, use it in the next.</div>
-
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">python</span>   <span class="dim">·</span>   <span class="toolargs">code</span></div>
-    <div class="ln py reveal">  nums = list(range(1, 101))</div>
-    <div class="ln reveal"><span class="tname-done">python</span>   <span class="ok">✓</span>   <span class="dim">0.3s</span></div>
-
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">python</span>   <span class="dim">·</span>   <span class="toolargs">code</span></div>
-    <div class="ln py reveal">  sum(n for n in nums if n % 2)</div>
-    <div class="ln out reveal">  2500</div>
-    <div class="ln reveal"><span class="tname-done">python</span>   <span class="ok">✓</span>   <span class="dim">0.2s</span></div>
-
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t4</span></div>
-    <div class="ln reveal"><span class="bar-on">▰▰▰▰</span><span class="bar-off">▱</span> <span class="dim">4/5 · next t5</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
-
-    <div class="gap reveal"></div>
-    <div class="msg reveal">one file under ~/.rig/plugins/ is one tool. the name is the filename,
-    the schema is the file's. a broken file names itself and is skipped,
-    never bricks the harness.</div>
+    <div class="ln sect reveal">── <b>one file, one tool</b> ──────────────────</div>
+    <div class="gap sm reveal"></div>
+    <div class="msg reveal">drop one python file under ~/.rig/plugins/. no manifest, build step, or restart.
+    model-authored files land in pending until you approve them.</div>
 
     <div class="gap reveal"></div>
     <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ cat ~/.rig/plugins/uptime.py</span></div>
@@ -338,20 +280,16 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln py reveal">  <span class="k">def</span> <span class="f">run</span>(args: dict) -&gt; str:</div>
     <div class="ln py reveal">      s = open(<span class="s">"/proc/uptime"</span>).read().split()[0]</div>
     <div class="ln py reveal">      <span class="k">return</span> f<span class="s">"up {int(float(s) // 3600)}h {int(float(s) // 60) % 60:02d}m"</span></div>
-    <div class="ln out reveal">  uptime: report host uptime, terse (~/.rig/plugins/uptime.py)</div>
+    <div class="ln out reveal">  uptime registered · report host uptime, terse</div>
     <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.1s</span></div>
 
     <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t5</span></div>
-    <div class="ln reveal"><span class="bar-on">▰▰▰▰▰</span> <span class="dim">5/5</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">research rig</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">get installer</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">configure harness</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t4</span> <span class="task-text">how to use tools</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t5</span> <span class="task-text">how to use plugins</span></div>
+    <div class="msg hero reveal">one machine. built closed. ready to work.</div>
+    <div class="msg proof reveal">point rig at any OpenAI-compatible endpoint. sessions persist across restarts.
+    <span class="ok">rig -update</span> replaces the binary in place.</div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">all five done. rig {{RIG_VERSION}} is installed, configured, and pointed at your endpoint. from here it updates itself: rig -update. you're in.</div>
+    <div class="ln cmd reveal"><span class="cmdtext"><span class="ps">❯</span>  rig --base-url $ENDPOINT --model $NAME</span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
 
     <div class="gap reveal"></div>
     <div class="ln in reveal"><span class="ps">❯</span>  <span class="cursor" aria-hidden="true"></span></div>
@@ -359,7 +297,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
 </div>
 
   <footer class="reveal">
-    <div>rig {{RIG_VERSION}} · a minimal agentic loop harness</div>
+    <div>rig {{RIG_VERSION}} · a daily-driver agent harness for local models</div>
     <div class="links">
       <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/docs">docs/</a><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a><a href="https://github.com/mrsirg97-rgb/rig">github</a>
     </div>
@@ -372,11 +310,17 @@ html.js .reveal.in { opacity: 1; transform: none; }
   document.documentElement.className += " js";
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var items = document.querySelectorAll(".reveal");
-  for (var i = 0; i < items.length; i++) {
-    (function (el, delay) {
-      if (reduced) { el.classList.add("in"); return; }
-      setTimeout(function () { el.classList.add("in"); }, 40 + delay * 38);
-    })(items[i], i);
+  if (reduced || !("IntersectionObserver" in window)) {
+    for (var i = 0; i < items.length; i++) { items[i].classList.add("in"); }
+  } else {
+    var observer = new IntersectionObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (!entries[i].isIntersecting) { continue; }
+        entries[i].target.classList.add("in");
+        observer.unobserve(entries[i].target);
+      }
+    }, { rootMargin: "0px 0px 80px", threshold: 0.02 });
+    for (var i = 0; i < items.length; i++) { observer.observe(items[i]); }
   }
   var btns = document.querySelectorAll(".copy");
   for (var b = 0; b < btns.length; b++) {
