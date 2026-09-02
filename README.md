@@ -1,11 +1,10 @@
 # rig
 
-A daily-driver coding agent. One binary. One model endpoint. One terminal.
+A minimum runtime for your agents.
 
-rig assembles context, streams the model, executes tool calls, returns
-results, and repeats. Every dependency sits behind a typed seam. The TUI,
-piped CLI, headless worker, and dashboard share the same session, task,
-memory, and scheduler stores.
+One binary. One model endpoint. One terminal.
+
+rig assembles context, streams the model, executes tool calls, returns results, and repeats. The TUI, piped CLI, headless worker, and dashboard share the same session, task, memory, and scheduler stores.
 
 ## install
 
@@ -30,8 +29,7 @@ chmod +x rig
 go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 ```
 
-`rig -update` fetches, verifies, and atomically installs the latest release.
-The running process keeps the old binary until restart.
+`rig -update` fetches, verifies, and atomically installs the latest release. The running process keeps the old binary until restart.
 
 ## first run
 
@@ -39,10 +37,7 @@ The running process keeps the old binary until restart.
 ./rig --base-url $ENDPOINT --model $NAME
 ```
 
-rig needs an OpenAI-compatible SSE endpoint and a model ID. It defaults to
-`http://127.0.0.1:8090/v1`, model `local`, and the TUI when stdout is a
-terminal. Otherwise it uses the piped CLI. For scripts, run
-`./rig -p "the task"`. See `docs/SETUP.md` for configuration.
+rig needs an OpenAI-compatible SSE endpoint and a model ID. It defaults to `http://127.0.0.1:8090/v1`, model `local`, and the TUI when stdout is a terminal. Otherwise it uses the piped CLI. For scripts, run `./rig -p "the task"`. See `docs/SETUP.md` for configuration.
 
 ## the tools
 
@@ -70,14 +65,11 @@ optional round cap limits calls per turn. A failed call executes once.
 ## plugins
 
 A Python plugin is one file and one tool. It provides `run` and `schema`.
-There is no build step. Model-authored plugins land in
-`~/.rig/plugins/pending/`. Approve, disable, and reload them with `/plugins`
-or the dashboard. See `docs/PLUGINS.md`.
+There is no build step. Model-authored plugins land in `~/.rig/plugins/pending/`. Approve, disable, and reload them with `/plugins` or the dashboard. See `docs/PLUGINS.md`.
 
 ## configuration
 
-Configuration lives in `~/.rig/`. Set `$RIG_HOME` to move it. Every file is
-optional. Invalid files fail startup and name the file and field.
+Configuration lives in `~/.rig/`. Set `$RIG_HOME` to move it. Every file is optional. Invalid files fail startup and name the file and field.
 
 | file | what it holds |
 |------|---------------|
@@ -87,9 +79,7 @@ optional. Invalid files fail startup and name the file and field.
 | `theme.json` | the terminal theme: base, slot colors, glyph set |
 | `plugins/` | your python plugins (top-level files are live) |
 
-Each key resolves in this order: flag, environment, file, built-in default.
-`/models` lists and switches models. `/effort` changes reasoning effort. See
-`docs/SETUP.md` for configuration and sandbox settings.
+Each key resolves in this order: flag, environment, file, built-in default. `/models` lists and switches models. `/effort` changes reasoning effort. See `docs/SETUP.md` for configuration and sandbox settings.
 
 ## the dashboard
 
@@ -97,24 +87,13 @@ Each key resolves in this order: flag, environment, file, built-in default.
 rig serve
 ```
 
-The dashboard serves the rig stores on loopback only. On first run it prints
-an access token, stores it with mode `0600`, and includes it in the URL. The
-page exchanges the token for a cookie.
+The dashboard serves the rig stores on loopback only. On first run it prints an access token, stores it with mode `0600`, and includes it in the URL. The page exchanges the token for a cookie. Mobile friendly.
 
 - **sessions**: list them per workspace, and resume one mid-work
 - **todo**: the queue, with create, start, complete, and retry
-- **scheduler**: the jobs, with create, pause, resume, remove, an
-  in-place update form that opens with the job's current fields, and
-  each job's run audit trail
+- **scheduler**: the jobs, with create, pause, resume, remove, an in-place update form that opens with the job's current fields, and each job's run audit trail
 - **models**: the table, with the effort dial
-- **plugins**: approved, pending, disabled; the forge reads and
-  saves a plugin's source into the pending zone
-
-Every write is attributed to `dashboard` and rides the store verb the
-matching tool calls; the reply is the store's voice, verbatim. Below
-720px the view is phone-first: the job row's controls stay a
-horizontal row of 44px tap targets, wrapping when the width forces
-it. Spec: `specs/SPEC_SERVE.md`.
+- **plugins**: approved, pending, disabled; the forge reads and saves a plugin's source into the pending zone
 
 ## docs
 
@@ -163,12 +142,8 @@ docs/           DESIGN (architecture), SETUP (build/config), USAGE (running),
 
 ## extending
 
-The structural test is simple: add one file and one registration line. The
-loop never names a concrete tool, provider, policy, frontend, or middleware.
-A Python plugin needs no Go. See `docs/DESIGN.md` and `docs/PLUGINS.md`.
+The structural test is simple: add one file and one registration line. The loop never names a concrete tool, provider, policy, frontend, or middleware. A Python plugin needs no Go. See `docs/DESIGN.md` and `docs/PLUGINS.md`.
 
 ## under the hood
 
-`core/` and `loop/` use only the standard library. Stores use the pure-Go
-`modernc.org/sqlite` driver. Version `0.20.0` remains pre-1.0 while the worker
-fleet and TUI continue daily-driver soak testing.
+`core/` and `loop/` use only the standard library. Stores use the pure-Go `modernc.org/sqlite` driver.
