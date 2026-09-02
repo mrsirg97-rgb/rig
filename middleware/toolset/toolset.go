@@ -97,9 +97,12 @@ func (t *Table) Tool(name string) (core.Tool, bool) {
 	return nil, false
 }
 
-func (t *Table) tool(name string) (core.Tool, bool) {
+func (t *Table) Plugin(name string) (core.Tool, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+	if !t.plugins[name] {
+		return nil, false
+	}
 	for _, tool := range t.tools {
 		if tool.Name() == name {
 			return tool, true
@@ -111,7 +114,7 @@ func (t *Table) tool(name string) (core.Tool, bool) {
 func Resolve(t *Table) core.ToolMiddleware {
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
-			if tool, ok := t.tool(call.Name); ok {
+			if tool, ok := t.Tool(call.Name); ok {
 				return tool.Exec(ctx, call.Args)
 			}
 			return next(ctx, call)

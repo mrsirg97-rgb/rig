@@ -6,8 +6,10 @@ The shared scope identity: what a project is, and how a directory maps
 to it. A queue's or memory's identity partition is the repo, not the
 directory rig happened to start in, and the identity is never a
 filename; it is the short sha1 of the git common dir (the
-`--git-common-dir` probe, memoized), falling back to the cwd hash
-outside a repo. Two worktrees of one repo share a scope; a renamed
+`--git-common-dir` probe, symlinks resolved, memoized), falling back
+to the cwd hash outside a repo. Resolving matters because git prints
+the common dir relative from the main worktree and as a realpath from
+a linked one; without it a symlinked cwd splits one repo into two keys. Two worktrees of one repo share a scope; a renamed
 directory keeps its identity; a subdirectory reads the repo's queue.
 
 ## What it includes

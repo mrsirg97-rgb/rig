@@ -16,7 +16,7 @@ type stubLive struct {
 }
 
 func (s *stubLive) PluginNames() []string { return s.names }
-func (s *stubLive) Tool(name string) (core.Tool, bool) {
+func (s *stubLive) Plugin(name string) (core.Tool, bool) {
 	if s.tool != nil && s.tool.Name() == name {
 		return s.tool, true
 	}
@@ -117,7 +117,7 @@ func (d *deferredLive) PluginNames() []string {
 	return nil
 }
 
-func (d *deferredLive) Tool(name string) (core.Tool, bool) {
+func (d *deferredLive) Plugin(name string) (core.Tool, bool) {
 	if d.ready && name == d.name {
 		return d.tool, true
 	}

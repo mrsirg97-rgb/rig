@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
@@ -115,6 +116,8 @@ func NewFetch(cfg FetchConfig) *fetch {
 		if pu, err := url.Parse(f.proxy); err == nil {
 			tr.Proxy = http.ProxyURL(pu)
 		}
+	} else {
+		tr.DialContext = pinnedDial
 	}
 
 	f.do = (&http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -129,61 +132,58 @@ func (f *fetch) Description() string { return description + "\n\n" + guidelines 
 
 func (f *fetch) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
-func IPisPrivate(ip string) bool {
-	normalized := strings.ToLower(ip)
-	v4 := normalized
-	if strings.HasPrefix(normalized, "::ffff:") {
-		v4 = normalized[len("::ffff:"):]
-	}
-	if strings.Contains(v4, ".") {
-		parts := strings.Split(v4, ".")
-		if len(parts) != 4 {
-			return true
-		}
-		octets := make([]int, 4)
-		for i, s := range parts {
-			n, err := strconv.Atoi(s)
-			if err != nil || n > 255 {
-				return true
-			}
-			octets[i] = n
-		}
-		a, b := octets[0], octets[1]
-		switch {
-		case a == 0, a == 10, a == 127:
-			return true
-		case a == 100 && b >= 64 && b <= 127:
-			return true
-		case a == 169 && b == 254:
-			return true
-		case a == 172 && b >= 16 && b <= 31:
-			return true
-		case a == 192 && b == 168:
-			return true
-		case a == 192 && b == 0 && octets[2] == 0:
-			return true
-		case a == 198 && (b == 18 || b == 19):
-			return true
-		case a >= 224:
-			return true
-		}
-		return false
-	}
-	switch {
-	case normalized == "::", normalized == "::1":
-		return true
-	case strings.HasPrefix(normalized, "fc"), strings.HasPrefix(normalized, "fd"):
-		return true
-	case strings.HasPrefix(normalized, "fe8"), strings.HasPrefix(normalized, "fe9"),
-		strings.HasPrefix(normalized, "fea"), strings.HasPrefix(normalized, "feb"):
-		return true
-	case strings.HasPrefix(normalized, "ff"):
-		return true
-	}
-	return false
+var reservedPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("240.0.0.0/4"),
 }
 
-func guardedURL(raw string, base *url.URL, lookup LookupFn) (*url.URL, error) {
+func publicAddr(ip string) (netip.Addr, bool) {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	a = a.Unmap()
+	if a.IsLoopback() || a.IsPrivate() || a.IsUnspecified() || a.IsMulticast() ||
+		a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsInterfaceLocalMulticast() {
+		return netip.Addr{}, false
+	}
+	for _, p := range reservedPrefixes {
+		if p.Contains(a) {
+			return netip.Addr{}, false
+		}
+	}
+	return a, true
+}
+
+func IPisPrivate(ip string) bool {
+	_, ok := publicAddr(ip)
+	return !ok
+}
+
+type pinKey struct{}
+
+func pinnedDial(ctx context.Context, network, addr string) (net.Conn, error) {
+	pins, ok := ctx.Value(pinKey{}).([]netip.Addr)
+	_, port, err := net.SplitHostPort(addr)
+	if !ok || len(pins) == 0 || err != nil {
+		return nil, fmt.Errorf("refused: unpinned dial to %s", addr)
+	}
+	var d net.Dialer
+	var last error
+	for _, a := range pins {
+		c, err := d.DialContext(ctx, network, net.JoinHostPort(a.String(), port))
+		if err == nil {
+			return c, nil
+		}
+		last = err
+	}
+	return nil, last
+}
+
+func guardedURL(raw string, base *url.URL, lookup LookupFn) (*url.URL, []netip.Addr, error) {
 	var u *url.URL
 	var err error
 	if base != nil {
@@ -193,22 +193,25 @@ func guardedURL(raw string, base *url.URL, lookup LookupFn) (*url.URL, error) {
 	}
 	if err != nil || u.Scheme == "" {
 
-		return nil, fmt.Errorf("invalid URL: %s", raw)
+		return nil, nil, fmt.Errorf("invalid URL: %s", raw)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("only http(s) is fetchable, got %s", u.Scheme)
+		return nil, nil, fmt.Errorf("only http(s) is fetchable, got %s", u.Scheme)
 	}
 	host := u.Hostname()
 	addrs, err := lookup(host)
 	if err != nil || len(addrs) == 0 {
-		return nil, fmt.Errorf("cannot resolve host: %s", host)
+		return nil, nil, fmt.Errorf("cannot resolve host: %s", host)
 	}
+	pins := make([]netip.Addr, 0, len(addrs))
 	for _, a := range addrs {
-		if IPisPrivate(a) {
-			return nil, fmt.Errorf("refused: %s resolves to private address %s", host, a)
+		p, ok := publicAddr(a)
+		if !ok {
+			return nil, nil, fmt.Errorf("refused: %s resolves to private address %s", host, a)
 		}
+		pins = append(pins, p)
 	}
-	return u, nil
+	return u, pins, nil
 }
 
 func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
@@ -218,7 +221,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 		budgetMs = int(d.Sub(start) / time.Millisecond)
 	}
 
-	u, err := guardedURL(raw, nil, f.lookup)
+	u, pins, err := guardedURL(raw, nil, f.lookup)
 	if err != nil {
 		return Fetched{}, err
 	}
@@ -227,7 +230,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 		if hop > maxHops {
 			return Fetched{}, fmt.Errorf("too many redirects (>%d) starting from %s", maxHops, raw)
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		req, err := http.NewRequestWithContext(context.WithValue(ctx, pinKey{}, pins), http.MethodGet, u.String(), nil)
 		if err != nil {
 			return Fetched{}, fmt.Errorf("invalid URL: %s", raw)
 		}
@@ -251,11 +254,11 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 
 		if loc := res.Header.Get("Location"); res.StatusCode >= 300 && res.StatusCode < 400 && loc != "" {
 			res.Body.Close()
-			nu, err := guardedURL(loc, u, f.lookup)
+			nu, np, err := guardedURL(loc, u, f.lookup)
 			if err != nil {
 				return Fetched{}, err
 			}
-			u = nu
+			u, pins = nu, np
 			current = nu.String()
 			continue
 		}

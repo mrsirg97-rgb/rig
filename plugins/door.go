@@ -11,7 +11,7 @@ import (
 
 type Live interface {
 	PluginNames() []string
-	Tool(name string) (core.Tool, bool)
+	Plugin(name string) (core.Tool, bool)
 }
 
 type Door struct {
@@ -58,12 +58,12 @@ func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	if in.Action != "run" && in.Action != "schema" {
 		return "", fmt.Errorf("plugin: unknown action %q (want run or schema)", in.Action)
 	}
-	tool, ok := d.Live.Tool(in.Name)
+	tool, ok := d.Live.Plugin(in.Name)
 	if !ok && d.redo != nil {
 		if err := d.redo(ctx); err != nil {
 			return "", fmt.Errorf("plugin: unknown plugin %q; re-discovery failed: %v", in.Name, err)
 		}
-		tool, ok = d.Live.Tool(in.Name)
+		tool, ok = d.Live.Plugin(in.Name)
 	}
 	if !ok {
 		return "", fmt.Errorf("plugin: unknown plugin %q (live: %s)", in.Name, strings.Join(d.Live.PluginNames(), ", "))

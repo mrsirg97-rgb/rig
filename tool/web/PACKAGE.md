@@ -20,9 +20,14 @@ stdlib text pass). Stdlib only; no third-party Go client, no new venv.
 
 ## Gotchas
 
-- SSRF guard: host resolved before the fetch, private addresses refused
-  (v4 private/loopback/broadcast, v6 loopback/ULA/link-local/multicast,
-  IPv4-mapped v6 folded), re-checked across redirect hops, hop count
-  capped.
+- SSRF guard: host resolved before the fetch, every address parsed with
+  net/netip (unparseable refused, IPv4-mapped v6 unmapped first) and
+  refused when loopback, private, unspecified, link-local, multicast,
+  0/8, CGNAT 100.64/10, 192.0.0/24, benchmark 198.18/15 or 240/4;
+  re-checked across redirect hops, hop count capped.
+- Direct egress dials only the addresses the guard vetted for that hop
+  (the request ctx carries them; the transport never re-resolves, so a
+  DNS rebind between check and dial cannot reach a private listener).
+  With a proxy the proxy resolves and dials; the proxy is not guarded.
 - An empty `WebFetchProxy`/`Trafilatura` is a choice (direct egress / the
   stdlib text pass), not an unset.

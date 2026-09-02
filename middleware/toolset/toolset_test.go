@@ -213,3 +213,23 @@ func TestGetResolvesTheTable(t *testing.T) {
 		t.Fatal("an absent name must resolve nil")
 	}
 }
+
+func TestPluginLookupRefusesNatives(t *testing.T) {
+	bash := &stubTool{name: "bash"}
+	forged := &stubTool{name: "forged"}
+	tbl := New(bash, forged)
+	tbl.SetPlugins("forged")
+	if _, ok := tbl.Plugin("bash"); ok {
+		t.Fatal("a native must not resolve through the plugin lookup")
+	}
+	if tool, ok := tbl.Plugin("forged"); !ok || tool != forged {
+		t.Fatal("an approved plugin must resolve through the plugin lookup")
+	}
+	if _, ok := tbl.Tool("bash"); !ok {
+		t.Fatal("the full lookup still serves natives")
+	}
+	tbl.SetPlugins()
+	if _, ok := tbl.Plugin("forged"); ok {
+		t.Fatal("a dropped plugin must stop resolving")
+	}
+}

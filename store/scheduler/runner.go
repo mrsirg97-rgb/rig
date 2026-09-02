@@ -242,28 +242,14 @@ func RunJob(key string, opts RunOpts) error {
 	}
 	exit := int64(res.Exit)
 	duration := durationMs
-	seq, err := RecordRun(context.Background(), db, RunRecordInput{
+	if _, err := RecordRun(context.Background(), db, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
-		Log: logRel, Started: started, Ended: ended,
-	})
-	if err != nil {
+		Log: logRel, Started: started, Ended: ended, Done: job.At != nil,
+	}); err != nil {
 		return fmt.Errorf("run-job: record: %w", err)
 	}
 
 	if job.At != nil {
-		job.State = "done"
-		job.UpdatedSeq = seq
-		ob, otx, err := db.Tx(context.Background())
-		if err != nil {
-			return fmt.Errorf("run-job: once-state: %w", err)
-		}
-		if _, err := scheddomain.NewJobDomain().UpdateJob(ob, *job); err != nil {
-			otx.Rollback()
-			return fmt.Errorf("run-job: once-state: %w", err)
-		}
-		if err := otx.Commit(); err != nil {
-			return fmt.Errorf("run-job: once-state: %w", err)
-		}
 		if err := installRemoved(opts.Crontab, text, key); err != nil {
 			return err
 		}

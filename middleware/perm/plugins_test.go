@@ -209,3 +209,25 @@ func mustJSON(t *testing.T, s string) string {
 	}
 	return string(b)
 }
+
+func TestPluginsRuleExpandsATildeBeforeTheZone(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	pluginsDir := filepath.Join(home, ".rig", "plugins")
+	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	calls, content, err := pluginCall(t, perm.Plugins(pluginsDir), "write",
+		`{"path": "~/.rig/plugins/evil.py", "content": "x"}`)
+	if err == nil || calls != 0 {
+		t.Fatalf("a tilde path into plugins/ must be refused before the exec (calls %d, err %v)", calls, err)
+	}
+	if !strings.Contains(content, filepath.Join(pluginsDir, "evil.py")) {
+		t.Fatalf("the refusal must name the expanded target, got %q", content)
+	}
+	calls, _, err = pluginCall(t, perm.Plugins(pluginsDir), "write",
+		`{"path": "~/.rig/plugins/pending/ok.py", "content": "x"}`)
+	if err != nil || calls != 1 {
+		t.Fatalf("a tilde path into pending/ must pass (calls %d, err %v)", calls, err)
+	}
+}

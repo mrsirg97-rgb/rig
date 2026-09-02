@@ -51,7 +51,7 @@ func lastText(j *jobState) string {
 }
 
 func driftOf(j *jobState, line *TaggedLine) string {
-	if j.State == "removed" {
+	if j.State == "removed" || j.State == "done" {
 		return ""
 	}
 	if line == nil {

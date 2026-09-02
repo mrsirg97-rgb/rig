@@ -41,7 +41,10 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   `plugin` and `plugins` are natives, so both are reserved).
 - `Kernel`: the shared-kernel seam (one code cell, the host's raw reply).
 - `Live`: the live plugin table's seam (SPEC_GROWTH 9): `PluginNames`
-  and `Tool(name)`, implemented by `middleware/toolset`'s Table.
+  and `Plugin(name)`, implemented by `middleware/toolset`'s Table. The
+  lookup admits plugins only: a native named through the door is an
+  unknown plugin, so the door never widens the allowlist or skips the
+  approval gate, which key on the outer call's name.
 - `Door` + `NewDoor`: the `plugin` native (SPEC_GROWTH 9, amended): one
   dispatch tool collapsing all plugin schemas to one request entry; an
   `action` enum; `run` (resolves and calls) and `schema` (returns a

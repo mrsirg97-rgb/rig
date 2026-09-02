@@ -27,8 +27,10 @@ new tools execute, by construction; the models-switch's semantics
   this, not `Specs()`.
 - `PluginNames()`: the live plugin names, sorted (the door's schema
   enum, deterministic).
-- `Tool(name)`: the door's lookup seam: the named tool, if the table
-  carries it.
+- `Tool(name)`: the named tool, native or plugin, if the table carries
+  it (`Resolve`'s lookup).
+- `Plugin(name)`: the door's lookup seam: the named tool only if it is
+  a live plugin; a native answers absent.
 - `Resolve(t)`: the exec's end middleware.
 - `Carry(t, inner)`: the request's end provider wrapper.
 

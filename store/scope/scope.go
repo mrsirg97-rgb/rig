@@ -38,6 +38,9 @@ func Path(cwd string) string {
 				p = filepath.Join(cwd, p)
 			}
 			v = filepath.Clean(p)
+			if real, err := filepath.EvalSymlinks(v); err == nil {
+				v = real
+			}
 		}
 	}
 	cache.vals[cwd] = v

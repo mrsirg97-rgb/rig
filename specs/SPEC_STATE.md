@@ -351,8 +351,10 @@ post-merge corrections)
   row written. Idempotent: a second open finds no `<hash>.sqlite` and does
   nothing. Rejected, named: reading both layouts forever; a `scope` that
   defaults to global but stays in the schema.
-- `events`: seq, ts, op (create|update|pause|resume|remove|run|compact),
-  args, session.
+- `events`: seq, ts, op (create|update|pause|resume|remove|run|done|compact),
+  args, session. `done` is the once-fire: the runner appends it after the
+  `run` in the same transaction and the fold moves the job to `done`; the
+  runner never writes the projection.
 - `jobs`: id (primary, `jN`), name (unique among live jobs only, enforced in
   Go, no unique index), prompt, cron, at (nullable), cwd (never empty;
   defaults to the creating session's cwd), model, busy (skip|force), state

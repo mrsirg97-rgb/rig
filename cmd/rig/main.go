@@ -147,12 +147,12 @@ func wire(r *root) *rig.Kernel {
 			resultCap = defaultResultCap
 		}
 		mw = append(mw,
-			paths.Middleware(),
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
 			guard.Rounds(r.rounds),
 			guard.Cap(resultCap),
+			paths.Middleware(),
 		)
 	}
 
@@ -182,12 +182,12 @@ func (r *root) buildSystem() string {
 			resultCap = defaultResultCap
 		}
 		mw = []core.ToolMiddleware{
-			paths.Middleware(),
 			perm.Plugins(r.pluginsDir),
 			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
 			guard.Bound(r.retries),
 			guard.Rounds(r.rounds),
 			guard.Cap(resultCap),
+			paths.Middleware(),
 		}
 	}
 	parts := make([]string, 0, 5)
@@ -1057,6 +1057,7 @@ func main() {
 	}
 
 	var fe core.Frontend
+	closeFrontend := func() {}
 	if *prompt != "" {
 		if err := oneshot.ErrPrompt(*prompt); err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
@@ -1077,7 +1078,8 @@ func main() {
 		)
 
 		if c, ok := fe.(interface{ Close() }); ok {
-			defer c.Close()
+			closeFrontend = c.Close
+			defer closeFrontend()
 		}
 	} else {
 		fe = cli.New(os.Stdin, os.Stdout, cli.WithCommands(command.All(), env))
@@ -1087,6 +1089,7 @@ func main() {
 		return state.Resume(context.Background(), sdb, id)
 	})
 	if err != nil {
+		closeFrontend()
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
@@ -1137,6 +1140,7 @@ func main() {
 	}
 
 	if runErr != nil || faulted {
+		closeFrontend()
 		os.Exit(1)
 	}
 }

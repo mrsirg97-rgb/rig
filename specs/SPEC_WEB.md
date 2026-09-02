@@ -91,7 +91,7 @@ func Fetch() *fetch                    // pane's defaults: proxy on, trafilatura
 func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) // pane's fetchGuarded
 
 // shared surface, pane's functions verbatim
-func IPisPrivate(ip string) bool            // pane's ipIsPrivate, same tables
+func IPisPrivate(ip string) bool            // pane's ipIsPrivate over net/netip, same refusal set as a superset
 func HtmlToText(html string) string         // pane's htmlToText (the RE2 port)
 func CapChars(text string, max int) string  // pane's capChars
 func ExtractReadable(html string, trafilatura *string) (string, string) // + the rig announcement footer
@@ -133,12 +133,19 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
   backreference; Go's regexp has none. The five block types become five
   non-greedy patterns (equivalent for matched pairs, the only sane HTML);
   the named case exercises the same input.
-- **The guard is check-and-use, per hop.** resolve, check all
-  addresses, dial, and the Location of every redirect hop re-runs the
-  same guardedUrl against the previous URL as base, before the next
-  fetch. A redirect into private space is refused with the same voice as
-  the first hop (pane's named case). The proxy is not guarded: it is
-  loopback by construction, and guarding it would need a second policy.
+- **The guard is check-and-pin, per hop.** resolve, parse every
+  address with net/netip (unmap 4-in-6, refuse unparseable, loopback,
+  private, unspecified, link-local, multicast and the reserved v4
+  blocks: 0/8, 100.64/10, 192.0.0/24, 198.18/15, 240/4), then dial only
+  the vetted addresses: the request ctx carries them and the direct
+  transport's DialContext connects to those, never re-resolving the
+  host, so a DNS rebind between check and dial cannot land on a
+  private listener. The Location of every redirect hop re-runs the
+  same guardedUrl against the previous URL as base and re-pins before
+  the next fetch. A redirect into private space is refused with the
+  same voice as the first hop (pane's named case). The proxy is not
+  guarded and not pinned: it is loopback by construction, resolves the
+  host itself, and guarding it would need a second policy.
 - **Timeout is the whole fetch, all hops included**: pane's signal is
   created once outside the loop; Go's ctx carries the same shape
   (WithTimeout over the fetchGuarded call). A cancelled caller ctx
@@ -170,6 +177,8 @@ fetch (pane's web-fetch.test.mjs order):
 
 - ipIsPrivate: v4 table
 - ipIsPrivate: v6 table
+- ipIsPrivate refuses unnormalized loopback spellings (hex 4-in-6,
+  zero-padded, unparseable)
 - non-http(s) schemes are refused
 - private hosts are refused before any connection
 - redirects are followed and each hop re-guarded
@@ -198,6 +207,8 @@ search (pane's web-search.test.mjs order):
 
 rig-side named cases (the port's own surface):
 
+- the dial is pinned to the vetted addresses and never re-resolves
+  (a loopback listener behind a lying resolver is not reached)
 - the egress proxy is used when set (the proxy sees the request)
 - an unreachable proxy names itself and the fix
 - the trafilatura fallback is announced in the content (rig over pane)

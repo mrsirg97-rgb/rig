@@ -53,3 +53,27 @@ func TestLabel(t *testing.T) {
 		t.Fatal("the label is the path's base")
 	}
 }
+
+func TestScopeResolvesSymlinksToOneKey(t *testing.T) {
+	bin := t.TempDir()
+	fake := filepath.Join(bin, "git")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho .git\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	base := t.TempDir()
+	real := filepath.Join(base, "repo")
+	if err := os.MkdirAll(filepath.Join(real, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlink: %v", err)
+	}
+	if Key(link) != Key(real) {
+		t.Fatalf("a symlinked cwd must share the repo's key: %q != %q", Path(link), Path(real))
+	}
+	if got, err := filepath.EvalSymlinks(real); err == nil && Path(real) != filepath.Join(got, ".git") {
+		t.Fatalf("the scope path must be the real path: %q", Path(real))
+	}
+}

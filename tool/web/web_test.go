@@ -44,6 +44,12 @@ func privateLookup(host string) ([]string, error) {
 	return []string{"10.9.8.7"}, nil
 }
 
+func direct() func(*http.Request) (*http.Response, error) {
+	return (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}).Do
+}
+
 type schema struct {
 	Properties map[string]map[string]any `json:"properties"`
 	Required   []string                  `json:"required"`
@@ -102,6 +108,20 @@ func TestIPisPrivateV6Table(t *testing.T) {
 		}
 	}
 	for _, ip := range pub {
+		if web.IPisPrivate(ip) {
+			t.Errorf("%s must be public", ip)
+		}
+	}
+}
+
+func TestIPisPrivateRefusesUnnormalizedLoopbackSpellings(t *testing.T) {
+	for _, ip := range []string{"::ffff:7f00:1", "0:0:0:0:0:0:0:1", "0::1", "::0001",
+		"::ffff:0:0", "::FFFF:10.0.0.1", "fe80::1%en0", "not-an-address", ""} {
+		if !web.IPisPrivate(ip) {
+			t.Errorf("%s must be private", ip)
+		}
+	}
+	for _, ip := range []string{"::ffff:5db8:d822", "2001:4860:4860::8888"} {
 		if web.IPisPrivate(ip) {
 			t.Errorf("%s must be public", ip)
 		}
@@ -302,7 +322,7 @@ func TestE2ERealServerThroughTheSeamHTMLExtracted(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup})
+	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct()})
 	got, err := f.Guarded(context.Background(), srv.URL+"/hop")
 	if err != nil {
 		t.Fatal(err)
@@ -324,6 +344,38 @@ func TestE2ERealServerThroughTheSeamHTMLExtracted(t *testing.T) {
 	}
 }
 
+func TestTheDialIsPinnedToTheVettedAddressesAndNeverReResolves(t *testing.T) {
+	reached := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, "rebound")
+	}))
+	defer srv.Close()
+
+	lookups := 0
+	lookup := func(host string) ([]string, error) {
+		lookups++
+		if lookups == 1 {
+			return []string{"192.0.2.1"}, nil
+		}
+		return []string{"127.0.0.1"}, nil
+	}
+	f := web.NewFetch(web.FetchConfig{Lookup: lookup})
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_, err := f.Guarded(ctx, srv.URL+"/")
+	if err == nil {
+		t.Fatal("a dial to the vetted address must not land on the loopback listener")
+	}
+	if reached {
+		t.Fatal("the transport re-resolved the host and reached the loopback listener")
+	}
+	if lookups != 1 {
+		t.Fatalf("lookup ran %d times, want exactly one vetting per hop", lookups)
+	}
+}
+
 func TestE2ETimeoutSurfacesAsAClearError(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -332,7 +384,7 @@ func TestE2ETimeoutSurfacesAsAClearError(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup})
+	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct()})
 	_, err := f.Exec(context.Background(), json.RawMessage(
 		`{"url":"`+srv.URL+`/slow","timeoutMs":300}`))
 	if err == nil || !regexp.MustCompile(`(?i)timed out`).MatchString(err.Error()) {
@@ -587,7 +639,7 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Trafilatura: off()})
+	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Trafilatura: off(), Do: direct()})
 	content, err := f.Exec(context.Background(), json.RawMessage(`{"url":`+`"`+srv.URL+`"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -600,7 +652,7 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 	if web.DefaultTrafilatura() == "" {
 		t.Skip("no trafilatura on this box")
 	}
-	f2 := web.NewFetch(web.FetchConfig{Lookup: publicLookup})
+	f2 := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct()})
 	content, err = f2.Exec(context.Background(), json.RawMessage(`{"url":`+`"`+srv.URL+`"}`))
 	if err != nil {
 		t.Fatal(err)

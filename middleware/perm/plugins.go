@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/middleware/paths"
 )
 
 func Plugins(pluginsDir string) core.ToolMiddleware {
@@ -48,7 +49,7 @@ func Plugins(pluginsDir string) core.ToolMiddleware {
 }
 
 func resolvedPath(path string) (string, error) {
-	abs, err := filepath.Abs(path)
+	abs, err := filepath.Abs(paths.Expand(path))
 	if err != nil {
 		return "", err
 	}

@@ -66,6 +66,11 @@ written before the store commit; drift is surfaced in list.
   one crontab line under the same key, a paused job's line rewritten
   commented and the new line landing on resume; `update` never changes
   the state (pause/resume stay their own ops).
+- `done` is the once-fire's own op: the runner's `RecordRun` appends it
+  after the `run` in the same transaction and the fold moves the job to
+  `done`; the projection is never written directly (a direct write is
+  undone by the next fold, the job reverting to `active` with a
+  "no crontab line" drift). A done job's consumed line is not drift.
 - One store, `global.sqlite`: `cwd` is a job field (where it runs and how
   the list groups), not a storage partition; `ParseKey` accepts `jN` only
   (the migration rewrites the old `cwd-<hash>:jN` crontab keys).

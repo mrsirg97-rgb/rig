@@ -94,7 +94,15 @@ func TestFreezeGate(t *testing.T) {
 			p == "go.mod" || p == "go.sum"
 	}
 
-	base := strings.TrimSpace(git("merge-base", "main", "HEAD"))
+	base := ""
+	upstream := exec.Command("git", "merge-base", "origin/main", "HEAD")
+	upstream.Dir = root
+	if o, err := upstream.Output(); err == nil {
+		base = strings.TrimSpace(string(o))
+	}
+	if base == "" {
+		base = strings.TrimSpace(git("merge-base", "main", "HEAD"))
+	}
 	if base == "" {
 		base = "main"
 	}

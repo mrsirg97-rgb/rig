@@ -400,6 +400,7 @@ type RunRecordInput struct {
 	Reason   string
 	Started  string
 	Ended    string
+	Done     bool
 }
 
 func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
@@ -429,6 +430,14 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 			job.LastExitSet = true
 		}
 		job.UpdatedSeq = seq
+	}
+	if ok && in.Done {
+		doneJSON, _ := json.Marshal(map[string]any{"id": in.ID})
+		doneSeq, err := appendEvent(bound, seq+1, "done", string(doneJSON), "")
+		if err != nil {
+			return 0, err
+		}
+		f.apply(eventRow{seq: doneSeq, ts: nowRFC3339(), op: "done", args: string(doneJSON)})
 	}
 	var reason, log *string
 	if in.Reason != "" {

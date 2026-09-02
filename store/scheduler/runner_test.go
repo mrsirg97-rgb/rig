@@ -416,6 +416,43 @@ func TestOnceWithFailingWorkerDoneWithFailNoRetry(t *testing.T) {
 	}
 }
 
+func TestOnceDoneIsAnEventAndSurvivesTheNextFold(t *testing.T) {
+	h, key := setupJob(t, "/ws/r11", func(in *sched.CreateInput) {
+		in.Cron = "once"
+		in.At = "2026-08-16T03:07:00Z"
+	})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
+	if _, err := h.create(sched.CreateInput{Name: "later", Prompt: "p", Cron: "0 */4 * * *", Model: "qwen3.8-workers"}); err != nil {
+		t.Fatal(err)
+	}
+	row := jobsRow(t, h, "j1")
+	if row["state"] != "done" {
+		t.Fatalf("state after refold %v", row["state"])
+	}
+	var ops []string
+	rows, err := h.db.DB.Query(`SELECT op FROM events ORDER BY seq`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var op string
+		if err := rows.Scan(&op); err != nil {
+			t.Fatal(err)
+		}
+		ops = append(ops, op)
+	}
+	if strings.Join(ops, ",") != "create,run,done,create" {
+		t.Fatalf("ops %v", ops)
+	}
+	out, err := h.list()
+	mustOK(t, err)
+	if !strings.Contains(out, "j1 job done") || strings.Contains(out, "no crontab line") {
+		t.Fatalf("list:\n%s", out)
+	}
+}
+
 func TestZombieLineWithMissingRowLineDeletedSkipRecorded(t *testing.T) {
 	h, key := setupJob(t, "/ws/z1", nil)
 

@@ -185,6 +185,11 @@ func (f *fold) applyVerb(e eventRow) {
 			return
 		}
 		j.State = "removed"
+	case "done":
+		if j.State == "removed" || j.State == "done" {
+			return
+		}
+		j.State = "done"
 	case "run":
 		if a.Status != "" {
 			j.LastStatus = a.Status
