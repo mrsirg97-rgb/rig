@@ -338,7 +338,7 @@ before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is th
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.
 
-## the post-hardening rounds (0.8.2 → 0.20.0)
+## the post-hardening rounds (0.8.2 → 0.20.1)
 
 Spec-first as always; the freeze discipline holds (`core/` and `loop/`
 open to extension, closed to modification; the one named loop change
@@ -389,5 +389,7 @@ in order:
   closed.
 - **the documentation release** (0.20.0): public docs, package docs, specs,
   and website copy use direct prose and conventional punctuation.
+- **the clock never repeats** (0.20.1): `evt.Monotonic()` mints unique
+  arrival-ordered ids; `Event` loses `UpdatePriority`.
 
 The queue's next lives in the CHANGELOG's `[Unreleased]`.

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.1]: the clock never repeats
+
+- **`evt.Monotonic()` refuses the id collision** (`specs/SPEC_EVT.md`
+  decision 2): a same-nanosecond step, or a wall clock stepping
+  backwards, takes `last+1` under a CAS, so the id stays unique and
+  arrival-ordered. The C accepted the collision and misordered the tie;
+  in Go a repeated id was a dropped push, since the queue treats the id
+  as identity. The default `Counter()` clock is unchanged.
+- **`Event` loses `UpdatePriority`**: mutating a queued event's priority
+  from outside broke the heap invariant; `Engine.Update` is the one
+  door and already fixes the heap.
+- **`Execute(ctx, event)`** takes the context first, as Go does.
+- The landing page and README use plainer copy; `ci` and `pages` accept
+  `workflow_dispatch`.
+
 ## [0.20.0]: documentation release
 
 - Rewrites the documentation for direct, concise technical reading.
