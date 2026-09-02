@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.21.0]: the second review
+
+An outside review of the whole tree; every finding below carries a test
+that failed before and passes after.
+
+- **the plugin door admits plugins only** (`specs/SPEC_GROWTH.md` 9):
+  the door's `Live` seam is `Plugin(name)`, absent for a native. A
+  native named through the door was reaching `Exec` past the allowlist
+  and the approval gate, which key on the outer call's name.
+- **the plugin zone expands `~` itself** (`specs/SPEC_SANDBOX.md` 2):
+  `resolvedPath` applies the `paths` rule before the symlink walk, and
+  the root lists `paths` last (outermost). A `~/.rig/plugins/x.py`
+  write was passing the zone unexpanded and landing live.
+- **the SSRF guard parses** (`specs/SPEC_WEB.md`): `net/netip`, 4-in-6
+  unmapped, loopback/private/link-local/multicast/unspecified refused
+  plus the reserved prefixes the string table named. The vetted
+  addresses pin the dial; the transport never re-resolves, and every
+  redirect hop re-vets and re-pins. `::ffff:7f00:1`, `0:0:0:0:0:0:0:1`,
+  `0::1`, and `::0001` reached loopback before.
+- **the scope resolves symlinks** (`store/scope`): the git common dir is
+  realpath'd before hashing. git prints it relative from the main
+  worktree and absolute from a linked one, so a symlinked cwd split one
+  repo into two keys. A repo under a symlinked path gets a new key.
+- **a once-job's `done` is an event** (`specs/SPEC_STATE.md`): appended
+  in the run's transaction and applied by the fold; the direct
+  projection write is gone. The next refold was reverting the job to
+  `active`. A done job's consumed crontab line is not drift.
+- **the TUI restores the terminal on every exit**: the two `os.Exit`
+  paths after raw mode (a bad `-resume` id, a loop error) close the
+  frontend first.
+- **the freeze gate bites on `main`**: the diff base is the merge-base
+  with `origin/main`, then `main`. On `main` itself the old base was
+  `HEAD`, an empty diff.
+- **the tui tests compile on darwin**: `pty_test.go` is `linux`-tagged;
+  the goldens, the freeze gate, and the session tests run here again.
+
 ## [0.20.1]: the clock never repeats
 
 - **`evt.Monotonic()` refuses the id collision** (`specs/SPEC_EVT.md`
