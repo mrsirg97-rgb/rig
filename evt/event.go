@@ -6,7 +6,6 @@ type Event interface {
 	ID() uint64
 	Priority() int
 	Closure() Closure
-	UpdatePriority(priority int)
 }
 
 type event struct {
@@ -20,14 +19,13 @@ func NewEvent(id uint64, priority int, closure Closure) Event {
 	return &event{id: id, priority: priority, closure: closure, index: -1}
 }
 
-func (e *event) ID() uint64                  { return e.id }
-func (e *event) Priority() int               { return e.priority }
-func (e *event) Closure() Closure            { return e.closure }
-func (e *event) UpdatePriority(priority int) { e.priority = priority }
+func (evt *event) ID() uint64       { return evt.id }
+func (evt *event) Priority() int    { return evt.priority }
+func (evt *event) Closure() Closure { return evt.closure }
 
-func Execute(e Event, ctx context.Context) {
-	if e == nil || e.Closure() == nil {
+func Execute(ctx context.Context, evt Event) {
+	if evt == nil || evt.Closure() == nil {
 		return
 	}
-	e.Closure().Resolve(ctx)
+	evt.Closure().Resolve(ctx)
 }

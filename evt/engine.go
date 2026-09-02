@@ -69,9 +69,9 @@ func (e *engine) Start(ctx context.Context) {
 			e.cond.Wait()
 			continue
 		}
-		ev, _ := e.q.Pop()
+		evt, _ := e.q.Pop()
 		e.mu.Unlock()
-		Execute(ev, ctx)
+		Execute(ctx, evt)
 		e.mu.Lock()
 	}
 }

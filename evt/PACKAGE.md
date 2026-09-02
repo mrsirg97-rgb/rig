@@ -19,7 +19,8 @@ imports this one.
   `Execute(e, ctx)` resolves its closure.
 - `Clock`: `Step() uint64` mints ids: `Counter()` (the default, a
   strictly increasing atomic) and `Monotonic()` (wall nanoseconds, as
-  libevt's `clock_step`; collisions possible, named).
+  libevt's `clock_step`, but never repeating: a same-nanosecond step
+  takes last+1, so a push is never dropped as a duplicate id).
 - `Queue`: the 4-ary max-heap ordered `(priority desc, id asc)` with a
   position map: `Push`, `Pop`, `Peek`, `Update` (the one addition:
   reprioritize in place), `View` (a sorted snapshot drained from a

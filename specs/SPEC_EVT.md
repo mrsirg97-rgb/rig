@@ -117,8 +117,10 @@ strictly increasing atomic counter (`Counter()`): unique by
 construction, arrival-ordered, and never colliding the way two adds in
 the same nanosecond would (the C accepts the collision; the tie then
 falls to heap position, which is not arrival order). `Monotonic()` is
-offered for the case that wants a real time on the id, named with the
-collision caveat. The engine clamps a negative priority to 0, as C does.
+offered for the case that wants a real time on the id; unlike the C it
+refuses the collision (a same-nanosecond step takes last+1), because a
+repeated id would be dropped by the queue's duplicate rule, not merely
+misordered. The engine clamps a negative priority to 0, as C does.
 
 ### 3. Update is the one addition.
 
