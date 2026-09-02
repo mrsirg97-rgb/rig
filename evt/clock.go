@@ -15,7 +15,6 @@ func Counter() Clock { return &counter{} }
 
 func (c *counter) Step() uint64 { return c.n.Add(1) }
 
-
 type monotonic struct{ last atomic.Uint64 }
 
 func Monotonic() Clock { return &monotonic{} }
