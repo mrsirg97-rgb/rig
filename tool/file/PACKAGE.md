@@ -15,6 +15,10 @@ model is told its prior read is stale before it acts on it.
 ## What it includes
 
 - `read`, `write`, `edit`: a `core.Tool` each, over `os`/`path/filepath`.
+- The edit license: a threaded session refuses an edit whose path has no
+  recorded `FileState` — `read` or `write` mints the license, so a blind
+  edit of a file the model never observed cannot slip past the drift
+  check. A standalone exec carries no session and so no license to check.
 - The stale-observation note on read: compared against the recorded
   `FileState` *before* the read re-records it, so an external or
   cross-session change is named once and the fresh bytes still ride it.
@@ -40,6 +44,9 @@ model is told its prior read is stale before it acts on it.
 - The drift check refuses when the file's hash or mtime differs from the
   recorded `FileState`; edit-after-external-change never silently
   clobbers.
+- `lastRead` (the remembered bytes a drift refusal diffs against) is
+  keyed per session: two sessions sharing one process each diff against
+  their own observation, never each other's.
 - A standalone exec (no threaded session) skips provenance maintenance.
 - `Session.Files` is written under a package mutex (`filesMu`): reads in
   one batch run concurrently (SPEC_EVT 2a) and the session type is

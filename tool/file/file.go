@@ -23,23 +23,35 @@ const readCap = 1 << 20
 const driftCap = 20
 
 var lastRead = struct {
-	sync.RWMutex
-	m map[string]string
-}{}
+	sync.Mutex
+	m map[*core.Session]map[string]string
+}{m: map[*core.Session]map[string]string{}}
 
-func rememberContent(path, content string) {
-	lastRead.Lock()
-	if lastRead.m == nil {
-		lastRead.m = map[string]string{}
+func rememberContent(s *core.Session, path, content string) {
+	if s == nil {
+		return
 	}
-	lastRead.m[path] = content
-	lastRead.Unlock()
+	lastRead.Lock()
+	defer lastRead.Unlock()
+	m, ok := lastRead.m[s]
+	if !ok {
+		m = map[string]string{}
+		lastRead.m[s] = m
+	}
+	m[path] = content
 }
 
-func forgottenContent(path string) (string, bool) {
-	lastRead.RLock()
-	defer lastRead.RUnlock()
-	c, ok := lastRead.m[path]
+func forgottenContent(s *core.Session, path string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	lastRead.Lock()
+	defer lastRead.Unlock()
+	m, ok := lastRead.m[s]
+	if !ok {
+		return "", false
+	}
+	c, ok := m[path]
 	return c, ok
 }
 
@@ -147,7 +159,8 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		}
 	}
 	recordState(ctx, a.Path, fileData)
-	rememberContent(a.Path, string(fileData))
+	s, _ := core.SessionFrom(ctx)
+	rememberContent(s, a.Path, string(fileData))
 	lines := strings.Split(string(fileData), "\n")
 	if offset >= len(lines) {
 		return "", fmt.Errorf("read: offset %d is past the end (%d lines)", offset, len(lines))
@@ -205,7 +218,8 @@ func (writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		return "", fmt.Errorf("write: %w", err)
 	}
 	recordState(ctx, a.Path, []byte(a.Content))
-	rememberContent(a.Path, a.Content)
+	s, _ := core.SessionFrom(ctx)
+	rememberContent(s, a.Path, a.Content)
 	return fmt.Sprintf("wrote %d bytes to %s", len(a.Content), a.Path), nil
 }
 
@@ -216,7 +230,7 @@ func Edit() core.Tool { return &editTool{} }
 func (editTool) Name() string { return "edit" }
 
 func (editTool) Description() string {
-	return "replace exactly one occurrence of old with new in a file. Guidelines: the precise change; read first and make old unique with context — an ambiguous or missing old, or a file changed since your read, refuses by name. Reply: the path edited."
+	return "replace exactly one occurrence of old with new in a file. Guidelines: the precise change; read first and make old unique with context — a file you never read this session, an ambiguous or missing old, or one changed since your read, refuses by name. Reply: the path edited."
 }
 
 func (editTool) Schema() json.RawMessage {
@@ -246,6 +260,11 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if a.Old == "" {
 		return "", errors.New("edit: zero-width old string")
 	}
+	if _, threaded := core.SessionFrom(ctx); threaded {
+		if _, seen := stateOf(ctx, a.Path); !seen {
+			return "", fmt.Errorf("edit: %s was never read this session: read (or write) it first", a.Path)
+		}
+	}
 
 	fileData, err := os.ReadFile(a.Path)
 	if err != nil {
@@ -255,7 +274,8 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if recorded, seen := stateOf(ctx, a.Path); seen {
 		sum := sha256.Sum256(fileData)
 		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
-			return "", fmt.Errorf("%s", driftRefusal(a.Path, string(fileData)))
+			s, _ := core.SessionFrom(ctx)
+			return "", fmt.Errorf("%s", driftRefusal(s, a.Path, string(fileData)))
 		}
 	}
 
@@ -272,6 +292,8 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		return "", fmt.Errorf("edit: %w", err)
 	}
 	recordState(ctx, a.Path, []byte(updated))
+	s, _ := core.SessionFrom(ctx)
+	rememberContent(s, a.Path, string(updated))
 	return fmt.Sprintf("edited %s: replaced %d byte(s)", a.Path, len(a.Old)), nil
 }
 
@@ -283,9 +305,9 @@ func mtimeOf(path string) int64 {
 	return st.ModTime().UnixNano()
 }
 
-func driftRefusal(path, onDisk string) string {
+func driftRefusal(s *core.Session, path, onDisk string) string {
 	const header = "edit: the file changed since the read:"
-	remembered, ok := forgottenContent(path)
+	remembered, ok := forgottenContent(s, path)
 	if !ok || remembered == onDisk {
 		return header
 	}

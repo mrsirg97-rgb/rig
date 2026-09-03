@@ -336,8 +336,29 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 	}
 }
 
-func TestEditWithoutPriorReadProceeds(t *testing.T) {
+func TestEditWithoutPriorReadRefusesThreaded(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "one", "new": "two",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "never read") {
+		t.Fatalf("an edit of a file with no recorded observation must refuse naming the license, got %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "one" {
+		t.Fatal("a refused edit must not mutate the file")
+	}
+}
 
+func TestEditWithoutPriorReadProceedsStandalone(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
@@ -347,10 +368,61 @@ func TestEditWithoutPriorReadProceeds(t *testing.T) {
 		"path": path, "old": "one", "new": "two",
 	}))
 	if err != nil {
-		t.Fatalf("edit without prior read: %v", err)
+		t.Fatalf("a standalone exec carries no session and so no license to check: %v", err)
 	}
 	if got == "" {
 		t.Fatal("edit must report what it did")
+	}
+}
+
+func TestEditAfterWriteProceedsThreaded(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := file.Write().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "content": "one",
+	})); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "one", "new": "two",
+	})); err != nil {
+		t.Fatalf("write mints the edit license: %v", err)
+	}
+}
+
+func TestDriftDiffKeysOnTheSession(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("A content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctxA := core.WithSession(context.Background(), core.NewSession())
+	ctxB := core.WithSession(context.Background(), core.NewSession())
+	if _, err := file.Read().Exec(ctxA, argsJSON(t, map[string]any{"path": path})); err != nil {
+		t.Fatalf("read A: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("B content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Read().Exec(ctxB, argsJSON(t, map[string]any{"path": path})); err != nil {
+		t.Fatalf("read B: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("C content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := file.Edit().Exec(ctxA, argsJSON(t, map[string]any{
+		"path": path, "old": "A content", "new": "X",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
+		t.Fatalf("session A's edit must refuse naming the drift, got %v", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "-A content") || !strings.Contains(msg, "+C content") {
+		t.Fatalf("the drift must diff against session A's own observation, got:\n%s", msg)
+	}
+	if strings.Contains(msg, "B content") {
+		t.Fatalf("session B's observation must not bleed into session A's refusal, got:\n%s", msg)
 	}
 }
 
@@ -362,6 +434,9 @@ func TestEditRecordsFreshProvenance(t *testing.T) {
 	}
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
+	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+		t.Fatalf("read: %v", err)
+	}
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "one", "new": "two",
 	})); err != nil {
