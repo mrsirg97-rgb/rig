@@ -69,7 +69,9 @@ the session at the boundary, clean.
 ## Gotchas
 
 - Empties never pollute the transcript: a blank user message re-enters
-  awaiting_input.
+  awaiting_input, and a completion with no text, no reasoning, and no
+  calls appends no assistant row (a billed-but-empty completion drops
+  its usage stamp with it).
 - A dead turn ctx at the `Assemble`/`Stream` seam is the user's interrupt
   (or the session's end), not a provider fault: no `Fault` row, the run
   re-prompts.
@@ -84,8 +86,11 @@ the session at the boundary, clean.
   string back to the model.
 - The compat rule (events are added, never changed): events the loop does
   not name forward untouched; the Frontend tolerates what it does not know.
-- A run-context cancel ends the run, not a turn, and emits no `TurnEnd`;
-  every turn exit emits one.
+- A run-context cancel observed at a prompt, input, or stream boundary
+  ends the run, not a turn, and emits no `TurnEnd`; observed at the
+  `Assemble`/`Stream` seams the run's death is the turn's (the turn ctx
+  is the child), classified `TurnInterrupt` and emitting
+  `TurnEnd{interrupt}` before the run stops. Every turn exit emits one.
 - Every event captures its turn and checks it is the live one: a stale
   completion or stream event is ignored by name.
 - The engine runs on a background context: the run ends from a handler

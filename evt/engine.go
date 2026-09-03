@@ -30,6 +30,7 @@ type engine struct {
 	clock   Clock
 	tick    func(ctx context.Context)
 	running bool
+	stopped bool
 }
 
 func NewEngine(opts ...Option) Engine {
@@ -84,6 +85,10 @@ func (e *engine) Add(c Closure, priority int) uint64 {
 		priority = 0
 	}
 	e.mu.Lock()
+	if e.stopped {
+		e.mu.Unlock()
+		return 0
+	}
 	id := e.clock.Step()
 	e.q.Push(NewEvent(id, priority, c))
 	e.cond.Signal()
@@ -103,6 +108,7 @@ func (e *engine) Update(id uint64, priority int) bool {
 func (e *engine) Stop() {
 	e.mu.Lock()
 	e.running = false
+	e.stopped = true
 	e.cond.Broadcast()
 	e.mu.Unlock()
 }

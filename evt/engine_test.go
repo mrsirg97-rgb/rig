@@ -181,3 +181,23 @@ func TestEngineUpdateRaisesAPendingEvent(t *testing.T) {
 		t.Fatalf("order %v, want [b a]", order)
 	}
 }
+
+func TestEngineAddAfterStopQueuesNothing(t *testing.T) {
+	e := evt.NewEngine()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	e.Add(evt.Func(func(context.Context) { close(started); <-release }), 9)
+	finished := make(chan struct{})
+	go func() { e.Start(context.Background()); close(finished) }()
+	<-started
+	e.Stop()
+	close(release)
+	<-finished
+
+	if id := e.Add(evt.Func(func(context.Context) {}), 1); id != 0 {
+		t.Fatalf("an add after stop must refuse with no id, got %d", id)
+	}
+	if p := e.Pending(); len(p) != 0 {
+		t.Fatalf("an add after stop must queue nothing, pending %d", len(p))
+	}
+}

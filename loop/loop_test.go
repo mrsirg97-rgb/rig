@@ -682,3 +682,32 @@ func TestDuplicateToolNamesPanic(t *testing.T) {
 	}()
 	rig.New(rig.WithTools(a, b))
 }
+
+func TestAnEmptyCompletionStaysOutOfTheTranscript(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{doneEv()}},
+		{events: []core.Event{textEv("delivered"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+	)
+	k.Session = session
+
+	f.inputs <- "hi"
+	f.inputs <- "again"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	want := []core.Message{
+		{Role: core.RoleUser, Content: "hi"},
+		{Role: core.RoleUser, Content: "again"},
+		{Role: core.RoleAssistant, Content: "delivered"},
+	}
+	wantTranscript(t, session, want...)
+}
