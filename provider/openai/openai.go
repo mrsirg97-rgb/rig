@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
 )
@@ -22,12 +23,20 @@ type provider struct {
 	sock    string
 }
 
+const defaultHeaderTimeout = 2 * time.Minute
+
 func New(baseURL, model string) core.Provider {
+	return NewWithHeaderTimeout(baseURL, model, defaultHeaderTimeout)
+}
+
+func NewWithHeaderTimeout(baseURL, model string, headerTimeout time.Duration) core.Provider {
 	baseURL = strings.TrimRight(baseURL, "/")
 	p := &provider{
 		baseURL: baseURL,
 		model:   model,
-		client:  &http.Client{},
+		client: &http.Client{
+			Transport: &http.Transport{ResponseHeaderTimeout: headerTimeout},
+		},
 	}
 	if strings.HasPrefix(baseURL, "unix:") {
 		sock := strings.TrimPrefix(baseURL, "unix:")
@@ -35,7 +44,8 @@ func New(baseURL, model string) core.Provider {
 		d := net.Dialer{}
 		p.client = &http.Client{
 			Transport: &http.Transport{
-				Proxy: nil,
+				Proxy:                 nil,
+				ResponseHeaderTimeout: headerTimeout,
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 					return d.DialContext(ctx, "unix", sock)
 				},

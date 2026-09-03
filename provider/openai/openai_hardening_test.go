@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/provider/openai"
@@ -322,5 +323,36 @@ func TestReasoningEffortWireShape(t *testing.T) {
 	}
 	if sawKwargs {
 		t.Fatal("chat_template_kwargs must be absent when empty (the server's default)")
+	}
+}
+
+func TestAStallingServerBoundsTheWaitForHeaders(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+	}))
+	defer func() {
+		close(release)
+		srv.Close()
+	}()
+
+	p := openai.NewWithHeaderTimeout(srv.URL, "local", 50*time.Millisecond)
+	start := time.Now()
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %v, want exactly the one transport fault", kinds(events))
+	}
+	f, ok := events[0].(core.Fault)
+	if !ok {
+		t.Fatalf("event 0 = %+v, want the transport fault", events[0])
+	}
+	if !strings.Contains(f.Err.Error(), "transport") {
+		t.Fatalf("the fault must name the transport, got %v", f.Err)
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("the header timeout must bound the wait, took %s", elapsed)
 	}
 }
