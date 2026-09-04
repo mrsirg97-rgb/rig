@@ -143,7 +143,13 @@ func TestRecorderUpsertsFilesAtTheBoundary(t *testing.T) {
 	sid := "rec-files"
 	session := core.NewSession()
 	session.Files["/tmp/a.txt"] = core.FileState{Hash: "h1", Mtime: 100}
-	rec := state.NewRecorder(&scripted{inputs: []string{"work"}}, db, "/tmp/wt", "model-x", "0.1.0", sid, session)
+	rec := state.NewRecorder(&scripted{inputs: []string{"work"}}, db, "/tmp/wt", "model-x", "0.1.0", sid, session).Snapshot(func(s *core.Session) map[string]core.FileState {
+		out := make(map[string]core.FileState, len(s.Files))
+		for p, st := range s.Files {
+			out[p] = st
+		}
+		return out
+	})
 
 	ctx := context.Background()
 	if _, err := rec.Input(ctx); err != nil {

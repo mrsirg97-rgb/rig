@@ -39,6 +39,10 @@ loop already emits; the read side rebuilds a session from the log.
 
 - The recorder sources its rows from the loop's events and forwards them
   to the inner frontend; it must not double-record or drop events.
+- The files upsert rides the wired `Snapshot` seam (the file tool's
+  snapshot, set by the root): the recorder persists the session's
+  recorded file states without racing the tools' concurrent records.
+  Without the seam the upsert is skipped.
 - A turn starts with a user message: the defined turns count comes from
   the row's lifecycle. `SessionRow` carries the model and version (so the
   list and the summary build from the same slice) and the fault count;

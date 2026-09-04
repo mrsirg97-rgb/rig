@@ -267,7 +267,7 @@ func (r *root) newSession(ctx context.Context) (string, error) {
 	r.role = ""
 	r.approve = r.approveDefault
 	s2 := core.NewSession()
-	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2)
+	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2).Snapshot(file.SnapshotFiles)
 	if err := rec2.Ensure(); err != nil {
 		return "", fmt.Errorf("new: %v", err)
 	}
@@ -309,7 +309,7 @@ func (r *root) sessionResume(ctx context.Context, id string) error {
 	if err := r.rec.Close("ok"); err != nil {
 		return fmt.Errorf("sessions: %v", err)
 	}
-	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s.ID, s)
+	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s.ID, s).Snapshot(file.SnapshotFiles)
 	if err := rec2.Ensure(); err != nil {
 		return fmt.Errorf("sessions: %v", err)
 	}
@@ -1104,7 +1104,7 @@ func main() {
 	}); ok {
 		r.askDoor = a.Ask
 	}
-	rec := state.NewRecorder(fe, sdb, cwd, modelID, Version, session.ID, session)
+	rec := state.NewRecorder(fe, sdb, cwd, modelID, Version, session.ID, session).Snapshot(file.SnapshotFiles)
 	r.rec = rec
 
 	k := wire(r)

@@ -13,20 +13,21 @@ import (
 )
 
 type Recorder struct {
-	inner   core.Frontend
-	db      store.DB
-	cwd     string
-	model   string
-	version string
-	sid     string
-	session *core.Session
-	buffer  strings.Builder
-	reason  strings.Builder
-	pending []core.ToolCall
-	lastSeq int64
-	relandN int
-	ensured bool
-	mu      sync.Mutex
+	inner    core.Frontend
+	db       store.DB
+	cwd      string
+	model    string
+	version  string
+	sid      string
+	session  *core.Session
+	buffer   strings.Builder
+	reason   strings.Builder
+	pending  []core.ToolCall
+	lastSeq  int64
+	relandN  int
+	ensured  bool
+	mu       sync.Mutex
+	snapshot func(*core.Session) map[string]core.FileState
 }
 
 func NewRecorder(inner core.Frontend, db store.DB, cwd, model, version, sid string, session *core.Session) *Recorder {
@@ -34,6 +35,14 @@ func NewRecorder(inner core.Frontend, db store.DB, cwd, model, version, sid stri
 		inner: inner, db: db, cwd: cwd, model: model,
 		version: version, sid: sid, session: session,
 	}
+}
+
+// Snapshot wires the file tool's snapshot so the recorder can persist
+// the session's recorded file states without racing the tools'
+// concurrent records; the default (nil) skips the files upsert.
+func (r *Recorder) Snapshot(fn func(*core.Session) map[string]core.FileState) *Recorder {
+	r.snapshot = fn
+	return r
 }
 
 func (r *Recorder) Input(ctx context.Context) (string, error) {
@@ -233,15 +242,10 @@ func (r *Recorder) relandTail() {
 }
 
 func (r *Recorder) upsertFiles() {
-	if r.session == nil {
+	if r.session == nil || r.snapshot == nil {
 		return
 	}
-	r.mu.Lock()
-	files := make(map[string]core.FileState, len(r.session.Files))
-	for p, st := range r.session.Files {
-		files[p] = st
-	}
-	r.mu.Unlock()
+	files := r.snapshot(r.session)
 	if len(files) == 0 {
 		return
 	}

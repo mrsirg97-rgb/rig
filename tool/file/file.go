@@ -48,6 +48,22 @@ func normalizePath(path string) string {
 	return path
 }
 
+// SnapshotFiles returns a copy of the session's recorded file states
+// under the package lock: a persister that upserts them cannot race the
+// tools' concurrent records.
+func SnapshotFiles(s *core.Session) map[string]core.FileState {
+	if s == nil {
+		return nil
+	}
+	filesMu.Lock()
+	defer filesMu.Unlock()
+	out := make(map[string]core.FileState, len(s.Files))
+	for p, st := range s.Files {
+		out[p] = st
+	}
+	return out
+}
+
 func recordState(ctx context.Context, path string, data []byte) {
 	s, ok := core.SessionFrom(ctx)
 	if !ok {
