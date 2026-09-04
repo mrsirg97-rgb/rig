@@ -31,7 +31,7 @@ func countMessages(t *testing.T, db store.DB, sid string) int {
 	return n
 }
 
-func TestListSessionsCountsTurnsExcludingSummary(t *testing.T) {
+func TestListSessionsCountsTurnsAfterTheLastSummary(t *testing.T) {
 	db := openStore(t)
 	ctx := context.Background()
 
@@ -83,8 +83,8 @@ func TestListSessionsCountsTurnsExcludingSummary(t *testing.T) {
 		t.Fatalf("newest first, got %v %v %v", rows[0].ID, rows[1].ID, rows[2].ID)
 	}
 
-	if rows[2].Turns != 2 {
-		t.Fatalf("turns = %d, want 2 (user rows minus [compaction] rows)", rows[2].Turns)
+	if rows[2].Turns != 1 {
+		t.Fatalf("turns = %d, want 1 (user rows after the last [compaction] marker; pre-summary rows are the compacted history)", rows[2].Turns)
 	}
 	if rows[2].Exit != "ok" {
 		t.Fatalf("closed row exit = %q, want ok", rows[2].Exit)

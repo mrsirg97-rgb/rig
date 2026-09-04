@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -13,27 +14,28 @@ import (
 )
 
 type Recorder struct {
-	inner    core.Frontend
-	db       store.DB
-	cwd      string
-	model    string
-	version  string
-	sid      string
-	session  *core.Session
-	buffer   strings.Builder
-	reason   strings.Builder
-	pending  []core.ToolCall
-	lastSeq  int64
-	relandN  int
-	ensured  bool
-	mu       sync.Mutex
-	snapshot func(*core.Session) map[string]core.FileState
+	inner     core.Frontend
+	db        store.DB
+	cwd       string
+	model     string
+	version   string
+	sid       string
+	session   *core.Session
+	buffer    strings.Builder
+	reason    strings.Builder
+	pending   []core.ToolCall
+	lastSeq   int64
+	resultMap map[string][]string
+	ensured   bool
+	mu        sync.Mutex
+	snapshot  func(*core.Session) map[string]core.FileState
 }
 
 func NewRecorder(inner core.Frontend, db store.DB, cwd, model, version, sid string, session *core.Session) *Recorder {
 	return &Recorder{
 		inner: inner, db: db, cwd: cwd, model: model,
 		version: version, sid: sid, session: session,
+		resultMap: map[string][]string{},
 	}
 }
 
@@ -97,14 +99,15 @@ func (r *Recorder) observe(ev core.Event) {
 			f := e.Err.Error()
 			failure = &f
 		}
-		if e2 := RecordToolResult(context.Background(), r.db, e.ID, e.Content, failure); e2 != nil {
+		storage, ok := r.popStorage(e.ID)
+		if !ok {
+			storage = e.ID
+		}
+		if e2 := RecordToolResult(context.Background(), r.db, r.sid, r.lastSeq, storage, e.Content, failure); e2 != nil {
 			r.loud("tool result "+e.ID, e2)
 		}
 	case core.Done:
 		seq := r.land()
-		if seq == 0 {
-			seq = r.lastSeq
-		}
 		if seq > 0 {
 			if e2 := RecordUsage(context.Background(), r.db, seq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite)); e2 != nil {
 				r.loud("usage", e2)
@@ -161,12 +164,40 @@ func (r *Recorder) land() (seq int64) {
 		return 0
 	}
 	r.setLastSeq(seq)
+	r.mu.Lock()
+	r.resultMap = map[string][]string{}
+	used := map[string]int{}
 	for _, call := range calls {
-		if e2 := RecordToolCall(context.Background(), r.db, seq, call.ID, call.Name, string(call.Args)); e2 != nil {
-			r.loud("tool call "+call.ID, e2)
+		n := used[call.ID]
+		used[call.ID] = n + 1
+		storage := call.ID
+		if n > 0 {
+			storage = fmt.Sprintf("%s-%d", call.ID, n+1)
 		}
+		if e2 := RecordToolCall(context.Background(), r.db, r.sid, seq, storage, call.Name, string(call.Args)); e2 != nil {
+			r.loud("tool call "+call.ID, e2)
+			continue
+		}
+		r.resultMap[call.ID] = append(r.resultMap[call.ID], storage)
 	}
+	r.mu.Unlock()
 	return seq
+}
+
+func (r *Recorder) popStorage(id string) (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	queue := r.resultMap[id]
+	if len(queue) == 0 {
+		return "", false
+	}
+	storage := queue[0]
+	if len(queue) == 1 {
+		delete(r.resultMap, id)
+	} else {
+		r.resultMap[id] = queue[1:]
+	}
+	return storage, true
 }
 
 func (r *Recorder) landCompacted(ev core.Compacted) {
@@ -179,10 +210,10 @@ func (r *Recorder) landCompacted(ev core.Compacted) {
 	if e2 := RecordUsage(context.Background(), r.db, seq, int64(ev.Usage.Prompt), int64(ev.Usage.Completion), int64(ev.Usage.CacheRead), int64(ev.Usage.CacheWrite)); e2 != nil {
 		r.loud("summary usage", e2)
 	}
-	r.relandTail()
+	r.relandTail(seq)
 }
 
-func (r *Recorder) relandTail() {
+func (r *Recorder) relandTail(floor int64) {
 	if r.session == nil {
 		return
 	}
@@ -193,11 +224,15 @@ func (r *Recorder) relandTail() {
 		return
 	}
 	tail := msgs[1:]
-	r.mu.Lock()
-	r.relandN++
-	suffix := fmt.Sprintf("-r%d", r.relandN)
-	r.mu.Unlock()
-	idMap := map[string]string{}
+	counts := map[string]int{}
+	for _, m := range tail {
+		if m.Role == core.RoleAssistant {
+			for _, call := range m.ToolCalls {
+				counts[call.ID]++
+			}
+		}
+	}
+	seen := map[string]int{}
 	for _, m := range tail {
 		switch m.Role {
 		case core.RoleUser:
@@ -222,23 +257,73 @@ func (r *Recorder) relandTail() {
 				continue
 			}
 			r.setLastSeq(seq)
+			r.mu.Lock()
+			r.resultMap = map[string][]string{}
+			used := map[string]int{}
 			for _, call := range m.ToolCalls {
-				fresh := call.ID + suffix
-				idMap[call.ID] = fresh
-				if e2 := RecordToolCall(context.Background(), r.db, seq, fresh, call.Name, string(call.Args)); e2 != nil {
-					r.loud("re-landed call", e2)
+				n := used[call.ID]
+				used[call.ID] = n + 1
+				storage := call.ID
+				if n > 0 {
+					storage = fmt.Sprintf("%s-%d", call.ID, n+1)
 				}
+				if e2 := RecordToolCall(context.Background(), r.db, r.sid, seq, storage, call.Name, string(call.Args)); e2 != nil {
+					r.loud("re-landed call", e2)
+					continue
+				}
+				r.resultMap[call.ID] = append(r.resultMap[call.ID], storage)
 			}
+			r.mu.Unlock()
 		case core.RoleTool:
-			fresh, ok := idMap[m.ToolID]
+			storage, ok := r.popStorage(m.ToolID)
 			if !ok {
 				continue
 			}
-			if e2 := RecordToolResult(context.Background(), r.db, fresh, m.Content, nil); e2 != nil {
+			failure := r.originalErr(m.ToolID, seen[m.ToolID], counts[m.ToolID], floor)
+			seen[m.ToolID]++
+			if e2 := RecordToolResult(context.Background(), r.db, r.sid, r.lastSeq, storage, m.Content, failure); e2 != nil {
 				r.loud("re-landed result", e2)
 			}
 		}
 	}
+}
+
+func (r *Recorder) originalErr(id string, i, total int, floor int64) *string {
+	if id == "" || total <= 0 {
+		return nil
+	}
+	rows, err := r.db.DB.QueryContext(context.Background(),
+		`SELECT "err" FROM "tool_calls" WHERE "session_id" = $1 AND "id" = $2 AND "message_seq" < $3 ORDER BY "message_seq" ASC`, r.sid, id, floor)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var errs []sql.NullString
+	for rows.Next() {
+		var e sql.NullString
+		if err := rows.Scan(&e); err != nil {
+			return nil
+		}
+		errs = append(errs, e)
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	// The tail is the kept, newest slice in transcript order: its i-th
+	// occurrence of the wire id maps to the original at len-total+i.
+	// The floor excludes this compaction's own re-landed rows.
+	idx := len(errs) - total + i
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(errs) {
+		idx = len(errs) - 1
+	}
+	if !errs[idx].Valid {
+		return nil
+	}
+	f := errs[idx].String
+	return &f
 }
 
 func (r *Recorder) upsertFiles() {

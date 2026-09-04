@@ -8,7 +8,7 @@ loop already emits; the read side rebuilds a session from the log.
 
 ## What it includes
 
-- `state.go`: `SchemaVersion`, `DDL`, `Statements`, the `DB` alias.
+- `state.go`: `SchemaVersion`, `DDL`, `Statements`, `Migration`, the `DB` alias.
 - `recorder.go`: the observing `core.Frontend`: forwards every
   Input/Notify untouched, appends rows for the loop's events.
 - `resume.go`: the read-side projection: rebuild a `core.Session` from
@@ -37,6 +37,16 @@ loop already emits; the read side rebuilds a session from the log.
 
 ## Gotchas
 
+- `tool_calls` is keyed `(session_id, message_seq, id)`: model-minted call
+  ids are not globally unique (two sessions, or two turns of one session,
+  can mint the same id), and the result write is scoped to the session,
+  the message, and the id. `RecordToolCall`/`RecordToolResult` take all
+  three. The v1 store's `(id)`-only key is migrated on open (`Migration`):
+  the `session_id` column is backfilled from `messages` and the table
+  rebuilt with the composite key. A duplicate id within one message is
+  minted to `id-2`, `id-3` by the recorder (the wire id stays on the
+  message row); results arrive in call order and are matched through that
+  mapping.
 - The recorder sources its rows from the loop's events and forwards them
   to the inner frontend; it must not double-record or drop events.
 - The files upsert rides the wired `Snapshot` seam (the file tool's

@@ -1,5 +1,59 @@
 # Changelog
 
+## [Unreleased]: the quality sweep
+
+Each finding below carries a test that failed before and passes after.
+
+- **tool calls are scoped to the session and the message**
+  (`store/state`, SPEC_STATE): model-minted call ids are not globally
+  unique, and the old `(id)`-only key let one session's result overwrite
+  another's row in the shared workspace file. `tool_calls` is now keyed
+  `(session_id, message_seq, id)`, the recorder scopes every call and
+  result to the session and the landing message, a duplicate id within
+  one message is minted to `id-2`, `id-3` (results arrive in call
+  order), and the v1 store is migrated on open: `session_id` is
+  backfilled from `messages` and the table rebuilt. Compaction replay
+  keeps wire ids and attributes a reused id to its own re-landed
+  message; the relanded result copies the `err` column from the
+  original row.
+- **the env and file knobs validate their bounds at the boundary**
+  (`cmd/rig`, `config`): a negative `RIG_RETRIES`/`RIG_ROUNDS`/
+  `RIG_RESULT_CAP` silently disabled its guard (the guard clamps
+  negatives to 1 or 0), and `RIG_RETRIES` ignored a parse error while
+  its siblings refused. All three env knobs now refuse loud, and
+  `settings.json` `retries` gets the same `v < 0` check as `rounds`
+  and `resultCap`. `jsonInt` rejects values at or beyond the platform
+  range: `int()` of a float64 past `MaxInt64` is implementation
+  dependent and turned `1e300` into a negative.
+- **the worker spawn bounds its output capture** (`store/scheduler`):
+  stdout and stderr were captured unbounded in memory; each stream now
+  keeps the first and last 128 KiB of a 256 KiB budget with a
+  truncation marker, so a verbose worker cannot OOM the runner.
+- **the memory dedup digest is sha256** (`store/rem`): the natural-key
+  digest of model-generated content was md5; the v2->v4 migration
+  rehashes legacy rows and renames the column (`content_md5` ->
+  `content_sha256`), so the field, the column, and the unique index all
+  agree.
+- **the dashboard opens the scheduler store with its migration**
+  (`frontend/web`): `rig serve` alone on a v1 scheduler store 500'd
+  with a schema mismatch; the state store's migration is wired there
+  too.
+- **a once job's `at` must be in the future** (`store/scheduler`): a
+  past `at` made the crontab line fire at the next local occurrence and
+  keep firing daily until a run finally succeeded. `NextFire` computes
+  in the caller's location, the list shows the stored `at` for once
+  jobs, and the crontab calls are bounded at five seconds.
+- **an empty completion's usage no longer lands on the previous
+  message** (`store/state`); the sessions list counts user turns after
+  the last summary marker, so compaction replay no longer inflates the
+  turn count.
+- **the compact policy locks the transcript mutation**
+  (`policy/compact`); the job socket is chmod'd 0600 after listen
+  (`store/scheduler`); the pending plugin write opens with
+  `O_NOFOLLOW` and a zone move re-checks the destination after the
+  rename (`plugins`); the dashboard page limit is capped
+  (`frontend/web`).
+
 ## [0.22.0]: the third review
 
 Three PRs from the outside review, then a clean pass over every package;

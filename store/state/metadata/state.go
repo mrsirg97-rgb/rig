@@ -32,8 +32,9 @@ type Message struct {
 
 // table:"tool_calls"
 type ToolCall struct {
+	SessionID  string     `primary:"true" alias:"name=session_id,nullable=false"`
+	MessageSeq int64      `primary:"true" alias:"name=message_seq,nullable=false"`
 	ID         string     `primary:"true" alias:"name=id,nullable=false"`
-	MessageSeq int64      `alias:"name=message_seq,nullable=false"`
 	Message    *Message   `link:"from=Message,on=seq,many=false"`
 	Name       string     `alias:"name=name,nullable=false"`
 	Args       string     `alias:"name=args,nullable=false"`

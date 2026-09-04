@@ -40,7 +40,7 @@ func (c *storeCache) open(path string, statements []string, version int, migrate
 }
 
 func (c *storeCache) state(cwd string) (store.DB, error) {
-	return c.open(state.StorePath(c.home, cwd), state.Statements(), state.SchemaVersion)
+	return c.open(state.StorePath(c.home, cwd), state.Statements(), state.SchemaVersion, state.Migration())
 }
 
 func (c *storeCache) todo(cwd string) (store.DB, error) {
@@ -50,7 +50,7 @@ func (c *storeCache) todo(cwd string) (store.DB, error) {
 
 func (c *storeCache) scheduler() (store.DB, error) {
 	shome := filepath.Join(c.home, "scheduler")
-	return c.open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	return c.open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(shome, sched.RealCrontab("")))
 }
 
 func (c *storeCache) closeAll() {

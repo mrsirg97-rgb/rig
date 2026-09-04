@@ -940,25 +940,50 @@ func TestMalformedConfigRefusesBeforeStores(t *testing.T) {
 func TestRoundsAndResultCapEnvRefuseLoud(t *testing.T) {
 	for _, tc := range []struct {
 		env   string
+		value string
 		voice string
 	}{
-		{"RIG_ROUNDS", "rig: RIG_ROUNDS: expected an integer, got \"many\""},
-		{"RIG_RESULT_CAP", "rig: RIG_RESULT_CAP: expected an integer, got \"big\""},
+		{"RIG_ROUNDS", "many", "rig: RIG_ROUNDS: expected an integer, got \"many\""},
+		{"RIG_RESULT_CAP", "big", "rig: RIG_RESULT_CAP: expected an integer, got \"big\""},
+		{"RIG_RETRIES", "three", "rig: RIG_RETRIES: expected an integer, got \"three\""},
 	} {
 		t.Run(tc.env, func(t *testing.T) {
 			bin := buildBin(t, t.TempDir())
 			cmd := exec.Command(bin, "-p", "hello")
 			cmd.Dir = t.TempDir()
 			env := rigEnv(t.TempDir(), "")
-			if tc.env == "RIG_RESULT_CAP" {
-				env = append(env, tc.env+"=big")
-			} else {
-				env = append(env, tc.env+"=many")
-			}
+			env = append(env, tc.env+"="+tc.value)
 			cmd.Env = env
 			out, runErr := cmd.CombinedOutput()
 			if runErr == nil {
 				t.Fatalf("an invalid %s must refuse: %q", tc.env, out)
+			}
+			if !strings.Contains(string(out), tc.voice) {
+				t.Fatalf("the voice = %q, want %q", out, tc.voice)
+			}
+		})
+	}
+}
+
+func TestNegativeEnvBoundsRefuseLoud(t *testing.T) {
+	for _, tc := range []struct {
+		env   string
+		voice string
+	}{
+		{"RIG_RETRIES=-3", "rig: RIG_RETRIES: expected a non-negative integer, got -3"},
+		{"RIG_ROUNDS=-5", "rig: RIG_ROUNDS: expected a non-negative integer, got -5"},
+		{"RIG_RESULT_CAP=-1", "rig: RIG_RESULT_CAP: expected a non-negative integer, got -1"},
+	} {
+		t.Run(tc.env, func(t *testing.T) {
+			bin := buildBin(t, t.TempDir())
+			cmd := exec.Command(bin, "-p", "hello")
+			cmd.Dir = t.TempDir()
+			env := rigEnv(t.TempDir(), "")
+			env = append(env, tc.env)
+			cmd.Env = env
+			out, runErr := cmd.CombinedOutput()
+			if runErr == nil {
+				t.Fatalf("a negative %s must refuse: %q", tc.env, out)
 			}
 			if !strings.Contains(string(out), tc.voice) {
 				t.Fatalf("the voice = %q, want %q", out, tc.voice)

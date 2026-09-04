@@ -237,6 +237,9 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		if err != nil {
 			return Settings{}, fmt.Errorf("config: %s: retries: %v", path, err)
 		}
+		if v < 0 {
+			return Settings{}, fmt.Errorf("config: %s: retries: expected a non-negative number, got %d", path, v)
+		}
 		if v != 0 {
 			s.Retries = v
 		}
@@ -327,6 +330,9 @@ func jsonInt(raw json.RawMessage) (int, error) {
 	f, ok := v.(float64)
 	if !ok || f != math.Trunc(f) {
 		return 0, fmt.Errorf("expected an integer, got %s", gojson(v))
+	}
+	if f >= float64(math.MaxInt64) || f < float64(math.MinInt64) {
+		return 0, fmt.Errorf("expected an integer within the platform range, got %s", gojson(v))
 	}
 	return int(f), nil
 }

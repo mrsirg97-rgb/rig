@@ -2,11 +2,13 @@ package scheduler
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var tagRe = regexp.MustCompile(`^(?P<lead>\S.*?)\s+#\s*pane-scheduler:(?P<key>\S+)$`)
@@ -130,6 +132,8 @@ type Crontab interface {
 
 var noCrontabRe = regexp.MustCompile(`(?i)no crontab for`)
 
+const crontabTimeout = 5 * time.Second
+
 func RealCrontab(bin string) Crontab {
 	if bin == "" {
 		bin = "crontab"
@@ -140,7 +144,9 @@ func RealCrontab(bin string) Crontab {
 type realCrontab struct{ bin string }
 
 func (r realCrontab) List() (string, error) {
-	out, err := exec.Command(r.bin, "-l").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), crontabTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, r.bin, "-l").Output()
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
@@ -157,7 +163,9 @@ func (r realCrontab) List() (string, error) {
 }
 
 func (r realCrontab) Install(text string) error {
-	cmd := exec.Command(r.bin, "-")
+	ctx, cancel := context.WithTimeout(context.Background(), crontabTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, r.bin, "-")
 	var stderr bytes.Buffer
 	cmd.Stdin = strings.NewReader(text)
 	cmd.Stderr = &stderr

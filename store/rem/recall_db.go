@@ -221,7 +221,7 @@ func hitOf(r remdom.Memory, eff float64, match string) Hit {
 		CreatedAt:          r.CreatedAt,
 		LastAccessedAt:     r.LastAccessedAt,
 		LastConsolidatedAt: r.LastConsolidatedAt,
-		ContentMd5:         r.ContentMd5,
+		ContentMd5:         r.ContentSha256,
 		EffectiveStrength:  eff,
 		Match:              match,
 	}

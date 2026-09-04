@@ -177,7 +177,7 @@ func NextFire(parsed ParsedCron, from time.Time) (time.Time, bool) {
 				if day == 0 && h == floorH && mi < floorM {
 					continue
 				}
-				return time.Date(d.Year(), d.Month(), d.Day(), h, mi, 0, 0, time.Local), true
+				return time.Date(d.Year(), d.Month(), d.Day(), h, mi, 0, 0, from.Location()), true
 			}
 		}
 	}

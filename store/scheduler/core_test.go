@@ -547,3 +547,24 @@ func TestCrontabListFailureRefusesLoudlyBeforeAnythingIsWritten(t *testing.T) {
 		t.Fatalf("events = %d, want 0", n)
 	}
 }
+
+func TestCreateOnceRefusesAPastAt(t *testing.T) {
+	h := newHarness(t, "/ws/past")
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "late", Prompt: "p", Cron: "once", At: "2026-08-15T11:59:00Z"})
+	mustErr(t, err, "in the future")
+	var n int
+	if err := h.db.QueryRow(`SELECT COUNT(*) FROM jobs`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("jobs = %d rows, want none (the past at is refused before the write)", n)
+	}
+}
+
+func TestUpdateOnceRefusesAPastAt(t *testing.T) {
+	h := newHarness(t, "/ws/pastupd")
+	_, err := h.create(sched.CreateInput{Model: "w", Name: "soon", Prompt: "p", Cron: "0 0 * * *"})
+	mustOK(t, err)
+	_, err = h.update(sched.UpdateInput{ID: "j1", At: "2026-08-15T11:00:00Z"})
+	mustErr(t, err, "in the future")
+}

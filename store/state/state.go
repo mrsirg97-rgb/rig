@@ -2,7 +2,9 @@ package state
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,7 +14,64 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
+
+func Migration() func(*sql.Tx, int, int) (string, error) {
+	return migrate
+}
+
+func migrate(tx *sql.Tx, from, to int) (string, error) {
+	var found int
+	err := tx.QueryRow(`SELECT 1 FROM pragma_table_info('tool_calls') WHERE name = 'session_id'`).Scan(&found)
+	switch {
+	case err == nil:
+		return "", nil
+	case errors.Is(err, sql.ErrNoRows):
+	default:
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`ALTER TABLE "tool_calls" ADD COLUMN "session_id" TEXT`); err != nil {
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`UPDATE "tool_calls" SET "session_id" = (
+		SELECT "session_id" FROM "messages"
+		WHERE "messages"."seq" = "tool_calls"."message_seq"
+	)`); err != nil {
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	var orphan int
+	if err := tx.QueryRow(`SELECT count(*) FROM "tool_calls" WHERE "session_id" IS NULL`).Scan(&orphan); err != nil {
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	if orphan > 0 {
+		return "", fmt.Errorf("state: migration: %d tool call rows reference no message row", orphan)
+	}
+	if _, err := tx.Exec(`CREATE TABLE "tool_calls_v2" (
+  "session_id" TEXT NOT NULL,
+  "message_seq" INTEGER NOT NULL,
+  "id" TEXT NOT NULL,
+  "args" TEXT NOT NULL,
+  "ended_at" TIMESTAMP,
+  "err" TEXT,
+  "name" TEXT NOT NULL,
+  "result" TEXT,
+  "started_at" TIMESTAMP NOT NULL,
+  PRIMARY KEY ("session_id", "message_seq", "id")
+)`); err != nil {
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`INSERT INTO "tool_calls_v2" ("session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at")
+		SELECT "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at" FROM "tool_calls"`); err != nil {
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`DROP TABLE "tool_calls"`); err != nil {
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`ALTER TABLE "tool_calls_v2" RENAME TO "tool_calls"`); err != nil {
+		return "", fmt.Errorf("state: migration: %w", err)
+	}
+	return "state migration: tool_calls keyed by (session_id, message_seq, id)", nil
+}
 
 func Statements() []string {
 	return ddl.Statements()
@@ -56,14 +115,14 @@ func CanonicalArgs(args string) (string, error) {
 	return string(out), nil
 }
 
-func RecordToolCall(ctx context.Context, db store.DB, messageSeq int64, id, name, args string) error {
+func RecordToolCall(ctx context.Context, db store.DB, sessionID string, messageSeq int64, id, name, args string) error {
 	canonical, cerr := CanonicalArgs(args)
 	if cerr != nil {
 		canonical = args
 	}
 	err := withTx(db, ctx, func(c context.Context) error {
 		_, e := domain.NewToolCallDomain().InsertToolCall(c, domain.ToolCall{
-			Id: id, Name: name, Args: canonical, MessageSeq: messageSeq, StartedAt: now(),
+			SessionId: sessionID, Id: id, Name: name, Args: canonical, MessageSeq: messageSeq, StartedAt: now(),
 		})
 		return e
 	})
@@ -73,16 +132,16 @@ func RecordToolCall(ctx context.Context, db store.DB, messageSeq int64, id, name
 	return cerr
 }
 
-func RecordToolResult(ctx context.Context, db store.DB, id, result string, failure *string) error {
+func RecordToolResult(ctx context.Context, db store.DB, sessionID string, messageSeq int64, id, result string, failure *string) error {
 	return withTx(db, ctx, func(c context.Context) error {
 		tc, err := safely(func() (*domain.ToolCall, error) {
-			return domain.NewToolCallDomain().GetToolCall(c, id).Row()
+			return domain.NewToolCallDomain().GetToolCall(c, sessionID, messageSeq, id).Row()
 		})
 		if err != nil {
 			return err
 		}
 		if tc == nil {
-			return fmt.Errorf("state: tool call %s: no such row", id)
+			return fmt.Errorf("state: tool call %s (session %s, message %d): no such row", id, sessionID, messageSeq)
 		}
 		tc.Result = &result
 		t := now()

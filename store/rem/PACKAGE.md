@@ -65,7 +65,10 @@ nothing is read into the prompt by a session start.
 - The trigram arm uses the pg_trgm convention (two-space padding): the
   fuzzy arm enforces a minimum absolute overlap and a containment floor.
 - Fusion is reciprocal rank (k=60) over the arms' rankings, deduped by
-  memory id, annotated with the reaching arm.
+  memory id, annotated with the reaching arm. The natural-key dedup
+  digest is sha256, and the v2->v4 migration rehashes legacy rows and
+  renames the column (`content_md5` -> `content_sha256`) so the field,
+  the column, and the unique index all agree.
 - The fts virtual table is not a container the grammar speaks, so its
   rowid bookkeeping is a named raw statement.
 - Supersession pairs a nullable alias with its self-link (the pairing that

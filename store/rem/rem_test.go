@@ -2,6 +2,7 @@ package rem
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -34,7 +35,47 @@ type probe struct {
 	CreatedAt          string
 	LastAccessedAt     *string
 	LastConsolidatedAt string
-	ContentMd5         string
+	ContentSha256      string
+}
+
+func legacyStatements() []string {
+	return []string{
+		`CREATE TABLE IF NOT EXISTS "memories" (
+  "id" INTEGER NOT NULL,
+  "access_count" INTEGER NOT NULL,
+  "content" TEXT NOT NULL,
+  "content_md5" TEXT NOT NULL,
+  "created_at" TEXT NOT NULL,
+  "importance" REAL NOT NULL,
+  "kind" TEXT NOT NULL,
+  "last_accessed_at" TEXT,
+  "last_consolidated_at" TEXT NOT NULL,
+  "scope" TEXT NOT NULL,
+  "scope_label" TEXT NOT NULL,
+  "source" TEXT,
+  "strength" REAL NOT NULL,
+  "superseded_by" INTEGER,
+  PRIMARY KEY ("id")
+)`,
+		`CREATE TABLE IF NOT EXISTS "meta" (
+  "key" TEXT NOT NULL,
+  "value" TEXT NOT NULL,
+  PRIMARY KEY ("key")
+)`,
+		`CREATE TABLE IF NOT EXISTS "trigrams" (
+  "memory_id" INTEGER NOT NULL,
+  "gram" TEXT NOT NULL,
+  PRIMARY KEY ("memory_id", "gram")
+)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_content ON memories (scope, content_md5)`,
+		`CREATE INDEX IF NOT EXISTS memories_scope_created ON memories (scope, created_at)`,
+		`CREATE INDEX IF NOT EXISTS trigrams_gram_idx ON trigrams (gram)`,
+		`CREATE INDEX IF NOT EXISTS trigrams_memory_idx ON trigrams (memory_id)`,
+		`CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5 (
+  content,
+  tokenize = 'porter unicode61'
+)`,
+	}
 }
 
 func newDB(t *testing.T) store.DB {
@@ -50,11 +91,11 @@ func memRow(t *testing.T, db store.DB, content string) *probe {
 	t.Helper()
 	row := db.QueryRow(`SELECT id, scope, scope_label, kind, content, source, importance,
 		strength, access_count, superseded_by, created_at, last_accessed_at,
-		last_consolidated_at, content_md5 FROM memories WHERE content = ?`, content)
+		last_consolidated_at, content_sha256 FROM memories WHERE content = ?`, content)
 	var p probe
 	if err := row.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
 		&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 		return nil
 	}
 	return &p
@@ -64,11 +105,11 @@ func memByID(t *testing.T, db store.DB, id int64) *probe {
 	t.Helper()
 	row := db.QueryRow(`SELECT id, scope, scope_label, kind, content, source, importance,
 		strength, access_count, superseded_by, created_at, last_accessed_at,
-		last_consolidated_at, content_md5 FROM memories WHERE id = ?`, id)
+		last_consolidated_at, content_sha256 FROM memories WHERE id = ?`, id)
 	var p probe
 	if err := row.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
 		&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 		return nil
 	}
 	return &p
@@ -78,7 +119,7 @@ func memRows(t *testing.T, db store.DB) []probe {
 	t.Helper()
 	rows, err := db.Query(`SELECT id, scope, scope_label, kind, content, source, importance,
 		strength, access_count, superseded_by, created_at, last_accessed_at,
-		last_consolidated_at, content_md5 FROM memories ORDER BY id`)
+		last_consolidated_at, content_sha256 FROM memories ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +129,7 @@ func memRows(t *testing.T, db store.DB) []probe {
 		var p probe
 		if err := rows.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
 			&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-			&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+			&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 			t.Fatal(err)
 		}
 		out = append(out, p)
@@ -1283,7 +1324,7 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(repo, "rem.sqlite")
-	db, _, _, err := store.Open(path, Statements(), 1)
+	db, _, _, err := store.Open(path, legacyStatements(), 1)
 	if err != nil {
 		t.Fatalf("v1 open: %v", err)
 	}
@@ -1307,14 +1348,14 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 		t.Fatalf("the migration must count once: %q", report)
 	}
 	var rows []probe
-	rs, err := db2.DB.Query(`SELECT id, scope, scope_label, kind, content, source, importance, strength, access_count, superseded_by, created_at, last_accessed_at, last_consolidated_at, content_md5 FROM memories ORDER BY id`)
+	rs, err := db2.DB.Query(`SELECT id, scope, scope_label, kind, content, source, importance, strength, access_count, superseded_by, created_at, last_accessed_at, last_consolidated_at, content_sha256 FROM memories ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rs.Close()
 	for rs.Next() {
 		var p probe
-		if err := rs.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source, &p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt, &p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+		if err := rs.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source, &p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt, &p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 			t.Fatal(err)
 		}
 		rows = append(rows, p)
@@ -1376,7 +1417,7 @@ func TestMigrationSurvivesTwoOpeners(t *testing.T) {
 	repo := t.TempDir()
 	gitInit(t, repo)
 	path := filepath.Join(repo, "rem.sqlite")
-	db, _, _, err := store.Open(path, Statements(), 1)
+	db, _, _, err := store.Open(path, legacyStatements(), 1)
 	if err != nil {
 		t.Fatalf("v1 open: %v", err)
 	}
@@ -1418,5 +1459,57 @@ func TestMigrationSurvivesTwoOpeners(t *testing.T) {
 	}
 	if sc != scope.Key(repo) {
 		t.Fatalf("the row must carry the repo scope after the race: %q != %q", sc, scope.Key(repo))
+	}
+}
+
+func TestLearnDigestsWithSha256(t *testing.T) {
+	db := newDB(t)
+	defer db.DB.Close()
+	cwd := t.TempDir()
+	learn(t, db, cwd, "the sha256 fact", we())
+	p := memRow(t, db, "the sha256 fact")
+	if p == nil {
+		t.Fatal("the memory row is missing")
+	}
+	if len(p.ContentSha256) != 64 {
+		t.Fatalf("digest = %q (%d chars), want the 64-char sha256 hex", p.ContentSha256, len(p.ContentSha256))
+	}
+	sum := sha256.Sum256([]byte("the sha256 fact"))
+	if p.ContentSha256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("digest = %q, want %x", p.ContentSha256, sum)
+	}
+}
+
+func TestMigrationRehashesLegacyDigests(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rem.sqlite")
+	db, _, _, err := store.Open(path, legacyStatements(), 2)
+	if err != nil {
+		t.Fatalf("v2 open: %v", err)
+	}
+	insert := `INSERT INTO memories (id, scope, scope_label, kind, content, source, importance, strength, access_count, created_at, last_consolidated_at, content_md5)
+		VALUES (?, ?, 'mem', 'fact', ?, 's1', 0.5, 0.5, 0, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z', ?)`
+	if _, err := db.DB.Exec(insert, 1, "global", "legacy content", "0123456789abcdef0123456789abcdef"); err != nil {
+		t.Fatal(err)
+	}
+	db.DB.Close()
+
+	db2, _, report, err := store.Open(path, Statements(), SchemaVersion, Migration(""))
+	if err != nil {
+		t.Fatalf("migrated open: %v", err)
+	}
+	defer db2.DB.Close()
+	if !strings.Contains(report, "rehashed 1 digests") {
+		t.Fatalf("the migration must count the rehash: %q", report)
+	}
+	p := memByID(t, db2, 1)
+	if p == nil {
+		t.Fatal("the migrated row is missing")
+	}
+	if len(p.ContentSha256) != 64 {
+		t.Fatalf("digest = %q (%d chars), want the 64-char sha256 hex", p.ContentSha256, len(p.ContentSha256))
+	}
+	sum := sha256.Sum256([]byte("legacy content"))
+	if p.ContentSha256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("digest = %q, want %x", p.ContentSha256, sum)
 	}
 }

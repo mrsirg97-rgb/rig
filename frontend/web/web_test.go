@@ -58,10 +58,10 @@ func seedHome(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolCall(ctx, sdb, seq, "call_1", "bash", `{"cmd":"ls"}`); err != nil {
+	if err := state.RecordToolCall(ctx, sdb, "sess1", seq, "call_1", "bash", `{"cmd":"ls"}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolResult(ctx, sdb, "call_1", "file1\nfile2", nil); err != nil {
+	if err := state.RecordToolResult(ctx, sdb, "sess1", seq, "call_1", "file1\nfile2", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.RecordUsage(ctx, sdb, seq, 100, 42, 10, 5); err != nil {
@@ -551,7 +551,7 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("list after create: %q, want the new job", after["text"])
 	}
 
-	rec = post(`{"name":"oncejob","prompt":"once","cron":"once","at":"2026-01-02T03:04:05Z"}`)
+	rec = post(`{"name":"oncejob","prompt":"once","cron":"once","at":"2030-01-02T03:04:05Z"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("once create: got %d (body %s)", rec.Code, rec.Body.String())
 	}

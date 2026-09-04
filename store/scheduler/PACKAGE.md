@@ -30,14 +30,18 @@ written before the store commit; drift is surfaced in list.
   `jN`), moves the old files aside as `<hash>.sqlite.migrated`, and is a
   no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
 - `runner.go`: the job runner (the worker spawn, bwrap jail, socket
-  proxy).
+  proxy); the spawn captures each stream to the first and last 128 KiB
+  of a 256 KiB budget with a truncation marker, so a verbose worker
+  cannot OOM the runner.
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE): the busy
   rule, the ad-hoc record (a minted job row with no crontab line), the
   state-store bind and explicit identity for the resumable transcript, the per-session
   delegate-slot flock (one slot per `slots`, the full set refusing
   naming the count) and the no-recursion marker.
 - `jail.go`: the bwrap jail argv composition.
-- `proxy.go`: the unix-socket proxy (the jail's one hole).
+- `proxy.go`: the unix-socket proxy (the jail's one hole), the socket
+  chmod'd 0600 after listen so no other local user reaches the model
+  endpoint through a running job.
 - `fold.go`: the fold/replay over the event log.
 - `render.go`: the list/rendering: one list grouped by each job's own
   `cwd` (this directory first, then the rest by path), the empty store
@@ -71,6 +75,11 @@ written before the store commit; drift is surfaced in list.
   `done`; the projection is never written directly (a direct write is
   undone by the next fold, the job reverting to `active` with a
   "no crontab line" drift). A done job's consumed line is not drift.
+- A once job's `at` must be in the future (refused otherwise) and is
+  stored normalized UTC; the crontab fields stay local (the daemon
+  fires in local time), the list shows the stored `at` rather than a
+  re-derived local fire, and `NextFire` computes in the caller's
+  location. `RealCrontab` bounds each crontab call at five seconds.
 - One store, `global.sqlite`: `cwd` is a job field (where it runs and how
   the list groups), not a storage partition; `ParseKey` accepts `jN` only
   (the migration rewrites the old `cwd-<hash>:jN` crontab keys).

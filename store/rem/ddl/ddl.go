@@ -14,7 +14,7 @@ func Statements() []string {
   "id" INTEGER NOT NULL,
   "access_count" INTEGER NOT NULL,
   "content" TEXT NOT NULL,
-  "content_md5" TEXT NOT NULL,
+  "content_sha256" TEXT NOT NULL,
   "created_at" TEXT NOT NULL,
   "importance" REAL NOT NULL,
   "kind" TEXT NOT NULL,

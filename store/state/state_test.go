@@ -27,7 +27,7 @@ func mustRead(t *testing.T, db store.DB, get func(ctx context.Context) (any, err
 
 func openStore(t *testing.T) store.DB {
 	t.Helper()
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -53,10 +53,10 @@ func TestStateRecordsAndReadsBack(t *testing.T) {
 	if seq2 <= seq1 {
 		t.Fatalf("seq minting not strictly increasing: %d then %d", seq1, seq2)
 	}
-	if err := state.RecordToolCall(ctx, db, seq2, "call_1", "bash", `{"cmd":"ls"}`); err != nil {
+	if err := state.RecordToolCall(ctx, db, "s1", seq2, "call_1", "bash", `{"cmd":"ls"}`); err != nil {
 		t.Fatalf("record tool call: %v", err)
 	}
-	if err := state.RecordToolResult(ctx, db, "call_1", "out", nil); err != nil {
+	if err := state.RecordToolResult(ctx, db, "s1", seq2, "call_1", "out", nil); err != nil {
 		t.Fatalf("record tool result: %v", err)
 	}
 	if err := state.RecordUsage(ctx, db, seq2, 10, 3, 0, 0); err != nil {
@@ -79,7 +79,7 @@ func TestStateRecordsAndReadsBack(t *testing.T) {
 		t.Errorf("null reasoning not preserved: %q", *m1.Reasoning)
 	}
 	tc := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "call_1").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, "s1", seq2, "call_1").Row()
 	}).(*domain.ToolCall)
 	if tc.Result == nil || *tc.Result != "out" || tc.Args != `{"cmd":"ls"}` {
 		t.Fatalf("tool call readback: %+v %v", tc, err)
@@ -102,12 +102,12 @@ func TestStateKillMidTurnLeavesCompletedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolCall(live, db, seq1, "call_2", "bash", `{"cmd":"sleep 10"}`); err != nil {
+	if err := state.RecordToolCall(live, db, "s2", seq1, "call_2", "bash", `{"cmd":"sleep 10"}`); err != nil {
 		t.Fatal(err)
 	}
 	killed, cancel := context.WithCancel(live)
 	cancel()
-	if err := state.RecordToolResult(killed, db, "call_2", "never", nil); err == nil {
+	if err := state.RecordToolResult(killed, db, "s2", seq1, "call_2", "never", nil); err == nil {
 		t.Fatal("record under a cancelled context succeeded")
 	}
 	if err := state.CloseSession(killed, db, "s2", "cancelled"); err == nil {
@@ -121,7 +121,7 @@ func TestStateKillMidTurnLeavesCompletedRows(t *testing.T) {
 		t.Fatalf("completed message not readable after kill: %+v %v", m, err)
 	}
 	tc := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "call_2").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, "s2", seq1, "call_2").Row()
 	}).(*domain.ToolCall)
 	if tc.Result != nil {
 		t.Fatalf("tool call with an unlanded result misreported: %+v %v", tc, err)

@@ -745,33 +745,28 @@ func main() {
 	if passed["allow"] {
 		allowList = splitCSV(*allow)
 	}
-	retriesN := cfg.Settings.Retries
-	if v := os.Getenv("RIG_RETRIES"); v != "" {
-		if n, aerr := strconv.Atoi(v); aerr == nil {
-			retriesN = n
+	envInt := func(key string, def int) int {
+		v := os.Getenv(key)
+		if v == "" {
+			return def
 		}
+		n, aerr := strconv.Atoi(v)
+		if aerr != nil {
+			fmt.Fprintf(os.Stderr, "rig: %s: expected an integer, got %q\n", key, v)
+			os.Exit(1)
+		}
+		if n < 0 {
+			fmt.Fprintf(os.Stderr, "rig: %s: expected a non-negative integer, got %d\n", key, n)
+			os.Exit(1)
+		}
+		return n
 	}
+	retriesN := envInt("RIG_RETRIES", cfg.Settings.Retries)
 	if passed["retries"] {
 		retriesN = *retries
 	}
-	roundsN := cfg.Settings.Rounds
-	if v := os.Getenv("RIG_ROUNDS"); v != "" {
-		if n, aerr := strconv.Atoi(v); aerr == nil {
-			roundsN = n
-		} else {
-			fmt.Fprintf(os.Stderr, "rig: RIG_ROUNDS: expected an integer, got %q\n", v)
-			os.Exit(1)
-		}
-	}
-	resultCapN := cfg.Settings.ResultCap
-	if v := os.Getenv("RIG_RESULT_CAP"); v != "" {
-		if n, aerr := strconv.Atoi(v); aerr == nil {
-			resultCapN = n
-		} else {
-			fmt.Fprintf(os.Stderr, "rig: RIG_RESULT_CAP: expected an integer, got %q\n", v)
-			os.Exit(1)
-		}
-	}
+	roundsN := envInt("RIG_ROUNDS", cfg.Settings.Rounds)
+	resultCapN := envInt("RIG_RESULT_CAP", cfg.Settings.ResultCap)
 
 	row := resolveModel(modelID, cfg.Models)
 
@@ -845,13 +840,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	sdb, quarantined, _, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion)
+	sdb, quarantined, sReport, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion, state.Migration())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: state store:", err)
 		os.Exit(1)
 	}
 	if quarantined != "" {
 		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt state file: %s\n", quarantined)
+	}
+	if sReport != "" {
+		fmt.Fprintln(os.Stderr, "rig:", sReport)
 	}
 	defer sdb.DB.Close()
 
