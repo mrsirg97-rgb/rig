@@ -12,11 +12,8 @@ func nextText(j *jobState, now func() time.Time) string {
 	if j.State != "active" {
 		return ""
 	}
-	if j.Cron == "once" {
-		if j.At != "" {
-			return "at " + j.At
-		}
-		return "at passed"
+	if j.At != "" {
+		return "at " + j.At
 	}
 	if now == nil {
 		return ""

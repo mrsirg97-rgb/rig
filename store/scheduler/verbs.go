@@ -35,10 +35,13 @@ func schedErr(format string, a ...any) error {
 	return fmt.Errorf("scheduler: "+format, a...)
 }
 
-func onceFields(at string) (string, string, error) {
+func onceFields(at string, now time.Time) (string, string, error) {
 	t, err := time.Parse(time.RFC3339, at)
 	if err != nil {
 		return "", "", schedErr("'at' must be a valid ISO time, got '%s'", at)
+	}
+	if !t.After(now) {
+		return "", "", schedErr("'at' must be in the future, got '%s'", at)
 	}
 	norm := t.UTC().Format(time.RFC3339)
 	lt := t.Local()
@@ -80,7 +83,7 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 		if in.At == "" {
 			return "", schedErr("cron 'once' requires 'at' (ISO time)")
 		}
-		norm, five, err := onceFields(in.At)
+		norm, five, err := onceFields(in.At, now())
 		if err != nil {
 			return "", err
 		}
@@ -284,7 +287,7 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 		if at == "" {
 			return "", schedErr("cron 'once' requires 'at' (ISO time)")
 		}
-		norm, five, err := onceFields(at)
+		norm, five, err := onceFields(at, now())
 		if err != nil {
 			return "", err
 		}
@@ -295,7 +298,7 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 		}
 		newCron = cron
 	case at != "":
-		norm, five, err := onceFields(at)
+		norm, five, err := onceFields(at, now())
 		if err != nil {
 			return "", err
 		}

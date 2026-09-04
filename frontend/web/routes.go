@@ -27,6 +27,7 @@ const (
 	maxWriteBytes = 64 * 1024
 	defaultReadTO = 5 * time.Second
 	defaultPage   = 200
+	maxPage       = 1000
 )
 
 var pluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -650,6 +651,9 @@ func pageParams(r *http.Request) (limit, offset int) {
 	if v := q.Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			limit = n
+			if limit > maxPage {
+				limit = maxPage
+			}
 		}
 	}
 	if v := q.Get("offset"); v != "" {

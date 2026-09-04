@@ -88,9 +88,8 @@ func (p *policy) assemble(s *core.Session) []core.Message {
 func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	p.mu.Lock()
 	factor := p.factor
-	p.mu.Unlock()
-
 	older, tail := split(p.s.Messages, factor, p.row.KeepRecent)
+	p.mu.Unlock()
 	if len(older) == 0 {
 		return core.Compacted{}, false, nil
 	}
@@ -124,7 +123,9 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	newMsgs := make([]core.Message, 0, len(tail)+1)
 	newMsgs = append(newMsgs, row)
 	newMsgs = append(newMsgs, tail...)
+	p.mu.Lock()
 	p.s.Messages = newMsgs
+	p.mu.Unlock()
 
 	ev := core.Compacted{
 		Summary: row.Content,

@@ -46,6 +46,8 @@ type RunOpts struct {
 
 const DefaultRunTimeout = 30 * time.Minute
 
+const spawnCaptureCap = 256 * 1024
+
 const defaultSwapURL = "http://127.0.0.1:8090"
 
 const ReportBack = "\n\nReport back: when you finish, persist durable findings with the rem tool (project scope: this job's cwd) and end your reply with a short summary of what you found and did."
@@ -444,9 +446,10 @@ func RealSpawn(ctx context.Context, argv []string, cwd string) (SpawnResult, err
 		}
 		return nil
 	}
-	var out, errBuf strings.Builder
-	cmd.Stdout = &out
-	cmd.Stderr = &errBuf
+	out := newCapture(spawnCaptureCap)
+	errBuf := newCapture(spawnCaptureCap)
+	cmd.Stdout = out
+	cmd.Stderr = errBuf
 	runErr := cmd.Run()
 	res := SpawnResult{Stdout: out.String(), Stderr: errBuf.String()}
 	switch {
@@ -466,4 +469,59 @@ func RealSpawn(ctx context.Context, argv []string, cwd string) (SpawnResult, err
 		return SpawnResult{}, fmt.Errorf("spawn: %w", runErr)
 	}
 	return res, nil
+}
+
+type capture struct {
+	head    []byte
+	tail    []byte
+	headCap int
+	tailCap int
+	full    bool
+}
+
+func newCapture(cap int) *capture {
+	if cap < 2 {
+		cap = 2
+	}
+	half := cap / 2
+	return &capture{head: make([]byte, 0, half), headCap: half, tailCap: half}
+}
+
+func (c *capture) Write(p []byte) (int, error) {
+	if len(c.head) < c.headCap {
+		room := c.headCap - len(c.head)
+		if len(p) <= room {
+			c.head = append(c.head, p...)
+			return len(p), nil
+		}
+		c.head = append(c.head, p[:room]...)
+		p = p[room:]
+	}
+	drop := len(c.tail) + len(p) - c.tailCap
+	if drop > 0 {
+		c.full = true
+		if drop >= len(c.tail) {
+			c.tail = c.tail[:0]
+		} else {
+			c.tail = append(c.tail[:0], c.tail[drop:]...)
+		}
+	}
+	kept := len(p)
+	if kept > c.tailCap {
+		kept = c.tailCap
+	}
+	if kept > 0 {
+		c.tail = append(c.tail, p[len(p)-kept:]...)
+	}
+	return len(p), nil
+}
+
+func (c *capture) String() string {
+	var b strings.Builder
+	b.Write(c.head)
+	b.Write(c.tail)
+	if c.full {
+		fmt.Fprintf(&b, "\n[spawn: output truncated, kept the first and last %d bytes of %d]\n", c.headCap, c.headCap+c.tailCap)
+	}
+	return b.String()
 }

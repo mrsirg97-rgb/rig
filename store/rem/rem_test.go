@@ -2,6 +2,7 @@ package rem
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -34,7 +35,7 @@ type probe struct {
 	CreatedAt          string
 	LastAccessedAt     *string
 	LastConsolidatedAt string
-	ContentMd5         string
+	ContentSha256      string
 }
 
 func newDB(t *testing.T) store.DB {
@@ -54,7 +55,7 @@ func memRow(t *testing.T, db store.DB, content string) *probe {
 	var p probe
 	if err := row.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
 		&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 		return nil
 	}
 	return &p
@@ -68,7 +69,7 @@ func memByID(t *testing.T, db store.DB, id int64) *probe {
 	var p probe
 	if err := row.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
 		&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 		return nil
 	}
 	return &p
@@ -88,7 +89,7 @@ func memRows(t *testing.T, db store.DB) []probe {
 		var p probe
 		if err := rows.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
 			&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-			&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+			&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 			t.Fatal(err)
 		}
 		out = append(out, p)
@@ -1314,7 +1315,7 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 	defer rs.Close()
 	for rs.Next() {
 		var p probe
-		if err := rs.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source, &p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt, &p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentMd5); err != nil {
+		if err := rs.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source, &p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt, &p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
 			t.Fatal(err)
 		}
 		rows = append(rows, p)
@@ -1418,5 +1419,57 @@ func TestMigrationSurvivesTwoOpeners(t *testing.T) {
 	}
 	if sc != scope.Key(repo) {
 		t.Fatalf("the row must carry the repo scope after the race: %q != %q", sc, scope.Key(repo))
+	}
+}
+
+func TestLearnDigestsWithSha256(t *testing.T) {
+	db := newDB(t)
+	defer db.DB.Close()
+	cwd := t.TempDir()
+	learn(t, db, cwd, "the sha256 fact", we())
+	p := memRow(t, db, "the sha256 fact")
+	if p == nil {
+		t.Fatal("the memory row is missing")
+	}
+	if len(p.ContentSha256) != 64 {
+		t.Fatalf("digest = %q (%d chars), want the 64-char sha256 hex", p.ContentSha256, len(p.ContentSha256))
+	}
+	sum := sha256.Sum256([]byte("the sha256 fact"))
+	if p.ContentSha256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("digest = %q, want %x", p.ContentSha256, sum)
+	}
+}
+
+func TestMigrationRehashesLegacyDigests(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rem.sqlite")
+	db, _, _, err := store.Open(path, Statements(), 2)
+	if err != nil {
+		t.Fatalf("v2 open: %v", err)
+	}
+	insert := `INSERT INTO memories (id, scope, scope_label, kind, content, source, importance, strength, access_count, created_at, last_consolidated_at, content_md5)
+		VALUES (?, ?, 'mem', 'fact', ?, 's1', 0.5, 0.5, 0, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z', ?)`
+	if _, err := db.DB.Exec(insert, 1, "global", "legacy content", "0123456789abcdef0123456789abcdef"); err != nil {
+		t.Fatal(err)
+	}
+	db.DB.Close()
+
+	db2, _, report, err := store.Open(path, Statements(), SchemaVersion, Migration(""))
+	if err != nil {
+		t.Fatalf("migrated open: %v", err)
+	}
+	defer db2.DB.Close()
+	if !strings.Contains(report, "rehashed 1 digests") {
+		t.Fatalf("the migration must count the rehash: %q", report)
+	}
+	p := memByID(t, db2, 1)
+	if p == nil {
+		t.Fatal("the migrated row is missing")
+	}
+	if len(p.ContentSha256) != 64 {
+		t.Fatalf("digest = %q (%d chars), want the 64-char sha256 hex", p.ContentSha256, len(p.ContentSha256))
+	}
+	sum := sha256.Sum256([]byte("legacy content"))
+	if p.ContentSha256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("digest = %q, want %x", p.ContentSha256, sum)
 	}
 }

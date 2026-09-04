@@ -40,7 +40,7 @@ type Memory struct {
 	CreatedAt          string  `alias:"name=created_at,nullable=false"`
 	LastAccessedAt     *string `alias:"name=last_accessed_at,nullable=true"`
 	LastConsolidatedAt string  `alias:"name=last_consolidated_at,nullable=false"`
-	ContentMd5         string  `alias:"name=content_md5,nullable=false"`
+	ContentSha256      string  `alias:"name=content_md5,nullable=false"`
 }
 
 // table:"trigrams"

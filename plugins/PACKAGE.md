@@ -96,9 +96,12 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   refusal and the reload's are this one rule.
 - On a reload, a discovery failure leaves the table and the wire untouched
   (the swap never ran).
-- Pending writes and zone moves refuse symlink files: provenance checks
-  resolve existing symlinks and the deepest existing parent before deciding
-  whether a file is live, pending, or foreign.
+- Pending writes and zone moves refuse symlink files: the pending write
+  opens with `O_NOFOLLOW` (the Lstat check cannot close the swap race),
+  and a zone move re-checks the destination after the rename and rolls
+  back a symlink. Provenance checks resolve existing symlinks and the
+  deepest existing parent before deciding whether a file is live,
+  pending, or foreign.
 - `DescriptionOf(path)` / `StaticDescription(src)`: the read-only
   DESCRIPTION read the listings use (no kernel, no execution): a plain,
   single-, or triple-quoted literal, or the parenthesized

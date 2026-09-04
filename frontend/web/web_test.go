@@ -551,7 +551,7 @@ func TestSchedulerCreate(t *testing.T) {
 		t.Fatalf("list after create: %q, want the new job", after["text"])
 	}
 
-	rec = post(`{"name":"oncejob","prompt":"once","cron":"once","at":"2026-01-02T03:04:05Z"}`)
+	rec = post(`{"name":"oncejob","prompt":"once","cron":"once","at":"2030-01-02T03:04:05Z"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("once create: got %d (body %s)", rec.Code, rec.Body.String())
 	}

@@ -15,7 +15,7 @@ type Memory struct {
 	Id                 int64   `db:"id"`
 	AccessCount        int64   `db:"access_count"`
 	Content            string  `db:"content"`
-	ContentMd5         string  `db:"content_md5"`
+	ContentSha256      string  `db:"content_md5"`
 	CreatedAt          string  `db:"created_at"`
 	Importance         float64 `db:"importance"`
 	Kind               string  `db:"kind"`
@@ -50,7 +50,7 @@ func ScanMemory(row lazy.ScanRow) (Memory, error) {
 		&out.Id,
 		&out.AccessCount,
 		&out.Content,
-		&out.ContentMd5,
+		&out.ContentSha256,
 		&out.CreatedAt,
 		&out.Importance,
 		&out.Kind,
@@ -199,7 +199,7 @@ func (d *memoryDomain) InsertMemory(ctx context.Context, row Memory) (*Memory, e
 		row.Id,
 		row.AccessCount,
 		row.Content,
-		row.ContentMd5,
+		row.ContentSha256,
 		row.CreatedAt,
 		row.Importance,
 		row.Kind,
@@ -239,7 +239,7 @@ func (d *memoryDomain) UpdateMemory(ctx context.Context, row Memory) (*Memory, e
 	rows, err := tx.QueryContext(ctx, `UPDATE "memories" SET "access_count" = $1, "content" = $2, "content_md5" = $3, "created_at" = $4, "importance" = $5, "kind" = $6, "last_accessed_at" = $7, "last_consolidated_at" = $8, "scope" = $9, "scope_label" = $10, "source" = $11, "strength" = $12, "superseded_by" = $13 WHERE "id" = $14 RETURNING "id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by"`,
 		row.AccessCount,
 		row.Content,
-		row.ContentMd5,
+		row.ContentSha256,
 		row.CreatedAt,
 		row.Importance,
 		row.Kind,

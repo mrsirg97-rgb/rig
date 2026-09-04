@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -104,5 +105,23 @@ func TestSocketProxyNormalizesASuffixedTarget(t *testing.T) {
 	resp.Body.Close()
 	if got := dest.saw(); len(got) != 1 || got[0] != "/v1/chat/completions" {
 		t.Fatalf("the destination saw %v, want the prefix applied exactly once", got)
+	}
+}
+
+func TestSocketProxySetsPrivatePermissions(t *testing.T) {
+	dest, srv := newScriptSrv(t)
+	_ = dest
+	sock := t.TempDir() + "/rig.sock"
+	proxy, err := sched.NewSocketProxy(sock, srv.URL)
+	if err != nil {
+		t.Fatalf("NewSocketProxy: %v", err)
+	}
+	defer proxy.Close()
+	fi, err := os.Stat(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&0o777 != 0o600 {
+		t.Fatalf("socket mode = %o, want 600 (any local user must not reach the model endpoint)", fi.Mode()&0o777)
 	}
 }

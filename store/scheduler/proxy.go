@@ -36,6 +36,10 @@ func NewSocketProxy(sockPath, target string) (*SocketProxy, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := os.Chmod(sockPath, 0o600); err != nil {
+		ln.Close()
+		return nil, err
+	}
 
 	rp := &httputil.ReverseProxy{
 		FlushInterval: -1,

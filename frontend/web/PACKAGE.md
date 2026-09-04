@@ -48,8 +48,9 @@ framework, no build step, no external asset: `go build` alone ships it.
   reply verbatim; the only `db.Tx` (not `TxReadOnly`) the dashboard
   opens (the plugin write is a file write the provenance rule blesses).
 - **The store cache**: opens the store files the way the root does (the
-  stores' own path helpers, one shared source) and caches them per file;
-  a reader of the same files, never a second copy.
+  stores' own path helpers, one shared source, each store's migration
+  wired) and caches them per file; a reader of the same files, never a
+  second copy.
 - **The plugin listing, live** (SPEC_SERVE phase 2, decision 8): read
   per request from the home's `plugins/` and `plugins/pending/`, never
   cached at `New`: a file created, promoted, or dropped is visible on

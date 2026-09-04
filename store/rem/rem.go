@@ -2,7 +2,7 @@ package rem
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -21,7 +21,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 func DDL() []string { return remdd.Statements() }
 
@@ -82,8 +82,8 @@ func readScopes(scope, cwd string) ([]string, error) {
 	return nil, fmt.Errorf("rem: scope must be project, global, or all")
 }
 
-func md5hex(content string) string {
-	sum := md5.Sum([]byte(content))
+func sha256hex(content string) string {
+	sum := sha256.Sum256([]byte(content))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -270,7 +270,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 	if err != nil {
 		return nil, false, err
 	}
-	digest := md5hex(sh.content)
+	digest := sha256hex(sh.content)
 
 	tx, err := sqlx.TxFrom(bound)
 	if err != nil {
@@ -345,7 +345,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 		Strength:           clamp01(sh.importance),
 		CreatedAt:          now,
 		LastConsolidatedAt: now,
-		ContentMd5:         digest,
+		ContentSha256:      digest,
 	}
 	fresh, err := remdom.NewMemoryDomain().InsertMemory(bound, row)
 	if err != nil {
@@ -754,6 +754,14 @@ func Migration(cwd string) func(*sql.Tx, int, int) (string, error) {
 			}
 			removed = n
 		}
+		rehashed := 0
+		if from < 3 {
+			n, err := rehashDigests(db)
+			if err != nil {
+				return "", err
+			}
+			rehashed = n
+		}
 		rescoped := 0
 		oldScope := scope.ShortHash(cwd)
 		newScope := scopeKey(cwd)
@@ -773,11 +781,42 @@ func Migration(cwd string) func(*sql.Tx, int, int) (string, error) {
 				return "", fmt.Errorf("rem: migration: %w", err)
 			}
 		}
-		if removed > 0 || rescoped > 0 {
-			return fmt.Sprintf("rem migration: removed %d compaction reflections, re-scoped %d memories", removed, rescoped), nil
+		if removed > 0 || rescoped > 0 || rehashed > 0 {
+			return fmt.Sprintf("rem migration: removed %d compaction reflections, re-scoped %d memories, rehashed %d digests", removed, rescoped, rehashed), nil
 		}
 		return "", nil
 	}
+}
+
+func rehashDigests(db *sql.Tx) (int, error) {
+	rows, err := db.Query(`SELECT id, content FROM memories WHERE length(content_md5) != 64`)
+	if err != nil {
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	type row struct {
+		id      int64
+		content string
+	}
+	var list []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.content); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("rem: migration: %w", err)
+		}
+		list = append(list, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, fmt.Errorf("rem: migration: %w", err)
+	}
+	rows.Close()
+	for _, r := range list {
+		if _, err := db.Exec(`UPDATE memories SET content_md5 = ? WHERE id = ?`, sha256hex(r.content), r.id); err != nil {
+			return 0, fmt.Errorf("rem: migration: %w", err)
+		}
+	}
+	return len(list), nil
 }
 
 func removeCompactionRows(db *sql.Tx) (int, error) {

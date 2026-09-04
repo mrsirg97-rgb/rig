@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/mrsirg97-rgb/rig/core"
 )
@@ -104,6 +105,13 @@ func Move(dir, name, from, to string) (src, dst string, err error) {
 	if err := os.Rename(src, dst); err != nil {
 		return "", "", fmt.Errorf("the move: %v", err)
 	}
+	if info, statErr := os.Lstat(dst); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		_ = os.Rename(dst, src)
+		return "", "", fmt.Errorf("%q is a symlink; plugin zone moves require regular files", dst)
+	} else if statErr != nil {
+		_ = os.Rename(dst, src)
+		return "", "", fmt.Errorf("the move: %v", statErr)
+	}
 	return src, dst, nil
 }
 
@@ -138,7 +146,12 @@ func WritePending(home string, natives map[string]bool, name, source string) (pa
 	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 		created = true
 	}
-	if err := os.WriteFile(path, []byte(strings.TrimRight(source, " \t\r\n")+"\n"), 0o644); err != nil {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o644)
+	if err != nil {
+		return "", false, fmt.Errorf("the write: %v", err)
+	}
+	defer f.Close()
+	if _, err := f.Write([]byte(strings.TrimRight(source, " \t\r\n") + "\n")); err != nil {
 		return "", false, fmt.Errorf("the write: %v", err)
 	}
 	return path, created, nil
