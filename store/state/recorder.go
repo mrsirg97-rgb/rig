@@ -14,11 +14,11 @@ import (
 )
 
 type Recorder struct {
-	inner    core.Frontend
-	db       store.DB
-	cwd      string
-	model    string
-	version  string
+	inner     core.Frontend
+	db        store.DB
+	cwd       string
+	model     string
+	version   string
 	sid       string
 	session   *core.Session
 	buffer    strings.Builder
