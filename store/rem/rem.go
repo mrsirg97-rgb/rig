@@ -21,7 +21,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
 
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 func DDL() []string { return remdd.Statements() }
 
@@ -277,7 +277,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 		return nil, false, err
 	}
 	var existingID int64
-	err = tx.QueryRowContext(bound, `SELECT id FROM memories WHERE scope = $1 AND content_md5 = $2`, scopeKey, digest).Scan(&existingID)
+	err = tx.QueryRowContext(bound, `SELECT id FROM memories WHERE scope = $1 AND content_sha256 = $2`, scopeKey, digest).Scan(&existingID)
 	switch {
 	case err == nil:
 
@@ -754,6 +754,11 @@ func Migration(cwd string) func(*sql.Tx, int, int) (string, error) {
 			}
 			removed = n
 		}
+		if from < 4 && columnExists(db, "content_md5") {
+			if _, err := db.Exec(`ALTER TABLE memories RENAME COLUMN content_md5 TO content_sha256`); err != nil {
+				return "", fmt.Errorf("rem: migration: %w", err)
+			}
+		}
 		rehashed := 0
 		if from < 3 {
 			n, err := rehashDigests(db)
@@ -788,8 +793,16 @@ func Migration(cwd string) func(*sql.Tx, int, int) (string, error) {
 	}
 }
 
+func columnExists(db *sql.Tx, column string) bool {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('memories') WHERE name = ?`, column).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
 func rehashDigests(db *sql.Tx) (int, error) {
-	rows, err := db.Query(`SELECT id, content FROM memories WHERE length(content_md5) != 64`)
+	rows, err := db.Query(`SELECT id, content FROM memories WHERE length(content_sha256) != 64`)
 	if err != nil {
 		return 0, fmt.Errorf("rem: migration: %w", err)
 	}
@@ -812,7 +825,7 @@ func rehashDigests(db *sql.Tx) (int, error) {
 	}
 	rows.Close()
 	for _, r := range list {
-		if _, err := db.Exec(`UPDATE memories SET content_md5 = ? WHERE id = ?`, sha256hex(r.content), r.id); err != nil {
+		if _, err := db.Exec(`UPDATE memories SET content_sha256 = ? WHERE id = ?`, sha256hex(r.content), r.id); err != nil {
 			return 0, fmt.Errorf("rem: migration: %w", err)
 		}
 	}

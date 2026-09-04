@@ -283,3 +283,61 @@ func TestMigrationBackfillsToolCallSessions(t *testing.T) {
 		t.Fatalf("session_id not backfilled: %+v %+v", first, second)
 	}
 }
+
+func TestRecorderRelandAttributesErrorsToTheRightTurn(t *testing.T) {
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sid := "rec-rel-order"
+	ctx := context.Background()
+	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	// Two turns reusing the wire id: the first fails, the second succeeds.
+	// A third turn fails again. The tail keeps the second and third turns.
+	seqs := []int64{}
+	for i := 0; i < 3; i++ {
+		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		seqs = append(seqs, seq)
+		if e := state.RecordToolCall(ctx, db, sid, seq, "c1", "bash", `{}`); e != nil {
+			t.Fatal(e)
+		}
+	}
+	fail1 := "boom-1"
+	fail3 := "boom-3"
+	if err := state.RecordToolResult(ctx, db, sid, seqs[0], "c1", "out-1", &fail1); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordToolResult(ctx, db, sid, seqs[1], "c1", "out-2", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordToolResult(ctx, db, sid, seqs[2], "c1", "out-3", &fail3); err != nil {
+		t.Fatal(err)
+	}
+
+	sess := core.NewSession()
+	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] sum"})
+	sess.Append(core.Message{Role: core.RoleAssistant, Content: "a2", ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)}}})
+	sess.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: "out-2"})
+	sess.Append(core.Message{Role: core.RoleAssistant, Content: "a3", ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)}}})
+	sess.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: "out-3"})
+	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", sid, sess)
+	rec.Notify(core.Compacted{Summary: "[compaction] sum", Usage: core.Usage{Prompt: 1, Completion: 1}})
+
+	second := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 5, "c1").Row()
+	}).(*domain.ToolCall)
+	third := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 6, "c1").Row()
+	}).(*domain.ToolCall)
+	if second.Err != nil {
+		t.Fatalf("the successful turn inherited an error: %+v", second)
+	}
+	if third.Err == nil || *third.Err != "boom-3" {
+		t.Fatalf("the failing turn's error mis-attributed: %+v", third)
+	}
+}

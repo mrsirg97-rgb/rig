@@ -30,8 +30,10 @@ Each finding below carries a test that failed before and passes after.
   keeps the first and last 128 KiB of a 256 KiB budget with a
   truncation marker, so a verbose worker cannot OOM the runner.
 - **the memory dedup digest is sha256** (`store/rem`): the natural-key
-  digest of model-generated content was md5; the v2->v3 migration
-  rehashes legacy rows so the unique index stays truthful.
+  digest of model-generated content was md5; the v2->v4 migration
+  rehashes legacy rows and renames the column (`content_md5` ->
+  `content_sha256`), so the field, the column, and the unique index all
+  agree.
 - **the dashboard opens the scheduler store with its migration**
   (`frontend/web`): `rig serve` alone on a v1 scheduler store 500'd
   with a schema mismatch; the state store's migration is wired there

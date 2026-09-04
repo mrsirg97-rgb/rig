@@ -210,10 +210,10 @@ func (r *Recorder) landCompacted(ev core.Compacted) {
 	if e2 := RecordUsage(context.Background(), r.db, seq, int64(ev.Usage.Prompt), int64(ev.Usage.Completion), int64(ev.Usage.CacheRead), int64(ev.Usage.CacheWrite)); e2 != nil {
 		r.loud("summary usage", e2)
 	}
-	r.relandTail()
+	r.relandTail(seq)
 }
 
-func (r *Recorder) relandTail() {
+func (r *Recorder) relandTail(floor int64) {
 	if r.session == nil {
 		return
 	}
@@ -279,7 +279,7 @@ func (r *Recorder) relandTail() {
 			if !ok {
 				continue
 			}
-			failure := r.originalErr(m.ToolID, seen[m.ToolID], counts[m.ToolID])
+			failure := r.originalErr(m.ToolID, seen[m.ToolID], counts[m.ToolID], floor)
 			seen[m.ToolID]++
 			if e2 := RecordToolResult(context.Background(), r.db, r.sid, r.lastSeq, storage, m.Content, failure); e2 != nil {
 				r.loud("re-landed result", e2)
@@ -288,29 +288,30 @@ func (r *Recorder) relandTail() {
 	}
 }
 
-func (r *Recorder) originalErr(id string, i, total int) *string {
+func (r *Recorder) originalErr(id string, i, total int, floor int64) *string {
 	if id == "" || total <= 0 {
 		return nil
 	}
 	rows, err := r.db.DB.QueryContext(context.Background(),
-		`SELECT "err" FROM "tool_calls" WHERE "session_id" = $1 AND "id" = $2 ORDER BY "message_seq" DESC`, r.sid, id)
+		`SELECT "err" FROM "tool_calls" WHERE "session_id" = $1 AND "id" = $2 AND "message_seq" < $3 ORDER BY "message_seq" ASC`, r.sid, id, floor)
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
-	var errs []string
+	var errs []sql.NullString
 	for rows.Next() {
 		var e sql.NullString
 		if err := rows.Scan(&e); err != nil {
 			return nil
 		}
-		if e.Valid {
-			errs = append(errs, e.String)
-		}
+		errs = append(errs, e)
 	}
 	if len(errs) == 0 {
 		return nil
 	}
+	// The tail is the kept, newest slice in transcript order: its i-th
+	// occurrence of the wire id maps to the original at len-total+i.
+	// The floor excludes this compaction's own re-landed rows.
 	idx := len(errs) - total + i
 	if idx < 0 {
 		idx = 0
@@ -318,7 +319,10 @@ func (r *Recorder) originalErr(id string, i, total int) *string {
 	if idx >= len(errs) {
 		idx = len(errs) - 1
 	}
-	f := errs[idx]
+	if !errs[idx].Valid {
+		return nil
+	}
+	f := errs[idx].String
 	return &f
 }
 

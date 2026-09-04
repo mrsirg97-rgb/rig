@@ -15,7 +15,7 @@ type Memory struct {
 	Id                 int64   `db:"id"`
 	AccessCount        int64   `db:"access_count"`
 	Content            string  `db:"content"`
-	ContentSha256      string  `db:"content_md5"`
+	ContentSha256      string  `db:"content_sha256"`
 	CreatedAt          string  `db:"created_at"`
 	Importance         float64 `db:"importance"`
 	Kind               string  `db:"kind"`
@@ -85,7 +85,7 @@ func (d *memoryDomain) GetMemory(ctx context.Context, id int64) *lazy.Lazy[Memor
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by" FROM "memories" WHERE "id" = $1`,
+		`SELECT "id", "access_count", "content", "content_sha256", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by" FROM "memories" WHERE "id" = $1`,
 		id,
 	)
 	out, err := ScanMemory(row)
@@ -122,7 +122,7 @@ func (d *memoryDomain) GetMemoryBatch(ctx context.Context, keys []int64) *lazy.L
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by" FROM "memories" WHERE "id" IN (`+ph+`)`, args...)
+		`SELECT "id", "access_count", "content", "content_sha256", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by" FROM "memories" WHERE "id" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -153,7 +153,7 @@ func (d *memoryDomain) ListMemoryById(ctx context.Context, id int64, limit int32
 		return l
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by" FROM "memories" WHERE "id" = $1 LIMIT $2`,
+		`SELECT "id", "access_count", "content", "content_sha256", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by" FROM "memories" WHERE "id" = $1 LIMIT $2`,
 		id, limit)
 	if err != nil {
 		l.FillAll(nil, err)
@@ -195,7 +195,7 @@ func (d *memoryDomain) InsertMemory(ctx context.Context, row Memory) (*Memory, e
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "memories" ("id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING "id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "memories" ("id", "access_count", "content", "content_sha256", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING "id", "access_count", "content", "content_sha256", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by"`,
 		row.Id,
 		row.AccessCount,
 		row.Content,
@@ -222,7 +222,7 @@ func (d *memoryDomain) DeleteMemory(ctx context.Context, id int64) (*Memory, err
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "memories" WHERE "id" = $1 RETURNING "id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "memories" WHERE "id" = $1 RETURNING "id", "access_count", "content", "content_sha256", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by"`,
 		id,
 	)
 	if err != nil {
@@ -236,7 +236,7 @@ func (d *memoryDomain) UpdateMemory(ctx context.Context, row Memory) (*Memory, e
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "memories" SET "access_count" = $1, "content" = $2, "content_md5" = $3, "created_at" = $4, "importance" = $5, "kind" = $6, "last_accessed_at" = $7, "last_consolidated_at" = $8, "scope" = $9, "scope_label" = $10, "source" = $11, "strength" = $12, "superseded_by" = $13 WHERE "id" = $14 RETURNING "id", "access_count", "content", "content_md5", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "memories" SET "access_count" = $1, "content" = $2, "content_sha256" = $3, "created_at" = $4, "importance" = $5, "kind" = $6, "last_accessed_at" = $7, "last_consolidated_at" = $8, "scope" = $9, "scope_label" = $10, "source" = $11, "strength" = $12, "superseded_by" = $13 WHERE "id" = $14 RETURNING "id", "access_count", "content", "content_sha256", "created_at", "importance", "kind", "last_accessed_at", "last_consolidated_at", "scope", "scope_label", "source", "strength", "superseded_by"`,
 		row.AccessCount,
 		row.Content,
 		row.ContentSha256,
