@@ -31,12 +31,12 @@ func New(baseURL, model string) core.Provider {
 
 func NewWithHeaderTimeout(baseURL, model string, headerTimeout time.Duration) core.Provider {
 	baseURL = strings.TrimRight(baseURL, "/")
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = headerTimeout
 	p := &provider{
 		baseURL: baseURL,
 		model:   model,
-		client: &http.Client{
-			Transport: &http.Transport{ResponseHeaderTimeout: headerTimeout},
-		},
+		client:  &http.Client{Transport: transport},
 	}
 	if strings.HasPrefix(baseURL, "unix:") {
 		sock := strings.TrimPrefix(baseURL, "unix:")
