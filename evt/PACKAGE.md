@@ -49,7 +49,9 @@ imports this one.
 - Execution is outside the lock: an event may `Add`, may block, may run
   long; a panic in an event is the closure's, not recovered.
 - `Stop` runs nothing further: the event in flight finishes; `Pending`
-  shows the rest, sorted. Cancelling `Start`'s ctx is a `Stop`.
+  shows the rest, sorted; an `Add` after `Stop` refuses (no id, nothing
+  queued), so a producer of a dead engine cannot grow it. Cancelling
+  `Start`'s ctx is a `Stop`.
 - Two `Start`s on one engine are the caller's bug: the scheduler is
   the door that refuses (`ErrStarted`).
 - `Update` on an id that already popped is `false`, never an error.

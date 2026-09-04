@@ -230,7 +230,9 @@ func (r *run) streamEnd(t *turn) {
 		r.k.Frontend.Notify(core.TurnEnd{Reason: core.TurnFault})
 		r.stop(err)
 	case len(t.calls) == 0:
-		session.Append(core.Message{Role: core.RoleAssistant, Content: t.text.String(), Reasoning: t.reasoning.String(), ContextTokens: t.usage.Prompt + t.usage.Completion})
+		if t.text.Len() > 0 || t.reasoning.Len() > 0 {
+			session.Append(core.Message{Role: core.RoleAssistant, Content: t.text.String(), Reasoning: t.reasoning.String(), ContextTokens: t.usage.Prompt + t.usage.Completion})
+		}
 		r.end(t)
 	default:
 		session.Append(core.Message{

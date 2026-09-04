@@ -147,12 +147,14 @@ the engine's.
 
 `Stop` sets running false and wakes the consumer; the event in flight
 finishes, nothing further runs, and `Pending` shows what was left
-(sorted, a snapshot). `Start(ctx)` returns when `Stop` is called or ctx
-is done; the ctx is the Go-centric stop, so a scheduler's `Stop` is a
-cancel plus a join on `Done`. Named: a second `Start` on a running
-engine refuses (`ErrStarted` at the scheduler; the engine itself is
-single-consumer by contract and does not guard against two `Start`s:
-the scheduler is the door that does).
+(sorted, a snapshot). An `Add` after `Stop` queues nothing and returns
+no id: a producer of a dead engine cannot grow it (the loop's late
+input closes over exactly this). `Start(ctx)` returns when `Stop` is
+called or ctx is done; the ctx is the Go-centric stop, so a scheduler's
+`Stop` is a cancel plus a join on `Done`. Named: a second `Start` on a
+running engine refuses (`ErrStarted` at the scheduler; the engine
+itself is single-consumer by contract and does not guard against two
+`Start`s: the scheduler is the door that does).
 
 ### 6. Phase 2a, the batch: built.
 
