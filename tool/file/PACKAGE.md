@@ -44,9 +44,13 @@ model is told its prior read is stale before it acts on it.
 - The drift check refuses when the file's hash or mtime differs from the
   recorded `FileState`; edit-after-external-change never silently
   clobbers.
-- `lastRead` (the remembered bytes a drift refusal diffs against) is
-  keyed per session: two sessions sharing one process each diff against
-  their own observation, never each other's.
+- The remembered bytes a drift refusal diffs against live in a bounded
+  cache keyed by session ID and path (16 MiB, FIFO-evicted): two
+  sessions sharing one process each diff against their own observation,
+  never each other's, and no session or file's bytes are pinned beyond
+  the cap (an evicted observation degrades to the header-only refusal).
+- The cache never holds a session object, only its ID: a finished
+  session's transcript is released with it.
 - A standalone exec (no threaded session) skips provenance maintenance.
 - `Session.Files` is written under a package mutex (`filesMu`): reads in
   one batch run concurrently (SPEC_EVT 2a) and the session type is
