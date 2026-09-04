@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]: the quality sweep
+## [0.23.0]: the quality sweep
 
 Each finding below carries a test that failed before and passes after.
 
