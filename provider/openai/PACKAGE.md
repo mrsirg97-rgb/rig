@@ -10,6 +10,8 @@ adapter's problem; the loop sees `core.Event` only.
 
 - `New(baseURL, model)`: builds the `core.Provider`. `baseURL` may carry
   a path prefix such as `/v1`; it joins `/chat/completions`.
+- `NewWithHeaderTimeout(baseURL, model, headerTimeout)`: the same with a
+  dialed time-to-headers bound; `New` applies the 5-minute default.
 - `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
   `core.Event`s.
 - The wire shapes (`wireRequest`, `wireMessage`, `wireTool`,
@@ -32,6 +34,13 @@ adapter's problem; the loop sees `core.Event` only.
 ## Gotchas
 
 - An empty message list is a loud `Stream` error.
+- The transport bounds time-to-headers (`ResponseHeaderTimeout`): a
+  server that accepts and never speaks faults instead of wedging the
+  run, which matters where no interrupt handle exists (the headless
+  worker). The plain path is `http.DefaultTransport`'s clone, so the
+  dial and TLS-handshake bounds survive; the stream after the headers
+  is unbounded, so a long generation keeps streaming; a
+  `Client.Timeout` would kill it.
 - A transport error emits `Fault` (or closes the channel torn-down, with
   no `Done`/`Fault`, when the ctx is dead). A non-2xx status emits `Fault`
   with a response snippet capped at 256 bytes.
