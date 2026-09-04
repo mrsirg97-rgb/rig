@@ -38,7 +38,6 @@ type probe struct {
 	ContentSha256      string
 }
 
-
 func legacyStatements() []string {
 	return []string{
 		`CREATE TABLE IF NOT EXISTS "memories" (
