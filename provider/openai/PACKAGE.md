@@ -11,7 +11,7 @@ adapter's problem; the loop sees `core.Event` only.
 - `New(baseURL, model)`: builds the `core.Provider`. `baseURL` may carry
   a path prefix such as `/v1`; it joins `/chat/completions`.
 - `NewWithHeaderTimeout(baseURL, model, headerTimeout)`: the same with a
-  dialed time-to-headers bound; `New` applies the 2-minute default.
+  dialed time-to-headers bound; `New` applies the 5-minute default.
 - `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
   `core.Event`s.
 - The wire shapes (`wireRequest`, `wireMessage`, `wireTool`,

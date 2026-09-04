@@ -23,7 +23,7 @@ type provider struct {
 	sock    string
 }
 
-const defaultHeaderTimeout = 2 * time.Minute
+const defaultHeaderTimeout = 5 * time.Minute
 
 func New(baseURL, model string) core.Provider {
 	return NewWithHeaderTimeout(baseURL, model, defaultHeaderTimeout)
