@@ -338,7 +338,7 @@ before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is th
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.
 
-## the post-hardening rounds (0.8.2 → 0.22.0)
+## the post-hardening rounds (0.8.2 → 0.23.0)
 
 Spec-first as always; the freeze discipline holds (`core/` and `loop/`
 open to extension, closed to modification; the one named loop change
@@ -400,5 +400,13 @@ in order:
   dead engine refuses adds, empty completions stay out of the
   transcript, the drift-diff cache is bounded and never pins a session,
   and the recorder persists file states under the file tool's lock.
+- **the quality sweep** (0.23.0): the state store scopes tool calls to
+  session and message (v1 stores migrated on open), the env and file
+  knobs refuse out-of-range bounds, the worker spawn and the dashboard
+  page limit are bounded, the rem dedup digest is sha256 with a renamed
+  column, the dashboard migrates the scheduler store, a once job's
+  `at` must be in the future, and the compact lock, the socket
+  permissions, the plugin TOCTOU, and the crontab timeout close the
+  review's stragglers.
 
 The queue's next lives in the CHANGELOG's `[Unreleased]`.
