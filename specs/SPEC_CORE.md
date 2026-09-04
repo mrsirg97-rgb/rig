@@ -273,6 +273,13 @@ push that `diff last` would otherwise force the model to go ask for.
 The note rides the content it already returns; nothing new is written,
 and a fresh observation re-records as usual.
 
+**An edit against a path with no recorded observation refuses** (amended
+for the daily driver): the threaded session's `Files` is the edit's
+license. `read` or `write` mints it, an external or cross-session change
+invalidates it, and a standalone exec (no session) carries no license to
+check. The rule is at the tool, so grep-first stays a guideline while an
+unlicensed edit is a refusal that names the missing observation.
+
 ### ToolMiddleware
 
 ```go

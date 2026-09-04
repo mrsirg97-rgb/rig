@@ -22,27 +22,6 @@ const readCap = 1 << 20
 
 const driftCap = 20
 
-var lastRead = struct {
-	sync.RWMutex
-	m map[string]string
-}{}
-
-func rememberContent(path, content string) {
-	lastRead.Lock()
-	if lastRead.m == nil {
-		lastRead.m = map[string]string{}
-	}
-	lastRead.m[path] = content
-	lastRead.Unlock()
-}
-
-func forgottenContent(path string) (string, bool) {
-	lastRead.RLock()
-	defer lastRead.RUnlock()
-	c, ok := lastRead.m[path]
-	return c, ok
-}
-
 func strictDecode(data json.RawMessage, out any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -85,6 +64,52 @@ func recordState(ctx context.Context, path string, data []byte) {
 		Hash:  hex.EncodeToString(sum[:]),
 		Mtime: st.ModTime().UnixNano(),
 	}
+}
+
+// rememberedBytesCap bounds the drift-diff cache: a large read cannot
+// pin gigabytes, and evicted observations degrade to the header-only
+// refusal (the drift still refuses; only the diff detail is lost).
+var rememberedBytesCap = 16 << 20
+
+var lastRead = struct {
+	sync.Mutex
+	m     map[string]string // session ID + "\x00" + path -> bytes as read
+	order []string          // insertion order, oldest first
+	bytes int
+}{m: map[string]string{}}
+
+func rememberedKey(s *core.Session, path string) string { return s.ID + "\x00" + path }
+
+func rememberContent(s *core.Session, path, content string) {
+	if s == nil {
+		return
+	}
+	key := rememberedKey(s, path)
+	lastRead.Lock()
+	defer lastRead.Unlock()
+	if prev, exists := lastRead.m[key]; exists {
+		lastRead.bytes += len(content) - len(prev)
+	} else {
+		lastRead.order = append(lastRead.order, key)
+		lastRead.bytes += len(content)
+	}
+	lastRead.m[key] = content
+	for lastRead.bytes > rememberedBytesCap {
+		oldest := lastRead.order[0]
+		lastRead.order = lastRead.order[1:]
+		lastRead.bytes -= len(lastRead.m[oldest])
+		delete(lastRead.m, oldest)
+	}
+}
+
+func forgottenContent(s *core.Session, path string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	lastRead.Lock()
+	defer lastRead.Unlock()
+	c, ok := lastRead.m[rememberedKey(s, path)]
+	return c, ok
 }
 
 type readTool struct{}
@@ -147,7 +172,8 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		}
 	}
 	recordState(ctx, a.Path, fileData)
-	rememberContent(a.Path, string(fileData))
+	s, _ := core.SessionFrom(ctx)
+	rememberContent(s, a.Path, string(fileData))
 	lines := strings.Split(string(fileData), "\n")
 	if offset >= len(lines) {
 		return "", fmt.Errorf("read: offset %d is past the end (%d lines)", offset, len(lines))
@@ -205,7 +231,8 @@ func (writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		return "", fmt.Errorf("write: %w", err)
 	}
 	recordState(ctx, a.Path, []byte(a.Content))
-	rememberContent(a.Path, a.Content)
+	s, _ := core.SessionFrom(ctx)
+	rememberContent(s, a.Path, a.Content)
 	return fmt.Sprintf("wrote %d bytes to %s", len(a.Content), a.Path), nil
 }
 
@@ -216,7 +243,7 @@ func Edit() core.Tool { return &editTool{} }
 func (editTool) Name() string { return "edit" }
 
 func (editTool) Description() string {
-	return "replace exactly one occurrence of old with new in a file. Guidelines: the precise change; read first and make old unique with context — an ambiguous or missing old, or a file changed since your read, refuses by name. Reply: the path edited."
+	return "replace exactly one occurrence of old with new in a file. Guidelines: the precise change; read first and make old unique with context — a file you never read this session, an ambiguous or missing old, or one changed since your read, refuses by name. Reply: the path edited."
 }
 
 func (editTool) Schema() json.RawMessage {
@@ -246,6 +273,11 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if a.Old == "" {
 		return "", errors.New("edit: zero-width old string")
 	}
+	if _, threaded := core.SessionFrom(ctx); threaded {
+		if _, seen := stateOf(ctx, a.Path); !seen {
+			return "", fmt.Errorf("edit: %s was never read this session: read (or write) it first", a.Path)
+		}
+	}
 
 	fileData, err := os.ReadFile(a.Path)
 	if err != nil {
@@ -255,7 +287,7 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if recorded, seen := stateOf(ctx, a.Path); seen {
 		sum := sha256.Sum256(fileData)
 		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
-			return "", fmt.Errorf("%s", driftRefusal(a.Path, string(fileData)))
+			return "", fmt.Errorf("%s", driftRefusal(ctx, a.Path, string(fileData)))
 		}
 	}
 
@@ -272,6 +304,8 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		return "", fmt.Errorf("edit: %w", err)
 	}
 	recordState(ctx, a.Path, []byte(updated))
+	s, _ := core.SessionFrom(ctx)
+	rememberContent(s, a.Path, string(updated))
 	return fmt.Sprintf("edited %s: replaced %d byte(s)", a.Path, len(a.Old)), nil
 }
 
@@ -283,9 +317,10 @@ func mtimeOf(path string) int64 {
 	return st.ModTime().UnixNano()
 }
 
-func driftRefusal(path, onDisk string) string {
+func driftRefusal(ctx context.Context, path, onDisk string) string {
 	const header = "edit: the file changed since the read:"
-	remembered, ok := forgottenContent(path)
+	s, _ := core.SessionFrom(ctx)
+	remembered, ok := forgottenContent(s, path)
 	if !ok || remembered == onDisk {
 		return header
 	}
