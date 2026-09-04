@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.22.0]: the third review
+
+Three PRs from the outside review, then a clean pass over every package;
+each finding below carries a test that failed before and passes after.
+
+- **edit requires a recorded observation** (`tool/file`, SPEC_CORE
+  amended): a threaded session refuses an edit whose path has no
+  recorded `FileState`; `read` or `write` mints the license, a
+  standalone exec carries no session and so no license to check. The
+  drift diff keys on the session: the remembered bytes are keyed by
+  session id and path, capped at 16 MiB and FIFO-evicted, so two
+  sessions sharing one process never diff each other's observations and
+  the cache never pins a session or a file's bytes.
+- **the provider bounds its wait for response headers**
+  (`provider/openai`): `ResponseHeaderTimeout` on both transports, the
+  5-minute default through `NewWithHeaderTimeout`; the plain path is
+  `http.DefaultTransport`'s clone, so the dial and TLS-handshake bounds
+  survive. A server that accepts and never speaks faults instead of
+  wedging the headless worker; the stream after the headers stays
+  unbounded.
+- **evt refuses adds after stop; the loop keeps empty completions out of
+  the transcript** (evt, loop): an `Add` after `Stop` queues nothing and
+  returns no id, so a producer of a dead engine cannot grow it; a
+  completion with no text, no reasoning, and no calls appends no
+  assistant row.
+- **the recorder persists file states under the file tool's lock**
+  (`store/state`): the files upsert rides the wired `Snapshot` seam, so
+  a user typing during tool execution no longer races the tools'
+  concurrent records.
+
 ## [0.21.0]: the second review
 
 An outside review of the whole tree; every finding below carries a test
