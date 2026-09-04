@@ -845,13 +845,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	sdb, quarantined, _, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion)
+	sdb, quarantined, sReport, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion, state.Migration())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: state store:", err)
 		os.Exit(1)
 	}
 	if quarantined != "" {
 		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt state file: %s\n", quarantined)
+	}
+	if sReport != "" {
+		fmt.Fprintln(os.Stderr, "rig:", sReport)
 	}
 	defer sdb.DB.Close()
 

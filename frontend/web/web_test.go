@@ -58,10 +58,10 @@ func seedHome(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolCall(ctx, sdb, seq, "call_1", "bash", `{"cmd":"ls"}`); err != nil {
+	if err := state.RecordToolCall(ctx, sdb, "sess1", seq, "call_1", "bash", `{"cmd":"ls"}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolResult(ctx, sdb, "call_1", "file1\nfile2", nil); err != nil {
+	if err := state.RecordToolResult(ctx, sdb, "sess1", seq, "call_1", "file1\nfile2", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.RecordUsage(ctx, sdb, seq, 100, 42, 10, 5); err != nil {

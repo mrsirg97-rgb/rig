@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/store/lazy"
@@ -13,21 +12,23 @@ import (
 )
 
 type ToolCall struct {
+	SessionId  string     `db:"session_id"`
+	MessageSeq int64      `db:"message_seq"`
 	Id         string     `db:"id"`
 	Args       string     `db:"args"`
 	EndedAt    *time.Time `db:"ended_at"`
 	Err        *string    `db:"err"`
-	MessageSeq int64      `db:"message_seq"`
 	Name       string     `db:"name"`
 	Result     *string    `db:"result"`
 	StartedAt  time.Time  `db:"started_at"`
 }
 
 type ToolCallDomain interface {
-	GetToolCall(ctx context.Context, id string) *lazy.Lazy[ToolCall]
-	GetToolCallBatch(ctx context.Context, keys []string) *lazy.Lazy[ToolCall]
+	GetToolCall(ctx context.Context, sessionId string, messageSeq int64, id string) *lazy.Lazy[ToolCall]
+	WindowToolCallBySessionIdMessageSeq(ctx context.Context, sessionId string, messageSeq int64, from string, to string, limit int32) *lazy.Lazy[ToolCall]
+	PageToolCallBySessionIdMessageSeq(ctx context.Context, sessionId string, messageSeq int64, after string, limit int32) *lazy.Lazy[ToolCall]
 	InsertToolCall(ctx context.Context, row ToolCall) (*ToolCall, error)
-	DeleteToolCall(ctx context.Context, id string) (*ToolCall, error)
+	DeleteToolCall(ctx context.Context, sessionId string, messageSeq int64, id string) (*ToolCall, error)
 	UpdateToolCall(ctx context.Context, row ToolCall) (*ToolCall, error)
 }
 
@@ -40,11 +41,12 @@ func NewToolCallDomain() *toolCallDomain {
 func ScanToolCall(row lazy.ScanRow) (ToolCall, error) {
 	var out ToolCall
 	err := row.Scan(
+		&out.SessionId,
+		&out.MessageSeq,
 		&out.Id,
 		&out.Args,
 		&out.EndedAt,
 		&out.Err,
-		&out.MessageSeq,
 		&out.Name,
 		&out.Result,
 		&out.StartedAt,
@@ -64,7 +66,7 @@ func (d *toolCallDomain) one(rows *sql.Rows) (*ToolCall, error) {
 	return &out, nil
 }
 
-func (d *toolCallDomain) GetToolCall(ctx context.Context, id string) *lazy.Lazy[ToolCall] {
+func (d *toolCallDomain) GetToolCall(ctx context.Context, sessionId string, messageSeq int64, id string) *lazy.Lazy[ToolCall] {
 	l := lazy.New(ScanToolCall)
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
@@ -72,7 +74,9 @@ func (d *toolCallDomain) GetToolCall(ctx context.Context, id string) *lazy.Lazy[
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at" FROM "tool_calls" WHERE "id" = $1`,
+		`SELECT "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at" FROM "tool_calls" WHERE "session_id" = $1 AND "message_seq" = $2 AND "id" = $3`,
+		sessionId,
+		messageSeq,
 		id,
 	)
 	out, err := ScanToolCall(row)
@@ -88,28 +92,54 @@ func (d *toolCallDomain) GetToolCall(ctx context.Context, id string) *lazy.Lazy[
 	return l
 }
 
-func (d *toolCallDomain) GetToolCallBatch(ctx context.Context, keys []string) *lazy.Lazy[ToolCall] {
+func (d *toolCallDomain) WindowToolCallBySessionIdMessageSeq(ctx context.Context, sessionId string, messageSeq int64, from string, to string, limit int32) *lazy.Lazy[ToolCall] {
 	l := lazy.New(ScanToolCall)
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
 	}
-	if len(keys) == 0 {
-		l.FillAll(nil, nil)
+	rows, err := tx.QueryContext(ctx,
+		`SELECT "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at" FROM "tool_calls" WHERE "session_id" = $1 AND "message_seq" = $2 AND "id" >= $3 AND "id" < $4 ORDER BY "session_id", "message_seq", "id" LIMIT $5`,
+		sessionId,
+		messageSeq,
+		from, to, limit,
+	)
+	if err != nil {
+		l.FillAll(nil, err)
 		return l
 	}
-	// one numbered placeholder per key: portable across database/sql
-	// drivers (postgres and sqlite alike); ANY($1) is postgres-only.
-	ph := "$1"
-	args := make([]any, len(keys))
-	args[0] = keys[0]
-	for i := 1; i < len(keys); i++ {
-		ph += ", $" + strconv.Itoa(i+1)
-		args[i] = keys[i]
+	defer rows.Close()
+	var out []ToolCall
+	for rows.Next() {
+		row, err := ScanToolCall(rows)
+		if err != nil {
+			l.FillAll(nil, err)
+			return l
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		l.FillAll(nil, err)
+		return l
+	}
+	l.FillAll(out, nil)
+	return l
+}
+
+func (d *toolCallDomain) PageToolCallBySessionIdMessageSeq(ctx context.Context, sessionId string, messageSeq int64, after string, limit int32) *lazy.Lazy[ToolCall] {
+	l := lazy.New(ScanToolCall)
+	tx, err := sqlx.TxFrom(ctx)
+	if err != nil {
+		l.FillAll(nil, err)
+		return l
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at" FROM "tool_calls" WHERE "id" IN (`+ph+`)`, args...)
+		`SELECT "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at" FROM "tool_calls" WHERE "session_id" = $1 AND "message_seq" = $2 AND "id" > $3 ORDER BY "session_id", "message_seq", "id" LIMIT $4`,
+		sessionId,
+		messageSeq,
+		after, limit,
+	)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -137,12 +167,13 @@ func (d *toolCallDomain) InsertToolCall(ctx context.Context, row ToolCall) (*Too
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "tool_calls" ("id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING "id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "tool_calls" ("session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at"`,
+		row.SessionId,
+		row.MessageSeq,
 		row.Id,
 		row.Args,
 		row.EndedAt,
 		row.Err,
-		row.MessageSeq,
 		row.Name,
 		row.Result,
 		row.StartedAt,
@@ -153,12 +184,14 @@ func (d *toolCallDomain) InsertToolCall(ctx context.Context, row ToolCall) (*Too
 	return d.one(rows)
 }
 
-func (d *toolCallDomain) DeleteToolCall(ctx context.Context, id string) (*ToolCall, error) {
+func (d *toolCallDomain) DeleteToolCall(ctx context.Context, sessionId string, messageSeq int64, id string) (*ToolCall, error) {
 	tx, err := sqlx.TxFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "tool_calls" WHERE "id" = $1 RETURNING "id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "tool_calls" WHERE "session_id" = $1 AND "message_seq" = $2 AND "id" = $3 RETURNING "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at"`,
+		sessionId,
+		messageSeq,
 		id,
 	)
 	if err != nil {
@@ -172,14 +205,15 @@ func (d *toolCallDomain) UpdateToolCall(ctx context.Context, row ToolCall) (*Too
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "tool_calls" SET "args" = $1, "ended_at" = $2, "err" = $3, "message_seq" = $4, "name" = $5, "result" = $6, "started_at" = $7 WHERE "id" = $8 RETURNING "id", "args", "ended_at", "err", "message_seq", "name", "result", "started_at"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "tool_calls" SET "args" = $1, "ended_at" = $2, "err" = $3, "name" = $4, "result" = $5, "started_at" = $6 WHERE "session_id" = $7 AND "message_seq" = $8 AND "id" = $9 RETURNING "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at"`,
 		row.Args,
 		row.EndedAt,
 		row.Err,
-		row.MessageSeq,
 		row.Name,
 		row.Result,
 		row.StartedAt,
+		row.SessionId,
+		row.MessageSeq,
 		row.Id,
 	)
 	if err != nil {

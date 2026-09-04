@@ -42,7 +42,7 @@ func (s *scripted) Notify(ev core.Event) {
 }
 
 func TestRecorderLandsTheTranscript(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestRecorderLandsTheTranscript(t *testing.T) {
 		t.Fatalf("assistant message misattributed: %+v", a)
 	}
 	tc := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c1").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 2, "c1").Row()
 	}).(*domain.ToolCall)
 	if tc.Result == nil || *tc.Result != "out-1" || tc.Err != nil {
 		t.Fatalf("tool result not landed: %+v", tc)
@@ -98,7 +98,7 @@ func TestRecorderLandsTheTranscript(t *testing.T) {
 }
 
 func TestRecorderForwardsIntact(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestRecorderForwardsIntact(t *testing.T) {
 }
 
 func TestRecorderFaultLands(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestRecorderFaultLands(t *testing.T) {
 }
 
 func TestRecorderObservationErrorsStayLoud(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,11 +168,12 @@ func TestRecorderObservationErrorsStayLoud(t *testing.T) {
 }
 
 func TestRecorderLandsToolOnlyTurns(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", "rec-toolonly", core.NewSession())
+	sid := "rec-toolonly"
+	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", sid, core.NewSession())
 	ctx := context.Background()
 	if _, err := rec.Input(ctx); err != nil {
 		t.Fatal(err)
@@ -201,13 +202,13 @@ func TestRecorderLandsToolOnlyTurns(t *testing.T) {
 	}
 
 	c1 := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c1").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 2, "c1").Row()
 	}).(*domain.ToolCall)
 	if c1 == nil {
 		t.Fatal("call c1 has no row")
 	}
 	c2 := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c2").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 2, "c2").Row()
 	}).(*domain.ToolCall)
 	if c2 == nil {
 		t.Fatal("call c2 has no row")
@@ -227,7 +228,7 @@ func TestRecorderLandsToolOnlyTurns(t *testing.T) {
 }
 
 func TestRecorderFaultDiscardsPartialText(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

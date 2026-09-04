@@ -34,7 +34,12 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 			(SELECT count(*) FROM "messages" m
 			 WHERE m."session_id" = s."id"
 				   AND m."role" = 'user'
-				   AND m."content" NOT LIKE '[compaction] %'),
+				   AND m."seq" > COALESCE((
+				         SELECT MAX(m2."seq") FROM "messages" m2
+				         WHERE m2."session_id" = s."id"
+				           AND m2."role" = 'user'
+				           AND m2."content" LIKE '[compaction] %'
+				       ), 0)),
 			(SELECT count(*) FROM "faults" f WHERE f."session_id" = s."id")
 		FROM "sessions" s
 		ORDER BY s."started_at" DESC

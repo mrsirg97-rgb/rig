@@ -45,15 +45,16 @@ func Statements() []string {
   PRIMARY KEY ("id")
 )`,
 		`CREATE TABLE IF NOT EXISTS "tool_calls" (
+  "session_id" TEXT NOT NULL,
+  "message_seq" INTEGER NOT NULL,
   "id" TEXT NOT NULL,
   "args" TEXT NOT NULL,
   "ended_at" TIMESTAMP,
   "err" TEXT,
-  "message_seq" INTEGER NOT NULL,
   "name" TEXT NOT NULL,
   "result" TEXT,
   "started_at" TIMESTAMP NOT NULL,
-  PRIMARY KEY ("id")
+  PRIMARY KEY ("session_id", "message_seq", "id")
 )`,
 		`CREATE TABLE IF NOT EXISTS "usage" (
   "message_seq" INTEGER NOT NULL,

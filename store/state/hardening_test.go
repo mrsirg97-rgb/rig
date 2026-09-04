@@ -18,7 +18,7 @@ import (
 
 func openState(t *testing.T) store.DB {
 	t.Helper()
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestRecorderLandsResultsFromTheEvent(t *testing.T) {
 	}
 
 	tc := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c1").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 2, "c1").Row()
 	}).(*domain.ToolCall)
 	if tc.Result == nil || *tc.Result != "out-1" || tc.Err != nil {
 		t.Fatalf("the event-sourced result not landed: %+v", tc)
@@ -63,7 +63,7 @@ func TestRecorderLandsGuardedFailuresFromTheEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	tc := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c9").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 1, "c9").Row()
 	}).(*domain.ToolCall)
 	if tc.Err == nil || !strings.Contains(*tc.Err, "bound exhausted") {
 		t.Fatalf("the guarded failure must land as a failure row: %+v", tc)
@@ -240,14 +240,14 @@ func seedSession(t *testing.T, db store.DB, sid string) {
 	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", &ra, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolCall(ctx, db, 2, "c1", "bash", `{"cmd":"ls"}`); err != nil {
+	if err := state.RecordToolCall(ctx, db, sid, 2, "c1", "bash", `{"cmd":"ls"}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolCall(ctx, db, 2, "c2", "edit", `{"path":"/tmp/a"}`); err != nil {
+	if err := state.RecordToolCall(ctx, db, sid, 2, "c2", "edit", `{"path":"/tmp/a"}`); err != nil {
 		t.Fatal(err)
 	}
 	out := "total 1"
-	if err := state.RecordToolResult(ctx, db, "c1", out, nil); err != nil {
+	if err := state.RecordToolResult(ctx, db, sid, 2, "c1", out, nil); err != nil {
 		t.Fatal(err)
 	}
 

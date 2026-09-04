@@ -13,7 +13,7 @@ import (
 )
 
 func TestRecorderLandsCompactedSummary(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestRecorderLandsCompactedSummary(t *testing.T) {
 }
 
 func TestRecorderRelandsTheKeptTail(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +69,10 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "old-call", nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolCall(ctx, db, 2, "c1", "bash", `{"old":1}`); err != nil {
+	if err := state.RecordToolCall(ctx, db, sid, 2, "c1", "bash", `{"old":1}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolResult(ctx, db, "c1", "old-result", nil); err != nil {
+	if err := state.RecordToolResult(ctx, db, sid, 2, "c1", "old-result", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,14 +105,14 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 	}
 
 	fresh := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c2-r1").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 5, "c2").Row()
 	}).(*domain.ToolCall)
 	if fresh.Name != "edit" || fresh.Args != `{"p":1}` || fresh.Result == nil || *fresh.Result != "tail result" {
 		t.Fatalf("the fresh call row: %+v", fresh)
 	}
 
 	orig := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c1").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, 2, "c1").Row()
 	}).(*domain.ToolCall)
 	if orig == nil || orig.Result == nil || *orig.Result != "old-result" {
 		t.Fatalf("the original call row must stay: %+v", orig)
@@ -133,10 +133,10 @@ func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
 	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "a1", nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolCall(ctx, db, 2, "c1", "bash", `{}`); err != nil {
+	if err := state.RecordToolCall(ctx, db, sid, 2, "c1", "bash", `{}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordToolResult(ctx, db, "c1", "r1", nil); err != nil {
+	if err := state.RecordToolResult(ctx, db, sid, 2, "c1", "r1", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -159,8 +159,8 @@ func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "[compaction] SUM"},
 		{Role: core.RoleUser, Content: "u2"},
-		{Role: core.RoleAssistant, Content: "a2", ToolCalls: []core.ToolCall{{ID: "c2-r1", Name: "bash", Args: json.RawMessage(`{}`)}}},
-		{Role: core.RoleTool, ToolID: "c2-r1", Content: "r2"},
+		{Role: core.RoleAssistant, Content: "a2", ToolCalls: []core.ToolCall{{ID: "c2", Name: "bash", Args: json.RawMessage(`{}`)}}},
+		{Role: core.RoleTool, ToolID: "c2", Content: "r2"},
 		{Role: core.RoleAssistant, Content: "post"},
 	}
 	if len(res.Messages) != len(want) {

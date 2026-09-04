@@ -109,11 +109,11 @@ func TestRecordToolCallStoresCanonicalForm(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolCall(ctx, db, seq, "c1", "bash", `{"b":1, "a":2}`); e != nil {
+	if e := state.RecordToolCall(ctx, db, "canonical-write", seq, "c1", "bash", `{"b":1, "a":2}`); e != nil {
 		t.Fatalf("a decodable args string must land: %v", e)
 	}
 	tc := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, "c1").Row()
+		return domain.NewToolCallDomain().GetToolCall(c, sid, seq, "c1").Row()
 	}).(*domain.ToolCall)
 	if tc.Args != `{"a":2,"b":1}` {
 		t.Fatalf("args = %s, want the canonical form {\"a\":2,\"b\":1}", tc.Args)
@@ -159,9 +159,9 @@ func TestRecorderUndecodableArgsLandsRawAndSpeaks(t *testing.T) {
 		}
 	}
 
-	for _, id := range []string{"c1", "c2"} {
+	for i, id := range []string{"c1", "c2"} {
 		tc := mustRead(t, db, func(c context.Context) (any, error) {
-			return domain.NewToolCallDomain().GetToolCall(c, id).Row()
+			return domain.NewToolCallDomain().GetToolCall(c, sid, int64(2+i), id).Row()
 		}).(*domain.ToolCall)
 		if tc == nil {
 			t.Fatalf("call %s has no row: the row must always land", id)
@@ -188,10 +188,10 @@ func TestRecentToolCallsReturnsNewestFirst(t *testing.T) {
 		}
 		seqs = append(seqs, seq)
 		id := fmt.Sprintf("c%d", i+1)
-		if e := state.RecordToolCall(ctx, db, seq, id, "bash", `{"command":"ls"}`); e != nil {
+		if e := state.RecordToolCall(ctx, db, "recent", seq, id, "bash", `{"command":"ls"}`); e != nil {
 			t.Fatal(e)
 		}
-		if e := state.RecordToolResult(ctx, db, id, res, nil); e != nil {
+		if e := state.RecordToolResult(ctx, db, "recent", seq, id, res, nil); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -235,20 +235,20 @@ func TestRecentToolCallsInflightInvisible(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolCall(ctx, db, seq, "c1", "bash", `{"command":"ls"}`); e != nil {
+	if e := state.RecordToolCall(ctx, db, "inflight", seq, "c1", "bash", `{"command":"ls"}`); e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolResult(ctx, db, "c1", "r1", nil); e != nil {
+	if e := state.RecordToolResult(ctx, db, "inflight", seq, "c1", "r1", nil); e != nil {
 		t.Fatal(e)
 	}
 	seq, e = state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolCall(ctx, db, seq, "c2", "bash", `{"command":"ls"}`); e != nil {
+	if e := state.RecordToolCall(ctx, db, "inflight", seq, "c2", "bash", `{"command":"ls"}`); e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolResult(ctx, db, "c2", "r2", nil); e != nil {
+	if e := state.RecordToolResult(ctx, db, "inflight", seq, "c2", "r2", nil); e != nil {
 		t.Fatal(e)
 	}
 
@@ -256,7 +256,7 @@ func TestRecentToolCallsInflightInvisible(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolCall(ctx, db, seq, "c3", "bash", `{"command":"ls"}`); e != nil {
+	if e := state.RecordToolCall(ctx, db, "inflight", seq, "c3", "bash", `{"command":"ls"}`); e != nil {
 		t.Fatal(e)
 	}
 	got, err := state.RecentToolCalls(ctx, db, sid, "bash", `{"command":"ls"}`, 1)
@@ -283,10 +283,10 @@ func TestRecentToolCallsSessionScope(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if e := state.RecordToolCall(ctx, db, seq, id, "bash", `{"command":"ls"}`); e != nil {
+		if e := state.RecordToolCall(ctx, db, "world-b", seq, id, "bash", `{"command":"ls"}`); e != nil {
 			t.Fatal(e)
 		}
-		if e := state.RecordToolResult(ctx, db, id, res, nil); e != nil {
+		if e := state.RecordToolResult(ctx, db, "world-b", seq, id, res, nil); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -321,10 +321,10 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolCall(ctx, db, seq1, "c1", "bash", args); e != nil {
+	if e := state.RecordToolCall(ctx, db, "world", seq1, "c1", "bash", args); e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolResult(ctx, db, "c1", "r1", nil); e != nil {
+	if e := state.RecordToolResult(ctx, db, "world", seq1, "c1", "r1", nil); e != nil {
 		t.Fatal(e)
 	}
 
@@ -350,10 +350,10 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolCall(ctx, db, seq2, "c2", "bash", args); e != nil {
+	if e := state.RecordToolCall(ctx, db, "world", seq2, "c2", "bash", args); e != nil {
 		t.Fatal(e)
 	}
-	if e := state.RecordToolResult(ctx, db, "c2", "r2", nil); e != nil {
+	if e := state.RecordToolResult(ctx, db, "world", seq2, "c2", "r2", nil); e != nil {
 		t.Fatal(e)
 	}
 	rows, err = state.RecentToolCalls(ctx, db, sid, "bash", args, 1)
@@ -374,10 +374,10 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 			t.Fatal(e)
 		}
 		id := fmt.Sprintf("m%d", i+1)
-		if e := state.RecordToolCall(ctx, db, seq, id, "bash", args); e != nil {
+		if e := state.RecordToolCall(ctx, db, "world", seq, id, "bash", args); e != nil {
 			t.Fatal(e)
 		}
-		if e := state.RecordToolResult(ctx, db, id, res, nil); e != nil {
+		if e := state.RecordToolResult(ctx, db, "world", seq, id, res, nil); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -403,11 +403,11 @@ func TestRecentToolCallsInterleavingKeepsThePair(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if e := state.RecordToolCall(ctx, db, seq, id, name, args); e != nil {
+		if e := state.RecordToolCall(ctx, db, "interleave", seq, id, name, args); e != nil {
 			t.Fatal(e)
 		}
 		if res != "" {
-			if e := state.RecordToolResult(ctx, db, id, res, nil); e != nil {
+			if e := state.RecordToolResult(ctx, db, "interleave", seq, id, res, nil); e != nil {
 				t.Fatal(e)
 			}
 		}
@@ -443,13 +443,13 @@ func TestRecentToolCallsTotalOrder(t *testing.T) {
 	at := time.Date(2026, 8, 16, 9, 58, 12, 0, time.UTC)
 	seed := func(id string, messageSeq int64, res string) {
 		t.Helper()
-		if e := state.RecordToolCall(ctx, db, messageSeq, id, "bash", `{"command":"ls"}`); e != nil {
+		if e := state.RecordToolCall(ctx, db, "tie", messageSeq, id, "bash", `{"command":"ls"}`); e != nil {
 
 			t.Fatal(e)
 		}
 
 		mustRead(t, db, func(c context.Context) (any, error) {
-			tc, err := domain.NewToolCallDomain().GetToolCall(c, id).Row()
+			tc, err := domain.NewToolCallDomain().GetToolCall(c, "tie", messageSeq, id).Row()
 			if err != nil {
 				return nil, err
 			}
@@ -457,7 +457,7 @@ func TestRecentToolCallsTotalOrder(t *testing.T) {
 			_, err = domain.NewToolCallDomain().UpdateToolCall(c, *tc)
 			return nil, err
 		})
-		if e := state.RecordToolResult(ctx, db, id, res, nil); e != nil {
+		if e := state.RecordToolResult(ctx, db, "tie", messageSeq, id, res, nil); e != nil {
 			t.Fatal(e)
 		}
 	}

@@ -97,11 +97,11 @@ func (w *world) call(t *testing.T, name, args, result string, failure *string) i
 		t.Fatal(e)
 	}
 	id := "c" + strconv.FormatInt(seq, 10)
-	if e := state.RecordToolCall(ctx, w.db, seq, id, name, args); e != nil {
+	if e := state.RecordToolCall(ctx, w.db, w.sid, seq, id, name, args); e != nil {
 		t.Fatalf("a decodable args string must land: %v", e)
 	}
 	if result != "" {
-		if e := state.RecordToolResult(ctx, w.db, id, result, failure); e != nil {
+		if e := state.RecordToolResult(ctx, w.db, w.sid, seq, id, result, failure); e != nil {
 			t.Fatal(e)
 		}
 	}
