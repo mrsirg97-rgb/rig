@@ -464,14 +464,18 @@ dataflow for result mutation).
 
 `middleware/guard` re-keys and re-scopes:
 
-- **Keyed by tool name, the streak per args** (amended, PR #57). The state
-  is one count and one last-failed-args marker per tool. A failure with
-  the same args as the tool's last failure extends the streak; a failure
-  with differing args starts a new one; a call differing from the last
-  failed args resets the count before the guard check. So the bound
-  strikes identical retries only, and the "change the call" teaching is
-  never followed by blocking the changed call. Pane keys by
-  `event.toolName`, so do we.
+- **Keyed by tool name, the streak per canonical args** (amended, PR #57;
+  amended again, the rev of 2026-09-05). The state is one count and one
+  last-failed-args marker per tool, and the marker's identity is a
+  canonical re-encode of the args: object keys sorted, numbers and
+  strings preserved, invalid JSON falling back to the raw bytes. A
+  failure with the same canonical args as the tool's last failure extends
+  the streak; a failure with differing args starts a new one; a call
+  differing from the last failed args resets the count before the guard
+  check. So the bound strikes identically-valued retries only — JSON key
+  order or whitespace is not a changed call, but a changed value always
+  is — and the "change the call" teaching is never followed by blocking
+  the changed call. Pane keys by `event.toolName`, so do we.
 - Rejected, named: **name keying with a shared budget** (this decision's
   first form). Its reason was that drifting args must not dodge the bound;
   in the field it blocked the corrected call the note had just asked for,

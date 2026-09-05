@@ -19,7 +19,11 @@ that bounds every tool result before the transcript.
 - `Bound(limit)`: the constructor: returns a `core.ToolMiddleware`.
 - `bound` (unexported): the per-turn state: `limit`, `counts` (tool
   name -> consecutive identical failures this turn), and `lastFailed`
-  (tool name -> the args of the last failure; the streak's identity).
+  (tool name -> the canonical args of the last failure; the streak's
+  identity). `canonical` (unexported): the args identity — a JSON
+  re-encode with object keys sorted, numbers and strings preserved, so
+  key order and whitespace never dodge the streak while a changed value
+  always starts a fresh one; invalid JSON falls back to the raw bytes.
 - `Rounds(n)`: the round cap: counts every call in a turn and, when
   `n > 0`, past `n` refuses without executing (a teaching voice naming
   the cap and what to do), cleared at `TurnStart`; `n <= 0` is no cap
@@ -55,10 +59,12 @@ that bounds every tool result before the transcript.
 - Identical calls inside one concurrent run may all execute: each passed
   the check before any had failed. They are duplicates, not retries; the
   bound strikes the re-issuance after them (SPEC_EVT 2a, named).
-- Keyed by tool name, but the streak is per args: the bound strikes
-  identical retries only. A corrected call (args differing from the last
-  failed args) resets the count before the guard check, so the "change the
-  call" teaching never blocks the changed call.
+- Keyed by tool name, but the streak is per canonical args: the bound
+  strikes identically-valued retries only, and JSON key order or
+  whitespace is not a changed call (`TestCanonicallyIdenticalArgsShareTheStreak`).
+  A corrected call (args whose value differs from the last failed args)
+  resets the count before the guard check, so the "change the call"
+  teaching never blocks the changed call.
 - Not a count per (name, args): the marker is the tool's last failure
   only. Two failing calls of one tool alternating within a turn reset each
   other and never trip the bound (`TestDriftingArgsEachGetAFreshStreak`

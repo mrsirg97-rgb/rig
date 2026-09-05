@@ -26,8 +26,9 @@ func Bound(limit int) core.ToolMiddleware {
 
 func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 	return func(ctx context.Context, call core.ToolCall) (string, error) {
+		args := canonical(call.Args)
 		g.mu.Lock()
-		if g.lastFailed[call.Name] != string(call.Args) {
+		if g.lastFailed[call.Name] != args {
 			g.counts[call.Name] = 0
 		}
 		if g.counts[call.Name] >= g.limit {
@@ -40,11 +41,11 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 		g.mu.Lock()
 		defer g.mu.Unlock()
 		if err != nil {
-			if g.lastFailed[call.Name] == string(call.Args) {
+			if g.lastFailed[call.Name] == args {
 				g.counts[call.Name]++
 			} else {
 				g.counts[call.Name] = 1
-				g.lastFailed[call.Name] = string(call.Args)
+				g.lastFailed[call.Name] = args
 			}
 			if g.counts[call.Name] == g.limit {
 				note := fmt.Sprintf("[retry-guard] %s failed %d× in a row this turn. The error is above; read it and change the call, or stop calling this tool. Do not retry blindly.", call.Name, g.limit)

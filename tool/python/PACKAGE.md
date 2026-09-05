@@ -23,6 +23,9 @@ The shared kernel is also the plugin discovery/execution surface
 
 - State lives in the kernel process (the namespace shared): a dead or
   un-writable kernel is a loud refusal.
+- An interrupted call tears the kernel down (like a timeout): a cell
+  that was mid-flight cannot keep running and poison the next call, so
+  an interrupt costs the namespace but never leaves a busy kernel behind.
 - The wire protocol is JSON-lines over stdio: the timeout starts only
   after the kernel slot is taken (a queued call is never charged queue
   time).

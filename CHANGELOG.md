@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+Each finding below carries a test that failed before and passes after.
+
+- **the retry guard's streak identity is canonical JSON**
+  (`middleware/guard`, PACKAGE.md): the bound keyed the streak on the raw
+  args bytes, so a model re-serializing the same call with a different key
+  order or whitespace got a fresh streak each time and could dodge the
+  bound forever. `canonical` re-encodes args with object keys sorted
+  (numbers and strings preserved; invalid JSON falls back to the raw
+  bytes), so semantically identical retries share the streak while a
+  changed value still resets it. `TestCanonicallyIdenticalArgsShareTheStreak`
+  and `TestCanonicalIdentityRespectsValuesNotKeys` pin both directions.
+- **an interrupted python call no longer leaves a busy kernel behind**
+  (`tool/python`, PACKAGE.md): on a context cancel the call only dropped
+  its reply, and the still-running cell kept the kernel slot occupied, so
+  the next call queued behind it (or timed out) instead of running.
+  The interrupt now tears the kernel down like the timeout path does, and
+  a reply that arrived before the cancel is still returned rather than
+  discarded. `TestInterruptTearsDownTheBusyKernel` pins the poison.
+
 ## [0.23.0]: the quality sweep
 
 Each finding below carries a test that failed before and passes after.
