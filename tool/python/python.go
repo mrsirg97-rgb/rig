@@ -386,7 +386,16 @@ func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, e
 		k.restart()
 		return Reply{ID: strPtr(id), Ok: false, Error: &msg, Note: note}, nil
 	case <-ctx.Done():
+		select {
+		case r := <-ch:
+			if note != nil {
+				r.Note = note
+			}
+			return r, nil
+		default:
+		}
 		p.forget(id)
+		k.restart()
 		return Reply{}, ctx.Err()
 	}
 }
