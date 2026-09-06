@@ -338,7 +338,7 @@ before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is th
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.
 
-## the post-hardening rounds (0.8.2 → 0.23.0)
+## the post-hardening rounds (0.8.2 → 0.23.1)
 
 Spec-first as always; the freeze discipline holds (`core/` and `loop/`
 open to extension, closed to modification; the one named loop change
@@ -408,5 +408,10 @@ in order:
   `at` must be in the future, and the compact lock, the socket
   permissions, the plugin TOCTOU, and the crontab timeout close the
   review's stragglers.
+- **the streak identity and the busy kernel** (0.23.1): the retry
+  guard keys its streak on canonical args (JSON key order and
+  whitespace are not a changed call), and an interrupted python call
+  tears its kernel down so the next call never queues behind a
+  still-running cell.
 
 The queue's next lives in the CHANGELOG's `[Unreleased]`.

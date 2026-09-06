@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.23.1]
 
 Each finding below carries a test that failed before and passes after.
 
