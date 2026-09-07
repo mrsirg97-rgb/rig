@@ -47,6 +47,24 @@ jobs:
           cd dist
           sha256sum rig_* > checksums.txt
 
+      # Each asset is signed with the operator's pinned minisign key; the
+      # binary's own -update verifies the signature, so a missing secret
+      # refuses the release before any asset ships.
+      - name: sign the assets with the pinned minisign key
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          set -eu
+          if [ -z "${MINISIGN_SECRET_KEY:-}" ]; then
+            echo "release: MINISIGN_SECRET_KEY is not set (the base64 of minisign.key); an unsigned release would be refused by rig -update" >&2
+            exit 1
+          fi
+          sudo apt-get update >/dev/null && sudo apt-get install -y -qq minisign >/dev/null
+          printf '%s' "$MINISIGN_SECRET_KEY" | base64 -d > "$RUNNER_TEMP/minisign.key"
+          for asset in dist/rig_linux_amd64 dist/rig_linux_arm64 dist/rig_darwin_amd64 dist/rig_darwin_arm64; do
+            minisign -S -s "$RUNNER_TEMP/minisign.key" -m "$asset" -o "$asset.minisig"
+          done
+
       - name: attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
@@ -71,4 +89,6 @@ jobs:
           gh release create "v$VERSION" \
             dist/rig_linux_amd64 dist/rig_linux_arm64 \
             dist/rig_darwin_amd64 dist/rig_darwin_arm64 dist/checksums.txt \
+            dist/rig_linux_amd64.minisig dist/rig_linux_arm64.minisig \
+            dist/rig_darwin_amd64.minisig dist/rig_darwin_arm64.minisig \
             --notes-file release-body.md

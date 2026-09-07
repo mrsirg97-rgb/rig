@@ -672,6 +672,14 @@ func main() {
 	if *updateFlag {
 		cfg, err := defaultUpdateCfg()
 		if err == nil {
+			if home, herr := rigHome(); herr == nil {
+				if loaded, lerr := config.Load(home, "."); lerr == nil {
+					cfg.key = loaded.Settings.UpdateKey
+				}
+			}
+			if v := os.Getenv("RIG_UPDATE_KEY"); v != "" {
+				cfg.key = v
+			}
 			err = update(context.Background(), cfg)
 		}
 		if err != nil {

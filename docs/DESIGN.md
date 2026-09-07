@@ -100,13 +100,18 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 The root's chain `WithMiddleware(toolset.Resolve, approve?, paths,
 perm.Plugins, perm.Allowlist, guard.Bound, guard.Rounds, guard.Cap)`
-composes **first-listed innermost**: the chain executes the live-table
-resolve first (it resolves a call), then the approve gate (when a
-frontend can ask), then the `~`-expansion boundary, then the two perm
-rules, and the bounds last. This is a deliberate
-inversion of the common `http.Handler` convention, chosen so that the listing
-order reads as the execution order. It is what makes the spec's pairing
-workable; the bound must sit outside the denial to count it.
+composes **first-listed innermost**: execution reads the registration list
+in reverse, a call entering at the outermost link and unwinding inward:
+
+    paths (the `~` expansion) -> guard.Cap -> guard.Rounds -> guard.Bound
+    -> perm.Allowlist -> perm.Plugins -> approve.Gate -> toolset.Resolve
+    -> the tool itself
+
+This is a deliberate inversion of the common `http.Handler` convention:
+the bound sits outside the denial so a denied call still counts toward
+the streak, the path expansion happens before any rule sees a
+path-shaped argument, and the resolve sits innermost so the live table's
+plugin tool executes under every bound.
 
 ### guard semantics (`middleware/guard`)
 

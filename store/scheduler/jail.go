@@ -21,12 +21,18 @@ type JailProfile struct {
 	Binds     []string
 	StateDir  string
 	Allow     string
+	Env       []string
 }
 
 func JailArgv(p JailProfile) ([]string, error) {
 	argv := []string{
 		p.Bwrap,
-		"--unshare-all", "--die-with-parent",
+		"--unshare-all", "--die-with-parent", "--clearenv",
+	}
+	for _, e := range p.Env {
+		argv = append(argv, "--setenv", e)
+	}
+	argv = append(argv,
 		"--ro-bind", "/usr", "/usr",
 		"--ro-bind", "/lib", "/lib",
 		"--ro-bind", "/lib64", "/lib64",
@@ -37,7 +43,7 @@ func JailArgv(p JailProfile) ([]string, error) {
 		"--dev", "/dev",
 		"--tmpfs", "/tmp",
 		"--bind", p.Cwd, p.Cwd,
-	}
+	)
 	if p.KernelDir != "" {
 		argv = append(argv, "--ro-bind", p.KernelDir, p.KernelDir)
 	}
@@ -113,7 +119,9 @@ func SocketRefusal(sock string, err error) string {
 	return "sandbox: the socket proxy: " + sock + ": " + err.Error()
 }
 
-func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow string) ([]string, *SocketProxy, string, string, error) {
+const jailPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow string, extraEnv ...string) ([]string, *SocketProxy, string, string, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil, "", PlatformRefusal(runtime.GOOS), nil
 	}
@@ -145,6 +153,12 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allo
 	if err != nil {
 		return nil, nil, "", SocketRefusal(sock, err), nil
 	}
+	env := []string{
+		"PATH=" + jailPath,
+		"HOME=/tmp",
+		"RIG_HOME=" + scratch,
+	}
+	env = append(env, extraEnv...)
 	argv, err := JailArgv(JailProfile{
 		Bwrap:     bwrap,
 		Binary:    workerCmd[0],
@@ -157,6 +171,7 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allo
 		Binds:     opts.SandboxBinds,
 		StateDir:  opts.StateDir,
 		Allow:     allow,
+		Env:       env,
 	})
 	if err != nil {
 		proxy.Close()

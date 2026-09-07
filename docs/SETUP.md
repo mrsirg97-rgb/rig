@@ -137,6 +137,7 @@ directory's project file, not the creating session's.
 | approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
+| update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | none; the pinned minisign public key that signs releases (SPEC_BUILD 5) — `-update` refuses without it |
 | model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the one-row table (`local`) |
 
 **On the worker sandbox**; `sandbox` is the scheduled worker's jail

@@ -29,6 +29,7 @@ type Settings struct {
 	SandboxBinds  []string
 	Approve       string
 	Plugins       SettingsPlugins
+	UpdateKey     string
 
 	legacyJobModel string
 	legacyJobKey   bool
@@ -38,7 +39,7 @@ type SettingsPlugins struct {
 	Max int
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "webFetchProxy"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "updateKey", "webFetchProxy"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -127,6 +128,9 @@ func mergeSettings(base, file Settings) Settings {
 	if file.Plugins.Max != 0 {
 		out.Plugins.Max = file.Plugins.Max
 	}
+	if file.UpdateKey != "" {
+		out.UpdateKey = file.UpdateKey
+	}
 	return out
 }
 
@@ -197,6 +201,11 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		return Settings{}, err
 	} else if ok && v != "" {
 		s.Theme = v
+	}
+	if v, ok, err := str("updateKey"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		s.UpdateKey = v
 	}
 	if v, ok, err := str("sandbox"); err != nil {
 		return Settings{}, err

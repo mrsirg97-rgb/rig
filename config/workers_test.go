@@ -189,7 +189,7 @@ func TestDefaultJobModelStaysInTheKnownList(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, dir, "settings.json", `{"allowd": ["bash"]}`)
 	err := loadErr(t, dir, t.TempDir())
-	want := `config: ` + p + `: unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`
+	want := `config: ` + p + `: unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy)`
 	if err.Error() != want {
 		t.Fatalf("the cut key must stay in the known list so its cut's voice, not the unknown-key voice, fires: %q", err.Error())
 	}

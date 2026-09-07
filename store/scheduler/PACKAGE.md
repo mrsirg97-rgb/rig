@@ -38,7 +38,10 @@ written before the store commit; drift is surfaced in list.
   state-store bind and explicit identity for the resumable transcript, the per-session
   delegate-slot flock (one slot per `slots`, the full set refusing
   naming the count) and the no-recursion marker.
-- `jail.go`: the bwrap jail argv composition.
+- `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
+  `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
+  worker) are the worker's whole environment, so the operator's exported
+  secrets never reach a jailed worker.
 - `proxy.go`: the unix-socket proxy (the jail's one hole), the socket
   chmod'd 0600 after listen so no other local user reaches the model
   endpoint through a running job.

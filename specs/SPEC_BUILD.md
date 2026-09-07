@@ -175,7 +175,12 @@ green assert is the whole path's precondition. Then `CGO_ENABLED=0`
 cross-builds linux/darwin x amd64/arm64 with `-trimpath
 -ldflags="-s -w"` (the sqlite is modernc, pure Go; no cgo toolchains),
 naming the assets `rig_<os>_<arch>`; no extension, no version in the
-name, and writes `checksums.txt` (sha256 over the four). Then attests
+name, and writes `checksums.txt` (sha256 over the four). Then signs
+each asset with minisign (`minisign -S -s <key> -m <asset>`, the key
+decoded from the `MINISIGN_SECRET_KEY` secret into the runner's temp
+dir) producing `<asset>.minisig` beside it; a missing secret refuses
+loud before any asset ships, because the binary's own `-update`
+refuses an unsigned release. Then attests
 build provenance with `actions/attest-build-provenance` (pinned by major
 tag), and creates the GitHub Release with `gh release create`, the body
 extracted from the matching `## [<version>]` CHANGELOG.md section (a
@@ -195,19 +200,26 @@ into a `mktemp` dir (`curl -fsSL`, `wget` fallback), verifies with
 `install -m 0755` into `${RIG_BIN:-$HOME/.local/bin}`; never sudo, never
 `/usr/local`; prints the PATH hint when the bindir is not on PATH, then
 runs `rig -version`. Every failure names what it was doing. The ci job
-shellchecks it.
+shellchecks it. The signature is not in the installer: POSIX sh carries
+no signature tool, and the signed path is the binary's own `-update`
+(the daily driver's path); the installer stays the checksum-only
+reference, documented as such.
 
 **The self-update** (`cmd/rig/update.go`), the binary's own installer
 beside `-version`: `rig -update` resolves the latest release the same way
 the installer does (the `releases/latest` redirect, no API call), maps
-`GOOS`/`GOARCH` into `rig_<os>_<arch>`, downloads `checksums.txt` and the
-asset, verifies the sha256 **before anything moves**, and renames a
-0755 temp file in the resolved executable's directory over the binary:
-atomic on one filesystem, so a running rig keeps its old inode and the
-scheduler's next fire gets the new one. A directory that cannot be
-written names itself and the sudo line; a platform with no asset and a
-build whose `Version` has no release tag each say so rather than
-downgrading.
+`GOOS`/`GOARCH` into `rig_<os>_<arch>`, downloads `checksums.txt`, the
+asset, and the asset's `.minisig`; verifies the ed25519 signature
+against the pinned minisign public key (`RIG_UPDATE_KEY` >
+`settings.json updateKey` > the embedded default; a missing key refuses
+loud naming the knob, an unsigned release refuses loud naming the
+missing `.minisig`) **before anything moves**, then the sha256, and
+renames a 0755 temp file in the resolved executable's directory over
+the binary: atomic on one filesystem, so a running rig keeps its old
+inode and the scheduler's next fire gets the new one. A directory that
+cannot be written names itself and the sudo line; a platform with no
+asset and a build whose `Version` has no release tag each say so rather
+than downgrading.
 
 **The site** (`site/`, published by `.github/workflows/pages.yml` on
 `push` to `main`). One static page: no build step, no JS framework, no

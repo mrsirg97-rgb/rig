@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -14,18 +17,46 @@ import (
 	"testing"
 )
 
-func newUpdateSrv(t *testing.T, latest string, asset []byte, assetSum string) *httptest.Server {
+type minisignTestKey struct {
+	pubText string
+	sign    func([]byte) []byte
+}
+
+func newMinisignKey(t *testing.T) minisignTestKey {
 	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	keyID := pub[:8]
+	pubText := "untrusted comment: minisign public key\n" +
+		base64.StdEncoding.EncodeToString(append(append([]byte{}, keyID...), pub...))
+	return minisignTestKey{pubText: pubText, sign: func(data []byte) []byte {
+		sig := ed25519.Sign(priv, data)
+		return []byte("untrusted comment: signature from minisign secret key\n" +
+			base64.StdEncoding.EncodeToString(append(append([]byte{}, sig...), keyID...)))
+	}}
+}
+
+func newUpdateSrv(t *testing.T, latest string, asset []byte, checksums string, sig []byte) *httptest.Server {
+	t.Helper()
+	assetPath := "/" + updateRepo + "/releases/download/v" + latest + "/rig_linux_amd64"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/"+updateRepo+"/releases/latest":
 			http.Redirect(w, r, "/"+updateRepo+"/releases/tag/v"+latest, http.StatusFound)
 		case strings.HasPrefix(r.URL.Path, "/"+updateRepo+"/releases/tag/"):
 			w.WriteHeader(http.StatusOK)
-		case strings.HasPrefix(r.URL.Path, "/"+updateRepo+"/releases/download/v"+latest+"/checksums.txt"):
-			fmt.Fprintf(w, "%s  rig_linux_amd64\n%s  rig_darwin_amd64\n", assetSum, strings.Repeat("0", 64))
-		case strings.HasPrefix(r.URL.Path, "/"+updateRepo+"/releases/download/v"+latest+"/rig_linux_amd64"):
+		case r.URL.Path == "/"+updateRepo+"/releases/download/v"+latest+"/checksums.txt":
+			fmt.Fprint(w, checksums)
+		case r.URL.Path == assetPath:
 			_, _ = w.Write(asset)
+		case r.URL.Path == assetPath+".minisig":
+			if sig == nil {
+				http.NotFound(w, r)
+				return
+			}
+			_, _ = w.Write(sig)
 		default:
 			http.NotFound(w, r)
 		}
@@ -59,13 +90,19 @@ func sha256Hex(b []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
+func checksumsFor(sum string) string {
+	return fmt.Sprintf("%s  rig_linux_amd64\n%s  rig_darwin_amd64\n", sum, strings.Repeat("0", 64))
+}
+
 func TestUpdateReplacesInPlace(t *testing.T) {
+	key := newMinisignKey(t)
 	asset := []byte("new binary bytes")
-	srv := newUpdateSrv(t, "0.15.1", asset, sha256Hex(asset))
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), key.sign(asset))
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "rig")
 	writeOld(t, bin)
 	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = key.pubText
 	if err := update(context.Background(), cfg); err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -100,12 +137,14 @@ func TestUpdateReplacesInPlace(t *testing.T) {
 }
 
 func TestUpdateBadChecksumRefuses(t *testing.T) {
+	key := newMinisignKey(t)
 	asset := []byte("new binary bytes")
-	srv := newUpdateSrv(t, "0.15.1", asset, strings.Repeat("f", 64))
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(strings.Repeat("f", 64)), key.sign(asset))
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "rig")
 	writeOld(t, bin)
 	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = key.pubText
 	err := update(context.Background(), cfg)
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Fatalf("update err = %v, want a checksum mismatch", err)
@@ -128,7 +167,7 @@ func TestUpdateBadChecksumRefuses(t *testing.T) {
 
 func TestUpdateAlreadyLatestIsNoOp(t *testing.T) {
 	asset := []byte("new binary bytes")
-	srv := newUpdateSrv(t, "0.15.0", asset, sha256Hex(asset))
+	srv := newUpdateSrv(t, "0.15.0", asset, checksumsFor(sha256Hex(asset)), nil)
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "rig")
 	writeOld(t, bin)
@@ -150,8 +189,9 @@ func TestUpdateAlreadyLatestIsNoOp(t *testing.T) {
 }
 
 func TestUpdateUnwritableDirNamesTheFix(t *testing.T) {
+	key := newMinisignKey(t)
 	asset := []byte("new binary bytes")
-	srv := newUpdateSrv(t, "0.15.1", asset, sha256Hex(asset))
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), key.sign(asset))
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "rig")
 	writeOld(t, bin)
@@ -160,6 +200,7 @@ func TestUpdateUnwritableDirNamesTheFix(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = key.pubText
 	err := update(context.Background(), cfg)
 	if err == nil || !strings.Contains(err.Error(), dir) || !strings.Contains(err.Error(), "sudo rig -update") {
 		t.Fatalf("update err = %v, want the dir named and the sudo line", err)
@@ -175,7 +216,7 @@ func TestUpdateUnwritableDirNamesTheFix(t *testing.T) {
 
 func TestUpdateNoAssetForPlatform(t *testing.T) {
 	asset := []byte("new binary bytes")
-	srv := newUpdateSrv(t, "0.15.1", asset, sha256Hex(asset))
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), nil)
 	dir := t.TempDir()
 	cfg := updateCfgFor(t, srv, "0.15.0", filepath.Join(dir, "rig"))
 	cfg.goos = "windows"
@@ -188,7 +229,7 @@ func TestUpdateNoAssetForPlatform(t *testing.T) {
 
 func TestUpdateAheadOfLatestSaysSo(t *testing.T) {
 	asset := []byte("new binary bytes")
-	srv := newUpdateSrv(t, "0.15.0", asset, sha256Hex(asset))
+	srv := newUpdateSrv(t, "0.15.0", asset, checksumsFor(sha256Hex(asset)), nil)
 	dir := t.TempDir()
 	cfg := updateCfgFor(t, srv, "0.15.1", filepath.Join(dir, "rig"))
 	err := update(context.Background(), cfg)
@@ -214,5 +255,148 @@ func TestUpdateWithNoBinRefusesBeforeAnyRequest(t *testing.T) {
 	err := update(context.Background(), updateCfg{version: "0.1.0"})
 	if err == nil || !strings.Contains(err.Error(), "no binary path") {
 		t.Fatalf("an empty bin must refuse by name, got %v", err)
+	}
+}
+
+func TestUpdateRefusesWithoutAVerificationKey(t *testing.T) {
+	key := newMinisignKey(t)
+	asset := []byte("new binary bytes")
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), key.sign(asset))
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "rig")
+	writeOld(t, bin)
+	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	err := update(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "verification key") {
+		t.Fatalf("update err = %v, want the missing-key refusal", err)
+	}
+	got, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatalf("read binary: %v", err)
+	}
+	if string(got) != "old binary" {
+		t.Fatalf("binary = %q, want the old bytes (nothing written)", got)
+	}
+}
+
+func TestUpdateRefusesAnUnsignedRelease(t *testing.T) {
+	key := newMinisignKey(t)
+	asset := []byte("new binary bytes")
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), nil)
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "rig")
+	writeOld(t, bin)
+	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = key.pubText
+	err := update(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "no signature") {
+		t.Fatalf("update err = %v, want the unsigned-release refusal", err)
+	}
+	got, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatalf("read binary: %v", err)
+	}
+	if string(got) != "old binary" {
+		t.Fatalf("binary = %q, want the old bytes (nothing written)", got)
+	}
+}
+
+func TestUpdateRefusesATamperedAsset(t *testing.T) {
+	key := newMinisignKey(t)
+	asset := []byte("new binary bytes")
+	tampered := []byte("new binary bytes and more")
+	srv := newUpdateSrv(t, "0.15.1", tampered, checksumsFor(sha256Hex(tampered)), key.sign(asset))
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "rig")
+	writeOld(t, bin)
+	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = key.pubText
+	err := update(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "signature") {
+		t.Fatalf("update err = %v, want the signature refusal", err)
+	}
+	got, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatalf("read binary: %v", err)
+	}
+	if string(got) != "old binary" {
+		t.Fatalf("binary = %q, want the old bytes (nothing written)", got)
+	}
+}
+
+func TestUpdateRefusesAForeignSignature(t *testing.T) {
+	keyA := newMinisignKey(t)
+	keyB := newMinisignKey(t)
+	asset := []byte("new binary bytes")
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), keyB.sign(asset))
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "rig")
+	writeOld(t, bin)
+	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = keyA.pubText
+	err := update(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "signature") {
+		t.Fatalf("update err = %v, want the foreign-signature refusal", err)
+	}
+}
+
+func TestUpdateRefusesAMismatchedKeyID(t *testing.T) {
+	keyA := newMinisignKey(t)
+	keyB := newMinisignKey(t)
+	asset := []byte("new binary bytes")
+	sig := keyA.sign(asset)
+	lines := strings.SplitN(string(sig), "\n", 2)
+	if len(lines) != 2 {
+		t.Fatalf("sig has %d lines, want 2", len(lines))
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(lines[1]))
+	if err != nil {
+		t.Fatalf("decode sig: %v", err)
+	}
+	replaced := append([]byte{}, decoded[:64]...)
+	replaced = append(replaced, mustDecodePub(t, keyB.pubText)[:8]...)
+	forged := lines[0] + "\n" + base64.StdEncoding.EncodeToString(replaced)
+	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), []byte(forged))
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "rig")
+	writeOld(t, bin)
+	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = keyA.pubText
+	err = update(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "key id") {
+		t.Fatalf("update err = %v, want the key-id refusal", err)
+	}
+}
+
+func mustDecodePub(t *testing.T, pubText string) []byte {
+	t.Helper()
+	lines := strings.SplitN(pubText, "\n", 2)
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(lines[1]))
+	if err != nil {
+		t.Fatalf("decode pub: %v", err)
+	}
+	return decoded
+}
+
+func TestUpdateChecksumMatchesTheExactAssetField(t *testing.T) {
+	key := newMinisignKey(t)
+	asset := []byte("new binary bytes")
+	checksums := fmt.Sprintf("%s  rig_linux_amd64_v2\n%s  rig_linux_amd64\n%s  rig_darwin_amd64\n",
+		strings.Repeat("a", 64), sha256Hex(asset), strings.Repeat("0", 64))
+	srv := newUpdateSrv(t, "0.15.1", asset, checksums, key.sign(asset))
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "rig")
+	writeOld(t, bin)
+	cfg := updateCfgFor(t, srv, "0.15.0", bin)
+	cfg.key = key.pubText
+	if err := update(context.Background(), cfg); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatalf("read new binary: %v", err)
+	}
+	if string(got) != string(asset) {
+		t.Fatalf("binary = %q, want %q", got, asset)
 	}
 }

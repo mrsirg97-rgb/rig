@@ -21,9 +21,12 @@ sees core and models and nothing else.
   the session closure with the run's exit status.
 - **update.go**: the `-update` self-installer (`specs/SPEC_BUILD.md` 5):
   resolves `releases/latest` by the redirect, maps `GOOS`/`GOARCH` to the
-  asset, verifies the sha256 against `checksums.txt` **before anything
-  moves**, and renames a 0755 temp over the resolved executable; atomic
-  on one filesystem, a running rig keeps its old inode. A directory you
+  asset, verifies the ed25519 signature against the pinned minisign key
+  (`RIG_UPDATE_KEY` > settings.json `updateKey`) and the sha256 against
+  `checksums.txt` **before anything moves**, and renames a 0755 temp over
+  the resolved executable; atomic on one filesystem, a running rig keeps
+  its old inode. A missing key, an unsigned release, and a bad signature
+  each refuse loud before the old binary is touched; a directory you
   cannot write names itself and the sudo line; a platform with no asset
   and a build with no release tag each say so.
 - **runJob**: the scheduler verb's cold-shell path: opens the one
