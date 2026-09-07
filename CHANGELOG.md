@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+Each finding below carries a test that failed before and passes after.
+
+- **the turn's end always leaves one blank row before the prompt**
+  (`frontend/tui`, PACKAGE.md): a reply that ended without a trailing
+  newline drew the input line directly beneath the last row. The live
+  region supplies its blank margin from `lastBlank`, which was still
+  stale-true when the final commit's lines were computed, so the margin
+  never appeared. `TurnEnd` now commits one blank row after the pending
+  text drains when the last committed row is not blank, and `live.draw`'s
+  blank merge keeps a double out when the reply already ended with a
+  newline. `TestSpacingRule` pins all three endings (trailing newline,
+  trailing blank line, no trailing newline) to exactly one blank row
+  before the prompt.
+
 ## [0.24.0]: the live region paints once per frame
 
 Each finding below carries a test that failed before and passes after.

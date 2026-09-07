@@ -72,7 +72,11 @@ width); no core or loop line (decision 10).
 - The TUI's one departure from the CLI's bytes is the spacing rule
   (decision 2): the transcript never carries two blank rows, and a
   reasoning or tool block's close gets exactly one blank row before what
-  follows. The CLI keeps every byte.
+  follows. The turn's end gets the same guarantee: the last committed
+  row and the input line stand one blank apart, whether or not the reply
+  ended with a newline (`TurnEnd` commits the blank after the pending
+  text drains; `live.draw`'s blank merge keeps a double out). The CLI
+  keeps every byte.
 - The size is read at the repaint, not the signal (the two-client tmux
   race): a repaint between the resize and the SIGWINCH must not use a
   stale width.

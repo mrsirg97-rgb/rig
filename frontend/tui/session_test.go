@@ -1238,6 +1238,60 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 
 func TestSpacingRule(t *testing.T) {
 	th := oledTheme(t)
+	for _, tc := range []struct {
+		name string
+		end  string
+	}{
+		{"trailing newline", "the answer\n"},
+		{"trailing blank line", "the answer\n\n"},
+		{"no trailing newline", "the answer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+				WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+			)
+			if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+				t.Fatalf("the prompt = %q, want go", got)
+			}
+
+			s.fe.Notify(core.TextDelta{Text: tc.end})
+			s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
+			s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+			s.tick()
+			s.await("the answer")
+
+			rows := screenLines(t, s, 60)
+
+			for i := 1; i < len(rows); i++ {
+				if rows[i] == "" && rows[i-1] == "" {
+					t.Fatalf("two blank rows in a row at %d:\n%q", i, rows)
+				}
+			}
+
+			find := func(prefix string) int {
+				for i, r := range rows {
+					if strings.HasPrefix(r, prefix) {
+						return i
+					}
+				}
+				return -1
+			}
+			ans := find("the answer")
+			promptIdx := -1
+			for i, r := range rows {
+				if strings.HasPrefix(r, th.Glyph(GlyphPrompt)) {
+					promptIdx = i
+				}
+			}
+			if ans < 0 || promptIdx < 0 || promptIdx != ans+2 || rows[promptIdx-1] != "" || rows[promptIdx-2] != "the answer" {
+				t.Fatalf("exactly one blank row before the prompt (ans %d, prompt %d):\n%q", ans, promptIdx, rows)
+			}
+		})
+	}
+}
+
+func TestBlockSpacingRule(t *testing.T) {
+	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
