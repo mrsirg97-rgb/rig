@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.24.0]: the live region paints once per frame
+
+Each finding below carries a test that failed before and passes after.
+
+- **the live frame is wrapped in the synchronized-output mode**
+  (`frontend/tui`, PACKAGE.md): every flushed repaint is written between
+  `?2026h` and `?2026l`, so a supporting terminal buffers the pair and
+  paints once — the tearing is gone outright. tmux 3.4, kitty, ghostty,
+  wezterm, foot, iTerm2, and Windows Terminal support the mode; the rest
+  ignore it. `TestLiveSyncFrames` pins the pairing.
+- **the live region repaints on a 16 ms frame cadence**
+  (`frontend/tui`, PACKAGE.md): `flow` no longer paints per delta — it
+  marks the region dirty and the frame tick paints once per frame, so
+  tokens that arrive together repaint together (at 75 tok/s the region
+  repainted 75 times a second before). The commit points stay immediate
+  and drain the pending chunks, and the activity spinner keeps its
+  120 ms pace on top. `TestFlowCoalescesDeltas` pins one paint per frame
+  window.
+- **the frame ticker lives only while a turn or a compaction can paint**
+  (`frontend/tui`, PACKAGE.md): the 16 ms ticker used to run for the
+  life of the TUI, so an idle session woke about sixty times a second to
+  find nothing dirty. It starts with the turn and the compaction, and
+  stops once the final commit has drained the pending chunks.
+  `TestFrameTickerLifecycle` pins the four transitions.
+
 ## [0.23.1]
 
 Each finding below carries a test that failed before and passes after.

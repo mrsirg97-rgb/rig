@@ -338,7 +338,7 @@ before the hardening. > PR B landed (0.5.0), PR C landed (0.6.0): the jail is th
 > forge (`/plugins create`/`approve`). SPEC_MODES landed (0.8.0): the
 > `/effort`, `/role`, `/approve` dials. The hardening sequence is complete.
 
-## the post-hardening rounds (0.8.2 → 0.23.1)
+## the post-hardening rounds (0.8.2 → 0.24.0)
 
 Spec-first as always; the freeze discipline holds (`core/` and `loop/`
 open to extension, closed to modification; the one named loop change
@@ -413,5 +413,9 @@ in order:
   whitespace are not a changed call), and an interrupted python call
   tears its kernel down so the next call never queues behind a
   still-running cell.
+- **the live region paints once per frame** (0.24.0): the TUI wraps
+  every flushed repaint in the synchronized-output mode (the tear is
+  gone), `flow` coalesces deltas onto a 16 ms frame cadence, and the
+  frame ticker lives only while a turn or a compaction can paint.
 
 The queue's next lives in the CHANGELOG's `[Unreleased]`.
