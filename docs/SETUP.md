@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.24.2
+./rig --version        # rig 0.24.3
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -137,7 +137,7 @@ directory's project file, not the creating session's.
 | approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
-| update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | none; the pinned minisign public key that signs releases (SPEC_BUILD 5) — `-update` refuses without it |
+| update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | the embedded pinned key that signs releases (SPEC_BUILD 5); env and file override it — a build without a pinned key refuses `-update` |
 | model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the one-row table (`local`) |
 
 **On the worker sandbox**; `sandbox` is the scheduled worker's jail
@@ -345,7 +345,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.24.2
+./rig --version                 # prints: rig 0.24.3
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

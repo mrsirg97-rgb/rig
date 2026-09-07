@@ -226,8 +226,10 @@ func TestSettingsUpdateKeyIsAKnownKey(t *testing.T) {
 	if cfg.Settings.UpdateKey != "untrusted comment: minisign public key\nRWTkAAAA" {
 		t.Fatalf("updateKey = %q, want the file's key", cfg.Settings.UpdateKey)
 	}
-	if got := load(t, t.TempDir(), t.TempDir()); got.Settings.UpdateKey != "" {
-		t.Fatalf("updateKey = %q, want empty (no pinned key by default; fail closed)", got.Settings.UpdateKey)
+	const pinned = "untrusted comment: minisign public key BB2AF5880C258058\n" +
+		"RWRYgCUMiPUqu6L/QoFGWokhOpP7onxuvDR6fWCyy2V1g3GvpY4WICi9"
+	if got := load(t, t.TempDir(), t.TempDir()); got.Settings.UpdateKey != pinned {
+		t.Fatalf("updateKey = %q, want the embedded pinned release key %q (a fresh home falls back to it; no pinned key means -update refuses)", got.Settings.UpdateKey, pinned)
 	}
 }
 

@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/blake2b"
 )
 
 type minisignTestKey struct {
@@ -22,6 +24,10 @@ type minisignTestKey struct {
 	sign    func([]byte) []byte
 }
 
+// newMinisignKey builds the wire format minisign 0.11 actually produces:
+// the public key is 2-byte "Ed" + 8-byte key id + 32-byte ed25519 key, and
+// the signature is 2-byte "ED" + 8-byte key id + 64-byte ed25519 signature
+// over the BLAKE2b-512 digest of the file (minisign's default hashed mode).
 func newMinisignKey(t *testing.T) minisignTestKey {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -29,12 +35,17 @@ func newMinisignKey(t *testing.T) minisignTestKey {
 		t.Fatalf("generate key: %v", err)
 	}
 	keyID := pub[:8]
+	blob := append([]byte("Ed"), keyID...)
+	blob = append(blob, pub...)
 	pubText := "untrusted comment: minisign public key\n" +
-		base64.StdEncoding.EncodeToString(append(append([]byte{}, keyID...), pub...))
+		base64.StdEncoding.EncodeToString(blob)
 	return minisignTestKey{pubText: pubText, sign: func(data []byte) []byte {
-		sig := ed25519.Sign(priv, data)
+		h := blake2b.Sum512(data)
+		sig := ed25519.Sign(priv, h[:])
+		sigBlob := append([]byte("ED"), keyID...)
+		sigBlob = append(sigBlob, sig...)
 		return []byte("untrusted comment: signature from minisign secret key\n" +
-			base64.StdEncoding.EncodeToString(append(append([]byte{}, sig...), keyID...)))
+			base64.StdEncoding.EncodeToString(sigBlob))
 	}}
 }
 
@@ -353,8 +364,9 @@ func TestUpdateRefusesAMismatchedKeyID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode sig: %v", err)
 	}
-	replaced := append([]byte{}, decoded[:64]...)
-	replaced = append(replaced, mustDecodePub(t, keyB.pubText)[:8]...)
+	replaced := append([]byte{}, decoded[:2]...)
+	replaced = append(replaced, mustDecodePub(t, keyB.pubText)[2:10]...)
+	replaced = append(replaced, decoded[10:]...)
 	forged := lines[0] + "\n" + base64.StdEncoding.EncodeToString(replaced)
 	srv := newUpdateSrv(t, "0.15.1", asset, checksumsFor(sha256Hex(asset)), []byte(forged))
 	dir := t.TempDir()
@@ -376,6 +388,57 @@ func mustDecodePub(t *testing.T, pubText string) []byte {
 		t.Fatalf("decode pub: %v", err)
 	}
 	return decoded
+}
+
+func TestVerifyMinisignRealFixtures(t *testing.T) {
+	// Golden fixtures produced by minisign 0.11 (the apt package, the
+	// release workflow's tool): the pubkey line, a default hashed ("ED")
+	// signature, and a legacy ("Ed", raw) signature over the same file.
+	// The fixture pins the real wire format: 2-byte algorithm tag +
+	// 8-byte key id + 32-byte ed25519 key (42), and 2-byte tag + 8-byte
+	// key id + 64-byte signature (74), with "ED" signing the BLAKE2b-512
+	// digest.
+	const (
+		asset = "new binary bytes"
+		pub   = "untrusted comment: minisign public key C4DF2D99EE1004A3\n" +
+			"RWSjBBDumS3fxCdHn4jP6IlxNoGGaNjOwZAGy7ATCcoRYdJVu+uVwPgB"
+		hashed = "untrusted comment: signature from minisign secret key\n" +
+			"RUSjBBDumS3fxJbpKBT7jaSw+QeuiAyavmRPIcN9PgYHz2k7FD24JTyeDIXadZ/GWyxFeyyfulSH1AJBMBJ2yGzEbAHWyZwHpwA=\n" +
+			"trusted comment: timestamp:1788816842\tfile:fixture-asset\thashed\n" +
+			"rPFlG8HNkg7PyJEoRRpMxLeIPX3FDSc7NXLLZwy610TwQfjWvDlykW1T4C6LH3Ti1JUy7TGA1DcR3ybvrRkvBA=="
+		legacy = "untrusted comment: signature from minisign secret key\n" +
+			"RWSjBBDumS3fxLVTD1Im+1sRnJZ5NPBJDESSMcTepdpgdrgVrNJxxgNyPP4/63Y3qY+DR7n5oP0vXSe7z8Swjz7uWpbAaj+o1Qs=\n" +
+			"trusted comment: timestamp:1788816842\tfile:fixture-asset\n" +
+			"vuazr8KMJGAcjTQqlUgzcpdUeYB1ppMbpRIZ6w9qohN3khoLtPARlD138ixfwfoRQizeHa4L8kraY1oeh3a7Dw=="
+	)
+	if err := verifyMinisign(pub, []byte(asset), []byte(hashed)); err != nil {
+		t.Fatalf("verify the default (hashed) release signature: %v", err)
+	}
+	if err := verifyMinisign(pub, []byte(asset), []byte(legacy)); err != nil {
+		t.Fatalf("verify the legacy (raw) signature: %v", err)
+	}
+	if err := verifyMinisign(pub, []byte("tampered"), []byte(hashed)); err == nil {
+		t.Fatal("a tampered asset must refuse")
+	}
+}
+
+func TestVerifyMinisignRefusesTheInventedShortFormat(t *testing.T) {
+	// The pre-0.24.3 format (40-byte key, 72-byte signature, raw data)
+	// was invented: real minisign keys are 42 bytes and signatures 74.
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	keyID := pub[:8]
+	pubText := "untrusted comment: minisign public key\n" +
+		base64.StdEncoding.EncodeToString(append(append([]byte{}, keyID...), pub...))
+	sig := ed25519.Sign(priv, []byte("new binary bytes"))
+	sigText := "untrusted comment: signature from minisign secret key\n" +
+		base64.StdEncoding.EncodeToString(append(append([]byte{}, sig...), keyID...))
+	err = verifyMinisign(pubText, []byte("new binary bytes"), []byte(sigText))
+	if err == nil || !strings.Contains(err.Error(), "want 42") {
+		t.Fatalf("the invented short key format must refuse by name, got %v", err)
+	}
 }
 
 func TestUpdateChecksumMatchesTheExactAssetField(t *testing.T) {

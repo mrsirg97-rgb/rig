@@ -84,4 +84,6 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   `manual`; anything else refuses at load.
 - `updateKey` is the pinned minisign public key that signs releases
   (SPEC_BUILD 5): the `-update` path's authenticity, `RIG_UPDATE_KEY`
-  above it, absent = fail closed (an unpinned update refuses).
+  above it, a file value over it, then the embedded `settings.json` —
+  the embedded default pins the operator's release key; a build whose
+  embedded key is empty fails closed (an unpinned update refuses).
