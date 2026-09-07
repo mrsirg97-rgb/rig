@@ -900,6 +900,12 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Unlock()
 		t.commit("")
 		t.mu.Lock()
+		lastBlank := t.live.lastBlank
+		t.mu.Unlock()
+		if !lastBlank {
+			t.commit("\n")
+		}
+		t.mu.Lock()
 		t.stopFrameTickerLocked()
 		t.mu.Unlock()
 	default:
