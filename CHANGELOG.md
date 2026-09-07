@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.24.1]: the turn's end always leaves one blank row before the prompt
 
 Each finding below carries a test that failed before and passes after.
 
