@@ -294,6 +294,37 @@ func TestFlowCoalescesDeltas(t *testing.T) {
 	}
 }
 
+func TestFrameTickerLifecycle(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+
+	running := func() bool {
+		s.fe.mu.Lock()
+		defer s.fe.mu.Unlock()
+		return s.fe.tickStop != nil
+	}
+	if !running() {
+		t.Fatal("the frame ticker must run while the turn is live")
+	}
+
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	if running() {
+		t.Fatal("the frame ticker must stop once the turn's commit has drained")
+	}
+
+	s.fe.Notify(core.Compacting{})
+	if !running() {
+		t.Fatal("compaction paints without a live turn: the frame ticker must run")
+	}
+	s.fe.Notify(core.Compacted{Summary: "s", Dropped: 100, Kept: 10})
+	if running() {
+		t.Fatal("the frame ticker must stop when compaction finishes")
+	}
+}
+
 func TestBothDoorsThroughFrontend(t *testing.T) {
 	th := oledTheme(t)
 	const reply = "→ t3 started\n" +

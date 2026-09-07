@@ -89,7 +89,10 @@ width); no core or loop line (decision 10).
 - Deltas paint on a 16 ms frame cadence (`flow` marks the region dirty,
   the tick paints once per frame): tokens that arrive together repaint
   together, and the commit points stay immediate. The activity spinner
-  keeps its own 120 ms pace on top.
+  keeps its own 120 ms pace on top. The ticker exists only while a turn
+  or a compaction can paint: it starts with `startTurnLocked` and with
+  the `Compacting` event, and stops once the turn's final commit or the
+  compaction has drained (an idle TUI wakes nothing).
 - Tabs expand at ingestion (runewidth gives a tab width zero: the
   terminal advances to an 8-column stop), or the pending line's row math
   breaks and every repaint leaves a copy.
