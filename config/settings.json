@@ -11,5 +11,6 @@
   "swapUrl": "http://127.0.0.1:8090",
   "sandbox": "jailed",
   "sandboxBinds": [],
-  "approve": "auto"
+  "approve": "auto",
+  "updateKey": "untrusted comment: minisign public key BB2AF5880C258058\nRWRYgCUMiPUqu6L/QoFGWokhOpP7onxuvDR6fWCyy2V1g3GvpY4WICi9"
 }

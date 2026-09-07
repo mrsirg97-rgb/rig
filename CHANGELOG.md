@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.24.3]: the release's signature proves itself
+
+Each finding below carries a test that failed before and passes after.
+
+- **the release's signature proves itself** (`cmd/rig/update.go`,
+  `specs/SPEC_BUILD.md` 5): the verifier from 0.24.2 was written against
+  an invented wire format — a 40-byte public key and a 72-byte signature
+  over the raw file. Real minisign 0.11 emits a 2-byte algorithm tag +
+  8-byte key id + 32-byte ed25519 key (42 bytes) and, in its default
+  mode, a 2-byte "ED" tag + 8-byte key id + 64-byte signature over the
+  BLAKE2b-512 digest of the file; the first signed release would have
+  been refused by its own verifier even after `MINISIGN_SECRET_KEY` was
+  configured. `verifyMinisign` now parses the real format, accepts both
+  "Ed" (legacy, raw) and "ED" (hashed) signatures, and refuses the
+  invented short format by name; the suite pins golden fixtures produced
+  by the actual minisign binary.
+- **the release key is pinned in the build** (`config/settings.json`,
+  `config/PACKAGE.md`, `docs/SETUP.md`): the operator's minisign public
+  key is now the embedded `updateKey` default, so every built rig knows
+  which key signs the releases and `-update` verifies out of the box
+  (`RIG_UPDATE_KEY` > settings.json `updateKey` > the embedded pinned
+  key); env and file still override, and a build without a pinned key
+  still refuses loud. The release workflow's `MINISIGN_SECRET_KEY`
+  secret holds the key's base64; a missing secret still refuses the
+  release before any asset ships.
+
 ## [0.24.2]: the update proves itself and the jail starts empty
 
 Each finding below carries a test that failed before and passes after.

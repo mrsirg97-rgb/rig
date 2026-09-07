@@ -16,6 +16,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/blake2b"
 )
 
 const (
@@ -150,25 +152,49 @@ func decodeMinisignLine(text []byte) ([]byte, error) {
 	return nil, errors.New("no minisign line found")
 }
 
+// minisign 0.11's wire format: every blob carries a 2-byte algorithm tag,
+// then the 8-byte key id, then the payload. The public key is "Ed" + key id
+// + 32-byte ed25519 key (42 bytes); the signature is "Ed" (legacy, covers
+// the file bytes) or "ED" (the default, covers the BLAKE2b-512 digest) +
+// key id + 64-byte ed25519 signature (74 bytes).
+const (
+	minisignAlgoEd       = "Ed"
+	minisignAlgoHashed   = "ED"
+	minisignPubKeyLen    = 42
+	minisignSignatureLen = 74
+)
+
 func verifyMinisign(pubText string, data, sigText []byte) error {
 	pub, err := decodeMinisignLine([]byte(pubText))
 	if err != nil {
 		return fmt.Errorf("the pinned key is not a minisign public key: %v", err)
 	}
-	if len(pub) != 40 {
-		return fmt.Errorf("the pinned key decodes to %d bytes, want 40 (8-byte key id + 32-byte ed25519 key)", len(pub))
+	if len(pub) != minisignPubKeyLen {
+		return fmt.Errorf("the pinned key decodes to %d bytes, want %d (2-byte algorithm tag + 8-byte key id + 32-byte ed25519 key)", len(pub), minisignPubKeyLen)
+	}
+	if string(pub[:2]) != minisignAlgoEd {
+		return fmt.Errorf("the pinned key's algorithm tag %q is not minisign ed25519", pub[:2])
 	}
 	sig, err := decodeMinisignLine(sigText)
 	if err != nil {
 		return fmt.Errorf("the signature is not a minisign signature: %v", err)
 	}
-	if len(sig) != 72 {
-		return fmt.Errorf("the signature decodes to %d bytes, want 72 (64-byte ed25519 signature + 8-byte key id)", len(sig))
+	if len(sig) != minisignSignatureLen {
+		return fmt.Errorf("the signature decodes to %d bytes, want %d (2-byte algorithm tag + 8-byte key id + 64-byte ed25519 signature)", len(sig), minisignSignatureLen)
 	}
-	if !bytes.Equal(sig[64:], pub[:8]) {
-		return fmt.Errorf("the signature's key id %s does not match the pinned key's %s", hex.EncodeToString(sig[64:]), hex.EncodeToString(pub[:8]))
+	algo := string(sig[:2])
+	if algo != minisignAlgoEd && algo != minisignAlgoHashed {
+		return fmt.Errorf("the signature's algorithm tag %q is not minisign ed25519 (Ed or ED)", sig[:2])
 	}
-	if !ed25519.Verify(pub[8:], data, sig[:64]) {
+	if !bytes.Equal(sig[2:10], pub[2:10]) {
+		return fmt.Errorf("the signature's key id %s does not match the pinned key's %s", hex.EncodeToString(sig[2:10]), hex.EncodeToString(pub[2:10]))
+	}
+	message := data
+	if algo == minisignAlgoHashed {
+		h := blake2b.Sum512(data)
+		message = h[:]
+	}
+	if !ed25519.Verify(ed25519.PublicKey(pub[10:42]), message, sig[10:74]) {
 		return errors.New("the signature does not match the asset")
 	}
 	return nil
