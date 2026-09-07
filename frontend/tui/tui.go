@@ -35,6 +35,8 @@ type tui struct {
 	inputScroll   int
 	phase         string
 	frame         int
+	dirty         bool
+	flowChunks    []string
 	showReasoning bool
 	turnLive      bool
 	compacting    bool
@@ -96,6 +98,7 @@ type tui struct {
 	closed     chan struct{}
 	closeOnce  sync.Once
 	ticker     *time.Ticker
+	tickStop   chan struct{}
 
 	ticks <-chan time.Time
 	winch <-chan struct{}
@@ -190,15 +193,8 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 
 		io.WriteString(out, pasteOn)
 	}
-	if t.ticks == nil {
-		t.ticker = time.NewTicker(120 * time.Millisecond)
-		t.ticks = t.ticker.C
-	}
 	if t.winch == nil && t.fdi != 0 {
 		t.winch = signalWinch()
-	}
-	if t.ticks != nil {
-		go t.tickLoop()
 	}
 	if t.winch != nil {
 		go t.winchLoop()
@@ -758,10 +754,13 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.turnLive = true
 	t.turnEstablished = false
 	t.pend = nil
+	t.dirty = false
+	t.flowChunks = nil
 	t.phase = "thinking"
 	t.frame = 0
 	t.toolName = ""
 	t.toolArgs = nil
+	t.startFrameTickerLocked()
 	t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
 }
@@ -843,6 +842,9 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Unlock()
 		t.flow("", "\n")
 		t.commit(fault)
+		t.mu.Lock()
+		t.stopFrameTickerLocked()
+		t.mu.Unlock()
 	case core.Compacting:
 
 		t.mu.Lock()
@@ -850,6 +852,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.frame = 0
 		if !t.turnLive {
 			t.compacting = true
+			t.startFrameTickerLocked()
 		}
 
 		if len(t.live.lines) > 0 {
@@ -870,6 +873,9 @@ func (t *tui) Notify(ev core.Event) {
 		}
 		t.mu.Unlock()
 		t.commit(chunk)
+		t.mu.Lock()
+		t.stopFrameTickerLocked()
+		t.mu.Unlock()
 	case core.TurnEnd:
 
 		t.mu.Lock()
@@ -893,6 +899,9 @@ func (t *tui) Notify(ev core.Event) {
 		t.toolArgs = nil
 		t.mu.Unlock()
 		t.commit("")
+		t.mu.Lock()
+		t.stopFrameTickerLocked()
+		t.mu.Unlock()
 	default:
 
 	}
@@ -900,8 +909,21 @@ func (t *tui) Notify(ev core.Event) {
 
 func (t *tui) commit(chunk string) {
 	t.mu.Lock()
+	if len(t.flowChunks) > 0 {
+		chunk = strings.Join(t.flowChunks, "") + chunk
+		t.flowChunks = nil
+	}
 	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
+}
+
+func (t *tui) paintLiveLocked() {
+	chunk := ""
+	if len(t.flowChunks) > 0 {
+		chunk = strings.Join(t.flowChunks, "")
+		t.flowChunks = nil
+	}
+	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
 }
 
 func (t *tui) liveLinesLocked() []string {
@@ -1455,12 +1477,10 @@ func (t *tui) flow(slot, text string) {
 		t.lastSlot = slot
 	}
 	t.pend = append(t.pend, seg{slot: slot, text: t.expandTabsLocked(text)})
-	lines := t.takeClosedLinesLocked()
-	chunk := ""
-	if len(lines) > 0 {
-		chunk = strings.Join(lines, "\n") + "\n"
+	if lines := t.takeClosedLinesLocked(); len(lines) > 0 {
+		t.flowChunks = append(t.flowChunks, strings.Join(lines, "\n")+"\n")
 	}
-	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
+	t.dirty = true
 	t.mu.Unlock()
 }
 
@@ -1535,16 +1555,65 @@ func paintFreeSegs(segs []seg) string {
 	return b.String()
 }
 
+// framePeriod is the repaint cadence: deltas that arrive inside one window
+// paint together. animPeriod paces the activity spinner on top of it.
+const (
+	framePeriod = 16 * time.Millisecond
+	animPeriod  = 120 * time.Millisecond
+)
+
+func (t *tui) startFrameTickerLocked() {
+	if !(t.turnLive || t.compacting) || t.tickStop != nil {
+		return
+	}
+	if t.ticker == nil && t.ticks == nil {
+		t.ticker = time.NewTicker(framePeriod)
+		t.ticks = t.ticker.C
+	}
+	t.tickStop = make(chan struct{})
+	go t.tickLoop()
+}
+
+func (t *tui) stopFrameTickerLocked() {
+	if t.turnLive || t.compacting || t.tickStop == nil {
+		return
+	}
+	close(t.tickStop)
+	t.tickStop = nil
+	if t.ticker != nil {
+		t.ticker.Stop()
+		t.ticker = nil
+		t.ticks = nil
+	}
+}
+
 func (t *tui) tickLoop() {
+	t.mu.Lock()
+	ticks := t.ticks
+	stop := t.tickStop
+	t.mu.Unlock()
+	if ticks == nil || stop == nil {
+		return
+	}
+	lastAnim := time.Time{}
 	for {
 		select {
 		case <-t.closed:
 			return
-		case <-t.ticks:
+		case <-stop:
+			return
+		case now := <-ticks:
 			t.mu.Lock()
-			if (t.turnLive || t.compacting) && len(t.live.lines) > 0 {
+			dirty := t.dirty
+			t.dirty = false
+			live := (t.turnLive || t.compacting) && len(t.live.lines) > 0
+			if live && now.Sub(lastAnim) >= animPeriod {
+				lastAnim = now
 				t.frame++
-				t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+				dirty = true
+			}
+			if live && dirty {
+				t.paintLiveLocked()
 			}
 			t.mu.Unlock()
 		}

@@ -90,19 +90,30 @@ type scriptedSession struct {
 	out    *lockBuf
 	ctx    context.Context
 	cancel context.CancelFunc
+	ticks  chan time.Time
 }
 
 func newScriptedSession(t *testing.T, opts ...Option) *scriptedSession {
 	t.Helper()
 	out := &lockBuf{}
 	si := newScriptInput()
+	ticks := make(chan time.Time, 64)
+	opts = append([]Option{WithTicks(ticks)}, opts...)
 	fe := New(si, out, opts...).(*tui)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		fe.Close()
 		cancel()
 	})
-	return &scriptedSession{t: t, fe: fe, si: si, out: out, ctx: ctx, cancel: cancel}
+	return &scriptedSession{t: t, fe: fe, si: si, out: out, ctx: ctx, cancel: cancel, ticks: ticks}
+}
+
+func (s *scriptedSession) tick() {
+	s.t.Helper()
+	select {
+	case s.ticks <- time.Time{}:
+	default:
+	}
 }
 
 func (s *scriptedSession) await(want string) {
@@ -149,7 +160,6 @@ func goldenStream(t *testing.T, th Theme, width int) string {
 				Up: 214000, Down: 18200, CacheRead: 187000,
 			}
 		}),
-		WithTicks(make(chan time.Time)),
 	)
 
 	in := make(chan string, 1)

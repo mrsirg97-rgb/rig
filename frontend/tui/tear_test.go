@@ -146,6 +146,11 @@ func (v *vtFlush) feedBytes(b []byte) {
 				}
 				v.rows = v.rows[:v.r+1]
 			case 'm':
+			case 'h', 'l':
+				if params != "?2026" {
+					v.fail("a mode outside the vocabulary: " + params + string(term))
+					return
+				}
 			default:
 				v.fail("an escape outside the vocabulary: " + string(term))
 				return
@@ -167,14 +172,17 @@ func TestTearFlushBoundaries(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(20),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
 
 	s.fe.Notify(core.ReasoningDelta{Text: "twenty char line one\n"})
+	s.tick()
 	s.fe.Notify(core.ReasoningDelta{Text: "twenty char line two\n"})
+	s.tick()
 	s.fe.Notify(core.ReasoningDelta{Text: "third\n"})
+	s.tick()
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
@@ -297,7 +305,7 @@ func TestTearSteeringEnter(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(12),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = core.WithInterrupt(ctx, cancel)
 	saved := s.ctx
@@ -309,6 +317,7 @@ func TestTearSteeringEnter(t *testing.T) {
 
 	s.fe.Notify(core.ReasoningDelta{Text: "streaming reasoning that wraps around and around and around\n"})
 	s.fe.Notify(core.ReasoningDelta{Text: "still thinking "})
+	s.tick()
 	s.await("still thinking")
 
 	long := "steer this turn in a long way"

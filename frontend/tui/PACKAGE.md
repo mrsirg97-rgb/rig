@@ -79,9 +79,20 @@ width); no core or loop line (decision 10).
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
   exactly at the last column across a write boundary (the tear). The
-  pager's entry is one write too; the alternate-screen switch and the
-  first frame together; written apart, a reader (the copy-mode case,
-  under `-race` on CI) could see the switch before the history.
+  repaint is wrapped in the synchronized-output mode (`?2026h`/`?2026l`,
+  a second write for the end marker): terminals that support it buffer
+  the pair and paint once, so the write boundary is never visible; the
+  rest ignore it. The pager's entry is one write too; the
+  alternate-screen switch and the first frame together; written apart, a
+  reader (the copy-mode case, under `-race` on CI) could see the switch
+  before the history.
+- Deltas paint on a 16 ms frame cadence (`flow` marks the region dirty,
+  the tick paints once per frame): tokens that arrive together repaint
+  together, and the commit points stay immediate. The activity spinner
+  keeps its own 120 ms pace on top. The ticker exists only while a turn
+  or a compaction can paint: it starts with `startTurnLocked` and with
+  the `Compacting` event, and stops once the turn's final commit or the
+  compaction has drained (an idle TUI wakes nothing).
 - Tabs expand at ingestion (runewidth gives a tab width zero: the
   terminal advances to an 8-column stop), or the pending line's row math
   breaks and every repaint leaves a copy.
