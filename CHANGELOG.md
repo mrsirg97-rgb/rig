@@ -1,5 +1,32 @@
 # Changelog
 
+## [Unreleased]
+
+Each finding below carries a test that failed before and passes after.
+
+- **the update proves itself** (`cmd/rig`, `specs/SPEC_BUILD.md` 5): the
+  `-update` path verified the downloaded asset against `checksums.txt`
+  from the same release, corruption protection with no authenticity.
+  The asset and its `.minisig` are now fetched and the ed25519
+  signature is verified against the pinned minisign key
+  (`RIG_UPDATE_KEY` > settings.json `updateKey`); a missing key, an
+  unsigned release, and a bad signature each refuse loud before the old
+  binary is touched, and the checksum lookup matches the exact asset
+  field (a name that shares the asset's prefix no longer steals the
+  line). The release workflow signs every asset with the
+  `MINISIGN_SECRET_KEY` secret.
+- **the jail starts empty** (`store/scheduler`, `specs/SPEC_SANDBOX.md`
+  1): the bwrap profile passed the operator's whole environment to a
+  jailed worker, exported secrets included. The profile now clears the
+  environment and names the whole list (`PATH`, `HOME`, `RIG_HOME`;
+  `RIG_DELEGATE=1` for a delegate worker) in explicit `--setenv` pairs.
+- **the chain's order is written down** (`docs/DESIGN.md`): the
+  middleware paragraph described the wrapper stack from the tool
+  outward, and "the listing order reads as the execution order" was the
+  reverse of the code. The paragraph now prints the execution order
+  explicitly: paths -> cap -> rounds -> bound -> allowlist -> plugins
+  -> approve -> resolve -> the tool.
+
 ## [0.24.1]: the turn's end always leaves one blank row before the prompt
 
 Each finding below carries a test that failed before and passes after.

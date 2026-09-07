@@ -142,7 +142,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, webFetchProxy)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed" or "off", got "maybe"`},
@@ -216,6 +216,18 @@ func TestSandboxBindsEmptyDescends(t *testing.T) {
 	}
 	if len(cfg.Settings.SandboxBinds) != 0 {
 		t.Fatalf("sandboxBinds = %v, want the embedded empty (an empty file list is no binds)", cfg.Settings.SandboxBinds)
+	}
+}
+
+func TestSettingsUpdateKeyIsAKnownKey(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"updateKey": "untrusted comment: minisign public key\nRWTkAAAA"}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.UpdateKey != "untrusted comment: minisign public key\nRWTkAAAA" {
+		t.Fatalf("updateKey = %q, want the file's key", cfg.Settings.UpdateKey)
+	}
+	if got := load(t, t.TempDir(), t.TempDir()); got.Settings.UpdateKey != "" {
+		t.Fatalf("updateKey = %q, want empty (no pinned key by default; fail closed)", got.Settings.UpdateKey)
 	}
 }
 

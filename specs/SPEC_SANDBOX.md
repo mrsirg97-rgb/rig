@@ -93,7 +93,9 @@ runner spawns the worker under `bwrap` when the job's profile says
 
 ```
 bwrap
-  --unshare-all --die-with-parent
+  --unshare-all --die-with-parent --clearenv
+  --setenv PATH <the jail's path> --setenv HOME /tmp
+  --setenv RIG_HOME <job cwd>/.rig-job
   --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64
   --ro-bind /bin /bin --ro-bind /sbin /sbin --ro-bind /etc /etc
   --proc /proc --dev /dev --tmpfs /tmp
@@ -124,6 +126,12 @@ bwrap
   write the operator's stores cannot poison the next session's
   transcript. The cost, named: a worker's rem reflections do not
   persist to the shared store; the report is the deliverable.
+- The environment is the whole list, not the operator's:
+  `--clearenv` plus the named `--setenv`s (PATH, HOME, RIG_HOME;
+  `RIG_DELEGATE=1` for a delegate worker) are everything a worker
+  sees, so an exported API key or token on the operator's shell never
+  reaches the model's subprocesses. A future knob extends the list
+  deliberately; nothing passes today.
 - Fail closed: profile `jailed` and no bwrap on `$PATH` refuses the
   run loud (the outcome row carries the refusal); `sandbox: "off"` in
   settings flips the default to unjailed with one loud line per run.

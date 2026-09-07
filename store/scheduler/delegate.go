@@ -157,7 +157,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 			argv = append(argv, "-allow", allow)
 		}
 	} else {
-		argv, proxy, homeEnv, refuse, err = jailSpawn(in.toRunOpts(), in.Cwd, workerCmd, in.Model, prompt, allow)
+		argv, proxy, homeEnv, refuse, err = jailSpawn(in.toRunOpts(), in.Cwd, workerCmd, in.Model, prompt, allow, DelegateEnv+"=1")
 		if err != nil {
 			return DelegateResult{}, fmt.Errorf("delegate: jail: %w", err)
 		}

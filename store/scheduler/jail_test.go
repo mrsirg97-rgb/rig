@@ -24,7 +24,7 @@ func TestJailArgvIsTheSpecProfileVerbatim(t *testing.T) {
 	}
 	want := []string{
 		"/usr/bin/bwrap",
-		"--unshare-all", "--die-with-parent",
+		"--unshare-all", "--die-with-parent", "--clearenv",
 		"--ro-bind", "/usr", "/usr",
 		"--ro-bind", "/lib", "/lib",
 		"--ro-bind", "/lib64", "/lib64",
@@ -150,5 +150,44 @@ func TestJailRefusalVoices(t *testing.T) {
 		if !strings.Contains(v, needle) {
 			t.Fatalf("the bwrap refusal must name %q: %q", needle, v)
 		}
+	}
+}
+
+func TestJailArgvCarriesTheWorkerEnv(t *testing.T) {
+	p := sched.JailProfile{
+		Bwrap:    "/usr/bin/bwrap",
+		Binary:   "/opt/rig/bin/rig",
+		Prompt:   "do the thing",
+		BaseURL:  "unix:/ws/j/.rig-job.sock",
+		Model:    "qwen3.8-workers",
+		Cwd:      "/ws/j",
+		SockPath: "/ws/j/.rig-job.sock",
+		Env:      []string{"PATH=/usr/bin:/bin", "HOME=/ws/j/.rig-job", "RIG_HOME=/ws/j/.rig-job", "RIG_DELEGATE=1"},
+	}
+	argv, err := sched.JailArgv(p)
+	if err != nil {
+		t.Fatalf("JailArgv: %v", err)
+	}
+	env := []string{}
+	for i := 0; i < len(argv)-1; i++ {
+		if argv[i] == "--setenv" {
+			env = append(env, argv[i+1])
+		}
+	}
+	want := []string{"PATH=/usr/bin:/bin", "HOME=/ws/j/.rig-job", "RIG_HOME=/ws/j/.rig-job", "RIG_DELEGATE=1"}
+	if strings.Join(env, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("setenv pairs = %v, want %v", env, want)
+	}
+	clearenv := false
+	for i := 0; i < len(argv); i++ {
+		if argv[i] == "--clearenv" {
+			clearenv = true
+		}
+		if argv[i] == "--setenv" && !clearenv {
+			t.Fatalf("a setenv appears before --clearenv: %v", argv)
+		}
+	}
+	if !clearenv {
+		t.Fatalf("the profile must clear the operator's environment: %v", argv)
 	}
 }

@@ -82,3 +82,6 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `sandbox` must be `"jailed"` or `"off"` (SPEC_SANDBOX 5).
 - `approve` is the approval dial's default (SPEC_MODES 4): `auto` or
   `manual`; anything else refuses at load.
+- `updateKey` is the pinned minisign public key that signs releases
+  (SPEC_BUILD 5): the `-update` path's authenticity, `RIG_UPDATE_KEY`
+  above it, absent = fail closed (an unpinned update refuses).
