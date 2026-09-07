@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.24.2]: the update proves itself and the jail starts empty
 
 Each finding below carries a test that failed before and passes after.
 
