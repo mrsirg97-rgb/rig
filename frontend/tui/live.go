@@ -129,7 +129,8 @@ func (l *live) flush() {
 	if l.frame.Len() == 0 {
 		return
 	}
-	io.WriteString(l.w, l.frame.String())
+	io.WriteString(l.w, syncOn+l.frame.String())
+	io.WriteString(l.w, syncOff)
 	l.frame.Reset()
 }
 
@@ -192,6 +193,10 @@ func (l *live) draw(committed string, newLines []string, status string) {
 		cs = l.collapseBlanks(cs)
 		l.record(cs)
 		all = append(all, cs...)
+		if len(cs) > 0 && WidthOf(cs[len(cs)-1]) == 0 &&
+			len(newLines) > 0 && WidthOf(newLines[0]) == 0 {
+			newLines = newLines[1:]
+		}
 	}
 	all = append(all, withStatus(newLines, status)...)
 	l.replaceRegion(all)

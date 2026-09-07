@@ -35,6 +35,8 @@ type tui struct {
 	inputScroll   int
 	phase         string
 	frame         int
+	dirty         bool
+	flowChunks    []string
 	showReasoning bool
 	turnLive      bool
 	compacting    bool
@@ -191,7 +193,7 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		io.WriteString(out, pasteOn)
 	}
 	if t.ticks == nil {
-		t.ticker = time.NewTicker(120 * time.Millisecond)
+		t.ticker = time.NewTicker(framePeriod)
 		t.ticks = t.ticker.C
 	}
 	if t.winch == nil && t.fdi != 0 {
@@ -758,6 +760,8 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.turnLive = true
 	t.turnEstablished = false
 	t.pend = nil
+	t.dirty = false
+	t.flowChunks = nil
 	t.phase = "thinking"
 	t.frame = 0
 	t.toolName = ""
@@ -900,8 +904,21 @@ func (t *tui) Notify(ev core.Event) {
 
 func (t *tui) commit(chunk string) {
 	t.mu.Lock()
+	if len(t.flowChunks) > 0 {
+		chunk = strings.Join(t.flowChunks, "") + chunk
+		t.flowChunks = nil
+	}
 	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
+}
+
+func (t *tui) paintLiveLocked() {
+	chunk := ""
+	if len(t.flowChunks) > 0 {
+		chunk = strings.Join(t.flowChunks, "")
+		t.flowChunks = nil
+	}
+	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
 }
 
 func (t *tui) liveLinesLocked() []string {
@@ -1455,12 +1472,10 @@ func (t *tui) flow(slot, text string) {
 		t.lastSlot = slot
 	}
 	t.pend = append(t.pend, seg{slot: slot, text: t.expandTabsLocked(text)})
-	lines := t.takeClosedLinesLocked()
-	chunk := ""
-	if len(lines) > 0 {
-		chunk = strings.Join(lines, "\n") + "\n"
+	if lines := t.takeClosedLinesLocked(); len(lines) > 0 {
+		t.flowChunks = append(t.flowChunks, strings.Join(lines, "\n")+"\n")
 	}
-	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
+	t.dirty = true
 	t.mu.Unlock()
 }
 
@@ -1535,16 +1550,31 @@ func paintFreeSegs(segs []seg) string {
 	return b.String()
 }
 
+// framePeriod is the repaint cadence: deltas that arrive inside one window
+// paint together. animPeriod paces the activity spinner on top of it.
+const (
+	framePeriod = 16 * time.Millisecond
+	animPeriod  = 120 * time.Millisecond
+)
+
 func (t *tui) tickLoop() {
+	lastAnim := time.Time{}
 	for {
 		select {
 		case <-t.closed:
 			return
-		case <-t.ticks:
+		case now := <-t.ticks:
 			t.mu.Lock()
-			if (t.turnLive || t.compacting) && len(t.live.lines) > 0 {
+			dirty := t.dirty
+			t.dirty = false
+			live := (t.turnLive || t.compacting) && len(t.live.lines) > 0
+			if live && now.Sub(lastAnim) >= animPeriod {
+				lastAnim = now
 				t.frame++
-				t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+				dirty = true
+			}
+			if live && dirty {
+				t.paintLiveLocked()
 			}
 			t.mu.Unlock()
 		}

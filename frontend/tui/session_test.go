@@ -162,7 +162,6 @@ func TestStatusLineRefresh(t *testing.T) {
 		WithTheme(th), WithWidth(50),
 		WithStatus(statusIn),
 		WithCommands([]core.Command{newC, sessC, modelsC, compactC}, nil),
-		WithTicks(make(chan time.Time)),
 	)
 	blockCount := func() int { return bytes.Count(s.out.Bytes(), []byte(blockRow)) }
 
@@ -175,12 +174,14 @@ func TestStatusLineRefresh(t *testing.T) {
 
 	s.fe.Notify(core.TextDelta{Text: "hi\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10}})
+	s.tick()
 	s.await(th.Paint(SlotText, "huihui3.8") + th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "10/262k"))
 	if got := blockCount(); got != 1 {
 		t.Fatalf("a plain turn reprinted the block: %d, want 1", got)
 	}
 
 	s.fe.Notify(core.Compacted{Dropped: 100, Kept: 3400})
+	s.tick()
 	s.await("3.4k/262k")
 	if got := blockCount(); got != 1 {
 		t.Fatalf("the Compacted event reprinted the block: %d, want 1", got)
@@ -252,12 +253,44 @@ func TestStatusLineRefresh(t *testing.T) {
 		t.Fatal("timed out on go2")
 	}
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 20}})
+	s.tick()
 	s.await(th.Paint(SlotText, "model2") + th.Paint(SlotDim, " · ") + th.Paint(SlotDim, "20/131k"))
 	if got := blockCount(); got != 1 {
 		t.Fatalf("the block count at the end = %d, want 1", got)
 	}
 	if got := int(calls.Load()); got != 4 {
 		t.Fatalf("the status door moved at the end: %d calls, want 4", got)
+	}
+}
+
+func TestFlowCoalescesDeltas(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, WithTheme(th), WithWidth(50))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+
+	frames := func() int { return bytes.Count(s.out.Bytes(), []byte(syncOn)) }
+	before := frames()
+
+	s.fe.Notify(core.TextDelta{Text: "hel"})
+	s.fe.Notify(core.TextDelta{Text: "lo"})
+	if got := frames(); got != before {
+		t.Fatalf("deltas painted before the frame tick: %d frames, want %d", got, before)
+	}
+
+	s.tick()
+	deadline := time.Now().Add(3 * time.Second)
+	for frames() != before+1 {
+		if time.Now().After(deadline) {
+			t.Fatalf("the frame tick never painted: %d frames, want %d", frames(), before+1)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	stream := s.out.String()
+	mid := strings.TrimSuffix(strings.TrimPrefix(stream[strings.LastIndex(stream, syncOn):], syncOn), syncOff)
+	if !strings.Contains(mid, "hel") || !strings.Contains(mid, "lo") {
+		t.Fatalf("the coalesced frame lost a delta: %q", mid)
 	}
 }
 
@@ -298,7 +331,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 
 	tool := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := tool.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q, want go", got)
 	}
@@ -314,7 +347,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 	cmdS := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{todo}, nil),
-		WithTicks(make(chan time.Time)))
+	)
 	in := make(chan string, 1)
 	go func() {
 		l, err := cmdS.input()
@@ -355,7 +388,7 @@ func TestMidTurnLinesSteer(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	mark := promptMark(th)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -386,19 +419,23 @@ func TestCtrlTogglesReasoning(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q, want go", got)
 	}
 
 	s.fe.Notify(core.ReasoningDelta{Text: "first thought"})
 	s.fe.Notify(core.ReasoningDelta{Text: "second thought"})
+	s.tick()
+	s.await("first thought")
 	s.si.feed(string(byte(0x14)))
 	s.awaitReasoning(false)
 	s.fe.Notify(core.ReasoningDelta{Text: "third thought"})
 	s.si.feed(string(byte(0x14)))
 	s.awaitReasoning(true)
 	s.fe.Notify(core.ReasoningDelta{Text: "fourth thought"})
+	s.tick()
+	s.await("fourth thought")
 
 	out := s.out.String()
 	for _, want := range []string{"first thought", "second thought", "fourth thought"} {
@@ -415,7 +452,7 @@ func TestCtrlCEndSession(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	ctx, interrupt := context.WithCancel(context.Background())
 	ctx = core.WithInterrupt(ctx, interrupt)
 	saved := s.ctx
@@ -440,7 +477,7 @@ func TestCtrlDEmptyExits(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q, want go", got)
 	}
@@ -458,7 +495,7 @@ func TestCtrlDNonBlankKept(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "keep me\x04\n"); got != "keep me" {
 		t.Fatalf("Ctrl-D on a non-blank line = %q, want keep me (kept)", got)
 	}
@@ -470,7 +507,7 @@ func TestDispatchVoice(t *testing.T) {
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{newC}, nil),
-		WithTicks(make(chan time.Time)))
+	)
 	in := make(chan string, 1)
 	go func() {
 		l, err := s.input()
@@ -512,7 +549,7 @@ func TestSteerSeam(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	fe, ok := interface{}(s.fe).(interface {
 		Steer(string) bool
 		Interrupt() bool
@@ -605,7 +642,7 @@ func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	in := make(chan string, 1)
 	go func() {
 		line, _ := s.input()
@@ -656,7 +693,7 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(20),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	in := make(chan string, 1)
 	go func() {
 		line, _ := s.input()
@@ -721,7 +758,7 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	in := make(chan string, 1)
 	go func() {
 		line, _ := s.input()
@@ -757,7 +794,7 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 
 	s2 := newScriptedSession(t, WithTheme(th), WithWidth(100),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	in2 := make(chan string, 1)
 	go func() {
 		line, _ := s2.input()
@@ -850,7 +887,7 @@ func TestCompletionMenu(t *testing.T) {
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{models, moveC, todo}, nil),
-		WithTicks(make(chan time.Time)))
+	)
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	row := func(name, desc string) string {
@@ -925,7 +962,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(10),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
 	s.await(promptMark(th))
@@ -988,7 +1025,7 @@ func TestPasteAndEscKeybinds(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
 	s.await(promptMark(th))
@@ -1028,7 +1065,7 @@ func TestPagerCopyMode(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
 	}
@@ -1071,7 +1108,7 @@ func TestCompactingLoader(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 
@@ -1114,7 +1151,7 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	s := newScriptedSession(t, WithTheme(th), WithWidth(30),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{long, moveC}, nil),
-		WithTicks(make(chan time.Time)))
+	)
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	s.si.feed("/mo")
@@ -1136,7 +1173,7 @@ func TestGhostEnterCompletes(t *testing.T) {
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{models}, nil),
-		WithTicks(make(chan time.Time)))
+	)
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	s.si.feed("/m")
@@ -1155,15 +1192,16 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
-
+	s.tick()
 	s.awaitScreen(50, 19, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
+	s.tick()
 	s.awaitScreen(50, 20, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 }
 
@@ -1171,7 +1209,7 @@ func TestSpacingRule(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
 	}
@@ -1184,6 +1222,7 @@ func TestSpacingRule(t *testing.T) {
 	s.fe.Notify(core.TextDelta{Text: "the answer\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.tick()
 	s.await("the answer")
 
 	rows := screenLines(t, s, 60)
@@ -1229,19 +1268,21 @@ func TestUsageRowIsLiveWithinTheTurn(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
 	}
 
 	s.fe.Notify(core.TextDelta{Text: "one\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 1000, Completion: 50, CacheRead: 900}})
+	s.tick()
 	s.await(th.Paint(SlotDim, "up 1.0k down 50 · cache r 900 90%"))
 
 	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash", Args: []byte(`{"command":"ls"}`)}})
 	s.fe.Notify(core.ToolResult{ID: "c1", Content: "a\n"})
 	s.fe.Notify(core.TextDelta{Text: "two\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 2000, Completion: 30, CacheRead: 1900}})
+	s.tick()
 	s.await(th.Paint(SlotDim, "up 3.0k down 80 · cache r 2.8k 93%"))
 
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
@@ -1257,7 +1298,7 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{todo}, nil),
-		WithTicks(make(chan time.Time)))
+	)
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	s.si.feed("/todo")
@@ -1281,7 +1322,7 @@ func TestMargins(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
@@ -1290,7 +1331,7 @@ func TestMargins(t *testing.T) {
 	s.si.feed("go\n")
 	<-in
 	s.fe.Notify(core.TextDelta{Text: "text"})
-
+	s.tick()
 	s.awaitScreen(60, 19, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 	s.fe.Notify(core.TextDelta{Text: "\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
@@ -1309,7 +1350,7 @@ func TestMarkdownOnTheCommittedPath(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(30),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
 	}
@@ -1356,17 +1397,19 @@ func TestRepaintSyncsTheSize(t *testing.T) {
 	s := newScriptedSession(t, WithTheme(th), WithWidth(96),
 		WithSize(func() (int, int, bool) { return w, 30, true }),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
 	}
 	s.fe.Notify(core.TextDelta{Text: "before the resize\n"})
+	s.tick()
 	s.await("before the resize")
 
 	s.fe.mu.Lock()
 	w = 40
 	s.fe.mu.Unlock()
 	s.fe.Notify(core.TextDelta{Text: "after the resize this line is long enough to wrap at forty\n"})
+	s.tick()
 	s.await("forty")
 	s.fe.mu.Lock()
 	width, lw := s.fe.width, s.fe.live.width
@@ -1397,7 +1440,7 @@ func TestArrowsNavigateTheMenu(t *testing.T) {
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{todo, models}, nil),
-		WithTicks(make(chan time.Time)))
+	)
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	row := func(name, desc string) string {
@@ -1424,7 +1467,7 @@ func TestReasoningStaysRawAndNeverLeaks(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt = %q, want go", got)
 	}
@@ -1453,7 +1496,7 @@ func TestEscInterruptsTheLiveTurn(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = core.WithInterrupt(ctx, cancel)
 	saved := s.ctx
@@ -1506,7 +1549,7 @@ func TestAskDoor(t *testing.T) {
 	}
 	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-		WithTicks(make(chan time.Time)))
+	)
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 

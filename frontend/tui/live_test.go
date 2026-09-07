@@ -136,6 +136,12 @@ func (v *vt) feed(b []byte) {
 				v.rows = v.rows[:v.r+1]
 			case 'm':
 
+			case 'h', 'l':
+				if params != "?2026" {
+					v.fail("a mode outside the vocabulary: " + params + string(term))
+					return
+				}
+
 			default:
 				v.fail("an escape outside the vocabulary: " + string(term))
 				return
@@ -154,6 +160,37 @@ func (v *vt) feed(b []byte) {
 }
 
 func paintFree(s string) string { return sgrRe.ReplaceAllString(s, "") }
+
+func TestLiveSyncFrames(t *testing.T) {
+	th, err := ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	l := newLive(&out, 40)
+	l.draw(th.Paint(SlotText, "hello"), []string{"tail"}, "")
+
+	stream := out.String()
+	if !strings.HasPrefix(stream, syncOn) || !strings.HasSuffix(stream, syncOff) {
+		t.Fatalf("the frame is not wrapped in the sync mode: %q", stream)
+	}
+	mid := strings.TrimSuffix(strings.TrimPrefix(stream, syncOn), syncOff)
+	if !strings.Contains(mid, "hello") {
+		t.Fatalf("the wrapped frame lost its content: %q", mid)
+	}
+
+	l.edit(th.Paint(SlotText, " in"), 2, "")
+	stream = out.String()
+	if got := strings.Count(stream, syncOn); got != 2 {
+		t.Fatalf("each flush must carry its own sync pair: %d on-markers, want 2\n%q", got, stream)
+	}
+	if got := strings.Count(stream, syncOff); got != 2 {
+		t.Fatalf("sync pairs must balance: %d off-markers, want 2", got)
+	}
+	if strings.Contains(stream, syncOn+syncOff) {
+		t.Fatal("an empty frame was flushed")
+	}
+}
 
 func TestLiveWalkPaintedLines(t *testing.T) {
 	th, err := ResolveTheme("oled", nil, true)
