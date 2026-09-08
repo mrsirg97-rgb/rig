@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -537,5 +538,108 @@ func TestDriftRefusalCapsARewrite(t *testing.T) {
 
 	if last := lines[len(lines)-1]; last != "… 63 more lines" {
 		t.Fatalf("the marker must name the elided count, got %q", last)
+	}
+}
+
+const readCap = 1 << 20
+
+func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.txt")
+	var b strings.Builder
+	for i := 0; b.Len() < readCap+4096; i++ {
+		fmt.Fprintf(&b, "line %06d\n", i)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	joined := strings.Join(lines, "\n")
+	want := joined
+	if len(want) > readCap {
+		want = want[:readCap] + "\n[output truncated]"
+	}
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got != want {
+		t.Fatalf("the capped whole-file read drifted from the split-join contract:\n got %d bytes\nwant %d bytes", len(got), len(want))
+	}
+}
+
+func TestReadWindowOfABigFileIsByteIdentical(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.txt")
+	var b strings.Builder
+	for i := 0; b.Len() < readCap+4096; i++ {
+		fmt.Fprintf(&b, "line %06d\n", i)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	end := 100 + 3
+	if end > len(lines) {
+		end = len(lines)
+	}
+	want := strings.Join(lines[100:end], "\n")
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+		"path": path, "offset": 100, "limit": 3,
+	}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got != want {
+		t.Fatalf("the window drifted:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestReadOneHugeLineCapsByteIdentical(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "one.txt")
+	huge := strings.Repeat("x", readCap+8192)
+	if err := os.WriteFile(path, []byte(huge), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := huge[:readCap] + "\n[output truncated]"
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got != want {
+		t.Fatalf("the huge-line cap drifted: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+func TestReadBigFileDoesNotAllocateTheWholeFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.txt")
+	size := 64 << 20
+	if err := os.WriteFile(path, []byte(strings.Repeat("x\n", size/2)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	runtime.ReadMemStats(&after)
+	if !strings.HasSuffix(got, "[output truncated]") {
+		t.Fatalf("a %d-byte file must come back capped, got %d bytes", size, len(got))
+	}
+	allocated := after.TotalAlloc - before.TotalAlloc
+	const bound = 16 << 20
+	if allocated > bound {
+		t.Fatalf("the read allocated %d bytes for a %d-byte file, want <= %d (the cap is %d; the whole file must not be materialised)", allocated, size, bound, readCap)
 	}
 }

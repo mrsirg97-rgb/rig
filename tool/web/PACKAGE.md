@@ -29,5 +29,8 @@ stdlib text pass). Stdlib only; no third-party Go client, no new venv.
   (the request ctx carries them; the transport never re-resolves, so a
   DNS rebind between check and dial cannot reach a private listener).
   With a proxy the proxy resolves and dials; the proxy is not guarded.
+- The DNS resolution rides the request ctx (the `LookupFn` seam takes
+  it): a stalled resolver cannot outlive the fetch's own deadline, and a
+  cancelled lookup surfaces the context error.
 - An empty `WebFetchProxy`/`Trafilatura` is a choice (direct egress / the
   stdlib text pass), not an unset.

@@ -130,3 +130,19 @@ func TestPTYResize(t *testing.T) {
 		t.Fatalf("the width after the resize = %d, want 120 (the terminal's)", w)
 	}
 }
+
+func TestCloseStopsTheWinchSignal(t *testing.T) {
+	master, slave := openPTY(t)
+	defer master.Close()
+	fe := New(slave, &lockBuf{}, WithTheme(oledTheme(t)), WithTicks(make(chan time.Time))).(*tui)
+	fe.mu.Lock()
+	stop := fe.stopWinch
+	fe.mu.Unlock()
+	if stop == nil {
+		t.Fatal("a terminal frontend must own the winch signal handler")
+	}
+	fe.Close()
+	if fe.stopWinch != nil {
+		t.Fatal("Close must stop the winch signal handler")
+	}
+}

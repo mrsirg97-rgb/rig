@@ -24,6 +24,11 @@ model is told its prior read is stale before it acts on it.
   cross-session change is named once and the fresh bytes still ride it.
 - read's `offset`/`limit`: select a 0-based line range: `offset` past the
   end and a negative `offset`/`limit` refuse loud, naming the line count.
+- read streams the file once: every byte is hashed for provenance while
+  only the requested window is captured, capped at one byte past the
+  output cap, so a huge file is never materialised through a read. The
+  returned bytes follow the split-join contract exactly (the
+  trailing-newline line count included).
 - `normalizePath`: canonicalizes at the boundary so `a.go` and `./a.go`
   are the same key (without it the drift check can be silently bypassed by
   path spelling).

@@ -162,4 +162,5 @@ The file tools normalize paths before any provenance decision, and `edit`
 validates that the file is still what it was when last read; external drift
 is named and the write is refused; ambiguous old-strings ("occurs N times")
 are refused, never guessed at. Outputs are capped (bash 256 KiB, read 1 MiB)
-and the truncation is named in the output.
+and the truncation is named in the output; a read streams the file, so a
+huge file is never materialised through a read.
