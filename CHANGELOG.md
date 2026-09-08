@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.0]: the clean release
+
+v0.24.6 was tagged from the release branch before it was merged, so the
+tag and the GitHub Release pointed at the unmerged head. The tree was
+identical to main, but the release was not the merge commit. 0.25.0
+ships that same tree from the merged main with a clean tag: the last
+pre-1.0 release starts clean.
+
 ## [0.24.6]: the pre-v1 sweep
 
 Three findings from the v1.0.0 review pass. Each carries a test that

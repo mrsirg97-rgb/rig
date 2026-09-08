@@ -42,14 +42,14 @@ func TestReapAtOpenReleasesClaimsOwnedByEndedSessions(t *testing.T) {
 	cwd := t.TempDir()
 
 	deadID := "dead-session-1234"
-	if err := state.RecordSession(ctx, sdb, deadID, cwd, "local", "0.24.6"); err != nil {
+	if err := state.RecordSession(ctx, sdb, deadID, cwd, "local", "0.25.0"); err != nil {
 		t.Fatalf("record dead session: %v", err)
 	}
 	if err := state.CloseSession(ctx, sdb, deadID, "ok"); err != nil {
 		t.Fatalf("close dead session: %v", err)
 	}
 	liveID := "live-session-5678"
-	if err := state.RecordSession(ctx, sdb, liveID, cwd, "local", "0.24.6"); err != nil {
+	if err := state.RecordSession(ctx, sdb, liveID, cwd, "local", "0.25.0"); err != nil {
 		t.Fatalf("record live session: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestReapAtOpenIsIdleWhenNoSessionsHaveEnded(t *testing.T) {
 	ctx := context.Background()
 	cwd := t.TempDir()
 	liveID := "live-session-5678"
-	if err := state.RecordSession(ctx, sdb, liveID, cwd, "local", "0.24.6"); err != nil {
+	if err := state.RecordSession(ctx, sdb, liveID, cwd, "local", "0.25.0"); err != nil {
 		t.Fatalf("record live session: %v", err)
 	}
 	proj := todostore.Project{Key: "reaptest", Label: "reaptest"}
