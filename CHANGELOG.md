@@ -1,6 +1,38 @@
 # Changelog
 
-## [0.24.4]: the correctness pass
+## [0.24.5]: the dead session's claim is released
+
+The queue's one unpaid debt: a task claimed by a session that died
+stayed `in_progress` forever, and every live session reading the queue
+had to fail-retry-start it by hand (the operator's cleanup of the
+stale queue was the field report). Each finding below carries a test
+that failed before and passes after.
+
+- **the dead session's claim is released** (`store/todo`,
+  `tool/todo`, `command/tools.go`, `cmd/rig`, `specs/SPEC_STATE.md`):
+  the todo store gains a `release` event op and two doors. `Release`
+  (the tool and `/todo release <id>`) returns a claimed task to
+  `pending`, clearing the owner, and refuses the caller's own claim,
+  an unclaimed task, a finished task, and a foreign claim younger than
+  `StaleClaimAfter` (24h) — a live session's work is never stolen by a
+  tool call. `Reap` (wired at session open in `cmd/rig`) frees every
+  foreign claim whose owner's session row has ended (the exact arm:
+  `state.ListSessions`, `Exit != "open"`) and every claim whose
+  owner's last event on the task is older than the staleness window
+  (the SIGKILL arm: a hard-killed session leaves its row `open`, and
+  only age proves it). The reaper never touches the caller's own
+  claims; the note names each task and the owner it was freed from,
+  printed to stderr at open, silent when idle. Tasks survive the
+  release — text, deps, and position stay; only the claim dies. The
+  compact snapshot now carries each task's `updatedTs` (the claim
+  clock), so a compaction folds the log without resetting a stale
+  claim's age.
+- **the todo schema rides the wire** (`tool/todo`): the `release`
+  action joins the schema enum, and the wire goldens were regenerated
+  (`cmd/rig/testdata/golden_020`), which is why this entry's diff
+  carries the three `.json` fixture changes.
+
+
 
 Each finding below carries a test that failed before and passes after.
 Field-tested by the harness's own occupant: the session that found the

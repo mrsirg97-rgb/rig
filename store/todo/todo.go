@@ -27,6 +27,13 @@ func Statements() []string {
 
 const anon = "anon"
 
+// StaleClaimAfter is the age after which a foreign claim may be
+// released: the owner's last event on the task is older than this, so
+// the session that held it is gone or gone quiet. The ended-session
+// arm of Reap does not wait on it — a session row that closed is dead
+// on arrival.
+const StaleClaimAfter = 24 * time.Hour
+
 type Project struct {
 	Key   string
 	Label string
@@ -131,7 +138,7 @@ func (f *folded) apply(e eventRow) {
 	switch e.op {
 	case "create":
 		f.applyCreate(e)
-	case "start", "complete", "fail", "retry":
+	case "start", "complete", "fail", "release", "retry":
 		f.applyVerb(e)
 	case "move":
 		f.applyMoveEvent(e)
@@ -272,6 +279,11 @@ func (f *folded) applyVerb(e eventRow) {
 	case "fail":
 		if ts.status == "in_progress" {
 			ts.status = "failed"
+			ts.owner = ""
+		}
+	case "release":
+		if ts.status == "in_progress" {
+			ts.status = "pending"
 			ts.owner = ""
 		}
 	case "retry":
@@ -763,6 +775,126 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 	})
 }
 
+// Release returns a claimed task to pending, clearing the owner. It
+// refuses the caller's own claim, an unclaimed task, a finished task,
+// and a foreign claim that is still fresh (the owner's last event on
+// the task is younger than StaleClaimAfter): a live session's work is
+// not stolen by a tool call. The ended-session arm is Reap's, not
+// Release's — the tool has no view of the session store.
+func Release(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
+		if e != nil {
+			return "", e
+		}
+		ts, ok := f.tasks[id]
+		if !ok {
+			return "", unknownTask(id)
+		}
+		switch ts.status {
+		case statusDone:
+			return "", fmt.Errorf("'%s' is done; read-only", id)
+		case statusFailed:
+			return "", fmt.Errorf("'%s' failed; retry it first", id)
+		case statusPending:
+			return "", fmt.Errorf("'%s' is not claimed; start it first", id)
+		}
+		if ts.owner == session {
+			return "", fmt.Errorf("'%s' is claimed by you; complete or fail it", id)
+		}
+		owner := ts.owner
+		if owner == "" {
+			return "", fmt.Errorf("'%s' is not claimed; start it first", id)
+		}
+		if !staleClaim(ts, time.Now()) {
+			return "", fmt.Errorf("'%s' is claimed by %s (fresh); a live claim is not released — fail it first to take over", id, owner)
+		}
+		args, _ := json.Marshal(map[string]any{"id": id})
+		seq := f.nextSeq()
+		if e := appendEvent(bound, seq, "release", string(args), session, p.Key); e != nil {
+			return "", e
+		}
+		ts.status = statusPending
+		ts.owner = ""
+		ts.updatedSeq = seq
+		ts.updatedTs = nowRFC3339()
+		if e := rewrite(tx, f, p.Key); e != nil {
+			return "", e
+		}
+		return withFoot(echoTask(f, session, id, "'"+id+"' released (was claimed by "+owner+")"), foot), nil
+	})
+}
+
+// Reap releases every foreign claim in the project that is dead on
+// arrival: an owner named in ended (a session row that closed) or a
+// claim whose owner's last event on the task is older than
+// StaleClaimAfter (a SIGKILL'd session leaves no row to consult). The
+// caller's own claims are never touched. The note names each released
+// task and the owner it was freed from; an idle reap returns "".
+func Reap(ctx context.Context, db store.DB, p Project, ended []string, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
+	dead := map[string]bool{}
+	for _, id := range ended {
+		dead[id] = true
+	}
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
+		if e != nil {
+			return "", e
+		}
+		now := time.Now()
+		released := []string{}
+		for id, ts := range f.tasks {
+			if ts.status != statusActive || ts.owner == "" || ts.owner == session {
+				continue
+			}
+			if !dead[ts.owner] && !staleClaim(ts, now) {
+				continue
+			}
+			owner := ts.owner
+			args, _ := json.Marshal(map[string]any{"id": id})
+			seq := f.nextSeq()
+			if e := appendEvent(bound, seq, "release", string(args), session, p.Key); e != nil {
+				return "", e
+			}
+			ts.status = statusPending
+			ts.owner = ""
+			ts.updatedSeq = seq
+			ts.updatedTs = nowRFC3339()
+			released = append(released, id+" (was claimed by "+owner+")")
+		}
+		if e := rewrite(tx, f, p.Key); e != nil {
+			return "", e
+		}
+		if len(released) == 0 {
+			return withFoot("", foot), nil
+		}
+		sort.Strings(released)
+		note := "released " + strconv.Itoa(len(released)) + " dead claim" + claimPlural(len(released)) + ": " + strings.Join(released, ", ")
+		return withFoot("\u2192 "+note, foot), nil
+	})
+}
+
+func staleClaim(ts *taskState, now time.Time) bool {
+	t, err := time.Parse(time.RFC3339, ts.updatedTs)
+	if err != nil {
+		return false
+	}
+	return now.Sub(t) > StaleClaimAfter
+}
+
+func claimPlural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
 func Read(ctx context.Context, db store.DB, p Project, session string) (string, error) {
 	return read(ctx, db, p, session, false)
 }
@@ -884,6 +1016,7 @@ func snapshotOf(f *folded) []any {
 		out = append(out, map[string]any{
 			"id": ts.id, "text": ts.text, "status": ts.status,
 			"pos": ts.pos - 1, "dependsOn": link, "owner": owner,
+			"updatedTs": ts.updatedTs,
 		})
 	}
 	return out
@@ -946,6 +1079,7 @@ func (f *folded) applyCompactEvent(e eventRow) {
 			DependsOn *string `json:"dependsOn"`
 			Pos       int     `json:"pos"`
 			Owner     string  `json:"owner"`
+			UpdatedTs string  `json:"updatedTs"`
 		} `json:"tasks"`
 	}
 	if json.Unmarshal([]byte(e.args), &payload) == nil {
@@ -967,9 +1101,13 @@ func (f *folded) applyCompactEvent(e eventRow) {
 			if r.DependsOn != nil {
 				dep = *r.DependsOn
 			}
+			updatedTs := r.UpdatedTs
+			if updatedTs == "" {
+				updatedTs = e.ts
+			}
 			tasks[r.ID] = &taskState{
 				id: r.ID, text: r.Text, status: status,
-				pos: pos, dep: dep, owner: r.Owner,
+				pos: pos, dep: dep, owner: r.Owner, updatedTs: updatedTs,
 			}
 		}
 		for _, ts := range tasks {
@@ -981,7 +1119,6 @@ func (f *folded) applyCompactEvent(e eventRow) {
 	for _, ts := range tasks {
 		ts.createdSeq = e.seq
 		ts.updatedSeq = e.seq
-		ts.updatedTs = e.ts
 	}
 	f.tasks = tasks
 	f.compactSeq = e.seq

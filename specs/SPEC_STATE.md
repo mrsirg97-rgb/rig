@@ -255,6 +255,22 @@ falling back to the cwd hash outside a repo.
   Two raw arms are owned and named as such: the event scan that rebuilds
   the fold (no ordered scan accessor is generated) and the projection
   rewrite (no bulk-replace accessor is generated).
+- **The dead claim is released (0.24.5).** A task claimed by a session
+  that died stays `in_progress` forever, blocking every live session
+  that reads the queue. `release` (an event op, both doors: the tool
+  and `/todo release <id>`) returns a claimed task to `pending`,
+  clearing the owner; it refuses the caller's own claim, an unclaimed
+  task, a finished task, and a foreign claim younger than
+  `StaleClaimAfter` (24h) — a live session's work is never stolen by a
+  tool call. `Reap`, wired at session open in `cmd/rig`, frees every
+  foreign claim whose owner's session row has ended (the exact arm,
+  `state.ListSessions` `Exit != "open"`) and every claim whose owner's
+  last event on the task is older than the staleness window (the
+  SIGKILL arm: a hard-killed session leaves its row `open`, and only
+  age proves it). The reaper never touches the caller's own claims;
+  the note names each task and the owner it was freed from, silent
+  when idle. Tasks survive the release — text, deps, and position
+  stay; only the claim dies.
 - **Migration (1 → 2), lossless.** Todo rows carried no cwd: the filename
   was the identity, so the fold keys on the files existing (the
   scheduler's lesson: a fresh `todo.sqlite` folds too): every
@@ -420,9 +436,11 @@ type MemoryDomain interface {
 ```
 
 The tool adapter is the only hand-written surface the model sees, and it
-is pane's tool surface verbatim: `todo {create|start|complete|fail|retry|
-move|read}` (`next` is not a verb: its semantics ride the render's next
-pointer, blocked-skipping), `rem {learn|recall|reflect|prune}`, `scheduler {create|
+is pane's tool surface verbatim: `todo {create|start|complete|fail|release|
+retry|move|read}` (amended 0.24.5: `release` is rig's own, the dead-claim
+door — pane has no session store to know an owner died; `next` is not a
+verb: its semantics ride the render's next pointer, blocked-skipping),
+`rem {learn|recall|reflect|prune}`, `scheduler {create|
 update|list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
 not pane's: a read-only introspection of the session store, absent from
 the root's `mutatingNatives` and from the concurrent read set; it opens

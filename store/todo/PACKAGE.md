@@ -48,6 +48,14 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 - Complete on the caller's own unclaimed pending task implicitly claims
   and completes: start+complete, both events appended, the echo noting
   the auto-start. Foreign-claim and blocked-by-dependency refusals stay.
+- Release returns a claimed task to pending (the dead-claim door): it
+  refuses the caller's own claim, an unclaimed task, a finished task,
+  and a foreign claim younger than StaleClaimAfter (24h). Reap is the
+  bulk door wired at session open: it frees foreign claims owned by
+  ended sessions (the exact arm) and claims whose owner's last event
+  on the task is older than the staleness window (the SIGKILL arm);
+  the caller's own claims are never touched. Both append `release`
+  events; the note names task and owner, silent when idle.
 - The read contract is lean (SPEC_TODO_LEAN): Read renders the
   actionable queue; done rows fold into the unconditional summary line
   `(N/M done · next: tN · K failed)`, never "(no tasks in <label>'s queue)"

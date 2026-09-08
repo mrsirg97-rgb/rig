@@ -17,7 +17,7 @@ const schemaJSON = `{
 	"required": ["action"],
 	"properties": {
 		"action": {
-			"enum": ["create", "start", "complete", "fail", "retry", "move", "read"],
+			"enum": ["create", "start", "complete", "fail", "release", "retry", "move", "read"],
 			"description": "The action to perform. Required."
 		},
 		"tasks": {
@@ -40,7 +40,7 @@ const schemaJSON = `{
 		},
 		"id": {
 			"type": "string",
-			"description": "Task id as shown by the tool. Required for start/complete/fail/retry."
+			"description": "Task id as shown by the tool. Required for start/complete/fail/release/retry."
 		},
 		"pos": {
 			"type": "integer",
@@ -107,7 +107,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			return "", err
 		}
 		return todostore.Create(ctx, a.db, p, items, session)
-	case "start", "complete", "fail", "retry":
+	case "start", "complete", "fail", "release", "retry":
 		if g.ID == "" {
 			return "", fmt.Errorf("action '%s' requires id", g.Action)
 		}
@@ -118,6 +118,8 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			return todostore.Complete(ctx, a.db, p, g.ID, session)
 		case "fail":
 			return todostore.Fail(ctx, a.db, p, g.ID, session)
+		case "release":
+			return todostore.Release(ctx, a.db, p, g.ID, session)
 		default:
 			return todostore.Retry(ctx, a.db, p, g.ID, session)
 		}
