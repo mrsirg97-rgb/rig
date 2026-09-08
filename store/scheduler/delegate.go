@@ -116,7 +116,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	case "error":
 		return DelegateResult{}, fmt.Errorf("delegate: busy check failed: %s", st.reason)
 	case "busy":
-		return DelegateResult{}, fmt.Errorf("delegate: the GPU is held by %s (busy:skip — no eviction from inside a turn)", st.names)
+		return DelegateResult{}, fmt.Errorf("delegate: the GPU is held by %s (busy:skip — no eviction from inside a turn); a delegate from inside a turn cannot win this box — schedule a once-job instead, it fires between turns", st.names)
 	}
 
 	id, err := adHocCreate(context.Background(), in.DB, in)
