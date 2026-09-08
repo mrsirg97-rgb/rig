@@ -37,12 +37,12 @@ func seedSession(t *testing.T, db store.DB, s seedSpec) {
 		t.Fatal(err)
 	}
 	for i := 0; i < s.turns; i++ {
-		if _, err := state.RecordMessage(ctx, db, s.id, "user", "prompt", nil, nil); err != nil {
+		if _, err := state.RecordMessage(ctx, db, s.id, "user", "prompt", nil, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, u := range s.usage {
-		seq, err := state.RecordMessage(ctx, db, s.id, "assistant", "reply", nil, nil)
+		seq, err := state.RecordMessage(ctx, db, s.id, "assistant", "reply", nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

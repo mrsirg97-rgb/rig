@@ -35,6 +35,7 @@ func (ToolCallEvent) event() {}
 type Done struct {
 	StopReason string
 	Usage      Usage
+	Model      string
 }
 
 func (Done) event() {}

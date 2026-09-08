@@ -326,7 +326,7 @@ func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 	if e := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, sid, "user", "before the kill", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, sid, "user", "before the kill", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 	sess, err := state.Resume(ctx, db, sid)

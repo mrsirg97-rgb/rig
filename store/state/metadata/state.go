@@ -27,6 +27,7 @@ type Message struct {
 	Content   string    `alias:"name=content,nullable=false"`
 	Reasoning *string   `alias:"name=reasoning,nullable=true"`
 	ToolID    *string   `alias:"name=tool_id,nullable=true"`
+	Model     *string   `alias:"name=model,nullable=true"`
 	CreatedAt time.Time `alias:"name=created_at,nullable=false"`
 }
 

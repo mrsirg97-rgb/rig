@@ -25,6 +25,10 @@ loop already emits; the read side rebuilds a session from the log.
   typed usage read (prompt/completion/cache tokens per message,
   transcript order) the dashboard and the `sessions` tool build from.
 - `metadata/state.go`: hand-written metadata.
+- The served model rides the transcript: assistant message rows carry
+  `model` (nullable), stamped by the recorder from `core.Done`'s echo;
+  user, compaction, and re-landed rows stay null. v2 files gain the
+  column on open (schema v3); pre-migration rows read null.
 
 ## How it is consumed
 

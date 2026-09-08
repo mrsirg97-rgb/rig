@@ -3,6 +3,7 @@ package state_test
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,12 +42,12 @@ func TestStateRecordsAndReadsBack(t *testing.T) {
 	if err := state.RecordSession(ctx, db, "s1", "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatalf("record session: %v", err)
 	}
-	seq1, err := state.RecordMessage(ctx, db, "s1", "user", "hello", nil, nil)
+	seq1, err := state.RecordMessage(ctx, db, "s1", "user", "hello", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("record message: %v", err)
 	}
 	reasoning := "because"
-	seq2, err := state.RecordMessage(ctx, db, "s1", "assistant", "", &reasoning, nil)
+	seq2, err := state.RecordMessage(ctx, db, "s1", "assistant", "", &reasoning, nil, nil)
 	if err != nil {
 		t.Fatalf("record reasoning message: %v", err)
 	}
@@ -98,7 +99,7 @@ func TestStateKillMidTurnLeavesCompletedRows(t *testing.T) {
 	if err := state.RecordSession(live, db, "s2", "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
 	}
-	seq1, err := state.RecordMessage(live, db, "s2", "user", "do it", nil, nil)
+	seq1, err := state.RecordMessage(live, db, "s2", "user", "do it", nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,5 +157,123 @@ func TestStateFaultRows(t *testing.T) {
 	}).(*domain.Fault)
 	if row.Message != "provider stream torn" || row.SessionId != "s3" {
 		t.Fatalf("fault readback: %+v %v", row, err)
+	}
+}
+
+func TestRecordMessageStampsModel(t *testing.T) {
+	db := openStore(t)
+	ctx := context.Background()
+
+	if err := state.RecordSession(ctx, db, "s1", "/tmp/wt", "model-x", "0.1.0"); err != nil {
+		t.Fatalf("record session: %v", err)
+	}
+	served := "glm5.3-flash"
+	seqA, err := state.RecordMessage(ctx, db, "s1", "assistant", "served reply", nil, nil, &served)
+	if err != nil {
+		t.Fatalf("record assistant: %v", err)
+	}
+	seqU, err := state.RecordMessage(ctx, db, "s1", "user", "asked", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("record user: %v", err)
+	}
+
+	a := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, seqA).Row()
+	}).(*domain.Message)
+	if a.Model == nil || *a.Model != "glm5.3-flash" {
+		t.Fatalf("assistant model not stamped: %+v", a.Model)
+	}
+	u := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, seqU).Row()
+	}).(*domain.Message)
+	if u.Model != nil {
+		t.Fatalf("user row carries no model: %+v", u.Model)
+	}
+}
+
+var v2Schema = []string{
+	`CREATE TABLE IF NOT EXISTS "faults" (
+  "seq" INTEGER NOT NULL,
+  "at" TIMESTAMP NOT NULL,
+  "message" TEXT NOT NULL,
+  "session_id" TEXT NOT NULL,
+  PRIMARY KEY ("seq")
+)`,
+	`CREATE TABLE IF NOT EXISTS "files" (
+  "session_id" TEXT NOT NULL,
+  "path" TEXT NOT NULL,
+  "hash" TEXT NOT NULL,
+  "mtime" INTEGER NOT NULL,
+  PRIMARY KEY ("session_id", "path")
+)`,
+	`CREATE TABLE IF NOT EXISTS "messages" (
+  "seq" INTEGER NOT NULL,
+  "content" TEXT NOT NULL,
+  "created_at" TIMESTAMP NOT NULL,
+  "reasoning" TEXT,
+  "role" TEXT NOT NULL,
+  "session_id" TEXT NOT NULL,
+  "tool_id" TEXT,
+  PRIMARY KEY ("seq")
+)`,
+	`CREATE TABLE IF NOT EXISTS "sessions" (
+  "id" TEXT NOT NULL,
+  "cwd" TEXT NOT NULL,
+  "ended_at" TIMESTAMP,
+  "exit" TEXT NOT NULL,
+  "model" TEXT NOT NULL,
+  "started_at" TIMESTAMP NOT NULL,
+  "version" TEXT NOT NULL,
+  PRIMARY KEY ("id")
+)`,
+	`CREATE TABLE IF NOT EXISTS "tool_calls" (
+  "session_id" TEXT NOT NULL,
+  "message_seq" INTEGER NOT NULL,
+  "id" TEXT NOT NULL,
+  "args" TEXT NOT NULL,
+  "ended_at" TIMESTAMP,
+  "err" TEXT,
+  "name" TEXT NOT NULL,
+  "result" TEXT,
+  "started_at" TIMESTAMP NOT NULL,
+  PRIMARY KEY ("session_id", "message_seq", "id")
+)`,
+	`CREATE TABLE IF NOT EXISTS "usage" (
+  "message_seq" INTEGER NOT NULL,
+  "cache_read" INTEGER NOT NULL,
+  "cache_write" INTEGER NOT NULL,
+  "completion" INTEGER NOT NULL,
+  "prompt" INTEGER NOT NULL,
+  PRIMARY KEY ("message_seq")
+)`,
+}
+
+func TestMigrationV2ToV3AddsMessagesModel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.sqlite")
+	db, _, _, err := store.Open(path, v2Schema, 2, state.Migration())
+	if err != nil {
+		t.Fatalf("open v2: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO "messages" ("seq", "content", "created_at", "role", "session_id")
+		VALUES (1, 'old row', CURRENT_TIMESTAMP, 'assistant', 's1')`); err != nil {
+		t.Fatalf("insert v2 row: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close v2: %v", err)
+	}
+
+	db2, _, report, err := store.Open(path, state.Statements(), state.SchemaVersion, state.Migration())
+	if err != nil {
+		t.Fatalf("reopen v3: %v", err)
+	}
+	defer db2.Close()
+	if !strings.Contains(report, "model") {
+		t.Fatalf("migration report should name the messages model change: %q", report)
+	}
+	m := mustRead(t, db2, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, 1).Row()
+	}).(*domain.Message)
+	if m.Model != nil {
+		t.Fatalf("pre-migration row carries no model: %+v", m.Model)
 	}
 }

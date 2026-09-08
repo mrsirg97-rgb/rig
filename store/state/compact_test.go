@@ -63,10 +63,10 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := state.RecordMessage(ctx, db, sid, "user", "old", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "old", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "old-call", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "old-call", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.RecordToolCall(ctx, db, sid, 2, "c1", "bash", `{"old":1}`); err != nil {
@@ -127,10 +127,10 @@ func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := state.RecordMessage(ctx, db, sid, "user", "u1", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "u1", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "a1", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "a1", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.RecordToolCall(ctx, db, sid, 2, "c1", "bash", `{}`); err != nil {

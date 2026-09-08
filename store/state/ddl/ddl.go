@@ -28,6 +28,7 @@ func Statements() []string {
   "seq" INTEGER NOT NULL,
   "content" TEXT NOT NULL,
   "created_at" TIMESTAMP NOT NULL,
+  "model" TEXT,
   "reasoning" TEXT,
   "role" TEXT NOT NULL,
   "session_id" TEXT NOT NULL,

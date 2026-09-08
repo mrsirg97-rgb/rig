@@ -92,7 +92,7 @@ func newWorld(t *testing.T) *world {
 func (w *world) call(t *testing.T, name, args, result string, failure *string) int64 {
 	t.Helper()
 	ctx := context.Background()
-	seq, e := state.RecordMessage(ctx, w.db, w.sid, "assistant", "", nil, nil)
+	seq, e := state.RecordMessage(ctx, w.db, w.sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}

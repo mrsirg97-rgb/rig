@@ -13,10 +13,10 @@ func TestSessionUsageReturnsRows(t *testing.T) {
 	if err := state.RecordSession(ctx, db, "s1", "/w", "m", "v"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, "s1", "user", "hi", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, "s1", "user", "hi", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	seq, err := state.RecordMessage(ctx, db, "s1", "assistant", "done", nil, nil)
+	seq, err := state.RecordMessage(ctx, db, "s1", "assistant", "done", nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

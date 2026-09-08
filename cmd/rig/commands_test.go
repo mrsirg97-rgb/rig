@@ -411,13 +411,13 @@ func TestCompactForcesTheAction(t *testing.T) {
 	h.r.session.Append(core.Message{Role: core.RoleAssistant, Content: a1})
 	h.r.session.Append(core.Message{Role: core.RoleUser, Content: u2})
 	ctx := context.Background()
-	if _, e := state.RecordMessage(ctx, h.db, sid, "user", u1, nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, h.db, sid, "user", u1, nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, h.db, sid, "assistant", a1, nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, h.db, sid, "assistant", a1, nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, h.db, sid, "user", u2, nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, h.db, sid, "user", u2, nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 
@@ -504,7 +504,7 @@ func TestSessionsResume(t *testing.T) {
 	if e := state.RecordSession(ctx, h.db, "sess-2", h.r.cwd, "local", Version); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, h.db, "sess-2", "user", "old", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, h.db, "sess-2", "user", "old", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 	if e := state.RecordFile(ctx, h.db, "sess-2", "notes.txt", "hash123", 1234); e != nil {

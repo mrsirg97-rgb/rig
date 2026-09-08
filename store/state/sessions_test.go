@@ -38,13 +38,13 @@ func TestListSessionsCountsTurnsAfterTheLastSummary(t *testing.T) {
 	if e := state.RecordSession(ctx, db, "a", "/w", "m", "v"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, "a", "user", "one", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, "a", "user", "one", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, "a", "user", "[compaction] the summary", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, "a", "user", "[compaction] the summary", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, "a", "user", "two", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, "a", "user", "two", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 	if e := state.CloseSession(ctx, db, "a", "ok"); e != nil {
@@ -63,7 +63,7 @@ func TestListSessionsCountsTurnsAfterTheLastSummary(t *testing.T) {
 	if e := state.RecordSession(ctx, db, "c", "/w", "m", "v"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, "c", "user", "live one", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, "c", "user", "live one", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 
@@ -196,7 +196,7 @@ func TestRecorderRetargetLandsUnderTheNewId(t *testing.T) {
 	if e := rec1.Ensure(); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, "s1", "user", "earlier", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, "s1", "user", "earlier", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 

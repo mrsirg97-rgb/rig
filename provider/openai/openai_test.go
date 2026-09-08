@@ -463,3 +463,30 @@ func TestStreamIgnoresSSEComments(t *testing.T) {
 		t.Fatalf("event order = %s, want delta,done (the comments invisible)", got)
 	}
 }
+
+func TestStreamEchoesModel(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"model":"glm5.3-flash","choices":[{"delta":{"content":"hello "}}]}`,
+		`data: {"model":"glm5.3-flash","choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	events, err := drain(t, context.Background(), openai.New(srv.URL, "local"), userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	var served string
+	for _, ev := range events {
+		if d, ok := ev.(core.Done); ok {
+			served = d.Model
+		}
+	}
+	if served != "glm5.3-flash" {
+		t.Fatalf("done event carries no served model: %q", served)
+	}
+}

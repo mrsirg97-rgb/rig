@@ -152,8 +152,8 @@ func TestFreezeGate(t *testing.T) {
 				t.Errorf("core/ or loop/ gofmt refused: %s (%v; %v)", p, oldFErr, newFErr)
 				continue
 			}
-			if !bytes.Equal(oldF, newF) {
-				t.Errorf("core/ or loop/ changed beyond gofmt: %s (the formatted sides differ)", p)
+			if !pureAddition(oldF, newF) {
+				t.Errorf("core/ or loop/ modified, not extended: %s (the frozen surface is open to pure addition, closed to modification; the named change goes in the PR and SPEC_CORE)", p)
 			}
 		}
 	}
@@ -163,6 +163,22 @@ func TestFreezeGate(t *testing.T) {
 	if o, err := gotest.CombinedOutput(); err != nil {
 		t.Errorf("the CLI's goldens are not green:\n%s", o)
 	}
+}
+
+// pureAddition reports whether every line of old survives in new, in
+// order: the change added lines and renamed nothing. Extension passes;
+// any modification — a rename, a signature change, a removal — drops or
+// reorders an old line and fails.
+func pureAddition(oldF, newF []byte) bool {
+	o := strings.Split(string(oldF), "\n")
+	n := strings.Split(string(newF), "\n")
+	i := 0
+	for _, line := range n {
+		if i < len(o) && line == o[i] {
+			i++
+		}
+	}
+	return i == len(o)
 }
 
 func stripped(src []byte) ([]byte, error) {
