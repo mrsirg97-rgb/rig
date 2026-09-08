@@ -52,7 +52,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.24.4"
+const Version = "0.24.5"
 
 type root struct {
 	pluginMax int
@@ -649,6 +649,30 @@ func sessionFor(resumeID string, resume func(id string) (*core.Session, error)) 
 	return s, nil
 }
 
+// reapClaims releases todo claims owned by sessions whose rows have
+// ended, so a dead session's in-progress tasks return to the shared
+// pool at the next open instead of blocking every live session that
+// reads the queue. The ended set comes from this cwd's session store
+// (a SIGKILL'd session leaves its row open; its claims age out through
+// Reap's staleness arm). The note names what was freed; an idle reap
+// returns "".
+func reapClaims(ctx context.Context, sdb, tdb store.DB, cwd string, proj todostore.Project, session string) (string, error) {
+	rows, err := state.ListSessions(ctx, sdb, state.ListCap)
+	if err != nil {
+		return "", err
+	}
+	var ended []string
+	for _, r := range rows {
+		if r.Exit != "" && r.Exit != "open" {
+			ended = append(ended, r.ID)
+		}
+	}
+	if len(ended) == 0 {
+		return "", nil
+	}
+	return todostore.Reap(ctx, tdb, proj, ended, session)
+}
+
 func main() {
 
 	baseURL := flag.String("base-url", "", "OpenAI-compatible endpoint base URL (the worker swap); precedence: flag > RIG_BASE_URL > settings.json baseUrl > the embedded default")
@@ -1109,6 +1133,11 @@ func main() {
 		Ask(ctx context.Context, prompt string) bool
 	}); ok {
 		r.askDoor = a.Ask
+	}
+	if note, e := reapClaims(context.Background(), sdb, tdb, cwd, todostore.Project{Key: scope.Key(cwd), Label: scope.Label(cwd)}, session.ID); e != nil {
+		fmt.Fprintln(os.Stderr, "rig: todo reap:", e)
+	} else if note != "" {
+		fmt.Fprintln(os.Stderr, "rig: todo:", note)
 	}
 	rec := state.NewRecorder(fe, sdb, cwd, modelID, Version, session.ID, session).Snapshot(file.SnapshotFiles)
 	r.rec = rec

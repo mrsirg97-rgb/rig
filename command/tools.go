@@ -98,7 +98,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 			"action": "create",
 			"tasks":  []map[string]any{{"text": text}},
 		})
-	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "retry") && len(fields) == 2:
+	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry") && len(fields) == 2:
 		action := fields[0]
 		if action == "done" {
 			action = "complete"
@@ -115,19 +115,19 @@ func todoArgs(args string) (json.RawMessage, error) {
 	}
 	switch {
 	case len(fields) == 0:
-		return nil, errors.New("todo: usage: todo read|create <text…>|start|complete|fail|retry <id>|move <id> <pos>|project <path>")
+		return nil, errors.New("todo: usage: todo read|create <text…>|start|complete|fail|release|retry <id>|move <id> <pos>|project <path>")
 	case fields[0] == "read":
 		return nil, errors.New("todo: read takes no args (todo read)")
 	case fields[0] == "create":
 		return nil, errors.New("todo: create needs text (todo create <text…>)")
-	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "retry":
+	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry":
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":
 		return nil, errors.New("todo: move takes an id and a position (todo move <id> <pos>)")
 	case fields[0] == "project":
 		return nil, errors.New("todo: project takes a path (todo project <path>)")
 	default:
-		return nil, fmt.Errorf("todo: unknown action %q (todo read|create <text…>|start|complete|fail|retry <id>|move <id> <pos>)", fields[0])
+		return nil, fmt.Errorf("todo: unknown action %q (todo read|create <text…>|start|complete|fail|release|retry <id>|move <id> <pos>)", fields[0])
 	}
 }
 

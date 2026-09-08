@@ -318,6 +318,31 @@ func TestTodoProjectCommand(t *testing.T) {
 	}
 }
 
+func TestTodoReleaseCommandParsesTheVerb(t *testing.T) {
+	var got map[string]any
+	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
+		got = map[string]any{}
+		if err := json.Unmarshal(args, &got); err != nil {
+			return "", err
+		}
+		return "released", nil
+	})
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"todo": capture}}
+
+	if _, err := runCmd(t, "todo", "release t9", env); err != nil {
+		t.Fatalf("todo release: %v", err)
+	}
+	if got["action"] != "release" || got["id"] != "t9" {
+		t.Fatalf("release parse: %v", got)
+	}
+
+	if _, err := runCmd(t, "todo", "release", env); err == nil {
+		t.Fatal("bare release succeeded")
+	} else if err.Error() != "todo: release takes an id (todo release <id>)" {
+		t.Fatalf("bare release voice: %v", err)
+	}
+}
+
 func TestSchedulerUpdatePromptKeepsKeyWords(t *testing.T) {
 	var got map[string]any
 	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
