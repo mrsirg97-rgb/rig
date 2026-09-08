@@ -43,6 +43,22 @@ loop already emits; the read side rebuilds a session from the log.
   tool (`tool/sessions`) are thin adapters over `ListSessions`,
   `SessionUsage`, and `SessionFaults`; no SQL in either.
 
+## Regenerating
+
+The generated `domain/` and `ddl/` projections come from the lift
+engine; edit `metadata/state.go` and run, from the lift checkout:
+
+```sh
+cd ~/Projects/lift/cmd && go run . \
+  -config ../../rig/store/state/gen.json \
+  -source ../../rig/store/state/source.json
+```
+
+`gen.json` names the output packages and templates; `source.json` names
+the metadata directory. Both paths resolve against the lift checkout, so
+the store regenerates in place. A zero-diff run on unchanged metadata is
+the sanity check that the invocation is right.
+
 ## Gotchas
 
 - `tool_calls` is keyed `(session_id, message_seq, id)`: model-minted call
