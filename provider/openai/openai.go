@@ -130,6 +130,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 			pending   map[int]*core.ToolCall
 			finishing string
 			usage     core.Usage
+			model     string
 		)
 		fault := func(err error) { emit(core.Fault{Err: err}) }
 
@@ -153,6 +154,9 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 				fault(fmt.Errorf("openai: malformed stream chunk: %s", payload))
 				return
+			}
+			if chunk.Model != "" {
+				model = chunk.Model
 			}
 			if chunk.Usage != nil {
 				usage = core.Usage{
@@ -199,7 +203,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 				return
 			}
 		}
-		emit(core.Done{StopReason: finishing, Usage: usage})
+		emit(core.Done{StopReason: finishing, Usage: usage, Model: model})
 	}()
 
 	return ch, nil
@@ -316,6 +320,7 @@ type wireTool struct {
 }
 
 type streamChunk struct {
+	Model   string       `json:"model"`
 	Choices []wireChoice `json:"choices"`
 	Usage   *wireUsage   `json:"usage"`
 }

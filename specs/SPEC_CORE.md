@@ -118,6 +118,7 @@ type ToolCallEvent struct{ Call ToolCall }
 type Done struct {
 	StopReason string
 	Usage      Usage
+	Model      string // the served model, the provider response's own echo; empty when the backend sends none
 }
 type Fault struct{ Err error }
 

@@ -254,3 +254,93 @@ func TestRecorderFaultDiscardsPartialText(t *testing.T) {
 		t.Fatalf("a concatenated or partial row landed: %+v", second)
 	}
 }
+
+func TestRecorderStampsServedModel(t *testing.T) {
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	inner := &scripted{inputs: []string{"do it"}}
+	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-model", core.NewSession())
+
+	ctx := context.Background()
+	if _, err := rec.Input(ctx); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	rec.Notify(core.TextDelta{Text: "hello"})
+	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 5, Completion: 2}, Model: "glm5.3-flash"})
+
+	a := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, 2).Row()
+	}).(*domain.Message)
+	if a.Role != "assistant" || a.Model == nil || *a.Model != "glm5.3-flash" {
+		t.Fatalf("assistant row not stamped with the served model: %+v", a)
+	}
+	u := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, 1).Row()
+	}).(*domain.Message)
+	if u.Model != nil {
+		t.Fatalf("user row carries no model: %+v", u)
+	}
+}
+
+func TestRecorderWithoutEchoLeavesModelNull(t *testing.T) {
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	inner := &scripted{inputs: []string{"do it"}}
+	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-null", core.NewSession())
+
+	ctx := context.Background()
+	if _, err := rec.Input(ctx); err != nil {
+		t.Fatalf("input: %v", err)
+	}
+	rec.Notify(core.TextDelta{Text: "hello"})
+	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 5, Completion: 2}})
+
+	a := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, 2).Row()
+	}).(*domain.Message)
+	if a.Model != nil {
+		t.Fatalf("no echo, no model: %+v", a.Model)
+	}
+}
+
+func TestRecorderLabelsTheFirstPrompt(t *testing.T) {
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	inner := &scripted{inputs: []string{"  fix the retry guard\nwith tests  ", "second prompt"}}
+	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-label", core.NewSession())
+
+	ctx := context.Background()
+	if _, err := rec.Input(ctx); err != nil {
+		t.Fatalf("input 1: %v", err)
+	}
+	if _, err := rec.Input(ctx); err != nil {
+		t.Fatalf("input 2: %v", err)
+	}
+
+	rows, err := state.ListSessions(ctx, db, state.ListCap)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows: %d", len(rows))
+	}
+	if rows[0].Label != "fix the retry guard" {
+		t.Fatalf("label: %q", rows[0].Label)
+	}
+}
+
+func TestRecorderPromptLabelCapsAtSixtyRunes(t *testing.T) {
+	long := strings.Repeat("x", 100)
+	if got := state.PromptLabel(long); len([]rune(got)) != 61 {
+		t.Fatalf("label runes: %d", len([]rune(got)))
+	}
+	if got := state.PromptLabel("  first line\nsecond"); got != "first line" {
+		t.Fatalf("label: %q", got)
+	}
+}

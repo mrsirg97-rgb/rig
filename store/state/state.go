@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/store"
@@ -14,37 +15,55 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 func Migration() func(*sql.Tx, int, int) (string, error) {
 	return migrate
 }
 
 func migrate(tx *sql.Tx, from, to int) (string, error) {
+	notes := []string{}
+	if from < 2 && to >= 2 {
+		if err := addToolCallsSessionID(tx, &notes); err != nil {
+			return "", err
+		}
+	}
+	if from < 3 && to >= 3 {
+		if err := addMessagesModel(tx, &notes); err != nil {
+			return "", err
+		}
+		if err := addSessionsLabel(tx, &notes); err != nil {
+			return "", err
+		}
+	}
+	return strings.Join(notes, "; "), nil
+}
+
+func addToolCallsSessionID(tx *sql.Tx, notes *[]string) error {
 	var found int
 	err := tx.QueryRow(`SELECT 1 FROM pragma_table_info('tool_calls') WHERE name = 'session_id'`).Scan(&found)
 	switch {
 	case err == nil:
-		return "", nil
+		return nil
 	case errors.Is(err, sql.ErrNoRows):
 	default:
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
 	if _, err := tx.Exec(`ALTER TABLE "tool_calls" ADD COLUMN "session_id" TEXT`); err != nil {
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
 	if _, err := tx.Exec(`UPDATE "tool_calls" SET "session_id" = (
 		SELECT "session_id" FROM "messages"
 		WHERE "messages"."seq" = "tool_calls"."message_seq"
 	)`); err != nil {
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
 	var orphan int
 	if err := tx.QueryRow(`SELECT count(*) FROM "tool_calls" WHERE "session_id" IS NULL`).Scan(&orphan); err != nil {
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
 	if orphan > 0 {
-		return "", fmt.Errorf("state: migration: %d tool call rows reference no message row", orphan)
+		return fmt.Errorf("state: migration: %d tool call rows reference no message row", orphan)
 	}
 	if _, err := tx.Exec(`CREATE TABLE "tool_calls_v2" (
   "session_id" TEXT NOT NULL,
@@ -58,19 +77,71 @@ func migrate(tx *sql.Tx, from, to int) (string, error) {
   "started_at" TIMESTAMP NOT NULL,
   PRIMARY KEY ("session_id", "message_seq", "id")
 )`); err != nil {
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
 	if _, err := tx.Exec(`INSERT INTO "tool_calls_v2" ("session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at")
 		SELECT "session_id", "message_seq", "id", "args", "ended_at", "err", "name", "result", "started_at" FROM "tool_calls"`); err != nil {
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
 	if _, err := tx.Exec(`DROP TABLE "tool_calls"`); err != nil {
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
 	if _, err := tx.Exec(`ALTER TABLE "tool_calls_v2" RENAME TO "tool_calls"`); err != nil {
-		return "", fmt.Errorf("state: migration: %w", err)
+		return fmt.Errorf("state: migration: %w", err)
 	}
-	return "state migration: tool_calls keyed by (session_id, message_seq, id)", nil
+	*notes = append(*notes, "state migration: tool_calls keyed by (session_id, message_seq, id)")
+	return nil
+}
+
+func addMessagesModel(tx *sql.Tx, notes *[]string) error {
+	var found int
+	err := tx.QueryRow(`SELECT 1 FROM pragma_table_info('messages') WHERE name = 'model'`).Scan(&found)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, sql.ErrNoRows):
+	default:
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`ALTER TABLE "messages" ADD COLUMN "model" TEXT`); err != nil {
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	*notes = append(*notes, "state migration: messages carry the served model")
+	return nil
+}
+
+func addSessionsLabel(tx *sql.Tx, notes *[]string) error {
+	var found int
+	err := tx.QueryRow(`SELECT 1 FROM pragma_table_info('sessions') WHERE name = 'label'`).Scan(&found)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, sql.ErrNoRows):
+	default:
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`ALTER TABLE "sessions" ADD COLUMN "label" TEXT`); err != nil {
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	*notes = append(*notes, "state migration: sessions carry a label")
+	return nil
+}
+
+func SetSessionLabel(ctx context.Context, db store.DB, sessionID, label string) error {
+	return withTx(db, ctx, func(c context.Context) error {
+		s, e := safely(func() (*domain.Session, error) {
+			return domain.NewSessionDomain().GetSession(c, sessionID).Row()
+		})
+		if e != nil || s == nil {
+			return e
+		}
+		if s.Label != nil {
+			return nil
+		}
+		s.Label = &label
+		_, e = domain.NewSessionDomain().UpdateSession(c, *s)
+		return e
+	})
 }
 
 func Statements() []string {
@@ -86,7 +157,7 @@ func RecordSession(ctx context.Context, db store.DB, id, cwd, model, version str
 	})
 }
 
-func RecordMessage(ctx context.Context, db store.DB, sessionID, role, content string, reasoning, toolID *string) (int64, error) {
+func RecordMessage(ctx context.Context, db store.DB, sessionID, role, content string, reasoning, toolID, model *string) (int64, error) {
 	var seq int64
 	err := withTx(db, ctx, func(c context.Context) error {
 		var e error
@@ -96,7 +167,7 @@ func RecordMessage(ctx context.Context, db store.DB, sessionID, role, content st
 		}
 		_, e = domain.NewMessageDomain().InsertMessage(c, domain.Message{
 			Seq: seq, SessionId: sessionID, Role: role, Content: content,
-			Reasoning: reasoning, ToolId: toolID, CreatedAt: now(),
+			Reasoning: reasoning, ToolId: toolID, Model: model, CreatedAt: now(),
 		})
 		return e
 	})

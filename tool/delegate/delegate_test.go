@@ -275,6 +275,9 @@ func TestDelegateBusyRefusalNamesTheHolder(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "held by other-model") {
 		t.Fatalf("the busy refusal must name the holder: (%q, %v)", out, err)
 	}
+	if !strings.Contains(err.Error(), "once-job") {
+		t.Fatalf("the busy refusal must teach the escape hatch: %v", err)
+	}
 	if len(spawn.calls) != 0 {
 		t.Fatal("no spawn on a busy GPU")
 	}

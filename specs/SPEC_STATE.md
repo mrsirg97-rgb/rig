@@ -144,10 +144,17 @@ The session transcript as rows. One file per session under
 `session_id` on every row; decide in the first PR, name it. Containers:
 
 - `sessions`: id (primary, minted, stable for the process), cwd, model,
-  started_at, ended_at, exit (ok|fault|cancelled), version.
+  started_at, ended_at, exit (ok|fault|cancelled), version, label (nullable;
+  the first user prompt's first line, trimmed, at 60 runes — written once
+  by the recorder, first writer wins; `new` and `sessions resume` mint
+  fresh rows, so each names itself).
 - `messages`: seq (primary), session_id (link sessions), role, content,
   reasoning (nullable; filled by the recorder, deliverable 7), tool_id (nullable),
-  created_at.
+  model (nullable; the served model as the provider's own response echo,
+  stamped on assistant rows by the recorder at `Done`; user, compaction,
+  and re-landed rows stay null — `sessions.model` is the requested id at
+  open, the message rows are what actually served, and the divergence is
+  the diagnostic), created_at.
 - `tool_calls`: id (primary: the provider's call id), message_seq (link
   messages), name, args (TEXT json), result (TEXT, nullable until it lands),
   err (nullable), started_at, ended_at.

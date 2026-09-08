@@ -232,12 +232,12 @@ func seedSession(t *testing.T, db store.DB, sid string) {
 		t.Fatal(err)
 	}
 
-	if _, err := state.RecordMessage(ctx, db, sid, "user", "do it", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "do it", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	ra := "the thinking behind the calls"
-	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", &ra, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", &ra, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.RecordToolCall(ctx, db, sid, 2, "c1", "bash", `{"cmd":"ls"}`); err != nil {
@@ -255,10 +255,10 @@ func seedSession(t *testing.T, db store.DB, sid string) {
 		t.Fatal(err)
 	}
 
-	if _, err := state.RecordMessage(ctx, db, sid, "user", "again", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "again", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "final answer", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "final answer", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 }

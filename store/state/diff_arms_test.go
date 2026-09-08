@@ -105,7 +105,7 @@ func TestRecordToolCallStoresCanonicalForm(t *testing.T) {
 	if e := state.RecordSession(ctx, db, sid, "/w", "m", "v"); e != nil {
 		t.Fatal(e)
 	}
-	seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -127,7 +127,7 @@ func TestRecorderUndecodableArgsLandsRawAndSpeaks(t *testing.T) {
 	if e := state.RecordSession(ctx, db, sid, "/w", "m", "v"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, sid, "user", "go", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, sid, "user", "go", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 	rec := state.NewRecorder(&nullFrontend{}, db, "/w", "m", "v", sid, core.NewSession())
@@ -182,7 +182,7 @@ func TestRecentToolCallsReturnsNewestFirst(t *testing.T) {
 	results := []string{"r1", "r2", "r3"}
 	var seqs []int64
 	for i, res := range results {
-		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -231,7 +231,7 @@ func TestRecentToolCallsInflightInvisible(t *testing.T) {
 	if e := state.RecordSession(ctx, db, sid, "/w", "m", "v"); e != nil {
 		t.Fatal(e)
 	}
-	seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -241,7 +241,7 @@ func TestRecentToolCallsInflightInvisible(t *testing.T) {
 	if e := state.RecordToolResult(ctx, db, "inflight", seq, "c1", "r1", nil); e != nil {
 		t.Fatal(e)
 	}
-	seq, e = state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq, e = state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -252,7 +252,7 @@ func TestRecentToolCallsInflightInvisible(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	seq, e = state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq, e = state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -279,7 +279,7 @@ func TestRecentToolCallsSessionScope(t *testing.T) {
 	}
 	makeCall := func(sid, id, res string) {
 		t.Helper()
-		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -317,7 +317,7 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 		t.Fatal(e)
 	}
 	args := `{"command":"ls"}`
-	seq1, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq1, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -346,7 +346,7 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 		t.Fatalf("the in-scope row = %q seq %d, want r1 at a fresh seq past the marker (the original's seq is %d)", rows[0].Result, rows[0].Seq, seq1)
 	}
 
-	seq2, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq2, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -369,7 +369,7 @@ func TestRecentToolCallsWorldBoundary(t *testing.T) {
 		t.Fatal(e)
 	}
 	for i, res := range []string{"a", "b"} {
-		seq, e := state.RecordMessage(ctx, db, sid2, "assistant", "", nil, nil)
+		seq, e := state.RecordMessage(ctx, db, sid2, "assistant", "", nil, nil, nil)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -399,7 +399,7 @@ func TestRecentToolCallsInterleavingKeepsThePair(t *testing.T) {
 	}
 	call := func(id, name, args, res string) {
 		t.Helper()
-		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -432,11 +432,11 @@ func TestRecentToolCallsTotalOrder(t *testing.T) {
 	if e := state.RecordSession(ctx, db, sid, "/w", "m", "v"); e != nil {
 		t.Fatal(e)
 	}
-	seq1, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq1, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
-	seq2, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+	seq2, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 	if e != nil {
 		t.Fatal(e)
 	}

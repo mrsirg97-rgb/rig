@@ -16,6 +16,7 @@ type Message struct {
 	Seq       int64     `db:"seq"`
 	Content   string    `db:"content"`
 	CreatedAt time.Time `db:"created_at"`
+	Model     *string   `db:"model"`
 	Reasoning *string   `db:"reasoning"`
 	Role      string    `db:"role"`
 	SessionId string    `db:"session_id"`
@@ -42,6 +43,7 @@ func ScanMessage(row lazy.ScanRow) (Message, error) {
 		&out.Seq,
 		&out.Content,
 		&out.CreatedAt,
+		&out.Model,
 		&out.Reasoning,
 		&out.Role,
 		&out.SessionId,
@@ -70,7 +72,7 @@ func (d *messageDomain) GetMessage(ctx context.Context, seq int64) *lazy.Lazy[Me
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "seq", "content", "created_at", "reasoning", "role", "session_id", "tool_id" FROM "messages" WHERE "seq" = $1`,
+		`SELECT "seq", "content", "created_at", "model", "reasoning", "role", "session_id", "tool_id" FROM "messages" WHERE "seq" = $1`,
 		seq,
 	)
 	out, err := ScanMessage(row)
@@ -107,7 +109,7 @@ func (d *messageDomain) GetMessageBatch(ctx context.Context, keys []int64) *lazy
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "seq", "content", "created_at", "reasoning", "role", "session_id", "tool_id" FROM "messages" WHERE "seq" IN (`+ph+`)`, args...)
+		`SELECT "seq", "content", "created_at", "model", "reasoning", "role", "session_id", "tool_id" FROM "messages" WHERE "seq" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -135,10 +137,11 @@ func (d *messageDomain) InsertMessage(ctx context.Context, row Message) (*Messag
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "messages" ("seq", "content", "created_at", "reasoning", "role", "session_id", "tool_id") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING "seq", "content", "created_at", "reasoning", "role", "session_id", "tool_id"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "messages" ("seq", "content", "created_at", "model", "reasoning", "role", "session_id", "tool_id") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING "seq", "content", "created_at", "model", "reasoning", "role", "session_id", "tool_id"`,
 		row.Seq,
 		row.Content,
 		row.CreatedAt,
+		row.Model,
 		row.Reasoning,
 		row.Role,
 		row.SessionId,
@@ -155,7 +158,7 @@ func (d *messageDomain) DeleteMessage(ctx context.Context, seq int64) (*Message,
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "messages" WHERE "seq" = $1 RETURNING "seq", "content", "created_at", "reasoning", "role", "session_id", "tool_id"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "messages" WHERE "seq" = $1 RETURNING "seq", "content", "created_at", "model", "reasoning", "role", "session_id", "tool_id"`,
 		seq,
 	)
 	if err != nil {
@@ -169,9 +172,10 @@ func (d *messageDomain) UpdateMessage(ctx context.Context, row Message) (*Messag
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "messages" SET "content" = $1, "created_at" = $2, "reasoning" = $3, "role" = $4, "session_id" = $5, "tool_id" = $6 WHERE "seq" = $7 RETURNING "seq", "content", "created_at", "reasoning", "role", "session_id", "tool_id"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "messages" SET "content" = $1, "created_at" = $2, "model" = $3, "reasoning" = $4, "role" = $5, "session_id" = $6, "tool_id" = $7 WHERE "seq" = $8 RETURNING "seq", "content", "created_at", "model", "reasoning", "role", "session_id", "tool_id"`,
 		row.Content,
 		row.CreatedAt,
+		row.Model,
 		row.Reasoning,
 		row.Role,
 		row.SessionId,

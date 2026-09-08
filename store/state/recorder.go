@@ -27,6 +27,7 @@ type Recorder struct {
 	lastSeq   int64
 	resultMap map[string][]string
 	ensured   bool
+	labeled   bool
 	mu        sync.Mutex
 	snapshot  func(*core.Session) map[string]core.FileState
 }
@@ -52,19 +53,47 @@ func (r *Recorder) Input(ctx context.Context) (string, error) {
 		r.loud("session row", e)
 	}
 
-	_ = r.land()
+	_ = r.land("")
 	text, err := r.inner.Input(ctx)
 	if err != nil {
 		return text, err
 	}
-	seq, e := RecordMessage(ctx, r.db, r.sid, "user", text, nil, nil)
+	seq, e := RecordMessage(ctx, r.db, r.sid, "user", text, nil, nil, nil)
 	if e != nil {
 		r.loud("user message", e)
 	} else {
 		r.setLastSeq(seq)
 	}
+	r.labelSession(text)
 	r.upsertFiles()
 	return text, err
+}
+
+func (r *Recorder) labelSession(text string) {
+	r.mu.Lock()
+	if r.labeled {
+		r.mu.Unlock()
+		return
+	}
+	r.mu.Unlock()
+	if e := SetSessionLabel(context.Background(), r.db, r.sid, PromptLabel(text)); e != nil {
+		r.loud("session label", e)
+		return
+	}
+	r.mu.Lock()
+	r.labeled = true
+	r.mu.Unlock()
+}
+
+func PromptLabel(content string) string {
+	if i := strings.IndexByte(content, '\n'); i >= 0 {
+		content = content[:i]
+	}
+	r := []rune(strings.TrimSpace(content))
+	if len(r) > 60 {
+		r = append(r[:60], '…')
+	}
+	return string(r)
 }
 
 func (r *Recorder) Notify(ev core.Event) {
@@ -107,7 +136,7 @@ func (r *Recorder) observe(ev core.Event) {
 			r.loud("tool result "+e.ID, e2)
 		}
 	case core.Done:
-		seq := r.land()
+		seq := r.land(e.Model)
 		if seq > 0 {
 			if e2 := RecordUsage(context.Background(), r.db, seq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite)); e2 != nil {
 				r.loud("usage", e2)
@@ -136,7 +165,7 @@ func (r *Recorder) discardPartial() {
 	r.mu.Unlock()
 }
 
-func (r *Recorder) land() (seq int64) {
+func (r *Recorder) land(model string) (seq int64) {
 	r.mu.Lock()
 	text := r.buffer.String()
 	reason := r.reason.String()
@@ -157,8 +186,12 @@ func (r *Recorder) land() (seq int64) {
 	if reason != "" {
 		reasoning = &reason
 	}
+	var served *string
+	if model != "" {
+		served = &model
+	}
 	var e error
-	seq, e = RecordMessage(context.Background(), r.db, r.sid, "assistant", text, reasoning, toolID)
+	seq, e = RecordMessage(context.Background(), r.db, r.sid, "assistant", text, reasoning, toolID, served)
 	if e != nil {
 		r.loud("assistant message", e)
 		return 0
@@ -201,7 +234,7 @@ func (r *Recorder) popStorage(id string) (string, bool) {
 }
 
 func (r *Recorder) landCompacted(ev core.Compacted) {
-	seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", ev.Summary, nil, nil)
+	seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", ev.Summary, nil, nil, nil)
 	if e != nil {
 		r.loud("summary row", e)
 		return
@@ -236,7 +269,7 @@ func (r *Recorder) relandTail(floor int64) {
 	for _, m := range tail {
 		switch m.Role {
 		case core.RoleUser:
-			if seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", m.Content, nil, nil); e != nil {
+			if seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", m.Content, nil, nil, nil); e != nil {
 				r.loud("re-landed user", e)
 			} else {
 				r.setLastSeq(seq)
@@ -251,7 +284,7 @@ func (r *Recorder) relandTail(floor int64) {
 			if m.Reasoning != "" {
 				reasoning = &m.Reasoning
 			}
-			seq, e := RecordMessage(context.Background(), r.db, r.sid, "assistant", m.Content, reasoning, toolID)
+			seq, e := RecordMessage(context.Background(), r.db, r.sid, "assistant", m.Content, reasoning, toolID, nil)
 			if e != nil {
 				r.loud("re-landed assistant", e)
 				continue
@@ -375,6 +408,7 @@ func (r *Recorder) Retarget(sid string, session *core.Session) {
 	r.mu.Lock()
 	r.sid = sid
 	r.session = session
+	r.labeled = false
 	r.mu.Unlock()
 }
 

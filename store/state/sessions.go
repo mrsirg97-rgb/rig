@@ -21,6 +21,8 @@ type SessionRow struct {
 	Exit    string
 	Turns   int
 	Faults  int
+	Tokens  int64
+	Label   string
 }
 
 func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error) {
@@ -40,7 +42,11 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 				           AND m2."role" = 'user'
 				           AND m2."content" LIKE '[compaction] %'
 				       ), 0)),
-			(SELECT count(*) FROM "faults" f WHERE f."session_id" = s."id")
+			(SELECT count(*) FROM "faults" f WHERE f."session_id" = s."id"),
+			COALESCE((SELECT SUM(u."prompt" + u."completion") FROM "usage" u
+				  JOIN "messages" m ON m."seq" = u."message_seq"
+				  WHERE m."session_id" = s."id"), 0),
+			COALESCE(s."label", '')
 		FROM "sessions" s
 		ORDER BY s."started_at" DESC
 		LIMIT $1`, n)
@@ -51,7 +57,7 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 	var out []SessionRow
 	for rows.Next() {
 		var r SessionRow
-		if err := rows.Scan(&r.ID, &r.Cwd, &r.Started, &r.Exit, &r.Model, &r.Version, &r.Turns, &r.Faults); err != nil {
+		if err := rows.Scan(&r.ID, &r.Cwd, &r.Started, &r.Exit, &r.Model, &r.Version, &r.Turns, &r.Faults, &r.Tokens, &r.Label); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

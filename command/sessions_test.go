@@ -33,9 +33,9 @@ func TestSessionsList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3  *\n" +
-		"01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12\n" +
-		"01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1\n"
+	want := "01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3 tokens 0  *\n" +
+		"01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12 tokens 0\n" +
+		"01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1 tokens 0\n"
 	if out != want {
 		t.Fatalf("the list lines must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}
@@ -71,9 +71,9 @@ func TestSessionsListVerb(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3  *\n" +
-		"01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12\n" +
-		"01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1\n"
+	want := "01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3 tokens 0  *\n" +
+		"01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12 tokens 0\n" +
+		"01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1 tokens 0\n"
 	if out != want {
 		t.Fatalf("the list verb must match the bare list:\ngot:\n%s\nwant:\n%s", out, want)
 	}

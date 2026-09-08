@@ -25,6 +25,14 @@ loop already emits; the read side rebuilds a session from the log.
   typed usage read (prompt/completion/cache tokens per message,
   transcript order) the dashboard and the `sessions` tool build from.
 - `metadata/state.go`: hand-written metadata.
+- The served model rides the transcript: assistant message rows carry
+  `model` (nullable), stamped by the recorder from `core.Done`'s echo;
+  user, compaction, and re-landed rows stay null. v2 files gain the
+  column on open (schema v3); pre-migration rows read null.
+- The session row carries `label` (nullable) and `tokens` (the sum of
+  prompt + completion usage): the label is the first user prompt's
+  first line (trimmed, 60 runes), written once and never rewritten;
+  `ListSessions` returns both beside the turns and fault counts.
 
 ## How it is consumed
 
@@ -34,6 +42,22 @@ loop already emits; the read side rebuilds a session from the log.
   `ErrNoSuchSession` (`errors.Is`); its `summary` verb and the `sessions`
   tool (`tool/sessions`) are thin adapters over `ListSessions`,
   `SessionUsage`, and `SessionFaults`; no SQL in either.
+
+## Regenerating
+
+The generated `domain/` and `ddl/` projections come from the lift
+engine; edit `metadata/state.go` and run, from the lift checkout:
+
+```sh
+cd ~/Projects/lift/cmd && go run . \
+  -config ../../rig/store/state/gen.json \
+  -source ../../rig/store/state/source.json
+```
+
+`gen.json` names the output packages and templates; `source.json` names
+the metadata directory. Both paths resolve against the lift checkout, so
+the store regenerates in place. A zero-diff run on unchanged metadata is
+the sanity check that the invocation is right.
 
 ## Gotchas
 

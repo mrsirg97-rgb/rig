@@ -21,6 +21,8 @@ type SessionRow struct {
 	Started time.Time
 	Exit    string
 	Turns   int
+	Tokens  int64
+	Label   string
 	Current bool
 }
 

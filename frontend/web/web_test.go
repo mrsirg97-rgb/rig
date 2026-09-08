@@ -50,11 +50,11 @@ func seedHome(t *testing.T) string {
 	if err := state.RecordSession(ctx, sdb, "sess1", testCWD, "model-x", "0.9.0"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, sdb, "sess1", "user", "do the thing", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, sdb, "sess1", "user", "do the thing", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	reasoning := "weighing the options"
-	seq, err := state.RecordMessage(ctx, sdb, "sess1", "assistant", "done", &reasoning, nil)
+	seq, err := state.RecordMessage(ctx, sdb, "sess1", "assistant", "done", &reasoning, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.24.4]: the correctness pass
+
+Each finding below carries a test that failed before and passes after.
+Field-tested by the harness's own occupant: the session that found the
+label bug was reading its own session row.
+
+- **the served model rides the message row** (`core/provider.go`,
+  `provider/openai/openai.go`, `store/state`, `specs/SPEC_CORE.md`,
+  `specs/SPEC_STATE.md`): the session store recorded the requested model
+  id once, at open, and never learned what actually served each turn — a
+  `/models` switch or a backend swap behind the endpoint left the row
+  lying about who was home. `core.Done` now carries `Model`, the
+  response's own echo, and the recorder stamps it on assistant message
+  rows (schema v3: `messages.model`, nullable); user, compaction, and
+  re-landed rows stay null. `sessions.model` stays the requested id at
+  open — the divergence between the two is the diagnostic. The freeze
+  gate learned the distinction it was missing: the frozen surface is open
+  to pure addition (every old line survives, in order) and closed to
+  modification, so extension no longer reads as a violation.
+- **the session names itself and counts its tokens** (`store/state`,
+  `command/sessions.go`, `tool/sessions`, `frontend/web`): the listing
+  was a wall of anonymous ids. `sessions.label` (schema v3) carries the
+  first user prompt's first line, trimmed, at 60 runes — written once by
+  the recorder, first writer wins, never rewritten; `ListSessions`
+  returns it beside the summed prompt+completion tokens. The command,
+  the tool, and the dashboard render both; absent labels render nothing.
+- **the busy refusal teaches the escape hatch** (`store/scheduler/delegate.go`):
+  on a single-endpoint box a delegate from inside a turn cannot win —
+  the worker's model would have to evict the delegator's own residency.
+  The refusal already named the holder; it now names the path that does
+  work (schedule a once-job, it fires between turns).
+- **the regeneration is documented** (`store/state/PACKAGE.md`): the
+  exact lift invocation for regenerating `domain`/`ddl` after a metadata
+  edit, which lived in nobody's head and nowhere on disk.
+
 ## [0.24.3]: the release's signature proves itself
 
 Each finding below carries a test that failed before and passes after.

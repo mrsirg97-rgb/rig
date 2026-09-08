@@ -241,6 +241,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			ID: row.ID, Cwd: row.Cwd,
 			Started: row.Started.UTC().Format(time.RFC3339),
 			Exit:    row.Exit, Turns: row.Turns,
+			Tokens: row.Tokens, Label: row.Label,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "sessions": out})
@@ -723,6 +724,8 @@ type sessionJSON struct {
 	Started string `json:"started"`
 	Exit    string `json:"exit"`
 	Turns   int    `json:"turns"`
+	Tokens  int64  `json:"tokens"`
+	Label   string `json:"label"`
 }
 
 type messageJSON struct {

@@ -20,7 +20,7 @@ func TestToolCallsAreSessionScoped(t *testing.T) {
 		if err := state.RecordSession(ctx, db, sid, "/w", "m", "v"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil); err != nil {
+		if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -56,10 +56,10 @@ func TestToolCallReuseAcrossTurnsStaysScopedToItsMessage(t *testing.T) {
 	if err := state.RecordSession(ctx, db, "s1", "/w", "m", "v"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, "s1", "assistant", "", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, "s1", "assistant", "", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, "s1", "assistant", "", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, "s1", "assistant", "", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.RecordToolCall(ctx, db, "s1", 1, "call_0", "bash", `{}`); err != nil {
@@ -165,10 +165,10 @@ func TestRecorderRelandKeepsTheToolFailure(t *testing.T) {
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, sid, "user", "go", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "go", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil); err != nil {
+	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.RecordToolCall(ctx, db, sid, 2, "c1", "bash", `{}`); err != nil {
@@ -298,7 +298,7 @@ func TestRecorderRelandAttributesErrorsToTheRightTurn(t *testing.T) {
 	// A third turn fails again. The tail keeps the second and third turns.
 	seqs := []int64{}
 	for i := 0; i < 3; i++ {
-		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil)
+		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)
 		if e != nil {
 			t.Fatal(e)
 		}

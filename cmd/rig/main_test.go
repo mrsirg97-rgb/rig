@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "0.24.3" {
-		t.Fatalf("Version = %q, want 0.24.3 (pre-1.0, feature-complete)", Version)
+	if Version != "0.24.4" {
+		t.Fatalf("Version = %q, want 0.24.4 (pre-1.0, feature-complete)", Version)
 	}
 
 	if !regexp.MustCompile(`^0\.\d+\.\d+$`).MatchString(Version) {
@@ -326,7 +326,7 @@ func TestResumePathAdoptsTheSessionIdentity(t *testing.T) {
 	if e := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := state.RecordMessage(ctx, db, sid, "user", "before the kill", nil, nil); e != nil {
+	if _, e := state.RecordMessage(ctx, db, sid, "user", "before the kill", nil, nil, nil); e != nil {
 		t.Fatal(e)
 	}
 	sess, err := state.Resume(ctx, db, sid)
