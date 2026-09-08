@@ -173,7 +173,7 @@ so `a.go` and `./a.go` are one key.
 |------------------|----------------------------------------------------------------|
 | bash output      | 256 KiB, naming the truncation                                 |
 | bash lifecycle   | `WaitDelay` (background children can't hold the turn), process-group teardown on cancellation |
-| file read        | 1 MiB, naming the truncation                                    |
+| file read        | 1 MiB, naming the truncation; streamed — a huge file is never materialised |
 | every tool result | `resultCap` (default 64 KiB): head and tail with the loud `[TRUNCATED]` marker naming the full size, before the transcript |
 | a turn's calls   | `rounds` (default 0 = no cap): the n+1th call is refused without executing |
 

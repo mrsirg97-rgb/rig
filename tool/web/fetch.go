@@ -53,7 +53,7 @@ var (
 	htmlishRE = regexp.MustCompile(`(?i)html|xml`)
 )
 
-type LookupFn func(host string) ([]string, error)
+type LookupFn func(ctx context.Context, host string) ([]string, error)
 
 type FetchConfig struct {
 	Proxy       string
@@ -93,8 +93,8 @@ func NewFetch(cfg FetchConfig) *fetch {
 		f.maxBytes = maxBytesDefault
 	}
 	if f.lookup == nil {
-		f.lookup = func(host string) ([]string, error) {
-			return net.DefaultResolver.LookupHost(context.Background(), host)
+		f.lookup = func(ctx context.Context, host string) ([]string, error) {
+			return net.DefaultResolver.LookupHost(ctx, host)
 		}
 	}
 	if cfg.Trafilatura != nil {
@@ -183,7 +183,7 @@ func pinnedDial(ctx context.Context, network, addr string) (net.Conn, error) {
 	return nil, last
 }
 
-func guardedURL(raw string, base *url.URL, lookup LookupFn) (*url.URL, []netip.Addr, error) {
+func guardedURL(ctx context.Context, raw string, base *url.URL, lookup LookupFn) (*url.URL, []netip.Addr, error) {
 	var u *url.URL
 	var err error
 	if base != nil {
@@ -199,8 +199,14 @@ func guardedURL(raw string, base *url.URL, lookup LookupFn) (*url.URL, []netip.A
 		return nil, nil, fmt.Errorf("only http(s) is fetchable, got %s", u.Scheme)
 	}
 	host := u.Hostname()
-	addrs, err := lookup(host)
-	if err != nil || len(addrs) == 0 {
+	addrs, err := lookup(ctx, host)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, nil, ctxErr
+		}
+		return nil, nil, fmt.Errorf("cannot resolve host: %s (%v)", host, err)
+	}
+	if len(addrs) == 0 {
 		return nil, nil, fmt.Errorf("cannot resolve host: %s", host)
 	}
 	pins := make([]netip.Addr, 0, len(addrs))
@@ -221,7 +227,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 		budgetMs = int(d.Sub(start) / time.Millisecond)
 	}
 
-	u, pins, err := guardedURL(raw, nil, f.lookup)
+	u, pins, err := guardedURL(ctx, raw, nil, f.lookup)
 	if err != nil {
 		return Fetched{}, err
 	}
@@ -254,7 +260,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 
 		if loc := res.Header.Get("Location"); res.StatusCode >= 300 && res.StatusCode < 400 && loc != "" {
 			res.Body.Close()
-			nu, np, err := guardedURL(loc, u, f.lookup)
+			nu, np, err := guardedURL(ctx, loc, u, f.lookup)
 			if err != nil {
 				return Fetched{}, err
 			}

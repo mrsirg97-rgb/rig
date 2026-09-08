@@ -80,7 +80,7 @@ const (
 type FetchConfig struct {
     Proxy       string        // egress proxy; "" = direct
     Trafilatura *string       // pane's string|null|undefined: nil = default resolution, &"" = off, &s = that binary
-    Lookup      func(string) ([]string, error) // DNS seam; nil = system resolver
+    Lookup      func(context.Context, string) ([]string, error) // DNS seam; nil = system resolver; the request ctx (amended 0.24.6)
     Do          func(*http.Request) (*http.Response, error) // transport seam
     MaxBytes    int           // 0 = the default
 }
@@ -146,11 +146,13 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
   same voice as the first hop (pane's named case). The proxy is not
   guarded and not pinned: it is loopback by construction, resolves the
   host itself, and guarding it would need a second policy.
-- **Timeout is the whole fetch, all hops included**: pane's signal is
-  created once outside the loop; Go's ctx carries the same shape
-  (WithTimeout over the fetchGuarded call). A cancelled caller ctx
-  returns the context error; the timeout voice names the ms and the
-  current URL.
+- **Timeout is the whole fetch, all hops included** (amended 0.24.6:
+  the DNS resolution rides the same ctx, so a stalled resolver cannot
+  outlive the deadline): pane's signal is created once outside the
+  loop; Go's ctx carries the same shape (WithTimeout over the
+  fetchGuarded call, and the seam's lookup now takes it). A cancelled
+  caller ctx returns the context error; the timeout voice names the ms
+  and the current URL.
 - **Byte cap is declared-then-streamed.** a Content-Length above the cap
   refuses before any download (pane's named case); otherwise the stream
   is read to the cap and the truncation is named in the content

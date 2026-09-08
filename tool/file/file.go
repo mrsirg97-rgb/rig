@@ -1,6 +1,7 @@
 package file
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -65,6 +67,11 @@ func SnapshotFiles(s *core.Session) map[string]core.FileState {
 }
 
 func recordState(ctx context.Context, path string, data []byte) {
+	sum := sha256.Sum256(data)
+	recordDigest(ctx, path, sum)
+}
+
+func recordDigest(ctx context.Context, path string, sum [32]byte) {
 	s, ok := core.SessionFrom(ctx)
 	if !ok {
 		return
@@ -73,7 +80,6 @@ func recordState(ctx context.Context, path string, data []byte) {
 	if err != nil {
 		return
 	}
-	sum := sha256.Sum256(data)
 	filesMu.Lock()
 	defer filesMu.Unlock()
 	s.Files[path] = core.FileState{
@@ -176,32 +182,22 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		}
 		limit = *a.Limit
 	}
-	fileData, err := os.ReadFile(a.Path)
+	content, total, sum, err := readWindow(a.Path, offset, limit)
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
 	}
+	if offset >= total {
+		return "", fmt.Errorf("read: offset %d is past the end (%d lines)", offset, total)
+	}
 	stale := false
 	if recorded, seen := stateOf(ctx, a.Path); seen {
-		sum := sha256.Sum256(fileData)
 		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
 			stale = true
 		}
 	}
-	recordState(ctx, a.Path, fileData)
+	recordDigest(ctx, a.Path, sum)
 	s, _ := core.SessionFrom(ctx)
-	rememberContent(s, a.Path, string(fileData))
-	lines := strings.Split(string(fileData), "\n")
-	if offset >= len(lines) {
-		return "", fmt.Errorf("read: offset %d is past the end (%d lines)", offset, len(lines))
-	}
-	end := len(lines)
-	if limit >= 0 {
-		end = offset + limit
-		if end > len(lines) {
-			end = len(lines)
-		}
-	}
-	content := strings.Join(lines[offset:end], "\n")
+	rememberContent(s, a.Path, content)
 	if len(content) > readCap {
 		content = content[:readCap] + "\n[output truncated]"
 	}
@@ -209,6 +205,109 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		content = "[changed since your observation] " + a.Path + " — re-read before acting on it\n" + content
 	}
 	return content, nil
+}
+
+// readChunk is the scanner's I/O buffer; a line longer than the read cap is
+// never materialised, only counted and hashed.
+const readChunk = 64 * 1024
+
+// readWindow streams the file once, hashing every byte for provenance while
+// capturing only the requested line window, capped at readCap+1 bytes: a
+// huge file cannot pin memory through a read. The line count and the
+// captured bytes follow strings.Split exactly (the final empty line after a
+// trailing newline counts).
+func readWindow(path string, offset, limit int) (string, int, [32]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", 0, [32]byte{}, err
+	}
+	defer f.Close()
+	h := sha256.New()
+	lr := lineReader{r: bufio.NewReaderSize(io.TeeReader(f, h), readChunk), cap: readCap + 1}
+	var window []byte
+	appendWindow := func(b []byte) {
+		if room := readCap + 1 - len(window); len(b) >= room {
+			window = append(window, b[:room]...)
+		} else {
+			window = append(window, b...)
+		}
+	}
+	first := true
+	seen := 0
+	for {
+		line, ok := lr.next()
+		if !ok {
+			break
+		}
+		seen++
+		if seen <= offset {
+			continue
+		}
+		if limit >= 0 && seen > offset+limit {
+			continue
+		}
+		if !first {
+			appendWindow([]byte{'\n'})
+		}
+		first = false
+		appendWindow(line)
+	}
+	var sum [32]byte
+	copy(sum[:], h.Sum(nil))
+	return string(window), seen, sum, nil
+}
+
+type lineReader struct {
+	r       *bufio.Reader
+	cap     int
+	buf     []byte
+	done    bool
+	endedNl bool
+	sawAny  bool
+}
+
+func (lr *lineReader) next() ([]byte, bool) {
+	if lr.done {
+		return nil, false
+	}
+	lr.buf = lr.buf[:0]
+	buf := lr.buf
+	for {
+		frag, err := lr.r.ReadSlice('\n')
+		n := len(frag)
+		delim := n > 0 && frag[n-1] == '\n'
+		if delim {
+			frag = frag[:n-1]
+		}
+		if n > 0 {
+			if room := lr.cap - len(buf); room > 0 {
+				if len(frag) >= room {
+					buf = append(buf, frag[:room]...)
+				} else {
+					buf = append(buf, frag...)
+				}
+			}
+		}
+		if err == nil {
+			lr.buf = buf
+			lr.endedNl = true
+			lr.sawAny = true
+			return buf, true
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		lr.done = true
+		if n > 0 {
+			lr.buf = buf
+			return buf, true
+		}
+		if lr.endedNl || !lr.sawAny {
+			lr.buf = buf
+			return buf, true
+		}
+		return nil, false
+	}
 }
 
 type writeTool struct{}

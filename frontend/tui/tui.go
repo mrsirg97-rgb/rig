@@ -100,8 +100,9 @@ type tui struct {
 	ticker     *time.Ticker
 	tickStop   chan struct{}
 
-	ticks <-chan time.Time
-	winch <-chan struct{}
+	ticks     <-chan time.Time
+	winch     <-chan struct{}
+	stopWinch func()
 
 	sizeOf func() (int, int, bool)
 }
@@ -194,7 +195,7 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		io.WriteString(out, pasteOn)
 	}
 	if t.winch == nil && t.fdi != 0 {
-		t.winch = signalWinch()
+		t.winch, t.stopWinch = signalWinch()
 	}
 	if t.winch != nil {
 		go t.winchLoop()
@@ -210,19 +211,35 @@ func defaultTheme() Theme {
 	return th
 }
 
-func signalWinch() <-chan struct{} {
+func signalWinch() (<-chan struct{}, func()) {
 	sig := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	exited := make(chan struct{})
 	signal.Notify(sig, syscall.SIGWINCH)
 	ch := make(chan struct{}, 1)
 	go func() {
-		for range sig {
+		defer close(exited)
+		for {
 			select {
-			case ch <- struct{}{}:
-			default:
+			case <-done:
+				signal.Stop(sig)
+				return
+			case <-sig:
+				select {
+				case ch <- struct{}{}:
+				default:
+				}
 			}
 		}
 	}()
-	return ch
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			close(done)
+			<-exited
+		})
+	}
+	return ch, stop
 }
 
 func IsTerminal(fd uintptr) bool { return term.IsTerminal(int(fd)) }
@@ -231,6 +248,10 @@ func (t *tui) Close() {
 	t.closeOnce.Do(func() { close(t.closed) })
 	if t.ticker != nil {
 		t.ticker.Stop()
+	}
+	if t.stopWinch != nil {
+		t.stopWinch()
+		t.stopWinch = nil
 	}
 	t.mu.Lock()
 	if t.pg != nil {

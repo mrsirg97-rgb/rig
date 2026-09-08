@@ -3,6 +3,7 @@ package web_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -36,11 +37,11 @@ func httpResp(status int, headers map[string]string, body string) *http.Response
 	}
 }
 
-func publicLookup(host string) ([]string, error) {
+func publicLookup(ctx context.Context, host string) ([]string, error) {
 	return []string{"93.184.216.34"}, nil
 }
 
-func privateLookup(host string) ([]string, error) {
+func privateLookup(ctx context.Context, host string) ([]string, error) {
 	return []string{"10.9.8.7"}, nil
 }
 
@@ -183,7 +184,7 @@ func TestRedirectsAreFollowedAndEachHopReGuarded(t *testing.T) {
 }
 
 func TestARedirectIntoPrivateSpaceIsRefused(t *testing.T) {
-	lookup := func(host string) ([]string, error) {
+	lookup := func(ctx context.Context, host string) ([]string, error) {
 		if host == "evil.example" {
 			return []string{"93.184.216.34"}, nil
 		}
@@ -354,7 +355,7 @@ func TestTheDialIsPinnedToTheVettedAddressesAndNeverReResolves(t *testing.T) {
 	defer srv.Close()
 
 	lookups := 0
-	lookup := func(host string) ([]string, error) {
+	lookup := func(ctx context.Context, host string) ([]string, error) {
 		lookups++
 		if lookups == 1 {
 			return []string{"192.0.2.1"}, nil
@@ -716,5 +717,27 @@ func TestTheSearchBudgetBitesOnAHangingEndpoint(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
 		t.Fatalf("the search did not respect the caller ctx (%v)", elapsed)
+	}
+}
+
+func TestLookupRidesTheRequestContext(t *testing.T) {
+	lookup := func(ctx context.Context, host string) ([]string, error) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(2 * time.Second):
+			return []string{"93.184.216.34"}, nil
+		}
+	}
+	f := web.NewFetch(web.FetchConfig{Lookup: lookup})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := f.Guarded(ctx, "http://slow.example/")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("a fetch whose DNS outlives the deadline must surface the deadline, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 1500*time.Millisecond {
+		t.Fatalf("the DNS lookup ignored the request context: the fetch took %v", elapsed)
 	}
 }

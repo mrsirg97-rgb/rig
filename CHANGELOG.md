@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.24.6]: the pre-v1 sweep
+
+Three findings from the v1.0.0 review pass. Each carries a test that
+failed before and passes after.
+
+- **read never materialises the file** (`tool/file`): a read of a file
+  larger than the 1 MiB cap read the whole file into memory before
+  truncating — a model naming a multi-gigabyte file could pin the box
+  (the field measurement: 806 MB allocated to read a 64 MB file). The
+  read now streams the file once, hashing every byte for provenance and
+  capturing only the requested line window, capped at one byte past the
+  output cap so the exact cut point is known; the returned bytes are
+  byte-identical to the old split-join contract (the trailing-newline
+  line count, the truncation marker, the window), and the drift-diff
+  cache remembers the window, not the file.
+- **the fetch's DNS rides the request context** (`tool/web`): the host
+  resolution used `context.Background()`, so a stalled resolver could
+  outlive the fetch's own timeout and return a success past the
+  deadline. `LookupFn` now carries the ctx (the seam's shape changed,
+  named in SPEC_WEB), the default resolver uses it, and a cancelled
+  lookup surfaces the context error instead of a generic resolution
+  failure.
+- **the winch signal stops at Close** (`frontend/tui`): `signalWinch`
+  registered SIGWINCH and never stopped it — a goroutine and a signal
+  handler leaked past `Close`. The handler now owns a stop that is
+  idempotent and synchronous (the goroutine exits before it returns),
+  and `Close` calls it.
+
 ## [0.24.5]: the dead session's claim is released
 
 The queue's one unpaid debt: a task claimed by a session that died
