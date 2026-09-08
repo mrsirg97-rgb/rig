@@ -23,15 +23,16 @@ func Migration() func(*sql.Tx, int, int) (string, error) {
 
 func migrate(tx *sql.Tx, from, to int) (string, error) {
 	notes := []string{}
-	// v1: tool_calls keyed by (session_id, message_seq, id)
 	if from < 2 && to >= 2 {
 		if err := addToolCallsSessionID(tx, &notes); err != nil {
 			return "", err
 		}
 	}
-	// v2: the served model rides each assistant message row
 	if from < 3 && to >= 3 {
 		if err := addMessagesModel(tx, &notes); err != nil {
+			return "", err
+		}
+		if err := addSessionsLabel(tx, &notes); err != nil {
 			return "", err
 		}
 	}
@@ -107,6 +108,40 @@ func addMessagesModel(tx *sql.Tx, notes *[]string) error {
 	}
 	*notes = append(*notes, "state migration: messages carry the served model")
 	return nil
+}
+
+func addSessionsLabel(tx *sql.Tx, notes *[]string) error {
+	var found int
+	err := tx.QueryRow(`SELECT 1 FROM pragma_table_info('sessions') WHERE name = 'label'`).Scan(&found)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, sql.ErrNoRows):
+	default:
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`ALTER TABLE "sessions" ADD COLUMN "label" TEXT`); err != nil {
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	*notes = append(*notes, "state migration: sessions carry a label")
+	return nil
+}
+
+func SetSessionLabel(ctx context.Context, db store.DB, sessionID, label string) error {
+	return withTx(db, ctx, func(c context.Context) error {
+		s, e := safely(func() (*domain.Session, error) {
+			return domain.NewSessionDomain().GetSession(c, sessionID).Row()
+		})
+		if e != nil || s == nil {
+			return e
+		}
+		if s.Label != nil {
+			return nil
+		}
+		s.Label = &label
+		_, e = domain.NewSessionDomain().UpdateSession(c, *s)
+		return e
+	})
 }
 
 func Statements() []string {

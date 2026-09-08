@@ -16,6 +16,7 @@ type Session struct {
 	EndedAt   *time.Time `alias:"name=ended_at,nullable=true"`
 	Exit      string     `alias:"name=exit,nullable=false"`
 	Version   string     `alias:"name=version,nullable=false"`
+	Label     *string    `alias:"name=label,nullable=true"`
 }
 
 // table:"messages"

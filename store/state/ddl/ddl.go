@@ -40,6 +40,7 @@ func Statements() []string {
   "cwd" TEXT NOT NULL,
   "ended_at" TIMESTAMP,
   "exit" TEXT NOT NULL,
+  "label" TEXT,
   "model" TEXT NOT NULL,
   "started_at" TIMESTAMP NOT NULL,
   "version" TEXT NOT NULL,

@@ -306,3 +306,41 @@ func TestRecorderWithoutEchoLeavesModelNull(t *testing.T) {
 		t.Fatalf("no echo, no model: %+v", a.Model)
 	}
 }
+
+func TestRecorderLabelsTheFirstPrompt(t *testing.T) {
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	inner := &scripted{inputs: []string{"  fix the retry guard\nwith tests  ", "second prompt"}}
+	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-label", core.NewSession())
+
+	ctx := context.Background()
+	if _, err := rec.Input(ctx); err != nil {
+		t.Fatalf("input 1: %v", err)
+	}
+	if _, err := rec.Input(ctx); err != nil {
+		t.Fatalf("input 2: %v", err)
+	}
+
+	rows, err := state.ListSessions(ctx, db, state.ListCap)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows: %d", len(rows))
+	}
+	if rows[0].Label != "fix the retry guard" {
+		t.Fatalf("label: %q", rows[0].Label)
+	}
+}
+
+func TestRecorderPromptLabelCapsAtSixtyRunes(t *testing.T) {
+	long := strings.Repeat("x", 100)
+	if got := state.PromptLabel(long); len([]rune(got)) != 61 {
+		t.Fatalf("label runes: %d", len([]rune(got)))
+	}
+	if got := state.PromptLabel("  first line\nsecond"); got != "first line" {
+		t.Fatalf("label: %q", got)
+	}
+}

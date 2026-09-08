@@ -27,6 +27,7 @@ type Recorder struct {
 	lastSeq   int64
 	resultMap map[string][]string
 	ensured   bool
+	labeled   bool
 	mu        sync.Mutex
 	snapshot  func(*core.Session) map[string]core.FileState
 }
@@ -63,8 +64,36 @@ func (r *Recorder) Input(ctx context.Context) (string, error) {
 	} else {
 		r.setLastSeq(seq)
 	}
+	r.labelSession(text)
 	r.upsertFiles()
 	return text, err
+}
+
+func (r *Recorder) labelSession(text string) {
+	r.mu.Lock()
+	if r.labeled {
+		r.mu.Unlock()
+		return
+	}
+	r.mu.Unlock()
+	if e := SetSessionLabel(context.Background(), r.db, r.sid, PromptLabel(text)); e != nil {
+		r.loud("session label", e)
+		return
+	}
+	r.mu.Lock()
+	r.labeled = true
+	r.mu.Unlock()
+}
+
+func PromptLabel(content string) string {
+	if i := strings.IndexByte(content, '\n'); i >= 0 {
+		content = content[:i]
+	}
+	r := []rune(strings.TrimSpace(content))
+	if len(r) > 60 {
+		r = append(r[:60], '…')
+	}
+	return string(r)
 }
 
 func (r *Recorder) Notify(ev core.Event) {
@@ -379,6 +408,7 @@ func (r *Recorder) Retarget(sid string, session *core.Session) {
 	r.mu.Lock()
 	r.sid = sid
 	r.session = session
+	r.labeled = false
 	r.mu.Unlock()
 }
 

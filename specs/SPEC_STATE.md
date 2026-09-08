@@ -144,7 +144,10 @@ The session transcript as rows. One file per session under
 `session_id` on every row; decide in the first PR, name it. Containers:
 
 - `sessions`: id (primary, minted, stable for the process), cwd, model,
-  started_at, ended_at, exit (ok|fault|cancelled), version.
+  started_at, ended_at, exit (ok|fault|cancelled), version, label (nullable;
+  the first user prompt's first line, trimmed, at 60 runes — written once
+  by the recorder, first writer wins; `new` and `sessions resume` mint
+  fresh rows, so each names itself).
 - `messages`: seq (primary), session_id (link sessions), role, content,
   reasoning (nullable; filled by the recorder, deliverable 7), tool_id (nullable),
   model (nullable; the served model as the provider's own response echo,

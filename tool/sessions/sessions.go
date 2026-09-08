@@ -118,8 +118,12 @@ func (a adapter) list(ctx context.Context, db store.DB, project string, n int) (
 	}
 	var b strings.Builder
 	for _, r := range rows {
-		fmt.Fprintf(&b, "%s  started %s  model %s  version %s  turns %d  faults %d\n",
-			shortID(r.ID), r.Started.UTC().Format(time.RFC3339), r.Model, r.Version, r.Turns, r.Faults)
+		tail := ""
+		if r.Label != "" {
+			tail = fmt.Sprintf("  label %s", r.Label)
+		}
+		fmt.Fprintf(&b, "%s  started %s  model %s  version %s  turns %d  faults %d  tokens %d%s\n",
+			shortID(r.ID), r.Started.UTC().Format(time.RFC3339), r.Model, r.Version, r.Turns, r.Faults, r.Tokens, tail)
 	}
 	return b.String(), nil
 }

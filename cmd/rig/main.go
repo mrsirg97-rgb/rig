@@ -282,7 +282,7 @@ func (r *root) sessionList(ctx context.Context) ([]command.SessionRow, error) {
 	}
 	out := make([]command.SessionRow, len(rows))
 	for i, row := range rows {
-		out[i] = command.SessionRow{ID: row.ID, Started: row.Started, Exit: row.Exit, Turns: row.Turns, Current: row.ID == r.session.ID}
+		out[i] = command.SessionRow{ID: row.ID, Started: row.Started, Exit: row.Exit, Turns: row.Turns, Tokens: row.Tokens, Label: row.Label, Current: row.ID == r.session.ID}
 	}
 	return out, nil
 }

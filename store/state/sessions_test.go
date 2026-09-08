@@ -240,3 +240,36 @@ type nullFrontend struct{}
 
 func (*nullFrontend) Input(context.Context) (string, error) { return "", io.EOF }
 func (*nullFrontend) Notify(core.Event)                     {}
+
+func TestListSessionsCarriesLabelAndTokens(t *testing.T) {
+	db := openStore(t)
+	ctx := context.Background()
+
+	if err := state.RecordSession(ctx, db, "a", "/tmp/wt", "model-x", "0.1.0"); err != nil {
+		t.Fatalf("record session: %v", err)
+	}
+	seqU, err := state.RecordMessage(ctx, db, "a", "user", "hello", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("record user: %v", err)
+	}
+	if err := state.RecordUsage(ctx, db, seqU, 100, 10, 40, 5); err != nil {
+		t.Fatalf("record usage: %v", err)
+	}
+	if err := state.SetSessionLabel(ctx, db, "a", "hello"); err != nil {
+		t.Fatalf("set label: %v", err)
+	}
+
+	rows, err := state.ListSessions(ctx, db, state.ListCap)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows: %d", len(rows))
+	}
+	if rows[0].Label != "hello" {
+		t.Fatalf("label: %q", rows[0].Label)
+	}
+	if rows[0].Tokens != 110 {
+		t.Fatalf("tokens: %d", rows[0].Tokens)
+	}
+}

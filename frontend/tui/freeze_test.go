@@ -165,10 +165,6 @@ func TestFreezeGate(t *testing.T) {
 	}
 }
 
-// pureAddition reports whether every line of old survives in new, in
-// order: the change added lines and renamed nothing. Extension passes;
-// any modification — a rename, a signature change, a removal — drops or
-// reorders an old line and fails.
 func pureAddition(oldF, newF []byte) bool {
 	o := strings.Split(string(oldF), "\n")
 	n := strings.Split(string(newF), "\n")

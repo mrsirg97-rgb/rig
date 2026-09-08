@@ -17,6 +17,7 @@ type Session struct {
 	Cwd       string     `db:"cwd"`
 	EndedAt   *time.Time `db:"ended_at"`
 	Exit      string     `db:"exit"`
+	Label     *string    `db:"label"`
 	Model     string     `db:"model"`
 	StartedAt time.Time  `db:"started_at"`
 	Version   string     `db:"version"`
@@ -43,6 +44,7 @@ func ScanSession(row lazy.ScanRow) (Session, error) {
 		&out.Cwd,
 		&out.EndedAt,
 		&out.Exit,
+		&out.Label,
 		&out.Model,
 		&out.StartedAt,
 		&out.Version,
@@ -70,7 +72,7 @@ func (d *sessionDomain) GetSession(ctx context.Context, id string) *lazy.Lazy[Se
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "id", "cwd", "ended_at", "exit", "model", "started_at", "version" FROM "sessions" WHERE "id" = $1`,
+		`SELECT "id", "cwd", "ended_at", "exit", "label", "model", "started_at", "version" FROM "sessions" WHERE "id" = $1`,
 		id,
 	)
 	out, err := ScanSession(row)
@@ -107,7 +109,7 @@ func (d *sessionDomain) GetSessionBatch(ctx context.Context, keys []string) *laz
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "cwd", "ended_at", "exit", "model", "started_at", "version" FROM "sessions" WHERE "id" IN (`+ph+`)`, args...)
+		`SELECT "id", "cwd", "ended_at", "exit", "label", "model", "started_at", "version" FROM "sessions" WHERE "id" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -135,11 +137,12 @@ func (d *sessionDomain) InsertSession(ctx context.Context, row Session) (*Sessio
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "sessions" ("id", "cwd", "ended_at", "exit", "model", "started_at", "version") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING "id", "cwd", "ended_at", "exit", "model", "started_at", "version"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "sessions" ("id", "cwd", "ended_at", "exit", "label", "model", "started_at", "version") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING "id", "cwd", "ended_at", "exit", "label", "model", "started_at", "version"`,
 		row.Id,
 		row.Cwd,
 		row.EndedAt,
 		row.Exit,
+		row.Label,
 		row.Model,
 		row.StartedAt,
 		row.Version,
@@ -155,7 +158,7 @@ func (d *sessionDomain) DeleteSession(ctx context.Context, id string) (*Session,
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "sessions" WHERE "id" = $1 RETURNING "id", "cwd", "ended_at", "exit", "model", "started_at", "version"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "sessions" WHERE "id" = $1 RETURNING "id", "cwd", "ended_at", "exit", "label", "model", "started_at", "version"`,
 		id,
 	)
 	if err != nil {
@@ -169,10 +172,11 @@ func (d *sessionDomain) UpdateSession(ctx context.Context, row Session) (*Sessio
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "sessions" SET "cwd" = $1, "ended_at" = $2, "exit" = $3, "model" = $4, "started_at" = $5, "version" = $6 WHERE "id" = $7 RETURNING "id", "cwd", "ended_at", "exit", "model", "started_at", "version"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "sessions" SET "cwd" = $1, "ended_at" = $2, "exit" = $3, "label" = $4, "model" = $5, "started_at" = $6, "version" = $7 WHERE "id" = $8 RETURNING "id", "cwd", "ended_at", "exit", "label", "model", "started_at", "version"`,
 		row.Cwd,
 		row.EndedAt,
 		row.Exit,
+		row.Label,
 		row.Model,
 		row.StartedAt,
 		row.Version,

@@ -29,6 +29,10 @@ loop already emits; the read side rebuilds a session from the log.
   `model` (nullable), stamped by the recorder from `core.Done`'s echo;
   user, compaction, and re-landed rows stay null. v2 files gain the
   column on open (schema v3); pre-migration rows read null.
+- The session row carries `label` (nullable) and `tokens` (the sum of
+  prompt + completion usage): the label is the first user prompt's
+  first line (trimmed, 60 runes), written once and never rewritten;
+  `ListSessions` returns both beside the turns and fault counts.
 
 ## How it is consumed
 

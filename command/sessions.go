@@ -123,8 +123,12 @@ func renderList(rows []SessionRow) string {
 		if r.Current {
 			mark = "  *"
 		}
-		fmt.Fprintf(&b, "%-*s  started %s  exit %-6s turns %d%s\n",
-			w, r.ID, r.Started.Format(time.RFC3339), r.Exit, r.Turns, mark)
+		tail := ""
+		if r.Label != "" {
+			tail = "  " + r.Label
+		}
+		fmt.Fprintf(&b, "%-*s  started %s  exit %-6s turns %d tokens %d%s%s\n",
+			w, r.ID, r.Started.Format(time.RFC3339), r.Exit, r.Turns, r.Tokens, tail, mark)
 	}
 	return b.String()
 }
