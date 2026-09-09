@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.25.1]: the panic that could kill the harness
+
+The v1.0.0 review pass found two reachable panics and one missing brake.
+Each carries a test that failed before and passes after.
+
+- **web_search and web_fetch refuse out-of-range args instead of
+  panicking** (`tool/web`): a model-supplied `maxResults` of 0, a
+  negative, or a huge integer made `make([]result, 0, n)` panic with
+  `makeslice: cap out of range`; a `maxChars` below the schema minimum
+  made `CapChars` slice past the string head. The schemas declared the
+  bounds but nothing enforced them — the model reads the schema as a
+  contract, and the harness must fail loud, not crash. Both tools now
+  refuse out-of-range at the boundary, naming the value and the allowed
+  range. The tests (`TestOutOfRangeMaxResultsRefusesInsteadOfPanicking`,
+  `TestOutOfRangeMaxCharsRefusesInsteadOfPanicking`) pass a table of
+  hostile args and require a refusal, not a run.
+- **a panicking tool is a tool error, not a process crash** (`loop`,
+  named in SPEC_CORE): the batch's `run` executes a tool in a goroutine
+  with no recover, so any panic — a tool bug, a hostile arg slipping
+  past a schema — took the whole harness down. `run` now recovers and
+  surfaces the panic as that call's tool error: the model sees the
+  panic text, the transcript survives, the process survives.
+  `TestBatchSurfacesAPanickingToolAsAToolError` runs a tool that
+  panics and requires the error to land as a `ToolResult`. This is the
+  second named reopening of the frozen loop (the first was SPEC_EVT 2a);
+  the gate's clause and SPEC_CORE carry the name, and the re-freeze PR
+  after the merge deletes the clause.
+- **ROADMAP's pointer lands**: "The queue's next lives in the CHANGELOG's
+  `[Unreleased]`" pointed at a section that did not exist. The line now
+  points at the CHANGELOG's top.
+
 ## [0.25.0]: the clean release
 
 v0.24.6 was tagged from the release branch before it was merged, so the

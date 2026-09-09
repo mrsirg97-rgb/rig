@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -287,4 +288,32 @@ func (t *failTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"o
 func (t *failTool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	t.n.Add(1)
 	return "synthetic failure", errors.New("synthetic failure")
+}
+
+func TestBatchSurfacesAPanickingToolAsAToolError(t *testing.T) {
+	k, f, _ := batchKernel(t, []core.Tool{panickyTool{}}, []core.ToolCall{{ID: "c1", Name: "panic"}})
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var got core.ToolResult
+	for _, ev := range f.events {
+		if r, ok := ev.(core.ToolResult); ok && r.ID == "c1" {
+			got = r
+		}
+	}
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "tool panic") {
+		t.Fatalf("want a tool-panic error surfaced, got %v", got.Err)
+	}
+	if strings.TrimSpace(got.Content) == "" {
+		t.Fatalf("the error text must be model-visible in the result content")
+	}
+}
+
+type panickyTool struct{}
+
+func (panickyTool) Name() string            { return "panic" }
+func (panickyTool) Description() string     { return "panics" }
+func (panickyTool) Schema() json.RawMessage { return json.RawMessage(`{}`) }
+func (panickyTool) Exec(context.Context, json.RawMessage) (string, error) {
+	panic("boom")
 }

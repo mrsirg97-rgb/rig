@@ -97,6 +97,9 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if p.MaxResults != nil {
 		n = *p.MaxResults
 	}
+	if n < 1 || n > 20 {
+		return "", fmt.Errorf("web_search: maxResults must be between 1 and 20, got %d", n)
+	}
 
 	cctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
