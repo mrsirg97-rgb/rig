@@ -23,13 +23,20 @@ type provider struct {
 	sock    string
 }
 
-const defaultHeaderTimeout = 5 * time.Minute
+const (
+	defaultHeaderTimeout = 5 * time.Minute
+	defaultIdleTimeout   = 10 * time.Minute
+)
 
 func New(baseURL, model string) core.Provider {
-	return NewWithHeaderTimeout(baseURL, model, defaultHeaderTimeout)
+	return NewWithTimeouts(baseURL, model, defaultHeaderTimeout, defaultIdleTimeout)
 }
 
 func NewWithHeaderTimeout(baseURL, model string, headerTimeout time.Duration) core.Provider {
+	return NewWithTimeouts(baseURL, model, headerTimeout, defaultIdleTimeout)
+}
+
+func NewWithTimeouts(baseURL, model string, headerTimeout, idleTimeout time.Duration) core.Provider {
 	baseURL = strings.TrimRight(baseURL, "/")
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = headerTimeout
