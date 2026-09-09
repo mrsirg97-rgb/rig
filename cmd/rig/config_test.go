@@ -885,7 +885,7 @@ func TestSchedulerCreateDefaultsToTheFleetModel(t *testing.T) {
 	home := t.TempDir()
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
-	tool := schedapi.New(st, ct, "rig run-job", cfg.Workers.Model)
+	tool := schedapi.New(st, ct, "rig run-job", cfg.Workers.Model, home)
 	if !strings.Contains(tool.Description(), "(default: "+cfg.Workers.Model+")") {
 		t.Fatalf("the tool description must name the fleet's model: %q", tool.Description())
 	}

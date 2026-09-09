@@ -214,3 +214,17 @@ func TestOutputIsCapped(t *testing.T) {
 		t.Fatal("capped output must name the truncation for the model")
 	}
 }
+
+func TestHugeOutputIsBoundedWithTheMarker(t *testing.T) {
+	tool := bash.New()
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "head -c 300000 /dev/zero | tr '\\0' 'x'",
+	}))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	want := strings.Repeat("x", 256*1024) + "\n[output truncated]"
+	if got != want {
+		t.Fatalf("huge output must be the head plus the marker, got %d bytes (want %d)", len(got), len(want))
+	}
+}
