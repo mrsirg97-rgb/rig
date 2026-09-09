@@ -267,6 +267,33 @@ func TestDelegateCwdSymlinkEscapeRefuses(t *testing.T) {
 	}
 }
 
+func TestDelegateCwdFileRefuses(t *testing.T) {
+	h := newHarness(t, "")
+	root := t.TempDir()
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
+	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": file})
+	_, err = tool.Exec(context.Background(), b)
+	if err == nil || !strings.Contains(err.Error(), "not a directory") {
+		t.Fatalf("a file cwd must refuse naming the directory rule: %v", err)
+	}
+	if spawn.count() != 0 {
+		t.Fatal("no spawn on a file cwd")
+	}
+}
+
 func TestDelegateBusyRefusalNamesTheHolder(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	spawn := &fakeSpawn{}
