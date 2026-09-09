@@ -71,6 +71,10 @@ plus one registration line, and the loop never names a concrete type.
   compact (trigger-based transcript summarization, the once-budget
   overflow recovery). Compaction writes nothing to rem: the summary is
   context, not memory (SPEC_STATE: rem is deliberate).
+- `pathguard`: the one cwd-containment rule: canonicalize a working
+  directory and refuse one outside the session's cwd or the rig home;
+  the delegate and scheduler tools and the runner's fire-time
+  revalidation all call it.
 - `middleware/approve`: the manual tool-approval gate (SPEC_MODES 4):
   in manual mode a mutating call pauses for the operator's y/n at the
   frontend's ask door; a denial is a teaching refusal the model reads.

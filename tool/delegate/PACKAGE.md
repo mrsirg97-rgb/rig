@@ -15,8 +15,9 @@ the state store.
 
 - `delegate.go`: `Opts` (the root's wiring, carrying the fleet's
   `Slots`) and `New`, the adapter with the description (the in-flight
-  bound phrased by the slot count), schema, and `Exec`; the cwd
-  canonicalization and the outside-the-session/rig-home refusal; the
+  bound phrased by the slot count), schema, and `Exec`; the `pathguard`
+  cwd rule (canonicalization, the outside-the-session/rig-home refusal,
+  the directory check); the
   output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
   the explicit worker session id threaded through the spawn.
@@ -45,8 +46,10 @@ the state store.
   path via `jailSpawn`'s sessions-dir bind (SPEC_DELEGATE 3); the
   parent mints its id and passes it as `-session-id`, so concurrent
   delegates cannot claim one another's transcript.
-- `cwd` containment resolves symlinks in the requested directory and both
-  allowed roots before the worker starts; a lexical child that resolves
-  outside refuses.
+- `cwd` containment is the one rule in `pathguard` (shared with the
+  scheduler tool): the requested directory and both allowed roots resolve
+  symlinks before the worker starts, a lexical child that resolves outside
+  refuses, and a file is not a cwd (it refuses at the boundary, not at
+  spawn).
 - `Exec` reads `os.Getwd()` for the session cwd, so the tests pin the
   real test cwd, not a fixture path.

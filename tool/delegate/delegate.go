@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
@@ -89,9 +89,9 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	}
 	cwd := sessionCwd
 	if g.Cwd != "" {
-		cwd, err = canonicalCwd(g.Cwd, sessionCwd, a.RigHome)
+		cwd, err = pathguard.Within(g.Cwd, sessionCwd, a.RigHome)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("delegate: %w", err)
 		}
 	}
 	model := a.DefaultModel
@@ -149,52 +149,6 @@ func capOutput(s string) string {
 		return s
 	}
 	return s[:outputCap] + "\n[TRUNCATED: " + fmt.Sprintf("%d", len(s)) + " bytes total]"
-}
-
-func canonicalCwd(path, sessionCwd, rigHome string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("delegate: cwd %q: %v", path, err)
-	}
-	lexicallyUnder := func(root string) bool {
-		rootAbs, err := filepath.Abs(root)
-		if err != nil {
-			return false
-		}
-		rel, err := filepath.Rel(rootAbs, abs)
-		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	}
-	if !lexicallyUnder(sessionCwd) && !lexicallyUnder(rigHome) {
-		return "", fmt.Errorf("delegate: cwd %q is outside the session's cwd (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
-	}
-	cwd, err := canonicalPath(path)
-	if err != nil {
-		return "", fmt.Errorf("delegate: cwd %q: %v", path, err)
-	}
-	under := func(root string) bool {
-		canonicalRoot, err := canonicalPath(root)
-		if err != nil {
-			return false
-		}
-		rel, err := filepath.Rel(canonicalRoot, cwd)
-		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	}
-	if under(sessionCwd) || under(rigHome) {
-		return cwd, nil
-	}
-	return "", fmt.Errorf("delegate: cwd %q is outside the session's cwd (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
-}
-
-func canonicalPath(path string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Clean(resolved), nil
 }
 
 func strictDecode(data json.RawMessage, out any) error {

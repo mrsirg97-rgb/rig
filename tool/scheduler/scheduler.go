@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
@@ -143,9 +143,9 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		jobCwd := g.Cwd
 		if jobCwd != "" {
-			validated, err := validateJobCwd(jobCwd, cwd, a.home)
+			validated, err := pathguard.Within(jobCwd, cwd, a.home)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("scheduler: %w", err)
 			}
 			jobCwd = validated
 		}
@@ -159,9 +159,9 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		updateCwd := g.Cwd
 		if updateCwd != "" {
-			validated, err := validateJobCwd(updateCwd, cwd, a.home)
+			validated, err := pathguard.Within(updateCwd, cwd, a.home)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("scheduler: %w", err)
 			}
 			updateCwd = validated
 		}
@@ -195,59 +195,4 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	default:
 		return "", fmt.Errorf("scheduler: unknown action '%s'", g.Action)
 	}
-}
-
-// validateJobCwd canonicalizes a job's working directory and refuses one
-// that is not the caller's project or the rig home. The jail rw-binds the
-// cwd (store/scheduler/jail.go, "--bind p.Cwd p.Cwd"), so a job must not be
-// scoped to the rest of the host: an arbitrary absolute cwd (a home
-// directory, /etc, /) would hand the jailed worker rw access to it. Same
-// rule as the delegate tool's canonicalCwd: lexical and canonical
-// (symlinks resolved), and the directory must exist (the jail binds it).
-func validateJobCwd(path, sessionCwd, rigHome string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("scheduler: cwd %q: %v", path, err)
-	}
-	under := func(root string) bool {
-		if root == "" {
-			return false
-		}
-		rootAbs, err := filepath.Abs(root)
-		if err != nil {
-			return false
-		}
-		rel, err := filepath.Rel(rootAbs, abs)
-		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	}
-	if !under(sessionCwd) && !under(rigHome) {
-		return "", fmt.Errorf("scheduler: cwd %q is outside the session's cwd (%s) and the rig home (%s)", abs, sessionCwd, rigHome)
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return "", fmt.Errorf("scheduler: cwd %q: %v", abs, err)
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("scheduler: cwd %q is not a directory", abs)
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		return "", fmt.Errorf("scheduler: cwd %q: %v", abs, err)
-	}
-	resolved = filepath.Clean(resolved)
-	canonUnder := func(root string) bool {
-		if root == "" {
-			return false
-		}
-		resolvedRoot, err := filepath.EvalSymlinks(root)
-		if err != nil {
-			return false
-		}
-		rel, err := filepath.Rel(filepath.Clean(resolvedRoot), resolved)
-		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	}
-	if !canonUnder(sessionCwd) && !canonUnder(rigHome) {
-		return "", fmt.Errorf("scheduler: cwd %q is outside the session's cwd (%s) and the rig home (%s)", resolved, sessionCwd, rigHome)
-	}
-	return resolved, nil
 }

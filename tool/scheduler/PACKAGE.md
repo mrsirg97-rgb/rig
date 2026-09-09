@@ -25,5 +25,9 @@ seams).
 
 - `create` carries a job name, prompt, and cron: the store validates the
   cron it gets (the adapter parses, the store teaches).
+- `create` and `update` run the one cwd rule in `pathguard` (shared with
+  the delegate tool): a cwd outside the session's cwd or the rig home
+  refuses at the boundary, and the runner rechecks the stored cwd at fire
+  time.
 - The schema carries no `scope` (SPEC_STATE's one-store scheduler): `cwd`
   is the job's own field, ids are one sequence, `name` unique store-wide.
