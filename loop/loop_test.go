@@ -11,6 +11,7 @@ import (
 	"github.com/mrsirg97-rgb/rig"
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/loop"
+	"github.com/mrsirg97-rgb/rig/middleware/cutoff"
 )
 
 type scriptedTurn struct {
@@ -710,4 +711,48 @@ func TestAnEmptyCompletionStaysOutOfTheTranscript(t *testing.T) {
 		{Role: core.RoleAssistant, Content: "delivered"},
 	}
 	wantTranscript(t, session, want...)
+}
+
+func TestTruncatedCallRecoversInBand(t *testing.T) {
+	bash := &scriptedTool{name: "bash", result: "42"}
+	p := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{
+			callEv(core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command": "cat /tmp/longfile`), Cut: "length"}),
+			core.Done{StopReason: "length"},
+		}},
+		{events: []core.Event{textEv("retried and done"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+		rig.WithMiddleware(cutoff.Middleware()),
+	)
+	k.Session = session
+
+	f.inputs <- "run it"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	if bash.calls != 0 {
+		t.Fatalf("tool executed %d times, want 0 (a cut call must never run)", bash.calls)
+	}
+	msgs := session.Messages
+	if len(msgs) != 4 {
+		t.Fatalf("transcript length = %d, want 4 (user, cut call, refusal, retry)", len(msgs))
+	}
+	if len(msgs[1].ToolCalls) != 1 || msgs[1].ToolCalls[0].Cut != "length" {
+		t.Fatalf("the transcript must keep the marked call, got %+v", msgs[1].ToolCalls)
+	}
+	if !strings.Contains(msgs[2].Content, "cut off") {
+		t.Fatalf("the refusal must feed back, got %q", msgs[2].Content)
+	}
+	if msgs[3].Content != "retried and done" {
+		t.Fatalf("the model's next turn must complete, got %q", msgs[3].Content)
+	}
 }

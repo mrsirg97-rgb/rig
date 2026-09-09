@@ -24,4 +24,5 @@ type ToolCall struct {
 	ID   string
 	Name string
 	Args json.RawMessage
+	Cut  string
 }
