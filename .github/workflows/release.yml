@@ -47,6 +47,21 @@ jobs:
           cd dist
           sha256sum rig_* > checksums.txt
 
+      # The pinned static minisign binary comes from the project's GitHub
+      # release, not apt: ubuntu-latest's apt sources include the Chrome repo,
+      # whose flaky index (Hash Sum mismatch on dl.google.com) breaks
+      # apt-get update. The tarball is verified by checksum before use.
+      - name: fetch the pinned minisign binary
+        run: |
+          set -eu
+          curl -fsSL -o "$RUNNER_TEMP/minisign.tar.gz" \
+            https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+          cd "$RUNNER_TEMP"
+          echo '9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  minisign.tar.gz' | sha256sum -c -
+          tar -xzf minisign.tar.gz
+          install -m 755 minisign-linux/x86_64/minisign minisign
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
       # Each asset is signed with the operator's pinned minisign key; the
       # binary's own -update verifies the signature, so a missing secret
       # refuses the release before any asset ships.
@@ -59,7 +74,6 @@ jobs:
             echo "release: MINISIGN_SECRET_KEY is not set (the base64 of minisign.key); an unsigned release would be refused by rig -update" >&2
             exit 1
           fi
-          sudo apt-get update >/dev/null && sudo apt-get install -y -qq minisign >/dev/null
           printf '%s' "$MINISIGN_SECRET_KEY" | base64 -d > "$RUNNER_TEMP/minisign.key"
           for asset in dist/rig_linux_amd64 dist/rig_linux_arm64 dist/rig_darwin_amd64 dist/rig_darwin_arm64; do
             minisign -S -x "$asset.minisig" -s "$RUNNER_TEMP/minisign.key" -m "$asset"

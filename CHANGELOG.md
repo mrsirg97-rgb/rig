@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.25.4]: the release workflow stops trusting apt
+
+The v0.25.3 release died in the minisign step: `apt-get update` broke on
+the Chrome repo's stale index (`Hash Sum mismatch` on `dl.google.com`),
+so the binary never arrived. The workflow no longer touches apt at all.
+
+- **minisign comes pinned, not from apt** (`.github/workflows/release.yml`):
+  the sign step ran `apt-get update`, which refreshes every runner source
+  including the Chrome repo whose flaky index fails intermittently, and
+  `apt-get install minisign` after it. The workflow now downloads the
+  project's static `minisign-0.12-linux.tar.gz` release, verifies its
+  pinned sha256 (`9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73`,
+  itself checked against the project's official signature), and puts the
+  binary on `PATH`. No apt, no sudo, no `dl.google.com`.
+
 ## [0.25.3]: the one cwd rule and the fire-time bind check
 
 The deep review pass found the jail fix's one remaining window and the
