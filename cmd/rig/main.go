@@ -52,7 +52,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.25.1"
+const Version = "0.25.2"
 
 type root struct {
 	pluginMax int
@@ -983,7 +983,7 @@ func main() {
 	}
 
 	if workers := cfg.Workers; workers != nil {
-		r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", workers.Model)
+		r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", workers.Model, cfgDir)
 		r.tools["delegate"] = delegate.New(delegate.Opts{
 			DB:           scdb,
 			Home:         schedHome,

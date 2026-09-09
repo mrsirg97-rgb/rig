@@ -387,7 +387,7 @@ func TestE2ETimeoutSurfacesAsAClearError(t *testing.T) {
 
 	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct()})
 	_, err := f.Exec(context.Background(), json.RawMessage(
-		`{"url":"`+srv.URL+`/slow","timeoutMs":300}`))
+		`{"url":"`+srv.URL+`/slow","timeoutMs":1000}`))
 	if err == nil || !regexp.MustCompile(`(?i)timed out`).MatchString(err.Error()) {
 		t.Fatalf("want a timeout error, got %v", err)
 	}
@@ -777,5 +777,31 @@ func TestOutOfRangeMaxCharsRefusesInsteadOfPanicking(t *testing.T) {
 		if err == nil {
 			t.Fatalf("out-of-range maxChars %s must refuse, not run", args)
 		}
+	}
+}
+
+func TestOutOfRangeTimeoutMsRefusesInsteadOfRunning(t *testing.T) {
+	f := web.NewFetch(web.FetchConfig{
+		Lookup: publicLookup,
+		Do: func(*http.Request) (*http.Response, error) {
+			return httpResp(200, map[string]string{"Content-Type": "text/plain"}, "ok"), nil
+		},
+	})
+	for _, n := range []int{0, 1, 999, 300001, 1 << 30} {
+		_, err := f.Exec(context.Background(), []byte(fmt.Sprintf(`{"url":"http://example.com/","timeoutMs":%d}`, n)))
+		if err == nil || !strings.Contains(err.Error(), "timeoutMs must be between") {
+			t.Fatalf("timeoutMs=%d: want a refusal naming the range, got %v", n, err)
+		}
+	}
+}
+
+func TestSchemaDeclaresTheTimeoutBound(t *testing.T) {
+	s := getSchema(t, web.NewFetch(web.FetchConfig{}))
+	props, ok := s.Properties["timeoutMs"]
+	if !ok {
+		t.Fatal("schema missing timeoutMs")
+	}
+	if props["minimum"] != float64(1000) || props["maximum"] != float64(300000) {
+		t.Fatalf("timeoutMs bounds = %v/%v, want 1000/300000", props["minimum"], props["maximum"])
 	}
 }

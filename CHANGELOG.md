@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## [0.25.2]: the jail escape and the missing brakes
+
+The deep review pass found one sandbox escape and four missing brakes. Each
+carries a test that failed before and passes after.
+
+- **the scheduler jail could be scoped to the host** (`tool/scheduler`): a
+  job's `cwd` was taken verbatim, and the jail rw-binds it
+  (`--bind p.Cwd p.Cwd` in `store/scheduler/jail.go`), so a model could
+  create a job with `cwd: "/home/<operator>"` (or `/etc`, or `/`) and the
+  jailed worker would have rw access to it. The tool now validates the
+  cwd the way the delegate tool already does: lexical and canonical
+  (symlinks resolved), and only under the session's cwd or the rig home.
+  `TestCreateRefusesACwdOutsideTheSessionRoot` creates a job with
+  `cwd: "/etc"` and requires the refusal, not a job row.
+- **bash output was capped after the fact** (`tool/bash`): the whole output
+  was buffered (`bytes.Buffer`) and truncated only after the process
+  exited, so `cat` of a huge file pinned it in RAM. The bounded writer now
+  keeps only the head at the cap, drops the rest, and always consumes the
+  child's writes (the child never blocks); the kept bytes are
+  byte-identical to the old truncation.
+  `TestBoundedWriterKeepsTheHeadAndNeverBlocksTheChild` writes three times
+  the cap and requires the kept output to be the head plus the marker, and
+  `TestHugeOutputIsBoundedWithTheMarker` pins the exec's reply
+  byte-for-byte.
+- **model-supplied timeouts were unbounded** (`tool/web`, `tool/python`):
+  `timeoutMs` was taken as-is; the schemas declared `minimum: 1000` and
+  nothing enforced it, so a value of 1 ran anyway, a huge value could hang
+  a turn for days, and an overflow wrapped negative. Both tools now refuse
+  outside `1000..300000` (web_fetch) and `1000..600000` (python) naming
+  the range, and the schemas carry the `maximum`. The web case
+  (`TestOutOfRangeTimeoutMsRefuses`) and the python case
+  (`TestOutOfRangeTimeoutMsRefuses`) pass a table of hostile values and
+  require the refusal, not a run. Named change: the E2E timeout case now
+  uses the new minimum (`timeoutMs: 1000`) so it stays a timeout instead
+  of hitting the boundary refusal, and the wire goldens carry the new
+  `maximum` fields.
+- **rem content was unbounded** (`store/rem`): `learn` and `reflect` stored
+  any size content, so a model could bloat the store and the fuzzy arm's
+  trigram table. Both now refuse above 64 KiB naming the cap.
+  `TestLearnRefusesOversizedContent` learns just over the cap and requires
+  the refusal, not a memory row.
+
 ## [0.25.1]: the panic that could kill the harness
 
 The v1.0.0 review pass found two reachable panics and one missing brake.

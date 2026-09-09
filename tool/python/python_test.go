@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -584,5 +585,15 @@ func TestSetCwdSeam(t *testing.T) {
 	seam.SetCwd("/x/y")
 	if seam.k.cwd != "/x/y" {
 		t.Fatalf("cwd = %q", seam.k.cwd)
+	}
+}
+
+func TestOutOfRangeTimeoutMsRefuses(t *testing.T) {
+	tool := NewWith("false", "/nonexistent-kernel-host.py")
+	for _, n := range []int{0, 1, 999, 600001, 1 << 30} {
+		_, err := tool.Exec(context.Background(), []byte(fmt.Sprintf(`{"action":"code","code":"1","timeoutMs":%d}`, n)))
+		if err == nil || !strings.Contains(err.Error(), "timeoutMs must be between") {
+			t.Fatalf("timeoutMs=%d: want a refusal naming the range, got %v", n, err)
+		}
 	}
 }

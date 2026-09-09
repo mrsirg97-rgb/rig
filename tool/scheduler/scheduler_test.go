@@ -35,6 +35,7 @@ func (f *fakeCrontab) Install(text string) error {
 type harness struct {
 	db   sched.DB
 	ct   *fakeCrontab
+	home string
 	tool core.Tool
 }
 
@@ -51,8 +52,8 @@ func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 		t.Fatal(err)
 	}
 	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
-	tool := adapter.New(db, ct, "/x/rig run-job", defModel)
-	return &harness{db: db, ct: ct, tool: tool}
+	tool := adapter.New(db, ct, "/x/rig run-job", defModel, home)
+	return &harness{db: db, ct: ct, home: home, tool: tool}
 }
 
 func exec(t *testing.T, h *harness, args map[string]any) (string, error) {
@@ -277,5 +278,23 @@ func TestExecAttributionFallsBackToAnon(t *testing.T) {
 	}
 	if sess != "anon" {
 		t.Fatalf("create session %v, want anon", sess)
+	}
+}
+
+func TestCreateRefusesACwdOutsideTheSessionRoot(t *testing.T) {
+	home := t.TempDir()
+	globalPath := filepath.Join(home, "global.sqlite")
+	db, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
+	tool := adapter.New(db, ct, "/x/rig run-job", "qwen3.8-workers", home)
+	raw, _ := json.Marshal(map[string]any{
+		"action": "create", "name": "escape", "prompt": "p", "cron": "1 0 * * *", "cwd": "/etc",
+	})
+	_, err = tool.Exec(context.Background(), raw)
+	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+		t.Fatalf("a cwd outside the session's cwd and the rig home must be refused, got %v", err)
 	}
 }

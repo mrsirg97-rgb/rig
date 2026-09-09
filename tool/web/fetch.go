@@ -23,6 +23,8 @@ import (
 const (
 	maxBytesDefault  = 5 * 1024 * 1024
 	maxChars         = 20_000
+	minTimeoutMs     = 1_000
+	maxTimeoutMs     = 300_000
 	defaultTimeoutMs = 30_000
 	maxHops          = 5
 	trafilaturaTime  = 20 * time.Second
@@ -42,7 +44,7 @@ const schemaJSON = `{
 	"properties": {
 		"url": {"type": "string", "description": "Absolute http(s) URL to fetch"},
 		"maxChars": {"type": "integer", "description": "Max chars returned (default 20000)", "minimum": 100},
-		"timeoutMs": {"type": "integer", "description": "Total timeout in ms (default 30000)", "minimum": 1000}
+		"timeoutMs": {"type": "integer", "description": "Total timeout in ms (default 30000)", "minimum": 1000, "maximum": 300000}
 	},
 	"required": ["url"]
 }`
@@ -353,6 +355,9 @@ func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) 
 	timeoutMs := defaultTimeoutMs
 	if p.TimeoutMs != nil {
 		timeoutMs = *p.TimeoutMs
+	}
+	if timeoutMs < minTimeoutMs || timeoutMs > maxTimeoutMs {
+		return "", fmt.Errorf("web_fetch: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, timeoutMs)
 	}
 
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)

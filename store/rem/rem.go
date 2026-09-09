@@ -187,9 +187,14 @@ type writeResult struct {
 	existing bool
 }
 
+const maxContentBytes = 64 * 1024
+
 func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string, *remdom.Memory, bool, error) {
 	if in.Content == "" {
 		return "", nil, false, fmt.Errorf("rem: action 'learn' requires content")
+	}
+	if len(in.Content) > maxContentBytes {
+		return "", nil, false, fmt.Errorf("rem: content must be at most %d bytes, got %d", maxContentBytes, len(in.Content))
 	}
 	res, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (writeResult, error) {
 		mem, existing, err := storeOrTouch(bound, writeShape{
@@ -222,6 +227,9 @@ func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string,
 func Reflect(ctx context.Context, db store.DB, cwd string, in ReflectInput) (string, *remdom.Memory, bool, error) {
 	if in.Content == "" {
 		return "", nil, false, fmt.Errorf("rem: action 'reflect' requires content")
+	}
+	if len(in.Content) > maxContentBytes {
+		return "", nil, false, fmt.Errorf("rem: content must be at most %d bytes, got %d", maxContentBytes, len(in.Content))
 	}
 	res, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (writeResult, error) {
 		mem, existing, err := storeOrTouch(bound, writeShape{

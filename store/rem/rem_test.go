@@ -1513,3 +1513,12 @@ func TestMigrationRehashesLegacyDigests(t *testing.T) {
 		t.Fatalf("digest = %q, want %x", p.ContentSha256, sum)
 	}
 }
+
+func TestLearnRefusesOversizedContent(t *testing.T) {
+	db := newDB(t)
+	big := strings.Repeat("x", 64*1024+1)
+	_, _, _, err := Learn(context.Background(), db, "/ws1", LearnInput{Content: big, Scope: "project"})
+	if err == nil || !strings.Contains(err.Error(), "at most") {
+		t.Fatalf("oversized content must be refused naming the cap, got %v", err)
+	}
+}
