@@ -28,6 +28,8 @@ var kernelHostSrc string
 
 const (
 	defaultTimeoutMs = 120_000
+	minTimeoutMs     = 1_000
+	maxTimeoutMs     = 600_000
 	stderrTailLen    = 4096
 	waitDelay        = 2 * time.Second
 )
@@ -44,7 +46,7 @@ const schemaJSON = `{
 	"properties": {
 		"code": {"type": "string", "description": "Python source to execute"},
 		"action": {"type": "string", "enum": ["code", "vars", "reset"], "description": "'code' (or omitted) runs code; 'vars' summarises the namespace; 'reset' clears it."},
-		"timeoutMs": {"type": "integer", "description": "Timeout in ms (default 120000)", "minimum": 1000}
+		"timeoutMs": {"type": "integer", "description": "Timeout in ms (default 120000)", "minimum": 1000, "maximum": 600000}
 	}
 }`
 
@@ -115,6 +117,9 @@ func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	timeoutMs := defaultTimeoutMs
 	if a.TimeoutMs != nil {
 		timeoutMs = *a.TimeoutMs
+	}
+	if timeoutMs < minTimeoutMs || timeoutMs > maxTimeoutMs {
+		return "", fmt.Errorf("python: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, timeoutMs)
 	}
 
 	reply, err := t.k.send(ctx, req, timeoutMs)

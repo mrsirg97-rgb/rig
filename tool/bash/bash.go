@@ -65,15 +65,12 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 		}
 		return nil
 	}
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	out := newBounded(outputCap)
+	cmd.Stdout = out
+	cmd.Stderr = out
 	err := cmd.Run()
 
 	content := out.String()
-	if len(content) > outputCap {
-		content = content[:outputCap] + "\n[output truncated]"
-	}
 	if err != nil {
 		dir := a.Cwd
 		if dir == "" {
@@ -107,4 +104,38 @@ func strictDecode(data json.RawMessage, out any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	return dec.Decode(out)
+}
+
+// bounded keeps the head of a child's output at cap and drops the rest,
+// so a huge stream cannot pin memory: the child's writes are always fully
+// consumed (it never blocks) and the kept output is byte-identical to the
+// post-hoc truncation (head + marker).
+type bounded struct {
+	cap       int
+	buf       []byte
+	truncated bool
+}
+
+func newBounded(cap int) *bounded { return &bounded{cap: cap} }
+
+func (b *bounded) Write(p []byte) (int, error) {
+	if room := b.cap - len(b.buf); room > 0 {
+		if len(p) > room {
+			b.buf = append(b.buf, p[:room]...)
+			b.truncated = true
+		} else {
+			b.buf = append(b.buf, p...)
+		}
+	} else {
+		b.truncated = true
+	}
+	return len(p), nil
+}
+
+func (b *bounded) String() string {
+	s := string(b.buf)
+	if b.truncated {
+		s += "\n[output truncated]"
+	}
+	return s
 }
