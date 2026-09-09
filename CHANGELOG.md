@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [0.25.7]: the live frame never erases before it writes
+
+The tear the operator kept seeing through tmux: the sync pair was a
+no-op there. tmux 3.4 consumes `?2026h`/`?2026l` without forwarding
+them (the pane-side support landed in 3.7), so every repaint was an
+unsynchronized erase-then-rewrite, and a write split at the pty buffer
+(a large commit, fast text) showed the region erased and blank — the
+input line flickered and lost its content. The frame now writes over
+the old region.
+
+- **the frame writes first, erases after** (`frontend/tui`, PACKAGE.md):
+  a repaint no longer clears the region before writing it. Each row's
+  replacement lands, then the tail is erased (`CSI K`); the shrink below
+  the last row is erased with `0J` after the content. A reader that
+  splits the frame at the pty buffer sees the old frame, then the new
+  one in place — never a blank region. The input row's prompt stays on
+  screen at every read boundary. `TestTearNoSyncPromptNeverBlanks` feeds
+  the real stream through a terminal model that swallows the sync pair
+  and splits writes at 9 bytes, asserting the prompt is never gone;
+  `TestTearNoSyncPairIsOneWrite` pins the pair and the frame as one
+  write.
+- **the sync pair closes the frame's write** (`frontend/tui/live.go`):
+  `?2026h`+frame+`?2026l` are one `write`, so the end marker cannot be
+  separated from the frame it closes. Terminals that support the mode
+  (kitty, ghostty, wezterm, foot, iTerm2, Windows Terminal, tmux 3.7+)
+  still paint the pair once; the rest ignore it.
+- **the support table says tmux 3.7** (PACKAGE.md): the claim that tmux
+  3.4 buffers the pair was wrong — 3.4 consumes it. Under 3.4 the
+  write-first protocol is the whole protection; the pair is inert.
+
 ## [0.25.6]: the stream's idle bound, the model's no default, the seam's dead weight
 
 The pre-v1 review's three findings: the one unbounded wait left in the

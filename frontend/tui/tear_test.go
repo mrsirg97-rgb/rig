@@ -48,10 +48,12 @@ func (v *vtFlush) writeRune(r rune) {
 	}
 	v.ensureRow(v.r)
 	rs := []rune(v.rows[v.r])
-	if v.c > len(rs) {
-		v.c = len(rs)
+	if v.c < len(rs) {
+		rs[v.c] = r
+	} else {
+		rs = append(rs, r)
 	}
-	v.rows[v.r] = string(append(rs[:v.c], append([]rune{r}, rs[v.c:]...)...))
+	v.rows[v.r] = string(rs)
 	v.c++
 }
 
@@ -127,12 +129,19 @@ func (v *vtFlush) feedBytes(b []byte) {
 				}
 				v.c = n - 1
 			case 'K':
-				if params != "2" {
-					v.fail("an unknown clear mode: 2K only")
+				v.ensureRow(v.r)
+				switch params {
+				case "2":
+					v.rows[v.r] = ""
+				case "":
+					rs := []rune(v.rows[v.r])
+					if v.c < len(rs) {
+						v.rows[v.r] = string(rs[:v.c])
+					}
+				default:
+					v.fail("an unknown clear mode: " + params + "K")
 					return
 				}
-				v.ensureRow(v.r)
-				v.rows[v.r] = ""
 			case 'J':
 
 				if params != "0" && params != "" {

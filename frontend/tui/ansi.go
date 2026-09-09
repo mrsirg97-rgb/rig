@@ -72,7 +72,7 @@ func toCol(c int) string {
 	return ESC + strconv.Itoa(c) + "G"
 }
 
-const clearLine = ESC + "2K"
+const clearToEOL = ESC + "K"
 
 const clearBelow = ESC + "0J"
 
