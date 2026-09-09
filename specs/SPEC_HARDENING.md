@@ -629,6 +629,30 @@ count does not grow for this class.
   raising the knob and documenting it (the allocation, not the size, is
   the fault).
 
+### 11. The stream's idle bound (0.25.6)
+
+The provider bounds the wait for response headers (5 minutes, 0.22.0);
+the body read had no bound at all: a server that accepted the request,
+sent its headers, and then held the connection open without events hung
+the turn forever (the run-context teardown waits for the stream to
+close). The provider now also bounds the silence: an idle bound of 10
+minutes, armed after the response headers and reset by every stream
+line (a delta, a comment, a keep-alive). A stream with no line for the
+whole bound is closed and Faults, naming the bound and the silence. No
+loop change: the Fault takes the ordinary mid-stream path, the turn
+ends with the fault row, and the operator steers the re-ask.
+
+This is not the wall-clock cap decision 9 rejected: a slow stream that
+keeps sending data never faults; only total silence does. The bound is
+a constant beside the header bound, no knob: a legitimately silent
+prefill stays under it on a daily-driver box, and a dead connection is
+caught within the bound instead of hanging an unattended worker
+forever. Rejected, named: a tighter bound (a slow prefill false-faults);
+a first-event exemption (a server that dies during the prefill hangs
+forever again — the stall and the prefill are indistinguishable);
+a knob (the header wait is a constant too, and the operator can
+interrupt).
+
 ## testing
 
 The contract: every existing named case passes byte-for-byte, or its
@@ -719,6 +743,15 @@ marked call and `Done` after it, and no `Fault`. New (cutoff):
 `TestTruncatedCallRecoversInBand` (the refusal feeds back, the
 transcript keeps the partial call, and the model's next turn completes).
 The loop's existing named cases stay byte-for-byte: no loop change.
+
+**The 0.25.6 amendment (decision 11).** New (provider):
+`TestAStallingStreamFaultsAfterTheIdleBound` (a server that sends one
+chunk and then holds the connection open: the stream ends with exactly
+one Fault naming the idle bound, within a bounded wall time) and
+`TestIdleBoundResetsOnEveryEvent` (chunks every 30 ms against a 150 ms
+bound: the stream completes with `Done` and no Fault). The provider's
+existing cases stay byte-for-byte: the idle timer only fires on
+silence.
 
 The suite is green on a box with no model loaded: every case is scripted
 or httptest; the live grounding (reasoning round-trip, cache fields) is a

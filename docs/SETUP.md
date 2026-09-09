@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.25.5
+./rig --version        # rig 0.25.6
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -120,7 +120,7 @@ directory's project file, not the creating session's.
 | knob          | flag           | env                    | file key        | embedded default |
 |---------------|----------------|------------------------|-----------------|------------------|
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
-| model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
+| model         | `--model`      | `RIG_MODEL`            | `model`         | none (a run without one refuses at start, naming the three ways) |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
 | allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 16 non-worker built-in tools (grows by `scheduler` and `delegate` when a fleet is configured and no operator allow stands) |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
@@ -345,7 +345,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.25.5
+./rig --version                 # prints: rig 0.25.6
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

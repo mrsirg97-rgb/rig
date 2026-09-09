@@ -40,8 +40,11 @@ func loadErr(t *testing.T, dir, cwd string) error {
 
 func TestLoadAbsentFilesIsSilent(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
-	if cfg.Settings.BaseURL == "" || cfg.Settings.Model == "" || cfg.Settings.System == "" {
+	if cfg.Settings.BaseURL == "" || cfg.Settings.System == "" {
 		t.Fatalf("absent files must resolve to the embedded values, got %+v", cfg.Settings)
+	}
+	if cfg.Settings.Model != "" {
+		t.Fatalf("model = %q, want no embedded default (a run without one refuses)", cfg.Settings.Model)
 	}
 	if len(cfg.Settings.Allow) == 0 || cfg.Settings.Retries == 0 {
 		t.Fatalf("absent files must resolve to the embedded values, got %+v", cfg.Settings)
@@ -73,8 +76,8 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.BaseURL != "http://127.0.0.1:8090/v1" {
 		t.Fatalf("baseUrl = %q, want the 0.2.0 flag default", s.BaseURL)
 	}
-	if s.Model != "local" {
-		t.Fatalf("model = %q, want the 0.2.0 flag default", s.Model)
+	if s.Model != "" {
+		t.Fatalf("model = %q, want no embedded default (0.25.6: a run without one refuses)", s.Model)
 	}
 	if s.System != "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin." {
 		t.Fatalf("system = %q, want the 0.2.0 default system prompt", s.System)
@@ -168,8 +171,8 @@ func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 	if cfg.Settings.Retries != 3 {
 		t.Fatalf("retries = %d, want the embedded 3 (zero descends)", cfg.Settings.Retries)
 	}
-	if cfg.Settings.Model != "local" {
-		t.Fatalf("model = %q, want the embedded local (empty descends)", cfg.Settings.Model)
+	if cfg.Settings.Model != "" {
+		t.Fatalf("model = %q, want no embedded default (empty descends to none)", cfg.Settings.Model)
 	}
 }
 

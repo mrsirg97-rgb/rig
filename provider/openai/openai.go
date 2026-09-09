@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
@@ -21,15 +22,23 @@ type provider struct {
 	model   string
 	client  *http.Client
 	sock    string
+	idle    time.Duration
 }
 
-const defaultHeaderTimeout = 5 * time.Minute
+const (
+	defaultHeaderTimeout = 5 * time.Minute
+	defaultIdleTimeout   = 10 * time.Minute
+)
 
 func New(baseURL, model string) core.Provider {
-	return NewWithHeaderTimeout(baseURL, model, defaultHeaderTimeout)
+	return NewWithTimeouts(baseURL, model, defaultHeaderTimeout, defaultIdleTimeout)
 }
 
 func NewWithHeaderTimeout(baseURL, model string, headerTimeout time.Duration) core.Provider {
+	return NewWithTimeouts(baseURL, model, headerTimeout, defaultIdleTimeout)
+}
+
+func NewWithTimeouts(baseURL, model string, headerTimeout, idleTimeout time.Duration) core.Provider {
 	baseURL = strings.TrimRight(baseURL, "/")
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = headerTimeout
@@ -37,6 +46,7 @@ func NewWithHeaderTimeout(baseURL, model string, headerTimeout time.Duration) co
 		baseURL: baseURL,
 		model:   model,
 		client:  &http.Client{Transport: transport},
+		idle:    idleTimeout,
 	}
 	if strings.HasPrefix(baseURL, "unix:") {
 		sock := strings.TrimPrefix(baseURL, "unix:")
@@ -126,6 +136,16 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
+		var idleClosed atomic.Bool
+		var idle *time.Timer
+		if p.idle > 0 {
+			idle = time.AfterFunc(p.idle, func() {
+				idleClosed.Store(true)
+				resp.Body.Close()
+			})
+			defer idle.Stop()
+		}
+
 		var (
 			pending   map[int]*core.ToolCall
 			finishing string
@@ -135,6 +155,9 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		fault := func(err error) { emit(core.Fault{Err: err}) }
 
 		for scanner.Scan() {
+			if idle != nil {
+				idle.Reset(p.idle)
+			}
 			line := scanner.Text()
 			if line == "" {
 				continue
@@ -184,6 +207,10 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 
 		if err := scanner.Err(); err != nil {
 			if ctx.Err() != nil {
+				return
+			}
+			if idleClosed.Load() {
+				fault(fmt.Errorf("openai: stream idle for %s: no data from the endpoint; the connection was closed at the idle bound", p.idle))
 				return
 			}
 			fault(fmt.Errorf("openai: stream read: %w", err))

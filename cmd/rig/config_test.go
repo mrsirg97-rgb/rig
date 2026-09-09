@@ -144,6 +144,7 @@ func rigEnv(scratch, binDir string) []string {
 	env := append(os.Environ(),
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
+		"RIG_MODEL=local",
 	)
 	if binDir != "" {
 		env = append(env, "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -1151,4 +1152,24 @@ func TestToolMenuBudgetAndVocabulary(t *testing.T) {
 		t.Fatalf("the tool menu is %d chars on the wire, over the %d budget: trimming is a decision, name it", total, budget)
 	}
 	t.Logf("tool menu: %d chars of %d", total, budget)
+}
+
+func TestNoModelRefusesBeforeAnyRequest(t *testing.T) {
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(os.Environ(), "HOME="+scratch, "XDG_CONFIG_HOME="+scratch)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("a run without a model must refuse: %s", out)
+	}
+	if !strings.Contains(string(out), "no model") {
+		t.Fatalf("the refusal must name the missing model, got %s", out)
+	}
+	if s.count() != 0 {
+		t.Fatalf("requests = %d, want 0 (the refusal precedes any call)", s.count())
+	}
 }

@@ -96,7 +96,8 @@ plus one registration line, and the loop never names a concrete type.
   swapped atomically so a plugin reload or model switch takes effect on
   the next turn.
 - `provider/openai`: the OpenAI-compatible streaming provider over
-  net/http: plain JSON/SSE wire, per-model tool-call formats.
+  net/http: plain JSON/SSE wire, per-model tool-call formats, the
+  bounded header wait and the stream's idle bound (SPEC_HARDENING 11).
 - `plugins`: python plugin discovery: one file under the rig home's
   `plugins/` is one tool, discovered and executed through the shared
   kernel.

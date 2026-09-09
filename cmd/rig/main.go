@@ -53,7 +53,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.25.5"
+const Version = "0.25.6"
 
 type root struct {
 	pluginMax int
@@ -678,7 +678,7 @@ func reapClaims(ctx context.Context, sdb, tdb store.DB, cwd string, proj todosto
 func main() {
 
 	baseURL := flag.String("base-url", "", "OpenAI-compatible endpoint base URL (the worker swap); precedence: flag > RIG_BASE_URL > settings.json baseUrl > the embedded default")
-	model := flag.String("model", "", "model name; precedence: flag > RIG_MODEL > settings.json model > the embedded default")
+	model := flag.String("model", "", "model name; precedence: flag > RIG_MODEL > settings.json model (no default; a run without one refuses)")
 	system := flag.String("system", "", "system prompt; precedence: flag > RIG_SYSTEM > settings.json system > the embedded default")
 	allow := flag.String("allow", "", "comma-separated allow-list of tool names; precedence: flag > RIG_ALLOW > settings.json allow > the embedded default")
 	retries := flag.Int("retries", 0, "repetition bound on identical failing calls (cleared on success); precedence: flag > RIG_RETRIES > settings.json retries > the embedded default")
@@ -767,6 +767,10 @@ func main() {
 	modelID := envOr("RIG_MODEL", cfg.Settings.Model)
 	if passed["model"] {
 		modelID = *model
+	}
+	if modelID == "" {
+		fmt.Fprintln(os.Stderr, "rig: no model: set --model, RIG_MODEL, or the model key in settings.json; there is no embedded default")
+		os.Exit(1)
 	}
 	systemPrompt := envOr("RIG_SYSTEM", cfg.Settings.System)
 	if passed["system"] {

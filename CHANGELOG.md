@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [0.25.6]: the stream's idle bound, the model's no default, the seam's dead weight
+
+The pre-v1 review's three findings: the one unbounded wait left in the
+loop (a server that holds the stream open without events hangs the turn
+forever), the persistence seam's unused postgres adapter, and the
+embedded `local` model default (a fresh install now refuses to start
+without a model instead of guessing one).
+
+- **the stream's idle bound** (`provider/openai`, SPEC_HARDENING 11):
+  the provider already bounds the wait for response headers (5 minutes);
+  the body read had none. A stream with no line for 10 minutes — the
+  constant beside the header wait, reset by every line (a delta, a
+  comment, a keep-alive) — is closed and Faults, naming the bound and
+  the silence; a slow stream that keeps sending data never faults. This
+  is not the wall-clock cap decision 9 rejected: only total silence
+  faults, not total time. No loop change: the Fault takes the ordinary
+  mid-stream path. `TestAStallingStreamFaultsAfterTheIdleBound` drives
+  the stall (one chunk, then the connection held open: exactly one
+  Fault naming the idle bound), and `TestIdleBoundResetsOnEveryEvent`
+  pins the reset (chunks every 30 ms against a 150 ms bound: the stream
+  completes with `Done`).
+- **the busy refusal names the wait** (`store/sqlx`): the seam's
+  busy-wait contract now has a named case —
+  `TestTxBusyRefusalNamesTheWait` holds the write lock past a caller
+  deadline: the refusal names the busy wait and the deadline, not a
+  bare driver error — and the wait-out test trades its `time.Sleep` for
+  the holder/contender channel handshake (no sleeps, no vacuous pass).
+- **the unused adapter is cut** (`store/sqlx`): `ArrayScanner`, the
+  postgres array-literal and JSON parsing that existed for it, is
+  called by nothing in the tree, and the seam's PACKAGE.md told a
+  postgres story (pgx/v5/stdlib) with no postgres driver in go.mod.
+  Both are gone; the seam is one constructor, one isolation, one read
+  of the context.
+- **the model default is gone** (`config`, `cmd/rig`): the embedded
+  settings.json no longer carries `model: local`, and a run that
+  resolves no model refuses at start — `--model`, `RIG_MODEL`, or the
+  `model` key in settings.json — before any store opens or request is
+  made (`TestNoModelRefusesBeforeAnyRequest` counts zero requests). The
+  embedded models.json keeps the `local` row: a model table is not a
+  default, and `model: local` still works when the operator names it.
+  SPEC_CONFIG 5, the SETUP knob table, and the README's first-run
+  paragraph say so.
+
 ## [0.25.5]: the truncated call comes back in-band
 
 The one fault class the soak has recorded: a stream cut off by the

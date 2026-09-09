@@ -37,7 +37,7 @@ go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 ./rig --base-url $ENDPOINT --model $NAME
 ```
 
-rig needs an OpenAI-compatible SSE endpoint and a model ID. It defaults to `http://127.0.0.1:8090/v1`, model `local`, and the TUI when stdout is a terminal. Otherwise it uses the piped CLI. For scripts, run `./rig -p "the task"`. See `docs/SETUP.md` for configuration.
+rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint defaults to `http://127.0.0.1:8090/v1`; there is no model default — a run without one refuses at start, naming the three ways to set it (`--model`, `RIG_MODEL`, the `model` key in `settings.json`). The TUI is the frontend when stdout is a terminal, the piped CLI otherwise. For scripts, run `./rig -p "the task"`. See `docs/SETUP.md` for configuration.
 
 ## the tools
 

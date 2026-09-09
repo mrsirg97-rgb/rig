@@ -698,6 +698,7 @@ func TestREPLCommands(t *testing.T) {
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
 		"RIG_BASE_URL=http://127.0.0.1:1/v1",
+		"RIG_MODEL=local",
 	)
 	var mu sync.Mutex
 	var out bytes.Buffer
