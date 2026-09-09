@@ -30,6 +30,15 @@ passes after.
   `TestDelegateCwdFileRefuses` points a file at the delegate and requires
   the refusal, not a spawn; `pathguard`'s own tests pin canonicalization
   and containment by name.
+- **the store waits out a busy write lock** (`store/sqlx`): the
+  transaction seam retried nothing on `SQLITE_BUSY`, so a concurrent
+  burst that outran the driver's five-second busy timeout (eighty queued
+  writers on a slow CI disk) failed creates with a raw "database is
+  locked" instead of serializing. `beginTx` now retries the begin while
+  the caller's context lives, bounded at thirty seconds with a doubling
+  backoff, and the final refusal names the wait.
+  `TestTxWaitsOutTheWriteLock` holds the write lock, waits out the
+  release, and requires the transaction to succeed.
 
 ## [0.25.2]: the jail escape and the missing brakes
 
