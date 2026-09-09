@@ -129,8 +129,7 @@ func (l *live) flush() {
 	if l.frame.Len() == 0 {
 		return
 	}
-	io.WriteString(l.w, syncOn+l.frame.String())
-	io.WriteString(l.w, syncOff)
+	io.WriteString(l.w, syncOn+l.frame.String()+syncOff)
 	l.frame.Reset()
 }
 
@@ -141,42 +140,27 @@ func (l *live) guardWrap(line string) {
 	}
 }
 
-func (l *live) clearRegion() {
-	l.norm()
-	old := l.regionRows()
-	if old == 0 {
-		return
-	}
-	l.wf(cursorUp(old - 1))
-	for r := 0; r < old; r++ {
-		l.wf(clearLine)
-		l.wf(toCol(1))
-		if r+1 < old {
-			l.wf("\n")
-		}
-	}
-}
-
 func (l *live) redraw(newLines []string) {
 	l.replaceRegion(newLines)
 	l.lines = newLines
 }
 
 func (l *live) replaceRegion(rows []string) {
-	l.clearRegion()
-	if old := l.regionRows(); old > 0 {
+	l.norm()
+	old := l.regionRows()
+	if old > 0 {
 		l.wf(cursorUp(old - 1))
 	}
 	for i, line := range rows {
 		l.wf(toCol(1))
-		if i == len(rows)-1 {
-
-			l.wf(clearBelow)
-		}
 		l.wf(line)
+		l.wf(clearToEOL)
 		if i < len(rows)-1 {
 			l.wf(lineEnd)
 		}
+	}
+	if old > 0 {
+		l.wf(clearBelow)
 	}
 	if len(rows) > 0 {
 		l.guardWrap(rows[len(rows)-1])
@@ -224,42 +208,25 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 		if upTop > 0 {
 			l.wf(cursorUp(upTop))
 		}
-		for r := 0; r < in; r++ {
-			l.wf(clearLine)
-			l.wf(toCol(1))
-			if r+1 < in {
-				l.wf("\n")
-			}
-		}
-		if in > 1 {
-			l.wf(cursorUp(in - 1))
-		}
-	}
-	l.wf(toCol(1))
-	for i, fr := range frozen {
-		if i > 0 {
-			l.wf(clearLine)
-		}
-		l.wf(fr)
-		l.wf(lineEnd)
 	}
 
-	l.wf(clearLine)
-	l.wf(lineEnd)
-
+	rows := append([]string(nil), frozen...)
+	rows = append(rows, "")
 	if activity != "" {
-		l.wf(clearLine)
-		l.wf(activity)
-		l.wf(lineEnd)
+		rows = append(rows, activity)
 	}
-	l.wf(clearLine)
-	l.wf(inputLine)
+	rows = append(rows, inputLine)
 	srows := statusRows(status)
-	for _, sr := range srows {
-		l.wf(lineEnd)
-		l.wf(clearLine)
-		l.wf(sr)
+	rows = append(rows, srows...)
+	for i, row := range rows {
+		l.wf(toCol(1))
+		l.wf(row)
+		l.wf(clearToEOL)
+		if i < len(rows)-1 {
+			l.wf(lineEnd)
+		}
 	}
+	l.wf(clearBelow)
 	if activity != "" {
 		l.lines = []string{activity, inputLine}
 	} else {
@@ -310,18 +277,9 @@ func (l *live) edit(inputLine string, cursorCol int, status string) {
 	if upTop > 0 {
 		l.wf(cursorUp(upTop))
 	}
-	for r := 0; r < old; r++ {
-		l.wf(clearLine)
-		l.wf(toCol(1))
-		if r+1 < old {
-			l.wf("\n")
-		}
-	}
-	if old > 1 {
-		l.wf(cursorUp(old - 1))
-	}
 	l.wf(toCol(1))
 	l.wf(inputLine)
+	l.wf(clearToEOL)
 	l.guardWrap(inputLine)
 
 	l.parkAt(inputLine, cursorCol, status, false)

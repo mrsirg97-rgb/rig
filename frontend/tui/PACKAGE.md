@@ -82,14 +82,21 @@ width); no core or loop line (decision 10).
   stale width.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
-  exactly at the last column across a write boundary (the tear). The
-  repaint is wrapped in the synchronized-output mode (`?2026h`/`?2026l`,
-  a second write for the end marker): terminals that support it buffer
-  the pair and paint once, so the write boundary is never visible; the
-  rest ignore it. The pager's entry is one write too; the
-  alternate-screen switch and the first frame together; written apart, a
-  reader (the copy-mode case, under `-race` on CI) could see the switch
-  before the history.
+  exactly at the last column across a write boundary (the tear). A frame
+  writes over the old region — the row's replacement content lands
+  first and the tail is erased after (`K`, the shrink below with `0J`) —
+  so a reader that splits the write at the pty buffer (tmux reads in
+  chunks; a large commit can split) never sees the region erased and
+  blank: it sees the old frame, then the new one in place. The repaint
+  is wrapped in the synchronized-output mode (`?2026h`/`?2026l`, one
+  write, pair included): terminals that support it buffer the pair and
+  paint once, so the write boundary is never visible at all. tmux's
+  pane-side support for the pair landed in 3.7 — 3.4 consumes the
+  sequences without forwarding them, so under it the write-first
+  protocol is the whole protection, and the pair is inert. The pager's
+  entry is one write too; the alternate-screen switch and the first
+  frame together; written apart, a reader (the copy-mode case, under
+  `-race` on CI) could see the switch before the history.
 - Deltas paint on a 16 ms frame cadence (`flow` marks the region dirty,
   the tick paints once per frame): tokens that arrive together repaint
   together, and the commit points stay immediate. The activity spinner
