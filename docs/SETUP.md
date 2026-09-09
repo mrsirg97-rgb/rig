@@ -120,7 +120,7 @@ directory's project file, not the creating session's.
 | knob          | flag           | env                    | file key        | embedded default |
 |---------------|----------------|------------------------|-----------------|------------------|
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
-| model         | `--model`      | `RIG_MODEL`            | `model`         | `local` |
+| model         | `--model`      | `RIG_MODEL`            | `model`         | none (a run without one refuses at start, naming the three ways) |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
 | allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 16 non-worker built-in tools (grows by `scheduler` and `delegate` when a fleet is configured and no operator allow stands) |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |

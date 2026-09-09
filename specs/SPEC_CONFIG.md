@@ -450,7 +450,7 @@ env names**, lowerCamel of the env minus the `RIG_` prefix:
 | key             | env                 | 0.2.0 default (the embedded value) |
 |-----------------|---------------------|------------------------------------|
 | `baseUrl`       | `RIG_BASE_URL`      | `http://127.0.0.1:8090/v1`         |
-| `model`         | `RIG_MODEL`         | `local`                            |
+| `model`         | `RIG_MODEL`         | (none: no default; a run without one refuses at start, naming the ways to set it) |
 | `system`        | `RIG_SYSTEM`        | rig's default system prompt        |
 | `allow`         | `RIG_ALLOW`         | the 13-tool default list           |
 | `retries`       | `RIG_RETRIES`       | `3`                                |
@@ -464,6 +464,10 @@ Shapes: `allow` is a **JSON array of tool names** in the file (the env
 stays CSV; the 0.2.0 env surface is unchanged); the rest are strings
 or the integer `retries`. `allow`'s array elements are strings; a
 non-string refuses (`allow[2]: …`).
+
+Amended (0.25.6): `model` carries no embedded value — a run that
+resolves no model refuses at start, naming `--model`, `RIG_MODEL`, and
+the file key.
 
 **`defaultJobModel`**; the one key without an env name (the sweep's
 move, 8): the scheduler's default job model, moved to the embedded

@@ -144,6 +144,7 @@ func rigEnv(scratch, binDir string) []string {
 	env := append(os.Environ(),
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
+		"RIG_MODEL=local",
 	)
 	if binDir != "" {
 		env = append(env, "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
