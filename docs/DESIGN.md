@@ -92,6 +92,10 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
   line is the next user message.
 - **Stream closed without Done or Fault, both contexts alive**: `Run` returns
   a loud error (a provider bug). Silent termination is not an option.
+- **A panicking tool** (0.25.1): the batch's `run` recovers and surfaces
+  the panic as that call's tool error — the model reads the panic text,
+  the transcript and the process survive. A tool panic is a tool failure,
+  not a loop failure.
 - **Cancellation** (run-ctx teardown, e.g. Ctrl-C): the session ends once
   the in-flight step unwinds, cleanly (`nil`); the loop never names which
   step; it only observes the context.

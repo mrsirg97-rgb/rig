@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
@@ -61,6 +62,15 @@ func (b *batch) run(x int) {
 		defer func() { <-b.sem }()
 	}
 	start := time.Now()
-	content, err := b.exec(b.ctx, b.calls[x])
+	var content string
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("tool panic: %v", r)
+			}
+		}()
+		content, err = b.exec(b.ctx, b.calls[x])
+	}()
 	b.post(x, outcome{content: content, err: err, dur: time.Since(start)})
 }

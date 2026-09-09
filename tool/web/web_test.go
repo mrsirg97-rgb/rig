@@ -741,3 +741,41 @@ func TestLookupRidesTheRequestContext(t *testing.T) {
 		t.Fatalf("the DNS lookup ignored the request context: the fetch took %v", elapsed)
 	}
 }
+
+func TestOutOfRangeMaxResultsRefusesInsteadOfPanicking(t *testing.T) {
+	s := web.NewSearch(web.SearchConfig{
+		Do: func(*http.Request) (*http.Response, error) {
+			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
+		},
+	})
+	for _, args := range []string{
+		`{"query":"q","maxResults":-1}`,
+		`{"query":"q","maxResults":0}`,
+		`{"query":"q","maxResults":21}`,
+		`{"query":"q","maxResults":999999999999}`,
+	} {
+		_, err := s.Exec(context.Background(), json.RawMessage(args))
+		if err == nil {
+			t.Fatalf("out-of-range maxResults %s must refuse, not run", args)
+		}
+	}
+}
+
+func TestOutOfRangeMaxCharsRefusesInsteadOfPanicking(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		io.WriteString(w, "body")
+	}))
+	defer srv.Close()
+	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct(), Trafilatura: off()})
+	for _, args := range []string{
+		`{"url":"` + srv.URL + `","maxChars":-1}`,
+		`{"url":"` + srv.URL + `","maxChars":0}`,
+		`{"url":"` + srv.URL + `","maxChars":99}`,
+	} {
+		_, err := f.Exec(context.Background(), json.RawMessage(args))
+		if err == nil {
+			t.Fatalf("out-of-range maxChars %s must refuse, not run", args)
+		}
+	}
+}

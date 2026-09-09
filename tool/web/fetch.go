@@ -347,6 +347,9 @@ func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) 
 	if p.MaxChars != nil {
 		maxC = *p.MaxChars
 	}
+	if maxC < 100 {
+		return "", fmt.Errorf("web_fetch: maxChars must be at least 100, got %d", maxC)
+	}
 	timeoutMs := defaultTimeoutMs
 	if p.TimeoutMs != nil {
 		timeoutMs = *p.TimeoutMs
