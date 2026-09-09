@@ -590,6 +590,45 @@ usually at the end), summarizing (a second model call in a tool path).
 listed is innermost); workers and delegated workers get the same. The TUI
 shows a capped result's marker the way it shows bash's.
 
+### 10. The truncated call comes back in-band
+
+0.25.5. The named core extension is `ToolCall.Cut` (a pure addition; the
+freeze gate's rule holds), and there is no loop change: the loop's
+existing tool-feedback path does the recovery.
+
+A stream that ends with `finish_reason "length"` mid-tool-call used to
+Fault. The turn died, the streamed reasoning and the partial call were
+discarded, and the model got no feedback: the operator had to steer with
+the fault text pasted into the next prompt. The provider now emits every
+accumulated call; a call whose args were left invalid carries `Cut` set
+to the finish reason, and `Done` follows. `middleware/cutoff` (a new
+leaf, one registration line) refuses a marked call before the tool, in a
+teaching voice naming the cause and the remedy, and the refusal feeds
+back through the loop's ordinary tool-result path: the transcript keeps
+the reasoning, the partial call, and the refusal, and the model
+re-issues on the next turn. The audit row names the call, its partial
+args, and the refusal; no `Fault` row is minted, so the soak's fault
+count does not grow for this class.
+
+- `Cut == "length"`: the output token limit cut the call; the refusal
+  says so and tells the model to re-issue more tersely or split the
+  call.
+- Any other finish reason with invalid args: the call was malformed when
+  the stream ended; the refusal says so and tells the model to re-issue.
+- The partial args never execute. A cut call is data, not intent; a
+  truncated command is exactly the thing never to run.
+- The refusal is a failure, so the guard's bound still counts it: an
+  identical re-issuance is bounded, and `Rounds` bounds the turn.
+- Wiring: the root's chain executes the cutoff link after the allowlist
+  and before the approve gate, so a doomed call is never offered to the
+  operator for approval.
+- Rejected, named: executing the partial args (never run a cut command);
+  repairing the JSON into a call (the model would act on a command it
+  never wrote); a one-shot re-issue with a higher ceiling (the reasoning
+  can eat any ceiling, and the re-issue regenerates from scratch);
+  raising the knob and documenting it (the allocation, not the size, is
+  the fault).
+
 ## testing
 
 The contract: every existing named case passes byte-for-byte, or its
@@ -670,6 +709,16 @@ the amendment (decision 7).
   note verbatim.
 - Compat: the loop forwards `TestEvent` untouched (no accumulation, no
   ordering break); the CLI and one-shot ignore it (no output, no panic).
+
+**The 0.25.5 amendment (decision 10).** `TestLengthFinishedTruncatedToolCallArgsFault`
+inverts: `TestLengthFinishedTruncatedToolCallArgsMarked` requires the
+marked call and `Done` after it, and no `Fault`. New (cutoff):
+`TestMarkedCallRefusesWithoutExecuting` (the tool never runs),
+`TestUnmarkedCallExecutes`, `TestMalformedMarkedCallTeaches` (the
+`stop` finish reason gets the malformed-call voice). New (loop):
+`TestTruncatedCallRecoversInBand` (the refusal feeds back, the
+transcript keeps the partial call, and the model's next turn completes).
+The loop's existing named cases stay byte-for-byte: no loop change.
 
 The suite is green on a box with no model loaded: every case is scripted
 or httptest; the live grounding (reasoning round-trip, cache fields) is a

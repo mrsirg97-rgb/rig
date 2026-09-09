@@ -102,20 +102,22 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 ### middleware composition
 
-The root's chain `WithMiddleware(toolset.Resolve, approve?, paths,
-perm.Plugins, perm.Allowlist, guard.Bound, guard.Rounds, guard.Cap)`
+The root's chain `WithMiddleware(toolset.Resolve, approve?, cutoff,
+paths, perm.Plugins, perm.Allowlist, guard.Bound, guard.Rounds, guard.Cap)`
 composes **first-listed innermost**: execution reads the registration list
 in reverse, a call entering at the outermost link and unwinding inward:
 
     paths (the `~` expansion) -> guard.Cap -> guard.Rounds -> guard.Bound
-    -> perm.Allowlist -> perm.Plugins -> approve.Gate -> toolset.Resolve
-    -> the tool itself
+    -> perm.Allowlist -> perm.Plugins -> cutoff -> approve.Gate
+    -> toolset.Resolve -> the tool itself
 
 This is a deliberate inversion of the common `http.Handler` convention:
 the bound sits outside the denial so a denied call still counts toward
 the streak, the path expansion happens before any rule sees a
-path-shaped argument, and the resolve sits innermost so the live table's
-plugin tool executes under every bound.
+path-shaped argument, the cutoff link (SPEC_HARDENING 10) refuses a
+provider-marked cut call before the operator is asked to approve it, and
+the resolve sits innermost so the live table's plugin tool executes under
+every bound.
 
 ### guard semantics (`middleware/guard`)
 

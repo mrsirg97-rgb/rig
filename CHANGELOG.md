@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+## [0.25.5]: the truncated call comes back in-band
+
+The one fault class the soak has recorded: a stream cut off by the
+output token limit mid-tool-call used to Fault, killing the turn and
+discarding the streamed reasoning and the partial call. The model got no
+feedback, so the operator had to steer with the fault text pasted into
+the next prompt (2026-09-09, the 36-minute stream that ended in a cut
+`bash` call). The cut call now comes back in-band.
+
+- **the cut call is marked, not faulted** (`core`, `provider/openai`):
+  `ToolCall` gains `Cut`, the finish reason that cut a call's arguments
+  mid-JSON (empty when the call is complete). The adapter emits every
+  accumulated call, and a call whose args are invalid at stream end
+  carries the marker and is followed by `Done`, never a `Fault`; a
+  complete sibling in the same stream still executes.
+  `TestLengthFinishedTruncatedToolCallArgsMarked` replaces
+  `TestLengthFinishedTruncatedToolCallArgsFault` (which required the
+  fault, and was wrong), and `TestStopFinishedMalformedToolCallArgsMarked`
+  and `TestLengthCutCallKeepsCompleteSiblings` pin the two edges. The old
+  fault text's advice (`raise MaxTokens or the reserve`) was misleading:
+  `Reserve` is the context-compaction threshold, not an output budget.
+  The allocation, not the size, was the fault.
+- **the cutoff link refuses before the tool** (`middleware/cutoff`, new):
+  the root's chain executes the link after the allowlist and before the
+  approve gate, and a marked call never reaches the tool: the partial
+  args are data, not intent, and a truncated command is exactly the
+  thing never to run. The refusal teaches: a length cut says to re-issue
+  more tersely or split the call; any other finish reason says the
+  arguments were not valid JSON. `TestMarkedCallRefusesWithoutExecuting`,
+  `TestUnmarkedCallExecutes`, `TestMalformedMarkedCallTeaches`.
+- **the model recovers on the next turn** (`loop`, unchanged): the
+  refusal feeds back through the ordinary tool-result path, so the
+  transcript keeps the reasoning, the partial call, and the refusal, and
+  the model re-issues with full context; no `Fault` row is minted, so
+  the soak's fault count does not grow for this class. The refusal is a
+  failure, so the guard's bound still counts it and `Rounds` bounds the
+  turn. `TestTruncatedCallRecoversInBand` drives the whole path.
+
 ## [0.25.4]: the release workflow stops trusting apt
 
 The v0.25.3 release died in the minisign step: `apt-get update` broke on

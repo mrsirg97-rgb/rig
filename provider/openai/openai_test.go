@@ -134,7 +134,7 @@ func TestAccumulatesSplitToolCallArgs(t *testing.T) {
 	}
 }
 
-func TestLengthFinishedTruncatedToolCallArgsFault(t *testing.T) {
+func TestLengthFinishedTruncatedToolCallArgsMarked(t *testing.T) {
 
 	body := strings.Join([]string{
 		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"bash","arguments":"{\"command\": \"cat /tmp/longfile"}}]}}]}`,
@@ -152,20 +152,103 @@ func TestLengthFinishedTruncatedToolCallArgsFault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stream: %v", err)
 	}
-	if got := kinds(events); !strings.HasSuffix(got, "fault") {
-		t.Fatalf("truncated tool call args (finish length) must Fault, got %s", got)
+	if got := kinds(events); got != "call,done" {
+		t.Fatalf("a length-cut call must be emitted marked before Done, got %s", got)
 	}
+	var call core.ToolCall
 	for _, ev := range events {
-		if _, ok := ev.(core.ToolCallEvent); ok {
-			t.Fatal("a truncated tool call must not be emitted into the transcript")
+		if c, ok := ev.(core.ToolCallEvent); ok {
+			call = c.Call
 		}
-		if _, ok := ev.(core.Done); ok {
-			t.Fatal("no Done after a truncated tool call")
+		if _, ok := ev.(core.Fault); ok {
+			t.Fatal("a length-cut call must not Fault")
 		}
 	}
-	msg := lastFault(t, events).Err.Error()
-	if !strings.Contains(msg, "bash") || !strings.Contains(msg, "truncated") {
-		t.Fatalf("fault must name the call and the cause, got %q", msg)
+	if call.ID != "c1" || call.Name != "bash" {
+		t.Fatalf("marked call identity wrong: %+v", call)
+	}
+	if call.Cut != "length" {
+		t.Fatalf("marked call Cut = %q, want length", call.Cut)
+	}
+	if got := string(call.Args); got != `{"command": "cat /tmp/longfile` {
+		t.Fatalf("marked call keeps the partial args, got %q", got)
+	}
+	done := events[len(events)-1].(core.Done)
+	if done.StopReason != "length" {
+		t.Fatalf("stop reason = %q, want length", done.StopReason)
+	}
+}
+
+func TestStopFinishedMalformedToolCallArgsMarked(t *testing.T) {
+
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"bash","arguments":"{\"command\": \"ls\" "}}]}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if got := kinds(events); got != "call,done" {
+		t.Fatalf("a malformed call must be emitted marked before Done, got %s", got)
+	}
+	var call core.ToolCall
+	for _, ev := range events {
+		if c, ok := ev.(core.ToolCallEvent); ok {
+			call = c.Call
+		}
+		if _, ok := ev.(core.Fault); ok {
+			t.Fatal("a malformed call must not Fault")
+		}
+	}
+	if call.Cut != "stop" {
+		t.Fatalf("marked call Cut = %q, want stop", call.Cut)
+	}
+}
+
+func TestLengthCutCallKeepsCompleteSiblings(t *testing.T) {
+
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c0","function":{"name":"bash","arguments":"{\"command\":\"ls\"}"}},{"index":1,"id":"c1","function":{"name":"bash","arguments":"{\"command\": \"cat /tmp/longfile"}}]}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"length"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	var calls []core.ToolCall
+	for _, ev := range events {
+		if c, ok := ev.(core.ToolCallEvent); ok {
+			calls = append(calls, c.Call)
+		}
+		if _, ok := ev.(core.Fault); ok {
+			t.Fatal("a cut sibling must not Fault the stream")
+		}
+	}
+	if len(calls) != 2 {
+		t.Fatalf("tool calls = %d, want 2 (the complete sibling survives)", len(calls))
+	}
+	if calls[0].ID != "c0" || calls[0].Cut != "" {
+		t.Fatalf("complete sibling must stay unmarked: %+v", calls[0])
+	}
+	if calls[1].ID != "c1" || calls[1].Cut != "length" {
+		t.Fatalf("cut sibling must carry the marker: %+v", calls[1])
 	}
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/middleware/cutoff"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
@@ -52,7 +53,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.25.4"
+const Version = "0.25.5"
 
 type root struct {
 	pluginMax int
@@ -142,6 +143,7 @@ func wire(r *root) *rig.Kernel {
 		if r.askDoor != nil {
 			mw = append(mw, approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating))
 		}
+		mw = append(mw, cutoff.Middleware())
 		resultCap := r.resultCap
 		if resultCap == 0 {
 			resultCap = defaultResultCap

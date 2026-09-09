@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "0.25.4" {
-		t.Fatalf("Version = %q, want 0.25.4", Version)
+	if Version != "0.25.5" {
+		t.Fatalf("Version = %q, want 0.25.5", Version)
 	}
 
 	if !regexp.MustCompile(`^0\.\d+\.\d+$`).MatchString(Version) {
@@ -188,8 +188,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("no fleet: the worker tools must stay unregistered: %v, want %v", got, want)
 	}
-	if len(k.Middleware) != 7 {
-		t.Fatalf("middleware = %d links, want the path boundary, the router, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decision 9; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	if len(k.Middleware) != 8 {
+		t.Fatalf("middleware = %d links, want the path boundary, the router, the cutoff link, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decisions 9 and 10; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
 	}
 }
 
