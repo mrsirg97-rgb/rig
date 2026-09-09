@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [0.25.3]: the one cwd rule and the fire-time bind check
+
+The deep review pass found the jail fix's one remaining window and the
+cwd rule's one duplication. Each carries a test that failed before and
+passes after.
+
+- **the job's cwd is revalidated at fire time** (`store/scheduler`): the
+  0.25.2 check validated the cwd at create and update, but the jail
+  rw-binds the stored path at fire time, and the model can rewrite the
+  session's project between the two: create a real directory, schedule a
+  once job against it, then rename the directory and leave a symlink to
+  `/etc` (or the operator's home) in its place. The bind follows the
+  symlink, so the jailed worker gets rw access to the host again. The
+  runner now canonicalizes the stored cwd at fire time and refuses when
+  the path no longer resolves to itself: a replaced, moved, or deleted
+  cwd skips the fire with a recorded reason and a teaching message, and
+  the crontab line stays for the list to flag.
+  `TestRunJobRefusesAReplacedOrMissingCwd` replaces and deletes the job's
+  cwd and requires the skip, not a spawn.
+- **the cwd rule is one function, not two** (`pathguard`): the scheduler
+  tool carried its own copy of the delegate tool's `canonicalCwd`, and
+  the copies had already drifted: the delegate's accepted a file as a
+  cwd (it failed at spawn), the scheduler's refused one at the boundary.
+  The rule now lives once in `pathguard` (`Canonical` and `Within`), both
+  tools call it, and the delegate inherits the directory check.
+  `TestDelegateCwdFileRefuses` points a file at the delegate and requires
+  the refusal, not a spawn; `pathguard`'s own tests pin canonicalization
+  and containment by name.
+
 ## [0.25.2]: the jail escape and the missing brakes
 
 The deep review pass found one sandbox escape and four missing brakes. Each
