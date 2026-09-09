@@ -30,6 +30,11 @@ isolation, one read of the context.
 - `TxFrom` on an unbound context refuses loudly ("sqlx: no transaction
   bound, call DB.Tx first"); the stack fails closed on an unbound
   request.
+- `Tx` and `TxReadOnly` wait out a `SQLITE_BUSY` begin: the driver's own
+  busy timeout is one attempt, the seam retries with a doubling backoff
+  while the caller's context lives, capped at thirty seconds total. A
+  concurrent writer burst serializes instead of failing; the final
+  refusal names the wait and the underlying busy error.
 - The tx rides a typed, unexported context key (`txKey`), not a string, so
   no other value can collide with it.
 - `ArrayScanner.Scan` handles three inputs: postgres array literals

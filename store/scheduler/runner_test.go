@@ -108,6 +108,19 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched
 	return f.result, f.err
 }
 
+func realCwd(t *testing.T, name string) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return real
+}
+
 func setupJob(t *testing.T, cwd string, mutate func(in *sched.CreateInput)) (h *harness, key string) {
 	t.Helper()
 	h = newHarness(t, cwd)
@@ -193,7 +206,7 @@ func TestParseKeyJNAndGarbageRefuses(t *testing.T) {
 }
 
 func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) {
-	h, key := setupJob(t, "/ws/r1", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "hello\n"}}
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
 		statuses: map[string]string{"qwen3.8-27b-workers": "loaded"},
@@ -228,7 +241,7 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 	if baseIdx < 0 || baseIdx+1 >= len(c.Argv) || c.Argv[baseIdx+1] != "http://127.0.0.1:8090/v1" {
 		t.Fatalf("argv missing the worker's swap endpoint: %v", c.Argv)
 	}
-	if c.Cwd != "/ws/r1" {
+	if c.Cwd != h.sessCwd {
 		t.Fatalf("cwd %q", c.Cwd)
 	}
 
@@ -263,7 +276,7 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 }
 
 func TestNothingResidentRuns(t *testing.T) {
-	h, key := setupJob(t, "/ws/r2", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
 	if len(spawn.calls) != 1 {
@@ -272,7 +285,7 @@ func TestNothingResidentRuns(t *testing.T) {
 }
 
 func TestSomethingElseResidentBusySkipRecordsAndSpawnsNothing(t *testing.T) {
-	h, key := setupJob(t, "/ws/r3", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{}
 	before := h.ct.text
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{}))
@@ -296,7 +309,7 @@ func TestSomethingElseResidentBusySkipRecordsAndSpawnsNothing(t *testing.T) {
 }
 
 func TestSomethingElseResidentBusyForceRunsAndEatsTheEviction(t *testing.T) {
-	h, key := setupJob(t, "/ws/r4", func(in *sched.CreateInput) { in.Busy = "force" })
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Busy = "force" })
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	mustOK(t, sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{})))
 	if len(spawn.calls) != 1 {
@@ -305,7 +318,7 @@ func TestSomethingElseResidentBusyForceRunsAndEatsTheEviction(t *testing.T) {
 }
 
 func TestOwnModelLoadedIdleWhileAnotherResidentRuns(t *testing.T) {
-	h, key := setupJob(t, "/ws/r5", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
 		statuses: map[string]string{"qwen3.8-27b-workers": "loaded"},
@@ -317,7 +330,7 @@ func TestOwnModelLoadedIdleWhileAnotherResidentRuns(t *testing.T) {
 }
 
 func TestOwnModelNotLoadedSomethingElseResidentSkips(t *testing.T) {
-	h, key := setupJob(t, "/ws/r6", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{}
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
 		statuses: map[string]string{"qwen3.8-27b": "loaded"},
@@ -333,7 +346,7 @@ func TestOwnModelNotLoadedSomethingElseResidentSkips(t *testing.T) {
 }
 
 func TestBusyCheckFetchFailureFailsClosedWithReason(t *testing.T) {
-	h, key := setupJob(t, "/ws/r7", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{}
 	err := sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{failing: "fetch failed: ECONNREFUSED"}))
 	mustOK(t, err)
@@ -353,7 +366,7 @@ func TestBusyCheckFetchFailureFailsClosedWithReason(t *testing.T) {
 }
 
 func TestWorkerExitNonZeroRecordsFailWithExitLogCarriesStderr(t *testing.T) {
-	h, key := setupJob(t, "/ws/r8", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 3, Stdout: "out", Stderr: "boom\n"}}
 	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
 	rec := runEvents(t, h, "")[0]
@@ -375,7 +388,7 @@ func TestWorkerExitNonZeroRecordsFailWithExitLogCarriesStderr(t *testing.T) {
 }
 
 func TestOnceFireConsumesTheLineAndMarksDone(t *testing.T) {
-	h, key := setupJob(t, "/ws/r9", func(in *sched.CreateInput) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) {
 		in.Cron = "once"
 		in.At = "2026-08-16T03:07:00Z"
 	})
@@ -394,7 +407,7 @@ func TestOnceFireConsumesTheLineAndMarksDone(t *testing.T) {
 }
 
 func TestOnceWithFailingWorkerDoneWithFailNoRetry(t *testing.T) {
-	h, key := setupJob(t, "/ws/r10", func(in *sched.CreateInput) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) {
 		in.Cron = "once"
 		in.At = "2026-08-16T03:07:00Z"
 	})
@@ -417,7 +430,7 @@ func TestOnceWithFailingWorkerDoneWithFailNoRetry(t *testing.T) {
 }
 
 func TestOnceDoneIsAnEventAndSurvivesTheNextFold(t *testing.T) {
-	h, key := setupJob(t, "/ws/r11", func(in *sched.CreateInput) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) {
 		in.Cron = "once"
 		in.At = "2026-08-16T03:07:00Z"
 	})
@@ -454,7 +467,7 @@ func TestOnceDoneIsAnEventAndSurvivesTheNextFold(t *testing.T) {
 }
 
 func TestZombieLineWithMissingRowLineDeletedSkipRecorded(t *testing.T) {
-	h, key := setupJob(t, "/ws/z1", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 
 	if _, err := h.db.DB.Exec(`DELETE FROM jobs WHERE id = 'j1'`); err != nil {
 		t.Fatal(err)
@@ -470,7 +483,7 @@ func TestZombieLineWithMissingRowLineDeletedSkipRecorded(t *testing.T) {
 }
 
 func TestCrashWindowRowDoneButLineAliveLineDeletedSkipRecorded(t *testing.T) {
-	h, key := setupJob(t, "/ws/z2", func(in *sched.CreateInput) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) {
 		in.Cron = "once"
 		in.At = "2026-08-16T03:07:00Z"
 	})
@@ -488,7 +501,7 @@ func TestCrashWindowRowDoneButLineAliveLineDeletedSkipRecorded(t *testing.T) {
 }
 
 func TestPausedRowLineDriftedActiveSkipLineUntouched(t *testing.T) {
-	h, key := setupJob(t, "/ws/z3", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	if _, err := h.db.DB.Exec(`UPDATE jobs SET state = 'paused' WHERE id = 'j1'`); err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +517,7 @@ func TestPausedRowLineDriftedActiveSkipLineUntouched(t *testing.T) {
 }
 
 func TestLogsPruneToTheNewestTwenty(t *testing.T) {
-	h, key := setupJob(t, "/ws/p1", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	dir := filepath.Join(h.home, "runs", "j1")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -548,7 +561,7 @@ func TestLogsPruneToTheNewestTwenty(t *testing.T) {
 }
 
 func TestLockHeldRecordsSkipWithoutRunningTheWorker(t *testing.T) {
-	h, key := setupJob(t, "/ws/l1", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	lockDir := filepath.Join(h.home, "locks")
 	if err := os.MkdirAll(lockDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -580,7 +593,7 @@ func TestLockHeldRecordsSkipWithoutRunningTheWorker(t *testing.T) {
 }
 
 func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
-	h, key := setupJob(t, "/ws/l2", nil)
+	h, key := setupJob(t, realCwd(t, "job"), nil)
 	fc := failingCrontab{listErr: jsonErr("crontab list failed (exit 1): PAM: user not authorized")}
 	err := sched.RunJob(key, sched.RunOpts{
 		Home:      h.home,
@@ -607,4 +620,48 @@ func toString(v any) string {
 		return s
 	}
 	return ""
+}
+
+func TestRunJobRefusesAReplacedOrMissingCwd(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		swap func(t *testing.T, cwd string)
+	}{
+		{name: "replaced", swap: func(t *testing.T, cwd string) {
+			outside := t.TempDir()
+			if err := os.Rename(cwd, cwd+".old"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, cwd); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "missing", swap: func(t *testing.T, cwd string) {
+			if err := os.RemoveAll(cwd); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cwd := realCwd(t, "job")
+			h, key := setupJob(t, cwd, nil)
+			tc.swap(t, cwd)
+			spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+			before := h.ct.text
+			mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
+			if len(spawn.calls) != 0 {
+				t.Fatal("a replaced or missing cwd must not spawn")
+			}
+			rec := runEvents(t, h, "")[0]
+			if rec.Args["status"] != "skip" {
+				t.Fatalf("status %v", rec.Args["status"])
+			}
+			if !regexp.MustCompile(`cwd`).MatchString(toString(rec.Args["reason"])) {
+				t.Fatalf("the skip reason must name the cwd rule: %v", rec.Args["reason"])
+			}
+			if h.ct.text != before {
+				t.Fatal("the crontab line must stay untouched")
+			}
+		})
+	}
 }

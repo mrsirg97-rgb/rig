@@ -32,7 +32,9 @@ written before the store commit; drift is surfaced in list.
 - `runner.go`: the job runner (the worker spawn, bwrap jail, socket
   proxy); the spawn captures each stream to the first and last 128 KiB
   of a 256 KiB budget with a truncation marker, so a verbose worker
-  cannot OOM the runner.
+  cannot OOM the runner; the stored cwd is revalidated at fire time (the
+  jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
+  with a recorded reason.
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE): the busy
   rule, the ad-hoc record (a minted job row with no crontab line), the
   state-store bind and explicit identity for the resumable transcript, the per-session

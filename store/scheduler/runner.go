@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/pathguard"
 	"github.com/mrsirg97-rgb/rig/store"
 	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
 )
@@ -136,6 +137,13 @@ func RunJob(key string, opts RunOpts) error {
 		return installRemoved(opts.Crontab, text, key)
 	case "paused":
 		if e := recordSkip(db, id, "store says paused (line drifted active)"); e != nil {
+			return e
+		}
+		return nil
+	}
+	canonical, err := pathguard.Canonical(job.Cwd)
+	if err != nil || canonical != job.Cwd {
+		if e := recordSkip(db, id, "job cwd was replaced or moved (refusing the read-write bind); re-create the job"); e != nil {
 			return e
 		}
 		return nil
