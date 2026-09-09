@@ -50,10 +50,13 @@ adapter's problem; the loop sees `core.Event` only.
 - `usage` is read from the usage chunk (the `stream_options.include_usage`
   request); cached tokens are a subset of `prompt` on this wire, and
   `total_tokens` is read and ignored.
-- Tool calls accumulate by index across deltas (`accumulate`): incomplete
-  calls are discarded; a missing finish marker faults "stream truncated",
-  and a length-capped stream that cut a call's args mid-JSON drops the
-  call and faults naming the cause (never poison the transcript).
+- Tool calls accumulate by index across deltas (`accumulate`): every
+  accumulated call is emitted, and a call whose args are invalid at
+  stream end carries `Cut` set to the finish reason (a length-cut or
+  malformed call, never a `Fault`; `Done` follows). The root's cutoff
+  link refuses a marked call before the tool, so the half of a call
+  never executes or poisons the transcript (SPEC_HARDENING 10); a
+  missing finish marker still faults "stream truncated".
 - The scanner buffer is bounded (64 KiB initial, 4 MiB max).
 - Two wire shapes go for the effort when it is set (top-level
   `reasoning_effort` plus `chat_template_kwargs.reasoning_effort)`,

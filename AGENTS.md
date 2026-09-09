@@ -78,6 +78,10 @@ plus one registration line, and the loop never names a concrete type.
 - `middleware/approve`: the manual tool-approval gate (SPEC_MODES 4):
   in manual mode a mutating call pauses for the operator's y/n at the
   frontend's ask door; a denial is a teaching refusal the model reads.
+- `middleware/cutoff`: the refuse-before-execute link for a call the
+  provider marked as cut off (`ToolCall.Cut`, SPEC_HARDENING 10): the
+  partial args never run, and the refusal feeds back so the model
+  re-issues on the next turn instead of a dead fault.
 - `middleware/perm`: deny-by-default tool allowlist and the plugin
   provenance rule (model writes land in `plugins/pending/`).
 - `middleware/guard`: the retry guard: bounds the model's repeated

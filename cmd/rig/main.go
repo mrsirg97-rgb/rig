@@ -23,6 +23,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/middleware/cutoff"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
