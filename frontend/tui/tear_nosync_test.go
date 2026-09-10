@@ -51,6 +51,7 @@ func (v *vtStream) writeRune(r rune) {
 func (v *vtStream) feed(b []byte) {
 	v.buf = append(v.buf, b...)
 	rest := 0
+	incomplete := false
 	i := 0
 	for i < len(v.buf) {
 		rest = i
@@ -68,6 +69,7 @@ func (v *vtStream) feed(b []byte) {
 			i++
 		case c == 0x1b:
 			if i+1 >= len(v.buf) {
+				incomplete = true
 				i = len(v.buf)
 				continue
 			}
@@ -80,6 +82,7 @@ func (v *vtStream) feed(b []byte) {
 				j++
 			}
 			if j >= len(v.buf) {
+				incomplete = true
 				i = len(v.buf)
 				continue
 			}
@@ -153,6 +156,7 @@ func (v *vtStream) feed(b []byte) {
 			i = j + 1
 		default:
 			if !utf8.FullRune(v.buf[i:]) {
+				incomplete = true
 				i = len(v.buf)
 				continue
 			}
@@ -165,7 +169,11 @@ func (v *vtStream) feed(b []byte) {
 			i += size
 		}
 	}
-	v.buf = append(v.buf[:0], v.buf[rest:]...)
+	if incomplete {
+		v.buf = append(v.buf[:0], v.buf[rest:]...)
+	} else {
+		v.buf = v.buf[:0]
+	}
 }
 
 func TestTearNoSyncPromptNeverBlanks(t *testing.T) {
