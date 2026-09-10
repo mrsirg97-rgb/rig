@@ -7,7 +7,7 @@ builds, and bubblewrap for jailed workers.
 ## prerequisites
 
 - **Go** with a toolchain that satisfies `go 1.26.6` in `go.mod`. Any Go ≥
-  1.26 works: the toolchain line pulls the newest matching patch automatically
+  1.26.6 works: the toolchain line pulls the newest matching patch automatically
   (`GOTOOLCHAIN=auto` is the default). Verify with `go version`.
 - An **OpenAI-compatible** chat-completions endpoint (SSE streaming): a local
   model server, a gateway, or the hosted API. rig speaks the wire protocol
@@ -59,7 +59,7 @@ chmod +x rig
 ./rig --version
 ```
 
-**go install** (needs Go ≥ 1.26; the toolchain line pulls the newest
+**go install** (needs Go ≥ 1.26.6; the toolchain line pulls the newest
 matching patch automatically):
 
 ```sh

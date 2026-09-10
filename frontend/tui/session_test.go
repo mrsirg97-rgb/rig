@@ -159,7 +159,7 @@ func TestStatusLineRefresh(t *testing.T) {
 	modelsC := &fakeCmd{name: "models", out: "switched"}
 	compactC := &fakeCmd{name: "compact", out: "nothing to drop"}
 	s := newScriptedSession(t,
-		WithTheme(th), WithWidth(50),
+		th, WithWidth(50),
 		WithStatus(statusIn),
 		WithCommands([]core.Command{newC, sessC, modelsC, compactC}, nil),
 	)
@@ -265,7 +265,7 @@ func TestStatusLineRefresh(t *testing.T) {
 
 func TestFlowCoalescesDeltas(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50))
+	s := newScriptedSession(t, th, WithWidth(50))
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
@@ -296,7 +296,7 @@ func TestFlowCoalescesDeltas(t *testing.T) {
 
 func TestFrameTickerLifecycle(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50))
+	s := newScriptedSession(t, th, WithWidth(50))
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
@@ -360,7 +360,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 		return nil
 	}
 
-	tool := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	tool := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := tool.prompt(promptMark(th), "go\n"); got != "go" {
@@ -375,7 +375,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 	toolBlock := block(tool, screen(tool), "● todo · start t3")
 
 	todo := &fakeCmd{name: "todo", out: reply}
-	cmdS := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	cmdS := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{todo}, nil),
 	)
@@ -417,7 +417,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 
 func TestMidTurnLinesSteer(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	mark := promptMark(th)
@@ -448,7 +448,7 @@ func TestMidTurnLinesSteer(t *testing.T) {
 }
 func TestCtrlTogglesReasoning(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -481,7 +481,7 @@ func TestCtrlTogglesReasoning(t *testing.T) {
 
 func TestCtrlCEndSession(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	ctx, interrupt := context.WithCancel(context.Background())
@@ -506,7 +506,7 @@ func TestCtrlCEndSession(t *testing.T) {
 
 func TestCtrlDEmptyExits(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -524,7 +524,7 @@ func TestCtrlDEmptyExits(t *testing.T) {
 
 func TestCtrlDNonBlankKept(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "keep me\x04\n"); got != "keep me" {
@@ -535,7 +535,7 @@ func TestCtrlDNonBlankKept(t *testing.T) {
 func TestDispatchVoice(t *testing.T) {
 	th := oledTheme(t)
 	newC := &fakeCmd{name: "new", out: "new session: s2"}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{newC}, nil),
 	)
@@ -578,7 +578,7 @@ func TestDispatchVoice(t *testing.T) {
 
 func TestSteerSeam(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	fe, ok := interface{}(s.fe).(interface {
@@ -671,7 +671,7 @@ func TestSteerSeam(t *testing.T) {
 
 func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
+	s := newScriptedSession(t, th, WithWidth(100),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	in := make(chan string, 1)
@@ -722,7 +722,7 @@ func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 
 func TestWidePendingLineWrapsClean(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(20),
+	s := newScriptedSession(t, th, WithWidth(20),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	in := make(chan string, 1)
@@ -787,7 +787,7 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 
 func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(100),
+	s := newScriptedSession(t, th, WithWidth(100),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	in := make(chan string, 1)
@@ -823,7 +823,7 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 		t.Fatalf("the CLI's Done newline did not land as a blank line after the text, before the input:\n%q", v.rows)
 	}
 
-	s2 := newScriptedSession(t, WithTheme(th), WithWidth(100),
+	s2 := newScriptedSession(t, th, WithWidth(100),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	in2 := make(chan string, 1)
@@ -915,7 +915,7 @@ func TestCompletionMenu(t *testing.T) {
 	models := &fakeCmd{name: "models", desc: "the per-model table"}
 	moveC := &fakeCmd{name: "move", desc: "move a thing"}
 	todo := &subCmd{fakeCmd: fakeCmd{name: "todo", out: "queue reply"}}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{models, moveC, todo}, nil),
 	)
@@ -991,7 +991,7 @@ func TestCompletionMenu(t *testing.T) {
 
 func TestInputWrapsAndScrolls(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(10),
+	s := newScriptedSession(t, th, WithWidth(10),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	in := make(chan string, 1)
@@ -1054,7 +1054,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 
 func TestPasteAndEscKeybinds(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	in := make(chan string, 1)
@@ -1094,7 +1094,7 @@ func TestPasteAndEscKeybinds(t *testing.T) {
 
 func TestPagerCopyMode(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -1137,7 +1137,7 @@ func TestPagerCopyMode(t *testing.T) {
 
 func TestCompactingLoader(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	go func() { _, _ = s.input() }()
@@ -1179,7 +1179,7 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	th := oledTheme(t)
 	long := &fakeCmd{name: "models", desc: strings.Repeat("a long description ", 6)}
 	moveC := &fakeCmd{name: "move", desc: "short"}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(30),
+	s := newScriptedSession(t, th, WithWidth(30),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{long, moveC}, nil),
 	)
@@ -1201,7 +1201,7 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 func TestGhostEnterCompletes(t *testing.T) {
 	th := oledTheme(t)
 	models := &fakeCmd{name: "models", out: "the table"}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{models}, nil),
 	)
@@ -1221,7 +1221,7 @@ func TestGhostEnterCompletes(t *testing.T) {
 
 func TestLoaderLocksAboveTheInput(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -1247,7 +1247,7 @@ func TestSpacingRule(t *testing.T) {
 		{"no trailing newline", "the answer"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+			s := newScriptedSession(t, th, WithWidth(60),
 				WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 			)
 			if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -1292,7 +1292,7 @@ func TestSpacingRule(t *testing.T) {
 
 func TestBlockSpacingRule(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+	s := newScriptedSession(t, th, WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -1351,7 +1351,7 @@ func TestBlockSpacingRule(t *testing.T) {
 
 func TestUsageRowIsLiveWithinTheTurn(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+	s := newScriptedSession(t, th, WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -1380,7 +1380,7 @@ func TestUsageRowIsLiveWithinTheTurn(t *testing.T) {
 func TestVerbMenuOnTheWholeName(t *testing.T) {
 	th := oledTheme(t)
 	todo := &subCmd{fakeCmd: fakeCmd{name: "todo", desc: "the queue"}}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{todo}, nil),
 	)
@@ -1405,7 +1405,7 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 
 func TestMargins(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+	s := newScriptedSession(t, th, WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 
@@ -1433,7 +1433,7 @@ func TestMargins(t *testing.T) {
 
 func TestMarkdownOnTheCommittedPath(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(30),
+	s := newScriptedSession(t, th, WithWidth(30),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -1479,7 +1479,7 @@ func TestMarkdownOnTheCommittedPath(t *testing.T) {
 func TestRepaintSyncsTheSize(t *testing.T) {
 	th := oledTheme(t)
 	w := 96
-	s := newScriptedSession(t, WithTheme(th), WithWidth(96),
+	s := newScriptedSession(t, th, WithWidth(96),
 		WithSize(func() (int, int, bool) { return w, 30, true }),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
@@ -1522,7 +1522,7 @@ func TestArrowsNavigateTheMenu(t *testing.T) {
 	th := oledTheme(t)
 	todo := &subCmd{fakeCmd: fakeCmd{name: "todo", desc: "the queue"}}
 	models := &fakeCmd{name: "models", desc: "the table"}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{todo, models}, nil),
 	)
@@ -1550,7 +1550,7 @@ func TestArrowsNavigateTheMenu(t *testing.T) {
 
 func TestReasoningStaysRawAndNeverLeaks(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+	s := newScriptedSession(t, th, WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -1579,7 +1579,7 @@ func TestReasoningStaysRawAndNeverLeaks(t *testing.T) {
 
 func TestEscInterruptsTheLiveTurn(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(50),
+	s := newScriptedSession(t, th, WithWidth(50),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1632,7 +1632,7 @@ func TestAskDoor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := newScriptedSession(t, WithTheme(th), WithWidth(60),
+	s := newScriptedSession(t, th, WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	go func() { _, _ = s.input() }()

@@ -45,11 +45,13 @@ width); no core or loop line (decision 10).
 
 ## How it is consumed
 
-- The root wires it with `New` plus options: `WithTheme`, `WithWidth`,
-  `WithStatus` (the status numbers computed at the refresh points, a
-  store read never per repaint), `WithNews` (the scheduler's one ambient
-  line), `WithCommands` (the dispatch + the `Steer` seam + the `Sub()`
-  hint door), `WithTicks`/`WithWinch` (test seams).
+- The root wires it with `New`: the resolved theme is the third argument
+  (the root reads theme.json; the frontend never resolves one), then
+  options: `WithWidth`, `WithStatus` (the status numbers computed at the
+  refresh points, a store read never per repaint), `WithNews` (the
+  scheduler's one ambient line), `WithCommands` (the dispatch + the
+  `Steer` seam + the `Sub()` hint door), `WithTicks`/`WithWinch` (test
+  seams).
 - `Input` returns one user message (the loop's contract): the steering
   slot is delivered before blocking, a command line is dispatched and
   consumed there, blank lines are no-ops, EOF ends the REPL.

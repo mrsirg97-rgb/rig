@@ -127,8 +127,6 @@ func (t *tui) syncSizeLocked() {
 
 type Option func(*tui)
 
-func WithTheme(t Theme) Option { return func(tu *tui) { tu.theme = t } }
-
 func WithWidth(w int) Option { return func(t *tui) { t.width = w } }
 
 func WithStatus(f func(context.Context) StatusIn) Option {
@@ -157,9 +155,9 @@ func WithTicks(ch <-chan time.Time) Option { return func(t *tui) { t.ticks = ch 
 
 func WithWinch(ch <-chan struct{}) Option { return func(t *tui) { t.winch = ch } }
 
-func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
+func New(in io.Reader, out io.Writer, theme Theme, opts ...Option) core.Frontend {
 	t := &tui{
-		theme:         defaultTheme(),
+		theme:         theme,
 		in:            in,
 		width:         80,
 		height:        24,
@@ -201,14 +199,6 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		go t.winchLoop()
 	}
 	return t
-}
-
-func defaultTheme() Theme {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		panic("tui: " + err.Error())
-	}
-	return th
 }
 
 func signalWinch() (<-chan struct{}, func()) {

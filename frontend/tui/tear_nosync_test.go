@@ -178,7 +178,7 @@ func (v *vtStream) feed(b []byte) {
 
 func TestTearNoSyncPromptNeverBlanks(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(24),
+	s := newScriptedSession(t, th, WithWidth(24),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {

@@ -1,0 +1,32 @@
+name: feature request
+description: a new tool, command, or capability
+title: "[feature]: "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Features land spec-first: `specs/SPEC_<FEATURE>.md` in the format
+        of `specs/SPEC_CORE.md`, written before the code. If you have the
+        spec, link it. If not, describe the feature and its shape; the
+        maintainer may write the spec with you.
+  - type: textarea
+    id: feature
+    attributes:
+      label: the feature
+      description: what it is, and what it replaces or simplifies in the daily driver
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: the shape
+      description: the surface — one tool, one command, one frontend? the schema? the registration line?
+    validations:
+      required: true
+  - type: checkboxes
+    id: spec
+    attributes:
+      label: the spec
+      options:
+        - label: I can write the spec (specs/SPEC_*.md) before the code
