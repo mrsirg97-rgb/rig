@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.25.8]: the tear harness stops replaying the last unit
+
+The flake that CI kept tripping on `TestTearNoSyncPromptNeverBlanks`:
+the terminal model kept the last complete unit of every feed call in
+its buffer and replayed it on the next call, at a cursor position that
+had already advanced. A chunk boundary landing right after a rune or a
+CSI shifted and duplicated the following content until the prompt row
+was overwritten ("the prompt vanished at byte 9666"). The model now
+keeps a tail only when a call ends mid-unit, so the screen no longer
+depends on how the stream is split.
+
+- **the model keeps only an incomplete tail** (`frontend/tui`, tear
+  tests): `vtStream.feed` tracks whether the call stopped inside a rune
+  or CSI; only then does it retain `buf[rest:]`. A call that ends on a
+  complete unit leaves the buffer empty, and the same stream replayed
+  in 9-byte chunks and in whole frames produces the same screen. The
+  prompt stays on screen at every read boundary.
+
 ## [0.25.7]: the live frame never erases before it writes
 
 The tear the operator kept seeing through tmux: the sync pair was a
