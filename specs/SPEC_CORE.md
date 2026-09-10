@@ -424,11 +424,12 @@ additions are inside the states. Tool execution was sequential through
 0.11; SPEC_EVT 2a (the batch) is the named loop change that admits
 concurrent runs inside `executing_tools` while keeping emission and the
 transcript in call order; the one reopening of the frozen loop, with
-its own gate clause and re-freeze. 0.25.1 reopens it a second time,
+its own gate clause and re-freeze. 0.25.1 reopened it a second time,
 named: the batch's `run` recovers a panicking tool and surfaces the
 panic as that call's tool error (the model sees the panic text, the
-session and the process survive); the gate's clause is named and the
-re-freeze follows the merge.
+session and the process survive); the re-freeze closed the clause and
+the gate measures `loop/` again — frozen at 0.25.1's bytes, and the
+next loop change opens it by name.
 
 Faults: a `Fault` event or transport error aborts the turn, surfaces the
 error through `Notify`, preserves the session up to the last complete

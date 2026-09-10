@@ -111,13 +111,6 @@ func TestFreezeGate(t *testing.T) {
 		base = "main"
 	}
 
-	// the named reopening (0.25.1, the batch's tool-panic guard): loop/
-	// changes under a spec'd deliverable; the re-freeze PR after the
-	// merge deletes this function and the gate measures the new bytes.
-	reopened := func(p string) bool {
-		return p == "loop" || strings.HasPrefix(p, "loop/")
-	}
-
 	if !strings.Contains(git("branch", "--show-current"), "-refactor") {
 
 		var changed []string
@@ -128,9 +121,6 @@ func TestFreezeGate(t *testing.T) {
 			}
 		}
 		for _, p := range changed {
-			if reopened(p) {
-				continue
-			}
 			if commentOnly(root, base, p) {
 				continue
 			}
@@ -140,9 +130,6 @@ func TestFreezeGate(t *testing.T) {
 		}
 
 		for _, p := range strings.Fields(git("diff", "--name-only", base, "--", "core/", "loop/")) {
-			if reopened(p) {
-				continue
-			}
 			if !strings.HasSuffix(p, ".go") {
 				t.Errorf("core/ or loop/ gained a non-Go file: %s (a real change to the frozen surface)", p)
 				continue
