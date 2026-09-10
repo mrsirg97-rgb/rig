@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.25.9]: the pre-1.0 polish
+
+The review's stragglers before the 1.0 tag: a constructor that could
+panic, a server that never closed idle connections, a Go requirement the
+docs understated. The project's front doors land too: how to report a
+vulnerability, how to contribute, and the issue forms.
+
+- **the theme is the constructor's third argument** (`frontend/tui`,
+  `cmd/rig`): `tui.New` takes the resolved theme and no longer resolves a
+  fallback that could panic; the composition root stays the one place
+  that reads the theme file. The constructor's contract is now total.
+- **the dashboard closes idle connections** (`frontend/web`): the serve
+  server sets `WriteTimeout` and `IdleTimeout` beside `ReadHeaderTimeout`,
+  so a slow or abandoned client cannot pin a loopback connection forever.
+- **the Go requirement is exact** (README, docs/SETUP): `go.mod` requires
+  Go 1.26.6; the docs say ≥ 1.26.6, not ≥ 1.26.
+- **the front doors** (SECURITY.md, CONTRIBUTING.md, the issue forms): the
+  trust model and the reporting path, the spec-first process and the
+  house rules, and the two issue templates that ask for the spec. The
+  freeze gate's allowlist gains the two root docs.
+
 ## [0.25.8]: the tear harness stops replaying the last unit
 
 The flake that CI kept tripping on `TestTearNoSyncPromptNeverBlanks`:
