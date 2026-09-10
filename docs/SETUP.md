@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 0.25.7
+./rig --version        # rig 1.0.0
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -206,6 +206,66 @@ table). A plugin still in `plugins/pending/` is not live and stays
 refused until approved and reloaded; the refusal's voice names the tool
 and the allow-list either way.
 
+## example configuration
+
+Three files, written into the rig home (`~/.rig/`, or `$RIG_HOME` when
+set). Every file is optional, so these are the ones to copy when a blank
+home is not what you want; an omitted key keeps its embedded default,
+and an unknown key refuses at start naming the file and the field.
+
+**`settings.json`** — the knobs, flat, by their env names:
+
+```json
+{
+  "baseUrl": "http://127.0.0.1:8090/v1",
+  "model": "local",
+  "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "python", "web_search", "web_fetch", "diff", "todo", "rem", "sessions", "plugin", "plugins"],
+  "retries": 3,
+  "resultCap": 65536,
+  "approve": "auto",
+  "sandbox": "jailed",
+  "sandboxBinds": []
+}
+```
+
+`baseUrl` and `model` are the two a run needs; the rest are the
+embedded defaults written out. `allow` is the one to be careful with:
+an `allow` you write replaces the default whole (default-deny below
+it), so it must carry `plugin` and `plugins` or every door call is
+refused, and it must carry `scheduler` and `delegate` when you also
+configure a fleet. `retries` bounds the model's re-issuance of a
+failing tool call; it is not a retry allowance. `approve: "manual"`
+pauses every mutating call for your y/n; `sandbox: "off"` is the
+operator's explicit unjailing of the scheduled worker, one loud line
+per run.
+
+**`models.json`** — the per-model table, merged by id over the embedded
+rows:
+
+```json
+[
+  {"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]},
+  {"id": "worker", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "role": "worker", "efforts": ["low", "medium"]}
+]
+```
+
+`id` must match the model id you pass to `--model`. A new id needs the
+numeric fields; a listed id keeps the ones you omit from the embedded
+row. `role` is `interactive` (the default) or `worker`; `efforts` is
+the `/effort` dial's vocabulary.
+
+**`workers.json`** — the fleet that unlocks `scheduler` and `delegate`:
+
+```json
+{"model": "worker", "slots": 2}
+```
+
+`model` must resolve in the merged models table (the `worker` row
+above); `slots` is the concurrent `delegate` bound per session and
+defaults to `1`. Absent file, no fleet: the worker tools are absent,
+the default allow does not grow, and the status row says
+`workers: none`.
+
 ## plugins
 
 Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
@@ -345,7 +405,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 0.25.7
+./rig --version                 # prints: rig 1.0.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
