@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig: a minimum agent runtime</title>
-<meta name="description" content="A coding agent for the local model you already run. One binary, one-line install. It reads your repo, runs your tests, edits your code, and remembers what it learned. Sessions survive restarts. Add a tool with one Python file.">
+<title>rig: a minimal, performant harness for your local agent</title>
+<meta name="description" content="One binary, one-line install. Point it at the local model you already run and it reads your repo, edits your code, runs your tests, and remembers what it learned. 99% of every token served from cache. Sessions survive restarts. Add a tool with one Python file.">
 <meta name="theme-color" content="#050505">
-<meta property="og:title" content="rig: a coding agent for your local model">
-<meta property="og:description" content="One binary, one-line install. Point it at the model you already run and it works your repo all day: reads, edits, tests, memory. Built by a local model running inside itself.">
+<meta property="og:title" content="rig: a minimal harness for your local model">
+<meta property="og:description" content="One binary, one-line install. 99% of every token from cache, measured on real daily use. Point it at the model you already run: it reads, edits, tests, and remembers. Built by local models running inside rig.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
 <style>
@@ -182,7 +182,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <span class="ver">{{RIG_VERSION}}</span>
   </div>
   <div class="tr">
-<h2 class="sr">rig: a coding agent for your local model</h2>
+<h2 class="sr">rig: a minimal, performant harness for your local agent</h2>
 
     <div class="ln boot reveal">welcome to</div>
     <pre class="logo reveal" aria-label="rig, in the 3x3 block face">█▀▄ █ █▀▀
@@ -195,17 +195,17 @@ html.js .reveal.in { opacity: 1; transform: none; }
 
     <div class="gap reveal"></div>
     <div class="msg hero reveal">your local model deserves more than a prompt box.</div>
-    <div class="msg proof reveal">rig is a coding agent that runs on the model you already have. install one binary,
-    point it at your endpoint, and it reads your repo, edits your code, runs your tests, and remembers
-    what it learned. close the laptop; pick the session back up from your phone.</div>
-    <div class="msg proof reveal"><strong>fast enough to use all day on a single desktop: 98-99% of every turn comes from cache.</strong></div>
+    <div class="msg proof reveal">rig is a minimal harness for the model you already run. one binary, one endpoint,
+    one terminal: it reads your repo, edits your code, runs your tests, and remembers what it learned.
+    close the laptop; pick the session back up from your phone.</div>
+    <div class="msg proof reveal"><strong>fast all day on one desktop: 99% of every token comes from cache.</strong> 724M tokens across 63 sessions, on real daily use.</div>
 
     <div class="gap sm reveal"></div>
     <div class="ln stats reveal" aria-label="rig in numbers">
-      <div class="stat"><span class="n">98-99%</span><span class="l">of each turn served from cache. long sessions stay fast.</span></div>
-      <div class="stat"><span class="n">371 lines</span><span class="l">is the whole agent loop. read it over coffee.</span></div>
-      <div class="stat"><span class="n">27k / 37k</span><span class="l">lines of code / lines of tests. more tests than code.</span></div>
-      <div class="stat"><span class="n">285 commits</span><span class="l">most of them written by rig, running inside rig</span></div>
+      <div class="stat"><span class="n">99%</span><span class="l">of every token served from cache. long sessions stay fast.</span></div>
+      <div class="stat"><span class="n">383 lines</span><span class="l">is the whole agent loop, batch included. read it over coffee.</span></div>
+      <div class="stat"><span class="n">28k / 40k</span><span class="l">lines of code / lines of tests. more tests than code.</span></div>
+      <div class="stat"><span class="n">497 commits</span><span class="l">most of them written by rig, running inside rig</span></div>
     </div>
 
     <div class="gap sm reveal"></div>
@@ -244,8 +244,8 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="msg reveal">the whole thing is one loop: build the prompt, stream the model, run what it asks for,
     hand back the results, repeat. everything below is what makes that loop safe to leave running.</div>
     <div class="gap sm reveal"></div>
-    <div class="ln li reveal"><span class="lg">•</span> the loop is 371 lines and locked. a test rejects any change to it. everything else plugs in around it: model providers, interfaces, tools, guardrails, policy. adding one is a single file and one line to register it.</div>
-    <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel, results land in order. the model can fire off three reads at once and the transcript still reads top to bottom. the scheduler underneath was ported from a trading engine; it does not drop or reorder anything.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the loop is 383 lines — open to extension, closed to modification since 0.3.0. everything else plugs in around it: model providers, interfaces, tools, guardrails, policy. adding one is a single file and one line to register it.</div>
+    <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel, results land in order. the model can fire off three reads at once and the transcript still reads top to bottom. nothing dropped, nothing reordered.</div>
     <div class="ln li reveal"><span class="lg">•</span> the guardrails have names and reasons. a command allowlist, a retry limit, an approval gate, output limits, a holding area for new plugins, a sandbox for background workers. when rig says no, it says why, so the model fixes its approach instead of thrashing.</div>
     <div class="ln li reveal"><span class="lg">•</span> memory is on purpose. nothing sneaks into your prompt on its own. the model saves a fact, recalls it when it needs it, and replaces it when it learns better. tasks, memory, and schedules belong to the repo. a prompt that stays stable is where the cache number comes from.</div>
     <div class="ln li reveal"><span class="lg">•</span> every behavior is one sentence in specs/ with a test that holds it there. the exact bytes sent to the model are pinned too. spec first, then the failing test, then the code.</div>
@@ -329,7 +329,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="gap reveal"></div>
     <div class="msg hero reveal">one binary. one model. ready to work.</div>
     <div class="msg proof reveal">point rig at any OpenAI-compatible endpoint: a local box, a gateway, a hosted API.
-    sessions survive restarts. <strong>98-99% cache hits</strong> steady, even after the context gets compacted.
+    sessions survive restarts. <strong>99% cache hits</strong> steady, even after the context gets compacted.
     measured on real daily use, not a benchmark.</div>
 
     <div class="gap reveal"></div>
@@ -341,7 +341,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
 </div>
 
   <footer class="reveal">
-    <div>rig {{RIG_VERSION}} · a coding agent for local models · MIT</div>
+    <div>rig {{RIG_VERSION}} · a minimal harness for local models · MIT</div>
     <div class="links">
       <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/DESIGN.md">DESIGN</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/PLUGINS.md">plugins</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/CHANGELOG.md">changelog</a><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a><a href="https://github.com/mrsirg97-rgb/rig">github ★</a>
     </div>
