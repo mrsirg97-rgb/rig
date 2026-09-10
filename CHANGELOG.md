@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.0]: the tag
+
+The gate the roadmap set before the tag is met: lived use — a worker
+soak and the TUI field-tested as the daily driver — with the receipts
+in the session store (63 sessions, 724M prompt tokens, 99.08% served
+from the KV cache). The freeze has held since 0.3.0, core/ and loop/
+open to extension and closed to modification; this tag says the
+interface is stable.
+
+- **the version is 1.0.0** (`cmd/rig`): the const, its freeze test
+  (the version must now be semver `x.y.z`, not `0.x.y until 1.0`), and
+  the setup docs' `--version` examples agree.
+- **the example configuration** (`docs/SETUP.md`): the configure
+  section gains a `settings.json`, a `models.json`, and a `workers.json`,
+  each annotated — the fastest start from a blank rig home, with the
+  allow-list's fleet rule and the `/effort` vocabulary named.
+- **the roadmap's gate is marked met** (ROADMAP.md): the v1.0.0 line no
+  longer waits.
+
 ## [0.25.9]: the pre-1.0 polish
 
 The review's stragglers before the 1.0 tag: a constructor that could

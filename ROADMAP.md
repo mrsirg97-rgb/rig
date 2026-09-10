@@ -15,6 +15,7 @@ loop change has already asked. From then on core/ and loop/ are open to extensio
 modification as a discipline (models are sensitive to the loop; a frozen
 loop is a controlled variable); the v1.0.0 tag waits for lived use; a
 worker soak on 0.2.x and the TUI (10) field-tested as the daily driver.
+> met (1.0.0): the soak's receipts are in the session store.
 10 is the first consumer of the frozen runtime and the freeze's first
 test: if the TUI needs loop.go, the freeze was premature. (It lives in
 the main module as frontend/tui; SPEC_TUI decision 10 names why the
