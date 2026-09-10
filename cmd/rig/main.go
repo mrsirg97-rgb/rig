@@ -53,7 +53,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "0.25.8"
+const Version = "0.25.9"
 
 type root struct {
 	pluginMax int
@@ -1107,8 +1107,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "rig:", terr)
 			os.Exit(1)
 		}
-		fe = tui.New(os.Stdin, os.Stdout,
-			tui.WithTheme(th),
+		fe = tui.New(os.Stdin, os.Stdout, th,
 			tui.WithStatus(tuiStatusIn(r, sdb)),
 			tui.WithCommands(command.All(), env),
 		)

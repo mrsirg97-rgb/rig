@@ -179,7 +179,7 @@ func (v *vtFlush) feedBytes(b []byte) {
 
 func TestTearFlushBoundaries(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(20),
+	s := newScriptedSession(t, th, WithWidth(20),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -241,7 +241,7 @@ func streamAndScreen(t *testing.T, width int, text string) []string {
 	t.Helper()
 	th := oledTheme(t)
 	ticks := make(chan time.Time, 64)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(width),
+	s := newScriptedSession(t, th, WithWidth(width),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithTicks(ticks))
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -312,7 +312,7 @@ func TestTearCharByChar(t *testing.T) {
 
 func TestTearSteeringEnter(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, WithTheme(th), WithWidth(12),
+	s := newScriptedSession(t, th, WithWidth(12),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	ctx, cancel := context.WithCancel(context.Background())

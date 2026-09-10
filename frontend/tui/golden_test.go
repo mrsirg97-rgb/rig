@@ -93,13 +93,13 @@ type scriptedSession struct {
 	ticks  chan time.Time
 }
 
-func newScriptedSession(t *testing.T, opts ...Option) *scriptedSession {
+func newScriptedSession(t *testing.T, theme Theme, opts ...Option) *scriptedSession {
 	t.Helper()
 	out := &lockBuf{}
 	si := newScriptInput()
 	ticks := make(chan time.Time, 64)
 	opts = append([]Option{WithTicks(ticks)}, opts...)
-	fe := New(si, out, opts...).(*tui)
+	fe := New(si, out, theme, opts...).(*tui)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		fe.Close()
@@ -152,7 +152,7 @@ func (s *scriptedSession) input() (string, error) {
 func goldenStream(t *testing.T, th Theme, width int) string {
 	t.Helper()
 	s := newScriptedSession(t,
-		WithTheme(th),
+		th,
 		WithWidth(width),
 		WithStatus(func(ctx context.Context) StatusIn {
 			return StatusIn{

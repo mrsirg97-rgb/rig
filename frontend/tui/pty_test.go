@@ -68,7 +68,7 @@ func TestPTYRawMode(t *testing.T) {
 	}
 
 	out := &lockBuf{}
-	fe := New(slave, out, WithTheme(oledTheme(t)),
+	fe := New(slave, out, oledTheme(t),
 		WithTicks(make(chan time.Time))).(*tui)
 	if ttyEcho(t, slave) {
 		t.Fatal("raw mode did not clear the pty's echo")
@@ -84,7 +84,7 @@ func TestPTYResize(t *testing.T) {
 	th := oledTheme(t)
 	winch := make(chan struct{}, 1)
 	out := &lockBuf{}
-	fe := New(slave, out, WithTheme(th),
+	fe := New(slave, out, th,
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithWinch(winch), WithTicks(make(chan time.Time))).(*tui)
 	defer fe.Close()
@@ -134,7 +134,7 @@ func TestPTYResize(t *testing.T) {
 func TestCloseStopsTheWinchSignal(t *testing.T) {
 	master, slave := openPTY(t)
 	defer master.Close()
-	fe := New(slave, &lockBuf{}, WithTheme(oledTheme(t)), WithTicks(make(chan time.Time))).(*tui)
+	fe := New(slave, &lockBuf{}, oledTheme(t), WithTicks(make(chan time.Time))).(*tui)
 	fe.mu.Lock()
 	stop := fe.stopWinch
 	fe.mu.Unlock()

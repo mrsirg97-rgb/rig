@@ -23,7 +23,7 @@ curl -fsSL https://github.com/mrsirg97-rgb/rig/releases/latest/download/rig_linu
 chmod +x rig
 ```
 
-**go install** (needs Go ≥ 1.26; the core is stdlib-only):
+**go install** (needs Go ≥ 1.26.6; the core is stdlib-only):
 
 ```sh
 go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
@@ -103,6 +103,8 @@ The dashboard serves the rig stores on loopback only. On first run it prints an 
 | `docs/SETUP.md`    | build, configuration, verification               |
 | `docs/USAGE.md`    | running a session; session and failure semantics |
 | `docs/PLUGINS.md`  | the python plugins: the contract, the zones, creating and consuming |
+| `SECURITY.md`      | the trust model and how to report a vulnerability |
+| `CONTRIBUTING.md`  | the process: spec first, tests before code, the freeze |
 
 ## layout
 
@@ -142,7 +144,7 @@ docs/           DESIGN (architecture), SETUP (build/config), USAGE (running),
 
 ## extending
 
-The structural test is simple: add one file and one registration line. The loop never names a concrete tool, provider, policy, frontend, or middleware. A Python plugin needs no Go. See `docs/DESIGN.md` and `docs/PLUGINS.md`.
+The structural test is simple: add one file and one registration line. The loop never names a concrete tool, provider, policy, frontend, or middleware. A Python plugin needs no Go. See `docs/DESIGN.md`, `docs/PLUGINS.md`, and `CONTRIBUTING.md` for the process.
 
 ## under the hood
 

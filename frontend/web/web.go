@@ -137,7 +137,12 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- srv.Serve(ln)

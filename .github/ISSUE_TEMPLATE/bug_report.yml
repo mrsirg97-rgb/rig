@@ -1,0 +1,39 @@
+name: bug report
+description: something does not behave as documented
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A bug is behavior that does not match its spec. Before filing:
+        reproduce it on the current version, and check the changelog for a
+        fix already released.
+  - type: input
+    id: version
+    attributes:
+      label: rig version
+      description: the output of `rig -version`
+    validations:
+      required: true
+  - type: input
+    id: surface
+    attributes:
+      label: surface
+      description: the tool, command, or frontend involved (bash, edit, tui, serve, web_fetch, ...)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: what happened
+      description: the behavior you saw, and the behavior the spec says you should have seen
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: how to reproduce
+      description: the exact commands or tool calls. Sanitize anything private: paths, keys, transcripts.
+    validations:
+      required: true
