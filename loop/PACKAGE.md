@@ -68,6 +68,10 @@ the session at the boundary, clean.
 
 ## Gotchas
 
+- A tool result whose exec failed keeps its content and gains the exec
+  error on its own line (an empty result carries the error alone): the
+  model sees both the output and the reason, and a child that never ran
+  can never reach it as a bare cwd line.
 - Empties never pollute the transcript: a blank user message re-enters
   awaiting_input, and a completion with no text, no reasoning, and no
   calls appends no assistant row (a billed-but-empty completion drops

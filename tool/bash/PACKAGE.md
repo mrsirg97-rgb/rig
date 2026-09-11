@@ -20,4 +20,7 @@ bounded. Stdlib only.
 - The command runs through a shell (`bash -c`) by design: the model
   authors the command string; quoting is the model's, not the tool's.
 - A failure reply carries the cwd line (the failure voice): a success
-  reply is byte-identical to the process output.
+  reply is byte-identical to the process output. The cwd is stat'ed and
+  checked before the child starts: a missing, non-directory, or
+  unsearchable cwd returns the plain `bash: cwd X: <reason>` (no child
+  ran), never a fork/exec line naming /usr/bin/bash.

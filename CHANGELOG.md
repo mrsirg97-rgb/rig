@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [1.1.4]: the fed-back error line
+
+One field report: a tool failure could reach the model as a bare
+`(cwd /root)` line. When bash's child never ran — a bad or unreadable
+cwd, Go's `fork/exec /usr/bin/bash: permission denied` — the output was
+empty and the reply was just `(cwd /root)`: the loop substituted the
+exec error only when the content was empty, and the model saw no error
+at all. Alongside it, path arguments reached the OS literally —
+`~/Projects/rig` was a directory named `~` — and the system prompt said
+"the working directory" without naming it, which is why the model
+guessed /root.
+
+- **the fed-back error is always a line** (`loop`): a tool result whose
+  exec failed keeps its content and appends the exec error on its own
+  line, so the model sees the output and the reason; an empty result
+  carries the error alone. The third named reopening of the frozen
+  loop; the gate's clause and SPEC_CORE carry the name, and the
+  re-freeze follows the merge. An unknown tool now returns the error
+  only (the loop appends it), so the refusal is never shown twice.
+- **bash refuses a dead cwd by name** (`tool/bash`): the cwd is stat'ed
+  and checked before the child starts; a missing, non-directory, or
+  unsearchable cwd returns the plain `bash: cwd X: <reason>` — no
+  child ran, no fork/exec line naming /usr/bin/bash, no bare cwd line.
+- **`~` is the session home, bare and leading only**
+  (`middleware/paths`): a bare `~` and a leading `~/` expand to the
+  session home at the path boundary, before any validation; `~user`, a
+  mid-path `~`, and an unset home stand as given.
+- **the session names itself** (`cmd/rig`): the system prompt carries
+  the session's working directory and home at session start, so the
+  model never guesses where it is, and a leading `~` in a tool path
+  expands to the home it was told about.
+
 ## [1.1.3]: the parked aim
 
 One field report: the typed-key fast path repaints the input row in

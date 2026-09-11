@@ -3,12 +3,17 @@ package paths_test
 import (
 	"context"
 	"encoding/json"
-	"os/user"
+	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/tool/bash"
+	"github.com/mrsirg97-rgb/rig/tool/file"
+	"github.com/mrsirg97-rgb/rig/tool/fs"
 )
 
 func TestExpandLeadingTildeIsTheHome(t *testing.T) {
@@ -26,25 +31,19 @@ func TestExpandLeadingTildeIsTheHome(t *testing.T) {
 	}
 }
 
-func TestExpandTildeUserIsThatUsersHome(t *testing.T) {
-	u, err := user.Current()
-	if err != nil || u.Username == "" || u.HomeDir == "" {
-		t.Skip("no current user to look up")
+func TestExpandTildeUserStandsAsGiven(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if got := paths.Expand("~root/x"); got != "~root/x" {
+		t.Fatalf("a ~user path must stand as given, got %q", got)
 	}
-	if got := paths.Expand("~" + u.Username + "/x"); got != filepath.Join(u.HomeDir, "x") {
-		t.Fatalf("~user/x = %q, want %q", got, filepath.Join(u.HomeDir, "x"))
-	}
-	if got := paths.Expand("~" + u.Username); got != u.HomeDir {
-		t.Fatalf("~user = %q, want %q", got, u.HomeDir)
-	}
-	if got := paths.Expand("~no-such-user-zz/x"); got != "~no-such-user-zz/x" {
-		t.Fatalf("an unknown user stands as given, got %q", got)
+	if got := paths.Expand("~root"); got != "~root" {
+		t.Fatalf("a bare ~user must stand as given, got %q", got)
 	}
 }
 
 func TestExpandLeavesEverythingElseAlone(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	for _, in := range []string{"", ".", "/abs/~/x", "a/~", "rel/path"} {
+	for _, in := range []string{"", ".", "/abs/~/x", "a/~", "a/~/b", "rel/path"} {
 		if got := paths.Expand(in); got != in {
 			t.Fatalf("Expand(%q) = %q, want it untouched", in, got)
 		}
@@ -52,6 +51,44 @@ func TestExpandLeavesEverythingElseAlone(t *testing.T) {
 	t.Setenv("HOME", "")
 	if got := paths.Expand("~/x"); got != "~/x" {
 		t.Fatalf("with no home the path stands as given, got %q", got)
+	}
+}
+
+func TestToolsExpandTheLeadingTildeAtTheBoundary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	proj := filepath.Join(home, "proj")
+	if err := os.Mkdir(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "a.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inner := func(ctx context.Context, call core.ToolCall) (string, error) {
+		switch call.Name {
+		case "bash":
+			return bash.New().Exec(ctx, call.Args)
+		case "ls":
+			return fs.LS().Exec(ctx, call.Args)
+		case "read":
+			return file.Read().Exec(ctx, call.Args)
+		default:
+			return "", errors.New("unexpected tool: " + call.Name)
+		}
+	}
+	exec := paths.Middleware().Wrap(inner)
+
+	got, err := exec(context.Background(), core.ToolCall{Name: "bash", Args: json.RawMessage(`{"command":"pwd","cwd":"~/proj"}`)})
+	if err != nil || got != proj+"\n" {
+		t.Fatalf("bash's cwd must expand to the home: %q, %v", got, err)
+	}
+	got, err = exec(context.Background(), core.ToolCall{Name: "ls", Args: json.RawMessage(`{"path":"~/proj"}`)})
+	if err != nil || !strings.Contains(got, "a.txt") {
+		t.Fatalf("ls's path must expand to the home: %q, %v", got, err)
+	}
+	got, err = exec(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/proj/a.txt"}`)})
+	if err != nil || got != "hi" {
+		t.Fatalf("read's path must expand to the home: %q, %v", got, err)
 	}
 }
 

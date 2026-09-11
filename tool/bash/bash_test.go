@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -73,6 +74,42 @@ func TestFailureNamesTheCwd(t *testing.T) {
 	}
 	if want := "(cwd " + dir + ")"; got != want {
 		t.Fatalf("an empty failure still names the cwd alone (no leading blank), got %q", got)
+	}
+}
+
+func TestMissingCwdNamesTheReason(t *testing.T) {
+	tool := bash.New()
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "pwd",
+		"cwd":     filepath.Join(t.TempDir(), "missing"),
+	}))
+	if err != nil {
+		t.Fatalf("a refused cwd must return plain content, not an error: %v", err)
+	}
+	if !strings.Contains(got, "bash: cwd ") || !strings.Contains(got, "no such file or directory") {
+		t.Fatalf("the plain message must name the cwd and the reason, got %q", got)
+	}
+}
+
+func TestUnreadableCwdNamesTheReason(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permission checks")
+	}
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	tool := bash.New()
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "pwd",
+		"cwd":     dir,
+	}))
+	if err != nil {
+		t.Fatalf("a refused cwd must return plain content, not an error: %v", err)
+	}
+	if !strings.Contains(got, "bash: cwd ") || !strings.Contains(got, "permission denied") {
+		t.Fatalf("the plain message must name the cwd and the reason, got %q", got)
 	}
 }
 

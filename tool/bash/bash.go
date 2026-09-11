@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"golang.org/x/sys/unix"
 )
 
 const outputCap = 256 * 1024
@@ -54,6 +55,9 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 
 	cmd := exec.CommandContext(ctx, "bash", "-c", a.Command)
 	if a.Cwd != "" {
+		if err := checkCwd(a.Cwd); err != nil {
+			return fmt.Sprintf("bash: cwd %s: %v", a.Cwd, err), nil
+		}
 		cmd.Dir = a.Cwd
 	}
 
@@ -104,6 +108,28 @@ func strictDecode(data json.RawMessage, out any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	return dec.Decode(out)
+}
+
+func checkCwd(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return reasonOf(err)
+	}
+	if !info.IsDir() {
+		return errors.New("not a directory")
+	}
+	if err := unix.Access(dir, unix.X_OK); err != nil {
+		return reasonOf(err)
+	}
+	return nil
+}
+
+func reasonOf(err error) error {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return errors.New(errno.Error())
+	}
+	return err
 }
 
 // bounded keeps the head of a child's output at cap and drops the rest,

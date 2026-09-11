@@ -53,7 +53,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.1.3"
+const Version = "1.1.4"
 
 type root struct {
 	pluginMax int
@@ -71,6 +71,7 @@ type root struct {
 	sdb   store.DB
 	remDB store.DB
 	cwd   string
+	home  string
 
 	pluginsDir string
 
@@ -192,9 +193,12 @@ func (r *root) buildSystem() string {
 			paths.Middleware(),
 		}
 	}
-	parts := make([]string, 0, 5)
+	parts := make([]string, 0, 6)
 	if r.system != "" {
 		parts = append(parts, r.system)
+	}
+	if seg := sessionSection(r.cwd, r.home); seg != "" {
+		parts = append(parts, seg)
 	}
 	if seg := command.RoleProse(r.role); seg != "" {
 		parts = append(parts, seg)
@@ -206,6 +210,16 @@ func (r *root) buildSystem() string {
 		parts = append(parts, g)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func sessionSection(cwd, home string) string {
+	if cwd == "" {
+		return ""
+	}
+	if home == "" {
+		return fmt.Sprintf("The session's working directory is %s.", cwd)
+	}
+	return fmt.Sprintf("The session's working directory is %s and the session home is %s. A leading ~ in a tool path expands to the session home.", cwd, home)
 }
 
 func remRow(m remdom.Memory) command.RemRow {
@@ -967,6 +981,7 @@ func main() {
 		sdb:        sdb,
 		remDB:      rdb,
 		cwd:        cwd,
+		home:       userHome(),
 		pluginsDir: pluginsDir,
 		activeID:   modelID,
 		row:        row,
