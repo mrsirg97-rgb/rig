@@ -507,20 +507,26 @@ the REPL's cwd, or the worker's job cwd (below).
 already assembles `system + "\n\n" + guidelines`, where `guidelines` is
 the `core.GuidelineContributor` prose of the middleware participants
 (SPEC_HARDENING decision 6's collection; today no participant
-contributes; `perm` and `guard` are wrap-only). AGENTS.md sits
-**between the system prompt and the participant guidelines**:
+contributes; `perm` and `guard` are wrap-only). The session section
+(the working directory and the session home, named so the model never
+guesses where it is; 1.1.4) and AGENTS.md sit **between the system
+prompt and the participant guidelines**:
 
 ```
-fullSystem = join( [system, AGENTS.md(global+project), guidelines], "\n\n" )
+fullSystem = join( [system, session, AGENTS.md(global+project), guidelines], "\n\n" )
 ```
 
 skipping empty segments. The order is descending proximity: the
-operator's identity prompt, then the user's project contract (broad to
-narrow: global before local), then the participants' operational prose
+operator's identity prompt, then the session's place (the model's
+ground truth), then the user's project contract (broad to narrow:
+global before local), then the participants' operational prose
 (machine-contributed, closest to the tool surface). With no AGENTS.md
-present the assembly is 0.2.0's bytes exactly (9); the order is pinned
-by `TestAgentsOrderAgainstGuidelines` when a guideline participant is
-present.
+present the assembly is 0.2.0's bytes plus the session section (9); the
+order is pinned by `TestAgentsOrderAgainstGuidelines` when a guideline
+participant is present. The session section's bytes are the run's own
+cwd and home, so the pinned request-body fixtures strip it before the
+byte compare (9); its presence and content are asserted against the
+run's environment by the precedence, flag-presence, and worker tests.
 
 **Every entry mode loads it.** The REPL and `-p` get it in the root's
 assembly; **the worker inherits its own cwd's `AGENTS.md`**: `run-job`
@@ -883,14 +889,18 @@ case names one, the built binary for the e2e.
 - `TestNoUserFilesIsByteIdenticalToV020`: subtests `repl` /
   `oneshot` / `runjob` against the golden request-body fixtures
   (9): the exact bytes, the worker argv, the refusal voice for an
-  unknown model id.
+  unknown model id. The fixture asserts the request carries the
+  session section (its bytes are the run's cwd and home, so the
+  compare strips the section first).
 - `TestPrecedenceFlagOverEnvOverFileOverEmbedded`: one key
   (`system`), four runs: each layer wins when the layers above are
-  absent (2's rule, tested at every boundary).
-- `TestFlagPresenceWins`: `-system ""` runs with the empty system
-  prompt (not the embedded default); `-retries 0` reaches the guard's
-  floor (the clamp to 1, not the embedded 3): a passed flag wins,
-  whatever its value (2's flag rule, the 0.2.0 semantics preserved).
+  absent (2's rule, tested at every boundary); the expected system
+  message is the winner plus the session section.
+- `TestFlagPresenceWins`: `-system ""` runs without the embedded
+  default (the session section stays: the model still knows where it
+  is); `-retries 0` reaches the guard's floor (the clamp to 1, not
+  the embedded 3): a passed flag wins, whatever its value (2's flag
+  rule, the 0.2.0 semantics preserved).
 - `TestPrecedencePresenceKeyEnvEmptyBeatsFile`:
   `RIG_WEB_FETCH_PROXY=""` + a file value: direct wins (2).
 - `TestRunJobSwapUrlChain`: the file's `swapUrl` reaches the busy
@@ -898,8 +908,9 @@ case names one, the built binary for the e2e.
   scripted busy endpoint).
 - `TestRunJobWorkerInheritsJobCwdAgents`: a job cwd with
   `AGENTS.md` (`JOB`) and a session cwd with `AGENTS.md` (`SESS`):
-  the worker's system message carries `JOB` and the global, not
-  `SESS` (6's worker semantics, named).
+  the worker's system message carries the session section (the job
+  cwd), `JOB` and the global, not `SESS` (6's worker semantics,
+  named).
 - `TestAgentsOrderAgainstGuidelines`: a root with a
   guideline-contributing middleware plus both AGENTS files:
   `fullSystem` is `system + "\n\n" + agents + "\n\n" + guidelines`

@@ -392,15 +392,17 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
+	cmdDir := t.TempDir()
+	cmd.Dir = cmdDir
 	env := rigEnv(scratch, "")
 	env = append(env, "RIG_HOME="+override)
 	cmd.Env = env
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
-	if got := systemOf(t, s.last()); got != "FROM-RIG-HOME" {
-		t.Fatalf("the override's settings must win, got %q", got)
+	want := "FROM-RIG-HOME\n\n" + sessionSection(cmdDir, scratch)
+	if got := systemOf(t, s.last()); got != want {
+		t.Fatalf("the override's settings must win, got %q, want %q", got, want)
 	}
 	if got, err := os.ReadFile(filepath.Join(oldHome, "settings.json")); err != nil || string(got) != `{"system": "FROM-OLD"}` {
 		t.Fatalf("the old home must be left intact when the override's home is present (err=%v, contents=%q)", err, got)
@@ -605,7 +607,8 @@ def run(args):
 		}
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
+	cmdDir := t.TempDir()
+	cmd.Dir = cmdDir
 	env := rigEnv(scratch, "")
 	env = append(env, "RIG_HOME="+override, "RIG_PYTHON="+py)
 	cmd.Env = env
@@ -613,8 +616,9 @@ def run(args):
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
-	if got := systemOf(t, s.last()); got != "FROM-OVERRIDE" {
-		t.Fatalf("the override's settings must win, got %q", got)
+	want := "FROM-OVERRIDE\n\n" + sessionSection(cmdDir, scratch)
+	if got := systemOf(t, s.last()); got != want {
+		t.Fatalf("the override's settings must win, got %q, want %q", got, want)
 	}
 	if !hasPluginName(s.body(0), "echo") {
 		t.Fatalf("the override's plugin must be discovered (in the plugin door's enum, got %v)", pluginNamesIn(s.body(0)))

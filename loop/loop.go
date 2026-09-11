@@ -274,8 +274,11 @@ func (r *run) advance(t *turn) {
 			return
 		}
 		content, execErr := out.content, out.err
-		if execErr != nil && content == "" {
-			content = execErr.Error()
+		if execErr != nil {
+			if content != "" && !strings.HasSuffix(content, "\n") {
+				content += "\n"
+			}
+			content += execErr.Error()
 		}
 		r.k.Frontend.Notify(core.ToolResult{ID: call.ID, Content: content, Err: execErr, Duration: out.dur})
 		session.Append(core.Message{
@@ -300,7 +303,7 @@ func directExec(tools map[string]core.Tool) core.ToolExec {
 		t, ok := tools[call.Name]
 		if !ok {
 			msg := fmt.Sprintf("unknown tool: %s", call.Name)
-			return msg, errors.New(msg)
+			return "", errors.New(msg)
 		}
 		return t.Exec(ctx, call.Args)
 	}

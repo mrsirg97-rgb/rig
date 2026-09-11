@@ -61,8 +61,9 @@ sees core and models and nothing else.
 - `wire(r)` assembles the kernel: the provider, the compact+effort
   policy pair, the live tool table (SPEC_PLUGINS 8), and the
   middleware chain; [toolset.Resolve, approve? (when a frontend can
-  ask), paths (the `~` boundary), perm.Plugins, perm.Allowlist,
-  guard.Bound, guard.Rounds, guard.Cap]. Swapping a seam is a
+  ask), cutoff, perm.Plugins, perm.Allowlist, guard.Bound,
+  guard.Rounds, guard.Cap, paths (the `~` boundary, outermost: every
+  path is expanded before any validation)]. Swapping a seam is a
   change here and nowhere else. The compaction `AutoReflect` seam is
   cut: compaction writes nothing to rem (SPEC_COMPACT 6).
 - The rem store opens with `remstore.Migration(cwd)` (SPEC_STATE: rem is

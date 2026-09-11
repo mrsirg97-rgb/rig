@@ -428,8 +428,13 @@ its own gate clause and re-freeze. 0.25.1 reopened it a second time,
 named: the batch's `run` recovers a panicking tool and surfaces the
 panic as that call's tool error (the model sees the panic text, the
 session and the process survive); the re-freeze closed the clause and
-the gate measures `loop/` again — frozen at 0.25.1's bytes, and the
-next loop change opens it by name.
+the gate measures `loop/` again — frozen at 0.25.1's bytes. 1.1.4
+reopens it a third time, named: the fed-back tool result always
+carries the exec's error text on its own line (a failing command keeps
+its output and gains the error line; an empty result carries the error
+alone), so a tool whose child never ran can never reach the model as a
+bare cwd line; the gate's clause carries the name, and the re-freeze
+follows the merge.
 
 Faults: a `Fault` event or transport error aborts the turn, surfaces the
 error through `Notify`, preserves the session up to the last complete

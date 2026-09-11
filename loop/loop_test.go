@@ -109,11 +109,13 @@ func (p *transcriptPolicy) Assemble(ctx context.Context, s *core.Session) ([]cor
 }
 
 type scriptedTool struct {
-	name   string
-	fail   int
-	result string
-	calls  int
-	cancel context.CancelFunc
+	name        string
+	fail        int
+	failContent string
+	failErr     error
+	result      string
+	calls       int
+	cancel      context.CancelFunc
 }
 
 func (t *scriptedTool) Name() string { return t.name }
@@ -133,7 +135,10 @@ func (t *scriptedTool) Exec(ctx context.Context, args json.RawMessage) (string, 
 		return "", ctx.Err()
 	}
 	if t.calls <= t.fail {
-		return "synthetic failure", errors.New("synthetic failure")
+		if t.failErr == nil {
+			return "synthetic failure", errors.New("synthetic failure")
+		}
+		return t.failContent, t.failErr
 	}
 	return t.result, nil
 }
@@ -551,10 +556,80 @@ func TestMalformedCallFedBackOnce(t *testing.T) {
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "go"},
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash"}}},
-		{Role: core.RoleTool, ToolID: "c1", Content: "synthetic failure"},
+		{Role: core.RoleTool, ToolID: "c1", Content: "synthetic failure\nsynthetic failure"},
 		{Role: core.RoleAssistant, Content: "recovered"},
 	}
 	wantTranscript(t, session, want...)
+}
+
+func TestToolErrorIsAppendedOnItsOwnLine(t *testing.T) {
+	boom := errors.New("bash: exit status 3")
+	bash := &scriptedTool{name: "bash", fail: 1, failContent: "visible\n", failErr: boom, result: "recovered"}
+	p := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{
+			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
+			doneEv(),
+		}},
+		{events: []core.Event{textEv("recovered"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+	)
+	k.Session = session
+
+	f.inputs <- "go"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	want := []core.Message{
+		{Role: core.RoleUser, Content: "go"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash"}}},
+		{Role: core.RoleTool, ToolID: "c1", Content: "visible\nbash: exit status 3"},
+		{Role: core.RoleAssistant, Content: "recovered"},
+	}
+	wantTranscript(t, session, want...)
+}
+
+func TestRefusedCwdCarriesTheReasonExactlyOnce(t *testing.T) {
+	boom := errors.New("bash: cwd /missing: no such file or directory")
+	bash := &scriptedTool{name: "bash", fail: 1, failErr: boom, result: "recovered"}
+	p := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{
+			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
+			doneEv(),
+		}},
+		{events: []core.Event{textEv("recovered"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+	)
+	k.Session = session
+
+	f.inputs <- "go"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	content := session.Messages[2].Content
+	if content != "bash: cwd /missing: no such file or directory" {
+		t.Fatalf("the tool message must carry the refusal exactly once, got %q", content)
+	}
+	if strings.Count(content, "bash: cwd") != 1 || strings.Count(content, "no such file or directory") != 1 {
+		t.Fatalf("the reason must appear exactly once, got %q", content)
+	}
 }
 
 func TestOversizedToolResultStaysIntact(t *testing.T) {

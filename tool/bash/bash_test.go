@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -73,6 +74,42 @@ func TestFailureNamesTheCwd(t *testing.T) {
 	}
 	if want := "(cwd " + dir + ")"; got != want {
 		t.Fatalf("an empty failure still names the cwd alone (no leading blank), got %q", got)
+	}
+}
+
+func TestMissingCwdNamesTheReason(t *testing.T) {
+	tool := bash.New()
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "pwd",
+		"cwd":     filepath.Join(t.TempDir(), "missing"),
+	}))
+	if err == nil || !strings.Contains(err.Error(), "bash: cwd ") || !strings.Contains(err.Error(), "no such file or directory") {
+		t.Fatalf("a refused cwd must be a failure naming the cwd and the reason: %q, %v", got, err)
+	}
+	if got != "" {
+		t.Fatalf("a refused cwd carries no content (the loop feeds the error line once), got %q", got)
+	}
+}
+
+func TestUnreadableCwdNamesTheReason(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permission checks")
+	}
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	tool := bash.New()
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "pwd",
+		"cwd":     dir,
+	}))
+	if err == nil || !strings.Contains(err.Error(), "bash: cwd ") || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("a refused cwd must be a failure naming the cwd and the reason: %q, %v", got, err)
+	}
+	if got != "" {
+		t.Fatalf("a refused cwd carries no content (the loop feeds the error line once), got %q", got)
 	}
 }
 

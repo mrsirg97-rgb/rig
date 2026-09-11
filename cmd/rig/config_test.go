@@ -50,6 +50,20 @@ func goldenCheck(t *testing.T, name string, data []byte) {
 	}
 }
 
+func goldenCheckSession(t *testing.T, name string, data []byte, cwd, home string) {
+	t.Helper()
+	section := sessionSection(cwd, home)
+	if section == "" {
+		goldenCheck(t, name, data)
+		return
+	}
+	if !bytes.Contains(data, []byte(section)) {
+		t.Fatalf("the request must carry the session section %q", section)
+	}
+	data = bytes.Replace(data, []byte(`\n\n`+section), nil, 1)
+	goldenCheck(t, name, data)
+}
+
 const goldenDir = "testdata/golden_020"
 
 type bodySrv struct {
@@ -164,7 +178,8 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		bin := buildBin(t, t.TempDir())
 		scratch := t.TempDir()
 		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-		cmd.Dir = t.TempDir()
+		cmdDir := t.TempDir()
+		cmd.Dir = cmdDir
 		cmd.Env = rigEnv(scratch, "")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -173,7 +188,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		if s.count() != 1 {
 			t.Fatalf("requests = %d, want 1", s.count())
 		}
-		goldenCheck(t, "oneshot.json", s.last())
+		goldenCheckSession(t, "oneshot.json", s.last(), cmdDir, scratch)
 	})
 	t.Run("repl", func(t *testing.T) {
 		s := &bodySrv{}
@@ -181,7 +196,8 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		bin := buildBin(t, t.TempDir())
 		scratch := t.TempDir()
 		cmd := exec.Command(bin, "-base-url", srv.URL+"/v1")
-		cmd.Dir = t.TempDir()
+		cmdDir := t.TempDir()
+		cmd.Dir = cmdDir
 		cmd.Env = rigEnv(scratch, "")
 		cmd.Stdin = strings.NewReader("hello\n")
 		out, err := cmd.CombinedOutput()
@@ -192,7 +208,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		if s.count() != 1 {
 			t.Fatalf("requests = %d, want 1", s.count())
 		}
-		goldenCheck(t, "repl.json", s.last())
+		goldenCheckSession(t, "repl.json", s.last(), cmdDir, scratch)
 	})
 	t.Run("runjob", func(t *testing.T) {
 		s := &bodySrv{}
@@ -263,7 +279,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 			t.Fatalf("the worker's model = %q, want the job's model (the argv's -model)", req.Model)
 		}
 
-		goldenCheck(t, "runjob.json", got)
+		goldenCheckSession(t, "runjob.json", got, workDir, scratch)
 	})
 }
 
@@ -301,7 +317,8 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 				args = append(args, "-system", c.flag)
 			}
 			cmd := exec.Command(bin, args...)
-			cmd.Dir = t.TempDir()
+			cmdDir := t.TempDir()
+			cmd.Dir = cmdDir
 			env := rigEnv(scratch, "")
 			if c.env != "" {
 				env = append(env, "RIG_SYSTEM="+c.env)
@@ -310,8 +327,9 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("the run must succeed: %v\n%s", err, out)
 			}
-			if got := systemOf(t, s.last()); got != c.want {
-				t.Fatalf("the system message = %q, want %q (%s wins)", got, c.want, c.name)
+			want := c.want + "\n\n" + sessionSection(cmdDir, scratch)
+			if got := systemOf(t, s.last()); got != want {
+				t.Fatalf("the system message = %q, want %q (%s wins)", got, want, c.name)
 			}
 		})
 	}
@@ -323,14 +341,17 @@ func TestFlagPresenceWins(t *testing.T) {
 		srv := newBodySrv(t, s)
 		bin := buildBin(t, t.TempDir())
 		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-system", "")
-		cmd.Dir = t.TempDir()
-		cmd.Env = rigEnv(t.TempDir(), "")
+		cmdDir := t.TempDir()
+		home := t.TempDir()
+		cmd.Dir = cmdDir
+		cmd.Env = rigEnv(home, "")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
 		}
-		if got := systemOf(t, s.last()); got != "" {
-			t.Fatalf("the system message = %q, want empty (-system \"\" wins over the embedded default)", got)
+		want := sessionSection(cmdDir, home)
+		if got := systemOf(t, s.last()); got != want {
+			t.Fatalf("the system message = %q, want %q (-system \"\" drops the default; the session section stays)", got, want)
 		}
 	})
 	t.Run("retries zero clamps to the guard's floor", func(t *testing.T) {
@@ -726,9 +747,9 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	sys := workerSystem
 	sysMu.Unlock()
 	const defaultSystem = "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin."
-	want := defaultSystem + "\n\n" + global + "\n\n" + jobAgents
+	want := defaultSystem + "\n\n" + sessionSection(workDir, scratch) + "\n\n" + global + "\n\n" + jobAgents
 	if sys != want {
-		t.Fatalf("the worker's system message = %q, want the default plus the global and the job cwd's AGENTS.md (not the session's):\n%q", sys, want)
+		t.Fatalf("the worker's system message = %q, want the default plus the session section, the global and the job cwd's AGENTS.md (not the session's):\n%q", sys, want)
 	}
 }
 

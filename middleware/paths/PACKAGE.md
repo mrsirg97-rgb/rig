@@ -16,9 +16,9 @@ so every tool inherits it and nothing drifts.
   tool that names its path one of these inherits the expansion; one that
   invents a fourth name is a finding for this list, not a per-tool fix.
 - `Expand(p)`: `~` and `~/…` are `os.UserHomeDir` (`$HOME`; the scratch
-  home inside a jail); `~user` and `~user/…` are that user's home
-  (`os/user`). An unknown user, an unset home, or a `~` anywhere else
-  leave the path as given.
+  home inside a jail, the home the session prompt names); `~user` and
+  `~user/…` are that user's home (`os/user`). An unknown user, an
+  unset home, or a `~` anywhere else leave the path as given.
 - `Rewrite(args)`: the top-level object's `Fields` that are strings and
   expand; bytes pass through untouched when nothing expands (the recorder
   and the approval prompt see what the model sent unless a `~` moved).
@@ -26,10 +26,9 @@ so every tool inherits it and nothing drifts.
 
 ## How it is consumed
 
-- Wired innermost in the root's chain (`cmd/rig`), so it runs after the
-  allow-list, the gate and the bounds and right before the tool: a
-  refused call is refused on the model's bytes; an executed call runs on
-  the expanded path. Workers and delegated workers get the same chain.
+- Wired outermost in the root's chain (`cmd/rig`), so it runs before the
+  allow-list, the gate and the bounds: every path is expanded before any
+  validation sees it. Workers and delegated workers get the same chain.
 - `bash` is also wrapped (its `cwd`), and its command line is the shell's
   own to expand. A plugin's nested `args` are the plugin's (python's
   `expanduser` is one line).

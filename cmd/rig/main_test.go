@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.1.3" {
-		t.Fatalf("Version = %q, want 1.1.3", Version)
+	if Version != "1.1.4" {
+		t.Fatalf("Version = %q, want 1.1.4", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -415,6 +415,20 @@ func TestDefaultRoleIsByteIdentical(t *testing.T) {
 	want := "be terse" + "\n\n" + "G\n\nP"
 	if got != want {
 		t.Fatalf("the default assembly = %q, want today's bytes %q (the role sits between system and AGENTS.md only when set)", got, want)
+	}
+}
+
+func TestSystemPromptNamesTheSessionCwdAndHome(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.cwd = "/work/proj"
+	r.home = "/home/ng"
+	r.agents = "G\n\nP"
+	got := r.buildSystem()
+	want := "be terse" + "\n\n" +
+		"The session's working directory is /work/proj and the session home is /home/ng. A leading ~ in a tool path expands to the session home." +
+		"\n\n" + "G\n\nP"
+	if got != want {
+		t.Fatalf("the session assembly = %q, want %q (the cwd and the home are named so the model never guesses)", got, want)
 	}
 }
 

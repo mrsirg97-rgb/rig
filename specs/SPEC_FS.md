@@ -61,9 +61,11 @@ accordingly and is named in the PR.
   ls/find/grep, bash's and delegate's and the scheduler's `cwd` all
   inherit it and no tool carries its own copy. The tools stay pure. A `~`
   anywhere else, an unknown user, or an unset home stand as given; the
-  shell expands its own command line. Amended 2026-08-23 on a model's own
-  report; half its path habits worked, and its own shape for the fix:
-  at the boundary, not per call, or the drift just relocates.
+  shell expands its own command line. The session home is the process
+  home at session start and the system prompt names it (SPEC_CONFIG 6).
+  Amended 2026-08-23 on a model's own report; half its path habits
+  worked, and its own shape for the fix: at the boundary, not per call,
+  or the drift just relocates.
 - `ls` sorts within its level (ReadDir order): an empty directory prints
   `(empty: /abs/dir)`; missing or non-directory paths are loud errors.
 - An empty `find` or `grep` names the pattern and the absolute root it

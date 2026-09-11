@@ -270,8 +270,12 @@ func checkViewportInvariants(t *testing.T, label string, v *vt, wantMark string)
 		t.Fatalf("%s: the protocol relied on %d cursor clamps", label, v.clamped)
 	}
 	rows := v.rows
-	if len(rows) != v.height {
-		t.Fatalf("%s: the screen holds %d rows, want the %d-row viewport:\n%q", label, len(rows), v.height, rows)
+	// a frame may end above the viewport's bottom: the live region elides
+	// an oversized pending block, so the status block can sit on the
+	// frame's last row rather than the screen's. The harness holds only
+	// the written rows, never more than the viewport.
+	if len(rows) > v.height {
+		t.Fatalf("%s: the screen holds %d rows, past the %d-row viewport:\n%q", label, len(rows), v.height, rows)
 	}
 	if wantMark != "" {
 		joined := paintFree(strings.Join(rows, "\n"))
@@ -279,7 +283,11 @@ func checkViewportInvariants(t *testing.T, label string, v *vt, wantMark string)
 			t.Fatalf("%s: the committed prose was wiped from the screen:\n%q", label, rows)
 		}
 	}
-	bottom := paintFree(strings.Join(rows[len(rows)-4:], "\n"))
+	start := len(rows) - 4
+	if start < 0 {
+		start = 0
+	}
+	bottom := paintFree(strings.Join(rows[start:], "\n"))
 	bottom = strings.Join(strings.Fields(bottom), " ")
 	if !strings.Contains(bottom, "cache r") {
 		t.Fatalf("%s: the model info is not at the bottom:\n%q", label, rows)
