@@ -92,7 +92,32 @@ width); no core or loop line (decision 10).
   count (the blank above plus the rendered rows), not a constant: the
   check decides between the in-place input-row edit and the full
   re-layout, and a wrong offset turns every keystroke into the heavy
-  path.
+  path. It also refuses the in-place edit while the painted width is
+  stale (SPEC_TUI, the 1.1.1 amendment): the keystroke takes the full
+  re-layout, which aims with the painted geometry.
+- The aim is painted geometry: the region keeps the row count and
+  width of its last paint, and every cursor-up aims with that count,
+  capped at the viewport. Measuring the old region in the new
+  geometry — the size changed between paints — overshoots the true
+  top and writes the region over committed history. The status
+  block's viewport budget counts its wrapped rows, not its logical
+  ones, so the bound holds on a pane narrow enough to wrap the usage
+  line.
+- A submit aims at the top of the live block above the input: the
+  verb menu's rows repaint away with the echo, the separator blank
+  survives (a blank first row of the region can only be that
+  separator), and a submit on a live turn carries the activity row
+  into the new region — the turn owns it.
+- Committed bytes expand tabs on the paint seam (`live.draw`): a tab
+  advances to the next eight-column stop while the width math counts
+  it as nothing, so tab-indented tool output rendered wider than the
+  bookkeeping saw and every row after the first tab drifted. SGR
+  sequences copy through at zero width; the flow path's expansion
+  already covered the model's text.
+- The aim caps at the viewport: the size is read at the repaint, and
+  a height-only shrink (the phone's keyboard) cuts the pane under a
+  region painted for a taller one — the first cursor-up after the
+  shrink holds inside the pane the repaint finds.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
   exactly at the last column across a write boundary (the tear). A frame

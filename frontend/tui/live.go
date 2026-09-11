@@ -3,6 +3,7 @@ package tui
 import (
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 type live struct {
@@ -11,6 +12,13 @@ type live struct {
 	width  int
 	height int
 	parked int
+
+	// the geometry the screen was last painted in: the region's visual
+	// row count and the width that count was taken at. every aim is
+	// relative to the painted region, so a resize may rebuild rows at
+	// the new width but must still aim with these.
+	paintedRows  int
+	paintedWidth int
 
 	hist []string
 
@@ -69,8 +77,8 @@ func (l *live) resume() {
 	l.pend = nil
 
 	all := append(append([]string(nil), pend...), cur...)
-	l.replaceRegion(all)
 	l.lines = cur
+	l.replaceRegion(all)
 	l.flush()
 }
 
@@ -85,7 +93,7 @@ func newLive(w io.Writer, width int) *live {
 	if width < 1 {
 		width = 1
 	}
-	return &live{w: w, width: width}
+	return &live{w: w, width: width, paintedWidth: width}
 }
 
 func (l *live) setWidth(w int) {
@@ -113,14 +121,6 @@ func (l *live) visualRows(s string) int {
 	n := (WidthOf(s) + l.width - 1) / l.width
 	if n < 1 {
 		n = 1
-	}
-	return n
-}
-
-func (l *live) regionRows() int {
-	n := 0
-	for _, line := range l.lines {
-		n += l.visualRows(line)
 	}
 	return n
 }
@@ -157,15 +157,14 @@ func (l *live) guardWrap(line string) {
 }
 
 func (l *live) redraw(newLines []string) {
-	l.replaceRegion(newLines)
 	l.lines = newLines
+	l.replaceRegion(newLines)
 }
 
 func (l *live) replaceRegion(rows []string) {
 	l.norm()
-	old := l.regionRows()
-	if old > 0 {
-		l.wf(cursorUp(old - 1))
+	if aim := l.aimRows(l.paintedRows); aim > 0 {
+		l.wf(cursorUp(aim - 1))
 	}
 	for i, line := range rows {
 		l.wf(toCol(1))
@@ -175,15 +174,92 @@ func (l *live) replaceRegion(rows []string) {
 			l.wf(lineEnd)
 		}
 	}
-	if old > 0 {
+	if l.paintedRows > 0 {
 		l.wf(clearBelow)
 	}
 	if len(rows) > 0 {
 		l.guardWrap(rows[len(rows)-1])
 	}
+	l.paintedRows = l.trackRows()
+	l.paintedWidth = l.width
+}
+
+// trackRows records the region's span on screen: the visual rows the next
+// repaint will redraw, capped at the viewport because a paint that
+// overflowed the pane scrolled its own head into history.
+func (l *live) trackRows() int {
+	return l.aimRows(l.liveRows())
+}
+
+// liveRows is the region's visual row count as the bookkeeping holds it.
+func (l *live) liveRows() int {
+	n := 0
+	for _, line := range l.lines {
+		n += l.visualRows(line)
+	}
+	return n
+}
+
+// aimRows caps a painted span at the viewport: a height shrink cuts the
+// pane under a region painted for a taller one, and the cursor-up must
+// not overshoot the screen's top on the first repaint after it.
+func (l *live) aimRows(n int) int {
+	if l.height > 0 && n > l.height {
+		return l.height
+	}
+	return n
+}
+
+// expandTabs makes a row's rendered width match its counted width: a tab
+// advances to the next eight-column stop, which runewidth counts as
+// nothing, so a row painted with raw tabs wraps into more terminal rows
+// than visualRows sees and every row after it drifts down the frame.
+// Committed bytes are external — tool results, command output, faults —
+// and pass through here on the paint seam; SGR sequences copy through at
+// zero width.
+func expandTabs(s string) string {
+	if !strings.Contains(s, "\t") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	col, i := 0, 0
+	for i < len(s) {
+		switch c := s[i]; {
+		case c == '\x1b':
+			j := i + 1
+			if j < len(s) && s[j] == '[' {
+				j++
+				for j < len(s) && s[j] >= 0x20 && s[j] <= 0x3f {
+					j++
+				}
+				if j < len(s) {
+					j++
+				}
+			}
+			b.WriteString(s[i:j])
+			i = j
+		case c == '\n':
+			col = 0
+			b.WriteByte(c)
+			i++
+		case c == '\t':
+			n := 8 - col%8
+			b.WriteString(strings.Repeat(" ", n))
+			col += n
+			i++
+		default:
+			r, size := utf8.DecodeRuneInString(s[i:])
+			col += runeWidth(r)
+			b.WriteString(s[i : i+size])
+			i += size
+		}
+	}
+	return b.String()
 }
 
 func (l *live) draw(committed string, newLines []string, status string) {
+	committed = expandTabs(committed)
 	var all []string
 	if committed != "" {
 		cs := strings.Split(committed, "\n")
@@ -199,9 +275,9 @@ func (l *live) draw(committed string, newLines []string, status string) {
 		}
 	}
 	all = append(all, withStatus(newLines, status)...)
-	l.replaceRegion(all)
 	l.lines = withStatus(newLines, status)
 	l.status = status
+	l.replaceRegion(all)
 	l.flush()
 }
 
@@ -209,21 +285,26 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 
 	frozen := strings.Split(fullLine, "\n")
 	l.record(append(append([]string(nil), frozen...), ""))
+	hadSep := len(l.lines) > 0 && WidthOf(l.lines[0]) == 0
 	l.lastBlank = true
 	l.norm()
 
-	oldStatusRows := statusRows(l.status)
-	oldStatusHeight := 0
-	for _, sr := range oldStatusRows {
-		oldStatusHeight += l.visualRows(sr)
+	// aim at the top of the live block above the input: menu or activity
+	// rows are repainted away, but the separator blank between the
+	// transcript and the region survives the submit. a blank first row can
+	// only be that separator: the builder never renders a blank live row
+	// above the input otherwise. with no live block this is the input
+	// row's top, the way submit always painted.
+	aim := 0
+	if hadSep {
+		aim = 1
 	}
-	if len(l.lines) > 0 {
-		idx := len(l.lines) - 1 - len(oldStatusRows)
-		in := l.visualRows(l.lines[idx])
-		upTop := in - 1 + oldStatusHeight
-		if upTop > 0 {
-			l.wf(cursorUp(upTop))
-		}
+	up := 0
+	for i := aim; i < len(l.lines); i++ {
+		up += l.visualRows(l.lines[i])
+	}
+	if up = l.aimRows(up); up > 0 {
+		l.wf(cursorUp(up - 1))
 	}
 
 	rows := append([]string(nil), frozen...)
@@ -249,6 +330,8 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 		l.lines = []string{inputLine}
 	}
 	l.lines = append(l.lines, srows...)
+	l.paintedRows = l.trackRows()
+	l.paintedWidth = l.width
 	l.status = status
 	if len(srows) > 0 {
 		l.guardWrap(srows[len(srows)-1])
@@ -331,9 +414,9 @@ func (l *live) parkAt(inputLine string, cursorCol int, status string, fromStatus
 
 func (l *live) editFull(newLines []string, cursorCol int, status string) {
 	rows := withStatus(newLines, status)
-	l.replaceRegion(rows)
 	l.lines = rows
 	l.status = status
+	l.replaceRegion(rows)
 	l.parkAt(newLines[len(newLines)-1], cursorCol, status, true)
 	l.flush()
 }

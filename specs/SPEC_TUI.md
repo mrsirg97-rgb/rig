@@ -186,6 +186,58 @@ the three rendered rows), so every keystroke re-laid the whole
 region. The check now counts the block's rows, and a keystroke
 rewrites the input row alone.
 
+### The painted aim, amended 1.1.1: aim with the geometry on screen
+
+The bound above capped the region, but the repaint still aimed with
+the geometry about to be painted: the old region's row count was
+measured at the width the repaint was about to use, while the screen
+held rows wrapped at the width of the paint before it. Three doors,
+one root. A resize — the phone's keyboard, a window drag, or a
+terminal that never delivers SIGWINCH, since the size is read at the
+repaint — re-measured the region at the new width and the cursor-up
+overshot the true top: the clamp wrote the region over committed
+history, stranded the model info mid-screen, and left rows below it
+that only a full re-layout cleared. The status block's budget counted
+its logical rows (split on newline) while the paint renders their
+wrapped rows, so a narrow pane let the region run a row taller than
+the screen and every streaming frame scrolled and clamped. And a
+submit painted the echo from the input row's top, which let the
+menu's rows survive the submit as committed-looking text.
+
+The live region now remembers the row count and the width it was
+last painted at. Every cursor-up aims with the painted count, capped
+at the viewport — a paint that overflowed the pane scrolled its own
+head into history, so the painted span is what the next aim must
+clear. The stability check refuses the in-place input-row edit while
+the painted width is stale: the keystroke takes the full re-layout,
+which aims correctly by construction. The viewport budget counts the
+status block's wrapped rows beside it, so the bound holds on a pane
+narrow enough to wrap the usage line.
+
+The submit's aim is the top of the live block above the input: the
+menu's rows repaint away with the echo, while the separator blank
+between the transcript and the region survives — a blank first row of
+the region can only be that separator, because the builder never
+renders a blank live row above the input otherwise. A submit on a
+live turn is a steer: the turn keeps running, so the activity row
+carries into the new region beside the echo instead of lingering
+stale above it.
+
+The painted-geometry invariant extends to the bytes themselves: a tab
+advances to the next eight-column stop while the width math counts it
+as nothing, so a tool result carrying tabs — any Go or YAML source —
+rendered wider than `visualRows` saw, and every row after the first
+tab drifted down the frame, baking fragments of the status block and
+of neighbouring rows into the committed block. Committed bytes expand
+tabs on the paint seam (`live.draw`), SGR sequences copying through
+at zero width; the flow path's expansion already covered the model's
+text, and the seam now covers everything the region paints. The aim
+itself holds inside the pane at repaint time: the phone's virtual
+keyboard is a height-only resize, and the first repaint after the
+shrink must not overshoot the shorter screen with the pre-shrink
+painted span — the size is read at the repaint, and the aim is
+capped at the pane the repaint finds.
+
 The spacing rule (amended): the transcript never carries two blank
 rows in a row; a model's run of trailing newlines, or the CLI's
 boundary bytes landing on an already-blank line, collapse to one, and
@@ -732,14 +784,26 @@ where the CI box allows and skip cleanly where not.
   and that committed bytes are never rewritten (the immutability
   invariant, decision 1); one op is one write to the terminal (the
   write gate, decision 2). The harness models the viewport (height,
-  scroll, the cursor clamp a terminal applies at the margins), and
+  scroll, the cursor clamp a terminal applies at the margins) and the
+  tab stop (the cells a tab skips keep whatever the previous frame
+  left in them — a gap the paint must fill), and
   the viewport cases are named: a streamed paragraph taller than the
   pane renders its tail under the hidden-head marker and, once
   closed, leaves no orphan rows between the committed text and the
   input; a menu window and an input window shrink to the pane; a
   keystroke on a stable region rewrites the input row alone (no
   clear-below in the frame); a frame after a commit carries no
-  cursor-down (the park is consumed, never re-emitted).
+  cursor-down (the park is consumed, never re-emitted); a resize
+  mid-stream — with the signal and without it — re-lays the region
+  from its painted top and relies on no cursor clamp (the committed
+  transcript survives on screen); a streaming run on a pane narrow
+  enough to wrap the status block stays inside the viewport; a submit
+  with the verb menu open repaints the menu's rows away and keeps the
+  separator blank between the transcript and the input; a read tool
+  returning tab-indented source paints no raw tab and carries no
+  foreign fragment inside the elided block; a height-only shrink
+  mid-stream — the phone's keyboard opening — aims inside the shorter
+  pane on its first repaint and regrows cleanly when it closes.
 - the tear: a stream of multi-line wrapped reasoning, replayed write
   by write through a flush-aware vt (a pending wrap resolves at a
   write boundary, the way a terminal's flush may), lands no indicator

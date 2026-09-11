@@ -963,7 +963,7 @@ func TestCompletionMenu(t *testing.T) {
 	}
 
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 25, []string{
+	s.awaitScreen(50, 21, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
@@ -977,7 +977,7 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("done", "a task's id")))
 
 	s.si.feed("\n")
-	s.awaitScreen(50, 21, []string{"❯ /todo done ", "", status, stance, usage})
+	s.awaitScreen(50, 17, []string{"❯ /todo done ", "", status, stance, usage})
 	if todo.calls != 1 {
 		t.Fatalf("the accepted line dispatched: %d calls, want 1 (Enter after navigation accepts, it does not run)", todo.calls)
 	}

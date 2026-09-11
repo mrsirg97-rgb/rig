@@ -2,6 +2,53 @@
 
 ## [Unreleased]
 
+## [1.1.1]: the painted aim
+
+One field report: the tear was back on 1.1.0. Mid-stream, content
+painted over the model info and the spacing between the content and
+the input collapsed, until a keystroke relaid the region. The viewport
+bound capped the region's height, but the repaint still aimed with the
+geometry about to be painted instead of the geometry on screen — three
+doors into that one root:
+
+- **the aim is painted geometry** (`frontend/tui`): the live region
+  remembers the row count and the width it was last painted at. Every
+  cursor-up aims with the painted count, capped at the viewport (a
+  paint that overflowed the pane scrolled its own head into history,
+  so the painted span is what the next aim must clear), and the
+  stability check refuses the in-place input-row edit while the
+  painted width is stale — the keystroke takes the full re-layout,
+  which aims correctly by construction. A resize re-lays the region
+  once, from the true top, at the new width; the transcript survives
+  whether or not the terminal ever delivers SIGWINCH, because the size
+  is read at the repaint.
+- **the viewport budget counts the rows it paints**: the status block
+  contributed its logical rows (split on newline) while the paint
+  renders their wrapped rows, so a narrow pane let the region run a
+  row taller than the screen and every streaming frame scrolled and
+  clamped. The budget now counts the block's wrapped rows beside it.
+- **a submit repaints the whole live block**: the echo aimed from the
+  input row's top, which let the verb menu's rows survive the submit
+  as committed-looking text. The submit now aims below the separator
+  blank (which survives) and repaints the menu's rows away; a submit
+  on a live turn is a steer, and the activity row the turn still owns
+  carries into the new region instead of lingering stale above the
+  echo.
+- **committed bytes expand tabs on the paint seam** (`frontend/tui`):
+  a tab advances to the next eight-column stop while the width math
+  counts it as nothing, so a tool result carrying tabs — any Go or
+  YAML source — rendered wider than `visualRows` saw, and every row
+  after the first tab drifted down the frame, baking fragments of the
+  status block and of neighbouring rows into the committed block. The
+  flow path already expanded tabs; the seam now covers everything the
+  region paints, SGR sequences copying through at zero width.
+- **the aim caps at the viewport**: the phone's virtual keyboard is a
+  height-only resize, and the first repaint after the shrink aimed
+  with the pre-shrink painted span, overshooting the shorter screen
+  and leaning on the terminal's clamp. The size is read at the
+  repaint; the aim now holds the painted span inside whatever the
+  pane currently is.
+
 ## [1.1.0]: the viewport bound
 
 Three field reports, one root: the live region had no notion of the

@@ -549,6 +549,11 @@ func (t *tui) paintInput() {
 }
 
 func (t *tui) regionStableLocked(lines []string, status string) bool {
+	if t.live.paintedWidth != t.live.width {
+		// the screen holds rows wrapped at the painted width; the input
+		// row alone cannot be rewritten in place against that geometry
+		return false
+	}
 	old := t.live.lines
 	if len(lines) < 1 {
 		return false
@@ -624,7 +629,14 @@ func (t *tui) onEnter() {
 		t.frame = 0
 	}
 
-	t.live.enter(full, "", t.inputLineLocked(), t.statusLineLocked())
+	// a submit on a live turn is a steer: the turn keeps running, so the
+	// activity row carries into the new region instead of lingering
+	// stale above the echo
+	activity := ""
+	if wasLive {
+		activity = t.activityLineLocked()
+	}
+	t.live.enter(full, activity, t.inputLineLocked(), t.statusLineLocked())
 	t.mu.Unlock()
 	if isCmd {
 		t.pending <- line
@@ -964,7 +976,7 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 	var blocks liveBlocks
 	for i := 0; i < 6 && !giveUp; i++ {
 		lines, line, col, blocks = t.buildLiveLinesLocked(pendCap, menuCap, inputCap)
-		over := t.live.rowsOver(lines, t.statusRowCountLocked())
+		over := t.live.rowsOver(lines, t.statusViewportRowsLocked())
 		if h <= 0 || over <= 0 {
 			break
 		}
@@ -1101,8 +1113,12 @@ func tailSegs(segs []seg, cols int) ([]seg, int) {
 	return out, tw
 }
 
-func (t *tui) statusRowCountLocked() int {
-	return len(statusRows(t.statusLineLocked()))
+func (t *tui) statusViewportRowsLocked() int {
+	n := 0
+	for _, sr := range statusRows(t.statusLineLocked()) {
+		n += t.live.visualRows(sr)
+	}
+	return n
 }
 
 func (t *tui) askLineLocked() string {

@@ -215,6 +215,17 @@ func (v *vt) feed(b []byte) {
 				v.fail("an invalid or orphaned UTF-8 byte")
 				return
 			}
+			if r == '\t' {
+				// a tab advances to the next eight-column stop and writes
+				// nothing: the cells it skips keep whatever the previous
+				// frame left in them
+				v.c += 8 - v.c%8
+				if v.c > v.width {
+					v.c = v.width
+				}
+				i += size
+				continue
+			}
 			v.writeRune(r)
 			i += size
 		}
@@ -301,7 +312,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	usage := RenderUsage(th, 3200, 136, 918)
 	toolBlock := strings.Join([]string{
 		"bash · $ go test ./x",
-		"  ok  \tx\t0.4s",
+		"  ok    x       0.4s",
 		"bash ✓ 0.4s",
 	}, "\n")
 
@@ -343,9 +354,8 @@ func TestLiveRegionProtocol(t *testing.T) {
 		"hel",
 		"lo",
 		"bash · $ go test ./x",
-		"  ok  \tx\t0.4s",
+		"  ok    x       0.4s",
 		"bash ✓ 0.4s",
-		"| thinking",
 		"❯ fix the retry",
 		"",
 		paintFree(usage),
