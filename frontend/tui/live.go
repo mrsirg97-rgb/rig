@@ -9,6 +9,7 @@ type live struct {
 	w      io.Writer
 	lines  []string
 	width  int
+	height int
 	parked int
 
 	hist []string
@@ -91,6 +92,21 @@ func (l *live) setWidth(w int) {
 	if w >= 1 {
 		l.width = w
 	}
+}
+
+func (l *live) setHeight(h int) {
+	l.height = h
+}
+
+func (l *live) rowsOver(lines []string, extra int) int {
+	if l.height <= 0 {
+		return 0
+	}
+	n := extra
+	for _, line := range lines {
+		n += l.visualRows(line)
+	}
+	return n - l.height
 }
 
 func (l *live) visualRows(s string) int {

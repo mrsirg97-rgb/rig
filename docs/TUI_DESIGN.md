@@ -35,7 +35,20 @@ count is the rows the old lines wrapped to, `visualRows`), cursor up to
 its top, write the committed chunk, then the new live lines. Committed
 bytes are never rewritten. The only cursor arithmetic is up, down,
 set-column, and clear-line, over at most the cap (decision 2's amended
-at-most-three). Single-line edits (typing, the spinner tick) clear and
+at-most-three).
+
+The region is bounded by the viewport height (SPEC_TUI, the 1.1.0
+amendment), read at every repaint beside the width. An over-tall
+region cannot be repainted cursor-relatively: the terminal clamps the
+cursor-up at the screen's top and the rewrite lands over committed
+text, leaving rows the bookkeeping can never clear. The pending prose
+line therefore renders its last rows under the dim `· k lines hidden ·`
+marker, the menu's window shrinks next, and the input's five-row
+window shrinks last; the shrink order keeps the operator's controls
+alive as the room runs out. A keystroke on an otherwise stable region
+rewrites the input row alone: the stability check counts the status
+block's real rows (the blank above plus the rendered rows), which is
+what decides between the in-place edit and the full re-layout. Single-line edits (typing, the spinner tick) clear and
 rewrite the input or activity line in place; a shape change (the menu
 opens, closes, or moves) re-lays the whole region (`editFull`).
 
