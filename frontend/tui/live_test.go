@@ -345,7 +345,6 @@ func TestLiveRegionProtocol(t *testing.T) {
 		"bash · $ go test ./x",
 		"  ok  \tx\t0.4s",
 		"bash ✓ 0.4s",
-		"| thinking",
 		"❯ fix the retry",
 		"",
 		paintFree(usage),

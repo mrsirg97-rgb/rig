@@ -48,7 +48,23 @@ window shrinks last; the shrink order keeps the operator's controls
 alive as the room runs out. A keystroke on an otherwise stable region
 rewrites the input row alone: the stability check counts the status
 block's real rows (the blank above plus the rendered rows), which is
-what decides between the in-place edit and the full re-layout. Single-line edits (typing, the spinner tick) clear and
+what decides between the in-place edit and the full re-layout.
+
+The aim is painted geometry (SPEC_TUI, the 1.1.1 amendment): the
+region remembers the row count and the width it was last painted at,
+and every cursor-up aims with that count, capped at the viewport — a
+paint that overflowed the pane scrolled its own head into history, so
+the painted span is what the next aim must clear. Measuring the old
+region in the geometry about to be painted (the size is read at the
+repaint, so a resize re-measures mid-stream) overshoots the true top
+and writes the region over committed history. The stability check
+refuses the in-place input-row edit while the painted width is stale;
+the keystroke takes the full re-layout, which aims correctly by
+construction. A submit aims at the top of the live block above the
+input: the menu's rows repaint away, the separator blank between the
+transcript and the region survives, and a submit on a live turn
+carries the activity row into the new region, because the turn still
+owns it. Single-line edits (typing, the spinner tick) clear and
 rewrite the input or activity line in place; a shape change (the menu
 opens, closes, or moves) re-lays the whole region (`editFull`).
 

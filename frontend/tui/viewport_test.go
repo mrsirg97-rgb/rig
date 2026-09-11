@@ -255,3 +255,183 @@ func TestInputWindowFitsTheViewport(t *testing.T) {
 	}
 	_ = done
 }
+
+func mutableSize(w, h *int) func() (int, int, bool) {
+	return func() (int, int, bool) { return *w, *h, true }
+}
+
+func checkViewportInvariants(t *testing.T, label string, v *vt, wantMark string) {
+	t.Helper()
+	if v.err != "" {
+		t.Fatalf("%s: harness: %s", label, v.err)
+	}
+	if v.clamped > 0 {
+		t.Fatalf("%s: the protocol relied on %d cursor clamps", label, v.clamped)
+	}
+	rows := v.rows
+	if len(rows) != v.height {
+		t.Fatalf("%s: the screen holds %d rows, want the %d-row viewport:\n%q", label, len(rows), v.height, rows)
+	}
+	if wantMark != "" {
+		joined := paintFree(strings.Join(rows, "\n"))
+		if !strings.Contains(joined, wantMark) {
+			t.Fatalf("%s: the committed prose was wiped from the screen:\n%q", label, rows)
+		}
+	}
+	bottom := paintFree(strings.Join(rows[len(rows)-4:], "\n"))
+	bottom = strings.Join(strings.Fields(bottom), " ")
+	if !strings.Contains(bottom, "cache r") {
+		t.Fatalf("%s: the model info is not at the bottom:\n%q", label, rows)
+	}
+	inRow := -1
+	for r := len(rows) - 1; r >= 0; r-- {
+		if strings.HasPrefix(paintFree(rows[r]), "❯") {
+			inRow = r
+			break
+		}
+	}
+	if inRow < 0 {
+		t.Fatalf("%s: the input row is gone:\n%q", label, rows)
+	}
+	for r := inRow + 1; r < len(rows); r++ {
+		if strings.Contains(paintFree(rows[r]), "thinking") {
+			t.Fatalf("%s: the activity row painted over the status block:\n%q", label, rows)
+		}
+	}
+	if !strings.Contains(paintFree(strings.Join(rows, "\n")), "thinking") {
+		t.Fatalf("%s: the activity row is gone:\n%q", label, rows)
+	}
+}
+
+func streamViewportFrames(t *testing.T, s *scriptedSession, v *vt, n int, label string) {
+	t.Helper()
+	painted := 0
+	for i := 0; i < n; i++ {
+		s.fe.Notify(core.ReasoningDelta{Text: "word word word word word "})
+		s.tick()
+		time.Sleep(4 * time.Millisecond)
+		chunks := s.out.writeChunks()
+		for ; painted < len(chunks); painted++ {
+			v.feed([]byte(chunks[painted]))
+		}
+		checkViewportInvariants(t, label, v, "")
+	}
+}
+
+func TestResizeMidStreamKeepsTheTranscript(t *testing.T) {
+	th := oledTheme(t)
+	w, h := 50, 14
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	v := newVTScreen(50, 14)
+	streamViewportFrames(t, s, v, 10, "pre-resize")
+
+	// the size changes under the TUI with no signal delivered: the next
+	// repaint reads the new geometry and must aim with the painted one
+	w, h = 36, 10
+	v.width = 36
+	streamViewportFrames(t, s, v, 5, "post-resize")
+	checkViewportInvariants(t, "post-resize", v, "word word word")
+}
+
+func TestWinchRedrawAimsAtThePaintedRegion(t *testing.T) {
+	th := oledTheme(t)
+	w, h := 50, 14
+	winch := make(chan struct{}, 4)
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithWinch(winch),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	v := newVTScreen(50, 14)
+	streamViewportFrames(t, s, v, 10, "pre-resize")
+
+	w, h = 36, 10
+	v.width = 36
+	winch <- struct{}{}
+	time.Sleep(30 * time.Millisecond)
+	chunks := s.out.writeChunks()
+	painted := 0
+	for ; painted < len(chunks); painted++ {
+		v.feed([]byte(chunks[painted]))
+	}
+	checkViewportInvariants(t, "winch redraw", v, "word word word")
+
+	streamViewportFrames(t, s, v, 5, "post-resize")
+	checkViewportInvariants(t, "post-resize", v, "word word word")
+}
+
+func TestViewportBoundCountsTheStatusRowsItPaints(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(24), WithSize(sizeFixture(24, 10)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	// the usage row is 35 columns on a 24-column pane: the status block
+	// paints five rows where the row count sees four
+	v := newVTScreen(24, 10)
+	streamViewportFrames(t, s, v, 20, "narrow")
+}
+
+func TestEnterWithMenuOpenRepaintsTheWholeRegion(t *testing.T) {
+	th := oledTheme(t)
+	verbs := make([]command.Sub, 8)
+	for i := range verbs {
+		verbs[i] = command.Sub{Name: fmt.Sprintf("verb%d", i+1), Desc: "test"}
+	}
+	wc := &wideCmd{fakeCmd: fakeCmd{name: "wide", out: "ok"}, verbs: verbs}
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(sizeFixture(50, 14)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{wc}, nil),
+	)
+	done := make(chan struct{})
+	go func() {
+		_, _ = s.input()
+		close(done)
+	}()
+	s.await(promptMark(th))
+
+	v := newVTScreen(50, 14)
+	paint := func(label string) {
+		t.Helper()
+		chunks := s.out.writeChunks()
+		for _, c := range chunks {
+			v.feed([]byte(c))
+		}
+		if v.err != "" {
+			t.Fatalf("%s: harness: %s", label, v.err)
+		}
+	}
+	paint("start")
+	n := len(s.out.writeChunks())
+
+	s.si.feed("/wide ")
+	s.await("verb1")
+	time.Sleep(30 * time.Millisecond)
+	chunks := s.out.writeChunks()
+	for i := n; i < len(chunks); i++ {
+		v.feed([]byte(chunks[i]))
+	}
+	n = len(chunks)
+
+	s.si.feed("\n")
+	s.await("ok")
+	time.Sleep(30 * time.Millisecond)
+	chunks = s.out.writeChunks()
+	for i := n; i < len(chunks); i++ {
+		v.feed([]byte(chunks[i]))
+	}
+	joined := paintFree(strings.Join(v.rows, "\n"))
+	if strings.Contains(joined, "verb1") || strings.Contains(joined, "tab/↓ pick") {
+		t.Fatalf("the menu rows outlived the submit:\n%q", v.rows)
+	}
+	_ = done
+}
