@@ -4,9 +4,12 @@
 
 The one-shot worker tool (`specs/SPEC_DELEGATE.md`): spawn a headless
 worker on a task now, in a cwd, wait, and feed back its last message.
-One tool over the existing runner; the jail per the sandbox setting
-(fail closed exactly as workers do), the socket proxy, the worker
-command, the GPU busy rule with `busy:skip` semantics, with a
+Fan-out is N delegate calls in one turn, bounded by `workers.json`
+`slots`: the calls run concurrently up to the slot count and extras
+wait for a slot rather than failing, so one slot runs them in
+sequence. One tool over the existing runner; the jail per the sandbox
+setting (fail closed exactly as workers do), the socket proxy, the
+worker command, the GPU busy rule with `busy:skip` semantics, with a
 recorded run in the cwd-scope scheduler store under a minted ad-hoc
 key (no crontab line, nothing scheduled) and a resumable transcript in
 the state store.
@@ -15,15 +18,16 @@ the state store.
 
 - `delegate.go`: `Opts` (the root's wiring, carrying the fleet's
   `Slots`) and `New`, the adapter with the description (the in-flight
-  bound phrased by the slot count), schema, and `Exec`; the `pathguard`
-  cwd rule (canonicalization, the outside-the-session/rig-home refusal,
-  the directory check); the
+  bound and the wait phrased by the slot count), schema, and `Exec`;
+  the `pathguard` cwd rule (canonicalization, the
+  outside-the-session/rig-home refusal, the directory check); the
   output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
   the explicit worker session id threaded through the spawn.
 - `delegate_test.go`: the failing-first named cases over a fake
   `Spawn` and `Fetch` (happy path, cwd refusal, busy refusal, timeout,
-  one-in-flight, no-recursion, the cap).
+  the fan-out overlap and the one-slot sequence, the slots-full wait,
+  no-recursion, the cap).
 
 ## How it is consumed
 
@@ -38,10 +42,11 @@ the state store.
 
 - The no-recursion marker (`RIG_DELEGATE`) and the per-slot flocks
   live in `store/scheduler`'s `Delegate`, not here: a worker's
-  inherited marker refuses by name, and a concurrent operator call
-  that holds every slot refuses first (the lock check precedes the
-  marker); the standing "already in flight" voice at one slot, the
-  full-set "slots are full (slots N)" voice otherwise.
+  inherited marker refuses by name, and a call that finds the
+  session's slots full waits on a short poll for one to free until
+  its call context ends (the lock check precedes the marker); the
+  standing "already in flight" voice at one slot, the full-set
+  "slots are full (slots N)" voice naming the wait time otherwise.
 - The jailed worker's transcript lands at the operator's state-store
   path via `jailSpawn`'s sessions-dir bind (SPEC_DELEGATE 3); the
   parent mints its id and passes it as `-session-id`, so concurrent

@@ -23,14 +23,16 @@ delegate spawns, exactly as `run-job` spawns one.
   needs the answer back now, so it spawns its own private worker and
   blocks. A pull-based queue would need standing worker processes and
   a poll-and-await seam for a result the turn can get by spawning; it
-  is the async/fan-out non-goal of this phase, named.
+  is the async non-goal of this phase, named.
 - **Not a scheduler.** No crontab line is written: nothing fires on a
   schedule. The run is recorded in the one scheduler store so
   `scheduler runs` and the dashboard show it beside cron runs, but
   nothing ever fires it.
-- **Not async, no fan-out, no nesting.** One delegation in flight per
-  session; a second call while one runs refuses. A worker cannot
-  delegate (an env marker). Each is named with its reason in BOUNDS.
+- **Not async, no nesting.** Fan-out is N delegate calls in one turn,
+  bounded by the fleet's `slots`: the calls run concurrently up to
+  the slot count, and extras wait for a slot rather than failing. A
+  worker cannot delegate (an env marker). Each is named with its
+  reason in BOUNDS.
 
 ## goals
 
@@ -58,7 +60,9 @@ delegate spawns, exactly as `run-job` spawns one.
   needs a synchronous result (see what it is not).
 - No async returns, no out-of-band results: the delegate blocks the
   turn until the worker finishes or times out.
-- No fan-out: one worker per call, no parallel sub-delegates.
+- No fan-out inside a call: one worker per call, no parallel
+  sub-delegates (fan-out is N calls in one turn, bounded by the
+  fleet's slots).
 - No nesting: a worker cannot delegate.
 - No new cron scheduling semantics, no crontab lines.
 
@@ -208,16 +212,18 @@ has the session id and log path.
   once per session. The delegate takes a non-blocking flock on the
   per-session slot lock files in the scheduler home (one file per
   slot, `delegate:<session>:<i>`), trying the slots in order and
-  taking the first free, releasing it after. A call beyond the slots
-  refuses: with `slots` 1 the voice is the standing one (`delegate: a
-  delegation is already in flight (this session)`), with `slots` > 1
-  it names the full set (`delegate: the session's delegate slots are
-  full (slots N)`). Sequential delivery makes the overlap rare in the
-  loop; the flocks also guard stale workers from interrupted turns
-  (they release on death). It is the run-job `acquireLock` shape,
-  keyed per session per slot. One slot today, the pool later; the
-  gate already counts, so raising `slots` is a file edit, not a code
-  change.
+  taking the first free, releasing it after. A call that finds every
+  slot held waits: it retries the acquisition on a short interval
+  until a slot frees or the call's context ends, so a fan-out can
+  issue more calls than slots and the extras queue rather than
+  fail. On the context ending the refusal is the standing voice:
+  with `slots` 1 `delegate: a delegation is already in flight (this
+  session)`, with `slots` > 1 `delegate: the session's delegate
+  slots are full (slots N)` with the wait time named. The flocks
+  also guard stale workers from interrupted turns (they release on
+  death). It is the run-job `acquireLock` shape, keyed per session
+  per slot. The gate already counts, so raising `slots` is a file
+  edit, not a code change.
 - **No recursion**: the delegate sets `RIG_DELEGATE=1` on the worker's
   spawn (the `RIG_HOME` pattern, decision 2). The delegate tool's
   Exec refuses by name when the marker is set: `delegate: a worker
@@ -234,9 +240,9 @@ has the session id and log path.
   worker and writes stores). Manual mode asks, and the prompt shows
   the task's first line, not the raw args JSON; `approve.Prompt`
   special-cases `delegate` (decision 7).
-- No fan-out, no async, no nesting in this phase: each named with its
-  reason above. A queue, a pool, and nested delegates are later
-  amendments, not this.
+- No async, no nesting in this phase: each named with its reason
+  above. A queue, a pool, and nested delegates are later amendments,
+  not this.
 
 ### 7. The approval prompt names the task
 
@@ -265,11 +271,13 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
 - **The timeout kill**: a `timeoutMs`-deadline spawn returns a
   timed-out result; the error names the timeout, and the fake
   `Spawn` saw the deadline kill.
-- **The one-in-flight refusal**: two concurrent Execs: one runs, the
-  second refuses naming the in-flight delegation (slots 1, the
-  default).
-- **The slots gate**: `slots` 2: two concurrent Execs run, a third
-  refuses naming the full set; the gate counts, not just blocks.
+- **The fan-out overlap**: `slots` 3: three concurrent Execs run, and
+  the spawn seam's timestamps prove the three spawns overlap.
+- **The one-slot sequence**: `slots` 1: three concurrent Execs run
+  one after another and each succeeds.
+- **The slots-full wait**: `slots` 2: two concurrent Execs run, a
+  third with an expiring context waits and then refuses naming the
+  full set and the wait time; no worker was spawned for it.
 - **The no-recursion refusal**: `RIG_DELEGATE=1` set, Exec refuses by
   name.
 - **The approval prompt shape**: `approve.Prompt` for `delegate`

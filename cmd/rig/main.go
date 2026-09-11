@@ -53,7 +53,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.1.4"
+const Version = "1.2.0"
 
 type root struct {
 	pluginMax int
@@ -383,6 +383,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 var concurrentNatives = map[string]bool{
 	"read": true, "ls": true, "find": true, "grep": true,
 	"web_search": true, "web_fetch": true, "diff": true,
+	"delegate": true,
 }
 
 var mutatingNatives = map[string]bool{

@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.1.4" {
-		t.Fatalf("Version = %q, want 1.1.4", Version)
+	if Version != "1.2.0" {
+		t.Fatalf("Version = %q, want 1.2.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -543,6 +543,12 @@ func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	}
 	if h.r.approve != "manual" {
 		t.Fatalf("/new must reset to the settings default: %q", h.r.approve)
+	}
+}
+
+func TestDelegateIsAConcurrentNative(t *testing.T) {
+	if !concurrentNatives["delegate"] {
+		t.Fatal("delegate must be concurrent (fan-out: several calls in one turn run as a batch)")
 	}
 }
 

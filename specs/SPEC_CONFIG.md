@@ -985,10 +985,9 @@ PR A carries this spec file only; the diffs below land with PR B.
   model (the row is the source of truth, no `workers.json` needed at
   fire time).
 - **SPEC_DELEGATE**: the delegate's model default is the fleet's
-  `model` (12, replacing the settings' `defaultJobModel`); the
-  one-in-flight gate is the fleet's `slots` (SPEC_DELEGATE 6); no
-  `workers.json` means the tool is unregistered (the presence rule,
-  12).
+  `model` (12, replacing the settings' `defaultJobModel`); the slots
+  gate is the fleet's `slots` (SPEC_DELEGATE 6); no `workers.json`
+  means the tool is unregistered (the presence rule, 12).
 - **SPEC_SERVE**: the dashboard's scheduler view says `no workers
   configured (~/.rig/workers.json names the model)` instead of the
   create form when the fleet is absent; the create door fills the
