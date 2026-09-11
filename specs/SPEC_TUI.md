@@ -231,7 +231,12 @@ tab drifted down the frame, baking fragments of the status block and
 of neighbouring rows into the committed block. Committed bytes expand
 tabs on the paint seam (`live.draw`), SGR sequences copying through
 at zero width; the flow path's expansion already covered the model's
-text, and the seam now covers everything the region paints.
+text, and the seam now covers everything the region paints. The aim
+itself holds inside the pane at repaint time: the phone's virtual
+keyboard is a height-only resize, and the first repaint after the
+shrink must not overshoot the shorter screen with the pre-shrink
+painted span — the size is read at the repaint, and the aim is
+capped at the pane the repaint finds.
 
 The spacing rule (amended): the transcript never carries two blank
 rows in a row; a model's run of trailing newlines, or the CLI's
@@ -794,7 +799,9 @@ where the CI box allows and skip cleanly where not.
   with the verb menu open repaints the menu's rows away and keeps the
   separator blank between the transcript and the input; a read tool
   returning tab-indented source paints no raw tab and carries no
-  foreign fragment inside the elided block.
+  foreign fragment inside the elided block; a height-only shrink
+  mid-stream — the phone's keyboard opening — aims inside the shorter
+  pane on its first repaint and regrows cleanly when it closes.
 - the tear: a stream of multi-line wrapped reasoning, replayed write
   by write through a flush-aware vt (a pending wrap resolves at a
   write boundary, the way a terminal's flush may), lands no indicator

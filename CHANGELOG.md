@@ -42,6 +42,12 @@ doors into that one root:
   status block and of neighbouring rows into the committed block. The
   flow path already expanded tabs; the seam now covers everything the
   region paints, SGR sequences copying through at zero width.
+- **the aim caps at the viewport**: the phone's virtual keyboard is a
+  height-only resize, and the first repaint after the shrink aimed
+  with the pre-shrink painted span, overshooting the shorter screen
+  and leaning on the terminal's clamp. The size is read at the
+  repaint; the aim now holds the painted span inside whatever the
+  pane currently is.
 
 ## [1.1.0]: the viewport bound
 

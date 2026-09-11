@@ -506,3 +506,71 @@ func TestToolResultRendersAtItsCountedWidth(t *testing.T) {
 		})
 	}
 }
+
+// resizeVT models the pane's reflow under a height change: a shrink keeps
+// the top rows and cuts the bottom, a grow appends blank rows, and the
+// cursor clamps into range. Width changes reflow the rows themselves and
+// go through the winch test.
+func resizeVT(v *vt, w, h int) *vt {
+	nv := newVTScreen(w, h)
+	nv.hist = v.hist
+	for r := 0; r < h && r < len(v.rows); r++ {
+		nv.ensureRow(r)
+		nv.rows[r] = v.rows[r]
+	}
+	nv.r = v.r
+	nv.c = v.c
+	if nv.r > h-1 {
+		nv.r = h - 1
+	}
+	if nv.c > w-1 {
+		nv.c = w - 1
+	}
+	return nv
+}
+
+func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
+	th := oledTheme(t)
+	w, h := 50, 14
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	v := newVTScreen(50, 14)
+	// one continuous feed index across the resizes: the frames replay in
+	// order onto the pane the way a terminal sees them
+	painted := 0
+	step := func(label string, want string) {
+		t.Helper()
+		s.fe.Notify(core.ReasoningDelta{Text: "word word word word word "})
+		s.tick()
+		time.Sleep(4 * time.Millisecond)
+		chunks := s.out.writeChunks()
+		for ; painted < len(chunks); painted++ {
+			v.feed([]byte(chunks[painted]))
+		}
+		checkViewportInvariants(t, label, v, want)
+	}
+	for i := 0; i < 10; i++ {
+		step("pre-shrink", "")
+	}
+
+	// the phone's virtual keyboard opens: the pane loses four rows and
+	// the width holds. No signal is needed — the size is read at the
+	// repaint — and the first aim after the shrink must not overshoot
+	// the shorter screen.
+	w, h = 50, 10
+	v = resizeVT(v, 50, 10)
+	for i := 0; i < 6; i++ {
+		step("post-shrink", "word word word")
+	}
+
+	// and it closes again
+	w, h = 50, 14
+	v = resizeVT(v, 50, 14)
+	for i := 0; i < 6; i++ {
+		step("regrown", "word word word")
+	}
+}

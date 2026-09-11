@@ -114,6 +114,10 @@ width); no core or loop line (decision 10).
   bookkeeping saw and every row after the first tab drifted. SGR
   sequences copy through at zero width; the flow path's expansion
   already covered the model's text.
+- The aim caps at the viewport: the size is read at the repaint, and
+  a height-only shrink (the phone's keyboard) cuts the pane under a
+  region painted for a taller one — the first cursor-up after the
+  shrink holds inside the pane the repaint finds.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
   exactly at the last column across a write boundary (the tear). A frame

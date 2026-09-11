@@ -163,8 +163,8 @@ func (l *live) redraw(newLines []string) {
 
 func (l *live) replaceRegion(rows []string) {
 	l.norm()
-	if l.paintedRows > 0 {
-		l.wf(cursorUp(l.paintedRows - 1))
+	if aim := l.aimRows(l.paintedRows); aim > 0 {
+		l.wf(cursorUp(aim - 1))
 	}
 	for i, line := range rows {
 		l.wf(toCol(1))
@@ -188,12 +188,24 @@ func (l *live) replaceRegion(rows []string) {
 // repaint will redraw, capped at the viewport because a paint that
 // overflowed the pane scrolled its own head into history.
 func (l *live) trackRows() int {
+	return l.aimRows(l.liveRows())
+}
+
+// liveRows is the region's visual row count as the bookkeeping holds it.
+func (l *live) liveRows() int {
 	n := 0
 	for _, line := range l.lines {
 		n += l.visualRows(line)
 	}
+	return n
+}
+
+// aimRows caps a painted span at the viewport: a height shrink cuts the
+// pane under a region painted for a taller one, and the cursor-up must
+// not overshoot the screen's top on the first repaint after it.
+func (l *live) aimRows(n int) int {
 	if l.height > 0 && n > l.height {
-		n = l.height
+		return l.height
 	}
 	return n
 }
@@ -291,7 +303,7 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	for i := aim; i < len(l.lines); i++ {
 		up += l.visualRows(l.lines[i])
 	}
-	if up > 0 {
+	if up = l.aimRows(up); up > 0 {
 		l.wf(cursorUp(up - 1))
 	}
 

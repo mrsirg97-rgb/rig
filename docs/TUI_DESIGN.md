@@ -67,7 +67,11 @@ carries the activity row into the new region, because the turn still
 owns it. The invariant extends to the bytes: committed bytes expand
 tabs on the paint seam — a tab advances to the next eight-column stop
 while the width math counts it as nothing, and a row painted with raw
-tabs wraps into rows the bookkeeping never sees. Single-line edits
+tabs wraps into rows the bookkeeping never sees. It extends to the
+pane too: the size is read at the repaint, and a height-only shrink
+(the phone's keyboard) cuts the pane under a region painted for a
+taller one, so the first cursor-up after a shrink caps at the pane
+the repaint finds. Single-line edits
 (typing, the spinner tick) clear and
 rewrite the input or activity line in place; a shape change (the menu
 opens, closes, or moves) re-lays the whole region (`editFull`).
