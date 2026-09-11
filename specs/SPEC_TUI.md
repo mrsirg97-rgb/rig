@@ -263,16 +263,31 @@ overshoots by `parked`, writing the region over committed rows above
 it.
 
 The repaint now aims from the parked position: the cursor-up before a
-repaint is the aim minus one minus `parked`, capped at the viewport
-as before, and the park clears after the paint. Every path that aimed
-from the bottom applies it — the region repaint (`replaceRegion`),
-the submit (`enter`), the winch re-layout (the region repaint after a
-SIGWINCH), and the in-place input edit, whose cursor-up is measured
-from the parked row, not the bottom. The caret still rests on the
-input row after an in-place edit. The protocol folds the old
-`ESC[nB ESC[mA` pair into one `ESC[(m-n)A`: no bytes are lost, and a
-shrink that cut the rows under the parked caret no longer makes the
-aim reach through the terminal's clamped no-op.
+repaint is the region's uncapped row count minus one minus `parked`,
+and only the result is capped at the viewport. The cap belongs to the
+aim, not to the span: a pane that shrank under a region painted for a
+taller one must aim all the way to the region's top, not to the
+shrunken viewport's — an aim capped at the viewport first undershoots
+by `parked` and leaves the region's head above the repaint, its rows
+duplicated in history and on screen. The park clears after the paint.
+Every path that aimed from the bottom applies it — the region repaint
+(`replaceRegion`), the submit (`enter`), the winch re-layout (the
+region repaint after a SIGWINCH), and the in-place input edit, whose
+cursor-up is measured from the parked row, not the bottom. The caret
+still rests on the input row after an in-place edit. The protocol
+folds the old `ESC[nB ESC[mA` pair into one `ESC[(m-n)A`: no bytes
+are lost, and a shrink that cut the rows under the parked caret no
+longer makes the aim reach through the terminal's clamped no-op.
+
+The resize harness models tmux's screen_resize_y rule (amended): a
+shrink by `k` first cuts `min(k, rows below the cursor)` rows from
+the bottom — the cursor stays put — then moves the remaining rows
+from the top into history and decrements the cursor row by that many;
+a grow appends blank rows and the cursor clamps into range. The
+old rule (keep the top rows, clamp the cursor) matched tmux only
+when the shrink was no larger than the park, so a shrink past the
+park left the harness holding the region's head where tmux would
+have scrolled it.
 
 The spacing rule (amended): the transcript never carries two blank
 rows in a row; a model's run of trailing newlines, or the CLI's
@@ -846,7 +861,11 @@ where the CI box allows and skip cleanly where not.
   shrink that lands while the caret is parked (a typed character, the
   pane cut by the parked rows, a text delta) keeps every committed
   row above the region and paints the region exactly once, and the
-  same holds through the stepped shrink-then-grow sequence.
+  same holds through the stepped shrink-then-grow sequence; a shrink
+  that lands under a region taller than the target pane — a long
+  pending paragraph, the park, 24→12 — paints the paragraph exactly
+  once across history and the screen, with the resize harness
+  applying tmux's screen_resize_y rule.
 - the tear: a stream of multi-line wrapped reasoning, replayed write
   by write through a flush-aware vt (a pending wrap resolves at a
   write boundary, the way a terminal's flush may), lands no indicator

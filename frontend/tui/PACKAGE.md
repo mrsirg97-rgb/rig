@@ -121,8 +121,11 @@ width); no core or loop line (decision 10).
 - The aim starts from the park (SPEC_TUI, the 1.1.3 amendment): the
   keystroke fast path parks the caret `parked` rows above the
   region's bottom, and the repaint never re-anchors through a
-  cursor-down — its cursor-up is the aim minus one minus `parked`,
-  capped at the viewport, and the park clears after the paint. tmux
+  cursor-down — its cursor-up is the region's uncapped row count
+  minus one minus `parked`, and only the result is capped at the
+  viewport (the cap belongs to the aim, not to the span: a pane that
+  shrank under a region painted for a taller one must aim all the way
+  to the region's top), and the park clears after the paint. tmux
   deletes rows below the cursor before scrolling the top into
   history, so a shrink that lands while parked makes the re-anchor a
   no-op and the following cursor-up would overshoot by `parked`,

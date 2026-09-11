@@ -83,14 +83,20 @@ func (l *live) resume() {
 }
 
 // norm returns the cursor-up a repaint needs from the parked position and
-// clears the park. The caret sits `parked` rows above the region's bottom,
-// so the aim is measured from there; a cursor-down re-anchor would be a
-// no-op after a shrink that cut the rows below the parked caret (tmux
-// deletes bottom rows first), and the following cursor-up would then
-// overshoot by `parked` and overwrite committed rows above the region.
-func (l *live) norm(aim int) int {
-	up := aim - 1 - l.parked
+// clears the park. It takes the region's uncapped row count: the park is
+// measured against the logical span, and only the resulting cursor-up is
+// held inside the pane — a pane that shrank under a region painted for a
+// taller one must aim all the way to the region's top, not to the
+// shrunken viewport's. A cursor-down re-anchor would be a no-op after a
+// shrink that cut the rows below the parked caret (tmux deletes bottom
+// rows first), and the following cursor-up would then overshoot by
+// `parked` and overwrite committed rows above the region.
+func (l *live) norm(n int) int {
+	up := n - 1 - l.parked
 	l.parked = 0
+	if l.height > 0 && up > l.height-1 {
+		up = l.height - 1
+	}
 	if up < 0 {
 		up = 0
 	}
@@ -170,7 +176,7 @@ func (l *live) redraw(newLines []string) {
 }
 
 func (l *live) replaceRegion(rows []string) {
-	if up := l.norm(l.aimRows(l.paintedRows)); up > 0 {
+	if up := l.norm(l.paintedRows); up > 0 {
 		l.wf(cursorUp(up))
 	}
 	for i, line := range rows {
@@ -191,11 +197,14 @@ func (l *live) replaceRegion(rows []string) {
 	l.paintedWidth = l.width
 }
 
-// trackRows records the region's span on screen: the visual rows the next
-// repaint will redraw, capped at the viewport because a paint that
-// overflowed the pane scrolled its own head into history.
+// trackRows records the region's logical row count: the span the next
+// repaint aims with, uncapped. The viewport cap belongs to the aim
+// (norm holds the cursor-up inside the pane), because a pane that shrank
+// under a region painted for a taller one still occupies the full logical
+// span — the repaint must reach its top to clear it, not the shrunken
+// viewport's.
 func (l *live) trackRows() int {
-	return l.aimRows(l.liveRows())
+	return l.liveRows()
 }
 
 // liveRows is the region's visual row count as the bookkeeping holds it.
@@ -203,16 +212,6 @@ func (l *live) liveRows() int {
 	n := 0
 	for _, line := range l.lines {
 		n += l.visualRows(line)
-	}
-	return n
-}
-
-// aimRows caps a painted span at the viewport: a height shrink cuts the
-// pane under a region painted for a taller one, and the cursor-up must
-// not overshoot the screen's top on the first repaint after it.
-func (l *live) aimRows(n int) int {
-	if l.height > 0 && n > l.height {
-		return l.height
 	}
 	return n
 }
@@ -309,7 +308,7 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	for i := aim; i < len(l.lines); i++ {
 		up += l.visualRows(l.lines[i])
 	}
-	if up := l.norm(l.aimRows(up)); up > 0 {
+	if up := l.norm(up); up > 0 {
 		l.wf(cursorUp(up))
 	}
 

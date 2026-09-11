@@ -16,22 +16,33 @@ overshoots by `parked`, writing the region over committed rows above
 it. The repro: a 24-row pane, one character typed during a streaming
 answer, the pane resized through 20/16/12/16/20/24 a few times at
 ~70ms per step — the first two committed rows of the answer were
-overwritten every run.
+overwritten every run. A second report: a 640-char paragraph with no
+newline streams (region ~16 rows), one key typed (park 4), the pane
+shrunk 24→12 — five wrapped rows of the paragraph stayed above the
+committed copy and the first fifty words showed twice, because the
+aim was capped at the shrunken viewport before the park was
+subtracted.
 
 - **the aim starts from the park** (`frontend/tui`): the repaint no
   longer re-anchors through a cursor-down. The cursor-up before a
-  repaint is the aim minus one minus `parked`, capped at the viewport
-  as before, and the park clears after the paint. Every path that
-  aimed from the bottom applies it — the region repaint, the submit,
-  the winch re-layout, and the in-place input edit, whose cursor-up
-  is measured from the parked row. The caret still rests on the input
-  row after an in-place edit, and the protocol folds the old
-  `ESC[nB ESC[mA` pair into one `ESC[(m-n)A` (the golden streams
-  shrink by the pair). The viewport cases are named: paint a region,
-  type a character (park), shrink the pane by the parked rows, and
-  deliver a text delta — every committed row above the region
-  survives and the region paints exactly once; the same through the
-  stepped shrink-then-grow sequence.
+  repaint is the region's uncapped row count minus one minus
+  `parked`, and only the result is capped at the viewport — a pane
+  that shrank under a region painted for a taller one must aim all
+  the way to the region's top, not to the shrunken viewport's (an
+  aim capped at the viewport first undershoots by `parked` and
+  leaves the region's head above the repaint). The park clears after
+  the paint. Every path that aimed from the bottom applies it — the
+  region repaint, the submit, the winch re-layout, and the in-place
+  input edit, whose cursor-up is measured from the parked row. The
+  caret still rests on the input row after an in-place edit, and the
+  protocol folds the old `ESC[nB ESC[mA` pair into one `ESC[(m-n)A`
+  (the golden streams shrink by the pair). The viewport cases are
+  named: paint a region, type a character (park), shrink the pane by
+  the parked rows, and deliver a text delta — every committed row
+  above the region survives and the region paints exactly once; the
+  same through the stepped shrink-then-grow sequence; and a shrink
+  that lands under a region taller than the target pane paints the
+  pending paragraph exactly once across history and the screen.
 
 ## [1.1.2]: the page the frame shows
 

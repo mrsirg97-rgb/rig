@@ -77,12 +77,14 @@ rows above the region's bottom, and tmux's shrink deletes rows below
 the cursor before scrolling the top into history — the cursor stays
 put — so a shrink that lands while parked makes a cursor-down
 re-anchor a no-op and the following cursor-up overshoots by
-`parked`. The repaint never re-anchors: its cursor-up is the aim
-minus one minus `parked`, capped at the viewport, and the park
-clears after the paint; the submit, the winch re-layout, and the
-in-place input edit (whose cursor-up is measured from the parked row)
-apply the same. The caret still rests on the input row after an
-in-place edit. Single-line edits
+`parked`. The repaint never re-anchors: its cursor-up is the
+region's uncapped row count minus one minus `parked`, and only the
+result is capped at the viewport — a pane that shrank under a
+region painted for a taller one must aim all the way to the region's
+top, not to the shrunken viewport's; the park clears after the paint.
+The submit, the winch re-layout, and the in-place input edit (whose
+cursor-up is measured from the parked row) apply the same. The caret
+still rests on the input row after an in-place edit. Single-line edits
 (typing, the spinner tick) clear and
 rewrite the input or activity line in place; a shape change (the menu
 opens, closes, or moves) re-lays the whole region (`editFull`).
