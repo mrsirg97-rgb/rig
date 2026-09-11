@@ -118,6 +118,18 @@ width); no core or loop line (decision 10).
   a height-only shrink (the phone's keyboard) cuts the pane under a
   region painted for a taller one — the first cursor-up after the
   shrink holds inside the pane the repaint finds.
+- The pager steps by the frame, not the height (SPEC_TUI, the 1.1.2
+  amendment): PgUp advances the offset by the lines the current frame
+  actually showed, minus one; PgDn walks forward from the frame's
+  bottom line, accumulating `rows()` against the same row budget, and
+  steps by that many minus one. The offset stays in lines and the
+  pages overlap by one line, so a record holding lines wider than the
+  pane — tool results and code blocks commit unwrapped — shows every
+  line across the pages.
+- An underscore is intraword: `_` opens or closes emphasis only when
+  the neighboring character is not a letter or digit (the CommonMark
+  rule), so snake_case identifiers keep their underscores; `*` keeps
+  the simpler rule.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
   exactly at the last column across a write boundary (the tear). A frame

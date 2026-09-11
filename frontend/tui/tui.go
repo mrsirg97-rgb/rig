@@ -459,9 +459,9 @@ func (t *tui) pagerKey(k key, r rune) bool {
 		t.mu.Unlock()
 		return true
 	case k == keyPgUp:
-		moved = t.pg.move(t.pg.page())
+		moved = t.pg.move(t.pg.pageUp())
 	case k == keyPgDn:
-		moved = t.pg.move(-t.pg.page())
+		moved = t.pg.move(-t.pg.pageDown())
 	case k == keyHome && empty:
 		moved = t.pg.move(len(t.pg.lines))
 	case k == keyEnd && empty:

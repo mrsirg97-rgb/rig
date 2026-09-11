@@ -33,13 +33,56 @@ func (p *pager) rows(s string) int {
 	return n
 }
 
-func (p *pager) page() int {
+func (p *pager) budget() int {
 	footerRows := 0
 	for _, f := range p.footer {
 		footerRows += p.rows(f)
 	}
-	if n := p.height - 2 - footerRows; n > 1 {
+	budget := p.height - 1 - footerRows
+	if budget < 1 {
+		budget = 1
+	}
+	return budget
+}
+
+func (p *pager) frameLines() []string {
+	end := len(p.lines) - p.offset
+	budget := p.budget()
+	var view []string
+	used := 0
+	for i := end - 1; i >= 0; i-- {
+		r := p.rows(p.lines[i])
+		if used+r > budget {
+			break
+		}
+		view = append([]string{p.lines[i]}, view...)
+		used += r
+	}
+	return view
+}
+
+func (p *pager) pageUp() int {
+	if n := len(p.frameLines()) - 1; n > 0 {
 		return n
+	}
+	return 1
+}
+
+func (p *pager) pageDown() int {
+	budget := p.budget()
+	end := len(p.lines) - p.offset
+	n := 0
+	used := 0
+	for i := end - 1; i < len(p.lines); i++ {
+		r := p.rows(p.lines[i])
+		if used+r > budget {
+			break
+		}
+		n++
+		used += r
+	}
+	if n > 1 {
+		return n - 1
 	}
 	return 1
 }
@@ -61,25 +104,12 @@ func (p *pager) move(delta int) bool {
 }
 
 func (p *pager) frame(th Theme) string {
-	end := len(p.lines) - p.offset
-	footerRows := 0
-	for _, f := range p.footer {
-		footerRows += p.rows(f)
-	}
-	budget := p.height - 1 - footerRows
-	if budget < 1 {
-		budget = 1
-	}
-	var view []string
+	view := p.frameLines()
 	used := 0
-	for i := end - 1; i >= 0; i-- {
-		r := p.rows(p.lines[i])
-		if used+r > budget {
-			break
-		}
-		view = append([]string{p.lines[i]}, view...)
-		used += r
+	for _, line := range view {
+		used += p.rows(line)
 	}
+	budget := p.budget()
 	var b strings.Builder
 	b.WriteString(clearAll)
 	b.WriteString(cursorHome)
