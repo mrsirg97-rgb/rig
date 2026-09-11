@@ -38,8 +38,9 @@ written before the store commit; drift is surfaced in list.
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE): the busy
   rule, the ad-hoc record (a minted job row with no crontab line), the
   state-store bind and explicit identity for the resumable transcript, the per-session
-  delegate-slot flock (one slot per `slots`, the full set refusing
-  naming the count) and the no-recursion marker.
+  delegate-slot flock (one slot per `slots`; a call that finds the set
+  full waits on a short poll for a slot until its context ends, the
+  refusal naming the wait time) and the no-recursion marker.
 - `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
   `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
   worker) are the worker's whole environment, so the operator's exported

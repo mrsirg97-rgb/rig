@@ -40,6 +40,7 @@ type DelegateInput struct {
 	StateDir      string
 	Allow         []string
 	Now           func() time.Time
+	Context       context.Context
 }
 
 type DelegateResult struct {
@@ -75,6 +76,33 @@ func delegateTimeout(t time.Duration) time.Duration {
 	return t
 }
 
+// slotPollInterval is how often a delegate whose session's slots are all
+// held retries the acquisition while it waits for one to free.
+const slotPollInterval = 50 * time.Millisecond
+
+func acquireSlot(ctx context.Context, home, session string, slots int) (*os.File, error) {
+	start := time.Now()
+	for {
+		for i := 0; i < slots; i++ {
+			fd, held, err := acquireLock(home, fmt.Sprintf("delegate:%s:%d", session, i))
+			if err != nil {
+				return nil, fmt.Errorf("delegate: lock: %w", err)
+			}
+			if held {
+				return fd, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			if slots == 1 {
+				return nil, fmt.Errorf("delegate: a delegation is already in flight (this session)")
+			}
+			return nil, fmt.Errorf("delegate: the session's delegate slots are full (slots %d); waited %s for a slot", slots, time.Since(start).Truncate(time.Millisecond))
+		case <-time.After(slotPollInterval):
+		}
+	}
+}
+
 func Delegate(in DelegateInput) (DelegateResult, error) {
 	in = delegateInput(in)
 	if in.Fetch == nil || in.Spawn == nil {
@@ -88,22 +116,13 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	if slots < 1 {
 		slots = 1
 	}
-	var lockFD *os.File
-	for i := 0; i < slots; i++ {
-		fd, held, err := acquireLock(in.Home, fmt.Sprintf("delegate:%s:%d", in.Session, i))
-		if err != nil {
-			return DelegateResult{}, fmt.Errorf("delegate: lock: %w", err)
-		}
-		if held {
-			lockFD = fd
-			break
-		}
+	waitCtx := in.Context
+	if waitCtx == nil {
+		waitCtx = context.Background()
 	}
-	if lockFD == nil {
-		if slots == 1 {
-			return DelegateResult{}, fmt.Errorf("delegate: a delegation is already in flight (this session)")
-		}
-		return DelegateResult{}, fmt.Errorf("delegate: the session's delegate slots are full (slots %d)", slots)
+	lockFD, err := acquireSlot(waitCtx, in.Home, in.Session, slots)
+	if err != nil {
+		return DelegateResult{}, err
 	}
 	defer releaseLock(lockFD)
 

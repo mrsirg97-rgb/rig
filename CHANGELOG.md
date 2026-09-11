@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [1.2.0]: the delegate fans out
+
+The turn's batch admitted `delegate` as a concurrent native, and the
+per-session slot gate stopped refusing when the fleet's slots were
+full. Fan-out is N delegate calls in one turn: the calls run
+concurrently up to `workers.json`'s `slots` (default 1), and a call
+that finds every slot held waits on a short poll for one to free
+instead of failing; the refusal is the standing voice only when the
+call's context ends, with the wait time named. The worker is jailed
+and cwd-guarded, cannot recurse (`RIG_DELEGATE`), and its output
+returns as a tool result like a read, so running it in parallel is
+non-mutating from the brain's side; the approval gate still counts it
+as mutating (it spawns a worker and writes stores).
+
+- **`delegate` is concurrent** (`cmd/rig`): the loop's concurrent
+  native set grows by `delegate`, so several delegate calls in one
+  turn run as a fan-out instead of one-after-another barriers.
+- **the slots gate waits instead of refusing** (`store/scheduler`):
+  the acquisition retries on a short interval while every slot is
+  held, until a slot frees or the call's context ends; on the context
+  ending the refusal keeps the standing voices — the one-slot
+  `delegate: a delegation is already in flight (this session)`
+  unchanged, the full-set `delegate: the session's delegate slots are
+  full (slots N)` now naming the wait time.
+- **the bound and the wait are documented** (SPEC_DELEGATE 6, the
+  package docs): the fan-out replaces the one-in-flight/refusing
+  voice; the tests pin the overlap (slots 3), the sequence (slots 1),
+  and the slots-full wait (slots 2).
+
+The version is 1.2.0; the changelog, SPEC_DELEGATE's bounds, and the
+PACKAGE.md docs move with the code.
+
 ## [1.1.4]: the fed-back error line
 
 One field report: a tool failure could reach the model as a bare

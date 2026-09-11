@@ -46,9 +46,10 @@ func (a adapter) Description() string {
 	}
 	return "spawn a headless worker on a task now, wait, and return its last message. Guidelines: a bounded " +
 		"sub-task whose result is a message — a long compute, a sweep, a review — never a conversation; " +
-		stance + ". Reply: the worker's message plus a trailer (exit, duration, session id, log); " +
-		"a held GPU refuses naming the holder. cwd must be under the session's cwd or the rig home; the model " +
-		"defaults to " + a.DefaultModel + "; the timeout to 10 minutes (ceiling 30)."
+		"fan out: several delegate calls in one turn, " + stance + " and extras wait for a slot. Reply: the " +
+		"worker's message plus a trailer (exit, duration, session id, log); a held GPU refuses naming the " +
+		"holder. cwd must be under the session's cwd or the rig home; the model defaults to " + a.DefaultModel +
+		"; the timeout to 10 minutes (ceiling 30)."
 }
 
 func (a adapter) Schema() json.RawMessage {
@@ -108,6 +109,7 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		Home:          a.Home,
 		Session:       session,
 		Cwd:           cwd,
+		Context:       ctx,
 		Task:          g.Task,
 		Model:         model,
 		WorkerSession: core.NewSession().ID,

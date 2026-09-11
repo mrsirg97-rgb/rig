@@ -3,13 +3,15 @@ package delegate_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/mrsirg97-rgb/rig/core"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/core"
 
 	"github.com/mrsirg97-rgb/rig/store"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
@@ -84,9 +86,11 @@ type fakeSpawn struct {
 }
 
 type fakeCall struct {
-	Argv []string
-	Cwd  string
-	Ctx  context.Context
+	Argv    []string
+	Cwd     string
+	Ctx     context.Context
+	Started time.Time
+	Ended   time.Time
 }
 
 func (f *fakeSpawn) count() int {
@@ -96,8 +100,10 @@ func (f *fakeSpawn) count() int {
 }
 
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.SpawnResult, error) {
+	started := time.Now()
 	f.mu.Lock()
-	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
+	idx := len(f.calls)
+	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx, Started: started})
 	if d, ok := ctx.Deadline(); ok {
 		f.deadline = time.Until(d)
 	}
@@ -105,10 +111,38 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched
 	if f.block != nil {
 		<-f.block
 	}
+	f.mu.Lock()
+	f.calls[idx].Ended = time.Now()
+	f.mu.Unlock()
 	if f.record != nil {
 		f.record()
 	}
 	return f.result, f.err
+}
+
+func callsByStart(calls []fakeCall) []fakeCall {
+	sort.Slice(calls, func(i, j int) bool { return calls[i].Started.Before(calls[j].Started) })
+	return calls
+}
+
+func assertOverlap(t *testing.T, calls []fakeCall) {
+	t.Helper()
+	calls = callsByStart(calls)
+	for i := 1; i < len(calls); i++ {
+		if !calls[i].Started.Before(calls[i-1].Ended) {
+			t.Fatalf("spawns %d and %d must overlap (started %v, ended %v)", i-1, i, calls[i-1].Started, calls[i].Started)
+		}
+	}
+}
+
+func assertSequential(t *testing.T, calls []fakeCall) {
+	t.Helper()
+	calls = callsByStart(calls)
+	for i := 1; i < len(calls); i++ {
+		if calls[i].Started.Before(calls[i-1].Ended) {
+			t.Fatalf("spawn %d must not overlap spawn %d (started %v, previous ended %v)", i, i-1, calls[i].Started, calls[i-1].Ended)
+		}
+	}
 }
 
 type harness struct {
@@ -329,37 +363,29 @@ func TestDelegateTimeoutNamesItAndTheSpawnSawTheDeadline(t *testing.T) {
 	}
 }
 
-func TestDelegateOneInFlightRefuses(t *testing.T) {
+func TestDelegateSlotsOneRunsThreeInSequence(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
-	block := make(chan struct{})
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
-	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	first := make(chan string, 1)
-	go func() {
-		out, err := tool.Exec(context.Background(), runArgs("t"))
-		if err != nil {
-			first <- "err: " + err.Error()
-			return
-		}
-		first <- out
-	}()
-
-	deadline := time.Now().Add(2 * time.Second)
-	for spawn.count() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("first spawn never started")
-		}
-		time.Sleep(time.Millisecond)
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}}
+	tool := h.newToolSlots(t, 1, fakeFetch(""), spawn.spawn)
+	done := make(chan error, 3)
+	for _, task := range []string{"t1", "t2", "t3"} {
+		go func(task string) {
+			_, err := tool.Exec(context.Background(), runArgs(task))
+			done <- err
+		}(task)
 	}
-	out, err := tool.Exec(context.Background(), runArgs("t2"))
-	if err == nil || !strings.Contains(err.Error(), "already in flight") {
-		t.Fatalf("the second call must refuse: (%q, %v)", out, err)
+	for i := 0; i < 3; i++ {
+		if err := <-done; err != nil {
+			t.Fatalf("call %d must succeed: %v", i, err)
+		}
 	}
-	close(block)
-	<-first
+	if spawn.count() != 3 {
+		t.Fatalf("three spawns, got %d", spawn.count())
+	}
+	assertSequential(t, spawn.calls)
 }
 
-func TestDelegateSlotsGateCounts(t *testing.T) {
+func TestDelegateSlotsFullWaitsAndNamesTheWait(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	block := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
@@ -382,15 +408,20 @@ func TestDelegateSlotsGateCounts(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	out, err := tool.Exec(context.Background(), runArgs("t3"))
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	out, err := tool.Exec(ctx, runArgs("t3"))
 	if err == nil || !strings.Contains(err.Error(), "delegate slots are full (slots 2)") {
 		t.Fatalf("the third call must refuse naming the full set: (%q, %v)", out, err)
+	}
+	if !strings.Contains(err.Error(), "waited ") || !strings.Contains(err.Error(), "for a slot") {
+		t.Fatalf("the refusal must name the wait time: %v", err)
 	}
 	close(block)
 	<-done
 	<-done
 	if spawn.count() != 2 {
-		t.Fatalf("exactly the slots' worth may run, got %d spawns", spawn.count())
+		t.Fatalf("no worker may spawn for the refused call, got %d spawns", spawn.count())
 	}
 }
 
@@ -412,12 +443,46 @@ func TestDelegateSlotsOneKeepsTheStandingVoice(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	out, err := tool.Exec(context.Background(), runArgs("t2"))
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	out, err := tool.Exec(ctx, runArgs("t2"))
 	if err == nil || !strings.Contains(err.Error(), "a delegation is already in flight (this session)") {
 		t.Fatalf("slots 1 must keep the standing voice: (%q, %v)", out, err)
 	}
 	close(block)
 	<-first
+}
+
+func TestDelegateSlotsThreeFanOutRunsConcurrently(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	block := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
+	tool := h.newToolSlots(t, 3, fakeFetch(""), spawn.spawn)
+	done := make(chan error, 3)
+	for _, task := range []string{"t1", "t2", "t3"} {
+		go func(task string) {
+			_, err := tool.Exec(context.Background(), runArgs(task))
+			done <- err
+		}(task)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for spawn.count() < 3 {
+		if time.Now().After(deadline) {
+			t.Fatalf("all three never started (count %d)", spawn.count())
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(block)
+	for i := 0; i < 3; i++ {
+		if err := <-done; err != nil {
+			t.Fatalf("call %d must succeed: %v", i, err)
+		}
+	}
+	if spawn.count() != 3 {
+		t.Fatalf("three spawns, got %d", spawn.count())
+	}
+	assertOverlap(t, spawn.calls)
 }
 
 func TestDelegateNoRecursionRefuses(t *testing.T) {
