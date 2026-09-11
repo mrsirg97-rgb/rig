@@ -56,7 +56,7 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	cmd := exec.CommandContext(ctx, "bash", "-c", a.Command)
 	if a.Cwd != "" {
 		if err := checkCwd(a.Cwd); err != nil {
-			return fmt.Sprintf("bash: cwd %s: %v", a.Cwd, err), nil
+			return "", fmt.Errorf("bash: cwd %s: %v", a.Cwd, err)
 		}
 		cmd.Dir = a.Cwd
 	}

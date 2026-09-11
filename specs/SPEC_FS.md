@@ -55,20 +55,17 @@ accordingly and is named in the PR.
   `[line truncated]` marker, so one match cannot carry a minified bundle.
 - Paths in results are relative to the walked root, slash-separated: results
   sorted by path then line number.
-- A bare `~` and a leading `~/…` in a path-shaped argument (`path`,
-  `root`, `cwd`) are the session home, expanded once at the tool
-  boundary: `middleware/paths`, the outermost link of the root's chain
-  (before the allow-list, the gate and the bounds), so read/write/edit,
+- A leading `~`, `~/…`, or `~user/…` in a path-shaped argument (`path`,
+  `root`, `cwd`) is the home, expanded once at the tool boundary:
+  `middleware/paths`, innermost in the root's chain, so read/write/edit,
   ls/find/grep, bash's and delegate's and the scheduler's `cwd` all
-  inherit it and no tool carries its own copy. The tools stay pure. A
-  `~user`, a `~` anywhere else, or an unset home stand as given; the
+  inherit it and no tool carries its own copy. The tools stay pure. A `~`
+  anywhere else, an unknown user, or an unset home stand as given; the
   shell expands its own command line. The session home is the process
   home at session start and the system prompt names it (SPEC_CONFIG 6).
-  Amended 2026-08-23 on a model's own report: half its path habits
-  worked, and its own shape for the fix — at the boundary, not per
-  call, or the drift just relocates. 1.1.4 narrows the expansion to
-  bare `~` and leading `~/` (the shell's `~user` is a name the model
-  never asked for), and the session home is the one the prompt names.
+  Amended 2026-08-23 on a model's own report; half its path habits
+  worked, and its own shape for the fix: at the boundary, not per call,
+  or the drift just relocates.
 - `ls` sorts within its level (ReadDir order): an empty directory prints
   `(empty: /abs/dir)`; missing or non-directory paths are loud errors.
 - An empty `find` or `grep` names the pattern and the absolute root it

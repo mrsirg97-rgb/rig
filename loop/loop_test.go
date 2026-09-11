@@ -135,15 +135,10 @@ func (t *scriptedTool) Exec(ctx context.Context, args json.RawMessage) (string, 
 		return "", ctx.Err()
 	}
 	if t.calls <= t.fail {
-		content := t.failContent
-		if content == "" {
-			content = "synthetic failure"
+		if t.failErr == nil {
+			return "synthetic failure", errors.New("synthetic failure")
 		}
-		err := t.failErr
-		if err == nil {
-			err = errors.New("synthetic failure")
-		}
-		return content, err
+		return t.failContent, t.failErr
 	}
 	return t.result, nil
 }
@@ -600,6 +595,41 @@ func TestToolErrorIsAppendedOnItsOwnLine(t *testing.T) {
 		{Role: core.RoleAssistant, Content: "recovered"},
 	}
 	wantTranscript(t, session, want...)
+}
+
+func TestRefusedCwdCarriesTheReasonExactlyOnce(t *testing.T) {
+	boom := errors.New("bash: cwd /missing: no such file or directory")
+	bash := &scriptedTool{name: "bash", fail: 1, failErr: boom, result: "recovered"}
+	p := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{
+			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
+			doneEv(),
+		}},
+		{events: []core.Event{textEv("recovered"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+	)
+	k.Session = session
+
+	f.inputs <- "go"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	content := session.Messages[2].Content
+	if content != "bash: cwd /missing: no such file or directory" {
+		t.Fatalf("the tool message must carry the refusal exactly once, got %q", content)
+	}
+	if strings.Count(content, "bash: cwd") != 1 || strings.Count(content, "no such file or directory") != 1 {
+		t.Fatalf("the reason must appear exactly once, got %q", content)
+	}
 }
 
 func TestOversizedToolResultStaysIntact(t *testing.T) {

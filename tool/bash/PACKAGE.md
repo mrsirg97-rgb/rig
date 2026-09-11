@@ -22,5 +22,6 @@ bounded. Stdlib only.
 - A failure reply carries the cwd line (the failure voice): a success
   reply is byte-identical to the process output. The cwd is stat'ed and
   checked before the child starts: a missing, non-directory, or
-  unsearchable cwd returns the plain `bash: cwd X: <reason>` (no child
-  ran), never a fork/exec line naming /usr/bin/bash.
+  unsearchable cwd fails with `bash: cwd X: <reason>` and no content
+  (the loop feeds the error text into the result content once), never a
+  fork/exec line naming /usr/bin/bash.

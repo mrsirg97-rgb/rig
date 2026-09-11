@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/mrsirg97-rgb/rig/core"
 )
@@ -16,10 +18,18 @@ func Expand(p string) string {
 		return p
 	}
 	rest := p[1:]
-	if rest != "" && rest[0] != '/' {
-		return p
+	name := rest
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		name, rest = rest[:i], rest[i:]
+	} else {
+		rest = ""
 	}
-	home, _ := os.UserHomeDir()
+	home := ""
+	if name == "" {
+		home, _ = os.UserHomeDir()
+	} else if u, err := user.Lookup(name); err == nil {
+		home = u.HomeDir
+	}
 	if home == "" {
 		return p
 	}

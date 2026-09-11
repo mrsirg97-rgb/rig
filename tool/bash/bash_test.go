@@ -83,11 +83,11 @@ func TestMissingCwdNamesTheReason(t *testing.T) {
 		"command": "pwd",
 		"cwd":     filepath.Join(t.TempDir(), "missing"),
 	}))
-	if err != nil {
-		t.Fatalf("a refused cwd must return plain content, not an error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "bash: cwd ") || !strings.Contains(err.Error(), "no such file or directory") {
+		t.Fatalf("a refused cwd must be a failure naming the cwd and the reason: %q, %v", got, err)
 	}
-	if !strings.Contains(got, "bash: cwd ") || !strings.Contains(got, "no such file or directory") {
-		t.Fatalf("the plain message must name the cwd and the reason, got %q", got)
+	if got != "" {
+		t.Fatalf("a refused cwd carries no content (the loop feeds the error line once), got %q", got)
 	}
 }
 
@@ -105,11 +105,11 @@ func TestUnreadableCwdNamesTheReason(t *testing.T) {
 		"command": "pwd",
 		"cwd":     dir,
 	}))
-	if err != nil {
-		t.Fatalf("a refused cwd must return plain content, not an error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "bash: cwd ") || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("a refused cwd must be a failure naming the cwd and the reason: %q, %v", got, err)
 	}
-	if !strings.Contains(got, "bash: cwd ") || !strings.Contains(got, "permission denied") {
-		t.Fatalf("the plain message must name the cwd and the reason, got %q", got)
+	if got != "" {
+		t.Fatalf("a refused cwd carries no content (the loop feeds the error line once), got %q", got)
 	}
 }
 

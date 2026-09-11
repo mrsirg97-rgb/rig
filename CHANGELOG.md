@@ -9,10 +9,8 @@ One field report: a tool failure could reach the model as a bare
 cwd, Go's `fork/exec /usr/bin/bash: permission denied` — the output was
 empty and the reply was just `(cwd /root)`: the loop substituted the
 exec error only when the content was empty, and the model saw no error
-at all. Alongside it, path arguments reached the OS literally —
-`~/Projects/rig` was a directory named `~` — and the system prompt said
-"the working directory" without naming it, which is why the model
-guessed /root.
+at all. Alongside it, the system prompt said "the working directory"
+without naming it, which is why the model guessed /root.
 
 - **the fed-back error is always a line** (`loop`): a tool result whose
   exec failed keeps its content and appends the exec error on its own
@@ -23,12 +21,17 @@ guessed /root.
   only (the loop appends it), so the refusal is never shown twice.
 - **bash refuses a dead cwd by name** (`tool/bash`): the cwd is stat'ed
   and checked before the child starts; a missing, non-directory, or
-  unsearchable cwd returns the plain `bash: cwd X: <reason>` — no
-  child ran, no fork/exec line naming /usr/bin/bash, no bare cwd line.
-- **`~` is the session home, bare and leading only**
-  (`middleware/paths`): a bare `~` and a leading `~/` expand to the
-  session home at the path boundary, before any validation; `~user`, a
-  mid-path `~`, and an unset home stand as given.
+  unsearchable cwd fails with `bash: cwd X: <reason>` and no content,
+  the loop feeds the error line into the result once, and the model
+  never sees a bare `(cwd X)` or a fork/exec line naming /usr/bin/bash.
+  The refusal is a real failure: the TUI shows the fail glyph and the
+  retry guard counts it.
+- **`~` is the session home, and the boundary keeps the shell's forms**
+  (`middleware/paths`): a leading `~`, `~/…`, or `~user/…` in a
+  path-shaped argument (`path`, `root`, `cwd`, `project`) expands at
+  the path boundary, before any validation; a `~` anywhere else, an
+  unknown user, or an unset home stand as given. The boundary already
+  did this; the report that tilde expansion was missing was wrong.
 - **the session names itself** (`cmd/rig`): the system prompt carries
   the session's working directory and home at session start, so the
   model never guesses where it is, and a leading `~` in a tool path

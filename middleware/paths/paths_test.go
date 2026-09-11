@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,13 +32,19 @@ func TestExpandLeadingTildeIsTheHome(t *testing.T) {
 	}
 }
 
-func TestExpandTildeUserStandsAsGiven(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	if got := paths.Expand("~root/x"); got != "~root/x" {
-		t.Fatalf("a ~user path must stand as given, got %q", got)
+func TestExpandTildeUserIsThatUsersHome(t *testing.T) {
+	u, err := user.Current()
+	if err != nil || u.Username == "" || u.HomeDir == "" {
+		t.Skip("no current user to look up")
 	}
-	if got := paths.Expand("~root"); got != "~root" {
-		t.Fatalf("a bare ~user must stand as given, got %q", got)
+	if got := paths.Expand("~" + u.Username + "/x"); got != filepath.Join(u.HomeDir, "x") {
+		t.Fatalf("~user/x = %q, want %q", got, filepath.Join(u.HomeDir, "x"))
+	}
+	if got := paths.Expand("~" + u.Username); got != u.HomeDir {
+		t.Fatalf("~user = %q, want %q", got, u.HomeDir)
+	}
+	if got := paths.Expand("~no-such-user-zz/x"); got != "~no-such-user-zz/x" {
+		t.Fatalf("an unknown user stands as given, got %q", got)
 	}
 }
 
