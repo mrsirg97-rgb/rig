@@ -249,6 +249,31 @@ shrink must not overshoot the shorter screen with the pre-shrink
 painted span — the size is read at the repaint, and the aim is
 capped at the pane the repaint finds.
 
+### The parked aim, amended 1.1.3: aim from where the caret is
+
+The painted-geometry rule still left one door: the keystroke fast path
+rewrites the input row in place and leaves the caret parked on it,
+`parked` rows above the region's bottom, and the repaint's first move
+re-anchored — a cursor-down back to the bottom — before the cursor-up
+aimed at the region's top. tmux's height shrink deletes rows below
+the cursor first and only then scrolls the top into history, so a
+shrink that lands while parked deletes the rows under the caret, the
+cursor-down is a no-op at the bottom, and the following cursor-up
+overshoots by `parked`, writing the region over committed rows above
+it.
+
+The repaint now aims from the parked position: the cursor-up before a
+repaint is the aim minus one minus `parked`, capped at the viewport
+as before, and the park clears after the paint. Every path that aimed
+from the bottom applies it — the region repaint (`replaceRegion`),
+the submit (`enter`), the winch re-layout (the region repaint after a
+SIGWINCH), and the in-place input edit, whose cursor-up is measured
+from the parked row, not the bottom. The caret still rests on the
+input row after an in-place edit. The protocol folds the old
+`ESC[nB ESC[mA` pair into one `ESC[(m-n)A`: no bytes are lost, and a
+shrink that cut the rows under the parked caret no longer makes the
+aim reach through the terminal's clamped no-op.
+
 The spacing rule (amended): the transcript never carries two blank
 rows in a row; a model's run of trailing newlines, or the CLI's
 boundary bytes landing on an already-blank line, collapse to one, and
@@ -817,7 +842,11 @@ where the CI box allows and skip cleanly where not.
   returning tab-indented source paints no raw tab and carries no
   foreign fragment inside the elided block; a height-only shrink
   mid-stream — the phone's keyboard opening — aims inside the shorter
-  pane on its first repaint and regrows cleanly when it closes.
+  pane on its first repaint and regrows cleanly when it closes; a
+  shrink that lands while the caret is parked (a typed character, the
+  pane cut by the parked rows, a text delta) keeps every committed
+  row above the region and paints the region exactly once, and the
+  same holds through the stepped shrink-then-grow sequence.
 - the tear: a stream of multi-line wrapped reasoning, replayed write
   by write through a flush-aware vt (a pending wrap resolves at a
   write boundary, the way a terminal's flush may), lands no indicator

@@ -82,11 +82,19 @@ func (l *live) resume() {
 	l.flush()
 }
 
-func (l *live) norm() {
-	if l.parked > 0 {
-		l.wf(cursorDown(l.parked))
-		l.parked = 0
+// norm returns the cursor-up a repaint needs from the parked position and
+// clears the park. The caret sits `parked` rows above the region's bottom,
+// so the aim is measured from there; a cursor-down re-anchor would be a
+// no-op after a shrink that cut the rows below the parked caret (tmux
+// deletes bottom rows first), and the following cursor-up would then
+// overshoot by `parked` and overwrite committed rows above the region.
+func (l *live) norm(aim int) int {
+	up := aim - 1 - l.parked
+	l.parked = 0
+	if up < 0 {
+		up = 0
 	}
+	return up
 }
 
 func newLive(w io.Writer, width int) *live {
@@ -162,9 +170,8 @@ func (l *live) redraw(newLines []string) {
 }
 
 func (l *live) replaceRegion(rows []string) {
-	l.norm()
-	if aim := l.aimRows(l.paintedRows); aim > 0 {
-		l.wf(cursorUp(aim - 1))
+	if up := l.norm(l.aimRows(l.paintedRows)); up > 0 {
+		l.wf(cursorUp(up))
 	}
 	for i, line := range rows {
 		l.wf(toCol(1))
@@ -287,7 +294,6 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	l.record(append(append([]string(nil), frozen...), ""))
 	hadSep := len(l.lines) > 0 && WidthOf(l.lines[0]) == 0
 	l.lastBlank = true
-	l.norm()
 
 	// aim at the top of the live block above the input: menu or activity
 	// rows are repainted away, but the separator blank between the
@@ -303,8 +309,8 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	for i := aim; i < len(l.lines); i++ {
 		up += l.visualRows(l.lines[i])
 	}
-	if up = l.aimRows(up); up > 0 {
-		l.wf(cursorUp(up - 1))
+	if up := l.norm(l.aimRows(up)); up > 0 {
+		l.wf(cursorUp(up))
 	}
 
 	rows := append([]string(nil), frozen...)
@@ -364,7 +370,6 @@ func (l *live) edit(inputLine string, cursorCol int, status string) {
 	if len(l.lines) == 0 {
 		return
 	}
-	l.norm()
 	oldStatus := 0
 	for _, sr := range statusRows(l.status) {
 		oldStatus += l.visualRows(sr)
@@ -372,9 +377,8 @@ func (l *live) edit(inputLine string, cursorCol int, status string) {
 	idx := len(l.lines) - 1 - len(statusRows(l.status))
 
 	old := l.visualRows(l.lines[idx])
-	upTop := old - 1 + oldStatus
-	if upTop > 0 {
-		l.wf(cursorUp(upTop))
+	if up := l.norm(old + oldStatus); up > 0 {
+		l.wf(cursorUp(up))
 	}
 	l.wf(toCol(1))
 	l.wf(inputLine)

@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+## [1.1.3]: the parked aim
+
+One field report: the typed-key fast path repaints the input row in
+place and parks the caret on it, `parked` rows above the region's
+bottom. The repaint's first move re-anchored with a cursor-down back
+to the bottom before aiming up at the region's top. tmux handles a
+height shrink by deleting rows below the cursor first and only then
+scrolling the top into history — the cursor stays put — so a shrink
+that lands while parked deletes the rows under the caret, the
+cursor-down is a no-op at the bottom, and the following cursor-up
+overshoots by `parked`, writing the region over committed rows above
+it. The repro: a 24-row pane, one character typed during a streaming
+answer, the pane resized through 20/16/12/16/20/24 a few times at
+~70ms per step — the first two committed rows of the answer were
+overwritten every run.
+
+- **the aim starts from the park** (`frontend/tui`): the repaint no
+  longer re-anchors through a cursor-down. The cursor-up before a
+  repaint is the aim minus one minus `parked`, capped at the viewport
+  as before, and the park clears after the paint. Every path that
+  aimed from the bottom applies it — the region repaint, the submit,
+  the winch re-layout, and the in-place input edit, whose cursor-up
+  is measured from the parked row. The caret still rests on the input
+  row after an in-place edit, and the protocol folds the old
+  `ESC[nB ESC[mA` pair into one `ESC[(m-n)A` (the golden streams
+  shrink by the pair). The viewport cases are named: paint a region,
+  type a character (park), shrink the pane by the parked rows, and
+  deliver a text delta — every committed row above the region
+  survives and the region paints exactly once; the same through the
+  stepped shrink-then-grow sequence.
+
 ## [1.1.2]: the page the frame shows
 
 One field report: the pager stepped by logical lines while the frame

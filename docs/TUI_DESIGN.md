@@ -71,7 +71,18 @@ tabs wraps into rows the bookkeeping never sees. It extends to the
 pane too: the size is read at the repaint, and a height-only shrink
 (the phone's keyboard) cuts the pane under a region painted for a
 taller one, so the first cursor-up after a shrink caps at the pane
-the repaint finds. Single-line edits
+the repaint finds. The aim starts from the park (SPEC_TUI, the 1.1.3
+amendment): the keystroke fast path leaves the caret parked `parked`
+rows above the region's bottom, and tmux's shrink deletes rows below
+the cursor before scrolling the top into history — the cursor stays
+put — so a shrink that lands while parked makes a cursor-down
+re-anchor a no-op and the following cursor-up overshoots by
+`parked`. The repaint never re-anchors: its cursor-up is the aim
+minus one minus `parked`, capped at the viewport, and the park
+clears after the paint; the submit, the winch re-layout, and the
+in-place input edit (whose cursor-up is measured from the parked row)
+apply the same. The caret still rests on the input row after an
+in-place edit. Single-line edits
 (typing, the spinner tick) clear and
 rewrite the input or activity line in place; a shape change (the menu
 opens, closes, or moves) re-lays the whole region (`editFull`).
