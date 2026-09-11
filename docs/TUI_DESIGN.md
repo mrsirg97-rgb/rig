@@ -86,6 +86,18 @@ boundary: the one whose pending wrap a terminal may resolve at the
 flush, shifting the cursor a row and taking the next op's cursor tally off by
 a row (the tear, `tear_test.go`).
 
+## the pager
+
+PgUp/PgDn step by lines, but the step comes from the frame, not the
+height (SPEC_TUI, the 1.1.2 amendment): PgUp advances the offset by
+the lines the current frame actually showed, minus one; PgDn walks
+forward from the frame's bottom line, accumulating `rows()` against
+the same row budget, and steps by that many minus one. The offset
+stays in lines and the pages overlap by one line, so a record holding
+lines wider than the pane shows every line across the pages. The
+arrows still step one line, Home/End jump, and the frame renders the
+tail of the record above the offset that fits the row budget.
+
 ## the event map
 
 The commit points are the events, exactly (SPEC_TUI decision 2):
