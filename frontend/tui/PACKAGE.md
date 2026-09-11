@@ -79,6 +79,13 @@ width); no core or loop line (decision 10).
   ended with a newline (`TurnEnd` commits the blank after the pending
   text drains; `live.draw`'s blank merge keeps a double out). The CLI
   keeps every byte.
+- The winch handler follows the input (SPEC_TUI, the 1.2.1
+  amendment): a terminal input owns the SIGWINCH handler whether or
+  not it is fd 0 — stdin is fd 0, and the guard that keyed on a
+  nonzero fd left the terminal on stdin with no handler at all, so a
+  resize with nothing streaming never repainted. The handler's full
+  draw is the winch re-layout: size read, region repaint from the
+  parked aim.
 - The size is read at the repaint, not the signal (the two-client tmux
   race): a repaint between the resize and the SIGWINCH must not use a
   stale width. The height rides beside it: the live region is bounded

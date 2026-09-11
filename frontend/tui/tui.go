@@ -23,6 +23,7 @@ type tui struct {
 	theme Theme
 	in    io.Reader
 	fdi   int
+	tty   bool
 
 	mu            sync.Mutex
 	width         int
@@ -171,6 +172,7 @@ func New(in io.Reader, out io.Writer, theme Theme, opts ...Option) core.Frontend
 	}
 	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 		t.fdi = int(f.Fd())
+		t.tty = true
 		if w, h, err := term.GetSize(t.fdi); err == nil && w > 0 {
 			t.width = w
 			t.height = h
@@ -193,7 +195,7 @@ func New(in io.Reader, out io.Writer, theme Theme, opts ...Option) core.Frontend
 
 		io.WriteString(out, pasteOn)
 	}
-	if t.winch == nil && t.fdi != 0 {
+	if t.winch == nil && t.tty {
 		t.winch, t.stopWinch = signalWinch()
 	}
 	if t.winch != nil {

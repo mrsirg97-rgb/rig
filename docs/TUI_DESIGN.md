@@ -84,8 +84,13 @@ region painted for a taller one must aim all the way to the region's
 top, not to the shrunken viewport's; the park clears after the paint.
 The submit, the winch re-layout, and the in-place input edit (whose
 cursor-up is measured from the parked row) apply the same. The caret
-still rests on the input row after an in-place edit. Single-line edits
-(typing, the spinner tick) clear and
+still rests on the input row after an in-place edit. The winch signal
+itself follows the input (SPEC_TUI, the 1.2.1 amendment): a terminal
+input owns the handler whether or not it is fd 0 — stdin is fd 0,
+and the guard that keyed on a nonzero fd left a terminal on stdin
+with no SIGWINCH at all, so a resize with nothing streaming never
+repainted the status rows the shrink deleted below the parked caret.
+Single-line edits (typing, the spinner tick) clear and
 rewrite the input or activity line in place; a shape change (the menu
 opens, closes, or moves) re-lays the whole region (`editFull`).
 

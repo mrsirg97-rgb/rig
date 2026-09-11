@@ -339,6 +339,16 @@ every repaint leaves the region's top rows behind. Every repaint
 re-reads the terminal size before building rows (a TIOCGWINSZ per
 repaint, microseconds); the signal still fires the full repaint.
 
+The signal's ownership follows the input (amended 1.2.1): the
+SIGWINCH handler installs whenever the input is a terminal, fd 0
+included. The guard keyed on a nonzero fd — stdin is fd 0 — so a rig
+whose input was the terminal installed no handler at all, and a
+resize with nothing streaming never repainted: the caret parked on
+the input row, tmux's shrink deleted the status rows below it, and
+they stayed missing through the regrow until the next delta or
+submit. `winchLoop` is unchanged; its full draw already repaints
+from the parked aim.
+
 The commit points are the events, exactly:
 
 - `ReasoningDelta` / `TextDelta`: streamed as they arrive (reasoning
