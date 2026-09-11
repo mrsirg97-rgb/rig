@@ -71,6 +71,9 @@ func (p *pager) pageUp() int {
 func (p *pager) pageDown() int {
 	budget := p.budget()
 	end := len(p.lines) - p.offset
+	if end < 1 {
+		return 1
+	}
 	n := 0
 	used := 0
 	for i := end - 1; i < len(p.lines); i++ {

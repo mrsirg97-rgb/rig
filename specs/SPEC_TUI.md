@@ -827,8 +827,12 @@ where the CI box allows and skip cleanly where not.
 - the pager: a record with lines wider than the pane — 40 lines,
   lines 20-27 padded to 70 chars, a 52x24 pane with a five-row
   footer — pages up covering every line, adjacent pages sharing
-  exactly one; PgDn walks forward from the frame's bottom against the
-  same row budget.
+  exactly one; from the top, PgDn walks forward from the frame's
+  bottom against the same row budget and covers every line too,
+  adjacent pages sharing at least one (the frame refills from the
+  bottom, so the overlap can exceed a line); the empty record's down
+  step never indexes the lines slice, and the single-line record
+  clamps at both ends.
 - the markdown inline pass: snake_case identifiers keep their
   underscores in prose and in a list item, while `_em_` still drops
   its marks.
