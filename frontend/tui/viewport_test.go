@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -434,4 +435,74 @@ func TestEnterWithMenuOpenRepaintsTheWholeRegion(t *testing.T) {
 		t.Fatalf("the menu rows outlived the submit:\n%q", v.rows)
 	}
 	_ = done
+}
+
+func TestToolResultRendersAtItsCountedWidth(t *testing.T) {
+	th := oledTheme(t)
+	for _, width := range []int{50, 24} {
+		t.Run("width"+strconv.Itoa(width), func(t *testing.T) {
+			s := newScriptedSession(t, th, WithWidth(width), WithSize(sizeFixture(width, 14)),
+				WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+			)
+			if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+				t.Fatalf("the prompt returned %q", got)
+			}
+			v := newVTScreen(width, 14)
+			painted := 0
+			step := func(label string) {
+				t.Helper()
+				chunks := s.out.writeChunks()
+				for ; painted < len(chunks); painted++ {
+					v.feed([]byte(chunks[painted]))
+				}
+				if v.err != "" {
+					t.Fatalf("%s: harness: %s", label, v.err)
+				}
+				if v.clamped > 0 {
+					t.Fatalf("%s: the protocol relied on %d cursor clamps", label, v.clamped)
+				}
+			}
+			for i := 0; i < 12; i++ {
+				s.fe.Notify(core.ReasoningDelta{Text: "word word word word word word "})
+				s.tick()
+				time.Sleep(3 * time.Millisecond)
+				step("stream")
+			}
+			s.fe.Notify(core.ToolStart{Call: core.ToolCall{
+				Name: "read", Args: []byte(`{"path":"~/Projects/rig/frontend/tui/tui.go"}`),
+			}})
+			time.Sleep(3 * time.Millisecond)
+			step("toolstart")
+			content := "package tui\n\nimport (\n\t\"bufio\"\n\t\"context\"\n\t\"io\"\n"
+			for i := 0; i < 1800; i++ {
+				content += "\t// a line of go source with a tab\tinside\n"
+			}
+			content += "}\n}\n"
+			s.fe.Notify(core.ToolResult{Content: content, Duration: 400})
+			time.Sleep(6 * time.Millisecond)
+			step("toolresult")
+
+			rows := v.rows
+			joined := paintFree(strings.Join(rows, "\n"))
+			// painted rows are terminal-width exact: a raw tab renders at the
+			// next tab stop while the width math counts nothing, so a row
+			// carrying one wraps into rows the bookkeeping never sees
+			if strings.Contains(joined, "\t") {
+				t.Fatalf("width %d: a painted row carries a raw tab:\n%q", width, rows)
+			}
+			// foreign fragments from other rows must not land in the block
+			for _, frag := range []string{"cache r", "xhigh", "huihui"} {
+				if strings.Count(joined, frag) > 1 {
+					t.Fatalf("width %d: the fragment %q landed twice — torn rows inside the committed block:\n%q", width, frag, rows)
+				}
+			}
+			// the elided block: one marker, and no fail glyph (the tool succeeded)
+			if markers := strings.Count(joined, "lines hidden"); markers != 1 {
+				t.Fatalf("width %d: the block carries %d elide markers, want 1:\n%q", width, markers, rows)
+			}
+			if strings.Contains(joined, th.Glyph(GlyphFail)) {
+				t.Fatalf("width %d: a fail glyph leaked into a succeeded tool's frame:\n%q", width, rows)
+			}
+		})
+	}
 }

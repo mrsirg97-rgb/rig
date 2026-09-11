@@ -223,6 +223,16 @@ live turn is a steer: the turn keeps running, so the activity row
 carries into the new region beside the echo instead of lingering
 stale above it.
 
+The painted-geometry invariant extends to the bytes themselves: a tab
+advances to the next eight-column stop while the width math counts it
+as nothing, so a tool result carrying tabs — any Go or YAML source —
+rendered wider than `visualRows` saw, and every row after the first
+tab drifted down the frame, baking fragments of the status block and
+of neighbouring rows into the committed block. Committed bytes expand
+tabs on the paint seam (`live.draw`), SGR sequences copying through
+at zero width; the flow path's expansion already covered the model's
+text, and the seam now covers everything the region paints.
+
 The spacing rule (amended): the transcript never carries two blank
 rows in a row; a model's run of trailing newlines, or the CLI's
 boundary bytes landing on an already-blank line, collapse to one, and
@@ -782,7 +792,9 @@ where the CI box allows and skip cleanly where not.
   transcript survives on screen); a streaming run on a pane narrow
   enough to wrap the status block stays inside the viewport; a submit
   with the verb menu open repaints the menu's rows away and keeps the
-  separator blank between the transcript and the input.
+  separator blank between the transcript and the input; a read tool
+  returning tab-indented source paints no raw tab and carries no
+  foreign fragment inside the elided block.
 - the tear: a stream of multi-line wrapped reasoning, replayed write
   by write through a flush-aware vt (a pending wrap resolves at a
   write boundary, the way a terminal's flush may), lands no indicator

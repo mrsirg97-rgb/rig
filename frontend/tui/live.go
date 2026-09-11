@@ -3,6 +3,7 @@ package tui
 import (
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 type live struct {
@@ -197,7 +198,56 @@ func (l *live) trackRows() int {
 	return n
 }
 
+// expandTabs makes a row's rendered width match its counted width: a tab
+// advances to the next eight-column stop, which runewidth counts as
+// nothing, so a row painted with raw tabs wraps into more terminal rows
+// than visualRows sees and every row after it drifts down the frame.
+// Committed bytes are external — tool results, command output, faults —
+// and pass through here on the paint seam; SGR sequences copy through at
+// zero width.
+func expandTabs(s string) string {
+	if !strings.Contains(s, "\t") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	col, i := 0, 0
+	for i < len(s) {
+		switch c := s[i]; {
+		case c == '\x1b':
+			j := i + 1
+			if j < len(s) && s[j] == '[' {
+				j++
+				for j < len(s) && s[j] >= 0x20 && s[j] <= 0x3f {
+					j++
+				}
+				if j < len(s) {
+					j++
+				}
+			}
+			b.WriteString(s[i:j])
+			i = j
+		case c == '\n':
+			col = 0
+			b.WriteByte(c)
+			i++
+		case c == '\t':
+			n := 8 - col%8
+			b.WriteString(strings.Repeat(" ", n))
+			col += n
+			i++
+		default:
+			r, size := utf8.DecodeRuneInString(s[i:])
+			col += runeWidth(r)
+			b.WriteString(s[i : i+size])
+			i += size
+		}
+	}
+	return b.String()
+}
+
 func (l *live) draw(committed string, newLines []string, status string) {
+	committed = expandTabs(committed)
 	var all []string
 	if committed != "" {
 		cs := strings.Split(committed, "\n")

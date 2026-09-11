@@ -108,6 +108,12 @@ width); no core or loop line (decision 10).
   survives (a blank first row of the region can only be that
   separator), and a submit on a live turn carries the activity row
   into the new region — the turn owns it.
+- Committed bytes expand tabs on the paint seam (`live.draw`): a tab
+  advances to the next eight-column stop while the width math counts
+  it as nothing, so tab-indented tool output rendered wider than the
+  bookkeeping saw and every row after the first tab drifted. SGR
+  sequences copy through at zero width; the flow path's expansion
+  already covered the model's text.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
   exactly at the last column across a write boundary (the tear). A frame

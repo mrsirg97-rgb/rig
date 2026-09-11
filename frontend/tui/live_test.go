@@ -301,7 +301,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	usage := RenderUsage(th, 3200, 136, 918)
 	toolBlock := strings.Join([]string{
 		"bash · $ go test ./x",
-		"  ok  \tx\t0.4s",
+		"  ok    x       0.4s",
 		"bash ✓ 0.4s",
 	}, "\n")
 
@@ -343,7 +343,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 		"hel",
 		"lo",
 		"bash · $ go test ./x",
-		"  ok  \tx\t0.4s",
+		"  ok    x       0.4s",
 		"bash ✓ 0.4s",
 		"❯ fix the retry",
 		"",

@@ -34,6 +34,14 @@ doors into that one root:
   on a live turn is a steer, and the activity row the turn still owns
   carries into the new region instead of lingering stale above the
   echo.
+- **committed bytes expand tabs on the paint seam** (`frontend/tui`):
+  a tab advances to the next eight-column stop while the width math
+  counts it as nothing, so a tool result carrying tabs — any Go or
+  YAML source — rendered wider than `visualRows` saw, and every row
+  after the first tab drifted down the frame, baking fragments of the
+  status block and of neighbouring rows into the committed block. The
+  flow path already expanded tabs; the seam now covers everything the
+  region paints, SGR sequences copying through at zero width.
 
 ## [1.1.0]: the viewport bound
 

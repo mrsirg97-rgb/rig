@@ -64,7 +64,11 @@ construction. A submit aims at the top of the live block above the
 input: the menu's rows repaint away, the separator blank between the
 transcript and the region survives, and a submit on a live turn
 carries the activity row into the new region, because the turn still
-owns it. Single-line edits (typing, the spinner tick) clear and
+owns it. The invariant extends to the bytes: committed bytes expand
+tabs on the paint seam — a tab advances to the next eight-column stop
+while the width math counts it as nothing, and a row painted with raw
+tabs wraps into rows the bookkeeping never sees. Single-line edits
+(typing, the spinner tick) clear and
 rewrite the input or activity line in place; a shape change (the menu
 opens, closes, or moves) re-lays the whole region (`editFull`).
 
