@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [1.1.0]: the viewport bound
+
+Three field reports, one root: the live region had no notion of the
+viewport's height. A streamed paragraph taller than the pane repainted
+with the cursor-up clamped at the screen's top, writing the region over
+committed history and leaving rows the bookkeeping could never clear —
+the phone's keyboard-open overlap, the lost spacing between the content
+and the input, the model info block gone or too far below the input,
+and the tearing under long thinking blocks (every 16 ms frame scrolling
+duplicate prose into history). Alongside it, the typing fast path was
+dead in production: the region-stability check counted the status
+block as one row when it is four.
+
+- **the live region is bounded by the viewport** (`frontend/tui`):
+  the height is read at every repaint beside the width; the pending
+  prose line renders its last rows under the dim `· k lines hidden ·`
+  marker (the line still commits whole to scrollback when it closes),
+  the menu's candidate window shrinks under the same budget before its
+  `… N more` tail and hint row, and the input's five-row window
+  shrinks last. The shrink order keeps the operator's controls alive
+  as the room runs out; a pane shorter than its own controls renders
+  whole and degrades, named.
+- **the typing fast path is restored** (`frontend/tui`): the
+  region-stability check counts the status block's real rows, so a
+  keystroke on a stable region rewrites the input row alone — the
+  golden streams shrink by forty rows of re-laid region per keystroke.
+- **the escape-capture harness models the viewport** (`frontend/tui`
+  tests): height, scroll, and the cursor clamp a terminal applies at
+  the margins; the viewport cases are named in SPEC_TUI's testing
+  section (the streamed-tail case, the shrunken windows, the
+  no-clear-below keystroke, the no-cursor-down frame after a commit).
+
 ## [1.0.0]: the tag
 
 The gate the roadmap set before the tag is met: lived use — a worker

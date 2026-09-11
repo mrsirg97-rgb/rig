@@ -157,6 +157,35 @@ rows, the menu's tail row when the candidates run past six, the input
 rows: repainted in place, never committed; the wf suspension gate
 keeps them off the pager's screen, like every other live row.
 
+### The viewport bound, amended 1.1.0: the region never outgrows the screen
+
+The cap above counted rows but not the screen. A streamed paragraph
+with no newline wraps to more terminal rows than the viewport holds,
+and a repaint of an over-tall region clamps its cursor-up at the
+screen's top: the rewrite lands over committed text and leaves rows
+the bookkeeping can never clear. The field named it three ways: the
+phone's keyboard-open overlap (the previous agent message cut off),
+the lost spacing between the content and the input, and the model
+info block gone or too far below the input.
+
+The region is now bounded by the viewport height, read at every
+repaint beside the width. The pending prose line renders its last
+rows under a dim `· k lines hidden ·` head marker (the tool block's
+elision voice; the line still commits whole to scrollback when it
+closes), the menu's candidate window shrinks under the same budget
+before its `… N more` tail and its hint row, and the input's five-row
+window shrinks last. The shrink order is the pending, then the menu,
+then the input: the operator's controls outlast the stream's texture.
+When the controls alone outgrow the pane, the region renders whole
+and the protocol degrades: a pane shorter than its own controls
+cannot host a live tail.
+
+The typing fast path is fixed with it: the stability check counted
+the status block as one row when it is four (the blank above plus
+the three rendered rows), so every keystroke re-laid the whole
+region. The check now counts the block's rows, and a keystroke
+rewrites the input row alone.
+
 The spacing rule (amended): the transcript never carries two blank
 rows in a row; a model's run of trailing newlines, or the CLI's
 boundary bytes landing on an already-blank line, collapse to one, and
@@ -702,7 +731,15 @@ where the CI box allows and skip cleanly where not.
   cursor-up/clear/reprint over at most the region's cap (decision 2),
   and that committed bytes are never rewritten (the immutability
   invariant, decision 1); one op is one write to the terminal (the
-  write gate, decision 2).
+  write gate, decision 2). The harness models the viewport (height,
+  scroll, the cursor clamp a terminal applies at the margins), and
+  the viewport cases are named: a streamed paragraph taller than the
+  pane renders its tail under the hidden-head marker and, once
+  closed, leaves no orphan rows between the committed text and the
+  input; a menu window and an input window shrink to the pane; a
+  keystroke on a stable region rewrites the input row alone (no
+  clear-below in the frame); a frame after a commit carries no
+  cursor-down (the park is consumed, never re-emitted).
 - the tear: a stream of multi-line wrapped reasoning, replayed write
   by write through a flush-aware vt (a pending wrap resolves at a
   write boundary, the way a terminal's flush may), lands no indicator

@@ -122,6 +122,7 @@ func (t *tui) syncSizeLocked() {
 	if w != t.width || h != t.height {
 		t.width, t.height = w, h
 		t.live.setWidth(w)
+		t.live.setHeight(h)
 	}
 }
 
@@ -537,9 +538,8 @@ func (t *tui) paintInput() {
 	t.mu.Lock()
 	t.inputText = t.ed.text()
 	t.editPos = t.ed.pos
-	line, col := t.inputLineAndColLocked()
 	status := t.statusLineLocked()
-	lines := t.liveLinesLocked()
+	lines, line, col := t.liveRegionLocked()
 	if !t.regionStableLocked(lines, status) {
 		t.live.editFull(lines, col, status)
 	} else {
@@ -550,19 +550,21 @@ func (t *tui) paintInput() {
 
 func (t *tui) regionStableLocked(lines []string, status string) bool {
 	old := t.live.lines
-	oldOffset := 0
-	if t.live.status != "" {
-		oldOffset = 1
-	}
-	if len(old) < 1+oldOffset || (status != "") != (oldOffset != 0) {
+	if len(lines) < 1 {
 		return false
 	}
-	oldIn := old[len(old)-1-oldOffset]
+	oldStatusRows := statusRows(t.live.status)
+	newStatusRows := statusRows(status)
+	offset := len(newStatusRows)
+	if len(oldStatusRows) != offset || len(old) < 1+offset {
+		return false
+	}
+	oldIn := old[len(old)-1-offset]
 	newIn := lines[len(lines)-1]
 	if t.live.visualRows(oldIn) != t.live.visualRows(newIn) {
 		return false
 	}
-	oldPart := old[:len(old)-1-oldOffset]
+	oldPart := old[:len(old)-1-offset]
 	newPart := lines[:len(lines)-1]
 	if len(oldPart) != len(newPart) {
 		return false
@@ -943,14 +945,64 @@ func (t *tui) paintLiveLocked() {
 	t.live.draw(chunk, t.liveLinesLocked(), t.statusLineLocked())
 }
 
+const menuMaxRows = 8
+
 func (t *tui) liveLinesLocked() []string {
+	lines, _, _ := t.liveRegionLocked()
+	return lines
+}
+
+func (t *tui) liveRegionLocked() ([]string, string, int) {
 	t.syncSizeLocked()
 
+	pendCap, menuCap, inputCap := 1<<30, menuMaxRows, maxInputRows
+	h := t.live.height
+	giveUp := false
+	var lines []string
+	var line string
+	var col int
+	var blocks liveBlocks
+	for i := 0; i < 6 && !giveUp; i++ {
+		lines, line, col, blocks = t.buildLiveLinesLocked(pendCap, menuCap, inputCap)
+		over := t.live.rowsOver(lines, t.statusRowCountLocked())
+		if h <= 0 || over <= 0 {
+			break
+		}
+		switch {
+		case blocks.pendRows > 0 && pendCap > 0:
+			if pendCap = blocks.pendRows - over; pendCap < 0 {
+				pendCap = 0
+			}
+		case blocks.menuRows > 0 && menuCap > 0:
+			if menuCap = blocks.menuRows - over; menuCap < 0 {
+				menuCap = 0
+			}
+		case inputCap > 1:
+			if inputCap = blocks.inputRows - over; inputCap < 1 {
+				inputCap = 1
+			}
+		default:
+			giveUp = true
+		}
+	}
+	return lines, line, col
+}
+
+type liveBlocks struct {
+	pendRows  int
+	menuRows  int
+	inputRows int
+}
+
+func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap int) ([]string, string, int, liveBlocks) {
+	var blocks liveBlocks
 	var lines []string
 	if t.turnLive || t.compacting {
 
-		if pl := paintSegs(t.theme, t.pend); pl != "" {
-			lines = append(lines, pl, "")
+		if pl, rows := t.pendingBlockLocked(pendCap); rows > 0 {
+			blocks.pendRows = rows
+			lines = append(lines, pl...)
+			lines = append(lines, "")
 		} else if !t.live.lastBlank {
 
 			lines = append(lines, "")
@@ -964,10 +1016,93 @@ func (t *tui) liveLinesLocked() []string {
 	if t.askReply != nil {
 
 		lines = append(lines, t.askLineLocked())
-	} else if ml := t.menuLinesLocked(); len(ml) > 0 {
+	} else if ml := t.menuLinesLocked(menuCap); len(ml) > 0 {
+		blocks.menuRows = len(ml)
 		lines = append(lines, ml...)
 	}
-	return append(lines, t.inputLineLocked())
+	in, col := t.inputLineAndColLocked(inputCap)
+	blocks.inputRows = t.live.visualRows(in)
+	return append(lines, in), in, col, blocks
+}
+
+func (t *tui) pendingBlockLocked(cap int) ([]string, int) {
+	pl := paintSegs(t.theme, t.pend)
+	if pl == "" || cap <= 0 {
+		return nil, 0
+	}
+	w := t.live.width
+	if w < 1 {
+		w = 1
+	}
+	full := (WidthOf(pl) + w - 1) / w
+	if full <= cap {
+		return []string{pl}, full
+	}
+	tailRows := cap - 1
+	if tailRows < 1 {
+		tailRows = 1
+	}
+	segs, tw := tailSegs(t.pend, tailRows*w-2)
+	tail := paintSegs(t.theme, segs)
+	if tail == "" {
+		return []string{pl}, full
+	}
+	tr := (tw + w - 1) / w
+	if tr > tailRows {
+		tr = tailRows
+	}
+	if tr < 1 {
+		tr = 1
+	}
+	if cap >= 2 {
+		return []string{
+			t.theme.Paint(SlotDim, "· "+strconv.Itoa(full-tr)+" lines hidden ·"),
+			tail,
+		}, tr + 1
+	}
+	return []string{tail}, tr
+}
+
+func tailSegs(segs []seg, cols int) ([]seg, int) {
+	total := 0
+	for _, s := range segs {
+		total += runeWidthSum(s.text)
+	}
+	if cols < 0 || total <= cols {
+		return segs, total
+	}
+	cut := total - cols
+	var out []seg
+	consumed := 0
+	claimed := false
+	for _, s := range segs {
+		w := runeWidthSum(s.text)
+		if !claimed {
+			if consumed+w <= cut {
+				consumed += w
+				continue
+			}
+			inside := cut - consumed
+			if inside > 0 {
+				out = append(out, seg{slot: s.slot, text: sliceCols(s.text, inside, w)})
+			} else {
+				out = append(out, s)
+			}
+			claimed = true
+			consumed += w
+			continue
+		}
+		out = append(out, s)
+	}
+	tw := 0
+	for _, s := range out {
+		tw += runeWidthSum(s.text)
+	}
+	return out, tw
+}
+
+func (t *tui) statusRowCountLocked() int {
+	return len(statusRows(t.statusLineLocked()))
 }
 
 func (t *tui) askLineLocked() string {
@@ -1196,23 +1331,44 @@ func (t *tui) completionLocked() (cands []menuCand, accept string, ok bool) {
 	return cands, "/", true
 }
 
-func (t *tui) menuLinesLocked() []string {
+func (t *tui) menuLinesLocked(maxRows int) []string {
 	if !t.menuOpenLocked() {
 		return nil
 	}
-	const cap = 6
 	n := len(t.menuCands)
-	start := t.menuSel - (cap - 1)
+	if n < 1 {
+		return nil
+	}
+	window := 6
+	if n < window {
+		window = n
+	}
+	showTail := n > window
+	showHint := true
+	for window+boolInt(showTail)+boolInt(showHint) > maxRows {
+		switch {
+		case window > 1:
+			window--
+			showTail = n > window
+		case showHint:
+			showHint = false
+		case showTail:
+			showTail = false
+		default:
+			return nil
+		}
+	}
+	start := t.menuSel - (window - 1)
 	if start < 0 {
 		start = 0
 	}
-	if max := n - cap; start > max {
+	if max := n - window; start > max {
 		start = max
 	}
 	if start < 0 {
 		start = 0
 	}
-	end := start + cap
+	end := start + window
 	if end > n {
 		end = n
 	}
@@ -1238,12 +1394,20 @@ func (t *tui) menuLinesLocked() []string {
 		}
 		rows = append(rows, row)
 	}
-	if n > cap {
-		rows = append(rows, t.theme.Paint(SlotDim, "… "+strconv.Itoa(n-cap)+" more"))
+	if showTail {
+		rows = append(rows, t.theme.Paint(SlotDim, "… "+strconv.Itoa(n-end)+" more"))
 	}
-
-	rows = append(rows, t.theme.Paint(SlotDim, "tab/↓ pick · enter runs"))
+	if showHint {
+		rows = append(rows, t.theme.Paint(SlotDim, "tab/↓ pick · enter runs"))
+	}
 	return rows
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (t *tui) tabTextLocked() (string, bool) {
@@ -1311,14 +1475,14 @@ func (t *tui) hintLocked() string {
 	return ""
 }
 
+const maxInputRows = 5
+
 func (t *tui) inputLineLocked() string {
-	line, _ := t.inputLineAndColLocked()
+	line, _ := t.inputLineAndColLocked(maxInputRows)
 	return line
 }
 
-const maxInputRows = 5
-
-func (t *tui) inputLineAndColLocked() (string, int) {
+func (t *tui) inputLineAndColLocked(maxRows int) (string, int) {
 	t.syncSizeLocked()
 	glyph := t.theme.Glyph(GlyphPrompt)
 	prefixCols := displayWidth(glyph) + 1
@@ -1337,7 +1501,7 @@ func (t *tui) inputLineAndColLocked() (string, int) {
 	}
 	totalCols := lineCols + len(pad)
 	totalRows := (totalCols + width - 1) / width
-	if totalRows <= maxInputRows {
+	if totalRows <= maxRows {
 		t.inputScroll = 0
 		line := t.theme.Paint(SlotEmber, glyph) +
 			t.theme.Paint(SlotText, " "+text+pad)
@@ -1358,7 +1522,7 @@ func (t *tui) inputLineAndColLocked() (string, int) {
 
 	cursorRow := (cursorCol - 1) / width
 	scroll := t.inputScroll
-	if max := totalRows - maxInputRows; scroll > max {
+	if max := totalRows - maxRows; scroll > max {
 		scroll = max
 	}
 	if scroll < 0 {
@@ -1367,12 +1531,12 @@ func (t *tui) inputLineAndColLocked() (string, int) {
 	if cursorRow < scroll {
 		scroll = cursorRow
 	}
-	if cursorRow > scroll+maxInputRows-1 {
-		scroll = cursorRow - maxInputRows + 1
+	if cursorRow > scroll+maxRows-1 {
+		scroll = cursorRow - maxRows + 1
 	}
 	t.inputScroll = scroll
 	logical := glyph + " " + text + pad
-	win := sliceCols(logical, scroll*width, (scroll+maxInputRows)*width)
+	win := sliceCols(logical, scroll*width, (scroll+maxRows)*width)
 	var line string
 	if scroll == 0 {
 		line = t.theme.Paint(SlotEmber, glyph) +
@@ -1644,13 +1808,7 @@ func (t *tui) winchLoop() {
 			return
 		case <-t.winch:
 			t.mu.Lock()
-			if t.fdi != 0 {
-				if w, h, err := term.GetSize(t.fdi); err == nil && w > 0 {
-					t.width = w
-					t.height = h
-					t.live.setWidth(w)
-				}
-			}
+			t.syncSizeLocked()
 			if t.pg != nil {
 				t.pg.width, t.pg.height = t.width, t.height
 				t.pg.clamp()

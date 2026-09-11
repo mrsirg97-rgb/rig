@@ -9,14 +9,49 @@ import (
 )
 
 type vt struct {
-	width  int
-	rows   []string
-	r, c   int
-	bottom int
-	err    string
+	width   int
+	height  int
+	hist    []string
+	rows    []string
+	r, c    int
+	bottom  int
+	err     string
+	clamped int
 }
 
 func newVT(width int) *vt { return &vt{width: width, rows: []string{}} }
+
+func newVTScreen(width, height int) *vt {
+	return &vt{width: width, height: height, rows: []string{}}
+}
+
+func (v *vt) scroll() {
+	if v.height <= 0 {
+		return
+	}
+	if len(v.rows) < v.height {
+		v.ensureRow(len(v.rows))
+		return
+	}
+	v.hist = append(v.hist, v.rows[0])
+	rest := make([]string, 0, v.height)
+	rest = append(rest, v.rows[1:]...)
+	rest = append(rest, "")
+	v.rows = rest
+}
+
+func (v *vt) advance() {
+	if v.height > 0 && v.r >= v.height-1 {
+		v.scroll()
+		v.r = v.height - 1
+		return
+	}
+	v.r++
+	if v.height > 0 && v.r > v.bottom {
+		v.bottom = v.r
+	}
+	v.ensureRow(v.r)
+}
 
 func (v *vt) fail(why string) {
 	if v.err == "" {
@@ -33,11 +68,8 @@ func (v *vt) ensureRow(r int) {
 func (v *vt) writeRune(r rune) {
 	if v.c > 0 && v.c == v.width {
 
-		v.r++
 		v.c = 0
-		if v.r > v.bottom {
-			v.bottom = v.r
-		}
+		v.advance()
 	}
 	v.ensureRow(v.r)
 	rs := []rune(v.rows[v.r])
@@ -59,13 +91,9 @@ func (v *vt) feed(b []byte) {
 		}
 		switch {
 		case c == '\n':
-			v.r++
-			v.ensureRow(v.r)
+			v.advance()
 			if v.c > v.width {
 				v.c = v.width
-			}
-			if v.r > v.bottom {
-				v.bottom = v.r
 			}
 			i++
 		case c == 0x1b:
@@ -89,6 +117,15 @@ func (v *vt) feed(b []byte) {
 					v.fail("cursor-up with n = " + params)
 					return
 				}
+				if v.height > 0 {
+					if v.r < n {
+						v.clamped++
+						v.r = 0
+						break
+					}
+					v.r -= n
+					break
+				}
 				if v.r < n {
 					v.fail("cursor-up past the top of the screen")
 					return
@@ -100,6 +137,15 @@ func (v *vt) feed(b []byte) {
 				if aerr != nil || n <= 0 {
 					v.fail("cursor-down with n = " + params)
 					return
+				}
+				if v.height > 0 {
+					if v.r+n > v.height-1 {
+						v.clamped++
+						v.r = v.height - 1
+						break
+					}
+					v.r += n
+					break
 				}
 				v.r += n
 				v.ensureRow(v.r)
@@ -141,6 +187,13 @@ func (v *vt) feed(b []byte) {
 				rr := []rune(v.rows[v.r])
 				if v.c < len(rr) {
 					v.rows[v.r] = string(rr[:v.c])
+				}
+				if v.height > 0 {
+					for i := v.r + 1; i < v.height; i++ {
+						v.ensureRow(i)
+						v.rows[i] = ""
+					}
+					break
 				}
 				v.rows = v.rows[:v.r+1]
 			case 'm':
