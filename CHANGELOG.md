@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [1.2.1]: the winch follows the terminal
+
+One field report: a resize with nothing streaming never repainted.
+The winch guard keyed on the input's nonzero fd — `fdi != 0` — while
+stdin is fd 0, so a rig whose input was the terminal installed no
+SIGWINCH handler at all: only the pty tests (fd != 0) got one. The
+repro: a 44-row pane, one character typed (the caret parks on the
+input row), the pane shrunk to 12. tmux deletes the rows below the
+parked caret — the status rows — and with no handler nothing
+repaints them; they stay missing through the regrow until the next
+delta or submit. Verified live: an idle rig writes 0 bytes on
+`kill -WINCH` and on a tmux resize, 66 bytes on a keystroke; the
+process's SigCgt mask lacks SIGWINCH.
+
+- **the winch handler follows the terminal** (`frontend/tui`): the
+  input's terminal-ness is its own flag (`tty`), set where the input
+  is found to be a terminal, and the handler installs whenever the
+  input is a terminal — fd 0 included. `winchLoop` is unchanged: its
+  full draw already repaints from the parked aim.
+- **the idle repaint is pinned** (`frontend/tui`): a real-pty test
+  where rig is idle — no delta, no keystroke — shrinks the pane and
+  asserts the status block repaints; the parked repro types one
+  character, shrinks, and asserts the status rows the shrink deleted
+  return after the winch and after the regrow, the transcript intact;
+  and the stdin shape itself is pinned — a pty on fd 0 owns the
+  handler. The existing winch tests stay green.
+
+The version is 1.2.1; the changelog, the SPEC_TUI signal-ownership
+amendment, and the TUI docs move with the code.
+
 ## [1.2.0]: the delegate fans out
 
 The turn's batch admitted `delegate` as a concurrent native, and the
