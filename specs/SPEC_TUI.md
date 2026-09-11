@@ -784,7 +784,9 @@ where the CI box allows and skip cleanly where not.
   and that committed bytes are never rewritten (the immutability
   invariant, decision 1); one op is one write to the terminal (the
   write gate, decision 2). The harness models the viewport (height,
-  scroll, the cursor clamp a terminal applies at the margins), and
+  scroll, the cursor clamp a terminal applies at the margins) and the
+  tab stop (the cells a tab skips keep whatever the previous frame
+  left in them — a gap the paint must fill), and
   the viewport cases are named: a streamed paragraph taller than the
   pane renders its tail under the hidden-head marker and, once
   closed, leaves no orphan rows between the committed text and the

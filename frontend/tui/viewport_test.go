@@ -574,3 +574,66 @@ func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 		step("regrown", "word word word")
 	}
 }
+
+func TestToolBlockTabGapsHoldNoPreviousFrame(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(sizeFixture(50, 20)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	v := newVTScreen(50, 20)
+	painted := 0
+	feed := func(label string) {
+		t.Helper()
+		chunks := s.out.writeChunks()
+		for ; painted < len(chunks); painted++ {
+			v.feed([]byte(chunks[painted]))
+		}
+		if v.err != "" {
+			t.Fatalf("%s: harness: %s", label, v.err)
+		}
+		if v.clamped > 0 {
+			t.Fatalf("%s: the protocol relied on %d cursor clamps", label, v.clamped)
+		}
+	}
+	// a small region: the status block sits a few rows above the bottom
+	s.fe.Notify(core.ReasoningDelta{Text: "word word word "})
+	s.tick()
+	time.Sleep(4 * time.Millisecond)
+	feed("stream")
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{
+		Name: "bash", Args: []byte(`{"command":"sed -n '80,86p' golden_test.go"}`),
+	}})
+	time.Sleep(4 * time.Millisecond)
+	feed("toolstart")
+	// the tool's content is tab-indented go source: the block's rows
+	// carry the same shape as the pane's previous frame
+	content := "func (l *lockBuf) Reset() {\n\tl.mu.Lock()\n\tdefer l.mu.Unlock()\n\tl.b.Reset()\n}\n"
+	s.fe.Notify(core.ToolResult{Content: content, Duration: 400})
+	time.Sleep(6 * time.Millisecond)
+	feed("toolresult")
+
+	// a tab advances to the next eight-column stop and writes nothing:
+	// the cells it skips keep whatever the previous frame left in them.
+	// The seam paints the gap as spaces, so the block's rows render
+	// exactly as expanded — no fragment of the frame before survives in
+	// the gap (the model info, the effort row, the pend tail).
+	joined := paintFree(strings.Join(v.rows, "\n"))
+	for _, want := range []string{
+		"  func (l *lockBuf) Reset() {",
+		"        l.mu.Lock()",
+		"        defer l.mu.Unlock()",
+		"        l.b.Reset()",
+		"  }",
+		"bash ✓ 0.0s",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("the block's row %q did not render as expanded — a tab gap kept the previous frame's cells:\n%q", want, v.rows)
+		}
+	}
+	if strings.Contains(joined, "\t") {
+		t.Fatalf("a painted row carries a raw tab:\n%q", v.rows)
+	}
+}

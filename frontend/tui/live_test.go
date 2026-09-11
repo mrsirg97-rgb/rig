@@ -215,6 +215,17 @@ func (v *vt) feed(b []byte) {
 				v.fail("an invalid or orphaned UTF-8 byte")
 				return
 			}
+			if r == '\t' {
+				// a tab advances to the next eight-column stop and writes
+				// nothing: the cells it skips keep whatever the previous
+				// frame left in them
+				v.c += 8 - v.c%8
+				if v.c > v.width {
+					v.c = v.width
+				}
+				i += size
+				continue
+			}
 			v.writeRune(r)
 			i += size
 		}
