@@ -507,21 +507,47 @@ func TestToolResultRendersAtItsCountedWidth(t *testing.T) {
 	}
 }
 
-// resizeVT models the pane's reflow under a height change: a shrink keeps
-// the top rows and cuts the bottom, a grow appends blank rows, and the
-// cursor clamps into range. Width changes reflow the rows themselves and
-// go through the winch test.
+// resizeVT models the pane's reflow under a height change with tmux's
+// screen_resize_y rule: a shrink first cuts as many rows as it can from
+// below the cursor, then moves the remaining rows from the top into
+// history — the cursor rides up with the content — and a grow appends
+// blank rows; the cursor clamps into range. Width changes reflow the
+// rows themselves and go through the winch test.
 func resizeVT(v *vt, w, h int) *vt {
 	nv := newVTScreen(w, h)
-	nv.hist = v.hist
-	for r := 0; r < h && r < len(v.rows); r++ {
-		nv.ensureRow(r)
-		nv.rows[r] = v.rows[r]
-	}
+	nv.hist = append([]string(nil), v.hist...)
 	nv.r = v.r
 	nv.c = v.c
+	oldh := v.height
+	rows := append([]string(nil), v.rows...)
+	for len(rows) < oldh {
+		rows = append(rows, "")
+	}
+	if h < oldh {
+		k := oldh - h
+		below := oldh - 1 - nv.r
+		cut := k
+		if cut > below {
+			cut = below
+		}
+		if cut < 0 {
+			cut = 0
+		}
+		remaining := k - cut
+		top := oldh - cut
+		nv.hist = append(nv.hist, rows[:remaining]...)
+		rows = rows[remaining:top]
+		nv.r -= remaining
+	}
+	for r := 0; r < h && r < len(rows); r++ {
+		nv.ensureRow(r)
+		nv.rows[r] = rows[r]
+	}
 	if nv.r > h-1 {
 		nv.r = h - 1
+	}
+	if nv.r < 0 {
+		nv.r = 0
 	}
 	if nv.c > w-1 {
 		nv.c = w - 1
@@ -572,6 +598,262 @@ func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 	v = resizeVT(v, 50, 14)
 	for i := 0; i < 6; i++ {
 		step("regrown", "word word word")
+	}
+}
+
+// parkOnStreaming feeds the fixture through a streaming turn, types one
+// character (parking the caret on the input row), and returns the parked
+// amount, the committed rows painted above the region, and the feed index
+// the caller must continue from.
+func parkOnStreaming(t *testing.T, s *scriptedSession, v *vt, n int) (int, []string, int) {
+	t.Helper()
+	painted := 0
+	feed := func(label string) {
+		t.Helper()
+		chunks := s.out.writeChunks()
+		for ; painted < len(chunks); painted++ {
+			v.feed([]byte(chunks[painted]))
+		}
+		if v.err != "" {
+			t.Fatalf("%s: harness: %s", label, v.err)
+		}
+	}
+	var committed []string
+	for i := 0; i < n; i++ {
+		line := "committed line number " + strconv.Itoa(i)
+		s.fe.Notify(core.ReasoningDelta{Text: line + "\n"})
+		s.tick()
+		time.Sleep(4 * time.Millisecond)
+		feed("stream")
+		committed = append(committed, line)
+	}
+	s.si.feed("x")
+	s.await(promptMark(s.fe.theme) + s.fe.theme.Paint(SlotText, " x"))
+	time.Sleep(30 * time.Millisecond)
+	feed("typed")
+	s.fe.mu.Lock()
+	parked := s.fe.live.parked
+	s.fe.mu.Unlock()
+	if parked <= 0 {
+		t.Fatalf("the keystroke left no park on the input row")
+	}
+	return parked, committed, painted
+}
+
+// checkParkedShrinkScreen asserts that a repaint after a shrink landed
+// while parked kept every committed row (on screen or scrolled into
+// history, in order) and painted the region exactly once.
+func checkParkedShrinkScreen(t *testing.T, label string, v *vt, committed []string, input string) {
+	t.Helper()
+	if v.err != "" {
+		t.Fatalf("%s: harness: %s", label, v.err)
+	}
+	if v.clamped > 0 {
+		t.Fatalf("%s: the protocol relied on %d cursor clamps", label, v.clamped)
+	}
+	if len(v.rows) != v.height {
+		t.Fatalf("%s: the screen holds %d rows, want the %d-row viewport:\n%q", label, len(v.rows), v.height, v.rows)
+	}
+	joined := strings.Join(v.hist, "\n") + "\n" + strings.Join(v.rows, "\n")
+	pos := -1
+	for _, c := range committed {
+		idx := strings.Index(joined, c)
+		if idx < 0 {
+			t.Fatalf("%s: the committed row %q was overwritten:\nrows %q\nhist %q", label, c, v.rows, v.hist)
+		}
+		if idx <= pos {
+			t.Fatalf("%s: the committed row %q is missing or out of order:\nrows %q\nhist %q", label, c, v.rows, v.hist)
+		}
+		pos = idx
+	}
+	visible := paintFree(strings.Join(v.rows, "\n"))
+	for _, marker := range []string{"| thinking", input, "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"} {
+		if n := strings.Count(visible, marker); n != 1 {
+			t.Fatalf("%s: the region marker %q appears %d times, want exactly once:\n%q", label, marker, n, v.rows)
+		}
+	}
+}
+
+func TestParkedShrinkKeepsCommittedRows(t *testing.T) {
+	th := oledTheme(t)
+	w, h := 50, 24
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	v := newVTScreen(50, 24)
+	parked, committed, painted := parkOnStreaming(t, s, v, 8)
+
+	// tmux handles a height shrink by deleting rows below the cursor and
+	// only then scrolling the top into history: the cursor stays put, so
+	// a shrink that lands while parked leaves the caret on the bottom
+	// row and the old cursor-down re-anchor becomes a no-op. Cut the
+	// pane by the parked amount before the next repaint.
+	w, h = 50, h-parked
+	v = resizeVT(v, w, h)
+
+	s.fe.Notify(core.TextDelta{Text: "the answer begins here\n"})
+	s.tick()
+	s.await("the answer begins here")
+	time.Sleep(30 * time.Millisecond)
+	chunks := s.out.writeChunks()
+	for ; painted < len(chunks); painted++ {
+		v.feed([]byte(chunks[painted]))
+	}
+	checkParkedShrinkScreen(t, "parked shrink", v, committed, "❯ x")
+}
+
+func TestParkedShrinkTallRegionPaintsTheParagraphOnce(t *testing.T) {
+	th := oledTheme(t)
+	w, h := 50, 24
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	v := newVTScreen(50, 24)
+	painted := 0
+	feed := func(label string) {
+		t.Helper()
+		chunks := s.out.writeChunks()
+		for ; painted < len(chunks); painted++ {
+			v.feed([]byte(chunks[painted]))
+		}
+		if v.err != "" {
+			t.Fatalf("%s: harness: %s", label, v.err)
+		}
+	}
+
+	// a long paragraph with no newline stays the pending line: the live
+	// region grows taller than the pane the shrink will leave behind.
+	words := make([]string, 64)
+	for i := range words {
+		words[i] = "word"
+	}
+	para := strings.Join(words, " ")
+	s.fe.Notify(core.ReasoningDelta{Text: para})
+	s.tick()
+	s.await("word word word word")
+	time.Sleep(30 * time.Millisecond)
+	feed("paragraph")
+
+	// park the caret, then shrink past the park: tmux cuts the rows below
+	// the cursor (the park), then scrolls the rest of the shrink's rows
+	// from the top into history. The region is taller than the target
+	// pane, so the repaint's aim must be the logical span minus the park —
+	// an aim capped at the shrunken viewport undershoots by the park and
+	// leaves the paragraph's head above the repaint.
+	s.si.feed("x")
+	s.await(promptMark(th) + th.Paint(SlotText, " x"))
+	time.Sleep(30 * time.Millisecond)
+	feed("typed")
+	s.fe.mu.Lock()
+	parked := s.fe.live.parked
+	paintedRows := s.fe.live.paintedRows
+	s.fe.mu.Unlock()
+	if parked <= 0 {
+		t.Fatalf("the keystroke left no park on the input row")
+	}
+	if paintedRows <= 12 {
+		t.Fatalf("the region holds %d rows, want it taller than the 12-row pane", paintedRows)
+	}
+
+	w, h = 50, 12
+	v = resizeVT(v, w, h)
+
+	s.fe.Notify(core.TextDelta{Text: "the answer begins here\n"})
+	s.tick()
+	s.await("the answer begins here")
+	time.Sleep(30 * time.Millisecond)
+	feed("delta")
+
+	// the committed startup block, the echo, and the answer each appear
+	// exactly once across history and the screen; the pending paragraph's
+	// wrapped rows are one contiguous run of the same length as the line —
+	// a head left above the repaint shows up twice.
+	if v.clamped > 0 {
+		t.Fatalf("the protocol relied on %d cursor clamps", v.clamped)
+	}
+	all := append(append([]string(nil), v.hist...), v.rows...)
+	joined := strings.Join(all, "\n")
+	for _, committed := range []string{"welcome to", "session 2f9a1c0e77b3", "workers: none",
+		"chat with your model, or type / for commands", "❯ go", "the answer begins here"} {
+		if n := strings.Count(joined, committed); n != 1 {
+			t.Fatalf("the committed row %q appears %d times, want exactly once:\nhist %q\nrows %q", committed, n, v.hist, v.rows)
+		}
+	}
+	want := (WidthOf(para) + s.fe.live.width - 1) / s.fe.live.width
+	got := 0
+	for _, r := range all {
+		if strings.HasPrefix(paintFree(r), "word") {
+			got++
+		}
+	}
+	if got != want {
+		t.Fatalf("the pending paragraph occupies %d rows across hist+rows, want its %d-row line exactly once:\nhist %q\nrows %q", got, want, v.hist, v.rows)
+	}
+}
+
+func TestParkedShrinkSteppedKeepsCommittedRows(t *testing.T) {
+	th := oledTheme(t)
+	w, h := 50, 24
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt returned %q", got)
+	}
+	v := newVTScreen(50, 24)
+	parked, committed, painted := parkOnStreaming(t, s, v, 6)
+	if parked != 4 {
+		t.Fatalf("the fixture parked %d rows, want the 4-row status block", parked)
+	}
+
+	// the reproduction: shrink through 20/16, grow back through 20/24,
+	// one text delta per step, the caret re-parked before each step. Every
+	// committed row above the region must survive every repaint.
+	steps := []struct {
+		height    int
+		keystroke string
+		input     string
+		delta     string
+	}{
+		{20, "y", "❯ x", "answer one\n"},
+		{16, "z", "❯ xy", "answer two\n"},
+		{20, "w", "❯ xyz", "answer three\n"},
+		{24, "q", "❯ xyzw", "answer four\n"},
+	}
+	input := "x"
+	for _, st := range steps {
+		input += st.keystroke
+		s.si.feed(st.keystroke)
+		s.await(promptMark(th) + th.Paint(SlotText, " "+input))
+		time.Sleep(30 * time.Millisecond)
+		chunks := s.out.writeChunks()
+		for ; painted < len(chunks); painted++ {
+			v.feed([]byte(chunks[painted]))
+		}
+		s.fe.mu.Lock()
+		p := s.fe.live.parked
+		s.fe.mu.Unlock()
+		if p <= 0 {
+			t.Fatalf("the keystroke before %q left no park", st.delta)
+		}
+
+		h = st.height
+		v = resizeVT(v, w, h)
+		s.fe.Notify(core.TextDelta{Text: st.delta})
+		s.tick()
+		s.await(strings.TrimSpace(st.delta))
+		time.Sleep(30 * time.Millisecond)
+		chunks = s.out.writeChunks()
+		for ; painted < len(chunks); painted++ {
+			v.feed([]byte(chunks[painted]))
+		}
+		checkParkedShrinkScreen(t, st.delta, v, committed, st.input)
 	}
 }
 

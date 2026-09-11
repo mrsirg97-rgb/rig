@@ -118,6 +118,21 @@ width); no core or loop line (decision 10).
   a height-only shrink (the phone's keyboard) cuts the pane under a
   region painted for a taller one — the first cursor-up after the
   shrink holds inside the pane the repaint finds.
+- The aim starts from the park (SPEC_TUI, the 1.1.3 amendment): the
+  keystroke fast path parks the caret `parked` rows above the
+  region's bottom, and the repaint never re-anchors through a
+  cursor-down — its cursor-up is the region's uncapped row count
+  minus one minus `parked`, and only the result is capped at the
+  viewport (the cap belongs to the aim, not to the span: a pane that
+  shrank under a region painted for a taller one must aim all the way
+  to the region's top), and the park clears after the paint. tmux
+  deletes rows below the cursor before scrolling the top into
+  history, so a shrink that lands while parked makes the re-anchor a
+  no-op and the following cursor-up would overshoot by `parked`,
+  writing the region over committed rows. The submit, the winch
+  re-layout, and the in-place input edit (its cursor-up measured from
+  the parked row) apply the same; the caret still rests on the input
+  row after an in-place edit.
 - The pager steps by the frame, not the height (SPEC_TUI, the 1.1.2
   amendment): PgUp advances the offset by the lines the current frame
   actually showed, minus one; PgDn walks forward from the frame's

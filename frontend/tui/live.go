@@ -82,11 +82,25 @@ func (l *live) resume() {
 	l.flush()
 }
 
-func (l *live) norm() {
-	if l.parked > 0 {
-		l.wf(cursorDown(l.parked))
-		l.parked = 0
+// norm returns the cursor-up a repaint needs from the parked position and
+// clears the park. It takes the region's uncapped row count: the park is
+// measured against the logical span, and only the resulting cursor-up is
+// held inside the pane — a pane that shrank under a region painted for a
+// taller one must aim all the way to the region's top, not to the
+// shrunken viewport's. A cursor-down re-anchor would be a no-op after a
+// shrink that cut the rows below the parked caret (tmux deletes bottom
+// rows first), and the following cursor-up would then overshoot by
+// `parked` and overwrite committed rows above the region.
+func (l *live) norm(n int) int {
+	up := n - 1 - l.parked
+	l.parked = 0
+	if l.height > 0 && up > l.height-1 {
+		up = l.height - 1
 	}
+	if up < 0 {
+		up = 0
+	}
+	return up
 }
 
 func newLive(w io.Writer, width int) *live {
@@ -162,9 +176,8 @@ func (l *live) redraw(newLines []string) {
 }
 
 func (l *live) replaceRegion(rows []string) {
-	l.norm()
-	if aim := l.aimRows(l.paintedRows); aim > 0 {
-		l.wf(cursorUp(aim - 1))
+	if up := l.norm(l.paintedRows); up > 0 {
+		l.wf(cursorUp(up))
 	}
 	for i, line := range rows {
 		l.wf(toCol(1))
@@ -184,11 +197,14 @@ func (l *live) replaceRegion(rows []string) {
 	l.paintedWidth = l.width
 }
 
-// trackRows records the region's span on screen: the visual rows the next
-// repaint will redraw, capped at the viewport because a paint that
-// overflowed the pane scrolled its own head into history.
+// trackRows records the region's logical row count: the span the next
+// repaint aims with, uncapped. The viewport cap belongs to the aim
+// (norm holds the cursor-up inside the pane), because a pane that shrank
+// under a region painted for a taller one still occupies the full logical
+// span — the repaint must reach its top to clear it, not the shrunken
+// viewport's.
 func (l *live) trackRows() int {
-	return l.aimRows(l.liveRows())
+	return l.liveRows()
 }
 
 // liveRows is the region's visual row count as the bookkeeping holds it.
@@ -196,16 +212,6 @@ func (l *live) liveRows() int {
 	n := 0
 	for _, line := range l.lines {
 		n += l.visualRows(line)
-	}
-	return n
-}
-
-// aimRows caps a painted span at the viewport: a height shrink cuts the
-// pane under a region painted for a taller one, and the cursor-up must
-// not overshoot the screen's top on the first repaint after it.
-func (l *live) aimRows(n int) int {
-	if l.height > 0 && n > l.height {
-		return l.height
 	}
 	return n
 }
@@ -287,7 +293,6 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	l.record(append(append([]string(nil), frozen...), ""))
 	hadSep := len(l.lines) > 0 && WidthOf(l.lines[0]) == 0
 	l.lastBlank = true
-	l.norm()
 
 	// aim at the top of the live block above the input: menu or activity
 	// rows are repainted away, but the separator blank between the
@@ -303,8 +308,8 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	for i := aim; i < len(l.lines); i++ {
 		up += l.visualRows(l.lines[i])
 	}
-	if up = l.aimRows(up); up > 0 {
-		l.wf(cursorUp(up - 1))
+	if up := l.norm(up); up > 0 {
+		l.wf(cursorUp(up))
 	}
 
 	rows := append([]string(nil), frozen...)
@@ -364,7 +369,6 @@ func (l *live) edit(inputLine string, cursorCol int, status string) {
 	if len(l.lines) == 0 {
 		return
 	}
-	l.norm()
 	oldStatus := 0
 	for _, sr := range statusRows(l.status) {
 		oldStatus += l.visualRows(sr)
@@ -372,9 +376,8 @@ func (l *live) edit(inputLine string, cursorCol int, status string) {
 	idx := len(l.lines) - 1 - len(statusRows(l.status))
 
 	old := l.visualRows(l.lines[idx])
-	upTop := old - 1 + oldStatus
-	if upTop > 0 {
-		l.wf(cursorUp(upTop))
+	if up := l.norm(old + oldStatus); up > 0 {
+		l.wf(cursorUp(up))
 	}
 	l.wf(toCol(1))
 	l.wf(inputLine)
