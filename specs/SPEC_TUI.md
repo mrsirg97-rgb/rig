@@ -133,6 +133,17 @@ enters the alternate screen: the content scrolls, the controls stay,
 inside the one mode where scrolling exists; a fixed footer over
 native scrollback stays rejected (the alt-screen model, decision 1).
 
+Amended 1.1.2, the page the frame shows: PgUp/PgDn stepped by logical
+lines while the frame fills the view by visual rows, so a record
+holding lines wider than the pane — tool results and code blocks
+commit unwrapped — showed fewer lines than the step and skipped the
+lines in the gap. The step now derives from the frame: PgUp advances
+the offset by the lines the current frame actually showed, minus one;
+PgDn walks forward from the frame's bottom line, accumulating rows
+against the same row budget, and steps by that many minus one. The
+offset stays in lines, the pages overlap by a line as before, and
+every line of the record is reachable.
+
 ### 2. The live region and the commit points
 
 Everything above the live region is immutable printed history.
@@ -728,7 +739,10 @@ raw: tables, links, images, HTML, nested lists. The parser is
 line-local: an inline mark that does not close on its line renders
 raw; `\*` escapes; marks inside code are text; the only cross-line
 state is the fence toggle, and a turn's end clears it (an unclosed
-fence never leaks into the next turn).
+fence never leaks into the next turn). An underscore is intraword: it
+opens or closes emphasis only when the neighboring character is not a
+letter or digit (the CommonMark rule), so snake_case identifiers
+render with their underscores; asterisks keep the simpler rule.
 
 Amended, then simplified (the operator's call, after the
 miscolored-session bug): a fenced block's lines commit preformatted
@@ -810,6 +824,18 @@ where the CI box allows and skip cleanly where not.
   row between committed lines and the screen's rows exact; the same
   stream through the plain deferred-wrap vt stays exact (both models
   named, decision 2).
+- the pager: a record with lines wider than the pane — 40 lines,
+  lines 20-27 padded to 70 chars, a 52x24 pane with a five-row
+  footer — pages up covering every line, adjacent pages sharing
+  exactly one; from the top, PgDn walks forward from the frame's
+  bottom against the same row budget and covers every line too,
+  adjacent pages sharing at least one (the frame refills from the
+  bottom, so the overlap can exceed a line); the empty record's down
+  step never indexes the lines slice, and the single-line record
+  clamps at both ends.
+- the markdown inline pass: snake_case identifiers keep their
+  underscores in prose and in a list item, while `_em_` still drops
+  its marks.
 - input: the key parser table (arrows, home/end, backspace across a
   wide glyph, Shift-Tab as CSI Z, an unrecognized CSI ignored);
   history up/down; paste of three lines becomes three prompts in

@@ -53,6 +53,8 @@ func TestMarkdownInline(t *testing.T) {
 		{"escaped \\*star\\*", th.Paint(SlotText, "escaped *star*")},
 		{"2 * 3 * 4", th.Paint(SlotText, "2 * 3 * 4")},
 		{"a `b*c*d` e", th.Paint(SlotText, "a b*c*d e")},
+		{"the cron_audit and gpu_stats plugins", th.Paint(SlotText, "the cron_audit and gpu_stats plugins")},
+		{"an _em_ word", th.Paint(SlotText, "an em word")},
 	}
 	for _, c := range cases {
 		out, fence, _ := mdLine(th, []seg{{slot: SlotText, text: c.in}})
@@ -112,5 +114,17 @@ func TestExpandTabs(t *testing.T) {
 	_ = tu.expandTabsLocked("\n")
 	if got := tu.expandTabsLocked("\t"); got != "        " {
 		t.Fatalf("tab after a newline = %q, want eight spaces", got)
+	}
+}
+
+func TestMarkdownUnderscoreIntraword(t *testing.T) {
+	th := oledTheme(t)
+	out, _, _ := mdLine(th, []seg{{slot: SlotText, text: "run gpu_stats with cron_audit"}})
+	if got := RemoveColor(paintSegs(th, out)); got != "run gpu_stats with cron_audit" {
+		t.Fatalf("prose = %q, want the underscores kept", got)
+	}
+	out, _, _ = mdLine(th, []seg{{slot: SlotText, text: "- the snake_case_id stays"}})
+	if got := RemoveColor(paintSegs(th, out)); got != th.Glyph(GlyphDot)+" the snake_case_id stays" {
+		t.Fatalf("list = %q, want the underscores kept", got)
 	}
 }

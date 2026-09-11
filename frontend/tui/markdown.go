@@ -1,6 +1,9 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 func mdLine(th Theme, segs []seg) (out []seg, fence bool, info string) {
 
@@ -98,13 +101,15 @@ func mdInline(line string, base string) []seg {
 				cur.WriteString("**")
 				i += 2
 			}
-		case (r == '*' || r == '_') && i+1 < len(rs) && rs[i+1] != ' ' && rs[i+1] != r:
+		case (r == '*' || r == '_') && i+1 < len(rs) && rs[i+1] != ' ' && rs[i+1] != r &&
+			(r == '*' || i == 0 || !wordRune(rs[i-1])):
 
 			j := i + 1
 			for j < len(rs) && rs[j] != r {
 				j++
 			}
-			if j < len(rs) && j > i+1 && rs[j-1] != ' ' {
+			if j < len(rs) && j > i+1 && rs[j-1] != ' ' &&
+				(r == '*' || j+1 >= len(rs) || !wordRune(rs[j+1])) {
 				cur.WriteString(string(rs[i+1 : j]))
 				i = j + 1
 			} else {
@@ -121,4 +126,8 @@ func mdInline(line string, base string) []seg {
 		return []seg{{slot: base, text: ""}}
 	}
 	return out
+}
+
+func wordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }

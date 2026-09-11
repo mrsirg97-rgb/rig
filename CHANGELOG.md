@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [1.1.2]: the page the frame shows
+
+One field report: the pager stepped by logical lines while the frame
+fills the view by visual rows, so a record holding lines wider than
+the pane — tool results and code blocks commit unwrapped — showed
+fewer lines than the step and the lines in the gap were never
+displayed. The repro: 40 lines, lines 20-27 padded to 70 chars, a
+52x24 pane with a five-row footer, paging up showed L26..L40, then
+L10..L23, then L01..L06 — L24, L25, L07, L08, L09 never shown.
+Alongside it, the markdown pass read `_` as an emphasis marker inside
+plain words, so `cron_audit, gpu_stats` rendered as `cronaudit,
+gpustats`.
+
+- **the pager steps by the frame** (`frontend/tui`): PgUp advances the
+  offset by the lines the current frame actually showed, minus one;
+  PgDn walks forward from the frame's bottom, accumulating `rows()`
+  against the same row budget, and steps by that many minus one. The
+  offset stays in lines, the pages overlap by a row as they did, and
+  every line is reachable: the repro's pages now cover all 40 lines,
+  adjacent pages sharing exactly one.
+- **underscores need a word boundary** (`frontend/tui`): an `_` opens
+  or closes emphasis only when the neighboring character is not a
+  letter or digit, the way CommonMark treats intraword underscores;
+  snake_case identifiers render literal in prose and in list items.
+
 ## [1.1.1]: the painted aim
 
 One field report: the tear was back on 1.1.0. Mid-stream, content

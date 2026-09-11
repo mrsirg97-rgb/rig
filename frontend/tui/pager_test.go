@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -61,5 +62,143 @@ func TestLiveSuspendResume(t *testing.T) {
 	}
 	if len(l.hist) != 2 || l.hist[0] != "before" || l.hist[1] != "during" {
 		t.Fatalf("the history = %q, want [before during]", l.hist)
+	}
+}
+
+func TestPagerPagesCoverEveryLine(t *testing.T) {
+	th := oledTheme(t)
+	lines := make([]string, 40)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("L%02d", i+1)
+	}
+	for i := 19; i <= 26; i++ {
+		lines[i] = lines[i] + strings.Repeat("x", 70-len(lines[i]))
+	}
+	p := newPager(lines, 52, 24)
+	p.footer = []string{"f1", "f2", "f3", "f4", "f5"}
+
+	var pages [][]string
+	for {
+		page := p.frameLines()
+		pages = append(pages, page)
+		f := RemoveColor(p.frame(th))
+		for _, line := range page {
+			if !strings.Contains(f, line) {
+				t.Fatalf("page %d renders %q without %s", len(pages)-1, f, line)
+			}
+		}
+		for _, line := range lines {
+			if !containsLine(page, line) && strings.Contains(f, line) {
+				t.Fatalf("page %d renders %s outside its frame", len(pages)-1, line)
+			}
+		}
+		if p.offset == len(p.lines)-1 {
+			break
+		}
+		p.move(p.pageUp())
+	}
+
+	seen := map[string]bool{}
+	for _, page := range pages {
+		for _, line := range page {
+			seen[line] = true
+		}
+	}
+	if len(seen) != len(lines) {
+		t.Fatalf("the pages cover %d lines, want all %d", len(seen), len(lines))
+	}
+	for i := 0; i+1 < len(pages); i++ {
+		shared := []string{}
+		for _, line := range pages[i] {
+			if containsLine(pages[i+1], line) {
+				shared = append(shared, line)
+			}
+		}
+		if len(shared) != 1 {
+			t.Fatalf("pages %d and %d share %v, want exactly one line", i, i+1, shared)
+		}
+	}
+}
+
+func containsLine(lines []string, s string) bool {
+	for _, line := range lines {
+		if line == s {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPagerEmptyAndSingleLine(t *testing.T) {
+	th := oledTheme(t)
+	p := newPager(nil, 52, 24)
+	p.footer = []string{"f1", "f2", "f3", "f4", "f5"}
+	if step := p.pageDown(); step != 1 {
+		t.Fatalf("the empty record's down step = %d, want 1", step)
+	}
+	p.move(-p.pageDown())
+	if p.offset != 0 {
+		t.Fatalf("the empty offset = %d, want 0", p.offset)
+	}
+	f := RemoveColor(p.frame(th))
+	if !strings.Contains(f, "history") {
+		t.Fatalf("the empty frame = %q", f)
+	}
+
+	p2 := newPager([]string{"one"}, 52, 24)
+	p2.footer = []string{"f1", "f2", "f3", "f4", "f5"}
+	p2.move(len(p2.lines))
+	if p2.offset != 0 {
+		t.Fatalf("the single-line offset = %d, want 0", p2.offset)
+	}
+	if step := p2.pageDown(); step != 1 {
+		t.Fatalf("the single-line down step = %d, want 1", step)
+	}
+	p2.move(-p2.pageDown())
+	if p2.offset != 0 {
+		t.Fatalf("the single-line offset = %d, want 0", p2.offset)
+	}
+}
+
+func TestPagerPageDownCoversEveryLine(t *testing.T) {
+	lines := make([]string, 40)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("L%02d", i+1)
+	}
+	for i := 19; i <= 26; i++ {
+		lines[i] = lines[i] + strings.Repeat("x", 70-len(lines[i]))
+	}
+	p := newPager(lines, 52, 24)
+	p.footer = []string{"f1", "f2", "f3", "f4", "f5"}
+	p.move(len(p.lines))
+
+	var pages [][]string
+	for {
+		pages = append(pages, p.frameLines())
+		if p.offset == 0 {
+			break
+		}
+		p.move(-p.pageDown())
+	}
+
+	seen := map[string]bool{}
+	for _, page := range pages {
+		for _, line := range page {
+			seen[line] = true
+		}
+	}
+	if len(seen) != len(lines) {
+		t.Fatalf("the down pages cover %d lines, want all %d", len(seen), len(lines))
+	}
+	for i := 0; i+1 < len(pages); i++ {
+		shared := 0
+		for _, line := range pages[i] {
+			if containsLine(pages[i+1], line) {
+				shared++
+			}
+		}
+		if shared < 1 {
+			t.Fatalf("pages %d and %d share no line", i, i+1)
+		}
 	}
 }
