@@ -116,6 +116,7 @@ func TestMenuWindowFitsTheViewport(t *testing.T) {
 
 	s.si.feed("/wide ")
 	s.await("verb1")
+	s.await(promptMark(th) + th.Paint(SlotText, " /wide "))
 
 	rows := screenAt(t, s, 50, 9)
 	if len(rows) != 9 {
