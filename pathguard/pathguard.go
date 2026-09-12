@@ -29,8 +29,14 @@ func Canonical(path string) (string, error) {
 func Within(path, sessionCwd, rigHome string) (string, error) {
 	cwd, err := Canonical(path)
 	if err != nil {
-		if abs, absErr := filepath.Abs(path); absErr == nil && !under(sessionCwd, abs) && !under(rigHome, abs) {
-			return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
+		if abs, absErr := filepath.Abs(path); absErr == nil {
+			if !inside(sessionCwd, abs) && !inside(rigHome, abs) {
+				if resolved, rerr := filepath.EvalSymlinks(abs); rerr == nil &&
+					(inside(sessionCwd, resolved) || inside(rigHome, resolved)) {
+					return "", err
+				}
+				return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
+			}
 		}
 		return "", err
 	}
@@ -49,6 +55,22 @@ func Within(path, sessionCwd, rigHome string) (string, error) {
 		return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
 	}
 	return cwd, nil
+}
+
+// inside reports whether path is under root in the lexical form or the
+// root's resolved form: a symlinked cwd accepts both spellings.
+func inside(root, path string) bool {
+	if under(root, path) {
+		return true
+	}
+	if root == "" {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	return under(resolved, path)
 }
 
 func under(root, path string) bool {

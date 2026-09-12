@@ -129,3 +129,67 @@ func TestWithinRefusesAFile(t *testing.T) {
 		t.Fatalf("a file must refuse naming the directory rule, got %v", err)
 	}
 }
+
+func TestWithinFailureNamesTheSpecificRuleUnderASymlinkedCwd(t *testing.T) {
+	root := realRoot(t)
+	real := filepath.Join(root, "real")
+	link := filepath.Join(root, "link")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(real, "file")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rigHome := realRoot(t)
+	for _, form := range []string{file, filepath.Join(link, "file")} {
+		_, err := pathguard.Within(form, link, rigHome)
+		if err == nil {
+			t.Fatalf("a file inside the session must refuse: %q", form)
+		}
+		if !strings.Contains(err.Error(), "not a directory") {
+			t.Fatalf("a file inside the session must name the directory rule, got %v", err)
+		}
+		if strings.Contains(err.Error(), "outside the session's cwd") {
+			t.Fatalf("an inside file must not be reported as outside: %q gave %v", form, err)
+		}
+	}
+}
+
+func TestWithinFailureNamesTheSpecificRuleForAMissingPathUnderASymlinkedCwd(t *testing.T) {
+	root := realRoot(t)
+	real := filepath.Join(root, "real")
+	link := filepath.Join(root, "link")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	rigHome := realRoot(t)
+	for _, form := range []string{filepath.Join(real, "missing"), filepath.Join(link, "missing")} {
+		_, err := pathguard.Within(form, link, rigHome)
+		if err == nil {
+			t.Fatalf("a missing path inside the session must refuse: %q", form)
+		}
+		if !strings.Contains(err.Error(), "no such file") {
+			t.Fatalf("a missing path inside the session must name the missing rule, got %v", err)
+		}
+		if strings.Contains(err.Error(), "outside the session's cwd") {
+			t.Fatalf("an inside missing path must not be reported as outside: %q gave %v", form, err)
+		}
+	}
+}
+
+func TestWithinFailureRefusesAMissingPathOutsideTheRoots(t *testing.T) {
+	session := realRoot(t)
+	rigHome := realRoot(t)
+	outside := realRoot(t)
+	_, err := pathguard.Within(filepath.Join(outside, "missing"), session, rigHome)
+	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+		t.Fatalf("a missing path outside both roots must name the containment rule, got %v", err)
+	}
+}
