@@ -79,10 +79,11 @@ func TestIPisPrivateV4Table(t *testing.T) {
 		"0.0.0.0", "10.1.2.3", "127.0.0.1", "169.254.169.254",
 		"172.16.0.1", "172.31.255.255", "192.168.1.1", "100.64.0.1",
 		"100.127.9.9", "192.0.0.170", "198.18.0.1", "224.0.0.1",
-		"255.255.255.255",
+		"255.255.255.255", "192.0.2.1", "198.51.100.1", "203.0.113.1",
+		"192.88.99.1",
 	}
 	pub := []string{"1.1.1.1", "8.8.8.8", "93.184.216.34", "172.32.0.1",
-		"100.128.0.1", "198.20.0.1"}
+		"100.128.0.1", "198.20.0.1", "192.88.100.1"}
 	for _, ip := range priv {
 		if !web.IPisPrivate(ip) {
 			t.Errorf("%s must be private", ip)
@@ -306,10 +307,27 @@ func TestCapCharsTruncatesLoudlyWithTheTrueTotal(t *testing.T) {
 }
 
 func TestExtractReadableFallsBackToHTMLToTextWhenTrafilaturaIsUnavailable(t *testing.T) {
-	text, _ := web.ExtractReadable("<body><p>plain fallback</p></body>", off())
+	text, _ := web.ExtractReadable(context.Background(), "<body><p>plain fallback</p></body>", off())
 	has(t, text, "plain fallback")
-	missing, _ := web.ExtractReadable("<body><p>still works</p></body>", ptr("/nonexistent/bin"))
+	missing, _ := web.ExtractReadable(context.Background(), "<body><p>still works</p></body>", ptr("/nonexistent/bin"))
 	has(t, missing, "still works")
+}
+
+func TestExtractReadableKillsASlowTrafilaturaAtTheContextDeadline(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "slow-traf")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	text, note := web.ExtractReadable(ctx, "<body><p>x</p></body>", ptr(script))
+	elapsed := time.Since(start)
+	has(t, text, "x")
+	has(t, note, "trafilatura failed")
+	if elapsed > 2*time.Second {
+		t.Fatalf("the extraction ignored the context deadline: %s", elapsed)
+	}
 }
 
 func TestE2ERealServerThroughTheSeamHTMLExtracted(t *testing.T) {

@@ -126,6 +126,16 @@ func List(ctx context.Context, db DB, ct Crontab, sessionCwd string, probe func(
 	}
 	tx.Rollback()
 
+	var orphans []string
+	if lines != nil {
+		for key := range lines {
+			if _, ok := f.jobs[key]; !ok {
+				orphans = append(orphans, key)
+			}
+		}
+		sort.Strings(orphans)
+	}
+
 	groups := map[string][]jobLineSet{}
 	for id := range f.jobs {
 		j := f.jobs[id]
@@ -157,7 +167,7 @@ func List(ctx context.Context, db DB, ct Crontab, sessionCwd string, probe func(
 		}
 	}
 
-	if len(groups) == 0 {
+	if len(groups) == 0 && len(orphans) == 0 {
 		return "scheduler: no jobs (global.sqlite)", nil
 	}
 	var dirs []string
@@ -196,6 +206,12 @@ func List(ctx context.Context, db DB, ct Crontab, sessionCwd string, probe func(
 				b.WriteString("\n")
 			}
 			b.WriteString(strings.Join(g.lines, "\n"))
+		}
+	}
+	if len(orphans) > 0 {
+		b.WriteString("\norphans:\n")
+		for _, key := range orphans {
+			fmt.Fprintf(&b, "  %s (no job row; remove the line)\n", key)
 		}
 	}
 	return b.String(), nil

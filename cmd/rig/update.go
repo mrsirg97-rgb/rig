@@ -307,7 +307,7 @@ func parseVersion(v string) ([]int, error) {
 	nums := make([]int, len(parts))
 	for i, p := range parts {
 		n, err := strconv.Atoi(p)
-		if err != nil {
+		if err != nil || n < 0 {
 			return nil, fmt.Errorf("%q is not a semver", v)
 		}
 		nums[i] = n
@@ -324,19 +324,24 @@ func compareVersions(a, b string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	for i := 0; i < len(va) && i < len(vb); i++ {
-		if va[i] != vb[i] {
-			if va[i] < vb[i] {
+	n := len(va)
+	if len(vb) > n {
+		n = len(vb)
+	}
+	for i := 0; i < n; i++ {
+		x, y := 0, 0
+		if i < len(va) {
+			x = va[i]
+		}
+		if i < len(vb) {
+			y = vb[i]
+		}
+		if x != y {
+			if x < y {
 				return -1, nil
 			}
 			return 1, nil
 		}
-	}
-	switch {
-	case len(va) < len(vb):
-		return -1, nil
-	case len(va) > len(vb):
-		return 1, nil
 	}
 	return 0, nil
 }

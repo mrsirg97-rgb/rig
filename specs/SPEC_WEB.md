@@ -23,7 +23,10 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
 - Extraction: trafilatura as a documented external (pane's own mechanism),
   resolved from the shared agent venv then PATH, overridable by
   RIG_TRAFILATURA; absent or failing degrades to pane's stdlib text
-  pass and says so in the content.
+  pass and says so in the content. Extraction rides the fetch's own
+  deadline: the subprocess gets the remaining budget (its 20 s cap is
+  the floor), and a one-second WaitDelay keeps an orphaned grandchild
+  from holding the output pipes past it.
 - Pane's surface verbatim: descriptions, promptGuidelines, schemas, and
   every runtime voice.
 
@@ -136,7 +139,9 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
 - **The guard is check-and-pin, per hop.** resolve, parse every
   address with net/netip (unmap 4-in-6, refuse unparseable, loopback,
   private, unspecified, link-local, multicast and the reserved v4
-  blocks: 0/8, 100.64/10, 192.0.0/24, 198.18/15, 240/4), then dial only
+  blocks: 0/8, 100.64/10, 192.0.0/24, 198.18/15, TEST-NET
+  192.0.2/24, 198.51.100/24 and 203.0.113/24, the 6to4 anycast
+  192.88.99/24, 240/4), then dial only
   the vetted addresses: the request ctx carries them and the direct
   transport's DialContext connects to those, never re-resolving the
   host, so a DNS rebind between check and dial cannot land on a

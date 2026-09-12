@@ -463,3 +463,34 @@ func TestUpdateChecksumMatchesTheExactAssetField(t *testing.T) {
 		t.Fatalf("binary = %q, want %q", got, asset)
 	}
 }
+
+func TestCompareVersionsPadsShortSegments(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"1.0", "1.0.0", 0},
+		{"1.0.0", "1.0", 0},
+		{"1.0.1", "1.0", 1},
+		{"1.0", "1.0.1", -1},
+		{"1.2.3", "1.2.3", 0},
+		{"1.2.3.1", "1.2.3", 1},
+		{"1.2.3", "1.2.3.1", -1},
+		{"1.0.0.1", "1.0.1", -1},
+	}
+	for _, c := range cases {
+		got, err := compareVersions(c.a, c.b)
+		if err != nil {
+			t.Fatalf("compareVersions(%q, %q): %v", c.a, c.b, err)
+		}
+		if got != c.want {
+			t.Fatalf("compareVersions(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestCompareVersionsRefusesNegativeSegments(t *testing.T) {
+	if _, err := compareVersions("-1.0", "1.0"); err == nil {
+		t.Fatal("a negative segment must refuse")
+	}
+}

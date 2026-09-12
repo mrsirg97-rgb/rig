@@ -431,7 +431,7 @@ func TestPrecedencePresenceKeyEnvEmptyBeatsFile(t *testing.T) {
 		w.Write([]byte("PROXY-SERVED"))
 	}))
 	t.Cleanup(proxySrv.Close)
-	const target = "http://203.0.113.10/page"
+	const target = "http://93.184.216.34/page"
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
