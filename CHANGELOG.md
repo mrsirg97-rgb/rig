@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [1.2.3]: the review pass's stragglers
+
+A second pass over the same seams landed five follow-ups, each with a
+failing test first. The one with teeth was the cwd gate: its lexical
+precheck refused a legitimate working directory whenever the session
+cwd and the passed path disagreed about symlink form.
+
+- **the cwd gate is canonical only** (`pathguard`): `Within`'s literal
+  precheck duplicated the canonical containment and over-refused — a
+  resolved path under a symlinked session cwd (and the reverse) was
+  refused although the canonical check accepts it. The canonical check
+  is the one containment rule; both forms now pass and the symlink
+  escape still refuses.
+- **the fetch tool introduces itself as rig** (`tool/web`): the
+  User-Agent said `pi-web-fetch/1.0`.
+- **the bound's concurrent doubles are named** (`middleware/guard`):
+  identical calls inside one concurrent run all execute (each passed
+  the check before any had failed) and the next identical call refuses;
+  the documented consequence now has its test.
+- **the busy match reads the driver's typed error** (`store/sqlx`):
+  `isBusy` matches the `SQLITE_BUSY` code on the driver's `*sqlite.Error`
+  first and the message second, so the retry loop cannot lose the busy
+  signal to a message change.
+- **the read cap ends on a rune boundary** (`tool/file`): a truncation
+  landing inside a multibyte rune no longer ships invalid UTF-8; the
+  straddling rune is dropped whole.
+
 ## [1.2.2]: the review pass's five findings
 
 A fresh-eyes review pass over the security boundaries, the scheduler's
