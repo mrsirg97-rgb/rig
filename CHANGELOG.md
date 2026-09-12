@@ -35,6 +35,12 @@ bounded the wait while an orphaned grandchild held the output pipes.
   one-second `WaitDelay` — so a slow extractor cannot outlive the
   requested timeout, and a killed trafilatura's orphaned children
   cannot hold the pipes past it.
+- **the viewport fixture's size writes are synchronized**
+  (`frontend/tui`): the mutable size behind the resize tests was read by
+  the frame-ticker goroutine while the test wrote it — a data race the
+  CI runner's `-p 2` scheduling finally exposed. The fixture is now a
+  mutex-guarded pair (`get`/`set`), and every resize test publishes its
+  new geometry through `set`.
 
 The version is 1.2.2; the changelog, the SPEC_WEB guard list and
 extraction budget, the SPEC_STATE supersede and orphan lines, and the
