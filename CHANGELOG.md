@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+## [1.2.2]: the review pass's five findings
+
+A fresh-eyes review pass over the security boundaries, the scheduler's
+consistency story, and the memory store landed five findings, each with
+a failing test first. One was a real authorization asymmetry — the
+store's own `Forget` refused another project's memory while a
+`supersedes` could reach the same row from anywhere — and one was a
+latent wait: the trafilatura subprocess's 20 s cap never actually
+bounded the wait while an orphaned grandchild held the output pipes.
+
+- **supersession is scoped** (`store/rem`): `applySupersedes` refuses a
+  target outside the caller's scope or global, naming the owning
+  project, before any row is touched — the same rule `Forget` already
+  enforced. A refused supersede rolls the whole write back, so the
+  learn or reflect lands nowhere.
+- **the list names orphan crontab lines** (`store/scheduler`): a tagged
+  line with no job row — the crash window between the crontab write and
+  the store commit — now lists under `orphans:` with the removal
+  instruction instead of being invisible; the runner already refused to
+  fire it.
+- **the fetch guard's denylist is complete** (`tool/web`): TEST-NET
+  (192.0.2/24, 198.51.100/24, 203.0.113/24) and the 6to4 anycast
+  192.88.99/24 join the refused ranges, so a host resolving there is
+  refused like any private address.
+- **the update's version compare pads short segments** (`cmd/rig`):
+  `1.0` equals `1.0.0` (the old compare called it older and refused the
+  update), and a negative segment refuses as not-a-semver.
+- **the extraction rides the fetch's total budget** (`tool/web`):
+  `ExtractReadable` takes the fetch's ctx, trafilatura's 20 s cap is the
+  floor under the caller's deadline, and the subprocess has a
+  one-second `WaitDelay` — so a slow extractor cannot outlive the
+  requested timeout, and a killed trafilatura's orphaned children
+  cannot hold the pipes past it.
+
+The version is 1.2.2; the changelog, the SPEC_WEB guard list and
+extraction budget, the SPEC_STATE supersede and orphan lines, and the
+setup examples move with the code.
+
 ## [1.2.1]: the winch follows the terminal
 
 One field report: a resize with nothing streaming never repainted.
