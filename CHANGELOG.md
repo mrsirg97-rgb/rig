@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.2.4]: the failure's diagnosis is canonical too
+
+The containment rule was already canonical; the failure path's message
+decision was not. Under a symlinked session cwd, a file or missing path
+that was genuinely inside (in either symlink form) was reported as
+"outside the session's cwd" instead of naming the real rule. No access
+changed — every path in that branch refuses either way — but the error
+lied about why, and a wrong diagnosis is a wrong error.
+
+- **the failure branch knows both forms** (`pathguard`): `Within`'s
+  refusal now checks the raw and resolved spellings of both the roots and
+  the failed path before choosing the containment message; a path inside
+  the roots in any form keeps its specific error (`not a directory`,
+  `no such file`), and only a path outside both roots in every form names
+  the containment rule.
+
 ## [1.2.3]: the review pass's stragglers
 
 A second pass over the same seams landed five follow-ups, each with a
