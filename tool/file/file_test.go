@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/tool/file"
@@ -600,6 +601,46 @@ func TestReadWindowOfABigFileIsByteIdentical(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("the window drifted:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestReadCapEndsOnARuneBoundary(t *testing.T) {
+	dir := t.TempDir()
+	straddle := filepath.Join(dir, "straddle.txt")
+	if err := os.WriteFile(straddle, []byte(strings.Repeat("a", readCap-1)+"é"+"tail"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": straddle}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	body, _, ok := strings.Cut(got, "\n[output truncated]")
+	if !ok {
+		t.Fatalf("a readCap+1-byte file must come back capped, got %d bytes", len(got))
+	}
+	if !utf8.ValidString(body) {
+		t.Fatalf("the cap must not split a rune, got tail %q", body[len(body)-8:])
+	}
+	if body != strings.Repeat("a", readCap-1) {
+		t.Fatalf("the rune straddling the cap must be dropped whole, got %d bytes", len(body))
+	}
+	aligned := filepath.Join(dir, "aligned.txt")
+	if err := os.WriteFile(aligned, []byte(strings.Repeat("a", readCap)+"é"+"tail"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err = file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": aligned}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	body, _, ok = strings.Cut(got, "\n[output truncated]")
+	if !ok {
+		t.Fatalf("a readCap+1-byte file must come back capped, got %d bytes", len(got))
+	}
+	if !utf8.ValidString(body) {
+		t.Fatalf("the cap must not split a rune, got tail %q", body[len(body)-8:])
+	}
+	if body != strings.Repeat("a", readCap) {
+		t.Fatalf("the cap on a rune start must keep the body byte-identical, got %d bytes", len(body))
 	}
 }
 

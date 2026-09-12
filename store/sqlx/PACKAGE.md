@@ -27,7 +27,9 @@ context. One constructor, one isolation, one read of the context.
   request.
 - `Tx` and `TxReadOnly` wait out a `SQLITE_BUSY` begin: the driver's own
   busy timeout is one attempt, the seam retries with a doubling backoff
-  while the caller's context lives, capped at thirty seconds total. A
+  while the caller's context lives, capped at thirty seconds total. The
+  busy match reads the driver's typed error code first
+  (`TestTheBusyRefusalCarriesTheDriverCode`) and the message second. A
   concurrent writer burst serializes instead of failing; the final
   refusal names the wait and the underlying busy error.
 - The tx rides a typed, unexported context key (`txKey`), not a string, so

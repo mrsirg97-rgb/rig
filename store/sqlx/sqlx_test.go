@@ -3,12 +3,14 @@ package sqlx_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 )
@@ -56,6 +58,41 @@ func TestTxWaitsOutTheWriteLock(t *testing.T) {
 	close(release)
 	if err := <-done; err != nil {
 		t.Fatalf("the transaction must wait out the write lock, got %v", err)
+	}
+}
+
+func TestTheBusyRefusalCarriesTheDriverCode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "busy.sqlite")
+	dsn := path + "?_txlock=immediate&_pragma=busy_timeout(1)&_pragma=journal_mode(WAL)"
+	holder, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	if _, err := holder.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	htx, err := holder.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer htx.Rollback()
+
+	contender, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer contender.Close()
+	_, err = contender.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err == nil {
+		t.Fatal("a held write lock must refuse at a one-millisecond busy timeout")
+	}
+	var se *sqlite.Error
+	if !errors.As(err, &se) {
+		t.Fatalf("the busy refusal must be the driver's typed error, got %T", err)
+	}
+	if se.Code() != sqlite3.SQLITE_BUSY {
+		t.Fatalf("the busy refusal must carry the driver's busy code, got %d (%v)", se.Code(), err)
 	}
 }
 

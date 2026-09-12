@@ -71,6 +71,31 @@ func TestWithinAcceptsAChildOfTheSessionCwdAndTheRigHome(t *testing.T) {
 	}
 }
 
+func TestWithinAcceptsBothFormsOfASymlinkedSessionCwd(t *testing.T) {
+	root := realRoot(t)
+	real := filepath.Join(root, "real")
+	link := filepath.Join(root, "link")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(real, "child")
+	if err := os.Mkdir(child, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rigHome := realRoot(t)
+	got, err := pathguard.Within(child, link, rigHome)
+	if err != nil || got != child {
+		t.Fatalf("the resolved form under a symlinked session cwd must accept: %q, %v", got, err)
+	}
+	got, err = pathguard.Within(filepath.Join(link, "child"), real, rigHome)
+	if err != nil || got != child {
+		t.Fatalf("the symlink form under a resolved session cwd must accept: %q, %v", got, err)
+	}
+}
+
 func TestWithinRefusesOutsideTheRoots(t *testing.T) {
 	session := realRoot(t)
 	rigHome := realRoot(t)

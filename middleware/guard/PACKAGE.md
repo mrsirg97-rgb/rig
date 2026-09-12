@@ -58,7 +58,8 @@ that bounds every tool result before the transcript.
 - `limit < 1` clamps to 1.
 - Identical calls inside one concurrent run may all execute: each passed
   the check before any had failed. They are duplicates, not retries; the
-  bound strikes the re-issuance after them (SPEC_EVT 2a, named).
+  bound strikes the re-issuance after them (SPEC_EVT 2a, named,
+  `TestConcurrentIdenticalDoublesRunAndTheNextRefuses`).
 - Keyed by tool name, but the streak is per canonical args: the bound
   strikes identically-valued retries only, and JSON key order or
   whitespace is not a changed call (`TestCanonicallyIdenticalArgsShareTheStreak`).

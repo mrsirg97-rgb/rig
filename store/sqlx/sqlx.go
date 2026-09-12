@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 type DB struct{ *sql.DB }
@@ -58,6 +61,10 @@ func (db DB) beginTx(ctx context.Context, readOnly bool) (context.Context, *sql.
 }
 
 func isBusy(err error) bool {
+	var se *sqlite.Error
+	if errors.As(err, &se) {
+		return se.Code() == sqlite3.SQLITE_BUSY
+	}
 	return strings.Contains(err.Error(), "SQLITE_BUSY")
 }
 

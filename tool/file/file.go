@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	difftool "github.com/mrsirg97-rgb/rig/tool/diff"
@@ -199,7 +200,11 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, a.Path, content)
 	if len(content) > readCap {
-		content = content[:readCap] + "\n[output truncated]"
+		cut := readCap
+		for !utf8.RuneStart(content[cut]) {
+			cut--
+		}
+		content = content[:cut] + "\n[output truncated]"
 	}
 	if stale {
 		content = "[changed since your observation] " + a.Path + " — re-read before acting on it\n" + content
