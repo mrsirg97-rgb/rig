@@ -29,6 +29,10 @@ tools and the jail.
   about symlink form — a resolved path under a symlinked cwd, or the
   reverse — and both forms accept; a symlink escape still resolves
   outside and refuses.
+- The refusal's message is chosen by the same canonical rule: a failed
+  `Canonical` on a path inside the roots (either symlink form) names the
+  specific rule (`not a directory`, `no such file`); only a path outside
+  both roots in every form names the containment rule.
 - The containment is rechecked at the runner's fire because the jail
   rw-binds the cwd: the create-time check is not the fire-time path.
 - A file is not a cwd: `Canonical` refuses one (the delegate's old copy
