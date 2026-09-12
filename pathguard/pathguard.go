@@ -27,26 +27,11 @@ func Canonical(path string) (string, error) {
 }
 
 func Within(path, sessionCwd, rigHome string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("cwd %q: %v", path, err)
-	}
-	under := func(root string) bool {
-		if root == "" {
-			return false
-		}
-		rootAbs, err := filepath.Abs(root)
-		if err != nil {
-			return false
-		}
-		rel, err := filepath.Rel(rootAbs, abs)
-		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	}
-	if !under(sessionCwd) && !under(rigHome) {
-		return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
-	}
 	cwd, err := Canonical(path)
 	if err != nil {
+		if abs, absErr := filepath.Abs(path); absErr == nil && !under(sessionCwd, abs) && !under(rigHome, abs) {
+			return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
+		}
 		return "", err
 	}
 	canonicalUnder := func(root string) bool {
@@ -64,4 +49,16 @@ func Within(path, sessionCwd, rigHome string) (string, error) {
 		return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
 	}
 	return cwd, nil
+}
+
+func under(root, path string) bool {
+	if root == "" {
+		return false
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(rootAbs, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

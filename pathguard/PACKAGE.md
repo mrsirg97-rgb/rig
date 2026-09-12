@@ -12,7 +12,7 @@ tools and the jail.
 
 - `pathguard.go`: `Canonical` (absolute, must exist and be a directory,
   symlinks resolved) and `Within` (`Canonical` plus containment under the
-  session cwd or the rig home, checked lexically and canonically).
+  session cwd or the rig home, checked canonically).
 
 ## How it is consumed
 
@@ -25,6 +25,10 @@ tools and the jail.
 ## Gotchas
 
 - `Within` refuses an empty root: the caller must supply both roots.
+- The containment is canonical: the session cwd and the path may disagree
+  about symlink form — a resolved path under a symlinked cwd, or the
+  reverse — and both forms accept; a symlink escape still resolves
+  outside and refuses.
 - The containment is rechecked at the runner's fire because the jail
   rw-binds the cwd: the create-time check is not the fire-time path.
 - A file is not a cwd: `Canonical` refuses one (the delegate's old copy

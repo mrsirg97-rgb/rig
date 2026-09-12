@@ -246,7 +246,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 		if err != nil {
 			return Fetched{}, fmt.Errorf("invalid URL: %s", raw)
 		}
-		req.Header.Set("User-Agent", "pi-web-fetch/1.0")
+		req.Header.Set("User-Agent", "rig-web-fetch/1.0")
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/json,text/*;q=0.9,*/*;q=0.5")
 
 		res, err := f.do(req)

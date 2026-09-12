@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/middleware/guard"
@@ -74,6 +75,56 @@ func TestSuccessfulReissuanceStaysUnbounded(t *testing.T) {
 	}
 	if total != 10 {
 		t.Fatalf("polling executed %d times, want 10 (unbounded)", total)
+	}
+}
+
+func TestConcurrentIdenticalDoublesRunAndTheNextRefuses(t *testing.T) {
+	inside := make(chan struct{}, 2)
+	gate := make(chan struct{})
+	mu := sync.Mutex{}
+	executions := 0
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		mu.Lock()
+		executions++
+		mu.Unlock()
+		inside <- struct{}{}
+		<-gate
+		return "", errors.New("synthetic failure")
+	}
+	exec = guard.Bound(1).Wrap(exec)
+
+	call := core.ToolCall{ID: "c1", Name: "delegate", Args: json.RawMessage(`{"task":"same"}`)}
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = exec(context.Background(), call)
+		}(i)
+	}
+	for i := 0; i < 2; i++ {
+		select {
+		case <-inside:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("concurrent double %d never executed: the bound refused a duplicate inside one concurrent run", i)
+		}
+	}
+	close(gate)
+	wg.Wait()
+	for i, err := range errs {
+		if err == nil || !strings.Contains(err.Error(), "synthetic failure") {
+			t.Fatalf("concurrent double %d must execute like its twin (it passed the check before either failed), got %v", i, err)
+		}
+	}
+	if executions != 2 {
+		t.Fatalf("executions %d, want 2", executions)
+	}
+	if _, err := exec(context.Background(), call); err == nil || !strings.Contains(err.Error(), "bound exhausted") {
+		t.Fatalf("the next identical call must refuse naming the bound, got %v", err)
+	}
+	if executions != 2 {
+		t.Fatalf("the refused call must not execute: executions %d, want 2", executions)
 	}
 }
 
