@@ -2,8 +2,6 @@
 
 A minimum runtime for your agents.
 
-One binary. One model endpoint. One terminal.
-
 rig assembles context, streams the model, executes tool calls, returns results, and repeats. The TUI, piped CLI, headless worker, and dashboard share the same session, task, memory, and scheduler stores.
 
 ## install
