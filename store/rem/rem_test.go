@@ -1413,6 +1413,28 @@ func TestForgetRefusesAnotherProjectsMemory(t *testing.T) {
 	}
 }
 
+func TestLearnSupersedesRefusesAnotherProjectsMemory(t *testing.T) {
+	db := newDB(t)
+	here := t.TempDir()
+	there := t.TempDir()
+	_, theirs, _ := learn(t, db, there, "theirs", we())
+	_, _, _, err := Learn(context.Background(), db, here, LearnInput{
+		Content: "the superseding way", Supersedes: []int64{theirs.Id},
+	})
+	if !errors.Is(err, ErrOtherProject) {
+		t.Fatalf("supersede across projects must refuse by name, got %v", err)
+	}
+	if !strings.Contains(err.Error(), filepath.Base(there)) {
+		t.Fatalf("the refusal must name the owning project: %v", err)
+	}
+	if got := memRow(t, db, "theirs"); got.SupersededBy != nil {
+		t.Fatal("the refused target must survive untouched")
+	}
+	if got := memRow(t, db, "the superseding way"); got != nil {
+		t.Fatal("the refused learn still landed")
+	}
+}
+
 func TestMigrationSurvivesTwoOpeners(t *testing.T) {
 	repo := t.TempDir()
 	gitInit(t, repo)

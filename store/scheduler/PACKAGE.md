@@ -51,7 +51,8 @@ written before the store commit; drift is surfaced in list.
 - `fold.go`: the fold/replay over the event log.
 - `render.go`: the list/rendering: one list grouped by each job's own
   `cwd` (this directory first, then the rest by path), the empty store
-  named (`scheduler: no jobs (global.sqlite)`).
+  named (`scheduler: no jobs (global.sqlite)`), and tagged crontab
+  lines with no job row listed as orphans with the removal instruction.
 - `metadata/scheduler.go`: hand-written metadata.
 
 ## How it is consumed
@@ -69,7 +70,9 @@ written before the store commit; drift is surfaced in list.
   survives compaction).
 - Runs are chain reads over their own container: run history survives
   compaction (an event-args-only shape would have dropped it).
-- Crontab is written before the store commit: drift is surfaced in list.
+- Crontab is written before the store commit: drift is surfaced in list,
+  and a line orphaned by a crash between the write and the commit is
+  listed too (the runner refuses to fire it, naming the row).
 - `update` is the definition change: one `update` op overlays only the
   fields the args carry; the id and the runs stay (remove + create
   re-mints the id and orphans the runs); a cadence change rewrites the

@@ -365,6 +365,19 @@ func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 	contains(t, list, "line is active")
 }
 
+func TestListNamesAnOrphanCrontabLine(t *testing.T) {
+	h := newHarness(t, "/ws/o")
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "kept", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/o"}); err != nil {
+		t.Fatal(err)
+	}
+	h.ct.mu.Lock()
+	h.ct.text += "5 5 * * * " + runnerCmd + " j99  # pane-scheduler:j99\n"
+	h.ct.mu.Unlock()
+	list, _ := h.list()
+	contains(t, list, "orphans:")
+	contains(t, list, "j99 (no job row; remove the line)")
+}
+
 func TestListMarksAJobRunningWhenItsLockIsHeld(t *testing.T) {
 	h := newHarness(t, "/ws/h")
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "locked", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/h"}); err != nil {

@@ -58,7 +58,8 @@ nothing is read into the prompt by a session start.
   migration transaction.
 - `Forget(ctx, db, cwd, id)` removes only this project's or a global row;
   ids are file-wide, so another project's id is `ErrOtherProject`, named
-  with its label.
+  with its label. Supersedes targets are scoped the same way: a
+  cross-project target refuses by name before any row is touched.
 - Recall's effective computation uses exactly the consolidation inputs, so
   the two paths agree: effective-at-recall equals what consolidate would
   persist, and consolidating later cannot double-count.

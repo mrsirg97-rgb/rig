@@ -137,7 +137,7 @@ func mintID(bound context.Context) (int64, error) {
 	return next, nil
 }
 
-func applySupersedes(bound context.Context, byID int64, targets []int64) error {
+func applySupersedes(bound context.Context, byID int64, targets []int64, callerScope string) error {
 	seen := map[int64]bool{}
 	var uniq []int64
 	for _, id := range targets {
@@ -154,6 +154,9 @@ func applySupersedes(bound context.Context, byID int64, targets []int64) error {
 		}
 		if row == nil {
 			return fmt.Errorf("rem: supersedes target m%d not found", id)
+		}
+		if row.Scope != "global" && row.Scope != callerScope {
+			return fmt.Errorf("%w: m%d is %s's; supersede it from there", ErrOtherProject, id, row.ScopeLabel)
 		}
 		row.SupersededBy = &byID
 		if _, err := remdom.NewMemoryDomain().UpdateMemory(bound, *row); err != nil {
@@ -304,7 +307,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 			return nil, false, fmt.Errorf("rem: natural key resolved to an absent row")
 		}
 		if len(sh.supersedes) > 0 {
-			if err := applySupersedes(bound, row.Id, sh.supersedes); err != nil {
+			if err := applySupersedes(bound, row.Id, sh.supersedes, scopeKey); err != nil {
 				return nil, false, err
 			}
 		}
@@ -369,7 +372,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 		}
 	}
 	if len(sh.supersedes) > 0 {
-		if err := applySupersedes(bound, id, sh.supersedes); err != nil {
+		if err := applySupersedes(bound, id, sh.supersedes, scopeKey); err != nil {
 			return nil, false, err
 		}
 	}

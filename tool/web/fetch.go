@@ -140,6 +140,10 @@ var reservedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("192.0.0.0/24"),
 	netip.MustParsePrefix("198.18.0.0/15"),
 	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("192.88.99.0/24"),
 }
 
 func publicAddr(ip string) (netip.Addr, bool) {
@@ -371,7 +375,7 @@ func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) 
 	var readable string
 	if htmlishRE.MatchString(fetched.ContentType) {
 		var note string
-		readable, note = ExtractReadable(fetched.Body, &f.traf)
+		readable, note = ExtractReadable(cctx, fetched.Body, &f.traf)
 		if note != "" {
 			readable += "\n\n" + note
 		}
@@ -458,10 +462,11 @@ func CapChars(text string, max int) string {
 		max, len(r))
 }
 
-func runTrafilatura(bin, html string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), trafilaturaTime)
+func runTrafilatura(ctx context.Context, bin, html string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, trafilaturaTime)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin)
+	cmd.WaitDelay = time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -479,7 +484,7 @@ func runTrafilatura(bin, html string) (string, error) {
 	return stdout.String(), nil
 }
 
-func ExtractReadable(html string, trafilatura *string) (string, string) {
+func ExtractReadable(ctx context.Context, html string, trafilatura *string) (string, string) {
 	bin := DefaultTrafilatura()
 	explicit := trafilatura != nil
 	if explicit {
@@ -488,7 +493,7 @@ func ExtractReadable(html string, trafilatura *string) (string, string) {
 	if bin == "" {
 		return HtmlToText(html), "[trafilatura unavailable; stdlib text pass used]"
 	}
-	out, err := runTrafilatura(bin, html)
+	out, err := runTrafilatura(ctx, bin, html)
 	if err != nil {
 		return HtmlToText(html), "[trafilatura failed (" + err.Error() + "); stdlib text pass used]"
 	}

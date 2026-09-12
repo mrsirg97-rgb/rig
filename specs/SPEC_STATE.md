@@ -346,7 +346,10 @@ falling back to the cwd hash outside a repo.
 - The `/rem` command (SPEC_COMMANDS 11): `rem [list|show|forget]` over
   the same store; list the live memories (project then global, one line
   each), show by id, forget by id (this project's or global only; ids
-  are file-wide, so another project's id is refused by name). A pin verb
+  are file-wide, so another project's id is refused by name). A learn
+  or reflect's supersedes targets are scoped the same way: a
+  cross-project id refuses by name and the whole write rolls back.
+  A pin verb
   was rejected there: the operator reads and prunes; keeping is the
   model's learn/reflect.
 - lift's `cmd/rem` is a different design (postgres, mesh, episodes and
@@ -387,7 +390,9 @@ post-merge corrections)
   exit, log_path. Pane records these as run events; a container makes
   `runs {id, n}` a chain read instead of a log scan.
 - Crontab remains the scheduling truth (tagged lines, surgical rewrites,
-  written before the store commit; drift surfaced in `list`). The runner is
+  written before the store commit; drift surfaced in `list`, and a line
+  orphaned by a crash between the write and the commit is listed too,
+  with the removal instruction; the runner refuses to fire it). The runner is
   a small Go binary or the rig binary itself with a `run-job` verb; it
   needs `-p` one-shot mode (landed with the scheduler) and llama-swap's
   `/running` and `/v1/models` for the busy policy, unchanged.

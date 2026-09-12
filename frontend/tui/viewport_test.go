@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -257,8 +258,23 @@ func TestInputWindowFitsTheViewport(t *testing.T) {
 	_ = done
 }
 
-func mutableSize(w, h *int) func() (int, int, bool) {
-	return func() (int, int, bool) { return *w, *h, true }
+type mutable struct {
+	mu   sync.Mutex
+	w, h int
+}
+
+func newMutable(w, h int) *mutable { return &mutable{w: w, h: h} }
+
+func (m *mutable) get() (int, int, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.w, m.h, true
+}
+
+func (m *mutable) set(w, h int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.w, m.h = w, h
 }
 
 func checkViewportInvariants(t *testing.T, label string, v *vt, wantMark string) {
@@ -329,8 +345,8 @@ func streamViewportFrames(t *testing.T, s *scriptedSession, v *vt, n int, label 
 
 func TestResizeMidStreamKeepsTheTranscript(t *testing.T) {
 	th := oledTheme(t)
-	w, h := 50, 14
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+	size := newMutable(50, 14)
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(size.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -341,7 +357,7 @@ func TestResizeMidStreamKeepsTheTranscript(t *testing.T) {
 
 	// the size changes under the TUI with no signal delivered: the next
 	// repaint reads the new geometry and must aim with the painted one
-	w, h = 36, 10
+	size.set(36, 10)
 	v.width = 36
 	streamViewportFrames(t, s, v, 5, "post-resize")
 	checkViewportInvariants(t, "post-resize", v, "word word word")
@@ -349,9 +365,9 @@ func TestResizeMidStreamKeepsTheTranscript(t *testing.T) {
 
 func TestWinchRedrawAimsAtThePaintedRegion(t *testing.T) {
 	th := oledTheme(t)
-	w, h := 50, 14
+	size := newMutable(50, 14)
 	winch := make(chan struct{}, 4)
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(size.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithWinch(winch),
 	)
@@ -361,7 +377,7 @@ func TestWinchRedrawAimsAtThePaintedRegion(t *testing.T) {
 	v := newVTScreen(50, 14)
 	streamViewportFrames(t, s, v, 10, "pre-resize")
 
-	w, h = 36, 10
+	size.set(36, 10)
 	v.width = 36
 	winch <- struct{}{}
 	time.Sleep(30 * time.Millisecond)
@@ -565,8 +581,8 @@ func resizeVT(v *vt, w, h int) *vt {
 
 func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 	th := oledTheme(t)
-	w, h := 50, 14
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+	size := newMutable(50, 14)
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(size.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -595,14 +611,14 @@ func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 	// the width holds. No signal is needed — the size is read at the
 	// repaint — and the first aim after the shrink must not overshoot
 	// the shorter screen.
-	w, h = 50, 10
+	size.set(50, 10)
 	v = resizeVT(v, 50, 10)
 	for i := 0; i < 6; i++ {
 		step("post-shrink", "word word word")
 	}
 
 	// and it closes again
-	w, h = 50, 14
+	size.set(50, 14)
 	v = resizeVT(v, 50, 14)
 	for i := 0; i < 6; i++ {
 		step("regrown", "word word word")
@@ -684,8 +700,8 @@ func checkParkedShrinkScreen(t *testing.T, label string, v *vt, committed []stri
 
 func TestParkedShrinkKeepsCommittedRows(t *testing.T) {
 	th := oledTheme(t)
-	w, h := 50, 24
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+	size := newMutable(50, 24)
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(size.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -699,8 +715,8 @@ func TestParkedShrinkKeepsCommittedRows(t *testing.T) {
 	// a shrink that lands while parked leaves the caret on the bottom
 	// row and the old cursor-down re-anchor becomes a no-op. Cut the
 	// pane by the parked amount before the next repaint.
-	w, h = 50, h-parked
-	v = resizeVT(v, w, h)
+	size.set(50, 24-parked)
+	v = resizeVT(v, 50, 24-parked)
 
 	s.fe.Notify(core.TextDelta{Text: "the answer begins here\n"})
 	s.tick()
@@ -715,8 +731,8 @@ func TestParkedShrinkKeepsCommittedRows(t *testing.T) {
 
 func TestParkedShrinkTallRegionPaintsTheParagraphOnce(t *testing.T) {
 	th := oledTheme(t)
-	w, h := 50, 24
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+	size := newMutable(50, 24)
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(size.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -769,8 +785,8 @@ func TestParkedShrinkTallRegionPaintsTheParagraphOnce(t *testing.T) {
 		t.Fatalf("the region holds %d rows, want it taller than the 12-row pane", paintedRows)
 	}
 
-	w, h = 50, 12
-	v = resizeVT(v, w, h)
+	size.set(50, 12)
+	v = resizeVT(v, 50, 12)
 
 	s.fe.Notify(core.TextDelta{Text: "the answer begins here\n"})
 	s.tick()
@@ -807,8 +823,8 @@ func TestParkedShrinkTallRegionPaintsTheParagraphOnce(t *testing.T) {
 
 func TestParkedShrinkSteppedKeepsCommittedRows(t *testing.T) {
 	th := oledTheme(t)
-	w, h := 50, 24
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(mutableSize(&w, &h)),
+	size := newMutable(50, 24)
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(size.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -851,8 +867,8 @@ func TestParkedShrinkSteppedKeepsCommittedRows(t *testing.T) {
 			t.Fatalf("the keystroke before %q left no park", st.delta)
 		}
 
-		h = st.height
-		v = resizeVT(v, w, h)
+		size.set(50, st.height)
+		v = resizeVT(v, 50, st.height)
 		s.fe.Notify(core.TextDelta{Text: st.delta})
 		s.tick()
 		s.await(strings.TrimSpace(st.delta))
