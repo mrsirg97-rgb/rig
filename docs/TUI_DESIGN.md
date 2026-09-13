@@ -42,13 +42,18 @@ amendment), read at every repaint beside the width. An over-tall
 region cannot be repainted cursor-relatively: the terminal clamps the
 cursor-up at the screen's top and the rewrite lands over committed
 text, leaving rows the bookkeeping can never clear. The pending prose
-line therefore renders its last rows under the dim `· k lines hidden ·`
-marker, the menu's window shrinks next, and the input's five-row
-window shrinks last; the shrink order keeps the operator's controls
-alive as the room runs out. A keystroke on an otherwise stable region
-rewrites the input row alone: the stability check counts the status
-block's real rows (the blank above plus the rendered rows), which is
-what decides between the in-place edit and the full re-layout.
+line therefore wraps at words on every frame and renders its last
+wrapped rows under the dim `· k lines hidden ·` marker (k is the
+wrapped total minus the visible tail), the menu's window shrinks
+next, and the input's five-row window shrinks last; the shrink order
+keeps the operator's controls alive as the room runs out. The tail is
+the last wrapped rows, never a column slice: a laid row stays as laid
+while it is visible, only the last row grows with a delta, and the
+block scrolls by exactly one row when a new row starts. A keystroke
+on an otherwise stable region rewrites the input row alone: the
+stability check counts the status block's real rows (the blank above
+plus the rendered rows), which is what decides between the in-place
+edit and the full re-layout.
 
 The aim is painted geometry (SPEC_TUI, the 1.1.1 amendment): the
 region remembers the row count and the width it was last painted at,

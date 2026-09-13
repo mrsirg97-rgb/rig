@@ -1040,79 +1040,32 @@ func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap int) ([]string, st
 }
 
 func (t *tui) pendingBlockLocked(cap int) ([]string, int) {
-	pl := paintSegs(t.theme, t.pend)
-	if pl == "" || cap <= 0 {
+	if cap <= 0 || len(t.pend) == 0 {
 		return nil, 0
 	}
 	w := t.live.width
 	if w < 1 {
 		w = 1
 	}
-	full := (WidthOf(pl) + w - 1) / w
-	if full <= cap {
-		return []string{pl}, full
+	rows := wrapSegs(t.theme, w, t.pend)
+	if len(rows) == 1 && rows[0] == "" {
+		return nil, 0
+	}
+	if len(rows) <= cap {
+		return rows, len(rows)
 	}
 	tailRows := cap - 1
 	if tailRows < 1 {
 		tailRows = 1
 	}
-	segs, tw := tailSegs(t.pend, tailRows*w-2)
-	tail := paintSegs(t.theme, segs)
-	if tail == "" {
-		return []string{pl}, full
-	}
-	tr := (tw + w - 1) / w
-	if tr > tailRows {
-		tr = tailRows
-	}
-	if tr < 1 {
-		tr = 1
-	}
+	hidden := len(rows) - tailRows
+	tail := rows[len(rows)-tailRows:]
 	if cap >= 2 {
-		return []string{
-			t.theme.Paint(SlotDim, "· "+strconv.Itoa(full-tr)+" lines hidden ·"),
-			tail,
-		}, tr + 1
+		return append([]string{
+			t.theme.Paint(SlotDim, "· "+strconv.Itoa(hidden)+" lines hidden ·"),
+		}, tail...), tailRows + 1
 	}
-	return []string{tail}, tr
-}
-
-func tailSegs(segs []seg, cols int) ([]seg, int) {
-	total := 0
-	for _, s := range segs {
-		total += runeWidthSum(s.text)
-	}
-	if cols < 0 || total <= cols {
-		return segs, total
-	}
-	cut := total - cols
-	var out []seg
-	consumed := 0
-	claimed := false
-	for _, s := range segs {
-		w := runeWidthSum(s.text)
-		if !claimed {
-			if consumed+w <= cut {
-				consumed += w
-				continue
-			}
-			inside := cut - consumed
-			if inside > 0 {
-				out = append(out, seg{slot: s.slot, text: sliceCols(s.text, inside, w)})
-			} else {
-				out = append(out, s)
-			}
-			claimed = true
-			consumed += w
-			continue
-		}
-		out = append(out, s)
-	}
-	tw := 0
-	for _, s := range out {
-		tw += runeWidthSum(s.text)
-	}
-	return out, tw
+	return tail, tailRows
 }
 
 func (t *tui) statusViewportRowsLocked() int {

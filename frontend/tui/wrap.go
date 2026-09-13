@@ -22,6 +22,12 @@ func wrapSegs(th Theme, width int, segs []seg) []string {
 	}
 	var rows []string
 	emit := func(from, to int) {
+		for to > from && cells[to-1].r == ' ' {
+			to--
+		}
+		if from > to {
+			return
+		}
 
 		var b strings.Builder
 		i := from
