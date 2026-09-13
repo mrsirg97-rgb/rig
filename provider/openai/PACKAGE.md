@@ -58,6 +58,13 @@ adapter's problem; the loop sees `core.Event` only.
   never executes or poisons the transcript (SPEC_HARDENING 10); a
   missing finish marker still faults "stream truncated".
 - The scanner buffer is bounded (64 KiB initial, 4 MiB max).
+- The wire is pinned by tests (`wire_test.go`): the same request
+  marshaled twice is byte-identical, and a later turn's message array
+  is the earlier one plus the appended tail. The prefix cache is
+  byte-keyed, so a rewrite, a reorder, or a nondeterministic field in
+  this encoding is a cache regression, not a cosmetic one; the root
+  also pins the fleet's tool schemas as a golden (`cmd/rig`,
+  `wire_stability_test.go`).
 - Two wire shapes go for the effort when it is set (top-level
   `reasoning_effort` plus `chat_template_kwargs.reasoning_effort)`,
   because two server families read two different fields: OpenAI-shaped

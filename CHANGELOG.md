@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [1.2.8]: the wire prefix is pinned
+
+The cache win (98-99% prefix hits across sessions and models) is the
+product of a byte-stable request prefix: the system prompt, the tool
+schemas, and the append-only transcript. Nothing guarded that property,
+so a timestamp in the system assembly or per-turn tool trimming would
+silently kill the cache. The stability is now pinned by tests.
+
+- **the tools prefix is golden** (`cmd/rig`): the registered fleet's
+  wire shape (name, description, schema) is pinned as a sha256; a schema
+  or description change fails the test, and the golden moves with a
+  deliberate commit — a cache-invalidating change is a reviewed event.
+- **the wire is deterministic and append-only** (`provider/openai`):
+  the same request marshaled twice is byte-identical, and a later
+  turn's message array is the earlier one plus the appended tail; the
+  two pins name the property the prefix cache is byte-keyed on.
+- **the system assembly is byte-stable** (`cmd/rig`): building the
+  system prompt twice yields identical bytes, so `time.Now` or a
+  session id in the assembly fails loud.
+- **tests**: `TestWireToolsPrefixGolden`,
+  `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`,
+  `TestSystemPromptIsByteStableAcrossBuilds`. The cache-ratio query
+  already exists (`sessions summary`: `cache_read / prompt`, pinned by
+  `TestSessionsSummaryCacheRatioFixture`), so the ratio is measured,
+  not inferred.
+
 ## [1.2.7]: the refusal lands once
 
 Eight refusals returned the same string as both content and error (the
