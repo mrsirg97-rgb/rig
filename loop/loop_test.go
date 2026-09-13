@@ -556,7 +556,7 @@ func TestMalformedCallFedBackOnce(t *testing.T) {
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "go"},
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash"}}},
-		{Role: core.RoleTool, ToolID: "c1", Content: "synthetic failure\nsynthetic failure"},
+		{Role: core.RoleTool, ToolID: "c1", Content: "synthetic failure"},
 		{Role: core.RoleAssistant, Content: "recovered"},
 	}
 	wantTranscript(t, session, want...)
@@ -629,6 +629,41 @@ func TestRefusedCwdCarriesTheReasonExactlyOnce(t *testing.T) {
 	}
 	if strings.Count(content, "bash: cwd") != 1 || strings.Count(content, "no such file or directory") != 1 {
 		t.Fatalf("the reason must appear exactly once, got %q", content)
+	}
+}
+
+func TestRefusalAlreadyInContentIsNotAppended(t *testing.T) {
+	msg := "round cap: 3 tool calls is this turn's limit; stop calling tools and report, or ask the operator to raise it"
+	bash := &scriptedTool{name: "bash", fail: 1, failContent: msg, failErr: errors.New(msg), result: "recovered"}
+	p := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{
+			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
+			doneEv(),
+		}},
+		{events: []core.Event{textEv("recovered"), doneEv()}},
+	}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithTools(bash),
+	)
+	k.Session = session
+
+	f.inputs <- "go"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	content := session.Messages[2].Content
+	if content != msg {
+		t.Fatalf("a refusal already in the content must not be appended again, got %q", content)
+	}
+	if strings.Count(content, "round cap") != 1 {
+		t.Fatalf("the refusal must appear exactly once, got %q", content)
 	}
 }
 

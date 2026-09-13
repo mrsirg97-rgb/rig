@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [1.2.7]: the refusal lands once
+
+Eight refusals returned the same string as both content and error (the
+retry guard's bound and round caps, the allow-list, the plugin
+provenance rule's three voices, the python tool's two), and the loop's
+fed-back error line appended that string again: the model saw each
+refusal twice. The error line is now skipped when the content already
+ends with it.
+
+- **the fed-back error line is skipped when it is already there**
+  (`loop`): a tool result whose exec failed keeps its content and gains
+  the exec error on its own line unless the trimmed content already
+  ends with it; a refusal that names itself as both content and error
+  lands once, and a failing command that produced output still gains
+  its error line. The fourth named reopening of the frozen loop;
+  SPEC_CORE and the loop's PACKAGE.md carry the name.
+- **the middleware chain's order is documented** (`middleware`): the
+  parent PACKAGE.md records the root's `wire()` slice — `Wrap` applies
+  in order, so the first-listed link is innermost and the last
+  (`paths`) is outermost.
+- **tests**: a scripted tool returning `(msg, errors.New(msg))` pins
+  the transcript to `msg` exactly once; the malformed-call test's
+  transcript now carries `synthetic failure` once, and the
+  output-plus-error-line path is unchanged.
+
 ## [1.2.6]: the pending tail scrolls by rows, not columns
 
 The capped pending prose line cut its visible tail at an exact column

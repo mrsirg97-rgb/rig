@@ -275,10 +275,12 @@ func (r *run) advance(t *turn) {
 		}
 		content, execErr := out.content, out.err
 		if execErr != nil {
-			if content != "" && !strings.HasSuffix(content, "\n") {
-				content += "\n"
+			if !strings.HasSuffix(strings.TrimSpace(content), execErr.Error()) {
+				if content != "" && !strings.HasSuffix(content, "\n") {
+					content += "\n"
+				}
+				content += execErr.Error()
 			}
-			content += execErr.Error()
 		}
 		r.k.Frontend.Notify(core.ToolResult{ID: call.ID, Content: content, Err: execErr, Duration: out.dur})
 		session.Append(core.Message{
