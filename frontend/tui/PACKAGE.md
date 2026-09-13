@@ -92,9 +92,10 @@ width); no core or loop line (decision 10).
   by the viewport (SPEC_TUI, the 1.1.0 amendment), because a region
   taller than the pane repaints with the cursor-up clamped at the
   screen's top and writes itself over committed history. The pending
-  prose line yields first (its tail renders under the `· k lines
-  hidden ·` marker), then the menu's window, then the input's
-  five-row window.
+  prose line yields first (the whole line wraps at words every frame
+  and its tail is the last wrapped rows under the `· k lines hidden ·`
+  marker, so a laid row never changes while it stays visible), then
+  the menu's window, then the input's five-row window.
 - The stability check's status offset is the status block's real row
   count (the blank above plus the rendered rows), not a constant: the
   check decides between the in-place input-row edit and the full

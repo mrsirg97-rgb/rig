@@ -180,16 +180,18 @@ the lost spacing between the content and the input, and the model
 info block gone or too far below the input.
 
 The region is now bounded by the viewport height, read at every
-repaint beside the width. The pending prose line renders its last
-rows under a dim `· k lines hidden ·` head marker (the tool block's
-elision voice; the line still commits whole to scrollback when it
-closes), the menu's candidate window shrinks under the same budget
-before its `… N more` tail and its hint row, and the input's five-row
-window shrinks last. The shrink order is the pending, then the menu,
-then the input: the operator's controls outlast the stream's texture.
-When the controls alone outgrow the pane, the region renders whole
-and the protocol degrades: a pane shorter than its own controls
-cannot host a live tail.
+repaint beside the width. The pending prose line wraps at words (the
+1.2.6 amendment) and renders its last wrapped rows under a dim
+`· k lines hidden ·` head marker, where `k` is the wrapped total
+minus the visible tail (the tool block's elision voice; the line
+still commits whole to scrollback when it closes), the menu's
+candidate window shrinks under the same budget before its `… N more`
+tail and its hint row, and the input's five-row window shrinks last.
+The shrink order is the pending, then the menu, then the input: the
+operator's controls outlast the stream's texture. When the controls
+alone outgrow the pane, the region renders whole and the protocol
+degrades: a pane shorter than its own controls cannot host a live
+tail.
 
 The typing fast path is fixed with it: the stability check counted
 the status block as one row when it is four (the blank above plus
@@ -317,7 +319,9 @@ Prose wraps at words (amended over "rig never hand-wraps"): a closed
 prose line; the model's text, its reasoning, the operator's prompt:
 commits as the terminal rows it needs, broken at spaces (a word wider
 than the width breaks at the edge, the terminal's rule); the pending
-(unclosed) line stays the terminal's while it streams. Preformatted
+(unclosed) line wraps the same way while it streams — the whole line
+wraps at words on every frame, so a laid row never changes while it
+stays visible and only the last row grows with a delta. Preformatted
 content never soft-wraps: tool output, command output, and fenced code
 commit whole and break at the column edge as before. The paint
 survives the break per piece.

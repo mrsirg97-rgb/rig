@@ -327,7 +327,7 @@ func TestTearSteeringEnter(t *testing.T) {
 	s.fe.Notify(core.ReasoningDelta{Text: "streaming reasoning that wraps around and around and around\n"})
 	s.fe.Notify(core.ReasoningDelta{Text: "still thinking "})
 	s.tick()
-	s.await("still thinking")
+	s.await("thinking")
 
 	long := "steer this turn in a long way"
 	s.si.feed(long)

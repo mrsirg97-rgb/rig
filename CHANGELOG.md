@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [1.2.6]: the pending tail scrolls by rows, not columns
+
+The capped pending prose line cut its visible tail at an exact column
+count, so rows ended mid-word and every delta re-sliced the whole tail
+at a new column — at streaming speed the tail jumped several times a
+second instead of scrolling. The tail is now computed in rows.
+
+- **the tail is the last wrapped rows** (`frontend/tui`): the pending
+  line wraps at words on every frame (the committed path's wrap), the
+  cap takes the last `cap-1` rows under the unchanged `· k lines
+  hidden ·` marker, and `k` is the wrapped total minus the visible
+  tail. A laid row never changes while it stays visible: only the
+  last row grows with a delta and the block scrolls by exactly one
+  row when a new row starts. `tailSegs` is gone; a row exactly width
+  wide gets the same pending-wrap guard (the `toCol(1)` before the
+  LF) the committed rows get.
+- **the wrap never leaves a trailing space** (`frontend/tui`,
+  `wrapSegs`): an emitted row dropped its trailing spaces when the
+  text ended on one and kept them once the stream moved past — the
+  same row changed while it scrolled. Rows now end at the last
+  non-space; the committed path's rows lose only invisible trailing
+  blanks.
+- **tests**: a scripted stream of a 640+ char paragraph into a narrow
+  pane asserts, between consecutive frames, that every visible row
+  except the last is unchanged or moved up by exactly one row, that
+  no row breaks inside a word, and that the hidden count plus the
+  visible rows equals the wrapped total; a no-newline stream of a
+  wide word pins the exact-width rows.
+
 ## [1.2.5]: the box the jail cannot run on
 
 The operator's box cannot run the bwrap jail: the kernel's
