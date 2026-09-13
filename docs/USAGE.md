@@ -69,12 +69,15 @@ transcript only; context, not memory: compaction writes nothing to
 rem (`specs/SPEC_STATE.md`: rem is deliberate).
 
 The `delegate` tool (SPEC_DELEGATE) spawns a headless worker on a task
-now; a bounded sub-task whose result is a message, not a conversation
-- on the worker model, in a cwd under your session's or the rig home.
-It waits, feeds back the worker's last message, and records the run in
-the one scheduler store under an ad-hoc key, so `scheduler runs`
-shows it beside cron runs; the worker's transcript is resumable with
-`sessions resume <id>`.
+now: a bounded sub-task whose result is a message, not a conversation,
+on the worker model, in a cwd under your session's or the rig home.
+Several delegate calls in one turn run in parallel, up to the fleet's
+slots, and extras wait for a slot; the turn blocks until each worker
+finishes or times out. A held GPU refuses by name (busy:skip, never an
+eviction from inside a turn). The worker's last message comes back as
+the tool result, the run is recorded in the one scheduler store under
+an ad-hoc key, so `scheduler runs` shows it beside cron runs, and the
+worker's transcript is resumable with `sessions resume <id>`.
 
 ## what you see
 
@@ -148,8 +151,9 @@ rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits the 18 built-in
-tools. Python plugins (outside the default) are admitted by their
+refusal goes back to the model. The default permits the 16 built-in
+tools, 18 when a worker fleet is configured. Python plugins (outside the
+default) are admitted by their
 presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7); an installed
 plugin's own allow-list entry; not by an `allow` line; a plugin still
 in `plugins/pending/` stays refused until approved (the approve's reload

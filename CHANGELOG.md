@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.2.9]: the docs name the fan-out
+
+The delegation feature never made it into the README or the landing page:
+parallel subagent fan-out, mid-turn execution, the slots gate, and the
+GPU busy rule were all undocumented, and the README's tool count and
+config table were stale (it said 18 built-in tools unconditionally, and
+omitted `workers.json`). The docs now say what the code does.
+
+- **README**: the tool count names the fleet condition; `workers.json`
+  joins the config table; a subagents section describes the delegate
+  fan-out (parallel workers in one turn, the fleet's slots gate, the
+  busy rule, no recursion, resumable transcripts).
+- **docs/USAGE.md**: the delegate paragraph names the fan-out and the
+  busy:skip refusal; the default allow count is conditioned on the fleet.
+- **docs/SETUP.md**: the version examples move; the fleet's slots section
+  says a fan-out queues beyond the gate.
+- **site/index.html**: the landing page gains the subagent bullet and the
+  conditional tool count.
+
 ## [1.2.8]: the wire prefix is pinned
 
 The cache win (98-99% prefix hits across sessions and models) is the

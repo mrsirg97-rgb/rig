@@ -203,7 +203,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="gap sm reveal"></div>
     <div class="ln stats reveal" aria-label="rig in numbers">
       <div class="stat"><span class="n">99%</span><span class="l">of every token served from cache. long sessions stay fast.</span></div>
-      <div class="stat"><span class="n">383 lines</span><span class="l">is the whole agent loop, batch included. read it over coffee.</span></div>
+      <div class="stat"><span class="n">388 lines</span><span class="l">is the whole agent loop, batch included. read it over coffee.</span></div>
       <div class="stat"><span class="n">28k / 40k</span><span class="l">lines of code / lines of tests. more tests than code.</span></div>
       <div class="stat"><span class="n">497 commits</span><span class="l">most of them written by rig, running inside rig</span></div>
     </div>
@@ -244,8 +244,9 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="msg reveal">the whole thing is one loop: build the prompt, stream the model, run what it asks for,
     hand back the results, repeat. everything below is what makes that loop safe to leave running.</div>
     <div class="gap sm reveal"></div>
-    <div class="ln li reveal"><span class="lg">•</span> the loop is 383 lines — open to extension, closed to modification since 0.3.0. everything else plugs in around it: model providers, interfaces, tools, guardrails, policy. adding one is a single file and one line to register it.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the loop is 388 lines: open to extension, closed to modification since 0.3.0. everything else plugs in around it: model providers, interfaces, tools, guardrails, policy. adding one is a single file and one line to register it.</div>
     <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel, results land in order. the model can fire off three reads at once and the transcript still reads top to bottom. nothing dropped, nothing reordered.</div>
+    <div class="ln li reveal"><span class="lg">•</span> delegate is a subagent. a turn can fan out several workers in parallel, bounded by the fleet's slots, and waits for their answers. a held GPU refuses by name (busy:skip). each worker is sandboxed, cannot delegate in turn, and keeps a transcript you can resume.</div>
     <div class="ln li reveal"><span class="lg">•</span> the guardrails have names and reasons. a command allowlist, a retry limit, an approval gate, output limits, a holding area for new plugins, a sandbox for background workers. when rig says no, it says why, so the model fixes its approach instead of thrashing.</div>
     <div class="ln li reveal"><span class="lg">•</span> memory is on purpose. nothing sneaks into your prompt on its own. the model saves a fact, recalls it when it needs it, and replaces it when it learns better. tasks, memory, and schedules belong to the repo. a prompt that stays stable is where the cache number comes from.</div>
     <div class="ln li reveal"><span class="lg">•</span> every behavior is one sentence in specs/ with a test that holds it there. the exact bytes sent to the model are pinned too. spec first, then the failing test, then the code.</div>
@@ -295,7 +296,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln sect reveal">── <b>the surface</b> ────────────────────────</div>
 
     <div class="gap reveal"></div>
-    <div class="msg reveal">eighteen tools built in. each one small enough that a local model can actually use it well.</div>
+    <div class="msg reveal">sixteen tools built in, eighteen when a worker fleet is configured. each one small enough that a local model can actually use it well.</div>
     <div class="ln tl reveal"><span class="tn">bash</span><span class="td">run real commands; output comes back trimmed to what matters</span></div>
     <div class="ln tl reveal"><span class="tn">file</span><span class="td">read · write · edit; an edit is refused if the file changed since you last read it</span></div>
     <div class="ln tl reveal"><span class="tn">fs</span><span class="td">ls · find · grep; simple enough for a local model to get right the first time</span></div>
@@ -305,7 +306,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln tl reveal"><span class="tn">todo</span><span class="td">a task list the model keeps for itself, with dependencies checked up front</span></div>
     <div class="ln tl reveal"><span class="tn">rem</span><span class="td">memory on purpose; save a fact, recall it when needed, update it later, per repo</span></div>
     <div class="ln tl reveal"><span class="tn">scheduler</span><span class="td">cron jobs that run a worker in a sandbox while you sleep</span></div>
-    <div class="ln tl reveal"><span class="tn">delegate</span><span class="td">hand a task to a fresh worker and get back its answer</span></div>
+    <div class="ln tl reveal"><span class="tn">delegate</span><span class="td">hand tasks to fresh workers in parallel and get back their answers, up to the fleet's slots</span></div>
     <div class="ln tl reveal"><span class="tn">plugin</span><span class="td">run a plugin, or read what it does, without pausing the main loop</span></div>
     <div class="ln tl reveal"><span class="tn">plugins</span><span class="td">list · create · delete · reload; anything the model writes waits in pending until you approve it</span></div>
     <div class="ln tl reveal"><span class="tn">sessions</span><span class="td">browse past sessions and live vitals: which models ran, what failed, the cache ratio</span></div>

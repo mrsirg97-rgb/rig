@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 1.2.2
+./rig --version        # rig 1.2.9
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -137,7 +137,7 @@ directory's project file, not the creating session's.
 | approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
-| update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | the embedded pinned key that signs releases (SPEC_BUILD 5); env and file override it — a build without a pinned key refuses `-update` |
+| update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | the embedded pinned key that signs releases (SPEC_BUILD 5); env and file override it; a build without a pinned key refuses `-update` |
 | model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the one-row table (`local`) |
 
 **On the worker sandbox**; `sandbox` is the scheduled worker's jail
@@ -213,7 +213,7 @@ set). Every file is optional, so these are the ones to copy when a blank
 home is not what you want; an omitted key keeps its embedded default,
 and an unknown key refuses at start naming the file and the field.
 
-**`settings.json`** — the knobs, flat, by their env names:
+**`settings.json`**: the knobs, flat, by their env names:
 
 ```json
 {
@@ -239,7 +239,7 @@ pauses every mutating call for your y/n; `sandbox: "off"` is the
 operator's explicit unjailing of the scheduled worker, one loud line
 per run.
 
-**`models.json`** — the per-model table, merged by id over the embedded
+**`models.json`**: the per-model table, merged by id over the embedded
 rows:
 
 ```json
@@ -254,7 +254,7 @@ numeric fields; a listed id keeps the ones you omit from the embedded
 row. `role` is `interactive` (the default) or `worker`; `efforts` is
 the `/effort` dial's vocabulary.
 
-**`workers.json`** — the fleet that unlocks `scheduler` and `delegate`:
+**`workers.json`**: the fleet that unlocks `scheduler` and `delegate`:
 
 ```json
 {"model": "worker", "slots": 2}
@@ -262,9 +262,10 @@ the `/effort` dial's vocabulary.
 
 `model` must resolve in the merged models table (the `worker` row
 above); `slots` is the concurrent `delegate` bound per session and
-defaults to `1`. Absent file, no fleet: the worker tools are absent,
-the default allow does not grow, and the status row says
-`workers: none`.
+defaults to `1`. A fan-out can issue more delegate calls than slots:
+the extras wait for a slot rather than fail. Absent file, no fleet:
+the worker tools are absent, the default allow does not grow, and the
+status row says `workers: none`.
 
 ## plugins
 
@@ -405,7 +406,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 1.2.2
+./rig --version                 # prints: rig 1.2.9
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
