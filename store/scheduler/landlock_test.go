@@ -63,8 +63,8 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 		t.Fatalf("spawn calls = %d, want 1 (landlock is a run, not a skip)", len(spawn.calls))
 	}
 	argv := spawn.calls[0].Argv
-	if argv[0] != "/x/rig" || argv[1] != "-p" {
-		t.Fatalf("the landlock worker is today's plain argv, got %v", argv)
+	if argv[0] != "/x/rig" || argv[1] != "-exec" || argv[2] != "/x/rig" || argv[3] != "-p" {
+		t.Fatalf("the landlock worker must exec through the confined helper, got %v", argv)
 	}
 	baseIdx := -1
 	for i, a := range argv {

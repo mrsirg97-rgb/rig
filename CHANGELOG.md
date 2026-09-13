@@ -25,12 +25,17 @@ can carry them, each residual named.
   dirs ro, `/proc` read, the device nodes rw, `sandboxBinds` with the
   same rw/ro semantics. Netless: bind+connect TCP handled and granted
   nowhere; the model call rides the one socket.
-- **the subprocess boundary, thread-safe** (`cmd/rig`, `tool/execwrap`,
-  `tool/bash`, `tool/python`): `landlock_restrict_self` commits
-  per-thread creds, so the worker's subprocesses exec through
-  `rig -exec <argv>` — a fresh single-threaded process that restricts
-  itself and execs the command; `RIG_EXEC_WRAPPER` is on the named env
-  list and bash/python wrap their exec through it.
+- **the domain arrives with the image, the only sound point**
+  (`cmd/rig`, `tool/execwrap`, `tool/bash`, `tool/python`):
+  `landlock_restrict_self` commits per-thread creds and Go's runtime
+  has threads before `main()`, so an in-process restrict leaves the
+  worker's own goroutines outside the wall — proven: a worker's
+  in-process `read` tool returned the operator's `~/.bashrc` under the
+  runner's exact env. The runner spawns `rig -exec rig -p ...`: the
+  `-exec` branch restricts on a locked thread and execs, so the new
+  image and every thread it creates inherit the domain; the worker
+  never applies the profile in-process, and `RIG_EXEC_WRAPPER` lets
+  bash/python wrap their subprocess execs through the same helper.
 - **fail closed, both ends** (`cmd/rig`): the worker restricts at
   startup, before config and before any tool; a malformed spec, an
   unknown spec version, a missing grant, a probe failure, or an

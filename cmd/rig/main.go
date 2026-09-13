@@ -716,14 +716,6 @@ func main() {
 		}
 	}
 
-	if oneShotArg(os.Args) {
-		if err := sched.ApplyLandlock(os.Getenv(sched.LandlockEnv)); err != nil {
-			fmt.Fprintln(os.Stderr, "rig:", err)
-			os.Exit(1)
-		}
-		runtime.LockOSThread()
-	}
-
 	baseURL := flag.String("base-url", "", "OpenAI-compatible endpoint base URL (the worker swap); precedence: flag > RIG_BASE_URL > settings.json baseUrl > the embedded default")
 	model := flag.String("model", "", "model name; precedence: flag > RIG_MODEL > settings.json model (no default; a run without one refuses)")
 	system := flag.String("system", "", "system prompt; precedence: flag > RIG_SYSTEM > settings.json system > the embedded default")
@@ -1286,15 +1278,6 @@ func runJob(args []string) int {
 		return 1
 	}
 	return 0
-}
-
-func oneShotArg(args []string) bool {
-	for _, a := range args[1:] {
-		if a == "-p" || strings.HasPrefix(a, "-p=") {
-			return true
-		}
-	}
-	return false
 }
 
 func execArgIndex(args []string) int {

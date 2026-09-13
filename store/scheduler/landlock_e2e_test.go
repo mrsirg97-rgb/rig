@@ -212,3 +212,43 @@ func TestLandlockSocketIsTheOnlyHole(t *testing.T) {
 		t.Fatalf("the socket forwards the job's model call (model %q)", req.Model)
 	}
 }
+
+func fileCall(t *testing.T, id, name string, args map[string]any) string {
+	t.Helper()
+	b, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return toolCallReplyJail(id, name, string(b))
+}
+
+func TestLandlockInProcessReadRefusesOutside(t *testing.T) {
+	requireLandlockBox(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, srv := landlockFixture(t, []string{
+		fileCall(t, "c1", "read", map[string]any{"path": filepath.Join(home, ".bashrc")}),
+		jailFinalReply,
+	}, nil, "")
+	result := toolResultOfJail(t, lastBodyOf(t, srv))
+	if !strings.Contains(result, "permission denied") {
+		t.Fatalf("an in-process read outside the grants must refuse, got %q", result)
+	}
+}
+
+func TestLandlockInProcessWriteOutsideRefuses(t *testing.T) {
+	requireLandlockBox(t)
+	_, srv := landlockFixture(t, []string{
+		fileCall(t, "c1", "write", map[string]any{"path": "/tmp/rigll-write", "content": "x"}),
+		jailFinalReply,
+	}, nil, "")
+	result := toolResultOfJail(t, lastBodyOf(t, srv))
+	if !strings.Contains(result, "permission denied") {
+		t.Fatalf("an in-process write outside the cwd must refuse, got %q", result)
+	}
+	if _, err := os.Stat("/tmp/rigll-write"); !os.IsNotExist(err) {
+		t.Fatalf("the host's /tmp must be untouched (stat: %v)", err)
+	}
+}

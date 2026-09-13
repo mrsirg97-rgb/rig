@@ -113,6 +113,8 @@ func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, 
 	}
 	env = append(env, extraEnv...)
 	argv := append(append([]string{}, workerCmd...),
+		"-exec",
+		workerCmd[0],
 		"-p", prompt,
 		"-base-url", "unix:"+sock,
 		"-model", model)

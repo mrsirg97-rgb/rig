@@ -244,22 +244,23 @@ process restricts itself, descendants inherit, and the wall holds
 under AppArmor. This decision is that profile: same guarantees as 1
 where Landlock can carry them, each residual named.
 
-- **The worker installs it.** The runner spawns `rig -p` as today
-  (plain argv, no bwrap), with the env scrubbed to the named list and
-  `RIG_LANDLOCK=<spec json>` as one of the named entries (paths only,
-  no secrets; a child of the worker can read the spec, which is why
-  nothing secret crosses). The worker restricts itself at startup,
-  before config, before any tool, before the provider dial.
-- **The subprocess boundary, thread-safe.** `landlock_restrict_self`
-  commits per-thread creds: in a Go worker only the restricting thread
-  carries the domain, and a tool exec from another runtime thread
-  would spawn an undomain'd child. So the worker's subprocesses
-  (bash, the python kernel, plugin subprocesses) exec through
-  `rig -exec <argv>`: a fresh single-threaded process restricts itself
-  from the same spec and execs the command, so the wall rides the
-  child. The env carries `RIG_EXEC_WRAPPER=<the worker binary>`;
-  bash and python wrap their exec through it when it is set, and the
-  off/jailed profiles never set it.
+- **The worker installs it through exec, the only sound point.**
+  `landlock_restrict_self` commits per-thread creds: only the calling
+  thread carries the domain, threads that already exist keep their old
+  creds, and Go's runtime has threads before `main()` runs. There is no
+  thread-sync and no way to re-apply the domain to a live thread, so an
+  in-process restrict would leave the worker's own goroutines outside
+  the wall — a worker's in-process `read` tool proved it by returning
+  the operator's `~/.bashrc`. The domain must arrive with the image:
+  the runner spawns `rig -exec rig -p ...` — the `-exec` branch
+  restricts on a locked thread and execs, so the new image and every
+  thread it creates inherit the domain. The env is scrubbed to the
+  named list with `RIG_LANDLOCK=<spec json>` as one of the named
+  entries (paths only, no secrets; a child of the worker can read the
+  spec, which is why nothing secret crosses). The worker itself never
+  applies the profile in-process; the subprocess helpers re-apply it
+  from the same spec before exec (`RIG_EXEC_WRAPPER=<the worker
+  binary>`), and the off/jailed profiles never set it.
 - **The grants, exactly.** Handled: every filesystem right the kernel
   knows except `IOCTL_DEV` (parity with the jail's `/dev` bind; a GPU
   bind keeps working), plus bind+connect TCP. Granted, nothing else:
@@ -285,12 +286,16 @@ where Landlock can carry them, each residual named.
   not process containment: no mount namespace (no second `/`, no
   private procfs), no pid namespace (no process hiding), and the net
   ABI is TCP-only (sendto on an unconnected socket, DNS tunneling, is
-  not restricted; UDP egress is open). `/proc` metadata of host
-  processes stays readable (cmdline, status); `environ` and `mem` are
-  the box's yama posture to gate (`ptrace_scope`). The walls that
-  hold: the operator's home, the rig home, the crontab, writes outside
-  the cwd, TCP egress, cross-domain signals. The interactive REPL
-  never consults any of this (4).
+  not restricted; UDP egress is open). The `/proc` grant is read for
+  the worker's own introspection, so same-uid process metadata stays
+  readable — including another session's `environ` (the brain's own
+  environment, if the worker shares its uid; `mem` is the box's yama
+  posture to gate, `ptrace_scope`). The ABI 5 device-ioctl right is
+  unhandled (parity with the jail's `/dev` bind, so a GPU bind keeps
+  working): a confined worker's ioctl on a granted device node stays
+  open. The walls that hold: the operator's home, the rig home, the
+  crontab, writes outside the cwd, TCP egress, cross-domain signals.
+  The interactive REPL never consults any of this (4).
 - **Fail closed, both ends.** The runner probes before the spawn
   (create_ruleset with the VERSION flag; a probe failure or ABI < 4
   refuses and records the skip, the bwrap voice's shape). The worker's
