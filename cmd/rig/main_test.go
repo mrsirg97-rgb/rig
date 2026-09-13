@@ -51,6 +51,19 @@ func TestExecArgIndex(t *testing.T) {
 	}
 }
 
+func TestExecDoorOpensOnlyWithTheProfile(t *testing.T) {
+	argv := []string{"rig", "-p", "-exec", "more prompt"}
+	if got := execDoor(argv, ""); got != -1 {
+		t.Fatalf("a one-shot without the profile keeps -exec as the prompt, got %d", got)
+	}
+	if got := execDoor(argv, `{"v":1}`); got != 2 {
+		t.Fatalf("the profile opens the door, got %d", got)
+	}
+	if got := execDoor([]string{"rig", "-p", "hi"}, `{"v":1}`); got != -1 {
+		t.Fatalf("no -exec refuses regardless of the profile, got %d", got)
+	}
+}
+
 type nullFrontend struct{}
 
 type fakeTodo struct{}
