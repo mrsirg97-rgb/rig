@@ -39,7 +39,8 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 
 ## the tools
 
-rig ships 18 built-in tools. Restrict them with `--allow`:
+rig ships 16 built-in tools, and two more (`scheduler` and `delegate`) when a
+worker fleet is configured. Restrict them with `--allow`:
 
 | tool | what it does |
 |------|--------------|
@@ -53,12 +54,23 @@ rig ships 18 built-in tools. Restrict them with `--allow`:
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one) |
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
-| `delegate` | a one-shot headless worker for a bounded subtask |
+| `delegate` | a headless worker for a bounded subtask; several run in parallel in one turn, up to the fleet's slots |
 | `sessions` | read-only vitals of the session store |
 | `plugin` / `plugins` | the door into your python plugins, and their ecosystem |
 
 Every tool result is capped. Repeated identical failures are bounded. An
 optional round cap limits calls per turn. A failed call executes once.
+
+## subagents
+
+`delegate` runs a bounded sub-task on a headless worker and waits for its
+last message. In one turn you can fan out several delegates: they run in
+parallel, the turn blocks until each finishes or times out, and
+`workers.json`'s `slots` bounds how many run at once, with extras waiting
+for a slot. A worker runs only when the model's GPU slot is free; a held
+GPU refuses by name (`busy:skip`, never an eviction from inside a turn).
+Workers are sandboxed, cannot delegate in turn (`RIG_DELEGATE`), and their
+transcripts are resumable with `sessions resume <id>`.
 
 ## plugins
 
@@ -73,6 +85,7 @@ Configuration lives in `~/.rig/`. Set `$RIG_HOME` to move it. Every file is opti
 |------|---------------|
 | `settings.json` | the knobs: endpoint, model, the allow-list, the retry bound, the approval dial, the worker sandbox |
 | `models.json` | the per-model table: context window, max tokens, the compaction reserve, the role (`worker`/`interactive`), the effort levels |
+| `workers.json` | the worker fleet: `{"model": "<id>", "slots": N}`. Unlocks `scheduler` and `delegate`; `slots` bounds concurrent delegates per session |
 | `AGENTS.md` | global instructions, read before the project's `<cwd>/AGENTS.md` |
 | `theme.json` | the terminal theme: base, slot colors, glyph set |
 | `plugins/` | your python plugins (top-level files are live) |
