@@ -57,6 +57,14 @@ forge) ships only after this spec's provenance rule (2) lands.
   needs (`/dev/nvidia*` for a GPU plugin, a data directory). And
   `sandbox: "off"`; the operator's explicit act, one loud line per
   worker run, never a default.
+- The landlock profile (6): the same containment for the boxes the
+  jail cannot run on. The jail needs an unprivileged user namespace;
+  Ubuntu 24.04+ restricts that under AppArmor
+  (`kernel.apparmor_restrict_unprivileged_userns`), and an
+  unprivileged operator cannot flip the sysctl. Landlock needs no
+  namespace: data access, egress, and the process domain, scoped by
+  the kernel itself. A box with neither refuses (fail closed), never
+  a silent unjailed run.
 
 ## non-goals
 
@@ -76,9 +84,9 @@ forge) ships only after this spec's provenance rule (2) lands.
 - No per-tool jails: one jail per worker process tree. bash and the
   kernel share it; splitting them buys nothing (they share a cwd
   anyway) and doubles the mount plumbing.
-- No Windows, no macOS: bwrap is Linux: the spec says so and the
-  refusal names it. (macOS sandbox-exec is deprecated; a later
-  amendment if a real second platform appears.)
+- No Windows, no macOS: bwrap and landlock are Linux: the spec says
+  so and the refusal names it. (macOS sandbox-exec is deprecated; a
+  later amendment if a real second platform appears.)
 - No signing, no plugin hashes, no lockfile: provenance is a
   directory boundary and an operator verb, not a PKI.
 
@@ -218,14 +226,82 @@ attendance, and it is already the models table's vocabulary: the
 ### 5. The settings, exactly
 
 ```
-"sandbox": "jailed" | "off"        (default "jailed"; workers only)
+"sandbox": "jailed" | "landlock" | "off"
+                                   (default "jailed"; workers only)
 "sandboxBinds": ["/dev/nvidia0", "/dev/nvidiactl", ...]
                                    (default []; ro-bind unless the
                                     entry ends ":rw"; workers only)
 ```
 
 Two keys, the settings chain as SPEC_CONFIG 2 (no env, no flags: the
-file over the embedded default). The refusal voice teaches both.
+file over the embedded default). The refusal voice teaches all three.
+
+### 6. The landlock profile: the same guarantees, no namespaces
+
+The jail's boundary is bwrap's user namespace; the box above cannot
+create one. Landlock is the kernel's unprivileged data-access LSM: a
+process restricts itself, descendants inherit, and the wall holds
+under AppArmor. This decision is that profile: same guarantees as 1
+where Landlock can carry them, each residual named.
+
+- **The worker installs it.** The runner spawns `rig -p` as today
+  (plain argv, no bwrap), with the env scrubbed to the named list and
+  `RIG_LANDLOCK=<spec json>` as one of the named entries (paths only,
+  no secrets; a child of the worker can read the spec, which is why
+  nothing secret crosses). The worker restricts itself at startup,
+  before config, before any tool, before the provider dial.
+- **The subprocess boundary, thread-safe.** `landlock_restrict_self`
+  commits per-thread creds: in a Go worker only the restricting thread
+  carries the domain, and a tool exec from another runtime thread
+  would spawn an undomain'd child. So the worker's subprocesses
+  (bash, the python kernel, plugin subprocesses) exec through
+  `rig -exec <argv>`: a fresh single-threaded process restricts itself
+  from the same spec and execs the command, so the wall rides the
+  child. The env carries `RIG_EXEC_WRAPPER=<the worker binary>`;
+  bash and python wrap their exec through it when it is set, and the
+  off/jailed profiles never set it.
+- **The grants, exactly.** Handled: every filesystem right the kernel
+  knows except `IOCTL_DEV` (parity with the jail's `/dev` bind; a GPU
+  bind keeps working), plus bind+connect TCP. Granted, nothing else:
+  the job cwd (rw, the full handled set), the scratch home (beneath
+  the cwd; `HOME` and `TMPDIR` point at it), the kernel dir (ro), the
+  rig binary (ro + exec), the system dirs `/usr` `/lib` `/lib64`
+  `/bin` `/sbin` `/etc` (ro), `/proc` (read), the kernel device nodes
+  `/dev/null` `/dev/zero` `/dev/random` `/dev/urandom` (rw), `/dev/shm`
+  (rw), and `sandboxBinds` with the same rw/ro semantics as the jail's
+  binds (a missing bind path refuses, named). There is no `/tmp`: the
+  worker's temp is `scratch/tmp`. The model call rides the unix-socket
+  proxy unchanged (1); the web tools stay host-side (3).
+- **Netless, the net ABI.** Handled bind+connect TCP, granted nowhere:
+  a jailed worker's `curl` and `urllib` fail loud. The ABI must be 4
+  or newer; the refusal names the kernel and the two alternatives
+  (`jailed` if bwrap can run, `off` if the operator accepts it).
+- **The process domain, scoped.** ABI 6 scopes the domain: SIGNAL and
+  ABSTRACT_UNIX_SOCKET. A confined worker cannot signal a process
+  outside its own domain (the jail's pid namespace equivalent) nor
+  reach an abstract socket outside it. Below ABI 6 the signal residual
+  is named, not silent: a worker can kill a same-uid process.
+- **The residual vs the jail, named.** Landlock is data access control,
+  not process containment: no mount namespace (no second `/`, no
+  private procfs), no pid namespace (no process hiding), and the net
+  ABI is TCP-only (sendto on an unconnected socket, DNS tunneling, is
+  not restricted; UDP egress is open). `/proc` metadata of host
+  processes stays readable (cmdline, status); `environ` and `mem` are
+  the box's yama posture to gate (`ptrace_scope`). The walls that
+  hold: the operator's home, the rig home, the crontab, writes outside
+  the cwd, TCP egress, cross-domain signals. The interactive REPL
+  never consults any of this (4).
+- **Fail closed, both ends.** The runner probes before the spawn
+  (create_ruleset with the VERSION flag; a probe failure or ABI < 4
+  refuses and records the skip, the bwrap voice's shape). The worker's
+  own restrict failure exits before any tool runs and the outcome row
+  carries it. A malformed `RIG_LANDLOCK`, a spec version the binary
+  does not know, or a grant path that does not exist refuses the same
+  way.
+- **Refusals, each naming what would be right.** The platform and arch
+  voice (the profile is linux/amd64 or linux/arm64; the syscall
+  numbers ride the generic table), the ABI voice, the probe voice, the
+  missing-grant voice, the worker's restrict voice.
 
 ## testing
 
@@ -250,6 +326,24 @@ file over the embedded default). The refusal voice teaches both.
   code on it (no bwrap invocation recorded by a fake PATH shim).
 - linux-only: the named refusal on a non-linux build (a build tag or
   a runtime check, the PR's choice, tested by the voice).
+- landlock: the same fixture against the landlock profile (this box
+  cannot run bwrap, so the landlock e2e runs here and the bwrap one
+  skips): the operator's home absent, no TCP, the outside writes
+  refuse, the kernel python sees the same walls (one boundary), the
+  operator's marker mtime untouched, the socket is the only hole; the
+  unit tests carry the refusal voices, the env list (incl
+  `RIG_EXEC_WRAPPER`), and the ApplyLandlock no-op/refusal paths.
+- the landlock profile (6), the box the jail cannot run on: the same
+  five walls, flipped — the operator's home is `Permission denied`,
+  `curl` fails (no TCP), a write inside the cwd lands, a write outside
+  (and into `/tmp`) refuses, the kernel's python sees the same walls,
+  and the model call rides the one socket. The e2e runs where bwrap's
+  skips (userns blocked, landlock present) and skips where bwrap's
+  runs; a box with neither skips both and the run refuses.
+- the landlock spec: the env list verbatim (PATH, HOME, RIG_HOME,
+  TMPDIR, RIG_LANDLOCK), the refusal voices (platform, arch, ABI,
+  probe, missing grant), the malformed-profile refusal, the unknown
+  spec version, the old-ABI skip at the runner.
 
 ## scope
 
@@ -264,3 +358,13 @@ PR A is this file. PR B implements decision 2 (provenance; small,
 unblocks SPEC_PLUGINS 8). PR C implements decisions 1/3/5 (the jail).
 The order is deliberate: the forge's gate first, the worker jail
 second, the reload (SPEC_PLUGINS 8) only after both.
+
+PR D is the amendment: decisions 5 and 6, the landlock profile.
+`store/scheduler` gains `landlock.go` and the two build-tagged syscall
+files (raw `syscall.Syscall`, no new Go dependencies: the numbers ride
+the generic syscall table, 444/445/446 on amd64 and arm64); the runner
+and the delegate gain the profile dispatch; `config` accepts the third
+value; `cmd/rig` restricts at startup; docs name the landlock
+dependency (a Linux kernel with Landlock ABI 4+, present on any
+6.12+ box) and the residuals (UDP egress, proc metadata). `core/` and
+`loop/` byte-identical.

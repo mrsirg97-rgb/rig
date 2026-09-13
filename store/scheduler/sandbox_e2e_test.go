@@ -51,10 +51,23 @@ var (
 func sharedRigBin(t *testing.T) string {
 	t.Helper()
 	binOnce.Do(func() {
-		root, err := filepath.Abs("../../..")
+		dir, err := os.Getwd()
 		if err != nil {
 			binErr = err
 			return
+		}
+		root := ""
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+				root = dir
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				binErr = fmt.Errorf("repo root not found from %s", dir)
+				return
+			}
+			dir = parent
 		}
 		binPath = filepath.Join(os.TempDir(), "rig-jail-e2e-bin", "rig")
 		out, err := exec.Command("go", "build", "-o", binPath, filepath.Join(root, "cmd", "rig")).CombinedOutput()

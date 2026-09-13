@@ -19,7 +19,7 @@ type envSpawn struct {
 	err     error
 }
 
-func (f *envSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.SpawnResult, error) {
+func (f *envSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
 	f.homeEnv = append(f.homeEnv, os.Getenv("RIG_HOME"))
 	return f.result, f.err

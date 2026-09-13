@@ -21,6 +21,7 @@ import (
 	"unicode"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/tool/execwrap"
 )
 
 //go:embed kernel_host.py
@@ -188,7 +189,8 @@ type proc struct {
 }
 
 func (k *kernel) start() (*proc, error) {
-	cmd := exec.Command(k.python, k.host)
+	argv := execwrap.Args([]string{k.python, k.host})
+	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = k.cwd
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -613,7 +615,8 @@ func runStep(ctx context.Context, command string, args []string) error {
 	stepCtx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
 	var stderr bytes.Buffer
-	cmd := exec.CommandContext(stepCtx, command, args...)
+	argv := execwrap.Args(append([]string{command}, args...))
+	cmd := exec.CommandContext(stepCtx, argv[0], argv[1:]...)
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err == nil {

@@ -79,7 +79,7 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   refuses with the OS reason, the path named once.
 - `readTheme` validates well-formedness only: no fields, no keys, no
   schema: the moment it named a field it would own 10's territory.
-- `sandbox` must be `"jailed"` or `"off"` (SPEC_SANDBOX 5).
+- `sandbox` must be `"jailed"`, `"landlock"`, or `"off"` (SPEC_SANDBOX 5, 6): landlock is the kernel LSM profile for boxes that cannot run the bwrap jail.
 - `approve` is the approval dial's default (SPEC_MODES 4): `auto` or
   `manual`; anything else refuses at load.
 - `updateKey` is the pinned minisign public key that signs releases

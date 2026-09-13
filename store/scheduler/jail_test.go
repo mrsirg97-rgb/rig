@@ -128,13 +128,13 @@ func TestSandboxProfileNormalizesAndRefuses(t *testing.T) {
 	if got, err := sched.SandboxProfile(""); err != nil || got != "jailed" {
 		t.Fatalf("SandboxProfile(\"\") = (%q, %v), want (jailed, nil)", got, err)
 	}
-	for _, v := range []string{"jailed", "off"} {
+	for _, v := range []string{"jailed", "landlock", "off"} {
 		if got, err := sched.SandboxProfile(v); err != nil || got != v {
 			t.Fatalf("SandboxProfile(%q) = (%q, %v), want (%q, nil)", v, got, err, v)
 		}
 	}
 	if _, err := sched.SandboxProfile("maybe"); err == nil ||
-		!strings.Contains(err.Error(), `"jailed" or "off"`) ||
+		!strings.Contains(err.Error(), `"jailed", "landlock", or "off"`) ||
 		!strings.Contains(err.Error(), "maybe") {
 		t.Fatalf("an unknown profile must refuse naming the vocabulary, got %v", err)
 	}

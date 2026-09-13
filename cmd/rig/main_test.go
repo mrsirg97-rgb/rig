@@ -30,12 +30,24 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.2.4" {
-		t.Fatalf("Version = %q, want 1.2.4", Version)
+	if Version != "1.2.5" {
+		t.Fatalf("Version = %q, want 1.2.5", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
 		t.Fatalf("Version %q must be semver x.y.z", Version)
+	}
+}
+
+func TestExecArgIndex(t *testing.T) {
+	if got := execArgIndex([]string{"rig"}); got != -1 {
+		t.Fatalf("no -exec must refuse the index, got %d", got)
+	}
+	if got := execArgIndex([]string{"rig", "-exec", "bash", "-c", "x"}); got != 1 {
+		t.Fatalf("the -exec index must name the command, got %d", got)
+	}
+	if got := execArgIndex([]string{"rig", "-p", "hi", "-exec", "bash"}); got != 3 {
+		t.Fatalf("a later -exec must win, got %d", got)
 	}
 }
 

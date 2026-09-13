@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [1.2.5]: the box the jail cannot run on
+
+The operator's box cannot run the bwrap jail: the kernel's
+`apparmor_restrict_unprivileged_userns` blocks the user namespace
+bwrap needs and the operator has no sudo, so `sandbox: "jailed"` was
+always refused there and `"off"` ran the cron workers unjailed. The
+fix is a second containment profile the box can actually run: Landlock,
+the kernel's unprivileged data-access LSM, no namespaces, no user
+namespace, no privileges. One boundary, same guarantees where Landlock
+can carry them, each residual named.
+
+- **the third sandbox value** (`config`): `"jailed" | "landlock" |
+  "off"`; the refusal voice names the vocabulary.
+- **the landlock profile** (`store/scheduler`): `landlock.go` plus the
+  two build-tagged syscall files (raw syscalls, no `x/sys/unix`,
+  linux/amd64 and linux/arm64); the runner probes the kernel (ABI 4+),
+  refuses loud and records the skip when the profile cannot run, and
+  spawns `rig -p` with the env scrubbed to the named list and
+  `RIG_LANDLOCK=<spec json>` carrying the grants: the cwd rw, the
+  scratch home, the kernel dir ro, the rig binary ro+exec, the system
+  dirs ro, `/proc` read, the device nodes rw, `sandboxBinds` with the
+  same rw/ro semantics. Netless: bind+connect TCP handled and granted
+  nowhere; the model call rides the one socket.
+- **the subprocess boundary, thread-safe** (`cmd/rig`, `tool/execwrap`,
+  `tool/bash`, `tool/python`): `landlock_restrict_self` commits
+  per-thread creds, so the worker's subprocesses exec through
+  `rig -exec <argv>` — a fresh single-threaded process that restricts
+  itself and execs the command; `RIG_EXEC_WRAPPER` is on the named env
+  list and bash/python wrap their exec through it.
+- **fail closed, both ends** (`cmd/rig`): the worker restricts at
+  startup, before config and before any tool; a malformed spec, an
+  unknown spec version, a missing grant, a probe failure, or an
+  old ABI refuses loud with a voice naming the alternative.
+
 ## [1.2.4]: the failure's diagnosis is canonical too
 
 The containment rule was already canonical; the failure path's message

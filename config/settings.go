@@ -210,8 +210,8 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	if v, ok, err := str("sandbox"); err != nil {
 		return Settings{}, err
 	} else if ok && v != "" {
-		if v != "jailed" && v != "off" {
-			return Settings{}, fmt.Errorf("config: %s: sandbox: expected \"jailed\" or \"off\", got %s", path, gojson(v))
+		if v != "jailed" && v != "landlock" && v != "off" {
+			return Settings{}, fmt.Errorf("config: %s: sandbox: expected \"jailed\", \"landlock\", or \"off\", got %s", path, gojson(v))
 		}
 		s.Sandbox = v
 	}
