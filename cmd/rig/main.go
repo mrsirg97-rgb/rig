@@ -8,8 +8,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -53,7 +55,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.2.4"
+const Version = "1.2.5"
 
 type root struct {
 	pluginMax int
@@ -692,6 +694,28 @@ func reapClaims(ctx context.Context, sdb, tdb store.DB, cwd string, proj todosto
 
 func main() {
 
+	if i := execArgIndex(os.Args); i >= 0 {
+		if err := sched.ApplyLandlock(os.Getenv(sched.LandlockEnv)); err != nil {
+			fmt.Fprintln(os.Stderr, "rig:", err)
+			os.Exit(1)
+		}
+		runtime.LockOSThread()
+		argv := os.Args[i+1:]
+		if len(argv) == 0 {
+			fmt.Fprintln(os.Stderr, "rig: -exec needs a command")
+			os.Exit(1)
+		}
+		resolved, err := exec.LookPath(argv[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
+			os.Exit(1)
+		}
+		if err := syscall.Exec(resolved, argv, os.Environ()); err != nil {
+			fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	baseURL := flag.String("base-url", "", "OpenAI-compatible endpoint base URL (the worker swap); precedence: flag > RIG_BASE_URL > settings.json baseUrl > the embedded default")
 	model := flag.String("model", "", "model name; precedence: flag > RIG_MODEL > settings.json model (no default; a run without one refuses)")
 	system := flag.String("system", "", "system prompt; precedence: flag > RIG_SYSTEM > settings.json system > the embedded default")
@@ -1254,6 +1278,15 @@ func runJob(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func execArgIndex(args []string) int {
+	for i, a := range args[1:] {
+		if a == "-exec" || strings.HasPrefix(a, "-exec=") {
+			return i + 1
+		}
+	}
+	return -1
 }
 
 func splitCSV(csv string) []string {

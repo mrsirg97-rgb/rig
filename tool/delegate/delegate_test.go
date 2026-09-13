@@ -99,7 +99,7 @@ func (f *fakeSpawn) count() int {
 	return len(f.calls)
 }
 
-func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.SpawnResult, error) {
+func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
 	started := time.Now()
 	f.mu.Lock()
 	idx := len(f.calls)

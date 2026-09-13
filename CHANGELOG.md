@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+## [1.2.5]: the box the jail cannot run on
+
+The operator's box cannot run the bwrap jail: the kernel's
+`apparmor_restrict_unprivileged_userns` blocks the user namespace
+bwrap needs and the operator has no sudo, so `sandbox: "jailed"` was
+always refused there and `"off"` ran the cron workers unjailed. The
+fix is a second containment profile the box can actually run: Landlock,
+the kernel's unprivileged data-access LSM, no namespaces, no user
+namespace, no privileges. One boundary, same guarantees where Landlock
+can carry them, each residual named.
+
+- **the third sandbox value** (`config`): `"jailed" | "landlock" |
+  "off"`; the refusal voice names the vocabulary.
+- **the landlock profile** (`store/scheduler`): `landlock.go` plus the
+  two build-tagged syscall files (raw syscalls, no `x/sys/unix`,
+  linux/amd64 and linux/arm64); the runner probes the kernel (ABI 4+),
+  refuses loud and records the skip when the profile cannot run, and
+  spawns `rig -p` with the env scrubbed to the named list and
+  `RIG_LANDLOCK=<spec json>` carrying the grants: the cwd rw, the
+  scratch home, the kernel dir ro, the rig binary ro+exec, the system
+  dirs ro, `/proc` read, the device nodes rw, `sandboxBinds` with the
+  same rw/ro semantics. Netless: bind+connect TCP handled and granted
+  nowhere; the model call rides the one socket.
+- **the domain arrives with the image, the only sound point**
+  (`cmd/rig`, `tool/execwrap`, `tool/bash`, `tool/python`):
+  `landlock_restrict_self` commits per-thread creds and Go's runtime
+  has threads before `main()`, so an in-process restrict leaves the
+  worker's own goroutines outside the wall — proven: a worker's
+  in-process `read` tool returned the operator's `~/.bashrc` under the
+  runner's exact env. The runner spawns `rig -exec rig -p ...`: the
+  `-exec` branch restricts on a locked thread and execs, so the new
+  image and every thread it creates inherit the domain; the worker
+  never applies the profile in-process, and `RIG_EXEC_WRAPPER` lets
+  bash/python wrap their subprocess execs through the same helper.
+- **fail closed, both ends** (`cmd/rig`): the worker restricts at
+  startup, before config and before any tool; a malformed spec, an
+  unknown spec version, a missing grant, a probe failure, or an
+  old ABI refuses loud with a voice naming the alternative.
+
 ## [1.2.4]: the failure's diagnosis is canonical too
 
 The containment rule was already canonical; the failure path's message

@@ -28,7 +28,7 @@ type SpawnResult struct {
 	TimedOut bool
 }
 
-type Spawn func(ctx context.Context, argv []string, cwd string) (SpawnResult, error)
+type Spawn func(ctx context.Context, argv []string, cwd string, env []string) (SpawnResult, error)
 
 type RunOpts struct {
 	Home         string
@@ -43,6 +43,7 @@ type RunOpts struct {
 	SandboxBinds []string
 	RigHome      string
 	StateDir     string
+	LandlockABI  func() (int, error)
 }
 
 const DefaultRunTimeout = 30 * time.Minute
@@ -180,10 +181,11 @@ func RunJob(key string, opts RunOpts) error {
 		return fmt.Errorf("run-job: sandbox: %w", err)
 	}
 	var (
-		argv    []string
-		proxy   *SocketProxy
-		homeEnv string
-		refuse  string
+		argv     []string
+		proxy    *SocketProxy
+		spawnEnv []string
+		homeEnv  string
+		refuse   string
 	)
 	if profile == "off" {
 
@@ -194,7 +196,7 @@ func RunJob(key string, opts RunOpts) error {
 			"-base-url", opts.SwapURL+"/v1",
 			"-model", job.Model)
 	} else {
-		argv, proxy, homeEnv, refuse, err = jailSpawn(opts, job.Cwd, workerCmd, job.Model, prompt, "")
+		argv, proxy, spawnEnv, homeEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "")
 		if err != nil {
 			return fmt.Errorf("run-job: jail: %w", err)
 		}
@@ -223,7 +225,7 @@ func RunJob(key string, opts RunOpts) error {
 			}
 		}()
 	}
-	res, err := opts.Spawn(ctx, argv, job.Cwd)
+	res, err := opts.Spawn(ctx, argv, job.Cwd, spawnEnv)
 	if err != nil {
 		return fmt.Errorf("run-job: spawn: %w", err)
 	}
@@ -438,7 +440,7 @@ func RealFetch(timeout time.Duration) Fetch {
 	}
 }
 
-func RealSpawn(ctx context.Context, argv []string, cwd string) (SpawnResult, error) {
+func RealSpawn(ctx context.Context, argv []string, cwd string, env []string) (SpawnResult, error) {
 	if len(argv) == 0 {
 		return SpawnResult{}, errors.New("spawn: empty argv")
 	}
@@ -446,6 +448,7 @@ func RealSpawn(ctx context.Context, argv []string, cwd string) (SpawnResult, err
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = time.Second
 	cmd.Cancel = func() error {

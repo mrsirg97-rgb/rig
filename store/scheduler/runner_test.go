@@ -103,7 +103,7 @@ type fakeCall struct {
 	Cwd  string
 }
 
-func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string) (sched.SpawnResult, error) {
+func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
 	return f.result, f.err
 }

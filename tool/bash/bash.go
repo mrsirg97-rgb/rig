@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/tool/execwrap"
 	"golang.org/x/sys/unix"
 )
 
@@ -53,7 +54,8 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 		return "", errors.New("bash: empty command")
 	}
 
-	cmd := exec.CommandContext(ctx, "bash", "-c", a.Command)
+	argv := execwrap.Args([]string{"bash", "-c", a.Command})
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if a.Cwd != "" {
 		if err := checkCwd(a.Cwd); err != nil {
 			return "", fmt.Errorf("bash: cwd %s: %v", a.Cwd, err)

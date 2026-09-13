@@ -39,6 +39,7 @@ type DelegateInput struct {
 	RigHome       string
 	StateDir      string
 	Allow         []string
+	LandlockABI   func() (int, error)
 	Now           func() time.Time
 	Context       context.Context
 }
@@ -159,11 +160,12 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: sandbox: %w", err)
 	}
 	var (
-		argv    []string
-		proxy   *SocketProxy
-		homeEnv string
-		refuse  string
-		note    string
+		argv     []string
+		proxy    *SocketProxy
+		homeEnv  string
+		refuse   string
+		note     string
+		spawnEnv []string
 	)
 	if profile == "off" {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
@@ -176,7 +178,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 			argv = append(argv, "-allow", allow)
 		}
 	} else {
-		argv, proxy, homeEnv, refuse, err = jailSpawn(in.toRunOpts(), in.Cwd, workerCmd, in.Model, prompt, allow, DelegateEnv+"=1")
+		argv, proxy, spawnEnv, homeEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, prompt, allow, DelegateEnv+"=1")
 		if err != nil {
 			return DelegateResult{}, fmt.Errorf("delegate: jail: %w", err)
 		}
@@ -216,7 +218,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		}
 	}()
 
-	res, err := in.Spawn(ctx, argv, in.Cwd)
+	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
 	}
@@ -265,6 +267,7 @@ func (in DelegateInput) toRunOpts() RunOpts {
 		Sandbox:      in.Sandbox,
 		SandboxBinds: in.SandboxBinds,
 		StateDir:     in.StateDir,
+		LandlockABI:  in.LandlockABI,
 	}
 }
 

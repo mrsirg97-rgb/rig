@@ -148,7 +148,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
-		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed" or "off", got "maybe"`},
+		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
 		{"sandboxBinds element", `{"sandboxBinds": ["/dev/nvidia0", 5]}`, `sandboxBinds[1]: expected a string, got 5`},
 		{"approve value", `{"approve": "yolo"}`, `approve: expected "auto" or "manual", got "yolo"`},
 	}
@@ -207,6 +207,15 @@ func TestSandboxDefaultsToJailed(t *testing.T) {
 	want := []string{"/dev/nvidia0", "/data:rw"}
 	if !reflect.DeepEqual(cfg.Settings.SandboxBinds, want) {
 		t.Fatalf("sandboxBinds = %v, want %v", cfg.Settings.SandboxBinds, want)
+	}
+}
+
+func TestSandboxLandlockIsASetting(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"sandbox": "landlock"}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.Sandbox != "landlock" {
+		t.Fatalf("sandbox = %q, want the file's landlock", cfg.Settings.Sandbox)
 	}
 }
 

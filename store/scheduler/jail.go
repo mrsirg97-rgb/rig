@@ -93,10 +93,10 @@ func SandboxProfile(s string) (string, error) {
 	if s == "" {
 		return "jailed", nil
 	}
-	if s == "jailed" || s == "off" {
+	if s == "jailed" || s == "landlock" || s == "off" {
 		return s, nil
 	}
-	return "", fmt.Errorf("sandbox: expected \"jailed\" or \"off\", got %q", s)
+	return "", fmt.Errorf("sandbox: expected \"jailed\", \"landlock\", or \"off\", got %q", s)
 }
 
 func PlatformRefusal(gos string) string {
