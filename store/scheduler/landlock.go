@@ -124,16 +124,16 @@ func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, 
 	return argv, proxy, env, "", nil
 }
 
-func spawnJailed(opts RunOpts, profile, cwd string, workerCmd []string, model, prompt, allow string, extraEnv ...string) ([]string, *SocketProxy, []string, string, string, error) {
+func spawnJailed(opts RunOpts, profile, cwd string, workerCmd []string, model, prompt, allow string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if profile == "landlock" {
 		argv, proxy, env, refuse, err := landlockSpawn(opts, cwd, workerCmd, model, prompt, allow, extraEnv...)
-		return argv, proxy, env, "", refuse, err
+		return argv, proxy, env, refuse, err
 	}
-	argv, proxy, homeEnv, refuse, err := jailSpawn(opts, cwd, workerCmd, model, prompt, allow, extraEnv...)
+	argv, proxy, refuse, err := jailSpawn(opts, cwd, workerCmd, model, prompt, allow, extraEnv...)
 	if err != nil || refuse != "" {
-		return argv, proxy, nil, homeEnv, refuse, err
+		return argv, proxy, nil, refuse, err
 	}
-	return argv, proxy, nil, homeEnv, "", nil
+	return argv, proxy, nil, "", nil
 }
 
 func ApplyLandlock(spec string) error {

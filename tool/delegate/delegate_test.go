@@ -87,6 +87,7 @@ type fakeSpawn struct {
 
 type fakeCall struct {
 	Argv    []string
+	Env     []string
 	Cwd     string
 	Ctx     context.Context
 	Started time.Time
@@ -103,7 +104,7 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 	started := time.Now()
 	f.mu.Lock()
 	idx := len(f.calls)
-	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx, Started: started})
+	f.calls = append(f.calls, fakeCall{Argv: argv, Env: env, Cwd: cwd, Ctx: ctx, Started: started})
 	if d, ok := ctx.Deadline(); ok {
 		f.deadline = time.Until(d)
 	}
@@ -496,6 +497,48 @@ func TestDelegateNoRecursionRefuses(t *testing.T) {
 	}
 	if len(spawn.calls) != 0 {
 		t.Fatal("no spawn on a refused recursion")
+	}
+}
+
+func TestDelegateOffProfileHandsTheChildTheRecursionMark(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
+	if _, err := tool.Exec(context.Background(), runArgs("do the sweep")); err != nil {
+		t.Fatalf("off-profile delegate: %v", err)
+	}
+	env := spawn.calls[0].Env
+	if env == nil {
+		t.Fatal("the child env must be explicit at the spawn, not nil-inherit")
+	}
+	found := false
+	for _, e := range env {
+		if e == sched.DelegateEnv+"=1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the child env must carry %s=1: %v", sched.DelegateEnv, env)
+	}
+}
+
+func TestDelegateLeavesTheProcessEnvAlone(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	var seen string
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	wrapped := func(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
+		seen = os.Getenv(sched.DelegateEnv)
+		return spawn.spawn(ctx, argv, cwd, env)
+	}
+	tool := h.newTool(t, fakeFetch(""), wrapped)
+	if _, err := tool.Exec(context.Background(), runArgs("do the sweep")); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if seen != "" {
+		t.Fatalf("the runner's own env must stay clean during the spawn: %s=%q", sched.DelegateEnv, seen)
+	}
+	if os.Getenv(sched.DelegateEnv) != "" {
+		t.Fatalf("the runner's env must stay clean after the run: %s=%q", sched.DelegateEnv, os.Getenv(sched.DelegateEnv))
 	}
 }
 

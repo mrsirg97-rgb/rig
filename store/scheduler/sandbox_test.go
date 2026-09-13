@@ -13,16 +13,25 @@ import (
 )
 
 type envSpawn struct {
-	calls   []fakeCall
-	homeEnv []string
-	result  sched.SpawnResult
-	err     error
+	calls  []fakeCall
+	envs   [][]string
+	result sched.SpawnResult
+	err    error
 }
 
 func (f *envSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
-	f.homeEnv = append(f.homeEnv, os.Getenv("RIG_HOME"))
+	f.envs = append(f.envs, env)
 	return f.result, f.err
+}
+
+func carriesSetenv(argv []string, key, value string) bool {
+	for i := 0; i+2 < len(argv); i++ {
+		if argv[i] == "--setenv" && argv[i+1] == key && argv[i+2] == value {
+			return true
+		}
+	}
+	return false
 }
 
 func runSandboxOpts(h *harness, s sched.Spawn, profile string) sched.RunOpts {
@@ -135,8 +144,8 @@ func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 	if argv[0] != filepath.Join(shimDir, "bwrap") || argv[1] != "--unshare-all" {
 		t.Fatalf("the jailed profile is the bwrap command, got %v", argv)
 	}
-	if want := filepath.Join(cwd, ".rig-job"); spawn.homeEnv[0] != want {
-		t.Fatalf("RIG_HOME during the spawn = %q, want the scratch home %q", spawn.homeEnv[0], want)
+	if want := filepath.Join(cwd, ".rig-job"); !carriesSetenv(argv, "RIG_HOME", want) {
+		t.Fatalf("the jailed argv must carry RIG_HOME=%q as a --setenv pair: %v", want, argv)
 	}
 	if got := os.Getenv("RIG_HOME"); got == filepath.Join(cwd, ".rig-job") {
 		t.Fatal("the scratch home must not leak into the runner's env after the run")
