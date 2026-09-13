@@ -153,6 +153,23 @@ func TestJailRefusalVoices(t *testing.T) {
 	}
 }
 
+func TestJailArgvRefusesAnEnvEntryWithoutAnEquals(t *testing.T) {
+	p := sched.JailProfile{
+		Bwrap:    "/usr/bin/bwrap",
+		Binary:   "/opt/rig/bin/rig",
+		Prompt:   "do the thing",
+		BaseURL:  "unix:/ws/j/.rig-job.sock",
+		Model:    "qwen3.8-workers",
+		Cwd:      "/ws/j",
+		SockPath: "/ws/j/.rig-job.sock",
+		Env:      []string{"BROKEN"},
+	}
+	_, err := sched.JailArgv(p)
+	if err == nil || !strings.Contains(err.Error(), "KEY=VALUE") {
+		t.Fatalf("an env entry without an = must refuse naming the shape: %v", err)
+	}
+}
+
 func TestJailArgvCarriesTheWorkerEnv(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",
@@ -168,15 +185,30 @@ func TestJailArgvCarriesTheWorkerEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("JailArgv: %v", err)
 	}
-	env := []string{}
-	for i := 0; i < len(argv)-1; i++ {
-		if argv[i] == "--setenv" {
-			env = append(env, argv[i+1])
+	env := map[string]string{}
+	for i := 0; i < len(argv)-2; i++ {
+		if argv[i] != "--setenv" {
+			continue
 		}
+		if argv[i+1] == "--setenv" || argv[i+2] == "--setenv" {
+			t.Fatalf("setenv must name VAR and VALUE as two arguments: %v", argv)
+		}
+		env[argv[i+1]] = argv[i+2]
+		i++
 	}
-	want := []string{"PATH=/usr/bin:/bin", "HOME=/ws/j/.rig-job", "RIG_HOME=/ws/j/.rig-job", "RIG_DELEGATE=1"}
-	if strings.Join(env, "\x00") != strings.Join(want, "\x00") {
-		t.Fatalf("setenv pairs = %v, want %v", env, want)
+	want := map[string]string{
+		"PATH":         "/usr/bin:/bin",
+		"HOME":         "/ws/j/.rig-job",
+		"RIG_HOME":     "/ws/j/.rig-job",
+		"RIG_DELEGATE": "1",
+	}
+	if len(env) != len(want) {
+		t.Fatalf("setenv vars = %v, want %v", env, want)
+	}
+	for k, v := range want {
+		if env[k] != v {
+			t.Fatalf("setenv %s = %q, want %q", k, env[k], v)
+		}
 	}
 	clearenv := false
 	for i := 0; i < len(argv); i++ {

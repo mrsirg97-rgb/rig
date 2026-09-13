@@ -30,7 +30,11 @@ func JailArgv(p JailProfile) ([]string, error) {
 		"--unshare-all", "--die-with-parent", "--clearenv",
 	}
 	for _, e := range p.Env {
-		argv = append(argv, "--setenv", e)
+		k, v, ok := strings.Cut(e, "=")
+		if !ok {
+			return nil, fmt.Errorf("jail env %q: expected KEY=VALUE", e)
+		}
+		argv = append(argv, "--setenv", k, v)
 	}
 	argv = append(argv,
 		"--ro-bind", "/usr", "/usr",
