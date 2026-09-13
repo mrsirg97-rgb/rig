@@ -434,7 +434,11 @@ carries the exec's error text on its own line (a failing command keeps
 its output and gains the error line; an empty result carries the error
 alone), so a tool whose child never ran can never reach the model as a
 bare cwd line; the gate's clause carries the name, and the re-freeze
-follows the merge.
+follows the merge. 1.2.7 reopens it a fourth time, named: the fed-back
+error line is skipped when the content already ends with it (the
+chain's refusals return the same string as both content and error, and
+the model saw each twice); the gate's clause carries the name, and the
+re-freeze follows the merge.
 
 Faults: a `Fault` event or transport error aborts the turn, surfaces the
 error through `Notify`, preserves the session up to the last complete
