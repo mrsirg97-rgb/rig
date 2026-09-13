@@ -13,6 +13,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/paths"
 )
 
+const provenanceVoice = "plugins install by the operator's /plugins approve; write to plugins/pending/"
+
 func Plugins(pluginsDir string) core.ToolMiddleware {
 	root, rootErr := resolvedPath(pluginsDir)
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
@@ -35,25 +37,68 @@ func Plugins(pluginsDir string) core.ToolMiddleware {
 				msg := fmt.Sprintf("permission denied: cannot resolve plugin path %s: %v", a.Path, resolveErr)
 				return msg, errors.New(msg)
 			}
-			rel, err := filepath.Rel(root, target)
-			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			lex, lexErr := lexicalPath(a.Path)
+			if lexErr != nil {
+				msg := fmt.Sprintf("permission denied: cannot resolve plugin path %s: %v", a.Path, lexErr)
+				return msg, errors.New(msg)
+			}
+			targetRel, targetIn := zoneRel(root, target)
+			lexRel, lexIn := zoneRel(root, lex)
+			if targetIn && inPending(targetRel) {
 				return next(ctx, call)
 			}
-			if rel == "pending" || strings.HasPrefix(rel, "pending"+string(os.PathSeparator)) {
+			if !targetIn && !lexIn {
 				return next(ctx, call)
 			}
-			msg := fmt.Sprintf("permission denied: %s is in plugins/ outside plugins/pending/ (plugins install by the operator's /plugins approve; write to plugins/pending/)", target)
+			if lexIn && inPending(lexRel) {
+				pending, pendingErr := resolvedPath(filepath.Join(root, "pending"))
+				if pendingErr == nil {
+					if _, within := zoneRel(pending, target); within {
+						return next(ctx, call)
+					}
+				}
+			}
+			if targetIn {
+				msg := fmt.Sprintf("permission denied: %s is in plugins/ outside plugins/pending/ (%s)", target, provenanceVoice)
+				return msg, errors.New(msg)
+			}
+			msg := fmt.Sprintf("permission denied: %s resolves outside the plugins root (%s) (%s)", lex, target, provenanceVoice)
 			return msg, errors.New(msg)
 		}
 	})
 }
 
-func resolvedPath(path string) (string, error) {
+func zoneRel(root, path string) (string, bool) {
+	if root == "" {
+		return "", false
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return rel, false
+	}
+	return rel, true
+}
+
+func inPending(rel string) bool {
+	return rel == "pending" || strings.HasPrefix(rel, "pending"+string(os.PathSeparator))
+}
+
+func lexicalPath(path string) (string, error) {
 	abs, err := filepath.Abs(paths.Expand(path))
 	if err != nil {
 		return "", err
 	}
-	cur := filepath.Clean(abs)
+	return filepath.Clean(abs), nil
+}
+
+func resolvedPath(path string) (string, error) {
+	cur, err := lexicalPath(path)
+	if err != nil {
+		return "", err
+	}
 	var missing []string
 	for {
 		resolved, err := filepath.EvalSymlinks(cur)

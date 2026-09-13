@@ -12,6 +12,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 )
 
+const provenanceWant = "plugins install by the operator's /plugins approve; write to plugins/pending/"
+
 func pluginCall(t *testing.T, mw core.ToolMiddleware, name, args string) (calls int, content string, err error) {
 	t.Helper()
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -78,9 +80,12 @@ func TestPluginsRuleResolvesSymlinksBeforeApplyingTheZone(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := filepath.Join(link, "x.py")
-	calls, _, err := pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, target)+`, "content": "x"}`)
-	if err != nil || calls != 1 {
-		t.Fatalf("a resolved target outside the plugin root is foreign and must pass through, got %d calls / %v", calls, err)
+	calls, content, err := pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, target)+`, "content": "x"}`)
+	if err == nil || calls != 0 {
+		t.Fatalf("a pending path that resolves outside the plugins root must refuse, got %d calls / %v", calls, err)
+	}
+	if !strings.Contains(content, target) || !strings.Contains(content, provenanceWant) {
+		t.Fatalf("the crossing refusal must name both spellings and teach the zone, got %q", content)
 	}
 	liveTarget := filepath.Join(pluginsDir, "live.py")
 	if err := os.WriteFile(liveTarget, []byte("x"), 0o644); err != nil {
@@ -93,6 +98,34 @@ func TestPluginsRuleResolvesSymlinksBeforeApplyingTheZone(t *testing.T) {
 	calls, _, err = pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, liveLink)+`, "content": "x"}`)
 	if err == nil || calls != 0 {
 		t.Fatalf("a foreign spelling that resolves into live plugins must refuse, got %d calls / %v", calls, err)
+	}
+}
+
+func TestPluginsRuleAllowsAPendingDirRelocatedBySymlink(t *testing.T) {
+	home := t.TempDir()
+	pluginsDir := filepath.Join(home, "plugins")
+	relocated := filepath.Join(home, "forge")
+	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(pluginsDir, "pending")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(relocated, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(relocated, filepath.Join(pluginsDir, "pending")); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(pluginsDir, "pending", "x.py")
+	calls, _, err := pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, target)+`, "content": "x"}`)
+	if err != nil || calls != 1 {
+		t.Fatalf("a pending dir relocated by a symlink stays the landing zone, got %d calls / %v", calls, err)
+	}
+	through := filepath.Join(relocated, "y.py")
+	calls, _, err = pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, through)+`, "content": "x"}`)
+	if err != nil || calls != 1 {
+		t.Fatalf("the relocated zone's own spelling must pass through, got %d calls / %v", calls, err)
 	}
 }
 
