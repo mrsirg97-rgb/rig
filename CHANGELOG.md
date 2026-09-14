@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [1.2.12]: search asks in whole sentences
+
+A debugging pass on the live SearXNG found one healthy engine serving
+navigational junk for brand-heavy queries: a query led by a product
+name returns that product's homepage, a query led by a single common
+token returns a dictionary entry. The tool's guidelines said nothing
+about query shape, so every session relearned the failure mode by
+burning queries on it. The guidelines now name the shape to prefer,
+route known URLs to web_fetch, and refuse identical retries —
+prompt-facing guidance that rides in every session, including the
+headless ones that never recall memory.
+
+- **query-shaping guidelines** (`tool/web`): web_search's guidelines
+  prefer natural-language multi-word queries, refuse leading
+  brand/single-token shapes, send known URLs to web_fetch, and demand a
+  reword rather than an identical retry on junk. A rig-over-pane
+  divergence, like the announced trafilatura fallback; the schema and
+  every runtime voice are untouched, and the golden_020 request pins
+  are regenerated for the new description bytes.
+
 ## [1.2.11]: approve rides the door
 
 A review pass found the approval gate skipped at the wiring for every

@@ -22,6 +22,9 @@ const (
 const searchDescription = "search the web (a local SearXNG)."
 
 const searchGuidelines = "Guidelines: current or external information; never for code already in the workspace. " +
+	"Prefer natural-language multi-word queries: a leading brand or single-token query often returns " +
+	"navigational or dictionary junk from the engines. For a known authoritative URL use web_fetch, not search. " +
+	"On junk results, reword the query once; an identical retry returns the same junk. " +
 	"Reply: compact JSON — title, url, snippet per result."
 
 const searchSchema = `{
