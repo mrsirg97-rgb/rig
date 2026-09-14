@@ -115,6 +115,13 @@ type root struct {
 const defaultResultCap = 64 * 1024
 
 func wire(r *root) *rig.Kernel {
+	// approve rides the door: manual means "ask before mutating", and
+	// asking needs a door, so a doorless frontend runs auto — a TUI
+	// user's manual never binds the workers.
+	if r.askDoor == nil {
+		r.approve = approve.Auto
+		r.approveDefault = approve.Auto
+	}
 
 	if r.live == nil {
 
@@ -1176,9 +1183,6 @@ func main() {
 		Ask(ctx context.Context, prompt string) bool
 	}); ok {
 		r.askDoor = a.Ask
-	}
-	if r.approve == approve.Manual && r.askDoor == nil {
-		fmt.Fprintln(os.Stderr, "rig: approve: manual is set but this frontend cannot ask; mutating tools will be refused")
 	}
 	if note, e := reapClaims(context.Background(), sdb, tdb, cwd, todostore.Project{Key: scope.Key(cwd), Label: scope.Label(cwd)}, session.ID); e != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo reap:", e)

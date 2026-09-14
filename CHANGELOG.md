@@ -2,23 +2,24 @@
 
 ## [Unreleased]
 
-## [1.2.11]: the approval gate wires without a door
+## [1.2.11]: approve rides the door
 
-A review pass found the manual-approve wall half-built for doorless
-frontends: the gate — whose own contract refuses a call when it cannot
-ask — was skipped at the wiring for exactly those frontends, so
-`approve: manual` in settings.json ran mutating tools unapproved while
-the status bar claimed otherwise. The validation lived only in the
-interactive `/approve` switch, never at the seam.
+A review pass found the approval gate skipped at the wiring for every
+doorless frontend, so `approve: manual` in the rig home's settings.json
+leaked onto the whole account — delegates, cron workers, `-p` runs —
+where the status bar claimed manual while the tools mutated unasked.
+The gate now wires unconditionally, and manual rides the door: a
+frontend that cannot ask runs auto, so gating a TUI never binds the
+fleet.
 
 - **the gate always wires** (`cmd/rig`): `approve.Gate` is appended
-  unconditionally. A doorless frontend now fails closed per call with
-  the gate's own message ("manual mode with no ask door (this frontend
-  cannot ask) — the call was not run") instead of passing the call
-  through to the tool. The middleware seam is 9 links (was 8).
-- **the operator hears about it at startup** (`cmd/rig`): with
-  `approve: manual` set and no ask door, rig prints a stderr note at
-  boot; the interactive switch keeps its existing refusal.
+  unconditionally and passes through in auto. The middleware seam is
+  9 links (was 8).
+- **manual applies where a door exists** (`cmd/rig`): a doorless
+  frontend resolves approve to auto at the seam. The live `/approve`
+  switch keeps its refusal on doorless frontends — a request that
+  cannot be honored errors, while the persistent preference scopes
+  itself to the frontends that can honor it.
 
 ## [1.2.10]: the jail's env lands in pairs
 

@@ -255,28 +255,28 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 	}
 }
 
-func TestManualApprovalWithoutADoorRefusesMutatingCalls(t *testing.T) {
+func TestManualApprovalRidesTheDoor(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.approve = approve.Manual
+	r.approveDefault = approve.Manual
 	k := wire(r)
 
-	ran := false
+	if r.approve != approve.Auto || r.approveDefault != approve.Auto {
+		t.Fatalf("a doorless frontend must resolve approve to auto, got %q (default %q)", r.approve, r.approveDefault)
+	}
+
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
-		ran = true
-		return "ran", nil
+		return "sentinel", nil
 	}
 	for _, mw := range k.Middleware {
 		exec = mw.Wrap(exec)
 	}
 	content, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"echo hi"}`)})
-	if ran {
-		t.Fatal("manual mode without an ask door must refuse the call, not run it")
-	}
 	if err != nil {
-		t.Fatalf("the refusal rides the content, not an error: %v", err)
+		t.Fatalf("the call must execute like auto: %v", err)
 	}
-	if !strings.Contains(content, "no ask door") {
-		t.Fatalf("the refusal must name the missing door, got %q", content)
+	if content != "hi\n" {
+		t.Fatalf("the fleet must run under a TUI user's manual setting, got %q", content)
 	}
 }
 
