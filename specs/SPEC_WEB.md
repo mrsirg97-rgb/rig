@@ -174,6 +174,15 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
 - **Query strings are built by hand**, in pane's order
   (`?q=<escaped>&format=json`), not url.Values (which would sort the
   keys); the named case asserts pane's exact URL.
+- **The search guidelines teach query shape** (rig over pane, 1.2.12).
+  The live SearXNG serves navigational and dictionary junk for
+  brand-heavy queries from whichever engine answers, and every session
+  relearned the failure mode by burning queries on it. The guidelines
+  now prefer natural-language multi-word queries, refuse leading
+  brand/single-token shapes, route known URLs to web_fetch, and demand
+  a reword rather than an identical retry on junk. Prompt-facing only:
+  the schema and every runtime voice are untouched; the golden_020
+  request pins carry the new description bytes.
 
 ## testing
 
