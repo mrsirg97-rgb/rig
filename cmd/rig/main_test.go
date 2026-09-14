@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.2.9" {
-		t.Fatalf("Version = %q, want 1.2.9", Version)
+	if Version != "1.2.10" {
+		t.Fatalf("Version = %q, want 1.2.10", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -48,6 +48,19 @@ func TestExecArgIndex(t *testing.T) {
 	}
 	if got := execArgIndex([]string{"rig", "-p", "hi", "-exec", "bash"}); got != 3 {
 		t.Fatalf("a later -exec must win, got %d", got)
+	}
+}
+
+func TestExecDoorOpensOnlyWithTheProfile(t *testing.T) {
+	argv := []string{"rig", "-p", "-exec", "more prompt"}
+	if got := execDoor(argv, ""); got != -1 {
+		t.Fatalf("a one-shot without the profile keeps -exec as the prompt, got %d", got)
+	}
+	if got := execDoor(argv, `{"v":1}`); got != 2 {
+		t.Fatalf("the profile opens the door, got %d", got)
+	}
+	if got := execDoor([]string{"rig", "-p", "hi"}, `{"v":1}`); got != -1 {
+		t.Fatalf("no -exec refuses regardless of the profile, got %d", got)
 	}
 }
 

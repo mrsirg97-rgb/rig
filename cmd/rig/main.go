@@ -55,7 +55,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.2.9"
+const Version = "1.2.10"
 
 type root struct {
 	pluginMax int
@@ -694,7 +694,7 @@ func reapClaims(ctx context.Context, sdb, tdb store.DB, cwd string, proj todosto
 
 func main() {
 
-	if i := execArgIndex(os.Args); i >= 0 {
+	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
 		if err := sched.ApplyLandlock(os.Getenv(sched.LandlockEnv)); err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
@@ -1287,6 +1287,13 @@ func execArgIndex(args []string) int {
 		}
 	}
 	return -1
+}
+
+func execDoor(args []string, spec string) int {
+	if spec == "" {
+		return -1
+	}
+	return execArgIndex(args)
 }
 
 func splitCSV(csv string) []string {

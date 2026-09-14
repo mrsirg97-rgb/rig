@@ -7,18 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
 const DelegateEnv = "RIG_DELEGATE"
-
-var (
-	delegateDepth    int32
-	delegatePrevHome string
-	delegateHadHome  bool
-	delegatePrevSet  bool
-)
 
 type DelegateInput struct {
 	DB            DB
@@ -162,7 +154,6 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	var (
 		argv     []string
 		proxy    *SocketProxy
-		homeEnv  string
 		refuse   string
 		note     string
 		spawnEnv []string
@@ -177,8 +168,9 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		if allow != "" {
 			argv = append(argv, "-allow", allow)
 		}
+		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
 	} else {
-		argv, proxy, spawnEnv, homeEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, prompt, allow, DelegateEnv+"=1")
+		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, prompt, allow, DelegateEnv+"=1")
 		if err != nil {
 			return DelegateResult{}, fmt.Errorf("delegate: jail: %w", err)
 		}
@@ -193,30 +185,6 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	defer cancel()
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
-
-	depth := atomic.AddInt32(&delegateDepth, 1)
-	if depth == 1 {
-		delegatePrevHome, delegateHadHome = os.LookupEnv("RIG_HOME")
-		delegatePrevSet = os.Getenv(DelegateEnv) != ""
-		if homeEnv != "" {
-			os.Setenv("RIG_HOME", homeEnv)
-		}
-		os.Setenv(DelegateEnv, "1")
-	}
-	defer func() {
-		if atomic.AddInt32(&delegateDepth, -1) == 0 {
-			if delegateHadHome {
-				os.Setenv("RIG_HOME", delegatePrevHome)
-			} else {
-				os.Unsetenv("RIG_HOME")
-			}
-			if delegatePrevSet {
-				os.Setenv(DelegateEnv, "1")
-			} else {
-				os.Unsetenv(DelegateEnv)
-			}
-		}
-	}()
 
 	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv)
 	if err != nil {

@@ -30,7 +30,11 @@ func JailArgv(p JailProfile) ([]string, error) {
 		"--unshare-all", "--die-with-parent", "--clearenv",
 	}
 	for _, e := range p.Env {
-		argv = append(argv, "--setenv", e)
+		k, v, ok := strings.Cut(e, "=")
+		if !ok {
+			return nil, fmt.Errorf("jail env %q: expected KEY=VALUE", e)
+		}
+		argv = append(argv, "--setenv", k, v)
 	}
 	argv = append(argv,
 		"--ro-bind", "/usr", "/usr",
@@ -121,37 +125,37 @@ func SocketRefusal(sock string, err error) string {
 
 const jailPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow string, extraEnv ...string) ([]string, *SocketProxy, string, string, error) {
+func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow string, extraEnv ...string) ([]string, *SocketProxy, string, error) {
 	if runtime.GOOS != "linux" {
-		return nil, nil, "", PlatformRefusal(runtime.GOOS), nil
+		return nil, nil, PlatformRefusal(runtime.GOOS), nil
 	}
 	bwrap, err := exec.LookPath("bwrap")
 	if err != nil {
-		return nil, nil, "", BwrapRefusal(), nil
+		return nil, nil, BwrapRefusal(), nil
 	}
 	kernelDir := ""
 	if opts.RigHome != "" {
 		kernelDir = filepath.Join(opts.RigHome, "kernel")
 		if _, err := os.Stat(kernelDir); err != nil {
-			return nil, nil, "", KernelRefusal(kernelDir), nil
+			return nil, nil, KernelRefusal(kernelDir), nil
 		}
 	}
 
 	scratch := filepath.Join(cwd, ".rig-job")
 	if err := os.MkdirAll(scratch, 0o755); err != nil {
-		return nil, nil, "", ScratchRefusal(scratch, err), nil
+		return nil, nil, ScratchRefusal(scratch, err), nil
 	}
 
 	if opts.StateDir != "" {
 		if err := os.MkdirAll(filepath.Join(scratch, "sessions"), 0o755); err != nil {
-			return nil, nil, "", ScratchRefusal(filepath.Join(scratch, "sessions"), err), nil
+			return nil, nil, ScratchRefusal(filepath.Join(scratch, "sessions"), err), nil
 		}
 	}
 
 	sock := filepath.Join(cwd, ".rig-job.sock")
 	proxy, err := NewSocketProxy(sock, opts.SwapURL)
 	if err != nil {
-		return nil, nil, "", SocketRefusal(sock, err), nil
+		return nil, nil, SocketRefusal(sock, err), nil
 	}
 	env := []string{
 		"PATH=" + jailPath,
@@ -175,7 +179,7 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allo
 	})
 	if err != nil {
 		proxy.Close()
-		return nil, nil, "", "", err
+		return nil, nil, "", err
 	}
-	return argv, proxy, scratch, "", nil
+	return argv, proxy, "", nil
 }

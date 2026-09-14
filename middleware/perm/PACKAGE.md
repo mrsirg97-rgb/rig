@@ -45,6 +45,12 @@ attributed so downstream guards can bound the repetition.
   than trusting its position in the chain; the root lists `paths` last
   (outermost) all the same. Missing final components remain legal for
   new pending files.
+- The zone is judged on both spellings: a path that names plugins/ but
+  resolves outside the plugins root refuses (a symlink crossing the
+  boundary), and so does an outside path resolving into the loaded
+  tree. A pending dir relocated by a symlink stays the landing zone:
+  the crossing is judged against the resolved pending dir, so the
+  operator's own relocation keeps working.
 - The rule guards the honest path, not the boundary: bash can still move
   a file into plugins/ (the operator's shell is the operator's); the
   worker jail is the boundary, the provenance rule is the workflow.

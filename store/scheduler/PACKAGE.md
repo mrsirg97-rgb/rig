@@ -43,7 +43,9 @@ written before the store commit; drift is surfaced in list.
   refusal naming the wait time) and the no-recursion marker.
 - `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
   `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
-  worker) are the worker's whole environment, so the operator's exported
+  worker), each entry split into explicit VAR VALUE pairs (bwrap's
+  `--setenv` takes two arguments; an entry without an `=` refuses), are
+  the worker's whole environment, so the operator's exported
   secrets never reach a jailed worker.
 - `proxy.go`: the unix-socket proxy (the jail's one hole), the socket
   chmod'd 0600 after listen so no other local user reaches the model

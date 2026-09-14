@@ -184,7 +184,6 @@ func RunJob(key string, opts RunOpts) error {
 		argv     []string
 		proxy    *SocketProxy
 		spawnEnv []string
-		homeEnv  string
 		refuse   string
 	)
 	if profile == "off" {
@@ -195,8 +194,9 @@ func RunJob(key string, opts RunOpts) error {
 			"-p", prompt,
 			"-base-url", opts.SwapURL+"/v1",
 			"-model", job.Model)
+		spawnEnv = os.Environ()
 	} else {
-		argv, proxy, spawnEnv, homeEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "")
+		argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "")
 		if err != nil {
 			return fmt.Errorf("run-job: jail: %w", err)
 		}
@@ -213,18 +213,6 @@ func RunJob(key string, opts RunOpts) error {
 	defer cancel()
 	startedTime := opts.Now().UTC()
 	started := startedTime.Format(time.RFC3339)
-	if homeEnv != "" {
-
-		prev, had := os.LookupEnv("RIG_HOME")
-		os.Setenv("RIG_HOME", homeEnv)
-		defer func() {
-			if had {
-				os.Setenv("RIG_HOME", prev)
-			} else {
-				os.Unsetenv("RIG_HOME")
-			}
-		}()
-	}
 	res, err := opts.Spawn(ctx, argv, job.Cwd, spawnEnv)
 	if err != nil {
 		return fmt.Errorf("run-job: spawn: %w", err)

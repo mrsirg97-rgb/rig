@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [1.2.10]: the jail's env lands in pairs
+
+A review pass over the 1.2.x surface surfaced four fixes: the bwrap
+jail's env never parsed, the delegate switched the process's own env
+around each spawn, the provenance rule fell open on a symlink crossing,
+and `-exec` opened the landlock path from any argv.
+
+- **the jail's env rides explicit pairs** (`store/scheduler`): bwrap's
+  `--setenv` takes VAR VALUE (two arguments) and the profile passed one
+  `KEY=VALUE` argument, so every jailed spawn died in "bwrap: setenv
+  failed" since 0.24.2. The argv now splits on the first `=`, an entry
+  without one refuses, and the shape test pins the pairs the spec
+  (SPEC_SANDBOX 1) already named.
+- **the child env rides the spawn** (`store/scheduler`): the delegate
+  and the runner switched the process's own `RIG_HOME`/`RIG_DELEGATE`
+  around each spawn and restored after — shared mutable state a fan-out
+  sibling could observe, and a race where a concurrent delegate read
+  the first one's `RIG_DELEGATE` and refused as a worker. The child env
+  is explicit at the spawn site now (`os.Environ()` plus the override);
+  the process env never changes, and the jailed runner's `RIG_HOME`
+  switch — dead weight, bwrap carries it via `--setenv` — is gone.
+- **the provenance rule refuses the crossing** (`middleware/perm`): a
+  plugins/ path whose symlink resolves outside the plugins root fell
+  through to the tool, and an outside path resolving into the loaded
+  tree fell through the same way. The zone is judged on both spellings;
+  a pending dir relocated by the operator's own symlink stays the
+  landing zone (the crossing is judged against the resolved pending
+  dir).
+- **the exec door opens only with the profile** (`cmd/rig`): `-exec`
+  entered the landlock path from any argv; now only with `RIG_LANDLOCK`
+  set, so a one-shot prompt of exactly `-exec` stays a prompt.
+
 ## [1.2.9]: the docs name the fan-out
 
 The delegation feature never made it into the README or the landing page:

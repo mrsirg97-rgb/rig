@@ -89,6 +89,10 @@ sees core and models and nothing else.
   spawn, and a fresh one-shot records under it instead of discovering a
   concurrent worker's session after the fact. It cannot combine with
   `-resume`.
+- The `-exec` door opens only with `RIG_LANDLOCK` set (`execDoor`): the
+  landlock spawn's argv and the wrapped tool children re-enter it to
+  apply the domain before the exec; a one-shot whose prompt is exactly
+  `-exec` stays a prompt.
 - The compaction row is resolved loud before the stores: a job whose
   window minus reserve leaves too little to work with fails at start.
 - `rigHome` migration is once and deterministic, and a **default-path
