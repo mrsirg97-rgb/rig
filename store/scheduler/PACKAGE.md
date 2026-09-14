@@ -23,7 +23,9 @@ written before the store commit; drift is surfaced in list.
   `global.sqlite`; the crontab key is `jN` for every job, `name` unique
   store-wide, ids one sequence. `Create` takes the model from the
   caller (there is no package default anymore): an empty model refuses,
-  naming the fleet's model and the job's own.
+  naming the fleet's model and the job's own — unless the create carries
+  `command` (a shell line run by `sh -c` in the job's cwd instead of a
+  worker prompt), which refuses `model` and `busy` and needs neither.
 - `migration.go`: the one-time schema-1→2 migration: folds every
   `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
@@ -34,7 +36,10 @@ written before the store commit; drift is surfaced in list.
   of a 256 KiB budget with a truncation marker, so a verbose worker
   cannot OOM the runner; the stored cwd is revalidated at fire time (the
   jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
-  with a recorded reason.
+  with a recorded reason. A command job's fire skips the busy probe and
+  the jail: `sh -c` over the stored line with the process environment,
+  in the job's cwd — the payload is the operator's own, the same trust
+  the crontab line itself carries.
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE): the busy
   rule, the ad-hoc record (a minted job row with no crontab line), the
   state-store bind and explicit identity for the resumable transcript, the per-session
@@ -94,3 +99,9 @@ written before the store commit; drift is surfaced in list.
 - One store, `global.sqlite`: `cwd` is a job field (where it runs and how
   the list groups), not a storage partition; `ParseKey` accepts `jN` only
   (the migration rewrites the old `cwd-<hash>:jN` crontab keys).
+- A job's kind is immutable: a command job stays a command job and a
+  model job stays a model job; `update` overlays the payload its job
+  already carries and a cross-kind change refuses by name (remove +
+  create expresses it). The migration function runs on every open, so
+  its steps key on presence — the command column on `pragma_table_info`,
+  the legacy fold on the files — never on the stored version alone.

@@ -22,13 +22,14 @@ func ParseKey(key string) (string, error) {
 }
 
 type CreateInput struct {
-	Name   string
-	Prompt string
-	Cron   string
-	At     string
-	Cwd    string
-	Model  string
-	Busy   string
+	Name    string
+	Prompt  string
+	Command string
+	Cron    string
+	At      string
+	Cwd     string
+	Model   string
+	Busy    string
 }
 
 func schedErr(format string, a ...any) error {
@@ -57,8 +58,18 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 		return "", schedErr("create requires a non-empty name")
 	}
 	prompt := in.Prompt
-	if prompt == "" {
-		return "", schedErr("create requires a non-empty prompt")
+	command := strings.TrimSpace(in.Command)
+	if prompt == "" && command == "" {
+		return "", schedErr("create requires a prompt or a command")
+	}
+	if prompt != "" && command != "" {
+		return "", schedErr("create got both a prompt and a command (one payload per job)")
+	}
+	if command != "" && in.Model != "" {
+		return "", schedErr("command jobs need no model")
+	}
+	if command != "" && in.Busy != "" {
+		return "", schedErr("command jobs need no busy policy")
 	}
 
 	jobCwd := in.Cwd
@@ -69,7 +80,7 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 		return "", schedErr("create requires a working directory (cwd or a session cwd)")
 	}
 	model := in.Model
-	if model == "" {
+	if command == "" && model == "" {
 		return "", schedErr("create requires a non-empty model (the fleet's model, or the job's own)")
 	}
 	busy := busyOf(in.Busy)
@@ -124,10 +135,14 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	if err := maybeCompact(bound, tx, f, session); err != nil {
 		return "", err
 	}
-	argsJSON, _ := json.Marshal(map[string]any{
+	args := map[string]any{
 		"name": name, "prompt": prompt, "cron": cron, "at": at,
 		"cwd": jobCwd, "model": model, "busy": busy,
-	})
+	}
+	if command != "" {
+		args["command"] = command
+	}
+	argsJSON, _ := json.Marshal(args)
 	seq, err := appendEvent(bound, f.maxSeq+1, "create", string(argsJSON), session)
 	if err != nil {
 		return "", err
@@ -257,14 +272,15 @@ func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session
 }
 
 type UpdateInput struct {
-	ID     string
-	Name   string
-	Prompt string
-	Cron   string
-	At     string
-	Cwd    string
-	Model  string
-	Busy   string
+	ID      string
+	Name    string
+	Prompt  string
+	Command string
+	Cron    string
+	At      string
+	Cwd     string
+	Model   string
+	Busy    string
 }
 
 func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, runnerCmd string, now func() time.Time) (string, error) {
@@ -273,6 +289,7 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	}
 	name := strings.TrimSpace(in.Name)
 	prompt := in.Prompt
+	command := strings.TrimSpace(in.Command)
 	model := strings.TrimSpace(in.Model)
 	cwd := strings.TrimSpace(in.Cwd)
 	cron := strings.TrimSpace(in.Cron)
@@ -321,11 +338,24 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if job.State == "removed" {
 		return "", schedErr("job '%s' is removed", in.ID)
 	}
-	if name == "" && prompt == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" {
+	if name == "" && prompt == "" && command == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" {
 		return "", schedErr("update needs a change")
 	}
 	if busy != "" && busy != "skip" && busy != "force" {
 		return "", schedErr("busy must be 'skip' or 'force', got '%s'", busy)
+	}
+	jobCommand := strings.TrimSpace(job.Command)
+	if command != "" && jobCommand == "" {
+		return "", schedErr("job '%s' runs a model prompt; update takes prompt (remove + create to convert it to a command)", in.ID)
+	}
+	if prompt != "" && jobCommand != "" {
+		return "", schedErr("job '%s' runs a command; update takes command (remove + create to convert it to a prompt)", in.ID)
+	}
+	if model != "" && jobCommand != "" {
+		return "", schedErr("command jobs need no model (job '%s' runs a command)", in.ID)
+	}
+	if busy != "" && jobCommand != "" {
+		return "", schedErr("command jobs need no busy policy (job '%s' runs a command)", in.ID)
 	}
 	if name != "" && name != job.Name {
 		for _, j := range f.jobs {
@@ -358,6 +388,9 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	}
 	if prompt != "" {
 		args["prompt"] = prompt
+	}
+	if command != "" {
+		args["command"] = command
 	}
 	if model != "" {
 		args["model"] = model

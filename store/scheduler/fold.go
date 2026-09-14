@@ -16,6 +16,7 @@ type jobState struct {
 	ID          string
 	Name        string
 	Prompt      string
+	Command     string
 	Cron        string
 	At          string
 	Cwd         string
@@ -64,6 +65,12 @@ func (j *jobState) lastExitPtr() *int64 {
 	}
 	return &j.LastExit
 }
+func (j *jobState) commandPtr() *string {
+	if j.Command == "" {
+		return nil
+	}
+	return &j.Command
+}
 
 type eventRow struct {
 	seq     int64
@@ -109,14 +116,15 @@ func (f *fold) apply(e eventRow) {
 
 func (f *fold) applyCreate(e eventRow) {
 	var a struct {
-		ID     string  `json:"id"`
-		Name   string  `json:"name"`
-		Prompt string  `json:"prompt"`
-		Cron   string  `json:"cron"`
-		At     *string `json:"at"`
-		Cwd    string  `json:"cwd"`
-		Model  string  `json:"model"`
-		Busy   string  `json:"busy"`
+		ID      string  `json:"id"`
+		Name    string  `json:"name"`
+		Prompt  string  `json:"prompt"`
+		Command string  `json:"command"`
+		Cron    string  `json:"cron"`
+		At      *string `json:"at"`
+		Cwd     string  `json:"cwd"`
+		Model   string  `json:"model"`
+		Busy    string  `json:"busy"`
 	}
 	if json.Unmarshal([]byte(e.args), &a) != nil || a.Name == "" {
 		return
@@ -141,8 +149,8 @@ func (f *fold) applyCreate(e eventRow) {
 		at = *a.At
 	}
 	f.jobs[id] = &jobState{
-		ID: id, Name: a.Name, Prompt: a.Prompt, Cron: a.Cron,
-		At: at, Cwd: a.Cwd, Model: a.Model,
+		ID: id, Name: a.Name, Prompt: a.Prompt, Command: a.Command,
+		Cron: a.Cron, At: at, Cwd: a.Cwd, Model: a.Model,
 		Busy: busyOf(a.Busy), State: "active",
 		CreatedSeq: e.seq, UpdatedSeq: e.seq,
 	}
@@ -209,13 +217,14 @@ func (f *fold) applyVerb(e eventRow) {
 
 func (j *jobState) applyUpdate(args string) {
 	var u struct {
-		Name   string  `json:"name"`
-		Prompt string  `json:"prompt"`
-		Cron   string  `json:"cron"`
-		At     *string `json:"at"`
-		Cwd    string  `json:"cwd"`
-		Model  string  `json:"model"`
-		Busy   string  `json:"busy"`
+		Name    string  `json:"name"`
+		Prompt  string  `json:"prompt"`
+		Command string  `json:"command"`
+		Cron    string  `json:"cron"`
+		At      *string `json:"at"`
+		Cwd     string  `json:"cwd"`
+		Model   string  `json:"model"`
+		Busy    string  `json:"busy"`
 	}
 	if json.Unmarshal([]byte(args), &u) != nil {
 		return
@@ -225,6 +234,9 @@ func (j *jobState) applyUpdate(args string) {
 	}
 	if u.Prompt != "" {
 		j.Prompt = u.Prompt
+	}
+	if u.Command != "" {
+		j.Command = u.Command
 	}
 	if u.Cron != "" {
 		j.Cron = u.Cron
@@ -249,6 +261,7 @@ type compactJob struct {
 	ID         string  `json:"id"`
 	Name       string  `json:"name"`
 	Prompt     string  `json:"prompt"`
+	Command    *string `json:"command"`
 	Cron       string  `json:"cron"`
 	At         *string `json:"at"`
 	Cwd        string  `json:"cwd"`
@@ -282,6 +295,9 @@ func (f *fold) applyCompact(e eventRow) {
 				ID: r.ID, Name: r.Name, Prompt: r.Prompt, Cron: r.Cron,
 				Cwd: r.Cwd, Model: r.Model, Busy: busyOf(r.Busy),
 				State: state,
+			}
+			if r.Command != nil {
+				j.Command = *r.Command
 			}
 			if r.At != nil {
 				j.At = *r.At
@@ -366,8 +382,9 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) er
 		lt := j.lastTsPtr()
 		le := j.lastExitPtr()
 		snapshot = append(snapshot, compactJob{
-			ID: j.ID, Name: j.Name, Prompt: j.Prompt, Cron: j.Cron,
-			At: at, Cwd: j.Cwd, Model: j.Model, Busy: j.Busy, State: j.State,
+			ID: j.ID, Name: j.Name, Prompt: j.Prompt, Command: j.commandPtr(),
+			Cron: j.Cron, At: at, Cwd: j.Cwd, Model: j.Model, Busy: j.Busy,
+			State: j.State,
 			LastStatus: ls, LastTs: lt, LastExit: le,
 		})
 	}
@@ -407,10 +424,10 @@ func rewrite(tx *sql.Tx, f *fold) error {
 	})
 	for _, j := range order {
 		_, err := tx.Exec(
-			`INSERT INTO jobs (id, name, prompt, cron, at, cwd, model, busy, state,
+			`INSERT INTO jobs (id, name, prompt, command, cron, at, cwd, model, busy, state,
 			    last_status, last_ts, last_exit, created_seq, updated_seq)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			j.ID, j.Name, j.Prompt, j.Cron, nullStr(j.At), j.Cwd, j.Model, j.Busy, j.State,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			j.ID, j.Name, j.Prompt, nullStr(j.Command), j.Cron, nullStr(j.At), j.Cwd, j.Model, j.Busy, j.State,
 			nullStr(j.LastStatus), nullStr(j.LastTs), nullInt64(j.LastExitSet, j.LastExit),
 			j.CreatedSeq, j.UpdatedSeq,
 		)

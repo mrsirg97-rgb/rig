@@ -37,6 +37,7 @@ type Job struct {
 	ID           string  `primary:"true" alias:"name=id,nullable=false"`
 	Name         string  `alias:"name=name,nullable=false"`
 	Prompt       string  `alias:"name=prompt,nullable=false"`
+	Command      *string `alias:"name=command,nullable=true"`
 	Cron         string  `alias:"name=cron,nullable=false"`
 	At           *string `alias:"name=at,nullable=true"`
 	Cwd          string  `alias:"name=cwd,nullable=false"`

@@ -15,6 +15,7 @@ type Job struct {
 	Id         string  `db:"id"`
 	At         *string `db:"at"`
 	Busy       string  `db:"busy"`
+	Command    *string `db:"command"`
 	CreatedSeq int64   `db:"created_seq"`
 	Cron       string  `db:"cron"`
 	Cwd        string  `db:"cwd"`
@@ -48,6 +49,7 @@ func ScanJob(row lazy.ScanRow) (Job, error) {
 		&out.Id,
 		&out.At,
 		&out.Busy,
+		&out.Command,
 		&out.CreatedSeq,
 		&out.Cron,
 		&out.Cwd,
@@ -83,7 +85,7 @@ func (d *jobDomain) GetJob(ctx context.Context, id string) *lazy.Lazy[Job] {
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "id", "at", "busy", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq" FROM "jobs" WHERE "id" = $1`,
+		`SELECT "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq" FROM "jobs" WHERE "id" = $1`,
 		id,
 	)
 	out, err := ScanJob(row)
@@ -120,7 +122,7 @@ func (d *jobDomain) GetJobBatch(ctx context.Context, keys []string) *lazy.Lazy[J
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "at", "busy", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq" FROM "jobs" WHERE "id" IN (`+ph+`)`, args...)
+		`SELECT "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq" FROM "jobs" WHERE "id" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -148,10 +150,11 @@ func (d *jobDomain) InsertJob(ctx context.Context, row Job) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "jobs" ("id", "at", "busy", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING "id", "at", "busy", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "jobs" ("id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq"`,
 		row.Id,
 		row.At,
 		row.Busy,
+		row.Command,
 		row.CreatedSeq,
 		row.Cron,
 		row.Cwd,
@@ -175,7 +178,7 @@ func (d *jobDomain) DeleteJob(ctx context.Context, id string) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "jobs" WHERE "id" = $1 RETURNING "id", "at", "busy", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "jobs" WHERE "id" = $1 RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq"`,
 		id,
 	)
 	if err != nil {
@@ -189,9 +192,10 @@ func (d *jobDomain) UpdateJob(ctx context.Context, row Job) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "jobs" SET "at" = $1, "busy" = $2, "created_seq" = $3, "cron" = $4, "cwd" = $5, "last_exit" = $6, "last_status" = $7, "last_ts" = $8, "model" = $9, "name" = $10, "prompt" = $11, "state" = $12, "updated_seq" = $13 WHERE "id" = $14 RETURNING "id", "at", "busy", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "jobs" SET "at" = $1, "busy" = $2, "command" = $3, "created_seq" = $4, "cron" = $5, "cwd" = $6, "last_exit" = $7, "last_status" = $8, "last_ts" = $9, "model" = $10, "name" = $11, "prompt" = $12, "state" = $13, "updated_seq" = $14 WHERE "id" = $15 RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "updated_seq"`,
 		row.At,
 		row.Busy,
+		row.Command,
 		row.CreatedSeq,
 		row.Cron,
 		row.Cwd,

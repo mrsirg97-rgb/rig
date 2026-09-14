@@ -23,8 +23,12 @@ seams).
 
 ## Gotchas
 
-- `create` carries a job name, prompt, and cron: the store validates the
-  cron it gets (the adapter parses, the store teaches).
+- `create` carries a job name, a prompt or a command, and a cron: the
+  store validates the cron it gets (the adapter parses, the store
+  teaches). A `command` create is the deterministic payload (no model,
+  no busy policy): the adapter fills the fleet's model only for the
+  prompt path, and the guidelines steer commands to scripts, never to
+  work needing judgment.
 - `create` and `update` run the one cwd rule in `pathguard` (shared with
   the delegate tool): a cwd outside the session's cwd or the rig home
   refuses at the boundary, and the runner rechecks the stored cwd at fire
