@@ -55,7 +55,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.2.10"
+const Version = "1.2.11"
 
 type root struct {
 	pluginMax int
@@ -115,6 +115,13 @@ type root struct {
 const defaultResultCap = 64 * 1024
 
 func wire(r *root) *rig.Kernel {
+	// approve rides the door: manual means "ask before mutating", and
+	// asking needs a door, so a doorless frontend runs auto — a TUI
+	// user's manual never binds the workers.
+	if r.askDoor == nil {
+		r.approve = approve.Auto
+		r.approveDefault = approve.Auto
+	}
 
 	if r.live == nil {
 
@@ -143,9 +150,7 @@ func wire(r *root) *rig.Kernel {
 			toolset.Resolve(r.live),
 		}
 
-		if r.askDoor != nil {
-			mw = append(mw, approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating))
-		}
+		mw = append(mw, approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating))
 		mw = append(mw, cutoff.Middleware())
 		resultCap := r.resultCap
 		if resultCap == 0 {

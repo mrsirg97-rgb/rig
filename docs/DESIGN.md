@@ -102,7 +102,7 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 ### middleware composition
 
-The root's chain `WithMiddleware(toolset.Resolve, approve?, cutoff,
+The root's chain `WithMiddleware(toolset.Resolve, approve, cutoff,
 paths, perm.Plugins, perm.Allowlist, guard.Bound, guard.Rounds, guard.Cap)`
 composes **first-listed innermost**: execution reads the registration list
 in reverse, a call entering at the outermost link and unwinding inward:

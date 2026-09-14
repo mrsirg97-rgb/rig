@@ -16,6 +16,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/command"
 	"github.com/mrsirg97-rgb/rig/config"
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/store"
@@ -30,8 +31,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.2.10" {
-		t.Fatalf("Version = %q, want 1.2.10", Version)
+	if Version != "1.2.11" {
+		t.Fatalf("Version = %q, want 1.2.11", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -213,8 +214,8 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("no fleet: the worker tools must stay unregistered: %v, want %v", got, want)
 	}
-	if len(k.Middleware) != 8 {
-		t.Fatalf("middleware = %d links, want the path boundary, the router, the cutoff link, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decisions 9 and 10; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	if len(k.Middleware) != 9 {
+		t.Fatalf("middleware = %d links, want the approval gate, the path boundary, the router, the cutoff link, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decisions 9 and 10; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
 	}
 }
 
@@ -251,6 +252,31 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 	}
 	if !r.isMutating("bash") {
 		t.Fatal("the control: bash must stay mutating")
+	}
+}
+
+func TestManualApprovalRidesTheDoor(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.approve = approve.Manual
+	r.approveDefault = approve.Manual
+	k := wire(r)
+
+	if r.approve != approve.Auto || r.approveDefault != approve.Auto {
+		t.Fatalf("a doorless frontend must resolve approve to auto, got %q (default %q)", r.approve, r.approveDefault)
+	}
+
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return "sentinel", nil
+	}
+	for _, mw := range k.Middleware {
+		exec = mw.Wrap(exec)
+	}
+	content, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"echo hi"}`)})
+	if err != nil {
+		t.Fatalf("the call must execute like auto: %v", err)
+	}
+	if content != "hi\n" {
+		t.Fatalf("the fleet must run under a TUI user's manual setting, got %q", content)
 	}
 }
 

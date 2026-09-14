@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.2.11]: approve rides the door
+
+A review pass found the approval gate skipped at the wiring for every
+doorless frontend, so `approve: manual` in the rig home's settings.json
+leaked onto the whole account — delegates, cron workers, `-p` runs —
+where the status bar claimed manual while the tools mutated unasked.
+The gate now wires unconditionally, and manual rides the door: a
+frontend that cannot ask runs auto, so gating a TUI never binds the
+fleet.
+
+- **the gate always wires** (`cmd/rig`): `approve.Gate` is appended
+  unconditionally and passes through in auto. The middleware seam is
+  9 links (was 8).
+- **manual applies where a door exists** (`cmd/rig`): a doorless
+  frontend resolves approve to auto at the seam. The live `/approve`
+  switch keeps its refusal on doorless frontends — a request that
+  cannot be honored errors, while the persistent preference scopes
+  itself to the frontends that can honor it.
+
 ## [1.2.10]: the jail's env lands in pairs
 
 A review pass over the 1.2.x surface surfaced four fixes: the bwrap
