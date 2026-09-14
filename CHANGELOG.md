@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.2.11]: the approval gate wires without a door
+
+A review pass found the manual-approve wall half-built for doorless
+frontends: the gate — whose own contract refuses a call when it cannot
+ask — was skipped at the wiring for exactly those frontends, so
+`approve: manual` in settings.json ran mutating tools unapproved while
+the status bar claimed otherwise. The validation lived only in the
+interactive `/approve` switch, never at the seam.
+
+- **the gate always wires** (`cmd/rig`): `approve.Gate` is appended
+  unconditionally. A doorless frontend now fails closed per call with
+  the gate's own message ("manual mode with no ask door (this frontend
+  cannot ask) — the call was not run") instead of passing the call
+  through to the tool. The middleware seam is 9 links (was 8).
+- **the operator hears about it at startup** (`cmd/rig`): with
+  `approve: manual` set and no ask door, rig prints a stderr note at
+  boot; the interactive switch keeps its existing refusal.
+
 ## [1.2.10]: the jail's env lands in pairs
 
 A review pass over the 1.2.x surface surfaced four fixes: the bwrap
