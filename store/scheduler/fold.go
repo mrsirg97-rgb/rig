@@ -384,7 +384,7 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) er
 		snapshot = append(snapshot, compactJob{
 			ID: j.ID, Name: j.Name, Prompt: j.Prompt, Command: j.commandPtr(),
 			Cron: j.Cron, At: at, Cwd: j.Cwd, Model: j.Model, Busy: j.Busy,
-			State: j.State,
+			State:      j.State,
 			LastStatus: ls, LastTs: lt, LastExit: le,
 		})
 	}
