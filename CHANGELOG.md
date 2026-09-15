@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [1.2.15]: the chain gets a name and the path vocabulary widens
+## [1.2.14]: the chain gets a name and the path vocabulary widens
 
 A review pass over the runtime found the middleware chain written out
 twice in the composition root: once in `wire` for the kernel and again,
