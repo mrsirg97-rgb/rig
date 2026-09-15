@@ -145,3 +145,43 @@ func TestMiddlewareLeavesBytesAloneWhenNothingExpands(t *testing.T) {
 		}
 	}
 }
+
+func TestRewriteCoversEveryVocabularyFieldName(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, f := range paths.Fields {
+		raw, err := json.Marshal(map[string]string{f: "~/x"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, changed := paths.Rewrite(raw)
+		if !changed {
+			t.Fatalf("%s is in the vocabulary and must expand", f)
+		}
+		var m map[string]string
+		if err := json.Unmarshal(got, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m[f] != filepath.Join(home, "x") {
+			t.Fatalf("%s = %q, want %q", f, m[f], filepath.Join(home, "x"))
+		}
+	}
+}
+
+func TestRewriteLeavesUnlistedNamesAlone(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, f := range []string{"pattern", "glob", "old", "new", "content", "command"} {
+		raw, err := json.Marshal(map[string]string{f: "~/x"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, changed := paths.Rewrite(raw)
+		if changed {
+			t.Fatalf("%s is not in the vocabulary and must ride through untouched", f)
+		}
+		if string(got) != string(raw) {
+			t.Fatalf("%s: bytes must ride through, got %s", f, got)
+		}
+	}
+}

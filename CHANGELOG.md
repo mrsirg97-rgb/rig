@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [1.2.15]: the chain gets a name and the path vocabulary widens
+
+A review pass over the runtime found the middleware chain written out
+twice in the composition root: once in `wire` for the kernel and again,
+shorter, in `buildSystem` for the guidelines harvest — the canonical
+order living in slice literals whose only guard was a sentence in a
+PACKAGE.md. The same pass found the path boundary's vocabulary
+understated by its own doc (four fields where the doc named three) and
+too narrow to catch the name a tool plausibly invents next. The chain is
+now one named constructor the root builds through, and the boundary's
+field list covers the path-shaped names a call arrives with.
+
+- **canonical chain** (`cmd/rig`): `canonicalMiddleware` is the one
+  place the nine links are listed — `toolset.Resolve`, the approval
+  gate, the cutoff, the provenance rule, the allow-list, the bound, the
+  round cap, the result cap, and `paths` outermost — and both `wire`
+  and `buildSystem` build through it, so the system prompt's harvest
+  can never name a chain the tools do not run. Order tests pin the
+  load-bearing positions: paths run before the gate (the operator judges
+  the expanded path), the allow-list sits inside the round cap (a denied
+  call still spends the budget) and outside the gate (an unknown tool is
+  refused before the operator is asked), and no link contributes
+  guidelines (the harvest stays byte-stable). The links and their order
+  are unchanged; this names them.
+- **path vocabulary** (`middleware/paths`): `Fields` grows `dir`,
+  `directory`, `file`, `target`, `dest`, and `destination` alongside
+  `path`, `root`, `cwd`, and `project`. A call whose path-shaped
+  argument uses one of these now expands at the boundary with no
+  per-tool fix; a name outside the list still rides through
+  byte-identical, so a `pattern` or a `command` beginning with `~` is
+  never mangled. Tests pin both directions: every vocabulary name
+  expands, every plausible non-path name does not.
+
 ## [1.2.13]: scheduler jobs without the model
 
 Building an autonomous RFP-digest watcher on rig's scheduler hit the

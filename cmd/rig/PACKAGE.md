@@ -60,11 +60,15 @@ sees core and models and nothing else.
   empty.
 - `wire(r)` assembles the kernel: the provider, the compact+effort
   policy pair, the live tool table (SPEC_PLUGINS 8), and the
-  middleware chain; [toolset.Resolve, approve? (when a frontend can
-  ask), cutoff, perm.Plugins, perm.Allowlist, guard.Bound,
+  middleware chain from `canonicalMiddleware` (middleware.go, the one
+  place the order is written down and the order tests pin it):
+  [toolset.Resolve, approve.Gate (auto unless a frontend can ask),
+  cutoff, perm.Plugins, perm.Allowlist, guard.Bound,
   guard.Rounds, guard.Cap, paths (the `~` boundary, outermost: every
-  path is expanded before any validation)]. Swapping a seam is a
-  change here and nowhere else. The compaction `AutoReflect` seam is
+  path is expanded before any validation)]. `buildSystem` harvests
+  guidelines from the same constructor, so the prompt can never name a
+  chain the tools do not run. Swapping a seam is a
+  change there and nowhere else. The compaction `AutoReflect` seam is
   cut: compaction writes nothing to rem (SPEC_COMPACT 6).
 - The rem store opens with `remstore.Migration(cwd)` (SPEC_STATE: rem is
   deliberate); the one-time idempotent re-scope and compaction-row
