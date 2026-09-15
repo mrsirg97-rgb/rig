@@ -25,10 +25,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/middleware/cutoff"
-	"github.com/mrsirg97-rgb/rig/middleware/guard"
 	"github.com/mrsirg97-rgb/rig/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/middleware/toolset"
 	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/plugins"
@@ -55,7 +52,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.2.13"
+const Version = "1.2.14"
 
 type root struct {
 	pluginMax int
@@ -145,25 +142,7 @@ func wire(r *root) *rig.Kernel {
 	}
 	mw := r.middleware
 	if mw == nil {
-
-		mw = []core.ToolMiddleware{
-			toolset.Resolve(r.live),
-		}
-
-		mw = append(mw, approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating))
-		mw = append(mw, cutoff.Middleware())
-		resultCap := r.resultCap
-		if resultCap == 0 {
-			resultCap = defaultResultCap
-		}
-		mw = append(mw,
-			perm.Plugins(r.pluginsDir),
-			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
-			guard.Bound(r.retries),
-			guard.Rounds(r.rounds),
-			guard.Cap(resultCap),
-			paths.Middleware(),
-		)
+		mw = r.canonicalMiddleware()
 	}
 
 	r.fullSystem = r.buildSystem()
@@ -187,18 +166,7 @@ func wire(r *root) *rig.Kernel {
 func (r *root) buildSystem() string {
 	mw := r.middleware
 	if mw == nil {
-		resultCap := r.resultCap
-		if resultCap == 0 {
-			resultCap = defaultResultCap
-		}
-		mw = []core.ToolMiddleware{
-			perm.Plugins(r.pluginsDir),
-			perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
-			guard.Bound(r.retries),
-			guard.Rounds(r.rounds),
-			guard.Cap(resultCap),
-			paths.Middleware(),
-		}
+		mw = r.canonicalMiddleware()
 	}
 	parts := make([]string, 0, 6)
 	if r.system != "" {

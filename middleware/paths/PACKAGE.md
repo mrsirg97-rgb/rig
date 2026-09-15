@@ -12,9 +12,13 @@ so every tool inherits it and nothing drifts.
 
 ## What it includes
 
-- `Fields`: the path-shaped argument names: `path`, `root`, `cwd`. A new
-  tool that names its path one of these inherits the expansion; one that
-  invents a fourth name is a finding for this list, not a per-tool fix.
+- `Fields`: the path-shaped argument names: `path`, `root`, `cwd`,
+  `project`, `dir`, `directory`, `file`, `target`, `dest`,
+  `destination`. A new tool that names its path one of these inherits
+  the expansion; one that invents a name outside the list is a finding
+  for this list, not a per-tool fix. A name outside the list rides
+  through untouched even when its value begins with `~`, so a `pattern`
+  or a `command` is never mangled; the tests pin both directions.
 - `Expand(p)`: `~` and `~/…` are `os.UserHomeDir` (`$HOME`; the scratch
   home inside a jail, the home the session prompt names); `~user` and
   `~user/…` are that user's home (`os/user`). An unknown user, an
