@@ -20,6 +20,11 @@ var legacyStoreRe = regexp.MustCompile(`^([0-9a-f]{12})\.sqlite$`)
 
 func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) {
 	return func(tx *sql.Tx, from, to int) (string, error) {
+		if from > 0 && from < 3 {
+			if err := addCommandColumn(tx); err != nil {
+				return "", err
+			}
+		}
 		entries, err := os.ReadDir(home)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -161,6 +166,20 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 		}
 		return "", nil
 	}
+}
+
+func addCommandColumn(tx *sql.Tx) error {
+	var n int64
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('jobs') WHERE name='command'`).Scan(&n); err != nil {
+		return fmt.Errorf("scheduler: migration: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := tx.Exec(`ALTER TABLE jobs ADD COLUMN command TEXT`); err != nil {
+		return fmt.Errorf("scheduler: migration: %w", err)
+	}
+	return nil
 }
 
 func rewriteKeys(text string, repl map[string]string) string {

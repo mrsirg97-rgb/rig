@@ -75,6 +75,10 @@ func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time)
 	if s := lastText(j); s != "" {
 		head += " · " + s
 	}
+	payload := "model " + j.Model
+	if j.Command != "" {
+		payload = "command " + j.Command
+	}
 	line2 := fmt.Sprintf("  cron %s%s · %s%s · %s",
 		j.Cron,
 		func() string {
@@ -83,9 +87,9 @@ func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time)
 			}
 			return ""
 		}(),
-		j.Model,
+		payload,
 		func() string {
-			if j.Busy == "force" {
+			if j.Command == "" && j.Busy == "force" {
 				return " · busy force"
 			}
 			return ""

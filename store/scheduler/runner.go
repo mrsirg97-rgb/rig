@@ -150,63 +150,73 @@ func RunJob(key string, opts RunOpts) error {
 		return nil
 	}
 
-	st := busyState(opts.Fetch, opts.SwapURL, job.Model)
-	switch st.kind {
-	case "error":
-		if e := recordSkip(db, id, st.reason); e != nil {
-			return e
-		}
-		return nil
-	case "busy":
-		if job.Busy != "force" {
-			if e := recordSkip(db, id, "busy: "+st.names+" resident (policy skip)"); e != nil {
-				return e
-			}
-			return nil
-		}
-	}
-
-	workerCmd := opts.WorkerCmd
-	if len(workerCmd) == 0 {
-		exe, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("run-job: worker command: %w", err)
-		}
-		workerCmd = []string{exe}
-	}
-	prompt := job.Prompt + ReportBack
-
-	profile, err := SandboxProfile(opts.Sandbox)
-	if err != nil {
-		return fmt.Errorf("run-job: sandbox: %w", err)
+	command := ""
+	if job.Command != nil {
+		command = strings.TrimSpace(*job.Command)
 	}
 	var (
 		argv     []string
 		proxy    *SocketProxy
 		spawnEnv []string
-		refuse   string
 	)
-	if profile == "off" {
-
-		fmt.Fprintln(os.Stderr, "run-job: sandbox off: the worker runs unjailed (the operator's choice)")
-
-		argv = append(append([]string{}, workerCmd...),
-			"-p", prompt,
-			"-base-url", opts.SwapURL+"/v1",
-			"-model", job.Model)
+	if command != "" {
+		argv = []string{"sh", "-c", command}
 		spawnEnv = os.Environ()
 	} else {
-		argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "")
-		if err != nil {
-			return fmt.Errorf("run-job: jail: %w", err)
-		}
-		if refuse != "" {
-			if e := recordSkip(db, id, refuse); e != nil {
+		st := busyState(opts.Fetch, opts.SwapURL, job.Model)
+		switch st.kind {
+		case "error":
+			if e := recordSkip(db, id, st.reason); e != nil {
 				return e
 			}
 			return nil
+		case "busy":
+			if job.Busy != "force" {
+				if e := recordSkip(db, id, "busy: "+st.names+" resident (policy skip)"); e != nil {
+					return e
+				}
+				return nil
+			}
 		}
-		defer proxy.Close()
+
+		workerCmd := opts.WorkerCmd
+		if len(workerCmd) == 0 {
+			exe, err := os.Executable()
+			if err != nil {
+				return fmt.Errorf("run-job: worker command: %w", err)
+			}
+			workerCmd = []string{exe}
+		}
+		prompt := job.Prompt + ReportBack
+
+		profile, err := SandboxProfile(opts.Sandbox)
+		if err != nil {
+			return fmt.Errorf("run-job: sandbox: %w", err)
+		}
+		if profile == "off" {
+
+			fmt.Fprintln(os.Stderr, "run-job: sandbox off: the worker runs unjailed (the operator's choice)")
+
+			argv = append(append([]string{}, workerCmd...),
+				"-p", prompt,
+				"-base-url", opts.SwapURL+"/v1",
+				"-model", job.Model)
+			spawnEnv = os.Environ()
+		} else {
+			var refuse string
+			var err error
+			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "")
+			if err != nil {
+				return fmt.Errorf("run-job: jail: %w", err)
+			}
+			if refuse != "" {
+				if e := recordSkip(db, id, refuse); e != nil {
+					return e
+				}
+				return nil
+			}
+			defer proxy.Close()
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

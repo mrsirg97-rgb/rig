@@ -22,6 +22,7 @@ func Statements() []string {
   "id" TEXT NOT NULL,
   "at" TEXT,
   "busy" TEXT NOT NULL,
+  "command" TEXT,
   "created_seq" INTEGER NOT NULL,
   "cron" TEXT NOT NULL,
   "cwd" TEXT NOT NULL,

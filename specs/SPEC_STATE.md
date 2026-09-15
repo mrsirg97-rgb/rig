@@ -426,6 +426,24 @@ post-merge corrections)
   tools follow the config: no fleet, no worker tools registered
   (SPEC_CONFIG 12's presence rule); the store and the runner are
   unchanged underneath.
+- Command jobs: `create` takes `command` (a shell line run by `sh -c`
+  in the job's cwd) instead of a `prompt`; a prompt and a command in
+  one call are mutually exclusive, refused by name, as are `command`
+  with `model` or with `busy`. A command job carries no model and no
+  busy policy: its fire skips the busy probe entirely (a loaded GPU
+  never delays a cron command) and runs unjailed — the payload is the
+  operator's own, the same trust the crontab line itself carries, and
+  the jail exists to contain a model's output, of which a command job
+  has none. Otherwise a command job is a job like any other: the same
+  tagged crontab line, the same lock, the same drift and
+  cwd-revalidation skips, the same run records, log capture, and
+  once-fire `done`. `update` edits a command job's line (or a model
+  job's prompt) but never converts a job's kind; remove + create
+  expresses a conversion, at its named cost. Schema 3 adds
+  `jobs.command` (nullable; NULL is a model job): the 2→3 step is an
+  idempotent column add inside the existing migration, which runs on
+  every open and so keys on column presence, not the version, the way
+  the 1→2 fold keys on the files.
 
 ## interfaces
 

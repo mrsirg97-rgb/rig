@@ -15,14 +15,17 @@ import (
 
 func description(defModel string) string {
 	return "background jobs on the user's crontab: each job is a headless worker session on the worker " +
-		"model (default: " + defModel + "), running in its own cwd."
+		"model (default: " + defModel + "), running in its own cwd; or, when command is set, a plain " +
+		"cron command in that cwd (no model, no GPU)."
 }
 
 const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D Mo DOW', or once + at:<ISO>, which " +
 	"self-deletes after one fire); list is one list, this directory first, the rest grouped by each job's cwd, with any drift between store and crontab; " +
 	"pause/resume/remove; runs is the audit trail. Reply: the job row or the list; ids (jN) are minted — copy from list, never invent. busy:skip (default) skips a fire while another model holds " +
 	"the GPU, force evicts it — only when the user wants the GPU now; a drifting job is not trustworthy " +
-	"until the note clears; a failed once job is done — re-create it to retry."
+	"until the note clears; a failed once job is done — re-create it to retry. command jobs run a fixed " +
+	"shell line instead of a worker session: no GPU, no busy policy, prompt/model/busy refused; for " +
+	"deterministic scripts (pollers, digests, backups), never for anything needing judgment."
 
 func schemaJSON(defModel string) string {
 	return `{
@@ -38,7 +41,11 @@ func schemaJSON(defModel string) string {
 		},
 		"prompt": {
 			"type": "string",
-			"description": "The prompt the worker session runs. Required for create."
+			"description": "The prompt the worker session runs. Required for create unless command is set."
+		},
+		"command": {
+			"type": "string",
+			"description": "Shell line run by sh -c in the job's cwd instead of a worker session (no model, no GPU). Refuses prompt/model/busy in the same call."
 		},
 		"cron": {
 			"type": "string",
@@ -75,16 +82,17 @@ func schemaJSON(defModel string) string {
 }
 
 type given struct {
-	Action string `json:"action"`
-	Name   string `json:"name"`
-	Prompt string `json:"prompt"`
-	Cron   string `json:"cron"`
-	At     string `json:"at"`
-	Model  string `json:"model"`
-	Busy   string `json:"busy"`
-	Cwd    string `json:"cwd"`
-	ID     string `json:"id"`
-	N      *int   `json:"n"`
+	Action  string `json:"action"`
+	Name    string `json:"name"`
+	Prompt  string `json:"prompt"`
+	Command string `json:"command"`
+	Cron    string `json:"cron"`
+	At      string `json:"at"`
+	Model   string `json:"model"`
+	Busy    string `json:"busy"`
+	Cwd     string `json:"cwd"`
+	ID      string `json:"id"`
+	N       *int   `json:"n"`
 }
 
 type adapter struct {
@@ -127,19 +135,26 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if name == "" {
 			return "", fmt.Errorf("scheduler: create requires 'name'")
 		}
-		if strings.TrimSpace(g.Prompt) == "" {
-			return "", fmt.Errorf("scheduler: create requires 'prompt'")
+		command := strings.TrimSpace(g.Command)
+		if command == "" && strings.TrimSpace(g.Prompt) == "" {
+			return "", fmt.Errorf("scheduler: create requires 'prompt' or 'command'")
 		}
 		if strings.TrimSpace(g.Cron) == "" {
 			return "", fmt.Errorf("scheduler: create requires 'cron' (5-field or 'once' + 'at')")
 		}
-		model := a.defModel
-		if g.Model != "" {
-			model = g.Model
-		}
-		busy := "skip"
-		if g.Busy == "force" {
-			busy = "force"
+		model := ""
+		busy := ""
+		if command == "" {
+			model = a.defModel
+			if g.Model != "" {
+				model = g.Model
+			}
+			busy = "skip"
+			if g.Busy == "force" {
+				busy = "force"
+			}
+		} else if g.Model != "" || g.Busy != "" {
+			return "", fmt.Errorf("scheduler: a command job takes no model and no busy policy")
 		}
 		jobCwd := g.Cwd
 		if jobCwd != "" {
@@ -150,7 +165,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			jobCwd = validated
 		}
 		return sched.Create(ctx, a.db, a.ct, sched.CreateInput{
-			Name: name, Prompt: g.Prompt, Cron: g.Cron, At: g.At,
+			Name: name, Prompt: g.Prompt, Command: command, Cron: g.Cron, At: g.At,
 			Model: model, Busy: busy, Cwd: jobCwd,
 		}, cwd, session, a.runnerCmd, time.Now)
 	case "update":
@@ -166,7 +181,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			updateCwd = validated
 		}
 		return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
-			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Cron: g.Cron,
+			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron,
 			At: g.At, Cwd: updateCwd, Model: g.Model, Busy: g.Busy,
 		}, session, a.runnerCmd, time.Now)
 	case "list":

@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [1.2.13]: scheduler jobs without the model
+
+Building an autonomous RFP-digest watcher on rig's scheduler hit the
+seam this feature closes: a deterministic daily script had to either
+burn a model worker on four commands, or drop to a hand-written crontab
+line the store would never know about. Hand-written crontab is escaped
+state — the harness cannot pause it, audit its runs, or remember it.
+The scheduler now takes a `command` payload: a shell line run by
+`sh -c` in the job's cwd instead of a worker session, with the same
+tagged crontab line, lock, drift, run records, log capture, and
+once-fire `done` semantics as a model job.
+
+- **command jobs** (`store/scheduler`): create/update carry `command`,
+  mutually exclusive with prompt/model/busy and refused by name; a
+  command job's fire skips the busy probe entirely (a loaded GPU never
+  delays a cron command) and runs unjailed — the payload is the
+  operator's own, the same trust the crontab line itself carries, and
+  the jail exists to contain a model's output, of which a command job
+  has none. `update` edits a job's command text or its prompt and never
+  converts a job's kind; remove + create expresses the conversion. List
+  renders `command <line>` in place of `model <id>`.
+- **schema 3** (`store/scheduler`): a nullable `jobs.command` column;
+  the 2→3 step is an idempotent column add inside the existing
+  migration, keyed on column presence the way the 1→2 fold keys on
+  files, verified in test against a v2 store.
+- **tool voice** (`tool/scheduler`): the schema and the guidelines
+  describe the command payload and steer it toward deterministic
+  scripts — pollers, digests, backups — never toward work needing
+  judgment, which stays a model job's business.
+
 ## [1.2.12]: search asks in whole sentences
 
 A debugging pass on the live SearXNG found one healthy engine serving
