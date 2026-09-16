@@ -164,12 +164,13 @@ predicate, `Concurrent(call) bool`, and a bound, `Parallel`. Walking the
 calls in order, a run of consecutive admitted calls is dispatched as
 goroutines (at most `Parallel` in flight, default 8); a refused call is
 a barrier; everything before it has been awaited, it runs alone on the
-loop goroutine, and the calls after it wait. Emission never changes
-shape: for call *i* the loop emits `ToolStart`, waits for *i*'s result,
-emits `ToolResult` with *i*'s own duration, appends *i*'s tool message.
-Results land in the order the model asked, whatever order they finished;
-the bracket per call is the same bytes the CLI reference already has, so
-no frontend, recorder, or golden changes. A nil predicate is the loop of
+loop goroutine, and the calls after it wait. Emission is per wave: a
+wave's `ToolStart`s all land at its dispatch, before any of the wave's
+results can (completions queue behind the advancing cursor on the loop
+goroutine); a serial call's start lands immediately before its own
+execution, as before. `ToolResult` keeps *i*'s own duration and appends
+*i*'s tool message. Results land in the order the model asked, whatever
+order they finished. A nil predicate is the loop of
 0.11, byte-for-byte.
 
 The root's predicate is **narrower than "not mutating"**: the pure reads
@@ -222,12 +223,12 @@ that waits on the world is a producer goroutine that posts:
   a producer drains the stream channel and posts each event (priority
   50, arrival order; the stream stays in order), then a `streamEnd`.
 - **The tools.** `streamEnd` appends the assistant message and builds
-  the batch (2a); `advance` walks the cursor; `ToolStart` when the
-  cursor reaches a call, its run dispatched then, `ToolResult` and the
-  tool message when its completion has landed, and each tool goroutine
-  posts its completion (priority 50). When the cursor passes the last
-  call, `model` again. A barrier runs in a goroutine too: the loop
-  goroutine never blocks on a tool.
+  the batch (2a); `advance` walks the cursor; the wave dispatches as
+  the cursor reaches its first call, the wave's starts notified then,
+  `ToolResult` and the tool message when its completion has landed,
+  and each tool goroutine posts its completion (priority 50). When the
+  cursor passes the last call, `model` again. A barrier runs in a
+  goroutine too: the loop goroutine never blocks on a tool.
 - **The end.** `end` cancels the turn context, emits `TurnEnd`, drops
   the turn, posts the prompt. The run ends only from a handler (`stop`):
   EOF or a dead run context at the prompt, the provider-closed-without-

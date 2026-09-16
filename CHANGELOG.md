@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [1.2.15]: a wave's starts land with the wave, and the provider caps its error-body read
+
+A review pass over the runtime found the loop telling the frontend a
+concurrent wave ran serially: every call in a wave was dispatched at
+once, but ToolStart was emitted one call at a time as the result
+cursor advanced, so a TUI could never show what was actually in
+flight. The same pass found the provider draining a non-2xx response
+whole before truncating it to the 256-byte snippet the fault carries,
+so a hostile endpoint could pin memory through a large error body.
+
+- **wave starts** (`loop`): `batch.dispatch` returns the exclusive
+  end of the wave it launched, and the loop notifies ToolStart for
+  every call in the wave at dispatch time, before any result can be
+  posted (results queue behind the advancing cursor on the single
+  engine thread). Serial dispatch is unchanged: one start, immediately
+  before one call. The TUI keys result blocks by call ID through a
+  start-time map, so a wave's results render the call that produced
+  them rather than the wave's latest start.
+  `TestWaveStartsArriveWhileTheWaveRuns` holds a gate closed until
+  three starts have arrived; the pre-fix loop emits one and times
+  out.
+- **error-body cap** (`provider/openai`): a non-2xx response is read
+  through a 256-byte `io.LimitReader`, the exact snippet the fault
+  carries, instead of whole. The observable fault is byte-identical;
+  `TestErrorBodyIsCappedAtASnippet` is regression-proofing rather
+  than red-first.
+
 ## [1.2.14]: the chain gets a name and the path vocabulary widens
 
 A review pass over the runtime found the middleware chain written out

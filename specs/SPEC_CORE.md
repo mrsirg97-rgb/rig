@@ -405,12 +405,12 @@ argument):
    `Concurrent` predicate admits runs beside its admitted neighbours
    (a run, bounded by `Parallel`); any other call is a barrier that
    waits for everything before it and runs alone. Emission is in call
-   order regardless of completion order: for each call, emit
-   `ToolStart` as the cursor reaches it, emit `ToolResult` (its own
-   duration) and append one tool message when its completion has been
-   posted; then goto 3. Every call runs in a goroutine; the loop
-   goroutine never blocks on a tool. A nil predicate is the sequential
-   order, byte-identical.
+   order regardless of completion order: a wave's `ToolStart`s emit at
+   its dispatch, before any of the wave's results can; a `ToolResult`
+   (its own duration) and one tool message append when its completion
+   has been posted; then goto 3. Every call runs in a goroutine; the
+   loop goroutine never blocks on a tool. A nil predicate is the
+   sequential order, byte-identical.
 
 L8 (SPEC_COMPACT 4): the loop stamps the assistant message it appends:
 in both the no-calls and the tool-calls branch, with `Done.Usage`'s

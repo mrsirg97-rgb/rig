@@ -359,8 +359,9 @@ The commit points are the events, exactly:
   dim, text normal), committed as flowed: the terminal wraps, rig
   never hand-wraps committed prose (decision 8's sinkhole rule);
 - `ToolStart`: the activity line switches to the tool: `ToolResult`:
-  the tool row commits with glyph, detail, outcome, duration
-  (decision 4);
+  the tool row commits with glyph, detail, outcome, duration, rendered
+  from the call's own start keyed by ID (a wave's results do not
+  inherit the wave's latest start) (decision 4);
 - `Done`: the turn's text is complete, and the status line's used
   takes its `Usage` (decision 3);
 - `TurnEnd`: the usage line commits (`up 3.2k down 136 · cache r 918
