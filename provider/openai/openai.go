@@ -125,10 +125,10 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			snippetBytes, _ := io.ReadAll(resp.Body)
-			if len(snippetBytes) > 256 {
-				snippetBytes = snippetBytes[:256]
-			}
+			// the error body is untrusted: read at most the snippet the
+			// fault will carry, so a hostile endpoint cannot pin memory
+			// through a large error response.
+			snippetBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
 			emit(core.Fault{Err: fmt.Errorf("openai: %d: %s", resp.StatusCode, strings.TrimSpace(string(snippetBytes)))})
 			return
 		}
