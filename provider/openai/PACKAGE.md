@@ -43,7 +43,7 @@ adapter's problem; the loop sees `core.Event` only.
   `Client.Timeout` would kill it.
 - A transport error emits `Fault` (or closes the channel torn-down, with
   no `Done`/`Fault`, when the ctx is dead). A non-2xx status emits `Fault`
-  with a response snippet capped at 256 bytes.
+  with a response snippet read capped at 256 bytes.
 - SSE comment lines (`":"`) are the server's keep-alive through a long
   prefill: ignored, never a fault. An unrecognized line or a malformed
   chunk is a `Fault`.

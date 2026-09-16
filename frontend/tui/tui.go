@@ -59,6 +59,9 @@ type tui struct {
 
 	toolName string
 	toolArgs []byte
+	// toolStarts keys a wave's in-flight calls by ID so a result block
+	// renders the call that produced it, not the wave's latest start.
+	toolStarts map[string]startInfo
 
 	markdown bool
 	codeMode bool
@@ -106,6 +109,13 @@ type tui struct {
 	stopWinch func()
 
 	sizeOf func() (int, int, bool)
+}
+
+// startInfo is a call's identity at ToolStart, kept by call ID until its
+// result consumes it.
+type startInfo struct {
+	name string
+	args []byte
 }
 
 func WithSize(f func() (int, int, bool)) Option {
@@ -787,6 +797,7 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.frame = 0
 	t.toolName = ""
 	t.toolArgs = nil
+	t.toolStarts = nil
 	t.startFrameTickerLocked()
 	t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	t.mu.Unlock()
@@ -834,13 +845,22 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Lock()
 		t.toolName = e.Call.Name
 		t.toolArgs = e.Call.Args
+		if t.toolStarts == nil {
+			t.toolStarts = map[string]startInfo{}
+		}
+		t.toolStarts[e.Call.ID] = startInfo{name: e.Call.Name, args: e.Call.Args}
 		t.phase = e.Call.Name
 		t.mu.Unlock()
 
 		t.flow(SlotText, "\n")
 	case core.ToolResult:
 		t.mu.Lock()
-		block := RenderToolBlock(t.theme, t.toolName, t.toolArgs, e.Content, e.Err != nil, e.Duration)
+		name, args := t.toolName, t.toolArgs
+		if si, ok := t.toolStarts[e.ID]; ok {
+			name, args = si.name, si.args
+			delete(t.toolStarts, e.ID)
+		}
+		block := RenderToolBlock(t.theme, name, args, e.Content, e.Err != nil, e.Duration)
 		t.phase = "thinking"
 		t.toolName = ""
 		t.toolArgs = nil
@@ -924,6 +944,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.pend = nil
 		t.toolName = ""
 		t.toolArgs = nil
+		t.toolStarts = nil
 		t.mu.Unlock()
 		t.commit("")
 		t.mu.Lock()

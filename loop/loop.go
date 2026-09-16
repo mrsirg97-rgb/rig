@@ -265,9 +265,11 @@ func (r *run) advance(t *turn) {
 		i := t.cursor
 		call := t.calls[i]
 		if t.started == i {
-			r.k.Frontend.Notify(core.ToolStart{Call: call})
-			t.started++
-			t.batch.dispatch(i)
+			end := t.batch.dispatch(i)
+			for x := i; x < end; x++ {
+				r.k.Frontend.Notify(core.ToolStart{Call: t.calls[x]})
+			}
+			t.started = end
 		}
 		out := t.results[i]
 		if out == nil {
