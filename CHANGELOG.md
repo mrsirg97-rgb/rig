@@ -30,6 +30,12 @@ appending text can only change the last row.
   paints one frame over a 100k-character pending paragraph and fails
   above 1ms: the pre-fix frame cost 21.8ms, the fixed one runs near
   0.2ms.
+- **the line splitter** (`frontend/tui`): `takeClosedLinesLocked`
+  scans only the segs the delta appended for newlines and leaves the
+  older segs untouched when none carry one, so a long pending
+  paragraph no longer pays a re-split of every seg on every delta
+  (2.5ms per 30 deltas over a 1563-seg paragraph before, about 1µs
+  after).
 
 ## [1.2.15]: a wave's starts land with the wave, and the provider caps its error-body read
 

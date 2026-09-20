@@ -1640,6 +1640,7 @@ const slotAfterTool = "\x00after-tool"
 func (t *tui) flow(slot, text string) {
 	t.mu.Lock()
 
+	base := len(t.pend)
 	boundary := (slot != "" && slot != SlotReasoning && t.lastSlot == SlotReasoning) ||
 		(slot != "" && t.lastSlot == slotAfterTool)
 	if boundary {
@@ -1654,17 +1655,28 @@ func (t *tui) flow(slot, text string) {
 		t.lastSlot = slot
 	}
 	t.pend = append(t.pend, seg{slot: slot, text: t.expandTabsLocked(text)})
-	if lines := t.takeClosedLinesLocked(); len(lines) > 0 {
+	if lines := t.takeClosedLinesLocked(base); len(lines) > 0 {
 		t.flowChunks = append(t.flowChunks, strings.Join(lines, "\n")+"\n")
 	}
 	t.dirty = true
 	t.mu.Unlock()
 }
 
-func (t *tui) takeClosedLinesLocked() []string {
+func (t *tui) takeClosedLinesLocked(base int) []string {
+	fresh := t.pend[base:]
+	newline := false
+	for _, s := range fresh {
+		if strings.Contains(s.text, "\n") {
+			newline = true
+			break
+		}
+	}
+	if !newline {
+		return nil
+	}
 	var lines []string
-	var cur []seg
-	for _, s := range t.pend {
+	cur := append([]seg(nil), t.pend[:base]...)
+	for _, s := range fresh {
 		parts := strings.Split(s.text, "\n")
 		for i, p := range parts {
 			if i < len(parts)-1 {
@@ -1679,9 +1691,7 @@ func (t *tui) takeClosedLinesLocked() []string {
 		}
 	}
 	t.pend = cur
-	if len(lines) > 0 {
-		t.pendGen++
-	}
+	t.pendGen++
 	return lines
 }
 
