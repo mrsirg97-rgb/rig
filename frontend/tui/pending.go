@@ -1,6 +1,7 @@
 package tui
 
 type pendWrap struct {
+	gen   int
 	width int
 	done  int
 	last  seg
@@ -9,8 +10,8 @@ type pendWrap struct {
 	col   int
 }
 
-func (p pendWrap) holds(pend []seg, w int) bool {
-	if p.width != w || p.done > len(pend) {
+func (p pendWrap) holds(pend []seg, w, gen int) bool {
+	if p.gen != gen || p.width != w || p.done > len(pend) {
 		return false
 	}
 	return p.done == 0 || pend[p.done-1] == p.last
@@ -22,9 +23,9 @@ func (t *tui) pendRowsLocked() []string {
 		w = 1
 	}
 	pw := &t.pw
-	if !pw.holds(t.pend, w) {
+	if !pw.holds(t.pend, w, t.pendGen) {
 		rows, carry, col := wrapCells(t.theme, flattenSegs(nil, t.pend), w, 0)
-		*pw = pendWrap{width: w, done: len(t.pend), rows: rows, carry: carry, col: col}
+		*pw = pendWrap{gen: t.pendGen, width: w, done: len(t.pend), rows: rows, carry: carry, col: col}
 		if len(t.pend) > 0 {
 			pw.last = t.pend[len(t.pend)-1]
 		}

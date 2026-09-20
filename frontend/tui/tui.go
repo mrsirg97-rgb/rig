@@ -55,8 +55,9 @@ type tui struct {
 
 	prompt, completion, cacheRead int
 
-	pend []seg
-	pw   pendWrap
+	pend    []seg
+	pw      pendWrap
+	pendGen int
 
 	toolName string
 	toolArgs []byte
@@ -659,6 +660,7 @@ func (t *tui) onEnter() {
 
 		t.mu.Lock()
 		t.pend = nil
+		t.pendGen++
 		t.mu.Unlock()
 		t.steer(line)
 		return
@@ -792,6 +794,7 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.turnLive = true
 	t.turnEstablished = false
 	t.pend = nil
+	t.pendGen++
 	t.dirty = false
 	t.flowChunks = nil
 	t.phase = "thinking"
@@ -943,6 +946,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.phase = "thinking"
 		t.frame = 0
 		t.pend = nil
+		t.pendGen++
 		t.toolName = ""
 		t.toolArgs = nil
 		t.toolStarts = nil
@@ -1675,6 +1679,9 @@ func (t *tui) takeClosedLinesLocked() []string {
 		}
 	}
 	t.pend = cur
+	if len(lines) > 0 {
+		t.pendGen++
+	}
 	return lines
 }
 

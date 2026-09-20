@@ -40,14 +40,19 @@ func TestPendingWrapCacheStaysByteIdenticalToFullWrap(t *testing.T) {
 	stream := func(where string, steps int) {
 		t.Helper()
 		for i := 0; i < steps; i++ {
-			var chunk strings.Builder
-			for k := 0; k < 1+rng.Intn(3); k++ {
-				if k > 0 || rng.Intn(3) == 0 {
-					chunk.WriteString(strings.Repeat(" ", 1+rng.Intn(3)))
+			for d := 0; d < 1+rng.Intn(4); d++ {
+				var chunk strings.Builder
+				for k := 0; k < 1+rng.Intn(3); k++ {
+					if k > 0 || rng.Intn(3) == 0 {
+						chunk.WriteString(strings.Repeat(" ", 1+rng.Intn(3)))
+					}
+					if rng.Intn(6) == 0 {
+						chunk.WriteString("\n")
+					}
+					chunk.WriteString(words[rng.Intn(len(words))])
 				}
-				chunk.WriteString(words[rng.Intn(len(words))])
+				s.fe.Notify(core.TextDelta{Text: chunk.String()})
 			}
-			s.fe.Notify(core.TextDelta{Text: chunk.String()})
 			check(where)
 		}
 	}
@@ -84,6 +89,35 @@ func TestPendingWrapCacheStaysByteIdenticalToFullWrap(t *testing.T) {
 
 	s.fe.Notify(core.TurnEnd{})
 	check("the turn end")
+}
+
+func TestPendingWrapCacheDoesNotServeThePreviousLinesRows(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(30), WithSize(sizeFixture(30, 14)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	tu := s.fe
+	tu.flow(SlotText, "- ")
+	tu.flow(SlotText, "the")
+	tu.mu.Lock()
+	rows := slices.Clone(tu.pendRowsLocked())
+	width := tu.live.width
+	tu.mu.Unlock()
+	if len(rows) != 1 || paintFree(rows[0]) != "- the" {
+		t.Fatalf("the first line's rows are %q, want %q", rows, []string{"- the"})
+	}
+
+	tu.flow(SlotText, "\n")
+	tu.flow(SlotText, "* ")
+	tu.flow(SlotText, "the")
+	tu.mu.Lock()
+	rows = slices.Clone(tu.pendRowsLocked())
+	pend := slices.Clone(tu.pend)
+	tu.mu.Unlock()
+	want := wrapSegs(th, width, pend)
+	if !slices.Equal(rows, want) {
+		t.Fatalf("the cache serves the previous line's rows:\ngot %q\nwant %q", rows, want)
+	}
 }
 
 func BenchmarkFramePaint100kPendingParagraph(b *testing.B) {
