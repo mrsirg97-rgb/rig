@@ -2,25 +2,37 @@ package tui
 
 import "strings"
 
-func wrapSegs(th Theme, width int, segs []seg) []string {
-	if width < 1 {
-		width = 1
-	}
+type cell struct {
+	slot string
+	r    rune
+}
 
-	type cell struct {
-		slot string
-		r    rune
-	}
-	var cells []cell
+func wrapSegs(th Theme, width int, segs []seg) []string {
+	rows, _, _ := wrapCells(th, flattenSegs(nil, segs), width, 0)
+	return rows
+}
+
+func flattenSegs(cells []cell, segs []seg) []cell {
 	for _, s := range segs {
 		for _, r := range s.text {
 			cells = append(cells, cell{s.slot, r})
 		}
 	}
+	return cells
+}
+
+func wrapCells(th Theme, cells []cell, width, col0 int) ([]string, []cell, int) {
+	if width < 1 {
+		width = 1
+	}
 	if len(cells) == 0 {
-		return []string{""}
+		return []string{""}, nil, 0
 	}
 	var rows []string
+	col := col0
+	start := 0
+	lastSpace := -1
+	base := col0
 	emit := func(from, to int) {
 		for to > from && cells[to-1].r == ' ' {
 			to--
@@ -49,22 +61,23 @@ func wrapSegs(th Theme, width int, segs []seg) []string {
 		}
 		rows = append(rows, b.String())
 	}
-	start := 0
-	col := 0
-	lastSpace := -1
 	for i := 0; i < len(cells); i++ {
 		w := runeWidth(cells[i].r)
 		if cells[i].r == ' ' {
 			lastSpace = i
 		}
 		if col+w > width && i > start {
-
 			if lastSpace > start {
 				emit(start, lastSpace)
 				start = lastSpace + 1
+				base = 0
+				if cells[i].r == ' ' {
+					base = w
+				}
 			} else {
 				emit(start, i)
 				start = i
+				base = 0
 			}
 
 			col = 0
@@ -81,5 +94,5 @@ func wrapSegs(th Theme, width int, segs []seg) []string {
 		col += w
 	}
 	emit(start, len(cells))
-	return rows
+	return rows, cells[start:], base
 }

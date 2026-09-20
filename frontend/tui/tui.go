@@ -56,6 +56,7 @@ type tui struct {
 	prompt, completion, cacheRead int
 
 	pend []seg
+	pw   pendWrap
 
 	toolName string
 	toolArgs []byte
@@ -992,6 +993,9 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 
 	pendCap, menuCap, inputCap := 1<<30, menuMaxRows, maxInputRows
 	h := t.live.height
+	if h >= 1 {
+		pendCap = h
+	}
 	giveUp := false
 	var lines []string
 	var line string
@@ -999,7 +1003,7 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 	var blocks liveBlocks
 	for i := 0; i < 6 && !giveUp; i++ {
 		lines, line, col, blocks = t.buildLiveLinesLocked(pendCap, menuCap, inputCap)
-		over := t.live.rowsOver(lines, t.statusViewportRowsLocked())
+		over := t.live.rowsOver(lines[blocks.pendRows:], t.statusViewportRowsLocked()) + blocks.pendRows
 		if h <= 0 || over <= 0 {
 			break
 		}
@@ -1064,11 +1068,7 @@ func (t *tui) pendingBlockLocked(cap int) ([]string, int) {
 	if cap <= 0 || len(t.pend) == 0 {
 		return nil, 0
 	}
-	w := t.live.width
-	if w < 1 {
-		w = 1
-	}
-	rows := wrapSegs(t.theme, w, t.pend)
+	rows := t.pendRowsLocked()
 	if len(rows) == 1 && rows[0] == "" {
 		return nil, 0
 	}

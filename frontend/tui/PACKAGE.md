@@ -177,6 +177,19 @@ width); no core or loop line (decision 10).
   or a compaction can paint: it starts with `startTurnLocked` and with
   the `Compacting` event, and stops once the turn's final commit or the
   compaction has drained (an idle TUI wakes nothing).
+- The pending paragraph wraps incrementally (SPEC_TUI, the 1.2.16
+  amendment): greedy word wrap is prefix stable, so `pendWrap` caches
+  the wrapped rows plus the cells that begin the last row and folds
+  each delta into the last row alone; a rebuild happens only on a
+  width change or an edit that is not an append. `liveRegionLocked`
+  starts the pending block at the viewport height and the budget loop
+  slices the cached rows to the cap, and the block's row count is its
+  row length (each wrapped row is one visual row by construction), so
+  `rowsOver` never measures rows that will not be painted. The rows
+  stay byte-identical to `wrapSegs(theme, width, t.pend)` at every
+  step, exact-width rows and the trailing-space trim included; the
+  space a soft break skips still charges its width to the row it left,
+  and the fold carries that in its start column.
 - Tabs expand at ingestion (runewidth gives a tab width zero: the
   terminal advances to an 8-column stop), or the pending line's row math
   breaks and every repaint leaves a copy.

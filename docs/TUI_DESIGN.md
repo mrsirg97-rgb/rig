@@ -42,7 +42,9 @@ amendment), read at every repaint beside the width. An over-tall
 region cannot be repainted cursor-relatively: the terminal clamps the
 cursor-up at the screen's top and the rewrite lands over committed
 text, leaving rows the bookkeeping can never clear. The pending prose
-line therefore wraps at words on every frame and renders its last
+line therefore wraps at words incrementally (the SPEC_TUI 1.2.16
+amendment: appending text rewraps only the last row, and the row
+count is the wrap's own row length) and renders its last
 wrapped rows under the dim `· k lines hidden ·` marker (k is the
 wrapped total minus the visible tail), the menu's window shrinks
 next, and the input's five-row window shrinks last; the shrink order
