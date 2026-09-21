@@ -61,7 +61,7 @@ func Parse(line string) (Ref, bool) {
 		return Ref{}, false
 	}
 	src := body[cut+len(srcKey):]
-	if src == "" {
+	if src == "" || HasControl(src) {
 		return Ref{}, false
 	}
 	fixed := strings.Split(body[:cut], " ")
@@ -86,6 +86,17 @@ func Parse(line string) (Ref, bool) {
 	}
 	ref.Src = src
 	return ref, true
+}
+
+// HasControl reports whether s carries a C0 control byte or DEL: a marker
+// line is one line, so such a byte can never legitimately reach it.
+func HasControl(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func Find(content string) (Ref, bool) {

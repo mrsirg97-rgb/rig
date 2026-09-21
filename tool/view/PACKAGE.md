@@ -31,6 +31,11 @@ its reference. The tool is registered only for a model row with `vision`
   can decompress into hundreds of megabytes, and the header is the only
   place that fact is known cheaply). Both refusals name the cap and the way
   around it.
+- The path may not carry a control character. The reply is one marker line,
+  and a filename with a newline would split it — the second line could be a
+  marker the tool never wrote, and the provider would honor it. The refusal
+  comes before the stat, and the marker's own parser refuses such a `src`
+  too, so neither writer nor reader can be smuggled.
 - The format is the bytes: `image.DecodeConfig` sniffs the magic, so a
   `.png` carrying a bitmap refuses and a `.dat` carrying a JPEG works.
   Outside png, jpeg, webp, and the first frame of a gif there is no reply.

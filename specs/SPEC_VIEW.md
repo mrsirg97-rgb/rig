@@ -42,7 +42,12 @@ one line, fixed key order, the tolerant value last. `imagemarker.Format`
 writes it, `imagemarker.Parse` reads exactly one marker line, and
 `imagemarker.BlobPath(dir, sum)` is `<dir>/<hex>` with no extension: the mime
 is in the marker, and a second name for the same bytes is how a content
-address becomes a path. The tool replies with the line and nothing else.
+address becomes a path. The tool replies with the line and nothing else,
+and the line stays one line: `src` may carry spaces, `]]`, and key
+lookalikes, but no control character — a newline there would split the
+reply, and the second line could be a marker the tool never wrote, so
+`tool/view` refuses such a path before the stat and `Parse` refuses such a
+`src` outright.
 
 `orig` is the named addition to the line the deliverable asked for. The TUI
 row is specified as `shot.png · 2560x1440 -> 1568x882 · 412 KB`, and the tool
@@ -107,10 +112,16 @@ cmd/rig/                         registration, the concurrency set, the allow de
   never the source path: a changed file gets a new address, and history
   cannot be re-pointed at new bytes.
 - **The provider honors a marker only when the tool that wrote it was
-  `view`.** `tool_call_id` back through the transcript to the assistant's
-  `ToolCall` name; a marker inside a `read`, a `grep` line, or a `web_fetch`
-  body is text, and it stays text. A marker in a user or assistant message is
-  text too. The rule is at the encoder, so nothing else can grant it.
+  `view`.** `tool_call_id` back to the assistant message that owns the
+  current tool batch — the batch runs from that assistant message until the
+  next message that is not a tool result — never through the transcript as
+  a whole, so a call id reused on a later `read` is looked up in the turn
+  that issued it and the marker stays text. The result must be exactly the
+  marker line and nothing else, which is what `view` replies; a result that
+  carries a smuggled line is text too. A marker inside a `read`, a `grep`
+  line, or a `web_fetch` body is text, and a marker in a user or assistant
+  message is text too. The rule is at the encoder, so nothing else can grant
+  it.
 - **Placement is the format's**: every tool message of one assistant turn is
   contiguous, so the synthetic user message goes after the *last* tool
   message of the batch, one per view, in tool-call order. Encoding is pure —
@@ -145,21 +156,25 @@ cmd/rig/                         registration, the concurrency set, the allow de
 Named cases, the real filesystem in `t.TempDir()`, the real encoder:
 
 - `imagemarker`: format and parse round-trip; a src with spaces and with
-  `]]` in it; a line that is not a marker; two markers; a truncated one; the
-  blob path rule.
+  `]]` in it; a src carrying a control character is refused; a src carrying
+  a whole marker line is refused; a line that is not a marker; two markers;
+  a truncated one; the blob path rule.
 - `view`: the downscale bound (2560x1440 to 1568x882) and no resample inside
   it; the re-encode rule per source format, transparency included; the format
   refusal by magic, not extension; the 20 MiB cap; the pixel cap; a missing
-  file; an empty directory created on demand; identical input bytes giving a
-  byte-identical blob and marker; a replay that keeps the blob it already
-  wrote; the ctx bound.
+  file; a path carrying a control character is refused before the stat, the
+  smuggled-marker path included; an empty directory created on demand;
+  identical input bytes giving a byte-identical blob and marker; a replay
+  that keeps the blob it already wrote; the ctx bound.
 - `provider/openai`: the image part lands after the last tool message of the
   batch, and nowhere else; a marker from another tool is not honored; a
-  marker in a user or assistant message is not honored; two views in tool-call
-  order; a missing blob giving the note and no fault; a non-vision provider
-  sending the tool text alone; two assemblies of one transcript byte-identical;
-  one over `httptest` with the whole loop proving the image part reaches the
-  wire body.
+  marker in a user or assistant message is not honored; a reused call id on
+  a later `read` is not honored as `view` (exactly one image on the wire);
+  a view result carrying a smuggled marker line is text; two views in
+  tool-call order; a missing blob giving the note and no fault; a non-vision
+  provider sending the tool text alone; two assemblies of one transcript
+  byte-identical; one over `httptest` with the whole loop proving the image
+  part reaches the wire body.
 - `models` and `config`: the flag defaults false; the file sets it; the merge
   overlays it; a non-boolean refuses by name; the unknown-key list names it.
 - `cmd/rig`: `view` registered for a vision row and absent otherwise; a model

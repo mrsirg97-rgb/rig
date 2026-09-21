@@ -49,9 +49,13 @@ func (c wireContent) MarshalJSON() ([]byte, error) {
 }
 
 func wireMessagesWith(msgs []core.Message, imgs *imageStore) []wireMessage {
-	order := toolCallOrder(msgs)
 	out := make([]wireMessage, 0, len(msgs))
 	var pending []orderedMessage
+	// owner is the assistant message that owns the current tool batch: the
+	// batch runs from that assistant message until the next message that is
+	// not a tool result, so a reused call id on a later turn is looked up
+	// in the turn that issued it, never in the transcript as a whole.
+	var owner callTable
 	flush := func() {
 		if len(pending) == 0 {
 			return
@@ -63,20 +67,30 @@ func wireMessagesWith(msgs []core.Message, imgs *imageStore) []wireMessage {
 		pending = nil
 	}
 	for _, m := range msgs {
+		if m.Role == core.RoleAssistant {
+			flush()
+			out = append(out, encodeMessage(m))
+			owner = tableOf(m)
+			continue
+		}
 		if m.Role != core.RoleTool {
 			flush()
 			out = append(out, encodeMessage(m))
+			owner = callTable{}
 			continue
 		}
 		out = append(out, encodeMessage(m))
-		if imgs == nil || order.nameOf(m.ToolID) != viewToolName {
+		if imgs == nil || owner.nameOf(m.ToolID) != viewToolName {
 			continue
 		}
-		ref, ok := imagemarker.Find(m.Content)
+		// The view contract is one line and nothing else: only a result
+		// that is exactly the marker it wrote is honored, so a path that
+		// smuggled a marker line stays text.
+		ref, ok := imagemarker.Parse(m.Content)
 		if !ok {
 			continue
 		}
-		pending = append(pending, orderedMessage{at: order.indexOf(m.ToolID), msg: imageMessage(imgs, ref)})
+		pending = append(pending, orderedMessage{at: owner.indexOf(m.ToolID), msg: imageMessage(imgs, ref)})
 	}
 	flush()
 	return out
@@ -141,22 +155,17 @@ type callTable struct {
 	index map[string]int
 }
 
-func toolCallOrder(msgs []core.Message) callTable {
+func tableOf(m core.Message) callTable {
 	t := callTable{names: map[string]string{}, index: map[string]int{}}
-	for _, m := range msgs {
-		if m.Role != core.RoleAssistant {
+	for i, c := range m.ToolCalls {
+		if c.ID == "" {
 			continue
 		}
-		for i, c := range m.ToolCalls {
-			if c.ID == "" {
-				continue
-			}
-			if _, seen := t.names[c.ID]; seen {
-				continue
-			}
-			t.names[c.ID] = c.Name
-			t.index[c.ID] = i
+		if _, seen := t.names[c.ID]; seen {
+			continue
 		}
+		t.names[c.ID] = c.Name
+		t.index[c.ID] = i
 	}
 	return t
 }

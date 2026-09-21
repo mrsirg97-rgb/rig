@@ -16,7 +16,7 @@ package exists. It is stdlib only and imports nothing of rig's, the way
   order), `Parse` (exactly one marker line, strict), `Find` (the first
   marker line inside a tool result), `BlobPath` (`<dir>/<hex>`, no
   extension), `BlobsDir` (`<RIG_HOME>/blobs`), `IsAddress` (64 lowercase
-  hex).
+  hex), `HasControl` (a C0 byte or DEL, which the line can never carry).
 
 ## How it is consumed
 
@@ -36,7 +36,10 @@ package exists. It is stdlib only and imports nothing of rig's, the way
   edited is not a marker.
 - `src` is last because it is the only value that may contain a space. It
   runs to the terminator, so a path carrying `]]` or `bytes=` survives —
-  the fixed fields before it never can, and they are checked.
+  the fixed fields before it never can, and they are checked. A control
+  character never survives: a newline in `src` would turn one line into
+  two, and the second could be a marker the tool never wrote, so `Parse`
+  refuses it and `tool/view` refuses such a path outright.
 - A blob's bytes are a function of the decoded pixels, never of the source
   file's encoder or name, so `BlobPath` carries no extension and the mime
   rides in the line. Two tools that disagreed about that would write two

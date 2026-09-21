@@ -32,12 +32,17 @@ func (d *Door) Description() string {
 }
 
 func (d *Door) Schema() json.RawMessage {
-	names := d.Live.PluginNames()
-	enum, err := json.Marshal(names)
-	if err != nil {
-		enum = []byte("[]")
+	// llama-server rejects "enum": [] ("enum must be a non-empty array"),
+	// so a home with no live plugins gets a plain string instead; a name
+	// it does not know still refuses loudly at Exec.
+	nameProps := `"type":"string"`
+	if names := d.Live.PluginNames(); len(names) > 0 {
+		if enum, err := json.Marshal(names); err == nil {
+			nameProps += `,"enum":` + string(enum)
+		}
 	}
-	return json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{"action":{"enum":["run","schema"],"description":"run the plugin, or fetch its contract"},"name":{"type":"string","enum":%s,"description":"the live plugin"},"args":{"type":"object","description":"the plugin's args, pass-through (run)"}},"required":["action","name"]}`, enum))
+	nameProps += `,"description":"the live plugin"`
+	return json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{"action":{"enum":["run","schema"],"description":"run the plugin, or fetch its contract"},"name":{%s},"args":{"type":"object","description":"the plugin's args, pass-through (run)"}},"required":["action","name"]}`, nameProps))
 }
 
 func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {

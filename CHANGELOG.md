@@ -52,6 +52,20 @@ code. 80 new cases: 14 on the marker, 29 on the tool, 17 on the wire, 5 on
 the TUI row, 7 on the gate at the root (one of them a run of the real
 binary end to end), 8 on the row's `vision` key.
 
+Review pass, same PR: the marker line could be smuggled — a filename with
+a newline followed by a marker line made `Find` return the smuggled
+marker, so `view` refuses a path carrying a control character (before the
+stat), `Parse` refuses a `src` carrying one, and the provider honors only
+a result that is exactly the marker line it wrote. The honor rule is also
+scoped to the assistant message that owns the current tool batch, so a
+call id reused on a later `read` can never be honored as `view`; and the
+`plugin` door omits its `name` enum when no plugin is live, because
+llama-server rejects `"enum": []` and a plugin-less home could not use it
+at all. `-allow` stays the execution gate, not a wire filter — the model's
+menu is the native table plus the door, whatever is allowed. 8 more named
+cases; the wire goldens moved once, deliberately, for the door's
+zero-plugin schema.
+
 ## [1.2.16]: the pending paragraph wraps incrementally, and no hidden row is measured
 
 The TUI stuttered while a long unbroken reasoning paragraph streamed:

@@ -74,6 +74,29 @@ func TestParseKeepsASrcCarryingAKeyLookalike(t *testing.T) {
 	}
 }
 
+func TestParseRefusesASrcCarryingAControlCharacter(t *testing.T) {
+	for _, c := range []string{"\n", "\r", "\t", "\x00", "\x1b", "\x7f"} {
+		bad := goodRef()
+		bad.Src = "/tmp/evil" + c + "shot.png"
+		line := imagemarker.Format(bad)
+		if got, ok := imagemarker.Parse(line); ok {
+			t.Fatalf("Parse(%q) = %+v, want refused: the marker line is one line, and a src carrying %q breaks it", line, got, c)
+		}
+	}
+}
+
+func TestParseRefusesASrcThatCarriesAWholeMarkerLine(t *testing.T) {
+	smuggled := goodRef()
+	smuggled.SHA256 = strings.Repeat("f", 64)
+	smuggled.Src = "/tmp/smuggled.png"
+	bad := goodRef()
+	bad.Src = "/tmp/evil\n" + imagemarker.Format(smuggled)
+	line := imagemarker.Format(bad)
+	if got, ok := imagemarker.Parse(line); ok {
+		t.Fatalf("Parse(%q) = %+v, want refused: a path carrying a marker line must never become one", line, got)
+	}
+}
+
 func TestParseRefusesLinesThatAreNotMarkers(t *testing.T) {
 	for _, line := range []string{
 		"",

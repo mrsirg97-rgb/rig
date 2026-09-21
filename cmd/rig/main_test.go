@@ -255,6 +255,26 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 	}
 }
 
+func TestAllowGatesExecutionAndNotTheWire(t *testing.T) {
+	full := wire(testRoot(nullFrontend{}))
+	allowed := testRoot(nullFrontend{})
+	allowed.allow = []string{"view", "read"}
+	partial := wire(allowed)
+
+	if got, want := partial.SortedToolNames(), full.SortedToolNames(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("an operator allow must not filter the tool specs on the wire: %v, want %v (allow is the execution gate, the wire is the model's menu)", got, want)
+	}
+	found := false
+	for _, tl := range partial.Tools {
+		if tl.Name() == "plugin" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the plugin door must stay on the wire even when it is not allow-listed")
+	}
+}
+
 func TestManualApprovalRidesTheDoor(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.approve = approve.Manual

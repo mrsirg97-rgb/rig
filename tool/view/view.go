@@ -72,6 +72,9 @@ func (v *toolView) Exec(ctx context.Context, data json.RawMessage) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("view: %v", err)
 	}
+	if imagemarker.HasControl(path) {
+		return "", fmt.Errorf("view: %q: the path carries a control character, so the marker line could be broken; rename the file", path)
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", fmt.Errorf("view: %v", err)
