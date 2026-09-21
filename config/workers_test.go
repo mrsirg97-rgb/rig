@@ -10,7 +10,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/config"
 )
 
-var noWorkerAllow = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
+var noWorkerAllow = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "view", "todo", "rem", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
 var fleetAllow = append(append(append([]string{}, noWorkerAllow...), "scheduler"), "delegate")
 
 func TestWorkersAbsentIsNoWorkers(t *testing.T) {
@@ -19,7 +19,7 @@ func TestWorkersAbsentIsNoWorkers(t *testing.T) {
 		t.Fatalf("Workers = %+v, want nil with no workers.json", cfg.Workers)
 	}
 	if !reflect.DeepEqual(cfg.Settings.Allow, noWorkerAllow) {
-		t.Fatalf("allow = %v, want the 16 non-worker natives (no fleet, no worker tools)", cfg.Settings.Allow)
+		t.Fatalf("allow = %v, want the 17 non-worker natives (no fleet, no worker tools)", cfg.Settings.Allow)
 	}
 }
 

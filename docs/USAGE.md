@@ -100,11 +100,28 @@ bash ✓ 12ms
 - each tool invocation renders as `● NAME` around its output, closed by
   `NAME ✓ <duration>` (`✕` when it failed); what executed is visible, not
   implied; a guarded refusal fails the row and says so;
+- a `view` row is the exception to the output: `● view · shot.png ·
+  2560x1440 -> 1568x882 · 412 KB` and nothing else, because no picture is
+  ever painted into the transcript (the bytes go to the model, from the
+  content-addressed store under your rig home; `docs/SETUP.md`);
 - the usage line closes every turn: `↑prompt ↓completion · cache read hit%`
  ; the turn's totals across its model calls, pane's token shaping, the hit
   rate as cached-over-prompt;
 - faults render as `[fault] <reason>` and the turn stops there: the session
   survives and the next prompt resumes at the last complete message.
+
+## images
+
+`view` is rig's eyes, and it is off until you say otherwise: a model row
+carries `"vision": true` in `~/.rig/models.json` and the tool appears, for
+that model only (switching models moves it, `/models`). A view call reads
+the file, caps the longest side at 1568 px, and stores the result under
+`~/.rig/blobs/` named by its sha256; the transcript keeps one line, and the
+picture is re-read from the store on every turn that sends it. So: the same
+image twice costs one blob and no extra prompt, a screenshot never bloats
+compaction, and deleting `~/.rig/blobs/` is always safe — the next look
+re-writes what it needs. `view` never edits and never records the file as
+seen; reading a picture is not a license to `edit` it.
 
 ## session behavior
 

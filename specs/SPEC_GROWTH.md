@@ -153,9 +153,13 @@ live table and calls it (run) or returns its description and schema
 verbatim (schema; the model fetches the args it needs when it calls a
 non-trivial plugin). Both arms are non-mutating. An unknown name is a
 loud tool error naming the live plugins. The `name` field's `enum` is
-the live plugin names (the swap's own list); the model sees what is
-callable, cheap, no per-plugin schemas. One door, one small schema; the
-request drops twenty large plugin schemas for one small one. The door's
+the live plugin names (the swap's own list), and it is omitted when the
+list is empty: llama-server rejects `"enum": []` ("enum must be a
+non-empty array") and a home with no plugins could not otherwise use
+it at all, so the zero-plugin schema is a plain string and an unknown
+name still refuses loudly at Exec. The model sees what is callable,
+cheap, no per-plugin schemas. One door, one small schema; the request
+drops twenty large plugin schemas for one small one. The door's
 description states the contract once: "plugins run via the `plugin`
 door's `run` arm; `schema <name>` shows a plugin's contract."
 

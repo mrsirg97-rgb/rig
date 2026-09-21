@@ -2,6 +2,70 @@
 
 ## [Unreleased]
 
+## [1.3.0]: rig looks at images
+
+A model with eyes had no way to use them: every image the agent met came
+back as a byte count. `view` reads a picture, and the picture reaches the
+model as a real image part, while the transcript keeps only a line.
+
+- **`view`** (`tool/view`): one path argument, one line of reply. The
+  source is decoded (png, jpeg, webp, the first frame of a gif), box-filtered
+  to at most 1568 px on its longest side, and re-encoded — JPEG for an
+  opaque lossy source, PNG for anything with alpha — then stored
+  content-addressed at `<RIG_HOME>/blobs/<sha256>` and never rewritten. The
+  reply is the marker line: the address, the mime, both sizes, the sent
+  bytes and the source. The bytes never travel through the transcript, so
+  a screenshot costs its reference, not its pixels, and compaction can
+  never drop them; the same bytes always land at the same address, so
+  looking twice sends the wire nothing new. Read-only: it never enters the
+  file state, never runs in manual mode's way, and refuses over 20 MiB,
+  over 16 megapixels, or anything that is not one of those formats — by
+  magic, not by extension.
+- **the image reaches the wire** (`provider/openai`): the tool message
+  keeps its text (the marker), and rig reads the blob back and appends the
+  base64 image part as its own user message after the whole tool batch it
+  belongs to, in call order, for the vision model's shape. Only a marker
+  the `view` tool actually wrote is honored, so a model quoting the format
+  gets text; a blob that is missing, unreadable, or no longer matches its
+  address degrades to a text note naming it, never a failed request. A
+  non-vision model sends the marker as text and no image at all. Encoding
+  stays deterministic: the same transcript assembles to identical bytes.
+- **the gate is the model row** (`models`, `config`): a row's `vision`
+  flag decides everything — `view` joins the tool table for a vision row
+  and not for a text row, and switching models moves it with the row. The
+  key is presence-aware (an explicit `false` turns it off on an embedded
+  row); the embedded table sets it for nobody, so the wire of every current
+  model is byte-for-byte what it was.
+- **the row on screen** (`frontend/tui`): a `view` call shows its path,
+  `2560x1440 -> 1568x882` when rig resampled, and the sent size — no
+  picture is ever painted into the transcript.
+- **the marker is one contract** (`imagemarker`): the line's format and the
+  blob path live in one stdlib-only leaf, because tool, provider and
+  frontend that disagree on those bytes break the prompt cache. The box
+  filter is stdlib too; `golang.org/x/image/webp` joins the module (its
+  decoder reads lossy webp; lossless refuses, named).
+
+`specs/SPEC_VIEW.md` is the contract; `golang.org/x/image v0.45.0` is the
+new dependency (only its `webp` decoder is imported). No frozen path
+moved; `imagemarker/` and `tool/view/` join the freeze allowlist as pure
+code. 80 new cases: 14 on the marker, 29 on the tool, 17 on the wire, 5 on
+the TUI row, 7 on the gate at the root (one of them a run of the real
+binary end to end), 8 on the row's `vision` key.
+
+Review pass, same PR: the marker line could be smuggled — a filename with
+a newline followed by a marker line made `Find` return the smuggled
+marker, so `view` refuses a path carrying a control character (before the
+stat), `Parse` refuses a `src` carrying one, and the provider honors only
+a result that is exactly the marker line it wrote. The honor rule is also
+scoped to the assistant message that owns the current tool batch, so a
+call id reused on a later `read` can never be honored as `view`; and the
+`plugin` door omits its `name` enum when no plugin is live, because
+llama-server rejects `"enum": []` and a plugin-less home could not use it
+at all. `-allow` stays the execution gate, not a wire filter — the model's
+menu is the native table plus the door, whatever is allowed. 8 more named
+cases; the wire goldens moved once, deliberately, for the door's
+zero-plugin schema.
+
 ## [1.2.16]: the pending paragraph wraps incrementally, and no hidden row is measured
 
 The TUI stuttered while a long unbroken reasoning paragraph streamed:

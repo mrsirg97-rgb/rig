@@ -23,6 +23,7 @@ type provider struct {
 	client  *http.Client
 	sock    string
 	idle    time.Duration
+	images  *imageStore
 }
 
 const (
@@ -39,6 +40,21 @@ func NewWithHeaderTimeout(baseURL, model string, headerTimeout time.Duration) co
 }
 
 func NewWithTimeouts(baseURL, model string, headerTimeout, idleTimeout time.Duration) core.Provider {
+	return newProvider(baseURL, model, headerTimeout, idleTimeout, nil)
+}
+
+// NewWithVision is the vision-capable provider: the marker a view tool
+// result carries becomes an image part read from blobsDir, and an empty
+// dir means the model has no store to read, which is the text path.
+func NewWithVision(baseURL, model, blobsDir string) core.Provider {
+	var imgs *imageStore
+	if blobsDir != "" {
+		imgs = &imageStore{dir: blobsDir}
+	}
+	return newProvider(baseURL, model, defaultHeaderTimeout, defaultIdleTimeout, imgs)
+}
+
+func newProvider(baseURL, model string, headerTimeout, idleTimeout time.Duration, imgs *imageStore) core.Provider {
 	baseURL = strings.TrimRight(baseURL, "/")
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = headerTimeout
@@ -47,6 +63,7 @@ func NewWithTimeouts(baseURL, model string, headerTimeout, idleTimeout time.Dura
 		model:   model,
 		client:  &http.Client{Transport: transport},
 		idle:    idleTimeout,
+		images:  imgs,
 	}
 	if strings.HasPrefix(baseURL, "unix:") {
 		sock := strings.TrimPrefix(baseURL, "unix:")
@@ -84,7 +101,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 	}
 	body, err := json.Marshal(wireRequest{
 		Model:              p.model,
-		Messages:           wireMessages(req.Messages),
+		Messages:           wireMessagesWith(req.Messages, p.images),
 		Tools:              wireTools(req.Tools),
 		MaxTokens:          req.MaxTokens,
 		ReasoningEffort:    req.ReasoningEffort,
@@ -289,19 +306,7 @@ type wireStreamOptions struct {
 }
 
 func wireMessages(msgs []core.Message) []wireMessage {
-	out := make([]wireMessage, 0, len(msgs))
-	for _, m := range msgs {
-		wm := wireMessage{Role: string(m.Role), Content: m.Content, ReasoningContent: m.Reasoning, ToolID: m.ToolID}
-		for _, c := range m.ToolCalls {
-			wm.ToolCalls = append(wm.ToolCalls, wireCall{
-				ID:       c.ID,
-				Type:     "function",
-				Function: wireFunc{Name: c.Name, Arguments: string(c.Args)},
-			})
-		}
-		out = append(out, wm)
-	}
-	return out
+	return wireMessagesWith(msgs, nil)
 }
 
 func wireTools(specs []core.ToolSpec) []wireTool {
@@ -322,11 +327,11 @@ type wireToolFn struct {
 }
 
 type wireMessage struct {
-	Role             string     `json:"role"`
-	Content          string     `json:"content"`
-	ReasoningContent string     `json:"reasoning_content,omitempty"`
-	ToolCalls        []wireCall `json:"tool_calls,omitempty"`
-	ToolID           string     `json:"tool_call_id,omitempty"`
+	Role             string      `json:"role"`
+	Content          wireContent `json:"content"`
+	ReasoningContent string      `json:"reasoning_content,omitempty"`
+	ToolCalls        []wireCall  `json:"tool_calls,omitempty"`
+	ToolID           string      `json:"tool_call_id,omitempty"`
 }
 
 type wireCall struct {

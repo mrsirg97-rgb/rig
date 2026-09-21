@@ -86,6 +86,8 @@ func TestFreezeGate(t *testing.T) {
 			p == "models" || strings.HasPrefix(p, "models/") ||
 			p == "policy" || strings.HasPrefix(p, "policy/") ||
 			p == "pathguard" || strings.HasPrefix(p, "pathguard/") ||
+			p == "imagemarker" || strings.HasPrefix(p, "imagemarker/") ||
+			p == "tool/view" || strings.HasPrefix(p, "tool/view/") ||
 			p == "docs" || strings.HasPrefix(p, "docs/") ||
 			p == "specs" || strings.HasPrefix(p, "specs/") ||
 			p == "AGENTS.md" ||

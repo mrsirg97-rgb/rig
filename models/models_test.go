@@ -223,3 +223,73 @@ func TestKnownIsStable(t *testing.T) {
 		t.Fatal("a missing row must not resolve")
 	}
 }
+
+func TestVisionDefaultsFalseAndSurvivesTheTable(t *testing.T) {
+	if legal.Vision {
+		t.Fatal("a row that says nothing about vision is not a vision model")
+	}
+	seeing := legal
+	seeing.ID = "seeing"
+	seeing.Vision = true
+	tbl, err := models.New(legal, seeing)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if m, _ := tbl.Get("seeing"); !m.Vision {
+		t.Fatal("the row's vision flag must survive the table")
+	}
+	if m, _ := tbl.Get("local"); m.Vision {
+		t.Fatal("the flag is per row")
+	}
+}
+
+func TestVisionIsNotARowInvariant(t *testing.T) {
+	seeing := legal
+	seeing.Vision = true
+	if err := seeing.Check(); err != nil {
+		t.Fatalf("vision carries no invariant: %v", err)
+	}
+}
+
+func TestResolveCarriesTheVisionFlag(t *testing.T) {
+	seeing := legal
+	seeing.ID = "seeing"
+	seeing.Vision = true
+	tbl, err := models.New(seeing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := models.Resolve(tbl, "seeing", func(string) (string, bool) { return "", false })
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if !got.Vision {
+		t.Fatal("Resolve must hand the root the row's vision flag")
+	}
+	env := map[string]string{"RIG_MODEL_WINDOW": "131072"}
+	overlaid, err := models.Resolve(tbl, "seeing", func(k string) (string, bool) { v, ok := env[k]; return v, ok })
+	if err != nil {
+		t.Fatalf("Resolve with the overlay: %v", err)
+	}
+	if !overlaid.Vision {
+		t.Fatal("the env overlay moves the numbers, not the capability")
+	}
+	if overlaid.Window != 131072 {
+		t.Fatalf("the overlay must still apply: %+v", overlaid)
+	}
+}
+
+func TestASynthesizedRowIsNotAVisionRow(t *testing.T) {
+	got, err := models.Resolve(table(), "brand-new", func(k string) (string, bool) {
+		if k == "RIG_MODEL_WINDOW" {
+			return "65536", true
+		}
+		return "", false
+	})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Vision {
+		t.Fatal("a row synthesized from the env is not a vision model: the operator's file decides")
+	}
+}

@@ -49,6 +49,7 @@ rig/
     bash/
     file/        read, write, edit
     fs/          ls, find, grep
+    view/        view: the image reader (SPEC_VIEW)
     todo/        the concurrent job queue
     rem/         memory
     scheduler/   background jobs
@@ -58,6 +59,9 @@ rig/
     cli/         stdin/stdout REPL
   command/       the user-command leaf (deliverable 9, SPEC_COMMANDS): the
                  prefix rule, the Env the root builds, one file per command
+  imagemarker/   the image-reference leaf (SPEC_VIEW): the marker line and
+                 the blob address, stdlib only, imported by tool/view,
+                 provider/openai and frontend/tui
   config/        the config leaf (SPEC_CONFIG): one load for every entry
                  mode; the embedded settings.json and models.json are the
                  0.2.0 defaults moved out of code
@@ -249,7 +253,8 @@ pending zone, approve, the door), so the model meets each word in both
 places. The whole menu; every native's description plus schema; is
 pinned under 14,000 characters by a case in `cmd/rig` over the wire
 golden (13.1k at the amendment: 5.5k of description, 7.5k of schema),
-so growth is a decision; the schemas of `rem`, `scheduler`, `todo`, and
+so growth is a decision (a vision model's row pays 457 more for `view`,
+which joins that menu only for a row whose `vision` flag is set, SPEC_VIEW); the schemas of `rem`, `scheduler`, `todo`, and
 `diff` are 4k of that and the next lever, named. No description carries
 the voice of another harness ("pi", "pane"), pinned by the same case. The
 one-line tools (`bash`, `write`, `edit`, `ls`) keep their line and gain

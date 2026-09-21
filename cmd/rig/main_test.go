@@ -31,8 +31,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.2.16" {
-		t.Fatalf("Version = %q, want 1.2.16", Version)
+	if Version != "1.3.0" {
+		t.Fatalf("Version = %q, want 1.3.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -252,6 +252,26 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 	}
 	if !r.isMutating("bash") {
 		t.Fatal("the control: bash must stay mutating")
+	}
+}
+
+func TestAllowGatesExecutionAndNotTheWire(t *testing.T) {
+	full := wire(testRoot(nullFrontend{}))
+	allowed := testRoot(nullFrontend{})
+	allowed.allow = []string{"view", "read"}
+	partial := wire(allowed)
+
+	if got, want := partial.SortedToolNames(), full.SortedToolNames(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("an operator allow must not filter the tool specs on the wire: %v, want %v (allow is the execution gate, the wire is the model's menu)", got, want)
+	}
+	found := false
+	for _, tl := range partial.Tools {
+		if tl.Name() == "plugin" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the plugin door must stay on the wire even when it is not allow-listed")
 	}
 }
 

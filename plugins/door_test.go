@@ -67,6 +67,33 @@ func TestDoorSurfacesAreTheNativeContract(t *testing.T) {
 	}
 }
 
+func TestDoorSchemaOmitsTheNameEnumWhenThereAreNoLivePlugins(t *testing.T) {
+	door := NewDoor(&stubLive{names: []string{}}, nil)
+	var schema struct {
+		Properties struct {
+			Name struct {
+				Type string   `json:"type"`
+				Enum []string `json:"enum"`
+			} `json:"name"`
+			Action struct {
+				Enum []string `json:"enum"`
+			} `json:"action"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(door.Schema(), &schema); err != nil {
+		t.Fatalf("the zero-plugin schema is not JSON: %v", err)
+	}
+	if schema.Properties.Name.Type != "string" {
+		t.Fatalf("name = %+v, want a plain string", schema.Properties.Name)
+	}
+	if schema.Properties.Name.Enum != nil {
+		t.Fatalf("an empty enum must be omitted: llama-server rejects it, got %v", schema.Properties.Name.Enum)
+	}
+	if len(schema.Properties.Action.Enum) != 2 {
+		t.Fatalf("the action enum must stay: %v", schema.Properties.Action.Enum)
+	}
+}
+
 func TestDoorExecResolvesAndCalls(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
 	door := NewDoor(live, nil)

@@ -21,9 +21,10 @@ type rowDoc struct {
 	role       *string
 	effort     *string
 	efforts    *[]string
+	vision     *bool
 }
 
-var knownRowKeys = []string{"effort", "efforts", "id", "keepRecent", "maxTokens", "reserve", "role", "window"}
+var knownRowKeys = []string{"effort", "efforts", "id", "keepRecent", "maxTokens", "reserve", "role", "vision", "window"}
 
 var knownRowKeysSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownRowKeys))
@@ -143,6 +144,13 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 			}
 			d.efforts = &list
 		}
+		if rawVision, ok := keys["vision"]; ok {
+			v, err := jsonBool(rawVision)
+			if err != nil {
+				return nil, rowErr(n, "vision: %v", err)
+			}
+			d.vision = &v
+		}
 		out = append(out, d)
 	}
 	seen := map[string]bool{}
@@ -190,6 +198,9 @@ func mergeRows(t models.Table, docs []rowDoc, path string) (models.Table, error)
 		if d.efforts != nil {
 			m.Efforts = append([]string(nil), *d.efforts...)
 		}
+		if d.vision != nil {
+			m.Vision = *d.vision
+		}
 		added = append(added, m)
 	}
 	rows := make([]models.Model, 0, len(t.Known())+len(added))
@@ -216,6 +227,9 @@ func mergeRows(t models.Table, docs []rowDoc, path string) (models.Table, error)
 			}
 			if d.efforts != nil {
 				m.Efforts = append([]string(nil), *d.efforts...)
+			}
+			if d.vision != nil {
+				m.Vision = *d.vision
 			}
 		}
 		rows = append(rows, m)

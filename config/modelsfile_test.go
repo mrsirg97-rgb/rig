@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/models"
@@ -19,7 +20,7 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 		{"duplicate id", `[{"id": "local", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1}, {"id": "local", "window": 200, "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 2: duplicate id "local"`},
 		{"unknown role", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "role": "boss"}]`, `row 1: role: "boss" (allowed: interactive, worker)`},
 		{"bad int", `[{"id": "x", "window": "big", "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 1: window: expected an integer, got "big"`},
-		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: effort, efforts, id, keepRecent, maxTokens, reserve, role, window)`},
+		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: effort, efforts, id, keepRecent, maxTokens, reserve, role, vision, window)`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -106,5 +107,65 @@ func TestModelsMergeViolationRefuses(t *testing.T) {
 	want := "config: " + p + ": local: Reserve 81920 must be in [0, Window 65536): as large as the window, the trigger fires at every estimate (the pi shape)"
 	if err.Error() != want {
 		t.Fatalf("the voice = %q, want %q", err, want)
+	}
+}
+
+func TestModelsVisionKeyDefaultsFalse(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	m, ok := cfg.Models.Get("local")
+	if !ok {
+		t.Fatal("the embedded row is gone")
+	}
+	if m.Vision {
+		t.Fatal("the embedded table sets vision for nobody: the operator's file decides")
+	}
+}
+
+func TestModelsVisionKeySetsAndOverlays(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "local", "vision": true}]`)
+	m, ok := load(t, dir, t.TempDir()).Models.Get("local")
+	if !ok || !m.Vision {
+		t.Fatalf("vision = %+v, want the row to carry it", m)
+	}
+	if m.Window != 65536 {
+		t.Fatalf("the overlay keeps the unset fields: %+v", m)
+	}
+}
+
+func TestModelsVisionKeyIsPresenceAware(t *testing.T) {
+	home := t.TempDir()
+	write(t, home, "models.json", `[{"id": "visionary", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "vision": true}, {"id": "plain", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "vision": false}]`)
+	cfg := load(t, home, t.TempDir())
+	if m, _ := cfg.Models.Get("visionary"); !m.Vision {
+		t.Fatal("a new row carries the flag")
+	}
+	if m, _ := cfg.Models.Get("plain"); m.Vision {
+		t.Fatal("an explicit false stands")
+	}
+	if m, _ := cfg.Models.Get("local"); m.Vision {
+		t.Fatal("an unlisted row keeps the embedded default")
+	}
+}
+
+func TestModelsVisionKeyRefusesANonBoolean(t *testing.T) {
+	cases := map[string]string{
+		"a string":  `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "vision": "yes"}]`,
+		"a number":  `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "vision": 1}]`,
+		"null":      `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "vision": null}]`,
+		"an object": `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "vision": {}}]`,
+	}
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			p := write(t, dir, "models.json", content)
+			err := loadErr(t, dir, t.TempDir())
+			if !strings.Contains(err.Error(), "vision") {
+				t.Fatalf("the refusal names the field: %v", err)
+			}
+			if !strings.Contains(err.Error(), p) {
+				t.Fatalf("the refusal names the file: %v", err)
+			}
+		})
 	}
 }

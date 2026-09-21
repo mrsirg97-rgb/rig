@@ -1,9 +1,12 @@
 package paths_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -15,6 +18,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/bash"
 	"github.com/mrsirg97-rgb/rig/tool/file"
 	"github.com/mrsirg97-rgb/rig/tool/fs"
+	"github.com/mrsirg97-rgb/rig/tool/view"
 )
 
 func TestExpandLeadingTildeIsTheHome(t *testing.T) {
@@ -184,4 +188,36 @@ func TestRewriteLeavesUnlistedNamesAlone(t *testing.T) {
 			t.Fatalf("%s: bytes must ride through, got %s", f, got)
 		}
 	}
+}
+
+func TestViewExpandsTheLeadingTildeAtTheBoundary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "shots"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "shots", "a.png"), onePixelPNG(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inner := func(ctx context.Context, call core.ToolCall) (string, error) {
+		return view.New(filepath.Join(t.TempDir(), "blobs")).Exec(ctx, call.Args)
+	}
+	exec := paths.Middleware().Wrap(inner)
+
+	got, err := exec(context.Background(), core.ToolCall{Name: "view", Args: json.RawMessage(`{"path":"~/shots/a.png"}`)})
+	if err != nil {
+		t.Fatalf("view's path must expand to the home: %q, %v", got, err)
+	}
+	if !strings.Contains(got, filepath.Join(home, "shots", "a.png")) {
+		t.Fatalf("the marker names the expanded path, not the tilde: %q", got)
+	}
+}
+
+func onePixelPNG(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }
