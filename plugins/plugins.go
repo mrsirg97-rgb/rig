@@ -211,6 +211,13 @@ func compactJSON(raw json.RawMessage) (string, error) {
 func pyLiteral(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `'`, `\'`)
+	// The escaping above is total only inside a Python single-quoted
+	// non-raw literal: callers pass json.Marshal output, where line breaks
+	// are already \n escapes. A raw break here would end the literal early
+	// and turn the embedded data into executed code — refuse the cell.
+	if strings.ContainsAny(s, "\n\r") {
+		panic("plugins: pyLiteral received a raw line break; the input must be JSON-marshalled")
+	}
 	return s
 }
 
