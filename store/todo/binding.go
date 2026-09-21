@@ -22,17 +22,24 @@ func ProjectOf(dir string) Project {
 		dir = abs
 	}
 	ident := scope.Path(dir)
+	bare := scope.Bare(dir)
 	if !scope.InRepo(dir) {
 		return Project{Key: scope.ShortHash(ident), Label: scope.Label(ident), OutsideRepo: true}
 	}
 	// Inside a repo the queue is the repo's and the name says which repo:
 	// the common dir's own base, so a session in a subdirectory or a second
-	// worktree names the project it is in, not the folder it started in.
-	return Project{Key: scope.ShortHash(ident), Label: repoName(ident)}
+	// worktree names the project it is in, not the folder it started in. A
+	// bare repo's common dir is the repo root itself, so the name is the
+	// root's own base.
+	return Project{Key: scope.ShortHash(ident), Label: repoName(ident, bare)}
 }
 
-func repoName(commonDir string) string {
-	name := filepath.Base(filepath.Dir(commonDir))
+func repoName(commonDir string, bare bool) string {
+	dir := commonDir
+	if !bare {
+		dir = filepath.Dir(commonDir)
+	}
+	name := filepath.Base(dir)
 	if name == "." || name == "" || name == string(filepath.Separator) {
 		return "repo"
 	}

@@ -17,9 +17,10 @@ func ShortHash(s string) string {
 type cacheT struct {
 	mu   sync.Mutex
 	vals map[string]string
+	bare map[string]bool
 }
 
-var cache = cacheT{vals: map[string]string{}}
+var cache = cacheT{vals: map[string]string{}, bare: map[string]bool{}}
 
 func Path(cwd string) string {
 	if cwd == "" {
@@ -60,12 +61,33 @@ func Label(cwd string) string {
 }
 
 // InRepo reports whether cwd resolves to a git repository: the common
-// dir differs from the cwd itself (or the cwd is the common dir of a
-// bare layout and git answers). Outside a repo the scope is the cwd hash
-// and callers say so out loud.
+// dir differs from the cwd itself, or git says the directory is a bare
+// repository (a bare layout's common dir is the cwd, so the path alone
+// cannot tell it apart). Outside a repo the scope is the cwd hash and
+// callers say so out loud.
 func InRepo(cwd string) bool {
 	if cwd == "" {
 		return false
 	}
-	return Path(cwd) != cwd
+	return Path(cwd) != cwd || Bare(cwd)
+}
+
+// Bare reports whether git says cwd is a bare repository. Its common dir
+// is the cwd itself, so Path cannot distinguish it from a plain
+// directory; the probe answers the one question the path leaves open.
+func Bare(cwd string) bool {
+	if cwd == "" {
+		return false
+	}
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if v, ok := cache.bare[cwd]; ok {
+		return v
+	}
+	bare := false
+	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--is-bare-repository").Output(); err == nil {
+		bare = strings.TrimSpace(string(out)) == "true"
+	}
+	cache.bare[cwd] = bare
+	return bare
 }

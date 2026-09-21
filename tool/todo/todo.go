@@ -120,8 +120,10 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	// move only once the action succeeded: a call that changed nothing
 	// changes no one's queue, and the refusal already named the queue it
 	// tried (`no task 't99' in loom`).
+	committed := false
 	if g.Action == "bind" {
-		if err := a.commit(ctx, t); err != nil {
+		committed, err = a.commit(ctx, t)
+		if err != nil {
 			return "", err
 		}
 	}
@@ -130,26 +132,38 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		return reply, err
 	}
 	if g.Action != "bind" && t.named && isWrite(g.Action) {
-		if err := a.commit(ctx, t); err != nil {
+		committed, err = a.commit(ctx, t)
+		if err != nil {
 			return reply, err
 		}
 	}
-	note := t.note()
+	// The note is a record of the record: it speaks only when the binding
+	// row was actually written. A named read is a peek and commits nothing,
+	// so it announces no move it did not make.
+	note := ""
+	if committed {
+		note = t.note()
+	}
 	if note == "" {
 		return reply, nil
 	}
 	return "\u2192 " + note + "\n" + reply, nil
 }
 
-// commit records the binding the call resolved to. The note that follows
-// it is the whole story of the move: silent when nothing moved.
-func (a adapter) commit(ctx context.Context, t target) error {
+// commit records the binding the call resolved to and reports whether it
+// wrote: false when the session cannot hold one, true once the row says
+// so. The note that follows it is the whole story of the move: silent
+// when nothing moved.
+func (a adapter) commit(ctx context.Context, t target) (bool, error) {
 	if !t.commits() {
-		return nil
+		return false, nil
 	}
-	return todostore.Bind(ctx, a.db, todostore.Binding{
+	if err := todostore.Bind(ctx, a.db, todostore.Binding{
 		Session: t.session, Scope: t.p.Key, Label: t.p.Label, OutsideRepo: t.p.OutsideRepo,
-	})
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, session string) (string, error) {
@@ -217,8 +231,8 @@ type target struct {
 }
 
 // commits is whether the resolution is a binding the session asked for:
-// a named project, or the bind action naming nothing (which reports
-// instead). An unattributable session records nothing anywhere.
+// a named project. An unattributable session records nothing anywhere;
+// a bare bind reports instead and never reaches here.
 func (t target) commits() bool {
 	return t.named && todostore.RealSession(t.session)
 }

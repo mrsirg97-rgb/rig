@@ -397,6 +397,9 @@ func TestReadWithProjectIsAPeekNotAMove(t *testing.T) {
 	if !strings.Contains(peek, "theirs") {
 		t.Fatalf("the peek must read the named queue:\n%s", peek)
 	}
+	if strings.Contains(peek, "bound to") {
+		t.Fatalf("a peek must not announce a move it did not make:\n%s", peek)
+	}
 	reported, err := exec(t, tool, ctx, map[string]any{"action": "bind"})
 	if err != nil {
 		t.Fatalf("report: %v", err)

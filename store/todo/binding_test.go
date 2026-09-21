@@ -3,6 +3,7 @@ package todo_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -85,5 +86,27 @@ func TestProjectOfMarksABucketAndKeysItAbsolutely(t *testing.T) {
 	t.Chdir(filepath.Dir(dir))
 	if got := todostore.ProjectOf(rel); got.Key != p.Key {
 		t.Fatalf("a relative spelling must reach the same bucket: %s vs %s", got.Key, p.Key)
+	}
+}
+
+// A bare repository is still a repository: its common dir is the cwd
+// itself, so the probe cannot tell it apart by path alone, and git says
+// so when asked. It gets the repo's own identity and name, not a shared
+// cwd bucket.
+func TestProjectOfNamesABareRepo(t *testing.T) {
+	dir := t.TempDir()
+	bare := filepath.Join(dir, "bare.git")
+	if out, err := exec.Command("git", "init", "--bare", bare).CombinedOutput(); err != nil {
+		t.Skipf("git init --bare: %v %s", err, out)
+	}
+	p := todostore.ProjectOf(bare)
+	if p.OutsideRepo {
+		t.Fatalf("a bare repo is a repo, not a bucket: %+v", p)
+	}
+	if p.Label != "bare.git" {
+		t.Fatalf("the label is the repo's own name, got %q", p.Label)
+	}
+	if p.Key != scope.ShortHash(bare) {
+		t.Fatalf("the key is the repo identity: %s", p.Key)
 	}
 }

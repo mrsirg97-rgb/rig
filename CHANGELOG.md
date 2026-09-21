@@ -28,8 +28,9 @@ paths a call happens to name.
 - **every reply names its queue** (`store/todo`): the summary leads with
   `[rig] 3/7 done · next: t4`, and a bucket minted from a non-repo says
   `[ng (not a repo)]`. Inside a repo the name is the repo's, so a
-  subdirectory or a second worktree does not rename the project (SPEC_CORE's
-  naming rule, reaching past the empty reply).
+  subdirectory or a second worktree does not rename the project, and a bare
+  repository is a repo of its own rather than the cwd bucket its common dir
+  would suggest (SPEC_CORE's naming rule, reaching past the empty reply).
 - **`prune`** (`store/todo`, `tool/todo`, `command`): the door for the done
   rows a long-lived summary keeps counting. It is itself an event, so a
   replay drops the same rows and the history stays reconstructable; failed

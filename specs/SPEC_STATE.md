@@ -225,7 +225,10 @@ One store, every row scoped (the project identity, SPEC_STATE's scope
 law; see the migration section): a queue is the project's, not the
 directory rig happened to start in, and the identity partition is never
 a filename; it is the short sha1 of the git common dir (`store/scope`),
-falling back to the cwd hash outside a repo. Outside a repo that hash is
+falling back to the cwd hash outside a repo. A bare repository's common
+dir is its own root, so the path alone cannot tell it from a plain
+directory and the probe asks (`scope.Bare`): a bare repo is a repo of
+its own, never the cwd bucket. Outside a repo that hash is
 a bucket, not a project: a place every session started there shares, and
 a reply that reads one says so. Which queue a session writes to is its
 binding, decided in the open, never inferred from the paths a call
