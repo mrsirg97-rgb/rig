@@ -21,7 +21,8 @@ person's daily driver.
 - **the model is untrusted.** Everything the model says, and every tool call
   it makes, is input to a boundary: the allow-list, the approval gate, the
   retry guard, the result cap, the path boundary, and the plugin landing
-  zone.
+  zone. The path boundary normalizes (`~` expansion); it scopes no
+  filesystem access — see the file tools below.
 - **the operator is trusted.** The operator's settings, themes, plugins, and
   approval mode are the operator's own decisions. A model cannot reach them:
   plugins install only into `plugins/pending/` and go live only on the
@@ -45,6 +46,11 @@ person's daily driver.
   closed.
 - **the plugin provenance rule**: `write` and `edit` into `plugins/` outside
   `plugins/pending/` is refused, symlink-resolved.
+- **the file tools are unscoped by design**: `read`, `write`, and `edit`
+  reach anywhere the process can; the only file-path rule is the plugin
+  provenance rule. Granting a file tool grants the filesystem. Path
+  validation (`pathguard`) applies to the `cwd` arguments of `delegate`
+  and `scheduler`, not to file paths.
 - **the dashboard** binds loopback only (anything else refuses at startup)
   and requires a 32-byte bearer token, stored `0600`, compared in constant
   time.
