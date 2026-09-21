@@ -34,7 +34,9 @@ person's daily driver.
 
 - **web_fetch** resolves and pins the dial: private, loopback, link-local,
   multicast, and reserved ranges are refused before the request, and every
-  redirect hop is re-validated.
+  redirect hop is re-validated. When the egress proxy is in use, the
+  address check still runs per hop but the dial goes through the proxy and
+  DNS resolves there — the pinning guarantee then belongs to the proxy.
 - **bash** runs under a context bound; the process group is killed on
   cancel and the output is capped.
 - **the worker jail** is bubblewrap: unshare-all, clearenv, a named setenv
