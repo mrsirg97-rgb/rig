@@ -643,9 +643,11 @@ scheduler runs <id> [n]
 - `todo <path> <verb…>` is the same door in the other order: a first
   field that is not one of the tool's verbs is the project, and what
   follows parses by the verb rules below (`todo ~/Projects/rig start t3`,
-  `todo ~/ledger create tidy the inbox`). It binds, then acts, so the
-  bare verbs after it stay in that queue. One path field only; a second
-  is the verb's own argument, and the verb's own refusals still fire.
+  `todo ~/ledger create tidy the inbox`). It binds on a write that
+  succeeds, then acts, so the bare verbs after it stay in that queue; on a
+  `read` it is a peek — that queue's rows show and the session's own
+  binding does not move. One path field only; a second is the verb's own
+  argument, and the verb's own refusals still fire.
 - `todo prune` drops the queue's done rows (SPEC_STATE); it takes no
   args, and an idle prune says `nothing to prune` rather than pretending.
 - the int slot is parse-checked: `todo start t1 extra` →

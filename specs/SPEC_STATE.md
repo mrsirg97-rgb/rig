@@ -267,6 +267,15 @@ happens to name (see the binding decision).
   unknown-id refusal names the queue it looked in (`no task 't7' in rig
   (…)`): ids are `tN` per scope, so an id carried over from another project's
   reply is the likeliest reason it does not match here.
+- Compaction carries the minting counters (`maxId`, `maxPos`) in its
+  snapshot: they are rebuilt from the create events the fold is about to
+  delete, so a snapshot that forgot them mints the next task from the first
+  free id and position. Harmless while the only way to leave a hole was to
+  clear the whole queue; with `prune` freeing ids mid-queue, the forgotten
+  high-water reissued a pruned id to a new task and a session holding the
+  stale id completed the wrong row. A snapshot written without the fields
+  reads as `0`, which is the pre-counter behaviour (mint past what is
+  here).
 - `prune` (1.3.3) drops the queue's done rows from the projection and is
   itself an event: a replay drops the same rows, a later compact snapshot
   carries only what survived, and the history stays reconstructable. Failed
@@ -554,10 +563,16 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   session dips into a neighbour's files and its plan migrates under it);
   per-session queues with a shared view (the claim semantics need one queue
   per project). So the scope is an explicit, sticky binding, resolved in one
-  order everywhere: the `project` a call names (which binds the session and
-  says so), else the session's binding, else the launch cwd when it is a
-  repo, else the cwd bucket, where a write refuses with the rule and a read
-  answers labelled. Chosen over inference because the plan belongs to a
+  order everywhere: the `project` a call names, else the session's binding,
+  else the launch cwd when it is a repo, else the cwd bucket, where a write
+  refuses with the rule and a read answers labelled. Naming a project binds
+  according to what the call did: a **write** records the binding once the
+  action succeeds (a call that changed nothing changes no one's queue, and
+  its refusal already named the queue it tried), a **read** is a peek that
+  leaves the binding where it was, and `bind` — `/todo project <path>` — is
+  the declaration itself and records regardless. Rejected: binding on every
+  named call, which let a failed `complete t99` in another project, or a
+  glance at a neighbour's queue, move a session's own later bare verbs. Chosen over inference because the plan belongs to a
   project by the operator's word, not our guess — the same reason SPEC_UX 1
   withdrew a create-side guard: the behaviour was fine, the guess about it
   was not. `~` is a legal binding: the machine bucket is a project of its
@@ -596,9 +611,13 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
 - todo binding and prune: a named `project` binds and answers in the same
   call; a bare verb follows the binding; a repo cwd resolves to the repo with
   no binding written; a non-repo cwd refuses every write by name and still
-  reads; `anon` binds nothing; `prune` drops done rows, keeps failed ones,
-  appends nothing when idle, and a log replayed across a prune rebuilds the
-  same queue; every reply names its queue and marks a cwd bucket.
+  reads; `anon` binds nothing; a **read** naming a project peeks without
+  moving the session; a **write** naming one that fails leaves the binding
+  alone and names the queue it tried; `prune` drops done rows, keeps failed
+  ones, appends nothing when idle, and a log replayed across a prune rebuilds
+  the same queue; compaction carries the id and position high-water, so a
+  pruned id is not handed out again and a new task joins the end of the
+  queue; every reply names its queue and marks a cwd bucket.
 - Recorder: kill a `-p` run mid-turn (context cancel inside a scripted tool)
   and assert every row that completed before the kill is readable; assert
   the session row is closed with `exit=cancelled` on the clean path.

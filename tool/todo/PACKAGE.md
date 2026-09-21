@@ -8,8 +8,10 @@ owns one question: *whose queue is this call*, answered in a fixed order
 and nowhere else —
 
 1. the `project` field, if given: it resolves the queue (repo scope via
-   `store/scope`, else the directory's own bucket) and binds the session
-   to it, saying so;
+   `store/scope`, else the directory's own bucket). On a write it then
+   binds the session, once the action succeeded (`→ bound to <label>`);
+   on a `read` it is a peek and the session stays where it was; the
+   `bind` action is the declaration and records whatever the read does;
 2. else the session's recorded binding (`session_project`);
 3. else the launch directory, when it is a repo;
 4. else the launch directory's bucket, where a write refuses with the
@@ -33,10 +35,12 @@ plan in one queue.
   re-voice; the store's teaching refusals carry the protocol.
 - `project` is resolved through `store/todo.ProjectOf` (`scope.Key`/
   `scope.Label` inside): a subdirectory and a second worktree reach the
-  repo's one queue, a non-repo directory its own bucket. Naming it binds
-  the session, so a session launched in `~` can work one repo's queue by
-  naming it once; `bind` with no project reports where the queue is and
-  touches nothing.
+  repo's one queue, a non-repo directory its own bucket. Naming it on a
+  write binds the session — so a session launched in `~` can work one
+  repo's queue by naming it once — while naming it on a read just reads:
+  an agent glancing at a neighbour's queue does not move its own plan. A
+  failed write changes nothing, the binding included; `bind` with no
+  project reports where the queue is and touches nothing.
 - Outside a repo a bare write refuses (`todo: no project: … is not a
   repo …`) rather than quietly filling a bucket every session on that
   directory shares; reads stay open. A session with no id at all (`anon`)

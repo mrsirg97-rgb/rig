@@ -15,13 +15,16 @@ paths a call happens to name.
 
 - **the binding** (`store/todo`, `tool/todo`, `command`): `session_project`
   records a session's queue. Resolution is one order everywhere: the
-  `project` a call names (which binds the session and says `→ bound to
-  <label>`), else the session's binding, else the launch directory when it
-  is a repo, else its bucket — where a write refuses with the rule and a
-  read answers labelled. `bind` with no project reports where the queue is
-  and touches nothing; `todo <path> <verb…>` binds and acts in one line,
-  `/todo project [path]` is the same door at the command. Resume re-reads
-  the binding, so a queue cannot move because a process started elsewhere.
+  `project` a call names, else the session's binding, else the launch
+  directory when it is a repo, else its bucket — where a write refuses with
+  the rule and a read answers labelled. Naming a project binds by what the
+  call did: a write records it once the action succeeded (`→ bound to
+  <label>`), a read is a peek that leaves the session where it was, and
+  `bind` — `/todo project <path>` — is the declaration itself. A failed
+  write changes nothing, the binding included, so a glance at a neighbour's
+  queue or a mistyped id cannot relocate a session's later bare verbs.
+  `todo <path> <verb…>` is the same door in one line. Resume re-reads the
+  binding, so a queue cannot move because a process started elsewhere.
 - **every reply names its queue** (`store/todo`): the summary leads with
   `[rig] 3/7 done · next: t4`, and a bucket minted from a non-repo says
   `[ng (not a repo)]`. Inside a repo the name is the repo's, so a
@@ -31,6 +34,13 @@ paths a call happens to name.
   rows a long-lived summary keeps counting. It is itself an event, so a
   replay drops the same rows and the history stays reconstructable; failed
   rows stay (they still ask for a retry) and an idle prune appends nothing.
+- **compaction carries the minting counters** (`store/todo`): the snapshot
+  now writes `maxId` and `maxPos`, which is the only place the high-water
+  marks survive once the create events they were rebuilt from are deleted.
+  Without them the next task took the first free id and position — harmless
+  while a hole meant the queue had been cleared, and a real hazard with
+  `prune`: a pruned id was handed to a new task and a session holding the
+  stale id completed the wrong row.
 - **the voice tells the truth about `create`** (`store/todo`): the note
   reports the merge it performs (`queue merged: 2 new, 1 already there`,
   `nothing new`, `queue cleared`) instead of the long-standing `queue

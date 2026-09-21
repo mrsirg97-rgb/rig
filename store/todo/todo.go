@@ -1081,7 +1081,13 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session, scope s
 		return "", nil
 	}
 	folded := f.maxSeq - f.compactSeq
-	args, _ := json.Marshal(map[string]any{"tasks": snapshotOf(f)})
+	// The snapshot replaces the events the counters were rebuilt from, so
+	// it carries them: ids are minted from the high-water mark, and the
+	// create events that advanced it are about to be deleted. Forget it and
+	// the next mint reissues an id some session still holds.
+	args, _ := json.Marshal(map[string]any{
+		"tasks": snapshotOf(f), "maxId": f.maxIdNum, "maxPos": f.maxPos,
+	})
 	seq := f.nextSeq()
 	if e := appendEvent(bound, seq, "compact", string(args), session, scope); e != nil {
 		return "", e
@@ -1168,7 +1174,9 @@ func (f *folded) applyMoveEvent(e eventRow) {
 func (f *folded) applyCompactEvent(e eventRow) {
 	tasks := map[string]*taskState{}
 	var payload struct {
-		Tasks []struct {
+		MaxID  int `json:"maxId"`
+		MaxPos int `json:"maxPos"`
+		Tasks  []struct {
 			ID        string  `json:"id"`
 			Text      string  `json:"text"`
 			Status    string  `json:"status"`
@@ -1215,6 +1223,15 @@ func (f *folded) applyCompactEvent(e eventRow) {
 	for _, ts := range tasks {
 		ts.createdSeq = e.seq
 		ts.updatedSeq = e.seq
+	}
+	// A snapshot written before the counters existed reports neither, and
+	// 0 means "keep minting from what is here": the mint skips ids the
+	// snapshot still holds, which is the pre-counter behaviour.
+	if payload.MaxID > f.maxIdNum {
+		f.maxIdNum = payload.MaxID
+	}
+	if payload.MaxPos > f.maxPos {
+		f.maxPos = payload.MaxPos
 	}
 	f.tasks = tasks
 	f.compactSeq = e.seq

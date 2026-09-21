@@ -204,6 +204,12 @@ the projection, the log keeps the history, and the bucket decision 1's
 reporter drowned in is now sweepable in one line. The empty create stays
 the one destructive verb, unguarded as before.
 
+The binding note appears when the binding actually moved: a successful
+write or an explicit `todo project <path>`. A read that names a project
+does not announce a move it did not make, and a write that failed does not
+announce one it did not keep — the note is a record, not an echo of the
+argument.
+
 Every reply names its queue (`[rig] 3/7 done · next: t4`), and a bucket
 minted from a directory that is not a repo says so
 (`[ng (not a repo)]`). A session can be two projects away from the queue

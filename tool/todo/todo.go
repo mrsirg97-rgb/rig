@@ -106,22 +106,50 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if g.Action == "bind" && (g.Project == nil || *g.Project == "") {
 		return a.report(ctx, session)
 	}
-	p, note, source, err := a.resolve(ctx, g, session)
+	t, err := a.resolve(ctx, g, session)
 	if err != nil {
 		return "", err
 	}
-	if source == srcHost && isWrite(g.Action) {
+	if t.source == srcHost && isWrite(g.Action) {
 		wd, _ := os.Getwd()
 		return "", fmt.Errorf("todo: no project: %s is not a repo, so its queue is shared by every session started there (project: \"~/Projects/x\" binds this session, \"~\" claims this bucket)", wd)
 	}
-	reply, err := a.dispatch(ctx, g, p, session)
+	// A read that names a project is a peek: it looks at that queue and
+	// leaves the session where it was. `bind` is the declaration, so it
+	// records whatever the read that follows does. A write records the
+	// move only once the action succeeded: a call that changed nothing
+	// changes no one's queue, and the refusal already named the queue it
+	// tried (`no task 't99' in loom`).
+	if g.Action == "bind" {
+		if err := a.commit(ctx, t); err != nil {
+			return "", err
+		}
+	}
+	reply, err := a.dispatch(ctx, g, t.p, session)
 	if err != nil {
 		return reply, err
 	}
+	if g.Action != "bind" && t.named && isWrite(g.Action) {
+		if err := a.commit(ctx, t); err != nil {
+			return reply, err
+		}
+	}
+	note := t.note()
 	if note == "" {
 		return reply, nil
 	}
 	return "\u2192 " + note + "\n" + reply, nil
+}
+
+// commit records the binding the call resolved to. The note that follows
+// it is the whole story of the move: silent when nothing moved.
+func (a adapter) commit(ctx context.Context, t target) error {
+	if !t.commits() {
+		return nil
+	}
+	return todostore.Bind(ctx, a.db, todostore.Binding{
+		Session: t.session, Scope: t.p.Key, Label: t.p.Label, OutsideRepo: t.p.OutsideRepo,
+	})
 }
 
 func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, session string) (string, error) {
@@ -179,60 +207,87 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 // files a call touches: a queue belongs to the plan, not to the last path
 // read, so a session that dips into another repo keeps its queue where it
 // put it.
-func (a adapter) resolve(ctx context.Context, g given, session string) (todostore.Project, string, string, error) {
-	if raw := g.Project; raw != nil && *raw != "" {
+type target struct {
+	p       todostore.Project
+	session string
+	prev    todostore.Binding
+	had     bool
+	named   bool
+	source  string
+}
+
+// commits is whether the resolution is a binding the session asked for:
+// a named project, or the bind action naming nothing (which reports
+// instead). An unattributable session records nothing anywhere.
+func (t target) commits() bool {
+	return t.named && todostore.RealSession(t.session)
+}
+
+func (t target) note() string {
+	if !t.commits() {
+		return ""
+	}
+	switch {
+	case !t.had:
+		return "bound to " + t.p.Label
+	case t.prev.Scope != t.p.Key:
+		return "bound to " + t.p.Label + " (was " + t.prev.Label + ")"
+	}
+	return ""
+}
+
+func (a adapter) resolve(ctx context.Context, g given, session string) (target, error) {
+	raw := g.Project
+	named := raw != nil && *raw != ""
+	p := todostore.Project{}
+	source := ""
+	if named {
 		dir := paths.Expand(*raw)
 		st, err := os.Stat(dir)
 		if err != nil || !st.IsDir() {
-			return todostore.Project{}, "", "", fmt.Errorf("todo: no such project directory: %s", dir)
+			return target{}, fmt.Errorf("todo: no such project directory: %s", dir)
 		}
-		p := todostore.ProjectOf(dir)
+		p, source = todostore.ProjectOf(dir), srcProject
+	} else {
+		if todostore.RealSession(session) {
+			b, ok, err := todostore.BindingOf(ctx, a.db, session)
+			if err != nil {
+				return target{}, err
+			}
+			if ok {
+				return target{p: b.Project(), session: session, prev: b, had: true, source: srcBinding}, nil
+			}
+		}
+		wd, err := os.Getwd()
+		if err != nil {
+			return target{}, fmt.Errorf("todo: no working directory: %v", err)
+		}
+		p = todostore.ProjectOf(wd)
+		if p.OutsideRepo {
+			source = srcHost
+		} else {
+			source = srcCwd
+		}
+	}
+	t := target{p: p, session: session, named: named, source: source}
+	if named && todostore.RealSession(session) {
 		prev, had, err := todostore.BindingOf(ctx, a.db, session)
 		if err != nil {
-			return todostore.Project{}, "", "", err
+			return target{}, err
 		}
-		if err := todostore.Bind(ctx, a.db, todostore.Binding{
-			Session: session, Scope: p.Key, Label: p.Label, OutsideRepo: p.OutsideRepo,
-		}); err != nil {
-			return todostore.Project{}, "", "", err
-		}
-		note := ""
-		switch {
-		case !todostore.RealSession(session):
-		case !had:
-			note = "bound to " + p.Label
-		case prev.Scope != p.Key:
-			note = "bound to " + p.Label + " (was " + prev.Label + ")"
-		}
-		return p, note, srcProject, nil
+		t.prev, t.had = prev, had
 	}
-	if todostore.RealSession(session) {
-		b, ok, err := todostore.BindingOf(ctx, a.db, session)
-		if err != nil {
-			return todostore.Project{}, "", "", err
-		}
-		if ok {
-			return b.Project(), "", srcBinding, nil
-		}
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return todostore.Project{}, "", "", fmt.Errorf("todo: no working directory: %v", err)
-	}
-	p := todostore.ProjectOf(wd)
-	if p.OutsideRepo {
-		return p, "", srcHost, nil
-	}
-	return p, "", srcCwd, nil
+	return t, nil
 }
 
 // report answers "whose queue am I in" without touching it: what a bare
 // `todo project` line shows.
 func (a adapter) report(ctx context.Context, session string) (string, error) {
-	p, _, source, err := a.resolve(ctx, given{}, session)
+	t, err := a.resolve(ctx, given{}, session)
 	if err != nil {
 		return "", err
 	}
+	p, source := t.p, t.source
 	switch source {
 	case srcBinding:
 		return "queue: " + p.Label + " (bound)", nil
