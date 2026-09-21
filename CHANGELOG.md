@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+## [1.3.3]: a queue knows whose it is
+
+The scope law says a queue belongs to its project, and the lazy re-scope
+could re-key one once a repo was discovered — but the operator's shape
+defeated it: `rig` launched in `~`, working several repos by absolute path
+(or none at all: a ledger, an inbox). The measured cost was 593 finished
+tasks from six projects in one cwd bucket while the repo's own scope held
+nothing, and a live claim that could name a session from another project.
+Which queue a session works in is now said out loud, not guessed from the
+paths a call happens to name.
+
+- **the binding** (`store/todo`, `tool/todo`, `command`): `session_project`
+  records a session's queue. Resolution is one order everywhere: the
+  `project` a call names (which binds the session and says `→ bound to
+  <label>`), else the session's binding, else the launch directory when it
+  is a repo, else its bucket — where a write refuses with the rule and a
+  read answers labelled. `bind` with no project reports where the queue is
+  and touches nothing; `todo <path> <verb…>` binds and acts in one line,
+  `/todo project [path]` is the same door at the command. Resume re-reads
+  the binding, so a queue cannot move because a process started elsewhere.
+- **every reply names its queue** (`store/todo`): the summary leads with
+  `[rig] 3/7 done · next: t4`, and a bucket minted from a non-repo says
+  `[ng (not a repo)]`. Inside a repo the name is the repo's, so a
+  subdirectory or a second worktree does not rename the project (SPEC_CORE's
+  naming rule, reaching past the empty reply).
+- **`prune`** (`store/todo`, `tool/todo`, `command`): the door for the done
+  rows a long-lived summary keeps counting. It is itself an event, so a
+  replay drops the same rows and the history stays reconstructable; failed
+  rows stay (they still ask for a retry) and an idle prune appends nothing.
+- **the voice tells the truth about `create`** (`store/todo`): the note
+  reports the merge it performs (`queue merged: 2 new, 1 already there`,
+  `nothing new`, `queue cleared`) instead of the long-standing `queue
+  replaced with 1 tasks`, which taught a model that a create wipes a queue
+  it never wipes. Semantics untouched — SPEC_UX 1 kept them for replay
+  compatibility and left this wording as the one-liner to land later.
+
+No migration re-keys the old buckets (a hash cannot be walked back to a
+path, the rule that killed the earlier re-key); `prune` is the door that
+sweeps them. An operator who wants the `~` bucket says so once per session
+(`/todo project ~`) and it is a project like any other, marked not a repo.
+
 ## [1.3.2]: a job may outlive the clock it never agreed to
 
 A scheduler job's every fire ran under one global 30-minute
