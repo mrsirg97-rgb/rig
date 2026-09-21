@@ -87,6 +87,12 @@ sees core and models and nothing else.
 
 - `run-job` lands before state/session wiring: it is its own lifecycle
   (own stores, own record) and must not touch the REPL's closure order.
+- The queue the startup reap sweeps is `sessionQueue`: the session's
+  recorded binding when it has one, else the launch directory's. A resume
+  from another folder therefore frees claims in the queue the session was
+  actually working, not in whatever bucket the resume happened to start
+  in. A binding read that fails falls back to the launch directory and
+  says so on stderr: the reap must still run.
 - The `-p`/`-resume` conflict is refused loud before any store is
   opened (`ErrResumeWithPrompt`: one-shot stays one-shot).
 - `-session-id` is the worker-only identity seam: delegate mints it before

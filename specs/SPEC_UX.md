@@ -187,6 +187,35 @@ of a half-picked candidate: picking requires navigation, and
 navigation disarms dispatch) while making the common case (type the
 whole command, hit Enter) do the obvious thing.
 
+### 6. todo: the voice says what the queue did (1.3.3)
+
+Decision 1's one-liner, landed with the scope binding (SPEC_STATE).
+`create` merges by text — the fold upserts and always did — so the note
+reports the merge in the numbers that matter: `→ queue merged: 2 new`, or
+`2 new, 1 already there`, `nothing new`, and `queue cleared` for the empty
+create. The old `queue replaced with 1 tasks` taught a model that a create
+wipes a queue it never wiped, and a session that believed it reached for
+`create` as a cleanup and inherited whatever the bucket already held. The
+semantics are untouched (replay compatibility, decision 1); only the voice
+moved, and the wording now tells the truth about the merge.
+
+`prune` is the door that was missing: the queue's done rows drop out of
+the projection, the log keeps the history, and the bucket decision 1's
+reporter drowned in is now sweepable in one line. The empty create stays
+the one destructive verb, unguarded as before.
+
+The binding note appears when the binding actually moved: a successful
+write or an explicit `todo project <path>`. A read that names a project
+does not announce a move it did not make, and a write that failed does not
+announce one it did not keep — the note is a record, not an echo of the
+argument.
+
+Every reply names its queue (`[rig] 3/7 done · next: t4`), and a bucket
+minted from a directory that is not a repo says so
+(`[ng (not a repo)]`). A session can be two projects away from the queue
+it is reading; a reply that could be read two ways carries the word that
+picks one (SPEC_CORE's naming rule, extended).
+
 ## interfaces
 
 The voices, verbatim:

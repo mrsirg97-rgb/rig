@@ -57,7 +57,7 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 
-	if read != strings.TrimPrefix(created, "\u2192 queue replaced with 1 tasks\n") {
+	if read != strings.TrimPrefix(created, "\u2192 queue merged: 1 new\n") {
 		t.Fatalf("read must be the same queue the create reported:\ncreate:\n%s\nread:\n%s", created, read)
 	}
 
@@ -308,13 +308,76 @@ func TestTodoProjectCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("todo project unknown: %v", err)
 	}
-	if !strings.Contains(empty, "(no tasks in "+scope.Label(unknown)+"'s queue)") {
-		t.Fatalf("an unknown path's empty queue must refuse naming its scope:\n%s", empty)
+	if !strings.Contains(empty, "(no tasks in "+scope.Label(unknown)+"'s queue, not a repo)") {
+		t.Fatalf("an unknown path's empty queue must name its scope and say it is not a repo:\n%s", empty)
 	}
 
-	_, err = runCmd(t, "todo", "project", env)
-	if err == nil || err.Error() != "todo: project takes a path (todo project <path>)" {
-		t.Fatalf("a bare project must refuse naming the shape, got %v", err)
+	reported, err := runCmd(t, "todo", "project", env)
+	if err != nil {
+		t.Fatalf("a bare project must report where the queue is: %v", err)
+	}
+	if !strings.Contains(reported, "queue: ") {
+		t.Fatalf("a bare project must name the queue, got %q", reported)
+	}
+}
+
+// The operator's way of saying "this project": a path where an action
+// would go, then the verb. It binds the session, so the bare verbs that
+// follow land in the same queue.
+func TestTodoPathFormBindsAndActs(t *testing.T) {
+	db := openTodo(t)
+	s := core.NewSession()
+	env := &command.Env{
+		Session: func() *core.Session { return s },
+		Tools:   map[string]core.Tool{"todo": todoapi.New(db)},
+	}
+	proj := t.TempDir()
+	created, err := runCmd(t, "todo", proj+" create write the spec", env)
+	if err != nil {
+		t.Fatalf("todo <path> create: %v", err)
+	}
+	if !strings.Contains(created, "bound to") || !strings.Contains(created, "write the spec") {
+		t.Fatalf("the path form must bind and act:\n%s", created)
+	}
+	read, err := runCmd(t, "todo", "read", env)
+	if err != nil {
+		t.Fatalf("read after a bind: %v", err)
+	}
+	if !strings.Contains(read, "write the spec") {
+		t.Fatalf("the bind must carry to a bare verb:\n%s", read)
+	}
+	if _, err := runCmd(t, "todo", t.TempDir()+"/nowhere read", env); err == nil ||
+		!strings.Contains(err.Error(), "no such project directory") {
+		t.Fatalf("a path that is not a directory must refuse by name, got %v", err)
+	}
+	if _, err := runCmd(t, "todo", "move t1 x", env); err == nil ||
+		!strings.Contains(err.Error(), "not a position") {
+		t.Fatalf("the path form must keep the verb's own refusals, got %v", err)
+	}
+}
+
+func TestTodoPruneCommand(t *testing.T) {
+	db := openTodo(t)
+	s := core.NewSession()
+	env := &command.Env{
+		Session: func() *core.Session { return s },
+		Tools:   map[string]core.Tool{"todo": todoapi.New(db)},
+	}
+	if _, err := runCmd(t, "todo", "create one task", env); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := runCmd(t, "todo", "done t1", env); err != nil {
+		t.Fatalf("done: %v", err)
+	}
+	pruned, err := runCmd(t, "todo", "prune", env)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if !strings.Contains(pruned, "pruned 1 done task") || strings.Contains(pruned, "t1") {
+		t.Fatalf("prune must drop the done row and say so:\n%s", pruned)
+	}
+	if _, err := runCmd(t, "todo", "prune x", env); err == nil {
+		t.Fatal("prune takes no args")
 	}
 }
 

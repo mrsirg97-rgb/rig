@@ -16,8 +16,12 @@ directory keeps its identity; a subdirectory reads the repo's queue.
 
 - `scope.go`: `ShortHash`, `Path` (the memoized git probe with the
   relative-output resolution and the echoed-option fallback), `Key`
-  (`ShortHash(Path)`), and `Label` (the display name: `filepath.Base`,
-  `"."`/`""` → `root`).
+  (`ShortHash(Path)`), `Label` (the display name: `filepath.Base`,
+  `"."`/`""` → `root`), `InRepo` (whether a directory resolved to a
+  repo at all, so a caller can say "this is a bucket, not a project"
+  instead of implying it), and `Bare` (the `--is-bare-repository`
+  probe: a bare layout's common dir is the cwd itself, so the path
+  alone cannot tell it from a plain directory).
 
 ## How it is consumed
 

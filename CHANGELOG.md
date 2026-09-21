@@ -2,6 +2,58 @@
 
 ## [Unreleased]
 
+## [1.3.3]: a queue knows whose it is
+
+The scope law says a queue belongs to its project, and the lazy re-scope
+could re-key one once a repo was discovered — but the operator's shape
+defeated it: `rig` launched in `~`, working several repos by absolute path
+(or none at all: a ledger, an inbox). The measured cost was 593 finished
+tasks from six projects in one cwd bucket while the repo's own scope held
+nothing, and a live claim that could name a session from another project.
+Which queue a session works in is now said out loud, not guessed from the
+paths a call happens to name.
+
+- **the binding** (`store/todo`, `tool/todo`, `command`): `session_project`
+  records a session's queue. Resolution is one order everywhere: the
+  `project` a call names, else the session's binding, else the launch
+  directory when it is a repo, else its bucket — where a write refuses with
+  the rule and a read answers labelled. Naming a project binds by what the
+  call did: a write records it once the action succeeded (`→ bound to
+  <label>`), a read is a peek that leaves the session where it was, and
+  `bind` — `/todo project <path>` — is the declaration itself. A failed
+  write changes nothing, the binding included, so a glance at a neighbour's
+  queue or a mistyped id cannot relocate a session's later bare verbs.
+  `todo <path> <verb…>` is the same door in one line. Resume re-reads the
+  binding, so a queue cannot move because a process started elsewhere.
+- **every reply names its queue** (`store/todo`): the summary leads with
+  `[rig] 3/7 done · next: t4`, and a bucket minted from a non-repo says
+  `[ng (not a repo)]`. Inside a repo the name is the repo's, so a
+  subdirectory or a second worktree does not rename the project, and a bare
+  repository is a repo of its own rather than the cwd bucket its common dir
+  would suggest (SPEC_CORE's naming rule, reaching past the empty reply).
+- **`prune`** (`store/todo`, `tool/todo`, `command`): the door for the done
+  rows a long-lived summary keeps counting. It is itself an event, so a
+  replay drops the same rows and the history stays reconstructable; failed
+  rows stay (they still ask for a retry) and an idle prune appends nothing.
+- **compaction carries the minting counters** (`store/todo`): the snapshot
+  now writes `maxId` and `maxPos`, which is the only place the high-water
+  marks survive once the create events they were rebuilt from are deleted.
+  Without them the next task took the first free id and position — harmless
+  while a hole meant the queue had been cleared, and a real hazard with
+  `prune`: a pruned id was handed to a new task and a session holding the
+  stale id completed the wrong row.
+- **the voice tells the truth about `create`** (`store/todo`): the note
+  reports the merge it performs (`queue merged: 2 new, 1 already there`,
+  `nothing new`, `queue cleared`) instead of the long-standing `queue
+  replaced with 1 tasks`, which taught a model that a create wipes a queue
+  it never wipes. Semantics untouched — SPEC_UX 1 kept them for replay
+  compatibility and left this wording as the one-liner to land later.
+
+No migration re-keys the old buckets (a hash cannot be walked back to a
+path, the rule that killed the earlier re-key); `prune` is the door that
+sweeps them. An operator who wants the `~` bucket says so once per session
+(`/todo project ~`) and it is a project like any other, marked not a repo.
+
 ## [1.3.2]: a job may outlive the clock it never agreed to
 
 A scheduler job's every fire ran under one global 30-minute

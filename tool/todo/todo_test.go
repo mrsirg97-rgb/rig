@@ -241,7 +241,10 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	}
 }
 
-func TestProjectReadsAndWritesAnotherQueue(t *testing.T) {
+// A project named on a call is not a one-off: it binds the session, whose
+// bare verbs then act there. The queue follows the work, not the
+// directory the process happened to start in.
+func TestProjectBindsTheSession(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db)
 	proj := t.TempDir()
@@ -252,22 +255,88 @@ func TestProjectReadsAndWritesAnotherQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create in project: %v", err)
 	}
-	if !strings.Contains(reply, "over there") {
+	if !strings.Contains(reply, "bound to") {
+		t.Fatalf("a named project must say it bound:\n%s", reply)
+	}
+	if !strings.Contains(reply, "[") || !strings.Contains(reply, "over there") {
 		t.Fatalf("create reply lost the task:\n%s", reply)
 	}
-	read, err := exec(t, tool, ctx, map[string]any{"action": "read", "project": proj})
+	read, err := exec(t, tool, ctx, map[string]any{"action": "read"})
 	if err != nil {
-		t.Fatalf("read project: %v", err)
+		t.Fatalf("read after a bind: %v", err)
 	}
 	if !strings.Contains(read, "over there") {
-		t.Fatalf("a project queue must read from anywhere:\n%s", read)
+		t.Fatalf("the bare verb must follow the binding:\n%s", read)
 	}
-	def, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	reported, err := exec(t, tool, ctx, map[string]any{"action": "bind"})
 	if err != nil {
-		t.Fatalf("read default: %v", err)
+		t.Fatalf("bind with no project reports: %v", err)
 	}
-	if strings.Contains(def, "over there") {
-		t.Fatalf("the default (cwd) queue must not see the project's:\n%s", def)
+	if !strings.Contains(reported, "(bound)") {
+		t.Fatalf("a bare bind must report the binding, got %q", reported)
+	}
+}
+
+// A session launched outside any repo has no project to write into: the
+// shared cwd bucket is a place, not a project, so a bare write refuses and
+// says what to do, while a read stays available and labels itself.
+func TestLaunchOutsideARepoRefusesWrites(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db)
+	t.Chdir(t.TempDir())
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "a chore"}},
+	}); err == nil || !strings.Contains(err.Error(), "no project") {
+		t.Fatalf("a bare write outside a repo must refuse naming the rule, got %v", err)
+	}
+	read, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("a read must stay available: %v", err)
+	}
+	if !strings.Contains(read, "not a repo") {
+		t.Fatalf("a non-repo queue must say so:\n%s", read)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "a chore"}}}); err == nil {
+		t.Fatal("the refusal must hold for every write verb")
+	}
+	home := t.TempDir()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "project": home,
+		"tasks": []any{map[string]any{"text": "a chore"}}}); err != nil {
+		t.Fatalf("naming a project lets the write land: %v", err)
+	}
+	started, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1"})
+	if err != nil {
+		t.Fatalf("a bare verb after the bind: %v", err)
+	}
+	if !strings.Contains(started, "t1 [~]") {
+		t.Fatalf("the bind must carry to the next verb:\n%s", started)
+	}
+}
+
+// Every reply says which queue it speaks for: a shared bucket is the one
+// place where two queues can look identical.
+func TestEveryReplyNamesTheQueue(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "name me"}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []map[string]any{
+		{"action": "read"},
+		{"action": "start", "id": "t1"},
+		{"action": "complete", "id": "t1"},
+	} {
+		out, err := exec(t, tool, ctx, args)
+		if err != nil {
+			t.Fatalf("%v: %v", args["action"], err)
+		}
+		if !strings.Contains(out, "[") || !strings.Contains(out, "] ") {
+			t.Fatalf("the reply for %v must name the queue:\n%s", args["action"], out)
+		}
 	}
 }
 
@@ -302,5 +371,90 @@ func TestProjectExpandsTildeAtTheBoundary(t *testing.T) {
 	}
 	if !strings.Contains(read, "tilde task") {
 		t.Fatalf("~ must expand to the project at the boundary:\n%s", read)
+	}
+}
+
+// A read that names a project is a peek, not a move: looking at another
+// repo's queue must not quietly relocate the session's own bare verbs.
+func TestReadWithProjectIsAPeekNotAMove(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db)
+	here, there := t.TempDir(), t.TempDir()
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "project": here,
+		"tasks": []any{map[string]any{"text": "mine"}}}); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+	if _, err := todostore.Create(context.Background(), db, todostore.ProjectOf(there),
+		[]todostore.CreateItem{{Text: "theirs"}}, "seed"); err != nil {
+		t.Fatalf("seed the other queue: %v", err)
+	}
+	peek, err := exec(t, tool, ctx, map[string]any{"action": "read", "project": there})
+	if err != nil {
+		t.Fatalf("peek: %v", err)
+	}
+	if !strings.Contains(peek, "theirs") {
+		t.Fatalf("the peek must read the named queue:\n%s", peek)
+	}
+	if strings.Contains(peek, "bound to") {
+		t.Fatalf("a peek must not announce a move it did not make:\n%s", peek)
+	}
+	reported, err := exec(t, tool, ctx, map[string]any{"action": "bind"})
+	if err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if !strings.Contains(reported, "queue: "+filepath.Base(here)) {
+		t.Fatalf("a peek must not move the binding, got %q", reported)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1"}); err != nil {
+		t.Fatalf("start in the bound queue: %v", err)
+	}
+	started, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("read after the peek: %v", err)
+	}
+	if !strings.Contains(started, "mine") || strings.Contains(started, "theirs") {
+		t.Fatalf("the bare verb must stay in the bound queue:\n%s", started)
+	}
+}
+
+// A write that names a project and fails changes nothing, including the
+// binding: the refusal already named the queue it tried.
+func TestFailedWriteWithProjectLeavesTheBindingAlone(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db)
+	here, there := t.TempDir(), t.TempDir()
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "project": here,
+		"tasks": []any{map[string]any{"text": "mine"}}}); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+	_, err := exec(t, tool, ctx, map[string]any{
+		"action": "complete", "id": "t99", "project": there,
+	})
+	if err == nil || !strings.Contains(err.Error(), "no task 't99'") {
+		t.Fatalf("the failed write must name the queue it tried, got %v", err)
+	}
+	reported, err := exec(t, tool, ctx, map[string]any{"action": "bind"})
+	if err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if !strings.Contains(reported, "queue: "+filepath.Base(here)) {
+		t.Fatalf("a failed call must not move the session, got %q", reported)
+	}
+	// And the same call, succeeding, does move it.
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "id": "", "project": there,
+		"tasks": []any{map[string]any{"text": "theirs"}}}); err != nil {
+		t.Fatalf("the succeeding write: %v", err)
+	}
+	moved, err := exec(t, tool, ctx, map[string]any{"action": "bind"})
+	if err != nil {
+		t.Fatalf("report after the move: %v", err)
+	}
+	if !strings.Contains(moved, "queue: "+filepath.Base(there)+" (bound)") {
+		t.Fatalf("a successful write must move the binding, got %q", moved)
 	}
 }

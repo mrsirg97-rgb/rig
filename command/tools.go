@@ -38,7 +38,8 @@ func (t toolCmd) Sub() []Sub {
 			{Name: "done", Desc: "mark a task complete: done <id>"},
 			{Name: "fail", Desc: "mark a task failed: fail <id>"},
 			{Name: "retry", Desc: "put a failed task back: retry <id>"},
-			{Name: "project", Desc: "show another project's queue: project <path>"},
+			{Name: "prune", Desc: "drop the done rows from the queue"},
+			{Name: "project", Desc: "whose queue this is (bare), or bind another and read it: project <path>"},
 		}
 	case "scheduler":
 		return []Sub{
@@ -82,13 +83,38 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 	return out, nil
 }
 
+// isTodoAction words the tool's own vocabulary: anything else in the
+// first field is a path, and `+"`todo <path> <verb>`"+` is how the operator
+// says "this project" (the form binds the session's queue).
+func isTodoAction(w string) bool {
+	switch w {
+	case "read", "create", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "project":
+		return true
+	}
+	return false
+}
+
+const todoUsage = "todo read|create <text…>|start|complete|fail|release|retry <id>|move <id> <pos>|prune|project <path>|<path> <verb>"
+
 func todoArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
+	if len(fields) > 0 && !isTodoAction(fields[0]) {
+		if len(fields) == 1 {
+			return nil, fmt.Errorf("todo: %q is not an action: %s", fields[0], todoUsage)
+		}
+		rest, err := todoArgs(strings.Join(fields[1:], " "))
+		if err != nil {
+			return nil, err
+		}
+		return withProjectField(rest, fields[0])
+	}
 	switch {
 	case len(fields) == 0:
 		return json.RawMessage(`{"action":""}`), nil
 	case fields[0] == "read" && len(fields) == 1:
 		return json.RawMessage(`{"action":"read"}`), nil
+	case fields[0] == "prune" && len(fields) == 1:
+		return json.RawMessage(`{"action":"prune"}`), nil
 	case fields[0] == "create":
 		if len(fields) == 1 {
 			return json.RawMessage(`{"action":"create"}`), nil
@@ -110,25 +136,44 @@ func todoArgs(args string) (json.RawMessage, error) {
 			return nil, fmt.Errorf("todo: %q: not a position (todo move <id> <pos>)", fields[2])
 		}
 		return json.Marshal(map[string]any{"action": "move", "id": fields[1], "pos": pos})
-	case fields[0] == "project" && len(fields) == 2:
-		return json.Marshal(map[string]any{"action": "read", "project": fields[1]})
+	case fields[0] == "project":
+		// A bare "project" reports where the session's queue is; one with
+		// a path binds the session to it and shows that queue.
+		m := map[string]any{"action": "bind"}
+		if len(fields) == 2 {
+			m["project"] = fields[1]
+		} else if len(fields) > 2 {
+			return nil, errors.New("todo: project takes one path (todo project <path>)")
+		}
+		return json.Marshal(m)
 	}
 	switch {
 	case len(fields) == 0:
-		return nil, errors.New("todo: usage: todo read|create <text…>|start|complete|fail|release|retry <id>|move <id> <pos>|project <path>")
+		return nil, errors.New("todo: usage: " + todoUsage)
 	case fields[0] == "read":
 		return nil, errors.New("todo: read takes no args (todo read)")
+	case fields[0] == "prune":
+		return nil, errors.New("todo: prune takes no args (todo prune)")
 	case fields[0] == "create":
 		return nil, errors.New("todo: create needs text (todo create <text…>)")
 	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry":
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":
 		return nil, errors.New("todo: move takes an id and a position (todo move <id> <pos>)")
-	case fields[0] == "project":
-		return nil, errors.New("todo: project takes a path (todo project <path>)")
 	default:
-		return nil, fmt.Errorf("todo: unknown action %q (todo read|create <text…>|start|complete|fail|release|retry <id>|move <id> <pos>)", fields[0])
+		return nil, fmt.Errorf("todo: unknown action %q (%s)", fields[0], todoUsage)
 	}
+}
+
+// withProjectField folds the path argument into the args the verb parse
+// produced, so one grammar serves both shapes.
+func withProjectField(raw json.RawMessage, project string) (json.RawMessage, error) {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("todo: %v", err)
+	}
+	m["project"] = project
+	return json.Marshal(m)
 }
 
 const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>] [cwd <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]"

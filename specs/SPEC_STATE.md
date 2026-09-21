@@ -222,14 +222,21 @@ deliverable 9) or plain `sqlite3`.
 ### todo (port; TODO_SPEC.md A, Rev 2, TASK_TREE_SPEC.md A)
 
 One store, every row scoped (the project identity, SPEC_STATE's scope
-law; see the migration section): a queue is the repo's, not the
+law; see the migration section): a queue is the project's, not the
 directory rig happened to start in, and the identity partition is never
 a filename; it is the short sha1 of the git common dir (`store/scope`),
-falling back to the cwd hash outside a repo.
+falling back to the cwd hash outside a repo. A bare repository's common
+dir is its own root, so the path alone cannot tell it from a plain
+directory and the probe asks (`scope.Bare`): a bare repo is a repo of
+its own, never the cwd bucket. Outside a repo that hash is
+a bucket, not a project: a place every session started there shares, and
+a reply that reads one says so. Which queue a session writes to is its
+binding, decided in the open, never inferred from the paths a call
+happens to name (see the binding decision).
 
 - `meta`: key (primary), value.
 - `events`: seq (primary, minted, strictly increasing), ts, op
-  (create|start|complete|fail|retry|move|compact), args (TEXT json), session
+  (create|start|complete|fail|retry|move|prune|compact), args (TEXT json), session
   (nullable), scope (the queue's identity, nullable-false).
 - `tasks`: scope + id (primary, `tN` per scope), text (unique per scope via
   extra.sql), status (pending|in_progress|done|failed), pos, created_seq
@@ -237,7 +244,14 @@ falling back to the cwd hash outside a repo.
 - `task_deps`: scope + task_id + depends_on (primary: both link tasks within
   one scope), created_seq.
 - `extra.sql`: `tasks_pos_seq` index on (scope, pos, created_seq): the unique
-  index on (scope, text).
+  index on (scope, text), and `session_project`: session_id (primary), scope,
+  label, outside_repo, bound_at — the session's queue binding, keyed by
+  session because the question is whose queue this session is in, and the
+  answer must survive a resume from another directory. Mutable state beside
+  the log, like `meta`: the log is the queue's spine, the binding only says
+  which spine a call reads. An anonymous call (`anon`, no session row) binds
+  nothing: the attribution is shared, so a binding recorded under it would
+  leak one caller's project onto another's.
 - Semantics kept verbatim, per scope: projection rebuilt from the log on
   every call and never trusted; replay is total and skips inapplicable rows;
   positions minted never mutated; move via events; claim semantics (start
@@ -248,8 +262,30 @@ falling back to the cwd hash outside a repo.
   boundary, cycles refused, completion gated, blocked skipped by `next`.
   Minted seq is one sequence across scopes (a shared events table), while
   ids stay `tN` per scope; the compact fold and stale footer are per scope.
-- The empty reply names the queue it read (`(no tasks in <label>'s queue)`),
-  never "this directory's queue" (SPEC_CORE's empty-reply rule).
+- Every reply names the queue it speaks for: the summary leads with
+  `[<label>]`, or `[<label> (not a repo)]` for a cwd bucket, and the empty
+  reply still says `(no tasks in <label>'s queue)` (SPEC_CORE's naming rule).
+  A queue reached by binding is not the one the process started next to, and
+  a reply that could be read either way carries the word that picks one. The
+  unknown-id refusal names the queue it looked in (`no task 't7' in rig
+  (…)`): ids are `tN` per scope, so an id carried over from another project's
+  reply is the likeliest reason it does not match here.
+- Compaction carries the minting counters (`maxId`, `maxPos`) in its
+  snapshot: they are rebuilt from the create events the fold is about to
+  delete, so a snapshot that forgot them mints the next task from the first
+  free id and position. Harmless while the only way to leave a hole was to
+  clear the whole queue; with `prune` freeing ids mid-queue, the forgotten
+  high-water reissued a pruned id to a new task and a session holding the
+  stale id completed the wrong row. A snapshot written without the fields
+  reads as `0`, which is the pre-counter behaviour (mint past what is
+  here).
+- `prune` (1.3.3) drops the queue's done rows from the projection and is
+  itself an event: a replay drops the same rows, a later compact snapshot
+  carries only what survived, and the history stays reconstructable. Failed
+  rows stay, they still ask for a retry; an idle prune appends nothing and
+  says so. Without the door a long-lived queue's summary counts work that
+  finished weeks ago — the cost the shared bucket made visible. The empty
+  create (`tasks: []`) stays the one destructive verb.
 - The FSM lives in `store/todo/todo.go` as Go, errors in pane's teaching
   voice; the generated domain is only the substrate it writes through.
   Two raw arms are owned and named as such: the event scan that rebuilds
@@ -520,6 +556,35 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
 - **One transaction per tool call, serializable, opened in the adapter.**
   Not per turn, not per process. Cross-process safety (scheduler runner
   writing while a session reads) is WAL plus busy_timeout, as in pane.
+- **The queue a session works in is its binding, not its launch directory
+  (1.3.3).** The lazy re-scope keyed the fix on the launch cwd and misses the
+  operator's shape: `rig` launched in `~`, working several repos by absolute
+  path (or none at all: a ledger, an inbox). The measured result was 593
+  finished tasks from six projects in one cwd bucket while the repo's own
+  scope held nothing, and a claim that could name a session from another
+  project. Rejected: deriving the scope from the paths a session edits (a
+  session dips into a neighbour's files and its plan migrates under it);
+  per-session queues with a shared view (the claim semantics need one queue
+  per project). So the scope is an explicit, sticky binding, resolved in one
+  order everywhere: the `project` a call names, else the session's binding,
+  else the launch cwd when it is a repo, else the cwd bucket, where a write
+  refuses with the rule and a read answers labelled. Naming a project binds
+  according to what the call did: a **write** records the binding once the
+  action succeeds (a call that changed nothing changes no one's queue, and
+  its refusal already named the queue it tried), a **read** is a peek that
+  leaves the binding where it was, and `bind` — `/todo project <path>` — is
+  the declaration itself and records regardless. Rejected: binding on every
+  named call, which let a failed `complete t99` in another project, or a
+  glance at a neighbour's queue, move a session's own later bare verbs. Chosen over inference because the plan belongs to a
+  project by the operator's word, not our guess — the same reason SPEC_UX 1
+  withdrew a create-side guard: the behaviour was fine, the guess about it
+  was not. `~` is a legal binding: the machine bucket is a project of its
+  own, marked not a repo. Failure mode: a resume from any directory re-reads
+  the same binding, so a queue cannot move because a process started
+  elsewhere; the cost is one row of mutable state per session and one
+  refusal at a non-repo launch. The binding is not derived state
+  (SPEC_STATE's rule): the log alone rebuilds every queue exactly; the
+  binding only decides which queue a call touches, never what it holds.
 - **Session id.** `core.Session` gains an `ID string` (minted at
   `NewSession`, ULID-style time-ordered, stdlib `crypto/rand`); the recorder
   and todo's claim semantics attribute to it. This is the one `core/` change
@@ -546,6 +611,16 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   with colliding `j1`s into distinct ids with their cwds intact and their
   crontab lines rewritten, then is a no-op on the second open; `run-job jN`
   fires the folded job in its own cwd.
+- todo binding and prune: a named `project` binds and answers in the same
+  call; a bare verb follows the binding; a repo cwd resolves to the repo with
+  no binding written; a non-repo cwd refuses every write by name and still
+  reads; `anon` binds nothing; a **read** naming a project peeks without
+  moving the session; a **write** naming one that fails leaves the binding
+  alone and names the queue it tried; `prune` drops done rows, keeps failed
+  ones, appends nothing when idle, and a log replayed across a prune rebuilds
+  the same queue; compaction carries the id and position high-water, so a
+  pruned id is not handed out again and a new task joins the end of the
+  queue; every reply names its queue and marks a cwd bucket.
 - Recorder: kill a `-p` run mid-turn (context cancel inside a scripted tool)
   and assert every row that completed before the kill is readable; assert
   the session row is closed with `exit=cancelled` on the clean path.
