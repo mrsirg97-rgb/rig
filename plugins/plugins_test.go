@@ -171,6 +171,27 @@ func TestCallCellIsTotal(t *testing.T) {
 	}
 }
 
+func TestPyLiteralRefusesRawLineBreaks(t *testing.T) {
+	for _, in := range []string{"x\ny", "x\ry", "x\r\ny"} {
+		func() {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("pyLiteral(%q): want a panic, the raw break would break out of the literal", in)
+				}
+			}()
+			pyLiteral(in)
+		}()
+	}
+	// the marshalled form of the same text is escaped and passes the guard
+	raw, err := json.Marshal("x\ny\rz")
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if got := pyLiteral(string(raw)); strings.ContainsAny(got, "\n\r") {
+		t.Errorf("the escaped literal must hold no raw break: %q", got)
+	}
+}
+
 func TestToolExecRoundTripsArgsAndResult(t *testing.T) {
 	k := &fakeKernel{replies: []pythontool.Reply{okReply("echo: hello rig\n")}}
 	tool := New("echo", "echoes", "/h/plugins/echo.py", json.RawMessage(`{"type":"object"}`), k)

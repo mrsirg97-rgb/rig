@@ -21,7 +21,8 @@ person's daily driver.
 - **the model is untrusted.** Everything the model says, and every tool call
   it makes, is input to a boundary: the allow-list, the approval gate, the
   retry guard, the result cap, the path boundary, and the plugin landing
-  zone.
+  zone. The path boundary normalizes (`~` expansion); it scopes no
+  filesystem access — see the file tools below.
 - **the operator is trusted.** The operator's settings, themes, plugins, and
   approval mode are the operator's own decisions. A model cannot reach them:
   plugins install only into `plugins/pending/` and go live only on the
@@ -34,7 +35,9 @@ person's daily driver.
 
 - **web_fetch** resolves and pins the dial: private, loopback, link-local,
   multicast, and reserved ranges are refused before the request, and every
-  redirect hop is re-validated.
+  redirect hop is re-validated. When the egress proxy is in use, the
+  address check still runs per hop but the dial goes through the proxy and
+  DNS resolves there — the pinning guarantee then belongs to the proxy.
 - **bash** runs under a context bound; the process group is killed on
   cancel and the output is capped.
 - **the worker jail** is bubblewrap: unshare-all, clearenv, a named setenv
@@ -43,6 +46,11 @@ person's daily driver.
   closed.
 - **the plugin provenance rule**: `write` and `edit` into `plugins/` outside
   `plugins/pending/` is refused, symlink-resolved.
+- **the file tools are unscoped by design**: `read`, `write`, and `edit`
+  reach anywhere the process can; the only file-path rule is the plugin
+  provenance rule. Granting a file tool grants the filesystem. Path
+  validation (`pathguard`) applies to the `cwd` arguments of `delegate`
+  and `scheduler`, not to file paths.
 - **the dashboard** binds loopback only (anything else refuses at startup)
   and requires a 32-byte bearer token, stored `0600`, compared in constant
   time.

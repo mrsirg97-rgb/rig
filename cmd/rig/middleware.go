@@ -10,6 +10,14 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/toolset"
 )
 
+// canonicalMiddleware is the one written order (see middleware/PACKAGE.md:
+// loop.Run composes exec = mw.Wrap(exec) over this slice, so the
+// last-listed link runs first). The order is load-bearing: paths expands
+// "~" before any gate validates an argument; cutoff refuses a truncated
+// call before approval spends a prompt on it; the permission gates deny
+// before approval asks and before the retry guard counts a failure; and
+// Cap truncates every reply, refusals included. Reorder only against the
+// chain tests in cmd/rig.
 func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	resultCap := r.resultCap
 	if resultCap == 0 {

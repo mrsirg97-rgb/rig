@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [1.3.1]: the docs tell the truth about their reach
+
+A source review of the guardrails (pathguard, the chain, the plugin
+zone, `web_fetch`, the loop) found the code sound and two doc claims
+wider than the machinery behind them. This release states what the
+boundaries actually are, welds one invariant that was only
+conventionally true, and pins the chain order where it is written.
+
+- **the egress proxy owns the pin** (`SECURITY.md`): `web_fetch`'s
+  resolve-and-pin holds for direct dials; with the proxy in use the
+  address check runs per hop but DNS resolves there, so the guarantee
+  belongs to the proxy. The boundary now says so instead of implying
+  otherwise.
+- **the file tools' reach, named** (`SECURITY.md`): `read`, `write`,
+  and `edit` are unscoped by design and the path boundary is
+  normalization, not containment; the doc said "the path boundary"
+  where a reader could hear "file paths are gated". The plugin
+  provenance rule is the only file-path rule, and `pathguard`'s scope
+  (the `cwd` of `delegate` and `scheduler`) is now written down.
+- **`pyLiteral` refuses raw line breaks** (`plugins`): the escaping is
+  total only inside a Python single-quoted literal, and the callers
+  feed it `json.Marshal` output where breaks are already escaped —
+  the gap was an unwritten invariant. A raw `\n` or `\r` now panics
+  the cell instead of ending the string literal early.
+- **the chain order comments its own definition** (`cmd/rig`):
+  `canonicalMiddleware` carries the load-bearing invariants (expand
+  before validate; cutoff before approval; deny before ask; cap every
+  reply) beside the order they describe, next to the order test.
+
+Two review findings were verified and retired unchanged: the drift
+cache is bounded by its 16MB pressure cap regardless of session
+churn, and `readCapped`'s probe read already reports exact-cap bodies
+as untruncated, correctly.
+
 ## [1.3.0]: rig looks at images
 
 A model with eyes had no way to use them: every image the agent met came
