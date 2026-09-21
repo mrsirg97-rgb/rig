@@ -250,11 +250,14 @@ function parseSchedDetail(l) {
   if (!l.startsWith('cron ')) return null;
   const parts = l.slice('cron '.length).split(' · ');
   if (parts.length < 3) return null;
-  const d = { cron: parts[0], at: '', model: '', cwd: '', busy: 'skip' };
+  const d = { cron: parts[0], at: '', model: '', cwd: '', busy: 'skip', timeout: '' };
   let base = 1;
   if (parts[1].startsWith('at ')) { d.at = parts[1].slice(3); base = 2; }
   d.model = parts[base];
-  if (parts[base + 1] === 'busy force') d.busy = 'force';
+  for (const p of parts.slice(base + 1, parts.length - 1)) {
+    if (p === 'busy force') d.busy = 'force';
+    else if (/^timeout \d+m$/.test(p)) d.timeout = p.slice('timeout '.length, -1);
+  }
   d.cwd = parts[parts.length - 1];
   return d;
 }
@@ -336,7 +339,7 @@ function schedConfirmEl(job, onDecision) {
 function schedUpdateFormEl(job, out, q, onSaved) {
   const f = el('div', 'schedup');
   f.appendChild(line('dim')).textContent = 'update ' + job.id + ' ' + job.name + ' — only what you change is sent';
-  const cur = job.fields || { cron: '', at: '', model: '', cwd: '', busy: 'skip' };
+  const cur = job.fields || { cron: '', at: '', model: '', cwd: '', busy: 'skip', timeout: '' };
   const cron = textInput('30 7 * * *  (five fields, or once)', true);
   cron.value = cur.cron;
   const at = textInput('2026-01-02T03:04:05Z', false);
@@ -356,6 +359,8 @@ function schedUpdateFormEl(job, out, q, onSaved) {
   busy.appendChild(new Option('skip', 'skip'));
   busy.appendChild(new Option('force', 'force'));
   busy.value = cur.busy;
+  const timeout = textInput('minutes per fire (blank: the 30-min default)');
+  timeout.value = cur.timeout;
   const diff = () => {
     const b = {};
     if (cron.value.trim() !== cur.cron) b.cron = cron.value.trim();
@@ -364,12 +369,13 @@ function schedUpdateFormEl(job, out, q, onSaved) {
     if (model.value.trim() !== cur.model) b.model = model.value.trim();
     if (cwdIn.value.trim() !== cur.cwd) b.cwd = cwdIn.value.trim();
     if (busy.value !== cur.busy) b.busy = busy.value;
+    if (timeout.value.trim() !== cur.timeout) b.timeout = timeout.value.trim() === '' ? -1 : Number(timeout.value.trim());
     return b;
   };
   const save = button('update', 'primary');
   const cancel = button('cancel', null);
   const sync = () => { save.disabled = Object.keys(diff()).length === 0; };
-  for (const i of [cron, at, prompt, model, cwdIn, busy]) {
+  for (const i of [cron, at, prompt, model, cwdIn, busy, timeout]) {
     i.addEventListener('input', () => { atRow.hidden = !atVisible(); sync(); });
     i.addEventListener('change', () => { atRow.hidden = !atVisible(); sync(); });
   }
@@ -384,6 +390,7 @@ function schedUpdateFormEl(job, out, q, onSaved) {
   f.appendChild(promptRow('model', model, G.dot));
   f.appendChild(promptRow('cwd', cwdIn, G.dot));
   f.appendChild(promptRow('busy', busy, G.dot));
+  f.appendChild(promptRow('timeout', timeout, G.dot));
   f.appendChild(act);
   cancel.addEventListener('click', (e) => {
     e.stopPropagation();

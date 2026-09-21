@@ -26,17 +26,24 @@ written before the store commit; drift is surfaced in list.
   naming the fleet's model and the job's own — unless the create carries
   `command` (a shell line run by `sh -c` in the job's cwd instead of a
   worker prompt), which refuses `model` and `busy` and needs neither.
+  `timeout` (minutes, 1..1440, refused outside the range by name) bounds
+  one fire and rides the create and update events; on update it is
+  optional — absent means unchanged, `-1` resets to the runner default.
 - `migration.go`: the one-time schema-1→2 migration: folds every
   `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
   `jN`), moves the old files aside as `<hash>.sqlite.migrated`, and is a
   no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
+  The schema-3 and schema-4 column adds (`command`, `timeout`) ride the
+  same function as presence-keyed `ALTER TABLE`s, since it runs on every open.
 - `runner.go`: the job runner (the worker spawn, bwrap jail, socket
   proxy); the spawn captures each stream to the first and last 128 KiB
   of a 256 KiB budget with a truncation marker, so a verbose worker
   cannot OOM the runner; the stored cwd is revalidated at fire time (the
   jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
-  with a recorded reason. A command job's fire skips the busy probe and
+  with a recorded reason. The spawn context is bounded by the row's own
+  `timeout`, else `RunOpts.Timeout`, else `DefaultRunTimeout` (30 min).
+  A command job's fire skips the busy probe and
   the jail: `sh -c` over the stored line with the process environment,
   in the job's cwd — the payload is the operator's own, the same trust
   the crontab line itself carries.
@@ -105,3 +112,7 @@ written before the store commit; drift is surfaced in list.
   create expresses it). The migration function runs on every open, so
   its steps key on presence — the command column on `pragma_table_info`,
   the legacy fold on the files — never on the stored version alone.
+- `timeout` is a job field, not a kind field (command jobs carry one
+  too), and the runner's clock reads the row at fire time: precedence is
+  the row's own timeout, then `RunOpts.Timeout`, then
+  `DefaultRunTimeout`; a NULL is "unbound by the job", never 0.

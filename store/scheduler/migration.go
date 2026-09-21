@@ -25,6 +25,11 @@ func Migration(home string, ct Crontab) func(*sql.Tx, int, int) (string, error) 
 				return "", err
 			}
 		}
+		if from > 0 && from < 4 {
+			if err := addTimeoutColumn(tx); err != nil {
+				return "", err
+			}
+		}
 		entries, err := os.ReadDir(home)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -177,6 +182,20 @@ func addCommandColumn(tx *sql.Tx) error {
 		return nil
 	}
 	if _, err := tx.Exec(`ALTER TABLE jobs ADD COLUMN command TEXT`); err != nil {
+		return fmt.Errorf("scheduler: migration: %w", err)
+	}
+	return nil
+}
+
+func addTimeoutColumn(tx *sql.Tx) error {
+	var n int64
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('jobs') WHERE name='timeout'`).Scan(&n); err != nil {
+		return fmt.Errorf("scheduler: migration: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := tx.Exec(`ALTER TABLE jobs ADD COLUMN timeout INTEGER`); err != nil {
 		return fmt.Errorf("scheduler: migration: %w", err)
 	}
 	return nil

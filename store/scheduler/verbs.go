@@ -30,6 +30,13 @@ type CreateInput struct {
 	Cwd     string
 	Model   string
 	Busy    string
+	Timeout int
+}
+
+const MaxTimeoutMinutes = 1440
+
+func timeoutErr(v int) error {
+	return schedErr("timeout must be 1..%d minutes (0 takes the runner default), got %d", MaxTimeoutMinutes, v)
 }
 
 func schedErr(format string, a ...any) error {
@@ -70,6 +77,9 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	}
 	if command != "" && in.Busy != "" {
 		return "", schedErr("command jobs need no busy policy")
+	}
+	if in.Timeout != 0 && (in.Timeout < 1 || in.Timeout > MaxTimeoutMinutes) {
+		return "", timeoutErr(in.Timeout)
 	}
 
 	jobCwd := in.Cwd
@@ -141,6 +151,9 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	}
 	if command != "" {
 		args["command"] = command
+	}
+	if in.Timeout > 0 {
+		args["timeout"] = in.Timeout
 	}
 	argsJSON, _ := json.Marshal(args)
 	seq, err := appendEvent(bound, f.maxSeq+1, "create", string(argsJSON), session)
@@ -281,6 +294,7 @@ type UpdateInput struct {
 	Cwd     string
 	Model   string
 	Busy    string
+	Timeout int
 }
 
 func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, runnerCmd string, now func() time.Time) (string, error) {
@@ -295,6 +309,11 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	cron := strings.TrimSpace(in.Cron)
 	at := in.At
 	busy := in.Busy
+	timeout := in.Timeout
+	timeoutReset := timeout == -1
+	if timeoutReset {
+		timeout = 0
+	}
 
 	var newCron, newAt string
 	switch {
@@ -338,11 +357,14 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if job.State == "removed" {
 		return "", schedErr("job '%s' is removed", in.ID)
 	}
-	if name == "" && prompt == "" && command == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" {
+	if name == "" && prompt == "" && command == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" && in.Timeout == 0 {
 		return "", schedErr("update needs a change")
 	}
 	if busy != "" && busy != "skip" && busy != "force" {
 		return "", schedErr("busy must be 'skip' or 'force', got '%s'", busy)
+	}
+	if timeout != 0 && (timeout < 1 || timeout > MaxTimeoutMinutes) {
+		return "", timeoutErr(timeout)
 	}
 	jobCommand := strings.TrimSpace(job.Command)
 	if command != "" && jobCommand == "" {
@@ -400,6 +422,11 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	}
 	if busy != "" {
 		args["busy"] = busy
+	}
+	if timeout != 0 {
+		args["timeout"] = timeout
+	} else if timeoutReset {
+		args["timeout"] = 0
 	}
 	if cadenceChanged {
 		args["cron"] = newCron

@@ -79,6 +79,9 @@ func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time)
 	if j.Command != "" {
 		payload = "command " + j.Command
 	}
+	if j.TimeoutSet {
+		payload += fmt.Sprintf(" · timeout %dm", j.Timeout)
+	}
 	line2 := fmt.Sprintf("  cron %s%s · %s%s · %s",
 		j.Cron,
 		func() string {
