@@ -3,10 +3,21 @@
 ## What it is
 
 Adapts `store/todo` to the loop's tool surface: session attribution from
-the threaded ctx; replies exactly as the store shapes them. The optional
-`project` field resolves a queue's scope (the repo, `store/scope`, or
-the cwd hash outside a repo) from the given path, defaulting to the
-session cwd; `~` is expanded at the `middleware/paths` boundary.
+the threaded ctx; replies exactly as the store shapes them. The adapter
+owns one question: *whose queue is this call*, answered in a fixed order
+and nowhere else —
+
+1. the `project` field, if given: it resolves the queue (repo scope via
+   `store/scope`, else the directory's own bucket) and binds the session
+   to it, saying so;
+2. else the session's recorded binding (`session_project`);
+3. else the launch directory, when it is a repo;
+4. else the launch directory's bucket, where a write refuses with the
+   rule and a read answers labelled.
+
+`~` is expanded at the `middleware/paths` boundary. Nothing is inferred
+from the paths a call names: a session that reads three repos keeps its
+plan in one queue.
 
 ## What it includes
 
@@ -20,10 +31,19 @@ session cwd; `~` is expanded at the `middleware/paths` boundary.
 
 - Replies are the store's shapes, verbatim: the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
-- `project` is resolved through `scope.Key`/`scope.Label`: a subdirectory
-  and a second worktree read the repo's one queue, a non-repo directory
-  its own; the empty reply names the queue it read (`(no tasks in
-  <label>'s queue)`, SPEC_CORE).
+- `project` is resolved through `store/todo.ProjectOf` (`scope.Key`/
+  `scope.Label` inside): a subdirectory and a second worktree reach the
+  repo's one queue, a non-repo directory its own bucket. Naming it binds
+  the session, so a session launched in `~` can work one repo's queue by
+  naming it once; `bind` with no project reports where the queue is and
+  touches nothing.
+- Outside a repo a bare write refuses (`todo: no project: … is not a
+  repo …`) rather than quietly filling a bucket every session on that
+  directory shares; reads stay open. A session with no id at all (`anon`)
+  binds nothing: the attribution is shared, so a binding under it would
+  leak one caller's project onto another's.
+- `prune` is the door for the done rows the summary keeps counting; the
+  log keeps them.
 - Complete on your own unclaimed pending task implicitly claims and
   completes (auto-started); foreign-claim and blocked-by-dependency
   refusals carry through unchanged.
@@ -31,7 +51,7 @@ session cwd; `~` is expanded at the `middleware/paths` boundary.
   actionable queue (done folds into the summary line), read all:true
   returns the history, and a transition echo is the affected row plus
   the summary; never the full queue. Create keeps the full (filtered)
-  queue because a replacement's point is the new state.
+  queue because after a merge the whole queue is the news.
 - The description is shape only (SPEC_STREAMLINE 1): the state machine,
   the claim rules, and the compaction rule ride the store's voices; the
   replies teach on contact, the standing context does not double-teach.

@@ -241,7 +241,10 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	}
 }
 
-func TestProjectReadsAndWritesAnotherQueue(t *testing.T) {
+// A project named on a call is not a one-off: it binds the session, whose
+// bare verbs then act there. The queue follows the work, not the
+// directory the process happened to start in.
+func TestProjectBindsTheSession(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db)
 	proj := t.TempDir()
@@ -252,22 +255,88 @@ func TestProjectReadsAndWritesAnotherQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create in project: %v", err)
 	}
-	if !strings.Contains(reply, "over there") {
+	if !strings.Contains(reply, "bound to") {
+		t.Fatalf("a named project must say it bound:\n%s", reply)
+	}
+	if !strings.Contains(reply, "[") || !strings.Contains(reply, "over there") {
 		t.Fatalf("create reply lost the task:\n%s", reply)
 	}
-	read, err := exec(t, tool, ctx, map[string]any{"action": "read", "project": proj})
+	read, err := exec(t, tool, ctx, map[string]any{"action": "read"})
 	if err != nil {
-		t.Fatalf("read project: %v", err)
+		t.Fatalf("read after a bind: %v", err)
 	}
 	if !strings.Contains(read, "over there") {
-		t.Fatalf("a project queue must read from anywhere:\n%s", read)
+		t.Fatalf("the bare verb must follow the binding:\n%s", read)
 	}
-	def, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	reported, err := exec(t, tool, ctx, map[string]any{"action": "bind"})
 	if err != nil {
-		t.Fatalf("read default: %v", err)
+		t.Fatalf("bind with no project reports: %v", err)
 	}
-	if strings.Contains(def, "over there") {
-		t.Fatalf("the default (cwd) queue must not see the project's:\n%s", def)
+	if !strings.Contains(reported, "(bound)") {
+		t.Fatalf("a bare bind must report the binding, got %q", reported)
+	}
+}
+
+// A session launched outside any repo has no project to write into: the
+// shared cwd bucket is a place, not a project, so a bare write refuses and
+// says what to do, while a read stays available and labels itself.
+func TestLaunchOutsideARepoRefusesWrites(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db)
+	t.Chdir(t.TempDir())
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "a chore"}},
+	}); err == nil || !strings.Contains(err.Error(), "no project") {
+		t.Fatalf("a bare write outside a repo must refuse naming the rule, got %v", err)
+	}
+	read, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("a read must stay available: %v", err)
+	}
+	if !strings.Contains(read, "not a repo") {
+		t.Fatalf("a non-repo queue must say so:\n%s", read)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "a chore"}}}); err == nil {
+		t.Fatal("the refusal must hold for every write verb")
+	}
+	home := t.TempDir()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "project": home,
+		"tasks": []any{map[string]any{"text": "a chore"}}}); err != nil {
+		t.Fatalf("naming a project lets the write land: %v", err)
+	}
+	started, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1"})
+	if err != nil {
+		t.Fatalf("a bare verb after the bind: %v", err)
+	}
+	if !strings.Contains(started, "t1 [~]") {
+		t.Fatalf("the bind must carry to the next verb:\n%s", started)
+	}
+}
+
+// Every reply says which queue it speaks for: a shared bucket is the one
+// place where two queues can look identical.
+func TestEveryReplyNamesTheQueue(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "name me"}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []map[string]any{
+		{"action": "read"},
+		{"action": "start", "id": "t1"},
+		{"action": "complete", "id": "t1"},
+	} {
+		out, err := exec(t, tool, ctx, args)
+		if err != nil {
+			t.Fatalf("%v: %v", args["action"], err)
+		}
+		if !strings.Contains(out, "[") || !strings.Contains(out, "] ") {
+			t.Fatalf("the reply for %v must name the queue:\n%s", args["action"], out)
+		}
 	}
 }
 

@@ -34,9 +34,15 @@ const anon = "anon"
 // on arrival.
 const StaleClaimAfter = 24 * time.Hour
 
+// Project is one queue's identity: Key partitions the log, Label names
+// the queue in every reply so a reader can never mistake whose queue a
+// line belongs to. OutsideRepo marks a bucket minted from a directory
+// that is not a repo (the launch-cwd hash): shared by every session
+// started there, it is a place, not a project, and the reply says so.
 type Project struct {
-	Key   string
-	Label string
+	Key         string
+	Label       string
+	OutsideRepo bool
 }
 
 type CreateItem struct {
@@ -77,6 +83,8 @@ type folded struct {
 	maxPos     int
 	maxIdNum   int
 	globalSeq  int64
+	label      string
+	notRepo    bool
 }
 
 func newFolded() *folded {
@@ -142,6 +150,8 @@ func (f *folded) apply(e eventRow) {
 		f.applyVerb(e)
 	case "move":
 		f.applyMoveEvent(e)
+	case "prune":
+		f.applyPrune()
 	case "compact":
 		f.applyCompactEvent(e)
 	}
@@ -295,7 +305,7 @@ func (f *folded) applyVerb(e eventRow) {
 	ts.updatedTs = e.ts
 }
 
-func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems []string) {
+func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fresh int, problems []string) {
 	planned := map[string]*taskState{}
 	type depRef struct {
 		ts      *taskState
@@ -312,6 +322,7 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems 
 			continue
 		}
 		seen[raw.text] = true
+		given++
 		ex := f.byText(raw.text)
 		if ex != nil {
 			planned[raw.text] = ex
@@ -320,6 +331,7 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems 
 			}
 			continue
 		}
+		fresh++
 		ts := &taskState{text: raw.text, status: statusPending}
 		ts.id = f.mintID()
 		ts.pos = f.nextPos()
@@ -350,7 +362,7 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, problems 
 	if path := cyclePath(f, planned); path != nil {
 		problems = append(problems, "dependencies would form a cycle: "+strings.Join(path, " -> "))
 	}
-	return modified, problems
+	return modified, given, fresh, problems
 }
 
 func addOnce(list *[]string, s string) {
@@ -527,6 +539,7 @@ func summaryOf(f *folded) string {
 		}
 	}
 	var b strings.Builder
+	b.WriteString(scopeTag(f))
 	fmt.Fprintf(&b, "%d/%d done", done, len(ordered))
 	if nextID != "" {
 		fmt.Fprintf(&b, " \u00b7 next: %s", nextID)
@@ -535,6 +548,20 @@ func summaryOf(f *folded) string {
 		fmt.Fprintf(&b, " \u00b7 %d failed", failed)
 	}
 	return b.String()
+}
+
+// scopeTag names the queue a reply speaks about. Every summary carries
+// it: a queue is addressed by project, and a session launched outside a
+// repo can be looking at any of several buckets, so a reply that could
+// be read two ways carries the word that picks one (SPEC_CORE).
+func scopeTag(f *folded) string {
+	if f.label == "" {
+		return ""
+	}
+	if f.notRepo {
+		return "[" + f.label + " (not a repo)] "
+	}
+	return "[" + f.label + "] "
 }
 
 func lineOf(f *folded, ts *taskState, session string) string {
@@ -549,6 +576,9 @@ func lineOf(f *folded, ts *taskState, session string) string {
 func renderQueue(f *folded, session string, all bool, label string) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
+		if f.notRepo && label != "" {
+			return fmt.Sprintf("(no tasks in %s's queue, not a repo)", label)
+		}
 		return fmt.Sprintf("(no tasks in %s's queue)", label)
 	}
 	var b strings.Builder
@@ -577,6 +607,11 @@ func echoTask(f *folded, session, id, note string) string {
 	return b.String()
 }
 
+// Create folds tasks into the queue: an item whose text matches a row
+// already in the queue keeps that row (id, status, position), a new text
+// mints one. It is a merge on the text natural key, not a wipe: only the
+// empty list clears. That is what lets a later session depend on an
+// earlier task, and what makes the note's counts the whole story.
 func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, session string) (string, error) {
 	if session == "" {
 		session = anon
@@ -586,12 +621,12 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		if e != nil {
 			return "", e
 		}
-		modified, problems := planCreate(f, items)
+		modified, given, fresh, problems := planCreate(f, items)
 		if len(problems) != 0 {
 			sort.Strings(problems)
 			return "", fmt.Errorf("todo: %s", strings.Join(problems, "; "))
 		}
-		note := "queue replaced with " + strconv.Itoa(len(items)) + " tasks"
+		note := mergeNote(given, fresh)
 		if len(items) == 0 {
 			f.tasks = map[string]*taskState{}
 			note = "queue cleared"
@@ -610,6 +645,21 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		}
 		return withFoot(replyText(f, session, note, false, p.Label), foot), nil
 	})
+}
+
+// mergeNote says what a create did in the numbers that matter: a merge
+// that reports "replaced" teaches the wrong model of the queue.
+func mergeNote(given, fresh int) string {
+	switch {
+	case given == 0:
+		return "queue unchanged: no task text given"
+	case fresh == 0:
+		return "queue merged: nothing new"
+	case given-fresh == 0:
+		return "queue merged: " + strconv.Itoa(fresh) + " new"
+	default:
+		return "queue merged: " + strconv.Itoa(fresh) + " new, " + strconv.Itoa(given-fresh) + " already there"
+	}
 }
 
 func Start(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
@@ -642,7 +692,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string) (
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", unknownTask(id)
+			return "", unknownTask(p, id)
 		}
 		switch ts.status {
 		case statusDone:
@@ -696,7 +746,7 @@ func Fail(ctx context.Context, db store.DB, p Project, id, session string) (stri
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", unknownTask(id)
+			return "", unknownTask(p, id)
 		}
 		var voice string
 		switch ts.status {
@@ -754,7 +804,7 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", unknownTask(id)
+			return "", unknownTask(p, id)
 		}
 		if pos < 1 || pos > len(f.tasks) {
 			return "", fmt.Errorf("move position for '%s' must be between 1 and %d, got %d", id, len(f.tasks), pos)
@@ -792,7 +842,7 @@ func Release(ctx context.Context, db store.DB, p Project, id, session string) (s
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", unknownTask(id)
+			return "", unknownTask(p, id)
 		}
 		switch ts.status {
 		case statusDone:
@@ -880,6 +930,52 @@ func Reap(ctx context.Context, db store.DB, p Project, ended []string, session s
 	})
 }
 
+// Prune drops the done rows from the projection. The log keeps every
+// event: prune is itself an event, so a replay drops the same rows and
+// the queue's history stays reconstructable. Failed rows stay, they
+// still ask for a retry. Without this door a long-lived queue's summary
+// counts work that finished weeks ago, and a shared bucket inherits
+// every past session's finished list. An idle prune appends nothing.
+func Prune(ctx context.Context, db store.DB, p Project, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
+		if e != nil {
+			return "", e
+		}
+		n := 0
+		for _, ts := range f.tasks {
+			if ts.status == statusDone {
+				n++
+			}
+		}
+		if n == 0 {
+			return withFoot(replyText(f, session, "nothing to prune (no done tasks)", false, p.Label), foot), nil
+		}
+		seq := f.nextSeq()
+		args, _ := json.Marshal(map[string]any{"done": n})
+		if e := appendEvent(bound, seq, "prune", string(args), session, p.Key); e != nil {
+			return "", e
+		}
+		f.applyPrune()
+		if e := rewrite(tx, f, p.Key); e != nil {
+			return "", e
+		}
+		note := "pruned " + strconv.Itoa(n) + " done task" + claimPlural(n)
+		return withFoot(replyText(f, session, note, false, p.Label), foot), nil
+	})
+}
+
+func (f *folded) applyPrune() {
+	for id, ts := range f.tasks {
+		if ts.status == statusDone {
+			delete(f.tasks, id)
+		}
+	}
+}
+
 func staleClaim(ts *taskState, now time.Time) bool {
 	t, err := time.Parse(time.RFC3339, ts.updatedTs)
 	if err != nil {
@@ -933,7 +1029,7 @@ func verb(
 		}
 		ts, ok := f.tasks[id]
 		if !ok {
-			return "", unknownTask(id)
+			return "", unknownTask(p, id)
 		}
 		ok, voice := check(f, ts)
 		if !ok {
@@ -1124,8 +1220,18 @@ func (f *folded) applyCompactEvent(e eventRow) {
 	f.compactSeq = e.seq
 }
 
-func unknownTask(id string) error {
-	return fmt.Errorf("no task '%s' (ids are minted by the tool; copy from a reply)", id)
+// unknownTask names the queue it looked in: ids are per scope, so an id
+// copied from another project's reply is the likeliest reason it is
+// missing here, and the refusal should say where it failed to match.
+func unknownTask(p Project, id string) error {
+	where := p.Label
+	if where == "" {
+		where = "this queue"
+	}
+	if p.OutsideRepo {
+		where += " (not a repo)"
+	}
+	return fmt.Errorf("no task '%s' in %s (ids are minted by the tool; copy from a reply)", id, where)
 }
 
 func withFoot(reply, foot string) string {
@@ -1145,6 +1251,7 @@ func mutate(ctx context.Context, db store.DB, p Project, act func(bound context.
 	if err != nil {
 		return "", err
 	}
+	f.label, f.notRepo = p.Label, p.OutsideRepo
 	reply, err := act(bound, tx, f)
 	if err != nil {
 		return "", err

@@ -18,7 +18,6 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/core"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/store/scope"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
@@ -795,5 +794,5 @@ func messageJSONOf(m core.Message) messageJSON {
 }
 
 func todoProject(cwd string) todostore.Project {
-	return todostore.Project{Key: scope.Key(cwd), Label: scope.Label(cwd)}
+	return todostore.ProjectOf(cwd)
 }

@@ -708,6 +708,22 @@ func sessionFor(resumeID string, resume func(id string) (*core.Session, error)) 
 // (a SIGKILL'd session leaves its row open; its claims age out through
 // Reap's staleness arm). The note names what was freed; an idle reap
 // returns "".
+// sessionQueue is the queue a session works in: the one it bound (a
+// resume from another directory keeps working in the same queue instead
+// of re-deriving one from where the process started), else the launch
+// directory's. A failed binding read falls back to the launch directory
+// and says so: the reap must still run.
+func sessionQueue(ctx context.Context, tdb store.DB, cwd, session string) (todostore.Project, error) {
+	b, ok, err := todostore.BindingOf(ctx, tdb, session)
+	if err != nil {
+		return todostore.ProjectOf(cwd), err
+	}
+	if ok {
+		return b.Project(), nil
+	}
+	return todostore.ProjectOf(cwd), nil
+}
+
 func reapClaims(ctx context.Context, sdb, tdb store.DB, cwd string, proj todostore.Project, session string) (string, error) {
 	rows, err := state.ListSessions(ctx, sdb, state.ListCap)
 	if err != nil {
@@ -1213,7 +1229,11 @@ func main() {
 	}); ok {
 		r.askDoor = a.Ask
 	}
-	if note, e := reapClaims(context.Background(), sdb, tdb, cwd, todostore.Project{Key: scope.Key(cwd), Label: scope.Label(cwd)}, session.ID); e != nil {
+	proj, perr := sessionQueue(context.Background(), tdb, cwd, session.ID)
+	if perr != nil {
+		fmt.Fprintln(os.Stderr, "rig: todo queue:", perr)
+	}
+	if note, e := reapClaims(context.Background(), sdb, tdb, cwd, proj, session.ID); e != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo reap:", e)
 	} else if note != "" {
 		fmt.Fprintln(os.Stderr, "rig: todo:", note)

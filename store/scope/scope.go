@@ -58,3 +58,14 @@ func Label(cwd string) string {
 	}
 	return label
 }
+
+// InRepo reports whether cwd resolves to a git repository: the common
+// dir differs from the cwd itself (or the cwd is the common dir of a
+// bare layout and git answers). Outside a repo the scope is the cwd hash
+// and callers say so out loud.
+func InRepo(cwd string) bool {
+	if cwd == "" {
+		return false
+	}
+	return Path(cwd) != cwd
+}

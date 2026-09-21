@@ -26,11 +26,18 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 
 - `todo.go`: the store: operations, replay, position minting, the DAG
   validation, per-scope folds and one shared event-log sequence.
+- `binding.go`: which queue a session works in. `ProjectOf(dir)` mints a
+  `Project` from a directory (abs first: one place must not have two
+  bucket keys), `Bind`/`BindingOf` record and read a session's binding in
+  `session_project`, `RealSession` says whether a session can hold one.
+  The binding is mutable state beside the log: the log decides what a
+  queue holds, the binding only which queue a call touches.
 - `path.go`: `FilePath(home)`, the store's file: `<home>/todo/todo.sqlite`.
 - `migration.go`: the one-time 1→2 migration: folds the legacy
   per-cwd stores into `todo.sqlite` (scope = the file's hash) and rem's
   lazy re-scope of the launch cwd's hash to the repo scope.
-- `metadata/metadata.go`: hand-written metadata (plus `extra.sql`).
+- `metadata/metadata.go`: hand-written metadata (plus `extra.sql`, which
+  now also carries the `session_project` table).
 
 ## How it is consumed
 
@@ -58,18 +65,29 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
   events; the note names task and owner, silent when idle.
 - The read contract is lean (SPEC_TODO_LEAN): Read renders the
   actionable queue; done rows fold into the unconditional summary line
-  `(N/M done · next: tN · K failed)`, never "(no tasks in <label>'s queue)"
-  on an all-done queue; ReadAll returns the history; a transition echo is
-  the affected row plus the summary. Create keeps the full (filtered)
-  queue: a replacement's point is the new state.
+  `(<label>] N/M done · next: tN · K failed)`, never "(no tasks in
+  <label>'s queue)" on an all-done queue; ReadAll returns the history; a
+  transition echo is the affected row plus the summary. Create keeps the
+  full (filtered) queue: after a merge the whole queue is the news.
 - One store, every row scoped: `FilePath(home)` is the one `todo.sqlite`,
-  and every operation takes a `Project{Key, Label}`; the queue's
-  identity (the repo's scope, `store/scope`, or the cwd hash outside a
-  repo) and its display label. A bare read/create resolves the key and
-  label from the session cwd; the tool's `project` field and the
-  `todo project <path>` command resolve another queue. Ids stay `tN` per
+  and every operation takes a `Project{Key, Label, OutsideRepo}`: the
+  queue's identity (the repo's scope, `store/scope`, or the cwd hash
+  outside a repo), its display label, and whether that hash is a bucket
+  rather than a project. The store does not decide which project a call
+  means; the caller resolves it (the tool holds the order, the
+  `session_project` table holds a session's answer). Ids stay `tN` per
   scope; minted event seq is one sequence across scopes; compact folds
   and stale footers are per scope.
+- Every summary names its queue (`[rig] 2/5 done · next: t3`, or
+  `[ng (not a repo)]` for a bucket), and the empty reply says so too: a
+  reply that could be read as two different queues carries the word that
+  picks one (SPEC_CORE).
+- `Prune` drops the done rows and is itself an event, so a replay drops
+  the same rows and a later compact snapshot carries only what survived;
+  failed rows stay (they still ask for a retry) and an idle prune appends
+  nothing. The empty create stays the one destructive verb; `Create` is
+  otherwise a merge on the text natural key, and its note counts the
+  merge (`queue merged: 2 new, 1 already there`), never claims a wipe.
 - Migration (SPEC_STATE §todo): folds every `<12-hex>.sqlite` in the
   todo dir into `todo.sqlite` with `scope = <that hash>` verbatim, then
   re-scopes the launch cwd's hash to the repo scope once (the

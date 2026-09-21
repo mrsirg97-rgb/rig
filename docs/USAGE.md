@@ -58,10 +58,12 @@ is a loud line naming the known set, never silently a prompt.
   lists the disabled zone, `disable <name>` and `enable <name>` move
   a plugin across it, `reload` re-registers from disk (the `plugins`
   tool's command door), `create <text>` queues the authoring prompt.
-- `/todo project <path>`, `/rem project <path>`: a one-off read of
-  another project's queue or memories: the path resolves to a repo
-  identity (worktrees share), and writes stay the bare verbs'
-  (`specs/SPEC_STATE.md`).
+- `/todo project [path]`: the queue's binding door. With a path it binds
+  this session to that project's queue and shows it; bare, it says where
+  the queue is. `todo <path> <verb>` binds and acts in one line, and
+  `/todo prune` drops the done rows (`specs/SPEC_STATE.md`).
+- `/rem project <path>`: a one-off read or write of another project's
+  memories: the path resolves to a repo identity (worktrees share).
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it. The summary lands in the

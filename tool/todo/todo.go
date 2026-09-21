@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/scope"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
 )
 
@@ -17,12 +17,12 @@ const schemaJSON = `{
 	"required": ["action"],
 	"properties": {
 		"action": {
-			"enum": ["create", "start", "complete", "fail", "release", "retry", "move", "read"],
+			"enum": ["create", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read"],
 			"description": "The action to perform. Required."
 		},
 		"tasks": {
 			"type": "array",
-			"description": "Full replacement queue. Required when action='create'.",
+			"description": "The queue as given: create merges by text, [] clears. Required when action='create'.",
 			"items": {
 				"type": "object",
 				"required": ["text"],
@@ -53,25 +53,37 @@ const schemaJSON = `{
 		},
 		"project": {
 			"type": "string",
-			"description": "the queue's project (default: this directory's repo)"
+			"description": "the queue's project as a directory: it binds the session, whose later bare verbs then act there (worktree-safe; ~ expands)"
 		}
 	}
 }`
 
-const description = "the task queue for this working directory. Guidelines: any job of three or more steps -> " +
+const description = "the task queue for the session's project. Guidelines: any job of three or more steps -> " +
 	"create before the first edit (tasks: [{text, dependsOn?}]), start before working, complete or fail on " +
-	"finish; read shows the actionable queue (all:true for history); move reorders by a 1-based pos. Reply: " +
-	"the affected row and the summary; a refusal names the rule. Ids (tN) are minted by the tool — copy, never invent."
+	"finish; read shows the actionable queue (all:true for history); move reorders by a 1-based pos; prune " +
+	"drops the done rows. Every reply names the queue it acted on ([rig]); name project when the work is in " +
+	"a repo you did not start in, which binds the session. Reply: the affected row and the summary; a refusal " +
+	"names the rule. Ids (tN) are minted by the tool — copy, never invent."
+
+// Where a queue's identity came from, named so the tool can tell a write
+// it must refuse (a bucket minted from a directory that is not a repo)
+// from one it may take silently.
+const (
+	srcProject = "project"
+	srcBinding = "binding"
+	srcCwd     = "cwd"
+	srcHost    = "host"
+)
 
 type adapter struct{ db store.DB }
 
 func New(db store.DB) core.Tool { return adapter{db: db} }
 
-func (a adapter) Name() string        { return "todo" }
+func (a adapter) Name() string { return "todo" }
+
 func (a adapter) Description() string { return description }
-func (a adapter) Schema() json.RawMessage {
-	return json.RawMessage(schemaJSON)
-}
+
+func (a adapter) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
 type given struct {
 	Action  string           `json:"action"`
@@ -91,13 +103,28 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if s, ok := core.SessionFrom(ctx); ok && s != nil {
 		session = s.ID
 	}
-	cwd := ""
-	if g.Project != nil && *g.Project != "" {
-		cwd = *g.Project
-	} else if wd, err := os.Getwd(); err == nil {
-		cwd = wd
+	if g.Action == "bind" && (g.Project == nil || *g.Project == "") {
+		return a.report(ctx, session)
 	}
-	p := todostore.Project{Key: scope.Key(cwd), Label: scope.Label(cwd)}
+	p, note, source, err := a.resolve(ctx, g, session)
+	if err != nil {
+		return "", err
+	}
+	if source == srcHost && isWrite(g.Action) {
+		wd, _ := os.Getwd()
+		return "", fmt.Errorf("todo: no project: %s is not a repo, so its queue is shared by every session started there (project: \"~/Projects/x\" binds this session, \"~\" claims this bucket)", wd)
+	}
+	reply, err := a.dispatch(ctx, g, p, session)
+	if err != nil {
+		return reply, err
+	}
+	if note == "" {
+		return reply, nil
+	}
+	return "\u2192 " + note + "\n" + reply, nil
+}
+
+func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, session string) (string, error) {
 	switch g.Action {
 	case "":
 		return "", fmt.Errorf("todo: action required")
@@ -107,6 +134,10 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			return "", err
 		}
 		return todostore.Create(ctx, a.db, p, items, session)
+	case "bind":
+		return todostore.Read(ctx, a.db, p, session)
+	case "prune":
+		return todostore.Prune(ctx, a.db, p, session)
 	case "start", "complete", "fail", "release", "retry":
 		if g.ID == "" {
 			return "", fmt.Errorf("action '%s' requires id", g.Action)
@@ -138,6 +169,86 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		return todostore.Read(ctx, a.db, p, session)
 	default:
 		return "", fmt.Errorf("todo: unknown action %q", g.Action)
+	}
+}
+
+// resolve answers "whose queue is this", in one order everywhere: the
+// project named on the call (which binds the session), else the session's
+// binding, else the launch directory when it is a repo, else the shared
+// bucket of a directory that is not one. Nothing is inferred from the
+// files a call touches: a queue belongs to the plan, not to the last path
+// read, so a session that dips into another repo keeps its queue where it
+// put it.
+func (a adapter) resolve(ctx context.Context, g given, session string) (todostore.Project, string, string, error) {
+	if raw := g.Project; raw != nil && *raw != "" {
+		dir := paths.Expand(*raw)
+		st, err := os.Stat(dir)
+		if err != nil || !st.IsDir() {
+			return todostore.Project{}, "", "", fmt.Errorf("todo: no such project directory: %s", dir)
+		}
+		p := todostore.ProjectOf(dir)
+		prev, had, err := todostore.BindingOf(ctx, a.db, session)
+		if err != nil {
+			return todostore.Project{}, "", "", err
+		}
+		if err := todostore.Bind(ctx, a.db, todostore.Binding{
+			Session: session, Scope: p.Key, Label: p.Label, OutsideRepo: p.OutsideRepo,
+		}); err != nil {
+			return todostore.Project{}, "", "", err
+		}
+		note := ""
+		switch {
+		case !todostore.RealSession(session):
+		case !had:
+			note = "bound to " + p.Label
+		case prev.Scope != p.Key:
+			note = "bound to " + p.Label + " (was " + prev.Label + ")"
+		}
+		return p, note, srcProject, nil
+	}
+	if todostore.RealSession(session) {
+		b, ok, err := todostore.BindingOf(ctx, a.db, session)
+		if err != nil {
+			return todostore.Project{}, "", "", err
+		}
+		if ok {
+			return b.Project(), "", srcBinding, nil
+		}
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return todostore.Project{}, "", "", fmt.Errorf("todo: no working directory: %v", err)
+	}
+	p := todostore.ProjectOf(wd)
+	if p.OutsideRepo {
+		return p, "", srcHost, nil
+	}
+	return p, "", srcCwd, nil
+}
+
+// report answers "whose queue am I in" without touching it: what a bare
+// `todo project` line shows.
+func (a adapter) report(ctx context.Context, session string) (string, error) {
+	p, _, source, err := a.resolve(ctx, given{}, session)
+	if err != nil {
+		return "", err
+	}
+	switch source {
+	case srcBinding:
+		return "queue: " + p.Label + " (bound)", nil
+	case srcCwd:
+		return "queue: " + p.Label + " (this directory's repo; not bound: name project)", nil
+	default:
+		return "queue: " + p.Label + " (this directory is not a repo; not bound: todo project <path>)", nil
+	}
+}
+
+func isWrite(action string) bool {
+	switch action {
+	case "create", "start", "complete", "fail", "release", "retry", "move", "prune":
+		return true
+	default:
+		return false
 	}
 }
 

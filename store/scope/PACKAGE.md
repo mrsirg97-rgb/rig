@@ -16,8 +16,10 @@ directory keeps its identity; a subdirectory reads the repo's queue.
 
 - `scope.go`: `ShortHash`, `Path` (the memoized git probe with the
   relative-output resolution and the echoed-option fallback), `Key`
-  (`ShortHash(Path)`), and `Label` (the display name: `filepath.Base`,
-  `"."`/`""` → `root`).
+  (`ShortHash(Path)`), `Label` (the display name: `filepath.Base`,
+  `"."`/`""` → `root`), and `InRepo` (whether a directory resolved to a
+  repo at all, so a caller can say "this is a bucket, not a project"
+  instead of implying it).
 
 ## How it is consumed
 

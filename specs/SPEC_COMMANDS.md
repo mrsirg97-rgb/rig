@@ -624,25 +624,41 @@ scheduler runs <id> [n]
   naming the shape: `scheduler: create needs name, prompt, and a cron
   (5-field, or 'once' <ISO>)`. The store still validates the cron it
   gets; the adapter parses, the store teaches.
-- `todo create <text…>` replaces the whole queue with the one task
-  (create's semantics; the line is for the one-task case). A bare
+- `todo create <text…>` folds one task into the queue (create merges by
+  text, SPEC_STATE; the line is for the one-task case). A bare
   `todo create` passes `{"action":"create"}` to the tool, whose refusal
   (`action 'create' requires tasks: array of {text}`) teaches that the
-  queue is replaced; clearing it (`tasks: []`) is a model-side call:
-  the line shape has no spelling for an empty array, and that is fine.
-- `todo project <path>` is a one-off read of that project's queue: the
-  path resolves through the same scope law as the model's `project` tool
-  field (SPEC_STATE), writes stay the model's or the session's own bare
-  verbs. An unknown path's empty queue renders `(no tasks in <label>'s
-  queue)`; the empty reply names the scope it read (SPEC_CORE). A bare
-  `todo project` refuses naming the shape.
+  line needs text; clearing the queue (`tasks: []`) stays a model-side
+  call: the line shape has no spelling for an empty array, and that is
+  fine.
+- `todo project [path]` is the binding door (SPEC_STATE's binding
+  decision). With a path it binds the session to that project's queue and
+  renders it — `→ bound to <label>`, or `→ bound to <label> (was <old>)`
+  when the binding moves — and with nothing it reports where the queue is
+  and touches nothing (`queue: <label> (bound)`). A path that is not a
+  directory refuses `todo: no such project directory: <path>`; an empty
+  queue renders `(no tasks in <label>'s queue)`, with `, not a repo` on a
+  bucket minted from a directory that is not one: the empty reply names
+  the scope it read (SPEC_CORE).
+- `todo <path> <verb…>` is the same door in the other order: a first
+  field that is not one of the tool's verbs is the project, and what
+  follows parses by the verb rules below (`todo ~/Projects/rig start t3`,
+  `todo ~/ledger create tidy the inbox`). It binds, then acts, so the
+  bare verbs after it stay in that queue. One path field only; a second
+  is the verb's own argument, and the verb's own refusals still fire.
+- `todo prune` drops the queue's done rows (SPEC_STATE); it takes no
+  args, and an idle prune says `nothing to prune` rather than pretending.
 - the int slot is parse-checked: `todo start t1 extra` →
   `todo: start takes an id (todo start <id>)`; `scheduler runs j2 x` →
   `scheduler: "x": not an integer (scheduler runs <id> [n])`.
 - a bare `todo` / `scheduler` passes `{"action":""}` to the tool: the
   tool's own `action required` / `unknown action` voice. No new verbs:
   the action vocabulary is the tool's schema, and a line the adapter
-  cannot place is refused with the shape, not guessed.
+  cannot place is refused with the shape, not guessed. The one exception
+  is named (1.3.3): a leading field that is not a verb reads as a path,
+  so a mistyped verb arrives as `no such project directory: comple` —
+  the same mistake, named by what the operator typed rather than by our
+  guess at what they meant.
 
 The tools come from `Env.Tools`; the same instances the kernel
 executes (the root puts the live `todoTool` / `schedTool` in), so a

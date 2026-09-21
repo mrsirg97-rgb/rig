@@ -127,7 +127,7 @@ func TestReplayingCreateWithIdenticalTextsDoesNotDuplicateIds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(reply, "[") != 2 {
+	if strings.Count(reply, "\n  t") != 2 {
 		t.Errorf("expected two rows, got:\n%s", reply)
 	}
 }
@@ -1839,5 +1839,145 @@ func TestClaimsAndDriftArePerScope(t *testing.T) {
 	}
 	if _, err := todostore.Start(ctx, db, pA, "t1", sessB); err == nil {
 		t.Fatal("a foreign session of another scope must not take scope a's claim")
+	}
+}
+
+func TestPruneDropsDoneRowsAndKeepsTheRest(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Complete(ctx, db, p, "t2", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := todostore.Prune(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if !strings.Contains(reply, "pruned 2 done tasks") || strings.Contains(reply, "[x]") {
+		t.Fatalf("prune must drop the done rows and say so:\n%s", reply)
+	}
+	all, err := todostore.ReadAll(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(all, " a") || strings.Contains(all, " b") || !strings.Contains(all, " c") {
+		t.Fatalf("the pruned rows must be gone and the pending one kept:\n%s", all)
+	}
+	if n := rawEventOps(t, db, "prune"); n != 1 {
+		t.Fatalf("prune is one event in the log, got %d", n)
+	}
+}
+
+func TestPruneOnAnIdleQueueAppendsNothing(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "a"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := todostore.Prune(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatalf("an idle prune must not fail: %v", err)
+	}
+	if !strings.Contains(reply, "nothing to prune") {
+		t.Fatalf("an idle prune must say so, got %q", reply)
+	}
+	if n := rawEventOps(t, db, "prune"); n != 0 {
+		t.Fatalf("an idle prune appends no event, got %d", n)
+	}
+}
+
+func TestPruneKeepsFailedRows(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "a"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Start(ctx, db, p, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Fail(ctx, db, p, "t1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Prune(ctx, db, p, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	all, err := todostore.ReadAll(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(all, "[!]") {
+		t.Fatalf("a failed row still asks for a retry:\n%s", all)
+	}
+}
+
+func TestSummaryNamesTheQueueAndSaysWhenItIsNotARepo(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	repo := todostore.Project{Key: "rigkey", Label: "rig"}
+	if _, err := todostore.Create(ctx, db, repo, []item{{Text: "a"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := todostore.Read(ctx, db, repo, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out, "[rig] ") {
+		t.Fatalf("the summary must lead with the queue's name, got %q", out)
+	}
+	host := todostore.Project{Key: "homekey", Label: "ng", OutsideRepo: true}
+	if _, err := todostore.Create(ctx, db, host, []item{{Text: "a"}}, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	out, err = todostore.Read(ctx, db, host, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out, "[ng (not a repo)] ") {
+		t.Fatalf("a cwd bucket must say it is not a repo, got %q", out)
+	}
+	if _, err := todostore.Prune(ctx, db, host, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := todostore.Read(ctx, db, todostore.Project{Key: "other", Label: "zz", OutsideRepo: true}, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(empty, "(no tasks in zz's queue, not a repo)") {
+		t.Fatalf("an empty reply names its scope and its kind, got %q", empty)
+	}
+}
+
+func rawEventOps(t *testing.T, db store.DB, op string) int {
+	t.Helper()
+	_, tx, err := db.Tx(context.Background())
+	if err != nil {
+		t.Fatalf("tx: %v", err)
+	}
+	defer tx.Rollback()
+	var n int
+	if err := tx.QueryRow("SELECT count(*) FROM events WHERE op = ?", op).Scan(&n); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	return n
+}
+
+func TestUnknownIdNamesTheQueueItMissed(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	repo := todostore.Project{Key: "rigkey", Label: "rig"}
+	if _, err := todostore.Start(ctx, db, repo, "t7", "s1"); err == nil {
+		t.Fatal("an unknown id must refuse")
+	} else if !strings.Contains(err.Error(), "in rig") {
+		t.Fatalf("the refusal names the queue it looked in: %v", err)
+	}
+	host := todostore.Project{Key: "homekey", Label: "ng", OutsideRepo: true}
+	if _, err := todostore.Complete(ctx, db, host, "t7", "s1"); err == nil ||
+		!strings.Contains(err.Error(), "in ng (not a repo)") {
+		t.Fatalf("a bucket's refusal says so: %v", err)
 	}
 }

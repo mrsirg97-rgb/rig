@@ -56,10 +56,13 @@ the leaf.
   only.
 - **todo/scheduler**: a thin shared adapter over one of the model's own
   tools: parse the line into the tool's JSON args, call `Exec` with the
-  session threaded, return the reply verbatim. `todo project <path>` is
-  a one-off read of another project's queue (the path resolves through
-  `store/scope`); writes stay the model's or the session's own bare
-  verbs, and an unknown path's empty queue names the scope it read.
+  session threaded, return the reply verbatim. `todo project [path]` is
+  the binding door (SPEC_STATE): with a path it binds this session to
+  that project's queue and renders it, bare it reports where the queue
+  is; `todo <path> <verb…>` binds and acts in one line, and `todo prune`
+  drops the done rows. A leading field that is not one of the tool's
+  verbs reads as a path, so a mistyped verb refuses as a missing
+  directory rather than as an unknown action.
   With no fleet the `scheduler` seam is absent, and the command
   refuses by name (`no workers configured`, the file's path in the
   voice) instead of falling to the generic no-tool line.
