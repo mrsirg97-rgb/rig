@@ -621,8 +621,8 @@ check, the body cap), and replying in the store's voice, verbatim:
   already removed), a pause of a paused, a pause of a done.
 - `POST /api/scheduler/update {id, …}`: `scheduler.Update` with the
   same partial fields the tool carries (any of `prompt`, `cron`/`at`,
-  `model`, `cwd`, `busy`, `name`) and the runner command the root
-  wired (as the create). The store's refusals ride through: an
+  `model`, `cwd`, `busy`, `timeout`, `name`) and the runner command the
+  root wired (as the create). The store's refusals ride through: an
   unknown id, a removed id, no fields (the verb's "update needs a
   change"), the cadence's exclusivity.
 - `GET /api/scheduler/runs?id=jN&n=`: the audit trail, `scheduler.
@@ -636,7 +636,8 @@ The list re-reads after a move; no page reload.
 The phone rule: every job row carries its controls beside it; pause
 or resume by state (a done row neither), remove, and runs, and an
 update form that opens in place with the row's current fields
-(cadence, prompt, model, cwd, busy; the row carries no prompt, so an
+(cadence, prompt, model, cwd, busy, timeout — a cleared timeout
+submits the reset; the row carries no prompt, so an
 empty one is no change) and submits only what changed. Remove asks
 once, in-page (a confirm and a keep, no reload). Below 720px the
 row's controls stay the horizontal flex row (wrapping when the width

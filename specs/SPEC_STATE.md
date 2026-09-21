@@ -383,7 +383,8 @@ post-merge corrections)
   runner never writes the projection.
 - `jobs`: id (primary, `jN`), name (unique among live jobs only, enforced in
   Go, no unique index), prompt, cron, at (nullable), cwd (never empty;
-  defaults to the creating session's cwd), model, busy (skip|force), state
+  defaults to the creating session's cwd), model, busy (skip|force),
+  timeout (nullable minutes, 1..1440), state
   (active|paused|done|removed), last_status (ok|fail|skip, nullable),
   last_ts, last_exit, created_seq, updated_seq.
 - `runs`: seq (primary), job_id (link jobs), started_at, ended_at, status,
@@ -397,7 +398,7 @@ post-merge corrections)
   needs `-p` one-shot mode (landed with the scheduler) and llama-swap's
   `/running` and `/v1/models` for the busy policy, unchanged.
 - `update` is the verb that changes a live job's definition, in place: any
-  of `prompt`, `model`, `cwd`, `busy`, `name`, and the cadence. The cadence
+  of `prompt`, `model`, `cwd`, `busy`, `timeout`, `name`, and the cadence. The cadence
   is a 5-field cron, or an `at` that makes the job `once`; create's
   refusals apply verbatim (a bad ISO, an invalid cron, a `once` without its
   `at`), and a 5-field cron and an `at` in the same call are mutually
@@ -444,6 +445,18 @@ post-merge corrections)
   idempotent column add inside the existing migration, which runs on
   every open and so keys on column presence, not the version, the way
   the 1→2 fold keys on the files.
+- Per-job timeout: `timeout` is a job field (nullable minutes), the
+  wall-clock bound on one fire, and it is orthogonal to the kind — a
+  command job carries one as well. The runner bounds the worker's spawn
+  context by the row's own value, falling back to the caller's
+  `RunOpts.Timeout` and then `DefaultRunTimeout` (30 minutes): the
+  default stays the default, and a job whose work legitimately outlives
+  it (a large suite, a backfill) states its own bound instead of being
+  killed by a clock it never agreed to. Bounded, named: 1..1440 minutes;
+  a create outside the range refuses by name, and `update` takes `-1` as
+  the explicit reset to the default (NULL, unrendered by `list`) because
+  an absent field means "unchanged". Schema 4 adds the column with the
+  same presence-keyed idempotent add.
 
 ## interfaces
 

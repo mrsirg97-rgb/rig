@@ -29,6 +29,11 @@ seams).
   no busy policy): the adapter fills the fleet's model only for the
   prompt path, and the guidelines steer commands to scripts, never to
   work needing judgment.
+- `timeout` (minutes) bounds one fire: the adapter passes it through on
+  create and update, the store refuses it outside 1..1440 by name, and
+  on update `-1` is the explicit reset to the runner default (an absent
+  field means unchanged). The timeout belongs to the job, not to the
+  kind: command jobs carry one too.
 - `create` and `update` run the one cwd rule in `pathguard` (shared with
   the delegate tool): a cwd outside the session's cwd or the rig home
   refuses at the boundary, and the runner rechecks the stored cwd at fire

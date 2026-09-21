@@ -22,6 +22,8 @@ type jobState struct {
 	Cwd         string
 	Model       string
 	Busy        string
+	Timeout     int64
+	TimeoutSet  bool
 	State       string
 	LastStatus  string
 	LastTs      string
@@ -64,6 +66,12 @@ func (j *jobState) lastExitPtr() *int64 {
 		return nil
 	}
 	return &j.LastExit
+}
+func (j *jobState) timeoutPtr() *int64 {
+	if !j.TimeoutSet {
+		return nil
+	}
+	return &j.Timeout
 }
 func (j *jobState) commandPtr() *string {
 	if j.Command == "" {
@@ -125,6 +133,7 @@ func (f *fold) applyCreate(e eventRow) {
 		Cwd     string  `json:"cwd"`
 		Model   string  `json:"model"`
 		Busy    string  `json:"busy"`
+		Timeout *int64  `json:"timeout"`
 	}
 	if json.Unmarshal([]byte(e.args), &a) != nil || a.Name == "" {
 		return
@@ -153,6 +162,10 @@ func (f *fold) applyCreate(e eventRow) {
 		Cron: a.Cron, At: at, Cwd: a.Cwd, Model: a.Model,
 		Busy: busyOf(a.Busy), State: "active",
 		CreatedSeq: e.seq, UpdatedSeq: e.seq,
+	}
+	if a.Timeout != nil {
+		f.jobs[id].Timeout = *a.Timeout
+		f.jobs[id].TimeoutSet = true
 	}
 }
 
@@ -225,6 +238,7 @@ func (j *jobState) applyUpdate(args string) {
 		Cwd     string  `json:"cwd"`
 		Model   string  `json:"model"`
 		Busy    string  `json:"busy"`
+		Timeout *int64  `json:"timeout"`
 	}
 	if json.Unmarshal([]byte(args), &u) != nil {
 		return
@@ -255,6 +269,10 @@ func (j *jobState) applyUpdate(args string) {
 	if u.Busy != "" {
 		j.Busy = busyOf(u.Busy)
 	}
+	if u.Timeout != nil {
+		j.Timeout = *u.Timeout
+		j.TimeoutSet = *u.Timeout > 0
+	}
 }
 
 type compactJob struct {
@@ -267,6 +285,7 @@ type compactJob struct {
 	Cwd        string  `json:"cwd"`
 	Model      string  `json:"model"`
 	Busy       string  `json:"busy"`
+	Timeout    *int64  `json:"timeout"`
 	State      string  `json:"state"`
 	CreatedSeq int64   `json:"created_seq"`
 	UpdatedSeq int64   `json:"updated_seq"`
@@ -298,6 +317,10 @@ func (f *fold) applyCompact(e eventRow) {
 			}
 			if r.Command != nil {
 				j.Command = *r.Command
+			}
+			if r.Timeout != nil {
+				j.Timeout = *r.Timeout
+				j.TimeoutSet = *r.Timeout > 0
 			}
 			if r.At != nil {
 				j.At = *r.At
@@ -384,6 +407,7 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) er
 		snapshot = append(snapshot, compactJob{
 			ID: j.ID, Name: j.Name, Prompt: j.Prompt, Command: j.commandPtr(),
 			Cron: j.Cron, At: at, Cwd: j.Cwd, Model: j.Model, Busy: j.Busy,
+			Timeout:    j.timeoutPtr(),
 			State:      j.State,
 			LastStatus: ls, LastTs: lt, LastExit: le,
 		})
@@ -424,10 +448,11 @@ func rewrite(tx *sql.Tx, f *fold) error {
 	})
 	for _, j := range order {
 		_, err := tx.Exec(
-			`INSERT INTO jobs (id, name, prompt, command, cron, at, cwd, model, busy, state,
+			`INSERT INTO jobs (id, name, prompt, command, cron, at, cwd, model, busy, timeout, state,
 			    last_status, last_ts, last_exit, created_seq, updated_seq)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			j.ID, j.Name, j.Prompt, nullStr(j.Command), j.Cron, nullStr(j.At), j.Cwd, j.Model, j.Busy, j.State,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			j.ID, j.Name, j.Prompt, nullStr(j.Command), j.Cron, nullStr(j.At), j.Cwd, j.Model, j.Busy,
+			nullInt64(j.TimeoutSet, j.Timeout), j.State,
 			nullStr(j.LastStatus), nullStr(j.LastTs), nullInt64(j.LastExitSet, j.LastExit),
 			j.CreatedSeq, j.UpdatedSeq,
 		)

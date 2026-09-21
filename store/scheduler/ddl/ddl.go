@@ -33,6 +33,7 @@ func Statements() []string {
   "name" TEXT NOT NULL,
   "prompt" TEXT NOT NULL,
   "state" TEXT NOT NULL,
+  "timeout" INTEGER,
   "updated_seq" INTEGER NOT NULL,
   PRIMARY KEY ("id")
 )`,

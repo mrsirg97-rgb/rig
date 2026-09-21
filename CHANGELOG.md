@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [1.3.2]: a job may outlive the clock it never agreed to
+
+A scheduler job's every fire ran under one global 30-minute
+`DefaultRunTimeout`. Work that legitimately needs longer — a suite over
+a GPU that may be busy at start, a ledger backfill, a long build — got
+SIGKILLed at the wall with its work done and only its finalize
+outstanding, and the run was recorded as a failure the operator had to
+read a log to explain. The bound is now a job field: `timeout`, minutes
+per fire, stated where the job is stated.
+
+- **per-job timeout** (`store/scheduler`): `jobs.timeout` (nullable
+  minutes, 1..1440, refused outside the range by name) rides the
+  create/update events and bounds the spawn context at fire time;
+  precedence is the row's own value, then `RunOpts.Timeout`, then the
+  unchanged 30-minute default. Orthogonal to the kind — a command job
+  carries one too. Schema 4 is the idempotent presence-keyed column add,
+  the same shape as schema 3's.
+- **`timeout` on the tool and the dashboard** (`tool/scheduler`,
+  `frontend/web`): create and update take it, update's `-1` resets to
+  the default (an absent field stays "unchanged"), and the in-place
+  update form carries it — a cleared field submits the reset. The
+  detail-line parser scans the payload's parts instead of fixed offsets,
+  so `· timeout 60m` never lands in the model field.
+
+The default stays the default: nothing an existing job did changes
+behaviour until it states its own bound.
+
 ## [1.3.1]: the docs tell the truth about their reach
 
 A source review of the guardrails (pathguard, the chain, the plugin

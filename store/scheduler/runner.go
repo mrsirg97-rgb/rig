@@ -64,10 +64,6 @@ func RunJob(key string, opts RunOpts) error {
 	if opts.SwapURL == "" {
 		opts.SwapURL = defaultSwapURL
 	}
-	timeout := opts.Timeout
-	if timeout <= 0 {
-		timeout = DefaultRunTimeout
-	}
 
 	id, err := ParseKey(key)
 	if err != nil {
@@ -142,6 +138,14 @@ func RunJob(key string, opts RunOpts) error {
 		}
 		return nil
 	}
+	timeout := opts.Timeout
+	if job.Timeout != nil && *job.Timeout > 0 {
+		timeout = time.Duration(*job.Timeout) * time.Minute
+	}
+	if timeout <= 0 {
+		timeout = DefaultRunTimeout
+	}
+
 	canonical, err := pathguard.Canonical(job.Cwd)
 	if err != nil || canonical != job.Cwd {
 		if e := recordSkip(db, id, "job cwd was replaced or moved (refusing the read-write bind); re-create the job"); e != nil {
