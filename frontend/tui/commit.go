@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/imagemarker"
 )
 
 func formatTokens(n int) string {
@@ -65,7 +66,7 @@ func RenderToolBlock(t Theme, name string, args json.RawMessage, content string,
 	b.WriteString(t.Paint(SlotAccent, t.Glyph(GlyphDone)))
 	b.WriteString(" ")
 	b.WriteString(t.Paint(SlotAccent, name))
-	if d := toolDetail(name, args); d != "" {
+	if d := toolDetail(name, args, content); d != "" {
 		b.WriteString(t.Paint(SlotDim, " · "))
 		b.WriteString(t.Paint(SlotText, d))
 	}
@@ -74,9 +75,11 @@ func RenderToolBlock(t Theme, name string, args json.RawMessage, content string,
 		b.WriteString(ap)
 		b.WriteString("\n")
 	}
-	if p := preview(t, content); p != "" {
-		b.WriteString(p)
-		b.WriteString("\n")
+	if name != "view" {
+		if p := preview(t, content); p != "" {
+			b.WriteString(p)
+			b.WriteString("\n")
+		}
 	}
 	outcome, slot := t.Glyph(GlyphOK), SlotSuccess
 	if failed {
@@ -90,7 +93,7 @@ func RenderToolBlock(t Theme, name string, args json.RawMessage, content string,
 	return b.String()
 }
 
-func toolDetail(name string, args json.RawMessage) string {
+func toolDetail(name string, args json.RawMessage, content string) string {
 	var v map[string]any
 	if err := json.Unmarshal(args, &v); err != nil {
 		return ""
@@ -114,6 +117,15 @@ func toolDetail(name string, args json.RawMessage) string {
 		if p := s("path"); p != "" {
 			return p
 		}
+	case "view":
+		d := s("path")
+		if img := imageDetail(content); img != "" {
+			if d == "" {
+				return img
+			}
+			return d + " · " + img
+		}
+		return d
 	case "find", "grep":
 		if p := s("pattern"); p != "" {
 			return p
@@ -136,6 +148,32 @@ func toolDetail(name string, args json.RawMessage) string {
 		}
 	}
 	return ""
+}
+
+func imageDetail(content string) string {
+	ref, ok := imagemarker.Find(content)
+	if !ok {
+		return ""
+	}
+	sent := strconv.Itoa(ref.W) + "x" + strconv.Itoa(ref.H)
+	if ref.OrigW != ref.W || ref.OrigH != ref.H {
+		sent = strconv.Itoa(ref.OrigW) + "x" + strconv.Itoa(ref.OrigH) + " -> " + sent
+	}
+	if ref.Bytes <= 0 {
+		return sent
+	}
+	return sent + " · " + humanBytes(ref.Bytes)
+}
+
+func humanBytes(n int) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/float64(1<<20))
+	case n >= 1<<10:
+		return strconv.Itoa(n/1024) + " KB"
+	default:
+		return strconv.Itoa(n) + " B"
+	}
 }
 
 func verbDetail(args json.RawMessage) string {

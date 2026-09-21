@@ -513,13 +513,19 @@ bash ✓ 0.4s
   TUI's, the runtime's own output caps still apply first);
 - `ToolResult` closes it: name, `✓`/`✕`, duration: a fed-back failure
   (`Err` non-nil) renders `✕` and the content stays visible: the
-  refusal is the interesting part.
+  refusal is the interesting part. `view` is the one tool whose body
+  renders as nothing: a picture is never painted into the transcript,
+  and its marker line is not the model's text to show.
 
 The detail line per tool is a table in `tools_render.go`, one line
 each: bash the command, read/write/edit the path, ls/find/grep the
 pattern or path, python the first line of code, web_search the query,
 web_fetch the url, todo/scheduler the action (their blocks are
-decision 6's). Unknown tools (a future registration) render name-only:
+decision 6's). `view` is the one detail read from the *result* and not
+the arguments: path, then the marker's `2560x1440 -> 1568x882` when rig
+resampled (its own size alone when it did not), then the sent bytes; the
+arrow is what tells the model-facing downscale from a pass-through
+(SPEC_VIEW). Unknown tools (a future registration) render name-only:
 the table is a nicety, not a contract.
 
 Amended (the operator's ask): write and edit preview their ARGUMENTS

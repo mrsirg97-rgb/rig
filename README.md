@@ -47,6 +47,7 @@ worker fleet is configured. Restrict them with `--allow`:
 | `bash` | run shell commands; output bounded |
 | `read` / `write` / `edit` | files; edits are exact-match, provenance-checked |
 | `ls` / `find` / `grep` | the filesystem, by name and by content |
+| `view` | look at an image: downscaled, content-addressed, sent to a vision model (off unless your model row has `"vision": true`) |
 | `diff` | the working tree against HEAD, or a tool's two latest observations |
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web_search` | a local SearXNG instance |
@@ -84,7 +85,8 @@ Configuration lives in `~/.rig/`. Set `$RIG_HOME` to move it. Every file is opti
 | file | what it holds |
 |------|---------------|
 | `settings.json` | the knobs: endpoint, model, the allow-list, the retry bound, the approval dial, the worker sandbox |
-| `models.json` | the per-model table: context window, max tokens, the compaction reserve, the role (`worker`/`interactive`), the effort levels |
+| `models.json` | the per-model table: context window, max tokens, the compaction reserve, the role (`worker`/`interactive`), the effort levels, and `vision` (the model takes images, which unlocks `view`) |
+| `blobs/` | the images `view` has read, named by sha256; delete anything, and rig never rewrites a file it did not create |
 | `workers.json` | the worker fleet: `{"model": "<id>", "slots": N}`. Unlocks `scheduler` and `delegate`; `slots` bounds concurrent delegates per session |
 | `AGENTS.md` | global instructions, read before the project's `<cwd>/AGENTS.md` |
 | `theme.json` | the terminal theme: base, slot colors, glyph set |

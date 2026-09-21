@@ -23,6 +23,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/cli"
 	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/imagemarker"
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/middleware/paths"
@@ -49,10 +50,11 @@ import (
 	schedapi "github.com/mrsirg97-rgb/rig/tool/scheduler"
 	sessionstool "github.com/mrsirg97-rgb/rig/tool/sessions"
 	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
+	viewtool "github.com/mrsirg97-rgb/rig/tool/view"
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.2.16"
+const Version = "1.3.0"
 
 type root struct {
 	pluginMax int
@@ -73,6 +75,7 @@ type root struct {
 	home  string
 
 	pluginsDir string
+	rigHome    string
 
 	activeID string
 	row      models.Model
@@ -112,6 +115,7 @@ type root struct {
 const defaultResultCap = 64 * 1024
 
 func wire(r *root) *rig.Kernel {
+	r.applyVision()
 	// approve rides the door: manual means "ask before mutating", and
 	// asking needs a door, so a doorless frontend runs auto — a TUI
 	// user's manual never binds the workers.
@@ -206,16 +210,20 @@ func remRow(m remdom.Memory) command.RemRow {
 }
 
 func (r *root) nativeTools() []core.Tool {
-	names := effectiveNativeNames(r.workers)
+	names := registeredNativeNames(r.workers, r.row.Vision)
 	out := make([]core.Tool, 0, len(names))
 	for _, name := range names {
-		out = append(out, r.tools[name])
+		tool, ok := r.tools[name]
+		if !ok {
+			continue
+		}
+		out = append(out, tool)
 	}
 	return out
 }
 
 func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
-	inner := openai.New(r.baseURL, r.activeID)
+	inner := r.buildProvider()
 	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row)
 	if err != nil {
 		panic("rig: wire: " + err.Error())
@@ -225,6 +233,38 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 	effInner := effort.Decorator(inner, r.effortForWire)
 
 	return toolset.Carry(r.live, compact.Decorator(effInner, pol)), pol
+}
+
+func (r *root) buildProvider() core.Provider {
+	if !r.row.Vision {
+		return openai.New(r.baseURL, r.activeID)
+	}
+	return openai.NewWithVision(r.baseURL, r.activeID, r.blobsDir())
+}
+
+// applyVision is the whole of the vision gate: the tool exists when the
+// row has vision and does not when it has none, and the model switch
+// re-applies it so the next turn's table follows the row.
+func (r *root) applyVision() {
+	if r.row.Vision {
+		if r.tools == nil {
+			r.tools = map[string]core.Tool{}
+		}
+		if _, ok := r.tools["view"]; !ok {
+			r.tools["view"] = viewtool.New(r.blobsDir())
+		}
+		return
+	}
+	delete(r.tools, "view")
+}
+
+func (r *root) blobsDir() string {
+	if r.rigHome == "" {
+		if h, err := rigHome(); err == nil {
+			r.rigHome = h
+		}
+	}
+	return imagemarker.BlobsDir(r.rigHome)
 }
 
 func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
@@ -321,6 +361,8 @@ func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	}
 	r.row = row
 	r.activeID = id
+	r.applyVision()
+	r.live.Set(append(r.nativeTools(), r.pluginTools...))
 	provider, pol := r.buildPair()
 	r.k.Provider = provider
 	r.k.Policy = pol
@@ -356,7 +398,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 }
 
 var concurrentNatives = map[string]bool{
-	"read": true, "ls": true, "find": true, "grep": true,
+	"read": true, "ls": true, "find": true, "grep": true, "view": true,
 	"web_search": true, "web_fetch": true, "diff": true,
 	"delegate": true,
 }
@@ -539,7 +581,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "view", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
 
 var workerToolNames = []string{"scheduler", "delegate"}
 
@@ -548,6 +590,24 @@ func effectiveNativeNames(workers *config.Workers) []string {
 	out := make([]string, 0, len(nativeToolNames))
 	for _, name := range nativeToolNames {
 		if drop && isWorkerTool(name) {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+// registeredNativeNames is the effective menu under the model row's gates:
+// the worker tools need a fleet and view needs vision, and what is not
+// offered is simply not in the table.
+func registeredNativeNames(workers *config.Workers, vision bool) []string {
+	names := effectiveNativeNames(workers)
+	if vision {
+		return names
+	}
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if name == "view" {
 			continue
 		}
 		out = append(out, name)
@@ -981,6 +1041,7 @@ func main() {
 		cwd:        cwd,
 		home:       userHome(),
 		pluginsDir: pluginsDir,
+		rigHome:    cfgDir,
 		activeID:   modelID,
 		row:        row,
 		runtime:    runtimeTable(cfg.Models, modelID, row),

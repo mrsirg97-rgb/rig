@@ -22,6 +22,7 @@ type Model struct {
 	Role       string
 	Effort     string
 	Efforts    []string
+	Vision     bool
 }
 
 func (m Model) Check() error {

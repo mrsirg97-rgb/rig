@@ -379,6 +379,7 @@ by `TestEmbeddedDefaultsAreTheV020Values`.
 | `keepRecent`| int   | yes (new rows) | |
 | `role`     | string | no       | `"worker"` or `"interactive"`; default `interactive`; shown by `/models` |
 | `effort`   | string | no       | the request effort where a call sets one: the compaction summary call's; default `""` = the policy's `medium` |
+| `vision`   | bool   | no       | the model takes image input; **presence-aware** (an explicit `false` descends onto an embedded row, unlike the zero-means-unset numbers). Default `false`. It gates the `view` tool (SPEC_VIEW) and the provider's image parts |
 
 `role` is display and fleet-identity in this PR: `/models` lists it
 (4's render); it is validated at parse (unknown value refuses, naming
@@ -748,7 +749,11 @@ tool's model default are the fleet's `model`; a job that names its own
 model keeps it (the row carries it, `run-job` fires the row's model).
 
 **The allow default grows with the fleet.** The embedded `allow`
-loses `scheduler` and `delegate` (16 tools: the non-worker natives).
+loses `scheduler` and `delegate` (17 tools: the non-worker natives).
+`view` is in the default allow with the rest of the read-only set: an allow
+entry for a tool the row does not register is inert (SPEC_TOOLS), so the
+fleet-free text row simply never uses it, and switching to a vision row
+starts using it without a settings change.
 When `workers.json` is present **and the operator's own allow is
 absent** (no `allow` key in the file, no `RIG_ALLOW`, no `-allow`),
 the default allow grows by the two worker tools; the allow default is
@@ -832,11 +837,11 @@ case names one, the built binary for the e2e.
 **workers (12):**
 
 - `TestWorkersAbsentIsNoWorkers`: no file: `Config.Workers` is nil,
-  the default allow is the 16 non-worker natives (the two worker tools
+  the default allow is the 17 non-worker natives (the two worker tools
   absent from the default allow-list).
 - `TestWorkersFileNamesTheFleet`: `{"model": "local"}`:
   `Workers{Model: "local", Slots: 1}` (slots defaults to 1); the
-  default allow grows to the 18 natives (the two worker tools present).
+  default allow grows to the 19 natives (the two worker tools present).
 - `TestWorkersModelIsRequired`: `{}` and `{"slots": 1}` refuse
   naming the missing `model`; `{"model": ""}` refuses the same.
 - `TestWorkersModelMustResolveInTheTable`: `{"model": "brain"}` with
@@ -857,7 +862,7 @@ case names one, the built binary for the e2e.
   mint), and the second start ignores the key with a notice;
   `…DisagreeingWithTheFleetRefuses`, `…UnknownToTheTableRefuses`
   (nothing minted), `…EmptyDefaultJobModelIsANotice`.
-- `TestEmbeddedDefaults` (amended): the embedded allow is the 16
+- `TestEmbeddedDefaults` (amended): the embedded allow is the 17
   non-worker natives, the embedded table is the one `local` row
   (no `qwen3.8-workers`), and the embedded settings carry no
   `defaultJobModel` key.
