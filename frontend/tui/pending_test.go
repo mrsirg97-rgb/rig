@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"io"
+	"math/rand"
 	"slices"
 	"strconv"
 	"strings"
@@ -10,6 +12,156 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/core"
 )
+
+func TestPendingWrapCacheStaysByteIdenticalToFullWrap(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(30), WithSize(sizeFixture(30, 14)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+
+	rng := rand.New(rand.NewSource(7))
+	words := []string{
+		"alpha", "beta", "gamma", "delta", "eps", "zeta",
+		"a_long_word_that_never_fits", "x", "ab", "spacing   runs",
+	}
+
+	check := func(where string) {
+		t.Helper()
+		s.fe.mu.Lock()
+		rows := slices.Clone(s.fe.pendRowsLocked())
+		pend := slices.Clone(s.fe.pend)
+		w := s.fe.live.width
+		s.fe.mu.Unlock()
+		want := wrapSegs(th, w, pend)
+		if !slices.Equal(rows, want) {
+			t.Fatalf("%s: the cached rows are not the full wrap:\ngot %q\nwant %q", where, rows, want)
+		}
+	}
+	stream := func(where string, steps int) {
+		t.Helper()
+		for i := 0; i < steps; i++ {
+			for d := 0; d < 1+rng.Intn(4); d++ {
+				var chunk strings.Builder
+				for k := 0; k < 1+rng.Intn(3); k++ {
+					if k > 0 || rng.Intn(3) == 0 {
+						chunk.WriteString(strings.Repeat(" ", 1+rng.Intn(3)))
+					}
+					if rng.Intn(6) == 0 {
+						chunk.WriteString("\n")
+					}
+					chunk.WriteString(words[rng.Intn(len(words))])
+				}
+				s.fe.Notify(core.TextDelta{Text: chunk.String()})
+			}
+			check(where)
+		}
+	}
+
+	check("the empty paragraph")
+	stream("the opening stream", 1)
+	s.fe.Notify(core.TextDelta{Text: "mid\nword"})
+	check("the commit that leaves a tail")
+	stream("the opening stream", 119)
+
+	for _, w := range []int{17, 9, 41, 30} {
+		s.fe.mu.Lock()
+		s.fe.live.setWidth(w)
+		s.fe.mu.Unlock()
+		check("the width change to " + strconv.Itoa(w))
+		stream("the stream at width "+strconv.Itoa(w), 40)
+	}
+
+	s.fe.Notify(core.TextDelta{Text: "\n"})
+	check("the commit")
+	stream("the stream after the commit", 60)
+
+	s.fe.mu.Lock()
+	s.fe.live.setWidth(10)
+	s.fe.mu.Unlock()
+	const exact = "abcdefghij"
+	for i := 0; i < 6; i++ {
+		for _, d := range []string{exact, " "} {
+			s.fe.Notify(core.TextDelta{Text: d})
+			check("the exact-width row followed by a space")
+		}
+	}
+	stream("the stream after the exact-width run", 40)
+
+	s.fe.Notify(core.TurnEnd{})
+	check("the turn end")
+}
+
+func TestPendingWrapCacheDoesNotServeThePreviousLinesRows(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(30), WithSize(sizeFixture(30, 14)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	tu := s.fe
+	tu.flow(SlotText, "- ")
+	tu.flow(SlotText, "the")
+	tu.mu.Lock()
+	rows := slices.Clone(tu.pendRowsLocked())
+	width := tu.live.width
+	tu.mu.Unlock()
+	if len(rows) != 1 || paintFree(rows[0]) != "- the" {
+		t.Fatalf("the first line's rows are %q, want %q", rows, []string{"- the"})
+	}
+
+	tu.flow(SlotText, "\n")
+	tu.flow(SlotText, "* ")
+	tu.flow(SlotText, "the")
+	tu.mu.Lock()
+	rows = slices.Clone(tu.pendRowsLocked())
+	pend := slices.Clone(tu.pend)
+	tu.mu.Unlock()
+	want := wrapSegs(th, width, pend)
+	if !slices.Equal(rows, want) {
+		t.Fatalf("the cache serves the previous line's rows:\ngot %q\nwant %q", rows, want)
+	}
+}
+
+func BenchmarkFramePaint100kPendingParagraph(b *testing.B) {
+	th, err := ResolveTheme("oled", nil, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+	const width, height = 100, 30
+	fe := New(newScriptInput(), io.Discard, th,
+		WithWidth(width), WithSize(sizeFixture(width, height)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	).(*tui)
+	defer fe.Close()
+
+	var words []string
+	for total := 0; total < 100000; total += 8 {
+		words = append(words, "alpha")
+		words = append(words, "bet")
+	}
+	text := strings.Join(words, " ")
+
+	paint := func() {
+		fe.mu.Lock()
+		fe.paintLiveLocked()
+		fe.mu.Unlock()
+	}
+	fe.mu.Lock()
+	fe.turnLive = true
+	fe.mu.Unlock()
+	for off := 0; off < len(text); off += 100 {
+		fe.flow(SlotText, text[off:min(off+100, len(text))])
+		paint()
+	}
+
+	b.ResetTimer()
+	start := time.Now()
+	for i := 0; i < b.N; i++ {
+		paint()
+	}
+	per := time.Since(start) / time.Duration(b.N)
+	if per > time.Millisecond {
+		b.Fatalf("a frame over the 100k-char pending paragraph costs %s, want under 1ms", per)
+	}
+}
 
 func TestPendingTailScrollsByRows(t *testing.T) {
 	th := oledTheme(t)

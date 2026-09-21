@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [1.2.16]: the pending paragraph wraps incrementally, and no hidden row is measured
+
+The TUI stuttered while a long unbroken reasoning paragraph streamed:
+since 1.2.6 every frame re-wrapped the entire pending paragraph, once
+per budget-loop iteration and twice once capped, and then measured
+each rendered row with a width pass, so a 100k-character paragraph
+burned several milliseconds of the 16 ms frame while the server's
+rolling rate stayed flat. Greedy word wrap is prefix stable:
+appending text can only change the last row.
+
+- **the pending wrap cache** (`frontend/tui`): `pendWrap` caches the
+  wrapped rows plus the cells that begin the last row and folds each
+  delta into the last row alone; a rebuild happens only on a width
+  change or an edit that is not an append. `liveRegionLocked` starts
+  the pending block at the viewport height, the budget loop slices the
+  cached rows to the cap instead of re-wrapping per iteration, and the
+  pending block's row count is its row length, so `rowsOver` never
+  measures rows that will not be painted. The rows shown stay
+  byte-identical to a fresh wrap of the full paragraph at every step,
+  exact-width rows and the trailing-space trim included; the space a
+  soft break skips still charges its width to the row it left.
+  `TestPendingWrapCacheStaysByteIdenticalToFullWrap` streams random
+  word sequences in random chunk sizes and compares the cache to a
+  fresh full wrap after every delta, across a mid-stream width change
+  and across a commit. `BenchmarkFramePaint100kPendingParagraph`
+  paints one frame over a 100k-character pending paragraph and fails
+  above 1ms: the pre-fix frame cost 21.8ms, the fixed one runs near
+  0.2ms.
+- **the line splitter** (`frontend/tui`): `takeClosedLinesLocked`
+  scans only the segs the delta appended for newlines and leaves the
+  older segs untouched when none carry one, so a long pending
+  paragraph no longer pays a re-split of every seg on every delta
+  (2.5ms per 30 deltas over a 1563-seg paragraph before, about 1µs
+  after).
+
 ## [1.2.15]: a wave's starts land with the wave, and the provider caps its error-body read
 
 A review pass over the runtime found the loop telling the frontend a

@@ -55,7 +55,9 @@ type tui struct {
 
 	prompt, completion, cacheRead int
 
-	pend []seg
+	pend    []seg
+	pw      pendWrap
+	pendGen int
 
 	toolName string
 	toolArgs []byte
@@ -658,6 +660,7 @@ func (t *tui) onEnter() {
 
 		t.mu.Lock()
 		t.pend = nil
+		t.pendGen++
 		t.mu.Unlock()
 		t.steer(line)
 		return
@@ -791,6 +794,7 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.turnLive = true
 	t.turnEstablished = false
 	t.pend = nil
+	t.pendGen++
 	t.dirty = false
 	t.flowChunks = nil
 	t.phase = "thinking"
@@ -942,6 +946,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.phase = "thinking"
 		t.frame = 0
 		t.pend = nil
+		t.pendGen++
 		t.toolName = ""
 		t.toolArgs = nil
 		t.toolStarts = nil
@@ -992,6 +997,9 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 
 	pendCap, menuCap, inputCap := 1<<30, menuMaxRows, maxInputRows
 	h := t.live.height
+	if h >= 1 {
+		pendCap = h
+	}
 	giveUp := false
 	var lines []string
 	var line string
@@ -999,7 +1007,7 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 	var blocks liveBlocks
 	for i := 0; i < 6 && !giveUp; i++ {
 		lines, line, col, blocks = t.buildLiveLinesLocked(pendCap, menuCap, inputCap)
-		over := t.live.rowsOver(lines, t.statusViewportRowsLocked())
+		over := t.live.rowsOver(lines[blocks.pendRows:], t.statusViewportRowsLocked()) + blocks.pendRows
 		if h <= 0 || over <= 0 {
 			break
 		}
@@ -1064,11 +1072,7 @@ func (t *tui) pendingBlockLocked(cap int) ([]string, int) {
 	if cap <= 0 || len(t.pend) == 0 {
 		return nil, 0
 	}
-	w := t.live.width
-	if w < 1 {
-		w = 1
-	}
-	rows := wrapSegs(t.theme, w, t.pend)
+	rows := t.pendRowsLocked()
 	if len(rows) == 1 && rows[0] == "" {
 		return nil, 0
 	}
@@ -1636,6 +1640,7 @@ const slotAfterTool = "\x00after-tool"
 func (t *tui) flow(slot, text string) {
 	t.mu.Lock()
 
+	base := len(t.pend)
 	boundary := (slot != "" && slot != SlotReasoning && t.lastSlot == SlotReasoning) ||
 		(slot != "" && t.lastSlot == slotAfterTool)
 	if boundary {
@@ -1650,17 +1655,28 @@ func (t *tui) flow(slot, text string) {
 		t.lastSlot = slot
 	}
 	t.pend = append(t.pend, seg{slot: slot, text: t.expandTabsLocked(text)})
-	if lines := t.takeClosedLinesLocked(); len(lines) > 0 {
+	if lines := t.takeClosedLinesLocked(base); len(lines) > 0 {
 		t.flowChunks = append(t.flowChunks, strings.Join(lines, "\n")+"\n")
 	}
 	t.dirty = true
 	t.mu.Unlock()
 }
 
-func (t *tui) takeClosedLinesLocked() []string {
+func (t *tui) takeClosedLinesLocked(base int) []string {
+	fresh := t.pend[base:]
+	newline := false
+	for _, s := range fresh {
+		if strings.Contains(s.text, "\n") {
+			newline = true
+			break
+		}
+	}
+	if !newline {
+		return nil
+	}
 	var lines []string
-	var cur []seg
-	for _, s := range t.pend {
+	cur := append([]seg(nil), t.pend[:base]...)
+	for _, s := range fresh {
 		parts := strings.Split(s.text, "\n")
 		for i, p := range parts {
 			if i < len(parts)-1 {
@@ -1675,6 +1691,7 @@ func (t *tui) takeClosedLinesLocked() []string {
 		}
 	}
 	t.pend = cur
+	t.pendGen++
 	return lines
 }
 

@@ -387,6 +387,29 @@ that resolves the wrap at the flush shifts the cursor a row, and the
 next op's cursor-up tally is off by a row; the clear misses the top
 row (the indicator) and it lands between committed text.
 
+### The pending wrap, amended 1.2.16: the paragraph wraps incrementally
+
+The 1.2.6 amendment wrapped the whole pending paragraph at words on
+every frame, and a long unbroken paragraph paid for its whole length
+at the 16 ms cadence: the wrap ran once per budget-loop iteration and
+twice once capped, and the row count measured every rendered row with
+a width pass, so a 100k-character paragraph spent several milliseconds
+of the frame while the server's own rate stayed flat. Greedy word wrap
+is prefix stable: appending text can only change the last row. The
+pending wrap now caches the wrapped rows plus the cells that begin the
+last row and folds each delta into the last row alone; a rebuild
+happens only when the width changes or an edit is not an append, which
+is the newline's commit and the turn's end. The budget loop starts the
+pending block at the viewport height and slices the cached rows to the
+cap instead of re-wrapping per iteration, and the pending block's row
+count is its row length, never a width pass: each wrapped row is one
+visual row by construction, so no row that will not be painted is
+measured. The rows shown stay byte-identical to a fresh wrap of the
+full paragraph at every step, exact-width rows and the trailing-space
+trim included; the space a soft break skips still charges its width to
+the row it left, and the cache carries that in the fold's start
+column.
+
 ### 3. The status line: one live row, a one-shot startup block
 
 The two-row banner is deleted; its content gets the two homes
