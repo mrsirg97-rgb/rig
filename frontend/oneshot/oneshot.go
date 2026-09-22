@@ -20,9 +20,10 @@ type OneShot struct {
 	Heartbeat time.Duration
 	faulted   bool
 	mu        sync.Mutex
+	inflight  int
+	toolNames map[string]string
 	hbStop    chan struct{}
 	hbDone    chan struct{}
-	toolName  string
 }
 
 func (o *OneShot) Faulted() bool { return o.faulted }
@@ -46,10 +47,8 @@ func (o *OneShot) heartbeatInterval() time.Duration {
 func (o *OneShot) startHeartbeat() {
 	stop := make(chan struct{})
 	done := make(chan struct{})
-	o.mu.Lock()
 	o.hbStop = stop
 	o.hbDone = done
-	o.mu.Unlock()
 	go func() {
 		defer close(done)
 		t := time.NewTicker(o.heartbeatInterval())
@@ -66,10 +65,8 @@ func (o *OneShot) startHeartbeat() {
 }
 
 func (o *OneShot) stopHeartbeat() {
-	o.mu.Lock()
 	stop, done := o.hbStop, o.hbDone
 	o.hbStop, o.hbDone = nil, nil
-	o.mu.Unlock()
 	if stop != nil {
 		close(stop)
 		<-done
@@ -89,17 +86,28 @@ func (o *OneShot) Notify(ev core.Event) {
 	case core.ToolStart:
 		if o.Err != nil {
 			o.mu.Lock()
-			o.toolName = e.Call.Name
+			if o.toolNames == nil {
+				o.toolNames = map[string]string{}
+			}
+			o.toolNames[e.Call.ID] = e.Call.Name
+			o.inflight++
+			if o.inflight == 1 {
+				o.startHeartbeat()
+			}
 			o.mu.Unlock()
 			io.WriteString(o.Err, "\nrig: tool "+e.Call.Name+" start\n")
-			o.startHeartbeat()
 		}
 	case core.ToolResult:
 		if o.Err != nil {
-			o.stopHeartbeat()
 			o.mu.Lock()
-			name := o.toolName
-			o.toolName = ""
+			if o.inflight > 0 {
+				o.inflight--
+			}
+			name := o.toolNames[e.ID]
+			delete(o.toolNames, e.ID)
+			if o.inflight == 0 {
+				o.stopHeartbeat()
+			}
 			o.mu.Unlock()
 			io.WriteString(o.Err, "rig: tool "+name+" end\n")
 		}

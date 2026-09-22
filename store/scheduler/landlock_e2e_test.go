@@ -224,12 +224,12 @@ func fileCall(t *testing.T, id, name string, args map[string]any) string {
 
 func TestLandlockInProcessReadRefusesOutside(t *testing.T) {
 	requireLandlockBox(t)
-	home, err := os.UserHomeDir()
-	if err != nil {
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("operator data"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, srv := landlockFixture(t, []string{
-		fileCall(t, "c1", "read", map[string]any{"path": filepath.Join(home, ".bashrc")}),
+		fileCall(t, "c1", "read", map[string]any{"path": outside}),
 		jailFinalReply,
 	}, nil, "")
 	result := toolResultOfJail(t, lastBodyOf(t, srv))

@@ -99,6 +99,45 @@ func TestOneShotHeartbeatsOnStderrWhileAToolRuns(t *testing.T) {
 	}
 }
 
+func TestOneShotBatchHeartbeatOutlivesTheFirstResult(t *testing.T) {
+	var out syncBuffer
+	var errB syncBuffer
+	o := &oneshot.OneShot{Out: &out, Err: &errB, Heartbeat: 5 * time.Millisecond}
+	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
+	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c2", Name: "python"}})
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(errB.String(), "heartbeat") {
+		if time.Now().After(deadline) {
+			t.Fatalf("no heartbeat while the batch ran: %q", errB.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	o.Notify(core.ToolResult{ID: "c1", Content: "bash out"})
+	before := errB.String()
+	deadline = time.Now().Add(2 * time.Second)
+	for errB.String() == before {
+		if time.Now().After(deadline) {
+			t.Fatalf("the batch heartbeat must outlive the first result: %q", errB.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	o.Notify(core.ToolResult{ID: "c2", Content: "py out"})
+	after := errB.String()
+	if !strings.Contains(after, "tool bash end") || !strings.Contains(after, "tool python end") {
+		t.Fatalf("each result must name its own tool: %q", after)
+	}
+	if strings.Index(after, "tool bash end") > strings.Index(after, "tool python end") {
+		t.Fatalf("the end lines must land in call order: %q", after)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if errB.String() != after {
+		t.Fatalf("the batch heartbeat must stop with the last result: %q", errB.String())
+	}
+	if out.String() != "" {
+		t.Fatalf("a silent batch must not touch stdout: %q", out.String())
+	}
+}
+
 func TestOneShotNotifyRendersAssistantTextAndFaultsLoud(t *testing.T) {
 	var sb strings.Builder
 	o := &oneshot.OneShot{Out: &sb}
