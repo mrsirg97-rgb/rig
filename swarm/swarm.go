@@ -100,6 +100,9 @@ type worker struct {
 	role      string
 	model     string
 	identity  string
+	ctx       context.Context
+	proj      todostore.Project
+	architect string
 	task      string
 	heartbeat time.Time
 	done      int
@@ -141,11 +144,11 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("swarm: queue: %w", err)
 	}
-	c.proj = proj
-	c.architect = session
 	if c.ctx == nil {
 		c.ctx, c.cancel = context.WithCancel(context.Background())
 	}
+	c.proj = proj
+	c.architect = session
 	base := len(c.workers)
 	added := "started"
 	if base > 0 {
@@ -154,9 +157,12 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	for i := 1; i <= in.Count; i++ {
 		w := &worker{
 			id: base + i, role: role, model: model,
-			identity: core.NewSession().ID,
-			state:    StateRunning,
-			retries:  map[string]int{},
+			identity:  core.NewSession().ID,
+			ctx:       c.ctx,
+			proj:      proj,
+			architect: session,
+			state:     StateRunning,
+			retries:   map[string]int{},
 		}
 		c.workers = append(c.workers, w)
 		c.wg.Add(1)
@@ -203,6 +209,8 @@ func (c *Controller) Stop() (string, error) {
 	}
 	cancel := c.cancel
 	count := len(c.workers)
+	proj := c.proj
+	architect := c.architect
 	c.mu.Unlock()
 	cancel()
 	c.wg.Wait()
@@ -215,7 +223,7 @@ func (c *Controller) Stop() (string, error) {
 	c.ctx = nil
 	c.cancel = nil
 	c.mu.Unlock()
-	if _, err := todostore.Reap(context.Background(), c.opts.TodoDB, c.proj, ended, c.architect); err != nil {
+	if _, err := todostore.Reap(context.Background(), c.opts.TodoDB, proj, ended, architect); err != nil {
 		return "", fmt.Errorf("swarm: stop: release: %w", err)
 	}
 	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "worker")), nil
@@ -232,15 +240,15 @@ func (c *Controller) run(w *worker) {
 		if w.role == RoleReviewer {
 			status = "review"
 		}
-		reply, err := todostore.Claim(c.ctx, c.opts.TodoDB, c.proj, w.identity, status)
+		reply, err := todostore.Claim(w.ctx, c.opts.TodoDB, w.proj, w.identity, status)
 		if err != nil {
-			c.loud("w%d: claim: %v\n", w.id, err)
+			c.loud(w, "w%d: claim: %v\n", w.id, err)
 			c.set(w, func() { w.state = StateExited })
 			return
 		}
 		if reply == "nothing to do" {
 			if c.anyBusy() {
-				c.idle()
+				c.idle(w)
 				continue
 			}
 			empties++
@@ -248,13 +256,13 @@ func (c *Controller) run(w *worker) {
 				c.set(w, func() { w.state = StateExited })
 				return
 			}
-			c.idle()
+			c.idle(w)
 			continue
 		}
 		empties = 0
 		id := claimID(reply)
 		if id == "" {
-			c.loud("w%d: claim reply unreadable: %q\n", w.id, reply)
+			c.loud(w, "w%d: claim reply unreadable: %q\n", w.id, reply)
 			c.set(w, func() { w.state = StateExited })
 			return
 		}
@@ -268,7 +276,7 @@ func (c *Controller) run(w *worker) {
 			})
 			if c.retriesOf(w, id) == 1 {
 				c.release(w, id)
-				c.idle()
+				c.idle(w)
 			} else {
 				c.failTask(w, id, res.noVerdict)
 				c.set(w, func() { w.failed++ })
@@ -284,9 +292,9 @@ type workResult struct {
 }
 
 func (c *Controller) work(w *worker, id string) workResult {
-	task, err := todostore.Task(c.ctx, c.opts.TodoDB, c.proj, id, w.identity)
+	task, err := todostore.Task(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 	if err != nil {
-		c.loud("w%d: task %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: task %s: %v\n", w.id, id, err)
 		return workResult{}
 	}
 	c.stream(w, []byte(fmt.Sprintf("## swarm task %s (%s)\n", id, w.role)))
@@ -309,13 +317,13 @@ func (c *Controller) work(w *worker, id string) workResult {
 		RigHome:       c.opts.RigHome,
 		StateDir:      c.opts.StateDir,
 		Allow:         c.opts.Allow,
-		Context:       c.ctx,
-		SpawnCtx:      c.ctx,
+		Context:       w.ctx,
+		SpawnCtx:      w.ctx,
 		WaitBusy:      true,
 		Observe:       func(p []byte) { c.stream(w, p) },
 	})
 	if err != nil {
-		c.loud("w%d: task %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: task %s: %v\n", w.id, id, err)
 		return workResult{}
 	}
 	if res.Exit != 0 || res.TimedOut {
@@ -325,30 +333,30 @@ func (c *Controller) work(w *worker, id string) workResult {
 		v := parseVerdict(res.Stdout)
 		switch v.kind {
 		case "accept":
-			_, err := todostore.Accept(c.ctx, c.opts.TodoDB, c.proj, id, w.identity)
+			_, err := todostore.Accept(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 			if err != nil {
-				c.loud("w%d: accept %s: %v\n", w.id, id, err)
+				c.loud(w, "w%d: accept %s: %v\n", w.id, id, err)
 			}
 			return workResult{ok: err == nil}
 		case "reject":
-			_, err := todostore.Reject(c.ctx, c.opts.TodoDB, c.proj, id, v.reason, w.identity)
+			_, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, v.reason, w.identity)
 			if err != nil {
-				c.loud("w%d: reject %s: %v\n", w.id, id, err)
+				c.loud(w, "w%d: reject %s: %v\n", w.id, id, err)
 			}
 			return workResult{ok: err == nil}
 		}
 		return workResult{noVerdict: true}
 	}
-	_, err = todostore.Complete(c.ctx, c.opts.TodoDB, c.proj, id, w.identity, true)
+	_, err = todostore.Complete(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, true)
 	if err != nil {
-		c.loud("w%d: complete %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: complete %s: %v\n", w.id, id, err)
 	}
 	return workResult{ok: err == nil}
 }
 
 func (c *Controller) release(w *worker, id string) {
-	if _, err := todostore.Reap(c.ctx, c.opts.TodoDB, c.proj, []string{w.identity}, c.architect); err != nil {
-		c.loud("w%d: release %s: %v\n", w.id, id, err)
+	if _, err := todostore.Reap(w.ctx, c.opts.TodoDB, w.proj, []string{w.identity}, w.architect); err != nil {
+		c.loud(w, "w%d: release %s: %v\n", w.id, id, err)
 	}
 }
 
@@ -358,13 +366,13 @@ func (c *Controller) failTask(w *worker, id string, noVerdict bool) {
 		if noVerdict {
 			reason = "the reviewer gave no verdict"
 		}
-		if _, err := todostore.Reject(c.ctx, c.opts.TodoDB, c.proj, id, reason, w.identity); err != nil {
-			c.loud("w%d: reject %s: %v\n", w.id, id, err)
+		if _, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, reason, w.identity); err != nil {
+			c.loud(w, "w%d: reject %s: %v\n", w.id, id, err)
 		}
 		return
 	}
-	if _, err := todostore.Fail(c.ctx, c.opts.TodoDB, c.proj, id, w.identity); err != nil {
-		c.loud("w%d: fail %s: %v\n", w.id, id, err)
+	if _, err := todostore.Fail(w.ctx, c.opts.TodoDB, w.proj, id, w.identity); err != nil {
+		c.loud(w, "w%d: fail %s: %v\n", w.id, id, err)
 	}
 }
 
@@ -374,19 +382,19 @@ func (c *Controller) retriesOf(w *worker, id string) int {
 	return w.retries[id]
 }
 
-func (c *Controller) idle() {
+func (c *Controller) idle(w *worker) {
 	poll := c.opts.Poll
 	if poll <= 0 {
 		poll = defaultPoll
 	}
 	select {
-	case <-c.ctx.Done():
+	case <-w.ctx.Done():
 	case <-time.After(poll):
 	}
 }
 
-func (c *Controller) loud(format string, args ...any) {
-	if c.ctx.Err() != nil {
+func (c *Controller) loud(w *worker, format string, args ...any) {
+	if w.ctx.Err() != nil {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "swarm: "+format, args...)
