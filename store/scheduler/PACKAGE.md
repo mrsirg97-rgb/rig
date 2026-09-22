@@ -29,13 +29,17 @@ written before the store commit; drift is surfaced in list.
   `timeout` (minutes, 1..1440, refused outside the range by name) bounds
   one fire and rides the create and update events; on update it is
   optional — absent means unchanged, `-1` resets to the runner default.
+  `stall` (minutes, same range and reset) is the silence window beside
+  it: NULL is "ceiling only", and a fire that writes nothing for longer
+  than the window is killed as hung.
 - `migration.go`: the one-time schema-1→2 migration: folds every
   `<hash>.sqlite`'s live jobs into `global.sqlite` (re-minted ids,
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
   `jN`), moves the old files aside as `<hash>.sqlite.migrated`, and is a
   no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
-  The schema-3 and schema-4 column adds (`command`, `timeout`) ride the
-  same function as presence-keyed `ALTER TABLE`s, since it runs on every open.
+  The schema-3, schema-4, and schema-5 column adds (`command`,
+  `timeout`, `stall`) ride the same function as presence-keyed
+  `ALTER TABLE`s, since it runs on every open.
 - `runner.go`: the job runner (the worker spawn, bwrap jail, socket
   proxy); the spawn captures each stream to the first and last 128 KiB
   of a 256 KiB budget with a truncation marker, so a verbose worker
@@ -43,6 +47,12 @@ written before the store commit; drift is surfaced in list.
   jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
   with a recorded reason. The spawn context is bounded by the row's own
   `timeout`, else `RunOpts.Timeout`, else `DefaultRunTimeout` (30 min).
+  The `Spawn` seam carries an output observer: every byte the worker
+  writes touches the row's `stall` window (a silent fire past it is
+  killed as hung, the log naming the reason) and streams to a live
+  `.stream` tail beside the canonical log, which is written whole at the
+  end. A delegate passes no observer — interactive sessions keep the
+  plain timeout.
   A command job's fire skips the busy probe and
   the jail: `sh -c` over the stored line with the process environment,
   in the job's cwd — the payload is the operator's own, the same trust
@@ -116,3 +126,9 @@ written before the store commit; drift is surfaced in list.
   too), and the runner's clock reads the row at fire time: precedence is
   the row's own timeout, then `RunOpts.Timeout`, then
   `DefaultRunTimeout`; a NULL is "unbound by the job", never 0.
+- `stall` is a job field too, and it is opt-in by design: NULL means
+  "ceiling only" (no stall kill), because a command job that is silent
+  by nature — a backup, a digest — must never be killed for not
+  printing. A model job that should never sit mute states its own
+  window. The liveness signal is bytes written, not the process: a long
+  silent computation is not a stall, a hung provider is.

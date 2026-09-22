@@ -186,7 +186,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 
-	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv)
+	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, nil)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
 	}

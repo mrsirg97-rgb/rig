@@ -123,8 +123,8 @@ plus one registration line, and the loop never names a concrete type.
   (worktrees share), a one-time migration on the schema bump, and every
   operation is deliberate.
 - `store/scheduler`: the background-jobs store: the event log, the
-  crontab as scheduling truth, the worker runner with the bwrap jail
-  and the socket proxy.
+  crontab as scheduling truth, the worker runner with the bwrap jail,
+  the socket proxy, the per-job stall watch, and the live run tail.
 - `store/{rem,scheduler,state,todo}/metadata`: hand-written container
   metadata: the source for the generated `ddl`/`domain` accessors. Edit
   and regenerate; never hand-edit the generated projections.

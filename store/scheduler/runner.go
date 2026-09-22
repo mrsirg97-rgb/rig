@@ -28,7 +28,7 @@ type SpawnResult struct {
 	TimedOut bool
 }
 
-type Spawn func(ctx context.Context, argv []string, cwd string, env []string) (SpawnResult, error)
+type Spawn func(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (SpawnResult, error)
 
 type RunOpts struct {
 	Home         string
@@ -38,6 +38,7 @@ type RunOpts struct {
 	WorkerCmd    []string
 	SwapURL      string
 	Timeout      time.Duration
+	Stall        time.Duration
 	Now          func() time.Time
 	Sandbox      string
 	SandboxBinds []string
@@ -227,19 +228,51 @@ func RunJob(key string, opts RunOpts) error {
 	defer cancel()
 	startedTime := opts.Now().UTC()
 	started := startedTime.Format(time.RFC3339)
-	res, err := opts.Spawn(ctx, argv, job.Cwd, spawnEnv)
-	if err != nil {
-		return fmt.Errorf("run-job: spawn: %w", err)
-	}
-	ended := opts.Now().UTC().Format(time.RFC3339)
-	durationMs := opts.Now().UTC().Sub(startedTime).Milliseconds()
 
-	logName := strings.NewReplacer(":", "-", ".", "-").Replace(opts.Now().UTC().Format("2006-01-02T15:04:05.000Z")) + ".log"
+	stall := opts.Stall
+	if job.Stall != nil && *job.Stall > 0 {
+		stall = time.Duration(*job.Stall) * time.Minute
+	}
+	var watch *stallWatch
+	if stall > 0 {
+		watch = newStallWatch(stall, cancel)
+	}
+
+	logName := strings.NewReplacer(":", "-", ".", "-").Replace(startedTime.Format("2006-01-02T15:04:05.000Z")) + ".log"
 	logRel := filepath.Join("runs", id, logName)
 	dir := filepath.Join(opts.Home, "runs", id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("run-job: log dir: %w", err)
 	}
+	streamPath := filepath.Join(dir, strings.TrimSuffix(logName, ".log")+".stream")
+	stream, err := os.Create(streamPath)
+	if err != nil {
+		if watch != nil {
+			watch.stop()
+		}
+		return fmt.Errorf("run-job: stream: %w", err)
+	}
+	observe := func(p []byte) {
+		if watch != nil {
+			watch.touch()
+		}
+		stream.Write(p)
+	}
+	res, err := opts.Spawn(ctx, argv, job.Cwd, spawnEnv, observe)
+	stream.Close()
+	os.Remove(streamPath)
+	if watch != nil {
+		watch.stop()
+	}
+	if err != nil {
+		return fmt.Errorf("run-job: spawn: %w", err)
+	}
+	if watch != nil && watch.hasFired() && ctx.Err() == context.Canceled {
+		res.Stderr += "\n[runner: killed after stall]\n"
+		res.Exit = 1
+	}
+	ended := opts.Now().UTC().Format(time.RFC3339)
+	durationMs := opts.Now().UTC().Sub(startedTime).Milliseconds()
 	content := fmt.Sprintf(
 		"# rig-scheduler run\nkey=%s\nstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
 		key, started, res.Exit, durationMs, res.Stdout, res.Stderr)
@@ -330,8 +363,9 @@ func pruneLogs(dir string, keep int) error {
 	}
 	var names []string
 	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".log") {
-			names = append(names, e.Name())
+		name := e.Name()
+		if strings.HasSuffix(name, ".log") || strings.HasSuffix(name, ".stream") {
+			names = append(names, name)
 		}
 	}
 	sort.Strings(names)
@@ -442,7 +476,7 @@ func RealFetch(timeout time.Duration) Fetch {
 	}
 }
 
-func RealSpawn(ctx context.Context, argv []string, cwd string, env []string) (SpawnResult, error) {
+func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (SpawnResult, error) {
 	if len(argv) == 0 {
 		return SpawnResult{}, errors.New("spawn: empty argv")
 	}
@@ -461,6 +495,8 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string) (Sp
 	}
 	out := newCapture(spawnCaptureCap)
 	errBuf := newCapture(spawnCaptureCap)
+	out.observe = observe
+	errBuf.observe = observe
 	cmd.Stdout = out
 	cmd.Stderr = errBuf
 	runErr := cmd.Run()
@@ -490,6 +526,7 @@ type capture struct {
 	headCap int
 	tailCap int
 	full    bool
+	observe func([]byte)
 }
 
 func newCapture(cap int) *capture {
@@ -501,6 +538,9 @@ func newCapture(cap int) *capture {
 }
 
 func (c *capture) Write(p []byte) (int, error) {
+	if c.observe != nil {
+		c.observe(p)
+	}
 	if len(c.head) < c.headCap {
 		room := c.headCap - len(c.head)
 		if len(p) <= room {

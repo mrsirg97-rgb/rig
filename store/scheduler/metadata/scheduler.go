@@ -44,6 +44,7 @@ type Job struct {
 	Model        string  `alias:"name=model,nullable=false"`
 	Busy         string  `alias:"name=busy,nullable=false"`
 	Timeout      *int64  `alias:"name=timeout,nullable=true"`
+	Stall        *int64  `alias:"name=stall,nullable=true"`
 	State        string  `alias:"name=state,nullable=false"`
 	LastStatus   *string `alias:"name=last_status,nullable=true"`
 	LastTs       *string `alias:"name=last_ts,nullable=true"`
