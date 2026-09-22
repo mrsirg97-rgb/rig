@@ -281,3 +281,60 @@ func TestRelativeProjectResolvesToTheAbsoluteWorkspace(t *testing.T) {
 		t.Fatalf("a relative project must resolve to the absolute workspace:\n%s", out)
 	}
 }
+
+func openV2Project(t *testing.T, home, cwd string) {
+	t.Helper()
+	path := state.StorePath(home, cwd)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, _, _, err := store.Open(path, state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.DB.Close()
+	for _, stmt := range []string{
+		`ALTER TABLE "messages" DROP COLUMN "model"`,
+		`ALTER TABLE "sessions" DROP COLUMN "label"`,
+		`UPDATE "meta" SET "value" = '2' WHERE "key" = 'schema_version'`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := db.Exec(`INSERT INTO "sessions" ("id", "cwd", "ended_at", "exit", "model", "started_at", "version")
+		VALUES ('old0001', $1, NULL, 'ok', 'm1', $2, '0.16.1')`, cwd, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO "messages" ("seq", "content", "created_at", "role", "session_id")
+		VALUES (1, 'old prompt', $1, 'user', 'old0001')`, now); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSessionsToolMigratesAnOlderProjectStoreToTheBuildVersion(t *testing.T) {
+	home := t.TempDir()
+	cwd := "/workspace/oldstore"
+	openV2Project(t, home, cwd)
+	tool := sessions.New(home, cwd)
+	out, err := run(t, tool, `{"action":"list"}`)
+	if err != nil {
+		t.Fatalf("the tool must migrate and read an older store, got %v", err)
+	}
+	if !strings.Contains(out, "old0001") {
+		t.Fatalf("the migrated store must list its session:\n%s", out)
+	}
+	db, _, _, err := store.Open(state.StorePath(home, cwd), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.DB.Close()
+	var v string
+	if err := db.QueryRow(`SELECT "value" FROM "meta" WHERE "key" = 'schema_version'`).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	if v != "3" {
+		t.Fatalf("the store must land on the build version after the read, got %s", v)
+	}
+}

@@ -240,7 +240,7 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 		t.Fatal("sessions must be a native (the eighteenth)")
 	}
 	if mutatingNatives["sessions"] {
-		t.Fatal("sessions must be absent from mutatingNatives (read-only: it never pauses)")
+		t.Fatal("sessions must be absent from mutatingNatives (it never pauses; a read's migration is the store's own)")
 	}
 	r := &root{}
 	r.natives = make(map[string]bool, len(nativeToolNames))

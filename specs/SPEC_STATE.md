@@ -514,9 +514,10 @@ door — pane has no session store to know an owner died; `next` is not a
 verb: its semantics ride the render's next pointer, blocked-skipping),
 `rem {learn|recall|reflect|prune}`, `scheduler {create|
 update|list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
-not pane's: a read-only introspection of the session store, absent from
-the root's `mutatingNatives` and from the concurrent read set; it opens
-a store, like `todo`/`rem`/`scheduler`, so it is not a pure observation).
+not pane's: an introspection of the session store that migrates an older
+store on open, absent from the root's `mutatingNatives` and from the
+concurrent read set; it opens a store, like `todo`/`rem`/`scheduler`, so
+it is not a pure observation).
 Descriptions and schema property text are pane's promptGuidelines, lowercase, terse.
 
 ## decisions

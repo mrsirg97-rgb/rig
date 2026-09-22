@@ -56,7 +56,7 @@ worker fleet is configured. Restrict them with `--allow`:
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
 | `delegate` | a headless worker for a bounded subtask; several run in parallel in one turn, up to the fleet's slots |
-| `sessions` | read-only vitals of the session store |
+| `sessions` | vitals of the session store (an older store is migrated on open) |
 | `plugin` / `plugins` | the door into your python plugins, and their ecosystem |
 
 Every tool result is capped. Repeated identical failures are bounded. An
