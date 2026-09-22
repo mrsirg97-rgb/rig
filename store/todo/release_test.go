@@ -69,6 +69,7 @@ func TestReleaseRefusesOwnUnclaimedFreshAndFinished(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, done, sessA); err != nil {
 		t.Fatalf("complete done: %v", err)
 	}
+	acceptDone(t, db, done, sessA)
 	if _, err := todostore.Start(ctx, db, p, fresh, sessA); err != nil {
 		t.Fatalf("start fresh: %v", err)
 	}
@@ -92,8 +93,8 @@ func TestReleaseRefusesOwnUnclaimedFreshAndFinished(t *testing.T) {
 	} else if !strings.Contains(err.Error(), sessA) {
 		t.Errorf("fresh-claim refusal must name the owner: %v", err)
 	}
-	// create(1) + start own(2) + auto-start+complete done(3,4) + start fresh(5).
-	if got := eventCount(t, db); got != 5 {
+	// create(1) + start own(2) + auto-start+complete done(3,4) + claim+accept done(5,6) + start fresh(7).
+	if got := eventCount(t, db); got != 7 {
 		t.Errorf("refused releases must append nothing: %d events", got)
 	}
 }

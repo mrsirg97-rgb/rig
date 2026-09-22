@@ -22,10 +22,25 @@ snapshot)`), so the stale footer's quieting after the fold reads as
 explained, not as state loss (SPEC_STREAMLINE 2). The unknown-id
 refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 
+The swarm surface (1.3.9): `claim` takes the first pending task whose
+dependency is done (the order `next` shows) and marks it active for the
+caller, or with `status=review` the first task in review that no
+reviewer holds (the status stays review, the owner becomes the
+caller); `nothing to do` when nothing qualifies. `note` appends to any
+task whatever the hold — notes are how agents talk about shared work —
+and `read` renders them in order with their session, one indented line
+each. `complete` now moves active to review, `accept` moves review to
+done, `reject` moves review to pending and records the reason as a
+note; accept and reject need the review hold, and an unclaimed review
+task refuses with the claim door. `blockedBy` clears only on done (a
+dependency in review keeps its dependents blocked), prune still drops
+done only, and the summary counts review rows (`· N in review`).
+
 ## What it includes
 
-- `todo.go`: the store: operations, replay, position minting, the DAG
-  validation, per-scope folds and one shared event-log sequence.
+- `todo.go`: the store: operations (claim, note, accept, reject, the
+  review state), replay, position minting, the DAG validation, per-scope
+  folds and one shared event-log sequence.
 - `binding.go`: which queue a session works in. `ProjectOf(dir)` mints a
   `Project` from a directory (abs first: one place must not have two
   bucket keys), `Bind`/`BindingOf` record and read a session's binding in
@@ -53,8 +68,16 @@ refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 - Create is the only dependency-mutation point: the DAG is validated
   there at the boundary.
 - Complete on the caller's own unclaimed pending task implicitly claims
-  and completes: start+complete, both events appended, the echo noting
-  the auto-start. Foreign-claim and blocked-by-dependency refusals stay.
+  and submits: start+complete, both events appended, the echo noting the
+  auto-start. Foreign-claim and blocked-by-dependency refusals stay.
+- The review gate (1.3.9): complete ends in review, accept ends in done,
+  reject returns to pending with the reason as a note. A reviewer claims
+  the first unowned review task (`claim status=review`); accept/reject
+  require that hold, so exactly one reviewer decides. Notes are free (no
+  hold needed), bounded at MaxNoteLen, and replayable: they ride the
+  event log and the compact snapshot. Historical completes (pre-1.3.9
+  logs) replay as done through ReviewMigration's accept pairing, a
+  one-time 2→3 migration that is a no-op on later opens.
 - Release returns a claimed task to pending (the dead-claim door): it
   refuses the caller's own claim, an unclaimed task, a finished task,
   and a foreign claim younger than StaleClaimAfter (24h). Reap is the

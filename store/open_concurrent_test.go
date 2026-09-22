@@ -121,6 +121,15 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("%d of 40 concurrent completes failed: %v", len(errs), errs[0])
 	}
+	for i := 0; i < 40; i++ {
+		id := fmt.Sprintf("t%d", i+1)
+		if _, err := todostore.Claim(context.Background(), d1, p, "reviewer", "review"); err != nil {
+			t.Fatalf("claim review %s: %v", id, err)
+		}
+		if _, err := todostore.Accept(context.Background(), d1, p, id, "reviewer"); err != nil {
+			t.Fatalf("accept %s: %v", id, err)
+		}
+	}
 	reply, err := todostore.Read(context.Background(), d1, p, "")
 	if err != nil {
 		t.Fatalf("read: %v", err)

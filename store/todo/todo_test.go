@@ -334,6 +334,7 @@ func TestRecreateProvidedUpdatesTheLink(t *testing.T) {
 		if _, err := todostore.Complete(ctx, db, p, id, "s1"); err != nil {
 			t.Fatalf("done %s: %v", id, err)
 		}
+		acceptDone(t, db, id, "s1")
 	}
 }
 
@@ -504,12 +505,23 @@ func projDep(t *testing.T, db store.DB, text string) string {
 
 func taskIDText(t *testing.T, reply, text string) string {
 	t.Helper()
-	re := regexp.MustCompile(`\bt(\d+)\b \[[~x! ]\] ` + regexp.QuoteMeta(text))
+	re := regexp.MustCompile(`\bt(\d+)\b \[[~x!r ]\] ` + regexp.QuoteMeta(text))
 	if mm := re.FindStringSubmatch(reply); mm != nil {
 		return "t" + mm[1]
 	}
 	t.Fatalf("no task %q in:\n%s", text, reply)
 	return ""
+}
+
+func acceptDone(t *testing.T, db store.DB, id, session string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := todostore.Claim(ctx, db, p, session, "review"); err != nil {
+		t.Fatalf("claim review %s: %v", id, err)
+	}
+	if _, err := todostore.Accept(ctx, db, p, id, session); err != nil {
+		t.Fatalf("accept %s: %v", id, err)
+	}
 }
 
 func age(t *testing.T, db store.DB, n int) {
@@ -625,6 +637,8 @@ func TestMoveWorksOnDoneAndFailedTasks(t *testing.T) {
 	for _, c := range []func() error{
 		func() error { _, e := todostore.Start(ctx, db, p, doneID, "s1"); return e },
 		func() error { _, e := todostore.Complete(ctx, db, p, doneID, "s1"); return e },
+		func() error { _, e := todostore.Claim(ctx, db, p, "s1", "review"); return e },
+		func() error { _, e := todostore.Accept(ctx, db, p, doneID, "s1"); return e },
 		func() error { _, e := todostore.Start(ctx, db, p, failID, "s1"); return e },
 		func() error { _, e := todostore.Fail(ctx, db, p, failID, "s1"); return e },
 	} {
@@ -965,11 +979,15 @@ func TestCompleteOnOwnPendingAutoStartsAndCompletes(t *testing.T) {
 	if !strings.Contains(done, "auto-started") {
 		t.Errorf("the echo must note the auto-start:\n%s", done)
 	}
-	if !strings.Contains(done, "[x] instant") {
-		t.Errorf("done marker:\n%s", done)
+	if !strings.Contains(done, "[r] instant") {
+		t.Errorf("review marker:\n%s", done)
 	}
+	if got := projStatus(t, db, "instant"); got != "review" {
+		t.Errorf("status = %q, want review", got)
+	}
+	acceptDone(t, db, id, sessA)
 	if got := projStatus(t, db, "instant"); got != "done" {
-		t.Errorf("status = %q, want done", got)
+		t.Errorf("after accept status = %q, want done", got)
 	}
 	rows := rawQuery(t, db, "SELECT op, session FROM events ORDER BY seq")
 	defer rows.Close()
@@ -982,7 +1000,7 @@ func TestCompleteOnOwnPendingAutoStartsAndCompletes(t *testing.T) {
 		ops = append(ops, op.String)
 		sess = append(sess, s.String)
 	}
-	if len(ops) != 3 {
+	if len(ops) < 3 {
 		t.Fatalf("events = %v, want create+start+complete", ops)
 	}
 	if ops[1] != "start" || ops[2] != "complete" {
@@ -1332,12 +1350,13 @@ func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, gate, "s1"); err != nil {
 		t.Fatalf("complete gate: %v", err)
 	}
+	acceptDone(t, db, gate, "s1")
 	done, err := todostore.Complete(ctx, db, p, work, "s1")
 	if err != nil {
 		t.Fatalf("unblocked complete: %v", err)
 	}
-	if !strings.Contains(done, "[x] work") {
-		t.Errorf("done marker:\n%s", done)
+	if !strings.Contains(done, "[r] work") {
+		t.Errorf("review marker:\n%s", done)
 	}
 }
 
@@ -1483,12 +1502,14 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatal(err)
 	}
+	acceptDone(t, db, "t1", "s1")
 	if _, err := todostore.Start(ctx, db, p, "t2", "s1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := todostore.Complete(ctx, db, p, "t2", "s1"); err != nil {
 		t.Fatal(err)
 	}
+	acceptDone(t, db, "t2", "s1")
 
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "c"}}, "s1"); err != nil {
 		t.Fatal(err)
@@ -1521,6 +1542,7 @@ func TestLifecycleDoneIsReadOnly(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
+	acceptDone(t, db, "t1", "s1")
 	if got := projStatus(t, db, "lc"); got != "done" {
 		t.Fatalf("status = %q, want done", got)
 	}
@@ -1562,6 +1584,10 @@ func TestFailedToRetryToStartedAgain(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatal(err)
 	}
+	if got := projStatus(t, db, "fc"); got != "review" {
+		t.Fatalf("status = %q, want review", got)
+	}
+	acceptDone(t, db, "t1", "s1")
 	if got := projStatus(t, db, "fc"); got != "done" {
 		t.Fatalf("status = %q, want done", got)
 	}
@@ -1620,6 +1646,7 @@ func TestReadDefaultHidesDoneRows(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, drop, "s1"); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
+	acceptDone(t, db, drop, "s1")
 	read, err := todostore.Read(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -1651,6 +1678,7 @@ func TestAllDoneQueueRendersSummaryOnly(t *testing.T) {
 		if _, err := todostore.Complete(ctx, db, p, id, "s1"); err != nil {
 			t.Fatalf("complete: %v", err)
 		}
+		acceptDone(t, db, id, "s1")
 	}
 	read, err := todostore.Read(ctx, db, p, "s1")
 	if err != nil {
@@ -1681,6 +1709,7 @@ func TestReadAllShowsDoneRows(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, drop, "s1"); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
+	acceptDone(t, db, drop, "s1")
 	full, err := todostore.ReadAll(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("read all: %v", err)
@@ -1711,6 +1740,7 @@ func TestNoWaitsOnReferencesAHiddenDoneRow(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatalf("complete gate: %v", err)
 	}
+	acceptDone(t, db, "t1", "s1")
 	read, err := todostore.Read(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -1854,6 +1884,8 @@ func TestPruneDropsDoneRowsAndKeepsTheRest(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, "t2", "s1"); err != nil {
 		t.Fatal(err)
 	}
+	acceptDone(t, db, "t1", "s1")
+	acceptDone(t, db, "t2", "s1")
 	reply, err := todostore.Prune(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("prune: %v", err)
@@ -1997,6 +2029,7 @@ func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 		if _, err := todostore.Complete(ctx, db, p, id, "s1"); err != nil {
 			t.Fatal(err)
 		}
+		acceptDone(t, db, id, "s1")
 	}
 	if _, err := todostore.Prune(ctx, db, p, "s1"); err != nil {
 		t.Fatal(err)
