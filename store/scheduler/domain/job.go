@@ -25,6 +25,7 @@ type Job struct {
 	Model      string  `db:"model"`
 	Name       string  `db:"name"`
 	Prompt     string  `db:"prompt"`
+	Stall      *int64  `db:"stall"`
 	State      string  `db:"state"`
 	Timeout    *int64  `db:"timeout"`
 	UpdatedSeq int64   `db:"updated_seq"`
@@ -60,6 +61,7 @@ func ScanJob(row lazy.ScanRow) (Job, error) {
 		&out.Model,
 		&out.Name,
 		&out.Prompt,
+		&out.Stall,
 		&out.State,
 		&out.Timeout,
 		&out.UpdatedSeq,
@@ -87,7 +89,7 @@ func (d *jobDomain) GetJob(ctx context.Context, id string) *lazy.Lazy[Job] {
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "timeout", "updated_seq" FROM "jobs" WHERE "id" = $1`,
+		`SELECT "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "stall", "state", "timeout", "updated_seq" FROM "jobs" WHERE "id" = $1`,
 		id,
 	)
 	out, err := ScanJob(row)
@@ -124,7 +126,7 @@ func (d *jobDomain) GetJobBatch(ctx context.Context, keys []string) *lazy.Lazy[J
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "timeout", "updated_seq" FROM "jobs" WHERE "id" IN (`+ph+`)`, args...)
+		`SELECT "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "stall", "state", "timeout", "updated_seq" FROM "jobs" WHERE "id" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -152,7 +154,7 @@ func (d *jobDomain) InsertJob(ctx context.Context, row Job) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "jobs" ("id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "timeout", "updated_seq") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "timeout", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "jobs" ("id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "stall", "state", "timeout", "updated_seq") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "stall", "state", "timeout", "updated_seq"`,
 		row.Id,
 		row.At,
 		row.Busy,
@@ -166,6 +168,7 @@ func (d *jobDomain) InsertJob(ctx context.Context, row Job) (*Job, error) {
 		row.Model,
 		row.Name,
 		row.Prompt,
+		row.Stall,
 		row.State,
 		row.Timeout,
 		row.UpdatedSeq,
@@ -181,7 +184,7 @@ func (d *jobDomain) DeleteJob(ctx context.Context, id string) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "jobs" WHERE "id" = $1 RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "timeout", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "jobs" WHERE "id" = $1 RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "stall", "state", "timeout", "updated_seq"`,
 		id,
 	)
 	if err != nil {
@@ -195,7 +198,7 @@ func (d *jobDomain) UpdateJob(ctx context.Context, row Job) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "jobs" SET "at" = $1, "busy" = $2, "command" = $3, "created_seq" = $4, "cron" = $5, "cwd" = $6, "last_exit" = $7, "last_status" = $8, "last_ts" = $9, "model" = $10, "name" = $11, "prompt" = $12, "state" = $13, "timeout" = $14, "updated_seq" = $15 WHERE "id" = $16 RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "state", "timeout", "updated_seq"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "jobs" SET "at" = $1, "busy" = $2, "command" = $3, "created_seq" = $4, "cron" = $5, "cwd" = $6, "last_exit" = $7, "last_status" = $8, "last_ts" = $9, "model" = $10, "name" = $11, "prompt" = $12, "stall" = $13, "state" = $14, "timeout" = $15, "updated_seq" = $16 WHERE "id" = $17 RETURNING "id", "at", "busy", "command", "created_seq", "cron", "cwd", "last_exit", "last_status", "last_ts", "model", "name", "prompt", "stall", "state", "timeout", "updated_seq"`,
 		row.At,
 		row.Busy,
 		row.Command,
@@ -208,6 +211,7 @@ func (d *jobDomain) UpdateJob(ctx context.Context, row Job) (*Job, error) {
 		row.Model,
 		row.Name,
 		row.Prompt,
+		row.Stall,
 		row.State,
 		row.Timeout,
 		row.UpdatedSeq,

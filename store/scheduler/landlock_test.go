@@ -20,7 +20,7 @@ type landlockEnvSpawn struct {
 	err    error
 }
 
-func (f *landlockEnvSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
+func (f *landlockEnvSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
 	f.env = env
 	return f.result, f.err

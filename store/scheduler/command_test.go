@@ -218,8 +218,8 @@ func TestSchemaThreeAddsTheCommandColumnToAV2Store(t *testing.T) {
 	if err := db.DB.QueryRow(`SELECT value FROM meta WHERE key='schema_version'`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != "4" {
-		t.Fatalf("the version must move to head (4), got %s", version)
+	if version != "5" {
+		t.Fatalf("the version must move to head (5), got %s", version)
 	}
 	if row := jobsRow(t, h, "j1"); row == nil || row["prompt"] != "p" || row["command"] != nil {
 		t.Fatalf("the legacy model job must survive with a NULL command: %v", row)

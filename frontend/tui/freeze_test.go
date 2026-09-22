@@ -37,6 +37,7 @@ func TestFreezeGate(t *testing.T) {
 			p == "frontend/cli" || strings.HasPrefix(p, "frontend/cli/") ||
 
 			p == "frontend/web" || strings.HasPrefix(p, "frontend/web/") ||
+			p == "frontend/oneshot" || strings.HasPrefix(p, "frontend/oneshot/") ||
 			p == "cmd/rig" || strings.HasPrefix(p, "cmd/rig/") ||
 			p == "command" || strings.HasPrefix(p, "command/") ||
 			p == "store/state" || strings.HasPrefix(p, "store/state/") ||

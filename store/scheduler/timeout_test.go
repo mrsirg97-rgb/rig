@@ -203,7 +203,7 @@ func TestRunJobWithoutAPerJobTimeoutKeepsTheDefault(t *testing.T) {
 func runAndCatchDeadline(t *testing.T, h *harness, optsTimeout time.Duration) time.Duration {
 	t.Helper()
 	var remaining time.Duration
-	spawn := func(ctx context.Context, argv []string, wd string, env []string) (sched.SpawnResult, error) {
+	spawn := func(ctx context.Context, argv []string, wd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 		dl, ok := ctx.Deadline()
 		if !ok {
 			t.Fatal("the spawn context must carry a deadline")

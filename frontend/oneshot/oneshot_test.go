@@ -5,11 +5,30 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
 )
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
 
 func TestOneShotFeedsExactlyOnePromptThenEOFs(t *testing.T) {
 	o := &oneshot.OneShot{Prompt: "do the thing"}
@@ -38,17 +57,84 @@ func TestOneShotErrPromptNamesTheEmptyConstruction(t *testing.T) {
 	}
 }
 
-func TestOneShotIgnoresTheNewEvents(t *testing.T) {
-	var sb strings.Builder
-	o := &oneshot.OneShot{Out: &sb}
+func TestOneShotKeepsStdoutTheAnswerAndStderrTheLiveness(t *testing.T) {
+	var out, errB strings.Builder
+	o := &oneshot.OneShot{Out: &out, Err: &errB}
 	o.Notify(core.ReasoningDelta{Text: "thinking "})
 	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
-	o.Notify(core.ToolResult{ID: "c1", Content: "out", Err: errors.New("boom")})
+	o.Notify(core.ToolResult{ID: "c1", Content: "out"})
 	o.Notify(core.TextDelta{Text: "hello"})
-	o.Notify(core.TurnEnd{Reason: core.TurnOver})
-	o.Notify(core.TestEvent{Name: "x"})
-	if sb.String() != "hello" {
-		t.Fatalf("the worker's stdout is the answer, got %q", sb.String())
+	o.Notify(core.Done{})
+	if out.String() != "hello\n" {
+		t.Fatalf("stdout is the answer only, got %q", out.String())
+	}
+	stderr := errB.String()
+	for _, want := range []string{"thinking ", "tool bash start", "tool bash end"} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr must carry %q, got %q", want, stderr)
+		}
+	}
+}
+
+func TestOneShotHeartbeatsOnStderrWhileAToolRuns(t *testing.T) {
+	var out syncBuffer
+	var errB syncBuffer
+	o := &oneshot.OneShot{Out: &out, Err: &errB, Heartbeat: 5 * time.Millisecond}
+	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(errB.String(), "heartbeat") {
+		if time.Now().After(deadline) {
+			t.Fatalf("no heartbeat while the tool ran: %q", errB.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	o.Notify(core.ToolResult{ID: "c1", Content: "out"})
+	after := errB.String()
+	time.Sleep(50 * time.Millisecond)
+	if errB.String() != after {
+		t.Fatalf("heartbeats must stop with the tool, got %q", errB.String())
+	}
+	if out.String() != "" {
+		t.Fatalf("a silent tool run must not touch stdout, got %q", out.String())
+	}
+}
+
+func TestOneShotBatchHeartbeatOutlivesTheFirstResult(t *testing.T) {
+	var out syncBuffer
+	var errB syncBuffer
+	o := &oneshot.OneShot{Out: &out, Err: &errB, Heartbeat: 5 * time.Millisecond}
+	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
+	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c2", Name: "python"}})
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(errB.String(), "heartbeat") {
+		if time.Now().After(deadline) {
+			t.Fatalf("no heartbeat while the batch ran: %q", errB.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	o.Notify(core.ToolResult{ID: "c1", Content: "bash out"})
+	before := errB.String()
+	deadline = time.Now().Add(2 * time.Second)
+	for errB.String() == before {
+		if time.Now().After(deadline) {
+			t.Fatalf("the batch heartbeat must outlive the first result: %q", errB.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	o.Notify(core.ToolResult{ID: "c2", Content: "py out"})
+	after := errB.String()
+	if !strings.Contains(after, "tool bash end") || !strings.Contains(after, "tool python end") {
+		t.Fatalf("each result must name its own tool: %q", after)
+	}
+	if strings.Index(after, "tool bash end") > strings.Index(after, "tool python end") {
+		t.Fatalf("the end lines must land in call order: %q", after)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if errB.String() != after {
+		t.Fatalf("the batch heartbeat must stop with the last result: %q", errB.String())
+	}
+	if out.String() != "" {
+		t.Fatalf("a silent batch must not touch stdout: %q", out.String())
 	}
 }
 
@@ -75,5 +161,20 @@ func TestOneShotNotifyRendersAssistantTextAndFaultsLoud(t *testing.T) {
 	o2 := &oneshot.OneShot{Out: &fb}
 	if o2.Faulted() {
 		t.Fatal("a fresh session reports faulted")
+	}
+}
+
+func TestOneShotFaultLandsOnStderrWhenPresent(t *testing.T) {
+	var out, errB strings.Builder
+	o := &oneshot.OneShot{Out: &out, Err: &errB}
+	o.Notify(core.Fault{Err: errors.New("boom")})
+	if !strings.Contains(errB.String(), "boom") {
+		t.Fatalf("a fault must land on stderr: %q", errB.String())
+	}
+	if out.String() != "" {
+		t.Fatalf("a fault must not touch stdout: %q", out.String())
+	}
+	if !o.Faulted() {
+		t.Fatal("the fault must mark the session")
 	}
 }

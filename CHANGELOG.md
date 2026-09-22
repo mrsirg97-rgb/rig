@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+## [1.3.8]: the scheduler kills a stalled worker, not a busy one
+
+The daily optimizer kept getting murdered at an arbitrary minute: it
+finished reports in 4-20 minutes and then, when the run drifted into
+implementation work, it always outlived its budget. The wall clock is
+the right bound for spend but the wrong bound for liveness, so the
+scheduler now tells them apart.
+
+- **Per-job stall kill**: `stall` (nullable minutes, same 1..1440 range
+  and `-1` reset as `timeout`) is the silence window on one fire. A
+  worker that writes nothing for longer than the window is killed as
+  hung — the log names it (`[runner: killed after stall]`), a fail run
+  like the timeout's note. `timeout` keeps its meaning: the hard
+  wall-clock ceiling, the spend bound. NULL stall is "ceiling only", so
+  a command job that is silent by nature never surprises.
+- **Output is the liveness signal**: every byte the worker writes
+  touches the window, so a long silent backtest with no stdout is never
+  confused with a hung provider. The `Spawn` seam carries the observer;
+  a delegate passes none (interactive sessions keep the plain timeout).
+  And the one-shot worker now lives on the contract: stdout is the
+  answer only, stderr carries the liveness — reasoning deltas as they
+  stream, one line at tool start and end, and a heartbeat while any tool
+  runs (30s cadence) — so a worker deep in a silent tool is never killed
+  for not printing.
+- **Live run tail**: a scheduled fire streams its output to
+  `runs/<id>/<run>.stream` while it runs — `tail -f` a long job — and
+  the canonical log is written whole at the end; the stream is removed,
+  and a run the runner never got to finish leaves it behind. Log names
+  now key on the run's start time, so the stream and the log share one
+  base name.
+- **Schema 5**: `jobs.stall` rides the same presence-keyed idempotent
+  migration as `timeout` and `command`, and the field survives
+  compaction like they do.
+- **The hedge fund's j9** (the run that found this) now sets
+  `stall=30` beside its `timeout=120`: silent for half an hour = hung,
+  but a working session gets the full two hours.
+
 ## [1.3.7]: the docs and the landing page catch up
 
 The 1.3.x surface landed in the code and the specs, but the README, the

@@ -24,7 +24,9 @@ const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D M
 	"pause/resume/remove; runs is the audit trail. Reply: the job row or the list; ids (jN) are minted — copy from list, never invent. busy:skip (default) skips a fire while another model holds " +
 	"the GPU, force evicts it — only when the user wants the GPU now; a drifting job is not trustworthy " +
 	"until the note clears; a failed once job is done — re-create it to retry. A job bounds each fire " +
-	"with timeout (minutes, default 30, ceiling 24h; update with -1 resets it). command jobs run a fixed " +
+	"with timeout (minutes, default 30, ceiling 24h; update with -1 resets it) and stall (minutes, the " +
+	"silence window: a fire that writes nothing for longer is killed as hung; NULL/0 = ceiling only; " +
+	"update with -1 resets it). command jobs run a fixed " +
 	"shell line instead of a worker session: no GPU, no busy policy, prompt/model/busy refused; for " +
 	"deterministic scripts (pollers, digests, backups), never for anything needing judgment."
 
@@ -70,6 +72,12 @@ func schemaJSON(defModel string) string {
 			"maximum": 1440,
 			"description": "Wall-clock cap per fire, in minutes (runner default 30, ceiling 1440); on update, -1 resets to the default. Omit to leave unchanged."
 		},
+		"stall": {
+			"type": "integer",
+			"minimum": -1,
+			"maximum": 1440,
+			"description": "Silence window per fire, in minutes: a fire whose worker writes nothing for longer is killed as hung. NULL/0 = ceiling only. On update, -1 resets to the default. Omit to leave unchanged."
+		},
 		"cwd": {
 			"type": "string",
 			"description": "Working directory the job runs in (default: this session's cwd)."
@@ -98,6 +106,7 @@ type given struct {
 	Model   string `json:"model"`
 	Busy    string `json:"busy"`
 	Timeout int    `json:"timeout"`
+	Stall   int    `json:"stall"`
 	Cwd     string `json:"cwd"`
 	ID      string `json:"id"`
 	N       *int   `json:"n"`
@@ -174,7 +183,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		return sched.Create(ctx, a.db, a.ct, sched.CreateInput{
 			Name: name, Prompt: g.Prompt, Command: command, Cron: g.Cron, At: g.At,
-			Model: model, Busy: busy, Cwd: jobCwd, Timeout: g.Timeout,
+			Model: model, Busy: busy, Cwd: jobCwd, Timeout: g.Timeout, Stall: g.Stall,
 		}, cwd, session, a.runnerCmd, time.Now)
 	case "update":
 		if g.ID == "" {
@@ -190,7 +199,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
 			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron,
-			At: g.At, Cwd: updateCwd, Model: g.Model, Busy: g.Busy, Timeout: g.Timeout,
+			At: g.At, Cwd: updateCwd, Model: g.Model, Busy: g.Busy, Timeout: g.Timeout, Stall: g.Stall,
 		}, session, a.runnerCmd, time.Now)
 	case "list":
 		return sched.List(ctx, a.db, a.ct, cwd, nil, time.Now)

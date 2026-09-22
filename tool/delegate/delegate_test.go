@@ -100,7 +100,7 @@ func (f *fakeSpawn) count() int {
 	return len(f.calls)
 }
 
-func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
+func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	started := time.Now()
 	f.mu.Lock()
 	idx := len(f.calls)
@@ -526,9 +526,9 @@ func TestDelegateLeavesTheProcessEnvAlone(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	var seen string
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	wrapped := func(ctx context.Context, argv []string, cwd string, env []string) (sched.SpawnResult, error) {
+	wrapped := func(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 		seen = os.Getenv(sched.DelegateEnv)
-		return spawn.spawn(ctx, argv, cwd, env)
+		return spawn.spawn(ctx, argv, cwd, env, observe)
 	}
 	tool := h.newTool(t, fakeFetch(""), wrapped)
 	if _, err := tool.Exec(context.Background(), runArgs("do the sweep")); err != nil {

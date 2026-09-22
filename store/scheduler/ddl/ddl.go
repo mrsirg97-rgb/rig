@@ -32,6 +32,7 @@ func Statements() []string {
   "model" TEXT NOT NULL,
   "name" TEXT NOT NULL,
   "prompt" TEXT NOT NULL,
+  "stall" INTEGER,
   "state" TEXT NOT NULL,
   "timeout" INTEGER,
   "updated_seq" INTEGER NOT NULL,

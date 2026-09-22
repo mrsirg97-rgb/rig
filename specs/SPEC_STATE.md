@@ -493,6 +493,34 @@ post-merge corrections)
   the explicit reset to the default (NULL, unrendered by `list`) because
   an absent field means "unchanged". Schema 4 adds the column with the
   same presence-keyed idempotent add.
+- Per-job stall kill: `stall` is a job field (nullable minutes) beside
+  the timeout — the silence window on one fire. The clock still bounds
+  spend (the timeout, unchanged), and the stall bounds liveness: a fire
+  whose worker writes nothing for longer than the window is killed as
+  hung, while a fire still talking to its log gets all the time its
+  timeout allows. NULL is "ceiling only" — a command job that is silent
+  by nature (a backup, a digest) never surprises, and a model job that
+  should never sit mute states its own window. Same 1..1440 range, same
+  create/update refusals and `-1` reset, same fold and compaction
+  survival as `timeout`; schema 5 adds the column with the same
+  presence-keyed idempotent add. A stall kill is a fail run whose log
+  names the reason (`[runner: killed after stall]`), beside the
+  timeout's own note. The runner watches the worker's output stream —
+  every byte the spawn writes touches the window, so silent-but-working
+  (a long backtest with no stdout) is never confused with hung. The
+  one-shot worker (`rig -p`) lives on this contract: its stdout is the
+  answer only, and its stderr carries the liveness — the reasoning
+  deltas as they stream, one line at tool start and end, and a periodic
+  heartbeat while a tool runs — so a worker deep in a silent tool is
+  never killed for not printing.
+- Live run tail: every scheduled fire streams the worker's output to
+  `runs/<id>/<run>.stream` beside the canonical log, so a long run has
+  a live `tail -f` while it runs. The canonical log is written whole at
+  the end (header, captured head+tail, kill note) and the stream file is
+  removed; a run the runner never got to finish leaves its stream
+  behind as evidence. Log names key on the run's start time, so the
+  stream and the log share one base name, and prune keeps the two
+  together.
 
 ## interfaces
 

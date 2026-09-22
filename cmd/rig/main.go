@@ -55,7 +55,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.3.7"
+const Version = "1.3.8"
 
 type root struct {
 	pluginMax int
@@ -1190,7 +1190,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
 		}
-		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout}
+		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout, Err: os.Stderr}
 	} else if *tuiMode == "true" || (*tuiMode == "auto" && tui.IsTerminal(os.Stdout.Fd())) {
 
 		th, terr := tui.ResolveTheme(cfg.Settings.Theme, cfg.Theme, tuiTrueColor())
