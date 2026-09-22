@@ -215,7 +215,7 @@ func TestRunJobKillsASilentFireAfterTheStallWindow(t *testing.T) {
 	}
 }
 
-func TestRunJobKeepsAFireThatKeepsWriting(t *testing.T) {
+func TestRunJobKeepsAFireThatHeartbeatsOnStderr(t *testing.T) {
 	cwd := realCwd(t, "stallactive")
 	h := newHarness(t, cwd)
 	_, err := h.create(sched.CreateInput{
@@ -224,11 +224,14 @@ func TestRunJobKeepsAFireThatKeepsWriting(t *testing.T) {
 	})
 	mustOK(t, err)
 	spawn := func(ctx context.Context, argv []string, wd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
+		answer := "the answer\n"
+		heartbeats := ""
 		for i := 0; i < 8; i++ {
-			observe([]byte("tick\n"))
+			observe([]byte("rig: heartbeat\n"))
+			heartbeats += "rig: heartbeat\n"
 			time.Sleep(50 * time.Millisecond)
 		}
-		return sched.SpawnResult{Exit: 0, Stdout: "tick\ntick\ntick\ntick\ntick\ntick\ntick\ntick\n"}, nil
+		return sched.SpawnResult{Exit: 0, Stdout: answer, Stderr: heartbeats}, nil
 	}
 	opts := runOpts(h, nil, &fakeSpawn{}, fetchOpts{})
 	opts.Spawn = spawn
@@ -238,10 +241,13 @@ func TestRunJobKeepsAFireThatKeepsWriting(t *testing.T) {
 	}
 	logBody := readRunLog(t, h, "j1", logName)
 	if strings.Contains(logBody, "killed after stall") {
-		t.Fatalf("a fire that keeps writing must never stall: %s", logBody)
+		t.Fatalf("a fire silent on stdout but heartbeating on stderr must never stall: %s", logBody)
 	}
 	if !strings.Contains(logBody, "exit=0") {
-		t.Fatalf("the chatty fire must end ok: %s", logBody)
+		t.Fatalf("the heartbeating fire must end ok: %s", logBody)
+	}
+	if !strings.Contains(logBody, "the answer") {
+		t.Fatalf("stdout must still carry the answer: %s", logBody)
 	}
 }
 

@@ -131,4 +131,7 @@ written before the store commit; drift is surfaced in list.
   by nature — a backup, a digest — must never be killed for not
   printing. A model job that should never sit mute states its own
   window. The liveness signal is bytes written, not the process: a long
-  silent computation is not a stall, a hung provider is.
+  silent computation is not a stall, a hung provider is. The one-shot
+  worker keeps its stdout answer-only and heartbeats on stderr
+  (reasoning deltas, tool start/end lines, a 30s heartbeat while a tool
+  runs), so a worker deep in a silent tool stays alive.

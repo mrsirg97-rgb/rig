@@ -21,6 +21,11 @@ scheduler now tells them apart.
   touches the window, so a long silent backtest with no stdout is never
   confused with a hung provider. The `Spawn` seam carries the observer;
   a delegate passes none (interactive sessions keep the plain timeout).
+  And the one-shot worker now lives on the contract: stdout is the
+  answer only, stderr carries the liveness — reasoning deltas as they
+  stream, one line at tool start and end, and a heartbeat while any tool
+  runs (30s cadence) — so a worker deep in a silent tool is never killed
+  for not printing.
 - **Live run tail**: a scheduled fire streams its output to
   `runs/<id>/<run>.stream` while it runs — `tail -f` a long job — and
   the canonical log is written whole at the end; the stream is removed,

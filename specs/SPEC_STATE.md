@@ -507,7 +507,12 @@ post-merge corrections)
   names the reason (`[runner: killed after stall]`), beside the
   timeout's own note. The runner watches the worker's output stream —
   every byte the spawn writes touches the window, so silent-but-working
-  (a long backtest with no stdout) is never confused with hung.
+  (a long backtest with no stdout) is never confused with hung. The
+  one-shot worker (`rig -p`) lives on this contract: its stdout is the
+  answer only, and its stderr carries the liveness — the reasoning
+  deltas as they stream, one line at tool start and end, and a periodic
+  heartbeat while a tool runs — so a worker deep in a silent tool is
+  never killed for not printing.
 - Live run tail: every scheduled fire streams the worker's output to
   `runs/<id>/<run>.stream` beside the canonical log, so a long run has
   a live `tail -f` while it runs. The canonical log is written whole at
