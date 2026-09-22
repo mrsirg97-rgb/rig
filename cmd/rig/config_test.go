@@ -814,6 +814,8 @@ func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 }
 
 func TestDefaultJobModelMintsTheFleetAtStart(t *testing.T) {
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()
 	dir := cfgDir(t, scratch)
@@ -824,10 +826,16 @@ func TestDefaultJobModelMintsTheFleetAtStart(t *testing.T) {
 	if err := os.WriteFile(p, []byte(`{"defaultJobModel": "local"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(bin, "-p", "hello")
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(scratch, "")
-	out, _ := cmd.CombinedOutput()
+	out, runErr := cmd.CombinedOutput()
+	if runErr != nil {
+		t.Fatalf("the mint must not break the run: %v\n%s", runErr, out)
+	}
+	if got := s.count(); got != 1 {
+		t.Fatalf("the minted run must make exactly one model call, got %d", got)
+	}
 	want := `defaultJobModel moved to workers.json — minted`
 	if !strings.Contains(string(out), want) {
 		t.Fatalf("the start must mint the fleet once and say so: %q", out)

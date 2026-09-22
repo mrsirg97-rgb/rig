@@ -35,6 +35,15 @@ func tableWith(t *testing.T, rows ...models.Model) models.Table {
 	return tbl
 }
 
+func visionRoot(t *testing.T) *root {
+	t.Helper()
+	r := testRoot(nullFrontend{})
+	r.row = visionRow()
+	r.runtime = tableWith(t, defaultRow(), visionRow())
+	r.rigHome = t.TempDir()
+	return r
+}
+
 func wiredToolNames(k interface{ SortedToolNames() []string }) string {
 	return strings.Join(k.SortedToolNames(), ",")
 }
@@ -45,9 +54,7 @@ func TestViewIsRegisteredOnlyWhenTheRowHasVision(t *testing.T) {
 		t.Fatalf("a non-vision row must not be offered view: %s", got)
 	}
 
-	seeing := testRoot(nullFrontend{})
-	seeing.row = visionRow()
-	seeing.runtime = tableWith(t, defaultRow(), visionRow())
+	seeing := visionRoot(t)
 	if got := wiredToolNames(wire(seeing)); !strings.Contains(got, "view,") && !strings.HasSuffix(got, ",view") {
 		t.Fatalf("a vision row must be offered view among its natives: %s", got)
 	}
@@ -55,10 +62,7 @@ func TestViewIsRegisteredOnlyWhenTheRowHasVision(t *testing.T) {
 
 func TestTheWireToolPrefixGrowsByViewAndNothingElse(t *testing.T) {
 	text := wire(testRoot(nullFrontend{}))
-	seeing := testRoot(nullFrontend{})
-	seeing.row = visionRow()
-	seeing.runtime = tableWith(t, defaultRow(), visionRow())
-	vision := wire(seeing)
+	vision := wire(visionRoot(t))
 
 	if len(vision.Tools) != len(text.Tools)+1 {
 		t.Fatalf("view must be the only difference: %d tools vs %d", len(vision.Tools), len(text.Tools))
@@ -82,9 +86,7 @@ func TestTheWireToolPrefixGrowsByViewAndNothingElse(t *testing.T) {
 }
 
 func TestViewSpecIsPinned(t *testing.T) {
-	seeing := testRoot(nullFrontend{})
-	seeing.row = visionRow()
-	seeing.runtime = tableWith(t, defaultRow(), visionRow())
+	seeing := visionRoot(t)
 	var spec struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description"`
@@ -116,9 +118,7 @@ func TestViewIsConcurrentAndNeverMutating(t *testing.T) {
 	if mutatingNatives["view"] {
 		t.Fatal("view never writes outside its own store: manual mode must not pause on it")
 	}
-	r := testRoot(nullFrontend{})
-	r.row = visionRow()
-	r.runtime = tableWith(t, defaultRow(), visionRow())
+	r := visionRoot(t)
 	r.natives = map[string]bool{}
 	for _, n := range effectiveNativeNames(nil) {
 		r.natives[n] = true
@@ -129,8 +129,7 @@ func TestViewIsConcurrentAndNeverMutating(t *testing.T) {
 }
 
 func TestTheModelSwitchMovesViewWithTheRow(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	r.runtime = tableWith(t, defaultRow(), visionRow())
+	r := visionRoot(t)
 	r.row = defaultRow()
 	r.activeID = "local"
 	wire(r)
