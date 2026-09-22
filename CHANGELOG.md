@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+## [1.3.9]: the todo store becomes the swarm's shared board
+
+The board is now the place sessions talk about shared work. Three
+changes, all events on the existing per-scope log: a claim verb that
+takes the next task atomically, notes that any session may attach to any
+task, and a review gate between active and done.
+
+- **`claim`**: takes the first pending task whose dependsOn is done (the
+  order `next` shows) and marks it active for this session; the reply is
+  the task's echo, or `nothing to do`. With `status=review` a reviewer
+  takes the first task in review that no reviewer holds. The take is
+  atomic: two sessions claiming one task, exactly one wins (the
+  serializable transaction plus the FSM check against the freshly
+  rebuilt projection).
+- **`note <id> "…"`**: appends a note to any task — no hold needed,
+  notes are how agents talk about shared work — and `read` renders them
+  in order with their session, one indented line each. A note must name
+  a task and is bounded (`MaxNoteLen`, 1000 chars) because it rides the
+  log and the compact snapshot.
+- **The review gate**: `complete` moves active to review (`[r]`), a new
+  `accept <id>` moves review to done, `reject <id> "…"` moves review to
+  pending and records the reason as a note. Accept and reject need the
+  review hold (claim `status=review` first); an unclaimed review task
+  refuses with the claim door. `blockedBy` still clears only on done, so
+  a dependency in review keeps its dependents blocked; prune still drops
+  done only; the summary counts review rows (`· N in review`).
+- **Replay and migration**: `claim`/`note`/`accept`/`reject` are events
+  on the log; notes ride the compact snapshot; a stale review claim
+  releases back to unclaimed review, keeping the status. Schema 3
+  (`ReviewMigration`) pairs every historical `complete` with an `accept`
+  in event order, so a pre-review log replays exactly — the live board's
+  109 finished tasks stay done instead of flipping to review.
+- **The `todo` tool and `/todo`**: the new verbs ride the store's shapes
+  (`todo claim [review]`, `todo note <id> <text…>`, `todo accept <id>`,
+  `todo reject <id> <reason…>`), and `done` now submits for review.
+
 ## [1.3.8]: the scheduler kills a stalled worker, not a busy one
 
 The daily optimizer kept getting murdered at an arbitrary minute: it

@@ -55,7 +55,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.3.8"
+const Version = "1.3.9"
 
 type root struct {
 	pluginMax int
@@ -985,7 +985,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	tdb, todoQuarantined, todoReport, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)))
+	tdb, todoQuarantined, todoReport, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)), todostore.ReviewMigration)
 	if todoErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo store:", todoErr)
 		os.Exit(1)
