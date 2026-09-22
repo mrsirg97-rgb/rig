@@ -37,8 +37,8 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "the session store, read-only: list sessions, or summary the vitals (models, faults, cache " +
-	"ratio). Guidelines: this workspace by default, or project and n. Reply: a line per session, or " +
+const description = "the session store: list sessions, or summary the vitals (models, faults, cache " +
+	"ratio); an older store is migrated on open. Guidelines: this workspace by default, or project and n. Reply: a line per session, or " +
 	"the vitals."
 
 type adapter struct {
@@ -97,7 +97,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if fi.IsDir() {
 		return "", fmt.Errorf("sessions: %s is a directory, not a state file", path)
 	}
-	db, _, _, err := store.Open(path, state.Statements(), state.SchemaVersion)
+	db, _, _, err := store.Open(path, state.Statements(), state.SchemaVersion, state.Migration())
 	if err != nil {
 		return "", fmt.Errorf("sessions: %v", err)
 	}

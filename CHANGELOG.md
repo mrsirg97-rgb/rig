@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.3.6]: the sessions tool migrates older project stores
+
+The `sessions` tool opened a project's state file with the build's schema
+version but no migration, so any store an older build left behind refused
+with "schema version mismatch: the file carries 2, this build wants 3 and
+carries no migration". The root migrates on session start; the read tool
+never did, and the file stayed unreadable until a v3 session happened to
+run in that workspace.
+
+- **the sessions tool migrates on open** (`tool/sessions`): the store open
+  carries `state.Migration()` — the same idempotent, transactional schema
+  step the root runs — so a read of an older workspace upgrades the file
+  first and lists the sessions instead of refusing. The tool stays out of
+  `mutatingNatives`: the only write a read can do is the store's own
+  bounded, versioned migration, and no session rows are touched.
+
 ## [1.3.5]: the suite never dials the real swap
 
 One test could still reach the operator's swap. `TestDefaultJobModelMintsTheFleetAtStart`

@@ -3,14 +3,18 @@
 ## What it is
 
 Adapts the session-state store (`store/state`) to the loop's tool surface:
-the soak's own vitals, read-only. `list` is the recent sessions, newest
-first, one line each (short id, started, model, version, turns, faults);
-`summary` is the vitals over the same slice; session and turn counts, the
-models with their versions, the fault count with the last fault's first
-line, and the aggregate cache ratio (cache_read over prompt, the status
-row's arithmetic). It reuses the store's typed verbs (`ListSessions`,
-`SessionUsage`, `SessionFaults`) and opens the project's state file itself,
-so it reads any workspace, not only the session's own.
+the soak's own vitals; a store an older build left behind is migrated on
+open. `list` is the recent sessions, newest first, one line each (short id,
+started, model, version, turns, faults); `summary` is the vitals over the
+same slice; session and turn counts, the models with their versions, the
+fault count with the last fault's first line, and the aggregate cache ratio
+(cache_read over prompt, the status row's arithmetic). It reuses the
+store's typed verbs (`ListSessions`, `SessionUsage`, `SessionFaults`) and
+opens the project's state file itself, so it reads any workspace, not only
+the session's own. The open carries `state.Migration()`: the same
+idempotent, transactional schema step the root runs at session start, so a
+v2 store reads after the v2→v3 upgrade instead of refusing, and no session
+rows are touched.
 
 ## What it includes
 
@@ -19,9 +23,11 @@ so it reads any workspace, not only the session's own.
 ## How it is consumed
 
 - Registered at the root as a native tool (`sessions`, the eighteenth).
-  Read-only: it is absent from the root's `mutatingNatives`, so the
-  approval gate passes it silently. It is also absent from
-  `concurrentNatives`; it opens a store, like `todo`/`rem`/`scheduler`,
+  It is absent from the root's `mutatingNatives`, so the approval gate
+  passes it silently: a read never pauses a session, and the only write a
+  read can do is the store's own bounded, versioned schema migration. It
+  is also absent from `concurrentNatives`; it opens a store, like
+  `todo`/`rem`/`scheduler`,
   so it is not a pure observation.
 
 ## Gotchas
