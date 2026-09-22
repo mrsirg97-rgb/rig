@@ -17,7 +17,7 @@ const schemaJSON = `{
 	"required": ["action"],
 	"properties": {
 		"action": {
-			"enum": ["create", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read"],
+			"enum": ["create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read", "note", "accept", "reject"],
 			"description": "The action to perform. Required."
 		},
 		"tasks": {
@@ -40,7 +40,16 @@ const schemaJSON = `{
 		},
 		"id": {
 			"type": "string",
-			"description": "Task id as shown by the tool. Required for start/complete/fail/release/retry."
+			"description": "Task id as shown by the tool. Required for start/complete/fail/release/retry/move/note/accept/reject."
+		},
+		"note": {
+			"type": "string",
+			"description": "The note text, or the reason for action='reject'. Required for action='note' and action='reject'."
+		},
+		"status": {
+			"type": "string",
+			"enum": ["review"],
+			"description": "Optional claim filter: action='claim' with status='review' takes the first task in review for this session."
 		},
 		"pos": {
 			"type": "integer",
@@ -59,11 +68,15 @@ const schemaJSON = `{
 }`
 
 const description = "the task queue for the session's project. Guidelines: any job of three or more steps -> " +
-	"create before the first edit (tasks: [{text, dependsOn?}]), start before working, complete or fail on " +
-	"finish; read shows the actionable queue (all:true for history); move reorders by a 1-based pos; prune " +
-	"drops the done rows. Every reply names the queue it acted on ([rig]); name project when the work is in " +
-	"a repo you did not start in, which binds the session. Reply: the affected row and the summary; a refusal " +
-	"names the rule. Ids (tN) are minted by the tool — copy, never invent."
+	"create before the first edit (tasks: [{text, dependsOn?}]), claim takes the next pending task whose " +
+	"dependency is done, complete lands your task done here (solo) or submits it for review from a worker " +
+	"(rig -p: delegate, swarm); accept or reject a task in review — the parent's flow is read then " +
+	"accept/reject, an unowned review task auto-claims, a foreign hold refuses, and reject takes the reason " +
+	"as note; note attaches a message to any task; read shows the actionable queue (all:true for history); " +
+	"move reorders by a 1-based pos; prune drops the done rows. Every reply names the queue it acted on " +
+	"([rig]); name project when the work is in a repo you did not start in, which binds the session. Reply: " +
+	"the affected row and the summary; a refusal names the rule. Ids (tN) are minted by the tool — copy, " +
+	"never invent."
 
 // Where a queue's identity came from, named so the tool can tell a write
 // it must refuse (a bucket minted from a directory that is not a repo)
@@ -75,9 +88,23 @@ const (
 	srcHost    = "host"
 )
 
-type adapter struct{ db store.DB }
+// Mode says who completes. An interactive session lands its own task
+// done in one call (complete+accept, the log stays uniform); a worker
+// (rig -p: delegate or swarm) submits it for review, and the parent's
+// accept or reject finishes it.
+type Mode bool
 
-func New(db store.DB) core.Tool { return adapter{db: db} }
+const (
+	Interactive Mode = false
+	Worker      Mode = true
+)
+
+type adapter struct {
+	db   store.DB
+	mode Mode
+}
+
+func New(db store.DB, mode Mode) core.Tool { return adapter{db: db, mode: mode} }
 
 func (a adapter) Name() string { return "todo" }
 
@@ -91,6 +118,8 @@ type given struct {
 	ID      string           `json:"id"`
 	Pos     *int             `json:"pos"`
 	All     *bool            `json:"all"`
+	Note    string           `json:"note"`
+	Status  string           `json:"status"`
 	Project *string          `json:"project"`
 }
 
@@ -180,6 +209,29 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 		return todostore.Read(ctx, a.db, p, session)
 	case "prune":
 		return todostore.Prune(ctx, a.db, p, session)
+	case "claim":
+		return todostore.Claim(ctx, a.db, p, session, g.Status)
+	case "note":
+		if g.ID == "" {
+			return "", fmt.Errorf("action 'note' requires id")
+		}
+		if g.Note == "" {
+			return "", fmt.Errorf("action 'note' requires note text")
+		}
+		return todostore.Note(ctx, a.db, p, g.ID, g.Note, session)
+	case "accept":
+		if g.ID == "" {
+			return "", fmt.Errorf("action 'accept' requires id")
+		}
+		return todostore.Accept(ctx, a.db, p, g.ID, session)
+	case "reject":
+		if g.ID == "" {
+			return "", fmt.Errorf("action 'reject' requires id")
+		}
+		if g.Note == "" {
+			return "", fmt.Errorf("action 'reject' requires a reason")
+		}
+		return todostore.Reject(ctx, a.db, p, g.ID, g.Note, session)
 	case "start", "complete", "fail", "release", "retry":
 		if g.ID == "" {
 			return "", fmt.Errorf("action '%s' requires id", g.Action)
@@ -188,7 +240,7 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 		case "start":
 			return todostore.Start(ctx, a.db, p, g.ID, session)
 		case "complete":
-			return todostore.Complete(ctx, a.db, p, g.ID, session)
+			return todostore.Complete(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "fail":
 			return todostore.Fail(ctx, a.db, p, g.ID, session)
 		case "release":
@@ -314,7 +366,7 @@ func (a adapter) report(ctx context.Context, session string) (string, error) {
 
 func isWrite(action string) bool {
 	switch action {
-	case "create", "start", "complete", "fail", "release", "retry", "move", "prune":
+	case "create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "note", "accept", "reject":
 		return true
 	default:
 		return false

@@ -58,7 +58,7 @@ func rawEvents(t *testing.T, db store.DB) []string {
 }
 
 func TestBareTodoIsLoudAtExecute(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	if _, err := exec(t, tool, context.Background(), map[string]any{}); err == nil {
 		t.Fatal("bare execute succeeded")
 	} else if !strings.Contains(err.Error(), "action required") {
@@ -67,7 +67,7 @@ func TestBareTodoIsLoudAtExecute(t *testing.T) {
 }
 
 func TestUnknownActionRefusesLoudly(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "sideways"}); err == nil {
 		t.Fatal("unknown action succeeded")
 	} else if !strings.Contains(err.Error(), "unknown action") {
@@ -76,7 +76,7 @@ func TestUnknownActionRefusesLoudly(t *testing.T) {
 }
 
 func TestCreateMissingTasksFailsLoudly(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "create"}); err == nil {
 		t.Fatal("create without tasks succeeded")
 	} else if want := "action 'create' requires tasks: array of {text}"; err.Error() != want {
@@ -85,7 +85,7 @@ func TestCreateMissingTasksFailsLoudly(t *testing.T) {
 }
 
 func TestCreateMalformedTasksFailLoudly(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	for _, tasks := range []any{
 		[]any{map[string]any{}},
 		[]any{"a"},
@@ -98,8 +98,8 @@ func TestCreateMalformedTasksFailLoudly(t *testing.T) {
 }
 
 func TestStateVerbsRefuseIdAbsenceLoudly(t *testing.T) {
-	tool := todoapi.New(newDB(t))
-	for _, action := range []string{"start", "complete", "fail", "retry"} {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	for _, action := range []string{"start", "complete", "fail", "retry", "note", "accept", "reject"} {
 		if _, err := exec(t, tool, context.Background(), map[string]any{"action": action}); err == nil {
 			t.Fatalf("%s without id succeeded", action)
 		} else if want := "action '" + action + "' requires id"; err.Error() != want {
@@ -109,7 +109,7 @@ func TestStateVerbsRefuseIdAbsenceLoudly(t *testing.T) {
 }
 
 func TestMoveRefusesIdOrPosAbsence(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "move"}); err == nil {
 		t.Fatal("move without id succeeded")
 	} else if want := "action 'move' requires id"; err.Error() != want {
@@ -124,7 +124,7 @@ func TestMoveRefusesIdOrPosAbsence(t *testing.T) {
 
 func TestExecThreadsTheSession(t *testing.T) {
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
 	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "attributed"}}})
@@ -143,7 +143,7 @@ func TestExecThreadsTheSession(t *testing.T) {
 
 func TestAnonymousExecutivesRecordAnon(t *testing.T) {
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	reply, err := exec(t, tool, context.Background(), map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "anon work"}}})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -159,7 +159,7 @@ func TestAnonymousExecutivesRecordAnon(t *testing.T) {
 }
 
 func TestExecSurfacesTheReplies(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
 	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
@@ -185,7 +185,7 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 }
 
 func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sessA := core.NewSession()
 	sessB := core.NewSession()
 	ctxA := core.WithSession(context.Background(), sessA)
@@ -204,8 +204,132 @@ func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 	}
 }
 
+func TestNewVerbsRoundTrip(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Worker)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "swarm work"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	claimed, err := exec(t, tool, ctx, map[string]any{"action": "claim"})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if !strings.Contains(claimed, "'"+id+"' claimed") {
+		t.Fatalf("claim reply: %s", claimed)
+	}
+	noted, err := exec(t, tool, ctx, map[string]any{"action": "note", "id": id, "note": "on it"})
+	if err != nil {
+		t.Fatalf("note: %v", err)
+	}
+	if !strings.Contains(noted, "note added to '"+id+"'") || !strings.Contains(noted, "on it (by "+sess.ID+")") {
+		t.Fatalf("note reply:\n%s", noted)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	review, err := exec(t, tool, ctx, map[string]any{"action": "claim", "status": "review"})
+	if err != nil {
+		t.Fatalf("claim review: %v", err)
+	}
+	if !strings.Contains(review, "'"+id+"' claimed for review") {
+		t.Fatalf("claim review reply: %s", review)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "accept", "id": id}); err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	history, err := exec(t, tool, ctx, map[string]any{"action": "read", "all": true})
+	if err != nil {
+		t.Fatalf("read all: %v", err)
+	}
+	if !strings.Contains(history, "[x] swarm work") {
+		t.Fatalf("the review flow must end done:\n%s", history)
+	}
+}
+
+func TestModeKeysTheGate(t *testing.T) {
+	solo := todoapi.New(newDB(t), todoapi.Interactive)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, solo, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "solo"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	if _, err := exec(t, solo, ctx, map[string]any{"action": "claim"}); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	done, err := exec(t, solo, ctx, map[string]any{"action": "complete", "id": id})
+	if err != nil {
+		t.Fatalf("solo complete: %v", err)
+	}
+	if !strings.Contains(done, "[x] solo") || strings.Contains(done, "in review") {
+		t.Fatalf("solo complete must land done in one call:\n%s", done)
+	}
+
+	worker := todoapi.New(newDB(t), todoapi.Worker)
+	ctx = core.WithSession(context.Background(), sess)
+	reply, err = exec(t, worker, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "delegated"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id = strings.Fields(strings.Split(reply, "\n")[2])[0]
+	if _, err := exec(t, worker, ctx, map[string]any{"action": "claim"}); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	review, err := exec(t, worker, ctx, map[string]any{"action": "complete", "id": id})
+	if err != nil {
+		t.Fatalf("worker complete: %v", err)
+	}
+	if !strings.Contains(review, "[r] delegated") {
+		t.Fatalf("worker complete must land in review:\n%s", review)
+	}
+	accepted, err := exec(t, worker, ctx, map[string]any{"action": "accept", "id": id})
+	if err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	if !strings.Contains(accepted, "auto-claimed and accepted") {
+		t.Fatalf("the accept must auto-claim:\n%s", accepted)
+	}
+}
+
+func TestRejectRequiresItsReasonThroughTheTool(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "reject", "id": "t1"}); err == nil {
+		t.Fatal("reject without a reason succeeded")
+	} else if want := "action 'reject' requires a reason"; err.Error() != want {
+		t.Errorf("voice:\n%q", err.Error())
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "note", "id": "t1"}); err == nil {
+		t.Fatal("note without text succeeded")
+	} else if want := "action 'note' requires note text"; err.Error() != want {
+		t.Errorf("voice:\n%q", err.Error())
+	}
+}
+
+func TestClaimStatusOnlyKnowsReview(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "claim", "status": "done"}); err == nil {
+		t.Fatal("claim with an unknown status succeeded")
+	} else if !strings.Contains(err.Error(), "unknown claim status") {
+		t.Errorf("voice: %v", err)
+	}
+}
+
 func TestReadAllTrueReturnsHistory(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
 	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
@@ -246,7 +370,7 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 // directory the process happened to start in.
 func TestProjectBindsTheSession(t *testing.T) {
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	proj := t.TempDir()
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	reply, err := exec(t, tool, ctx, map[string]any{
@@ -282,7 +406,7 @@ func TestProjectBindsTheSession(t *testing.T) {
 // says what to do, while a read stays available and labels itself.
 func TestLaunchOutsideARepoRefusesWrites(t *testing.T) {
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	t.Chdir(t.TempDir())
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{
@@ -319,7 +443,7 @@ func TestLaunchOutsideARepoRefusesWrites(t *testing.T) {
 // place where two queues can look identical.
 func TestEveryReplyNamesTheQueue(t *testing.T) {
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{
 		"action": "create", "tasks": []any{map[string]any{"text": "name me"}}}); err != nil {
@@ -348,7 +472,7 @@ func TestProjectExpandsTildeAtTheBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	wrapped := paths.Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return tool.Exec(ctx, call.Args)
 	})
@@ -378,7 +502,7 @@ func TestProjectExpandsTildeAtTheBoundary(t *testing.T) {
 // repo's queue must not quietly relocate the session's own bare verbs.
 func TestReadWithProjectIsAPeekNotAMove(t *testing.T) {
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	here, there := t.TempDir(), t.TempDir()
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{
@@ -423,7 +547,7 @@ func TestReadWithProjectIsAPeekNotAMove(t *testing.T) {
 // binding: the refusal already named the queue it tried.
 func TestFailedWriteWithProjectLeavesTheBindingAlone(t *testing.T) {
 	db := newDB(t)
-	tool := todoapi.New(db)
+	tool := todoapi.New(db, todoapi.Interactive)
 	here, there := t.TempDir(), t.TempDir()
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{

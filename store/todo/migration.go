@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +18,72 @@ import (
 )
 
 const legacySchemaVersion = 1
+
+// ReviewMigration pairs every historical complete event with an accept:
+// complete now means active -> review, so without the pair a log written
+// under the old semantics would replay every finished task as awaiting
+// review. The accept follows its complete in event order (before any
+// later prune that was meant to drop the row), the log is renumbered,
+// and the pairing is a no-op once the store is at SchemaVersion 3.
+func ReviewMigration(tx *sql.Tx, from, to int) (string, error) {
+	if from >= 3 {
+		return "", nil
+	}
+	rows, err := tx.Query("SELECT op, args, session, ts, scope FROM events ORDER BY seq")
+	if err != nil {
+		return "", fmt.Errorf("todo: migration: %w", err)
+	}
+	type row struct {
+		op, args, ts, scope string
+		session             sql.NullString
+	}
+	var log []row
+	pairs := 0
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.op, &r.args, &r.session, &r.ts, &r.scope); err != nil {
+			rows.Close()
+			return "", fmt.Errorf("todo: migration: %w", err)
+		}
+		log = append(log, r)
+		if r.op != "complete" {
+			continue
+		}
+		var payload struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal([]byte(r.args), &payload) == nil && payload.ID != "" {
+			pairs++
+			acceptArgs, _ := json.Marshal(map[string]any{"id": payload.ID})
+			log = append(log, row{op: "accept", args: string(acceptArgs), ts: r.ts, scope: r.scope, session: r.session})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return "", fmt.Errorf("todo: migration: %w", err)
+	}
+	rows.Close()
+	if pairs == 0 {
+		return "", nil
+	}
+	if _, err := tx.Exec("DELETE FROM events"); err != nil {
+		return "", fmt.Errorf("todo: migration: %w", err)
+	}
+	for i, r := range log {
+		seq := int64(i + 1)
+		var sess any
+		if r.session.Valid {
+			sess = r.session.String
+		}
+		if _, err := tx.Exec(
+			"INSERT INTO events (seq, ts, op, args, session, scope) VALUES (?, ?, ?, ?, ?, ?)",
+			seq, r.ts, r.op, r.args, sess, r.scope,
+		); err != nil {
+			return "", fmt.Errorf("todo: migration: %w", err)
+		}
+	}
+	return fmt.Sprintf("todo migration: paired %d completed task%s", pairs, plural(pairs)), nil
+}
 
 var legacyStoreRe = regexp.MustCompile(`^([0-9a-f]{24})\.sqlite$`)
 

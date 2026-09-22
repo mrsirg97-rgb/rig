@@ -236,10 +236,10 @@ happens to name (see the binding decision).
 
 - `meta`: key (primary), value.
 - `events`: seq (primary, minted, strictly increasing), ts, op
-  (create|start|complete|fail|retry|move|prune|compact), args (TEXT json), session
+  (create|claim|start|complete|fail|retry|move|prune|note|accept|reject|compact), args (TEXT json), session
   (nullable), scope (the queue's identity, nullable-false).
 - `tasks`: scope + id (primary, `tN` per scope), text (unique per scope via
-  extra.sql), status (pending|in_progress|done|failed), pos, created_seq
+  extra.sql), status (pending|in_progress|review|done|failed), pos, created_seq
   (link events), updated_seq (link events).
 - `task_deps`: scope + task_id + depends_on (primary: both link tasks within
   one scope), created_seq.
@@ -257,11 +257,30 @@ happens to name (see the binding decision).
   positions minted never mutated; move via events; claim semantics (start
   claims, foreign complete refuses, fail frees; completing your own
   unclaimed pending task implicitly claims and completes; start+complete,
-  both events, the echo noting auto-started); compaction past 1000 events
-  snapshots the queue and resets the epoch; dependsOn DAG validated at the
-  boundary, cycles refused, completion gated, blocked skipped by `next`.
-  Minted seq is one sequence across scopes (a shared events table), while
-  ids stay `tN` per scope; the compact fold and stale footer are per scope.
+  both events, the echo noting auto-started); the swarm surface (1.3.9):
+  `claim` takes the first pending task whose dependsOn is done (the same
+  order `next` shows) and marks it active for this session, or with
+  `status=review` the first task in review that no reviewer holds; `note`
+  appends to any task (notes are how agents talk about shared work, so the
+  hold is not needed, but the task must exist) and `read` renders them in
+  order with their session; the review gate keys on who completes: an
+  interactive session completing its own task lands it done in one call
+  (complete+accept both written, the log uniform, replay unchanged), a
+  worker (`rig -p`: delegate or swarm) submits it for review; `accept`
+  moves review to done, `reject` moves review to pending and records the
+  reason as a note — accept and reject auto-claim an unowned review task
+  (claim+accept, the same idiom as complete auto-starting a pending one),
+  so a delegate's parent reviews its workers by read then accept/reject
+  with no claim step, and the hold rule still refuses when another session
+  holds; a review task keeps its status when a stale claim is released;
+  `blockedBy` still clears only on done, so a dependency in review keeps
+  its dependents blocked; `prune` still drops done only, review rows stay;
+  the summary counts review rows (`· N in review`); compaction past 1000
+  events snapshots the queue and resets the epoch, notes riding the
+  snapshot; dependsOn DAG validated at the boundary, cycles refused,
+  completion gated, blocked skipped by `next`. Minted seq is one sequence
+  across scopes (a shared events table), while ids stay `tN` per scope;
+  the compact fold and stale footer are per scope.
 - Every reply names the queue it speaks for: the summary leads with
   `[<label>]`, or `[<label> (not a repo)]` for a cwd bucket, and the empty
   reply still says `(no tasks in <label>'s queue)` (SPEC_CORE's naming rule).
@@ -319,6 +338,14 @@ happens to name (see the binding decision).
   marker, that cwd-hash's rows re-scope to the repo scope, `INSERT OR
   IGNORE` the marker, counted once on stderr, one transaction. The fold is
   in filename order, rows in event order; reproducible.
+- **Migration (2 → 3), the review gate.** `complete` now means active →
+  review, so a log written under the old semantics would replay every
+  finished task as awaiting review. `ReviewMigration` pairs each
+  historical `complete` event with an `accept` that follows it in event
+  order (before any later `prune` that was meant to drop the row), the
+  log is renumbered once, and the pairing is a no-op on any later open
+  (`from >= 3` skips). A snapshot written before the gate already carries
+  `done`, so folded history needs no accept; only live completes pair.
 
 ### rem (port; REM_SPEC.md D, E, F, G)
 
@@ -536,10 +563,13 @@ type MemoryDomain interface {
 ```
 
 The tool adapter is the only hand-written surface the model sees, and it
-is pane's tool surface verbatim: `todo {create|start|complete|fail|release|
-retry|move|read}` (amended 0.24.5: `release` is rig's own, the dead-claim
-door — pane has no session store to know an owner died; `next` is not a
-verb: its semantics ride the render's next pointer, blocked-skipping),
+is pane's tool surface verbatim: `todo {create|claim|start|complete|fail|release|
+retry|move|prune|bind|read|note|accept|reject}` (amended 0.24.5: `release`
+is rig's own, the dead-claim door — pane has no session store to know an
+owner died; amended 1.3.9: `claim`, `note`, `accept`, `reject` and the
+review status are rig's own, the swarm surface — pane has no shared board;
+`next` is not a verb: its semantics ride the render's next pointer,
+blocked-skipping),
 `rem {learn|recall|reflect|prune}`, `scheduler {create|
 update|list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
 not pane's: an introspection of the session store that migrates an older

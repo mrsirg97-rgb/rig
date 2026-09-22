@@ -55,7 +55,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.3.8"
+const Version = "1.3.9"
 
 type root struct {
 	pluginMax int
@@ -985,7 +985,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	tdb, todoQuarantined, todoReport, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)))
+	tdb, todoQuarantined, todoReport, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)), todostore.ReviewMigration)
 	if todoErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo store:", todoErr)
 		os.Exit(1)
@@ -1068,7 +1068,7 @@ func main() {
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
-			"todo": todoapi.New(tdb), "rem": remapi.New(rdb),
+			"todo": todoapi.New(tdb, todoapi.Mode(*prompt != "")), "rem": remapi.New(rdb),
 			"python": py, "web_search": webSearch, "web_fetch": webFetch,
 			"diff": diff.New(sdb), "sessions": sessionstool.New(cfgDir, cwd),
 		},

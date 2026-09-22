@@ -108,7 +108,7 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 						mu.Unlock()
 						continue
 					}
-					if _, err := todostore.Complete(context.Background(), db, p, id, sess); err != nil {
+					if _, err := todostore.Complete(context.Background(), db, p, id, sess, false); err != nil {
 						mu.Lock()
 						errs = append(errs, err)
 						mu.Unlock()

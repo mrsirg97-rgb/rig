@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/store"
 	"github.com/mrsirg97-rgb/rig/store/scope"
@@ -258,5 +259,83 @@ func TestLazyRescopeMovesCwdHashQueueToRepoOnce(t *testing.T) {
 	defer db2.DB.Close()
 	if report2 != "" {
 		t.Fatalf("the re-scope must be idempotent, second open reports %q", report2)
+	}
+}
+
+func TestReviewMigrationPairsHistoricalCompletesWithAccepts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "todo.sqlite")
+	seed, _, _, err := store.Open(path, todostore.Statements(), 2)
+	if err != nil {
+		t.Fatalf("open v2: %v", err)
+	}
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, seed, p, []item{
+		{Text: "pruned"}, {Text: "active"}, {Text: "kept done"}, {Text: "pending"},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	pruned := taskIDText(t, reply, "pruned")
+	kept := taskIDText(t, reply, "kept done")
+	if _, err := todostore.Complete(ctx, seed, p, pruned, "s1", true); err != nil {
+		t.Fatalf("complete pruned: %v", err)
+	}
+	rawExec(t, seed, "INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'prune', ?, NULL, 'ws')",
+		time.Now().UTC().Format(time.RFC3339), `{"done":1}`)
+	if _, err := todostore.Claim(ctx, seed, p, "s1", ""); err != nil {
+		t.Fatalf("claim active: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, seed, p, kept, "s1", true); err != nil {
+		t.Fatalf("complete kept: %v", err)
+	}
+	seed.DB.Close()
+
+	db, _, report, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion, todostore.ReviewMigration)
+	if err != nil {
+		t.Fatalf("open v3: %v", err)
+	}
+	defer db.DB.Close()
+	if !strings.Contains(report, "paired 2 completed") {
+		t.Fatalf("the migration must count the pairs: %q", report)
+	}
+	read, err := todostore.ReadAll(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(read, "[x] kept done") {
+		t.Errorf("a historical complete must replay as done:\n%s", read)
+	}
+	if strings.Contains(read, "[r]") || strings.Contains(read, "pruned") {
+		t.Errorf("the pruned task must replay as dropped, review must not leak:\n%s", read)
+	}
+	if !strings.Contains(read, "[~] active") || !strings.Contains(read, "[ ] pending") {
+		t.Errorf("untouched tasks must keep their states:\n%s", read)
+	}
+	rows := rawQuery(t, db, "SELECT seq, op FROM events ORDER BY seq")
+	defer rows.Close()
+	var ops []string
+	for rows.Next() {
+		var seq int64
+		var op string
+		if err := rows.Scan(&seq, &op); err != nil {
+			t.Fatal(err)
+		}
+		ops = append(ops, op)
+	}
+	want := []string{"create", "start", "complete", "accept", "prune", "claim", "start", "complete", "accept"}
+	if strings.Join(ops, ",") != strings.Join(want, ",") {
+		t.Errorf("event order = %v, want %v", ops, want)
+	}
+
+	db2, _, report2, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion, todostore.ReviewMigration)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer db2.DB.Close()
+	if report2 != "" {
+		t.Errorf("the pairing must be idempotent, second open reports %q", report2)
+	}
+	if accepts := rawEventOps(t, db2, "accept"); accepts != 2 {
+		t.Errorf("a second open must not pair again: %d accepts", accepts)
 	}
 }

@@ -23,7 +23,12 @@ plan in one queue.
 
 ## What it includes
 
-- `Tool`: a `core.Tool` over the todo store's verbs.
+- `Tool`: a `core.Tool` over the todo store's verbs, including the
+  1.3.9 swarm surface: `claim`, `note`, `accept`, `reject` and the
+  `status: review` claim filter. `New` takes a `Mode` set once in
+  main.go from the frontend kind (`-p` is a worker, everything else is
+  interactive): it is the gate's switch, passed to the store's
+  `Complete` as the worker flag.
 
 ## How it is consumed
 
@@ -49,8 +54,13 @@ plan in one queue.
 - `prune` is the door for the done rows the summary keeps counting; the
   log keeps them.
 - Complete on your own unclaimed pending task implicitly claims and
-  completes (auto-started); foreign-claim and blocked-by-dependency
-  refusals carry through unchanged.
+  submits (auto-started); foreign-claim and blocked-by-dependency
+  refusals carry through unchanged. In Interactive mode complete lands
+  done in one call; in Worker mode it ends in review and the parent's
+  `accept` (or `reject` with the reason) finishes it. Accept and reject
+  auto-claim an unowned review task, so the parent's flow is read then
+  accept/reject with no claim step; a foreign hold still refuses. Notes
+  never need the hold.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
   actionable queue (done folds into the summary line), read all:true
   returns the history, and a transition echo is the affected row plus

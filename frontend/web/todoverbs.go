@@ -40,7 +40,7 @@ func (s *Server) handleTodoVerb(w http.ResponseWriter, r *http.Request, verb str
 	case "start":
 		reply, err = todostore.Start(ctx, db, proj, id, sessionName)
 	case "complete":
-		reply, err = todostore.Complete(ctx, db, proj, id, sessionName)
+		reply, err = todostore.Complete(ctx, db, proj, id, sessionName, false)
 	case "retry":
 		reply, err = todostore.Retry(ctx, db, proj, id, sessionName)
 	}

@@ -631,6 +631,17 @@ scheduler runs <id> [n]
   line needs text; clearing the queue (`tasks: []`) stays a model-side
   call: the line shape has no spelling for an empty array, and that is
   fine.
+- `todo claim [review]` takes the next claimable task (no args) or the
+  first task in review (`claim review` maps to
+  `{"action":"claim","status":"review"}`); the reply is the store's
+  echo or `nothing to do`. `todo note <id> <text…>` attaches a message
+  to any task, `todo accept <id>` approves a reviewed task, and
+  `todo reject <id> <reason…>` sends it back with the reason as a note
+  (SPEC_STATE's swarm surface); the refusals are the store's voices.
+  `done <id>` keeps its spelling; in an interactive session it lands the
+  task done in one call (the complete/accept pair), and in a worker
+  (`rig -p`) it submits for review, which the parent finishes with
+  `accept` or `reject` by id.
 - `todo project [path]` is the binding door (SPEC_STATE's binding
   decision). With a path it binds the session to that project's queue and
   renders it — `→ bound to <label>`, or `→ bound to <label> (was <old>)`
@@ -908,6 +919,9 @@ crontab spool for the scheduler (the e2e's existing pattern).
   change, verbatim), `todo start t9` (the tool's `no task 't9'`,
   verbatim), bare `todo` (the tool's `action required`), `todo start
   t1 extra` (the adapter's shape refusal naming `todo start <id>`).
+- `TestTodoNewVerbsParse`: `todo claim`, `todo claim review`,
+  `todo note t1 heads up`, `todo accept t1`, `todo reject t1 tests
+  missing` — the line shapes map to the tool's args verbatim.
 - `TestSchedulerCommandRoundTrip`: `scheduler create nightly report
   0 3 * * *` (the crontab spool gains the tagged line; `list` shows
   it), `scheduler create once-job do it once 2030-01-01T00:00:00Z`
