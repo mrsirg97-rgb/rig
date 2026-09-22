@@ -23,7 +23,9 @@ plan in one queue.
 
 ## What it includes
 
-- `Tool`: a `core.Tool` over the todo store's verbs.
+- `Tool`: a `core.Tool` over the todo store's verbs, including the
+  1.3.9 swarm surface: `claim`, `note`, `accept`, `reject` and the
+  `status: review` claim filter.
 
 ## How it is consumed
 
@@ -49,8 +51,12 @@ plan in one queue.
 - `prune` is the door for the done rows the summary keeps counting; the
   log keeps them.
 - Complete on your own unclaimed pending task implicitly claims and
-  completes (auto-started); foreign-claim and blocked-by-dependency
-  refusals carry through unchanged.
+  submits (auto-started); foreign-claim and blocked-by-dependency
+  refusals carry through unchanged. Complete ends in review: the
+  operator's round-trip is `complete` then `claim status=review` then
+  `accept` (or `reject` with the reason). Notes do not need the hold;
+  accept and reject do, and an unclaimed review task teaches the claim
+  door.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
   actionable queue (done folds into the summary line), read all:true
   returns the history, and a transition echo is the affected row plus

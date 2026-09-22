@@ -21,7 +21,7 @@ func (t toolCmd) Name() string { return t.name }
 func (t toolCmd) Description() string {
 	switch t.name {
 	case "todo":
-		return "the task queue: read it, add a task, or move one (start, done, fail, retry)"
+		return "the task queue: read it, add a task, claim work, review, or move one (claim, start, done, fail, retry, accept, reject)"
 	case "scheduler":
 		return "the cron jobs: list, create, update, pause, resume, remove, or show a job's runs"
 	}
@@ -34,8 +34,12 @@ func (t toolCmd) Sub() []Sub {
 		return []Sub{
 			{Name: "read", Desc: "show the queue"},
 			{Name: "create", Desc: "add a task: create <text>"},
+			{Name: "claim", Desc: "take the next task: claim, or claim review"},
 			{Name: "start", Desc: "mark a task in progress: start <id>"},
-			{Name: "done", Desc: "mark a task complete: done <id>"},
+			{Name: "done", Desc: "submit a task for review: done <id>"},
+			{Name: "note", Desc: "attach a message to a task: note <id> <text…>"},
+			{Name: "accept", Desc: "accept a reviewed task: accept <id>"},
+			{Name: "reject", Desc: "send a reviewed task back with a reason: reject <id> <reason…>"},
 			{Name: "fail", Desc: "mark a task failed: fail <id>"},
 			{Name: "retry", Desc: "put a failed task back: retry <id>"},
 			{Name: "prune", Desc: "drop the done rows from the queue"},
@@ -88,13 +92,13 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 // says "this project" (the form binds the session's queue).
 func isTodoAction(w string) bool {
 	switch w {
-	case "read", "create", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "project":
+	case "read", "create", "claim", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "accept", "reject", "project":
 		return true
 	}
 	return false
 }
 
-const todoUsage = "todo read|create <text…>|start|complete|fail|release|retry <id>|move <id> <pos>|prune|project <path>|<path> <verb>"
+const todoUsage = "todo read|create <text…>|claim [review]|start|complete|fail|release|retry <id>|move <id> <pos>|note <id> <text…>|accept <id>|reject <id> <reason…>|prune|project <path>|<path> <verb>"
 
 func todoArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -124,6 +128,24 @@ func todoArgs(args string) (json.RawMessage, error) {
 			"action": "create",
 			"tasks":  []map[string]any{{"text": text}},
 		})
+	case fields[0] == "claim" && len(fields) == 1:
+		return json.RawMessage(`{"action":"claim"}`), nil
+	case fields[0] == "claim" && len(fields) == 2 && fields[1] == "review":
+		return json.RawMessage(`{"action":"claim","status":"review"}`), nil
+	case fields[0] == "accept" && len(fields) == 2:
+		return json.Marshal(map[string]any{"action": "accept", "id": fields[1]})
+	case (fields[0] == "note" || fields[0] == "reject") && len(fields) >= 3:
+		m := map[string]any{"action": fields[0], "id": fields[1], "note": strings.TrimSpace(args[len(fields[0])+1+len(fields[1]):])}
+		return json.Marshal(m)
+	case fields[0] == "claim" && len(fields) == 1:
+		return json.RawMessage(`{"action":"claim"}`), nil
+	case fields[0] == "claim" && len(fields) == 2 && fields[1] == "review":
+		return json.RawMessage(`{"action":"claim","status":"review"}`), nil
+	case fields[0] == "accept" && len(fields) == 2:
+		return json.Marshal(map[string]any{"action": "accept", "id": fields[1]})
+	case (fields[0] == "note" || fields[0] == "reject") && len(fields) >= 3:
+		m := map[string]any{"action": fields[0], "id": fields[1], "note": strings.TrimSpace(args[len(fields[0])+1+len(fields[1]):])}
+		return json.Marshal(m)
 	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry") && len(fields) == 2:
 		action := fields[0]
 		if action == "done" {
@@ -156,6 +178,14 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return nil, errors.New("todo: prune takes no args (todo prune)")
 	case fields[0] == "create":
 		return nil, errors.New("todo: create needs text (todo create <text…>)")
+	case fields[0] == "claim" || fields[0] == "accept":
+		return nil, fmt.Errorf("todo: %s takes no extra args (todo %s)", fields[0], fields[0])
+	case fields[0] == "note" || fields[0] == "reject":
+		return nil, fmt.Errorf("todo: %s takes an id and text (todo %s <id> <text…>)", fields[0], fields[0])
+	case fields[0] == "claim" || fields[0] == "accept":
+		return nil, fmt.Errorf("todo: %s takes no extra args (todo %s)", fields[0], fields[0])
+	case fields[0] == "note" || fields[0] == "reject":
+		return nil, fmt.Errorf("todo: %s takes an id and text (todo %s <id> <text…>)", fields[0], fields[0])
 	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry":
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":

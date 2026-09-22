@@ -356,6 +356,49 @@ func TestTodoPathFormBindsAndActs(t *testing.T) {
 	}
 }
 
+func TestTodoNewVerbsParse(t *testing.T) {
+	var got map[string]any
+	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
+		got = map[string]any{}
+		if err := json.Unmarshal(args, &got); err != nil {
+			return "", err
+		}
+		return "ok", nil
+	})
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"todo": capture}}
+
+	if _, err := runCmd(t, "todo", "claim", env); err != nil {
+		t.Fatalf("todo claim: %v", err)
+	}
+	if got["action"] != "claim" {
+		t.Fatalf("claim parse: %v", got)
+	}
+	if _, err := runCmd(t, "todo", "claim review", env); err != nil {
+		t.Fatalf("todo claim review: %v", err)
+	}
+	if got["action"] != "claim" || got["status"] != "review" {
+		t.Fatalf("claim review parse: %v", got)
+	}
+	if _, err := runCmd(t, "todo", "note t1 heads up", env); err != nil {
+		t.Fatalf("todo note: %v", err)
+	}
+	if got["action"] != "note" || got["id"] != "t1" || got["note"] != "heads up" {
+		t.Fatalf("note parse: %v", got)
+	}
+	if _, err := runCmd(t, "todo", "accept t1", env); err != nil {
+		t.Fatalf("todo accept: %v", err)
+	}
+	if got["action"] != "accept" || got["id"] != "t1" {
+		t.Fatalf("accept parse: %v", got)
+	}
+	if _, err := runCmd(t, "todo", "reject t1 tests missing", env); err != nil {
+		t.Fatalf("todo reject: %v", err)
+	}
+	if got["action"] != "reject" || got["id"] != "t1" || got["note"] != "tests missing" {
+		t.Fatalf("reject parse: %v", got)
+	}
+}
+
 func TestTodoPruneCommand(t *testing.T) {
 	db := openTodo(t)
 	s := core.NewSession()
@@ -368,6 +411,12 @@ func TestTodoPruneCommand(t *testing.T) {
 	}
 	if _, err := runCmd(t, "todo", "done t1", env); err != nil {
 		t.Fatalf("done: %v", err)
+	}
+	if _, err := runCmd(t, "todo", "claim review", env); err != nil {
+		t.Fatalf("claim review: %v", err)
+	}
+	if _, err := runCmd(t, "todo", "accept t1", env); err != nil {
+		t.Fatalf("accept: %v", err)
 	}
 	pruned, err := runCmd(t, "todo", "prune", env)
 	if err != nil {

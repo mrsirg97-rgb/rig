@@ -99,7 +99,7 @@ func TestCreateMalformedTasksFailLoudly(t *testing.T) {
 
 func TestStateVerbsRefuseIdAbsenceLoudly(t *testing.T) {
 	tool := todoapi.New(newDB(t))
-	for _, action := range []string{"start", "complete", "fail", "retry"} {
+	for _, action := range []string{"start", "complete", "fail", "retry", "note", "accept", "reject"} {
 		if _, err := exec(t, tool, context.Background(), map[string]any{"action": action}); err == nil {
 			t.Fatalf("%s without id succeeded", action)
 		} else if want := "action '" + action + "' requires id"; err.Error() != want {
@@ -204,6 +204,80 @@ func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 	}
 }
 
+func TestNewVerbsRoundTrip(t *testing.T) {
+	tool := todoapi.New(newDB(t))
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "swarm work"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	claimed, err := exec(t, tool, ctx, map[string]any{"action": "claim"})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if !strings.Contains(claimed, "'"+id+"' claimed") {
+		t.Fatalf("claim reply: %s", claimed)
+	}
+	noted, err := exec(t, tool, ctx, map[string]any{"action": "note", "id": id, "note": "on it"})
+	if err != nil {
+		t.Fatalf("note: %v", err)
+	}
+	if !strings.Contains(noted, "note added to '"+id+"'") || !strings.Contains(noted, "on it (by "+sess.ID+")") {
+		t.Fatalf("note reply:\n%s", noted)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	review, err := exec(t, tool, ctx, map[string]any{"action": "claim", "status": "review"})
+	if err != nil {
+		t.Fatalf("claim review: %v", err)
+	}
+	if !strings.Contains(review, "'"+id+"' claimed for review") {
+		t.Fatalf("claim review reply: %s", review)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "accept", "id": id}); err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	history, err := exec(t, tool, ctx, map[string]any{"action": "read", "all": true})
+	if err != nil {
+		t.Fatalf("read all: %v", err)
+	}
+	if !strings.Contains(history, "[x] swarm work") {
+		t.Fatalf("the review flow must end done:\n%s", history)
+	}
+}
+
+func TestRejectRequiresItsReasonThroughTheTool(t *testing.T) {
+	tool := todoapi.New(newDB(t))
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "reject", "id": "t1"}); err == nil {
+		t.Fatal("reject without a reason succeeded")
+	} else if want := "action 'reject' requires a reason"; err.Error() != want {
+		t.Errorf("voice:\n%q", err.Error())
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "note", "id": "t1"}); err == nil {
+		t.Fatal("note without text succeeded")
+	} else if want := "action 'note' requires note text"; err.Error() != want {
+		t.Errorf("voice:\n%q", err.Error())
+	}
+}
+
+func TestClaimStatusOnlyKnowsReview(t *testing.T) {
+	tool := todoapi.New(newDB(t))
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "claim", "status": "done"}); err == nil {
+		t.Fatal("claim with an unknown status succeeded")
+	} else if !strings.Contains(err.Error(), "unknown claim status") {
+		t.Errorf("voice: %v", err)
+	}
+}
+
 func TestReadAllTrueReturnsHistory(t *testing.T) {
 	tool := todoapi.New(newDB(t))
 	sess := core.NewSession()
@@ -221,6 +295,12 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	}
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": drop}); err != nil {
 		t.Fatalf("complete: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "claim", "status": "review"}); err != nil {
+		t.Fatalf("claim review: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "accept", "id": drop}); err != nil {
+		t.Fatalf("accept: %v", err)
 	}
 	defaultRead, err := exec(t, tool, ctx, map[string]any{"action": "read"})
 	if err != nil {
