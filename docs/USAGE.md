@@ -170,8 +170,8 @@ rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits the 16 built-in
-tools, 18 when a worker fleet is configured. Python plugins (outside the
+refusal goes back to the model. The default permits the 17 built-in
+tools, 19 when a worker fleet is configured. Python plugins (outside the
 default) are admitted by their
 presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7); an installed
 plugin's own allow-list entry; not by an `allow` line; a plugin still

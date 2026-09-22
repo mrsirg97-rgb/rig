@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [1.3.7]: the docs and the landing page catch up
+
+The 1.3.x surface landed in the code and the specs, but the README, the
+setup and usage docs, and the landing page never learned the new tool
+count: `view` joined the default allow list at 1.3.0 while the docs still
+said 16 built-in tools, and the landing page had no image tool at all.
+The package index also missed the leaves the 1.3.x surface added, and
+the landing page's numbers were the 1.2.9-era snapshot. The docs now say
+what the code does.
+
+- **README**: the tool count names `view`'s vision gate beside the fleet
+  condition, and `view` joins the layout's tool list.
+- **docs/USAGE.md**: the default allow count is 17 tools, 19 with a fleet.
+- **docs/SETUP.md**: the version examples move to 1.3.7; the knob table
+  and the allow-list section name the 17 non-worker tools and the
+  19-tool fleet default.
+- **AGENTS.md**: the package index gains `tool/view`, `tool/sessions`,
+  `tool/execwrap`, and `imagemarker` (the one image-marker contract).
+- **docs/DESIGN.md**: `tool/view` joins the leaf diagram, and the
+  middleware chain names `cutoff` and the `~` expansion at the outer
+  edge.
+- **site/index.html**: the landing page gains the `view` tool row and the
+  seventeen/nineteen count, and its numbers move: the loop is 396 lines
+  (loop.go + batch.go), 31k/47k lines of code/tests, 602 commits, and
+  1.36B prompt tokens across 120 sessions at 99% served from cache (the
+  session store's current totals, same store and metric as the 1.0.0
+  receipts).
+
 ## [1.3.6]: the sessions tool migrates older project stores
 
 The `sessions` tool opened a project's state file with the build's schema
