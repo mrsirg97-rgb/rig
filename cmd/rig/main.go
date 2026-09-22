@@ -32,6 +32,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/plugins"
 	"github.com/mrsirg97-rgb/rig/policy/compact"
 	effort "github.com/mrsirg97-rgb/rig/policy/effort"
+	"github.com/mrsirg97-rgb/rig/policy/empty"
 	"github.com/mrsirg97-rgb/rig/provider/openai"
 	"github.com/mrsirg97-rgb/rig/store"
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
@@ -232,7 +233,7 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 
 	effInner := effort.Decorator(inner, r.effortForWire)
 
-	return toolset.Carry(r.live, compact.Decorator(effInner, pol)), pol
+	return toolset.Carry(r.live, compact.Decorator(empty.Decorator(effInner), pol)), pol
 }
 
 func (r *root) buildProvider() core.Provider {

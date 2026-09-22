@@ -18,8 +18,9 @@ seam (SPEC_HARDENING decision 4, SPEC_COMMANDS 2).
 - **Notify**: the render of the named events: `TextDelta`/`ReasoningDelta`
   verbatim, `ToolStart`/`ToolResult` as the `● name` bracket, `Done`,
   `Compacting`/`Compacted` (the loader line and the one-line compact
-  event), `Fault` as `[fault]`, and `TurnEnd`'s usage line. Events it
-  does not name are ignored (the compat rule).
+  event), `EmptyTurn` (the one-line resampling notice, its usage added to
+  the turn totals), `Fault` as `[fault]`, and `TurnEnd`'s usage line.
+  Events it does not name are ignored (the compat rule).
 - **The reader goroutine**: owns stdin: a line that lands while Input
   is blocked delivers direct (between turns); a line during a live turn
   goes to the slot and interrupts the turn, marking the "an interrupt

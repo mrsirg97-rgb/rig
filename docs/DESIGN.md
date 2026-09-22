@@ -59,6 +59,7 @@ change at the composition root and nowhere else.
       ▲                                        │
       │                                        ├─ ReasoningDelta / TextDelta ─► Notify
       │                                        ├─ ToolCall ─► ToolStart ─► exec chain ─► ToolResult ─► back into the stream
+      │                                        ├─ EmptyTurn ─► resample the identical request (SPEC_EMPTY)
       │                                        ├─ Fault ─► Notify + the turn aborts, session intact
       └────────────────────────────────────────┴─ Done ─► TurnEnd{over|fault|interrupt} ─► next user message
 ```

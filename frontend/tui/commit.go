@@ -44,6 +44,10 @@ func RenderFault(t Theme, err error) string {
 	return t.Paint(SlotError, t.Glyph(GlyphFail)+" fault: "+err.Error())
 }
 
+func RenderEmptyTurn(t Theme, ev core.EmptyTurn) string {
+	return t.Paint(SlotDim, fmt.Sprintf("empty turn, resampling (%d/%d)", ev.Resample, ev.Limit))
+}
+
 const (
 	previewHead = 6
 	previewTail = 2

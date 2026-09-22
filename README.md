@@ -132,7 +132,8 @@ command/        the user commands (/compact, /models, /sessions, /effort, ...)
 config/         the four-layer config resolution (flag > env > file > embedded)
 models/         the per-model table (window, compaction numbers, role, effort)
 policy/         ContextPolicy implementations: compact (per-model trigger),
-                effort (the reasoning dial's provider decorator)
+                and the provider decorators: effort (the reasoning dial),
+                empty (the empty-turn guard)
 middleware/     ToolMiddleware: toolset (the live table), approve (the gate),
                 paths (the ~ boundary), perm (deny by default + plugin
                 provenance), guard (the bound, the round cap, the result cap)

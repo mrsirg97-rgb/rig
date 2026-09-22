@@ -8,9 +8,14 @@ loop already emits; the read side rebuilds a session from the log.
 
 ## What it includes
 
-- `state.go`: `SchemaVersion`, `DDL`, `Statements`, `Migration`, the `DB` alias.
+- `state.go`: `SchemaVersion`, `DDL`, `Statements`, `Migration`, the `DB`
+  alias; `RecordUsage` and `AddUsage` (the upsert-add a discarded turn's
+  usage uses: one row per message, two discards in one turn merge into it).
 - `recorder.go`: the observing `core.Frontend`: forwards every
-  Input/Notify untouched, appends rows for the loop's events.
+  Input/Notify untouched, appends rows for the loop's events. On
+  `core.EmptyTurn` (SPEC_EMPTY) it discards the partial buffer and adds
+  the discarded attempt's usage, so the totals count it while the empty
+  turn leaves no message row.
 - `resume.go`: the read-side projection: rebuild a `core.Session` from
   the log (SPEC_HARDENING decision 5).
 - `sessions.go`: the sessions list rows (`ErrNoSuchSession`,

@@ -822,7 +822,7 @@ func (t *tui) takeSlot() (string, bool) {
 func (t *tui) Notify(ev core.Event) {
 	switch ev.(type) {
 	case core.ReasoningDelta, core.TextDelta, core.ToolStart, core.ToolResult,
-		core.Done, core.Fault, core.Compacted, core.TurnEnd:
+		core.Done, core.Fault, core.Compacted, core.EmptyTurn, core.TurnEnd:
 
 		t.mu.Lock()
 		t.turnEstablished = true
@@ -885,6 +885,15 @@ func (t *tui) Notify(ev core.Event) {
 		t.statusUp, t.statusDown, t.statusCache = t.prompt, t.completion, t.cacheRead
 		t.mu.Unlock()
 		t.flow("", "\n")
+	case core.EmptyTurn:
+
+		t.mu.Lock()
+		t.prompt += e.Usage.Prompt
+		t.completion += e.Usage.Completion
+		t.cacheRead += e.Usage.CacheRead
+		t.mu.Unlock()
+		t.flow("", "\n")
+		t.commit(RenderEmptyTurn(t.theme, e))
 	case core.Fault:
 
 		t.mu.Lock()

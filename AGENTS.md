@@ -69,8 +69,11 @@ plus one registration line, and the loop never names a concrete type.
   effort; env overlay and loud row invariants.
 - `policy`: the ContextPolicy implementations: the passthrough and
   compact (trigger-based transcript summarization, the once-budget
-  overflow recovery). Compaction writes nothing to rem: the summary is
-  context, not memory (SPEC_STATE: rem is deliberate).
+  overflow recovery). Beside them the provider decorators: effort (the
+  reasoning dial) and empty (the empty-turn guard, SPEC_EMPTY: a `stop`
+  turn with no content and no tool calls is resampled twice with the
+  identical request, then faults). Compaction writes nothing to rem: the
+  summary is context, not memory (SPEC_STATE: rem is deliberate).
 - `pathguard`: the one cwd-containment rule: canonicalize a working
   directory and refuse one outside the session's cwd or the rig home;
   the delegate and scheduler tools and the runner's fire-time

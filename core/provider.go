@@ -12,6 +12,7 @@ var (
 	_ Event = ReasoningDelta{}
 	_ Event = ToolCallEvent{}
 	_ Event = Done{}
+	_ Event = EmptyTurn{}
 	_ Event = Fault{}
 	_ Event = ToolStart{}
 	_ Event = ToolResult{}
@@ -39,6 +40,14 @@ type Done struct {
 }
 
 func (Done) event() {}
+
+type EmptyTurn struct {
+	Resample int
+	Limit    int
+	Usage    Usage
+}
+
+func (EmptyTurn) event() {}
 
 type Fault struct{ Err error }
 

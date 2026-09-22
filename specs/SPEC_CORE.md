@@ -127,6 +127,15 @@ type Done struct {
 	Usage      Usage
 	Model      string // the served model, the provider response's own echo; empty when the backend sends none
 }
+
+// provider-decorator event (SPEC_EMPTY): emitted instead of a discarded
+// empty turn's Done; the loop forwards it in its existing default.
+type EmptyTurn struct {
+	Resample int   // 1-based: this resample
+	Limit    int   // total resamples allowed
+	Usage    Usage // the discarded attempt's usage, still counted
+}
+
 type Fault struct{ Err error }
 
 type TurnReason string
@@ -175,7 +184,10 @@ Provider-stream events (`TextDelta`, `ReasoningDelta`, `ToolCallEvent`,
 turn; they are emitted by the loop. Policy events (`Compacted`,
 SPEC_COMPACT) are emitted at `Assemble` or on-stream by the policy's
 decorator; the third emitter category; the loop forwards them in its
-existing default, and the recorder lands them (SPEC_STATE). `TurnEnd` fires at every turn exit
+existing default, and the recorder lands them (SPEC_STATE). `EmptyTurn`
+(SPEC_EMPTY) is the provider-decorator event in that category: the empty
+guard emits it instead of a discarded empty turn's `Done`, and the
+recorder counts its usage. `TurnEnd` fires at every turn exit
 (`over` / `fault` / `interrupt`), after the turn's last other event; a
 run-context cancel ends the run, not a turn, and does not emit it. The
 recorder's rule (SPEC_HARDENING 4): an unlanded partial at any `TurnEnd`

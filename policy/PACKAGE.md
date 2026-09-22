@@ -30,6 +30,10 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
 - `effort.Decorator`: the effort dial's provider decorator (SPEC_MODES 1):
   stamps the session's effort onto a request that has none; the compaction
   summary call's own (the row's) is untouched.
+- `empty.Decorator`: the empty-turn guard (SPEC_EMPTY): a `stop` turn with
+  no content and no tool calls is discarded and resampled with the
+  identical request, at most twice, then a fault with plain words; the
+  discarded reasoning never reaches the frontend or the transcript.
 
 ## How it is consumed
 

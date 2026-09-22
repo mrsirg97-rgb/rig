@@ -43,6 +43,18 @@ func TestCompactedLineExact(t *testing.T) {
 	}
 }
 
+func TestEmptyTurnLine(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderEmptyTurn(th, core.EmptyTurn{Resample: 2, Limit: 2})
+	want := th.Paint("dim", "empty turn, resampling (2/2)")
+	if got != want {
+		t.Fatalf("empty-turn line = %q, want %q", got, want)
+	}
+}
+
 func TestFaultLine(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
