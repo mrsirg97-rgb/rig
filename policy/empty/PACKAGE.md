@@ -34,17 +34,17 @@ identical request, at most twice, then a fault surfaces. Stdlib only.
 
 ## Gotchas
 
-- The deltas of a discarded attempt never reach the frontend. The relay
-  buffers reasoning deltas (and whitespace content deltas) until the turn
-  is provably non-empty: the first non-whitespace `TextDelta` or any
-  `ToolCallEvent` releases the buffer and the relay goes live. The cost,
-  stated in the spec: a normal turn's thinking appears when the answer
-  starts rather than as it streams. This is the only way to keep the
-  discarded reasoning out of the transcript with `loop/loop.go` frozen.
+- Deltas stream live: the empty attempt's reasoning has been shown by the
+  time the turn is known empty, and the discard is marked by the notice,
+  not hidden. The recorder drops its partial on `EmptyTurn`, so the store
+  never writes the discarded reasoning. The one residue is the loop's own
+  accumulation: it appends one message per stream, so the in-memory
+  session message carries the shown reasoning beside the kept turn's; the
+  store and the resample's request stay clean (SPEC_EMPTY 2).
 - Only `finish_reason "stop"` with trimmed-empty content and zero calls is
   an empty turn. A `length` cut, a fault, or a truncated stream pass
-  through untouched (the buffered deltas flush before a non-`stop` `Done`
-  or a `Fault`, so the existing partials keep their shape).
+  through untouched: every delta is forwarded as it arrives, and a
+  non-`stop` `Done` or a `Fault` goes through with the partials as shown.
 - The resample reuses the request exactly: no re-clamp, no reassembly, no
   nudge. The wire request is byte-identical, so the server's prompt cache
   is a full hit.

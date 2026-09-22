@@ -150,25 +150,31 @@ func TestEmptyTurnResamplesSameRequest(t *testing.T) {
 		t.Fatalf("the resample must reuse the identical request: %+v vs %+v", reqs[0], reqs[1])
 	}
 
-	found := false
+	seen := false
+	notice := false
 	for _, ev := range fe.snapshot() {
-		if e, ok := ev.(core.EmptyTurn); ok {
-			found = true
+		switch e := ev.(type) {
+		case core.ReasoningDelta:
+			if strings.Contains(e.Text, "thinking about an edit") {
+				seen = true
+			}
+		case core.EmptyTurn:
+			notice = true
 			if e.Resample != 1 || e.Limit != 2 || e.Usage != (core.Usage{Prompt: 100, Completion: 268, CacheRead: 99}) {
 				t.Fatalf("EmptyTurn = %+v, want resample 1/2 with the discarded usage", e)
 			}
 		}
-		if rd, ok := ev.(core.ReasoningDelta); ok && strings.Contains(rd.Text, "thinking about an edit") {
-			t.Fatalf("the discarded reasoning must never reach the frontend: %+v", rd)
-		}
 	}
-	if !found {
+	if !seen {
+		t.Fatalf("the discarded reasoning must stream live to the frontend: %v", fe.snapshot())
+	}
+	if !notice {
 		t.Fatalf("the frontend must see the resampling notice, got %v", fe.snapshot())
 	}
 
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "go"},
-		{Role: core.RoleAssistant, Content: "answer", Reasoning: "ok", ContextTokens: 110},
+		{Role: core.RoleAssistant, Content: "answer", Reasoning: "thinking about an edit\n<invoke name=\"edit\" path=\"x\">ok", ContextTokens: 110},
 	}
 	if !reflect.DeepEqual(k.Session.Messages, want) {
 		t.Fatalf("the transcript must contain only the good turn: %+v", k.Session.Messages)

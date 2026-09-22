@@ -70,21 +70,10 @@ func (d *decorator) relay(ctx context.Context, out chan<- core.Event, req core.R
 
 func (d *decorator) relayOnce(ctx context.Context, out chan<- core.Event, ch <-chan core.Event) (core.Usage, string, bool) {
 	var (
-		pending []core.Event
 		content strings.Builder
 		reason  strings.Builder
 		calls   int
-		live    bool
 	)
-	flush := func() bool {
-		for _, ev := range pending {
-			if !emit(ctx, out, ev) {
-				return false
-			}
-		}
-		pending = nil
-		return true
-	}
 	for {
 		select {
 		case ev, ok := <-ch:
@@ -94,57 +83,15 @@ func (d *decorator) relayOnce(ctx context.Context, out chan<- core.Event, ch <-c
 			switch e := ev.(type) {
 			case core.TextDelta:
 				content.WriteString(e.Text)
-				if live {
-					if !emit(ctx, out, ev) {
-						return core.Usage{}, "", false
-					}
-					continue
-				}
-				if strings.TrimSpace(e.Text) != "" {
-					if !flush() {
-						return core.Usage{}, "", false
-					}
-					live = true
-					if !emit(ctx, out, ev) {
-						return core.Usage{}, "", false
-					}
-					continue
-				}
-				pending = append(pending, ev)
 			case core.ReasoningDelta:
 				reason.WriteString(e.Text)
-				if !live {
-					pending = append(pending, ev)
-					continue
-				}
-				if !emit(ctx, out, ev) {
-					return core.Usage{}, "", false
-				}
 			case core.ToolCallEvent:
 				calls++
-				if !live {
-					if !flush() {
-						return core.Usage{}, "", false
-					}
-					live = true
-				}
-				if !emit(ctx, out, ev) {
-					return core.Usage{}, "", false
-				}
+			}
+			switch e := ev.(type) {
 			case core.Done:
 				if e.StopReason == "stop" && strings.TrimSpace(content.String()) == "" && calls == 0 {
 					return e.Usage, reason.String(), true
-				}
-				if !flush() {
-					return core.Usage{}, "", false
-				}
-				if !emit(ctx, out, ev) {
-					return core.Usage{}, "", false
-				}
-				return core.Usage{}, "", false
-			case core.Fault:
-				if !flush() {
-					return core.Usage{}, "", false
 				}
 				if !emit(ctx, out, ev) {
 					return core.Usage{}, "", false

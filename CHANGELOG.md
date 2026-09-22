@@ -23,13 +23,13 @@ it. Server side was clean: HTTP 200, truncated = 0, nowhere near maxTokens.
   tool-call marker (`<invoke name=`, `<tool_call>`, `<function=`). A
   `length` cut, a fault, and a content turn pass through untouched; the
   loop is byte-identical.
-- **the discarded attempt never shows or persists** (`policy/empty`): the
-  decorator withholds the attempt's deltas until the turn is decided, so
-  the discarded reasoning never reaches the frontend, the recorder, or
-  the transcript. The frontends render one honest line instead,
-  `empty turn, resampling (1/2)`. The cost, stated in the spec: a normal
-  turn's thinking appears when the answer starts rather than as it
-  streams.
+- **thinking still streams live** (`policy/empty`): the deltas of the
+  discarded attempt are shown as they arrive; the `EmptyTurn` notice marks
+  the discard, and the recorder drops its partial on it, so the store
+  never persists the discarded reasoning. The one residue, named in the
+  spec: the loop appends one message per stream, so the in-memory session
+  message carries the shown reasoning beside the kept turn's; the store
+  and the resample's request stay clean.
 - **usage still counts** (`store/state`, `core`): the discarded attempts'
   usage rides `core.EmptyTurn` and is added to the session totals (one
   row per message; two discards in one turn merge), while no empty message

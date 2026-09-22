@@ -48,29 +48,25 @@ resample then bypasses compact's re-clamp (a factor change after the first
 attempt's calibration would otherwise change MaxTokens and break the cache
 hit), and compact's calibration sees only the kept turn's `Done`.
 
-### 2. The deltas of a discarded attempt never reach the frontend
+### 2. Deltas stream live; the recorder drops the discarded attempt
 
-Reasoning deltas are emitted by the provider as they arrive and, in the
-current code, are forwarded to the frontend immediately and accumulated by
-the loop and the recorder. By the time the decorator sees `Done` (the
-earliest moment the turn is known empty), the reasoning has already been
-shown live and is accumulated in the loop's turn state. If the decorator
-forwarded it and then resampled, the discarded thinking would end up in both
-the in-memory transcript (the next request's bytes) and the store: the loop
-appends `t.reasoning` at `streamEnd`, and the recorder lands it at the
-resample's `Done`.
+Reasoning deltas are emitted by the provider as they arrive and are
+forwarded to the frontend immediately: the operator reads thinking live, so
+a normal turn keeps its stream. By the time the decorator sees `Done` (the
+earliest moment the turn is known empty), the attempt's reasoning has
+already been shown. That is accepted: the discard is marked, not hidden.
 
-With the loop frozen, the only way to keep the discarded reasoning out is
-for the decorator to withhold the deltas until the turn is decided. It
-buffers reasoning deltas (and whitespace content deltas) and releases the
-buffer as soon as the turn is provably non-empty: the first non-whitespace
-`TextDelta` or any `ToolCallEvent`. An empty turn only ever carries
-reasoning, so in practice only the thinking prefix of a turn that never
-produces an answer is withheld.
+The discarded reasoning must still not be persisted. The `EmptyTurn` event
+is the marker: the recorder discards its partial buffer on it, so the store
+never writes the empty attempt's reasoning, and the resample's `Done` lands
+only its own text and thinking. The empty turn leaves no message row.
 
-The cost is stated: the thinking of a normal turn appears when the answer
-starts rather than as it streams. That is the deliberate trade-off for a
-clean transcript with a frozen loop.
+The one residue is the loop's own accumulation, and it is named: with
+`loop/loop.go` frozen, the loop appends one assistant message per stream
+from what it accumulated, so the in-memory session message carries the shown
+reasoning of the discarded attempt beside the kept turn's (the next request
+sends it). The store and the resample's request bytes stay clean; the
+recorder is the transcript of record.
 
 ### 3. `core.EmptyTurn`: the notice and the usage
 
@@ -120,7 +116,7 @@ Fake provider, no network, loop-level (the decorator + the real loop):
 
 - Empty turn then a good turn: exactly 2 provider calls, the transcript
   holds only the good turn, request bytes of call 2 equal call 1, the
-  discarded reasoning never reaches the frontend.
+  discarded reasoning streams live and the notice follows it.
 - Three empty turns: exactly 3 provider calls, then the fault above;
   transcript unchanged; exactly 2 notices.
 - The marker clause: present when the last reasoning carries
