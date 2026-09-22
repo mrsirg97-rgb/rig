@@ -16,6 +16,7 @@ func All() []core.Command {
 		&effortCmd{},
 		roleCmd{},
 		approveCmd{},
+		swarmCmd{},
 	}
 }
 

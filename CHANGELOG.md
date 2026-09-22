@@ -1,6 +1,46 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.0]: the swarm: a fleet of drain workers, supervisor-side
+
+`/swarm` turns the session's queue into a shared work board a fleet
+drains. The supervisor is the session's own process: each drain worker
+claims a task and spawns a one-shot `rig -p` through the delegate path
+(the jail, the socket proxy, the recorded run), then finishes the task
+itself — workers submit for review, reviewers parse the worker's
+`verdict:` line and accept or reject. The parallelism is the GPU slots,
+not the worker count.
+
+- **`/swarm`** (thirteenth command): bare lists the supervisor's
+  workers (`w1 worker qwen3.8-workers · task t3 · heartbeat 2s ago ·
+  done 1 failed 0`); `swarm <n> [role=worker|reviewer] [model=<id>]`
+  starts n drain workers on the session's bound queue — against a
+  running swarm a start adds workers, so a worker swarm gains a
+  reviewer mid-drain; `swarm stop` cancels the swarm, releases the
+  in-flight claims, clears the rows.
+- **The drain loop is supervisor-side Go**: `todo claim` → brief (task
+  text and notes, with their sessions) → delegate spawn → `complete`
+  (worker mode, submits for review) or the reviewer's verdict protocol
+  (`accept` / `reject <reason>`, the reason riding the reject note).
+  Three consecutive empty claims end a worker; an empty claim while
+  another worker is mid-task does not count.
+- **The dead claim**: a worker that dies mid-task has its claim released
+  through the todo store's Reap door and is retried once; a second death
+  fails the task (workers) or rejects it with the reason (reviewers).
+  No task is ever left held by a dead identity.
+- **The delegate path, three amendments** (defaulted to today's
+  behavior): `WaitBusy` — a swarm spawn waits at llama-swap for a GPU
+  slot instead of refusing; `Observe` — the worker's stderr streams
+  into `<scheduler home>/swarm/wN.stream`, the run stream the
+  supervisor's heartbeat reads; `SpawnCtx` — the base context the spawn
+  timeout wraps, so `swarm stop` kills the in-flight worker.
+- **The one todo read**: `todo.Task(ctx, db, p, id, session)` returns
+  the task's text and notes for the brief — the rendered queue is the
+  model's surface, not a parser contract. The swarm's review release
+  also fixed a store replay bug: the `release` event now folds a
+  review claim (the holder clears, the status stays), with a replay
+  test.
+- **`workers.json`** gains an optional `reviewer` key (same row
+  contract as `model`): the swarm reviewer's default model.
 
 ## [1.3.9]: the todo store becomes the swarm's shared board
 

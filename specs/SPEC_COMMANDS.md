@@ -64,6 +64,7 @@ command/              NEW leaf package (stdlib + core + models, nothing else)
   models.go           models (list / switch)
   steer.go            steer
   rem.go              rem (list / show / forget)
+  swarm.go            swarm (start / list / stop)
   tools.go            todo + scheduler over core.Tool
   parse_test.go, commands_test.go, compact_test.go, new_test.go,
   sessions_test.go, models_test.go, steer_test.go, tools_test.go
@@ -772,6 +773,36 @@ are `list`, `show`, `forget`, `project` (SPEC_TUI 9). `rem project` is
 the same `List` closure with a project path: the root resolves it through
 `store/scope` (`~` expands at the boundary), so `command/` never touches
 a store.
+
+### 12. `swarm`: the drain workers
+
+**`swarm`**; the bare command lists the supervisor's workers, one line
+each: `w1 worker qwen3.8-workers · task t3 · heartbeat 2s ago · done 1
+failed 0`; an idle worker says `task none · heartbeat —`; a finished one
+says `exited`. **`swarm <n> [role=worker|reviewer] [model=<id>]`**;
+starts n drain workers on the session's bound queue, each spawning one
+`rig -p` per task through the delegate path; against a running swarm it
+adds (the roles mix — a worker swarm gains a reviewer mid-drain), and a
+`model=` must resolve in the runtime models table. **`swarm stop`**;
+cancels the swarm, releases the claims, clears the rows
+(`swarm: stopped N workers`). The command threads the live session, so
+the swarm's doors attribute to the architect; the controller itself is
+`swarm/` (SPEC_SWARM), wired once in `cmd/rig` as `Env.Swarm` — the
+command package defines only the seam and the row types.
+
+Refusals, named: a non-numeric count and the unknown token → the usage
+line naming `[role=worker|reviewer] [model=<id>]`; `role=` twice, an
+empty `role=`, an empty `model=`, and `stop` with extra args → the
+voice naming the right shape; a start with no fleet →
+`swarm: no workers configured (<file> names the model)`; a stop with no
+swarm → `swarm: no swarm running`; `model=<id>` unknown in the runtime
+table → `swarm: no row for "<id>" (known: ...)`. The bare command with
+no seam and no rows is `swarm: no workers` (a read, not a refusal).
+
+Why the seam and not a store handle in `command/`: the command owns the
+vocabulary, the root owns the goroutines (the leaf rule, SPEC_COMMANDS
+2), and the drain loop's truth is in memory — a store row would be a
+second truth. `Sub()` hints are `stop` and `<n>` (SPEC_TUI 9).
 
 ## testing
 

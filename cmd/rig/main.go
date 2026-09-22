@@ -41,6 +41,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/scope"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/swarm"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
 	"github.com/mrsirg97-rgb/rig/tool/delegate"
 	"github.com/mrsirg97-rgb/rig/tool/diff"
@@ -55,7 +56,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.3.9"
+const Version = "1.4.0"
 
 type root struct {
 	pluginMax int
@@ -94,6 +95,7 @@ type root struct {
 	tools   map[string]core.Tool
 
 	workers *config.Workers
+	swarm   *swarm.Controller
 
 	pluginTools []core.Tool
 
@@ -1096,6 +1098,27 @@ func main() {
 			Fetch:        sched.RealFetch(0),
 			Spawn:        sched.RealSpawn,
 		})
+		r.swarm = swarm.New(swarm.Opts{
+			TodoDB:  tdb,
+			SchedDB: scdb,
+			Home:    schedHome,
+			Project: func(ctx context.Context, session string) (todostore.Project, error) {
+				return sessionQueue(ctx, tdb, cwd, session)
+			},
+			Cwd:           cwd,
+			WorkerCmd:     []string{self},
+			Fetch:         sched.RealFetch(0),
+			Spawn:         sched.RealSpawn,
+			SwapURL:       swapURL,
+			Sandbox:       cfg.Settings.Sandbox,
+			SandboxBinds:  cfg.Settings.SandboxBinds,
+			RigHome:       cfgDir,
+			StateDir:      filepath.Join(cfgDir, "sessions"),
+			Allow:         allowList,
+			FleetModel:    workers.Model,
+			ReviewerModel: workers.Reviewer,
+			Models:        func() models.Table { return r.runtime },
+		})
 	}
 
 	for _, t := range pluginTools {
@@ -1115,6 +1138,7 @@ func main() {
 	}
 	env := &command.Env{
 		Workers:       workersEnv,
+		Swarm:         swarmAdapter{r.swarm},
 		Session:       func() *core.Session { return r.session },
 		Compact:       r.compactNow,
 		NewSession:    r.newSession,

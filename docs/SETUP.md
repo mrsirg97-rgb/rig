@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 1.3.9
+./rig --version        # rig 1.4.0
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -109,7 +109,7 @@ the file is a contract, not a filter.
 |-------------------|-------------------------------------------------------------------------|
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut; a present one mints `workers.json` once at start (the notice says so), then nags until deleted |
 | `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), and `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row) |
-| `workers.json`    | the fleet: `{"model": "<id>", "slots": N}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
+| `workers.json`    | the fleet: `{"model": "<id>", "slots": N, "reviewer": "<id>"}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session); `reviewer` is optional and must resolve too — the swarm's reviewer default (`/swarm role=reviewer`). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's theme (`specs/SPEC_TUI.md` 7): `base` (one of `oled`, `paper`, `p1`, `p3`, required), optional `slots` (the eight slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema |
 
@@ -257,14 +257,16 @@ the `/effort` dial's vocabulary.
 **`workers.json`**: the fleet that unlocks `scheduler` and `delegate`:
 
 ```json
-{"model": "worker", "slots": 2}
+{"model": "worker", "slots": 2, "reviewer": "worker"}
 ```
 
 `model` must resolve in the merged models table (the `worker` row
 above); `slots` is the concurrent `delegate` bound per session and
 defaults to `1`. A fan-out can issue more delegate calls than slots:
-the extras wait for a slot rather than fail. Absent file, no fleet:
-the worker tools are absent, the default allow does not grow, and the
+the extras wait for a slot rather than fail. `reviewer` is optional:
+the swarm's reviewer default, same row contract as `model` (absent, a
+swarm reviewer uses the fleet's model). Absent file, no fleet: the
+worker tools are absent, the default allow does not grow, and the
 status row says `workers: none`.
 
 ## plugins
@@ -406,7 +408,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 1.3.9
+./rig --version                 # prints: rig 1.4.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

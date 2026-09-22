@@ -105,7 +105,7 @@ func TestWorkersUnknownKeyRefuses(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, dir, "workers.json", `{"model": "local", "slot": 1}`)
 	err := loadErr(t, dir, t.TempDir())
-	if err.Error() != `config: `+p+`: unknown key "slot" (known: model, slots)` {
+	if err.Error() != `config: `+p+`: unknown key "slot" (known: model, reviewer, slots)` {
 		t.Fatalf("the voice = %q", err.Error())
 	}
 }
@@ -192,5 +192,58 @@ func TestDefaultJobModelStaysInTheKnownList(t *testing.T) {
 	want := `config: ` + p + `: unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy)`
 	if err.Error() != want {
 		t.Fatalf("the cut key must stay in the known list so its cut's voice, not the unknown-key voice, fires: %q", err.Error())
+	}
+}
+
+func TestWorkersReviewerIsOptionalAndResolves(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "review", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}]`)
+	write(t, dir, "workers.json", `{"model": "local", "reviewer": "review"}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Workers == nil || cfg.Workers.Reviewer != "review" {
+		t.Fatalf("Workers = %+v, want the reviewer row", cfg.Workers)
+	}
+
+	dir = t.TempDir()
+	write(t, dir, "workers.json", `{"model": "local"}`)
+	cfg = load(t, dir, t.TempDir())
+	if cfg.Workers == nil || cfg.Workers.Reviewer != "" {
+		t.Fatalf("absent reviewer must stay empty: %+v", cfg.Workers)
+	}
+}
+
+func TestWorkersReviewerMustResolveInTheTable(t *testing.T) {
+	dir := t.TempDir()
+	p := write(t, dir, "workers.json", `{"model": "local", "reviewer": "brain"}`)
+	err := loadErr(t, dir, t.TempDir())
+	want := "config: " + p + `: reviewer "brain": no row in the models table (known: local)`
+	if err.Error() != want {
+		t.Fatalf("the voice = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestWorkersReviewerMalformedRefuses(t *testing.T) {
+	dir := t.TempDir()
+	p := write(t, dir, "workers.json", `{"model": "local", "reviewer": ""}`)
+	err := loadErr(t, dir, t.TempDir())
+	want := "config: " + p + ": reviewer: expected a non-empty string, got the empty string"
+	if err.Error() != want {
+		t.Fatalf("the voice = %q, want %q", err.Error(), want)
+	}
+	dir = t.TempDir()
+	p = write(t, dir, "workers.json", `{"model": "local", "reviewer": 1}`)
+	err = loadErr(t, dir, t.TempDir())
+	want = "config: " + p + ": reviewer: expected a string, got 1"
+	if err.Error() != want {
+		t.Fatalf("the voice = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestWorkersUnknownKeyNamesReviewer(t *testing.T) {
+	dir := t.TempDir()
+	p := write(t, dir, "workers.json", `{"model": "local", "slot": 1}`)
+	err := loadErr(t, dir, t.TempDir())
+	if err.Error() != `config: `+p+`: unknown key "slot" (known: model, reviewer, slots)` {
+		t.Fatalf("the voice = %q", err.Error())
 	}
 }

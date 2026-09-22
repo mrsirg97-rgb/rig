@@ -34,6 +34,9 @@ type DelegateInput struct {
 	LandlockABI   func() (int, error)
 	Now           func() time.Time
 	Context       context.Context
+	WaitBusy      bool
+	Observe       func([]byte)
+	SpawnCtx      context.Context
 }
 
 type DelegateResult struct {
@@ -72,6 +75,32 @@ func delegateTimeout(t time.Duration) time.Duration {
 // slotPollInterval is how often a delegate whose session's slots are all
 // held retries the acquisition while it waits for one to free.
 const slotPollInterval = 50 * time.Millisecond
+
+// busyWaitInterval is how often a delegate waiting for a GPU slot re-checks
+// the swap's running state. The swarm's spawns wait here; the interactive
+// delegate still refuses (busy:skip).
+const busyWaitInterval = time.Second
+
+func delegateBusy(fetch Fetch, swapURL, model string, waitCtx context.Context, wait bool) error {
+	for {
+		st := busyState(fetch, swapURL, model)
+		switch st.kind {
+		case "run":
+			return nil
+		case "error":
+			return fmt.Errorf("delegate: busy check failed: %s", st.reason)
+		case "busy":
+			if !wait {
+				return fmt.Errorf("delegate: the GPU is held by %s (busy:skip — no eviction from inside a turn); a delegate from inside a turn cannot win this box — schedule a once-job instead, it fires between turns", st.names)
+			}
+			select {
+			case <-waitCtx.Done():
+				return fmt.Errorf("delegate: the GPU never freed while waiting (busy: %s)", st.names)
+			case <-time.After(busyWaitInterval):
+			}
+		}
+	}
+}
 
 func acquireSlot(ctx context.Context, home, session string, slots int) (*os.File, error) {
 	start := time.Now()
@@ -123,12 +152,8 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
 
-	st := busyState(in.Fetch, in.SwapURL, in.Model)
-	switch st.kind {
-	case "error":
-		return DelegateResult{}, fmt.Errorf("delegate: busy check failed: %s", st.reason)
-	case "busy":
-		return DelegateResult{}, fmt.Errorf("delegate: the GPU is held by %s (busy:skip — no eviction from inside a turn); a delegate from inside a turn cannot win this box — schedule a once-job instead, it fires between turns", st.names)
+	if err := delegateBusy(in.Fetch, in.SwapURL, in.Model, waitCtx, in.WaitBusy); err != nil {
+		return DelegateResult{}, err
 	}
 
 	id, err := adHocCreate(context.Background(), in.DB, in)
@@ -181,12 +206,16 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		defer proxy.Close()
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout(in.Timeout))
+	base := in.SpawnCtx
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(base, delegateTimeout(in.Timeout))
 	defer cancel()
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 
-	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, nil)
+	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, in.Observe)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
 	}

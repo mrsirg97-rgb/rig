@@ -16,6 +16,31 @@ type Steerer interface {
 	LiveTurn() bool
 }
 
+// Swarm is the supervisor seam: the root's drain-worker controller. The
+// command owns the vocabulary; the controller owns the goroutines.
+type Swarm interface {
+	Start(ctx context.Context, in SwarmStart) (string, error)
+	List() []SwarmWorker
+	Stop() (string, error)
+}
+
+type SwarmStart struct {
+	Count int
+	Role  string
+	Model string
+}
+
+type SwarmWorker struct {
+	ID        int
+	Role      string
+	Model     string
+	Task      string
+	Heartbeat time.Time
+	Done      int
+	Failed    int
+	State     string
+}
+
 type SessionRow struct {
 	ID      string
 	Started time.Time
@@ -47,6 +72,7 @@ type Workers struct {
 
 type Env struct {
 	Workers Workers
+	Swarm   Swarm
 
 	Session func() *core.Session
 

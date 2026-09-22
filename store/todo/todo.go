@@ -386,6 +386,8 @@ func (f *folded) applyVerb(e eventRow) {
 		if ts.status == "in_progress" {
 			ts.status = "pending"
 			ts.owner = ""
+		} else if ts.status == "review" {
+			ts.owner = ""
 		}
 	case "retry":
 		if ts.status == "failed" {

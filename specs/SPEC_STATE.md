@@ -326,6 +326,14 @@ happens to name (see the binding decision).
   the note names each task and the owner it was freed from, silent
   when idle. Tasks survive the release — text, deps, and position
   stay; only the claim dies.
+- **The one structured read (SPEC_SWARM).** `Task(ctx, db, p, id,
+  session)` returns the task's text and notes (each with its session, in
+  order) — the swarm's brief source, read-only, unknown id in the store's
+  voice. The rendered `Read` reply is the model's surface, not a parser
+  contract. The swarm's review release also surfaced a replay bug: the
+  `release` event folded only `in_progress` claims, so a released review
+  claim's holder came back on the next fold; the fold now clears the
+  holder for a `review` claim too (the status stays), with a replay test.
 - **Migration (1 → 2), lossless.** Todo rows carried no cwd: the filename
   was the identity, so the fold keys on the files existing (the
   scheduler's lesson: a fresh `todo.sqlite` folds too): every
