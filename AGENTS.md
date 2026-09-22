@@ -117,7 +117,9 @@ plus one registration line, and the loop never names a concrete type.
 - `store/todo`: the task-queue store: the event log is the spine, the
   task rows a disposable projection rebuilt every transaction, DAG
   validated at create; one file for every project, rows carrying the
-  project scope.
+  project scope. The swarm surface (claim/note/review/accept/reject)
+  rides the same log, and the 2→3 migration pairs historical completes
+  with accepts so a pre-review log replays exactly.
 - `store/rem`: the memory store: recall (FTS plus trigram, rank-fused),
   consolidation arithmetic, supersession; scope is a repo identity
   (worktrees share), a one-time migration on the schema bump, and every
