@@ -58,8 +58,9 @@ width); no core or loop line (decision 10).
 - `Notify` observes the stream events and renders at the commit points
   exactly: deltas as they arrive, the tool block on `ToolResult`, the
   newline guarantee on `Done`, the fault line, the compact line, the
-  usage on `TurnEnd`. Events it does not name are ignored (the compat
-  rule).
+  empty-turn notice (`RenderEmptyTurn`, its usage added to the turn
+  totals), the usage on `TurnEnd`. Events it does not name are ignored
+  (the compat rule).
 - The `Steerer` is the frontend-owned seam (SPEC_COMMANDS 2): `Steer`
   queues text and reports the interrupt; `LiveTurn` is the turn's
   state; `Ask` is the approval gate's door (SPEC_MODES 4).

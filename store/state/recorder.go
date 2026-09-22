@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -143,6 +144,15 @@ func (r *Recorder) observe(ev core.Event) {
 			}
 		}
 		r.upsertFiles()
+	case core.EmptyTurn:
+		r.discardPartial()
+		if r.lastSeq <= 0 {
+			r.loud("usage", errors.New("state: a discarded turn's usage has no message to attach to"))
+			return
+		}
+		if e2 := AddUsage(context.Background(), r.db, r.lastSeq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite)); e2 != nil {
+			r.loud("usage", e2)
+		}
 	case core.Compacted:
 
 		r.landCompacted(e)

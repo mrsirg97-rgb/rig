@@ -233,6 +233,30 @@ func RecordUsage(ctx context.Context, db store.DB, messageSeq, prompt, completio
 	})
 }
 
+func AddUsage(ctx context.Context, db store.DB, messageSeq, prompt, completion, cacheRead, cacheWrite int64) error {
+	return withTx(db, ctx, func(c context.Context) error {
+		existing, err := safely(func() (*domain.Usage, error) {
+			return domain.NewUsageDomain().GetUsage(c, messageSeq).Row()
+		})
+		if err != nil {
+			return err
+		}
+		if existing == nil {
+			_, err = domain.NewUsageDomain().InsertUsage(c, domain.Usage{
+				MessageSeq: messageSeq, Prompt: prompt, Completion: completion,
+				CacheRead: cacheRead, CacheWrite: cacheWrite,
+			})
+			return err
+		}
+		existing.Prompt += prompt
+		existing.Completion += completion
+		existing.CacheRead += cacheRead
+		existing.CacheWrite += cacheWrite
+		_, err = domain.NewUsageDomain().UpdateUsage(c, *existing)
+		return err
+	})
+}
+
 func RecordFile(ctx context.Context, db store.DB, sessionID, path, hash string, mtime int64) error {
 	return withTx(db, ctx, func(c context.Context) error {
 		_, err := domain.NewFileDomain().InsertFile(c, domain.File{

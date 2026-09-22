@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+## [1.3.4]: an empty turn is asked again
+
+The evidence, verified in a session store: messages.seq 13171, model
+huihui3.8-flash, the assistant turn had content "", zero tool calls, 268
+completion tokens, finish_reason "stop". Its reasoning ended with a fully
+formed tool call (`<invoke name="edit"> ... </invoke>`) that the model wrote
+inside its thinking block without closing it. llama.cpp filed it as
+reasoning, so rig got an assistant turn with nothing to say and nothing to
+run, and the turn ended; the operator had to type "you good?" to restart
+it. Server side was clean: HTTP 200, truncated = 0, nowhere near maxTokens.
+
+- **the empty-turn guard** (`policy/empty`, `core`): a provider decorator
+  at the same seam as the overflow retry. A stream that finishes normally
+  (`finish_reason "stop"`) with no content and no tool calls is discarded
+  and resampled with the identical request, at most twice, then a fault
+  with plain words: `model returned an empty turn 3 times (no content, no
+  tool call)`, plus `last reasoning ended with what looks like a tool call
+  written inside its thinking` only when the last reasoning carries a
+  tool-call marker (`<invoke name=`, `<tool_call>`, `<function=`). A
+  `length` cut, a fault, and a content turn pass through untouched; the
+  loop is byte-identical.
+- **thinking still streams live** (`policy/empty`): the deltas of the
+  discarded attempt are shown as they arrive; the `EmptyTurn` notice marks
+  the discard, and the recorder drops its partial on it, so the store
+  never persists the discarded reasoning. The one residue, named in the
+  spec: the loop appends one message per stream, so the in-memory session
+  message carries the shown reasoning beside the kept turn's; the store
+  and the resample's request stay clean.
+- **usage still counts** (`store/state`, `core`): the discarded attempts'
+  usage rides `core.EmptyTurn` and is added to the session totals (one
+  row per message; two discards in one turn merge), while no empty message
+  row is written.
+- **cancellation is unchanged** (`policy/empty`): a ctx cancel during an
+  attempt or a resample closes the stream cleanly, the loop reads its
+  normal interrupt path, no fault, no extra call.
+
+The spec is `specs/SPEC_EMPTY.md`; `loop/loop.go` was not touched.
+
 ## [1.3.3]: a queue knows whose it is
 
 The scope law says a queue belongs to its project, and the lazy re-scope

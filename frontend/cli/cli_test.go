@@ -263,6 +263,20 @@ func TestUsageTotalsAccumulateAcrossTheTurn(t *testing.T) {
 	}
 }
 
+func TestNotifyRendersEmptyTurnNotice(t *testing.T) {
+	r := build(t)
+	r.fe.Notify(core.EmptyTurn{Resample: 1, Limit: 2, Usage: core.Usage{Prompt: 100, Completion: 268, CacheRead: 99}})
+	r.fe.Notify(core.Done{Usage: core.Usage{Prompt: 100, Completion: 10, CacheRead: 99}})
+	r.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	out := r.out.String()
+	if !strings.Contains(out, "empty turn, resampling (1/2)\n") {
+		t.Fatalf("the notice must render: %q", out)
+	}
+	if !strings.Contains(out, "↑200 ↓278 · cache 198 99%") {
+		t.Fatalf("the discarded usage must join the turn totals: %q", out)
+	}
+}
+
 func TestNotifyRendersFaults(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.Fault{Err: errors.New("boom")})

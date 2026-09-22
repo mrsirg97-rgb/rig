@@ -269,6 +269,11 @@ func (c *cli) Notify(ev core.Event) {
 		c.prompt += e.Usage.Prompt
 		c.completion += e.Usage.Completion
 		c.cacheRead += e.Usage.CacheRead
+	case core.EmptyTurn:
+		fmt.Fprintf(c.out, "\nempty turn, resampling (%d/%d)\n", e.Resample, e.Limit)
+		c.prompt += e.Usage.Prompt
+		c.completion += e.Usage.Completion
+		c.cacheRead += e.Usage.CacheRead
 	case core.Compacting:
 
 		io.WriteString(c.out, "\u29c9 compacting\u2026\n")
