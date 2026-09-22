@@ -39,8 +39,9 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 
 ## the tools
 
-rig ships 16 built-in tools, and two more (`scheduler` and `delegate`) when a
-worker fleet is configured. Restrict them with `--allow`:
+rig ships 17 built-in tools: `view` joins the set only for a model row
+whose `"vision": true` says it takes images, and `scheduler` and `delegate`
+join when a worker fleet is configured. Restrict them with `--allow`:
 
 | tool | what it does |
 |------|--------------|
@@ -144,10 +145,11 @@ store/          the SQLite stores (state, todo, rem, scheduler), the sqlx
                 transaction seam, the project scope identity (store/scope);
                 -resume projects a session back from the state rows
 tool/           Tool implementations: bash(1); file read/write/edit; fs
-                ls/find/grep; todo the job queue; rem memory; scheduler
-                background jobs; delegate the one-shot worker; python the
-                persistent IPython kernel; web search and fetch; diff the
-                observation diff; sessions the soak's vitals
+                ls/find/grep; view the image reader (a vision row only);
+                todo the job queue; rem memory; scheduler background jobs;
+                delegate the one-shot worker; python the persistent IPython
+                kernel; web search and fetch; diff the observation diff;
+                sessions the soak's vitals
 frontend/       Frontend implementations: cli (the piped reference), tui (the
                 terminal default), oneshot (-p worker), web (the serve
                 dashboard)

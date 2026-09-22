@@ -130,11 +130,21 @@ plus one registration line, and the loop never names a concrete type.
   and regenerate; never hand-edit the generated projections.
 - `tool/bash`: bash(1) execution: real subprocesses, output surfaced
   and bounded.
+- `tool/execwrap`: the landlock subprocess seam: prepends the
+  `RIG_EXEC_WRAPPER` helper (`rig -exec <argv>`) to a tool's argv when
+  the env names one, so the landlock domain rides the tool's subprocess.
 - `tool/file`: the read, write, and edit tools: exact-match edit with
   provenance from the threaded session, so edit-after-external-change
   fails loudly instead of clobbering.
 - `tool/fs`: the named filesystem tools: `ls`, `find`, `grep`, with
   small schemas a local model can reach for.
+- `tool/view`: the image tool (SPEC_VIEW): a path in, one marker line
+  out, the bytes content-addressed under the rig home; registered only
+  for a model row whose `vision` is true.
+- `imagemarker`: the one image-marker contract: the line a `view`
+  result is, and the blob path rule. One stdlib-only leaf beside
+  `pathguard`, because `tool/view`, `provider/openai`, and
+  `frontend/tui` disagreeing on those bytes breaks the prompt cache.
 - `tool/diff`: the observation diff: `git diff` against the working
   tree, or the previous observation of the same call, over a pure Go
   diff engine.
@@ -149,6 +159,9 @@ plus one registration line, and the loop never names a concrete type.
   headless worker on a task now, wait, and feed back its last message;
   a recorded run in the cwd-scope scheduler store, a resumable
   transcript.
+- `tool/sessions`: the session-store introspection tool: `list` and
+  `summary`, the vitals (which models ran, what failed, the cache
+  ratio), and the store's schema migration on open.
 - `frontend/cli`: the stdin/stdout frontend and the piped reference:
   plain text, command dispatch, the steering seam.
 - `frontend/oneshot`: the one-shot (`-p`) worker frontend: the single

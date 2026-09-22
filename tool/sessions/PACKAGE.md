@@ -22,7 +22,7 @@ rows are touched.
 
 ## How it is consumed
 
-- Registered at the root as a native tool (`sessions`, the eighteenth).
+- Registered at the root as a native tool (`sessions`, the nineteenth).
   It is absent from the root's `mutatingNatives`, so the approval gate
   passes it silently: a read never pauses a session, and the only write a
   read can do is the store's own bounded, versioned schema migration. It

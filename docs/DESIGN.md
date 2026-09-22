@@ -16,15 +16,16 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
                   │  ├─ seam: ContextPolicy ─► policy        (per-turn Assemble)
                   │  └─ seam: Provider      ─► provider/openai (stream out, events in)
                   └─ seam: Tool ─► ToolMiddleware chain
-                                   └─ toolset.Resolve → approve.Gate → paths
+                                   └─ toolset.Resolve → approve.Gate → cutoff
                                        → perm.Plugins → perm.Allowlist
                                        → guard.Bound → guard.Rounds → guard.Cap
+                                       → paths (the ~ expansion)
                                        (first-listed = innermost)
                                         │
                                         ▼
-             tool/bash · tool/file · tool/fs · tool/todo · tool/rem
-             · tool/scheduler · tool/delegate · tool/python · tool/web
-             · tool/diff · tool/sessions · plugins
+             tool/bash · tool/file · tool/fs · tool/view · tool/todo
+             · tool/rem · tool/scheduler · tool/delegate · tool/python
+             · tool/web · tool/diff · tool/sessions · plugins
 
  cmd/rig (composition root): wires every seam once at startup; flags and env only.
  store/state: the recorder wraps the Frontend; it sources its rows from the
