@@ -1508,8 +1508,8 @@ func TestTodoStartAndComplete(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("complete: got %d %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(read(true), "t1 [r]") {
-		t.Fatalf("after complete the history must show t1 in review: %q", read(true))
+	if !strings.Contains(read(true), "t1 [x]") {
+		t.Fatalf("after complete the history must show t1 done: %q", read(true))
 	}
 
 	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t99"}`), hdr()); rec.Code != http.StatusBadRequest {

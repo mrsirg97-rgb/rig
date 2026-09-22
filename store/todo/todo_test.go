@@ -331,10 +331,9 @@ func TestRecreateProvidedUpdatesTheLink(t *testing.T) {
 		if _, err := todostore.Start(ctx, db, p, id, "s1"); err != nil {
 			t.Fatalf("start %s: %v", id, err)
 		}
-		if _, err := todostore.Complete(ctx, db, p, id, "s1"); err != nil {
+		if _, err := todostore.Complete(ctx, db, p, id, "s1", false); err != nil {
 			t.Fatalf("done %s: %v", id, err)
 		}
-		acceptDone(t, db, id, "s1")
 	}
 }
 
@@ -354,7 +353,7 @@ func TestRecreateNullClearsTheLink(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, "t2", "s1"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t2", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t2", "s1", false); err != nil {
 		t.Errorf("link cleared: %v", err)
 	}
 }
@@ -513,17 +512,6 @@ func taskIDText(t *testing.T, reply, text string) string {
 	return ""
 }
 
-func acceptDone(t *testing.T, db store.DB, id, session string) {
-	t.Helper()
-	ctx := context.Background()
-	if _, err := todostore.Claim(ctx, db, p, session, "review"); err != nil {
-		t.Fatalf("claim review %s: %v", id, err)
-	}
-	if _, err := todostore.Accept(ctx, db, p, id, session); err != nil {
-		t.Fatalf("accept %s: %v", id, err)
-	}
-}
-
 func age(t *testing.T, db store.DB, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
@@ -636,9 +624,10 @@ func TestMoveWorksOnDoneAndFailedTasks(t *testing.T) {
 	doneID, failID := taskIDText(t, reply, "done one"), taskIDText(t, reply, "fail one")
 	for _, c := range []func() error{
 		func() error { _, e := todostore.Start(ctx, db, p, doneID, "s1"); return e },
-		func() error { _, e := todostore.Complete(ctx, db, p, doneID, "s1"); return e },
-		func() error { _, e := todostore.Claim(ctx, db, p, "s1", "review"); return e },
-		func() error { _, e := todostore.Accept(ctx, db, p, doneID, "s1"); return e },
+		func() error {
+			_, e := todostore.Complete(ctx, db, p, doneID, "s1", false)
+			return e
+		},
 		func() error { _, e := todostore.Start(ctx, db, p, failID, "s1"); return e },
 		func() error { _, e := todostore.Fail(ctx, db, p, failID, "s1"); return e },
 	} {
@@ -823,7 +812,7 @@ func TestAnonymousCallsRecordAnonAndNeverClaimLock(t *testing.T) {
 	if s.String != "anon" {
 		t.Errorf("anon event session = %q", s.String)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, ""); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, "", false); err != nil {
 		t.Errorf("anon completing anon-started work: %v", err)
 	}
 }
@@ -839,7 +828,7 @@ func TestCompleteByForeignSessionRefusesWithClaimer(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, id, sessA); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessB); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessB, false); err == nil {
 		t.Fatal("foreign complete succeeded")
 	} else if !strings.Contains(err.Error(), "is claimed by "+sessA+"; fail it first to take over") {
 		t.Errorf("claim voice: %v", err)
@@ -888,7 +877,7 @@ func TestFailIsTheTakeoverPath(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, id, sessB); err != nil {
 		t.Fatalf("takeover start: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessB); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessB, false); err != nil {
 		t.Errorf("takeover complete: %v", err)
 	}
 }
@@ -908,7 +897,7 @@ func TestOwnerIsDerivedFromLogNotProjection(t *testing.T) {
 	if _, err := todostore.Read(ctx, db, p, sessB); err != nil {
 		t.Fatalf("read rebuilds: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessB); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessB, false); err == nil {
 		t.Fatal("foreign complete succeeded")
 	} else if !strings.Contains(err.Error(), "claimed by "+sessA) {
 		t.Errorf("claim survived the rebuild: %v", err)
@@ -932,7 +921,7 @@ func TestFailedTasksCarryNoOwnerAnySessionMayRetry(t *testing.T) {
 	for _, c := range []func() error{
 		func() error { _, e := todostore.Retry(ctx, db, p, id, sessB); return e },
 		func() error { _, e := todostore.Start(ctx, db, p, id, sessB); return e },
-		func() error { _, e := todostore.Complete(ctx, db, p, id, sessB); return e },
+		func() error { _, e := todostore.Complete(ctx, db, p, id, sessB, false); return e },
 	} {
 		if e := c(); e != nil {
 			t.Fatalf("takeover path: %v", e)
@@ -972,22 +961,18 @@ func TestCompleteOnOwnPendingAutoStartsAndCompletes(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := taskIDText(t, reply, "instant")
-	done, err := todostore.Complete(ctx, db, p, id, sessA)
+	done, err := todostore.Complete(ctx, db, p, id, sessA, false)
 	if err != nil {
 		t.Fatalf("auto-complete: %v", err)
 	}
 	if !strings.Contains(done, "auto-started") {
 		t.Errorf("the echo must note the auto-start:\n%s", done)
 	}
-	if !strings.Contains(done, "[r] instant") {
-		t.Errorf("review marker:\n%s", done)
+	if !strings.Contains(done, "[x] instant") {
+		t.Errorf("done marker:\n%s", done)
 	}
-	if got := projStatus(t, db, "instant"); got != "review" {
-		t.Errorf("status = %q, want review", got)
-	}
-	acceptDone(t, db, id, sessA)
 	if got := projStatus(t, db, "instant"); got != "done" {
-		t.Errorf("after accept status = %q, want done", got)
+		t.Errorf("status = %q, want done", got)
 	}
 	rows := rawQuery(t, db, "SELECT op, session FROM events ORDER BY seq")
 	defer rows.Close()
@@ -1019,7 +1004,7 @@ func TestCompleteOnPendingBlockedRefusesWithBlocker(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	work := taskIDText(t, reply, "work")
-	if _, err := todostore.Complete(ctx, db, p, work, sessA); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, work, sessA, false); err == nil {
 		t.Fatal("pending blocked complete succeeded")
 	} else if !strings.Contains(err.Error(), "blocked by") {
 		t.Errorf("blocked voice: %v", err)
@@ -1158,7 +1143,7 @@ func TestClaimsSurviveCompaction(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	age(t, db, 1010)
-	if _, err := todostore.Complete(ctx, db, p, id, sessB); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessB, false); err == nil {
 		t.Fatal("foreign complete succeeded")
 	} else if !strings.Contains(err.Error(), "claimed by "+sessA) {
 		t.Errorf("claim survived the snapshot: %v", err)
@@ -1271,11 +1256,14 @@ func TestUnknownIdNamesMinting(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	calls := map[string]func() error{
-		"start":    func() error { _, e := todostore.Start(ctx, db, p, "t99", "s1"); return e },
-		"complete": func() error { _, e := todostore.Complete(ctx, db, p, "t99", "s1"); return e },
-		"fail":     func() error { _, e := todostore.Fail(ctx, db, p, "t99", "s1"); return e },
-		"retry":    func() error { _, e := todostore.Retry(ctx, db, p, "t99", "s1"); return e },
-		"move":     func() error { _, e := todostore.Move(ctx, db, p, "t99", 1, "s1"); return e },
+		"start": func() error { _, e := todostore.Start(ctx, db, p, "t99", "s1"); return e },
+		"complete": func() error {
+			_, e := todostore.Complete(ctx, db, p, "t99", "s1", false)
+			return e
+		},
+		"fail":  func() error { _, e := todostore.Fail(ctx, db, p, "t99", "s1"); return e },
+		"retry": func() error { _, e := todostore.Retry(ctx, db, p, "t99", "s1"); return e },
+		"move":  func() error { _, e := todostore.Move(ctx, db, p, "t99", 1, "s1"); return e },
 	}
 	for verb, call := range calls {
 		err := call()
@@ -1319,7 +1307,7 @@ func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	want := func(hint string) string {
 		return "'" + work + "' is blocked by '" + gate + "' (" + hint + ")"
 	}
-	if _, err := todostore.Complete(ctx, db, p, work, "s1"); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, work, "s1", false); err == nil {
 		t.Fatal("blocked complete (pending) succeeded")
 	} else if got := err.Error(); got != want("pending; start it first") {
 		t.Fatalf("blocked voice (pending):\n%q\nwant\n%q", got, want("pending; start it first"))
@@ -1327,7 +1315,7 @@ func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, gate, "s1"); err != nil {
 		t.Fatalf("start gate: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, work, "s1"); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, work, "s1", false); err == nil {
 		t.Fatal("blocked complete (in_progress) succeeded")
 	} else if got := err.Error(); got != want("in_progress") {
 		t.Fatalf("blocked voice (in_progress):\n%q", got)
@@ -1335,7 +1323,7 @@ func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	if _, err := todostore.Fail(ctx, db, p, gate, "s1"); err != nil {
 		t.Fatalf("fail gate: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, work, "s1"); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, work, "s1", false); err == nil {
 		t.Fatal("blocked complete (failed) succeeded")
 	} else if got := err.Error(); got != want("failed; retry it first") {
 		t.Fatalf("blocked voice (failed):\n%q", got)
@@ -1347,16 +1335,15 @@ func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, gate, "s1"); err != nil {
 		t.Fatalf("start gate: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, gate, "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, gate, "s1", false); err != nil {
 		t.Fatalf("complete gate: %v", err)
 	}
-	acceptDone(t, db, gate, "s1")
-	done, err := todostore.Complete(ctx, db, p, work, "s1")
+	done, err := todostore.Complete(ctx, db, p, work, "s1", false)
 	if err != nil {
 		t.Fatalf("unblocked complete: %v", err)
 	}
-	if !strings.Contains(done, "[r] work") {
-		t.Errorf("review marker:\n%s", done)
+	if !strings.Contains(done, "[x] work") {
+		t.Errorf("done marker:\n%s", done)
 	}
 }
 
@@ -1499,17 +1486,15 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err != nil {
 		t.Fatal(err)
 	}
-	acceptDone(t, db, "t1", "s1")
 	if _, err := todostore.Start(ctx, db, p, "t2", "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t2", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t2", "s1", false); err != nil {
 		t.Fatal(err)
 	}
-	acceptDone(t, db, "t2", "s1")
 
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "c"}}, "s1"); err != nil {
 		t.Fatal(err)
@@ -1517,7 +1502,7 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "dep", DependsOn: d("c")}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := todostore.Complete(ctx, db, p, "t1", "s1")
+	_, err := todostore.Complete(ctx, db, p, "t1", "s1", false)
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
@@ -1539,15 +1524,17 @@ func TestLifecycleDoneIsReadOnly(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	acceptDone(t, db, "t1", "s1")
 	if got := projStatus(t, db, "lc"); got != "done" {
 		t.Fatalf("status = %q, want done", got)
 	}
 	for _, verb := range []func() error{
-		func() error { _, err := todostore.Complete(ctx, db, p, "t1", "s1"); return err },
+		func() error {
+			_, err := todostore.Complete(ctx, db, p, "t1", "s1", false)
+			return err
+		},
 		func() error { _, err := todostore.Start(ctx, db, p, "t1", "s1"); return err },
 	} {
 		err := verb()
@@ -1581,13 +1568,9 @@ func TestFailedToRetryToStartedAgain(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err != nil {
 		t.Fatal(err)
 	}
-	if got := projStatus(t, db, "fc"); got != "review" {
-		t.Fatalf("status = %q, want review", got)
-	}
-	acceptDone(t, db, "t1", "s1")
 	if got := projStatus(t, db, "fc"); got != "done" {
 		t.Fatalf("status = %q, want done", got)
 	}
@@ -1643,10 +1626,9 @@ func TestReadDefaultHidesDoneRows(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, drop, "s1"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, drop, "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, drop, "s1", false); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	acceptDone(t, db, drop, "s1")
 	read, err := todostore.Read(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -1675,10 +1657,9 @@ func TestAllDoneQueueRendersSummaryOnly(t *testing.T) {
 		if _, err := todostore.Start(ctx, db, p, id, "s1"); err != nil {
 			t.Fatalf("start: %v", err)
 		}
-		if _, err := todostore.Complete(ctx, db, p, id, "s1"); err != nil {
+		if _, err := todostore.Complete(ctx, db, p, id, "s1", false); err != nil {
 			t.Fatalf("complete: %v", err)
 		}
-		acceptDone(t, db, id, "s1")
 	}
 	read, err := todostore.Read(ctx, db, p, "s1")
 	if err != nil {
@@ -1706,10 +1687,9 @@ func TestReadAllShowsDoneRows(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, drop, "s1"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, drop, "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, drop, "s1", false); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	acceptDone(t, db, drop, "s1")
 	full, err := todostore.ReadAll(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("read all: %v", err)
@@ -1737,10 +1717,9 @@ func TestNoWaitsOnReferencesAHiddenDoneRow(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, "t1", "s1"); err != nil {
 		t.Fatalf("start gate: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err != nil {
 		t.Fatalf("complete gate: %v", err)
 	}
-	acceptDone(t, db, "t1", "s1")
 	read, err := todostore.Read(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -1794,7 +1773,7 @@ func TestEachTransitionEchoesOneAffectedLine(t *testing.T) {
 		if _, err := todostore.Start(ctx, db, p, id, "s1"); err != nil {
 			t.Fatalf("start %s: %v", id, err)
 		}
-		done, err := todostore.Complete(ctx, db, p, id, "s1")
+		done, err := todostore.Complete(ctx, db, p, id, "s1", false)
 		if err != nil {
 			t.Fatalf("complete %s: %v", id, err)
 		}
@@ -1853,7 +1832,7 @@ func TestClaimsAndDriftArePerScope(t *testing.T) {
 	if !strings.Contains(ra, "claimed by "+sessA) {
 		t.Fatalf("scope a's claim must show to a foreign session:\n%s", ra)
 	}
-	if _, err := todostore.Complete(ctx, db, pB, "t1", sessA); err == nil {
+	if _, err := todostore.Complete(ctx, db, pB, "t1", sessA, false); err == nil {
 		t.Fatal("scope b's task must be claimable by a foreign session of another scope")
 	} else if !strings.Contains(err.Error(), "claimed by "+sessB) {
 		t.Fatalf("the refusal must name scope b's claimer: %v", err)
@@ -1878,14 +1857,12 @@ func TestPruneDropsDoneRowsAndKeepsTheRest(t *testing.T) {
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, "t2", "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, "t2", "s1", false); err != nil {
 		t.Fatal(err)
 	}
-	acceptDone(t, db, "t1", "s1")
-	acceptDone(t, db, "t2", "s1")
 	reply, err := todostore.Prune(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatalf("prune: %v", err)
@@ -2008,7 +1985,7 @@ func TestUnknownIdNamesTheQueueItMissed(t *testing.T) {
 		t.Fatalf("the refusal names the queue it looked in: %v", err)
 	}
 	host := todostore.Project{Key: "homekey", Label: "ng", OutsideRepo: true}
-	if _, err := todostore.Complete(ctx, db, host, "t7", "s1"); err == nil ||
+	if _, err := todostore.Complete(ctx, db, host, "t7", "s1", false); err == nil ||
 		!strings.Contains(err.Error(), "in ng (not a repo)") {
 		t.Fatalf("a bucket's refusal says so: %v", err)
 	}
@@ -2026,10 +2003,9 @@ func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"t1", "t2"} {
-		if _, err := todostore.Complete(ctx, db, p, id, "s1"); err != nil {
+		if _, err := todostore.Complete(ctx, db, p, id, "s1", false); err != nil {
 			t.Fatal(err)
 		}
-		acceptDone(t, db, id, "s1")
 	}
 	if _, err := todostore.Prune(ctx, db, p, "s1"); err != nil {
 		t.Fatal(err)
@@ -2055,7 +2031,7 @@ func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 		t.Fatalf("a new task joins the end of the queue, not the front:\n%s", reply)
 	}
 	// The stale id is refused, not silently re-targeted.
-	if _, err := todostore.Complete(ctx, db, p, "t1", "s1"); err == nil ||
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err == nil ||
 		!strings.Contains(err.Error(), "no task 't1'") {
 		t.Fatalf("the stale id must refuse, got %v", err)
 	}

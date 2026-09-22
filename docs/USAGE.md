@@ -63,8 +63,9 @@ is a loud line naming the known set, never silently a prompt.
   the queue is. `todo <path> <verb>` binds and acts in one line, and
   `/todo prune` drops the done rows. The swarm surface (1.3.9): `claim`
   takes the next task (or `claim review`), `note <id>` attaches a
-  message to any task, `done` submits for review, `accept`/`reject`
-  decide (`specs/SPEC_STATE.md`).
+  message to any task, `done` lands it done in a solo session and submits
+  it for review from a worker (`rig -p`), and `accept`/`reject` decide
+  (`specs/SPEC_STATE.md`).
 - `/rem project <path>`: a one-off read or write of another project's
   memories: the path resolves to a repo identity (worktrees share).
 

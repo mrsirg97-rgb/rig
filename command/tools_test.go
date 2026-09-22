@@ -41,7 +41,7 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 	s := core.NewSession()
 	env := &command.Env{
 		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(openTodo(t))},
+		Tools:   map[string]core.Tool{"todo": todoapi.New(openTodo(t), todoapi.Interactive)},
 	}
 
 	created, err := runCmd(t, "todo", "create write the spec", env)
@@ -288,7 +288,7 @@ func TestTodoProjectCommand(t *testing.T) {
 	db := openTodo(t)
 	env := &command.Env{
 		Session: func() *core.Session { return core.NewSession() },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(db)},
+		Tools:   map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
 	proj := t.TempDir()
 	ctx := context.Background()
@@ -329,7 +329,7 @@ func TestTodoPathFormBindsAndActs(t *testing.T) {
 	s := core.NewSession()
 	env := &command.Env{
 		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(db)},
+		Tools:   map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
 	proj := t.TempDir()
 	created, err := runCmd(t, "todo", proj+" create write the spec", env)
@@ -404,19 +404,13 @@ func TestTodoPruneCommand(t *testing.T) {
 	s := core.NewSession()
 	env := &command.Env{
 		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(db)},
+		Tools:   map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
 	if _, err := runCmd(t, "todo", "create one task", env); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if _, err := runCmd(t, "todo", "done t1", env); err != nil {
 		t.Fatalf("done: %v", err)
-	}
-	if _, err := runCmd(t, "todo", "claim review", env); err != nil {
-		t.Fatalf("claim review: %v", err)
-	}
-	if _, err := runCmd(t, "todo", "accept t1", env); err != nil {
-		t.Fatalf("accept: %v", err)
 	}
 	pruned, err := runCmd(t, "todo", "prune", env)
 	if err != nil {

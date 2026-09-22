@@ -188,7 +188,7 @@ func TestClaimWithReviewFilterTakesTheFirstUnownedReviewTask(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	claimed, err := todostore.Claim(ctx, db, p, sessB, "review")
@@ -223,7 +223,7 @@ func TestClaimReviewSkipsTasksAlreadyHeld(t *testing.T) {
 		if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 			t.Fatalf("claim %s: %v", id, err)
 		}
-		if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+		if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 			t.Fatalf("complete %s: %v", id, err)
 		}
 	}
@@ -389,7 +389,7 @@ func TestCompleteMovesActiveToReview(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	completed, err := todostore.Complete(ctx, db, p, id, sessA)
+	completed, err := todostore.Complete(ctx, db, p, id, sessA, true)
 	if err != nil {
 		t.Fatalf("complete: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestCompleteOnOwnPendingSubmitsForReview(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := taskIDText(t, reply, "quick")
-	completed, err := todostore.Complete(ctx, db, p, id, sessA)
+	completed, err := todostore.Complete(ctx, db, p, id, sessA, true)
 	if err != nil {
 		t.Fatalf("complete: %v", err)
 	}
@@ -438,10 +438,10 @@ func TestCompleteOnAReviewTaskRefuses(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err == nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err == nil {
 		t.Fatal("completing a review task succeeded")
 	} else if !strings.Contains(err.Error(), "in review; accept or reject it first") {
 		t.Errorf("review-complete voice: %v", err)
@@ -459,7 +459,7 @@ func TestStartOnAReviewTaskRefuses(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	if _, err := todostore.Start(ctx, db, p, id, sessB); err == nil {
@@ -480,7 +480,7 @@ func TestFailOnAReviewTaskRefuses(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	if _, err := todostore.Fail(ctx, db, p, id, sessB); err == nil {
@@ -501,7 +501,7 @@ func TestAcceptMovesReviewToDone(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessB, "review"); err != nil {
@@ -519,35 +519,74 @@ func TestAcceptMovesReviewToDone(t *testing.T) {
 	}
 }
 
-func TestAcceptRequiresTheReviewHold(t *testing.T) {
+func TestAcceptAutoClaimsAnUnownedReviewTask(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "held"}, {Text: "unclaimed"}}, sessA)
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "parent approved"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	unclaimed := taskIDText(t, reply, "unclaimed")
-	held := taskIDText(t, reply, "held")
-	for _, id := range []string{unclaimed, held} {
-		if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
-			t.Fatalf("claim %s: %v", id, err)
+	id := taskIDText(t, reply, "parent approved")
+	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	accepted, err := todostore.Accept(ctx, db, p, id, sessB)
+	if err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	if !strings.Contains(accepted, "auto-claimed and accepted") {
+		t.Fatalf("the accept must say it auto-claimed: %s", accepted)
+	}
+	if got := projStatus(t, db, "parent approved"); got != "done" {
+		t.Errorf("status = %v, want done", got)
+	}
+	rows := rawQuery(t, db, "SELECT op, session FROM events WHERE seq > (SELECT seq FROM events WHERE op = 'complete') ORDER BY seq")
+	defer rows.Close()
+	var ops, sess []string
+	for rows.Next() {
+		var op string
+		var session sql.NullString
+		if err := rows.Scan(&op, &session); err != nil {
+			t.Fatal(err)
 		}
-		if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
-			t.Fatalf("complete %s: %v", id, err)
-		}
+		ops = append(ops, op)
+		sess = append(sess, session.String)
+	}
+	if strings.Join(ops, ",") != "claim,accept" {
+		t.Errorf("auto-claim events = %v, want claim then accept", ops)
+	}
+	if sess[0] != sessB || sess[1] != sessB {
+		t.Errorf("auto-claim events must be the accepting session's: %v", sess)
+	}
+}
+
+func TestAcceptStillRefusesAForeignHold(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "held"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "held")
+	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
+		t.Fatalf("complete: %v", err)
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessB, "review"); err != nil {
 		t.Fatalf("claim review: %v", err)
 	}
-	if _, err := todostore.Accept(ctx, db, p, unclaimed, sessB); err == nil {
-		t.Fatal("accepting an unclaimed review task succeeded")
-	} else if !strings.Contains(err.Error(), "claim it first") {
-		t.Errorf("unclaimed-accept voice: %v", err)
-	}
-	if _, err := todostore.Accept(ctx, db, p, held, sessC); err == nil {
+	if _, err := todostore.Accept(ctx, db, p, id, sessC); err == nil {
 		t.Fatal("accepting another reviewer's task succeeded")
 	} else if !strings.Contains(err.Error(), "claimed for review by "+sessB) {
 		t.Errorf("foreign-accept voice: %v", err)
+	}
+	if got := projStatus(t, db, "held"); got != "review" {
+		t.Errorf("a refused accept must not move the task: %v", got)
 	}
 }
 
@@ -570,7 +609,7 @@ func TestAcceptOnNonReviewRefuses(t *testing.T) {
 			t.Fatalf("claim: %v", err)
 		}
 	}
-	if _, err := todostore.Complete(ctx, db, p, done, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, done, sessA, true); err != nil {
 		t.Fatalf("complete done: %v", err)
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessA, "review"); err != nil {
@@ -582,7 +621,7 @@ func TestAcceptOnNonReviewRefuses(t *testing.T) {
 	if _, err := todostore.Fail(ctx, db, p, failed, sessA); err != nil {
 		t.Fatalf("fail: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, review, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, review, sessA, true); err != nil {
 		t.Fatalf("complete review: %v", err)
 	}
 	for id, want := range map[string]string{
@@ -590,13 +629,18 @@ func TestAcceptOnNonReviewRefuses(t *testing.T) {
 		active:  "in progress",
 		done:    "done",
 		failed:  "failed",
-		review:  "claim it first",
 	} {
 		if _, err := todostore.Accept(ctx, db, p, id, sessA); err == nil {
 			t.Fatalf("accept on %s succeeded", id)
 		} else if !strings.Contains(err.Error(), want) {
 			t.Errorf("accept-on-%s voice %q must name %q", id, err.Error(), want)
 		}
+	}
+	if _, err := todostore.Accept(ctx, db, p, review, sessA); err != nil {
+		t.Fatalf("an unowned review task must auto-claim: %v", err)
+	}
+	if got := projStatus(t, db, "unclaimed review"); got != "done" {
+		t.Errorf("the auto-claimed accept must finish the task: %v", got)
 	}
 }
 
@@ -611,7 +655,7 @@ func TestRejectMovesReviewToPendingAndNotesTheReason(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessB, "review"); err != nil {
@@ -636,40 +680,59 @@ func TestRejectMovesReviewToPendingAndNotesTheReason(t *testing.T) {
 	}
 }
 
-func TestRejectRequiresTheHoldAndAReason(t *testing.T) {
+func TestRejectAutoClaimsAndLeavesTheReasonAsTheNextBrief(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "unclaimed"}}, sessA)
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "write the parser"}, {Text: "held reject"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := taskIDText(t, reply, "unclaimed")
-	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
-		t.Fatalf("complete: %v", err)
-	}
-	if _, err := todostore.Reject(ctx, db, p, id, "no", sessB); err == nil {
-		t.Fatal("rejecting an unclaimed review task succeeded")
-	} else if !strings.Contains(err.Error(), "claim it first") {
-		t.Errorf("unclaimed-reject voice: %v", err)
+	id := taskIDText(t, reply, "write the parser")
+	held := taskIDText(t, reply, "held reject")
+	for _, x := range []string{id, held} {
+		if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
+			t.Fatalf("claim: %v", err)
+		}
+		if _, err := todostore.Complete(ctx, db, p, x, sessA, true); err != nil {
+			t.Fatalf("complete: %v", err)
+		}
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessB, "review"); err != nil {
 		t.Fatalf("claim review: %v", err)
-	}
-	if _, err := todostore.Reject(ctx, db, p, id, "", sessB); err == nil {
-		t.Fatal("rejecting with no reason succeeded")
-	} else if !strings.Contains(err.Error(), "reason") {
-		t.Errorf("empty-reason voice: %v", err)
 	}
 	if _, err := todostore.Reject(ctx, db, p, id, "no", sessC); err == nil {
 		t.Fatal("rejecting another reviewer's task succeeded")
 	} else if !strings.Contains(err.Error(), "claimed for review by "+sessB) {
 		t.Errorf("foreign-reject voice: %v", err)
 	}
-	if got := projStatus(t, db, "unclaimed"); got != "review" {
-		t.Errorf("a refused reject must not move the task: %v", got)
+	if _, err := todostore.Reject(ctx, db, p, id, "", sessB); err == nil {
+		t.Fatal("rejecting with no reason succeeded")
+	} else if !strings.Contains(err.Error(), "reason") {
+		t.Errorf("empty-reason voice: %v", err)
+	}
+	rejected, err := todostore.Reject(ctx, db, p, held, "tests are missing", sessC)
+	if err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	if !strings.Contains(rejected, "auto-claimed and rejected") {
+		t.Fatalf("the reject must say it auto-claimed: %s", rejected)
+	}
+	if got := projStatus(t, db, "held reject"); got != "pending" {
+		t.Errorf("status = %v, want pending", got)
+	}
+	read, err := todostore.Read(ctx, db, p, sessA)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(read, "tests are missing (by "+sessC+")") {
+		t.Fatalf("the rejection reason must be a note:\n%s", read)
+	}
+	claimed, err := todostore.Claim(ctx, db, p, sessA, "")
+	if err != nil {
+		t.Fatalf("claim after reject: %v", err)
+	}
+	if !strings.Contains(claimed, "'"+taskIDText(t, reply, "held reject")+"' claimed") {
+		t.Errorf("the rejected task must be the next brief:\n%s", claimed)
 	}
 }
 
@@ -686,7 +749,7 @@ func TestBlockedByClearsOnlyOnDone(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, gate, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, gate, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	if claimed, err := todostore.Claim(ctx, db, p, sessB, ""); err != nil {
@@ -726,10 +789,10 @@ func TestPruneDropsDoneOnly(t *testing.T) {
 			t.Fatalf("claim %s: %v", id, err)
 		}
 	}
-	if _, err := todostore.Complete(ctx, db, p, accepted, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, accepted, sessA, true); err != nil {
 		t.Fatalf("complete accepted: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, inReview, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, inReview, sessA, true); err != nil {
 		t.Fatalf("complete in review: %v", err)
 	}
 	if _, err := todostore.Fail(ctx, db, p, failed, sessA); err != nil {
@@ -776,7 +839,7 @@ func TestReleaseFreesAStaleReviewClaimKeepingTheStatus(t *testing.T) {
 		if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 			t.Fatalf("claim %s: %v", id, err)
 		}
-		if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+		if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 			t.Fatalf("complete %s: %v", id, err)
 		}
 		if _, err := todostore.Claim(ctx, db, p, sessA, "review"); err != nil {
@@ -821,7 +884,7 @@ func TestReleaseOnAReviewTaskRefusesOwnUnclaimedAndFresh(t *testing.T) {
 		if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 			t.Fatalf("claim %s: %v", id, err)
 		}
-		if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+		if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 			t.Fatalf("complete %s: %v", id, err)
 		}
 	}
@@ -862,7 +925,7 @@ func TestReplayAcrossClaimNoteRejectAccept(t *testing.T) {
 	if _, err := todostore.Note(ctx, db, p, id, "on it", sessB); err != nil {
 		t.Fatalf("note: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessC, "review"); err != nil {
@@ -877,7 +940,7 @@ func TestReplayAcrossClaimNoteRejectAccept(t *testing.T) {
 	if _, err := todostore.Note(ctx, db, p, id, "redone", sessA); err != nil {
 		t.Fatalf("note again: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete again: %v", err)
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessC, "review"); err != nil {
@@ -937,7 +1000,7 @@ func TestNotesAndReviewSurviveCompaction(t *testing.T) {
 	if _, err := todostore.Note(ctx, db, p, id, "done", sessA); err != nil {
 		t.Fatalf("note: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	if _, err := todostore.Claim(ctx, db, p, sessB, "review"); err != nil {
@@ -973,7 +1036,7 @@ func TestSummaryCountsTasksInReview(t *testing.T) {
 	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	read, err := todostore.Read(ctx, db, p, sessA)
@@ -982,5 +1045,112 @@ func TestSummaryCountsTasksInReview(t *testing.T) {
 	}
 	if !strings.Contains(read, "0/1 done") || !strings.Contains(read, "1 in review") {
 		t.Fatalf("the summary must count the review row:\n%s", read)
+	}
+}
+
+func TestSoloCompleteLandsDoneInOneCall(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "solo finish"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "solo finish")
+	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	done, err := todostore.Complete(ctx, db, p, id, sessA, false)
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if !strings.Contains(done, "[x] solo finish") {
+		t.Fatalf("a solo complete must land done in one call:\n%s", done)
+	}
+	if strings.Contains(done, "in review") {
+		t.Errorf("the solo complete must not mention review: %s", done)
+	}
+	if got := projStatus(t, db, "solo finish"); got != "done" {
+		t.Errorf("status = %v, want done", got)
+	}
+	ops := rawEventOps(t, db, "complete")
+	accepts := rawEventOps(t, db, "accept")
+	if ops != 1 || accepts != 1 {
+		t.Errorf("the solo complete must write the complete/accept pair: complete=%d accept=%d", ops, accepts)
+	}
+}
+
+func TestSoloCompleteOnOwnPendingAutoStartsAndLandsDone(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "instant"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "instant")
+	done, err := todostore.Complete(ctx, db, p, id, sessA, false)
+	if err != nil {
+		t.Fatalf("auto-complete: %v", err)
+	}
+	if !strings.Contains(done, "auto-started and completed") {
+		t.Errorf("the echo must note the auto-start:\n%s", done)
+	}
+	if !strings.Contains(done, "[x] instant") {
+		t.Errorf("done marker:\n%s", done)
+	}
+	if got := projStatus(t, db, "instant"); got != "done" {
+		t.Errorf("status = %v, want done", got)
+	}
+	rows := rawQuery(t, db, "SELECT op FROM events ORDER BY seq")
+	defer rows.Close()
+	var ops []string
+	for rows.Next() {
+		var op string
+		if err := rows.Scan(&op); err != nil {
+			t.Fatal(err)
+		}
+		ops = append(ops, op)
+	}
+	want := []string{"create", "start", "complete", "accept"}
+	if strings.Join(ops, ",") != strings.Join(want, ",") {
+		t.Errorf("auto-complete must append start+complete+accept, got %v", ops)
+	}
+}
+
+func TestWorkerCompleteLandsInReviewAndTheParentsAcceptFinishesIt(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "delegated work"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "delegated work")
+	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	completed, err := todostore.Complete(ctx, db, p, id, sessA, true)
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if !strings.Contains(completed, "[r] delegated work") || !strings.Contains(completed, "in review") {
+		t.Fatalf("a worker's complete must land in review:\n%s", completed)
+	}
+	if got := projStatus(t, db, "delegated work"); got != "review" {
+		t.Errorf("worker status = %v, want review", got)
+	}
+	accepted, err := todostore.Accept(ctx, db, p, id, sessB)
+	if err != nil {
+		t.Fatalf("the parent's accept: %v", err)
+	}
+	if !strings.Contains(accepted, "auto-claimed and accepted") {
+		t.Fatalf("the parent's accept must auto-claim:\n%s", accepted)
+	}
+	if got := projStatus(t, db, "delegated work"); got != "done" {
+		t.Errorf("after the parent's accept status = %v, want done", got)
+	}
+	// The pair is written by the parent: the log is uniform, complete then accept.
+	ops := rawEventOps(t, db, "complete")
+	accepts := rawEventOps(t, db, "accept")
+	if ops != 1 || accepts != 1 {
+		t.Errorf("log = %d completes, %d accepts; want the uniform pair", ops, accepts)
 	}
 }

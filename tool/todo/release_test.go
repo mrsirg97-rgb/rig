@@ -21,7 +21,7 @@ func taskIDText(t *testing.T, reply, text string) string {
 }
 
 func TestReleaseIsAStateVerbAndNeedsAnID(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "release"}); err == nil {
 		t.Fatal("release without id succeeded")
 	} else if want := "action 'release' requires id"; err.Error() != want {
@@ -30,7 +30,7 @@ func TestReleaseIsAStateVerbAndNeedsAnID(t *testing.T) {
 }
 
 func TestReleaseRefusesAFreshForeignClaimThroughTheTool(t *testing.T) {
-	tool := todoapi.New(newDB(t))
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	ctx := context.Background()
 	created, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "wire the guard"}}})
 	if err != nil {

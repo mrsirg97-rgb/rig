@@ -29,12 +29,18 @@ reviewer holds (the status stays review, the owner becomes the
 caller); `nothing to do` when nothing qualifies. `note` appends to any
 task whatever the hold — notes are how agents talk about shared work —
 and `read` renders them in order with their session, one indented line
-each. `complete` now moves active to review, `accept` moves review to
-done, `reject` moves review to pending and records the reason as a
-note; accept and reject need the review hold, and an unclaimed review
-task refuses with the claim door. `blockedBy` clears only on done (a
-dependency in review keeps its dependents blocked), prune still drops
-done only, and the summary counts review rows (`· N in review`).
+each. The review gate keys on who completes: `Complete` takes a worker
+flag — `worker=false` (an interactive session) lands the task done in
+one call, writing the complete/accept pair so the log stays uniform and
+replay is unchanged; `worker=true` (`rig -p`: delegate, swarm) submits
+it for review. `accept` moves review to done and `reject` moves review
+to pending, recording the reason as a note; both auto-claim an unowned
+review task (claim+accept, the same idiom as complete auto-starting a
+pending one), so a parent reviews its workers by read then accept/reject
+with no claim step, and a foreign holder still refuses. `blockedBy`
+clears only on done (a dependency in review keeps its dependents
+blocked), prune still drops done only, and the summary counts review
+rows (`· N in review`).
 
 ## What it includes
 
@@ -70,10 +76,12 @@ done only, and the summary counts review rows (`· N in review`).
 - Complete on the caller's own unclaimed pending task implicitly claims
   and submits: start+complete, both events appended, the echo noting the
   auto-start. Foreign-claim and blocked-by-dependency refusals stay.
-- The review gate (1.3.9): complete ends in review, accept ends in done,
-  reject returns to pending with the reason as a note. A reviewer claims
-  the first unowned review task (`claim status=review`); accept/reject
-  require that hold, so exactly one reviewer decides. Notes are free (no
+- The review gate (1.3.9) keys on who completes: a worker's complete ends
+  in review, an interactive one lands done with the pair; accept ends in
+  done, reject returns to pending with the reason as a note. Accept and
+  reject auto-claim an unowned review task, so the parent needs no claim
+  step; a foreign holder still refuses, and `claim status=review` stays
+  for reviewers who want to hold before deciding. Notes are free (no
   hold needed), bounded at MaxNoteLen, and replayable: they ride the
   event log and the compact snapshot. Historical completes (pre-1.3.9
   logs) replay as done through ReviewMigration's accept pairing, a

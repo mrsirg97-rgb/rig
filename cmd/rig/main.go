@@ -1068,7 +1068,7 @@ func main() {
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
-			"todo": todoapi.New(tdb), "rem": remapi.New(rdb),
+			"todo": todoapi.New(tdb, todoapi.Mode(*prompt != "")), "rem": remapi.New(rdb),
 			"python": py, "web_search": webSearch, "web_fetch": webFetch,
 			"diff": diff.New(sdb), "sessions": sessionstool.New(cfgDir, cwd),
 		},

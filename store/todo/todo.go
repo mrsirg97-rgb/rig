@@ -797,7 +797,13 @@ func Start(ctx context.Context, db store.DB, p Project, id, session string) (str
 	}, "start", statusActive, "'"+id+"' started")
 }
 
-func Complete(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+// Complete moves the caller's task out of active. On the caller's own
+// unclaimed pending task it implicitly claims and completes (start+complete,
+// both events appended, the echo noting the auto-start). worker=false lands
+// the task done in one call (complete+accept, the log stays uniform);
+// worker=true submits it for review, and the parent's accept or reject
+// finishes it.
+func Complete(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
 	if session == "" {
 		session = anon
 	}
@@ -826,7 +832,10 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string) (
 		}
 
 		args, _ := json.Marshal(map[string]any{"id": id})
-		note := "'" + id + "' completed; in review"
+		note := "'" + id + "' completed"
+		if worker {
+			note += "; in review"
+		}
 		if ts.status == statusPending {
 			startSeq := f.nextSeq()
 			if e := appendEvent(bound, startSeq, "start", string(args), session, p.Key); e != nil {
@@ -836,7 +845,11 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string) (
 			ts.owner = session
 			ts.updatedSeq = startSeq
 			ts.updatedTs = nowRFC3339()
-			note = "'" + id + "' auto-started and submitted for review"
+			if worker {
+				note = "'" + id + "' auto-started and submitted for review"
+			} else {
+				note = "'" + id + "' auto-started and completed"
+			}
 		}
 		seq := f.nextSeq()
 		if e := appendEvent(bound, seq, "complete", string(args), session, p.Key); e != nil {
@@ -846,6 +859,15 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string) (
 		ts.owner = ""
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
+		if !worker {
+			acceptSeq := f.nextSeq()
+			if e := appendEvent(bound, acceptSeq, "accept", string(args), session, p.Key); e != nil {
+				return "", e
+			}
+			ts.status = statusDone
+			ts.updatedSeq = acceptSeq
+			ts.updatedTs = nowRFC3339()
+		}
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
@@ -1019,9 +1041,10 @@ func cleanNote(text, verb string) (string, error) {
 	return note, nil
 }
 
-// Accept moves a task in review to done. The caller must hold the task:
-// the review claim is the atomic acquisition, and a task nobody claimed
-// refuses with the door that takes it.
+// Accept moves a task in review to done. The caller must not be a foreign
+// holder: an unowned review task is auto-claimed (claim+accept, the same
+// idiom as complete auto-starting a pending one), so a parent reviews its
+// workers by read then accept, with no claim step.
 func Accept(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
 	if session == "" {
 		session = anon
@@ -1035,10 +1058,21 @@ func Accept(ctx context.Context, db store.DB, p Project, id, session string) (st
 		if !ok {
 			return "", unknownTask(p, id)
 		}
-		if e := reviewHold(f, ts, id, session); e != nil {
+		if e := reviewHold(ts, id, session); e != nil {
 			return "", e
 		}
 		args, _ := json.Marshal(map[string]any{"id": id})
+		note := "'" + id + "' accepted"
+		if ts.owner == "" {
+			claimSeq := f.nextSeq()
+			if e := appendEvent(bound, claimSeq, "claim", string(args), session, p.Key); e != nil {
+				return "", e
+			}
+			ts.owner = session
+			ts.updatedSeq = claimSeq
+			ts.updatedTs = nowRFC3339()
+			note = "'" + id + "' auto-claimed and accepted"
+		}
 		seq := f.nextSeq()
 		if e := appendEvent(bound, seq, "accept", string(args), session, p.Key); e != nil {
 			return "", e
@@ -1050,13 +1084,14 @@ func Accept(ctx context.Context, db store.DB, p Project, id, session string) (st
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, "'"+id+"' accepted"), foot), nil
+		return withFoot(echoTask(f, session, id, note), foot), nil
 	})
 }
 
 // Reject sends a task in review back to pending and records the reason as
-// a note, so the next worker sees why it bounced. The caller must hold
-// the task; the reason is required and rides the reject event.
+// a note, so the next worker sees why it bounced. An unowned review task
+// is auto-claimed (claim+reject); a foreign holder still refuses. The
+// reason is required and rides the reject event.
 func Reject(ctx context.Context, db store.DB, p Project, id, reason, session string) (string, error) {
 	if session == "" {
 		session = anon
@@ -1074,10 +1109,21 @@ func Reject(ctx context.Context, db store.DB, p Project, id, reason, session str
 		if !ok {
 			return "", unknownTask(p, id)
 		}
-		if e := reviewHold(f, ts, id, session); e != nil {
+		if e := reviewHold(ts, id, session); e != nil {
 			return "", e
 		}
 		args, _ := json.Marshal(map[string]any{"id": id, "note": note})
+		reply := "'" + id + "' rejected; reason noted"
+		if ts.owner == "" {
+			claimSeq := f.nextSeq()
+			if e := appendEvent(bound, claimSeq, "claim", string(args), session, p.Key); e != nil {
+				return "", e
+			}
+			ts.owner = session
+			ts.updatedSeq = claimSeq
+			ts.updatedTs = nowRFC3339()
+			reply = "'" + id + "' auto-claimed and rejected; reason noted"
+		}
 		seq := f.nextSeq()
 		if e := appendEvent(bound, seq, "reject", string(args), session, p.Key); e != nil {
 			return "", e
@@ -1090,11 +1136,11 @@ func Reject(ctx context.Context, db store.DB, p Project, id, reason, session str
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, "'"+id+"' rejected; reason noted"), foot), nil
+		return withFoot(echoTask(f, session, id, reply), foot), nil
 	})
 }
 
-func reviewHold(f *folded, ts *taskState, id, session string) error {
+func reviewHold(ts *taskState, id, session string) error {
 	switch ts.status {
 	case statusPending:
 		return fmt.Errorf("'%s' is pending; not in review", id)
@@ -1105,10 +1151,7 @@ func reviewHold(f *folded, ts *taskState, id, session string) error {
 	case statusFailed:
 		return fmt.Errorf("'%s' failed; retry it first", id)
 	}
-	if ts.owner == "" {
-		return fmt.Errorf("'%s' is in review; claim it first (claim status=review)", id)
-	}
-	if ts.owner != session {
+	if ts.owner != "" && ts.owner != session {
 		return fmt.Errorf("'%s' is claimed for review by %s", id, ts.owner)
 	}
 	return nil

@@ -638,8 +638,10 @@ scheduler runs <id> [n]
   to any task, `todo accept <id>` approves a reviewed task, and
   `todo reject <id> <reason…>` sends it back with the reason as a note
   (SPEC_STATE's swarm surface); the refusals are the store's voices.
-  `done <id>` keeps its spelling and now submits for review: the line's
-  operator round-trip is `done` then `claim review` then `accept`.
+  `done <id>` keeps its spelling; in an interactive session it lands the
+  task done in one call (the complete/accept pair), and in a worker
+  (`rig -p`) it submits for review, which the parent finishes with
+  `accept` or `reject` by id.
 - `todo project [path]` is the binding door (SPEC_STATE's binding
   decision). With a path it binds the session to that project's queue and
   renders it — `→ bound to <label>`, or `→ bound to <label> (was <old>)`

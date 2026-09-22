@@ -263,19 +263,24 @@ happens to name (see the binding decision).
   `status=review` the first task in review that no reviewer holds; `note`
   appends to any task (notes are how agents talk about shared work, so the
   hold is not needed, but the task must exist) and `read` renders them in
-  order with their session; `complete` moves active to review, `accept`
+  order with their session; the review gate keys on who completes: an
+  interactive session completing its own task lands it done in one call
+  (complete+accept both written, the log uniform, replay unchanged), a
+  worker (`rig -p`: delegate or swarm) submits it for review; `accept`
   moves review to done, `reject` moves review to pending and records the
-  reason as a note — accept and reject need the review hold, unclaimed
-  review refuses with the claim door; a review task keeps its status when
-  a stale claim is released; `blockedBy` still clears only on done, so a
-  dependency in review keeps its dependents blocked; `prune` still drops
-  done only, review rows stay; the summary counts review rows
-  (`· N in review`); compaction past 1000 events snapshots the queue and
-  resets the epoch, notes riding the snapshot; dependsOn DAG validated at
-  the boundary, cycles refused, completion gated, blocked skipped by
-  `next`. Minted seq is one sequence across scopes (a shared events table),
-  while ids stay `tN` per scope; the compact fold and stale footer are per
-  scope.
+  reason as a note — accept and reject auto-claim an unowned review task
+  (claim+accept, the same idiom as complete auto-starting a pending one),
+  so a delegate's parent reviews its workers by read then accept/reject
+  with no claim step, and the hold rule still refuses when another session
+  holds; a review task keeps its status when a stale claim is released;
+  `blockedBy` still clears only on done, so a dependency in review keeps
+  its dependents blocked; `prune` still drops done only, review rows stay;
+  the summary counts review rows (`· N in review`); compaction past 1000
+  events snapshots the queue and resets the epoch, notes riding the
+  snapshot; dependsOn DAG validated at the boundary, cycles refused,
+  completion gated, blocked skipped by `next`. Minted seq is one sequence
+  across scopes (a shared events table), while ids stay `tN` per scope;
+  the compact fold and stale footer are per scope.
 - Every reply names the queue it speaks for: the summary leads with
   `[<label>]`, or `[<label> (not a repo)]` for a cwd bucket, and the empty
   reply still says `(no tasks in <label>'s queue)` (SPEC_CORE's naming rule).

@@ -21,12 +21,16 @@ task, and a review gate between active and done.
   in order with their session, one indented line each. A note must name
   a task and is bounded (`MaxNoteLen`, 1000 chars) because it rides the
   log and the compact snapshot.
-- **The review gate**: `complete` moves active to review (`[r]`), a new
-  `accept <id>` moves review to done, `reject <id> "…"` moves review to
-  pending and records the reason as a note. Accept and reject need the
-  review hold (claim `status=review` first); an unclaimed review task
-  refuses with the claim door. `blockedBy` still clears only on done, so
-  a dependency in review keeps its dependents blocked; prune still drops
+- **The review gate keys on who completes**: an interactive session
+  completing its own task lands it done in one call (the complete/accept
+  pair is still written, so the log is uniform and replay is unchanged);
+  a worker (`rig -p`: delegate or swarm) submitting it lands it in
+  review (`[r]`), and `accept <id>` / `reject <id> "…"` decide. Accept
+  and reject auto-claim an unowned review task — the same idiom as
+  complete auto-starting a pending one — so a delegate's parent reviews
+  its workers by read then accept/reject, with no claim step; a foreign
+  holder still refuses. `blockedBy` still clears only on done, so a
+  dependency in review keeps its dependents blocked; prune still drops
   done only; the summary counts review rows (`· N in review`).
 - **Replay and migration**: `claim`/`note`/`accept`/`reject` are events
   on the log; notes ride the compact snapshot; a stale review claim

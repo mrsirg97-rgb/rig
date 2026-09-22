@@ -277,7 +277,7 @@ func TestReviewMigrationPairsHistoricalCompletesWithAccepts(t *testing.T) {
 	}
 	pruned := taskIDText(t, reply, "pruned")
 	kept := taskIDText(t, reply, "kept done")
-	if _, err := todostore.Complete(ctx, seed, p, pruned, "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, seed, p, pruned, "s1", true); err != nil {
 		t.Fatalf("complete pruned: %v", err)
 	}
 	rawExec(t, seed, "INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'prune', ?, NULL, 'ws')",
@@ -285,7 +285,7 @@ func TestReviewMigrationPairsHistoricalCompletesWithAccepts(t *testing.T) {
 	if _, err := todostore.Claim(ctx, seed, p, "s1", ""); err != nil {
 		t.Fatalf("claim active: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, seed, p, kept, "s1"); err != nil {
+	if _, err := todostore.Complete(ctx, seed, p, kept, "s1", true); err != nil {
 		t.Fatalf("complete kept: %v", err)
 	}
 	seed.DB.Close()
