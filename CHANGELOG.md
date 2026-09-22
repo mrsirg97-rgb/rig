@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [1.3.5]: the suite never dials the real swap
+
+One test could still reach the operator's swap. `TestDefaultJobModelMintsTheFleetAtStart`
+ran `rig -p hello` with no `-base-url` and no `RIG_BASE_URL`, so the
+embedded default (`config/settings.json`: `http://127.0.0.1:8090/v1`) was
+the endpoint; a guard (a canary base URL children inherit, plus a dialer
+that fails on 127.0.0.1:8090) caught exactly one `POST /v1/chat/completions`
+for the fixture model `local`. The test ignored the child's exit, so the
+suite stayed green while the live swap was touched. The leak is closed.
+
+- **the fixture run is hermetic** (`cmd/rig`): the minted-fleet test now
+  dials an httptest fixture and asserts the run exits 0 with exactly one
+  model call, so a return of the embedded-default path fails loudly
+  instead of touching the operator's swap.
+- **the vision wire no longer reads the operator home** (`cmd/rig`): the
+  view-registration tests pin `rigHome` to a temp dir, so `wire` never
+  resolves the real `~/.rig` — the read was safe, but it was the last
+  path from a unit test into the operator home, and `rigHome` carries a
+  rename of the old config home.
+
 ## [1.3.4]: an empty turn is asked again
 
 The evidence, verified in a session store: messages.seq 13171, model
