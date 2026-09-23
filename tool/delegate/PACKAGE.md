@@ -27,6 +27,11 @@ the state store.
 - `delegate.go`: `stallMs` rides the schema beside `timeoutMs`
   (0 = off, today's plain timeout; the tool keeps its own 30-minute
   `timeoutMs` ceiling), and `Stall` rides `DelegateInput`.
+- `delegate.go`: `Notify` (optional, nil = silent): the status door
+  (SPEC_SWARM 7) — an interactive delegate emits `SwarmStatus`
+  snapshots on start, on the spawn's stream bytes (the same Observe),
+  and on exit, one worker row, zero queue counts, throttled to a few
+  per second with the exit's last frame always landing.
 - `delegate_test.go`: the failing-first named cases over a fake
   `Spawn` and `Fetch` (happy path, cwd refusal, busy refusal, timeout,
   the stall kill, the fan-out overlap and the one-slot sequence, the

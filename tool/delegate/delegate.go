@@ -7,12 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/swarm/status"
 )
 
 const (
@@ -35,15 +38,34 @@ type Opts struct {
 	Allow        []string
 	Fetch        sched.Fetch
 	Spawn        sched.Spawn
+	Notify       func(core.Event)
 }
 
-func New(o Opts) core.Tool { return adapter{o} }
+type workerState struct {
+	task      string
+	heartbeat time.Time
+	state     string
+}
 
-type adapter struct{ Opts }
+func New(o Opts) core.Tool {
+	a := &adapter{Opts: o, workers: map[int64]workerState{}}
+	if o.Notify != nil {
+		a.emitter = status.New(o.Notify)
+	}
+	return a
+}
 
-func (a adapter) Name() string { return "delegate" }
+type adapter struct {
+	Opts
+	mu      sync.Mutex
+	seq     int64
+	workers map[int64]workerState
+	emitter *status.Emitter
+}
 
-func (a adapter) Description() string {
+func (a *adapter) Name() string { return "delegate" }
+
+func (a *adapter) Description() string {
 	stance := "one in flight per session"
 	if a.Slots > 1 {
 		stance = fmt.Sprintf("up to %d in flight per session", a.Slots)
@@ -56,7 +78,7 @@ func (a adapter) Description() string {
 		"; the timeout to 10 minutes (ceiling 30)."
 }
 
-func (a adapter) Schema() json.RawMessage {
+func (a *adapter) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -78,13 +100,17 @@ type args struct {
 	StallMs   int64  `json:"stallMs,omitempty"`
 }
 
-func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
+func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var g args
 	if err := strictDecode(data, &g); err != nil {
 		return "", fmt.Errorf("delegate: args: %w", err)
 	}
 	if strings.TrimSpace(g.Task) == "" {
 		return "", errors.New("delegate: task is required")
+	}
+	id := a.begin(g.Task)
+	if id > 0 {
+		defer a.end(id)
 	}
 	session := "anon"
 	if s, ok := core.SessionFrom(ctx); ok && s != nil {
@@ -138,6 +164,7 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		RigHome:       a.RigHome,
 		StateDir:      a.StateDir,
 		Allow:         a.Allow,
+		Observe:       a.observe(id),
 	})
 	if err != nil {
 		return "", err
@@ -173,4 +200,74 @@ func strictDecode(data json.RawMessage, out any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	return dec.Decode(out)
+}
+
+func (a *adapter) begin(task string) int64 {
+	if a.emitter == nil {
+		return 0
+	}
+	a.mu.Lock()
+	a.seq++
+	id := a.seq
+	a.workers[id] = workerState{task: firstLine(task), heartbeat: time.Now(), state: "running"}
+	a.mu.Unlock()
+	a.emit(false)
+	return id
+}
+
+func (a *adapter) end(id int64) {
+	if a.emitter == nil {
+		return
+	}
+	a.mu.Lock()
+	delete(a.workers, id)
+	a.mu.Unlock()
+	a.emit(true)
+}
+
+func (a *adapter) observe(id int64) func([]byte) {
+	if a.emitter == nil {
+		return nil
+	}
+	return func(p []byte) {
+		a.mu.Lock()
+		if w, ok := a.workers[id]; ok {
+			w.heartbeat = time.Now()
+			a.workers[id] = w
+		}
+		a.mu.Unlock()
+		a.emit(false)
+	}
+}
+
+func (a *adapter) emit(force bool) {
+	if a.emitter == nil {
+		return
+	}
+	st := a.snapshot()
+	if force {
+		a.emitter.Force(st)
+	} else {
+		a.emitter.Emit(st)
+	}
+}
+
+func (a *adapter) snapshot() core.SwarmStatus {
+	a.mu.Lock()
+	ws := make([]core.SwarmWorker, 0, len(a.workers))
+	for id, w := range a.workers {
+		ws = append(ws, core.SwarmWorker{ID: int(id), Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
+	}
+	a.mu.Unlock()
+	sort.Slice(ws, func(i, j int) bool { return ws[i].ID < ws[j].ID })
+	return core.SwarmStatus{Workers: ws}
+}
+
+func firstLine(s string) string {
+	l := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
+	l = strings.TrimSpace(l)
+	if len(l) > 60 {
+		l = l[:60] + "…"
+	}
+	return l
 }

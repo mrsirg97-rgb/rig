@@ -83,6 +83,14 @@ is a loud line naming the known set, never silently a prompt.
   worker's claim
   is released and the task retried once; a second death fails it (or
   rejects it with the reason). No fleet configured refuses by name.
+  The TUI shows the swarm beside the session: the transcript gets one
+  line at each decision (a task failed with its note, a reviewer
+  rejected with the reason, a worker died and was restarted or exited,
+  the board emptied or the swarm stopped), and the footer's status band
+  carries the live counts (`workers 2 · todo 3 · done 5 · failed 1 ·
+  w2 t388 12s` / `reviewer 1 · review 1 · done 1 · failed 0 · w3 t386
+  4m`) — two rows above the status line while a swarm runs, one row for
+  an interactive delegate, none when nothing runs (1.4.4).
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it. The summary lands in the

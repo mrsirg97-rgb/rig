@@ -19,6 +19,8 @@ var (
 	_ Event = TurnEnd{}
 	_ Event = TestEvent{}
 	_ Event = Compacted{}
+	_ Event = SwarmStatus{}
+	_ Event = SwarmNotice{}
 )
 
 type TextDelta struct{ Text string }
@@ -101,6 +103,28 @@ func (Compacted) event() {}
 type Compacting struct{}
 
 func (Compacting) event() {}
+
+type SwarmWorker struct {
+	ID        int
+	Role      string
+	Task      string
+	Heartbeat time.Time
+	Done      int
+	Failed    int
+	State     string
+}
+
+type SwarmStatus struct {
+	Workers []SwarmWorker
+	Pending int
+	Review  int
+}
+
+func (SwarmStatus) event() {}
+
+type SwarmNotice struct{ Text string }
+
+func (SwarmNotice) event() {}
 
 type Provider interface {
 	Stream(ctx context.Context, req Request) (<-chan Event, error)

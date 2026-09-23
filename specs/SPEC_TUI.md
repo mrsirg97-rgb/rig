@@ -497,6 +497,38 @@ A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
 drop scrolled lines from scrollback, which trades away decision 1.
 
+### 3a. The swarm band and the transcript notice, amended 1.4.4
+
+The status string is a newline-joined footer already; the swarm band is
+two more rows above the existing status rows while a swarm runs, zero
+rows when nothing runs — the region's height-changing machinery (the
+stability check's status offset, the painted aim, the viewport budget)
+handles it without a `live.go` line:
+
+```
+❯
+<blank>
+workers 2 · todo 3 · done 5 · failed 1 · w2 t388 12s
+reviewer 1 · review 1 · done 1 · failed 0 · w3 t386 4m
+huihui3.8 · 41.2k/262k
+default · auto
+up 214k down 18.2k · cache r 187k 92%
+```
+
+- The TUI folds the latest `core.SwarmStatus` (SPEC_SWARM 7) into the
+  footer; the band's rows are `workers <n> · todo <pending> · done <d> ·
+  failed <f> · <busiest>` and `reviewer <n> · review <r> · done <d> ·
+  failed <f> · <busiest>` — one row per role that has a worker, the
+  labels and numbers in the text slot, the separators dim, the tail the
+  role's busiest worker's `w<id> <task> <age>` (`—` when idle or
+  unbeat).
+- A delegate shows the worker row only: its snapshot carries the one
+  in-flight worker and zero queue counts, and the band is one row.
+- `core.SwarmNotice` commits one dim line in the transcript at the
+  decision points, exactly the events SPEC_SWARM 7 names; nothing else is
+  a notice. The CLI and the oneshot ignore both events (the compat rule:
+  unknown events are ignored, never misread).
+
 ### 4. Tool rows
 
 One committed block per execution, pane's vocabulary:

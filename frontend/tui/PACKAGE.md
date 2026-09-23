@@ -31,6 +31,11 @@ width); no core or loop line (decision 10).
   fleet as `workers: <model|none>`, and the hint line), and the
   snapshot's refresh points (start, `/new`, `sessions resume`, a
   `models` switch).
+- **The swarm band and the notice line** (`swarm.go`): `RenderSwarmBand`
+  folds the latest `SwarmStatus` into two extra footer rows above the
+  status rows while a swarm runs (zero rows when nothing runs; one row
+  for a delegate), and `RenderSwarmNotice` commits the one-line
+  `SwarmNotice` transcript line at the decision points (SPEC_SWARM 7).
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,
   both doors; the tool-result path and the command path commit
   byte-equal blocks minus the opening line (decision 6).

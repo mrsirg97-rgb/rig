@@ -172,6 +172,7 @@ type harness struct {
 	spawn   *fakeSpawn
 	fetch   *fetchState
 	ctl     *swarm.Controller
+	fe      *recordFrontend
 }
 
 func newHarness(t *testing.T) *harness {
@@ -191,6 +192,7 @@ func newHarness(t *testing.T) *harness {
 	h.cwd = t.TempDir()
 	h.spawn = &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	h.fetch = &fetchState{}
+	h.fe = &recordFrontend{}
 	h.ctl = swarm.New(swarm.Opts{
 		TodoDB:        todoDB,
 		SchedDB:       schedDB,
@@ -208,6 +210,7 @@ func newHarness(t *testing.T) *harness {
 		ReviewerModel: "qwen3.8-review",
 		Models:        func() models.Table { return modelRows(t) },
 		Poll:          20 * time.Millisecond,
+		Frontend:      h.fe,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	return h

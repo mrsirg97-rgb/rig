@@ -204,6 +204,58 @@ holder came back on the next fold. The fold now applies the release to a
 `review` claim too (the status stays, the holder clears), with a replay
 test.
 
+### 7. The transcript notices and the status band
+
+The controller gains an optional `Frontend` seam (wired once at the root,
+like `Steer`): the four decision-worthy events emit one-line
+`core.SwarmNotice` transcript notices, and nothing else does — the drain
+loop's ordinary claim/complete/bytes stay out of the transcript (the run
+stream and the bare `/swarm` are their audit).
+
+- **A task failed (with its note)**: `swarm: t1 failed — the worker died
+  twice` (the worker's second death; the reason is noted on the task),
+  `swarm: t1 failed — the reviewer rejected this twice; the swarm failed
+  it` (the reject cap).
+- **A reviewer rejected (with the reason)**: `swarm: t1 rejected — tests
+  are missing` — every reject door names its reason (the verdict's reason,
+  the no-verdict fallback, the died fallback).
+- **A worker died and was restarted or exited**: `swarm: w2 died — t1
+  restarted` (the first death: the claim released, the task retried),
+  `swarm: w2 died — t1 exited` (the second: the retry budget spent, the
+  worker's run of the task is over — the task's fate, failed or rejected,
+  is the next notice).
+- **The board emptied /swarm exited**: `swarm: the board emptied — all
+  workers exited` (the natural drain after three empty claims), `swarm:
+  /swarm exited — N workers stopped` (Stop).
+
+The controller also emits `core.SwarmStatus` snapshots on claim, stream
+bytes, complete, verdict, and exit, throttled to a few per second (the
+exit's last frame always lands); the delegate tool's Observe emits the
+same shape for an interactive delegate. The snapshot carries the workers
+(the supervisor's List) and the bound queue's fold counts (`todo.Counts`:
+pending and review), and the TUI folds the latest into the footer: two
+rows above the existing footer line while a swarm runs, zero rows when
+nothing runs:
+
+```
+workers 2 · todo 3 · done 5 · failed 1 · w2 t388 12s
+reviewer 1 · review 1 · done 1 · failed 0 · w3 t386 4m
+```
+
+- `workers <n>` / `reviewer <n>`: the role's drain-worker count; `todo
+  <pending>` / `review <r>`: the bound queue's fold; `done <d>` /
+  `failed <f>`: the role's summed counters.
+- The tail is the role's busiest worker — in flight first, then the
+  highest done+failed, ties by id — its current task (`—` when idle) and
+  heartbeat age (`12s`, `4m`, `1h`; `—` when none).
+- A delegate shows the worker row only (its snapshot carries the one
+  in-flight worker; the queue counts are zero).
+
+Rejected, named: the controller calling the frontend on every heartbeat
+(the band's cadence is the throttle, not the stream's); a transcript
+notice per task completion (completion is the ordinary path; the notices
+exist for the decisions).
+
 ## testing
 
 Named cases, failing first. The controller tests use a real todo store and
@@ -258,6 +310,18 @@ fake `Swarm` seam.
 - `TestTodoTaskRead`: `Task` returns the text and the notes in order with
   their sessions; an unknown id uses the store's voice; the read is
   read-only.
+- `TestTodoCounts`: `Counts` returns the pending and review counts from
+  the fold, read-only.
+- `TestSwarmNoticesTaskFailed` / `TestSwarmNoticesReviewerRejected` /
+  `TestSwarmNoticesWorkerDied` / `TestSwarmNoticesBoardEmptiedAndStop`:
+  each decision-worthy notice with the fake spawn — the failed task names
+  its note, the reject names its reason, the death names the restart or
+  the exit, the board and the stop name themselves; nothing else is
+  notified.
+- `TestSwarmStatusEmitsThrottled`: the controller notifies a
+  `SwarmStatus` on claim, stream bytes, complete, verdict, and exit — the
+  live updates throttle to a few per second, the exit's last frame always
+  lands, and the snapshot carries the roster and the fold counts.
 - `TestDelegateBusyWait` / `TestDelegateObserve` / `TestDelegateSpawnCtx`
   (store/scheduler): the wait-policy, the observer, and the spawn context
   each pinned at the delegate seam; the default paths (skip, nil observer,
@@ -271,26 +335,35 @@ spawn, a scripted busy fixture, or a real store in a temp dir.
 
 ## freeze
 
-- `core/` and `loop/`: zero diff. The loop never learns the swarm.
-- The todo store gains one read (`Task`) and nothing else: the claim
-  filter, the review gate, and the release doors are the 1.3.9 surface.
-- The delegate path gains three defaulted fields and no new process
-  topology: the jail, the proxy, the record, the worker command, the
-  state-store bind are verbatim.
+- `core/`: the event vocabulary gains two types (`SwarmNotice`,
+  `SwarmStatus`) as pure additions — nothing else; `loop/`: zero diff.
+  The loop never learns the swarm.
+- The todo store gains the two structured reads (`Task`, `Counts`) and
+  nothing else: the claim filter, the review gate, and the release doors
+  are the 1.3.9 surface.
+- The delegate path gains the three defaulted fields, the optional
+  frontend seam, and no new process topology: the jail, the proxy, the
+  record, the worker command, the state-store bind are verbatim.
 - `command/` gains one file and one registration line (the standard set's
   thirteenth command); the TUI's `Sub()` door is the swarm's vocabulary.
+- The TUI's live region protocol (`live.go`) is unchanged: the band is a
+  status-string extension, and the region already handles its changing
+  height.
 
 ## scope
 
 - `specs/SPEC_SWARM.md` (this file).
 - `swarm/`: the controller (Start/List/Stop, the drain loop, the brief, the
-  verdict protocol, the run stream) and its `PACKAGE.md`.
-- `store/todo`: `Task` (the structured read) and its test.
+  verdict protocol, the run stream, the notices, the status) and its
+  `PACKAGE.md`.
+- `store/todo`: `Task` and `Counts` (the structured reads) and their tests.
 - `store/scheduler`: the delegate input's `WaitBusy`/`Observe`/`SpawnCtx`.
 - `command`: the `Swarm` seam, the `/swarm` command, the registration.
 - `config`: `workers.json` gains the optional `reviewer` model.
-- `cmd/rig`: the wiring (the controller, the env seam).
+- `cmd/rig`: the wiring (the controller, the env seam, the frontend door).
+- `tool/delegate`: the `Notify` seam, the status `Observe`.
+- `frontend/tui`: the band, the notice line, their tests.
 - `specs/SPEC_COMMANDS.md`, `specs/SPEC_CONFIG.md`, `specs/SPEC_STATE.md`,
-  `specs/SPEC_DELEGATE.md`: the amendments above.
-- `docs/USAGE.md`, `docs/SETUP.md`, `CHANGELOG.md`: the command, the fleet
-  key, the release notes.
+  `specs/SPEC_DELEGATE.md`, `specs/SPEC_TUI.md`: the amendments above.
+- `docs/USAGE.md`, `docs/SETUP.md`, `docs/TUI_DESIGN.md`, `CHANGELOG.md`:
+  the command, the fleet key, the band, the release notes.

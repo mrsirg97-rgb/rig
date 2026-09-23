@@ -47,3 +47,37 @@ func Task(ctx context.Context, db store.DB, p Project, id, session string) (Task
 	}
 	return TaskInfo{ID: ts.id, Text: ts.text, Notes: notes}, nil
 }
+
+type QueueCounts struct {
+	Pending int
+	Review  int
+	Done    int
+	Failed  int
+}
+
+func Counts(ctx context.Context, db store.DB, p Project) (QueueCounts, error) {
+	_, tx, err := db.TxReadOnly(ctx)
+	if err != nil {
+		return QueueCounts{}, err
+	}
+	defer tx.Rollback()
+	f, err := eventsOf(tx, p.Key)
+	if err != nil {
+		return QueueCounts{}, err
+	}
+	f.label, f.notRepo = p.Label, p.OutsideRepo
+	var out QueueCounts
+	for _, ts := range f.tasks {
+		switch ts.status {
+		case statusPending:
+			out.Pending++
+		case statusReview:
+			out.Review++
+		case statusDone:
+			out.Done++
+		case statusFailed:
+			out.Failed++
+		}
+	}
+	return out, nil
+}
