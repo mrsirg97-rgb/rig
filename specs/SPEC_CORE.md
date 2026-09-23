@@ -450,8 +450,9 @@ Core surface: 1.5.0 reopens `core/`, named (SPEC_HOSTED): `Usage.Cost`
 (the endpoint's dollars, 0 when unreported), `ReasoningDelta.Details`
 (the raw `reasoning_details` array chunk), and `Message.ReasoningDetails`
 (the full array, echoed back on later turns); `Load` normalizes a `null`
-details field back to nil. The gate's clause carries the name, and the
-re-freeze follows the merge.
+details field back to nil. The re-freeze closed the clause and the
+gate measures `core/` again — frozen at 1.5.0's bytes, and the next
+core change opens it by name.
 
 State machine per turn: `awaiting_input -> awaiting_model -> executing_tools
 -> awaiting_model -> ... -> done`. Deliverable 7 leaves it unchanged; its
