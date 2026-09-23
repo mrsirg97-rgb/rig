@@ -43,6 +43,7 @@ func NewSocketProxy(sockPath, target string) (*SocketProxy, error) {
 
 	rp := &httputil.ReverseProxy{
 		FlushInterval: -1,
+		Transport:     Transport,
 		Director: func(req *http.Request) {
 			req.URL.Scheme = base.Scheme
 			req.URL.Host = base.Host

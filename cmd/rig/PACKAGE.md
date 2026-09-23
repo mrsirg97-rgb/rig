@@ -85,6 +85,11 @@ sees core and models and nothing else.
 
 ## Gotchas
 
+- The suite runs under `testenv.Main`: `HOME` and `RIG_HOME` point at a
+  throwaway directory for the whole package run, so a fixture that
+  forgets its own scratch can never write into the operator's `~/.rig`.
+  The operator-home probes (the kernel venv, the config-home migration
+  fixtures) read `testenv.OperatorHome` deliberately and never write.
 - `run-job` lands before state/session wiring: it is its own lifecycle
   (own stores, own record) and must not touch the REPL's closure order.
 - The queue the startup reap sweeps is `sessionQueue`: the session's

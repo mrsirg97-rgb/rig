@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/mrsirg97-rgb/rig/plugins"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,11 +13,13 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/config"
+	"github.com/mrsirg97-rgb/rig/plugins"
+	"github.com/mrsirg97-rgb/rig/testenv"
 )
 
 func pluginKernelPy(t *testing.T) string {
 	t.Helper()
-	if h, err := os.UserHomeDir(); err == nil {
+	if h := testenv.OperatorHome; h != "" {
 		p := filepath.Join(h, ".pi", "agent", "kernel-venv", "bin", "python")
 		if fi, err := os.Stat(p); err == nil && fi.Mode()&0o111 != 0 {
 			if _, err := exec.Command(p, "-c", "import IPython, numpy, pandas").CombinedOutput(); err == nil {

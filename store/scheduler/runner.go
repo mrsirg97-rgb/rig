@@ -53,6 +53,8 @@ const spawnCaptureCap = 256 * 1024
 
 const defaultSwapURL = "http://127.0.0.1:8090"
 
+var Transport http.RoundTripper
+
 const ReportBack = "\n\nReport back: when you finish, persist durable findings with the rem tool (project scope: this job's cwd) and end your reply with a short summary of what you found and did."
 
 func RunJob(key string, opts RunOpts) error {
@@ -462,6 +464,9 @@ func RealFetch(timeout time.Duration) Fetch {
 		timeout = 5 * time.Second
 	}
 	client := &http.Client{Timeout: timeout}
+	if Transport != nil {
+		client.Transport = Transport
+	}
 	return func(url string) (json.RawMessage, error) {
 		resp, err := client.Get(url)
 		if err != nil {

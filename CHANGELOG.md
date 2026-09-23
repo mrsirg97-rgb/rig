@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.4.3]: the suite is walled off from the operator's machine
+
+One fixture run once wrote a `local` session into the real `~/.rig`
+(`sessions/cb051fd0065f.sqlite`, cwd `cmd/rig`), and a test could still
+dial the embedded default swap (`127.0.0.1:8090`) — or detect the
+operator's live server by binding that port and skipping when it was
+busy. The suite now runs walled: every package that opens config or
+stores isolates `HOME`/`RIG_HOME` to a throwaway directory, and the
+scheduler's dial seam rides a test-only transport that refuses any host
+that is not an httptest server before it dials.
+
+- **TestMain isolation** (`testenv`, every package that opens config or
+  stores): `HOME`, `XDG_CONFIG_HOME`, and `RIG_HOME` point at one
+  throwaway directory for the whole package run, so a fixture that
+  forgets its own scratch cannot write into the operator's `~/.rig`.
+  The Go toolchain keeps the operator's caches (`GOPATH`/`GOMODCACHE`/
+  `GOCACHE`), so the fixtures' `go build` calls stay warm and offline.
+  The operator-home fixture probes (the lift checkout, the kernel venv,
+  the `.bashrc` landlock probe) read `testenv.OperatorHome`, captured at
+  package init, and never write.
+- **The refusing dial transport** (`testenv`, `store/scheduler`): the
+  `Transport` seam carries `testenv.Transport` in the suite; nil stays
+  the production default (`http.DefaultTransport`). `RealFetch` and the
+  socket proxy ride it, and any host that is not an httptest server
+  created by `testenv.Server` is refused before the dial, so a test
+  reaching for the embedded default swap fails loud instead of touching
+  the operator's live server.
+- **The embedded-default test no longer detects the live server**
+  (`cmd/rig`): the swap chain's "neither takes the embedded" case used
+  to bind `127.0.0.1:8090` and skip when the port was busy — detecting
+  the operator's server — then fired the real worker at it. It now runs
+  `RunJob` in-process with a recording fetch seam and a recording spawn,
+  asserting the busy check and the worker argv carry the embedded
+  default, with nothing bound and nothing dialed.
+- **Tests**: the isolation invariant per package (the suite never sees
+  the operator home), the refusal (a non-server host refused, an
+  httptest host dialed), and `RealFetch` riding the seam.
+
 ## [1.4.2]: the spawned worker stops touching the board, and the plugin door pauses
 
 The manual gate and the swarm's worker door both had a gap the model could

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/testenv"
 )
 
 // The worker's own goroutines must be inside the domain. An in-process
@@ -19,11 +20,7 @@ import (
 func TestLandlockWorkerThreadsAreInsideTheDomain(t *testing.T) {
 	requireLandlockBox(t)
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	probe := filepath.Join(home, ".bashrc")
+	probe := filepath.Join(testenv.OperatorHome, ".bashrc")
 	if _, err := os.Stat(probe); err != nil {
 		t.Skipf("the probe file is absent: %v", err)
 	}
@@ -49,7 +46,7 @@ func TestLandlockWorkerThreadsAreInsideTheDomain(t *testing.T) {
 	srv := newJailSrv(t, s)
 	bin := sharedRigBin(t)
 
-	err = sched.RunJob(key, sched.RunOpts{
+	err := sched.RunJob(key, sched.RunOpts{
 		Home:      h.home,
 		Crontab:   h.ct,
 		Fetch:     fakeFetch(nil, fetchOpts{}),
