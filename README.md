@@ -53,7 +53,7 @@ join when a worker fleet is configured. Restrict them with `--allow`:
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web_search` | a local SearXNG instance |
 | `web_fetch` | a URL as readable text; private addresses refused |
-| `todo` | the task queue, scoped to the project (a repo's worktrees share one) |
+| `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
 | `delegate` | a headless worker for a bounded subtask; several run in parallel in one turn, up to the fleet's slots |
@@ -129,7 +129,7 @@ rig serve
 The dashboard serves the rig stores on loopback only. On first run it prints an access token, stores it with mode `0600`, and includes it in the URL. The page exchanges the token for a cookie. Mobile friendly.
 
 - **sessions**: list them per workspace, and resume one mid-work
-- **todo**: the queue, with create, start, complete, and retry
+- **todo**: the queue, with create (requires/blocks links), claim, start, complete, notes, and retry
 - **scheduler**: the jobs, with create, pause, resume, remove, an in-place update form that opens with the job's current fields, and each job's run audit trail
 - **models**: the table, with the effort dial
 - **plugins**: approved, pending, disabled; the forge reads and saves a plugin's source into the pending zone

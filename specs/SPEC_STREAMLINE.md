@@ -49,7 +49,7 @@ The three dense contracts are trimmed to the shape:
   the auto-start, the compaction sentence, and the batching sentence:
   each already rides an error or an echo the model reads on contact
   (`is claimed by X; fail it first to take over`, `auto-started and
-  completed`, `waits on tN`).
+  completed`, `requires tN`).
 - `tool/scheduler`'s description and guidelines de-duplicate: the cron
   shape, the once-line self-delete, the busy semantics, the id minting,
   the scope list, and the drift note each appear once. SPEC_CONFIG 5's

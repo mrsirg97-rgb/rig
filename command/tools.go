@@ -92,13 +92,13 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 // says "this project" (the form binds the session's queue).
 func isTodoAction(w string) bool {
 	switch w {
-	case "read", "create", "claim", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "accept", "reject", "project":
+	case "read", "create", "claim", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "notes", "accept", "reject", "project":
 		return true
 	}
 	return false
 }
 
-const todoUsage = "todo read|create <text…>|claim [review]|start|complete|fail|release|retry <id>|move <id> <pos>|note <id> <text…>|accept <id>|reject <id> <reason…>|prune|project <path>|<path> <verb>"
+const todoUsage = "todo read [id]|create <text…>|claim [review]|start|complete|fail|release|retry <id>|move <id> <pos>|note <id> <text…>|notes <id>|accept <id>|reject <id> <reason…>|prune|project <path>|<path> <verb>"
 
 func todoArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -117,6 +117,10 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return json.RawMessage(`{"action":""}`), nil
 	case fields[0] == "read" && len(fields) == 1:
 		return json.RawMessage(`{"action":"read"}`), nil
+	case fields[0] == "read" && len(fields) == 2:
+		return json.Marshal(map[string]any{"action": "read", "id": fields[1]})
+	case fields[0] == "notes" && len(fields) == 2:
+		return json.Marshal(map[string]any{"action": "notes", "id": fields[1]})
 	case fields[0] == "prune" && len(fields) == 1:
 		return json.RawMessage(`{"action":"prune"}`), nil
 	case fields[0] == "create":
@@ -173,7 +177,9 @@ func todoArgs(args string) (json.RawMessage, error) {
 	case len(fields) == 0:
 		return nil, errors.New("todo: usage: " + todoUsage)
 	case fields[0] == "read":
-		return nil, errors.New("todo: read takes no args (todo read)")
+		return nil, errors.New("todo: read takes no args (todo read) or one id (todo read <id>)")
+	case fields[0] == "notes":
+		return nil, errors.New("todo: notes takes an id (todo notes <id>)")
 	case fields[0] == "prune":
 		return nil, errors.New("todo: prune takes no args (todo prune)")
 	case fields[0] == "create":

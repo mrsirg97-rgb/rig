@@ -62,10 +62,14 @@ is a loud line naming the known set, never silently a prompt.
   this session to that project's queue and shows it; bare, it says where
   the queue is. `todo <path> <verb>` binds and acts in one line, and
   `/todo prune` drops the done rows. The swarm surface (1.3.9): `claim`
-  takes the next task (or `claim review`), `note <id>` attaches a
-  message to any task, `done` lands it done in a solo session and submits
-  it for review from a worker (`rig -p`), and `accept`/`reject` decide
-  (`specs/SPEC_STATE.md`).
+  takes the next task nothing waits for (or `claim review`), `note
+  <id>` attaches a message to any task, `notes <id>` lists a task's
+  notes in order with their session and time, `read <id>` renders one
+  task summary-only, `done` lands it done in a solo session and submits
+  it for review from a worker (`rig -p`), and `accept`/`reject` decide.
+  Tasks carry two links, one each: `requires tN` (I wait for it) and
+  `blocks tN` (it waits for me), gating claim and finish
+  (`specs/SPEC_TODO_EDGES.md`).
 - `/rem project <path>`: a one-off read or write of another project's
   memories: the path resolves to a repo identity (worktrees share).
 - `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's

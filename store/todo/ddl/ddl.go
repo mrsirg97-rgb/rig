@@ -37,9 +37,10 @@ func Statements() []string {
 		`CREATE TABLE IF NOT EXISTS "task_deps" (
   "scope" TEXT NOT NULL,
   "task_id" TEXT NOT NULL,
-  "depends_on" TEXT NOT NULL,
+  "kind" TEXT NOT NULL,
   "created_seq" INTEGER NOT NULL,
-  PRIMARY KEY ("scope", "task_id", "depends_on")
+  "depends_on" TEXT NOT NULL,
+  PRIMARY KEY ("scope", "task_id", "kind")
 )`,
 	}
 }

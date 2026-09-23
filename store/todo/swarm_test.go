@@ -15,7 +15,7 @@ func TestClaimTakesTheFirstUnblockedPendingTask(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{
-		{Text: "gate"}, {Text: "work", DependsOn: ptrTo("gate")}, {Text: "later"},
+		{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")}, {Text: "later"},
 	}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -47,7 +47,7 @@ func TestClaimRepliesNothingToDoWhenAllBlocked(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{
-		{Text: "gate"}, {Text: "work", DependsOn: ptrTo("gate")},
+		{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")},
 	}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -288,13 +288,23 @@ func TestNoteAppendsAndReadShowsNotesInOrderWithTheirSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	first := strings.Index(read, "first thought (by "+sessA+")")
-	second := strings.Index(read, "second thought (by "+sessB+")")
+	if !strings.Contains(read, "\u00b7 2 notes") {
+		t.Fatalf("read must show the count:\n%s", read)
+	}
+	if strings.Contains(read, "first thought") || strings.Contains(read, "second thought") {
+		t.Fatalf("read must not inline note text:\n%s", read)
+	}
+	notes, err := todostore.Notes(ctx, db, p, id, sessC)
+	if err != nil {
+		t.Fatalf("notes: %v", err)
+	}
+	first := strings.Index(notes, "first thought (by "+sessA+", ")
+	second := strings.Index(notes, "second thought (by "+sessB+", ")
 	if first == -1 || second == -1 {
-		t.Fatalf("read must show the notes with their sessions:\n%s", read)
+		t.Fatalf("notes must carry the sessions:\n%s", notes)
 	}
 	if first > second {
-		t.Fatalf("notes must render in order:\n%s", read)
+		t.Fatalf("notes must render in order:\n%s", notes)
 	}
 }
 
@@ -369,12 +379,12 @@ func TestNoteSurvivesCompaction(t *testing.T) {
 	if _, err := todostore.Move(ctx, db, p, id, 1, sessA); err != nil {
 		t.Fatalf("move (compaction trigger): %v", err)
 	}
-	read, err := todostore.Read(ctx, db, p, sessA)
+	notes, err := todostore.Notes(ctx, db, p, id, sessA)
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
-	if !strings.Contains(read, "kept by the snapshot (by "+sessB+")") {
-		t.Fatalf("a note must survive compaction:\n%s", read)
+	if !strings.Contains(notes, "kept by the snapshot (by "+sessB+", ") {
+		t.Fatalf("a note must survive compaction:\n%s", notes)
 	}
 }
 
@@ -738,12 +748,12 @@ func TestRejectMovesReviewToPendingAndNotesTheReason(t *testing.T) {
 	if got := projStatus(t, db, "needs work"); got != "pending" {
 		t.Errorf("status = %v, want pending", got)
 	}
-	read, err := todostore.Read(ctx, db, p, sessA)
+	notes, err := todostore.Notes(ctx, db, p, id, sessA)
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
-	if !strings.Contains(read, "tests are missing (by "+sessB+")") {
-		t.Fatalf("the rejection reason must be a note:\n%s", read)
+	if !strings.Contains(notes, "tests are missing (by "+sessB+", ") {
+		t.Fatalf("the rejection reason must be a note:\n%s", notes)
 	}
 }
 
@@ -787,12 +797,12 @@ func TestRejectAutoClaimsAndLeavesTheReasonAsTheNextBrief(t *testing.T) {
 	if got := projStatus(t, db, "held reject"); got != "pending" {
 		t.Errorf("status = %v, want pending", got)
 	}
-	read, err := todostore.Read(ctx, db, p, sessA)
+	notes, err := todostore.Notes(ctx, db, p, held, sessA)
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
-	if !strings.Contains(read, "tests are missing (by "+sessC+")") {
-		t.Fatalf("the rejection reason must be a note:\n%s", read)
+	if !strings.Contains(notes, "tests are missing (by "+sessC+", ") {
+		t.Fatalf("the rejection reason must be a note:\n%s", notes)
 	}
 	claimed, err := todostore.Claim(ctx, db, p, sessA, "")
 	if err != nil {
@@ -807,7 +817,7 @@ func TestBlockedByClearsOnlyOnDone(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{
-		{Text: "gate"}, {Text: "work", DependsOn: ptrTo("gate")},
+		{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")},
 	}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -1038,17 +1048,17 @@ func TestReplayAcrossClaimNoteRejectAccept(t *testing.T) {
 	if got := projStatus(t, db, "ship it"); got != "done" {
 		t.Errorf("replay must reproduce done: %v", got)
 	}
-	read, err := todostore.ReadAll(ctx, db, p, sessA)
+	notes, err := todostore.Notes(ctx, db, p, id, sessA)
 	if err != nil {
-		t.Fatalf("read all: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
 	for _, note := range []string{
-		"on it (by " + sessB + ")",
-		"needs tests (by " + sessC + ")",
-		"redone (by " + sessA + ")",
+		"on it (by " + sessB + ", ",
+		"needs tests (by " + sessC + ", ",
+		"redone (by " + sessA + ", ",
 	} {
-		if !strings.Contains(read, note) {
-			t.Errorf("replay must keep the note %q:\n%s", note, read)
+		if !strings.Contains(notes, note) {
+			t.Errorf("replay must keep the note %q:\n%s", note, notes)
 		}
 	}
 }
@@ -1084,8 +1094,15 @@ func TestNotesAndReviewSurviveCompaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(read, "done (by "+sessA+")") {
-		t.Errorf("notes must survive compaction:\n%s", read)
+	if !strings.Contains(read, "\u00b7 1 note") {
+		t.Errorf("the count must survive compaction:\n%s", read)
+	}
+	notes, err := todostore.Notes(ctx, db, p, id, sessA)
+	if err != nil {
+		t.Fatalf("notes: %v", err)
+	}
+	if !strings.Contains(notes, "done (by "+sessA+", ") {
+		t.Errorf("notes must survive compaction:\n%s", notes)
 	}
 	if !strings.Contains(read, "claimed for review by "+sessB) {
 		t.Errorf("the review hold must survive compaction:\n%s", read)

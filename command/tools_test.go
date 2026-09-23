@@ -85,6 +85,42 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTodoNotesAndReadIdThroughTheCommand(t *testing.T) {
+	s := core.NewSession()
+	env := &command.Env{
+		Session: func() *core.Session { return s },
+		Tools:   map[string]core.Tool{"todo": todoapi.New(openTodo(t), todoapi.Interactive)},
+	}
+	created, err := runCmd(t, "todo", "create note me", env)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := runCmd(t, "todo", "note t1 on it", env); err != nil {
+		t.Fatalf("note: %v", err)
+	}
+	notes, err := runCmd(t, "todo", "notes t1", env)
+	if err != nil {
+		t.Fatalf("notes: %v", err)
+	}
+	if !strings.Contains(notes, "on it (by "+s.ID+", ") {
+		t.Fatalf("notes must list with session and time:\n%s", notes)
+	}
+	one, err := runCmd(t, "todo", "read t1", env)
+	if err != nil {
+		t.Fatalf("read t1: %v", err)
+	}
+	if !strings.Contains(one, "\u00b7 1 note") || !strings.Contains(one, "action 'notes' with id=t1 lists them") {
+		t.Fatalf("read id must be summary-only and point at notes:\n%s", one)
+	}
+	if !strings.Contains(created, "t1") {
+		t.Fatalf("the create reply must carry the task:\n%s", created)
+	}
+	_, err = runCmd(t, "todo", "notes t1 extra", env)
+	if err == nil || !strings.Contains(err.Error(), "notes takes an id") {
+		t.Fatalf("the notes arity refusal, got %v", err)
+	}
+}
+
 func TestSchedulerCommandNoFleetRefuses(t *testing.T) {
 	file := "/home/op/.rig/workers.json"
 	env := &command.Env{

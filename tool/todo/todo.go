@@ -18,7 +18,7 @@ const schemaJSON = `{
 	"required": ["action"],
 	"properties": {
 		"action": {
-			"enum": ["create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read", "note", "accept", "reject"],
+			"enum": ["create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read", "note", "notes", "accept", "reject"],
 			"description": "The action to perform. Required."
 		},
 		"tasks": {
@@ -32,16 +32,20 @@ const schemaJSON = `{
 						"type": "string",
 						"description": "What needs doing"
 					},
-					"dependsOn": {
+					"requires": {
 						"type": ["string", "null"],
-						"description": "Task id (tN) or exact text this task depends on; null clears the link"
+						"description": "Task id (tN) or exact text this task cannot start until done; null clears the link"
+					},
+					"blocks": {
+						"type": ["string", "null"],
+						"description": "Task id (tN) or exact text that cannot complete until this task is done; null clears the link"
 					}
 				}
 			}
 		},
 		"id": {
 			"type": "string",
-			"description": "Task id as shown by the tool. Required for start/complete/fail/release/retry/move/note/accept/reject."
+			"description": "Task id as shown by the tool. Required for start/complete/fail/release/retry/move/note/notes/accept/reject and read with id."
 		},
 		"note": {
 			"type": "string",
@@ -69,16 +73,17 @@ const schemaJSON = `{
 }`
 
 const description = "the task queue for the session's project. Guidelines: any job of three or more steps -> " +
-	"create before the first edit (tasks: [{text, dependsOn?}]), claim takes the next pending task whose " +
-	"dependency is done, complete lands your task done here (solo); a worker (rig -p: delegate, swarm) is " +
-	"read/note-only — the supervisor owns the board, and the worker's findings go in note and rem; accept or " +
-	"reject a task in review — the parent's flow is read then accept/reject, an unowned review task " +
-	"auto-claims, a foreign hold refuses, and reject takes the reason " +
-	"as note; note attaches a message to any task; read shows the actionable queue (all:true for history); " +
-	"move reorders by a 1-based pos; prune drops the done rows. Every reply names the queue it acted on " +
-	"([rig]); name project when the work is in a repo you did not start in, which binds the session. Reply: " +
-	"the affected row and the summary; a refusal names the rule. Ids (tN) are minted by the tool — copy, " +
-	"never invent."
+	"create before the first edit (tasks: [{text, requires?, blocks?}]); requires = I wait for it; blocks = " +
+	"it waits for me; claim takes the next pending task nothing waits for, complete lands your task done " +
+	"here (solo); a worker (rig -p: delegate, swarm) is read/note-only — the supervisor owns the board, and " +
+	"the worker's findings go in note and rem; accept or reject a task in review — the parent's flow is " +
+	"read then accept/reject, an unowned review task auto-claims, a foreign hold refuses, and reject takes " +
+	"the reason as note; note attaches a message to any task; notes with id lists a task's notes in order " +
+	"with their session and time, read shows the count and read with id points at notes; read shows the " +
+	"actionable queue (all:true for history); move reorders by a 1-based pos; prune drops the done rows. " +
+	"Every reply names the queue it acted on ([rig]); name project when the work is in a repo you did not " +
+	"start in, which binds the session. Reply: the affected row and the summary; a refusal names the rule. " +
+	"Ids (tN) are minted by the tool — copy, never invent."
 
 // Where a queue's identity came from, named so the tool can tell a write
 // it must refuse (a bucket minted from a directory that is not a repo)
@@ -239,6 +244,11 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 			return "", fmt.Errorf("action 'note' requires note text")
 		}
 		return todostore.Note(ctx, a.db, p, g.ID, g.Note, session)
+	case "notes":
+		if g.ID == "" {
+			return "", fmt.Errorf("action 'notes' requires id")
+		}
+		return todostore.Notes(ctx, a.db, p, g.ID, session)
 	case "accept":
 		if g.ID == "" {
 			return "", fmt.Errorf("action 'accept' requires id")
@@ -277,6 +287,9 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 		}
 		return todostore.Move(ctx, a.db, p, g.ID, *g.Pos, session)
 	case "read":
+		if g.ID != "" {
+			return todostore.ReadOne(ctx, a.db, p, g.ID, session)
+		}
 		if g.All != nil && *g.All {
 			return todostore.ReadAll(ctx, a.db, p, session)
 		}
@@ -405,14 +418,23 @@ func itemsOf(tasks []map[string]any) ([]todostore.CreateItem, error) {
 			return nil, fmt.Errorf("todo: tasks[].text required")
 		}
 		item.Text = text
-		if v, present := raw["dependsOn"]; present {
-			switch dep := v.(type) {
-			case nil:
-				item.DepNull = true
-			case string:
-				item.DependsOn = &dep
-			default:
-				return nil, fmt.Errorf("todo: tasks[].dependsOn must be a task id, exact text, or null")
+		for _, link := range []struct {
+			key string
+			set func(*todostore.CreateItem, bool)
+			ptr func(*todostore.CreateItem, *string)
+		}{
+			{"requires", func(it *todostore.CreateItem, v bool) { it.RequiresNull = v }, func(it *todostore.CreateItem, v *string) { it.Requires = v }},
+			{"blocks", func(it *todostore.CreateItem, v bool) { it.BlocksNull = v }, func(it *todostore.CreateItem, v *string) { it.Blocks = v }},
+		} {
+			if v, present := raw[link.key]; present {
+				switch dep := v.(type) {
+				case nil:
+					link.set(&item, true)
+				case string:
+					link.ptr(&item, &dep)
+				default:
+					return nil, fmt.Errorf("todo: tasks[].%s must be a task id, exact text, or null", link.key)
+				}
 			}
 		}
 		items = append(items, item)

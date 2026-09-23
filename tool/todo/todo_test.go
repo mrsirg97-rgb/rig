@@ -99,7 +99,7 @@ func TestCreateMalformedTasksFailLoudly(t *testing.T) {
 
 func TestStateVerbsRefuseIdAbsenceLoudly(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	for _, action := range []string{"start", "complete", "fail", "retry", "note", "accept", "reject"} {
+	for _, action := range []string{"start", "complete", "fail", "retry", "note", "notes", "accept", "reject"} {
 		if _, err := exec(t, tool, context.Background(), map[string]any{"action": action}); err == nil {
 			t.Fatalf("%s without id succeeded", action)
 		} else if want := "action '" + action + "' requires id"; err.Error() != want {
@@ -164,7 +164,7 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 	ctx := core.WithSession(context.Background(), sess)
 	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
 		map[string]any{"text": "gate"},
-		map[string]any{"text": "work", "dependsOn": "gate"},
+		map[string]any{"text": "work", "requires": "gate"},
 	}})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -172,14 +172,14 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 	if !strings.Contains(reply, "0/2 done") || !strings.Contains(reply, "next: ") {
 		t.Errorf("counts/next missing:\n%s", reply)
 	}
-	if !strings.Contains(reply, "waits on") {
-		t.Errorf("waits-on suffix missing:\n%s", reply)
+	if !strings.Contains(reply, "requires t1") {
+		t.Errorf("requires suffix missing:\n%s", reply)
 	}
 	read, err := exec(t, tool, core.WithSession(context.Background(), core.NewSession()), map[string]any{"action": "read"})
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(read, "claimed by ") && !strings.Contains(read, "waits on") {
+	if !strings.Contains(read, "requires t1") {
 		t.Errorf("presence labels missing:\n%s", read)
 	}
 }
@@ -226,8 +226,15 @@ func TestNewVerbsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("note: %v", err)
 	}
-	if !strings.Contains(noted, "note added to '"+id+"'") || !strings.Contains(noted, "on it (by "+sess.ID+")") {
+	if !strings.Contains(noted, "note added to '"+id+"'") || !strings.Contains(noted, "\u00b7 1 note") {
 		t.Fatalf("note reply:\n%s", noted)
+	}
+	notes, err := exec(t, tool, ctx, map[string]any{"action": "notes", "id": id})
+	if err != nil {
+		t.Fatalf("notes: %v", err)
+	}
+	if !strings.Contains(notes, "on it (by "+sess.ID+", ") {
+		t.Fatalf("the note must carry its session and time:\n%s", notes)
 	}
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
 		t.Fatalf("complete: %v", err)
@@ -308,8 +315,15 @@ func TestWorkerModeIsReadNoteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(board, id+" [ ] board entry") || !strings.Contains(board, "findings (by "+sess.ID+")") {
-		t.Fatalf("the refused verbs must not move the board, and the note must show:\n%s", board)
+	if !strings.Contains(board, id+" [ ] board entry") || !strings.Contains(board, "\u00b7 1 note") {
+		t.Fatalf("the refused verbs must not move the board, and the count must show:\n%s", board)
+	}
+	notes, err := exec(t, worker, ctx, map[string]any{"action": "notes", "id": id})
+	if err != nil {
+		t.Fatalf("worker notes: %v", err)
+	}
+	if !strings.Contains(notes, "findings (by "+sess.ID+", ") {
+		t.Fatalf("the worker's note must carry its session:\n%s", notes)
 	}
 }
 

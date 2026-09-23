@@ -9,16 +9,19 @@ import (
 var (
 	todoHeadRe   = regexp.MustCompile(`^(\d+)/(\d+) done( · next: (\S+))?( · (\d+) failed)?$`)
 	todoTaskRe   = regexp.MustCompile(`^  (t\d+) \[([x!~ ])\] (.+)$`)
+	todoNotesRe  = regexp.MustCompile(`^    · (\d+) notes?( \(.*\))?$`)
 	schedRunsRe  = regexp.MustCompile(`^(j\d+) · (\d+) runs? \(oldest first\):$`)
 	schedJobHead = regexp.MustCompile(`^(j\d+)(?: (.*))?$`)
 )
 
 type todoTask struct {
-	ID     string
-	Status string
-	Text   string
-	Waits  string
-	Claim  string
+	ID        string
+	Status    string
+	Text      string
+	Links     string
+	Waits     string
+	Claim     string
+	NoteCount string
 }
 
 type todoParsed struct {
@@ -73,6 +76,13 @@ func parseTodo(reply string) (todoParsed, bool) {
 			p.Footer = line
 			continue
 		}
+		if todoNotesRe.MatchString(line) {
+			if len(p.Tasks) == 0 {
+				return p, false
+			}
+			p.Tasks[len(p.Tasks)-1].NoteCount = line
+			continue
+		}
 		tm := todoTaskRe.FindStringSubmatch(line)
 		if tm == nil {
 			return p, false
@@ -94,9 +104,20 @@ func parseTodo(reply string) (todoParsed, bool) {
 			task.Claim = rest[j+len(" · claimed by "):]
 			rest = rest[:j]
 		}
-		if j := strings.LastIndex(rest, " · waits on "); j >= 0 {
-			task.Waits = rest[j+len(" · waits on "):]
+		if j := strings.LastIndex(rest, " · waits for "); j >= 0 {
+			task.Waits = rest[j+len(" · waits for "):]
 			rest = rest[:j]
+		}
+		for _, sep := range []string{" · blocks ", " · requires "} {
+			if j := strings.LastIndex(rest, sep); j >= 0 {
+				tail := rest[j+len(" · "):]
+				if task.Links != "" {
+					task.Links = tail + " · " + task.Links
+				} else {
+					task.Links = tail
+				}
+				rest = rest[:j]
+			}
 		}
 		task.Text = rest
 		p.Tasks = append(p.Tasks, task)
@@ -159,13 +180,20 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 		b.WriteString(t.Paint(SlotDim, task.ID))
 		b.WriteString(" ")
 		b.WriteString(t.Paint(SlotText, task.Text))
+		if task.Links != "" {
+			b.WriteString(t.Paint(SlotDim, " · "+task.Links))
+		}
 		if task.Waits != "" {
-			b.WriteString(t.Paint(SlotDim, " · waits on "+task.Waits))
+			b.WriteString(t.Paint(SlotDim, " · waits for "+task.Waits))
 		}
 		if task.Claim != "" {
 			b.WriteString(t.Paint(SlotDim, " · claimed by "+task.Claim))
 		}
 		b.WriteString("\n")
+		if task.NoteCount != "" {
+			b.WriteString(t.Paint(SlotDim, task.NoteCount))
+			b.WriteString("\n")
+		}
 	}
 	if p.Footer != "" {
 		b.WriteString(t.Paint(SlotDim, "  "+p.Footer))

@@ -332,7 +332,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 		"  t1 [x] wire the models table\n" +
 		"  t2 [x] the switch seam\n" +
 		"  t3 [~] steer verb\n" +
-		"  t4 [ ] policy test · waits on t3\n" +
+		"  t4 [ ] policy test · requires t3\n" +
 		"  t5 [ ] rem check\n"
 
 	screen := func(s *scriptedSession) []string {

@@ -610,11 +610,11 @@ The blocks are pane's:
   ▰▰▰▱▱ 2/5 · next t4
   ● t1 wire the models table
   ◐ t3 the switch seam
-  ○ t4 steer verb · waits on t3
+  ○ t4 steer verb · requires t3
 ```
 
 - the progress head, then one row per task: status glyph, id, text,
-  `· waits on tN` dim when blocked, `· claimed by <sid8>` dim only
+  `· requires tN`/`· blocks tN`/`· waits for k` dim, `· claimed by <sid8>` dim only
   when the claim is foreign (another session);
 - scheduler `list`: `●`/`○`/`✕` per job state with cron, last, next,
   and drift named. The sections are directories (SPEC_STATE's one-store

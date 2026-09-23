@@ -12,7 +12,8 @@ const todoReply = "→ t3 started\n" +
 	"  t1 [x] wire the models table\n" +
 	"  t2 [x] the switch seam\n" +
 	"  t3 [~] steer verb\n" +
-	"  t4 [ ] policy test · waits on t3\n" +
+	"  t4 [ ] policy test · requires t3\n" +
+	"    · 2 notes\n" +
 	"  t5 [ ] rem check\n"
 
 const todoReplyWithClaim = "→ t3 started\n" +
@@ -86,8 +87,11 @@ func TestTodoBlockExactBytes(t *testing.T) {
 	if !strings.Contains(got, th.Paint("accent", "◐")+" "+th.Paint("dim", "t3")+" "+th.Paint("text", "steer verb")) {
 		t.Fatalf("the in-progress row is missing or wrong:\n%s", got)
 	}
-	if !strings.Contains(got, th.Paint("dim", "○")+" "+th.Paint("dim", "t4")+" "+th.Paint("text", "policy test")+th.Paint("dim", " · waits on t3")) {
-		t.Fatalf("the blocked row keeps its waits-on, dim:\n%s", got)
+	if !strings.Contains(got, th.Paint("dim", "○")+" "+th.Paint("dim", "t4")+" "+th.Paint("text", "policy test")+th.Paint("dim", " · requires t3")) {
+		t.Fatalf("the linked row keeps its requires, dim:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("dim", "    · 2 notes")) {
+		t.Fatalf("the note count stays visible, dim:\n%s", got)
 	}
 }
 
