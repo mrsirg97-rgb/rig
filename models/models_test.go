@@ -293,3 +293,69 @@ func TestASynthesizedRowIsNotAVisionRow(t *testing.T) {
 		t.Fatal("a row synthesized from the env is not a vision model: the operator's file decides")
 	}
 }
+
+func TestRemoteRowDefaultsConcurrencyAndRetries(t *testing.T) {
+	tbl, err := models.New(models.Model{
+		ID: "brain", Window: 262144, MaxTokens: 16384, Reserve: 16384, KeepRecent: 32768,
+		Role: models.RoleWorker, Remote: true, BaseURL: "https://openrouter.ai/api/v1",
+	})
+	if err != nil {
+		t.Fatalf("remote row: %v", err)
+	}
+	m, ok := tbl.Get("brain")
+	if !ok {
+		t.Fatal("row lost")
+	}
+	if m.Concurrency != 1 || m.Retries != 3 {
+		t.Fatalf("defaults = concurrency %d retries %d, want 1 and 3", m.Concurrency, m.Retries)
+	}
+}
+
+func TestRemoteRowInvariantsRefuse(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(*models.Model)
+		part string
+	}{
+		{"missing baseUrl", func(m *models.Model) { m.Remote = true; m.BaseURL = "" }, "baseUrl"},
+		{"zero concurrency", func(m *models.Model) { m.Remote = true; m.BaseURL = "/x"; m.Concurrency = 0 }, "concurrency"},
+		{"negative concurrency", func(m *models.Model) { m.Concurrency = -1 }, "Concurrency"},
+		{"negative retries", func(m *models.Model) { m.Retries = -1 }, "Retries"},
+		{"bad reasoning", func(m *models.Model) { m.Reasoning = "chain" }, "reasoning"},
+		{"pin without openrouter", func(m *models.Model) {
+			m.Provider = "deepseek"
+			m.Remote = true
+			m.BaseURL = "/x"
+			m.Concurrency = 1
+			m.ProviderPin = []string{"X"}
+		}, "openrouter-only"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := legal
+			c.mut(&m)
+			err := m.Check()
+			if err == nil {
+				t.Fatalf("Check() = nil, want a refusal")
+			}
+			if !strings.Contains(err.Error(), c.part) {
+				t.Fatalf("the refusal must name %q: %v", c.part, err)
+			}
+		})
+	}
+}
+
+func TestResolveEnvOverlaysHostedKeys(t *testing.T) {
+	env := map[string]string{
+		"RIG_MODEL_REMOTE": "true", "RIG_MODEL_BASE_URL": "https://api.deepseek.com",
+		"RIG_MODEL_API_KEY": "sk-env", "RIG_MODEL_CONCURRENCY": "2", "RIG_MODEL_REASONING": "reasoning",
+	}
+	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
+	m, err := models.Resolve(table(), "local", lookup)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if !m.Remote || m.BaseURL != "https://api.deepseek.com" || m.APIKey != "sk-env" || m.Concurrency != 2 || m.Reasoning != "reasoning" {
+		t.Fatalf("hosted overlay = %+v", m)
+	}
+}

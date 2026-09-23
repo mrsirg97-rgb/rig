@@ -56,7 +56,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.4.4"
+const Version = "1.5.0"
 
 type root struct {
 	pluginMax int
@@ -239,10 +239,27 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 }
 
 func (r *root) buildProvider() core.Provider {
-	if !r.row.Vision {
-		return openai.New(r.baseURL, r.activeID)
+	if !r.row.Remote && r.row.APIKey == "" {
+		if !r.row.Vision {
+			return openai.New(r.baseURL, r.activeID)
+		}
+		return openai.NewWithVision(r.baseURL, r.activeID, r.blobsDir())
 	}
-	return openai.NewWithVision(r.baseURL, r.activeID, r.blobsDir())
+	baseURL := r.baseURL
+	if r.row.Remote {
+		baseURL = r.row.BaseURL
+	}
+	return openai.NewWithConfig(openai.Config{
+		BaseURL:      baseURL,
+		Model:        r.activeID,
+		APIKey:       r.row.APIKey,
+		Remote:       r.row.Remote,
+		Reasoning:    r.row.Reasoning,
+		ProviderPin:  r.row.ProviderPin,
+		CacheControl: r.row.CacheControl,
+		Retries:      r.row.Retries,
+		BlobsDir:     r.blobsDir(),
+	})
 }
 
 // applyVision is the whole of the vision gate: the tool exists when the
@@ -681,9 +698,9 @@ func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 		}
 		b.Session = r.session.ID
 		if err := db.QueryRowContext(ctx,
-			`SELECT COALESCE(SUM(u.prompt), 0), COALESCE(SUM(u.completion), 0), COALESCE(SUM(u.cache_read), 0)
+			`SELECT COALESCE(SUM(u.prompt), 0), COALESCE(SUM(u.completion), 0), COALESCE(SUM(u.cache_read), 0), COALESCE(SUM(u.cost), 0)
 			 FROM usage u JOIN messages m ON m.seq = u.message_seq
-			 WHERE m.session_id = ?`, r.session.ID).Scan(&b.Up, &b.Down, &b.CacheRead); err != nil {
+			 WHERE m.session_id = ?`, r.session.ID).Scan(&b.Up, &b.Down, &b.CacheRead, &b.Cost); err != nil {
 			return b
 		}
 		return b
@@ -1097,6 +1114,7 @@ func main() {
 			Allow:        allowList,
 			Fetch:        sched.RealFetch(0),
 			Spawn:        sched.RealSpawn,
+			Models:       func() models.Table { return r.runtime },
 			Notify:       r.rec.Notify,
 		})
 		r.swarm = swarm.New(swarm.Opts{
@@ -1354,6 +1372,8 @@ func runJob(args []string) int {
 		Sandbox:      cfg.Settings.Sandbox,
 		SandboxBinds: cfg.Settings.SandboxBinds,
 		RigHome:      cfgDir,
+		StateDir:     filepath.Join(cfgDir, "sessions"),
+		Models:       func() models.Table { return cfg.Models },
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,19 +20,20 @@ const (
 )
 
 type turn struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	text      strings.Builder
-	reasoning strings.Builder
-	calls     []core.ToolCall
-	done      bool
-	faulted   bool
-	usage     core.Usage
-	reason    core.TurnReason
-	batch     *batch
-	results   []*outcome
-	cursor    int
-	started   int
+	ctx              context.Context
+	cancel           context.CancelFunc
+	text             strings.Builder
+	reasoning        strings.Builder
+	reasoningDetails []json.RawMessage
+	calls            []core.ToolCall
+	done             bool
+	faulted          bool
+	usage            core.Usage
+	reason           core.TurnReason
+	batch            *batch
+	results          []*outcome
+	cursor           int
+	started          int
 }
 
 type run struct {
@@ -162,6 +164,7 @@ func (r *run) model(t *turn) {
 
 	t.text.Reset()
 	t.reasoning.Reset()
+	t.reasoningDetails = nil
 	t.calls = nil
 	t.done, t.faulted = false, false
 	t.usage = core.Usage{}
@@ -185,6 +188,12 @@ func (r *run) streamEvent(t *turn, ev core.Event) {
 	case core.ReasoningDelta:
 		r.k.Frontend.Notify(ev)
 		t.reasoning.WriteString(e.Text)
+		if len(e.Details) > 0 {
+			var items []json.RawMessage
+			if json.Unmarshal(e.Details, &items) == nil {
+				t.reasoningDetails = append(t.reasoningDetails, items...)
+			}
+		}
 	case core.ToolCallEvent:
 		r.k.Frontend.Notify(ev)
 		t.calls = append(t.calls, e.Call)
@@ -231,16 +240,17 @@ func (r *run) streamEnd(t *turn) {
 		r.stop(err)
 	case len(t.calls) == 0:
 		if t.text.Len() > 0 || t.reasoning.Len() > 0 {
-			session.Append(core.Message{Role: core.RoleAssistant, Content: t.text.String(), Reasoning: t.reasoning.String(), ContextTokens: t.usage.Prompt + t.usage.Completion})
+			session.Append(core.Message{Role: core.RoleAssistant, Content: t.text.String(), Reasoning: t.reasoning.String(), ReasoningDetails: marshalDetails(t.reasoningDetails), ContextTokens: t.usage.Prompt + t.usage.Completion})
 		}
 		r.end(t)
 	default:
 		session.Append(core.Message{
-			Role:          core.RoleAssistant,
-			Content:       t.text.String(),
-			Reasoning:     t.reasoning.String(),
-			ToolCalls:     t.calls,
-			ContextTokens: t.usage.Prompt + t.usage.Completion,
+			Role:             core.RoleAssistant,
+			Content:          t.text.String(),
+			Reasoning:        t.reasoning.String(),
+			ReasoningDetails: marshalDetails(t.reasoningDetails),
+			ToolCalls:        t.calls,
+			ContextTokens:    t.usage.Prompt + t.usage.Completion,
 		})
 		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Concurrent, r.k.Parallel, func(x int, out outcome) {
 			r.post(prioTool, func() { r.toolDone(t, x, out) })
@@ -311,4 +321,15 @@ func directExec(tools map[string]core.Tool) core.ToolExec {
 		}
 		return t.Exec(ctx, call.Args)
 	}
+}
+
+func marshalDetails(items []json.RawMessage) json.RawMessage {
+	if len(items) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(items)
+	if err != nil {
+		return nil
+	}
+	return b
 }

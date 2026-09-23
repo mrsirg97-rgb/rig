@@ -12,11 +12,12 @@ type UsageRow struct {
 	Completion int64
 	CacheRead  int64
 	CacheWrite int64
+	Cost       float64
 }
 
 func SessionUsage(ctx context.Context, db store.DB, sessionID string) ([]UsageRow, error) {
 	rows, err := db.DB.QueryContext(ctx, `
-		SELECT u."message_seq", u."prompt", u."completion", u."cache_read", u."cache_write"
+		SELECT u."message_seq", u."prompt", u."completion", u."cache_read", u."cache_write", u."cost"
 		FROM "usage" u
 		JOIN "messages" m ON m."seq" = u."message_seq"
 		WHERE m."session_id" = ?
@@ -28,7 +29,7 @@ func SessionUsage(ctx context.Context, db store.DB, sessionID string) ([]UsageRo
 	var out []UsageRow
 	for rows.Next() {
 		var r UsageRow
-		if err := rows.Scan(&r.Seq, &r.Prompt, &r.Completion, &r.CacheRead, &r.CacheWrite); err != nil {
+		if err := rows.Scan(&r.Seq, &r.Prompt, &r.Completion, &r.CacheRead, &r.CacheWrite, &r.Cost); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -37,4 +38,17 @@ func SessionUsage(ctx context.Context, db store.DB, sessionID string) ([]UsageRo
 		return nil, err
 	}
 	return out, nil
+}
+
+func SessionCost(ctx context.Context, db store.DB, sessionID string) (float64, error) {
+	var cost float64
+	err := db.DB.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(u."cost"), 0)
+		FROM "usage" u
+		JOIN "messages" m ON m."seq" = u."message_seq"
+		WHERE m."session_id" = ?`, sessionID).Scan(&cost)
+	if err != nil {
+		return 0, err
+	}
+	return cost, nil
 }

@@ -70,8 +70,10 @@ is a loud line naming the known set, never silently a prompt.
   memories: the path resolves to a repo identity (worktrees share).
 - `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's
   workers (`w1 worker qwen3.8-workers · task t3 · heartbeat 2s ago ·
-  done 1 failed 0`); `swarm <n> [role=worker|reviewer] [model=<id>]`
-  starts n drain workers on this session's queue — each claims a task,
+  done 1 failed 0`); `swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
+  starts n drain workers on this session's queue (a budget stops the
+  controller's claims at the cap with a notice, the spend summed from
+  the recorded run costs) — each claims a task,
   spawns a one-shot `rig -p` through the delegate path (jail, socket
   proxy, recorded run), and finishes it itself: workers submit for
   review, reviewers parse the worker's last `verdict: accept|reject
@@ -90,7 +92,9 @@ is a loud line naming the known set, never silently a prompt.
   carries the live counts (`workers 2 · todo 3 · done 5 · failed 1 ·
   w2 t388 12s` / `reviewer 1 · review 1 · done 1 · failed 0 · w3 t386
   4m`) — two rows above the status line while a swarm runs, one row for
-  an interactive delegate, none when nothing runs (1.4.4).
+  an interactive delegate, none when nothing runs (1.4.4). The usage
+  line shows the session's dollars when the endpoint reported a cost
+  (`up 214k down 18k · cache r 187k 87% · $1.23`, 1.5.0).
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it. The summary lands in the

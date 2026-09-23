@@ -63,6 +63,7 @@ func Statements() []string {
   "cache_read" INTEGER NOT NULL,
   "cache_write" INTEGER NOT NULL,
   "completion" INTEGER NOT NULL,
+  "cost" REAL NOT NULL,
   "prompt" INTEGER NOT NULL,
   PRIMARY KEY ("message_seq")
 )`,

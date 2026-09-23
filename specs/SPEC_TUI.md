@@ -365,7 +365,8 @@ The commit points are the events, exactly:
 - `Done`: the turn's text is complete, and the status line's used
   takes its `Usage` (decision 3);
 - `TurnEnd`: the usage line commits (`up 3.2k down 136 · cache r 918
-  92%`, pane's shaping) and the live region resets;
+  92%`, pane's shaping) — plus `· $1.23` when the endpoint reported a
+  cost (SPEC_HOSTED 3, 1.5.0) — and the live region resets;
 - `Compacted`: the compact line commits, and the status line's used
   takes the compact's `Kept` (decision 3);
 - unknown events: ignored (the compat rule: the CLI's discipline).

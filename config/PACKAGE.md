@@ -67,7 +67,11 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - Model rows: a user row overlays per-field on an embedded id (each set
   field replaces, each unset keeps); a new id requires its numbers and
   takes the defaults (role interactive, effort ""); unlisted embedded
-  rows are kept. A duplicate id in the same file refuses at the second
+  rows are kept. The hosted keys (SPEC_HOSTED 1) merge the same way:
+  `remote`, `provider` (a name implies remote), `baseUrl`, `apiKey`
+  (never rendered by `/models`), `concurrency`, `reasoning`,
+  `providerPin` (a string or an array), `cacheControl`, `retries`. A
+  duplicate id in the same file refuses at the second
   occurrence.
 - The overlay's zero-means-unset has one named cost: a zero numeric value
   is unreachable by overlay on a table id.

@@ -1014,7 +1014,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 
 	statusRows := 1
 	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "xhigh", "", "", 0, 262144, false,
-		214000, 18200, 187000)), "\n") {
+		214000, 18200, 187000, 0)), "\n") {
 		statusRows += (displayWidth(r) + 9) / 10
 	}
 	above := func(n int) []string {

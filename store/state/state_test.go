@@ -60,7 +60,7 @@ func TestStateRecordsAndReadsBack(t *testing.T) {
 	if err := state.RecordToolResult(ctx, db, "s1", seq2, "call_1", "out", nil); err != nil {
 		t.Fatalf("record tool result: %v", err)
 	}
-	if err := state.RecordUsage(ctx, db, seq2, 10, 3, 0, 0); err != nil {
+	if err := state.RecordUsage(ctx, db, seq2, 10, 3, 0, 0, 0); err != nil {
 		t.Fatalf("record usage: %v", err)
 	}
 	if err := state.RecordFile(ctx, db, "s1", "/tmp/wt/a", "hash-a", time.Now().UnixNano()); err != nil {

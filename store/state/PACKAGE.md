@@ -27,17 +27,21 @@ loop already emits; the read side rebuilds a session from the log.
   file per cwd under `<home>/sessions`, keyed by the first six sha1
   bytes of the cwd.
 - `usage.go`: `UsageRow` and `SessionUsage(ctx, db, sessionID)`, the
-  typed usage read (prompt/completion/cache tokens per message,
-  transcript order) the dashboard and the `sessions` tool build from.
+  typed usage read (prompt/completion/cache/cost per message, transcript
+  order) the dashboard and the `sessions` tool build from; `SessionCost`
+  sums one session's cost column (SPEC_HOSTED 5: the swarm and the
+  scheduler runner read a worker's spend from here).
 - `metadata/state.go`: hand-written metadata.
 - The served model rides the transcript: assistant message rows carry
   `model` (nullable), stamped by the recorder from `core.Done`'s echo;
   user, compaction, and re-landed rows stay null. v2 files gain the
   column on open (schema v3); pre-migration rows read null.
-- The session row carries `label` (nullable) and `tokens` (the sum of
-  prompt + completion usage): the label is the first user prompt's
-  first line (trimmed, 60 runes), written once and never rewritten;
-  `ListSessions` returns both beside the turns and fault counts.
+- The session row carries `label` (nullable), `tokens` (the sum of
+  prompt + completion usage), and `cost` (the sum of the cost column):
+  the label is the first user prompt's first line (trimmed, 60 runes),
+  written once and never rewritten; `ListSessions` returns them beside
+  the turns and fault counts. The usage table's `cost` column (schema
+  v4) defaults 0 for rows recorded before the migration.
 
 ## How it is consumed
 

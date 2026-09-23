@@ -252,7 +252,7 @@ func TestListSessionsCarriesLabelAndTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("record user: %v", err)
 	}
-	if err := state.RecordUsage(ctx, db, seqU, 100, 10, 40, 5); err != nil {
+	if err := state.RecordUsage(ctx, db, seqU, 100, 10, 40, 5, 0); err != nil {
 		t.Fatalf("record usage: %v", err)
 	}
 	if err := state.SetSessionLabel(ctx, db, "a", "hello"); err != nil {

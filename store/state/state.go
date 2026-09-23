@@ -15,7 +15,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
 )
 
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 func Migration() func(*sql.Tx, int, int) (string, error) {
 	return migrate
@@ -36,7 +36,29 @@ func migrate(tx *sql.Tx, from, to int) (string, error) {
 			return "", err
 		}
 	}
+	if from < 4 && to >= 4 {
+		if err := addUsageCost(tx, &notes); err != nil {
+			return "", err
+		}
+	}
 	return strings.Join(notes, "; "), nil
+}
+
+func addUsageCost(tx *sql.Tx, notes *[]string) error {
+	var found int
+	err := tx.QueryRow(`SELECT 1 FROM pragma_table_info('usage') WHERE name = 'cost'`).Scan(&found)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, sql.ErrNoRows):
+	default:
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	if _, err := tx.Exec(`ALTER TABLE "usage" ADD COLUMN "cost" REAL NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("state: migration: %w", err)
+	}
+	*notes = append(*notes, "state migration: usage carries the request cost")
+	return nil
 }
 
 func addToolCallsSessionID(tx *sql.Tx, notes *[]string) error {
@@ -223,17 +245,17 @@ func RecordToolResult(ctx context.Context, db store.DB, sessionID string, messag
 	})
 }
 
-func RecordUsage(ctx context.Context, db store.DB, messageSeq, prompt, completion, cacheRead, cacheWrite int64) error {
+func RecordUsage(ctx context.Context, db store.DB, messageSeq, prompt, completion, cacheRead, cacheWrite int64, cost float64) error {
 	return withTx(db, ctx, func(c context.Context) error {
 		_, err := domain.NewUsageDomain().InsertUsage(c, domain.Usage{
 			MessageSeq: messageSeq, Prompt: prompt, Completion: completion,
-			CacheRead: cacheRead, CacheWrite: cacheWrite,
+			CacheRead: cacheRead, CacheWrite: cacheWrite, Cost: cost,
 		})
 		return err
 	})
 }
 
-func AddUsage(ctx context.Context, db store.DB, messageSeq, prompt, completion, cacheRead, cacheWrite int64) error {
+func AddUsage(ctx context.Context, db store.DB, messageSeq, prompt, completion, cacheRead, cacheWrite int64, cost float64) error {
 	return withTx(db, ctx, func(c context.Context) error {
 		existing, err := safely(func() (*domain.Usage, error) {
 			return domain.NewUsageDomain().GetUsage(c, messageSeq).Row()
@@ -244,7 +266,7 @@ func AddUsage(ctx context.Context, db store.DB, messageSeq, prompt, completion, 
 		if existing == nil {
 			_, err = domain.NewUsageDomain().InsertUsage(c, domain.Usage{
 				MessageSeq: messageSeq, Prompt: prompt, Completion: completion,
-				CacheRead: cacheRead, CacheWrite: cacheWrite,
+				CacheRead: cacheRead, CacheWrite: cacheWrite, Cost: cost,
 			})
 			return err
 		}
@@ -252,6 +274,7 @@ func AddUsage(ctx context.Context, db store.DB, messageSeq, prompt, completion, 
 		existing.Completion += completion
 		existing.CacheRead += cacheRead
 		existing.CacheWrite += cacheWrite
+		existing.Cost += cost
 		_, err = domain.NewUsageDomain().UpdateUsage(c, *existing)
 		return err
 	})

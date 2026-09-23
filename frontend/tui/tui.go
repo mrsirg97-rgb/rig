@@ -54,6 +54,7 @@ type tui struct {
 	rawOld          *term.State
 
 	prompt, completion, cacheRead int
+	cost                          float64
 
 	pend    []seg
 	pw      pendWrap
@@ -91,6 +92,7 @@ type tui struct {
 	statusHasUsed bool
 
 	statusUp, statusDown, statusCache int
+	statusCost                        float64
 
 	swarm core.SwarmStatus
 
@@ -879,12 +881,13 @@ func (t *tui) Notify(ev core.Event) {
 		t.prompt += e.Usage.Prompt
 		t.completion += e.Usage.Completion
 		t.cacheRead += e.Usage.CacheRead
+		t.cost += e.Usage.Cost
 		if e.Usage.Prompt > 0 || e.Usage.Completion > 0 {
 			t.statusUsed = e.Usage.Prompt + e.Usage.Completion
 			t.statusHasUsed = true
 		}
 
-		t.statusUp, t.statusDown, t.statusCache = t.prompt, t.completion, t.cacheRead
+		t.statusUp, t.statusDown, t.statusCache, t.statusCost = t.prompt, t.completion, t.cacheRead, t.cost
 		t.mu.Unlock()
 		t.flow("", "\n")
 	case core.EmptyTurn:
@@ -893,6 +896,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.prompt += e.Usage.Prompt
 		t.completion += e.Usage.Completion
 		t.cacheRead += e.Usage.CacheRead
+		t.cost += e.Usage.Cost
 		t.mu.Unlock()
 		t.flow("", "\n")
 		t.commit(RenderEmptyTurn(t.theme, e))
@@ -951,8 +955,8 @@ func (t *tui) Notify(ev core.Event) {
 		}
 		t.mu.Lock()
 
-		t.statusUp, t.statusDown, t.statusCache = t.prompt, t.completion, t.cacheRead
-		t.prompt, t.completion, t.cacheRead = 0, 0, 0
+		t.statusUp, t.statusDown, t.statusCache, t.statusCost = t.prompt, t.completion, t.cacheRead, t.cost
+		t.prompt, t.completion, t.cacheRead, t.cost = 0, 0, 0, 0
 		t.turnLive = false
 		t.phase = "thinking"
 		t.frame = 0
@@ -1126,7 +1130,7 @@ func (t *tui) askLineLocked() string {
 
 func (t *tui) statusLineLocked() string {
 	st := RenderStatusLine(t.theme, t.statusModel, t.statusEffort, t.statusRole, t.statusApprove, t.statusUsed, t.statusWindow, t.statusHasUsed,
-		t.statusUp, t.statusDown, t.statusCache)
+		t.statusUp, t.statusDown, t.statusCache, t.statusCost)
 	if st == "" {
 		return ""
 	}
@@ -1148,7 +1152,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusWindow = in.Window
 		t.statusUsed = 0
 		t.statusHasUsed = false
-		t.statusUp, t.statusDown, t.statusCache = in.Up, in.Down, in.CacheRead
+		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
 		b.WriteString(RenderStatus(t.theme, in))
 	}
 	return b.String()
@@ -1207,7 +1211,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 			t.statusUsed = 0
 			t.statusHasUsed = false
 		}
-		t.statusUp, t.statusDown, t.statusCache = in.Up, in.Down, in.CacheRead
+		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
 }

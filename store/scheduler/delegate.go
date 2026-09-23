@@ -36,6 +36,8 @@ type DelegateInput struct {
 	Now           func() time.Time
 	Context       context.Context
 	WaitBusy      bool
+	Remote        bool
+	Concurrency   int
 	Observe       func([]byte)
 	SpawnCtx      context.Context
 }
@@ -52,6 +54,7 @@ type DelegateResult struct {
 	Started   string
 	SessionID string
 	Note      string
+	Cost      float64
 }
 
 func delegateInput(in DelegateInput) DelegateInput {
@@ -156,7 +159,13 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
 
-	if err := delegateBusy(in.Fetch, in.SwapURL, in.Model, waitCtx, in.WaitBusy); err != nil {
+	if in.Remote {
+		token, err := acquireRowTokens(waitCtx, in.Home, in.Model, in.Concurrency)
+		if err != nil {
+			return DelegateResult{}, err
+		}
+		defer releaseLock(token)
+	} else if err := delegateBusy(in.Fetch, in.SwapURL, in.Model, waitCtx, in.WaitBusy); err != nil {
 		return DelegateResult{}, err
 	}
 
@@ -199,14 +208,13 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		}
 		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
 	} else {
-		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, prompt, allow, DelegateEnv+"=1")
+		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, prompt, allow, in.WorkerSession, DelegateEnv+"=1")
 		if err != nil {
 			return DelegateResult{}, fmt.Errorf("delegate: jail: %w", err)
 		}
 		if refuse != "" {
 			return DelegateResult{}, fmt.Errorf("delegate: %s", refuse)
 		}
-		argv = append(argv, "-session-id", in.WorkerSession)
 		defer proxy.Close()
 	}
 
@@ -270,9 +278,14 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	}
 	exit := int64(res.Exit)
 	duration := durationMs
+	cost := workerSessionCost(in.RigHome, in.Cwd, in.WorkerSession)
+	var costPtr *float64
+	if cost > 0 {
+		costPtr = &cost
+	}
 	if _, err := RecordRun(context.Background(), in.DB, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
-		Log: logRel, Started: startedStr, Ended: ended.Format(time.RFC3339),
+		Log: logRel, Started: startedStr, Ended: ended.Format(time.RFC3339), Cost: costPtr,
 	}); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: record: %w", err)
 	}
@@ -281,6 +294,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		Exit: res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
 		TimedOut: res.TimedOut, Stalled: stalled, Duration: ended.Sub(started),
 		ID: id, LogRel: logRel, Started: startedStr, SessionID: in.WorkerSession, Note: note,
+		Cost: cost,
 	}, nil
 }
 

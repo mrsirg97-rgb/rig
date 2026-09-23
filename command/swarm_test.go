@@ -61,6 +61,23 @@ func runSwarm(t *testing.T, env *command.Env, args string) (string, error) {
 	return "", nil
 }
 
+func TestSwarmStartParsesBudget(t *testing.T) {
+	f := &fakeSwarm{}
+	env := swarmEnv(f)
+	if _, err := runSwarm(t, env, "2 budget=5.50"); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(f.started) != 1 || f.started[0].Budget != 5.50 {
+		t.Fatalf("start = %+v, want budget 5.50", f.started)
+	}
+	if _, err := runSwarm(t, env, "1 budget=-1"); err == nil {
+		t.Fatal("a negative budget must refuse")
+	}
+	if _, err := runSwarm(t, env, "1 budget=nope"); err == nil {
+		t.Fatal("a non-numeric budget must refuse")
+	}
+}
+
 func TestSwarmStartParsesCountRoleAndModel(t *testing.T) {
 	f := &fakeSwarm{}
 	env := swarmEnv(f)

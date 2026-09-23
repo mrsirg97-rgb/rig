@@ -12,11 +12,12 @@ import (
 )
 
 type Usage struct {
-	MessageSeq int64 `db:"message_seq"`
-	CacheRead  int64 `db:"cache_read"`
-	CacheWrite int64 `db:"cache_write"`
-	Completion int64 `db:"completion"`
-	Prompt     int64 `db:"prompt"`
+	MessageSeq int64   `db:"message_seq"`
+	CacheRead  int64   `db:"cache_read"`
+	CacheWrite int64   `db:"cache_write"`
+	Completion int64   `db:"completion"`
+	Cost       float64 `db:"cost"`
+	Prompt     int64   `db:"prompt"`
 }
 
 type UsageDomain interface {
@@ -40,6 +41,7 @@ func ScanUsage(row lazy.ScanRow) (Usage, error) {
 		&out.CacheRead,
 		&out.CacheWrite,
 		&out.Completion,
+		&out.Cost,
 		&out.Prompt,
 	)
 	return out, err
@@ -65,7 +67,7 @@ func (d *usageDomain) GetUsage(ctx context.Context, messageSeq int64) *lazy.Lazy
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "message_seq", "cache_read", "cache_write", "completion", "prompt" FROM "usage" WHERE "message_seq" = $1`,
+		`SELECT "message_seq", "cache_read", "cache_write", "completion", "cost", "prompt" FROM "usage" WHERE "message_seq" = $1`,
 		messageSeq,
 	)
 	out, err := ScanUsage(row)
@@ -102,7 +104,7 @@ func (d *usageDomain) GetUsageBatch(ctx context.Context, keys []int64) *lazy.Laz
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "message_seq", "cache_read", "cache_write", "completion", "prompt" FROM "usage" WHERE "message_seq" IN (`+ph+`)`, args...)
+		`SELECT "message_seq", "cache_read", "cache_write", "completion", "cost", "prompt" FROM "usage" WHERE "message_seq" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -130,11 +132,12 @@ func (d *usageDomain) InsertUsage(ctx context.Context, row Usage) (*Usage, error
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "usage" ("message_seq", "cache_read", "cache_write", "completion", "prompt") VALUES ($1, $2, $3, $4, $5) RETURNING "message_seq", "cache_read", "cache_write", "completion", "prompt"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "usage" ("message_seq", "cache_read", "cache_write", "completion", "cost", "prompt") VALUES ($1, $2, $3, $4, $5, $6) RETURNING "message_seq", "cache_read", "cache_write", "completion", "cost", "prompt"`,
 		row.MessageSeq,
 		row.CacheRead,
 		row.CacheWrite,
 		row.Completion,
+		row.Cost,
 		row.Prompt,
 	)
 	if err != nil {
@@ -148,7 +151,7 @@ func (d *usageDomain) DeleteUsage(ctx context.Context, messageSeq int64) (*Usage
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "usage" WHERE "message_seq" = $1 RETURNING "message_seq", "cache_read", "cache_write", "completion", "prompt"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "usage" WHERE "message_seq" = $1 RETURNING "message_seq", "cache_read", "cache_write", "completion", "cost", "prompt"`,
 		messageSeq,
 	)
 	if err != nil {
@@ -162,10 +165,11 @@ func (d *usageDomain) UpdateUsage(ctx context.Context, row Usage) (*Usage, error
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "usage" SET "cache_read" = $1, "cache_write" = $2, "completion" = $3, "prompt" = $4 WHERE "message_seq" = $5 RETURNING "message_seq", "cache_read", "cache_write", "completion", "prompt"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "usage" SET "cache_read" = $1, "cache_write" = $2, "completion" = $3, "cost" = $4, "prompt" = $5 WHERE "message_seq" = $6 RETURNING "message_seq", "cache_read", "cache_write", "completion", "cost", "prompt"`,
 		row.CacheRead,
 		row.CacheWrite,
 		row.Completion,
+		row.Cost,
 		row.Prompt,
 		row.MessageSeq,
 	)

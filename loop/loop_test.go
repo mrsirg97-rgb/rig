@@ -866,3 +866,30 @@ func TestTruncatedCallRecoversInBand(t *testing.T) {
 		t.Fatalf("the model's next turn must complete, got %q", msgs[3].Content)
 	}
 }
+
+func TestLoopAccumulatesReasoningDetailsIntoTheMessage(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{{
+		events: []core.Event{
+			core.ReasoningDelta{Text: "think", Details: json.RawMessage(`[{"id":"r1"}]`)},
+			core.ReasoningDelta{Text: "ing", Details: json.RawMessage(`[{"id":"r2"}]`)},
+			textEv("answer"),
+			doneEv(),
+		},
+	}}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
+	k.Session = session
+	f.inputs <- "hi"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	last := session.Messages[len(session.Messages)-1]
+	if last.Reasoning != "thinking" {
+		t.Fatalf("reasoning = %q, want thinking", last.Reasoning)
+	}
+	if string(last.ReasoningDetails) != `[{"id":"r1"},{"id":"r2"}]` {
+		t.Fatalf("reasoning details = %s, want both chunks in order", last.ReasoningDetails)
+	}
+}

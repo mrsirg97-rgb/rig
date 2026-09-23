@@ -96,8 +96,21 @@ func renderTable(t models.Table, active string) string {
 		if id == active {
 			mark = "  *"
 		}
-		fmt.Fprintf(&b, "%-*s%-*swindow %d  max %d  reserve %d  keep %d  trigger %d%s\n",
-			wID+2, id, wRole+2, m.Role, m.Window, m.MaxTokens, m.Reserve, m.KeepRecent, m.Window-m.Reserve, mark)
+		where := ""
+		if m.Remote {
+			where = "  remote"
+			if m.Provider != "" {
+				where += " " + m.Provider
+			}
+			if m.Concurrency > 1 {
+				where += fmt.Sprintf(" concurrency %d", m.Concurrency)
+			}
+			if m.BaseURL != "" {
+				where += " " + m.BaseURL
+			}
+		}
+		fmt.Fprintf(&b, "%-*s%-*swindow %d  max %d  reserve %d  keep %d  trigger %d%s%s\n",
+			wID+2, id, wRole+2, m.Role, m.Window, m.MaxTokens, m.Reserve, m.KeepRecent, m.Window-m.Reserve, where, mark)
 	}
 	return b.String()
 }

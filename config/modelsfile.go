@@ -12,19 +12,28 @@ import (
 )
 
 type rowDoc struct {
-	n          int
-	id         string
-	window     *int
-	maxTokens  *int
-	reserve    *int
-	keepRecent *int
-	role       *string
-	effort     *string
-	efforts    *[]string
-	vision     *bool
+	n            int
+	id           string
+	window       *int
+	maxTokens    *int
+	reserve      *int
+	keepRecent   *int
+	role         *string
+	effort       *string
+	efforts      *[]string
+	vision       *bool
+	remote       *bool
+	provider     *string
+	baseURL      *string
+	apiKey       *string
+	concurrency  *int
+	reasoning    *string
+	providerPin  *[]string
+	cacheControl *bool
+	retries      *int
 }
 
-var knownRowKeys = []string{"effort", "efforts", "id", "keepRecent", "maxTokens", "reserve", "role", "vision", "window"}
+var knownRowKeys = []string{"apiKey", "baseUrl", "cacheControl", "concurrency", "effort", "efforts", "id", "keepRecent", "maxTokens", "provider", "providerPin", "reasoning", "remote", "reserve", "retries", "role", "vision", "window"}
 
 var knownRowKeysSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownRowKeys))
@@ -151,6 +160,68 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 			}
 			d.vision = &v
 		}
+		if rawRemote, ok := keys["remote"]; ok {
+			v, err := jsonBool(rawRemote)
+			if err != nil {
+				return nil, rowErr(n, "remote: %v", err)
+			}
+			d.remote = &v
+		}
+		for _, field := range []string{"provider", "baseUrl", "apiKey", "reasoning"} {
+			rawV, ok := keys[field]
+			if !ok {
+				continue
+			}
+			v, err := jsonString(rawV)
+			if err != nil {
+				return nil, rowErr(n, "%s: %v", field, err)
+			}
+			switch field {
+			case "provider":
+				d.provider = &v
+			case "baseUrl":
+				d.baseURL = &v
+			case "apiKey":
+				d.apiKey = &v
+			case "reasoning":
+				d.reasoning = &v
+			}
+		}
+		if rawPin, ok := keys["providerPin"]; ok {
+			var one string
+			if err := json.Unmarshal(rawPin, &one); err == nil && one != "" {
+				d.providerPin = &[]string{one}
+			} else {
+				var list []string
+				if err := json.Unmarshal(rawPin, &list); err != nil {
+					return nil, rowErr(n, "providerPin: expected a string or an array of provider names")
+				}
+				d.providerPin = &list
+			}
+		}
+		if rawCC, ok := keys["cacheControl"]; ok {
+			v, err := jsonBool(rawCC)
+			if err != nil {
+				return nil, rowErr(n, "cacheControl: %v", err)
+			}
+			d.cacheControl = &v
+		}
+		for _, field := range []string{"concurrency", "retries"} {
+			rawV, ok := keys[field]
+			if !ok {
+				continue
+			}
+			v, err := jsonInt(rawV)
+			if err != nil {
+				return nil, rowErr(n, "%s: %v", field, err)
+			}
+			switch field {
+			case "concurrency":
+				d.concurrency = &v
+			case "retries":
+				d.retries = &v
+			}
+		}
 		out = append(out, d)
 	}
 	seen := map[string]bool{}
@@ -201,6 +272,7 @@ func mergeRows(t models.Table, docs []rowDoc, path string) (models.Table, error)
 		if d.vision != nil {
 			m.Vision = *d.vision
 		}
+		applyHosted(&m, d)
 		added = append(added, m)
 	}
 	rows := make([]models.Model, 0, len(t.Known())+len(added))
@@ -231,6 +303,7 @@ func mergeRows(t models.Table, docs []rowDoc, path string) (models.Table, error)
 			if d.vision != nil {
 				m.Vision = *d.vision
 			}
+			applyHosted(&m, d)
 		}
 		rows = append(rows, m)
 	}
@@ -240,4 +313,34 @@ func mergeRows(t models.Table, docs []rowDoc, path string) (models.Table, error)
 		return models.Table{}, fmt.Errorf("config: %s: %s", path, strings.TrimPrefix(err.Error(), "models: "))
 	}
 	return t2, nil
+}
+
+func applyHosted(m *models.Model, d *rowDoc) {
+	if d.remote != nil {
+		m.Remote = *d.remote
+	}
+	if d.provider != nil {
+		m.Provider = *d.provider
+	}
+	if d.baseURL != nil {
+		m.BaseURL = *d.baseURL
+	}
+	if d.apiKey != nil {
+		m.APIKey = *d.apiKey
+	}
+	if d.concurrency != nil {
+		m.Concurrency = *d.concurrency
+	}
+	if d.reasoning != nil {
+		m.Reasoning = *d.reasoning
+	}
+	if d.providerPin != nil {
+		m.ProviderPin = append([]string(nil), *d.providerPin...)
+	}
+	if d.cacheControl != nil {
+		m.CacheControl = *d.cacheControl
+	}
+	if d.retries != nil {
+		m.Retries = *d.retries
+	}
 }

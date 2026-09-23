@@ -169,6 +169,7 @@ type harness struct {
 	schedDB store.DB
 	home    string
 	cwd     string
+	rigHome string
 	spawn   *fakeSpawn
 	fetch   *fetchState
 	ctl     *swarm.Controller
@@ -190,6 +191,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	h.schedDB = schedDB
 	h.cwd = t.TempDir()
+	h.rigHome = t.TempDir()
 	h.spawn = &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	h.fetch = &fetchState{}
 	h.fe = &recordFrontend{}
@@ -204,7 +206,7 @@ func newHarness(t *testing.T) *harness {
 		Spawn:         h.spawn.spawn,
 		SwapURL:       "http://127.0.0.1:8090",
 		Sandbox:       "off",
-		RigHome:       t.TempDir(),
+		RigHome:       h.rigHome,
 		StateDir:      t.TempDir(),
 		FleetModel:    "qwen3.8-workers",
 		ReviewerModel: "qwen3.8-review",

@@ -11,18 +11,30 @@ import (
 const (
 	RoleInteractive = "interactive"
 	RoleWorker      = "worker"
+
+	ReasoningContent    = "reasoning_content"
+	ReasoningOpenRouter = "reasoning"
 )
 
 type Model struct {
-	ID         string
-	Window     int
-	MaxTokens  int
-	Reserve    int
-	KeepRecent int
-	Role       string
-	Effort     string
-	Efforts    []string
-	Vision     bool
+	ID           string
+	Window       int
+	MaxTokens    int
+	Reserve      int
+	KeepRecent   int
+	Role         string
+	Effort       string
+	Efforts      []string
+	Vision       bool
+	Remote       bool
+	Provider     string
+	BaseURL      string
+	APIKey       string
+	Concurrency  int
+	Reasoning    string
+	ProviderPin  []string
+	CacheControl bool
+	Retries      int
 }
 
 func (m Model) Check() error {
@@ -46,7 +58,40 @@ func (m Model) Check() error {
 	if m.Role != RoleInteractive && m.Role != RoleWorker {
 		return fmt.Errorf("models: %s: role: %q (allowed: interactive, worker)", m.ID, m.Role)
 	}
+	if m.Concurrency < 0 {
+		return fmt.Errorf("models: %s: Concurrency %d must be >= 0", m.ID, m.Concurrency)
+	}
+	if m.Retries < 0 {
+		return fmt.Errorf("models: %s: Retries %d must be >= 0", m.ID, m.Retries)
+	}
+	if m.Reasoning != "" && m.Reasoning != ReasoningContent && m.Reasoning != ReasoningOpenRouter {
+		return fmt.Errorf("models: %s: reasoning: %q (allowed: reasoning_content, reasoning)", m.ID, m.Reasoning)
+	}
+	if m.Remote && m.BaseURL == "" {
+		return fmt.Errorf("models: %s: a remote row needs a baseUrl (the endpoint it runs against)", m.ID)
+	}
+	if m.Remote && m.Concurrency == 0 {
+		return fmt.Errorf("models: %s: a remote row needs a concurrency (>= 1)", m.ID)
+	}
+	if (len(m.ProviderPin) > 0 || m.CacheControl) && m.Provider != "openrouter" {
+		return fmt.Errorf("models: %s: providerPin and cacheControl are openrouter-only (provider: %q)", m.ID, m.Provider)
+	}
 	return nil
+}
+
+func normalize(m Model) Model {
+	if m.Provider != "" {
+		m.Remote = true
+	}
+	if m.Remote {
+		if m.Concurrency == 0 {
+			m.Concurrency = 1
+		}
+		if m.Retries == 0 {
+			m.Retries = 3
+		}
+	}
+	return m
 }
 
 type Table struct{ rows map[string]Model }
@@ -54,6 +99,7 @@ type Table struct{ rows map[string]Model }
 func New(rows ...Model) (Table, error) {
 	t := Table{rows: map[string]Model{}}
 	for _, m := range rows {
+		m = normalize(m)
 		if err := m.Check(); err != nil {
 			return Table{}, err
 		}
@@ -85,6 +131,8 @@ func overlay(m Model, env func(string) (string, bool)) (Model, error) {
 		"RIG_MODEL_MAX_TOKENS":  func(n int) { m.MaxTokens = n },
 		"RIG_MODEL_RESERVE":     func(n int) { m.Reserve = n },
 		"RIG_MODEL_KEEP_RECENT": func(n int) { m.KeepRecent = n },
+		"RIG_MODEL_CONCURRENCY": func(n int) { m.Concurrency = n },
+		"RIG_MODEL_RETRIES":     func(n int) { m.Retries = n },
 	} {
 		raw, ok := env(key)
 		if !ok || raw == "" {
@@ -96,6 +144,23 @@ func overlay(m Model, env func(string) (string, bool)) (Model, error) {
 		}
 		set(n)
 	}
+	for key, set := range map[string]func(string){
+		"RIG_MODEL_BASE_URL":  func(v string) { m.BaseURL = v },
+		"RIG_MODEL_API_KEY":   func(v string) { m.APIKey = v },
+		"RIG_MODEL_REASONING": func(v string) { m.Reasoning = v },
+		"RIG_MODEL_PROVIDER":  func(v string) { m.Provider = v },
+	} {
+		if v, ok := env(key); ok && v != "" {
+			set(v)
+		}
+	}
+	if v, ok := env("RIG_MODEL_REMOTE"); ok && v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Model{}, fmt.Errorf("models: RIG_MODEL_REMOTE %q: %v", v, err)
+		}
+		m.Remote = b
+	}
 	return m, nil
 }
 
@@ -105,6 +170,7 @@ func Resolve(t Table, id string, env func(string) (string, bool)) (Model, error)
 		if err != nil {
 			return Model{}, err
 		}
+		overlaid = normalize(overlaid)
 		if err := overlaid.Check(); err != nil {
 			return Model{}, err
 		}
@@ -123,6 +189,7 @@ func Resolve(t Table, id string, env func(string) (string, bool)) (Model, error)
 	if m, err = overlay(m, env); err != nil {
 		return Model{}, err
 	}
+	m = normalize(m)
 	if err := m.Check(); err != nil {
 		return Model{}, err
 	}

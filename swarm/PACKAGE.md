@@ -6,6 +6,11 @@ vocabulary (`command.Env.Swarm`); this package owns the goroutines and
 the supervisor's in-memory truth.
 
 - `Controller` / `New`: one drain-worker swarm. `Start(ctx, in)` begins n
+  more drain workers; `StartOpts.Budget` (dollars, `swarm <n>
+  budget=<dollars>`) caps the controller's claims — the spend is summed
+  from each delegate result's cost (the cost column) and at the cap the
+  worker stops claiming with the notice `swarm: budget reached —
+  $X.XX / $Y.YY — the swarm stops claiming` (SPEC_HOSTED 5).
   more drain workers (against a running swarm it adds, so the roles mix);
   `List()` is the supervisor's read; `Stop()` cancels the context (the
   in-flight spawns die with it), waits for the drain workers, releases
@@ -37,4 +42,6 @@ the supervisor's in-memory truth.
   so the `Counts` fold never runs per stream chunk. The snapshot is the
   roster (`List`) plus the bound queue's fold counts (`todo.Counts`).
 - Pure supervisor side: stdlib plus core, models, store/todo,
-  store/scheduler, the `status` throttle leaf. No command.
+  store/scheduler, the `status` throttle leaf. No command. A worker's
+  model row resolves at spawn: a remote row's delegate skips the swap
+  busy probe and carries the row's concurrency token bound.

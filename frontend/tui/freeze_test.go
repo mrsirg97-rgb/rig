@@ -119,11 +119,13 @@ func TestFreezeGate(t *testing.T) {
 		base = "main"
 	}
 
-	// the named reopening (1.1.4, the fed-back error line): loop/ changes
-	// under a spec'd deliverable; the re-freeze PR after the merge
-	// deletes this function and the gate measures the new bytes.
+	// the named reopenings: loop/ (1.1.4, the fed-back error line) and
+	// core/ (1.5.0, SPEC_HOSTED: usage cost, reasoning details) under
+	// spec'd deliverables; the re-freeze PR after the merge deletes
+	// this function and the gate measures the new bytes.
 	reopened := func(p string) bool {
-		return p == "loop" || strings.HasPrefix(p, "loop/")
+		return p == "loop" || strings.HasPrefix(p, "loop/") ||
+			p == "core" || strings.HasPrefix(p, "core/")
 	}
 
 	if !strings.Contains(git("branch", "--show-current"), "-refactor") {

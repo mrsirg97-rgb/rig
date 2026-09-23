@@ -63,6 +63,31 @@ join when a worker fleet is configured. Restrict them with `--allow`:
 Every tool result is capped. Repeated identical failures are bounded. An
 optional round cap limits calls per turn. A failed call executes once.
 
+## hosted mode
+
+The provider speaks the OpenAI wire as-is, so a hosted endpoint
+(OpenRouter, DeepSeek's API, any remote OpenAI-compatible server) is a
+model row, not a new provider. A row says where it runs:
+
+```json
+{"id": "openrouter-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000,
+ "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1",
+ "apiKey": "sk-or-...", "concurrency": 4, "reasoning": "reasoning",
+ "providerPin": "Together", "cacheControl": true}
+```
+
+The row's key rides `Authorization: Bearer <key>` (from the file or
+`RIG_MODEL_API_KEY`, never logged); 429 and 5xx retry with bounded
+backoff and jitter instead of faulting a turn; `usage.cost` lands in
+the state store's cost column and shows in the TUI footer; OpenRouter
+rows read and echo `reasoning` / `reasoning_details` while everything
+else keeps `reasoning_content`; remote rows omit llama-server-only
+fields. A remote row's delegate and scheduled fire skip the local swap
+entirely — no busy probe — and bound parallelism by the row's
+`concurrency` tokens beside the fleet's slots. `swarm <n> budget=5`
+and a scheduled job's `budget` cap spend in dollars, summed from the
+cost column (SPEC_HOSTED).
+
 ## subagents
 
 `delegate` runs a bounded sub-task on a headless worker and waits for its
@@ -86,7 +111,7 @@ Configuration lives in `~/.rig/`. Set `$RIG_HOME` to move it. Every file is opti
 | file | what it holds |
 |------|---------------|
 | `settings.json` | the knobs: endpoint, model, the allow-list, the retry bound, the approval dial, the worker sandbox |
-| `models.json` | the per-model table: context window, max tokens, the compaction reserve, the role (`worker`/`interactive`), the effort levels, and `vision` (the model takes images, which unlocks `view`) |
+| `models.json` | the per-model table: context window, max tokens, the compaction reserve, the role (`worker`/`interactive`), the effort levels, `vision` (the model takes images, which unlocks `view`), and the hosted run site: `remote`/`provider` (where it runs), `baseUrl`, `apiKey`, `concurrency`, `reasoning`, `providerPin`, `cacheControl`, `retries` |
 | `blobs/` | the images `view` has read, named by sha256; delete anything, and rig never rewrites a file it did not create |
 | `workers.json` | the worker fleet: `{"model": "<id>", "slots": N}`. Unlocks `scheduler` and `delegate`; `slots` bounds concurrent delegates per session |
 | `AGENTS.md` | global instructions, read before the project's `<cwd>/AGENTS.md` |

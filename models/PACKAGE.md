@@ -11,7 +11,12 @@ command reads this same table.
 
 - `Model`: one row: `ID`, `Window`, `MaxTokens`, `Reserve`, `KeepRecent`,
   `Role`, `Effort` (the compaction summary call's request effort; `""` =
-  the policy's "medium").
+  the policy's "medium"), and the hosted run site (SPEC_HOSTED): `Remote`,
+  `Provider` (a name implies remote), `BaseURL`, `APIKey` (never logged or
+  rendered), `Concurrency` (default 1 for remote rows), `Reasoning`
+  (`reasoning_content` default, `reasoning` for OpenRouter), `ProviderPin`
+  and `CacheControl` (openrouter-only), `Retries` (default 3 for remote
+  rows).
 - `Table`: id -> row, built by `New` with every row checked.
 - `Check`: the row's invariants, loud, naming the id and fields.
 - `overlay` (unexported): applies `RIG_MODEL_*` env onto a row's fields.
@@ -41,6 +46,11 @@ command reads this same table.
   leave room for the summary beside the tail, or compaction can never help.
 - Env precedence is env over file over embedded: the overlay makes the env
   win for a known id too (0.2.0 consulted the env only for unknown ids).
+  The hosted overlay adds `RIG_MODEL_BASE_URL`, `RIG_MODEL_API_KEY`,
+  `RIG_MODEL_REMOTE`, `RIG_MODEL_CONCURRENCY`, `RIG_MODEL_REASONING`,
+  `RIG_MODEL_PROVIDER`, and `RIG_MODEL_RETRIES`; a key can live in the
+  environment and never in a file. A remote row's `retries` defaults to 3
+  at `New` (0 = the default; there is no "no retry" for a remote row).
 - The synthesized row carries `Role: RoleInteractive`: there is no file to
   borrow a role from.
 - `overlay` setter map uses closures over the `m` value: parse failure

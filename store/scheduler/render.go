@@ -85,6 +85,9 @@ func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time)
 	if j.StallSet {
 		payload += fmt.Sprintf(" · stall %dm", j.Stall)
 	}
+	if j.BudgetSet {
+		payload += fmt.Sprintf(" · budget $%.2f", j.Budget)
+	}
 	line2 := fmt.Sprintf("  cron %s%s · %s%s · %s",
 		j.Cron,
 		func() string {

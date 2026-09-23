@@ -50,9 +50,10 @@ const (
 )
 
 type StartOpts struct {
-	Count int
-	Role  string
-	Model string
+	Count  int
+	Role   string
+	Model  string
+	Budget float64
 }
 
 type Worker struct {
@@ -100,6 +101,8 @@ type Controller struct {
 	proj      todostore.Project
 	retries   map[string]int
 	rejects   map[string]int
+	budget    float64
+	spent     float64
 	fe        core.Frontend
 	emitter   *status.Emitter
 }
@@ -125,6 +128,23 @@ func New(o Opts) *Controller {
 		c.emitter = status.New(o.Frontend.Notify)
 	}
 	return c
+}
+
+func (c *Controller) addSpent(v float64) {
+	c.mu.Lock()
+	c.spent += v
+	c.mu.Unlock()
+}
+
+func (c *Controller) atBudget() bool {
+	spent, budget := c.budgetState()
+	return budget > 0 && spent >= budget
+}
+
+func (c *Controller) budgetState() (float64, float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.spent, c.budget
 }
 
 // Start begins n drain workers. The architect is the session the command
@@ -161,6 +181,7 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	}
 	c.proj = proj
 	c.architect = session
+	c.budget = in.Budget
 	base := len(c.workers)
 	added := "started"
 	if base > 0 {
@@ -249,6 +270,12 @@ func (c *Controller) run(w *worker) {
 		if w.ctx.Err() != nil {
 			return
 		}
+		if c.atBudget() {
+			spent, budget := c.budgetState()
+			c.notice(fmt.Sprintf("swarm: budget reached — $%.2f / $%.2f — the swarm stops claiming", spent, budget))
+			c.finish(w, true)
+			return
+		}
 		status := ""
 		if w.role == RoleReviewer {
 			status = "review"
@@ -313,6 +340,7 @@ func (c *Controller) work(w *worker, id string) workResult {
 		return workResult{}
 	}
 	c.stream(w, []byte(fmt.Sprintf("## swarm task %s (%s)\n", id, w.role)))
+	row, _ := c.opts.Models().Get(w.model)
 	res, err := sched.Delegate(sched.DelegateInput{
 		DB:            c.opts.SchedDB,
 		Home:          c.opts.Home,
@@ -336,8 +364,11 @@ func (c *Controller) work(w *worker, id string) workResult {
 		Context:       w.ctx,
 		SpawnCtx:      w.ctx,
 		WaitBusy:      true,
+		Remote:        row.Remote,
+		Concurrency:   row.Concurrency,
 		Observe:       func(p []byte) { c.stream(w, p) },
 	})
+	c.addSpent(res.Cost)
 	if err != nil {
 		c.loud(w, "w%d: task %s: %v\n", w.id, id, err)
 		return workResult{}
