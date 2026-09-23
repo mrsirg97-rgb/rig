@@ -1,4 +1,41 @@
 # Changelog
+## [1.4.4]: the swarm's progress in the TUI
+
+The swarm ran silently beside the session: the transcript showed nothing
+when a task failed or a reviewer bounced the work, and the only progress
+read was the bare `/swarm`. The TUI now gets two surfaces, both through
+the frontend's existing `Notify` door.
+
+- **The transcript notices** (`core.SwarmNotice`, `swarm`): the
+  controller emits one line per decision-worthy event and nothing else —
+  a task failed with its note (`swarm: t1 failed — the worker died
+  twice`), a reviewer rejected with the reason (`swarm: t1 rejected —
+  tests are missing`), a worker died and was restarted or exited
+  (`swarm: w1 died — t1 restarted` / `swarm: w1 died — t1 exited`), and
+  the board emptied or the swarm exited (`swarm: the board emptied — all
+  workers exited` / `swarm: /swarm exited — N workers stopped`). The
+  worker failure now notes the reason on the task too.
+- **The status band** (`core.SwarmStatus`, `swarm`, `frontend/tui`): the
+  controller emits a snapshot on claim, stream bytes, complete, verdict,
+  and exit — throttled to a few per second, the exit's last frame always
+  landing — carrying the roster and the bound queue's fold counts
+  (`store/todo.Counts`, the new structured read). The TUI folds the
+  latest into the footer: two rows above the existing status line while a
+  swarm runs (`workers 2 · todo 3 · done 5 · failed 1 · w2 t388 12s`,
+  `reviewer 1 · review 1 · done 1 · failed 0 · w3 t386 4m`), zero rows
+  when nothing runs, one row for a delegate.
+- **The delegate's row** (`tool/delegate`): the optional `Notify` seam —
+  an interactive delegate emits the same snapshot shape (one worker row,
+  zero queue counts), so the band shows the worker row only. CLI and
+  oneshot ignore both events (the compat rule).
+- **The band is a status-string extension**: no `live.go` line, no loop
+  line — the region's existing height-changing machinery covers the two
+  extra rows, and the mid-swarm resize test replays the stream under the
+  freeze harness.
+- **Tests**: each notice with the fake spawn (failed, rejected, died,
+  board/stop), the throttled status emission, `todo.Counts`, the band's
+  exact rows, the footer growing/updating/returning, the resize under the
+  freeze harness, the delegate's snapshot.
 
 ## [1.4.3]: the suite is walled off from the operator's machine
 
