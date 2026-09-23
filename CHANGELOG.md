@@ -1,4 +1,29 @@
 # Changelog
+## [1.5.1]: the swarm survives its first status frame
+
+The controller captured the frontend at wiring time (`Frontend: r.rec`),
+but `r.rec` is assigned later and `swapIn` replaces it on `/new` and
+`/resume` — the first `SwarmStatus` frame hit a typed-nil recorder and
+panicked in `Recorder.ensure`, crashing the session.
+
+- **The swarm's frontend is a resolver** (`swarm`): `Opts.Frontend` is
+  `func() core.Frontend` (the `Models` idiom), resolved on every notify,
+  so a controller wired before the recorder exists emits safely once it
+  does and a session swap routes its frames to the new recorder. A
+  panicking frontend is recovered into a stderr line — the drain worker
+  keeps draining.
+- **The recorder tolerates a nil receiver** (`store/state`): `Notify` on
+  a nil `*Recorder` is a no-op, so a seam wired before the recorder
+  exists cannot crash on `ensure`.
+- **The delegate's notice seam resolves at call time** (`cmd/rig`): the
+  delegate's `Notify` no longer captures the recorder's method value at
+  wiring time.
+- **Tests**: a controller wired with no recorder drains a task and
+  routes the next frames once the recorder appears; a session swap
+  routes notices to the new recorder; a panicking frontend leaves the
+  drain loop running with the panic loud on stderr; `Recorder.Notify` on
+  a nil receiver is a no-op.
+
 ## [1.5.0]: hosted mode — remote OpenAI-compatible endpoints
 
 The provider already spoke the OpenAI wire; hosted endpoints (OpenRouter,

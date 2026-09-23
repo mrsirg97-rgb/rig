@@ -31,8 +31,13 @@ the supervisor's in-memory truth.
   `SpawnCtx` (the drain worker's context, so a stop kills the spawn),
   `Stall` 10m and `Timeout` 2h: a worker that keeps writing holds its
   slot for the full spend ceiling, a silent one is killed as hung.
-- The optional `Frontend` seam is the transcript door (SPEC_SWARM 7):
-  the four decision-worthy events emit one-line `SwarmNotice` notices
+- The optional `Frontend` seam is the transcript door (SPEC_SWARM 7),
+  a resolver read on every notify (the root wires it once as
+  `func() core.Frontend { return r.rec }`, so the recorder can appear
+  after wiring and a session swap routes to the current one; a
+  panicking frontend is recovered into a stderr line, the drain worker
+  keeps draining). The four decision-worthy events emit one-line
+  `SwarmNotice` notices
   (a task failed with its note, a reviewer rejected with the reason, a
   worker died and was restarted or exited, the board emptied or the
   swarm exited) and nothing else; the controller emits `SwarmStatus`

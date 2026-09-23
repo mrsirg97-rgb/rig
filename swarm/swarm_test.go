@@ -178,6 +178,11 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessResolved(t, nil)
+}
+
+func newHarnessResolved(t *testing.T, resolve func() core.Frontend) *harness {
+	t.Helper()
 	h := &harness{}
 	todoDB, _, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
@@ -195,6 +200,9 @@ func newHarness(t *testing.T) *harness {
 	h.spawn = &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	h.fetch = &fetchState{}
 	h.fe = &recordFrontend{}
+	if resolve == nil {
+		resolve = func() core.Frontend { return h.fe }
+	}
 	h.ctl = swarm.New(swarm.Opts{
 		TodoDB:        todoDB,
 		SchedDB:       schedDB,
@@ -212,7 +220,7 @@ func newHarness(t *testing.T) *harness {
 		ReviewerModel: "qwen3.8-review",
 		Models:        func() models.Table { return modelRows(t) },
 		Poll:          20 * time.Millisecond,
-		Frontend:      h.fe,
+		Frontend:      resolve,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	return h

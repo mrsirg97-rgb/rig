@@ -86,7 +86,7 @@ type Opts struct {
 	ReviewerModel string
 	Models        func() models.Table
 	Poll          time.Duration
-	Frontend      core.Frontend
+	Frontend      func() core.Frontend
 }
 
 type Controller struct {
@@ -103,7 +103,6 @@ type Controller struct {
 	rejects   map[string]int
 	budget    float64
 	spent     float64
-	fe        core.Frontend
 	emitter   *status.Emitter
 }
 
@@ -123,11 +122,29 @@ type worker struct {
 }
 
 func New(o Opts) *Controller {
-	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}, fe: o.Frontend}
+	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}}
 	if o.Frontend != nil {
-		c.emitter = status.New(o.Frontend.Notify)
+		c.emitter = status.New(c.safeNotify)
 	}
 	return c
+}
+
+// safeNotify resolves the frontend on every call and recovers a panicking
+// frontend into a stderr line: the drain worker keeps draining, the
+// transcript door never kills the session.
+func (c *Controller) safeNotify(ev core.Event) {
+	defer func() {
+		if p := recover(); p != nil {
+			fmt.Fprintf(os.Stderr, "swarm: notify: recovered from panic: %v\n", p)
+		}
+	}()
+	resolve := c.opts.Frontend
+	if resolve == nil {
+		return
+	}
+	if fe := resolve(); fe != nil {
+		fe.Notify(ev)
+	}
 }
 
 func (c *Controller) addSpent(v float64) {
@@ -555,10 +572,10 @@ func (c *Controller) status() core.SwarmStatus {
 }
 
 func (c *Controller) notice(text string) {
-	if c.fe == nil {
+	if c.emitter == nil {
 		return
 	}
-	c.fe.Notify(core.SwarmNotice{Text: text})
+	c.safeNotify(core.SwarmNotice{Text: text})
 }
 
 func (c *Controller) stream(w *worker, p []byte) {

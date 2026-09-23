@@ -98,6 +98,9 @@ func PromptLabel(content string) string {
 }
 
 func (r *Recorder) Notify(ev core.Event) {
+	if r == nil {
+		return
+	}
 	r.observe(ev)
 	r.inner.Notify(ev)
 }
