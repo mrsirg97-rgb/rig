@@ -41,6 +41,12 @@ func (s *scripted) Notify(ev core.Event) {
 	s.named = append(s.named, fmt.Sprintf("%T", ev))
 }
 
+func TestRecorderNotifyToleratesANilReceiver(t *testing.T) {
+	var rec *state.Recorder
+	rec.Notify(core.TextDelta{Text: "drop me"})
+	rec.Notify(core.Done{StopReason: "end_turn"})
+}
+
 func TestRecorderLandsTheTranscript(t *testing.T) {
 	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
 	if err != nil {
