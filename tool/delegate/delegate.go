@@ -15,7 +15,11 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
 
-const outputCap = 256 * 1024
+const (
+	outputCap          = 256 * 1024
+	defaultTimeout     = 10 * time.Minute
+	delegateTimeoutCap = 30 * time.Minute
+)
 
 type Opts struct {
 	DB           sched.DB
@@ -59,7 +63,8 @@ func (a adapter) Schema() json.RawMessage {
 			"task":      {"type": "string", "description": "the prompt the worker runs (required)"},
 			"cwd":       {"type": "string", "description": "working directory (default the session's cwd; must be under it or the rig home)"},
 			"model":     {"type": "string", "description": "worker model id (default ` + a.DefaultModel + `)"},
-			"timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"}
+			"timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"},
+			"stallMs":   {"type": "integer", "minimum": 1, "description": "stall window in ms: a worker writing nothing for longer is killed as hung (0 = off; the timeout stays the spend ceiling)"}
 		},
 		"required": ["task"]
 	}`)
@@ -70,6 +75,7 @@ type args struct {
 	Cwd       string `json:"cwd,omitempty"`
 	Model     string `json:"model,omitempty"`
 	TimeoutMs int64  `json:"timeoutMs,omitempty"`
+	StallMs   int64  `json:"stallMs,omitempty"`
 }
 
 func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -99,9 +105,16 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	if g.Model != "" {
 		model = g.Model
 	}
-	timeout := 10 * time.Minute
+	timeout := defaultTimeout
 	if g.TimeoutMs > 0 {
 		timeout = time.Duration(g.TimeoutMs) * time.Millisecond
+		if timeout > delegateTimeoutCap {
+			timeout = delegateTimeoutCap
+		}
+	}
+	stall := time.Duration(0)
+	if g.StallMs > 0 {
+		stall = time.Duration(g.StallMs) * time.Millisecond
 	}
 
 	res, err := sched.Delegate(sched.DelegateInput{
@@ -119,6 +132,7 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		WorkerCmd:     a.WorkerCmd,
 		SwapURL:       a.SwapURL,
 		Timeout:       timeout,
+		Stall:         stall,
 		Sandbox:       a.Sandbox,
 		SandboxBinds:  a.SandboxBinds,
 		RigHome:       a.RigHome,
@@ -138,6 +152,8 @@ func (a adapter) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	content += "\n" + trailer
 
 	switch {
+	case res.Stalled:
+		return content, fmt.Errorf("delegate: the worker stalled after %s (process tree killed)", res.Duration.Round(time.Millisecond))
 	case res.TimedOut:
 		return content, fmt.Errorf("delegate: the worker timed out after %s (process tree killed)", res.Duration.Round(time.Millisecond))
 	case res.Exit != 0:

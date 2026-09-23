@@ -42,6 +42,9 @@ const (
 	// note bound, so a long verdict cannot fail the review protocol.
 	maxVerdictReason = todostore.MaxNoteLen
 
+	workerTimeout = 2 * time.Hour
+	workerStall   = 10 * time.Minute
+
 	heartbeatLine = "rig: heartbeat"
 )
 
@@ -309,7 +312,8 @@ func (c *Controller) work(w *worker, id string) workResult {
 		Spawn:         c.opts.Spawn,
 		WorkerCmd:     c.opts.WorkerCmd,
 		SwapURL:       c.opts.SwapURL,
-		Timeout:       sched.DefaultRunTimeout,
+		Timeout:       workerTimeout,
+		Stall:         workerStall,
 		Sandbox:       c.opts.Sandbox,
 		SandboxBinds:  c.opts.SandboxBinds,
 		RigHome:       c.opts.RigHome,

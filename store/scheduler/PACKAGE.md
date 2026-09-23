@@ -51,8 +51,9 @@ written before the store commit; drift is surfaced in list.
   writes touches the row's `stall` window (a silent fire past it is
   killed as hung, the log naming the reason) and streams to a live
   `.stream` tail beside the canonical log, which is written whole at the
-  end. A delegate passes no observer — interactive sessions keep the
-  plain timeout.
+  end. A delegate passes no observer unless its `Stall` is set — the
+  watch rides the same observer, so an interactive session keeps the
+  plain timeout and a caller that states a window gets the kill.
   A command job's fire skips the busy probe and
   the jail: `sh -c` over the stored line with the process environment,
   in the job's cwd — the payload is the operator's own, the same trust
@@ -62,7 +63,11 @@ written before the store commit; drift is surfaced in list.
   state-store bind and explicit identity for the resumable transcript, the per-session
   delegate-slot flock (one slot per `slots`; a call that finds the set
   full waits on a short poll for a slot until its context ends, the
-  refusal naming the wait time) and the no-recursion marker.
+  refusal naming the wait time), the no-recursion marker, and the
+  `Stall` watch: a set window kills a worker silent past it (the
+  result marked `Stalled`, the stderr and the log naming the reason)
+  while `Timeout` stays the spend ceiling (the seam's cap is 24h, the
+  tool's own cap is 30 minutes).
 - `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
   `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
   worker), each entry split into explicit VAR VALUE pairs (bwrap's

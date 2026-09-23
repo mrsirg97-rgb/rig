@@ -26,6 +26,7 @@ type DelegateInput struct {
 	WorkerCmd     []string
 	SwapURL       string
 	Timeout       time.Duration
+	Stall         time.Duration
 	Sandbox       string
 	SandboxBinds  []string
 	RigHome       string
@@ -44,6 +45,7 @@ type DelegateResult struct {
 	Stdout    string
 	Stderr    string
 	TimedOut  bool
+	Stalled   bool
 	Duration  time.Duration
 	ID        string
 	LogRel    string
@@ -62,12 +64,14 @@ func delegateInput(in DelegateInput) DelegateInput {
 	return in
 }
 
+const maxDelegateTimeout = 24 * time.Hour
+
 func delegateTimeout(t time.Duration) time.Duration {
 	if t <= 0 {
 		return DefaultRunTimeout
 	}
-	if t > DefaultRunTimeout {
-		return DefaultRunTimeout
+	if t > maxDelegateTimeout {
+		return maxDelegateTimeout
 	}
 	return t
 }
@@ -215,9 +219,31 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 
-	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, in.Observe)
+	var watch *stallWatch
+	if in.Stall > 0 {
+		watch = newStallWatch(in.Stall, cancel)
+	}
+	observe := in.Observe
+	if watch != nil {
+		observe = func(p []byte) {
+			watch.touch()
+			if in.Observe != nil {
+				in.Observe(p)
+			}
+		}
+	}
+	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, observe)
+	if watch != nil {
+		watch.stop()
+	}
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
+	}
+	stalled := false
+	if watch != nil && watch.hasFired() && ctx.Err() == context.Canceled {
+		stalled = true
+		res.Stderr += "\n[runner: killed after stall]\n"
+		res.Exit = 1
 	}
 	ended := in.Now().UTC()
 	durationMs := ended.Sub(started).Milliseconds()
@@ -253,7 +279,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 
 	return DelegateResult{
 		Exit: res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
-		TimedOut: res.TimedOut, Duration: ended.Sub(started),
+		TimedOut: res.TimedOut, Stalled: stalled, Duration: ended.Sub(started),
 		ID: id, LogRel: logRel, Started: startedStr, SessionID: in.WorkerSession, Note: note,
 	}, nil
 }

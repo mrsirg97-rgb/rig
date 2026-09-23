@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.4.1]: the delegate worker dies on the silence, not the clock
+
+The scheduler already kills a fire that writes nothing (1.3.8), but the
+delegate path kept one wall-clock bound for both jobs: a swarm worker
+still producing output — a long suite, a deep report — was killed at
+the 30-minute ceiling while it worked. The liveness bound and the spend
+bound are now separate here too.
+
+- **`Stall` on `DelegateInput`** (`store/scheduler`): the silence
+  window, 0 = today (no stall kill, the plain timeout). The delegate
+  wires it to the same `stallWatch` the runner uses, touched by the
+  `Observe` stream: a worker that writes nothing for longer than the
+  window is killed as hung, its stderr naming
+  `[runner: killed after stall]` and the result marked `Stalled`. The
+  timeout stays the spend ceiling; a producing worker is never killed
+  for the clock.
+- **The spend ceiling is the caller's** (`store/scheduler`,
+  `tool/delegate`): the seam's cap moves from the runner's 30-minute
+  default to the scheduler's 24h bound, and the interactive tool keeps
+  its own 30-minute `timeoutMs` cap at the tool boundary, so a model's
+  induced spend is unchanged. The swarm sets `Stall 10m` and `Timeout
+  2h`: a worker keeps its slot while it writes, and a silent one is
+  gone in ten minutes.
+- **`stallMs` on the tool** (`tool/delegate`): the optional silence
+  window beside `timeoutMs`; unset is today's behavior. A stalled
+  worker errors naming the stall (`delegate: the worker stalled after
+  … (process tree killed)`), the trailer unchanged.
+
 ## [1.4.0]: the swarm: a fleet of drain workers, supervisor-side
 
 `/swarm` turns the session's queue into a shared work board a fleet

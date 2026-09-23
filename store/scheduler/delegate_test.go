@@ -209,3 +209,66 @@ func TestDelegateDefaultsAreUnchanged(t *testing.T) {
 		t.Fatalf("the run record must still land: %v", err)
 	}
 }
+
+func TestDelegateStallKillsASilentWorker(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1}}
+	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+		<-ctx.Done()
+	}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.Stall = 60 * time.Millisecond
+	})
+	res, err := sched.Delegate(in)
+	if err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if !res.Stalled {
+		t.Fatal("a worker silent past the window must be marked stalled")
+	}
+	if res.Exit != 1 {
+		t.Fatalf("a stalled worker must record exit 1, got %d", res.Exit)
+	}
+	if !strings.Contains(res.Stderr, "[runner: killed after stall]") {
+		t.Errorf("a stalled worker must name the reason in its stderr: %q", res.Stderr)
+	}
+	logBody, err := os.ReadFile(filepath.Join(in.Home, filepath.FromSlash(res.LogRel)))
+	if err != nil {
+		t.Fatalf("read run log: %v", err)
+	}
+	if !strings.Contains(string(logBody), "[runner: killed after stall]") {
+		t.Errorf("the run log must name the stall: %s", logBody)
+	}
+}
+
+func TestDelegateStallKeepsAWritingWorkerPastTheOldCeiling(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	var remaining time.Duration
+	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+		dl, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("the spawn context must carry the delegate timeout")
+		}
+		remaining = time.Until(dl)
+		for i := 0; i < 8; i++ {
+			observe([]byte("rig: heartbeat\n"))
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.Stall = 60 * time.Millisecond
+		in.Timeout = 2 * time.Hour
+	})
+	res, err := sched.Delegate(in)
+	if err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if res.Stalled || res.TimedOut {
+		t.Fatalf("a writing worker must never stall: stalled=%v timedOut=%v", res.Stalled, res.TimedOut)
+	}
+	if res.Exit != 0 {
+		t.Fatalf("a writing worker must finish, got exit %d", res.Exit)
+	}
+	if remaining > 2*time.Hour || remaining < 90*time.Minute {
+		t.Fatalf("the 2h spend ceiling must not clamp to the old 30m default, got %v", remaining)
+	}
+}

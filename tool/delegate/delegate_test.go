@@ -557,3 +557,33 @@ func TestDelegateCapsOutputWithTheSize(t *testing.T) {
 		t.Fatalf("the cap marker must name the full size:\n%s", out[:60])
 	}
 }
+
+func TestDelegateStallMsKilledAsStalledNamesIt(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	silent := func(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
+		<-ctx.Done()
+		return sched.SpawnResult{Exit: 1}, nil
+	}
+	tool := h.newTool(t, fakeFetch(""), silent)
+	b, _ := json.Marshal(map[string]any{"task": "t", "stallMs": 50})
+	out, err := tool.Exec(context.Background(), b)
+	if err == nil || !strings.Contains(err.Error(), "stalled") {
+		t.Fatalf("a stalled worker must be a named error: (%q, %v)", out, err)
+	}
+	if !strings.Contains(err.Error(), "process tree killed") {
+		t.Fatalf("the stall error must name the kill: %v", err)
+	}
+}
+
+func TestDelegateTimeoutCeilingStaysThirtyMinutes(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}}
+	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
+	b, _ := json.Marshal(map[string]any{"task": "t", "timeoutMs": 7200000})
+	if _, err := tool.Exec(context.Background(), b); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if spawn.deadline <= 29*time.Minute || spawn.deadline > 31*time.Minute {
+		t.Fatalf("the interactive timeout ceiling must stay 30 minutes, got %v", spawn.deadline)
+	}
+}

@@ -24,10 +24,13 @@ the state store.
   output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
   the explicit worker session id threaded through the spawn.
+- `delegate.go`: `stallMs` rides the schema beside `timeoutMs`
+  (0 = off, today's plain timeout; the tool keeps its own 30-minute
+  `timeoutMs` ceiling), and `Stall` rides `DelegateInput`.
 - `delegate_test.go`: the failing-first named cases over a fake
   `Spawn` and `Fetch` (happy path, cwd refusal, busy refusal, timeout,
-  the fan-out overlap and the one-slot sequence, the slots-full wait,
-  no-recursion, the cap).
+  the stall kill, the fan-out overlap and the one-slot sequence, the
+  slots-full wait, no-recursion, the cap).
 
 ## How it is consumed
 

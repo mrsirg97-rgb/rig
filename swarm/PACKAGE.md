@@ -22,7 +22,9 @@ the supervisor's in-memory truth.
   (reviewers). The task worker never touches the queue protocol.
 - The delegate spawn passes `WaitBusy` (the GPU slots are the
   parallelism), `Observe` (the worker's stderr streams into
-  `<scheduler home>/swarm/wN.stream`, the heartbeat read from it), and
-  `SpawnCtx` (the drain worker's context, so a stop kills the spawn).
+  `<scheduler home>/swarm/wN.stream`, the heartbeat read from it),
+  `SpawnCtx` (the drain worker's context, so a stop kills the spawn),
+  `Stall` 10m and `Timeout` 2h: a worker that keeps writing holds its
+  slot for the full spend ceiling, a silent one is killed as hung.
 - Pure supervisor side: stdlib plus core, models, store/todo,
   store/scheduler. No command, no frontend.
