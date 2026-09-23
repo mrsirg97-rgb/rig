@@ -68,6 +68,18 @@ is a loud line naming the known set, never silently a prompt.
   (`specs/SPEC_STATE.md`).
 - `/rem project <path>`: a one-off read or write of another project's
   memories: the path resolves to a repo identity (worktrees share).
+- `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's
+  workers (`w1 worker qwen3.8-workers · task t3 · heartbeat 2s ago ·
+  done 1 failed 0`); `swarm <n> [role=worker|reviewer] [model=<id>]`
+  starts n drain workers on this session's queue — each claims a task,
+  spawns a one-shot `rig -p` through the delegate path (jail, socket
+  proxy, recorded run), and finishes it itself: workers submit for
+  review, reviewers parse the worker's last `verdict: accept|reject
+  <reason>` line and call `accept`/`reject`. Against a running swarm a
+  start adds workers (the roles mix); `swarm stop` ends it and releases
+  the in-flight claims (`specs/SPEC_SWARM.md`). A dead worker's claim
+  is released and the task retried once; a second death fails it (or
+  rejects it with the reason). No fleet configured refuses by name.
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it. The summary lands in the

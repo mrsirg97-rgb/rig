@@ -224,6 +224,15 @@ has the session id and log path.
   death). It is the run-job `acquireLock` shape, keyed per session
   per slot. The gate already counts, so raising `slots` is a file
   edit, not a code change.
+- **Three swarm amendments (SPEC_SWARM)**, all defaulted to today's
+  behavior. `WaitBusy` (false): a busy GPU is waited on — the busy
+  check polls `busyState` on a short interval until the model runs or
+  the call's context ends; the swarm's parallelism is the GPU slots,
+  and a busy-check failure still fails closed. `Observe` (nil): the
+  spawn's byte observer, so the swarm streams the worker's stderr to
+  the run stream and reads its heartbeat. `SpawnCtx` (Background): the
+  base context the spawn timeout wraps, so a swarm stop kills the
+  in-flight worker instead of leaving it to its timeout.
 - **No recursion**: the delegate sets `RIG_DELEGATE=1` on the worker's
   spawn (the `RIG_HOME` pattern, decision 2). The delegate tool's
   Exec refuses by name when the marker is set: `delegate: a worker

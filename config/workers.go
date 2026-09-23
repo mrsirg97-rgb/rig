@@ -13,8 +13,9 @@ import (
 )
 
 type Workers struct {
-	Model string
-	Slots int
+	Model    string
+	Reviewer string
+	Slots    int
 }
 
 var workerToolNames = []string{"scheduler", "delegate"}
@@ -48,13 +49,13 @@ func loadWorkers(dir string, t models.Table) (*Workers, error) {
 	}
 	var unknown []string
 	for k := range keys {
-		if k != "model" && k != "slots" {
+		if k != "model" && k != "reviewer" && k != "slots" {
 			unknown = append(unknown, k)
 		}
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return nil, fmt.Errorf("config: %s: unknown key %q (known: model, slots)", p, unknown[0])
+		return nil, fmt.Errorf("config: %s: unknown key %q (known: model, reviewer, slots)", p, unknown[0])
 	}
 	w := &Workers{Slots: 1}
 	modelSet := false
@@ -72,6 +73,16 @@ func loadWorkers(dir string, t models.Table) (*Workers, error) {
 	if !modelSet {
 		return nil, fmt.Errorf("config: %s: \"model\" is required", p)
 	}
+	if raw, ok := keys["reviewer"]; ok {
+		var m string
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return nil, fmt.Errorf("config: %s: reviewer: expected a string, got %s", p, string(raw))
+		}
+		if m == "" {
+			return nil, fmt.Errorf("config: %s: reviewer: expected a non-empty string, got the empty string", p)
+		}
+		w.Reviewer = m
+	}
 	if raw, ok := keys["slots"]; ok {
 		var n int
 		if err := json.Unmarshal(raw, &n); err != nil {
@@ -84,6 +95,11 @@ func loadWorkers(dir string, t models.Table) (*Workers, error) {
 	}
 	if _, ok := t.Get(w.Model); !ok {
 		return nil, fmt.Errorf("config: %s: model %q: no row in the models table (known: %s)", p, w.Model, strings.Join(t.Known(), ", "))
+	}
+	if w.Reviewer != "" {
+		if _, ok := t.Get(w.Reviewer); !ok {
+			return nil, fmt.Errorf("config: %s: reviewer %q: no row in the models table (known: %s)", p, w.Reviewer, strings.Join(t.Known(), ", "))
+		}
 	}
 	return w, nil
 }

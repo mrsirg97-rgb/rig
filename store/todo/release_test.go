@@ -19,7 +19,7 @@ func TestReleaseReturnsAStaleForeignClaimToPendingAndNamesTheOwner(t *testing.T)
 		t.Fatalf("create: %v", err)
 	}
 	id := taskIDText(t, reply, "write the spec")
-	if _, err := todostore.Start(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Start(ctx, db, p, id, sessA, false); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	// The claim is old: the owner is long gone.
@@ -63,13 +63,13 @@ func TestReleaseRefusesOwnUnclaimedFreshAndFinished(t *testing.T) {
 	pending := taskIDText(t, reply, "pending")
 	done := taskIDText(t, reply, "done")
 	fresh := taskIDText(t, reply, "fresh")
-	if _, err := todostore.Start(ctx, db, p, own, sessA); err != nil {
+	if _, err := todostore.Start(ctx, db, p, own, sessA, false); err != nil {
 		t.Fatalf("start own: %v", err)
 	}
 	if _, err := todostore.Complete(ctx, db, p, done, sessA, false); err != nil {
 		t.Fatalf("complete done: %v", err)
 	}
-	if _, err := todostore.Start(ctx, db, p, fresh, sessA); err != nil {
+	if _, err := todostore.Start(ctx, db, p, fresh, sessA, false); err != nil {
 		t.Fatalf("start fresh: %v", err)
 	}
 	if _, err := todostore.Release(ctx, db, p, own, sessA); err == nil {
@@ -112,21 +112,21 @@ func TestReapReleasesEndedAndStaleClaims(t *testing.T) {
 	mine := taskIDText(t, reply, "mine")
 
 	// dead: claimed by sessA, whose session row has ended.
-	if _, err := todostore.Start(ctx, db, p, dead, sessA); err != nil {
+	if _, err := todostore.Start(ctx, db, p, dead, sessA, false); err != nil {
 		t.Fatalf("start dead: %v", err)
 	}
 	// stale: claimed by sessB a long time ago (the claim event is old).
-	if _, err := todostore.Start(ctx, db, p, stale, sessB); err != nil {
+	if _, err := todostore.Start(ctx, db, p, stale, sessB, false); err != nil {
 		t.Fatalf("start stale: %v", err)
 	}
 	old := time.Now().Add(-todostore.StaleClaimAfter - time.Hour).UTC().Format(time.RFC3339)
 	rawExec(t, db, "UPDATE events SET ts = ? WHERE op = 'start' AND args = ? AND session = ?", old, `{"id":"`+stale+`"}`, sessB)
 	// fresh: claimed by sessC recently.
-	if _, err := todostore.Start(ctx, db, p, fresh, sessC); err != nil {
+	if _, err := todostore.Start(ctx, db, p, fresh, sessC, false); err != nil {
 		t.Fatalf("start fresh: %v", err)
 	}
 	// mine: claimed by the reaping session itself.
-	if _, err := todostore.Start(ctx, db, p, mine, sessC); err != nil {
+	if _, err := todostore.Start(ctx, db, p, mine, sessC, false); err != nil {
 		t.Fatalf("start mine: %v", err)
 	}
 
@@ -165,7 +165,7 @@ func TestReapIsIdleWhenNothingIsStale(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := taskIDText(t, reply, "fresh")
-	if _, err := todostore.Start(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Start(ctx, db, p, id, sessA, false); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	reaped, err := todostore.Reap(ctx, db, p, nil, sessB)
@@ -200,7 +200,7 @@ func TestStaleClaimSurvivesCompaction(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := taskIDText(t, reply, "old claim")
-	if _, err := todostore.Start(ctx, db, p, id, sessA); err != nil {
+	if _, err := todostore.Start(ctx, db, p, id, sessA, false); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	// The claim is old; then a compaction folds the log and must carry

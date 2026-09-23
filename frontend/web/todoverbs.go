@@ -38,7 +38,7 @@ func (s *Server) handleTodoVerb(w http.ResponseWriter, r *http.Request, verb str
 	proj := todoProject(cwd)
 	switch verb {
 	case "start":
-		reply, err = todostore.Start(ctx, db, proj, id, sessionName)
+		reply, err = todostore.Start(ctx, db, proj, id, sessionName, false)
 	case "complete":
 		reply, err = todostore.Complete(ctx, db, proj, id, sessionName, false)
 	case "retry":

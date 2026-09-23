@@ -84,8 +84,9 @@ config/               NEW leaf (stdlib + models, nothing else):
   modelsfile.go       the models.json parse, the row-by-row overlay
                       over the embedded table
   workers.go          the workers.json parse (12: the fleet; model
-                      required, slots default 1), the id resolution
-                      over the merged table, the allow-default growth
+                      required, slots default 1, reviewer optional),
+                      the id resolution over the merged table, the
+                      allow-default growth
   agents.go           the AGENTS.md pair (global + project)
   theme.go            the theme.json read (raw; 10 owns the schema)
   settings.json       EMBED: the embedded settings; the 0.2.0 flag
@@ -319,7 +320,7 @@ rig: config: ~/.rig/workers.json: "model" is required
 rig: config: ~/.rig/workers.json: model "brain": no row in the models table (known: local)
 rig: config: ~/.rig/workers.json: slots: expected an integer, got "two"
 rig: config: ~/.rig/workers.json: slots: expected a positive number, got 0
-rig: config: ~/.rig/workers.json: unknown key "slot" (known: model, slots)
+rig: config: ~/.rig/workers.json: unknown key "slot" (known: model, reviewer, slots)
 rig: config: ~/.rig/settings.json: defaultJobModel "x" disagrees with workers.json's model "y"; delete the key
 rig: config: ~/.rig/theme.json: invalid character 'x' after object key:value pair
 rig: config: ~/.rig/AGENTS.md: permission denied
@@ -733,9 +734,13 @@ knew. The worker is a role; its name is the operator's.
 - `slots` (optional, default 1): how many `delegate` calls may run at
   once per session (SPEC_DELEGATE 6). A positive integer; zero,
   negative, or non-integer refuses naming the value.
+- `reviewer` (optional): the swarm's reviewer model, the same row
+  contract as `model` — it must resolve in the merged models table.
+  Amended by SPEC_SWARM: the `/swarm role=reviewer` default is this
+  key when configured, else the fleet's `model`.
 - Unknown keys refuse (3's rule), naming the known list (`model`,
-  `slots`). Present-but-malformed refuses as every other file (3);
-  absent is silent; the layer simply does not contribute.
+  `reviewer`, `slots`). Present-but-malformed refuses as every other
+  file (3); absent is silent; the layer simply does not contribute.
 
 **The presence rule: no workers, no worker tools.** With no
 `workers.json`, `delegate` and `scheduler` are **not registered**:

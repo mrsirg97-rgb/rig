@@ -60,8 +60,9 @@ plus one registration line, and the loop never names a concrete type.
   The only package that imports the whole tree.
 - `command`: the user-command leaf: the slash-command set (`compact`,
   `new`, `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
-  `rem`, `effort`, `role`, `approve`), testable with fakes: no kernel,
-  no stores, no provider.
+  `rem`, `effort`, `role`, `approve`, `swarm`), testable with fakes:
+  no kernel, no stores, no provider; `swarm` owns the vocabulary, the
+  controller owns the goroutines (SPEC_SWARM).
 - `config`: the config-loading layer: four-layer resolution (flags >
   env > file > embedded defaults) and the models table out of code and
   into a file.
@@ -163,6 +164,11 @@ plus one registration line, and the loop never names a concrete type.
   headless worker on a task now, wait, and feed back its last message;
   a recorded run in the cwd-scope scheduler store, a resumable
   transcript.
+- `swarm`: the drain-worker controller (SPEC_SWARM): supervisor-side
+  claim/spawn/complete loops over the session's bound queue, the
+  reviewer verdict protocol, the run streams and the in-memory roster;
+  the GPU slots are the parallelism, the dead claim is released via the
+  todo store's Reap door.
 - `tool/sessions`: the session-store introspection tool: `list` and
   `summary`, the vitals (which models ran, what failed, the cache
   ratio), and the store's schema migration on open.

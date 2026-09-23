@@ -238,11 +238,11 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 		}
 		switch g.Action {
 		case "start":
-			return todostore.Start(ctx, a.db, p, g.ID, session)
+			return todostore.Start(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "complete":
 			return todostore.Complete(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "fail":
-			return todostore.Fail(ctx, a.db, p, g.ID, session)
+			return todostore.Fail(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "release":
 			return todostore.Release(ctx, a.db, p, g.ID, session)
 		default:

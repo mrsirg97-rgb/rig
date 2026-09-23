@@ -1551,7 +1551,7 @@ func TestTodoRetryFromTheDashboard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Fail(context.Background(), db, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, "t1", "dashboard"); err != nil {
+	if _, err := todostore.Fail(context.Background(), db, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, "t1", "dashboard", false); err != nil {
 		t.Fatal(err)
 	}
 	rec := doReq(t, h, "POST", "/api/todo/retry"+q, strings.NewReader(`{"id":"t1"}`), hdr)

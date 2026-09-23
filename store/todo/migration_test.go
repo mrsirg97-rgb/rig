@@ -277,17 +277,21 @@ func TestReviewMigrationPairsHistoricalCompletesWithAccepts(t *testing.T) {
 	}
 	pruned := taskIDText(t, reply, "pruned")
 	kept := taskIDText(t, reply, "kept done")
-	if _, err := todostore.Complete(ctx, seed, p, pruned, "s1", true); err != nil {
-		t.Fatalf("complete pruned: %v", err)
+	if _, err := todostore.Start(ctx, seed, p, pruned, "s1", false); err != nil {
+		t.Fatalf("start pruned: %v", err)
 	}
+	rawExec(t, seed, "INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'complete', ?, 's1', 'ws')",
+		time.Now().UTC().Format(time.RFC3339), `{"id":"`+pruned+`"}`)
 	rawExec(t, seed, "INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'prune', ?, NULL, 'ws')",
 		time.Now().UTC().Format(time.RFC3339), `{"done":1}`)
 	if _, err := todostore.Claim(ctx, seed, p, "s1", ""); err != nil {
 		t.Fatalf("claim active: %v", err)
 	}
-	if _, err := todostore.Complete(ctx, seed, p, kept, "s1", true); err != nil {
-		t.Fatalf("complete kept: %v", err)
+	if _, err := todostore.Start(ctx, seed, p, kept, "s1", false); err != nil {
+		t.Fatalf("start kept: %v", err)
 	}
+	rawExec(t, seed, "INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'complete', ?, 's1', 'ws')",
+		time.Now().UTC().Format(time.RFC3339), `{"id":"`+kept+`"}`)
 	seed.DB.Close()
 
 	db, _, report, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion, todostore.ReviewMigration)
