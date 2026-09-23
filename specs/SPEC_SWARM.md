@@ -231,11 +231,14 @@ stream and the bare `/swarm` are their audit).
 The controller also emits `core.SwarmStatus` snapshots on claim, stream
 bytes, complete, verdict, and exit, throttled to a few per second (the
 exit's last frame always lands); the delegate tool's Observe emits the
-same shape for an interactive delegate. The snapshot carries the workers
-(the supervisor's List) and the bound queue's fold counts (`todo.Counts`:
-pending and review), and the TUI folds the latest into the footer: two
-rows above the existing footer line while a swarm runs, zero rows when
-nothing runs:
+same shape for an interactive delegate. The throttle owns the cadence:
+`Emit` takes the snapshot builder and invokes it only when a frame is
+due, so a streaming worker's per-chunk emits never fold the store (the
+`Counts` read runs at most four times a second, the forced frames
+besides). The snapshot carries the workers (the supervisor's List) and
+the bound queue's fold counts (`todo.Counts`: pending and review), and
+the TUI folds the latest into the footer: two rows above the existing
+footer line while a swarm runs, zero rows when nothing runs:
 
 ```
 workers 2 · todo 3 · done 5 · failed 1 · w2 t388 12s

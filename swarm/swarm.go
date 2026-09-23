@@ -497,11 +497,10 @@ func (c *Controller) emit(force bool) {
 	if c.emitter == nil {
 		return
 	}
-	st := c.status()
 	if force {
-		c.emitter.Force(st)
+		c.emitter.Force(c.status)
 	} else {
-		c.emitter.Emit(st)
+		c.emitter.Emit(c.status)
 	}
 }
 

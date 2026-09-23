@@ -244,11 +244,10 @@ func (a *adapter) emit(force bool) {
 	if a.emitter == nil {
 		return
 	}
-	st := a.snapshot()
 	if force {
-		a.emitter.Force(st)
+		a.emitter.Force(a.snapshot)
 	} else {
-		a.emitter.Emit(st)
+		a.emitter.Emit(a.snapshot)
 	}
 }
 

@@ -33,7 +33,8 @@ the supervisor's in-memory truth.
   swarm exited) and nothing else; the controller emits `SwarmStatus`
   snapshots on claim, stream bytes, complete, verdict, and exit,
   throttled to a few per second with the exit's last frame always
-  landing. The snapshot is the roster (`List`) plus the bound queue's
-  fold counts (`todo.Counts`).
+  landing; the emitter builds the snapshot only when the frame is due,
+  so the `Counts` fold never runs per stream chunk. The snapshot is the
+  roster (`List`) plus the bound queue's fold counts (`todo.Counts`).
 - Pure supervisor side: stdlib plus core, models, store/todo,
   store/scheduler, the `status` throttle leaf. No command.
