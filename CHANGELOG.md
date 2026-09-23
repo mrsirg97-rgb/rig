@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.4.2]: the spawned worker stops touching the board, and the plugin door pauses
+
+The manual gate and the swarm's worker door both had a gap the model could
+walk through: the `plugin` tool ran any live plugin ungated, and a spawned
+`rig -p` worker could claim a board entry and complete it — or accept or
+reject a review — despite the brief. The gate now pauses the door, and
+Worker mode is read/note-only.
+
+- **The plugin door pauses** (`cmd/rig`): `plugin` joins the mutating set,
+  so a `plugin run` asks the operator in manual mode exactly like calling
+  the plugin by name does. Both entries are pinned in the mutating
+  predicate, and a chain test pins that the ask fires.
+- **Worker mode is read/note-only** (`tool/todo`): claim, start, complete,
+  fail, accept, and reject refuse with one message naming the supervisor —
+  findings go in the task's note and in rem. The store's own arms stay as
+  they are: the swarm controller and the delegate parent use the store
+  directly and are unaffected.
+- **Tests**: each refused verb, the door's gate, and the board never
+  moving; the golden fixtures regenerated for the new todo description.
+
 ## [1.4.1]: the delegate worker dies on the silence, not the clock
 
 The scheduler already kills a fire that writes nothing (1.3.8), but the

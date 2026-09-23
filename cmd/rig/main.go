@@ -56,7 +56,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.4.1"
+const Version = "1.4.2"
 
 type root struct {
 	pluginMax int
@@ -408,7 +408,7 @@ var concurrentNatives = map[string]bool{
 
 var mutatingNatives = map[string]bool{
 	"bash": true, "write": true, "edit": true, "python": true,
-	"scheduler": true, "plugins": true, "delegate": true,
+	"scheduler": true, "plugin": true, "plugins": true, "delegate": true,
 }
 
 func (r *root) isMutating(name string) bool {

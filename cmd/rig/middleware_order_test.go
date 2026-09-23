@@ -84,6 +84,28 @@ func TestCanonicalMiddlewareAsksOnlyForAllowListedCalls(t *testing.T) {
 	}
 }
 
+func TestCanonicalMiddlewareAsksForThePluginDoor(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.live = toolset.New()
+	r.natives = map[string]bool{"plugin": true, "plugins": true}
+	r.allow = []string{"plugin"}
+	r.approve = approve.Manual
+	asked := ""
+	r.askDoor = func(ctx context.Context, prompt string) bool {
+		asked = prompt
+		return true
+	}
+	exec := chainFor(t, r, func(ctx context.Context, call core.ToolCall) (string, error) {
+		return "ran", nil
+	})
+	if _, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "plugin", Args: json.RawMessage(`{"action":"run","name":"syshealth","args":{}}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if asked == "" || !strings.Contains(asked, "plugin") {
+		t.Fatalf("the plugin door must pause in manual mode, prompt %q", asked)
+	}
+}
+
 func TestCanonicalMiddlewareContributesNoGuidelines(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.live = toolset.New()

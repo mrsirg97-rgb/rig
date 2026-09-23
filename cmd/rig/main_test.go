@@ -31,8 +31,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.4.1" {
-		t.Fatalf("Version = %q, want 1.4.1", Version)
+	if Version != "1.4.2" {
+		t.Fatalf("Version = %q, want 1.4.2", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -629,7 +629,7 @@ func TestIsMutatingPredicate(t *testing.T) {
 	for _, n := range nativeToolNames {
 		r.natives[n] = true
 	}
-	for _, n := range []string{"bash", "write", "edit", "python", "scheduler", "plugins", "delegate", "gpu_stats"} {
+	for _, n := range []string{"bash", "write", "edit", "python", "scheduler", "plugin", "plugins", "delegate", "gpu_stats"} {
 		if !r.isMutating(n) {
 			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
 		}
