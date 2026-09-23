@@ -139,7 +139,7 @@ func (r *Recorder) observe(ev core.Event) {
 	case core.Done:
 		seq := r.land(e.Model)
 		if seq > 0 {
-			if e2 := RecordUsage(context.Background(), r.db, seq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite)); e2 != nil {
+			if e2 := RecordUsage(context.Background(), r.db, seq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite), e.Usage.Cost); e2 != nil {
 				r.loud("usage", e2)
 			}
 		}
@@ -150,7 +150,7 @@ func (r *Recorder) observe(ev core.Event) {
 			r.loud("usage", errors.New("state: a discarded turn's usage has no message to attach to"))
 			return
 		}
-		if e2 := AddUsage(context.Background(), r.db, r.lastSeq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite)); e2 != nil {
+		if e2 := AddUsage(context.Background(), r.db, r.lastSeq, int64(e.Usage.Prompt), int64(e.Usage.Completion), int64(e.Usage.CacheRead), int64(e.Usage.CacheWrite), e.Usage.Cost); e2 != nil {
 			r.loud("usage", e2)
 		}
 	case core.Compacted:
@@ -250,7 +250,7 @@ func (r *Recorder) landCompacted(ev core.Compacted) {
 		return
 	}
 	r.setLastSeq(seq)
-	if e2 := RecordUsage(context.Background(), r.db, seq, int64(ev.Usage.Prompt), int64(ev.Usage.Completion), int64(ev.Usage.CacheRead), int64(ev.Usage.CacheWrite)); e2 != nil {
+	if e2 := RecordUsage(context.Background(), r.db, seq, int64(ev.Usage.Prompt), int64(ev.Usage.Completion), int64(ev.Usage.CacheRead), int64(ev.Usage.CacheWrite), ev.Usage.Cost); e2 != nil {
 		r.loud("summary usage", e2)
 	}
 	r.relandTail(seq)

@@ -12,15 +12,16 @@ import (
 )
 
 type Run struct {
-	Seq        int64   `db:"seq"`
-	DurationMs *int64  `db:"duration_ms"`
-	EndedAt    string  `db:"ended_at"`
-	Exit       *int64  `db:"exit"`
-	JobId      string  `db:"job_id"`
-	LogPath    *string `db:"log_path"`
-	Reason     *string `db:"reason"`
-	StartedAt  string  `db:"started_at"`
-	Status     string  `db:"status"`
+	Seq        int64    `db:"seq"`
+	Cost       *float64 `db:"cost"`
+	DurationMs *int64   `db:"duration_ms"`
+	EndedAt    string   `db:"ended_at"`
+	Exit       *int64   `db:"exit"`
+	JobId      string   `db:"job_id"`
+	LogPath    *string  `db:"log_path"`
+	Reason     *string  `db:"reason"`
+	StartedAt  string   `db:"started_at"`
+	Status     string   `db:"status"`
 }
 
 type RunDomain interface {
@@ -41,6 +42,7 @@ func ScanRun(row lazy.ScanRow) (Run, error) {
 	var out Run
 	err := row.Scan(
 		&out.Seq,
+		&out.Cost,
 		&out.DurationMs,
 		&out.EndedAt,
 		&out.Exit,
@@ -73,7 +75,7 @@ func (d *runDomain) GetRun(ctx context.Context, seq int64) *lazy.Lazy[Run] {
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "seq", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status" FROM "runs" WHERE "seq" = $1`,
+		`SELECT "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status" FROM "runs" WHERE "seq" = $1`,
 		seq,
 	)
 	out, err := ScanRun(row)
@@ -110,7 +112,7 @@ func (d *runDomain) GetRunBatch(ctx context.Context, keys []int64) *lazy.Lazy[Ru
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "seq", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status" FROM "runs" WHERE "seq" IN (`+ph+`)`, args...)
+		`SELECT "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status" FROM "runs" WHERE "seq" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -138,8 +140,9 @@ func (d *runDomain) InsertRun(ctx context.Context, row Run) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "runs" ("seq", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING "seq", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "runs" ("seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
 		row.Seq,
+		row.Cost,
 		row.DurationMs,
 		row.EndedAt,
 		row.Exit,
@@ -160,7 +163,7 @@ func (d *runDomain) DeleteRun(ctx context.Context, seq int64) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "runs" WHERE "seq" = $1 RETURNING "seq", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "runs" WHERE "seq" = $1 RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
 		seq,
 	)
 	if err != nil {
@@ -174,7 +177,8 @@ func (d *runDomain) UpdateRun(ctx context.Context, row Run) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "runs" SET "duration_ms" = $1, "ended_at" = $2, "exit" = $3, "job_id" = $4, "log_path" = $5, "reason" = $6, "started_at" = $7, "status" = $8 WHERE "seq" = $9 RETURNING "seq", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "runs" SET "cost" = $1, "duration_ms" = $2, "ended_at" = $3, "exit" = $4, "job_id" = $5, "log_path" = $6, "reason" = $7, "started_at" = $8, "status" = $9 WHERE "seq" = $10 RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
+		row.Cost,
 		row.DurationMs,
 		row.EndedAt,
 		row.Exit,

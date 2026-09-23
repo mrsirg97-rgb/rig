@@ -10,6 +10,14 @@ adapter's problem; the loop sees `core.Event` only.
 
 - `New(baseURL, model)`: builds the `core.Provider`. `baseURL` may carry
   a path prefix such as `/v1`; it joins `/chat/completions`.
+- `NewWithConfig(Config)`: the hosted-mode constructor (SPEC_HOSTED):
+  `APIKey` (sent as `Authorization: Bearer <key>`, never in a fault or a
+  wire test), `Remote` (omits `chat_template_kwargs`), `Reasoning`
+  (`reasoning` = OpenRouter field names), `ProviderPin` (the
+  `provider.order` upstream pin), `CacheControl` (the top-level
+  `cache_control` switch), `Retries`/`RetryBase`/`Jitter` (the 429/5xx
+  backoff), `BlobsDir` (vision). The existing constructors delegate with
+  the local-row defaults (no key, no retry, `reasoning_content`).
 - `NewWithHeaderTimeout(baseURL, model, headerTimeout)`: the same with a
   dialed time-to-headers bound; `New` applies the 5-minute default.
 - `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
@@ -49,7 +57,22 @@ adapter's problem; the loop sees `core.Event` only.
   chunk is a `Fault`.
 - `usage` is read from the usage chunk (the `stream_options.include_usage`
   request); cached tokens are a subset of `prompt` on this wire, and
-  `total_tokens` is read and ignored.
+  `total_tokens` is read and ignored. `usage.cost` (dollars, where the
+  endpoint returns it) becomes `Usage.Cost`.
+- **Retry**: a 429 or 5xx re-posts the identical body with backoff
+  `base * 2^attempt * (1 + jitter)` inside the stream goroutine — the loop
+  sees no event until the bound is exhausted, then the existing loud
+  fault. A 4xx other than 429 faults immediately. The request body is
+  rebuilt per attempt (the reader is consumed); `Jitter` is a Config field
+  so tests are deterministic.
+- **Reasoning field names**: the row's `Reasoning` names the wire. The
+  default reads `delta.reasoning_content` and echoes
+  `reasoning_content`; the OpenRouter style reads `delta.reasoning` and
+  accumulates `delta.reasoning_details` in order, and echoes both. The
+  full details array is the last chunk's cumulative state, carried by
+  `ReasoningDelta.Details` into `Message.ReasoningDetails`. The details
+  array is not persisted (a resumed session echoes the plain reasoning
+  text only).
 - Tool calls accumulate by index across deltas (`accumulate`): every
   accumulated call is emitted, and a call whose args are invalid at
   stream end carries `Cut` set to the finish reason (a length-cut or

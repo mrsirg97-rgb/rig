@@ -12,12 +12,13 @@ const (
 )
 
 type Message struct {
-	Role          Role
-	Content       string
-	Reasoning     string
-	ToolCalls     []ToolCall
-	ToolID        string
-	ContextTokens int
+	Role             Role
+	Content          string
+	Reasoning        string
+	ReasoningDetails json.RawMessage
+	ToolCalls        []ToolCall
+	ToolID           string
+	ContextTokens    int
 }
 
 type ToolCall struct {

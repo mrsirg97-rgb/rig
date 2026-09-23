@@ -64,7 +64,7 @@ func seedHome(t *testing.T) string {
 	if err := state.RecordToolResult(ctx, sdb, "sess1", seq, "call_1", "file1\nfile2", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordUsage(ctx, sdb, seq, 100, 42, 10, 5); err != nil {
+	if err := state.RecordUsage(ctx, sdb, seq, 100, 42, 10, 5, 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := state.CloseSession(ctx, sdb, "sess1", "ok"); err != nil {

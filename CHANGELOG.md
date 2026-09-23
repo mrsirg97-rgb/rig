@@ -1,4 +1,57 @@
 # Changelog
+## [1.5.0]: hosted mode — remote OpenAI-compatible endpoints
+
+The provider already spoke the OpenAI wire; hosted endpoints (OpenRouter,
+DeepSeek's API, any remote OpenAI-compatible server) needed what a local
+llama-server does not: auth, retry, cost, per-provider reasoning field
+names, and a remote spawn path that never touches the local swap. Model
+rows now carry where they run, and swarms and scheduled jobs take dollar
+budgets.
+
+- **Model rows gain their run site** (`models`, `config`): `remote` (bool),
+  `provider` (a name implies remote), `baseUrl` (required for a remote
+  row), `apiKey` (never logged or rendered), `concurrency` (the row's
+  token bound, default 1), `reasoning` (`reasoning_content` default,
+  `reasoning` for OpenRouter), `providerPin` and `cacheControl`
+  (openrouter-only), and `retries` (default 3 for remote rows). The env
+  overlay gains `RIG_MODEL_BASE_URL`, `RIG_MODEL_API_KEY`,
+  `RIG_MODEL_REMOTE`, `RIG_MODEL_CONCURRENCY`, `RIG_MODEL_REASONING`, and
+  `RIG_MODEL_RETRIES`, so a key can live in the environment and never in
+  a file.
+- **The provider's hosted behavior** (`provider/openai`): `NewWithConfig`
+  sends `Authorization: Bearer <key>`, retries 429 and 5xx with
+  exponential backoff and jitter under the row's bound (the loop sees no
+  event until the bound is exhausted, then the existing loud fault),
+  parses `usage.cost` into `core.Usage.Cost`, reads reasoning under the
+  row's field names (`delta.reasoning` / `delta.reasoning_details` for
+  OpenRouter, `delta.reasoning_content` otherwise), echoes both back on
+  later turns, omits `chat_template_kwargs` for remote rows, and sends
+  the OpenRouter `provider.order` pin and `cache_control` switch when
+  the row asks for them.
+- **Cost lands in the usage column** (`store/state`, `core`, `loop`):
+  `usage.cost` (schema v4), `RecordUsage`/`AddUsage` take it,
+  `SessionUsage`/`SessionCost` read it, the sessions list carries it,
+  and the TUI footer shows the session's dollars beside the token
+  totals.
+- **Remote spawns** (`store/scheduler`, `tool/delegate`, `swarm`): a
+  remote row's delegate and job fire skip the llama-swap busy probe and
+  `WaitBusy` entirely; parallelism is the row's `concurrency` token
+  flock beside the per-session slot bound. The worker resolves the row
+  from the shared `models.json`, so a remote row's `baseUrl` and key
+  ride the worker without the parent passing them.
+- **Budgets** (`swarm`, `store/scheduler`): `swarm <n> budget=<dollars>`
+  stops claiming at the cap with a notice; scheduled jobs take `budget`
+  on create/update and record a skip at the cap. The delegate and the
+  runner record each run's cost (read from the cost column), so
+  `scheduler runs` shows the spend and the job's sum is auditable.
+- **Tests**: a fake OpenAI-compatible server asserts the bearer, the
+  bounded 429/5xx backoff (deterministic base and jitter), cost parsing,
+  reasoning echoed under the row's field names, and the remote wire
+  (no `chat_template_kwargs`, pin, cache switch); the cost column is
+  recorded and summed; a remote delegate and a remote swarm fire never
+  consult the swap; a swarm budget and a scheduled job budget stop at
+  the cap.
+
 ## [1.4.4]: the swarm's progress in the TUI
 
 The swarm ran silently beside the session: the transcript showed nothing

@@ -25,9 +25,10 @@ type Swarm interface {
 }
 
 type SwarmStart struct {
-	Count int
-	Role  string
-	Model string
+	Count  int
+	Role   string
+	Model  string
+	Budget float64
 }
 
 type SwarmWorker struct {

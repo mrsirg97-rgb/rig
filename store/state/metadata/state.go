@@ -54,6 +54,7 @@ type Usage struct {
 	Completion int64    `alias:"name=completion,nullable=false"`
 	CacheRead  int64    `alias:"name=cache_read,nullable=false"`
 	CacheWrite int64    `alias:"name=cache_write,nullable=false"`
+	Cost       float64  `alias:"name=cost,nullable=false"`
 }
 
 // table:"files"

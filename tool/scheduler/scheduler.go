@@ -26,7 +26,9 @@ const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D M
 	"until the note clears; a failed once job is done — re-create it to retry. A job bounds each fire " +
 	"with timeout (minutes, default 30, ceiling 24h; update with -1 resets it) and stall (minutes, the " +
 	"silence window: a fire that writes nothing for longer is killed as hung; NULL/0 = ceiling only; " +
-	"update with -1 resets it). command jobs run a fixed " +
+	"update with -1 resets it). budget is dollars, summed from the recorded run " +
+	"costs (SPEC_HOSTED 5): a model fire at the cap records a skip naming the spend; " +
+	"update with -1 resets the cap; command jobs take no budget. command jobs run a fixed " +
 	"shell line instead of a worker session: no GPU, no busy policy, prompt/model/busy refused; for " +
 	"deterministic scripts (pollers, digests, backups), never for anything needing judgment."
 
@@ -78,6 +80,11 @@ func schemaJSON(defModel string) string {
 			"maximum": 1440,
 			"description": "Silence window per fire, in minutes: a fire whose worker writes nothing for longer is killed as hung. NULL/0 = ceiling only. On update, -1 resets to the default. Omit to leave unchanged."
 		},
+		"budget": {
+			"type": "number",
+			"minimum": -1,
+			"description": "Dollar cap for the job's model fires, summed from the recorded run costs. On update, -1 resets the cap. Command jobs take no budget."
+		},
 		"cwd": {
 			"type": "string",
 			"description": "Working directory the job runs in (default: this session's cwd)."
@@ -97,19 +104,20 @@ func schemaJSON(defModel string) string {
 }
 
 type given struct {
-	Action  string `json:"action"`
-	Name    string `json:"name"`
-	Prompt  string `json:"prompt"`
-	Command string `json:"command"`
-	Cron    string `json:"cron"`
-	At      string `json:"at"`
-	Model   string `json:"model"`
-	Busy    string `json:"busy"`
-	Timeout int    `json:"timeout"`
-	Stall   int    `json:"stall"`
-	Cwd     string `json:"cwd"`
-	ID      string `json:"id"`
-	N       *int   `json:"n"`
+	Action  string  `json:"action"`
+	Name    string  `json:"name"`
+	Prompt  string  `json:"prompt"`
+	Command string  `json:"command"`
+	Cron    string  `json:"cron"`
+	At      string  `json:"at"`
+	Model   string  `json:"model"`
+	Busy    string  `json:"busy"`
+	Timeout int     `json:"timeout"`
+	Stall   int     `json:"stall"`
+	Budget  float64 `json:"budget"`
+	Cwd     string  `json:"cwd"`
+	ID      string  `json:"id"`
+	N       *int    `json:"n"`
 }
 
 type adapter struct {
@@ -183,7 +191,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		return sched.Create(ctx, a.db, a.ct, sched.CreateInput{
 			Name: name, Prompt: g.Prompt, Command: command, Cron: g.Cron, At: g.At,
-			Model: model, Busy: busy, Cwd: jobCwd, Timeout: g.Timeout, Stall: g.Stall,
+			Model: model, Busy: busy, Cwd: jobCwd, Timeout: g.Timeout, Stall: g.Stall, Budget: g.Budget,
 		}, cwd, session, a.runnerCmd, time.Now)
 	case "update":
 		if g.ID == "" {
@@ -199,7 +207,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		}
 		return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
 			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron,
-			At: g.At, Cwd: updateCwd, Model: g.Model, Busy: g.Busy, Timeout: g.Timeout, Stall: g.Stall,
+			At: g.At, Cwd: updateCwd, Model: g.Model, Busy: g.Busy, Timeout: g.Timeout, Stall: g.Stall, Budget: g.Budget,
 		}, session, a.runnerCmd, time.Now)
 	case "list":
 		return sched.List(ctx, a.db, a.ct, cwd, nil, time.Now)

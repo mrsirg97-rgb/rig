@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -27,7 +28,10 @@ type TextDelta struct{ Text string }
 
 func (TextDelta) event() {}
 
-type ReasoningDelta struct{ Text string }
+type ReasoningDelta struct {
+	Text    string
+	Details json.RawMessage
+}
 
 func (ReasoningDelta) event() {}
 
@@ -60,6 +64,7 @@ type Usage struct {
 	Completion int
 	CacheRead  int
 	CacheWrite int
+	Cost       float64
 }
 
 type ToolStart struct{ Call ToolCall }

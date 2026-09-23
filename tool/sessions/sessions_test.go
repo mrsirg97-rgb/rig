@@ -46,7 +46,7 @@ func seedSession(t *testing.T, db store.DB, s seedSpec) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := state.RecordUsage(ctx, db, seq, u.prompt, 0, u.cacheRead, 0); err != nil {
+		if err := state.RecordUsage(ctx, db, seq, u.prompt, 0, u.cacheRead, 0, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -334,7 +334,7 @@ func TestSessionsToolMigratesAnOlderProjectStoreToTheBuildVersion(t *testing.T) 
 	if err := db.QueryRow(`SELECT "value" FROM "meta" WHERE "key" = 'schema_version'`).Scan(&v); err != nil {
 		t.Fatal(err)
 	}
-	if v != "3" {
+	if v != "4" {
 		t.Fatalf("the store must land on the build version after the read, got %s", v)
 	}
 }

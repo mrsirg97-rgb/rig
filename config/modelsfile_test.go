@@ -20,7 +20,7 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 		{"duplicate id", `[{"id": "local", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1}, {"id": "local", "window": 200, "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 2: duplicate id "local"`},
 		{"unknown role", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "role": "boss"}]`, `row 1: role: "boss" (allowed: interactive, worker)`},
 		{"bad int", `[{"id": "x", "window": "big", "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 1: window: expected an integer, got "big"`},
-		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: effort, efforts, id, keepRecent, maxTokens, reserve, role, vision, window)`},
+		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: apiKey, baseUrl, cacheControl, concurrency, effort, efforts, id, keepRecent, maxTokens, provider, providerPin, reasoning, remote, reserve, retries, role, vision, window)`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -167,5 +167,37 @@ func TestModelsVisionKeyRefusesANonBoolean(t *testing.T) {
 				t.Fatalf("the refusal names the file: %v", err)
 			}
 		})
+	}
+}
+
+func TestModelsHostedRowKeys(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-test", "concurrency": 4, "reasoning": "reasoning", "providerPin": "Together", "cacheControl": true}]`)
+	cfg := load(t, dir, t.TempDir())
+	m, ok := cfg.Models.Get("brain")
+	if !ok {
+		t.Fatalf("the hosted row must be added")
+	}
+	if !m.Remote || m.Provider != "openrouter" || m.BaseURL != "https://openrouter.ai/api/v1" || m.APIKey != "sk-test" {
+		t.Fatalf("row run site = %+v", m)
+	}
+	if m.Concurrency != 4 || m.Reasoning != "reasoning" || len(m.ProviderPin) != 1 || m.ProviderPin[0] != "Together" || !m.CacheControl || m.Retries != 3 {
+		t.Fatalf("hosted fields = %+v, want concurrency 4 reasoning reasoning pin [Together] cacheControl retries 3 (the remote default)", m)
+	}
+}
+
+func TestModelsHostedRowInvariantsRefuse(t *testing.T) {
+	dir := t.TempDir()
+	p := write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "remote": true}]`)
+	err := loadErr(t, dir, t.TempDir())
+	if err.Error() != "config: "+p+": brain: a remote row needs a baseUrl (the endpoint it runs against)" {
+		t.Fatalf("the voice = %q, want the missing baseUrl named", err)
+	}
+
+	dir2 := t.TempDir()
+	p2 := write(t, dir2, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "provider": "deepseek", "baseUrl": "https://api.deepseek.com", "cacheControl": true}]`)
+	err = loadErr(t, dir2, t.TempDir())
+	if err.Error() != "config: "+p2+": brain: providerPin and cacheControl are openrouter-only (provider: \"deepseek\")" {
+		t.Fatalf("the voice = %q, want the openrouter-only refusal", err)
 	}
 }

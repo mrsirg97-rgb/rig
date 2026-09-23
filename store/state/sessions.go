@@ -22,6 +22,7 @@ type SessionRow struct {
 	Turns   int
 	Faults  int
 	Tokens  int64
+	Cost    float64
 	Label   string
 }
 
@@ -46,6 +47,9 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 			COALESCE((SELECT SUM(u."prompt" + u."completion") FROM "usage" u
 				  JOIN "messages" m ON m."seq" = u."message_seq"
 				  WHERE m."session_id" = s."id"), 0),
+			COALESCE((SELECT SUM(u."cost") FROM "usage" u
+				  JOIN "messages" m ON m."seq" = u."message_seq"
+				  WHERE m."session_id" = s."id"), 0),
 			COALESCE(s."label", '')
 		FROM "sessions" s
 		ORDER BY s."started_at" DESC
@@ -57,7 +61,7 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 	var out []SessionRow
 	for rows.Next() {
 		var r SessionRow
-		if err := rows.Scan(&r.ID, &r.Cwd, &r.Started, &r.Exit, &r.Model, &r.Version, &r.Turns, &r.Faults, &r.Tokens, &r.Label); err != nil {
+		if err := rows.Scan(&r.ID, &r.Cwd, &r.Started, &r.Exit, &r.Model, &r.Version, &r.Turns, &r.Faults, &r.Tokens, &r.Cost, &r.Label); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

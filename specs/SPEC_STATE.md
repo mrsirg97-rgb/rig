@@ -159,7 +159,10 @@ The session transcript as rows. One file per session under
   messages), name, args (TEXT json), result (TEXT, nullable until it lands),
   err (nullable), started_at, ended_at.
 - `usage`: message_seq (primary, link messages), prompt, completion,
-  cache_read, cache_write.
+  cache_read, cache_write, cost (the endpoint's dollars, 0 when it
+  reported none; schema v4, SPEC_HOSTED 3). `SessionCost` sums it, the
+  sessions list and the TUI footer show it, and the swarm and the
+  scheduler runner read a worker's spend from it.
 - `files`: session_id + path (primary), hash, mtime. `Session.Files`
   persisted, so a resumed session keeps its drift checks. `files` pairs its
   composite primary with `session_id` directly and carries no Session link

@@ -11,14 +11,14 @@ import (
 	"github.com/mrsirg97-rgb/rig/core"
 )
 
-const swarmUsage = "swarm [<n> [role=worker|reviewer] [model=<id>]] | swarm stop"
+const swarmUsage = "swarm [<n> [role=worker|reviewer] [model=<id>] [budget=<dollars>]] | swarm stop"
 
 type swarmCmd struct{}
 
 func (swarmCmd) Name() string { return "swarm" }
 
 func (swarmCmd) Description() string {
-	return "the drain workers: start N workers on the session's queue, list the live ones, stop them (swarm <n> [role=worker|reviewer] [model=<id>], bare swarm lists, swarm stop ends)"
+	return "the drain workers: start N workers on the session's queue, list the live ones, stop them (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>], bare swarm lists, swarm stop ends)"
 }
 
 func (swarmCmd) Sub() []Sub {
@@ -51,12 +51,12 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		return "", fmt.Errorf("swarm: %q: not a worker count (%s)", fields[0], swarmUsage)
 	}
 	in := SwarmStart{Count: n, Role: "worker"}
-	roleSeen, modelSeen := false, false
+	roleSeen, modelSeen, budgetSeen := false, false, false
 	for _, f := range fields[1:] {
 		switch {
 		case strings.HasPrefix(f, "role="):
 			if roleSeen {
-				return "", errors.New("swarm: role given twice (swarm <n> [role=worker|reviewer] [model=<id>])")
+				return "", errors.New("swarm: role given twice (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>])")
 			}
 			roleSeen = true
 			in.Role = strings.TrimPrefix(f, "role=")
@@ -65,13 +65,27 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 			}
 		case strings.HasPrefix(f, "model="):
 			if modelSeen {
-				return "", errors.New("swarm: model given twice (swarm <n> [role=worker|reviewer] [model=<id>])")
+				return "", errors.New("swarm: model given twice (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>])")
 			}
 			modelSeen = true
 			in.Model = strings.TrimPrefix(f, "model=")
 			if in.Model == "" {
 				return "", errors.New("swarm: model needs an id (model=<id>)")
 			}
+		case strings.HasPrefix(f, "budget="):
+			if budgetSeen {
+				return "", errors.New("swarm: budget given twice (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>])")
+			}
+			budgetSeen = true
+			raw := strings.TrimPrefix(f, "budget=")
+			if raw == "" {
+				return "", errors.New("swarm: budget needs a dollar amount (budget=<dollars>)")
+			}
+			v, err := strconv.ParseFloat(raw, 64)
+			if err != nil || v < 0 {
+				return "", fmt.Errorf("swarm: budget %q: expected a non-negative dollar amount", raw)
+			}
+			in.Budget = v
 		default:
 			return "", fmt.Errorf("swarm: unknown token %q (%s)", f, swarmUsage)
 		}

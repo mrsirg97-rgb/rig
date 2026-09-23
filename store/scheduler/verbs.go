@@ -32,6 +32,7 @@ type CreateInput struct {
 	Busy    string
 	Timeout int
 	Stall   int
+	Budget  float64
 }
 
 const MaxTimeoutMinutes = 1440
@@ -83,6 +84,12 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	}
 	if command != "" && in.Busy != "" {
 		return "", schedErr("command jobs need no busy policy")
+	}
+	if command != "" && in.Budget != 0 {
+		return "", schedErr("command jobs need no budget")
+	}
+	if in.Budget < 0 {
+		return "", schedErr("budget must be >= 0 dollars, got %v", in.Budget)
 	}
 	if in.Timeout != 0 && (in.Timeout < 1 || in.Timeout > MaxTimeoutMinutes) {
 		return "", timeoutErr(in.Timeout)
@@ -166,6 +173,9 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	}
 	if in.Stall > 0 {
 		args["stall"] = in.Stall
+	}
+	if in.Budget > 0 {
+		args["budget"] = in.Budget
 	}
 	argsJSON, _ := json.Marshal(args)
 	seq, err := appendEvent(bound, f.maxSeq+1, "create", string(argsJSON), session)
@@ -308,6 +318,7 @@ type UpdateInput struct {
 	Busy    string
 	Timeout int
 	Stall   int
+	Budget  float64
 }
 
 func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, runnerCmd string, now func() time.Time) (string, error) {
@@ -331,6 +342,11 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	stallReset := stall == -1
 	if stallReset {
 		stall = 0
+	}
+	budget := in.Budget
+	budgetReset := budget == -1
+	if budgetReset {
+		budget = 0
 	}
 
 	var newCron, newAt string
@@ -375,8 +391,11 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if job.State == "removed" {
 		return "", schedErr("job '%s' is removed", in.ID)
 	}
-	if name == "" && prompt == "" && command == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" && in.Timeout == 0 && in.Stall == 0 {
+	if name == "" && prompt == "" && command == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" && in.Timeout == 0 && in.Stall == 0 && in.Budget == 0 {
 		return "", schedErr("update needs a change")
+	}
+	if budget != 0 && budget < 0 {
+		return "", schedErr("budget must be >= 0 dollars, got %v", budget)
 	}
 	if busy != "" && busy != "skip" && busy != "force" {
 		return "", schedErr("busy must be 'skip' or 'force', got '%s'", busy)
@@ -399,6 +418,9 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	}
 	if busy != "" && jobCommand != "" {
 		return "", schedErr("command jobs need no busy policy (job '%s' runs a command)", in.ID)
+	}
+	if in.Budget != 0 && jobCommand != "" {
+		return "", schedErr("command jobs need no budget (job '%s' runs a command)", in.ID)
 	}
 	if name != "" && name != job.Name {
 		for _, j := range f.jobs {
@@ -454,6 +476,11 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	} else if stallReset {
 		args["stall"] = 0
 	}
+	if budget != 0 {
+		args["budget"] = budget
+	} else if budgetReset {
+		args["budget"] = 0
+	}
 	if cadenceChanged {
 		args["cron"] = newCron
 		var atPtr *string
@@ -489,6 +516,7 @@ type RunRecordInput struct {
 	Reason   string
 	Started  string
 	Ended    string
+	Cost     *float64
 	Done     bool
 }
 
@@ -549,7 +577,7 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 		Seq: seq, JobId: in.ID,
 		StartedAt: started, EndedAt: ended,
 		Status: status, Exit: in.Exit, DurationMs: in.Duration,
-		Reason: reason, LogPath: log,
+		Reason: reason, LogPath: log, Cost: in.Cost,
 	}); err != nil {
 		return 0, fmt.Errorf("scheduler: run record: %w", err)
 	}

@@ -26,6 +26,8 @@ type jobState struct {
 	TimeoutSet  bool
 	Stall       int64
 	StallSet    bool
+	Budget      float64
+	BudgetSet   bool
 	State       string
 	LastStatus  string
 	LastTs      string
@@ -81,6 +83,12 @@ func (j *jobState) stallPtr() *int64 {
 	}
 	return &j.Stall
 }
+func (j *jobState) budgetPtr() *float64 {
+	if !j.BudgetSet {
+		return nil
+	}
+	return &j.Budget
+}
 func (j *jobState) commandPtr() *string {
 	if j.Command == "" {
 		return nil
@@ -132,17 +140,18 @@ func (f *fold) apply(e eventRow) {
 
 func (f *fold) applyCreate(e eventRow) {
 	var a struct {
-		ID      string  `json:"id"`
-		Name    string  `json:"name"`
-		Prompt  string  `json:"prompt"`
-		Command string  `json:"command"`
-		Cron    string  `json:"cron"`
-		At      *string `json:"at"`
-		Cwd     string  `json:"cwd"`
-		Model   string  `json:"model"`
-		Busy    string  `json:"busy"`
-		Timeout *int64  `json:"timeout"`
-		Stall   *int64  `json:"stall"`
+		ID      string   `json:"id"`
+		Name    string   `json:"name"`
+		Prompt  string   `json:"prompt"`
+		Command string   `json:"command"`
+		Cron    string   `json:"cron"`
+		At      *string  `json:"at"`
+		Cwd     string   `json:"cwd"`
+		Model   string   `json:"model"`
+		Busy    string   `json:"busy"`
+		Timeout *int64   `json:"timeout"`
+		Stall   *int64   `json:"stall"`
+		Budget  *float64 `json:"budget"`
 	}
 	if json.Unmarshal([]byte(e.args), &a) != nil || a.Name == "" {
 		return
@@ -179,6 +188,10 @@ func (f *fold) applyCreate(e eventRow) {
 	if a.Stall != nil {
 		f.jobs[id].Stall = *a.Stall
 		f.jobs[id].StallSet = *a.Stall > 0
+	}
+	if a.Budget != nil {
+		f.jobs[id].Budget = *a.Budget
+		f.jobs[id].BudgetSet = *a.Budget > 0
 	}
 }
 
@@ -243,16 +256,17 @@ func (f *fold) applyVerb(e eventRow) {
 
 func (j *jobState) applyUpdate(args string) {
 	var u struct {
-		Name    string  `json:"name"`
-		Prompt  string  `json:"prompt"`
-		Command string  `json:"command"`
-		Cron    string  `json:"cron"`
-		At      *string `json:"at"`
-		Cwd     string  `json:"cwd"`
-		Model   string  `json:"model"`
-		Busy    string  `json:"busy"`
-		Timeout *int64  `json:"timeout"`
-		Stall   *int64  `json:"stall"`
+		Name    string   `json:"name"`
+		Prompt  string   `json:"prompt"`
+		Command string   `json:"command"`
+		Cron    string   `json:"cron"`
+		At      *string  `json:"at"`
+		Cwd     string   `json:"cwd"`
+		Model   string   `json:"model"`
+		Busy    string   `json:"busy"`
+		Timeout *int64   `json:"timeout"`
+		Stall   *int64   `json:"stall"`
+		Budget  *float64 `json:"budget"`
 	}
 	if json.Unmarshal([]byte(args), &u) != nil {
 		return
@@ -291,26 +305,31 @@ func (j *jobState) applyUpdate(args string) {
 		j.Stall = *u.Stall
 		j.StallSet = *u.Stall > 0
 	}
+	if u.Budget != nil {
+		j.Budget = *u.Budget
+		j.BudgetSet = *u.Budget > 0
+	}
 }
 
 type compactJob struct {
-	ID         string  `json:"id"`
-	Name       string  `json:"name"`
-	Prompt     string  `json:"prompt"`
-	Command    *string `json:"command"`
-	Cron       string  `json:"cron"`
-	At         *string `json:"at"`
-	Cwd        string  `json:"cwd"`
-	Model      string  `json:"model"`
-	Busy       string  `json:"busy"`
-	Timeout    *int64  `json:"timeout"`
-	Stall      *int64  `json:"stall"`
-	State      string  `json:"state"`
-	CreatedSeq int64   `json:"created_seq"`
-	UpdatedSeq int64   `json:"updated_seq"`
-	LastStatus *string `json:"lastStatus"`
-	LastTs     *string `json:"lastTs"`
-	LastExit   *int64  `json:"lastExit"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Prompt     string   `json:"prompt"`
+	Command    *string  `json:"command"`
+	Cron       string   `json:"cron"`
+	At         *string  `json:"at"`
+	Cwd        string   `json:"cwd"`
+	Model      string   `json:"model"`
+	Busy       string   `json:"busy"`
+	Timeout    *int64   `json:"timeout"`
+	Stall      *int64   `json:"stall"`
+	Budget     *float64 `json:"budget"`
+	State      string   `json:"state"`
+	CreatedSeq int64    `json:"created_seq"`
+	UpdatedSeq int64    `json:"updated_seq"`
+	LastStatus *string  `json:"lastStatus"`
+	LastTs     *string  `json:"lastTs"`
+	LastExit   *int64   `json:"lastExit"`
 }
 
 func (f *fold) applyCompact(e eventRow) {
@@ -344,6 +363,10 @@ func (f *fold) applyCompact(e eventRow) {
 			if r.Stall != nil {
 				j.Stall = *r.Stall
 				j.StallSet = *r.Stall > 0
+			}
+			if r.Budget != nil {
+				j.Budget = *r.Budget
+				j.BudgetSet = *r.Budget > 0
 			}
 			if r.At != nil {
 				j.At = *r.At
@@ -432,6 +455,7 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) er
 			Cron: j.Cron, At: at, Cwd: j.Cwd, Model: j.Model, Busy: j.Busy,
 			Timeout:    j.timeoutPtr(),
 			Stall:      j.stallPtr(),
+			Budget:     j.budgetPtr(),
 			State:      j.State,
 			LastStatus: ls, LastTs: lt, LastExit: le,
 		})
@@ -472,11 +496,11 @@ func rewrite(tx *sql.Tx, f *fold) error {
 	})
 	for _, j := range order {
 		_, err := tx.Exec(
-			`INSERT INTO jobs (id, name, prompt, command, cron, at, cwd, model, busy, timeout, stall, state,
+			`INSERT INTO jobs (id, name, prompt, command, cron, at, cwd, model, busy, timeout, stall, budget, state,
 			    last_status, last_ts, last_exit, created_seq, updated_seq)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			j.ID, j.Name, j.Prompt, nullStr(j.Command), j.Cron, nullStr(j.At), j.Cwd, j.Model, j.Busy,
-			nullInt64(j.TimeoutSet, j.Timeout), nullInt64(j.StallSet, j.Stall), j.State,
+			nullInt64(j.TimeoutSet, j.Timeout), nullInt64(j.StallSet, j.Stall), nullFloat64(j.BudgetSet, j.Budget), j.State,
 			nullStr(j.LastStatus), nullStr(j.LastTs), nullInt64(j.LastExitSet, j.LastExit),
 			j.CreatedSeq, j.UpdatedSeq,
 		)
@@ -495,6 +519,13 @@ func nullStr(s string) any {
 }
 
 func nullInt64(set bool, v int64) any {
+	if !set {
+		return nil
+	}
+	return v
+}
+
+func nullFloat64(set bool, v float64) any {
 	if !set {
 		return nil
 	}

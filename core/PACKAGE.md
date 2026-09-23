@@ -14,7 +14,11 @@ type, an interface, or a context helper.
 - **Wire types**: `Message`, `ToolCall`, `ToolSpec`, `Request`, `Usage`,
   and the `Event` vocabulary (`TextDelta`, `ReasoningDelta`,
   `ToolCallEvent`, `Done`, `Fault`, `ToolStart`, `ToolResult`, `TurnEnd`,
-  `TestEvent`, `Compacted`, `Compacting`).
+  `TestEvent`, `Compacted`, `Compacting`). The 1.5.0 hosted-mode extension
+  (SPEC_HOSTED, the named reopening of the frozen surface): `Usage.Cost`
+  (dollars, 0 when the endpoint reports none), `ReasoningDelta.Details`
+  (the raw `reasoning_details` array chunk), and `Message.ReasoningDetails`
+  (the full array, echoed back on later turns).
 - **State**: `Session` (transcript + `FileState` provenance), JSON
   save/load.
 - **Helpers**: `WithInterrupt`/`InterruptFrom` (turn cancel under a typed

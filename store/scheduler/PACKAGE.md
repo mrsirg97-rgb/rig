@@ -59,7 +59,9 @@ written before the store commit; drift is surfaced in list.
   in the job's cwd — the payload is the operator's own, the same trust
   the crontab line itself carries.
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE): the busy
-  rule, the ad-hoc record (a minted job row with no crontab line), the
+  rule (skipped for a remote row: `Remote` in `DelegateInput` — the swap
+  is never consulted, and the row's `Concurrency` token flock rides
+  beside the per-session slots), the ad-hoc record (a minted job row with no crontab line), the
   state-store bind and explicit identity for the resumable transcript, the per-session
   delegate-slot flock (one slot per `slots`; a call that finds the set
   full waits on a short poll for a slot until its context ends, the
@@ -83,7 +85,11 @@ written before the store commit; drift is surfaced in list.
   `TestMain` installs `testenv.Transport` here, which refuses any host
   that is not an httptest server, so a test cannot dial the operator's
   live swap by accident.
-- `fold.go`: the fold/replay over the event log.
+- `fold.go`: the fold/replay over the event log. Jobs carry `budget`
+  (dollars, 0 = unset) and runs carry `cost` (schema v6): a model job's
+  fire at the cap records a skip naming the spend, and each fire and
+  delegate records its worker's cost (read from the state store's cost
+  column, SPEC_HOSTED 5).
 - `render.go`: the list/rendering: one list grouped by each job's own
   `cwd` (this directory first, then the rest by path), the empty store
   named (`scheduler: no jobs (global.sqlite)`), and tagged crontab

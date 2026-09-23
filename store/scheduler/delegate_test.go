@@ -272,3 +272,63 @@ func TestDelegateStallKeepsAWritingWorkerPastTheOldCeiling(t *testing.T) {
 		t.Fatalf("the 2h spend ceiling must not clamp to the old 30m default, got %v", remaining)
 	}
 }
+
+func TestRemoteDelegateWaitsForTheRowsConcurrencyTokens(t *testing.T) {
+	failing := func(url string) (json.RawMessage, error) {
+		return nil, jsonError("the swap must never be consulted: " + url)
+	}
+	spawned := make(chan struct{})
+	first := &delegateSpawn{
+		result: sched.SpawnResult{Exit: 0, Stdout: "done\n"},
+		block:  make(chan struct{}),
+		onSpawn: func(ctx context.Context, observe func([]byte)) {
+			close(spawned)
+		},
+	}
+	second := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	in1 := delegateInput(t, failing, first.spawn, func(in *sched.DelegateInput) {
+		in.Remote = true
+		in.Concurrency = 1
+		in.WorkerSession = "worker-1"
+	})
+	in2 := in1
+	in2.Spawn = second.spawn
+	in2.WorkerSession = "worker-2"
+	done1 := make(chan struct{})
+	go func() {
+		if _, err := sched.Delegate(in1); err != nil {
+			t.Errorf("first delegate: %v", err)
+		}
+		close(done1)
+	}()
+	select {
+	case <-spawned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first delegate's worker never started")
+	}
+	done2 := make(chan struct{})
+	go func() {
+		if _, err := sched.Delegate(in2); err != nil {
+			t.Errorf("second delegate: %v", err)
+		}
+		close(done2)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	if second.count() != 0 {
+		t.Fatalf("the second delegate must wait for the row's token, spawned %d times", second.count())
+	}
+	close(first.block)
+	select {
+	case <-done1:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first delegate never finished")
+	}
+	select {
+	case <-done2:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the second delegate never got the token")
+	}
+	if second.count() != 1 {
+		t.Fatalf("after the token freed, the second delegate must spawn once, got %d", second.count())
+	}
+}

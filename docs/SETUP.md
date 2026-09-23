@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 1.4.4
+./rig --version        # rig 1.5.0
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -108,7 +108,7 @@ the file is a contract, not a filter.
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut; a present one mints `workers.json` once at start (the notice says so), then nags until deleted |
-| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), and `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row) |
+| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row), and the hosted run site: `remote` (bool), `provider` (a name like `openrouter` implies remote), `baseUrl` (required for a remote row), `apiKey` (sent as `Authorization: Bearer <key>`; never logged or rendered), `concurrency` (the row's parallel-spawn token bound, default 1), `reasoning` (`reasoning_content` default, `reasoning` for OpenRouter), `providerPin` and `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for remote rows) |
 | `workers.json`    | the fleet: `{"model": "<id>", "slots": N, "reviewer": "<id>"}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session); `reviewer` is optional and must resolve too — the swarm's reviewer default (`/swarm role=reviewer`). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's theme (`specs/SPEC_TUI.md` 7): `base` (one of `oled`, `paper`, `p1`, `p3`, required), optional `slots` (the eight slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema |
@@ -138,7 +138,7 @@ directory's project file, not the creating session's.
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
 | update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | the embedded pinned key that signs releases (SPEC_BUILD 5); env and file override it; a build without a pinned key refuses `-update` |
-| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`) | `models.json` | the one-row table (`local`) |
+| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`, `_CONCURRENCY`, `_RETRIES`; and `_BASE_URL`, `_API_KEY`, `_REASONING`, `_PROVIDER`, `_REMOTE`) | `models.json` | the one-row table (`local`) |
 
 **On the worker sandbox**; `sandbox` is the scheduled worker's jail
 (`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the default; fail closed)
@@ -157,6 +157,22 @@ are presence-aware at every layer: "set empty" means present but empty,
 an explicit choice (direct egress / the stdlib text pass), while an
 unset value descends to the next layer. Presence is the signal, the
 value is the choice.
+
+**On hosted mode** (`specs/SPEC_HOSTED.md`); a row that runs on a remote
+endpoint says where: `remote: true` or `provider: "openrouter"` (a name
+implies remote), plus `baseUrl` (the endpoint), `apiKey` (the bearer
+key, from the file or `RIG_MODEL_API_KEY`), `concurrency` (the row's
+parallel-spawn token bound; the delegate's busy probe and `WaitBusy`
+are skipped for remote rows), `reasoning` (OpenRouter rows use
+`reasoning` / `reasoning_details` and echo them back; the default stays
+`reasoning_content` for llama-server and DeepSeek), and the
+openrouter-only `providerPin` (the `provider.order` upstream pin) and
+`cacheControl` (the top-level `cache_control` prompt-caching switch).
+Remote rows omit `chat_template_kwargs` (the llama-server-only effort
+carrier). Cost rides `usage.cost` where the endpoint returns it
+(OpenRouter): it lands in the state store's `usage.cost` column, shows
+in the TUI footer, and sums into a swarm's `budget=` and a scheduled
+job's `budget`.
 
 **On the model row**; compaction is per-model: the active model must
 resolve to a row (window, max tokens, reserve, keep-recent). The table
@@ -408,7 +424,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 1.4.4
+./rig --version                 # prints: rig 1.5.0
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

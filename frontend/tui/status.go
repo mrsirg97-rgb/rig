@@ -16,6 +16,7 @@ type StatusIn struct {
 	Up        int
 	Down      int
 	CacheRead int
+	Cost      float64
 }
 
 func RenderStatus(t Theme, in StatusIn) string {
@@ -54,7 +55,7 @@ var titleRows = []string{
 	"▀ ▀ ▀ ▀▀▀",
 }
 
-func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, window int, hasUsed bool, up, down, cacheRead int) string {
+func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, window int, hasUsed bool, up, down, cacheRead int, cost float64) string {
 	if model == "" {
 		return ""
 	}
@@ -87,6 +88,9 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, wi
 	}
 	row3 := t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
 		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))
+	if cost > 0 {
+		row3 += t.Paint(SlotDim, " · $"+fmt.Sprintf("%.2f", cost))
+	}
 	return row1 + "\n" + row2 + "\n" + row3
 }
 

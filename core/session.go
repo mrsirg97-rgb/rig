@@ -62,6 +62,11 @@ func Load(path string) (*Session, error) {
 	if s.Files == nil {
 		s.Files = map[string]FileState{}
 	}
+	for i := range s.Messages {
+		if bytes.Equal(s.Messages[i].ReasoningDetails, []byte("null")) {
+			s.Messages[i].ReasoningDetails = nil
+		}
+	}
 	return s, nil
 }
 

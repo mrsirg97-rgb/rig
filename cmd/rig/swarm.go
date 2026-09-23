@@ -14,7 +14,7 @@ func (a swarmAdapter) Start(ctx context.Context, in command.SwarmStart) (string,
 	if a.c == nil {
 		return "", errors.New("swarm: no workers configured (workers.json names the model)")
 	}
-	return a.c.Start(ctx, swarm.StartOpts{Count: in.Count, Role: in.Role, Model: in.Model})
+	return a.c.Start(ctx, swarm.StartOpts{Count: in.Count, Role: in.Role, Model: in.Model, Budget: in.Budget})
 }
 
 func (a swarmAdapter) List() []command.SwarmWorker {

@@ -446,6 +446,13 @@ prompt+completion as `Message.ContextTokens` (0 when the `Done` reported
 none). A named line with its own loop test; it is the anchor the
 compaction trigger reads. No other loop change.
 
+Core surface: 1.5.0 reopens `core/`, named (SPEC_HOSTED): `Usage.Cost`
+(the endpoint's dollars, 0 when unreported), `ReasoningDelta.Details`
+(the raw `reasoning_details` array chunk), and `Message.ReasoningDetails`
+(the full array, echoed back on later turns); `Load` normalizes a `null`
+details field back to nil. The gate's clause carries the name, and the
+re-freeze follows the merge.
+
 State machine per turn: `awaiting_input -> awaiting_model -> executing_tools
 -> awaiting_model -> ... -> done`. Deliverable 7 leaves it unchanged; its
 additions are inside the states. Tool execution was sequential through

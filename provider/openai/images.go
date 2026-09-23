@@ -48,56 +48,13 @@ func (c wireContent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.parts)
 }
 
-func wireMessagesWith(msgs []core.Message, imgs *imageStore) []wireMessage {
-	out := make([]wireMessage, 0, len(msgs))
-	var pending []orderedMessage
-	// owner is the assistant message that owns the current tool batch: the
-	// batch runs from that assistant message until the next message that is
-	// not a tool result, so a reused call id on a later turn is looked up
-	// in the turn that issued it, never in the transcript as a whole.
-	var owner callTable
-	flush := func() {
-		if len(pending) == 0 {
-			return
-		}
-		sortOrdered(pending)
-		for _, p := range pending {
-			out = append(out, p.msg)
-		}
-		pending = nil
-	}
-	for _, m := range msgs {
-		if m.Role == core.RoleAssistant {
-			flush()
-			out = append(out, encodeMessage(m))
-			owner = tableOf(m)
-			continue
-		}
-		if m.Role != core.RoleTool {
-			flush()
-			out = append(out, encodeMessage(m))
-			owner = callTable{}
-			continue
-		}
-		out = append(out, encodeMessage(m))
-		if imgs == nil || owner.nameOf(m.ToolID) != viewToolName {
-			continue
-		}
-		// The view contract is one line and nothing else: only a result
-		// that is exactly the marker it wrote is honored, so a path that
-		// smuggled a marker line stays text.
-		ref, ok := imagemarker.Parse(m.Content)
-		if !ok {
-			continue
-		}
-		pending = append(pending, orderedMessage{at: owner.indexOf(m.ToolID), msg: imageMessage(imgs, ref)})
-	}
-	flush()
-	return out
-}
-
-func encodeMessage(m core.Message) wireMessage {
+func encodeMessage(m core.Message, style wireStyle) wireMessage {
 	wm := wireMessage{Role: string(m.Role), Content: textContent(m.Content), ReasoningContent: m.Reasoning, ToolID: m.ToolID}
+	if style.reasoning == "reasoning" {
+		wm.ReasoningContent = ""
+		wm.Reasoning = m.Reasoning
+		wm.ReasoningDetails = m.ReasoningDetails
+	}
 	for _, c := range m.ToolCalls {
 		wm.ToolCalls = append(wm.ToolCalls, wireCall{
 			ID:       c.ID,

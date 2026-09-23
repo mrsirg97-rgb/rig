@@ -47,7 +47,7 @@ func LandlockABI() (int, error) {
 	return landlockABIFn()
 }
 
-func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
+func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil, nil, LandlockPlatformRefusal(runtime.GOOS), nil
 	}
@@ -116,6 +116,7 @@ func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, 
 		"-exec",
 		workerCmd[0],
 		"-p", prompt,
+		"-session-id", sessionID,
 		"-base-url", "unix:"+sock,
 		"-model", model)
 	if allow != "" {
@@ -124,12 +125,12 @@ func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, 
 	return argv, proxy, env, "", nil
 }
 
-func spawnJailed(opts RunOpts, profile, cwd string, workerCmd []string, model, prompt, allow string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
+func spawnJailed(opts RunOpts, profile, cwd string, workerCmd []string, model, prompt, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if profile == "landlock" {
-		argv, proxy, env, refuse, err := landlockSpawn(opts, cwd, workerCmd, model, prompt, allow, extraEnv...)
+		argv, proxy, env, refuse, err := landlockSpawn(opts, cwd, workerCmd, model, prompt, allow, sessionID, extraEnv...)
 		return argv, proxy, env, refuse, err
 	}
-	argv, proxy, refuse, err := jailSpawn(opts, cwd, workerCmd, model, prompt, allow, extraEnv...)
+	argv, proxy, refuse, err := jailSpawn(opts, cwd, workerCmd, model, prompt, allow, sessionID, extraEnv...)
 	if err != nil || refuse != "" {
 		return argv, proxy, nil, refuse, err
 	}

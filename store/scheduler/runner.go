@@ -14,9 +14,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/pathguard"
 	"github.com/mrsirg97-rgb/rig/store"
 	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
+	"github.com/mrsirg97-rgb/rig/store/state"
 )
 
 type Fetch func(url string) (json.RawMessage, error)
@@ -45,6 +48,7 @@ type RunOpts struct {
 	RigHome      string
 	StateDir     string
 	LandlockABI  func() (int, error)
+	Models       func() models.Table
 }
 
 const DefaultRunTimeout = 30 * time.Minute
@@ -161,28 +165,52 @@ func RunJob(key string, opts RunOpts) error {
 	if job.Command != nil {
 		command = strings.TrimSpace(*job.Command)
 	}
+	if command == "" && job.Budget != nil && *job.Budget > 0 {
+		spent, err := jobSpent(db, id)
+		if err != nil {
+			return fmt.Errorf("run-job: budget: %w", err)
+		}
+		if spent >= *job.Budget {
+			if e := recordSkip(db, id, fmt.Sprintf("budget reached (%.2f of %.2f spent)", spent, *job.Budget)); e != nil {
+				return e
+			}
+			return nil
+		}
+	}
 	var (
-		argv     []string
-		proxy    *SocketProxy
-		spawnEnv []string
+		argv          []string
+		proxy         *SocketProxy
+		spawnEnv      []string
+		workerSession string
 	)
 	if command != "" {
 		argv = []string{"sh", "-c", command}
 		spawnEnv = os.Environ()
 	} else {
-		st := busyState(opts.Fetch, opts.SwapURL, job.Model)
-		switch st.kind {
-		case "error":
-			if e := recordSkip(db, id, st.reason); e != nil {
-				return e
+		row, rowOK := opts.modelRow(job.Model)
+		if rowOK && row.Remote {
+			waitCtx, cancelWait := context.WithTimeout(context.Background(), timeout)
+			token, err := acquireRowTokens(waitCtx, opts.Home, job.Model, row.Concurrency)
+			cancelWait()
+			if err != nil {
+				return fmt.Errorf("run-job: concurrency: %w", err)
 			}
-			return nil
-		case "busy":
-			if job.Busy != "force" {
-				if e := recordSkip(db, id, "busy: "+st.names+" resident (policy skip)"); e != nil {
+			defer releaseLock(token)
+		} else {
+			st := busyState(opts.Fetch, opts.SwapURL, job.Model)
+			switch st.kind {
+			case "error":
+				if e := recordSkip(db, id, st.reason); e != nil {
 					return e
 				}
 				return nil
+			case "busy":
+				if job.Busy != "force" {
+					if e := recordSkip(db, id, "busy: "+st.names+" resident (policy skip)"); e != nil {
+						return e
+					}
+					return nil
+				}
 			}
 		}
 
@@ -195,6 +223,7 @@ func RunJob(key string, opts RunOpts) error {
 			workerCmd = []string{exe}
 		}
 		prompt := job.Prompt + ReportBack
+		workerSession = core.NewSession().ID
 
 		profile, err := SandboxProfile(opts.Sandbox)
 		if err != nil {
@@ -206,13 +235,14 @@ func RunJob(key string, opts RunOpts) error {
 
 			argv = append(append([]string{}, workerCmd...),
 				"-p", prompt,
+				"-session-id", workerSession,
 				"-base-url", opts.SwapURL+"/v1",
 				"-model", job.Model)
 			spawnEnv = os.Environ()
 		} else {
 			var refuse string
 			var err error
-			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "")
+			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "", workerSession)
 			if err != nil {
 				return fmt.Errorf("run-job: jail: %w", err)
 			}
@@ -291,9 +321,15 @@ func RunJob(key string, opts RunOpts) error {
 	}
 	exit := int64(res.Exit)
 	duration := durationMs
+	var cost *float64
+	if workerSession != "" {
+		if c := workerSessionCost(opts.RigHome, job.Cwd, workerSession); c > 0 {
+			cost = &c
+		}
+	}
 	if _, err := RecordRun(context.Background(), db, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
-		Log: logRel, Started: started, Ended: ended, Done: job.At != nil,
+		Log: logRel, Started: started, Ended: ended, Cost: cost, Done: job.At != nil,
 	}); err != nil {
 		return fmt.Errorf("run-job: record: %w", err)
 	}
@@ -457,6 +493,65 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 	}
 	sort.Strings(names)
 	return busyResult{kind: "busy", names: strings.Join(names, ", ")}
+}
+
+func jobSpent(db DB, id string) (float64, error) {
+	var spent float64
+	err := db.DB.QueryRow(`SELECT COALESCE(SUM(cost), 0) FROM runs WHERE job_id = ?`, id).Scan(&spent)
+	if err != nil {
+		return 0, err
+	}
+	return spent, nil
+}
+
+func workerSessionCost(home, cwd, session string) float64 {
+	if home == "" || session == "" {
+		return 0
+	}
+	path := state.StorePath(home, cwd)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return 0
+	}
+	db, _, _, err := store.Open(path, state.Statements(), state.SchemaVersion, state.Migration())
+	if err != nil {
+		return 0
+	}
+	defer db.DB.Close()
+	cost, err := state.SessionCost(context.Background(), db, session)
+	if err != nil {
+		return 0
+	}
+	return cost
+}
+
+func acquireRowTokens(ctx context.Context, home, model string, n int) (*os.File, error) {
+	if n <= 0 {
+		n = 1
+	}
+	for {
+		for i := 0; i < n; i++ {
+			fd, held, err := acquireLock(home, fmt.Sprintf("delegate:model:%s:%d", model, i))
+			if err != nil {
+				return nil, fmt.Errorf("concurrency: lock: %w", err)
+			}
+			if held {
+				return fd, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("concurrency: the row's %d tokens are all held (model %s)", n, model)
+		case <-time.After(slotPollInterval):
+		}
+	}
+}
+
+func (opts RunOpts) modelRow(model string) (models.Model, bool) {
+	if opts.Models == nil {
+		return models.Model{}, false
+	}
+	row, ok := opts.Models().Get(model)
+	return row, ok
 }
 
 func RealFetch(timeout time.Duration) Fetch {

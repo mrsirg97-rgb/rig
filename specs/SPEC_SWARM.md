@@ -35,7 +35,12 @@ tasks done/failed), and `/swarm stop` ends them.
   the delegate path → complete (workers) or take the verdict (reviewers) →
   repeat; three consecutive empty claims end the worker.
 - The delegate path verbatim: the jail, the socket proxy, the worker
-  command, the GPU busy rule, the state-store bind, the recorded run. Two
+  command, the GPU busy rule (skipped for a remote worker row: the swap
+  is never consulted, and the row's `concurrency` token bound rides
+  beside the per-session slots, SPEC_HOSTED 4), the state-store bind,
+  the recorded run. A `budget=<dollars>` start caps the controller's
+  claims: the spend is summed from the recorded run costs, and at the
+  cap the worker stops claiming with the notice (SPEC_HOSTED 5). Two
   amendments, named below: a swarm spawn waits at llama-swap for a GPU
   slot instead of refusing, and it streams the worker's stderr to the run
   stream so the supervisor sees the heartbeat.

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/models"
 	"github.com/mrsirg97-rgb/rig/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/swarm/status"
@@ -38,6 +39,7 @@ type Opts struct {
 	Allow        []string
 	Fetch        sched.Fetch
 	Spawn        sched.Spawn
+	Models       func() models.Table
 	Notify       func(core.Event)
 }
 
@@ -131,6 +133,12 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if g.Model != "" {
 		model = g.Model
 	}
+	remote, concurrency := false, 0
+	if a.Models != nil {
+		if row, ok := a.Models().Get(model); ok {
+			remote, concurrency = row.Remote, row.Concurrency
+		}
+	}
 	timeout := defaultTimeout
 	if g.TimeoutMs > 0 {
 		timeout = time.Duration(g.TimeoutMs) * time.Millisecond
@@ -155,6 +163,8 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		Slots:         a.Slots,
 		Fetch:         a.Fetch,
 		Spawn:         a.Spawn,
+		Remote:        remote,
+		Concurrency:   concurrency,
 		WorkerCmd:     a.WorkerCmd,
 		SwapURL:       a.SwapURL,
 		Timeout:       timeout,

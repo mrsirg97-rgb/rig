@@ -78,7 +78,7 @@ func TestStatusLineModelAloneBeforeFirstUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 0, 262144, false, 0, 0, 0)
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 0, 262144, false, 0, 0, 0, 0)
 	want := th.Paint("text", "huihui3.8") +
 		"\n" + th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("warn", "auto") +
 		"\n" + th.Paint("dim", "up 0 down 0 · cache r 0 0%")
@@ -101,7 +101,7 @@ func TestStatusLineFormatAndMarks(t *testing.T) {
 		{180000, "error"},
 	}
 	for _, c := range cases {
-		got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", c.used, 200000, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", c.used, 200000, true, 214000, 3200, 187000, 0)
 		part := fmtTokens(c.used) + "/" + fmtTokens(200000)
 		if !strings.Contains(got, th.Paint(c.want, part)) {
 			t.Errorf("used=%d: the context part is not painted %s:\n%s", c.used, c.want, got)
@@ -121,7 +121,7 @@ func TestStatusLineEmptyModelIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := tui.RenderStatusLine(th, "", "", "", "", 100, 1000, true, 1, 1, 1); got != "" {
+	if got := tui.RenderStatusLine(th, "", "", "", "", 100, 1000, true, 1, 1, 1, 0); got != "" {
 		t.Fatalf("no model, no row: %q", got)
 	}
 }
@@ -144,7 +144,7 @@ func TestStatusThreeRowShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "xhigh", "architect", "manual", 41200, 262144, true, 214000, 3200, 187000)
+	got := tui.RenderStatusLine(th, "huihui3.8", "xhigh", "architect", "manual", 41200, 262144, true, 214000, 3200, 187000, 0)
 	sep := th.Paint("dim", " · ")
 	rows := strings.Split(got, "\n")
 	if len(rows) != 3 {
@@ -170,7 +170,7 @@ func TestStatusLineRoleAbbreviations(t *testing.T) {
 		{"architect", "arch"}, {"reviewer", "rev"}, {"default", "default"}, {"", "default"},
 	}
 	for _, c := range cases {
-		got := tui.RenderStatusLine(th, "huihui3.8", "", c.role, "", 41200, 262144, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", "", c.role, "", 41200, 262144, true, 214000, 3200, 187000, 0)
 		rows := strings.Split(got, "\n")
 		want := th.Paint("dim", c.want) + th.Paint("dim", " · ") + th.Paint("warn", "auto")
 		if len(rows) != 3 || rows[1] != want {
@@ -189,12 +189,12 @@ func TestStatusLineEffortColorsAndFallback(t *testing.T) {
 		{"medium", "effortMedium"}, {"high", "effortHigh"}, {"xhigh", "effortXhigh"},
 		{"max", "effortMax"}, {"galactic", "accent"},
 	} {
-		got := tui.RenderStatusLine(th, "huihui3.8", c.level, "", "", 41200, 262144, true, 214000, 3200, 187000)
+		got := tui.RenderStatusLine(th, "huihui3.8", c.level, "", "", 41200, 262144, true, 214000, 3200, 187000, 0)
 		if !strings.Contains(got, th.Paint(c.slot, c.level)) {
 			t.Errorf("level %q must paint %s:\n%s", c.level, c.slot, got)
 		}
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000)
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000, 0)
 	rows := strings.Split(got, "\n")
 	if len(rows) != 3 || rows[1] != th.Paint("dim", "default")+th.Paint("dim", " · ")+th.Paint("warn", "auto") {
 		t.Fatalf("an empty effort must drop the segment from the stance row:\n%q", got)
@@ -206,10 +206,25 @@ func TestStatusLineNamesTheFleetModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000)
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000, 0)
 	rows := strings.Split(got, "\n")
 	want := th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("warn", "auto")
 	if len(rows) != 3 || rows[1] != want {
 		t.Fatalf("the stance row must name the fleet's model:\ngot  %q\nwant %q", rows[1], want)
+	}
+}
+
+func TestRenderStatusLineShowsTheSessionsDollars(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 0, 262144, false, 214000, 3200, 187000, 1.2345)
+	if !strings.Contains(got, "$1.23") {
+		t.Fatalf("the footer must show the session's dollars, got %q", got)
+	}
+	got = tui.RenderStatusLine(th, "huihui3.8", "", "", "", 0, 262144, false, 214000, 3200, 187000, 0)
+	if strings.Contains(got, "$") {
+		t.Fatalf("zero cost must stay quiet, got %q", got)
 	}
 }
