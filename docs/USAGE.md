@@ -77,7 +77,10 @@ is a loud line naming the known set, never silently a prompt.
   review, reviewers parse the worker's last `verdict: accept|reject
   <reason>` line and call `accept`/`reject`. Against a running swarm a
   start adds workers (the roles mix); `swarm stop` ends it and releases
-  the in-flight claims (`specs/SPEC_SWARM.md`). A dead worker's claim
+  the in-flight claims (`specs/SPEC_SWARM.md`). The task workers run
+  on a 10-minute stall beside a 2h spend ceiling, so one that keeps
+  writing holds its slot and a silent one is killed as hung. A dead
+  worker's claim
   is released and the task retried once; a second death fails it (or
   rejects it with the reason). No fleet configured refuses by name.
 
@@ -91,11 +94,15 @@ now: a bounded sub-task whose result is a message, not a conversation,
 on the worker model, in a cwd under your session's or the rig home.
 Several delegate calls in one turn run in parallel, up to the fleet's
 slots, and extras wait for a slot; the turn blocks until each worker
-finishes or times out. A held GPU refuses by name (busy:skip, never an
-eviction from inside a turn). The worker's last message comes back as
-the tool result, the run is recorded in the one scheduler store under
-an ad-hoc key, so `scheduler runs` shows it beside cron runs, and the
-worker's transcript is resumable with `sessions resume <id>`.
+finishes or times out. `timeoutMs` is the spend ceiling (default 10
+minutes, ceiling 30); `stallMs` sets the silence window beside it, so
+a worker that writes nothing for longer is killed as hung while one
+still producing output is never killed for the clock. A held GPU
+refuses by name (busy:skip, never an eviction from inside a turn). The
+worker's last message comes back as the tool result, the run is
+recorded in the one scheduler store under an ad-hoc key, so
+`scheduler runs` shows it beside cron runs, and the worker's
+transcript is resumable with `sessions resume <id>`.
 
 ## what you see
 

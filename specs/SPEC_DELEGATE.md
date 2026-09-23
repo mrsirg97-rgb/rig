@@ -79,7 +79,8 @@ delegate spawns, exactly as `run-job` spawns one.
     "task":       {"type": "string"},
     "cwd":        {"type": "string"},
     "model":      {"type": "string"},
-    "timeoutMs":  {"type": "integer", "minimum": 1}
+    "timeoutMs":  {"type": "integer", "minimum": 1},
+    "stallMs":    {"type": "integer", "minimum": 1}
   },
   "required": ["task"]
 }
@@ -94,10 +95,18 @@ delegate spawns, exactly as `run-job` spawns one.
   fleet): the worker row, exactly as `scheduler create` defaults. The
   fleet's model is a row of the operator's models table; there is no
   fallback baked into the binary.
-- `timeoutMs` (default 10 minutes): capped at the runner's
-  `DefaultRunTimeout` (30 minutes); the ceiling, named; a larger
-  value clamps to it. The timeout bounds the work an untrusted caller
-  can induce.
+- `timeoutMs` (default 10 minutes): capped at 30 minutes by the
+  tool, the ceiling named; a larger value clamps to it. The timeout
+  bounds the work an untrusted caller can induce. The seam's own
+  ceiling is the scheduler's 24h spend bound (`maxDelegateTimeout`),
+  so a trusted caller — the swarm — passes a 2h budget of its own.
+- `stallMs` (default 0 = off): the silence window, the scheduler's
+  stall kill (1.3.8) at the delegate seam. A worker that writes
+  nothing for longer than the window is killed as hung, its stderr
+  naming the reason, the result marked `Stalled`; the timeout stays
+  the spend ceiling, so a worker still producing output is never
+  killed for the clock. Off by default: the interactive delegate
+  keeps its plain timeout unless the caller sets a window.
 - The tool registers only when the fleet is configured (SPEC_CONFIG
   12's presence rule): no `workers.json`, no `delegate` on the wire:
   there is no worker to spawn, and a tool that can only refuse is
@@ -199,11 +208,12 @@ is that text, capped the way bash output is capped: the loud
 
     delegate: exit N · 123ms · session <id> · log <rel path>
 
-A failed or timed-out worker is a tool error naming which:
-`delegate: the worker failed (exit N): <last message>` / `delegate:
-the worker timed out after <dur> (process tree killed): <last
-message>`. The trailer still rides the error, so the operator always
-has the session id and log path.
+A failed, stalled, or timed-out worker is a tool error naming which:
+`delegate: the worker failed (exit N): <last message>` /
+`delegate: the worker stalled after <dur> (process tree killed):
+<last message>` / `delegate: the worker timed out after <dur>
+(process tree killed): <last message>`. The trailer still rides the
+error, so the operator always has the session id and log path.
 
 ### 6. Bounds, named
 
@@ -224,7 +234,7 @@ has the session id and log path.
   death). It is the run-job `acquireLock` shape, keyed per session
   per slot. The gate already counts, so raising `slots` is a file
   edit, not a code change.
-- **Three swarm amendments (SPEC_SWARM)**, all defaulted to today's
+- **Four swarm amendments (SPEC_SWARM)**, all defaulted to today's
   behavior. `WaitBusy` (false): a busy GPU is waited on — the busy
   check polls `busyState` on a short interval until the model runs or
   the call's context ends; the swarm's parallelism is the GPU slots,
@@ -232,7 +242,11 @@ has the session id and log path.
   spawn's byte observer, so the swarm streams the worker's stderr to
   the run stream and reads its heartbeat. `SpawnCtx` (Background): the
   base context the spawn timeout wraps, so a swarm stop kills the
-  in-flight worker instead of leaving it to its timeout.
+  in-flight worker instead of leaving it to its timeout. `Stall` (0):
+  the silence window, wired to the same stall watch the runner uses
+  and touched by the `Observe` stream; the swarm sets 10m beside a 2h
+  spend ceiling, so a worker keeps its slot while it writes and a
+  silent one is gone in ten minutes.
 - **No recursion**: the delegate sets `RIG_DELEGATE=1` on the worker's
   spawn (the `RIG_HOME` pattern, decision 2). The delegate tool's
   Exec refuses by name when the marker is set: `delegate: a worker
@@ -280,6 +294,12 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
 - **The timeout kill**: a `timeoutMs`-deadline spawn returns a
   timed-out result; the error names the timeout, and the fake
   `Spawn` saw the deadline kill.
+- **The stall kill**: with `Stall` set, a spawn silent past the
+  window is killed as stalled (`Stalled`, the stderr and the run log
+  naming the reason), while one still writing finishes and carries
+  the caller's 2h deadline — the seam's ceiling never clamps it to
+  the runner's 30-minute default. The interactive `stallMs` stays off
+  by default, and its `timeoutMs` ceiling stays 30 minutes.
 - **The fan-out overlap**: `slots` 3: three concurrent Execs run, and
   the spawn seam's timestamps prove the three spawns overlap.
 - **The one-slot sequence**: `slots` 1: three concurrent Execs run

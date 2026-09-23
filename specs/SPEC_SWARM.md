@@ -99,7 +99,7 @@ Each task worker spawns through `sched.Delegate` with the delegate's
 socket proxy, `WorkerCmd`, the state-store bind, the explicit worker
 session id, the ad-hoc run record (`scheduler runs` shows each task
 worker beside cron runs), the allow-list minus `delegate`, and
-`RIG_DELEGATE=1`. The delegate input gains three fields, all defaulted to
+`RIG_DELEGATE=1`. The delegate input gains four fields, all defaulted to
 today's behavior:
 
 - `WaitBusy` (default false): with it, a busy GPU is waited on instead of
@@ -113,6 +113,12 @@ today's behavior:
 - `SpawnCtx` (default Background): the base context the spawn timeout
   wraps, so `/swarm stop` kills the in-flight task worker's process tree
   instead of leaving it to its timeout.
+- `Stall` (default 0) with the swarm's `Timeout` 2h: the silence window,
+  the scheduler's stall kill at the delegate seam. A worker writing
+  nothing for 10 minutes is killed as hung; one still writing keeps its
+  slot for the full 2h spend ceiling, never killed at the old 30-minute
+  wall. The interactive delegate stays unset (today's plain timeout)
+  unless the caller sets `stallMs`.
 
 The swarm's spawn passes the drain worker's identity as the delegate's
 `Session` with `Slots: 1`, so the per-session slot flock is a no-op: one
