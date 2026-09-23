@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/testenv"
 )
 
 type scriptSrv struct {
@@ -22,14 +23,13 @@ type scriptSrv struct {
 func newScriptSrv(t *testing.T) (*scriptSrv, *httptest.Server) {
 	t.Helper()
 	s := &scriptSrv{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.paths = append(s.paths, r.URL.Path)
 		s.mu.Unlock()
 		w.Header().Set("Content-Type", "text/event-stream")
 		io.WriteString(w, `data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`+"\n")
 	}))
-	t.Cleanup(srv.Close)
 	return s, srv
 }
 

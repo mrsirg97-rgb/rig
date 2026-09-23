@@ -77,6 +77,12 @@ written before the store commit; drift is surfaced in list.
 - `proxy.go`: the unix-socket proxy (the jail's one hole), the socket
   chmod'd 0600 after listen so no other local user reaches the model
   endpoint through a running job.
+- **The dial seam** (`runner.go` `Transport`): the `http.RoundTripper`
+  the busy check's `RealFetch` and the socket proxy's reverse proxy use;
+  nil is the production default (`http.DefaultTransport`). The suite's
+  `TestMain` installs `testenv.Transport` here, which refuses any host
+  that is not an httptest server, so a test cannot dial the operator's
+  live swap by accident.
 - `fold.go`: the fold/replay over the event log.
 - `render.go`: the list/rendering: one list grouped by each job's own
   `cwd` (this directory first, then the rest by path), the empty store

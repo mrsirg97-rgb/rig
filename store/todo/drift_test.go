@@ -12,10 +12,11 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/store"
 	todo "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/testenv"
 )
 
 func TestGeneratedMatchesCommitted(t *testing.T) {
-	liftCmd, err := filepath.Abs(filepath.Join(os.Getenv("HOME"), "Projects", "lift", "cmd"))
+	liftCmd, err := filepath.Abs(filepath.Join(testenv.OperatorHome, "Projects", "lift", "cmd"))
 	if err != nil {
 		t.Fatal(err)
 	}

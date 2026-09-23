@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -119,8 +119,6 @@ func (s *bodySrv) bodiesAll() [][]byte {
 	defer s.mu.Unlock()
 	return append([][]byte(nil), s.bodies...)
 }
-
-func netListen(addr string) (net.Listener, error) { return net.Listen("tcp", addr) }
 
 func systemOf(t *testing.T, body []byte) string {
 	t.Helper()
@@ -625,42 +623,60 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		}
 	})
 	t.Run("neither takes the embedded", func(t *testing.T) {
-
-		l, err := netListen("127.0.0.1:8090")
-		if err != nil {
-			t.Skipf("the embedded default's port is busy: %v", err)
-		}
-		defer l.Close()
-		hit := make(chan bool, 1)
-		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/v1/models" {
-				select {
-				case hit <- true:
-				default:
-				}
-			}
-			if r.URL.Path == "/v1/models" {
-				w.Write([]byte(`{"data":[]}`))
-			} else if r.URL.Path == "/running" {
-				w.Write([]byte(`{"running":[]}`))
-			} else {
-				w.Write([]byte(`data: {"choices":[{"delta":{"content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}` + "\n"))
-			}
-		}))
-		srv.Listener = l
-		srv.Start()
-		t.Cleanup(srv.Close)
-
-		binDir := t.TempDir()
-		bin := buildBin(t, binDir)
+		bin := filepath.Join(t.TempDir(), "rig")
 		scratch := t.TempDir()
-		writeFakeCrontab(t, binDir, filepath.Join(scratch, "spool"))
-		key, workDir := mkJob(t, scratch, bin)
-		fire(t, binDir, bin, scratch, key, workDir, "")
-		select {
-		case <-hit:
-		default:
-			t.Fatal("the embedded swapUrl did not receive the busy check")
+		key, _ := mkJob(t, scratch, bin)
+		var dialedMu sync.Mutex
+		var dialed []string
+		fetch := func(url string) (json.RawMessage, error) {
+			dialedMu.Lock()
+			dialed = append(dialed, url)
+			dialedMu.Unlock()
+			switch {
+			case strings.HasSuffix(url, "/v1/models"):
+				return json.RawMessage(`{"data":[]}`), nil
+			case strings.HasSuffix(url, "/running"):
+				return json.RawMessage(`{"running":[]}`), nil
+			}
+			return nil, errors.New("unexpected url " + url)
+		}
+		var workerArgv []string
+		spawn := func(_ context.Context, argv []string, _ string, _ []string, _ func([]byte)) (sched.SpawnResult, error) {
+			workerArgv = argv
+			return sched.SpawnResult{Exit: 0}, nil
+		}
+		ct := newFakeCrontab()
+		ct.Install(sched.LineFor(key, "0 5 * * *", bin+" run-job"))
+		err := sched.RunJob(key, sched.RunOpts{
+			Home:      filepath.Join(cfgDir(t, scratch), "scheduler"),
+			Crontab:   ct,
+			Fetch:     fetch,
+			Spawn:     spawn,
+			WorkerCmd: []string{bin},
+			SwapURL:   "",
+			Sandbox:   "off",
+			Now:       fixedNow,
+		})
+		if err != nil {
+			t.Fatalf("run-job: %v", err)
+		}
+		var sawDefault bool
+		for _, u := range dialed {
+			if strings.HasPrefix(u, "http://127.0.0.1:8090/") {
+				sawDefault = true
+			}
+		}
+		if !sawDefault {
+			t.Fatalf("the embedded swapUrl did not receive the busy check (dials: %v)", dialed)
+		}
+		base := ""
+		for i, a := range workerArgv {
+			if a == "-base-url" && i+1 < len(workerArgv) {
+				base = workerArgv[i+1]
+			}
+		}
+		if base != "http://127.0.0.1:8090/v1" {
+			t.Fatalf("the worker's -base-url = %q, want the embedded default", base)
 		}
 	})
 }

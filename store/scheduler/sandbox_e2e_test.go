@@ -17,6 +17,7 @@ import (
 	"time"
 
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/testenv"
 )
 
 func requireJailBox(t *testing.T) {
@@ -90,7 +91,7 @@ type jailSrv struct {
 
 func newJailSrv(t *testing.T, s *jailSrv) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		if r.Method == "GET" {
 			w.Write([]byte(`{"data":[]}`))
@@ -106,7 +107,6 @@ func newJailSrv(t *testing.T, s *jailSrv) *httptest.Server {
 		s.mu.Unlock()
 		w.Write([]byte(reply))
 	}))
-	t.Cleanup(srv.Close)
 	return srv
 }
 
@@ -347,7 +347,7 @@ func lastBodyOf(t *testing.T, s *jailSrv) []byte {
 
 func kernelPython(t *testing.T) string {
 	t.Helper()
-	if h, err := os.UserHomeDir(); err == nil {
+	if h := testenv.OperatorHome; h != "" {
 		p := filepath.Join(h, ".pi", "agent", "kernel-venv", "bin", "python")
 		if fi, err := os.Stat(p); err == nil && fi.Mode()&0o111 != 0 {
 			if _, err := exec.Command(p, "-c", "import IPython, numpy, pandas").CombinedOutput(); err == nil {

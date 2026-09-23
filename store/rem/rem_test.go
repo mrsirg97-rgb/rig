@@ -19,6 +19,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store"
 	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
 	"github.com/mrsirg97-rgb/rig/store/scope"
+	"github.com/mrsirg97-rgb/rig/testenv"
 )
 
 type probe struct {
@@ -1057,7 +1058,7 @@ func TestConcurrentCallsSerialize(t *testing.T) {
 }
 
 func TestGeneratedMatchesCommitted(t *testing.T) {
-	liftCmd, err := filepath.Abs(filepath.Join(os.Getenv("HOME"), "Projects", "lift", "cmd"))
+	liftCmd, err := filepath.Abs(filepath.Join(testenv.OperatorHome, "Projects", "lift", "cmd"))
 	if err != nil {
 		t.Fatal(err)
 	}

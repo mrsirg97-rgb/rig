@@ -11,6 +11,7 @@ import (
 	"time"
 
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/testenv"
 )
 
 func requireLandlockBox(t *testing.T) {
@@ -116,10 +117,7 @@ func landlockFixture(t *testing.T, replies []string, binds []string, py string) 
 
 func TestLandlockOperatorHomeAbsent(t *testing.T) {
 	requireLandlockBox(t)
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	home := testenv.OperatorHome
 	_, srv := landlockFixture(t, []string{
 		bashCall(t, "c1", `rm -f /tmp/rigll-probe; ls `+home+` 2>&1; echo "home-rc=$?"; touch /usr/bin/rigll-probe 2>&1; echo "usr-rc=$?"; touch /tmp/rigll-probe 2>&1; echo "tmp-rc=$?"; touch /etc/rigll-probe 2>&1; echo "etc-rc=$?"; ls /usr/bin >/dev/null 2>&1; echo "usrread-rc=$?"`),
 		jailFinalReply,
