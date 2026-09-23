@@ -3,6 +3,7 @@ package todo
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -69,9 +70,10 @@ const schemaJSON = `{
 
 const description = "the task queue for the session's project. Guidelines: any job of three or more steps -> " +
 	"create before the first edit (tasks: [{text, dependsOn?}]), claim takes the next pending task whose " +
-	"dependency is done, complete lands your task done here (solo) or submits it for review from a worker " +
-	"(rig -p: delegate, swarm); accept or reject a task in review — the parent's flow is read then " +
-	"accept/reject, an unowned review task auto-claims, a foreign hold refuses, and reject takes the reason " +
+	"dependency is done, complete lands your task done here (solo); a worker (rig -p: delegate, swarm) is " +
+	"read/note-only — the supervisor owns the board, and the worker's findings go in note and rem; accept or " +
+	"reject a task in review — the parent's flow is read then accept/reject, an unowned review task " +
+	"auto-claims, a foreign hold refuses, and reject takes the reason " +
 	"as note; note attaches a message to any task; read shows the actionable queue (all:true for history); " +
 	"move reorders by a 1-based pos; prune drops the done rows. Every reply names the queue it acted on " +
 	"([rig]); name project when the work is in a repo you did not start in, which binds the session. Reply: " +
@@ -90,8 +92,8 @@ const (
 
 // Mode says who completes. An interactive session lands its own task
 // done in one call (complete+accept, the log stays uniform); a worker
-// (rig -p: delegate or swarm) submits it for review, and the parent's
-// accept or reject finishes it.
+// (rig -p: delegate or swarm) is read/note-only — the supervisor owns
+// the board, and the worker's findings go in the task's note and in rem.
 type Mode bool
 
 const (
@@ -195,7 +197,25 @@ func (a adapter) commit(ctx context.Context, t target) (bool, error) {
 	return true, nil
 }
 
+// workerBoardRefusal is the Worker-mode board door: the six
+// board-transition verbs refuse here at the tool's seam, so the store's
+// own arms (the swarm controller calls the store directly) stay as they
+// are, and the spawned worker records findings instead of moving the
+// board.
+const workerBoardRefusal = "todo: the supervisor owns the board; a worker does not claim, start, complete, fail, accept, or reject its entries (findings go in note and rem)"
+
+func boardTransition(action string) bool {
+	switch action {
+	case "claim", "start", "complete", "fail", "accept", "reject":
+		return true
+	}
+	return false
+}
+
 func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, session string) (string, error) {
+	if bool(a.mode) && boardTransition(g.Action) {
+		return "", errors.New(workerBoardRefusal)
+	}
 	switch g.Action {
 	case "":
 		return "", fmt.Errorf("todo: action required")

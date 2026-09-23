@@ -205,7 +205,7 @@ func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 }
 
 func TestNewVerbsRoundTrip(t *testing.T) {
-	tool := todoapi.New(newDB(t), todoapi.Worker)
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
 	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
@@ -232,27 +232,18 @@ func TestNewVerbsRoundTrip(t *testing.T) {
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	review, err := exec(t, tool, ctx, map[string]any{"action": "claim", "status": "review"})
-	if err != nil {
-		t.Fatalf("claim review: %v", err)
-	}
-	if !strings.Contains(review, "'"+id+"' claimed for review") {
-		t.Fatalf("claim review reply: %s", review)
-	}
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "accept", "id": id}); err != nil {
-		t.Fatalf("accept: %v", err)
-	}
 	history, err := exec(t, tool, ctx, map[string]any{"action": "read", "all": true})
 	if err != nil {
 		t.Fatalf("read all: %v", err)
 	}
 	if !strings.Contains(history, "[x] swarm work") {
-		t.Fatalf("the review flow must end done:\n%s", history)
+		t.Fatalf("the round trip must end done:\n%s", history)
 	}
 }
 
 func TestModeKeysTheGate(t *testing.T) {
-	solo := todoapi.New(newDB(t), todoapi.Interactive)
+	db := newDB(t)
+	solo := todoapi.New(db, todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
 	reply, err := exec(t, solo, ctx, map[string]any{"action": "create", "tasks": []any{
@@ -273,31 +264,52 @@ func TestModeKeysTheGate(t *testing.T) {
 		t.Fatalf("solo complete must land done in one call:\n%s", done)
 	}
 
-	worker := todoapi.New(newDB(t), todoapi.Worker)
+	worker := todoapi.New(db, todoapi.Worker)
 	ctx = core.WithSession(context.Background(), sess)
-	reply, err = exec(t, worker, ctx, map[string]any{"action": "create", "tasks": []any{
-		map[string]any{"text": "delegated"},
+	if _, err := exec(t, worker, ctx, map[string]any{"action": "claim"}); err == nil {
+		t.Fatal("a worker's claim must refuse")
+	} else if !strings.Contains(err.Error(), "the supervisor owns the board") {
+		t.Errorf("claim voice = %q, want the supervisor refusal", err.Error())
+	}
+	if _, err := exec(t, worker, ctx, map[string]any{"action": "note", "id": id, "note": "findings"}); err != nil {
+		t.Fatalf("a worker's note must land: %v", err)
+	}
+}
+
+func TestWorkerModeIsReadNoteOnly(t *testing.T) {
+	worker := todoapi.New(newDB(t), todoapi.Worker)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, worker, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "board entry"},
 	}})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id = strings.Fields(strings.Split(reply, "\n")[2])[0]
-	if _, err := exec(t, worker, ctx, map[string]any{"action": "claim"}); err != nil {
-		t.Fatalf("claim: %v", err)
+	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	for _, action := range []string{"claim", "start", "complete", "fail", "accept", "reject"} {
+		args := map[string]any{"action": action}
+		if action != "claim" {
+			args["id"] = id
+		}
+		if action == "reject" {
+			args["note"] = "not mine to judge"
+		}
+		if _, err := exec(t, worker, ctx, args); err == nil {
+			t.Fatalf("worker %s must refuse", action)
+		} else if !strings.Contains(err.Error(), "the supervisor owns the board") {
+			t.Errorf("%s voice = %q, want the supervisor refusal", action, err.Error())
+		}
 	}
-	review, err := exec(t, worker, ctx, map[string]any{"action": "complete", "id": id})
+	if _, err := exec(t, worker, ctx, map[string]any{"action": "note", "id": id, "note": "findings"}); err != nil {
+		t.Fatalf("a worker's note must land: %v", err)
+	}
+	board, err := exec(t, worker, ctx, map[string]any{"action": "read"})
 	if err != nil {
-		t.Fatalf("worker complete: %v", err)
+		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(review, "[r] delegated") {
-		t.Fatalf("worker complete must land in review:\n%s", review)
-	}
-	accepted, err := exec(t, worker, ctx, map[string]any{"action": "accept", "id": id})
-	if err != nil {
-		t.Fatalf("accept: %v", err)
-	}
-	if !strings.Contains(accepted, "auto-claimed and accepted") {
-		t.Fatalf("the accept must auto-claim:\n%s", accepted)
+	if !strings.Contains(board, id+" [ ] board entry") || !strings.Contains(board, "findings (by "+sess.ID+")") {
+		t.Fatalf("the refused verbs must not move the board, and the note must show:\n%s", board)
 	}
 }
 
