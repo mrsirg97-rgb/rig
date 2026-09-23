@@ -77,7 +77,13 @@ life), and loops:
    session is over); the task returns to the queue and the worker's own
    next claim works it again — the first death is retried once, a second
    death of the same task fails it (workers) or rejects it with a reason
-   (reviewers).
+   (reviewers). The retry budget is keyed by task, not per worker: the
+   controller's one map counts every death of the task across the swarm,
+   so a worker's death and a reviewer's death share the single retry.
+6. The task's brief says the supervisor owns the board entry: the claim
+   is the supervisor's, findings go in the task's note and in rem, and
+   the worker does not create tasks or start/complete/fail the board's
+   entries.
 
 Rejected, named: the drain loop inside the spawned agent (the prompt would
 be the loop). The supervisor then knows nothing deterministic — the current
@@ -123,7 +129,12 @@ prefix; a worker that returns no verdict is treated as a dead worker
 (release, retry once; a second no-verdict rejects with
 `reviewer gave no verdict`). The verdict line is the one contract between
 the swarm and its reviewer worker, and the task text and notes are in the
-brief so the reviewer needs no queue parse. Rejected, named: the reviewer
+brief so the reviewer needs no queue parse. The rejections are capped per
+task: the controller counts every reject door (the verdict reject, the
+no-verdict fallback, the died fallback) and a third rejection fails the
+task with a note (`rejected twice — the swarm failed it`) instead of
+returning it to the workers — the reject → pending → worker → review →
+no-verdict cycle cannot spin forever. Rejected, named: the reviewer
 worker calling `accept`/`reject` itself — it does not hold the review
 claim (the drain worker does), the foreign-hold refusal would fire, and
 the queue protocol would leak back into the agent.
@@ -176,7 +187,12 @@ claim echo carries only the id. `store/todo` gains one structured read:
 with its session, in order), the unknown id in the store's voice, read-only.
 Rejected, named: parsing the rendered `Read` reply — the brief would depend
 on the render's words, and the render is the model's surface, not a parser
-contract. The swarm's review release exposed one store bug: the `release`
+contract. The worker-mode door (the spawned `rig -p`'s todo tool) gains
+the same refusal: `Start`/`Complete`/`Fail` take the worker flag and
+refuse a task the worker does not hold, with no takeover hint — the
+supervisor's board entry is not the worker's to take. `Fail` also accepts
+the caller's own review claim (the swarm's capped fail), and the fold
+replays that arm. The swarm's review release exposed one store bug: the `release`
 event replayed only for `in_progress` claims, so a released review claim's
 holder came back on the next fold. The fold now applies the release to a
 `review` claim too (the status stays, the holder clears), with a replay
@@ -222,6 +238,17 @@ fake `Swarm` seam.
   refused by name.
 - `TestSwarmStartRefusals`: a second start, a count outside 1..16, an
   unknown role, and an unknown model each refuse by name.
+- `TestWorkerModeRefusesStartCompleteFailOnUnheld`: the worker-mode store
+  doors — `start`/`complete`/`fail` refuse a task the worker does not
+  hold (pending and foreign), the voice names no takeover, the
+  supervisor's claim is neither released nor failed, and the interactive
+  auto-start still lands solo.
+- `TestSwarmReviewerNoVerdictCappedAtTwoRejectsThenFails`: a reviewer
+  that never returns a verdict: the task is rejected twice, the third
+  rejection fails it with the note — the no-verdict cycle cannot spin.
+- `TestSwarmRetriesAreKeyedByTaskAcrossWorkers`: a worker's death and a
+  reviewer's death share the one retry budget — the reviewer's death is
+  not retried, and the task fails with the note after the reject cap.
 - `TestTodoTaskRead`: `Task` returns the text and the notes in order with
   their sessions; an unknown id uses the store's voice; the read is
   read-only.

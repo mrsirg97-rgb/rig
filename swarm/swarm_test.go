@@ -276,6 +276,9 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 		if !strings.Contains(h.spawn.argv(i), text) {
 			t.Errorf("spawn %d must carry the task brief %q:\n%s", i, text, h.spawn.argv(i))
 		}
+		if !strings.Contains(h.spawn.argv(i), "The supervisor owns this board entry") {
+			t.Errorf("spawn %d must tell the worker the supervisor owns the board entry:\n%s", i, h.spawn.argv(i))
+		}
 	}
 	h.waitFor(t, "both workers exited", func() bool {
 		rows := h.ctl.List()
@@ -571,5 +574,63 @@ func TestSwarmEmptyQueueStopRepliesNoSwarm(t *testing.T) {
 	h := newHarness(t)
 	if got, err := h.ctl.Stop(); err == nil || !strings.Contains(err.Error(), "no swarm") {
 		t.Errorf("stop with no swarm = %q err=%v", got, err)
+	}
+}
+
+func TestSwarmReviewerNoVerdictCappedAtTwoRejectsThenFails(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "hopeless")
+	h.spawn.queue = []sched.SpawnResult{
+		{Exit: 0, Stdout: "done\n"},
+		{Exit: 0},
+		{Exit: 0},
+		{Exit: 0, Stdout: "done\n"},
+		{Exit: 0},
+		{Exit: 0, Stdout: "done\n"},
+		{Exit: 0},
+	}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.waitFor(t, "the task failed after the reject cap", func() bool {
+		return h.status(t, "t1") == "failed"
+	})
+	if got := h.spawn.count(); got != 7 {
+		t.Fatalf("spawn calls = %d, want 7 (three work rounds plus four review rounds)", got)
+	}
+	read, err := todostore.ReadAll(context.Background(), h.todoDB, proj, "sess-architect")
+	if err != nil {
+		t.Fatalf("read all: %v", err)
+	}
+	if !strings.Contains(read, "rejected this twice") {
+		t.Errorf("the capped fail must carry the note:\n%s", read)
+	}
+}
+
+func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "shared retry budget")
+	h.spawn.queue = []sched.SpawnResult{
+		{Exit: 1, Stderr: "worker died\n"},
+		{Exit: 0, Stdout: "done\n"},
+		{Exit: 1, Stderr: "reviewer died\n"},
+		{Exit: 0, Stdout: "done\n"},
+		{Exit: 1, Stderr: "reviewer died\n"},
+		{Exit: 0, Stdout: "done\n"},
+		{Exit: 1, Stderr: "reviewer died\n"},
+	}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.waitFor(t, "the task failed from the shared retry budget", func() bool {
+		return h.status(t, "t1") == "failed"
+	})
+	if got := h.spawn.count(); got != 7 {
+		t.Fatalf("spawn calls = %d, want 7 (the worker's death consumed the one retry the reviewer would have had)", got)
+	}
+	read, err := todostore.ReadAll(context.Background(), h.todoDB, proj, "sess-architect")
+	if err != nil {
+		t.Fatalf("read all: %v", err)
+	}
+	if !strings.Contains(read, "rejected this twice") {
+		t.Errorf("the capped fail must carry the note:\n%s", read)
 	}
 }

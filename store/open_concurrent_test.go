@@ -102,7 +102,7 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 				for i := 0; i < slice; i++ {
 					id := fmt.Sprintf("t%d", wi*20+g*slice+i+1)
 					sess := fmt.Sprintf("s%dg%d", wi, g)
-					if _, err := todostore.Start(context.Background(), db, p, id, sess); err != nil {
+					if _, err := todostore.Start(context.Background(), db, p, id, sess, false); err != nil {
 						mu.Lock()
 						errs = append(errs, err)
 						mu.Unlock()

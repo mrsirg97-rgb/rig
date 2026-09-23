@@ -326,6 +326,13 @@ happens to name (see the binding decision).
   the note names each task and the owner it was freed from, silent
   when idle. Tasks survive the release — text, deps, and position
   stay; only the claim dies.
+- **The worker door (SPEC_SWARM).** `Start`/`Complete`/`Fail` take the
+  worker flag: a worker (`rig -p`: delegate or swarm) refuses a task it
+  does not hold — no `fail it first to take over` hint, no foreign
+  takeover release, no auto-start of an unclaimed pending task — the
+  supervisor owns the board entry. `Fail` also accepts the caller's own
+  review claim (an abandoned review fails; the fold replays it), and the
+  interactive takeover door is unchanged.
 - **The one structured read (SPEC_SWARM).** `Task(ctx, db, p, id,
   session)` returns the task's text and notes (each with its session, in
   order) — the swarm's brief source, read-only, unknown id in the store's

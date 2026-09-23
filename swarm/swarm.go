@@ -93,6 +93,8 @@ type Controller struct {
 	wg        sync.WaitGroup
 	architect string
 	proj      todostore.Project
+	retries   map[string]int
+	rejects   map[string]int
 }
 
 type worker struct {
@@ -108,11 +110,10 @@ type worker struct {
 	done      int
 	failed    int
 	state     string
-	retries   map[string]int
 }
 
 func New(o Opts) *Controller {
-	return &Controller{opts: o}
+	return &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}}
 }
 
 // Start begins n drain workers. The architect is the session the command
@@ -162,7 +163,6 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 			proj:      proj,
 			architect: session,
 			state:     StateRunning,
-			retries:   map[string]int{},
 		}
 		c.workers = append(c.workers, w)
 		c.wg.Add(1)
@@ -233,7 +233,7 @@ func (c *Controller) run(w *worker) {
 	defer c.wg.Done()
 	empties := 0
 	for {
-		if c.ctx.Err() != nil {
+		if w.ctx.Err() != nil {
 			return
 		}
 		status := ""
@@ -271,10 +271,8 @@ func (c *Controller) run(w *worker) {
 		if res.ok {
 			c.set(w, func() { w.done++ })
 		} else {
-			c.set(w, func() {
-				w.retries[id]++
-			})
-			if c.retriesOf(w, id) == 1 {
+			c.bump(w, "retries", id)
+			if c.countOf("retries", id) == 1 {
 				c.release(w, id)
 				c.idle(w)
 			} else {
@@ -339,11 +337,7 @@ func (c *Controller) work(w *worker, id string) workResult {
 			}
 			return workResult{ok: err == nil}
 		case "reject":
-			_, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, v.reason, w.identity)
-			if err != nil {
-				c.loud(w, "w%d: reject %s: %v\n", w.id, id, err)
-			}
-			return workResult{ok: err == nil}
+			return workResult{ok: c.rejectTask(w, id, v.reason) == nil}
 		}
 		return workResult{noVerdict: true}
 	}
@@ -366,20 +360,57 @@ func (c *Controller) failTask(w *worker, id string, noVerdict bool) {
 		if noVerdict {
 			reason = "the reviewer gave no verdict"
 		}
-		if _, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, reason, w.identity); err != nil {
-			c.loud(w, "w%d: reject %s: %v\n", w.id, id, err)
-		}
+		c.rejectTask(w, id, reason)
 		return
 	}
-	if _, err := todostore.Fail(w.ctx, c.opts.TodoDB, w.proj, id, w.identity); err != nil {
+	if _, err := todostore.Fail(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, false); err != nil {
 		c.loud(w, "w%d: fail %s: %v\n", w.id, id, err)
 	}
 }
 
-func (c *Controller) retriesOf(w *worker, id string) int {
+// rejectTask is the swarm's one reject door: the task's rejections are
+// counted per task, and a third rejection fails it with a note instead of
+// returning it to the workers — the no-verdict cycle cannot spin forever.
+func (c *Controller) rejectTask(w *worker, id, reason string) error {
+	c.bump(w, "rejects", id)
+	if c.countOf("rejects", id) > 2 {
+		c.note(w, id, "the reviewer rejected this twice; the swarm failed it")
+		if _, err := todostore.Fail(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, false); err != nil {
+			c.loud(w, "w%d: fail %s: %v\n", w.id, id, err)
+			return err
+		}
+		return nil
+	}
+	if _, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, reason, w.identity); err != nil {
+		c.loud(w, "w%d: reject %s: %v\n", w.id, id, err)
+		return err
+	}
+	return nil
+}
+
+func (c *Controller) note(w *worker, id, text string) {
+	if _, err := todostore.Note(w.ctx, c.opts.TodoDB, w.proj, id, text, w.architect); err != nil {
+		c.loud(w, "w%d: note %s: %v\n", w.id, id, err)
+	}
+}
+
+func (c *Controller) countOf(key, id string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return w.retries[id]
+	if key == "rejects" {
+		return c.rejects[id]
+	}
+	return c.retries[id]
+}
+
+func (c *Controller) bump(w *worker, key, id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if key == "rejects" {
+		c.rejects[id]++
+	} else {
+		c.retries[id]++
+	}
 }
 
 func (c *Controller) idle(w *worker) {
@@ -442,6 +473,7 @@ func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {
 			fmt.Fprintf(&b, "- %s (by %s)\n", n.Text, n.Session)
 		}
 	}
+	b.WriteString("\nThe supervisor owns this board entry: the claim is the supervisor's, so findings go in the task's note (todo note) and in rem; do not create tasks, and do not start, complete, or fail the board's tasks.\n")
 	if w.role == RoleReviewer {
 		b.WriteString("\nReview the work now: read the diff and the task's notes; then decide. End your reply with exactly one verdict line as the last line: 'verdict: accept' or 'verdict: reject <reason>'.\n")
 	} else {

@@ -60,10 +60,10 @@ func TestReapAtOpenReleasesClaimsOwnedByEndedSessions(t *testing.T) {
 	}
 	dead := taskIDText(t, reply, "dead claim")
 	live := taskIDText(t, reply, "live claim")
-	if _, err := todostore.Start(ctx, tdb, proj, dead, deadID); err != nil {
+	if _, err := todostore.Start(ctx, tdb, proj, dead, deadID, false); err != nil {
 		t.Fatalf("start dead: %v", err)
 	}
-	if _, err := todostore.Start(ctx, tdb, proj, live, liveID); err != nil {
+	if _, err := todostore.Start(ctx, tdb, proj, live, liveID, false); err != nil {
 		t.Fatalf("start live: %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestReapAtOpenIsIdleWhenNoSessionsHaveEnded(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := taskIDText(t, reply, "live claim")
-	if _, err := todostore.Start(ctx, tdb, proj, id, liveID); err != nil {
+	if _, err := todostore.Start(ctx, tdb, proj, id, liveID, false); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	note, err := reapClaims(ctx, sdb, tdb, cwd, proj, "current-session")

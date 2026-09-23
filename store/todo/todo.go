@@ -381,6 +381,9 @@ func (f *folded) applyVerb(e eventRow) {
 		if ts.status == "in_progress" {
 			ts.status = "failed"
 			ts.owner = ""
+		} else if ts.status == "review" {
+			ts.status = "failed"
+			ts.owner = ""
 		}
 	case "release":
 		if ts.status == "in_progress" {
@@ -778,10 +781,13 @@ func mergeNote(given, fresh int) string {
 	}
 }
 
-func Start(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+func Start(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
 	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
 		switch ts.status {
 		case statusPending:
+			if worker {
+				return false, "'" + id + "' is not claimed by you; a worker does not start the supervisor's board entries"
+			}
 			return true, ""
 		case statusActive:
 			voice := "'" + id + "' is already in progress"
@@ -827,7 +833,13 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 			return "", fmt.Errorf("'%s' failed; retry it first", id)
 		}
 		if ts.owner != "" && ts.owner != session {
+			if worker {
+				return "", fmt.Errorf("'%s' is claimed by %s", id, ts.owner)
+			}
 			return "", fmt.Errorf("'%s' is claimed by %s; fail it first to take over", id, ts.owner)
+		}
+		if worker && ts.status == statusPending {
+			return "", fmt.Errorf("'%s' is not claimed by you; a worker does not complete the supervisor's board entries", id)
 		}
 		if blocker := blockedBy(f, ts); blocker != "" {
 			return "", fmt.Errorf("'%s' is blocked by '%s' (%s)", id, blocker, blockHint(f, blocker))
@@ -877,7 +889,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 	})
 }
 
-func Fail(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+func Fail(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
 	if session == "" {
 		session = anon
 	}
@@ -893,9 +905,15 @@ func Fail(ctx context.Context, db store.DB, p Project, id, session string) (stri
 		var voice string
 		switch ts.status {
 		case statusPending:
-			voice = "'" + id + "' is pending; start it first"
+			if worker {
+				voice = "'" + id + "' is not claimed by you; a worker does not fail the supervisor's board entries"
+			} else {
+				voice = "'" + id + "' is pending; start it first"
+			}
 		case statusReview:
-			voice = "'" + id + "' is in review; accept or reject it first"
+			if ts.owner != session {
+				voice = "'" + id + "' is in review; accept or reject it first"
+			}
 		case statusDone:
 			voice = "'" + id + "' is done; read-only"
 		case statusFailed:
@@ -903,6 +921,9 @@ func Fail(ctx context.Context, db store.DB, p Project, id, session string) (stri
 		}
 		if voice != "" {
 			return "", fmt.Errorf("%s", voice)
+		}
+		if worker && ts.owner != "" && ts.owner != session {
+			return "", fmt.Errorf("'%s' is claimed by %s", id, ts.owner)
 		}
 		released := ""
 		if ts.owner != "" && ts.owner != session {
