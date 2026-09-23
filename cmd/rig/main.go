@@ -56,7 +56,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.4.3"
+const Version = "1.4.4"
 
 type root struct {
 	pluginMax int
@@ -1097,6 +1097,7 @@ func main() {
 			Allow:        allowList,
 			Fetch:        sched.RealFetch(0),
 			Spawn:        sched.RealSpawn,
+			Notify:       r.rec.Notify,
 		})
 		r.swarm = swarm.New(swarm.Opts{
 			TodoDB:  tdb,
@@ -1118,6 +1119,7 @@ func main() {
 			FleetModel:    workers.Model,
 			ReviewerModel: workers.Reviewer,
 			Models:        func() models.Table { return r.runtime },
+			Frontend:      r.rec,
 		})
 	}
 

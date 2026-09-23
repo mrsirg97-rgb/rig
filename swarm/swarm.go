@@ -16,6 +16,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/swarm/status"
 )
 
 const (
@@ -84,6 +85,7 @@ type Opts struct {
 	ReviewerModel string
 	Models        func() models.Table
 	Poll          time.Duration
+	Frontend      core.Frontend
 }
 
 type Controller struct {
@@ -98,6 +100,8 @@ type Controller struct {
 	proj      todostore.Project
 	retries   map[string]int
 	rejects   map[string]int
+	fe        core.Frontend
+	emitter   *status.Emitter
 }
 
 type worker struct {
@@ -116,7 +120,11 @@ type worker struct {
 }
 
 func New(o Opts) *Controller {
-	return &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}}
+	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}, fe: o.Frontend}
+	if o.Frontend != nil {
+		c.emitter = status.New(o.Frontend.Notify)
+	}
+	return c
 }
 
 // Start begins n drain workers. The architect is the session the command
@@ -229,6 +237,8 @@ func (c *Controller) Stop() (string, error) {
 	if _, err := todostore.Reap(context.Background(), c.opts.TodoDB, proj, ended, architect); err != nil {
 		return "", fmt.Errorf("swarm: stop: release: %w", err)
 	}
+	c.emit(true)
+	c.notice(fmt.Sprintf("swarm: /swarm exited — %d %s stopped", count, plural(count, "worker")))
 	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "worker")), nil
 }
 
@@ -246,7 +256,7 @@ func (c *Controller) run(w *worker) {
 		reply, err := todostore.Claim(w.ctx, c.opts.TodoDB, w.proj, w.identity, status)
 		if err != nil {
 			c.loud(w, "w%d: claim: %v\n", w.id, err)
-			c.set(w, func() { w.state = StateExited })
+			c.finish(w, false)
 			return
 		}
 		if reply == "nothing to do" {
@@ -256,7 +266,7 @@ func (c *Controller) run(w *worker) {
 			}
 			empties++
 			if empties >= emptyClaimsBeforeExit {
-				c.set(w, func() { w.state = StateExited })
+				c.finish(w, true)
 				return
 			}
 			c.idle(w)
@@ -266,23 +276,27 @@ func (c *Controller) run(w *worker) {
 		id := claimID(reply)
 		if id == "" {
 			c.loud(w, "w%d: claim reply unreadable: %q\n", w.id, reply)
-			c.set(w, func() { w.state = StateExited })
+			c.finish(w, false)
 			return
 		}
 		c.set(w, func() { w.task = id })
+		c.emit(false)
 		res := c.work(w, id)
 		if res.ok {
 			c.set(w, func() { w.done++ })
 		} else {
 			c.bump(w, "retries", id)
 			if c.countOf("retries", id) == 1 {
+				c.notice(fmt.Sprintf("swarm: w%d died — %s restarted", w.id, id))
 				c.release(w, id)
 				c.idle(w)
 			} else {
+				c.notice(fmt.Sprintf("swarm: w%d died — %s exited", w.id, id))
 				c.failTask(w, id, res.noVerdict)
 				c.set(w, func() { w.failed++ })
 			}
 		}
+		c.emit(false)
 		c.set(w, func() { w.task = "" })
 	}
 }
@@ -338,10 +352,16 @@ func (c *Controller) work(w *worker, id string) workResult {
 			_, err := todostore.Accept(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 			if err != nil {
 				c.loud(w, "w%d: accept %s: %v\n", w.id, id, err)
+			} else {
+				c.emit(false)
 			}
 			return workResult{ok: err == nil}
 		case "reject":
-			return workResult{ok: c.rejectTask(w, id, v.reason) == nil}
+			ok := c.rejectTask(w, id, v.reason) == nil
+			if ok {
+				c.emit(false)
+			}
+			return workResult{ok: ok}
 		}
 		return workResult{noVerdict: true}
 	}
@@ -367,14 +387,14 @@ func (c *Controller) failTask(w *worker, id string, noVerdict bool) {
 		c.rejectTask(w, id, reason)
 		return
 	}
+	c.note(w, id, "the worker died twice")
 	if _, err := todostore.Fail(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, false); err != nil {
 		c.loud(w, "w%d: fail %s: %v\n", w.id, id, err)
+		return
 	}
+	c.notice(fmt.Sprintf("swarm: %s failed — the worker died twice", id))
 }
 
-// rejectTask is the swarm's one reject door: the task's rejections are
-// counted per task, and a third rejection fails it with a note instead of
-// returning it to the workers — the no-verdict cycle cannot spin forever.
 func (c *Controller) rejectTask(w *worker, id, reason string) error {
 	c.bump(w, "rejects", id)
 	if c.countOf("rejects", id) > 2 {
@@ -383,12 +403,14 @@ func (c *Controller) rejectTask(w *worker, id, reason string) error {
 			c.loud(w, "w%d: fail %s: %v\n", w.id, id, err)
 			return err
 		}
+		c.notice(fmt.Sprintf("swarm: %s failed — the reviewer rejected this twice; the swarm failed it", id))
 		return nil
 	}
 	if _, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, reason, w.identity); err != nil {
 		c.loud(w, "w%d: reject %s: %v\n", w.id, id, err)
 		return err
 	}
+	c.notice(fmt.Sprintf("swarm: %s rejected — %s", id, reason))
 	return nil
 }
 
@@ -446,16 +468,73 @@ func (c *Controller) anyBusy() bool {
 	return false
 }
 
+func (c *Controller) allExited() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, w := range c.workers {
+		if w.state != StateExited {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *Controller) set(w *worker, fn func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	fn()
 }
 
+func (c *Controller) finish(w *worker, natural bool) {
+	c.set(w, func() { w.state = StateExited })
+	if natural && c.allExited() {
+		c.notice("swarm: the board emptied — all workers exited")
+	}
+	c.emit(true)
+}
+
+func (c *Controller) emit(force bool) {
+	if c.emitter == nil {
+		return
+	}
+	if force {
+		c.emitter.Force(c.status)
+	} else {
+		c.emitter.Emit(c.status)
+	}
+}
+
+func (c *Controller) status() core.SwarmStatus {
+	c.mu.Lock()
+	proj := c.proj
+	c.mu.Unlock()
+	rows := c.List()
+	workers := make([]core.SwarmWorker, len(rows))
+	for i, w := range rows {
+		workers[i] = core.SwarmWorker{
+			ID: w.ID, Role: w.Role, Task: w.Task,
+			Heartbeat: w.Heartbeat, Done: w.Done, Failed: w.Failed, State: w.State,
+		}
+	}
+	counts, err := todostore.Counts(context.Background(), c.opts.TodoDB, proj)
+	if err != nil {
+		return core.SwarmStatus{Workers: workers}
+	}
+	return core.SwarmStatus{Workers: workers, Pending: counts.Pending, Review: counts.Review}
+}
+
+func (c *Controller) notice(text string) {
+	if c.fe == nil {
+		return
+	}
+	c.fe.Notify(core.SwarmNotice{Text: text})
+}
+
 func (c *Controller) stream(w *worker, p []byte) {
 	if bytes.Contains(p, []byte(heartbeatLine)) {
 		c.set(w, func() { w.heartbeat = time.Now() })
 	}
+	c.emit(false)
 	dir := filepath.Join(c.opts.Home, "swarm")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return

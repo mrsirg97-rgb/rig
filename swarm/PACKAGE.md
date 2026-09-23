@@ -26,5 +26,15 @@ the supervisor's in-memory truth.
   `SpawnCtx` (the drain worker's context, so a stop kills the spawn),
   `Stall` 10m and `Timeout` 2h: a worker that keeps writing holds its
   slot for the full spend ceiling, a silent one is killed as hung.
+- The optional `Frontend` seam is the transcript door (SPEC_SWARM 7):
+  the four decision-worthy events emit one-line `SwarmNotice` notices
+  (a task failed with its note, a reviewer rejected with the reason, a
+  worker died and was restarted or exited, the board emptied or the
+  swarm exited) and nothing else; the controller emits `SwarmStatus`
+  snapshots on claim, stream bytes, complete, verdict, and exit,
+  throttled to a few per second with the exit's last frame always
+  landing; the emitter builds the snapshot only when the frame is due,
+  so the `Counts` fold never runs per stream chunk. The snapshot is the
+  roster (`List`) plus the bound queue's fold counts (`todo.Counts`).
 - Pure supervisor side: stdlib plus core, models, store/todo,
-  store/scheduler. No command, no frontend.
+  store/scheduler, the `status` throttle leaf. No command.

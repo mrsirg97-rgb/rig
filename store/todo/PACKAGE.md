@@ -47,6 +47,10 @@ rows (`· N in review`).
 - `todo.go`: the store: operations (claim, note, accept, reject, the
   review state), replay, position minting, the DAG validation, per-scope
   folds and one shared event-log sequence.
+- `task.go`: the structured reads beside the render: `Task` (one task's
+  brief: text + notes with sessions) and `Counts` (the fold's
+  per-status counts, read-only) — the swarm's brief and status band
+  never parse the rendered reply.
 - `binding.go`: which queue a session works in. `ProjectOf(dir)` mints a
   `Project` from a directory (abs first: one place must not have two
   bucket keys), `Bind`/`BindingOf` record and read a session's binding in

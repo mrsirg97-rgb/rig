@@ -92,6 +92,8 @@ type tui struct {
 
 	statusUp, statusDown, statusCache int
 
+	swarm core.SwarmStatus
+
 	askText  string
 	askReply chan bool
 
@@ -970,6 +972,13 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
 		t.mu.Unlock()
+	case core.SwarmNotice:
+		t.commit(RenderSwarmNotice(t.theme, e.Text) + "\n")
+	case core.SwarmStatus:
+		t.mu.Lock()
+		t.swarm = e
+		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+		t.mu.Unlock()
 	default:
 
 	}
@@ -1121,8 +1130,11 @@ func (t *tui) statusLineLocked() string {
 	if st == "" {
 		return ""
 	}
-
-	return "\n" + st
+	s := "\n"
+	if band := RenderSwarmBand(t.theme, t.swarm); band != "" {
+		s += band + "\n"
+	}
+	return s + st
 }
 
 func (t *tui) sessionStartLocked() string {

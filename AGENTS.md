@@ -163,12 +163,15 @@ plus one registration line, and the loop never names a concrete type.
 - `tool/delegate`: the one-shot worker tool (SPEC_DELEGATE): spawn a
   headless worker on a task now, wait, and feed back its last message;
   a recorded run in the cwd-scope scheduler store, a resumable
-  transcript.
+  transcript; the optional `Notify` seam (SPEC_SWARM 7) emits the
+  status snapshot for an interactive delegate.
 - `swarm`: the drain-worker controller (SPEC_SWARM): supervisor-side
   claim/spawn/complete loops over the session's bound queue, the
   reviewer verdict protocol, the run streams and the in-memory roster;
   the GPU slots are the parallelism, the dead claim is released via the
-  todo store's Reap door.
+  todo store's Reap door; the optional `Frontend` seam is the
+  transcript door (the four decision-worthy notices and the throttled
+  `SwarmStatus` band, SPEC_SWARM 7).
 - `tool/sessions`: the session-store introspection tool: `list` and
   `summary`, the vitals (which models ran, what failed, the cache
   ratio), and the store's schema migration on open.
@@ -178,7 +181,8 @@ plus one registration line, and the loop never names a concrete type.
   prompt runs once, a faulted turn ends non-zero (the scheduler's
   worker path).
 - `frontend/tui`: the terminal UI: the same events and commands in a
-  live-region design; adds to the CLI's bytes, never changes them.
+  live-region design; adds to the CLI's bytes, never changes them; the
+  swarm band and the one-line transcript notices (SPEC_SWARM 7).
 - `frontend/web`: the `rig serve` dashboard (SPEC_SERVE): loopback-only
   net/http over the rig home's stores, token-gated, with the todo,
   scheduler, and plugin-forge writes.

@@ -247,6 +247,13 @@ error, so the operator always has the session id and log path.
   and touched by the `Observe` stream; the swarm sets 10m beside a 2h
   spend ceiling, so a worker keeps its slot while it writes and a
   silent one is gone in ten minutes.
+- **The status Observe (SPEC_SWARM 7)**: the tool gains an optional
+  `Notify` seam (nil = silent, today's behavior); with it, an
+  interactive delegate emits a `core.SwarmStatus` snapshot on start,
+  on the spawn's stream bytes (the same Observe), and on exit — one
+  worker row, the queue counts zero, throttled to a few per second
+  with the exit's last frame always landing. The TUI then shows the
+  delegate's worker row only; CLI/oneshot ignore the event.
 - **No recursion**: the delegate sets `RIG_DELEGATE=1` on the worker's
   spawn (the `RIG_HOME` pattern, decision 2). The delegate tool's
   Exec refuses by name when the marker is set: `delegate: a worker
