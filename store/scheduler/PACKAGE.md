@@ -69,7 +69,12 @@ written before the store commit; drift is surfaced in list.
   `Stall` watch: a set window kills a worker silent past it (the
   result marked `Stalled`, the stderr and the log naming the reason)
   while `Timeout` stays the spend ceiling (the seam's cap is 24h, the
-  tool's own cap is 30 minutes).
+  tool's own cap is 30 minutes). Every abnormal end is also recorded as
+  the run's reason — `killed after timeout`, `killed after stall`,
+  `canceled` (the spawn's base context ended), or `killed by signal N`
+  (a signal the runner did not send) — and `RealSpawn` captures the
+  signal from the wait status and carries `Pdeathsig`, so a signal
+  death is never a bare exit -1.
 - `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
   `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
   worker), each entry split into explicit VAR VALUE pairs (bwrap's

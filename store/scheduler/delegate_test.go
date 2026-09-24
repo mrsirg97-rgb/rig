@@ -1,6 +1,7 @@
 package scheduler_test
 
 import (
+	"syscall"
 	"context"
 	"encoding/json"
 	"os"
@@ -330,5 +331,85 @@ func TestRemoteDelegateWaitsForTheRowsConcurrencyTokens(t *testing.T) {
 	}
 	if second.count() != 1 {
 		t.Fatalf("after the token freed, the second delegate must spawn once, got %d", second.count())
+	}
+}
+
+func runReason(t *testing.T, in sched.DelegateInput, id string) string {
+	t.Helper()
+	row := in.DB.DB.QueryRow(`SELECT reason FROM runs WHERE job_id = ?`, id)
+	var reason string
+	if err := row.Scan(&reason); err != nil {
+		t.Fatalf("run reason: %v", err)
+	}
+	return reason
+}
+
+func TestDelegateRecordsCanceledReason(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: -1}}
+	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+		<-ctx.Done()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.SpawnCtx = ctx
+		in.Context = ctx
+	})
+	done := make(chan struct{})
+	go func() {
+		if _, err := sched.Delegate(in); err != nil {
+			t.Errorf("delegate: %v", err)
+		}
+		close(done)
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the canceled delegate did not return")
+	}
+	if got := runReason(t, in, "j1"); got != "canceled" {
+		t.Errorf("a canceled spawn must record the reason, got %q", got)
+	}
+}
+
+func TestDelegateRecordsSignalReason(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: -1, Signal: syscall.SIGKILL}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
+	res, err := sched.Delegate(in)
+	if err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if res.Exit != -1 {
+		t.Fatalf("exit = %d, want -1", res.Exit)
+	}
+	if got := runReason(t, in, "j1"); got != "killed by signal 9" {
+		t.Errorf("a signal death must record the signal, got %q", got)
+	}
+}
+
+func TestDelegateRecordsStallAndTimeoutReasons(t *testing.T) {
+	stallSpawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1}}
+	stallSpawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+		<-ctx.Done()
+	}
+	in := delegateInput(t, delegateFetch(t, false, ""), stallSpawn.spawn, func(in *sched.DelegateInput) {
+		in.Stall = 60 * time.Millisecond
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if got := runReason(t, in, "j1"); got != "killed after stall" {
+		t.Errorf("a stalled worker must record the reason, got %q", got)
+	}
+
+	timeoutSpawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1, TimedOut: true}}
+	in = delegateInput(t, delegateFetch(t, false, ""), timeoutSpawn.spawn, nil)
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if got := runReason(t, in, "j1"); got != "killed after timeout" {
+		t.Errorf("a timed-out worker must record the reason, got %q", got)
 	}
 }

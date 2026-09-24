@@ -1134,11 +1134,11 @@ func (t *tui) statusLineLocked() string {
 	if st == "" {
 		return ""
 	}
-	s := "\n"
+	s := "\n" + st
 	if band := RenderSwarmBand(t.theme, t.swarm); band != "" {
-		s += band + "\n"
+		s += "\n" + band
 	}
-	return s + st
+	return s
 }
 
 func (t *tui) sessionStartLocked() string {

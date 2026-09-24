@@ -12,9 +12,14 @@ the supervisor's in-memory truth.
   worker stops claiming with the notice `swarm: budget reached —
   $X.XX / $Y.YY — the swarm stops claiming` (SPEC_HOSTED 5).
   more drain workers (against a running swarm it adds, so the roles mix);
-  `List()` is the supervisor's read; `Stop()` cancels the context (the
-  in-flight spawns die with it), waits for the drain workers, releases
-  their claims through the todo store's Reap door, and clears the rows.
+  the reply is `swarm: added N agents (role X · model M)` — one phrasing
+  whether the swarm was empty or running. The controller's context
+  derives from the start command's session context, so a session
+  teardown cancels the in-flight spawns with it. `List()` is the
+  supervisor's read; `Stop()` cancels the context (the in-flight spawns
+  die with it), waits for the drain workers, releases their claims
+  through the todo store's Reap door, and clears the rows — the reply is
+  `swarm: stopped N agents`.
 - One drain worker owns one identity (a minted session id) and loops:
   `todo claim` (a reviewer claims `status=review`), build the brief from
   `todo.Task`, spawn a one-shot `rig -p` through `sched.Delegate`, then
@@ -30,7 +35,11 @@ the supervisor's in-memory truth.
   `<scheduler home>/swarm/wN.stream`, the heartbeat read from it),
   `SpawnCtx` (the drain worker's context, so a stop kills the spawn),
   `Stall` 10m and `Timeout` 2h: a worker that keeps writing holds its
-  slot for the full spend ceiling, a silent one is killed as hung.
+  slot for the full spend ceiling, a silent one is killed as hung. The
+  heartbeat resets on each spawn, so a restarted task shows a fresh age
+  instead of the dead run's last beat; every abnormal spawn end is
+  recorded on the run (`killed after timeout` / `killed after stall` /
+  `canceled` / `killed by signal N`).
 - The optional `Frontend` seam is the transcript door (SPEC_SWARM 7),
   a resolver read on every notify (the root wires it once as
   `func() core.Frontend { return r.rec }`, so the recorder can appear

@@ -11,8 +11,8 @@ Each number names its mechanism.
 - **99.1% cache hit over 2,925 turns.** The request prefix is byte-stable, so the provider's prefix cache reuses it. The ratio is `cache_read/prompt` from the usage table, the same arithmetic `sessions summary` uses (`TestSessionsSummaryCacheRatioFixture`). 297M of 299M prompt tokens came from cache.
 - **208M prompt tokens on 2026-09-22.** The same query, that day alone.
 - **7k byte-stable preamble.** The system prompt, the tool schemas, and the append-only transcript are a few thousand bytes, pinned by `TestWireToolsPrefixGolden` (a sha256 over the fleet's wire shape), `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`, and `TestSystemPromptIsByteStableAcrossBuilds`, so a stray timestamp cannot silently kill the cache.
-- **723 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
-- **34,301 lines of Go, 53,626 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
+- **720 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
+- **34,336 lines of Go, 53,815 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
 
 ## what's different
 

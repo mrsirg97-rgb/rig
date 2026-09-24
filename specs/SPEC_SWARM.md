@@ -130,6 +130,15 @@ The swarm's spawn passes the drain worker's identity as the delegate's
 task worker in flight per drain worker is the loop's own shape. The
 fleet's `slots` gate stays the delegate's; the swarm's gate is the GPU.
 
+Every abnormal end of a spawned worker is recorded as the run's reason,
+never only as a log marker: `killed after timeout` (the spend ceiling),
+`killed after stall` (the silence window), `canceled` (the spawn's base
+context ended — `/swarm stop`, the session teardown, or the caller's
+own cancel), and `killed by signal N` (a signal the runner did not
+send — the exit code alone cannot name it). A spawned worker's process
+group also carries `Pdeathsig`, so a runner that dies hard does not
+leave the worker running orphaned.
+
 ### 3. The reviewer verdict is a protocol line
 
 A reviewer drain worker's brief ends with a directive naming the verdict
@@ -165,16 +174,24 @@ owns every concrete type; the command owns only the vocabulary.
   the role vocabulary, and resolves an unknown `model=` against the
   runtime models table by name. With no `model=`, a worker uses the
   fleet's `model`; a reviewer uses `workers.json`'s `reviewer` when
-  configured, else the fleet's.
+  configured, else the fleet's. The reply is one phrasing whether the
+  swarm was empty or running: `swarm: added N agents (role X · model
+  M)` (`agent` for one, `agents` for more; never `started`). The
+  controller's context derives from the start command's session context,
+  so a session teardown cancels the in-flight spawns with it.
 - **List** renders the workers in start order: `w1 worker qwen3.8-workers ·
   task t3 · heartbeat 2s ago · done 1 failed 0`; an idle worker says
   `task none · heartbeat —`; a finished one says `exited`. Exited workers
   stay listed with their counters until the next Start or Stop, so the
-  architect can read the swarm's summary after the drain.
+  architect can read the swarm's summary after the drain. A worker's
+  heartbeat resets on each spawn, so a restarted task shows a fresh age
+  instead of the dead run's last beat.
 - **Stop** cancels the swarm's context (the in-flight spawns die with it),
   waits for the drain workers, releases whatever claims they held (the
   Reap door again), and clears the rows. The reply is `swarm: stopped N
-  workers`; a stop with no swarm refuses by name.
+  agents`; a stop with no swarm refuses by name. Session teardown stops
+  the swarm the same way (`cmd/rig`'s exit path), so the in-flight
+  spawns' deaths are recorded before the process ends.
 - **The run stream**: `<scheduler home>/swarm/wN.stream`, one file per
   drain worker, appended across its life with task markers; the heartbeat
   the list shows is the supervisor's in-memory read of that stream. The
@@ -242,20 +259,24 @@ due, so a streaming worker's per-chunk emits never fold the store (the
 `Counts` read runs at most four times a second, the forced frames
 besides). The snapshot carries the workers (the supervisor's List) and
 the bound queue's fold counts (`todo.Counts`: pending and review), and
-the TUI folds the latest into the footer: two rows above the existing
-footer line while a swarm runs, zero rows when nothing runs:
+the TUI folds the latest into the footer below the existing status
+rows, separated by a short dim rule, while a swarm runs; zero rows and
+no rule when nothing runs:
 
 ```
-workers 2 · todo 3 · done 5 · failed 1 · w2 t388 12s
-reviewer 1 · review 1 · done 1 · failed 0 · w3 t386 4m
+····
+workers 2 · +3 ✓5 ✕1 · w2 t388 12s
+reviewer 1 · ⧗1 ✓1 ✕0 · w3 t386 4m
 ```
 
-- `workers <n>` / `reviewer <n>`: the role's drain-worker count; `todo
-  <pending>` / `review <r>`: the bound queue's fold; `done <d>` /
-  `failed <f>`: the role's summed counters.
+- `workers <n>` / `reviewer <n>`: the role's drain-worker count; `+<p>`
+  / `⧗<r>`: the bound queue's pending/review fold; `✓<d>` / `✕<f>`: the
+  role's summed counters. The role labels, the `+`/`⧗` markers and the
+  separators are dim, the counts text, `✓` the success slot, `✕` the
+  fault slot (the theme's glyph switch carries the ascii fallback).
 - The tail is the role's busiest worker — in flight first, then the
   highest done+failed, ties by id — its current task (`—` when idle) and
-  heartbeat age (`12s`, `4m`, `1h`; `—` when none).
+  heartbeat age (`12s`, `4m`, `1h`; `—` when none), dim.
 - A delegate shows the worker row only (its snapshot carries the one
   in-flight worker; the queue counts are zero).
 

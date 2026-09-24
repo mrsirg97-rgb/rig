@@ -647,3 +647,83 @@ func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
 		t.Errorf("the capped fail must carry the note:\n%s", notes)
 	}
 }
+
+func TestSwarmHeartbeatResetsOnEachSpawn(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "work")
+	h.spawn.queue = []sched.SpawnResult{{Exit: -1}, {Exit: 0}}
+	releaseFirst := make(chan struct{})
+	releaseRetry := make(chan struct{})
+	retrySpawn := make(chan struct{})
+	calls := 0
+	h.spawn.onCall = func(observe func([]byte)) {
+		h.spawn.mu.Lock()
+		calls++
+		n := calls
+		h.spawn.mu.Unlock()
+		if n == 1 {
+			observe([]byte("rig: heartbeat\n"))
+			<-releaseFirst
+			return
+		}
+		close(retrySpawn)
+		<-releaseRetry
+	}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.waitFor(t, "a worker holding t1 with a heartbeat", func() bool {
+		for _, r := range h.ctl.List() {
+			if r.Task == "t1" && !r.Heartbeat.IsZero() {
+				return true
+			}
+		}
+		return false
+	})
+	close(releaseFirst)
+	h.waitFor(t, "the restarted task's spawn", func() bool {
+		select {
+		case <-retrySpawn:
+			return true
+		default:
+			return false
+		}
+	})
+	rows := h.ctl.List()
+	found := false
+	for _, r := range rows {
+		if r.Task != "t1" {
+			continue
+		}
+		found = true
+		if !r.Heartbeat.IsZero() {
+			t.Errorf("the restarted run's heartbeat must reset to none, holds %v", r.Heartbeat)
+		}
+	}
+	if !found {
+		t.Fatalf("the worker rows lost the task:\n%+v", rows)
+	}
+	close(releaseRetry)
+}
+
+func TestSwarmStartAndStopReplyVoice(t *testing.T) {
+	h := newHarness(t)
+	reply := h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	want := "swarm: added 1 agent (role worker · model qwen3.8-workers)"
+	if reply != want {
+		t.Errorf("start reply = %q, want %q", reply, want)
+	}
+	reply = h.start(t, swarm.StartOpts{Count: 2, Role: "reviewer"})
+	want = "swarm: added 2 agents (role reviewer · model qwen3.8-review)"
+	if reply != want {
+		t.Errorf("a start against a running swarm replies %q, want %q", reply, want)
+	}
+	if strings.Contains(reply, "started") {
+		t.Errorf("the start reply must never say started: %q", reply)
+	}
+	got, err := h.ctl.Stop()
+	if err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if got != "swarm: stopped 3 agents" {
+		t.Errorf("stop reply = %q, want stopped 3 agents", got)
+	}
+}

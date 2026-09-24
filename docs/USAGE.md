@@ -77,7 +77,8 @@ is a loud line naming the known set, never silently a prompt.
   done 1 failed 0`); `swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
   starts n drain workers on this session's queue (a budget stops the
   controller's claims at the cap with a notice, the spend summed from
-  the recorded run costs) — each claims a task,
+  the recorded run costs); the reply is `swarm: added N agents (role X ·
+  model M)` whether the swarm was empty or running — each claims a task,
   spawns a one-shot `rig -p` through the delegate path (jail, socket
   proxy, recorded run), and finishes it itself: workers submit for
   review, reviewers parse the worker's last `verdict: accept|reject
@@ -86,9 +87,13 @@ is a loud line naming the known set, never silently a prompt.
   riding the row's `concurrency` tokens beside the fleet's slots.
   Against a running swarm a
   start adds workers (the roles mix); `swarm stop` ends it and releases
-  the in-flight claims (`specs/SPEC_SWARM.md`). The task workers run
+  the in-flight claims (`swarm: stopped N agents`; `specs/SPEC_SWARM.md`).
+  The task workers run
   on a 10-minute stall beside a 2h spend ceiling, so one that keeps
-  writing holds its slot and a silent one is killed as hung. A dead
+  writing holds its slot and a silent one is killed as hung; every
+  abnormal end is recorded on the run (`killed after timeout`, `killed
+  after stall`, `canceled`, or `killed by signal N`), never only as a
+  log marker. A dead
   worker's claim
   is released and the task retried once; a second death fails it (or
   rejects it with the reason). No fleet configured refuses by name.
@@ -96,10 +101,10 @@ is a loud line naming the known set, never silently a prompt.
   line at each decision (a task failed with its note, a reviewer
   rejected with the reason, a worker died and was restarted or exited,
   the board emptied or the swarm stopped), and the footer's status band
-  carries the live counts (`workers 2 · todo 3 · done 5 · failed 1 ·
-  w2 t388 12s` / `reviewer 1 · review 1 · done 1 · failed 0 · w3 t386
-  4m`) — two rows above the status line while a swarm runs, one row for
-  an interactive delegate, none when nothing runs (1.4.4). The usage
+  carries the live counts below the status line, behind a short dim
+  rule (`workers 2 · +3 ✓5 ✕1 · w2 t388 12s` / `reviewer 1 · ⧗1 ✓1 ✕0 ·
+  w3 t386 4m`) — one row per role while a swarm runs, one row for
+  an interactive delegate, none when nothing runs (1.5.4). The usage
   line shows the session's dollars when the endpoint reported a cost
   (`up 214k down 18k · cache r 187k 87% · $1.23`, 1.5.0).
 
