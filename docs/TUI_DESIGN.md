@@ -153,10 +153,13 @@ Kept); `new` and `resume` reset it with the session.
 The swarm band is the one live surface the root does not compute: the
 controller and the delegate tool emit `core.SwarmStatus` snapshots
 (throttled, the exit always landing) and the TUI folds the latest into
-the footer — two rows above the status rows while a swarm runs
-(`workers <n> · todo <pending> · done <d> · failed <f> · w<id> <task>
-<age>`, `reviewer <n> · review <r> · done <d> · failed <f> · w<id>
-<task> <age>`), zero rows when nothing runs, one row for a delegate.
+the footer below the status rows, behind a short dim rule, while a
+swarm runs (`workers <n> · +<pending> ✓<done> ✕<failed> · w<id> <task>
+<age>`, `reviewer <n> · ⧗<review> ✓<done> ✕<failed> · w<id> <task>
+<age>`), zero rows and no rule when nothing runs, one row for a
+delegate. No new colors: labels and markers dim, counts text, the
+check the success slot, the cross the fault slot; the glyph switch
+carries the ascii fallback (`....`, `~` for the review clock).
 The notices (`core.SwarmNotice`) commit one dim line per decision in the
 transcript (SPEC_SWARM 7). Both are status-string extensions: the
 region's height-changing machinery covers them with no `live.go` line.

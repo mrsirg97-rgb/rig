@@ -56,7 +56,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.5.3"
+const Version = "1.5.4"
 
 type root struct {
 	pluginMax int
@@ -1294,6 +1294,11 @@ func main() {
 	runErr := loop.Run(ctx, k)
 	if runErr != nil {
 		fmt.Fprintln(os.Stderr, "rig:", runErr)
+	}
+	if r.swarm != nil && len(r.swarm.List()) > 0 {
+		if _, err := r.swarm.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "rig: swarm stop: %v\n", err)
+		}
 	}
 
 	oneShot, oneShotOK := fe.(*oneshot.OneShot)

@@ -1,4 +1,40 @@
 # Changelog
+## [1.5.4]: the swarm band densifies below the footer
+
+The TUI band moves below the existing footer rows behind a short dim
+rule and densifies each row (`workers 1 · +7 ✓0 ✗0 · w1 t423 12s` /
+`reviewer 1 · ⧗0 ✓0 ✗0 · w2 — —`); `/swarm`'s replies say `added N
+agents` and `stopped N agents`; and every abnormal spawn end records a
+reason on the run.
+
+- **The band** (`frontend/tui`, SPEC_TUI 3a): one row per role below
+  the status rows, separated by a four-cell dim rule (no rule and no
+  rows when nothing runs). No new colors: labels, markers and
+  separators dim, counts text, ✓ the success slot, ✕ the fault slot;
+  the glyph switch carries the ascii fallback (`....`, `~` for the
+  review clock).
+- **The replies** (`swarm/`, SPEC_SWARM 4): `swarm: added N agents
+  (role X · model M)` — one phrasing whether the swarm was empty or
+  running (`agent` for one, `agents` for more, never `started`) — and
+  `swarm: stopped N agents`.
+- **The heartbeat resets on each spawn**: a restarted task shows a
+  fresh age (`—` until the new run's first beat) instead of the dead
+  run's last heartbeat.
+- **Run reasons** (`store/scheduler`, the j23 investigation): the
+  runner captured no signal and recorded no reason when a spawn's
+  process group died — the only proof of a stall or timeout was a log
+  marker, and a cancel or external signal was a bare exit -1 with
+  reason NULL. `RealSpawn` now captures the signal from the wait
+  status, `Delegate` and `RunJob` record the reason on the run
+  (`killed after timeout`, `killed after stall`, `canceled`, `killed by
+  signal N`), the spawn's process group carries `Pdeathsig` (a hard
+  runner death does not orphan the worker), the swarm controller's
+  context derives from the session context, and `cmd/rig` stops the
+  swarm on session teardown so those deaths are recorded before the
+  process ends.
+- **README.md**: the measured stats refresh (720 swarm lines, 34,336 of
+  Go, 53,815 of tests).
+
 ## [1.5.3]: the docs catch up to the thesis
 
 The README, the docs, and the landing page now say what rig is: a small

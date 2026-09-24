@@ -286,6 +286,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	if _, err := RecordRun(context.Background(), in.DB, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
 		Log: logRel, Started: startedStr, Ended: ended.Format(time.RFC3339), Cost: costPtr,
+		Reason: spawnReason(ctx, res, stalled),
 	}); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: record: %w", err)
 	}

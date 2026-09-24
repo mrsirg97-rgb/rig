@@ -29,7 +29,7 @@ func (f *fakeSwarm) Start(ctx context.Context, in command.SwarmStart) (string, e
 	if f.startReply != "" {
 		return f.startReply, nil
 	}
-	return "swarm: started", nil
+	return "swarm: added 1 agent (role worker · model qwen3.8-workers)", nil
 }
 
 func (f *fakeSwarm) List() []command.SwarmWorker { return f.rows }
@@ -85,7 +85,7 @@ func TestSwarmStartParsesCountRoleAndModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if got != "swarm: started" {
+	if got != "swarm: added 1 agent (role worker · model qwen3.8-workers)" {
 		t.Errorf("reply = %q", got)
 	}
 	if len(f.started) != 1 || f.started[0].Count != 3 || f.started[0].Role != "worker" || f.started[0].Model != "" {
@@ -136,12 +136,12 @@ func TestSwarmListIdleAndNoHeartbeat(t *testing.T) {
 }
 
 func TestSwarmStopEndsTheWorkers(t *testing.T) {
-	f := &fakeSwarm{stopReply: "swarm: stopped 2 workers"}
+	f := &fakeSwarm{stopReply: "swarm: stopped 2 agents"}
 	got, err := runSwarm(t, swarmEnv(f), "stop")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if got != "swarm: stopped 2 workers" {
+	if got != "swarm: stopped 2 agents" {
 		t.Errorf("reply = %q", got)
 	}
 	if f.stopped != 1 {

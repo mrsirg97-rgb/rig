@@ -194,16 +194,12 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 		return "", fmt.Errorf("swarm: queue: %w", err)
 	}
 	if c.ctx == nil {
-		c.ctx, c.cancel = context.WithCancel(context.Background())
+		c.ctx, c.cancel = context.WithCancel(ctx)
 	}
 	c.proj = proj
 	c.architect = session
 	c.budget = in.Budget
 	base := len(c.workers)
-	added := "started"
-	if base > 0 {
-		added = "added"
-	}
 	for i := 1; i <= in.Count; i++ {
 		w := &worker{
 			id: base + i, role: role, model: model,
@@ -217,7 +213,7 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 		c.wg.Add(1)
 		go c.run(w)
 	}
-	return fmt.Sprintf("swarm: %s %d %s (role %s · model %s)", added, in.Count, plural(in.Count, "worker"), role, model), nil
+	return fmt.Sprintf("swarm: added %d %s (role %s · model %s)", in.Count, plural(in.Count, "agent"), role, model), nil
 }
 
 func (c *Controller) modelFor(role, override string) (string, error) {
@@ -277,7 +273,7 @@ func (c *Controller) Stop() (string, error) {
 	}
 	c.emit(true)
 	c.notice(fmt.Sprintf("swarm: /swarm exited — %d %s stopped", count, plural(count, "worker")))
-	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "worker")), nil
+	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "agent")), nil
 }
 
 func (c *Controller) run(w *worker) {
@@ -351,6 +347,7 @@ type workResult struct {
 }
 
 func (c *Controller) work(w *worker, id string) workResult {
+	c.set(w, func() { w.heartbeat = time.Time{} })
 	task, err := todostore.Task(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 	if err != nil {
 		c.loud(w, "w%d: task %s: %v\n", w.id, id, err)

@@ -783,9 +783,11 @@ says `exited`. **`swarm <n> [role=worker|reviewer] [model=<id>]`**;
 starts n drain workers on the session's bound queue, each spawning one
 `rig -p` per task through the delegate path; against a running swarm it
 adds (the roles mix — a worker swarm gains a reviewer mid-drain), and a
-`model=` must resolve in the runtime models table. **`swarm stop`**;
-cancels the swarm, releases the claims, clears the rows
-(`swarm: stopped N workers`). The command threads the live session, so
+`model=` must resolve in the runtime models table. The start reply is
+`swarm: added N agents (role X · model M)` whether the swarm was empty
+or running (`agent` for one, `agents` for more; never `started`).
+**`swarm stop`**; cancels the swarm, releases the claims, clears the rows
+(`swarm: stopped N agents`). The command threads the live session, so
 the swarm's doors attribute to the architect; the controller itself is
 `swarm/` (SPEC_SWARM), wired once in `cmd/rig` as `Env.Swarm` — the
 command package defines only the seam and the row types.

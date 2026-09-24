@@ -498,33 +498,41 @@ A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
 drop scrolled lines from scrollback, which trades away decision 1.
 
-### 3a. The swarm band and the transcript notice, amended 1.4.4
+### 3a. The swarm band and the transcript notice, amended 1.5.4
 
 The status string is a newline-joined footer already; the swarm band is
-two more rows above the existing status rows while a swarm runs, zero
-rows when nothing runs — the region's height-changing machinery (the
-stability check's status offset, the painted aim, the viewport budget)
-handles it without a `live.go` line:
+one row per role below the existing status rows while a swarm runs,
+separated from them by a short dim rule (four cells, not full width),
+zero rows and no rule when nothing runs — the region's
+height-changing machinery (the stability check's status offset, the
+painted aim, the viewport budget) handles it without a `live.go` line:
 
 ```
 ❯
 <blank>
-workers 2 · todo 3 · done 5 · failed 1 · w2 t388 12s
-reviewer 1 · review 1 · done 1 · failed 0 · w3 t386 4m
 huihui3.8 · 41.2k/262k
 default · auto
 up 214k down 18.2k · cache r 187k 92%
+····
+workers 1 · +7 ✓0 ✕0 · w1 t423 12s
+reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
 ```
 
 - The TUI folds the latest `core.SwarmStatus` (SPEC_SWARM 7) into the
-  footer; the band's rows are `workers <n> · todo <pending> · done <d> ·
-  failed <f> · <busiest>` and `reviewer <n> · review <r> · done <d> ·
-  failed <f> · <busiest>` — one row per role that has a worker, the
-  labels and numbers in the text slot, the separators dim, the tail the
-  role's busiest worker's `w<id> <task> <age>` (`—` when idle or
-  unbeat).
+  footer; the band's rows are `workers <n> · +<pending> ✓<done>
+  ✕<failed> · <busiest>` and `reviewer <n> · ⧗<review> ✓<done>
+  ✕<failed> · <busiest>` — one row per role that has a worker. No new
+  colors: the role labels, the `+`/`⧗` markers and the separators are
+  the footer's dim role, the counts the footer's text role, `✓` the
+  success role and `✕` the fault role that tool results already use,
+  and the tail the role's busiest worker's `w<id> <task> <age>` (dim;
+  `—` when idle or unbeat). The glyphs ride the theme's glyph switch —
+  the rule is four `·` cells (`....` under the ascii set), `+` stays
+  `+`, `⧗` falls back to `~`, `✓`/`✕` are the tool rows' glyphs
+  (`v`/`[x]` under ascii).
 - A delegate shows the worker row only: its snapshot carries the one
-  in-flight worker and zero queue counts, and the band is one row.
+  in-flight worker and zero queue counts, and the band is the rule plus
+  one row.
 - `core.SwarmNotice` commits one dim line in the transcript at the
   decision points, exactly the events SPEC_SWARM 7 names; nothing else is
   a notice. The CLI and the oneshot ignore both events (the compat rule:

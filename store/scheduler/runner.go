@@ -29,6 +29,7 @@ type SpawnResult struct {
 	Stdout   string
 	Stderr   string
 	TimedOut bool
+	Signal   syscall.Signal
 }
 
 type Spawn func(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (SpawnResult, error)
@@ -299,7 +300,9 @@ func RunJob(key string, opts RunOpts) error {
 	if err != nil {
 		return fmt.Errorf("run-job: spawn: %w", err)
 	}
+	stalled := false
 	if watch != nil && watch.hasFired() && ctx.Err() == context.Canceled {
+		stalled = true
 		res.Stderr += "\n[runner: killed after stall]\n"
 		res.Exit = 1
 	}
@@ -330,6 +333,7 @@ func RunJob(key string, opts RunOpts) error {
 	if _, err := RecordRun(context.Background(), db, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
 		Log: logRel, Started: started, Ended: ended, Cost: cost, Done: job.At != nil,
+		Reason: spawnReason(ctx, res, stalled),
 	}); err != nil {
 		return fmt.Errorf("run-job: record: %w", err)
 	}
@@ -585,7 +589,7 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, obs
 		cmd.Dir = cwd
 	}
 	cmd.Env = env
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	cmd.WaitDelay = time.Second
 	cmd.Cancel = func() error {
 		if cmd.Process != nil {
@@ -612,12 +616,29 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, obs
 		var exit *exec.ExitError
 		if errors.As(runErr, &exit) {
 			res.Exit = exit.ExitCode()
+			if ws, ok := exit.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+				res.Signal = ws.Signal()
+			}
 			return res, nil
 		}
 
 		return SpawnResult{}, fmt.Errorf("spawn: %w", runErr)
 	}
 	return res, nil
+}
+
+func spawnReason(ctx context.Context, res SpawnResult, stalled bool) string {
+	switch {
+	case res.TimedOut:
+		return "killed after timeout"
+	case stalled:
+		return "killed after stall"
+	case ctx.Err() != nil && res.Exit != 0:
+		return "canceled"
+	case res.Signal != 0:
+		return fmt.Sprintf("killed by signal %d", res.Signal)
+	}
+	return ""
 }
 
 type capture struct {

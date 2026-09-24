@@ -22,7 +22,14 @@ func RenderSwarmBand(t Theme, st core.SwarmStatus) string {
 			rows = append(rows, row)
 		}
 	}
-	return strings.Join(rows, "\n")
+	if len(rows) == 0 {
+		return ""
+	}
+	return swarmRule(t) + "\n" + strings.Join(rows, "\n")
+}
+
+func swarmRule(t Theme) string {
+	return t.Paint(SlotDim, strings.Repeat(t.Glyph(GlyphDot), 4))
 }
 
 func swarmAnyRunning(workers []core.SwarmWorker) bool {
@@ -45,25 +52,25 @@ func swarmRoleRow(t Theme, st core.SwarmStatus, role string) (string, bool) {
 		return "", false
 	}
 	label := "workers"
-	queue := "todo"
-	count := st.Pending
+	queue := st.Pending
+	glyph := GlyphPlus
 	if role == "reviewer" {
 		label = "reviewer"
-		queue = "review"
-		count = st.Review
+		queue = st.Review
+		glyph = GlyphReview
 	}
 	done, failed := 0, 0
 	for _, w := range ws {
 		done += w.Done
 		failed += w.Failed
 	}
-	sep := t.Paint(SlotDim, " · ")
+	sep := t.Paint(SlotDim, " "+t.Glyph(GlyphDot)+" ")
 	best := swarmBusiest(ws)
-	return t.Paint(SlotText, fmt.Sprintf("%s %d", label, len(ws))) + sep +
-		t.Paint(SlotText, fmt.Sprintf("%s %d", queue, count)) + sep +
-		t.Paint(SlotText, fmt.Sprintf("done %d", done)) + sep +
-		t.Paint(SlotText, fmt.Sprintf("failed %d", failed)) + sep +
-		t.Paint(SlotText, swarmTail(best)), true
+	return t.Paint(SlotDim, label) + t.Paint(SlotText, fmt.Sprintf(" %d", len(ws))) + sep +
+		t.Paint(SlotDim, t.Glyph(glyph)) + t.Paint(SlotText, fmt.Sprintf("%d", queue)) + " " +
+		t.Paint(SlotSuccess, t.Glyph(GlyphOK)) + t.Paint(SlotText, fmt.Sprintf("%d", done)) + " " +
+		t.Paint(SlotError, t.Glyph(GlyphFail)) + t.Paint(SlotText, fmt.Sprintf("%d", failed)) + sep +
+		t.Paint(SlotDim, swarmTail(best)), true
 }
 
 func swarmBusiest(ws []core.SwarmWorker) core.SwarmWorker {

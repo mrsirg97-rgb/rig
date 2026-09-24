@@ -47,16 +47,20 @@ const (
 	GlyphBarOn   = "bar"
 	GlyphBarOff  = "baroff"
 	GlyphDot     = "dot"
+	GlyphPlus    = "plus"
+	GlyphReview  = "review"
 )
 
 var (
 	glyphsUnicode = map[string]string{
 		GlyphPending: "○", GlyphActive: "◐", GlyphDone: "●", GlyphFail: "✕", GlyphOK: "✓",
 		GlyphCompact: "⧉", GlyphPrompt: "❯", GlyphBarOn: "▰", GlyphBarOff: "▱", GlyphDot: "·",
+		GlyphPlus: "+", GlyphReview: "⧗",
 	}
 	glyphsASCII = map[string]string{
 		GlyphPending: "[ ]", GlyphActive: "[~]", GlyphDone: "[*]", GlyphFail: "[x]", GlyphOK: "v",
 		GlyphCompact: "=", GlyphPrompt: ">", GlyphBarOn: "#", GlyphBarOff: "-", GlyphDot: ".",
+		GlyphPlus: "+", GlyphReview: "~",
 	}
 )
 

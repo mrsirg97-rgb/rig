@@ -665,3 +665,17 @@ func TestRunJobRefusesAReplacedOrMissingCwd(t *testing.T) {
 		})
 	}
 }
+
+func TestRealSpawnCapturesTheKillingSignal(t *testing.T) {
+	res, err := sched.RealSpawn(context.Background(),
+		[]string{"/bin/sh", "-c", "kill -9 $$"}, "", nil, nil)
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	if res.Exit != -1 {
+		t.Errorf("exit = %d, want -1 for a signal death", res.Exit)
+	}
+	if res.Signal != syscall.SIGKILL {
+		t.Errorf("signal = %v, want SIGKILL", res.Signal)
+	}
+}
