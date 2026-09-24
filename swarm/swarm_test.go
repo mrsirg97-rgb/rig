@@ -322,12 +322,12 @@ func TestSwarmReviewerRejectsAndAWorkerPicksItUp(t *testing.T) {
 	h.waitFor(t, "the rejection picked up and accepted", func() bool {
 		return h.status(t, "t1") == "done"
 	})
-	read, err := todostore.ReadAll(context.Background(), h.todoDB, proj, "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
 	if err != nil {
-		t.Fatalf("read all: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
-	if !strings.Contains(read, "tests are missing") {
-		t.Errorf("the rejection reason must be a note:\n%s", read)
+	if !strings.Contains(notes, "tests are missing") {
+		t.Errorf("the rejection reason must be a note:\n%s", notes)
 	}
 	rows := h.ctl.List()
 	var workerDone, reviewerDone int
@@ -417,12 +417,12 @@ func TestSwarmReviewerSecondDeathRejectsWithTheReason(t *testing.T) {
 	h.waitFor(t, "the review rejected after the restart", func() bool {
 		return h.status(t, "t1") == "pending"
 	})
-	read, err := todostore.Read(context.Background(), h.todoDB, proj, "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
-	if !strings.Contains(read, "reviewer died twice") {
-		t.Errorf("the second death must reject with the reason as a note:\n%s", read)
+	if !strings.Contains(notes, "reviewer died twice") {
+		t.Errorf("the second death must reject with the reason as a note:\n%s", notes)
 	}
 }
 
@@ -610,12 +610,12 @@ func TestSwarmReviewerNoVerdictCappedAtTwoRejectsThenFails(t *testing.T) {
 	if got := h.spawn.count(); got != 7 {
 		t.Fatalf("spawn calls = %d, want 7 (three work rounds plus four review rounds)", got)
 	}
-	read, err := todostore.ReadAll(context.Background(), h.todoDB, proj, "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
 	if err != nil {
-		t.Fatalf("read all: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
-	if !strings.Contains(read, "rejected this twice") {
-		t.Errorf("the capped fail must carry the note:\n%s", read)
+	if !strings.Contains(notes, "rejected this twice") {
+		t.Errorf("the capped fail must carry the note:\n%s", notes)
 	}
 }
 
@@ -639,11 +639,11 @@ func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
 	if got := h.spawn.count(); got != 7 {
 		t.Fatalf("spawn calls = %d, want 7 (the worker's death consumed the one retry the reviewer would have had)", got)
 	}
-	read, err := todostore.ReadAll(context.Background(), h.todoDB, proj, "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
 	if err != nil {
-		t.Fatalf("read all: %v", err)
+		t.Fatalf("notes: %v", err)
 	}
-	if !strings.Contains(read, "rejected this twice") {
-		t.Errorf("the capped fail must carry the note:\n%s", read)
+	if !strings.Contains(notes, "rejected this twice") {
+		t.Errorf("the capped fail must carry the note:\n%s", notes)
 	}
 }

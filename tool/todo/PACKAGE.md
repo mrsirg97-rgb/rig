@@ -24,8 +24,8 @@ plan in one queue.
 ## What it includes
 
 - `Tool`: a `core.Tool` over the todo store's verbs, including the
-  1.3.9 swarm surface: `claim`, `note`, `accept`, `reject` and the
-  `status: review` claim filter. `New` takes a `Mode` set once in
+  1.3.9 swarm surface: `claim`, `note`, `notes`, `accept`, `reject` and
+  the `status: review` claim filter. `New` takes a `Mode` set once in
   main.go from the frontend kind (`-p` is a worker, everything else is
   interactive): it is the gate's switch, passed to the store's
   `Complete` as the worker flag.
@@ -63,9 +63,13 @@ plan in one queue.
   never need the hold.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
   actionable queue (done folds into the summary line), read all:true
-  returns the history, and a transition echo is the affected row plus
+  returns the history, read with id renders one task summary-only and
+  points at `notes`, and a transition echo is the affected row plus
   the summary; never the full queue. Create keeps the full (filtered)
-  queue because after a merge the whole queue is the news.
+  queue because after a merge the whole queue is the news. Read no
+  longer inlines note text: a task with notes shows `· N notes` and the
+  `notes` action lists them with their session and time; the swarm
+  brief's `TaskInfo` still carries the full notes.
 - The description is shape only (SPEC_STREAMLINE 1): the state machine,
   the claim rules, and the compaction rule ride the store's voices; the
   replies teach on contact, the standing context does not double-teach.

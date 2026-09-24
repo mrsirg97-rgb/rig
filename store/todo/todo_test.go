@@ -186,8 +186,8 @@ func TestSameBatchChainCreatesATaskTree(t *testing.T) {
 	d := func(s string) *string { return &s }
 	_, err := todostore.Create(context.Background(), db, p, []item{
 		{Text: "a"},
-		{Text: "b", DependsOn: d("a")},
-		{Text: "c", DependsOn: d("b")},
+		{Text: "b", Requires: d("a")},
+		{Text: "c", Requires: d("b")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("chain: %v", err)
@@ -199,8 +199,8 @@ func TestDiamondSeveralTasksMayDependOnOneTask(t *testing.T) {
 	d := func(s string) *string { return &s }
 	_, err := todostore.Create(context.Background(), db, p, []item{
 		{Text: "root"},
-		{Text: "l", DependsOn: d("root")},
-		{Text: "r", DependsOn: d("root")},
+		{Text: "l", Requires: d("root")},
+		{Text: "r", Requires: d("root")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("diamond: %v", err)
@@ -211,7 +211,7 @@ func TestForwardReferencesWithinABatchResolve(t *testing.T) {
 	db := newDB(t)
 	d := func(s string) *string { return &s }
 	_, err := todostore.Create(context.Background(), db, p, []item{
-		{Text: "first", DependsOn: d("second")},
+		{Text: "first", Requires: d("second")},
 		{Text: "second"},
 	}, "s1")
 	if err != nil {
@@ -226,7 +226,7 @@ func TestIdBasedReferenceToAnExistingTask(t *testing.T) {
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "a"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := todostore.Create(ctx, db, p, []item{{Text: "b", DependsOn: d("t1")}}, "s1")
+	_, err := todostore.Create(ctx, db, p, []item{{Text: "b", Requires: d("t1")}}, "s1")
 	if err != nil {
 		t.Fatalf("id reference: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestUnknownDependencyTargetRefusesLoudly(t *testing.T) {
 	d := func(s string) *string { return &s }
 	ctx := context.Background()
 	before := eventCount(t, db)
-	_, err := todostore.Create(ctx, db, p, []item{{Text: "a", DependsOn: d("nope")}}, "s1")
+	_, err := todostore.Create(ctx, db, p, []item{{Text: "a", Requires: d("nope")}}, "s1")
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
@@ -252,8 +252,8 @@ func TestUnknownDependencyTargetRefusesLoudly(t *testing.T) {
 func TestSelfDependencyRefusesLoudly(t *testing.T) {
 	db := newDB(t)
 	d := func(s string) *string { return &s }
-	_, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", DependsOn: d("a")}}, "s1")
-	if err == nil || !strings.Contains(err.Error(), "cannot depend on itself") {
+	_, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", Requires: d("a")}}, "s1")
+	if err == nil || !strings.Contains(err.Error(), "cannot require itself") {
 		t.Fatalf("voice: %v", err)
 	}
 }
@@ -264,11 +264,11 @@ func TestCyclesRefuseWithTheCyclePath(t *testing.T) {
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, p, []item{
 		{Text: "x"},
-		{Text: "y", DependsOn: d("x")},
+		{Text: "y", Requires: d("x")},
 	}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := todostore.Create(ctx, db, p, []item{{Text: "z", DependsOn: d("y")}, {Text: "x", DependsOn: d("z")}}, "s1")
+	_, err := todostore.Create(ctx, db, p, []item{{Text: "z", Requires: d("y")}, {Text: "x", Requires: d("z")}}, "s1")
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
@@ -283,12 +283,12 @@ func TestACreateCannotPushAnAcyclicQueueIntoACycle(t *testing.T) {
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, p, []item{
 		{Text: "a"},
-		{Text: "b", DependsOn: d("a")},
-		{Text: "c", DependsOn: d("b")},
+		{Text: "b", Requires: d("a")},
+		{Text: "c", Requires: d("b")},
 	}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := todostore.Create(ctx, db, p, []item{{Text: "a", DependsOn: d("c")}}, "s1")
+	_, err := todostore.Create(ctx, db, p, []item{{Text: "a", Requires: d("c")}}, "s1")
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("voice: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestRecreateOmittedKeepsTheLink(t *testing.T) {
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, p, []item{
 		{Text: "a"},
-		{Text: "b", DependsOn: d("a")},
+		{Text: "b", Requires: d("a")},
 	}, "s1"); err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestRecreateOmittedKeepsTheLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(reply, "waits on") {
+	if !strings.Contains(reply, "requires ") {
 		t.Errorf("link kept:\n%s", reply)
 	}
 }
@@ -319,12 +319,12 @@ func TestRecreateProvidedUpdatesTheLink(t *testing.T) {
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, p, []item{
 		{Text: "a"},
-		{Text: "b", DependsOn: d("a")},
+		{Text: "b", Requires: d("a")},
 		{Text: "c"},
 	}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "b", DependsOn: d("c")}}, "s1"); err != nil {
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "b", Requires: d("c")}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"t3", "t2"} {
@@ -343,11 +343,11 @@ func TestRecreateNullClearsTheLink(t *testing.T) {
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, p, []item{
 		{Text: "a"},
-		{Text: "b", DependsOn: d("a")},
+		{Text: "b", Requires: d("a")},
 	}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "b", DepNull: true}}, "s1"); err != nil {
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "b", RequiresNull: true}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := todostore.Start(ctx, db, p, "t2", "s1", false); err != nil {
@@ -364,8 +364,8 @@ func TestFirstOccurrenceWinsWithinABatch(t *testing.T) {
 	_, err := todostore.Create(context.Background(), db, p, []item{
 		{Text: "a"},
 		{Text: "x"},
-		{Text: "b", DependsOn: d("a")},
-		{Text: "b", DependsOn: d("x")},
+		{Text: "b", Requires: d("a")},
+		{Text: "b", Requires: d("x")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("first-occurrence: %v", err)
@@ -389,7 +389,7 @@ func TestDanglingDependencyFromACorruptCreateEventDropsOnReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replay never throws: %v", err)
 	}
-	if strings.Contains(reply, "waits on") {
+	if strings.Contains(reply, "requires ") {
 		t.Errorf("dangling dropped:\n%s", reply)
 	}
 }
@@ -999,7 +999,7 @@ func TestCompleteOnOwnPendingAutoStartsAndCompletes(t *testing.T) {
 func TestCompleteOnPendingBlockedRefusesWithBlocker(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "gate"}, {Text: "work", DependsOn: ptrTo("gate")}}, sessA)
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -1155,7 +1155,7 @@ func TestMovesAndDependenciesSurviveCompaction(t *testing.T) {
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{
 		{Text: "root"},
-		{Text: "leaf", DependsOn: ptrTo("root")},
+		{Text: "leaf", Requires: ptrTo("root")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -1295,7 +1295,7 @@ func TestCompleteOnBlockedTaskRefusesWithBlockerStatus(t *testing.T) {
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{
 		{Text: "gate"},
-		{Text: "work", DependsOn: ptrTo("gate")},
+		{Text: "work", Requires: ptrTo("gate")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -1352,7 +1352,7 @@ func TestStartOnBlockedTaskIsLegal(t *testing.T) {
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{
 		{Text: "prereq"},
-		{Text: "later", DependsOn: ptrTo("prereq")},
+		{Text: "later", Requires: ptrTo("prereq")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -1373,15 +1373,15 @@ func TestNextSkipsBlockedTasks(t *testing.T) {
 	reply, err := todostore.Create(ctx, db, p, []item{
 		{Text: "dep-a"},
 		{Text: "dep-b"},
-		{Text: "leaf", DependsOn: ptrTo("dep-b")},
+		{Text: "leaf", Requires: ptrTo("dep-b")},
 		{Text: "free"},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	depA, depB := taskIDText(t, reply, "dep-a"), taskIDText(t, reply, "dep-b")
-	if !strings.Contains(reply, "waits on "+depB) {
-		t.Errorf("waits-on suffix:\n%s", reply)
+	if !strings.Contains(reply, "requires "+depB) {
+		t.Errorf("requires suffix:\n%s", reply)
 	}
 	if !strings.Contains(reply, "next: "+depA) {
 		t.Errorf("next skips the blocked leaf:\n%s", reply)
@@ -1393,7 +1393,7 @@ func TestAllBlockedQueueShowsNoNext(t *testing.T) {
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{
 		{Text: "prereq"},
-		{Text: "dependent", DependsOn: ptrTo("prereq")},
+		{Text: "dependent", Requires: ptrTo("prereq")},
 	}, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -1409,8 +1409,8 @@ func TestAllBlockedQueueShowsNoNext(t *testing.T) {
 	if strings.Contains(read, "next: ") {
 		t.Errorf("blocked-only queue shows a next:\n%s", read)
 	}
-	if !strings.Contains(read, "waits on ") {
-		t.Errorf("waits-on suffix:\n%s", read)
+	if !strings.Contains(read, "requires ") {
+		t.Errorf("requires suffix:\n%s", read)
 	}
 }
 
@@ -1447,7 +1447,7 @@ func TestMintedIdDoesNotShadowMatchingText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "beta", DependsOn: d("t3")}}, "s1"); err != nil {
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "beta", Requires: d("t3")}}, "s1"); err != nil {
 		t.Fatalf("text match shadowed by the minted id: %v", err)
 	}
 	if dep := projDep(t, db, "beta"); dep != "t2" {
@@ -1460,9 +1460,9 @@ func TestThreeNodeCyclesRefuseWithPath(t *testing.T) {
 	d := func(s string) *string { return &s }
 	before := eventCount(t, db)
 	_, err := todostore.Create(context.Background(), db, p, []item{
-		{Text: "a", DependsOn: d("c")},
-		{Text: "b", DependsOn: d("a")},
-		{Text: "c", DependsOn: d("b")},
+		{Text: "a", Requires: d("c")},
+		{Text: "b", Requires: d("a")},
+		{Text: "c", Requires: d("b")},
 	}, "s1")
 	if err == nil {
 		t.Fatal("expected refusal")
@@ -1479,7 +1479,7 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	db := newDB(t)
 	d := func(s string) *string { return &s }
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "dep"}, {Text: "outer", DependsOn: d("dep")}}, "s1"); err != nil {
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "dep"}, {Text: "outer", Requires: d("dep")}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1499,7 +1499,7 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "c"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "dep", DependsOn: d("c")}}, "s1"); err != nil {
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "dep", Requires: d("c")}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	_, err := todostore.Complete(ctx, db, p, "t1", "s1", false)
@@ -1708,10 +1708,10 @@ func TestReadAllShowsDoneRows(t *testing.T) {
 	}
 }
 
-func TestNoWaitsOnReferencesAHiddenDoneRow(t *testing.T) {
+func TestDoneDependencyLeavesNoWaitsFor(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "gate"}, {Text: "work", DependsOn: ptrTo("gate")}}, "s1"); err != nil {
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")}}, "s1"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if _, err := todostore.Start(ctx, db, p, "t1", "s1", false); err != nil {
@@ -1724,11 +1724,11 @@ func TestNoWaitsOnReferencesAHiddenDoneRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if strings.Contains(read, "waits on") {
-		t.Errorf("a hidden (done) dep must not leave a waits-on suffix:\n%s", read)
+	if strings.Contains(read, "waits for") {
+		t.Errorf("a hidden (done) dep must not leave a waits-for suffix:\n%s", read)
 	}
-	if !strings.Contains(read, "work") {
-		t.Errorf("the unblocked dependent vanished:\n%s", read)
+	if !strings.Contains(read, "next: t2") {
+		t.Errorf("the unblocked dependent must be the next:\n%s", read)
 	}
 }
 

@@ -15,9 +15,31 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/store"
 	"github.com/mrsirg97-rgb/rig/store/scope"
+	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
 )
 
 const legacySchemaVersion = 1
+
+// EdgeMigration rebuilds the disposable task_deps projection with the
+// edge kind column: requires and blocks live in one table, keyed by
+// kind. The projection is rebuilt from the log inside every transaction
+// and never trusted, so dropping it is safe; the log carries the edges.
+func EdgeMigration(tx *sql.Tx, from, to int) (string, error) {
+	if from >= 4 {
+		return "", nil
+	}
+	if _, err := tx.Exec("DROP TABLE IF EXISTS task_deps"); err != nil {
+		return "", fmt.Errorf("todo: migration: %w", err)
+	}
+	for _, stmt := range tododdl.Statements() {
+		if strings.Contains(stmt, `"task_deps"`) {
+			if _, err := tx.Exec(stmt); err != nil {
+				return "", fmt.Errorf("todo: migration: %w", err)
+			}
+		}
+	}
+	return "todo migration: task_deps gained the edge kind", nil
+}
 
 // ReviewMigration pairs every historical complete event with an accept:
 // complete now means active -> review, so without the pair a log written

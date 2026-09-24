@@ -1,4 +1,45 @@
 # Changelog
+## [1.5.2]: the todo board grows two edges and a notes door
+
+The task queue's one dependency became two named links, `requires` and
+`blocks`, and `read` stopped inlining note text.
+
+- **Two edges per task** (`store/todo`, `tool/todo`, SPEC_TODO_EDGES): a
+  task carries `requires` and `blocks`, one each, each an id (`tN`) or
+  exact text, null clears. `requires tN`: I cannot start until tN is
+  done; `blocks tN`: tN cannot complete until I am done. Blocked
+  means a task's requires target is unfinished or any task whose blocks
+  names it is unfinished (pending, in_progress, review, failed), so
+  `claim` takes only unblocked pending tasks and `complete`/`accept` on
+  a blocked task refuse naming what it waits for. `create` refuses
+  loudly naming the tasks: an unknown link, a self-link, and a cycle
+  through either relation (`cyclePath` walks both). The waits-for graph
+  is `requires` t -> required and `blocks` target -> blocker; the read
+  line shows `· requires tN`, `· blocks tN`, and `· waits for k` on a
+  target. Old `dependsOn` payloads (create events and compact
+  snapshots) fold as `requires` at replay; the snapshot carries both
+  links and note times.
+- **The notes door** (`store/todo`, `tool/todo`, `/todo`): `read` no
+  longer inlines note text — a task with notes shows `· N notes` under
+  it, and the new `notes <id>` action lists them in order with their
+  session and time, headed by the task's link lines; a task with none
+  replies `no notes on tN`. `read <id>` renders one task, summary-only,
+  and points at `notes`. The swarm brief's `TaskInfo` still carries the
+  full notes; workers need them.
+- **Schema 4** (`store/todo`): `task_deps` gains the `kind` column
+  (requires|blocks), the disposable projection rebuilt from the log in
+  every transaction. `EdgeMigration` (3->4) drops and recreates the
+  projection table; the log carries the edges, so replay is total.
+- **The TUI's todo render** (`frontend/tui`): the parser dims the new
+  suffixes (`requires`/`blocks`/`waits for`/`claimed by`) and keeps the
+  note-count line.
+- **Tests**: seven leaves blocking a root (claim and complete of the
+  root refused until the last leaf is done), a requires-chain, both
+  links on one task, cycles refused with the task names, old
+  `dependsOn` payloads folding, replay across compaction, note counts
+  and the notes action (order, session, time, the no-notes reply), and
+  read-one's summary-only pointer.
+
 ## [1.5.1]: the swarm survives its first status frame
 
 The controller captured the frontend at wiring time (`Frontend: r.rec`),

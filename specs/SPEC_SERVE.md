@@ -381,7 +381,7 @@ TUI; each view renders the way the TUI renders that tool's output.
   the case) and its visual grammar: the todo view renders the store's
   text with the TUI's todo render (the progress bar, the
   `done/total · next · failed` head, the status glyphs, the dim
-  `waits on`/`claimed by` tails); the scheduler view renders it with
+  `requires`/`blocks`/`waits for`/`claimed by` tails); the scheduler view renders it with
   the TUI's scheduler render (the scope sections, the state glyphs,
   the dim detail lines, the warn `drift:`); sessions and the transcript
   adopt the tool-block shape (the `✓ name · detail` opening, the `→`

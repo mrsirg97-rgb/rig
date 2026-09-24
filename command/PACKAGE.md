@@ -59,8 +59,9 @@ the leaf.
   session threaded, return the reply verbatim. `todo project [path]` is
   the binding door (SPEC_STATE): with a path it binds this session to
   that project's queue and renders it, bare it reports where the queue
-  is; `todo <path> <verb…>` binds and acts in one line, and `todo prune`
-  drops the done rows. A leading field that is not one of the tool's
+  is; `todo <path> <verb…>` binds and acts in one line, `todo notes
+  <id>` lists a task's notes, `todo read <id>` renders one task, and
+  `todo prune` drops the done rows. A leading field that is not one of the tool's
   verbs reads as a path, so a mistyped verb refuses as a missing
   directory rather than as an unknown action.
   With no fleet the `scheduler` seam is absent, and the command

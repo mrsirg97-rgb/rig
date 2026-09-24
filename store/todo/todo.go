@@ -16,7 +16,7 @@ import (
 	todometa "github.com/mrsirg97-rgb/rig/store/todo/metadata"
 )
 
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 func DDL() []string { return tododdl.Statements() }
 
@@ -46,20 +46,26 @@ type Project struct {
 }
 
 type CreateItem struct {
-	Text      string
-	DependsOn *string
-	DepNull   bool
+	Text         string
+	Requires     *string
+	RequiresNull bool
+	Blocks       *string
+	BlocksNull   bool
 }
 
 func (c CreateItem) raw() rawItem {
 	it := rawItem{text: c.Text}
-	if c.DepNull {
-		it.hasDep, it.depNull = true, true
-		return it
+	if c.RequiresNull {
+		it.hasRequires, it.reqNull = true, true
+	} else if c.Requires != nil {
+		it.hasRequires = true
+		it.requires = *c.Requires
 	}
-	if c.DependsOn != nil {
-		it.hasDep = true
-		it.dep = *c.DependsOn
+	if c.BlocksNull {
+		it.hasBlocks, it.blkNull = true, true
+	} else if c.Blocks != nil {
+		it.hasBlocks = true
+		it.blocks = *c.Blocks
 	}
 	return it
 }
@@ -67,6 +73,7 @@ func (c CreateItem) raw() rawItem {
 type noteState struct {
 	text    string
 	session string
+	ts      string
 }
 
 type taskState struct {
@@ -74,7 +81,8 @@ type taskState struct {
 	text       string
 	status     string
 	pos        int
-	dep        string
+	requires   string
+	blocks     string
 	owner      string
 	createdSeq int64
 	updatedSeq int64
@@ -207,7 +215,7 @@ func (f *folded) applyNoteEvent(e eventRow) {
 	if !ok {
 		return
 	}
-	ts.notes = append(ts.notes, noteState{text: payload.Note, session: attrOf(e)})
+	ts.notes = append(ts.notes, noteState{text: payload.Note, session: attrOf(e), ts: e.ts})
 }
 
 func (f *folded) applyAcceptEvent(e eventRow) {
@@ -249,10 +257,35 @@ func (f *folded) applyRejectEvent(e eventRow) {
 }
 
 type rawItem struct {
-	text    string
-	hasDep  bool
-	depNull bool
-	dep     string
+	text        string
+	hasRequires bool
+	reqNull     bool
+	requires    string
+	hasBlocks   bool
+	blkNull     bool
+	blocks      string
+}
+
+func linkField(raw map[string]any, key, oldKey string) (has, isNull bool, value string) {
+	if v, ok := raw[key]; ok {
+		has = true
+		if v == nil {
+			isNull = true
+		} else if s, ok := v.(string); ok {
+			value = s
+		}
+		return
+	}
+	// Old payloads name the wait edge dependsOn: it folds as requires.
+	if v, ok := raw[oldKey]; ok {
+		has = true
+		if v == nil {
+			isNull = true
+		} else if s, ok := v.(string); ok {
+			value = s
+		}
+	}
+	return
 }
 
 func decodeItems(args string) ([]rawItem, bool) {
@@ -266,14 +299,8 @@ func decodeItems(args string) ([]rawItem, bool) {
 	for _, raw := range payload.Tasks {
 		text, _ := raw["text"].(string)
 		it := rawItem{text: text}
-		if v, ok := raw["dependsOn"]; ok {
-			it.hasDep = true
-			if v == nil {
-				it.depNull = true
-			} else if s, ok := v.(string); ok {
-				it.dep = s
-			}
-		}
+		it.hasRequires, it.reqNull, it.requires = linkField(raw, "requires", "dependsOn")
+		it.hasBlocks, it.blkNull, it.blocks = linkField(raw, "blocks", "")
 		out = append(out, it)
 	}
 	return out, true
@@ -290,6 +317,7 @@ func (f *folded) applyCreate(e eventRow) {
 	}
 	type pendingRef struct {
 		ts    *taskState
+		kind  string
 		clear bool
 		ref   string
 	}
@@ -304,8 +332,11 @@ func (f *folded) applyCreate(e eventRow) {
 		seen[item.text] = true
 		ex := f.byText(item.text)
 		if ex != nil {
-			if item.hasDep {
-				refs = append(refs, pendingRef{ts: ex, clear: item.depNull, ref: item.dep})
+			if item.hasRequires {
+				refs = append(refs, pendingRef{ts: ex, kind: "requires", clear: item.reqNull, ref: item.requires})
+			}
+			if item.hasBlocks {
+				refs = append(refs, pendingRef{ts: ex, kind: "blocks", clear: item.blkNull, ref: item.blocks})
 			}
 			continue
 		}
@@ -317,21 +348,31 @@ func (f *folded) applyCreate(e eventRow) {
 		ts.pos = f.nextPos()
 		f.tasks[ts.id] = ts
 		batchTexts[item.text] = ts
-		if item.
-			hasDep {
-			refs = append(refs, pendingRef{ts: ts, clear: item.depNull, ref: item.dep})
+		if item.hasRequires {
+			refs = append(refs, pendingRef{ts: ts, kind: "requires", clear: item.reqNull, ref: item.requires})
+		}
+		if item.hasBlocks {
+			refs = append(refs, pendingRef{ts: ts, kind: "blocks", clear: item.blkNull, ref: item.blocks})
 		}
 	}
 
 	for _, pr := range refs {
 		if pr.clear {
-			pr.ts.dep = ""
+			setLink(pr.ts, pr.kind, "")
 			continue
 		}
 		if ref := resolveDep(preIDs, batchTexts, f, pr.ref); ref != "" {
-			pr.ts.dep = ref
+			setLink(pr.ts, pr.kind, ref)
 		}
 	}
+}
+
+func setLink(ts *taskState, kind, ref string) {
+	if kind == "blocks" {
+		ts.blocks = ref
+		return
+	}
+	ts.requires = ref
 }
 
 func depPreIDs(f *folded) map[string]bool {
@@ -406,6 +447,7 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fr
 	type depRef struct {
 		ts      *taskState
 		text    string
+		kind    string
 		depNull bool
 		dep     string
 	}
@@ -422,8 +464,11 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fr
 		ex := f.byText(raw.text)
 		if ex != nil {
 			planned[raw.text] = ex
-			if raw.hasDep {
-				refs = append(refs, depRef{ts: ex, text: raw.text, depNull: raw.depNull, dep: raw.dep})
+			if raw.hasRequires {
+				refs = append(refs, depRef{ts: ex, text: raw.text, kind: "requires", depNull: raw.reqNull, dep: raw.requires})
+			}
+			if raw.hasBlocks {
+				refs = append(refs, depRef{ts: ex, text: raw.text, kind: "blocks", depNull: raw.blkNull, dep: raw.blocks})
 			}
 			continue
 		}
@@ -434,29 +479,36 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fr
 		planned[raw.text] = ts
 		f.tasks[ts.id] = ts
 		modified = append(modified, ts)
-		if raw.hasDep {
-			refs = append(refs, depRef{ts: ts, text: raw.text, depNull: raw.depNull, dep: raw.dep})
+		if raw.hasRequires {
+			refs = append(refs, depRef{ts: ts, text: raw.text, kind: "requires", depNull: raw.reqNull, dep: raw.requires})
+		}
+		if raw.hasBlocks {
+			refs = append(refs, depRef{ts: ts, text: raw.text, kind: "blocks", depNull: raw.blkNull, dep: raw.blocks})
 		}
 	}
 
 	for _, dr := range refs {
 		if dr.depNull {
-			dr.ts.dep = ""
+			setLink(dr.ts, dr.kind, "")
 			continue
 		}
 		if dr.dep == dr.text {
-			addOnce(&problems, fmt.Sprintf("'%s' cannot depend on itself", dr.text))
+			verb := "require"
+			if dr.kind == "blocks" {
+				verb = "block"
+			}
+			addOnce(&problems, fmt.Sprintf("'%s' cannot %s itself", dr.text, verb))
 			continue
 		}
 		if resolved := resolveDep(preIDs, planned, f, dr.dep); resolved != "" {
-			dr.ts.dep = resolved
+			setLink(dr.ts, dr.kind, resolved)
 			modified = append(modified, dr.ts)
 		} else {
-			addOnce(&problems, fmt.Sprintf("dependsOn '%s' not found", dr.dep))
+			addOnce(&problems, fmt.Sprintf("%s '%s' not found", dr.kind, dr.dep))
 		}
 	}
 	if path := cyclePath(f, planned); path != nil {
-		problems = append(problems, "dependencies would form a cycle: "+strings.Join(path, " -> "))
+		problems = append(problems, "links would form a cycle: "+strings.Join(path, " -> "))
 	}
 	return modified, given, fresh, problems
 }
@@ -471,10 +523,15 @@ func addOnce(list *[]string, s string) {
 }
 
 func cyclePath(f *folded, planned map[string]*taskState) []string {
+	// The waits-for graph: requires gives t -> required, blocks gives
+	// target -> blocker. A cycle through either relation is refused.
 	adj := map[string][]string{}
 	for id, ts := range f.tasks {
-		if ts.dep != "" {
-			adj[id] = append(adj[id], ts.dep)
+		if ts.requires != "" {
+			adj[id] = append(adj[id], ts.requires)
+		}
+		if ts.blocks != "" {
+			adj[ts.blocks] = append(adj[ts.blocks], id)
 		}
 	}
 	var cycle []string
@@ -488,7 +545,7 @@ func cyclePath(f *folded, planned map[string]*taskState) []string {
 			if onStack[dep] {
 				for i, n := range stack {
 					if n == dep {
-						cycle = append([]string{dep}, stack[i:]...)
+						cycle = append(append([]string{}, stack[i:]...), dep)
 						return true
 					}
 				}
@@ -556,29 +613,64 @@ func orderedTaskStates(f *folded) []*taskState {
 	return out
 }
 
-func blockedBy(f *folded, ts *taskState) string {
-	if ts.status != statusPending && ts.status != statusActive {
-		return ""
+// blockersOf lists the unfinished tasks a task waits for, in queue order:
+// its requires target and every unfinished task whose blocks names it.
+// A done or missing target is not a blocker; a task in review still is.
+func blockersOf(f *folded, ts *taskState) []string {
+	var out []string
+	for _, ot := range orderedTaskStates(f) {
+		if ot.id == ts.requires || ot.blocks == ts.id {
+			if ot.status != statusDone {
+				out = append(out, ot.id)
+			}
+		}
 	}
-	if ts.dep == "" {
-		return ""
-	}
-	dep := f.tasks[ts.dep]
-	if dep == nil || dep.status == statusDone {
-		return ""
-	}
-	return ts.dep
+	return out
 }
 
-func blockHint(f *folded, depID string) string {
-	switch f.tasks[depID].status {
-	case statusPending:
-		return "pending; start it first"
-	case statusFailed:
-		return "failed; retry it first"
-	default:
-		return "in_progress"
+func blockedBy(f *folded, ts *taskState) []string {
+	if ts.status != statusPending && ts.status != statusActive && ts.status != statusReview {
+		return nil
 	}
+	return blockersOf(f, ts)
+}
+
+func blockHint(f *folded, ids []string) string {
+	statuses := []string{}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if ts := f.tasks[id]; ts != nil && !seen[ts.status] {
+			seen[ts.status] = true
+			statuses = append(statuses, ts.status)
+		}
+	}
+	if len(statuses) == 1 {
+		switch statuses[0] {
+		case statusPending:
+			if len(ids) == 1 {
+				return "pending; start it first"
+			}
+			return "pending; start them first"
+		case statusFailed:
+			if len(ids) == 1 {
+				return "failed; retry it first"
+			}
+			return "failed; retry them first"
+		case statusReview:
+			return "in review"
+		default:
+			return "in_progress"
+		}
+	}
+	return strings.Join(statuses, ", ")
+}
+
+func blockedVoice(id string, ids []string) string {
+	quoted := make([]string, len(ids))
+	for i, b := range ids {
+		quoted[i] = "'" + b + "'"
+	}
+	return fmt.Sprintf("'%s' is blocked by %s", id, strings.Join(quoted, ", "))
 }
 
 func claimSuffix(ts *taskState, session string) string {
@@ -641,7 +733,7 @@ func summaryOf(f *folded) string {
 		}
 	}
 	for _, ts := range ordered {
-		if ts.status == statusPending && blockedBy(f, ts) == "" {
+		if ts.status == statusPending && len(blockedBy(f, ts)) == 0 {
 			nextID = ts.id
 			break
 		}
@@ -675,19 +767,61 @@ func scopeTag(f *folded) string {
 	return "[" + f.label + "] "
 }
 
+// waitersOf counts the unfinished tasks that block a target: the read's
+// "waits for k" suffix is a count, the links name the edges.
+func waitersOf(f *folded, ts *taskState) int {
+	n := 0
+	for _, ot := range f.tasks {
+		if ot.blocks == ts.id && ot.status != statusDone {
+			n++
+		}
+	}
+	return n
+}
+
 func lineOf(f *folded, ts *taskState, session string) string {
 	line := fmt.Sprintf("  %s %s %s", ts.id, marker(ts.status), ts.text)
-	if blocker := blockedBy(f, ts); blocker != "" {
-		line += fmt.Sprintf(" \u00b7 waits on %s", blocker)
+	if ts.requires != "" {
+		line += " \u00b7 requires " + ts.requires
+	}
+	if ts.blocks != "" {
+		line += " \u00b7 blocks " + ts.blocks
+	}
+	if n := waitersOf(f, ts); n != 0 {
+		line += fmt.Sprintf(" \u00b7 waits for %d", n)
 	}
 	line += claimSuffix(ts, session)
 	return line
 }
 
+func noteCountLine(ts *taskState, notePointer bool) string {
+	if len(ts.notes) == 0 {
+		return ""
+	}
+	n := len(ts.notes)
+	word := "notes"
+	if n == 1 {
+		word = "note"
+	}
+	line := fmt.Sprintf("    \u00b7 %d %s", n, word)
+	if notePointer {
+		line += fmt.Sprintf(" (action 'notes' with id=%s lists them)", ts.id)
+	}
+	return line
+}
+
 func renderTask(f *folded, ts *taskState, session string) string {
 	line := lineOf(f, ts, session)
-	for _, n := range ts.notes {
-		line += "\n    \u00b7 " + n.text + " (by " + n.session + ")"
+	if count := noteCountLine(ts, false); count != "" {
+		line += "\n" + count
+	}
+	return line
+}
+
+func renderOne(f *folded, ts *taskState, session string) string {
+	line := lineOf(f, ts, session)
+	if count := noteCountLine(ts, true); count != "" {
+		line += "\n" + count
 	}
 	return line
 }
@@ -752,7 +886,7 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		}
 		args, _ := json.Marshal(map[string]any{"tasks": asGiven(items)})
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "create", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "create", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		for _, ts := range modified {
@@ -841,8 +975,8 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 		if worker && ts.status == statusPending {
 			return "", fmt.Errorf("'%s' is not claimed by you; a worker does not complete the supervisor's board entries", id)
 		}
-		if blocker := blockedBy(f, ts); blocker != "" {
-			return "", fmt.Errorf("'%s' is blocked by '%s' (%s)", id, blocker, blockHint(f, blocker))
+		if blockers := blockedBy(f, ts); len(blockers) != 0 {
+			return "", fmt.Errorf("%s (%s)", blockedVoice(id, blockers), blockHint(f, blockers))
 		}
 
 		args, _ := json.Marshal(map[string]any{"id": id})
@@ -852,7 +986,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 		}
 		if ts.status == statusPending {
 			startSeq := f.nextSeq()
-			if e := appendEvent(bound, startSeq, "start", string(args), session, p.Key); e != nil {
+			if _, e := appendEvent(bound, startSeq, "start", string(args), session, p.Key); e != nil {
 				return "", e
 			}
 			ts.status = statusActive
@@ -866,7 +1000,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 			}
 		}
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "complete", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "complete", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		ts.status = statusReview
@@ -875,7 +1009,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 		ts.updatedTs = nowRFC3339()
 		if !worker {
 			acceptSeq := f.nextSeq()
-			if e := appendEvent(bound, acceptSeq, "accept", string(args), session, p.Key); e != nil {
+			if _, e := appendEvent(bound, acceptSeq, "accept", string(args), session, p.Key); e != nil {
 				return "", e
 			}
 			ts.status = statusDone
@@ -935,7 +1069,7 @@ func Fail(ctx context.Context, db store.DB, p Project, id, session string, worke
 		}
 		args, _ := json.Marshal(map[string]any{"id": id})
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "fail", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "fail", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		ts.status = statusFailed
@@ -990,7 +1124,7 @@ func Claim(ctx context.Context, db store.DB, p Project, session, status string) 
 				}
 				continue
 			}
-			if ot.status == statusPending && blockedBy(f, ot) == "" {
+			if ot.status == statusPending && len(blockedBy(f, ot)) == 0 {
 				ts = ot
 				break
 			}
@@ -1000,7 +1134,7 @@ func Claim(ctx context.Context, db store.DB, p Project, session, status string) 
 		}
 		args, _ := json.Marshal(map[string]any{"id": ts.id})
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "claim", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "claim", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		note := "'" + ts.id + "' claimed"
@@ -1042,10 +1176,11 @@ func Note(ctx context.Context, db store.DB, p Project, id, text, session string)
 		}
 		args, _ := json.Marshal(map[string]any{"id": id, "note": note})
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "note", string(args), session, p.Key); e != nil {
+		ts, e := appendEvent(bound, seq, "note", string(args), session, p.Key)
+		if e != nil {
 			return "", e
 		}
-		f.tasks[id].notes = append(f.tasks[id].notes, noteState{text: note, session: session})
+		f.tasks[id].notes = append(f.tasks[id].notes, noteState{text: note, session: session, ts: ts})
 		return withFoot(echoTask(f, session, id, "note added to '"+id+"'"), foot), nil
 	})
 }
@@ -1084,11 +1219,14 @@ func Accept(ctx context.Context, db store.DB, p Project, id, session string) (st
 		if e := reviewHold(ts, id, session); e != nil {
 			return "", e
 		}
+		if blockers := blockedBy(f, ts); len(blockers) != 0 {
+			return "", fmt.Errorf("%s (%s)", blockedVoice(id, blockers), blockHint(f, blockers))
+		}
 		args, _ := json.Marshal(map[string]any{"id": id})
 		note := "'" + id + "' accepted"
 		if ts.owner == "" {
 			claimSeq := f.nextSeq()
-			if e := appendEvent(bound, claimSeq, "claim", string(args), session, p.Key); e != nil {
+			if _, e := appendEvent(bound, claimSeq, "claim", string(args), session, p.Key); e != nil {
 				return "", e
 			}
 			ts.owner = session
@@ -1097,7 +1235,7 @@ func Accept(ctx context.Context, db store.DB, p Project, id, session string) (st
 			note = "'" + id + "' auto-claimed and accepted"
 		}
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "accept", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "accept", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		ts.status = statusDone
@@ -1139,7 +1277,7 @@ func Reject(ctx context.Context, db store.DB, p Project, id, reason, session str
 		reply := "'" + id + "' rejected; reason noted"
 		if ts.owner == "" {
 			claimSeq := f.nextSeq()
-			if e := appendEvent(bound, claimSeq, "claim", string(args), session, p.Key); e != nil {
+			if _, e := appendEvent(bound, claimSeq, "claim", string(args), session, p.Key); e != nil {
 				return "", e
 			}
 			ts.owner = session
@@ -1148,12 +1286,13 @@ func Reject(ctx context.Context, db store.DB, p Project, id, reason, session str
 			reply = "'" + id + "' auto-claimed and rejected; reason noted"
 		}
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "reject", string(args), session, p.Key); e != nil {
+		rejectTs, e := appendEvent(bound, seq, "reject", string(args), session, p.Key)
+		if e != nil {
 			return "", e
 		}
 		ts.status = statusPending
 		ts.owner = ""
-		ts.notes = append(ts.notes, noteState{text: note, session: session})
+		ts.notes = append(ts.notes, noteState{text: note, session: session, ts: rejectTs})
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
 		if e := rewrite(tx, f, p.Key); e != nil {
@@ -1198,7 +1337,7 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 		}
 		args, _ := json.Marshal(map[string]any{"id": id, "pos": pos})
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "move", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "move", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		if appliedMove(f, ts, pos) {
@@ -1261,7 +1400,7 @@ func Release(ctx context.Context, db store.DB, p Project, id, session string) (s
 		}
 		args, _ := json.Marshal(map[string]any{"id": id})
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, "release", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "release", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		if review {
@@ -1315,7 +1454,7 @@ func Reap(ctx context.Context, db store.DB, p Project, ended []string, session s
 			owner := ts.owner
 			args, _ := json.Marshal(map[string]any{"id": id})
 			seq := f.nextSeq()
-			if e := appendEvent(bound, seq, "release", string(args), session, p.Key); e != nil {
+			if _, e := appendEvent(bound, seq, "release", string(args), session, p.Key); e != nil {
 				return "", e
 			}
 			claimed := "was claimed by "
@@ -1367,7 +1506,7 @@ func Prune(ctx context.Context, db store.DB, p Project, session string) (string,
 		}
 		seq := f.nextSeq()
 		args, _ := json.Marshal(map[string]any{"done": n})
-		if e := appendEvent(bound, seq, "prune", string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, "prune", string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		f.applyPrune()
@@ -1422,6 +1561,62 @@ func read(ctx context.Context, db store.DB, p Project, session string, all bool)
 	})
 }
 
+// ReadOne renders one task: the line, the note count with the pointer to
+// the notes action, and the queue summary. It never inlines note text.
+func ReadOne(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
+	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := rewrite(tx, f, p.Key); e != nil {
+			return "", e
+		}
+		ts, ok := f.tasks[id]
+		if !ok {
+			return "", unknownTask(p, id)
+		}
+		var b strings.Builder
+		b.WriteString(renderOne(f, ts, session))
+		b.WriteString("\n" + summaryOf(f))
+		if foot := staleFooter(f); foot != "" {
+			b.WriteString("\n" + foot)
+		}
+		return b.String(), nil
+	})
+}
+
+// Notes returns one task's notes in order, each with its session and
+// time, headed by the task's link lines. It reads nothing and appends
+// nothing; a task without notes replies "no notes on tN".
+func Notes(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
+	if session == "" {
+		session = anon
+	}
+	_, tx, err := db.TxReadOnly(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	f, err := eventsOf(tx, p.Key)
+	if err != nil {
+		return "", err
+	}
+	f.label, f.notRepo = p.Label, p.OutsideRepo
+	ts, ok := f.tasks[id]
+	if !ok {
+		return "", unknownTask(p, id)
+	}
+	if len(ts.notes) == 0 {
+		return "no notes on " + id, nil
+	}
+	var b strings.Builder
+	b.WriteString(lineOf(f, ts, session))
+	for _, n := range ts.notes {
+		fmt.Fprintf(&b, "\n\u00b7 %s (by %s, %s)", n.text, n.session, n.ts)
+	}
+	return b.String(), nil
+}
+
 func verb(
 	ctx context.Context,
 	db store.DB,
@@ -1448,7 +1643,7 @@ func verb(
 		}
 		args, _ := json.Marshal(map[string]any{"id": id})
 		seq := f.nextSeq()
-		if e := appendEvent(bound, seq, op, string(args), session, p.Key); e != nil {
+		if _, e := appendEvent(bound, seq, op, string(args), session, p.Key); e != nil {
 			return "", e
 		}
 		ts.status = toStatus
@@ -1500,7 +1695,7 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session, scope s
 		"tasks": snapshotOf(f), "maxId": f.maxIdNum, "maxPos": f.maxPos,
 	})
 	seq := f.nextSeq()
-	if e := appendEvent(bound, seq, "compact", string(args), session, scope); e != nil {
+	if _, e := appendEvent(bound, seq, "compact", string(args), session, scope); e != nil {
 		return "", e
 	}
 	f.compactSeq = seq
@@ -1518,9 +1713,11 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session, scope s
 func snapshotOf(f *folded) []any {
 	var out []any
 	for _, ts := range f.tasks {
-		link := any(nil)
-		if ts.dep != "" {
-			link = ts.dep
+		link := func(v string) any {
+			if v == "" {
+				return nil
+			}
+			return v
 		}
 		owner := any(nil)
 		if ts.owner != "" {
@@ -1528,13 +1725,13 @@ func snapshotOf(f *folded) []any {
 		}
 		m := map[string]any{
 			"id": ts.id, "text": ts.text, "status": ts.status,
-			"pos": ts.pos - 1, "dependsOn": link, "owner": owner,
-			"updatedTs": ts.updatedTs,
+			"pos": ts.pos - 1, "requires": link(ts.requires), "blocks": link(ts.blocks),
+			"owner": owner, "updatedTs": ts.updatedTs,
 		}
 		if len(ts.notes) != 0 {
 			notes := []any{}
 			for _, n := range ts.notes {
-				notes = append(notes, map[string]any{"note": n.text, "session": n.session})
+				notes = append(notes, map[string]any{"note": n.text, "session": n.session, "ts": n.ts})
 			}
 			m["notes"] = notes
 		}
@@ -1599,13 +1796,16 @@ func (f *folded) applyCompactEvent(e eventRow) {
 			ID        string  `json:"id"`
 			Text      string  `json:"text"`
 			Status    string  `json:"status"`
+			Requires  *string `json:"requires"`
 			DependsOn *string `json:"dependsOn"`
+			Blocks    *string `json:"blocks"`
 			Pos       int     `json:"pos"`
 			Owner     string  `json:"owner"`
 			UpdatedTs string  `json:"updatedTs"`
 			Notes     []struct {
 				Note    string `json:"note"`
 				Session string `json:"session"`
+				Ts      string `json:"ts"`
 			} `json:"notes"`
 		} `json:"tasks"`
 	}
@@ -1624,9 +1824,14 @@ func (f *folded) applyCompactEvent(e eventRow) {
 			if pos < 1 {
 				pos = 1
 			}
-			var dep string
-			if r.DependsOn != nil {
-				dep = *r.DependsOn
+			var requires, blocks string
+			if r.Requires != nil {
+				requires = *r.Requires
+			} else if r.DependsOn != nil {
+				requires = *r.DependsOn
+			}
+			if r.Blocks != nil {
+				blocks = *r.Blocks
 			}
 			updatedTs := r.UpdatedTs
 			if updatedTs == "" {
@@ -1635,17 +1840,25 @@ func (f *folded) applyCompactEvent(e eventRow) {
 			var notes []noteState
 			for _, n := range r.Notes {
 				if n.Note != "" {
-					notes = append(notes, noteState{text: n.Note, session: n.Session})
+					ts := n.Ts
+					if ts == "" {
+						ts = e.ts
+					}
+					notes = append(notes, noteState{text: n.Note, session: n.Session, ts: ts})
 				}
 			}
 			tasks[r.ID] = &taskState{
 				id: r.ID, text: r.Text, status: status,
-				pos: pos, dep: dep, owner: r.Owner, updatedTs: updatedTs, notes: notes,
+				pos: pos, requires: requires, blocks: blocks, owner: r.Owner,
+				updatedTs: updatedTs, notes: notes,
 			}
 		}
 		for _, ts := range tasks {
-			if ts.dep != "" && tasks[ts.dep] == nil {
-				ts.dep = ""
+			if ts.requires != "" && tasks[ts.requires] == nil {
+				ts.requires = ""
+			}
+			if ts.blocks != "" && tasks[ts.blocks] == nil {
+				ts.blocks = ""
 			}
 		}
 	}
@@ -1734,19 +1947,20 @@ func eventsOf(tx *sql.Tx, scope string) (*folded, error) {
 	return f, nil
 }
 
-func appendEvent(bound context.Context, seq int64, op, args, session, scope string) error {
+func appendEvent(bound context.Context, seq int64, op, args, session, scope string) (string, error) {
 	if session == "" {
 		session = anon
 	}
 	s := session
 	sess := &s
+	ts := nowRFC3339()
 	_, err := tododomain.NewEventDomain().InsertEvent(bound, tododomain.Event{
-		Seq: seq, Ts: nowRFC3339(), Op: op, Args: args, Session: sess, Scope: scope,
+		Seq: seq, Ts: ts, Op: op, Args: args, Session: sess, Scope: scope,
 	})
 	if err != nil {
-		return fmt.Errorf("todo: event append: %w", err)
+		return "", fmt.Errorf("todo: event append: %w", err)
 	}
-	return nil
+	return ts, nil
 }
 
 func rewrite(tx *sql.Tx, f *folded, scope string) error {
@@ -1767,11 +1981,6 @@ func rewrite(tx *sql.Tx, f *folded, scope string) error {
 		return order[i].createdSeq < order[j].createdSeq
 	})
 	for _, ts := range order {
-		var dep *string
-		if ts.dep != "" {
-			d := ts.dep
-			dep = &d
-		}
 		_, err := tx.Exec(
 			"INSERT INTO tasks (scope, id, text, status, pos, created_seq, updated_seq) VALUES (?, ?, ?, ?, ?, ?, ?)",
 			scope, ts.id, ts.text, ts.status, ts.pos, ts.createdSeq, ts.updatedSeq,
@@ -1779,10 +1988,15 @@ func rewrite(tx *sql.Tx, f *folded, scope string) error {
 		if err != nil {
 			return fmt.Errorf("todo: rewrite: %w", err)
 		}
-		if dep != nil {
+		for _, edge := range []struct{ kind, ref string }{
+			{"requires", ts.requires}, {"blocks", ts.blocks},
+		} {
+			if edge.ref == "" {
+				continue
+			}
 			_, err := tx.Exec(
-				"INSERT INTO task_deps (scope, task_id, depends_on, created_seq) VALUES (?, ?, ?, ?)",
-				scope, ts.id, ts.dep, ts.updatedSeq,
+				"INSERT INTO task_deps (scope, task_id, kind, depends_on, created_seq) VALUES (?, ?, ?, ?, ?)",
+				scope, ts.id, edge.kind, edge.ref, ts.updatedSeq,
 			)
 			if err != nil {
 				return fmt.Errorf("todo: rewrite: %w", err)
@@ -1797,10 +2011,16 @@ func asGiven(items []CreateItem) []any {
 	for _, it := range items {
 		m := map[string]any{"text": it.Text}
 		switch {
-		case it.DependsOn != nil:
-			m["dependsOn"] = *it.DependsOn
-		case it.DepNull:
-			m["dependsOn"] = nil
+		case it.Requires != nil:
+			m["requires"] = *it.Requires
+		case it.RequiresNull:
+			m["requires"] = nil
+		}
+		switch {
+		case it.Blocks != nil:
+			m["blocks"] = *it.Blocks
+		case it.BlocksNull:
+			m["blocks"] = nil
 		}
 		out = append(out, m)
 	}

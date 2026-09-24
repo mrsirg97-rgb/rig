@@ -343,3 +343,45 @@ func TestReviewMigrationPairsHistoricalCompletesWithAccepts(t *testing.T) {
 		t.Errorf("a second open must not pair again: %d accepts", accepts)
 	}
 }
+
+func TestEdgeMigrationRebuildsTheProjection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "todo.sqlite")
+	var old []string
+	for _, stmt := range todostore.Statements() {
+		if strings.Contains(stmt, `"task_deps"`) {
+			old = append(old, `CREATE TABLE IF NOT EXISTS "task_deps" (
+  "scope" TEXT NOT NULL,
+  "task_id" TEXT NOT NULL,
+  "depends_on" TEXT NOT NULL,
+  "created_seq" INTEGER NOT NULL,
+  PRIMARY KEY ("scope", "task_id", "depends_on")
+)`)
+			continue
+		}
+		old = append(old, stmt)
+	}
+	db, _, _, err := store.Open(path, old, 3)
+	if err != nil {
+		t.Fatalf("open v3: %v", err)
+	}
+	db.DB.Close()
+	db, _, report, err := store.Open(path, todostore.Statements(), todostore.SchemaVersion, todostore.EdgeMigration)
+	if err != nil {
+		t.Fatalf("open v4: %v", err)
+	}
+	defer db.DB.Close()
+	if !strings.Contains(report, "edge kind") {
+		t.Errorf("migration report = %q", report)
+	}
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, p, []item{
+		{Text: "gate"},
+		{Text: "work", Requires: ptrTo("gate")},
+		{Text: "tail", Blocks: ptrTo("work")},
+	}, "s1"); err != nil {
+		t.Fatalf("create after migration: %v", err)
+	}
+	if got := projDep(t, db, "work"); got != "t1" {
+		t.Errorf("the migrated projection must carry the requires edge: %q", got)
+	}
+}

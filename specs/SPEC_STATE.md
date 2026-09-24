@@ -244,8 +244,9 @@ happens to name (see the binding decision).
 - `tasks`: scope + id (primary, `tN` per scope), text (unique per scope via
   extra.sql), status (pending|in_progress|review|done|failed), pos, created_seq
   (link events), updated_seq (link events).
-- `task_deps`: scope + task_id + depends_on (primary: both link tasks within
-  one scope), created_seq.
+- `task_deps`: scope + task_id + kind (primary, kind is requires|blocks:
+  a task carries one edge per kind), depends_on, created_seq — both sides
+  link tasks within one scope.
 - `extra.sql`: `tasks_pos_seq` index on (scope, pos, created_seq): the unique
   index on (scope, text), and `session_project`: session_id (primary), scope,
   label, outside_repo, bound_at — the session's queue binding, keyed by
@@ -261,12 +262,13 @@ happens to name (see the binding decision).
   claims, foreign complete refuses, fail frees; completing your own
   unclaimed pending task implicitly claims and completes; start+complete,
   both events, the echo noting auto-started); the swarm surface (1.3.9):
-  `claim` takes the first pending task whose dependsOn is done (the same
-  order `next` shows) and marks it active for this session, or with
+  `claim` takes the first pending task nothing waits for (the same order
+  `next` shows) and marks it active for this session, or with
   `status=review` the first task in review that no reviewer holds; `note`
   appends to any task (notes are how agents talk about shared work, so the
-  hold is not needed, but the task must exist) and `read` renders them in
-  order with their session; the review gate keys on who completes: an
+  hold is not needed, but the task must exist) and `read` shows the count
+  (`· N notes`) while the `notes` action lists them in order with their
+  session and time; the review gate keys on who completes: an
   interactive session completing its own task lands it done in one call
   (complete+accept both written, the log uniform, replay unchanged), a
   worker (`rig -p`: delegate or swarm) submits it for review; `accept`
@@ -276,11 +278,15 @@ happens to name (see the binding decision).
   so a delegate's parent reviews its workers by read then accept/reject
   with no claim step, and the hold rule still refuses when another session
   holds; a review task keeps its status when a stale claim is released;
-  `blockedBy` still clears only on done, so a dependency in review keeps
-  its dependents blocked; `prune` still drops done only, review rows stay;
-  the summary counts review rows (`· N in review`); compaction past 1000
-  events snapshots the queue and resets the epoch, notes riding the
-  snapshot; dependsOn DAG validated at the boundary, cycles refused,
+  `blocked` clears only on done (SPEC_TODO_EDGES): a task waits for its
+  `requires` target and for every unfinished task whose `blocks` names it,
+  so a dependency in review keeps its dependents blocked; `complete` and
+  `accept` on a blocked task refuse naming what it waits for; `prune`
+  still drops done only, review rows stay; the summary counts review rows
+  (`· N in review`); compaction past 1000 events snapshots the queue and
+  resets the epoch, notes (with their times) riding the snapshot; the
+  requires/blocks DAG is validated at the boundary — unknown links,
+  self-links, and cycles through either relation refuse naming the tasks —
   completion gated, blocked skipped by `next`. Minted seq is one sequence
   across scopes (a shared events table), while ids stay `tN` per scope;
   the compact fold and stale footer are per scope.

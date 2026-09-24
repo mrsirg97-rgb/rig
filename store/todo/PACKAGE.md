@@ -3,13 +3,14 @@
 ## What it is
 
 The task-queue store, Go over the generated substrate (SPEC_STATE's "###
-todo" section). The event log is the spine; tasks/task_deps are a
-disposable projection rebuilt from the log inside every transaction and
-never trusted. Replay is total: malformed or inapplicable rows are
+todo" section, SPEC_TODO_EDGES). The event log is the spine; tasks/task_deps
+are a disposable projection rebuilt from the log inside every transaction
+and never trusted. Replay is total: malformed or inapplicable rows are
 skipped, never thrown. Positions are minted, never mutated in place;
-moves are events. Create is the only dependency-mutation point; the DAG
-is validated there, at the boundary, and refused loudly with the problem
-in a teaching voice.
+moves are events. Create is the only link-mutation point; the
+requires/blocks DAG is validated there, at the boundary, and refused
+loudly naming the tasks (unknown link, self-link, cycle through either
+relation).
 
 The reply contract (the lean read): a transition echoes the affected
 row, the summary line, and; like every other reply; the stale footer
@@ -28,8 +29,10 @@ caller, or with `status=review` the first task in review that no
 reviewer holds (the status stays review, the owner becomes the
 caller); `nothing to do` when nothing qualifies. `note` appends to any
 task whatever the hold — notes are how agents talk about shared work —
-and `read` renders them in order with their session, one indented line
-each. The review gate keys on who completes: `Complete` takes a worker
+and `read` shows the count (`· N notes`) while the `notes` action lists
+them in order with their session and time, headed by the task's link
+lines; `read` with `id` renders one task, summary-only, and points at
+`notes`. The review gate keys on who completes: `Complete` takes a worker
 flag — `worker=false` (an interactive session) lands the task done in
 one call, writing the complete/accept pair so the log stays uniform and
 replay is unchanged; `worker=true` (`rig -p`: delegate, swarm) submits
@@ -37,16 +40,18 @@ it for review. `accept` moves review to done and `reject` moves review
 to pending, recording the reason as a note; both auto-claim an unowned
 review task (claim+accept, the same idiom as complete auto-starting a
 pending one), so a parent reviews its workers by read then accept/reject
-with no claim step, and a foreign holder still refuses. `blockedBy`
-clears only on done (a dependency in review keeps its dependents
-blocked), prune still drops done only, and the summary counts review
-rows (`· N in review`).
+with no claim step, and a foreign holder still refuses. `blocked` clears only on done (a dependency in review
+keeps its dependents blocked); a task waits for its `requires` target and
+for every unfinished task whose `blocks` names it, `complete` and
+`accept` on a blocked task refuse naming what it waits for, prune still
+drops done only, and the summary counts review rows (`· N in review`).
 
 ## What it includes
 
-- `todo.go`: the store: operations (claim, note, accept, reject, the
-  review state), replay, position minting, the DAG validation, per-scope
-  folds and one shared event-log sequence.
+- `todo.go`: the store: operations (claim, note, notes, accept, reject,
+  the review state), replay, position minting, the requires/blocks DAG
+  validation and cyclePath (both relations), per-scope folds and one
+  shared event-log sequence.
 - `task.go`: the structured reads beside the render: `Task` (one task's
   brief: text + notes with sessions) and `Counts` (the fold's
   per-status counts, read-only) — the swarm's brief and status band
@@ -75,8 +80,8 @@ rows (`· N in review`).
 - Replay is total: malformed or inapplicable rows are skipped, never
   thrown.
 - Positions are minted, never mutated in place: moves are events.
-- Create is the only dependency-mutation point: the DAG is validated
-  there at the boundary.
+- Create is the only link-mutation point: the requires/blocks DAG is
+  validated there at the boundary (SPEC_TODO_EDGES).
 - Complete on the caller's own unclaimed pending task implicitly claims
   and submits: start+complete, both events appended, the echo noting the
   auto-start. Foreign-claim and blocked-by-dependency refusals stay.

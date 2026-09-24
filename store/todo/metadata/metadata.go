@@ -47,13 +47,15 @@ type Task struct {
 
 // table:"task_deps"
 //
-// Composite primary (scope + task_id + depends_on); both sides reference
-// tasks within the same scope.
+// Composite primary (scope + task_id + kind): a task carries at most
+// one edge per kind, so the kind pins the row. Both sides reference
+// tasks within the same scope; kind names the edge (requires|blocks).
 type TaskDep struct {
 	Scope        string `primary:"true" alias:"name=scope,nullable=false"`
 	TaskID       string `primary:"true" alias:"name=task_id,nullable=false"`
 	Task         Task   `link:"from=Task,on=id,many=false"`
-	DependsOn    string `primary:"true" alias:"name=depends_on,nullable=false"`
+	Kind         string `primary:"true" alias:"name=kind,nullable=false"`
+	DependsOn    string `alias:"name=depends_on,nullable=false"`
 	Depended     Task   `link:"from=Task,on=id,many=false"`
 	CreatedSeq   int64  `alias:"name=created_seq,nullable=false"`
 	CreatedEvent Event  `link:"from=Event,on=seq,many=false"`
