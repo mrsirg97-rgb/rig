@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig: a minimal, performant harness for your local agent</title>
+<title>rig: a small operating system for agents</title>
 <meta name="description" content="One binary, one-line install. Point it at the local model you already run and it reads your repo, edits your code, runs your tests, and remembers what it learned. 99% of every token served from cache. Sessions survive restarts. Add a tool with one Python file.">
 <meta name="theme-color" content="#050505">
-<meta property="og:title" content="rig: a minimal harness for your local model">
+<meta property="og:title" content="rig: a small operating system for agents">
 <meta property="og:description" content="One binary, one-line install. 99% of every token from cache, measured on real daily use. Point it at the model you already run: it reads, edits, tests, and remembers. Built by local models running inside rig.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
@@ -194,7 +194,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="ln dim reveal">up 214k down 18k · cache r 211k 99%</div>
 
     <div class="gap reveal"></div>
-    <div class="msg hero reveal">your local model deserves more than a prompt box.</div>
+    <div class="msg hero reveal">a small operating system for agents.</div>
     <div class="msg proof reveal">rig is a minimal harness for the model you already run. one binary, one endpoint,
     one terminal: it reads your repo, edits your code, runs your tests, and remembers what it learned.
     close the laptop; pick the session back up from your phone.</div>
@@ -203,9 +203,9 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="gap sm reveal"></div>
     <div class="ln stats reveal" aria-label="rig in numbers">
       <div class="stat"><span class="n">99%</span><span class="l">of every token served from cache. long sessions stay fast.</span></div>
-      <div class="stat"><span class="n">396 lines</span><span class="l">is the whole agent loop, batch included. read it over coffee.</span></div>
-      <div class="stat"><span class="n">31k / 49k</span><span class="l">lines of code / lines of tests. more tests than code.</span></div>
-      <div class="stat"><span class="n">615 commits</span><span class="l">most of them written by rig, running inside rig</span></div>
+      <div class="stat"><span class="n">417 lines</span><span class="l">is the whole agent loop, batch included. read it over coffee.</span></div>
+      <div class="stat"><span class="n">34k / 53k</span><span class="l">lines of code / lines of tests. more tests than code.</span></div>
+      <div class="stat"><span class="n">638 commits</span><span class="l">most of them written by rig, running inside rig</span></div>
     </div>
 
     <div class="gap sm reveal"></div>
@@ -244,7 +244,7 @@ html.js .reveal.in { opacity: 1; transform: none; }
     <div class="msg reveal">the whole thing is one loop: build the prompt, stream the model, run what it asks for,
     hand back the results, repeat. everything below is what makes that loop safe to leave running.</div>
     <div class="gap sm reveal"></div>
-    <div class="ln li reveal"><span class="lg">•</span> the loop is 396 lines: open to extension, closed to modification since 0.3.0. everything else plugs in around it: model providers, interfaces, tools, guardrails, policy. adding one is a single file and one line to register it.</div>
+    <div class="ln li reveal"><span class="lg">•</span> the loop is 417 lines: open to pure addition, closed to modification, named reopenings only. core is frozen at 1.5.0's bytes. everything else plugs in around it: model providers, interfaces, tools, guardrails, policy. adding one is a single file and one line to register it.</div>
     <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel, results land in order. the model can fire off three reads at once and the transcript still reads top to bottom. nothing dropped, nothing reordered.</div>
     <div class="ln li reveal"><span class="lg">•</span> delegate is a subagent. a turn can fan out several workers in parallel, bounded by the fleet's slots, and waits for their answers. a held GPU refuses by name (busy:skip). each worker is sandboxed, cannot delegate in turn, and keeps a transcript you can resume.</div>
     <div class="ln li reveal"><span class="lg">•</span> the guardrails have names and reasons. a command allowlist, a retry limit, an approval gate, output limits, a holding area for new plugins, a sandbox for background workers. when rig says no, it says why, so the model fixes its approach instead of thrashing.</div>
