@@ -1,13 +1,13 @@
 package scheduler_test
 
 import (
-	"syscall"
 	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
