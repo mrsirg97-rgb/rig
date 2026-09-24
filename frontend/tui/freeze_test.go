@@ -151,6 +151,9 @@ func TestFreezeGate(t *testing.T) {
 			if reopened(p) {
 				continue
 			}
+			if strings.HasSuffix(p, "/PACKAGE.md") {
+				continue
+			}
 			if !strings.HasSuffix(p, ".go") {
 				t.Errorf("core/ or loop/ gained a non-Go file: %s (a real change to the frozen surface)", p)
 				continue

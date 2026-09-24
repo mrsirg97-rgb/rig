@@ -81,7 +81,10 @@ is a loud line naming the known set, never silently a prompt.
   spawns a one-shot `rig -p` through the delegate path (jail, socket
   proxy, recorded run), and finishes it itself: workers submit for
   review, reviewers parse the worker's last `verdict: accept|reject
-  <reason>` line and call `accept`/`reject`. Against a running swarm a
+  <reason>` line and call `accept`/`reject`. A worker on a hosted row
+  skips the local swap and the busy probe entirely, its parallelism
+  riding the row's `concurrency` tokens beside the fleet's slots.
+  Against a running swarm a
   start adds workers (the roles mix); `swarm stop` ends it and releases
   the in-flight claims (`specs/SPEC_SWARM.md`). The task workers run
   on a 10-minute stall beside a 2h spend ceiling, so one that keeps
@@ -99,6 +102,16 @@ is a loud line naming the known set, never silently a prompt.
   an interactive delegate, none when nothing runs (1.4.4). The usage
   line shows the session's dollars when the endpoint reported a cost
   (`up 214k down 18k · cache r 187k 87% · $1.23`, 1.5.0).
+
+**Hosted rows** (`specs/SPEC_HOSTED.md`): a row with `remote: true` or
+`provider: "<name>"` speaks the OpenAI wire at its `baseUrl`, the key
+riding `Authorization: Bearer <key>` (from the file or
+`RIG_MODEL_API_KEY`, never logged); 429 and 5xx retry with bounded
+backoff instead of faulting a turn (`retries`, default 3 for remote
+rows); `usage.cost` rides the endpoint's `usage.cost` into the state
+store's cost column and shows in the usage line. OpenRouter rows read
+and echo `reasoning` / `reasoning_details`; everything else keeps
+`reasoning_content`. Remote rows omit the llama-server-only fields.
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it. The summary lands in the

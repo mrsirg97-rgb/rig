@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 1.5.2
+./rig --version        # rig 1.5.3
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -261,14 +261,22 @@ rows:
 ```json
 [
   {"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]},
-  {"id": "worker", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "role": "worker", "efforts": ["low", "medium"]}
+  {"id": "worker", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "role": "worker", "efforts": ["low", "medium"]},
+  {"id": "openrouter-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000, "remote": true, "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-or-...", "concurrency": 4, "reasoning": "reasoning", "providerPin": "Together", "cacheControl": true}
 ]
 ```
 
 `id` must match the model id you pass to `--model`. A new id needs the
 numeric fields; a listed id keeps the ones you omit from the embedded
 row. `role` is `interactive` (the default) or `worker`; `efforts` is
-the `/effort` dial's vocabulary.
+the `/effort` dial's vocabulary. The third row is a hosted run site
+(`specs/SPEC_HOSTED.md`): `remote` and `provider` (a name implies
+remote), `baseUrl` (the endpoint), `apiKey` (the bearer key, from the
+file or `RIG_MODEL_API_KEY`), `concurrency` (the row's parallel-spawn
+token bound), `reasoning` (`reasoning` for OpenRouter, the default
+`reasoning_content` otherwise), `providerPin` and `cacheControl`
+(openrouter-only), `retries` (the 429/5xx retry bound, default 3 for
+remote rows).
 
 **`workers.json`**: the fleet that unlocks `scheduler` and `delegate`:
 
@@ -424,7 +432,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 1.5.2
+./rig --version                 # prints: rig 1.5.3
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

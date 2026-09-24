@@ -1,4 +1,43 @@
 # Changelog
+## [1.5.3]: the docs catch up to the thesis
+
+The README, the docs, and the landing page now say what rig is: a small
+operating system for agents.
+
+- **README** (`README.md`): the top screen becomes the thesis, "A small
+  operating system for agents. The kernel is a few hundred lines.", with
+  `## measured` (each number names its mechanism: 99.1% cache hit over
+  2,925 turns, 297M of 299M prompt tokens, 208M on 2026-09-22, 7k
+  byte-stable preamble, swarm 723 lines, 34,301 lines of Go, 53,626 of
+  tests), `## what's different`, and an OS mapping table. A new
+  `a day with rig` walkthrough covers first prompt, tools, the queue,
+  memory, schedules, the swarm, and resume. The tools section says the
+  default menu is 17 built-in tools (`view` vision-gated, `scheduler`
+  and `delegate` fleet-gated), and the dashboard bullets match the real
+  web surface (plain-text create, start/complete/retry, transcript open).
+- **docs/EMBED.md** (new): rig as a Go module, the core seams,
+  `loop.Run`, the five seams the root wires, a worked HTTP-service
+  example (kernel, board-backed job, in-process worker, one process),
+  the freeze, and local vs hosted. The example compiles.
+- **docs/SETUP.md**: the models.json block gains a hosted row example
+  (`remote`, `provider`, `baseUrl`, `apiKey`, `concurrency`,
+  `reasoning`, `providerPin`, `cacheControl`, `retries`).
+- **docs/USAGE.md**: the /swarm section names the hosted-row path (a
+  remote worker skips the local swap and the busy probe, riding the
+  row's `concurrency` tokens) and gains a short hosted-rows paragraph
+  (auth, retry, cost in the usage line, reasoning field names).
+- **site/index.html**: the title, og:title, and hero become "a small
+  operating system for agents"; the stats refresh (417 loop lines,
+  34k/53k code/tests, commit count) and the freeze line names the real
+  story (core frozen at 1.5.0's bytes, loop open to pure addition with
+  named reopenings).
+- **core/PACKAGE.md**: the 1.5.0 hosted extension is the named reopening,
+  closed when the gate re-froze core at 1.5.0's bytes, not "the named
+  reopening of the frozen surface" (the re-freeze, 8441fd8).
+- **The freeze gate** (`frontend/tui/freeze_test.go`): the frozen-surface
+  loop honors the allowlist's PACKAGE.md entry, a PACKAGE.md change in
+  core/ or loop/ is a docs change, not a reopening.
+
 ## [1.5.2]: the todo board grows two edges and a notes door
 
 The task queue's one dependency became two named links, `requires` and

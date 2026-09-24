@@ -1,8 +1,40 @@
 # rig
 
-A minimum runtime for your agents.
+A small operating system for agents. The kernel is a few hundred lines.
 
 rig assembles context, streams the model, executes tool calls, returns results, and repeats. The TUI, piped CLI, headless worker, and dashboard share the same session, task, memory, and scheduler stores.
+
+## measured
+
+Each number names its mechanism.
+
+- **99.1% cache hit over 2,925 turns.** The request prefix is byte-stable, so the provider's prefix cache reuses it. The ratio is `cache_read/prompt` from the usage table, the same arithmetic `sessions summary` uses (`TestSessionsSummaryCacheRatioFixture`). 297M of 299M prompt tokens came from cache.
+- **208M prompt tokens on 2026-09-22.** The same query, that day alone.
+- **7k byte-stable preamble.** The system prompt, the tool schemas, and the append-only transcript are a few thousand bytes, pinned by `TestWireToolsPrefixGolden` (a sha256 over the fleet's wire shape), `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`, and `TestSystemPromptIsByteStableAcrossBuilds`, so a stray timestamp cannot silently kill the cache.
+- **723 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
+- **34,301 lines of Go, 53,626 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
+
+## what's different
+
+- **the loop is closed.** The turn runtime names no concrete tool, provider, policy, frontend, or middleware. One file plus one registration line extends it.
+- **the wire is pinned.** The exact bytes sent to the model are golden-tested. The cache win is a measured property, not a claim.
+- **the loop never retries.** A failed call executes once and the model is told. Results are capped with loud markers; denials are named refusals with reasons.
+- **state belongs to the repo.** Tasks, memory, and schedules carry the project's identity, shared by worktrees. A session resumes from the store in one read-only transaction.
+- **default deny at the boundary.** Allowlist, approval gate, pathguard, plugin provenance, worker jail. Narrowing is the operator's act.
+- **spec first.** Every behavior is one sentence in specs/ with a test that holds it there. Core is frozen.
+
+## the os
+
+| OS concept | rig | where |
+|---|---|---|
+| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 417 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
+| scheduler | the turn's batch: concurrent reads beside each other, bounded by the kernel's Parallel (8), effects in call order; background jobs on the operator's crontab, model fires jailed | `loop/batch.go`, `tool/scheduler`, `store/scheduler` |
+| processes | sessions (TUI, piped, one-shot), delegates, drain workers; each worker owns a transcript, sandboxed and resumable | `frontend/`, `tool/delegate`, `swarm/` |
+| IPC | the event stream (`TextDelta`, `ToolCallEvent`, `ToolResult`, `TurnEnd`) and tool calls through the middleware chain; the stores are the shared state across processes | `core/provider.go`, `evt/`, `store/` |
+| filesystem | the workspace through read/write/edit/ls/find/grep, provenance-canonicalized; the stores are SQLite files under the rig home | `tool/file`, `tool/fs`, `store/` |
+| permissions | allowlist, approval gate, pathguard, plugin provenance, worker jail; deny by default, refusals named | `middleware/`, `policy/`, `specs/SPEC_SANDBOX.md` |
+| modules | python plugins, one file one tool, pending until approved; typed Go seams beside them | `plugins/`, `core/` |
+| shells | the frontends: TUI default, piped CLI, `-p` one-shot, web dashboard; user commands are the builtins | `frontend/`, `command/` |
 
 ## install
 
@@ -37,11 +69,34 @@ go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
 
 rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint defaults to `http://127.0.0.1:8090/v1`; there is no model default. a run without one refuses at start, naming the three ways to set it (`--model`, `RIG_MODEL`, the `model` key in `settings.json`). The TUI is the frontend when stdout is a terminal, the piped CLI otherwise. For scripts, run `./rig -p "the task"`. See `docs/SETUP.md` for configuration.
 
+## a day with rig
+
+- **first prompt.** `./rig` opens the TUI; `./rig -p "the task"` runs one
+  prompt headless. `--base-url` and `--model` point at the endpoint, or set
+  `RIG_BASE_URL` and `RIG_MODEL`; `settings.json` is the fallback.
+- **tools.** `bash`, `read`/`write`/`edit`, `ls`/`find`/`grep`, `python`,
+  `web_search`, `web_fetch`, `diff`, `todo`, `rem`, `scheduler`, `delegate`,
+  `sessions`, `plugin`/`plugins`. Results are capped, refusals are named.
+- **the queue.** `todo` reads the project's tasks (worktrees share one
+  board); `todo claim` takes the next unblocked task, `todo complete` lands
+  it, `todo notes tN` lists a task's notes. Tasks link with `requires` and
+  `blocks`.
+- **memory.** `rem learn`/`recall`/`reflect`/`prune` at the project's scope;
+  a repo and its worktrees share the same memories.
+- **schedules.** `scheduler` puts a job on the crontab; a job is a one-shot
+  `rig -p` in its own cwd, jailed by default.
+- **the swarm.** `swarm 2` drains the queue: workers claim, run one-shot,
+  and submit; reviewers accept or reject. `swarm stop` ends it;
+  `swarm 2 budget=5` caps the spend.
+- **resume.** `sessions` lists the vitals; `rig --resume <id>` replays a
+  session from the state store in one read-only transaction.
+
 ## the tools
 
-rig ships 17 built-in tools: `view` joins the set only for a model row
-whose `"vision": true` says it takes images, and `scheduler` and `delegate`
-join when a worker fleet is configured. Restrict them with `--allow`:
+rig's default menu is 17 built-in tools: `view` joins the set only for a
+model row whose `"vision": true` says it takes images, and `scheduler` and
+`delegate` join when a worker fleet is configured. Restrict them with
+`--allow`:
 
 | tool | what it does |
 |------|--------------|
@@ -128,8 +183,8 @@ rig serve
 
 The dashboard serves the rig stores on loopback only. On first run it prints an access token, stores it with mode `0600`, and includes it in the URL. The page exchanges the token for a cookie. Mobile friendly.
 
-- **sessions**: list them per workspace, and resume one mid-work
-- **todo**: the queue, with create (requires/blocks links), claim, start, complete, notes, and retry
+- **sessions**: list them per workspace, and open a transcript mid-work
+- **todo**: the queue, with create (one task per line), start, complete, and retry; the rows show the requires/blocks links and claims
 - **scheduler**: the jobs, with create, pause, resume, remove, an in-place update form that opens with the job's current fields, and each job's run audit trail
 - **models**: the table, with the effort dial
 - **plugins**: approved, pending, disabled; the forge reads and saves a plugin's source into the pending zone
@@ -142,6 +197,7 @@ The dashboard serves the rig stores on loopback only. On first run it prints an 
 | `docs/SETUP.md`    | build, configuration, verification               |
 | `docs/USAGE.md`    | running a session; session and failure semantics |
 | `docs/PLUGINS.md`  | the python plugins: the contract, the zones, creating and consuming |
+| `docs/EMBED.md`    | rig as a Go module: the seams, the freeze, a worked example |
 | `SECURITY.md`      | the trust model and how to report a vulnerability |
 | `CONTRIBUTING.md`  | the process: spec first, tests before code, the freeze |
 
@@ -180,7 +236,7 @@ frontend/       Frontend implementations: cli (the piped reference), tui (the
                 dashboard)
 specs/          the specs, written and agreed before the code (SPEC_CORE first)
 docs/           DESIGN (architecture), SETUP (build/config), USAGE (running),
-                PLUGINS (the python plugins)
+                PLUGINS (the python plugins), EMBED (rig as a module)
 ```
 
 ## extending
