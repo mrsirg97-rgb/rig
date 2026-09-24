@@ -589,7 +589,7 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, obs
 		cmd.Dir = cwd
 	}
 	cmd.Env = env
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
+	cmd.SysProcAttr = spawnSysProcAttr()
 	cmd.WaitDelay = time.Second
 	cmd.Cancel = func() error {
 		if cmd.Process != nil {
