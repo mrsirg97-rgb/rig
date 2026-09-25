@@ -96,6 +96,7 @@ type tui struct {
 
 	statusUp, statusDown, statusCache int
 	statusCost                        float64
+	statusRows                        []string
 
 	swarm core.SwarmStatus
 
@@ -1149,6 +1150,9 @@ func (t *tui) statusLineLocked() string {
 	if band := RenderSwarmBand(t.theme, t.swarm); band != "" {
 		s += "\n" + band
 	}
+	if rows := RenderStatusRows(t.theme, t.statusRows); rows != "" {
+		s += "\n" + rows
+	}
 	return s
 }
 
@@ -1164,6 +1168,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusUsed = 0
 		t.statusHasUsed = false
 		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
+		t.statusRows = in.Rows
 		b.WriteString(renderStatus(t.theme, in, t.titleName, t.titleRows, t.titleTagline))
 	}
 	return b.String()
@@ -1223,6 +1228,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 			t.statusHasUsed = false
 		}
 		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
+		t.statusRows = in.Rows
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
 }

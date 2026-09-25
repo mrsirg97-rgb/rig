@@ -17,6 +17,18 @@ type StatusIn struct {
 	Down      int
 	CacheRead int
 	Cost      float64
+	Rows      []string
+}
+
+// RenderStatusRows is the embedder's footer band: the rows under a dim
+// rule, nothing when empty. The swarm band and the rows band stack below
+// the status line (SPEC_TUI 3a's shape, both live surfaces).
+func RenderStatusRows(t Theme, rows []string) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	rule := t.Paint(SlotDim, strings.Repeat(t.Glyph(GlyphDot), 4))
+	return rule + "\n" + strings.Join(rows, "\n")
 }
 
 func RenderStatus(t Theme, in StatusIn) string {

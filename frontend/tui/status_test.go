@@ -228,3 +228,19 @@ func TestRenderStatusLineShowsTheSessionsDollars(t *testing.T) {
 		t.Fatalf("zero cost must stay quiet, got %q", got)
 	}
 }
+
+func TestRenderStatusRowsRuleAndRows(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderStatusRows(th, []string{"projects held: 3", "open claims: 1"})
+	want := th.Paint("dim", strings.Repeat(th.Glyph("dot"), 4)) + "\n" +
+		"projects held: 3\nopen claims: 1"
+	if got != want {
+		t.Fatalf("footer rows:\ngot  %q\nwant %q", got, want)
+	}
+	if empty := tui.RenderStatusRows(th, nil); empty != "" {
+		t.Fatalf("empty rows must render nothing, got %q", empty)
+	}
+}
