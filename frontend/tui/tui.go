@@ -96,6 +96,7 @@ type tui struct {
 
 	statusUp, statusDown, statusCache int
 	statusCost                        float64
+	statusRows                        []string
 
 	swarm core.SwarmStatus
 
@@ -1149,6 +1150,9 @@ func (t *tui) statusLineLocked() string {
 	if band := RenderSwarmBand(t.theme, t.swarm); band != "" {
 		s += "\n" + band
 	}
+	if rows := RenderStatusRows(t.theme, t.statusRows); rows != "" {
+		s += "\n" + rows
+	}
 	return s
 }
 
@@ -1164,6 +1168,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusUsed = 0
 		t.statusHasUsed = false
 		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
+		t.statusRows = in.Rows
 		b.WriteString(renderStatus(t.theme, in, t.titleName, t.titleRows, t.titleTagline))
 	}
 	return b.String()
@@ -1182,36 +1187,29 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	switch {
-	case err == nil && (name == "todo" || name == "scheduler") && out != "":
-
-		opening := t.commandOpeningLocked(name, args)
-		if name == "todo" {
-			t.live.draw(RenderTodoBlock(t.theme, opening, out), t.liveLinesLocked(), t.statusLineLocked())
-		} else {
-			t.live.draw(RenderSchedulerBlock(t.theme, opening, out), t.liveLinesLocked(), t.statusLineLocked())
-		}
-		return
 	case err != nil:
 		t.live.draw(t.theme.Paint(SlotError, err.Error()), t.liveLinesLocked(), t.statusLineLocked())
 		return
+	case name == "todo" || name == "scheduler":
+		if out != "" {
+			opening := t.commandOpeningLocked(name, args)
+			if name == "todo" {
+				t.live.draw(RenderTodoBlock(t.theme, opening, out), t.liveLinesLocked(), t.statusLineLocked())
+			} else {
+				t.live.draw(RenderSchedulerBlock(t.theme, opening, out), t.liveLinesLocked(), t.statusLineLocked())
+			}
+		}
+	default:
+		if out != "" {
+			t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
+		}
 	}
-	refresh := false
-	fresh := false
-	switch {
-	case name == "new":
-		refresh, fresh = true, true
-	case name == "sessions" && strings.HasPrefix(args, "resume"):
-		refresh, fresh = true, true
-	case name == "models" && args != "":
-		refresh = true
-	case name == "role" && args != "":
-		refresh = true
-	}
-	if out != "" {
-		t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
-	}
-	if refresh && t.statusIn != nil {
-
+	// Generic status recapture: any successful command may have changed what
+	// the status function returns (the embedder's Rows, a model or role
+	// switch), so the status redraws after every one. The Used reset stays
+	// with the session boundaries: /new and sessions resume.
+	fresh := name == "new" || (name == "sessions" && strings.HasPrefix(args, "resume"))
+	if t.statusIn != nil {
 		in := t.statusIn(context.Background())
 		t.statusModel = in.Model
 		t.statusEffort = in.Effort
@@ -1223,6 +1221,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 			t.statusHasUsed = false
 		}
 		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
+		t.statusRows = in.Rows
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
 }

@@ -1,4 +1,17 @@
 # Changelog
+## [1.5.6]: the embedder's footer rows
+
+`tui.StatusIn` gains `Rows []string`: the embedder's footer band. The
+rows render under the status line behind the same four-cell dim rule the
+swarm band uses (nothing when empty, so rig's own main is unchanged).
+The status recaptures after every successful command — the embedder's
+commands included — with the Used reset staying at the session
+boundaries (`/new`, `sessions resume`); `docs/EMBED.md` lists the field
+beside `WithCommands` and `WithStatus`. Rows recapture at command time
+only: a mid-turn tool effect shows stale until the next command, while
+the swarm band stays live because it rides a notify event. A turn-end
+hook is a later version.
+
 ## [1.5.5]: the welcome title is an embedder door
 
 `frontend/tui` gains `WithTitle(name string, rows []string, tagline

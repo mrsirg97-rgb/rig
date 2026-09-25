@@ -154,6 +154,12 @@ block letters with the embedder's rows and adds a tagline under them
 (default: the rig rows, no tagline); the ascii glyph fallback prints
 the plain name.
 `tui.WithNews(fn)` supplies the session-start news line (empty = nothing).
+`StatusIn.Rows` is the embedder's footer band: the rows render under the
+status line behind a dim rule (empty = nothing), recaptured after every
+successful command (the Used reset stays at `/new` and `sessions
+resume`). Rows change at command time only — a mid-turn tool effect
+shows stale until the next command, unlike the swarm band, which rides a
+notify event; a turn-end hook is a later version.
 The swarm band is the one live surface the root does not compute: the
 controller and the delegate tool emit `core.SwarmStatus` snapshots
 (throttled, the exit always landing) and the TUI folds the latest into
