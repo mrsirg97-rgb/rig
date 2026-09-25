@@ -226,8 +226,8 @@ func TestStatusLineRefresh(t *testing.T) {
 
 	s.si.feed("/compact\n")
 	s.await("nothing to drop")
-	if got := int(calls.Load()); got != 4 {
-		t.Fatalf("the compact command refreshed the status: %d, want 4", got)
+	if got := int(calls.Load()); got != 5 {
+		t.Fatalf("the generic rule recaptures after any command: %d calls, want 5", got)
 	}
 
 	s.si.feed("/models\n")
@@ -239,8 +239,8 @@ func TestStatusLineRefresh(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if got := int(calls.Load()); got != 4 {
-		t.Fatalf("the models list refreshed the status: %d, want 4", got)
+	if got := int(calls.Load()); got != 6 {
+		t.Fatalf("the models list recaptures too: %d calls, want 6", got)
 	}
 
 	s.si.feed("go2\n")
@@ -258,8 +258,8 @@ func TestStatusLineRefresh(t *testing.T) {
 	if got := blockCount(); got != 1 {
 		t.Fatalf("the block count at the end = %d, want 1", got)
 	}
-	if got := int(calls.Load()); got != 4 {
-		t.Fatalf("the status door moved at the end: %d calls, want 4", got)
+	if got := int(calls.Load()); got != 6 {
+		t.Fatalf("the status door moved at the end: %d calls, want 6", got)
 	}
 }
 
@@ -1742,5 +1742,57 @@ func waitSlot(t *testing.T, tu *tui, want string) {
 			t.Fatalf("the slot never held %q (last %q)", want, got)
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+// flipRowCmd is a fake command whose run flips a value the status callback
+// reads, so the test can prove the recapture happens at command time.
+type flipRowCmd struct {
+	name string
+	flip func()
+}
+
+func (f *flipRowCmd) Name() string        { return f.name }
+func (f *flipRowCmd) Description() string { return "flip the status rows" }
+func (f *flipRowCmd) Run(ctx context.Context, args string, env any) (string, error) {
+	f.flip()
+	return "x ran", nil
+}
+
+func TestStatusRowsRecaptureOnAnyCommand(t *testing.T) {
+	th := oledTheme(t)
+	var rows atomic.Value
+	rows.Store([]string(nil))
+	x := &flipRowCmd{name: "x", flip: func() { rows.Store([]string{"projects held: 3", "open claims: 1"}) }}
+	s := newScriptedSession(t, th, WithWidth(100),
+		WithStatus(func(ctx context.Context) StatusIn {
+			b := statusFixture()
+			if r, _ := rows.Load().([]string); r != nil {
+				b.Rows = r
+			}
+			return b
+		}),
+		WithCommands([]core.Command{x}, nil),
+	)
+
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	if got := bytes.Count(s.out.Bytes(), []byte("projects held: 3")); got != 0 {
+		t.Fatalf("the startup block rendered the rows before the command: %d", got)
+	}
+
+	s.si.feed("/x\n")
+	s.await("x ran")
+	s.await("projects held: 3")
+	if got := bytes.Count(s.out.Bytes(), []byte("projects held: 3")); got != 1 {
+		t.Fatalf("the rows recaptured %d time(s), want 1:\n%s", got, s.out.String())
+	}
+
+	// A second dispatch that keeps the rows proves the redraw tracks the
+	// status function's value, not a one-shot commit.
+	s.si.feed("/x\n")
+	s.await("projects held: 3")
+	if got := bytes.Count(s.out.Bytes(), []byte("projects held: 3")); got != 1 {
+		t.Fatalf("an unchanged status re-committed the row: %d, want 1", got)
 	}
 }
