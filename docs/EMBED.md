@@ -41,7 +41,9 @@ middleware. One file plus one registration line extends it.
 `tui.New` takes the embedder's doors as options:
 
 - `tui.WithStatus(fn)` supplies the startup block's and the status
-  row's numbers (model, effort, window, session up/down/cache).
+  row's numbers (model, effort, window, session up/down/cache) and,
+  through `StatusIn.Rows`, the footer band: the embedder's rows under a
+  dim rule below the status line (nothing when empty).
 - `tui.WithCommands(cmds, env)` wires the slash-command dispatch and
   the steering seam.
 - `tui.WithTitle(name, rows, tagline)` replaces the welcome block's

@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 1.5.5
+./rig --version        # rig 1.5.6
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -432,7 +432,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 1.5.5
+./rig --version                 # prints: rig 1.5.6
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 

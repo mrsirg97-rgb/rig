@@ -30,9 +30,10 @@ width); no core or loop line (decision 10).
   the one-shot startup block (`RenderStatus`: the title, the session, the
   fleet as `workers: <model|none>`, and the hint line; `WithTitle`
   replaces the rig block letters, adds a tagline, and names the ascii
-  fallback), and the
+  fallback; `StatusIn.Rows` is the embedder's footer band under the same
+  dim rule the swarm band uses, nothing when empty), and the
   snapshot's refresh points (start, `/new`, `sessions resume`, a
-  `models` switch).
+  `models` switch, and the embedder's own `/earn` command).
 - **The swarm band and the notice line** (`swarm.go`): `RenderSwarmBand`
   folds the latest `SwarmStatus` into one row per role below the status
   rows, behind a short dim rule (four cells), while a swarm runs — the

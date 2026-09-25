@@ -1,4 +1,14 @@
 # Changelog
+## [1.5.6]: the embedder's footer rows
+
+`tui.StatusIn` gains `Rows []string`: the embedder's footer band. The
+rows render under the status line behind the same four-cell dim rule the
+swarm band uses (nothing when empty, so rig's own main is unchanged).
+The status refresh points recapture the rows (session start, `/new`,
+`sessions resume`, a model/role/effort/approve switch, and the
+embedder's own `/earn` command), and `docs/EMBED.md` lists the field
+beside `WithCommands` and `WithStatus`.
+
 ## [1.5.5]: the welcome title is an embedder door
 
 `frontend/tui` gains `WithTitle(name string, rows []string, tagline
