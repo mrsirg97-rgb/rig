@@ -73,7 +73,8 @@ default 3).
 
 `provider/openai` gains `NewWithConfig(Config)`; the existing
 constructors delegate with defaults and local-row behavior unchanged
-(no key, no retry beyond the same bound, `reasoning_content`).
+(no key, no 429/5xx retry beyond the empty-5xx case,
+`reasoning_content`).
 
 - **Auth**: when `Config.APIKey` is set, the request carries
   `Authorization: Bearer <key>`. The key is never part of a fault
@@ -84,6 +85,14 @@ constructors delegate with defaults and local-row behavior unchanged
   retry re-posts the identical request body inside the same stream
   goroutine; the loop sees no event until the bound is exhausted, then
   the existing loud fault. 4xx other than 429 faults immediately.
+- **The empty 5xx before the first token**: a 5xx whose body is empty is
+  the proxy's proof that nothing reached the model (llama-swap's
+  keep-alive race with llama-server, which a local row can hit) — the
+  case is retried for every row, hosted and local, under the same
+  backoff with the hosted 3-retry bound as the local default. The retry
+  lives at the status gate before the stream; once a streamed byte has
+  arrived a failure is never retried, and a 5xx carrying a body is a
+  real error — a local row faults it immediately.
 - **Cost**: `usage.cost` (a number, dollars) becomes
   `core.Usage.Cost`; `stream_options.include_usage` already asks for
   the usage chunk.

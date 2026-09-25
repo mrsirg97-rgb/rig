@@ -56,6 +56,7 @@ const (
 	defaultHeaderTimeout = 5 * time.Minute
 	defaultIdleTimeout   = 10 * time.Minute
 	defaultRetryBase     = 500 * time.Millisecond
+	defaultEmptyRetries  = 3
 )
 
 func New(baseURL, model string) core.Provider {
@@ -79,8 +80,8 @@ func NewWithVision(baseURL, model, blobsDir string) core.Provider {
 
 // NewWithConfig is the hosted-mode constructor: an API key, retry with
 // backoff on 429 and 5xx, the row's reasoning field names, and the
-// OpenRouter extras. Zero values take the local-row defaults (no retry,
-// reasoning_content).
+// OpenRouter extras. Zero values take the local-row defaults (no retry
+// beyond the empty 5xx, reasoning_content).
 func NewWithConfig(cfg Config) core.Provider {
 	headerTimeout := cfg.HeaderTimeout
 	if headerTimeout <= 0 {
@@ -223,26 +224,33 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 				emit(core.Fault{Err: fmt.Errorf("openai: transport: %w", err)})
 				return
 			}
-			if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-				if attempts < p.retries {
-					attempts++
-					wait := time.Duration(float64(p.base*(1<<(attempts-1))) * (1 + p.jitter()))
-					resp.Body.Close()
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(wait):
-					}
-					continue
+			// the error body is untrusted: read at most the snippet the
+			// fault will carry, so a hostile endpoint cannot pin memory
+			// through a large error response. The read also decides the
+			// every-row retry: a 5xx with an empty body is the proxy's
+			// proof that nothing reached the model before the first token.
+			var snippet []byte
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				snippet, _ = io.ReadAll(io.LimitReader(resp.Body, 256))
+			}
+			bound := p.retries
+			if resp.StatusCode >= 500 && len(snippet) == 0 && bound == 0 {
+				bound = defaultEmptyRetries
+			}
+			if (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) && attempts < bound {
+				attempts++
+				wait := time.Duration(float64(p.base*(1<<(attempts-1))) * (1 + p.jitter()))
+				resp.Body.Close()
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(wait):
 				}
+				continue
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				// the error body is untrusted: read at most the snippet the
-				// fault will carry, so a hostile endpoint cannot pin memory
-				// through a large error response.
-				snippetBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
-				emit(core.Fault{Err: fmt.Errorf("openai: %d: %s", resp.StatusCode, strings.TrimSpace(string(snippetBytes)))})
+				emit(core.Fault{Err: fmt.Errorf("openai: %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet)))})
 				return
 			}
 

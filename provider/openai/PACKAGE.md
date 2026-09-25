@@ -17,7 +17,8 @@ adapter's problem; the loop sees `core.Event` only.
   `provider.order` upstream pin), `CacheControl` (the top-level
   `cache_control` switch), `Retries`/`RetryBase`/`Jitter` (the 429/5xx
   backoff), `BlobsDir` (vision). The existing constructors delegate with
-  the local-row defaults (no key, no retry, `reasoning_content`).
+  the local-row defaults (no key, no 429/5xx retry beyond the empty-5xx
+  case, `reasoning_content`).
 - `NewWithHeaderTimeout(baseURL, model, headerTimeout)`: the same with a
   dialed time-to-headers bound; `New` applies the 5-minute default.
 - `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
@@ -65,6 +66,13 @@ adapter's problem; the loop sees `core.Event` only.
   fault. A 4xx other than 429 faults immediately. The request body is
   rebuilt per attempt (the reader is consumed); `Jitter` is a Config field
   so tests are deterministic.
+- **The empty 5xx before the first token**: a 5xx whose body is empty is
+  the proxy's proof that nothing reached the model (llama-swap's
+  keep-alive race with llama-server) — retried for every row, hosted and
+  local alike, under the same backoff with the hosted 3-retry bound as
+  the local default. The retry lives at the status gate before the
+  stream: once a byte has streamed a failure is never retried, and a 5xx
+  carrying a body is a real error — a local row faults it immediately.
 - **Reasoning field names**: the row's `Reasoning` names the wire. The
   default reads `delta.reasoning_content` and echoes
   `reasoning_content`; the OpenRouter style reads `delta.reasoning` and
