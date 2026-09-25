@@ -1211,6 +1211,8 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		refresh = true
 	case name == "role" && args != "":
 		refresh = true
+	case name == "earn":
+		refresh = true
 	}
 	if out != "" {
 		t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
