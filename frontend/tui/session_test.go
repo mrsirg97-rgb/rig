@@ -263,6 +263,49 @@ func TestStatusLineRefresh(t *testing.T) {
 	}
 }
 
+func TestWithTitleCustomRowsTaglineAndFallbackName(t *testing.T) {
+	th := oledTheme(t)
+	rows := []string{
+		"▄▀█ █▀▀ █▀▀",
+		"█▀█ █▄▄ █ █",
+		"▀ ▀ ▀▀▀ ▀▀▀",
+	}
+	name, tagline := "orbit", "the app"
+	s := newScriptedSession(t, th, WithWidth(100),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTitle(name, rows, tagline),
+	)
+	s.prompt(promptMark(th), "go\n")
+
+	for i, row := range rows {
+		if got := bytes.Count(s.out.Bytes(), []byte(th.Paint(SlotEmber, row))); got != 1 {
+			t.Fatalf("custom title row %d committed %d times, want 1:\n%s", i, got, s.out.String())
+		}
+	}
+	if got := bytes.Count(s.out.Bytes(), []byte(th.Paint(SlotDim, tagline))); got != 1 {
+		t.Fatalf("the tagline committed %d times, want 1:\n%s", got, s.out.String())
+	}
+	if got := bytes.Count(s.out.Bytes(), []byte(th.Paint(SlotEmber, "█▀▄ █ █▀▀"))); got != 0 {
+		t.Fatalf("the default rig row still renders %d time(s):\n%s", got, s.out.String())
+	}
+
+	ath, err := ResolveTheme("oled", []byte(`{"base":"oled","glyphs":"ascii"}`), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2 := newScriptedSession(t, ath, WithWidth(100),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTitle(name, rows, tagline),
+	)
+	s2.prompt(promptMark(ath), "go\n")
+	if got := bytes.Count(s2.out.Bytes(), []byte(ath.Paint(SlotEmber, name))); got != 1 {
+		t.Fatalf("the fallback name committed %d times, want 1:\n%s", got, s2.out.String())
+	}
+	if got := bytes.Count(s2.out.Bytes(), []byte(ath.Paint(SlotEmber, rows[0]))); got != 0 {
+		t.Fatalf("the ascii fallback printed the art row %d time(s):\n%s", got, s2.out.String())
+	}
+}
+
 func TestFlowCoalescesDeltas(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, th, WithWidth(50))

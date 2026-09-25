@@ -446,7 +446,11 @@ committed block at session start, not deleted): the title; "welcome
 to" in the dim, and under it the name in three rows of half-block
 glyphs in the ember, the one piece of retro texture the block keeps
 (decision 8: it spells the same word the plain row would; the ascii
-glyph set gets the plain row); the session id under it (its first twelve
+glyph set gets the plain row; amended 1.5.5: the title is an embedder
+door, `WithTitle(name, rows, tagline)` — the embedder's rows replace
+the rig letters and the tagline renders under them, default the rig
+rows with no tagline, and the ascii fallback prints the plain name,
+never the first art row); the session id under it (its first twelve
 characters, git's short-hash habit; `/sessions` lists the full ids),
 the fleet under it (`workers: <model>`, or `workers: none`; amended
 2026-08-25: a static fact reads once at start, never in the live row,

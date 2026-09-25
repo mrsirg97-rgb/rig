@@ -28,7 +28,9 @@ width); no core or loop line (decision 10).
   (`RenderStatusLine`, three rows; identity / effort · role · approve ·
   workers / usage; the stance row always ends with the fleet's model or
   the one-shot startup block (`RenderStatus`: the title, the session, the
-  fleet as `workers: <model|none>`, and the hint line), and the
+  fleet as `workers: <model|none>`, and the hint line; `WithTitle`
+  replaces the rig block letters, adds a tagline, and names the ascii
+  fallback), and the
   snapshot's refresh points (start, `/new`, `sessions resume`, a
   `models` switch).
 - **The swarm band and the notice line** (`swarm.go`): `RenderSwarmBand`
@@ -58,8 +60,9 @@ width); no core or loop line (decision 10).
   options: `WithWidth`, `WithStatus` (the status numbers computed at the
   refresh points, a store read never per repaint), `WithNews` (the
   scheduler's one ambient line), `WithCommands` (the dispatch + the
-  `Steer` seam + the `Sub()` hint door), `WithTicks`/`WithWinch` (test
-  seams).
+  `Steer` seam + the `Sub()` hint door), `WithTitle` (the welcome
+  block's plain name, title rows, and tagline; default the rig rows
+  with none), `WithTicks`/`WithWinch` (test seams).
 - `Input` returns one user message (the loop's contract): the steering
   slot is delivered before blocking, a command line is dispatched and
   consumed there, blank lines are no-ops, EOF ends the REPL.
