@@ -1,4 +1,17 @@
 # Changelog
+## [1.5.7]: the empty 5xx before the first token is retried for every row
+
+`provider/openai` retried 429/5xx with backoff only for hosted rows; a
+local llama-swap proxy could answer 502 with an empty body before the
+first token (a keep-alive race with llama-server — nothing reached the
+model), and the local row faulted the turn. A 5xx whose body is empty
+now retries for every row under the hosted policy: the identical request
+body, exponential backoff from `RetryBase` (500ms, 1s, 2s by default)
+with the row's jitter, under the hosted 3-retry bound. The retry lives
+at the status gate before the stream: once any streamed byte has
+arrived a failure is never retried, and a 5xx carrying a body is still
+a real error — it faults immediately on a local row.
+
 ## [1.5.6]: the embedder's footer rows
 
 `tui.StatusIn` gains `Rows []string`: the embedder's footer band. The
