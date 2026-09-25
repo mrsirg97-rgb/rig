@@ -44,10 +44,10 @@ middleware. One file plus one registration line extends it.
   row's numbers (model, effort, window, session up/down/cache).
 - `tui.WithCommands(cmds, env)` wires the slash-command dispatch and
   the steering seam.
-- `tui.WithTitle(rows, tagline)` replaces the welcome block's "rig"
-  block letters with `rows` and adds `tagline` as a line under them
-  (default: the rig rows, no tagline; the ascii glyph fallback prints
-  the first row as plain text).
+- `tui.WithTitle(name, rows, tagline)` replaces the welcome block's
+  "rig" block letters with `rows` and adds `tagline` as a line under
+  them (default: the rig rows, no tagline). The ascii glyph fallback
+  prints `name` as the plain row.
 
 ## worked example: an HTTP service, one process
 

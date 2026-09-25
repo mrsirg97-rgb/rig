@@ -74,6 +74,7 @@ type tui struct {
 	lastSlot string
 
 	statusIn     func(context.Context) StatusIn
+	titleName    string
 	titleRows    []string
 	titleTagline string
 	commands     map[string]core.Command
@@ -171,8 +172,9 @@ func WithCommands(cmds []core.Command, env any) Option {
 	}
 }
 
-func WithTitle(rows []string, tagline string) Option {
+func WithTitle(name string, rows []string, tagline string) Option {
 	return func(t *tui) {
+		t.titleName = name
 		t.titleRows = rows
 		t.titleTagline = tagline
 	}
@@ -1162,7 +1164,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusUsed = 0
 		t.statusHasUsed = false
 		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
-		b.WriteString(renderStatus(t.theme, in, t.titleRows, t.titleTagline))
+		b.WriteString(renderStatus(t.theme, in, t.titleName, t.titleRows, t.titleTagline))
 	}
 	return b.String()
 }
