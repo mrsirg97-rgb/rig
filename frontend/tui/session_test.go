@@ -263,6 +263,32 @@ func TestStatusLineRefresh(t *testing.T) {
 	}
 }
 
+func TestWithTitleCustomRowsAndTagline(t *testing.T) {
+	th := oledTheme(t)
+	rows := []string{
+		"▄▀█ █▀▀ █▀▀",
+		"█▀█ █▄▄ █ █",
+		"▀ ▀ ▀▀▀ ▀▀▀",
+	}
+	s := newScriptedSession(t, th, WithWidth(100),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithTitle(rows, "the app"),
+	)
+	s.prompt(promptMark(th), "go\n")
+
+	for i, row := range rows {
+		if got := bytes.Count(s.out.Bytes(), []byte(th.Paint(SlotEmber, row))); got != 1 {
+			t.Fatalf("custom title row %d committed %d times, want 1:\n%s", i, got, s.out.String())
+		}
+	}
+	if got := bytes.Count(s.out.Bytes(), []byte(th.Paint(SlotDim, "the app"))); got != 1 {
+		t.Fatalf("the tagline committed %d times, want 1:\n%s", got, s.out.String())
+	}
+	if got := bytes.Count(s.out.Bytes(), []byte(th.Paint(SlotEmber, "█▀▄ █ █▀▀"))); got != 0 {
+		t.Fatalf("the default rig row still renders %d time(s):\n%s", got, s.out.String())
+	}
+}
+
 func TestFlowCoalescesDeltas(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, th, WithWidth(50))

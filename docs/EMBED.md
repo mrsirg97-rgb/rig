@@ -36,6 +36,19 @@ seams, and the stores are yours.
 The loop never names a concrete tool, provider, policy, frontend, or
 middleware. One file plus one registration line extends it.
 
+## the TUI options
+
+`tui.New` takes the embedder's doors as options:
+
+- `tui.WithStatus(fn)` supplies the startup block's and the status
+  row's numbers (model, effort, window, session up/down/cache).
+- `tui.WithCommands(cmds, env)` wires the slash-command dispatch and
+  the steering seam.
+- `tui.WithTitle(rows, tagline)` replaces the welcome block's "rig"
+  block letters with `rows` and adds `tagline` as a line under them
+  (default: the rig rows, no tagline; the ascii glyph fallback prints
+  the first row as plain text).
+
 ## worked example: an HTTP service, one process
 
 A kernel, a board-backed job from `store/todo`, and an in-process

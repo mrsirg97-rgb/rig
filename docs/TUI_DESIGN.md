@@ -149,6 +149,9 @@ never per repaint (the closure is a store read; a live row repaints on every
 keystroke). The used number is the frontend's own arithmetic over the
 usage events (the last Done's Prompt+Completion, then the compact's
 Kept); `new` and `resume` reset it with the session.
+`tui.WithTitle(rows, tagline)` replaces the welcome block's rig block
+letters with the embedder's rows and adds a tagline under them
+(default: the rig rows, no tagline).
 `tui.WithNews(fn)` supplies the session-start news line (empty = nothing).
 The swarm band is the one live surface the root does not compute: the
 controller and the delegate tool emit `core.SwarmStatus` snapshots

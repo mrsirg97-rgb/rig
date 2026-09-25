@@ -1,4 +1,13 @@
 # Changelog
+## [1.5.5]: the welcome title is an embedder door
+
+`frontend/tui` gains `WithTitle(rows []string, tagline string)`: an
+embedder replaces the welcome block's block-letter rows with their own
+and adds a line under them (default: the rig rows, no tagline). The
+ascii glyph fallback still prints a single plain row — the first row
+for a custom title, "rig" for the default — and `docs/EMBED.md` lists
+the option beside `WithCommands` and `WithStatus`.
+
 ## [1.5.4]: the swarm band densifies below the footer
 
 The TUI band moves below the existing footer rows behind a short dim

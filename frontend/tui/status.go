@@ -20,7 +20,11 @@ type StatusIn struct {
 }
 
 func RenderStatus(t Theme, in StatusIn) string {
-	b := renderTitle(t)
+	return renderStatus(t, in, nil, "")
+}
+
+func renderStatus(t Theme, in StatusIn, rows []string, tagline string) string {
+	b := renderTitle(t, rows, tagline)
 	if in.Session != "" {
 
 		id := in.Session
@@ -38,13 +42,24 @@ func RenderStatus(t Theme, in StatusIn) string {
 	return b
 }
 
-func renderTitle(t Theme) string {
+func renderTitle(t Theme, rows []string, tagline string) string {
 	b := t.Paint(SlotDim, "welcome to") + "\n"
 	if t.Glyph(GlyphPrompt) == ">" {
-		return b + t.Paint(SlotEmber, "rig") + "\n"
+		plain := "rig"
+		if len(rows) > 0 {
+			plain = rows[0]
+		}
+		b += t.Paint(SlotEmber, plain) + "\n"
+	} else {
+		if len(rows) == 0 {
+			rows = titleRows
+		}
+		for _, row := range rows {
+			b += t.Paint(SlotEmber, row) + "\n"
+		}
 	}
-	for _, row := range titleRows {
-		b += t.Paint(SlotEmber, row) + "\n"
+	if tagline != "" {
+		b += t.Paint(SlotDim, tagline) + "\n"
 	}
 	return b
 }

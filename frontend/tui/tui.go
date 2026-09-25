@@ -73,10 +73,12 @@ type tui struct {
 
 	lastSlot string
 
-	statusIn func(context.Context) StatusIn
-	commands map[string]core.Command
-	known    []string
-	env      any
+	statusIn     func(context.Context) StatusIn
+	titleRows    []string
+	titleTagline string
+	commands     map[string]core.Command
+	known        []string
+	env          any
 
 	menuCands     []menuCand
 	menuSel       int
@@ -166,6 +168,13 @@ func WithCommands(cmds []core.Command, env any) Option {
 			command.ModelHints(cmds, e)
 			command.EffortHints(cmds, e)
 		}
+	}
+}
+
+func WithTitle(rows []string, tagline string) Option {
+	return func(t *tui) {
+		t.titleRows = rows
+		t.titleTagline = tagline
 	}
 }
 
@@ -1153,7 +1162,7 @@ func (t *tui) sessionStartLocked() string {
 		t.statusUsed = 0
 		t.statusHasUsed = false
 		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
-		b.WriteString(RenderStatus(t.theme, in))
+		b.WriteString(renderStatus(t.theme, in, t.titleRows, t.titleTagline))
 	}
 	return b.String()
 }
