@@ -133,7 +133,7 @@
 
   /* ---------- rating strip ---------- */
   .rating {
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     border: 1px solid var(--rule); background: var(--panel);
   }
   .rating > div { padding: 1rem 1.1rem 0.9rem; border-right: 1px solid var(--rule); min-width: 0; }
@@ -200,9 +200,9 @@
     body { font-size: 17px; }
     .page { gap: 5.5rem; padding-block: 7vh 7vh; }
     .plate { padding: 1.6rem 1.2rem 1.3rem; }
-    .rating { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .rating > div:nth-child(2) { border-right: 0; }
-    .rating > div:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+    .rating { grid-template-columns: 1fr; }
+    .rating > div { border-right: 0; border-bottom: 1px solid var(--rule); }
+    .rating > div:last-child { border-bottom: 0; }
     .step { grid-template-columns: 1fr; }
     .step pre, .step .file { grid-column: 1; }
     .num { font-size: 56px; }
@@ -234,10 +234,9 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
   </section>
 
   <section class="rating" aria-label="measured">
-    <div><span class="n">99<small>%</small></span><span class="l">of every token served from cache, over 2,925 real turns</span></div>
-    <div><span class="n">417</span><span class="l">lines is the whole agent loop, batch included</span></div>
-    <div><span class="n">53<small>k</small></span><span class="l">lines of tests over 34k lines of code</span></div>
-    <div><span class="n">654</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
+    <div><span class="n">99<small>%</small></span><span class="l">of every token served from cache, over thousands of real turns</span></div>
+    <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the whole agent loop, batch included</span></div>
+    <div><span class="n">{{RIG_COMMITS}}</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
   </section>
 
   <section class="lede">
@@ -270,16 +269,26 @@ rig -update</pre>
         <p>Anything that speaks the OpenAI API, on your desk or hosted: llama.cpp, llama-swap, Ollama, OpenRouter, or any compatible endpoint with a key. <b>The local endpoint is the default;</b> you only name the model.</p>
       </div>
       <p class="file">~/.rig/settings.json</p>
-      <pre>{ <span class="k">"model"</span>: <span class="s">"local"</span>,
-  <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span> }</pre>
+      <pre>{
+  <span class="k">"model"</span>: <span class="s">"local"</span>,
+  <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>
+}</pre>
       <p class="file">~/.rig/models.json</p>
       <pre>[
-  { <span class="k">"id"</span>: <span class="s">"local"</span>, <span class="k">"window"</span>: <span class="d">262144</span>, <span class="k">"maxTokens"</span>: <span class="d">8192</span> },
-
-  { <span class="k">"id"</span>: <span class="s">"sonnet"</span>, <span class="k">"window"</span>: <span class="d">200000</span>, <span class="k">"maxTokens"</span>: <span class="d">8192</span>,
+  {
+    <span class="k">"id"</span>: <span class="s">"local"</span>,
+    <span class="k">"window"</span>: <span class="d">262144</span>,
+    <span class="k">"maxTokens"</span>: <span class="d">8192</span>
+  },
+  {
+    <span class="k">"id"</span>: <span class="s">"sonnet"</span>,
+    <span class="k">"window"</span>: <span class="d">200000</span>,
+    <span class="k">"maxTokens"</span>: <span class="d">8192</span>,
     <span class="k">"provider"</span>: <span class="s">"openrouter"</span>,
     <span class="k">"baseUrl"</span>: <span class="s">"https://openrouter.ai/api/v1"</span>,
-    <span class="k">"apiKey"</span>: <span class="s">"sk-or-…"</span>, <span class="k">"reasoning"</span>: <span class="s">"reasoning"</span> }
+    <span class="k">"apiKey"</span>: <span class="s">"sk-or-…"</span>,
+    <span class="k">"reasoning"</span>: <span class="s">"reasoning"</span>
+  }
 ]
 <span class="c"># switch any time: /models sonnet</span></pre>
     </article>

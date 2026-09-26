@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the commit count needs the whole history
       - name: assemble the site artifact
         run: |
           # RIG_VERSION is main.go's Version const — one source of truth,
@@ -25,6 +27,12 @@ jobs:
           cp site/* dist/
           cp install.sh dist/install.sh
           sed -i "s/{{RIG_VERSION}}/$RIG_VERSION/g" dist/index.html
+          # the rating strip reads the repo, never a typed number: the commit
+          # count from the log, the loop size from the two files that are it.
+          RIG_COMMITS=$(git rev-list --count HEAD)
+          RIG_LOOP_LINES=$(cat loop/loop.go loop/batch.go | wc -l | tr -d ' ')
+          echo "RIG_COMMITS=$RIG_COMMITS RIG_LOOP_LINES=$RIG_LOOP_LINES"
+          sed -i "s/{{RIG_COMMITS}}/$RIG_COMMITS/g; s/{{RIG_LOOP_LINES}}/$RIG_LOOP_LINES/g" dist/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
