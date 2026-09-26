@@ -266,19 +266,27 @@ rig -update</pre>
       <p class="num">2</p>
       <div>
         <h2>Point it at a model</h2>
-        <p>Anything that speaks the OpenAI API, on your desk or hosted: llama.cpp, llama-swap, Ollama, OpenRouter, or any compatible endpoint with a key. <b>The local endpoint is the default;</b> you only name the model.</p>
+        <p>Anything that speaks the OpenAI API, on your desk or hosted: llama.cpp, llama-swap, Ollama, OpenRouter, or any compatible endpoint with a key. Three small files in <b>~/.rig</b>, and these are real ones.</p>
       </div>
-      <p class="file">~/.rig/settings.json</p>
+      <p class="file">~/.rig/settings.json · which model, where the endpoint is</p>
       <pre>{
   <span class="k">"model"</span>: <span class="s">"local"</span>,
-  <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>
+  <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,
+  <span class="k">"sandbox"</span>: <span class="s">"off"</span>,
+  <span class="k">"plugins"</span>: { <span class="k">"enabled"</span>: [] }
 }</pre>
-      <p class="file">~/.rig/models.json</p>
+      <p class="file">~/.rig/models.json · one row per model: its window, its budget, its dials</p>
       <pre>[
   {
     <span class="k">"id"</span>: <span class="s">"local"</span>,
-    <span class="k">"window"</span>: <span class="d">262144</span>,
-    <span class="k">"maxTokens"</span>: <span class="d">8192</span>
+    <span class="k">"window"</span>: <span class="d">393216</span>,
+    <span class="k">"maxTokens"</span>: <span class="d">65536</span>,
+    <span class="k">"reserve"</span>: <span class="d">104858</span>,
+    <span class="k">"keepRecent"</span>: <span class="d">98304</span>,
+    <span class="k">"role"</span>: <span class="s">"interactive"</span>,
+    <span class="k">"effort"</span>: <span class="s">"max"</span>,
+    <span class="k">"efforts"</span>: [<span class="s">"low"</span>, <span class="s">"high"</span>, <span class="s">"max"</span>],
+    <span class="k">"vision"</span>: <span class="d">true</span>
   },
   {
     <span class="k">"id"</span>: <span class="s">"sonnet"</span>,
@@ -291,10 +299,37 @@ rig -update</pre>
   }
 ]
 <span class="c"># switch any time: /models sonnet</span></pre>
+      <p class="file">~/.rig/workers.json · the fleet: which model background workers run on, and how many at once</p>
+      <pre>{
+  <span class="k">"model"</span>: <span class="s">"local"</span>,
+  <span class="k">"slots"</span>: <span class="d">2</span>
+}</pre>
     </article>
 
     <article class="step">
       <p class="num">3</p>
+      <div>
+        <h2>Make it yours</h2>
+        <p>Two optional files. A theme is a base plus the colours you want to change. <b>AGENTS.md</b> in the rig home is your standing instructions, read before every session, ahead of the project's own.</p>
+      </div>
+      <p class="file">~/.rig/theme.json</p>
+      <pre>{
+  <span class="k">"base"</span>: <span class="s">"oled"</span>,
+  <span class="k">"slots"</span>: {
+    <span class="k">"ember"</span>: <span class="s">"#6b7fa3"</span>,
+    <span class="k">"text"</span>: <span class="s">"#b8bfcc"</span>,
+    <span class="k">"dim"</span>: <span class="s">"#3a4150"</span>
+  }
+}</pre>
+      <p class="file">~/.rig/AGENTS.md</p>
+      <pre><span class="d"># how I like to work
+- run the tests before you say something is done
+- prefer small commits with one idea each
+- never add a dependency without saying why</span></pre>
+    </article>
+
+    <article class="step">
+      <p class="num">4</p>
       <div>
         <h2>Run it in a repo</h2>
         <p>The terminal opens. Ask for something real. <b>Tool calls run in parallel and results land in order,</b> so three reads cost one round trip and the transcript still reads top to bottom.</p>
@@ -311,7 +346,7 @@ rig -update</pre>
     </article>
 
     <article class="step">
-      <p class="num">4</p>
+      <p class="num">5</p>
       <div>
         <h2>Let it run things for you</h2>
         <p>Hand the slow part to a worker, or put a job on real cron. <b>Workers are sandboxed and keep a transcript you can resume.</b></p>
@@ -324,7 +359,7 @@ rig -update</pre>
     </article>
 
     <article class="step">
-      <p class="num">5</p>
+      <p class="num">6</p>
       <div>
         <h2>Add a tool in one file</h2>
         <p>A plugin is a Python file: a description, a schema, and a <b>run</b> function. Drop it in and it shows up beside the built-in tools on the next turn. <b>The model can write one too;</b> it lands in a pending folder until you approve it.</p>
@@ -341,7 +376,7 @@ rig -update</pre>
     </article>
 
     <article class="step">
-      <p class="num">6</p>
+      <p class="num">7</p>
       <div>
         <h2>Organize the work</h2>
         <p>Tasks live on a board in the repo, with <b>requires</b> and <b>blocks</b> links between them. The model claims, works, and completes; you accept or reject. Add workers and they drain the same board.</p>
@@ -356,7 +391,7 @@ rig -update</pre>
     </article>
 
     <article class="step">
-      <p class="num">7</p>
+      <p class="num">8</p>
       <div>
         <h2>Come back later</h2>
         <p>Everything is on disk in the repo: tasks, memory, schedules, sessions. <b>Resume from the phone over SSH,</b> or glance at the dashboard.</p>
