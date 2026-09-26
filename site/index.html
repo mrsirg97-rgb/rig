@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="rig: a small operating system for agents. A real agent for the model you already run.">
 <meta name="theme-color" content="#0e0f11">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tryrig.ai/">
+<meta property="og:title" content="rig — a real agent for the model you already run">
+<meta property="og:description" content="A small operating system for agents. One binary, one endpoint, one terminal. 99% of every token from cache; a 417-line loop you can read before you trust it.">
+<meta property="og:image" content="https://tryrig.ai/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="rig — a real agent for the model you already run">
+<meta name="twitter:description" content="A small operating system for agents. One binary, one endpoint, one terminal. 99% of every token from cache; a 417-line loop you can read before you trust it.">
+<meta name="twitter:image" content="https://tryrig.ai/og.png">
+<link rel="canonical" href="https://tryrig.ai/">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%23e8a86b'/><rect x='18' y='16' width='10' height='32' fill='%230e0f11'/><rect x='18' y='16' width='26' height='8' fill='%230e0f11'/><rect x='36' y='24' width='8' height='8' fill='%230e0f11'/></svg>">
 <title>rig</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -255,16 +267,21 @@ rig -update</pre>
       <p class="num">2</p>
       <div>
         <h2>Point it at a model</h2>
-        <p>Anything that speaks the OpenAI API: llama.cpp, llama-swap, Ollama, or a hosted key. <b>Local is the default.</b></p>
+        <p>Anything that speaks the OpenAI API, on your desk or hosted: llama.cpp, llama-swap, Ollama, OpenRouter, or any compatible endpoint with a key. <b>The local endpoint is the default;</b> you only name the model.</p>
       </div>
       <p class="file">~/.rig/settings.json</p>
-      <pre>{ <span class="k">"model"</span>: <span class="s">"local"</span> }</pre>
+      <pre>{ <span class="k">"model"</span>: <span class="s">"local"</span>,
+  <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span> }</pre>
       <p class="file">~/.rig/models.json</p>
       <pre>[
-  { <span class="k">"id"</span>: <span class="s">"local"</span>,
-    <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,
-    <span class="k">"window"</span>: <span class="d">262144</span> }
-]</pre>
+  { <span class="k">"id"</span>: <span class="s">"local"</span>, <span class="k">"window"</span>: <span class="d">262144</span>, <span class="k">"maxTokens"</span>: <span class="d">8192</span> },
+
+  { <span class="k">"id"</span>: <span class="s">"sonnet"</span>, <span class="k">"window"</span>: <span class="d">200000</span>, <span class="k">"maxTokens"</span>: <span class="d">8192</span>,
+    <span class="k">"provider"</span>: <span class="s">"openrouter"</span>,
+    <span class="k">"baseUrl"</span>: <span class="s">"https://openrouter.ai/api/v1"</span>,
+    <span class="k">"apiKey"</span>: <span class="s">"sk-or-…"</span>, <span class="k">"reasoning"</span>: <span class="s">"reasoning"</span> }
+]
+<span class="c"># switch any time: /models sonnet</span></pre>
     </article>
 
     <article class="step">
