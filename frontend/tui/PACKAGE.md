@@ -34,7 +34,10 @@ width); no core or loop line (decision 10).
   dim rule the swarm band uses, nothing when empty), and the
   snapshot's recapture: every successful command re-reads the status
   function (the Used reset stays at `/new` and `sessions resume`), so
-  the embedder's rows follow their commands, not a name list).
+  the embedder's rows follow their commands, not a name list; with
+  `WithStatusTick` the Input loop re-reads it every d while idle, and
+  the region redraws only when the rows changed (zero is off, and
+  rig's own main never sets it)).
 - **The swarm band and the notice line** (`swarm.go`): `RenderSwarmBand`
   folds the latest `SwarmStatus` into one row per role below the status
   rows, behind a short dim rule (four cells), while a swarm runs — the
@@ -60,8 +63,11 @@ width); no core or loop line (decision 10).
 - The root wires it with `New`: the resolved theme is the third argument
   (the root reads theme.json; the frontend never resolves one), then
   options: `WithWidth`, `WithStatus` (the status numbers computed at the
-  refresh points, a store read never per repaint), `WithNews` (the
-  scheduler's one ambient line), `WithCommands` (the dispatch + the
+  refresh points, a store read never per repaint), `WithStatusTick`
+  (the idle recapture: while the Input loop waits for a line, the status
+  function is re-read every d and the region redraws only when the rows
+  changed; zero is off and rig's own main never sets it), `WithNews`
+  (the scheduler's one ambient line), `WithCommands` (the dispatch + the
   `Steer` seam + the `Sub()` hint door), `WithTitle` (the welcome
   block's plain name, title rows, and tagline; default the rig rows
   with none), `WithTicks`/`WithWinch` (test seams).
@@ -191,6 +197,12 @@ width); no core or loop line (decision 10).
   or a compaction can paint: it starts with `startTurnLocked` and with
   the `Compacting` event, and stops once the turn's final commit or the
   compaction has drained (an idle TUI wakes nothing).
+- The status tick is the idle complement (`WithStatusTick`): the status
+  function is re-read every d on the Input loop while no turn streams
+  and no compaction runs, and the region redraws only when the rows
+  changed. The recapture lives on the Input loop, which a turn's start
+  leaves, so the tick never fires mid-turn; a buffered tick lands
+  immediately when the next Input starts.
 - The pending paragraph wraps incrementally (SPEC_TUI, the 1.2.16
   amendment): greedy word wrap is prefix stable, so `pendWrap` caches
   the wrapped rows plus the cells that begin the last row and folds

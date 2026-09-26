@@ -496,7 +496,14 @@ and a `models` switch refresh the status line's snapshot (and reset
 its used number where the session did: `new`, `resume`); a
 `Compacted` no longer reprints a block at all. Between refreshes the
 per-turn usage line keeps the running numbers in the scrollback where
-they happened (decision 2, unchanged).
+they happened (decision 2, unchanged). Amended 1.5.8: the embedder
+may set `WithStatusTick(d)` — while the TUI waits for input (no turn
+streaming, no compaction), the status function is re-read every d on
+the Input loop and the region redraws only when the status rows
+changed; zero (the default; rig's own main never sets it) is off. The
+recapture rides the Input loop, which a turn's start leaves, so the
+tick never fires mid-turn, and a buffered tick lands immediately when
+the next Input starts.
 
 A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
