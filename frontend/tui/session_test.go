@@ -1796,3 +1796,81 @@ func TestStatusRowsRecaptureOnAnyCommand(t *testing.T) {
 		t.Fatalf("an unchanged status re-committed the row: %d, want 1", got)
 	}
 }
+
+func waitStatusCalls(t *testing.T, calls *atomic.Int32, want int32) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for calls.Load() < want {
+		if time.Now().After(deadline) {
+			t.Fatalf("the status function made %d calls, want %d", calls.Load(), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestStatusTickRedrawsOnlyChangedRows(t *testing.T) {
+	th := oledTheme(t)
+	var calls atomic.Int32
+	var rows atomic.Value
+	rows.Store([]string{"projects held: 3"})
+	s := newScriptedSession(t, th, WithWidth(100),
+		WithStatus(func(ctx context.Context) StatusIn {
+			if calls.Add(1) > 2 {
+				rows.Store([]string{"projects held: 4"})
+			}
+			b := statusFixture()
+			b.Rows, _ = rows.Load().([]string)
+			return b
+		}),
+		WithStatusTick(10*time.Millisecond),
+	)
+
+	go func() { _, _ = s.fe.Input(s.ctx) }()
+	s.await(promptMark(th))
+	s.await("projects held: 3")
+	s.await("projects held: 4")
+	time.Sleep(60 * time.Millisecond)
+	if got := bytes.Count(s.out.Bytes(), []byte("projects held: 3")); got != 1 {
+		t.Fatalf("an unchanged status re-painted the row %d times, want 1:\n%s", got, s.out.String())
+	}
+	if got := bytes.Count(s.out.Bytes(), []byte("projects held: 4")); got != 1 {
+		t.Fatalf("the flipped row painted %d times, want 1:\n%s", got, s.out.String())
+	}
+}
+
+func TestStatusTickSkipsLiveTurn(t *testing.T) {
+	th := oledTheme(t)
+	var calls atomic.Int32
+	s := newScriptedSession(t, th, WithWidth(100),
+		WithStatus(func(ctx context.Context) StatusIn {
+			calls.Add(1)
+			b := statusFixture()
+			b.Rows = []string{"projects held: 3"}
+			return b
+		}),
+		WithStatusTick(10*time.Millisecond),
+	)
+
+	started := make(chan string, 1)
+	go func() {
+		l, _ := s.fe.Input(s.ctx)
+		started <- l
+	}()
+	s.await(promptMark(th))
+	waitStatusCalls(t, &calls, 2)
+	s.si.feed("go\n")
+	if l := <-started; l != "go" {
+		t.Fatalf("prompt = %q, want go", l)
+	}
+	mid := calls.Load()
+	s.fe.Notify(core.TextDelta{Text: "hi\n"})
+	s.tick()
+	s.await("hi")
+	time.Sleep(60 * time.Millisecond)
+	if got := calls.Load(); got != mid {
+		t.Fatalf("the status ticked mid-turn: %d calls, want %d", got, mid)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	go func() { _, _ = s.fe.Input(s.ctx) }()
+	waitStatusCalls(t, &calls, mid+1)
+}

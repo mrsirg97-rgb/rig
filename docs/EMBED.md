@@ -46,7 +46,11 @@ middleware. One file plus one registration line extends it.
   dim rule below the status line (nothing when empty). The status
   recaptures after every successful command (the Used reset stays at
   `/new` and `sessions resume`); rows change at command time only, so a
-  mid-turn tool effect shows stale until the next command.
+  mid-turn tool effect shows stale until the next command. Add
+  `tui.WithStatusTick(d)` to re-read the function every d while the
+  TUI waits for input: a background write the function sees lands on
+  the next tick, and the region redraws only when the rows changed
+  (zero is off; the tick never fires mid-turn).
 - `tui.WithCommands(cmds, env)` wires the slash-command dispatch and
   the steering seam.
 - `tui.WithTitle(name, rows, tagline)` replaces the welcome block's

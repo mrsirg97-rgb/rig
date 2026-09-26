@@ -106,17 +106,19 @@ type tui struct {
 	ed editor
 	kp keyParser
 
-	pending    chan string
-	wake       chan struct{}
-	readerOnce sync.Once
-	closed     chan struct{}
-	closeOnce  sync.Once
-	ticker     *time.Ticker
-	tickStop   chan struct{}
+	pending      chan string
+	wake         chan struct{}
+	readerOnce   sync.Once
+	closed       chan struct{}
+	closeOnce    sync.Once
+	ticker       *time.Ticker
+	tickStop     chan struct{}
+	statusTicker *time.Ticker
 
-	ticks     <-chan time.Time
-	winch     <-chan struct{}
-	stopWinch func()
+	ticks       <-chan time.Time
+	statusTicks <-chan time.Time
+	winch       <-chan struct{}
+	stopWinch   func()
 
 	sizeOf func() (int, int, bool)
 }
@@ -153,6 +155,20 @@ func WithWidth(w int) Option { return func(t *tui) { t.width = w } }
 
 func WithStatus(f func(context.Context) StatusIn) Option {
 	return func(t *tui) { t.statusIn = f }
+}
+
+func WithStatusTick(d time.Duration) Option {
+	return func(t *tui) {
+		if t.statusTicker != nil {
+			t.statusTicker.Stop()
+			t.statusTicker = nil
+			t.statusTicks = nil
+		}
+		if d > 0 {
+			t.statusTicker = time.NewTicker(d)
+			t.statusTicks = t.statusTicker.C
+		}
+	}
 }
 
 func WithCommands(cmds []core.Command, env any) Option {
@@ -269,6 +285,9 @@ func (t *tui) Close() {
 	t.closeOnce.Do(func() { close(t.closed) })
 	if t.ticker != nil {
 		t.ticker.Stop()
+	}
+	if t.statusTicker != nil {
+		t.statusTicker.Stop()
 	}
 	if t.stopWinch != nil {
 		t.stopWinch()
@@ -782,6 +801,10 @@ func (t *tui) Input(ctx context.Context) (string, error) {
 			if quit {
 				return "", io.EOF
 			}
+		case <-t.statusTicks:
+			t.mu.Lock()
+			t.statusTickLocked()
+			t.mu.Unlock()
 		}
 	}
 }
@@ -1156,19 +1179,36 @@ func (t *tui) statusLineLocked() string {
 	return s
 }
 
+func (t *tui) recaptureStatusLocked(in StatusIn, fresh bool) {
+	t.statusModel = in.Model
+	t.statusEffort = in.Effort
+	t.statusRole = in.Role
+	t.statusApprove = in.Approve
+	t.statusWindow = in.Window
+	if fresh {
+		t.statusUsed = 0
+		t.statusHasUsed = false
+	}
+	t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
+	t.statusRows = in.Rows
+}
+
+func (t *tui) statusTickLocked() {
+	if t.turnLive || t.compacting || t.statusIn == nil {
+		return
+	}
+	old := t.statusLineLocked()
+	t.recaptureStatusLocked(t.statusIn(context.Background()), false)
+	if t.statusLineLocked() != old {
+		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+	}
+}
+
 func (t *tui) sessionStartLocked() string {
 	var b strings.Builder
 	if t.statusIn != nil {
 		in := t.statusIn(context.Background())
-		t.statusModel = in.Model
-		t.statusEffort = in.Effort
-		t.statusRole = in.Role
-		t.statusApprove = in.Approve
-		t.statusWindow = in.Window
-		t.statusUsed = 0
-		t.statusHasUsed = false
-		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
-		t.statusRows = in.Rows
+		t.recaptureStatusLocked(in, true)
 		b.WriteString(renderStatus(t.theme, in, t.titleName, t.titleRows, t.titleTagline))
 	}
 	return b.String()
@@ -1210,18 +1250,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 	// with the session boundaries: /new and sessions resume.
 	fresh := name == "new" || (name == "sessions" && strings.HasPrefix(args, "resume"))
 	if t.statusIn != nil {
-		in := t.statusIn(context.Background())
-		t.statusModel = in.Model
-		t.statusEffort = in.Effort
-		t.statusRole = in.Role
-		t.statusApprove = in.Approve
-		t.statusWindow = in.Window
-		if fresh {
-			t.statusUsed = 0
-			t.statusHasUsed = false
-		}
-		t.statusUp, t.statusDown, t.statusCache, t.statusCost = in.Up, in.Down, in.CacheRead, in.Cost
-		t.statusRows = in.Rows
+		t.recaptureStatusLocked(t.statusIn(context.Background()), fresh)
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
 }

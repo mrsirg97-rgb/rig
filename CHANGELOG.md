@@ -1,4 +1,23 @@
 # Changelog
+## [1.5.8]: the status rows tick while idle
+
+`frontend/tui` gains `WithStatusTick(d time.Duration)`: while the TUI
+waits for input (no turn streaming, no compaction), the status function
+is re-read every d on the Input loop and the region redraws only when
+the rows changed. The embedder's rows used to change at command time
+only — a background fire wrote a snapshot the next command would show;
+now a write the status function sees lands on the next idle tick. Zero
+is off (the default; rig's own main never sets it), and the recapture
+rides the Input loop, which a turn's start leaves, so the tick never
+fires mid-turn; a buffered tick lands immediately when the next Input
+starts. The Used reset stays at the session boundaries (`/new`,
+`sessions resume`).
+
+Tests: a status callback that flips a row after two 10 ms ticks
+redraws with the new row under a 10 ms tick without any command, the
+unchanged rows never repaint, and a streaming turn blocks the tick
+until it ends.
+
 ## [1.5.7]: the empty 5xx before the first token is retried for every row
 
 `provider/openai` retried 429/5xx with backoff only for hosted rows; a
