@@ -2,398 +2,343 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig: a small operating system for agents</title>
-<meta name="description" content="One binary, one-line install. Point it at the local model you already run and it reads your repo, edits your code, runs your tests, and remembers what it learned. 99% of every token served from cache. Sessions survive restarts. Add a tool with one Python file.">
-<meta name="theme-color" content="#050505">
-<meta property="og:title" content="rig: a small operating system for agents">
-<meta property="og:description" content="One binary, one-line install. 99% of every token from cache, measured on real daily use. Point it at the model you already run: it reads, edits, tests, and remembers. Built by local models running inside rig.">
-<meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ctext x='16' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%23e8a86b' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="rig: a small operating system for agents. A real agent for the model you already run.">
+<meta name="theme-color" content="#0e0f11">
+<title>rig</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root {
-  --bg: #050505;
-  --text: #d8d8d8;
-  --dim: #6e6e6e;
-  --faint: #4a4a4a;
-  --accent: #61afef;
-  --ok: #98c379;
-  --warn: #e5c07b;
-  --ember: #e8a86b;
-  --rule: #3c3c3c;
-  --reason: #8a8a8a;
-  --xhigh: #d183e8;
-  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
-}
-* { box-sizing: border-box; }
-html { background: var(--bg); }
-body {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--text);
-  background: radial-gradient(130% 100% at 50% 0%, #0e0e0e 0%, var(--bg) 52%, #030303 100%);
-  min-height: 100vh;
-}
-::selection { background: rgba(232, 168, 107, .28); }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.frame { max-width: 60rem; margin: 0 auto; padding: 3rem 1rem 2.5rem; }
-.term {
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: rgba(255,255,255,.014);
-  box-shadow: 0 0 44px rgba(232,168,107,.05), 0 24px 60px rgba(0,0,0,.5);
-  overflow: hidden;
-}
-.tbar {
-  display: flex; gap: .9rem; align-items: baseline;
-  padding: .5rem .95rem;
-  border-bottom: 1px solid var(--rule);
-  font-size: 12px; color: var(--faint);
-}
-.tbar .name { color: var(--ember); }
-.tbar .dots { letter-spacing: .3em; }
-.tbar .ver { margin-left: auto; }
-.tr { padding: 1.2rem 1.4rem 1.4rem; font-size: 13px; line-height: 1.7; }
-.ln { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2.2ch; text-indent: -2.2ch; }
-.ln.out, .ln.py { padding-left: 4ch; text-indent: -2ch; }
-.msg { margin: 0; white-space: normal; max-width: 72ch; overflow-wrap: anywhere; }
-.hero { color: var(--text); font-size: 16px; line-height: 1.55; max-width: 62ch; }
-.proof { color: var(--dim); max-width: 72ch; }
-.proof strong { color: var(--ok); font-weight: normal; }
-.dim { color: var(--dim); }
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem .7rem; padding-left: 0; text-indent: 0; max-width: 76ch; }
-.stat { border: 1px solid var(--rule); border-radius: 6px; padding: .5rem .7rem; background: rgba(255,255,255,.012); }
-.stat .n { display: block; color: var(--ember); font-size: 17px; line-height: 1.2; text-shadow: 0 0 14px rgba(232,168,107,.25); }
-.stat .l { display: block; color: var(--dim); font-size: 12px; line-height: 1.4; margin-top: .15rem; }
-.origin { color: var(--text); max-width: 72ch; }
-.origin em { color: var(--ember); font-style: normal; }
-.plat { color: var(--dim); padding-left: 0; text-indent: 0; }
-.plat b { color: var(--text); font-weight: normal; }
-.alt { color: var(--faint); padding-left: 4ch; text-indent: -2ch; }
-.alt code { color: var(--dim); }
-.fit { color: var(--dim); padding-left: 0; text-indent: 0; max-width: 72ch; }
-.fit b { color: var(--text); font-weight: normal; }
-.fit .no { color: var(--faint); }
-.gap { height: 1.1rem; }
-.gap.sm { height: .55rem; }
-.boot { color: var(--dim); }
-.logo {
-  margin: 0;
-  color: var(--ember);
-  text-shadow: 0 0 18px rgba(232,168,107,.35);
-  font-size: 18px;
-  line-height: 1.35;
-  white-space: pre;
-  overflow-x: auto;
-}
-.model { color: var(--text); }
-.xhigh { color: var(--xhigh); }
-.ps { color: var(--ember); }
-.in { color: var(--text); }
-.think { color: var(--ember); }
-.reason { color: var(--reason); }
-.tglyph { color: var(--accent); }
-.tname { color: var(--accent); }
-.toolargs { color: var(--text); }
-.out { color: var(--dim); }
-.tname-done { color: var(--dim); }
-.ok { color: var(--ok); }
-.bar-on { color: var(--accent); }
-.bar-off { color: var(--dim); }
-.tid { color: var(--dim); }
-.pend { color: var(--dim); }
-.act { color: var(--accent); }
-.doneg { color: var(--ok); }
-.task-text { color: var(--text); }
-.tl { color: var(--dim); display: grid; grid-template-columns: 15ch 1fr; column-gap: 1ch; padding-left: 0; text-indent: 0; }
-.tl .tn { color: var(--ember); }
-.tl .td { overflow-wrap: anywhere; }
-.cmd { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1rem; padding-left: 0; text-indent: 0; }
-.cmd .cmdtext { flex: 1 1 20ch; min-width: 0; padding-left: 2.2ch; text-indent: -2.2ch; overflow-wrap: anywhere; }
-.copy {
-  display: inline-flex; align-items: center; justify-content: center;
-  color: var(--dim);
-  background: none;
-  border: none;
-  border-radius: 4px;
-  padding: .15rem .35rem;
-  margin-left: auto;
-  cursor: pointer;
-  line-height: 1;
-}
-.copy svg { width: 15px; height: 15px; display: block; }
-.copy .ck { display: none; font-size: 13px; line-height: 1; }
-.copy:hover { color: var(--text); background: rgba(255,255,255,.05); }
-.copy.done { color: var(--ok); }
-.copy.done svg { display: none; }
-.copy.done .ck { display: block; }
-.li { color: var(--text); padding-left: 2.2ch; text-indent: -2.2ch; max-width: 76ch; }
-.li .lg { color: var(--dim); }
-.sect { color: var(--faint); letter-spacing: .08em; padding-left: 0; text-indent: 0; }
-.sect b { color: var(--ember); font-weight: normal; }
-.note { color: var(--dim); padding-left: 4ch; text-indent: -2ch; max-width: 72ch; }
-.py { color: var(--text); }
-.py .k { color: var(--accent); }
-.py .s { color: var(--ok); }
-.py .f { color: var(--ember); }
-.cursor::after { content: "█"; color: var(--ember); animation: blink 1.06s steps(1) infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-footer { border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1.1rem; color: var(--dim); font-size: 13px; text-align: center; }
-footer .links { margin: .5rem 0; display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem 0; }
-footer .links a { padding: .15rem .55rem; }
-footer .links a + a::before { content: "·"; color: var(--faint); margin-right: 1.1rem; }
-.signoff { color: var(--faint); }
-html.js .reveal { opacity: 0; transform: translateY(6px); transition: opacity .4s ease, transform .4s ease; }
-html.js .reveal.in { opacity: 1; transform: none; }
-@media (max-width: 600px) {
-  .frame { padding: 1.4rem .6rem 2rem; }
-  .tr { padding: .95rem .8rem 1.1rem; font-size: 12.5px; line-height: 1.65; }
-  .logo { font-size: 13px; }
-  .sect { font-size: 11px; overflow: hidden; white-space: nowrap; }
-  .term { border-radius: 6px; }
-  .tbar { padding: .45rem .8rem; }
-  .cmd .copy { flex: 0 0 auto; min-height: 40px; min-width: 40px; }
-  .li { max-width: none; }
-  .note { max-width: none; }
-  .tl { grid-template-columns: 1fr; row-gap: 0; }
-  .tl .td { padding-left: 2.2ch; margin-bottom: .25rem; }
-  .msg { max-width: none; }
-  .hero { font-size: 14px; }
-  .stats { grid-template-columns: repeat(2, 1fr); gap: .45rem; }
-  .stat .n { font-size: 15px; }
-  footer .links a + a::before { margin-right: .9rem; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .cursor::after { animation: none; }
-  html.js .reveal { transition: none; }
-}
+  :root {
+    --ground: #0e0f11;
+    --panel: #131518;
+    --panel-2: #17191d;
+    --grid: rgba(214, 211, 204, 0.045);
+    --grid-major: rgba(214, 211, 204, 0.085);
+    --text: #d6d3cc;
+    --dim: #8a857d;
+    --faint: #4d4a45;
+    --ember: #e8a86b;
+    --ember-deep: #bc4c00;
+    --ok: #98c379;
+    --effort-max: #ff5fff;
+    --rule: #2c2e33;
+    --sans: "Barlow", "Helvetica Neue", Arial, sans-serif;
+    --cond: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html { background: var(--ground); }
+  body {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    background:
+      radial-gradient(120% 70% at 50% 0%, rgba(232,168,107,0.06) 0%, rgba(232,168,107,0) 55%),
+      repeating-linear-gradient(0deg, var(--grid-major) 0 1px, transparent 1px 120px),
+      repeating-linear-gradient(90deg, var(--grid-major) 0 1px, transparent 1px 120px),
+      repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 24px),
+      var(--ground);
+  }
+  .page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding-block: 9vh 8vh;
+    padding-inline: 20px;
+    display: flex; flex-direction: column; gap: 7.5rem;
+  }
+
+  /* ---------- nameplate ---------- */
+  .plate {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 30px 60px rgba(0,0,0,0.45);
+    padding: 2rem 2rem 1.6rem;
+    display: flex; flex-direction: column; gap: 1.6rem;
+  }
+  .plate::before, .plate::after, .plate .s3, .plate .s4 {
+    content: ""; position: absolute; width: 9px; height: 9px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #3a3d44, #15171a 70%);
+    box-shadow: 0 0 0 1px #0a0b0c, 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .plate::before { left: 10px; top: 10px; }
+  .plate::after  { right: 10px; top: 10px; }
+  .plate .s3 { left: 10px; bottom: 10px; }
+  .plate .s4 { right: 10px; bottom: 10px; }
+  .plate-head {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.4rem 1.5rem;
+    font-family: var(--cond); font-weight: 600; font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim);
+  }
+  .plate-head b { color: var(--ember); font-weight: 600; }
+  .glyph {
+    margin: 0;
+    font-family: var(--mono); font-weight: 500;
+    font-size: clamp(26px, 6vw, 40px); line-height: 1.05;
+    color: var(--ember); white-space: pre;
+    text-shadow: 0 0 18px rgba(232,168,107,0.22);
+  }
+  .tagline {
+    margin: 0;
+    font-family: var(--cond); font-weight: 600;
+    font-size: clamp(28px, 5.4vw, 40px); line-height: 1.08; letter-spacing: 0.005em;
+    text-transform: uppercase; text-wrap: balance; max-width: 20ch;
+  }
+  .tagline em { font-style: normal; color: var(--ember); }
+  .band {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--dim);
+    white-space: pre; overflow-x: auto; max-width: 100%;
+    border-top: 1px dashed var(--rule); padding-top: 0.9rem;
+  }
+  .band .k { color: var(--text); }
+  .band .g { color: var(--ok); }
+  .band .m { color: var(--effort-max); }
+
+  .install {
+    display: flex; align-items: stretch; width: 100%;
+    border: 1px solid var(--rule); background: #0a0b0d; overflow: hidden;
+  }
+  .install code {
+    flex: 1 1 auto; min-width: 0;
+    font-family: var(--mono); font-size: 14px; line-height: 1;
+    padding: 0.95rem 1rem; color: var(--text); white-space: nowrap; overflow-x: auto;
+  }
+  .install code .p { color: var(--ember); margin-right: 0.6em; }
+  .install button {
+    flex: 0 0 auto; cursor: pointer;
+    font-family: var(--cond); font-weight: 600; font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--dim); background: var(--panel-2); border: 0; border-left: 1px solid var(--rule); padding: 0 1.1rem;
+  }
+  .install button:hover, .install button:focus-visible { color: var(--ember); outline: none; }
+  .install button:focus-visible { box-shadow: inset 0 0 0 1px var(--ember); }
+  .install-note { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+
+  /* ---------- rating strip ---------- */
+  .rating {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid var(--rule); background: var(--panel);
+  }
+  .rating > div { padding: 1rem 1.1rem 0.9rem; border-right: 1px solid var(--rule); min-width: 0; }
+  .rating > div:last-child { border-right: 0; }
+  .rating .n {
+    display: block; font-family: var(--cond); font-weight: 700; font-size: 34px; line-height: 1; color: var(--ember);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+  .rating .n small { font-size: 16px; color: var(--dim); font-weight: 600; margin-left: 0.15em; }
+  .rating .l { display: block; margin-top: 0.4rem; font-size: 13px; line-height: 1.35; color: var(--dim); }
+
+  /* ---------- prose ---------- */
+  .eyebrow {
+    margin: 0;
+    font-family: var(--cond); font-weight: 600; font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--faint);
+  }
+  .eyebrow::before { content: "// "; color: var(--ember-deep); }
+  .lede { display: flex; flex-direction: column; gap: 1.3rem; max-width: 62ch; }
+  .lede p { margin: 0; font-size: 20px; line-height: 1.55; }
+  .lede p strong { font-weight: 500; color: #fff; }
+
+  /* ---------- steps ---------- */
+  .steps { display: flex; flex-direction: column; gap: 4.5rem; }
+  .step { display: grid; grid-template-columns: 92px 1fr; column-gap: 1.4rem; row-gap: 1rem; align-items: start; }
+  .num {
+    margin: 0; padding-top: 0.1rem;
+    font-family: var(--cond); font-weight: 700; font-size: 72px; line-height: 0.85; letter-spacing: -0.02em;
+    color: transparent; -webkit-text-stroke: 1.5px var(--ember);
+    font-variant-numeric: tabular-nums;
+  }
+  .step h2 {
+    margin: 0 0 0.45rem;
+    font-family: var(--cond); font-weight: 600; font-size: 28px; line-height: 1.1; letter-spacing: 0.01em; text-transform: uppercase; text-wrap: balance;
+  }
+  .step p { margin: 0; color: var(--dim); max-width: 54ch; }
+  .step p b { font-weight: 500; color: var(--text); }
+  .step .file {
+    grid-column: 2; margin: 0 0 -0.5rem;
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
+  }
+  .step pre {
+    grid-column: 2; margin: 0;
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.6; color: var(--text);
+    background: #0a0b0d; border: 1px solid var(--rule); border-left: 3px solid var(--ember-deep);
+    padding: 1rem 1.1rem; overflow-x: auto;
+  }
+  .step pre .c { color: var(--faint); }
+  .step pre .k { color: var(--ember); }
+  .step pre .s { color: #b7c9a3; }
+  .step pre .d { color: var(--dim); }
+  .step pre .g { color: var(--ok); }
+
+  /* ---------- footer ---------- */
+  footer { display: flex; flex-direction: column; gap: 2rem; padding-top: 2.6rem; border-top: 1px solid var(--rule); }
+  .built { margin: 0; font-size: 16px; color: var(--dim); max-width: 62ch; }
+  .built a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .built a:hover { color: var(--ember); border-color: var(--ember); }
+  .links { display: flex; flex-wrap: wrap; gap: 0.6rem 1.8rem; font-family: var(--cond); font-weight: 600; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; }
+  .links a { color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--rule); padding-bottom: 2px; }
+  .links a:hover, .links a:focus-visible { color: var(--ember); border-color: var(--ember); outline: none; }
+  .stamp { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+
+  @media (max-width: 600px) {
+    body { font-size: 17px; }
+    .page { gap: 5.5rem; padding-block: 7vh 7vh; }
+    .plate { padding: 1.6rem 1.2rem 1.3rem; }
+    .rating { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rating > div:nth-child(2) { border-right: 0; }
+    .rating > div:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+    .step { grid-template-columns: 1fr; }
+    .step pre, .step .file { grid-column: 1; }
+    .num { font-size: 56px; }
+    .lede p { font-size: 18px; }
+  }
 </style>
 </head>
 <body>
-<div class="frame">
-<div class="term">
-  <div class="tbar" aria-hidden="true">
-    <span class="dots">○ ◐ ●</span>
-    <span class="name">rig</span>
-    <span class="ver">{{RIG_VERSION}}</span>
-  </div>
-  <div class="tr">
-<h2 class="sr">rig: a minimal, performant harness for your local agent</h2>
 
-    <div class="ln boot reveal">welcome to</div>
-    <pre class="logo reveal" aria-label="rig, in the 3x3 block face">█▀▄ █ █▀▀
+<main class="page">
+
+  <section class="plate" aria-label="rig">
+    <span class="s3"></span><span class="s4"></span>
+    <div class="plate-head">
+      <span>model <b>rig</b> · rev <b>{{RIG_VERSION}}</b></span>
+      <span>one binary · no runtime · MIT</span>
+    </div>
+    <pre class="glyph" aria-label="rig">█▀▄ █ █▀▀
 █▀▄ █ █ █
 ▀ ▀ ▀ ▀▀▀</pre>
-    <div class="gap reveal"></div>
-    <div class="ln model reveal">local model · long session · real repository</div>
-    <div class="ln reveal"><span class="xhigh">xhigh</span><span class="dim"> · default · auto</span></div>
-    <div class="ln dim reveal">up 214k down 18k · cache r 211k 99%</div>
-
-    <div class="gap reveal"></div>
-    <div class="msg hero reveal">a small operating system for agents.</div>
-    <div class="msg proof reveal">rig is a minimal harness for the model you already run. one binary, one endpoint,
-    one terminal: it reads your repo, edits your code, runs your tests, and remembers what it learned.
-    close the laptop; pick the session back up from your phone.</div>
-    <div class="msg proof reveal"><strong>fast all day on one desktop: 99% of every token comes from cache.</strong> 1.36B tokens across 120 sessions, on real daily use.</div>
-
-    <div class="gap sm reveal"></div>
-    <div class="ln stats reveal" aria-label="rig in numbers">
-      <div class="stat"><span class="n">99%</span><span class="l">of every token served from cache. long sessions stay fast.</span></div>
-      <div class="stat"><span class="n">417 lines</span><span class="l">is the whole agent loop, batch included. read it over coffee.</span></div>
-      <div class="stat"><span class="n">34k / 53k</span><span class="l">lines of code / lines of tests. more tests than code.</span></div>
-      <div class="stat"><span class="n">638 commits</span><span class="l">most of them written by rig, running inside rig</span></div>
+    <h1 class="tagline">A real agent for the <em>model you already run.</em></h1>
+    <div class="band" aria-label="the footer of a running rig session"><span class="m">max</span> · default · auto
+up 214k down 18k · cache r 211k <span class="g">99%</span></div>
+    <div class="install">
+      <code id="install-line"><span class="p">❯</span>curl -fsSL https://tryrig.ai/install.sh | sh</code>
+      <button type="button" id="copy-btn" aria-label="copy the install command">copy</button>
     </div>
+    <p class="install-note">linux · macOS · amd64 · arm64 · no Go, no sudo · installs to ~/.local/bin · rig -update keeps it current</p>
+  </section>
 
-    <div class="gap sm reveal"></div>
-    <div class="msg origin reveal">how it was built: the core was written by hand. the moment rig could finish one turn,
-    <em>everything else was built by local models running inside rig</em>, a 284B and a 27B on one desktop,
-    driven from a phone over SSH. the git log is the receipt.</div>
+  <section class="rating" aria-label="measured">
+    <div><span class="n">99<small>%</small></span><span class="l">of every token served from cache, over 2,925 real turns</span></div>
+    <div><span class="n">417</span><span class="l">lines is the whole agent loop, batch included</span></div>
+    <div><span class="n">53<small>k</small></span><span class="l">lines of tests over 34k lines of code</span></div>
+    <div><span class="n">654</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
+  </section>
 
-    <div class="gap reveal"></div>
-    <div class="ln cmd reveal"><span class="cmdtext"><span class="ps">❯</span>  curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</span><button class="copy" type="button" data-cmd="curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh" aria-label="copy the installer command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
-    <div class="ln out reveal">  rig {{RIG_VERSION}} installed to ~/.local/bin/rig</div>
-    <div class="ln plat reveal"><b>linux</b> · <b>macOS</b> · amd64 · arm64 · no Go, no sudo, no runtime · <b>rig -update</b> upgrades itself in place</div>
-    <div class="ln alt reveal">  or <code>go install github.com/mrsirg97-rgb/rig/cmd/rig@latest</code> · or grab the binary from releases</div>
+  <section class="lede">
+    <p class="eyebrow">what it is</p>
+    <p>rig turns the model on your desk into something that works. Point it at your repo and it reads the code, edits it, runs the tests, and remembers what it learned. <strong>One binary, one endpoint, one terminal.</strong></p>
+    <p>It is small enough to read before you trust it. The loop is a few hundred lines, and everything around it plugs in: tools, guardrails, schedules, workers. Sessions stay fast for hours because the prompt never wobbles, so the cache does the work.</p>
+    <p>Close the laptop. <strong>Pick the session back up from your phone.</strong></p>
+  </section>
 
-    <div class="gap reveal"></div>
-    <div class="ln in reveal"><span class="ps">❯</span>  look around this repo, run the tests in the background, and remember what you learn</div>
+  <section class="steps" aria-labelledby="setup-heading">
+    <p class="eyebrow" id="setup-heading">getting set up</p>
 
-    <div class="gap reveal"></div>
-    <div class="ln think reveal">| thinking</div>
-    <div class="ln reason reveal">map the code, hand off the slow part, keep what matters.</div>
+    <article class="step">
+      <p class="num">1</p>
+      <div>
+        <h2>Install it</h2>
+        <p>One file lands in your path. Signed releases, and it <b>updates itself in place.</b></p>
+      </div>
+      <pre>curl -fsSL https://tryrig.ai/install.sh | sh
+<span class="d">✓ rig {{RIG_VERSION}} installed to ~/.local/bin/rig</span>
 
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">create</span></div>
-    <div class="ln reveal"><span class="bar-off">▱▱▱</span> <span class="dim">0/3 · next t1</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
+<span class="c"># later</span>
+rig -update</pre>
+    </article>
 
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">read</span>   <span class="dim">·</span>   <span class="toolargs">AGENTS.md</span></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">find</span>   <span class="dim">·</span>   <span class="toolargs">PACKAGE.md</span></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">grep</span>   <span class="dim">·</span>   <span class="toolargs">interface ./core</span></div>
-    <div class="ln out reveal">  three reads admitted together · results applied in call order</div>
-    <div class="ln reveal"><span class="tname-done">batch</span>   <span class="ok">✓</span>   <span class="dim">0.08s</span></div>
+    <article class="step">
+      <p class="num">2</p>
+      <div>
+        <h2>Point it at a model</h2>
+        <p>Anything that speaks the OpenAI API: llama.cpp, llama-swap, Ollama, or a hosted key. <b>Local is the default.</b></p>
+      </div>
+      <p class="file">~/.rig/settings.json</p>
+      <pre>{ <span class="k">"model"</span>: <span class="s">"local"</span> }</pre>
+      <p class="file">~/.rig/models.json</p>
+      <pre>[
+  { <span class="k">"id"</span>: <span class="s">"local"</span>,
+    <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,
+    <span class="k">"window"</span>: <span class="d">262144</span> }
+]</pre>
+    </article>
 
-    <div class="gap reveal"></div>
-    <div class="msg reveal">the whole thing is one loop: build the prompt, stream the model, run what it asks for,
-    hand back the results, repeat. everything below is what makes that loop safe to leave running.</div>
-    <div class="gap sm reveal"></div>
-    <div class="ln li reveal"><span class="lg">•</span> the loop is 417 lines: open to pure addition, closed to modification, named reopenings only. core is frozen at 1.5.0's bytes. everything else plugs in around it: model providers, interfaces, tools, guardrails, policy. adding one is a single file and one line to register it.</div>
-    <div class="ln li reveal"><span class="lg">•</span> tool calls run in parallel, results land in order. the model can fire off three reads at once and the transcript still reads top to bottom. nothing dropped, nothing reordered.</div>
-    <div class="ln li reveal"><span class="lg">•</span> delegate is a subagent. a turn can fan out several workers in parallel, bounded by the fleet's slots, and waits for their answers. a held GPU refuses by name (busy:skip). each worker is sandboxed, cannot delegate in turn, and keeps a transcript you can resume.</div>
-    <div class="ln li reveal"><span class="lg">•</span> the guardrails have names and reasons. a command allowlist, a retry limit, an approval gate, output limits, a holding area for new plugins, a sandbox for background workers. when rig says no, it says why, so the model fixes its approach instead of thrashing.</div>
-    <div class="ln li reveal"><span class="lg">•</span> memory is on purpose. nothing sneaks into your prompt on its own. the model saves a fact, recalls it when it needs it, and replaces it when it learns better. tasks, memory, and schedules belong to the repo. a prompt that stays stable is where the cache number comes from.</div>
-    <div class="ln li reveal"><span class="lg">•</span> every behavior is one sentence in specs/ with a test that holds it there. the exact bytes sent to the model are pinned too. spec first, then the failing test, then the code.</div>
-    <div class="ln li reveal"><span class="lg">•</span> one binary, nothing else to install. the terminal UI, the scripting CLI, background workers, and a phone-sized dashboard all read the same files on disk. close the laptop; resume from the phone.</div>
-    <div class="gap sm reveal"></div>
-    <div class="msg reveal dim">rig is built by models running inside rig. this page is the tool they use to do it.</div>
-    <div class="gap sm reveal"></div>
-    <div class="ln fit reveal"><b>for:</b> anyone running a local model who wants a real agent under it, not a chat window. anyone who wants to read the loop before trusting it. <span class="no">not: a framework, a cloud, a wrapper.</span></div>
+    <article class="step">
+      <p class="num">3</p>
+      <div>
+        <h2>Run it in a repo</h2>
+        <p>The terminal opens. Ask for something real. <b>Reads run in parallel, results land in order,</b> and the transcript still reads top to bottom.</p>
+      </div>
+      <pre>cd your-project && rig
+<span class="c">❯ look around, run the tests in the background, remember what you learn</span>
 
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t1</span></div>
-    <div class="ln reveal"><span class="bar-on">▰</span><span class="bar-off">▱▱</span> <span class="dim">1/3 · next t2</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
+<span class="d">● todo · create   0/3 · next t1
+● read · AGENTS.md
+● find · PACKAGE.md
+● grep · interface ./core
+  three reads admitted together · results applied in call order
+  batch ✓ 0.08s</span></pre>
+    </article>
 
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">delegate</span>   <span class="dim">·</span>   <span class="toolargs">run the full test suite and report only failures that need a fix</span></div>
-    <div class="ln out reveal">  worker w1 · fresh session · sandboxed · cwd /rig</div>
-    <div class="ln out reveal">  all green · platform-only checks noted separately · nothing to fix</div>
-    <div class="ln reveal"><span class="tname-done">delegate</span>   <span class="ok">✓</span>   <span class="dim">2m14s</span></div>
+    <article class="step">
+      <p class="num">4</p>
+      <div>
+        <h2>Let it run things for you</h2>
+        <p>Hand off the slow part to a worker, or put a job on real cron. <b>Workers are sandboxed and keep a transcript you can resume.</b></p>
+      </div>
+      <pre><span class="c">❯ /swarm 2</span>
+<span class="d">swarm: added 2 agents · worker w1 claimed t2 · worker w2 claimed t3</span>
 
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t2</span></div>
-    <div class="ln reveal"><span class="bar-on">▰▰</span><span class="bar-off">▱</span> <span class="dim">2/3 · next t3</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
-    <div class="ln reveal"><span class="pend">○</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
+<span class="c">❯ /scheduler create health check the fund and note anything odd 0 */2 * * *</span>
+<span class="d">scheduler: j8 health · every 2 hours · next fire 14:00</span></pre>
+    </article>
 
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">rem</span>   <span class="dim">·</span>   <span class="toolargs">learn</span></div>
-    <div class="ln out reveal">  m42 · the core and the loop are locked; new features plug in at cmd/rig</div>
-    <div class="ln reveal"><span class="tname-done">rem</span>   <span class="ok">✓</span>   <span class="dim">0.03s</span></div>
+    <article class="step">
+      <p class="num">5</p>
+      <div>
+        <h2>Come back later</h2>
+        <p>Everything is on disk in the repo: tasks, memory, schedules, sessions. <b>Resume from the phone over SSH,</b> or glance at the dashboard.</p>
+      </div>
+      <pre>rig -resume 1a0d99397efd
+<span class="d">session 1a0d99397efd · 214k up · 3 todo · 1 job · resumed</span></pre>
+    </article>
+  </section>
 
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">todo</span>   <span class="dim">·</span>   <span class="toolargs">complete t3</span></div>
-    <div class="ln reveal"><span class="bar-on">▰▰▰</span> <span class="dim">3/3</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t1</span> <span class="task-text">map the architecture</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t2</span> <span class="task-text">run the test sweep</span></div>
-    <div class="ln reveal"><span class="doneg">●</span> <span class="tid">t3</span> <span class="task-text">record the durable facts</span></div>
-
-    <div class="gap reveal"></div>
-    <div class="msg reveal">done. the main session never got cluttered, the worker kept its own transcript you can
-    reopen, and that fact about the repo will be there next time, only when asked for.</div>
-
-    <div class="gap reveal"></div>
-    <div class="ln sect reveal">── <b>the surface</b> ────────────────────────</div>
-
-    <div class="gap reveal"></div>
-    <div class="msg reveal">seventeen tools built in, nineteen when a worker fleet is configured. each one small enough that a local model can actually use it well.</div>
-    <div class="ln tl reveal"><span class="tn">bash</span><span class="td">run real commands; output comes back trimmed to what matters</span></div>
-    <div class="ln tl reveal"><span class="tn">file</span><span class="td">read · write · edit; an edit is refused if the file changed since you last read it</span></div>
-    <div class="ln tl reveal"><span class="tn">fs</span><span class="td">ls · find · grep; simple enough for a local model to get right the first time</span></div>
-    <div class="ln tl reveal"><span class="tn">view</span><span class="td">look at an image: downscaled, stored once, sent to the model only when its row says vision</span></div>
-    <div class="ln tl reveal"><span class="tn">diff</span><span class="td">what changed since HEAD, or since the last time you looked</span></div>
-    <div class="ln tl reveal"><span class="tn">python</span><span class="td">a live python kernel; your variables survive between calls</span></div>
-    <div class="ln tl reveal"><span class="tn">web</span><span class="td">search and fetch, with a guard against reaching into your private network</span></div>
-    <div class="ln tl reveal"><span class="tn">todo</span><span class="td">a task list the model keeps for itself; tasks link with requires (I wait for it) and blocks (it waits for me)</span></div>
-    <div class="ln tl reveal"><span class="tn">rem</span><span class="td">memory on purpose; save a fact, recall it when needed, update it later, per repo</span></div>
-    <div class="ln tl reveal"><span class="tn">scheduler</span><span class="td">cron jobs that run a worker in a sandbox while you sleep</span></div>
-    <div class="ln tl reveal"><span class="tn">delegate</span><span class="td">hand tasks to fresh workers in parallel and get back their answers, up to the fleet's slots</span></div>
-    <div class="ln tl reveal"><span class="tn">plugin</span><span class="td">run a plugin, or read what it does, without pausing the main loop</span></div>
-    <div class="ln tl reveal"><span class="tn">plugins</span><span class="td">list · create · delete · reload; anything the model writes waits in pending until you approve it</span></div>
-    <div class="ln tl reveal"><span class="tn">sessions</span><span class="td">browse past sessions and live vitals: which models ran, what failed, the cache ratio</span></div>
-
-    <div class="gap reveal"></div>
-    <div class="ln sect reveal">── <b>one file, one tool</b> ──────────────────</div>
-    <div class="gap sm reveal"></div>
-    <div class="msg reveal">want a new tool? write one python file and drop it in ~/.rig/plugins/. no manifest,
-    no build step, no restart. if the model writes one itself, it waits in pending until you say yes.</div>
-
-    <div class="gap reveal"></div>
-    <div class="ln reveal"><span class="tglyph">●</span>   <span class="tname">bash</span>   <span class="dim">·</span>   <span class="toolargs">$ cat ~/.rig/plugins/uptime.py</span></div>
-    <div class="ln py reveal">  DESCRIPTION = <span class="s">"report host uptime, terse"</span></div>
-    <div class="ln py reveal">  SCHEMA = <span class="s">{"type": "object", "properties": {}}</span></div>
-    <div class="ln py reveal">  <span class="k">def</span> <span class="f">run</span>(args: dict) -&gt; str:</div>
-    <div class="ln py reveal">      s = open(<span class="s">"/proc/uptime"</span>).read().split()[0]</div>
-    <div class="ln py reveal">      <span class="k">return</span> f<span class="s">"up {int(float(s) // 3600)}h {int(float(s) // 60) % 60:02d}m"</span></div>
-    <div class="ln out reveal">  uptime registered · report host uptime, terse</div>
-    <div class="ln reveal"><span class="tname-done">bash</span>   <span class="ok">✓</span>   <span class="dim">0.1s</span></div>
-
-    <div class="gap reveal"></div>
-    <div class="msg hero reveal">one binary. one model. ready to work.</div>
-    <div class="msg proof reveal">point rig at any OpenAI-compatible endpoint: a local box, a gateway, a hosted API.
-    sessions survive restarts. <strong>99% cache hits</strong> steady, even after the context gets compacted.
-    measured on real daily use, not a benchmark.</div>
-
-    <div class="gap reveal"></div>
-    <div class="ln cmd reveal"><span class="cmdtext"><span class="ps">❯</span>  rig --base-url $ENDPOINT --model $NAME</span><button class="copy" type="button" data-cmd="rig --base-url $ENDPOINT --model $NAME" aria-label="copy the rig command"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg><span class="ck">✓</span></button></div>
-
-    <div class="gap reveal"></div>
-    <div class="ln in reveal"><span class="ps">❯</span>  <span class="cursor" aria-hidden="true"></span></div>
-  </div>
-</div>
-
-  <footer class="reveal">
-    <div>rig {{RIG_VERSION}} · a minimal harness for local models · MIT</div>
-    <div class="links">
-      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/README.md">README</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/DESIGN.md">DESIGN</a><a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs/</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/PLUGINS.md">plugins</a><a href="https://github.com/mrsirg97-rgb/rig/blob/main/CHANGELOG.md">changelog</a><a href="https://github.com/mrsirg97-rgb/rig/releases/latest">releases</a><a href="https://github.com/mrsirg97-rgb/rig">github ★</a>
-    </div>
-    <div class="signoff">not a framework. a harness.</div>
+  <footer>
+    <p class="built">rig was built by hand until it could finish one turn. Everything after that was written by local models running inside rig, from a phone. <a href="https://github.com/mrsirg97-rgb/rig/commits/main">The git log is the receipt.</a></p>
+    <nav class="links" aria-label="links">
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
+      <a href="https://discoverorbit.ai">orbit</a>
+    </nav>
+    <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
   </footer>
-</div>
+
+</main>
 
 <script>
-(function () {
-  document.documentElement.className += " js";
-  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var items = document.querySelectorAll(".reveal");
-  if (reduced || !("IntersectionObserver" in window)) {
-    for (var i = 0; i < items.length; i++) { items[i].classList.add("in"); }
-  } else {
-    var observer = new IntersectionObserver(function (entries) {
-      for (var i = 0; i < entries.length; i++) {
-        if (!entries[i].isIntersecting) { continue; }
-        entries[i].target.classList.add("in");
-        observer.unobserve(entries[i].target);
+  (function () {
+    var btn = document.getElementById('copy-btn'), line = document.getElementById('install-line');
+    var text = 'curl -fsSL https://tryrig.ai/install.sh | sh';
+    btn.addEventListener('click', function () {
+      function done() { btn.textContent = 'copied'; setTimeout(function () { btn.textContent = 'copy'; }, 1600); }
+      function fallback() {
+        var r = document.createRange(); r.selectNodeContents(line);
+        var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = 'select';
+        setTimeout(function () { btn.textContent = 'copy'; }, 1600);
       }
-    }, { rootMargin: "0px 0px 80px", threshold: 0.02 });
-    for (var i = 0; i < items.length; i++) { observer.observe(items[i]); }
-  }
-  var btns = document.querySelectorAll(".copy");
-  for (var b = 0; b < btns.length; b++) {
-    (function (btn) {
-      btn.addEventListener("click", function () {
-        var text = btn.getAttribute("data-cmd");
-        if (!text) { return; }
-        function done() {
-          btn.classList.add("done");
-          setTimeout(function () { btn.classList.remove("done"); }, 1600);
-        }
-        function fallback() {
-          var row = btn.parentNode.querySelector(".cmdtext");
-          var r = document.createRange();
-          r.selectNodeContents(row || btn.parentNode);
-          var s = window.getSelection();
-          s.removeAllRanges();
-          s.addRange(r);
-          done();
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(done, fallback);
-        } else { fallback(); }
-      });
-    })(btns[b]);
-  }
-})();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else { fallback(); }
+    });
+  })();
 </script>
 </body>
 </html>
