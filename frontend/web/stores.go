@@ -13,13 +13,15 @@ import (
 )
 
 type storeCache struct {
-	home string
-	mu   sync.Mutex
-	dbs  map[string]store.DB
+	home      string
+	crontab   sched.Crontab
+	runnerCmd string
+	mu        sync.Mutex
+	dbs       map[string]store.DB
 }
 
-func newStoreCache(home string) *storeCache {
-	return &storeCache{home: home, dbs: map[string]store.DB{}}
+func newStoreCache(home string, ct sched.Crontab, runnerCmd string) *storeCache {
+	return &storeCache{home: home, crontab: ct, runnerCmd: runnerCmd, dbs: map[string]store.DB{}}
 }
 
 func (c *storeCache) open(path string, statements []string, version int, migrate ...func(*sql.Tx, int, int) (string, error)) (store.DB, error) {
@@ -50,7 +52,7 @@ func (c *storeCache) todo(cwd string) (store.DB, error) {
 
 func (c *storeCache) scheduler() (store.DB, error) {
 	shome := filepath.Join(c.home, "scheduler")
-	return c.open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(shome, c.home, sched.RealCrontab("")))
+	return c.open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(shome, c.home, c.runnerCmd, c.crontab))
 }
 
 func (c *storeCache) closeAll() {

@@ -21,9 +21,12 @@ written before the store commit; drift is surfaced in list.
   the `DB` alias.
 - `cron.go`: the vixie cron parser and matcher.
 - `crontab.go`: the tagged-lines crontab edit/merge; `TagHome` is the
-  short-sha1 home, `Scan` accepts the old `pane-scheduler:<key>` tag and
-  this home's `rig-scheduler` lines and ignores another home's, and the
-  writer emits only the new tag.
+  short-sha1 of the cleaned home path, `Scan` and the writer see only
+  this home's `rig-scheduler` lines (another home's and every old
+  `pane-scheduler` line are foreign to them), and the writer emits only
+  the new tag. `oldTagLine` reads an old-tag line for the migration
+  alone: its key, and the runner command between the cron fields and
+  the key.
 - `verbs.go`: the command verbs
   (list/create/update/pause/resume/remove/runs) over the one
   `global.sqlite`; the crontab key is `jN` for every job, `name` unique
@@ -131,10 +134,15 @@ written before the store commit; drift is surfaced in list.
   listed too (the runner refuses to fire it, naming the row).
 - The tag is home-scoped: the writer never touches another home's line
   (its `rig-scheduler` home differs, or its key is not this store's), so
-  two homes sharing one crontab stay disjoint; the reader accepts the
-  old `pane-scheduler` tag as this home's line, and the one-time tag
-  migration attributes an old line to the store whose event log knows
-  its key.
+  two homes sharing one crontab stay disjoint. An old `pane-scheduler`
+  line belongs to nobody until the one-time tag migration claims it,
+  and the migration claims a line only when its key is a job in this
+  store's event log and its runner command is this binary's
+  (`<self> run-job`): two homes with the same key never take each
+  other's lines, whichever migrates first. A migration is given the
+  same `Crontab` the runtime writes through; the web frontend's store
+  cache takes the server's, so a test suite with a fake crontab never
+  reaches the operator's.
 - `update` is the definition change: one `update` op overlays only the
   fields the args carry; the id and the runs stay (remove + create
   re-mints the id and orphans the runs); a cadence change rewrites the

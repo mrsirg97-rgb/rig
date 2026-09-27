@@ -1038,7 +1038,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, sched.RealCrontab("")))
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
 	if sErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sErr)
 		os.Exit(1)
@@ -1051,11 +1056,6 @@ func main() {
 	}
 	defer scdb.DB.Close()
 
-	self, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
-	}
 	swapURL := cfg.Settings.SwapURL
 	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
 		swapURL = v

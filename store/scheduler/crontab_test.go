@@ -211,8 +211,8 @@ func TestRemoveOfAMissingKeyReportsNotFound(t *testing.T) {
 
 func TestScanFindsTaggedLinesAndExtractsCronFields(t *testing.T) {
 	text := foreign +
-		"\n0 */4 * * * /x/rig run-job j1  # pane-scheduler:j1" +
-		"\n# 5 4 * * * /x/rig run-job cwd-abc123def456:j2  # pane-scheduler:cwd-abc123def456:j2" +
+		"\n0 */4 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1" +
+		"\n# 5 4 * * * /x/rig run-job cwd-abc123def456:j2  # rig-scheduler:" + TagHome(testHome) + ":cwd-abc123def456:j2" +
 		"\n7 3 16 8 * /x/rig run-job j3  # rig-scheduler:" + TagHome(testHome) + ":j3"
 	found := Scan(text, testHome)
 	var j1, j2, j3 *TaggedLine
@@ -227,10 +227,10 @@ func TestScanFindsTaggedLinesAndExtractsCronFields(t *testing.T) {
 		}
 	}
 	if j1 == nil || j1.Paused || j1.Cron != "0 */4 * * *" {
-		t.Fatalf("the reader must accept the old tag: j1 = %+v", j1)
+		t.Fatalf("j1 = %+v", j1)
 	}
 	if j2 == nil || !j2.Paused || j2.Cron != "5 4 * * *" {
-		t.Fatalf("the old-tag legacy key must still read: j2 = %+v", j2)
+		t.Fatalf("the legacy key must still read: j2 = %+v", j2)
 	}
 	if j3 == nil || j3.Paused || j3.Cron != "7 3 16 8 *" {
 		t.Fatalf("j3 = %+v", j3)
@@ -253,11 +253,53 @@ func TestScanIgnoresLookalikes(t *testing.T) {
 		"# prose about rig-scheduler and friends",
 		"30 6 * * * echo hi # rig-scheduler:NOTOURS  # tag not trailing",
 		"# rig-scheduler:standalone",
-		`0 0 * * * /x/rig run-job j1  # pane-scheduler:j1`,
+		`0 0 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1`,
 	}, "\n")
 	found := Scan(text, testHome)
 	if len(found) != 1 || found[0].Key != "j1" {
 		t.Fatalf("scan = %+v, want exactly j1", found)
+	}
+}
+
+func TestScanAndWriterNeverSeeAnOldTagLine(t *testing.T) {
+	old := `0 0 * * * /x/rig run-job j1  # pane-scheduler:j1`
+	if found := Scan(foreign+"\n"+old+"\n", testHome); len(found) != 0 {
+		t.Fatalf("an old-tag line is the migration's, never the reader's: %+v", found)
+	}
+	text, added := UpsertLine(foreign+"\n"+old+"\n", "j1", "30 1 * * *", RUNNER, testHome)
+	if !added || !strings.Contains(text, old) {
+		t.Fatalf("the writer must leave an old-tag line byte-identical and append its own:\n%s", text)
+	}
+	if next, found := RemoveLine(foreign+"\n"+old+"\n", "j1", testHome); found || !strings.Contains(next, old) {
+		t.Fatalf("remove must not touch an old-tag line: found %v\n%s", found, next)
+	}
+}
+
+func TestTagHomeIgnoresATrailingSlash(t *testing.T) {
+	if TagHome("/home/u/.rig/") != TagHome("/home/u/.rig") || TagHome("/home/u//.rig") != TagHome("/home/u/.rig") {
+		t.Fatal("the home hash must be over the cleaned path")
+	}
+	if TagHome("/home/u/.rig") == TagHome("/home/u/.orbit") {
+		t.Fatal("two homes must hash apart")
+	}
+}
+
+func TestOldTagLineNamesItsRunner(t *testing.T) {
+	key, cmd, ok := oldTagLine(`0 4 * * * '/home/u/.local/bin/orbit' run-job j1  # pane-scheduler:j1`)
+	if !ok || key != "j1" || cmd != "'/home/u/.local/bin/orbit' run-job" {
+		t.Fatalf("%q %q %v", key, cmd, ok)
+	}
+	if _, cmd, ok := oldTagLine(`# 0 4 * * * /x/rig run-job j2  # pane-scheduler:j2`); !ok || cmd != "/x/rig run-job" {
+		t.Fatalf("a paused old line: %q %v", cmd, ok)
+	}
+	if _, _, ok := oldTagLine(`0 4 * * * /x/rig run-job j1  # pane-scheduler:j2`); ok {
+		t.Fatal("a tag whose key is not the line's last field is nobody's")
+	}
+	if _, _, ok := oldTagLine(`0 4 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1`); ok {
+		t.Fatal("a new-tag line is not an old one")
+	}
+	if !runnerMatches("/x/rig run-job", "/x/rig  run-job") || runnerMatches("/x/orbit run-job", "/x/rig run-job") {
+		t.Fatal("the runner match is on the normalized command")
 	}
 }
 

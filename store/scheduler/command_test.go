@@ -209,7 +209,7 @@ func TestSchemaThreeAddsTheCommandColumnToAV2Store(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, ct))
+	db, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}

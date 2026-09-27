@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ var tagRe = regexp.MustCompile(`^(?P<lead>\S.*?)\s+#\s*(?:(?P<old>pane-scheduler
 var oldTagRe = regexp.MustCompile(`(\s*#\s*)pane-scheduler:(\S+)$`)
 
 func TagHome(home string) string {
-	return scope.ShortHash(home)
+	return scope.ShortHash(filepath.Clean(home))
 }
 
 func LineFor(key, cron, runnerCmd, home string) string {
@@ -30,16 +31,32 @@ func scanMatch(line, homeHash string) (key string, ok bool) {
 	if m == nil {
 		return "", false
 	}
-	oldIdx := tagRe.SubexpIndex("oldkey")
-	newIdx := tagRe.SubexpIndex("newkey")
-	homeIdx := tagRe.SubexpIndex("home")
-	if m[oldIdx] != "" {
-		return m[oldIdx], true
-	}
-	if m[homeIdx] != homeHash {
+	if m[tagRe.SubexpIndex("home")] != homeHash {
 		return "", false
 	}
-	return m[newIdx], true
+	return m[tagRe.SubexpIndex("newkey")], true
+}
+
+func oldTagLine(line string) (key, command string, ok bool) {
+	m := tagRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", "", false
+	}
+	key = m[tagRe.SubexpIndex("oldkey")]
+	if key == "" {
+		return "", "", false
+	}
+	body := m[tagRe.SubexpIndex("lead")]
+	body = strings.TrimPrefix(body, "# ")
+	fields := strings.Fields(body)
+	if len(fields) < 7 || fields[len(fields)-1] != key {
+		return "", "", false
+	}
+	return key, strings.Join(fields[5:len(fields)-1], " "), true
+}
+
+func runnerMatches(command, runnerCmd string) bool {
+	return command == strings.Join(strings.Fields(runnerCmd), " ")
 }
 
 func Normalize(text string) string {

@@ -487,15 +487,21 @@ post-merge corrections)
 - The crontab tag is `# rig-scheduler:<home>:<key>`, `<home>` the 12-hex
   short sha1 of the rig home path, so `~/.rig` and an embedder's home
   (~/.orbit) sharing one crontab own disjoint lines and a key only means
-  something inside its home. The reader accepts the old
-  `# pane-scheduler:<key>` tag (a line with no home is this home's) and
-  ignores another home's `rig-scheduler` line; the writer emits only the
-  new tag and never touches another home's line. On the store's next
-  open a one-time migration (a `meta` marker per store) rewrites this
-  home's old-tag lines — old lines whose key is a job in this store's
-  event log — to the new tag, leaves every other line alone (tagged or
-  not), and never runs again: a restored old-tag line is read but not
-  re-rewritten.
+  something inside its home; the hash is over the cleaned path, so a
+  trailing slash in `RIG_HOME` names the same home. The reader and the
+  writer see only this home's `rig-scheduler` lines: another home's
+  line and every old `# pane-scheduler:<key>` line are foreign to them,
+  and the writer emits only the new tag. On the store's next open a
+  one-time migration (a `meta` marker per store) rewrites this home's
+  old-tag lines to the new tag and leaves every other line byte-identical
+  (tagged or not). An old line is this home's only when its key is a job
+  in this store's event log and the runner command on the line is this
+  binary's (`<self> run-job`): an old line has no home, so the key alone
+  cannot attribute it, and two homes sharing a key never claim each
+  other's lines. The migration never runs again; a restored old-tag line
+  is foreign from then on. The migration is handed the runtime's own
+  `Crontab`, never a fresh real one, so a frontend or a test with a fake
+  crontab cannot reach the operator's.
 - `update` is the verb that changes a live job's definition, in place: any
   of `prompt`, `model`, `cwd`, `busy`, `timeout`, `name`, and the cadence. The cadence
   is a 5-field cron, or an `at` that makes the job `once`; create's

@@ -20,7 +20,7 @@ var legacyStoreRe = regexp.MustCompile(`^([0-9a-f]{12})\.sqlite$`)
 
 const crontabTagMigratedKey = "migrated:pane-scheduler"
 
-func Migration(home, rigHome string, ct Crontab) func(*sql.Tx, int, int) (string, error) {
+func Migration(home, rigHome, runnerCmd string, ct Crontab) func(*sql.Tx, int, int) (string, error) {
 	return func(tx *sql.Tx, from, to int) (string, error) {
 		if from > 0 && from < 3 {
 			if err := addCommandColumn(tx); err != nil {
@@ -181,7 +181,7 @@ func Migration(home, rigHome string, ct Crontab) func(*sql.Tx, int, int) (string
 			}
 		}
 
-		tagged, err := migrateCrontabTag(tx, rigHome, ct)
+		tagged, err := migrateCrontabTag(tx, rigHome, runnerCmd, ct)
 		if err != nil {
 			return "", err
 		}
@@ -200,7 +200,7 @@ func Migration(home, rigHome string, ct Crontab) func(*sql.Tx, int, int) (string
 	}
 }
 
-func migrateCrontabTag(tx *sql.Tx, rigHome string, ct Crontab) (int, error) {
+func migrateCrontabTag(tx *sql.Tx, rigHome, runnerCmd string, ct Crontab) (int, error) {
 	var marker string
 	err := tx.QueryRow(`SELECT value FROM meta WHERE key = ?`, crontabTagMigratedKey).Scan(&marker)
 	if err == nil {
@@ -233,12 +233,8 @@ func migrateCrontabTag(tx *sql.Tx, rigHome string, ct Crontab) (int, error) {
 	rewritten := 0
 	for i, l := range lines {
 		trimmed := strings.TrimRight(l, " \t")
-		m := tagRe.FindStringSubmatch(trimmed)
-		if m == nil {
-			continue
-		}
-		key := m[tagRe.SubexpIndex("oldkey")]
-		if key == "" || !keys[key] {
+		key, command, ok := oldTagLine(trimmed)
+		if !ok || !keys[key] || !runnerMatches(command, runnerCmd) {
 			continue
 		}
 		lines[i] = rewriteOldTag(trimmed, homeHash)

@@ -48,9 +48,22 @@ func isolate() {
 	os.Setenv("HOME", testHome)
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(testHome, ".config"))
 	os.Setenv("RIG_HOME", "")
+	wallCrontab(testHome)
 	os.Setenv("GOPATH", gopath)
 	os.Setenv("GOMODCACHE", gomod)
 	os.Setenv("GOCACHE", gocache)
+}
+
+func wallCrontab(home string) {
+	bin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		return
+	}
+	script := "#!/bin/sh\necho 'testenv: a test reached the operator crontab' >&2\nexit 3\n"
+	if err := os.WriteFile(filepath.Join(bin, "crontab"), []byte(script), 0o755); err != nil {
+		return
+	}
+	os.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 type transport struct{}

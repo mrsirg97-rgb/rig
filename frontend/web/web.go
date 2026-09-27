@@ -87,7 +87,7 @@ func New(opts Options) (*Server, error) {
 		readTO:    opts.ReadTimeout,
 		natives:   natives,
 		root:      root,
-		stores:    newStoreCache(opts.Home),
+		stores:    newStoreCache(opts.Home, ct, runner),
 		static:    sub,
 	}, nil
 }
