@@ -1,4 +1,20 @@
 # Changelog
+## [1.5.9]: the region resets after a capped aim
+
+A pane that shrank under a tall live region (the phone's keyboard
+opening with the command picker up) capped the repaint's cursor-up at
+the viewport, and the terminal clamped the cursor at the top; the rows
+of the taller paint stood above, out of view. When the pane grew again
+(the keyboard closing) a phone terminal brought them back into view,
+and the next repaint aimed only as far as the trimmed region it had
+painted while short — the picker and the status rows stood twice.
+`live` now marks a capped aim and makes the next repaint a viewport
+reset: cursor-up by a full pane, clear below, the region painted from
+row one. The transcript rows that pane showed are the price (the
+scrollback keeps them); tmux, which returns no history on a grow, sees
+the same reset and nothing else changes. `TestLiveRegionSurvivesPhoneKeyboardShrinkAndGrow`
+replays the shrink and the grow through the test terminal.
+
 ## [1.5.8]: the status rows tick while idle
 
 `frontend/tui` gains `WithStatusTick(d time.Duration)`: while the TUI
