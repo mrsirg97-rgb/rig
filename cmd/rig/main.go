@@ -44,7 +44,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/swarm"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
 	"github.com/mrsirg97-rgb/rig/tool/delegate"
-	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 	remapi "github.com/mrsirg97-rgb/rig/tool/rem"
@@ -418,7 +417,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 
 var concurrentNatives = map[string]bool{
 	"read": true, "view": true,
-	"web_search": true, "web_fetch": true, "diff": true,
+	"web_search": true, "web_fetch": true,
 	"delegate": true,
 }
 
@@ -600,7 +599,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "plugin", "plugins", "sessions"}
 
 var workerToolNames = []string{"scheduler", "delegate"}
 
@@ -1087,7 +1086,7 @@ func main() {
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"todo": todoapi.New(tdb, todoapi.Mode(*prompt != "")), "rem": remapi.New(rdb),
 			"python": py, "web_search": webSearch, "web_fetch": webFetch,
-			"diff": diff.New(sdb), "sessions": sessionstool.New(cfgDir, cwd),
+			"sessions": sessionstool.New(cfgDir, cwd),
 		},
 		workers:     cfg.Workers,
 		pluginTools: pluginTools,

@@ -75,7 +75,7 @@ kernel's `Concurrent` predicate admits runs beside its admitted
 neighbours, bounded by the kernel's `Parallel` (default 8); any other
 call is a barrier in call order, and results are emitted and appended in
 the order the model asked. The root admits the pure reads (`read`,
-`web_search`, `web_fetch`, `diff`); everything
+`web_search`, `web_fetch`); everything
 with effects, a store, or the shared kernel stays sequential.
 
 Turn-boundary semantics (the runtime's contract, enforced and tested):

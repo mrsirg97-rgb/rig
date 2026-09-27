@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const wireToolsPrefixGolden = "ffeee01cf4adec4d4854e4168fd9813939554222415abc79daa90df11493af47"
+const wireToolsPrefixGolden = "10c64d894f2da297018c56285114a558d808fba434cb24ee305e712268a76ef2"
 
 func TestWireToolsPrefixGolden(t *testing.T) {
 	k := wire(testRoot(nullFrontend{}))
@@ -38,6 +38,8 @@ func TestWireHasNoNamedFilesystemTools(t *testing.T) {
 		switch tool.Name() {
 		case "ls", "find", "grep":
 			t.Fatalf("the wire must not carry %q: bash ls/find/grep is the shell's, read is the observation path", tool.Name())
+		case "diff":
+			t.Fatalf("the wire must not carry %q: the diff folded into read's diff:true and edit's drift refusal", tool.Name())
 		}
 	}
 }

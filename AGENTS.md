@@ -148,9 +148,9 @@ plus one registration line, and the loop never names a concrete type.
   result is, and the blob path rule. One stdlib-only leaf beside
   `pathguard`, because `tool/view`, `provider/openai`, and
   `frontend/tui` disagreeing on those bytes breaks the prompt cache.
-- `tool/diff`: the observation diff: `git diff` against the working
-  tree, or the previous observation of the same call, over a pure Go
-  diff engine.
+- `tool/diff`: the diff engine, no tool surface: the pure Go `Diff`
+  (edit's drift refusal) and `Files` (the `git diff` read's `diff: true`
+  appends); read and edit use the package.
 - `tool/python`: the persistent IPython kernel: JSON-lines over stdio,
   one kernel per session, the namespace shared with plugin discovery.
 - `tool/web`: `web_search` against a local SearXNG and `web_fetch`

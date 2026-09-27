@@ -272,8 +272,8 @@ places. The whole menu; every native's description plus schema; is
 pinned under 14,000 characters by a case in `cmd/rig` over the wire
 golden (13.1k at the amendment: 5.5k of description, 7.5k of schema),
 so growth is a decision (a vision model's row pays 457 more for `view`,
-which joins that menu only for a row whose `vision` flag is set, SPEC_VIEW); the schemas of `rem`, `scheduler`, `todo`, and
-`diff` are 4k of that and the next lever, named. No description carries
+which joins that menu only for a row whose `vision` flag is set, SPEC_VIEW); the schemas of `rem`, `scheduler`, and
+`todo` are 4k of that and the next lever, named. No description carries
 the voice of another harness ("pi", "pane"), pinned by the same case. The
 one-line tools (`bash`, `write`, `edit`) keep their line and gain
 the shape's clauses without padding.

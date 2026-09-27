@@ -3,9 +3,7 @@ package diff_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -13,22 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/state"
 	difftool "github.com/mrsirg97-rgb/rig/tool/diff"
 )
-
-func openState(t *testing.T) store.DB {
-	t.Helper()
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), 1)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	return db
-}
 
 func chdir(t *testing.T, dir string) {
 	t.Helper()
@@ -75,49 +60,6 @@ func commitAll(t *testing.T, dir, msg string) {
 	}
 }
 
-type world struct {
-	db  store.DB
-	sid string
-}
-
-func newWorld(t *testing.T) *world {
-	t.Helper()
-	w := &world{db: openState(t), sid: "w"}
-	if e := state.RecordSession(context.Background(), w.db, w.sid, "/w", "m", "v"); e != nil {
-		t.Fatal(e)
-	}
-	return w
-}
-
-func (w *world) call(t *testing.T, name, args, result string, failure *string) int64 {
-	t.Helper()
-	ctx := context.Background()
-	seq, e := state.RecordMessage(ctx, w.db, w.sid, "assistant", "", nil, nil, nil)
-	if e != nil {
-		t.Fatal(e)
-	}
-	id := "c" + strconv.FormatInt(seq, 10)
-	if e := state.RecordToolCall(ctx, w.db, w.sid, seq, id, name, args); e != nil {
-		t.Fatalf("a decodable args string must land: %v", e)
-	}
-	if result != "" {
-		if e := state.RecordToolResult(ctx, w.db, w.sid, seq, id, result, failure); e != nil {
-			t.Fatal(e)
-		}
-	}
-	return seq
-}
-
-func (w *world) exec(t *testing.T, args string) (string, error) {
-	t.Helper()
-	sess := core.NewSession()
-	sess.ID = w.sid
-	tool := difftool.New(w.db)
-	return tool.Exec(core.WithSession(context.Background(), sess), json.RawMessage(args))
-}
-
-func itob(n int64) string { return strconv.FormatInt(n, 10) }
-
 func lastLine(s string) string {
 	i := strings.LastIndexByte(s, '\n')
 	if i < 0 {
@@ -126,18 +68,17 @@ func lastLine(s string) string {
 	return s[i+1:]
 }
 
-func TestFilesCleanTreeRepliesIdentical(t *testing.T) {
+func TestFilesCleanTreeRepliesNoChanges(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 	initRepo(t, dir)
 	commitAll(t, dir, "base")
-	tool := difftool.New(openState(t))
-	reply, err := tool.Exec(context.Background(), json.RawMessage(`{"mode":"files"}`))
+	reply, err := difftool.Files(context.Background(), "", nil)
 	if err != nil {
 		t.Fatalf("a clean tree must succeed: %v (%s)", err, reply)
 	}
-	if reply != "identical" {
-		t.Fatalf("a clean tree must reply identical, got %q", reply)
+	if reply != "no changes" {
+		t.Fatalf("a clean tree must reply no changes, got %q", reply)
 	}
 }
 
@@ -166,8 +107,7 @@ func TestFilesDirtyTreeCappedAt100(t *testing.T) {
 	if len(gitLines) <= 100 {
 		t.Fatalf("the fixture must exceed the cap, got %d lines", len(gitLines))
 	}
-	tool := difftool.New(openState(t))
-	reply, err := tool.Exec(context.Background(), json.RawMessage(`{"mode":"files"}`))
+	reply, err := difftool.Files(context.Background(), "", nil)
 	if err != nil {
 		t.Fatalf("a dirty tree must succeed: %v", err)
 	}
@@ -181,8 +121,7 @@ func TestFilesDirtyTreeCappedAt100(t *testing.T) {
 func TestFilesNonGitCwdRefusesLoud(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
-	tool := difftool.New(openState(t))
-	_, err := tool.Exec(context.Background(), json.RawMessage(`{"mode":"files"}`))
+	_, err := difftool.Files(context.Background(), "", nil)
 	if err == nil {
 		t.Fatal("a non-git cwd must refuse")
 	}
@@ -211,8 +150,7 @@ func TestFilesRefIsOneDotNotTwoDot(t *testing.T) {
 	commitAll(t, dir, "head")
 	setFile("ccc\n")
 
-	tool := difftool.New(openState(t))
-	reply, err := tool.Exec(context.Background(), json.RawMessage(`{"mode":"files","ref":"base"}`))
+	reply, err := difftool.Files(context.Background(), "base", nil)
 	if err != nil {
 		t.Fatalf("a valid ref must succeed: %v (%s)", err, reply)
 	}
@@ -239,8 +177,7 @@ func TestFilesPathsRestrictTheDiff(t *testing.T) {
 	commitAll(t, dir, "base")
 	w("a.txt", "A\n")
 	w("b.txt", "B\n")
-	tool := difftool.New(openState(t))
-	reply, err := tool.Exec(context.Background(), json.RawMessage(`{"mode":"files","paths":["a.txt"]}`))
+	reply, err := difftool.Files(context.Background(), "", []string{"a.txt"})
 	if err != nil {
 		t.Fatalf("paths must succeed: %v (%s)", err, reply)
 	}
@@ -263,225 +200,13 @@ func TestFilesGitFailurePassesTheStderrLine(t *testing.T) {
 		t.Fatal("git must fail on the unknown ref")
 	}
 	first := strings.Split(strings.TrimSpace(errb), "\n")[0]
-	tool := difftool.New(openState(t))
-	_, terr := tool.Exec(context.Background(), json.RawMessage(`{"mode":"files","ref":"v9"}`))
+	_, terr := difftool.Files(context.Background(), "v9", nil)
 	if terr == nil {
 		t.Fatal("the unknown ref must refuse")
 	}
 	want := "diff files: " + first
 	if terr.Error() != want {
 		t.Fatalf("voice = %q, want %q", terr.Error(), want)
-	}
-}
-
-func TestLastDiffsNewestAgainstPreviousHeaderNamesBoth(t *testing.T) {
-	w := newWorld(t)
-	w.call(t, "bash", `{"command":"ls"}`, "context line\nold line\n", nil)
-	w.call(t, "bash", `{"command":"ls"}`, "context line\nnew line\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"}}`)
-	if err != nil {
-		t.Fatalf("a pair must succeed: %v (%s)", err, reply)
-	}
-	rows, err := state.RecentToolCalls(context.Background(), w.db, w.sid, "bash", `{"command":"ls"}`, 1)
-	if err != nil || len(rows) != 2 {
-		t.Fatalf("fixture rows = %d, want 2: %v", len(rows), err)
-	}
-	nt, ot := rows[0].StartedAt.Format(time.RFC3339Nano), rows[1].StartedAt.Format(time.RFC3339Nano)
-	want := fmt.Sprintf(`diff last bash {"command":"ls"} · old %s seq %d · new %s seq %d
-
---- %s
-+++ %s
-@@ -1,2 +1,2 @@
- context line
--old line
-+new line`, ot, rows[1].Seq, nt, rows[0].Seq, ot, nt)
-	if reply != want {
-		t.Fatalf("reply = %q, want %q", reply, want)
-	}
-}
-
-func TestLastIdenticalPairRepliesIdentical(t *testing.T) {
-	w := newWorld(t)
-	w.call(t, "bash", `{"command":"ls"}`, "same\n", nil)
-	w.call(t, "bash", `{"command":"ls"}`, "same\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"}}`)
-	if err != nil {
-		t.Fatalf("an identical pair must succeed: %v", err)
-	}
-	if reply != "identical" {
-		t.Fatalf("an identical pair must reply identical, got %q", reply)
-	}
-}
-
-func TestLastSingleCallRepliesNoEarlier(t *testing.T) {
-	w := newWorld(t)
-	w.call(t, "bash", `{"command":"ls"}`, "one\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"}}`)
-	if err != nil {
-		t.Fatalf("one call must be a named reply, not a refusal: %v", err)
-	}
-	if reply != "no earlier observation" {
-		t.Fatalf("one call must reply no earlier observation, got %q", reply)
-	}
-}
-
-func TestLastZeroCallsRepliesNoEarlier(t *testing.T) {
-	w := newWorld(t)
-	w.call(t, "bash", `{"command":"ls"}`, "one\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"read","args":{"path":"/x"}}`)
-	if err != nil {
-		t.Fatalf("zero calls must be a named reply, not a refusal: %v", err)
-	}
-	if reply != "no earlier observation" {
-		t.Fatalf("zero calls must reply no earlier observation, got %q", reply)
-	}
-}
-
-func TestLastNPicksNthPreviousAndBeyondRefuses(t *testing.T) {
-	w := newWorld(t)
-	seq1 := w.call(t, "bash", `{"command":"ls"}`, "one\n", nil)
-	w.call(t, "bash", `{"command":"ls"}`, "two\n", nil)
-	w.call(t, "bash", `{"command":"ls"}`, "three\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"},"n":2}`)
-	if err != nil {
-		t.Fatalf("n=2 must succeed: %v (%s)", err, reply)
-	}
-	if !strings.Contains(reply, "-one") || !strings.Contains(reply, "+three") {
-		t.Fatalf("n=2 must diff newest against second-previous (one vs three):\n%s", reply)
-	}
-	if !strings.Contains(reply, "seq "+itob(seq1)) {
-		t.Fatalf("the header must name the second-previous observation (seq %d):\n%s", seq1, reply)
-	}
-	if strings.Contains(reply, "\ntwo") {
-		t.Fatalf("the middle observation must not enter the reply:\n%s", reply)
-	}
-	reply, err = w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"},"n":4}`)
-	if err != nil {
-		t.Fatalf("an n beyond the available must be a named reply, not a refusal: %v", err)
-	}
-	if reply != "no earlier observation" {
-		t.Fatalf("n=4 with 3 rows must reply no earlier observation, got %q", reply)
-	}
-}
-
-func TestLastQueryArgsKeyOrderWhitespaceIgnored(t *testing.T) {
-	w := newWorld(t)
-	w.call(t, "bash", `{"command":"ls","cwd":"/x"}`, "r1\n", nil)
-	w.call(t, "bash", `{"command":"ls","cwd":"/x"}`, "r2\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"cwd": "/x", "command" : "ls"}}`)
-	if err != nil {
-		t.Fatalf("the same call, retyped with order and whitespace, must match: %v (%s)", err, reply)
-	}
-	if reply == "no earlier observation" || reply == "identical" {
-		t.Fatalf("the pair must be found, got %q", reply)
-	}
-
-	if !strings.HasPrefix(reply, `diff last bash {"command":"ls","cwd":"/x"} · old `) {
-		t.Fatalf("the header must name the canonical args:\n%s", reply)
-	}
-}
-
-func TestLastValueChangedIsDifferentObservation(t *testing.T) {
-	w := newWorld(t)
-	w.call(t, "bash", `{"command":"ls"}`, "r1\n", nil)
-	w.call(t, "bash", `{"command":"ls"}`, "r2\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls -la"}}`)
-	if err != nil {
-		t.Fatalf("a different observation must be a named reply, not a refusal: %v", err)
-	}
-	if reply != "no earlier observation" {
-		t.Fatalf("ls -la is not ls: %q", reply)
-	}
-}
-
-func TestLastFailedCallParticipates(t *testing.T) {
-	w := newWorld(t)
-	failure := "exit 1"
-	w.call(t, "bash", `{"command":"false"}`, "err-out-1\n", &failure)
-	w.call(t, "bash", `{"command":"false"}`, "err-out-2\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"false"}}`)
-	if err != nil {
-		t.Fatalf("a failed call must participate: %v (%s)", err, reply)
-	}
-	if !strings.Contains(reply, "-err-out-1") || !strings.Contains(reply, "+err-out-2") {
-		t.Fatalf("the failed call's result must be in the diff:\n%s", reply)
-	}
-}
-
-func TestLastNoSessionIsALoudRefusal(t *testing.T) {
-	w := newWorld(t)
-	w.call(t, "bash", `{"command":"ls"}`, "r1\n", nil)
-	w.call(t, "bash", `{"command":"ls"}`, "r2\n", nil)
-	tool := difftool.New(w.db)
-	_, err := tool.Exec(context.Background(), json.RawMessage(`{"mode":"last","tool":"bash","args":{"command":"ls"}}`))
-	if err == nil {
-		t.Fatal("no session in ctx must refuse")
-	}
-	want := "diff last: no session in context (the loop threads one)"
-	if err.Error() != want {
-		t.Fatalf("voice = %q, want %q", err.Error(), want)
-	}
-}
-
-func TestLastRelandedTailDiffsAsOrdinaryRow(t *testing.T) {
-	w := newWorld(t)
-	sess := core.NewSession()
-	sess.ID = w.sid
-	rec := state.NewRecorder(&nullFrontend{}, w.db, "/w", "m", "v", w.sid, sess)
-
-	seq1 := w.call(t, "bash", `{"command":"ls"}`, "r1\n", nil)
-	id := "c" + itob(seq1)
-
-	sess.Append(core.Message{Role: core.RoleUser, Content: "go"})
-	sess.Append(core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: id, Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}}})
-	sess.Append(core.Message{Role: core.RoleTool, ToolID: id, Content: "r1\n"})
-
-	rec.Notify(core.Compacted{Summary: "[compaction] the summary"})
-
-	rows, err := state.RecentToolCalls(context.Background(), w.db, w.sid, "bash", `{"command":"ls"}`, 1)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("rows = %d, want 1 (the tail's copy): %v", len(rows), err)
-	}
-	if rows[0].Result != "r1\n" {
-		t.Fatalf("the re-landed result = %q, want r1\\n verbatim", rows[0].Result)
-	}
-	relandedSeq := rows[0].Seq
-	if relandedSeq <= seq1 {
-		t.Fatalf("the re-landed row's seq = %d, want a fresh seq past the original's %d", relandedSeq, seq1)
-	}
-
-	w.call(t, "bash", `{"command":"ls"}`, "r2\n", nil)
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"}}`)
-	if err != nil {
-		t.Fatalf("the re-landed pair must diff: %v (%s)", err, reply)
-	}
-	if !strings.Contains(reply, "-r1") || !strings.Contains(reply, "+r2") {
-		t.Fatalf("the re-landed row must be in the diff:\n%s", reply)
-	}
-
-	if !strings.Contains(reply, "seq "+itob(relandedSeq)+" · new") {
-		t.Fatalf("the old observation must be the re-landed row (seq %d), not the original (seq %d):\n%s", relandedSeq, seq1, reply)
-	}
-}
-
-func TestLastRelandedCopyNeverRepliesSpuriousIdentical(t *testing.T) {
-	w := newWorld(t)
-	seq1 := w.call(t, "bash", `{"command":"ls"}`, "same\n", nil)
-	id := "c" + itob(seq1)
-	sess := core.NewSession()
-	sess.ID = w.sid
-	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] the summary"})
-	sess.Append(core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: id, Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}}})
-	sess.Append(core.Message{Role: core.RoleTool, ToolID: id, Content: "same\n"})
-	rec := state.NewRecorder(&nullFrontend{}, w.db, "/w", "m", "v", w.sid, sess)
-	rec.Notify(core.Compacted{Summary: "[compaction] the summary"})
-
-	reply, err := w.exec(t, `{"mode":"last","tool":"bash","args":{"command":"ls"}}`)
-	if err != nil {
-		t.Fatalf("one observation must be a named reply, not a refusal: %v (%s)", err, reply)
-	}
-	if reply != "no earlier observation" {
-		t.Fatalf("the copy has no earlier observation in the current world: got %q, want no earlier observation (the spurious identical is the copy pairing against its own original)", reply)
 	}
 }
 
@@ -681,95 +406,3 @@ func lineOr(lines []string, i int) string {
 	}
 	return "<eof>"
 }
-
-func TestNameDescriptionAndSchemaAreTheSpecText(t *testing.T) {
-	tool := difftool.New(openState(t))
-	if tool.Name() != "diff" {
-		t.Fatalf("name = %q, want diff", tool.Name())
-	}
-	const wantDescription = "diff the working tree against HEAD (mode files, git diff), or a tool call's newest result against " +
-		"its previous observation in this session (mode last: the same tool and args). Guidelines: 'did my change " +
-		"actually apply' -> last with that call's tool and args; the tree -> files; arbitrary strings -> python, not this. " +
-		"Reply: a unified diff (context 3, capped), 'identical', or 'no earlier observation'; a non-git cwd refuses files by name."
-	if tool.Description() != wantDescription {
-		t.Fatalf("description = %q, want the spec's verbatim text", tool.Description())
-	}
-	const wantSchema = `{
-  "type": "object",
-  "required": ["mode"],
-  "properties": {
-    "mode": {
-      "type": "string",
-      "enum": ["files", "last"],
-      "description": "files: the working tree against HEAD (git diff); last: the previous observation of the same tool call"
-    },
-    "ref": {
-      "type": "string",
-      "description": "files only: the ref to diff against (default HEAD)"
-    },
-    "paths": {
-      "type": "array",
-      "items": {"type": "string"},
-      "description": "files only: restrict the diff to these paths"
-    },
-    "tool": {
-      "type": "string",
-      "description": "last only: the tool name of the observed call"
-    },
-    "args": {
-      "type": "object",
-      "description": "last only: the exact args of that call; matched by canonical equality (key order and whitespace do not matter, values do)"
-    },
-    "n": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "last only: the n-th previous observation (default 1)"
-    }
-  }
-}`
-	if string(tool.Schema()) != wantSchema {
-		t.Fatalf("schema = %s, want the spec's verbatim JSON", tool.Schema())
-	}
-
-	var probe map[string]any
-	if err := json.Unmarshal(tool.Schema(), &probe); err != nil {
-		t.Fatalf("the schema must be valid JSON: %v", err)
-	}
-}
-
-func TestPinnedRefusals(t *testing.T) {
-	w := newWorld(t)
-	tool := difftool.New(w.db)
-	sess := core.NewSession()
-	sess.ID = w.sid
-	ctx := core.WithSession(context.Background(), sess)
-	cases := []struct {
-		name string
-		args string
-		want string
-	}{
-		{"mode missing", `{}`, "diff: mode required (files|last)"},
-		{"mode unknown", `{"mode":"both"}`, `diff: unknown mode "both" (files|last)`},
-		{"last without tool and args", `{"mode":"last"}`, "diff last: tool and args required"},
-		{"last without args", `{"mode":"last","tool":"bash"}`, "diff last: tool and args required"},
-		{"n zero", `{"mode":"last","tool":"bash","args":{"command":"ls"},"n":0}`, "diff last: n must be >= 1"},
-		{"n negative", `{"mode":"last","tool":"bash","args":{"command":"ls"},"n":-2}`, "diff last: n must be >= 1"},
-		{"n not an integer", `{"mode":"last","tool":"bash","args":{"command":"ls"},"n":"2"}`, "diff last: n must be >= 1"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			_, err := tool.Exec(ctx, json.RawMessage(c.args))
-			if err == nil {
-				t.Fatalf("must refuse")
-			}
-			if err.Error() != c.want {
-				t.Fatalf("voice = %q, want %q", err.Error(), c.want)
-			}
-		})
-	}
-}
-
-type nullFrontend struct{}
-
-func (nullFrontend) Input(context.Context) (string, error) { return "", io.EOF }
-func (nullFrontend) Notify(core.Event)                     {}

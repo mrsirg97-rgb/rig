@@ -10,7 +10,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/config"
 )
 
-var noWorkerAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
+var noWorkerAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web_search", "web_fetch", "plugin", "plugins", "sessions"}
 var fleetAllow = append(append(append([]string{}, noWorkerAllow...), "scheduler"), "delegate")
 
 func TestWorkersAbsentIsNoWorkers(t *testing.T) {

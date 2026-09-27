@@ -75,7 +75,7 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
   prompt headless. `--base-url` and `--model` point at the endpoint, or set
   `RIG_BASE_URL` and `RIG_MODEL`; `settings.json` is the fallback.
 - **tools.** `bash`, `read`/`write`/`edit`, `python`, `web_search`,
-  `web_fetch`, `diff`, `todo`, `rem`, `scheduler`, `delegate`, `sessions`,
+  `web_fetch`, `todo`, `rem`, `scheduler`, `delegate`, `sessions`,
   `plugin`/`plugins`. Results are capped, refusals are named.
 - **the queue.** `todo` reads the project's tasks (worktrees share one
   board); `todo claim` takes the next unblocked task, `todo complete` lands
@@ -93,7 +93,7 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 
 ## the tools
 
-rig's default menu is 14 built-in tools: `view` joins the set only for a
+rig's default menu is 13 built-in tools: `view` joins the set only for a
 model row whose `"vision": true` says it takes images, and `scheduler` and
 `delegate` join when a worker fleet is configured. Restrict them with
 `--allow`:
@@ -103,7 +103,6 @@ model row whose `"vision": true` says it takes images, and `scheduler` and
 | `bash` | run shell commands; output bounded |
 | `read` / `write` / `edit` | files; edits are exact-match, provenance-checked |
 | `view` | look at an image: downscaled, content-addressed, sent to a vision model (off unless your model row has `"vision": true`) |
-| `diff` | the working tree against HEAD, or a tool's two latest observations |
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web_search` | a local SearXNG instance |
 | `web_fetch` | a URL as readable text; private addresses refused |
@@ -224,12 +223,13 @@ plugins/        python plugin discovery (one file, one tool) and the plugin
 store/          the SQLite stores (state, todo, rem, scheduler), the sqlx
                 transaction seam, the project scope identity (store/scope);
                 -resume projects a session back from the state rows
-tool/           Tool implementations: bash(1); file read/write/edit; view
-                the image reader (a vision row only); todo the job queue;
-                rem memory; scheduler background jobs; delegate the
-                one-shot worker; python the persistent IPython kernel; web
-                search and fetch; diff the observation diff; sessions the
-                soak's vitals
+tool/           Tool implementations: bash(1); file read/write/edit (read
+                appends the file's git diff on ask, the drift refusal
+                carries the capped diff); view the image reader (a vision
+                row only); todo the job queue; rem memory; scheduler
+                background jobs; delegate the one-shot worker; python the
+                persistent IPython kernel; web search and fetch; sessions
+                the soak's vitals
 frontend/       Frontend implementations: cli (the piped reference), tui (the
                 terminal default), oneshot (-p worker), web (the serve
                 dashboard)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -682,5 +683,85 @@ func TestReadBigFileDoesNotAllocateTheWholeFile(t *testing.T) {
 	const bound = 16 << 20
 	if allocated > bound {
 		t.Fatalf("the read allocated %d bytes for a %d-byte file, want <= %d (the cap is %d; the whole file must not be materialised)", allocated, size, bound, readCap)
+	}
+}
+
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func initRepo(t *testing.T, dir string) {
+	t.Helper()
+	for _, a := range [][]string{
+		{"init"},
+		{"config", "user.name", "rig test"},
+		{"config", "user.email", "rig@test"},
+		{"config", "commit.gpgsign", "false"},
+	} {
+		git(t, dir, a...)
+	}
+}
+
+func commitAll(t *testing.T, dir, msg string) {
+	t.Helper()
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "--allow-empty", "-m", msg)
+}
+
+func TestReadDiffShowsTheHunk(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(oldWd) })
+	initRepo(t, dir)
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, dir, "base")
+	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	if err != nil {
+		t.Fatalf("read diff: %v", err)
+	}
+	if !strings.Contains(got, "@@") || !strings.Contains(got, "+two") {
+		t.Fatalf("a modified file must show its hunk:\n%s", got)
+	}
+}
+
+func TestReadDiffCleanSaysNoChanges(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(oldWd) })
+	initRepo(t, dir)
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, dir, "base")
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	if err != nil {
+		t.Fatalf("read diff: %v", err)
+	}
+	if !strings.HasSuffix(got, "\n\nno changes") {
+		t.Fatalf("a clean file must append 'no changes':\n%s", got)
 	}
 }

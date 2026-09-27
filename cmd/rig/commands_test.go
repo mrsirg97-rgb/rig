@@ -27,7 +27,6 @@ import (
 	remstore "github.com/mrsirg97-rgb/rig/store/rem"
 	"github.com/mrsirg97-rgb/rig/store/state"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
-	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
 	sessionstool "github.com/mrsirg97-rgb/rig/tool/sessions"
 )
@@ -181,7 +180,6 @@ func newHarness(t *testing.T, row models.Model, activeID string, runtime models.
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": &fakePython{},
 			"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
-			"diff":     diff.New(db),
 			"sessions": sessionstool.New("", dir),
 			"plugins":  fakePlugins{},
 		},
