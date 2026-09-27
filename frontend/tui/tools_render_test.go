@@ -8,7 +8,7 @@ import (
 )
 
 const todoReply = "→ t3 started\n" +
-	"2/5 done · next: t4\n" +
+	"[rig] 2/5 done · next: t4\n" +
 	"  t1 [x] wire the models table\n" +
 	"  t2 [x] the switch seam\n" +
 	"  t3 [~] steer verb\n" +
@@ -17,10 +17,14 @@ const todoReply = "→ t3 started\n" +
 	"  t5 [ ] rem check\n"
 
 const todoReplyWithClaim = "→ t3 started\n" +
-	"1/3 done · next: t2\n" +
+	"[rig] 1/3 done · next: t2\n" +
 	"  t1 [x] wire the models table\n" +
 	"  t2 [~] the switch seam\n" +
 	"  t3 [ ] rem check · claimed by 01a011f6\n"
+
+const todoReplyReview = "[rig] 1/2 done · 1 in review\n" +
+	"  t1 [x] one\n" +
+	"  t2 [r] delegated work · claimed for review by 01a011f6\n"
 
 const todoReplyStale = "3/3 done · next: t4\n" +
 	"  t1 [x] one\n" +
@@ -78,8 +82,8 @@ func TestTodoBlockExactBytes(t *testing.T) {
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", todoReply)
 
-	if !strings.Contains(got, th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t4")) {
-		t.Fatalf("the progress head is missing or wrong:\n%s", got)
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t4")) {
+		t.Fatalf("the scoped progress head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "wire the models table")) {
 		t.Fatalf("the done row is missing or wrong:\n%s", got)
@@ -107,6 +111,30 @@ func TestTodoBlockClaimAndStaleFooter(t *testing.T) {
 	got = tui.RenderTodoBlock(th, "OPEN", todoReplyStale)
 	if !strings.Contains(got, th.Paint("dim", "  · 2 unresolved since 2026-04-18 (recovered from log)")) {
 		t.Fatalf("the stale footer (the todo's own) commits dim:\n%s", got)
+	}
+}
+
+func TestTodoBlockReview(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", todoReplyReview)
+	if !strings.Contains(got, th.Paint("dim", " 1/2 · 1 in review")) {
+		t.Fatalf("the review count is missing from the head:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("warn", "⧗")+" "+th.Paint("dim", "t2")+" "+th.Paint("text", "delegated work")+th.Paint("dim", " · claimed for review by 01a011f6")) {
+		t.Fatalf("the review row keeps its glyph and the review claim, dim:\n%s", got)
+	}
+}
+
+func TestTodoBlockBareQueueOneDimLine(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tui.RenderTodoBlock(th, "OPEN", "queue: rig (bound)"); got != th.Paint("dim", "queue: rig (bound)") {
+		t.Fatalf("a bare queue report prints as one dim line, got:\n%s", got)
 	}
 }
 
