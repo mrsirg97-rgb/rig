@@ -33,12 +33,12 @@ func TestCompactedLineExact(t *testing.T) {
 	}
 	ev := core.Compacted{Dropped: 1200, Kept: 40000, Usage: core.Usage{Prompt: 2000, Completion: 1000}}
 	got := tui.RenderCompacted(th, ev)
-	want := th.Paint("accent", "⧉") + " " + th.Paint("dim", "compact: -1.2k kept 40k · summary up 2.0k down 1.0k")
+	want := th.Paint("ember", "⧉") + " " + th.Paint("dim", "compact: -1.2k kept 40k · summary up 2.0k down 1.0k")
 	if got != want {
 		t.Fatalf("compacted line = %q, want %q", got, want)
 	}
 	as, _ := tui.ResolveTheme("oled", json.RawMessage(`{"base":"oled","glyphs":"ascii"}`), true)
-	if got := tui.RenderCompacted(as, ev); !strings.HasPrefix(got, as.Paint("accent", "=")+" ") {
+	if got := tui.RenderCompacted(as, ev); !strings.HasPrefix(got, as.Paint("ember", "=")+" ") {
 		t.Fatalf("the ascii compact glyph is the = set: %q", got)
 	}
 }
@@ -93,7 +93,7 @@ func TestToolBlockHeadTailElided(t *testing.T) {
 	lines := strings.Split(got, "\n")
 
 	want := []string{
-		th.Paint("accent", "●") + " " + th.Paint("accent", "bash") + th.Paint("dim", " · ") + th.Paint("text", "$ go test ./middleware/"),
+		th.Paint("ember", "●") + " " + th.Paint("ember", "bash") + th.Paint("dim", " · ") + th.Paint("text", "$ go test ./middleware/"),
 		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
 		th.Paint("dim", "  line4"), th.Paint("dim", "  line5"), th.Paint("dim", "  line6"),
 		th.Paint("dim", "  · 2 lines hidden ·"),
@@ -126,7 +126,7 @@ func TestToolBlockDiffShowsVerbAndStaysDefaultPath(t *testing.T) {
 	lines := strings.Split(got, "\n")
 
 	want := []string{
-		th.Paint("accent", "●") + " " + th.Paint("accent", "diff") + th.Paint("dim", " · ") + th.Paint("text", "files"),
+		th.Paint("ember", "●") + " " + th.Paint("ember", "diff") + th.Paint("dim", " · ") + th.Paint("text", "files"),
 		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
 		th.Paint("dim", "  line4"), th.Paint("dim", "  line5"), th.Paint("dim", "  line6"),
 		th.Paint("dim", "  · 2 lines hidden ·"),
@@ -214,7 +214,7 @@ func TestToolDetailTable(t *testing.T) {
 	}
 	for _, c := range cases {
 		got := tui.RenderToolBlock(th, c.name, json.RawMessage(c.args), "body", false, time.Second)
-		open := th.Paint("accent", "●") + " " + th.Paint("accent", c.name)
+		open := th.Paint("ember", "●") + " " + th.Paint("ember", c.name)
 		if c.want != "" {
 			open += th.Paint("dim", " · ") + th.Paint("text", c.want)
 		}
@@ -240,7 +240,7 @@ func TestWriteBlockPreviewsTheContent(t *testing.T) {
 	args := json.RawMessage(`{"path":"a.go","content":"package a\n\nfunc A() {}\n"}`)
 	got := tui.RenderToolBlock(th, "write", args, "wrote 24 bytes to a.go", false, 50*time.Millisecond)
 	want := []string{
-		th.Paint("accent", "●") + " " + th.Paint("accent", "write") + th.Paint("dim", " · ") + th.Paint("text", "a.go"),
+		th.Paint("ember", "●") + " " + th.Paint("ember", "write") + th.Paint("dim", " · ") + th.Paint("text", "a.go"),
 		th.Paint("dim", "  package a"), th.Paint("dim", "  "), th.Paint("dim", "  func A() {}"),
 		th.Paint("dim", "  wrote 24 bytes to a.go"),
 		th.Paint("dim", "write") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.1s"),
@@ -271,7 +271,7 @@ func TestEditBlockPreviewsOldAndNewElided(t *testing.T) {
 	raw, _ := json.Marshal(map[string]string{"path": "b.go", "old": old.String(), "new": "n1\nn2"})
 	got := tui.RenderToolBlock(th, "edit", raw, "edited b.go", false, 50*time.Millisecond)
 	want := []string{
-		th.Paint("accent", "●") + " " + th.Paint("accent", "edit") + th.Paint("dim", " · ") + th.Paint("text", "b.go"),
+		th.Paint("ember", "●") + " " + th.Paint("ember", "edit") + th.Paint("dim", " · ") + th.Paint("text", "b.go"),
 		th.Paint("error", "- o1"), th.Paint("error", "- o2"), th.Paint("error", "- o3"),
 		th.Paint("error", "- o4"), th.Paint("error", "- o5"), th.Paint("error", "- o6"),
 		th.Paint("dim", "  · 2 lines hidden ·"),

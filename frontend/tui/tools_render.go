@@ -162,7 +162,7 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	if filled > segs {
 		filled = segs
 	}
-	b.WriteString(t.Paint(SlotAccent, strings.Repeat(t.Glyph(GlyphBarOn), filled)))
+	b.WriteString(t.Paint(SlotEmber, strings.Repeat(t.Glyph(GlyphBarOn), filled)))
 	b.WriteString(t.Paint(SlotDim, strings.Repeat(t.Glyph(GlyphBarOff), segs-filled)))
 	head := fmt.Sprintf(" %d/%d", p.Done, p.Total)
 	if p.Next != "" {

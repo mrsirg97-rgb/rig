@@ -34,7 +34,7 @@ func RenderUsage(t Theme, up, down, cacheRead int) string {
 }
 
 func RenderCompacted(t Theme, ev core.Compacted) string {
-	return t.Paint(SlotAccent, t.Glyph(GlyphCompact)) + " " +
+	return t.Paint(SlotEmber, t.Glyph(GlyphCompact)) + " " +
 		t.Paint(SlotDim, fmt.Sprintf("compact: -%s kept %s · summary up %s down %s",
 			formatTokens(ev.Dropped), formatTokens(ev.Kept),
 			formatTokens(ev.Usage.Prompt), formatTokens(ev.Usage.Completion)))
@@ -57,7 +57,7 @@ const elideSentinel = "\x00hidden\x00"
 
 func RenderToolBlock(t Theme, name string, args json.RawMessage, content string, failed bool, dur time.Duration) string {
 	if name == "todo" || name == "scheduler" {
-		open := t.Paint(SlotAccent, t.Glyph(GlyphDone)) + " " + t.Paint(SlotAccent, name)
+		open := t.Paint(SlotEmber, t.Glyph(GlyphDone)) + " " + t.Paint(SlotEmber, name)
 		if d := verbDetail(args); d != "" {
 			open += t.Paint(SlotDim, " · ") + t.Paint(SlotText, d)
 		}
@@ -67,9 +67,9 @@ func RenderToolBlock(t Theme, name string, args json.RawMessage, content string,
 		return RenderSchedulerBlock(t, open, content)
 	}
 	var b strings.Builder
-	b.WriteString(t.Paint(SlotAccent, t.Glyph(GlyphDone)))
+	b.WriteString(t.Paint(SlotEmber, t.Glyph(GlyphDone)))
 	b.WriteString(" ")
-	b.WriteString(t.Paint(SlotAccent, name))
+	b.WriteString(t.Paint(SlotEmber, name))
 	if d := toolDetail(name, args, content); d != "" {
 		b.WriteString(t.Paint(SlotDim, " · "))
 		b.WriteString(t.Paint(SlotText, d))

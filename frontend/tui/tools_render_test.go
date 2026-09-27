@@ -50,7 +50,7 @@ func TestTodoBlockBothDoorsByteEqualMinusOpening(t *testing.T) {
 		t.Fatal(err)
 	}
 	tool := tui.RenderTodoBlock(th,
-		th.Paint("accent", "●")+" "+th.Paint("accent", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
+		th.Paint("ember", "●")+" "+th.Paint("ember", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
 		todoReply)
 	cmd := tui.RenderTodoBlock(th,
 		th.Paint("dim", "/todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
@@ -78,7 +78,7 @@ func TestTodoBlockExactBytes(t *testing.T) {
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", todoReply)
 
-	if !strings.Contains(got, th.Paint("accent", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t4")) {
+	if !strings.Contains(got, th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t4")) {
 		t.Fatalf("the progress head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "wire the models table")) {
@@ -134,7 +134,7 @@ func TestSchedulerBlockBothDoorsByteEqualMinusOpening(t *testing.T) {
 	}
 	for _, reply := range []string{schedListReply, schedRunsReply} {
 		tool := tui.RenderSchedulerBlock(th,
-			th.Paint("accent", "●")+" "+th.Paint("accent", "scheduler")+th.Paint("dim", " · ")+th.Paint("text", "list"),
+			th.Paint("ember", "●")+" "+th.Paint("ember", "scheduler")+th.Paint("dim", " · ")+th.Paint("text", "list"),
 			reply)
 		cmd := tui.RenderSchedulerBlock(th,
 			th.Paint("dim", "/scheduler")+th.Paint("dim", " · ")+th.Paint("text", "list"),

@@ -433,7 +433,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 	cmdS.await(promptMark(th))
 	cmdS.si.feed("/todo start t3\n")
 
-	cmdS.await(th.Paint(SlotAccent, "/todo"))
+	cmdS.await(th.Paint(SlotEmber, "/todo"))
 	cmdS.si.feed("bye\n")
 	select {
 	case l := <-in:

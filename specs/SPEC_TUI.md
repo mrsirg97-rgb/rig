@@ -559,7 +559,7 @@ One committed block per execution, pane's vocabulary:
 bash ✓ 0.4s
 ```
 
-- `ToolStart` opens the row: accent glyph, tool name, the detail;
+- `ToolStart` opens the row: ember glyph, tool name, the detail;
 - the result body renders head/tail: first N and last M lines with a
   dim `· k lines hidden ·` between (N=6, M=2 at v1; the caps are the
   TUI's, the runtime's own output caps still apply first);

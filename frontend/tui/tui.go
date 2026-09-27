@@ -1256,7 +1256,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 }
 
 func (t *tui) commandOpeningLocked(name, args string) string {
-	s := t.theme.Paint(SlotAccent, "/"+name)
+	s := t.theme.Paint(SlotEmber, "/"+name)
 	if args != "" {
 		s += t.theme.Paint(SlotDim, " · ") + t.theme.Paint(SlotText, args)
 	}
