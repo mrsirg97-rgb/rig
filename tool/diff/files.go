@@ -14,10 +14,10 @@ import (
 const capLines = 100
 
 func Files(ctx context.Context, ref string, paths []string) (string, error) {
-	cmdArgs := []string{"diff", "--no-color", "-U3"}
-	if ref != "" {
-		cmdArgs = append(cmdArgs, ref)
+	if ref == "" {
+		ref = "HEAD"
 	}
+	cmdArgs := []string{"diff", "--no-color", "--no-ext-diff", "-U3", ref}
 	if len(paths) > 0 {
 		cmdArgs = append(cmdArgs, "--")
 		cmdArgs = append(cmdArgs, paths...)

@@ -68,6 +68,27 @@ func lastLine(s string) string {
 	return s[i+1:]
 }
 
+func TestFilesDefaultsToHeadNotTheIndex(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	initRepo(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, dir, "base")
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "f.txt")
+	reply, err := difftool.Files(context.Background(), "", nil)
+	if err != nil {
+		t.Fatalf("a staged edit must succeed: %v (%s)", err, reply)
+	}
+	if !strings.Contains(reply, "+two") {
+		t.Fatalf("the empty ref must mean HEAD, not the index (a staged edit shows against HEAD):\n%s", reply)
+	}
+}
+
 func TestFilesCleanTreeRepliesNoChanges(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

@@ -8,7 +8,7 @@ session makes edit-after-external-change fail loudly instead of
 clobbering. Read gains `offset`/`limit` line arguments (SPEC_HARDENING
 decision 9): a narrower read exists to reach for when a capped result's
 "re-read a narrower range" is the teaching. Read's `diff: true` appends
-the file's git diff against the working tree (`tool/diff`'s `Files`), or
+the file's git diff against HEAD (`tool/diff`'s `Files`), or
 `no changes` when clean, so the model sees what it is about to edit. A
 read that finds a stale observation (SPEC_CORE: "a read that finds a
 stale observation names it") prepends `[changed since your observation]`

@@ -1,8 +1,8 @@
 # tool/diff: the observation diff
 
 **Amended 1.7.0: the tool surface is gone.** `diff` folded into read and
-edit: read's `diff: true` appends the file's `git diff` against the
-working tree, and edit's drift refusal carries the capped diff. The
+edit: read's `diff: true` appends the file's `git diff` against HEAD,
+and edit's drift refusal carries the capped diff. The
 package keeps the engine (`Diff`, `Files`) and no native tool; the rest
 is history, kept for the record.
 

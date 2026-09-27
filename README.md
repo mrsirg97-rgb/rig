@@ -224,9 +224,10 @@ store/          the SQLite stores (state, todo, rem, scheduler), the sqlx
                 transaction seam, the project scope identity (store/scope);
                 -resume projects a session back from the state rows
 tool/           Tool implementations: bash(1); file read/write/edit (read
-                appends the file's git diff on ask, the drift refusal
-                carries the capped diff); view the image reader (a vision
-                row only); todo the job queue; rem memory; scheduler
+                appends the file's git diff against HEAD on ask, the
+                drift refusal carries the capped diff); view the image
+                reader (a vision row only); todo the job queue; rem
+                memory; scheduler
                 background jobs; delegate the one-shot worker; python the
                 persistent IPython kernel; web search and fetch; sessions
                 the soak's vitals

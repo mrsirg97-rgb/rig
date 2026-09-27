@@ -750,6 +750,67 @@ func TestReadDiffShowsTheHunk(t *testing.T) {
 	}
 }
 
+func TestReadDiffShowsTheHunkWithTheEditStaged(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(oldWd) })
+	initRepo(t, dir)
+	path := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, dir, "base")
+	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "note.txt")
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	if err != nil {
+		t.Fatalf("read diff: %v", err)
+	}
+	if !strings.Contains(got, "@@") || !strings.Contains(got, "+two") {
+		t.Fatalf("a staged edit must still show its hunk against HEAD:\n%s", got)
+	}
+}
+
+func TestReadDiffShowsAnAddedFileStagedWhole(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(oldWd) })
+	initRepo(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, "base.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, dir, "base")
+	path := filepath.Join(dir, "new.txt")
+	if err := os.WriteFile(path, []byte("fresh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "new.txt")
+	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	if err != nil {
+		t.Fatalf("read diff: %v", err)
+	}
+	if strings.Contains(got, "no changes") {
+		t.Fatalf("an added file staged but never committed must diff against HEAD whole:\n%s", got)
+	}
+	if !strings.Contains(got, "new file") || !strings.Contains(got, "+fresh") {
+		t.Fatalf("the staged add must show as a new file:\n%s", got)
+	}
+}
+
 func TestReadDiffCleanSaysNoChanges(t *testing.T) {
 	dir := t.TempDir()
 	oldWd, err := os.Getwd()
