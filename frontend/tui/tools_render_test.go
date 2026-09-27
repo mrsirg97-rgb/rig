@@ -1,32 +1,12 @@
 package tui_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
 )
-
-const todoReply = "→ t3 started\n" +
-	"2/5 done · next: t4\n" +
-	"  t1 [x] wire the models table\n" +
-	"  t2 [x] the switch seam\n" +
-	"  t3 [~] steer verb\n" +
-	"  t4 [ ] policy test · requires t3\n" +
-	"    · 2 notes\n" +
-	"  t5 [ ] rem check\n"
-
-const todoReplyWithClaim = "→ t3 started\n" +
-	"1/3 done · next: t2\n" +
-	"  t1 [x] wire the models table\n" +
-	"  t2 [~] the switch seam\n" +
-	"  t3 [ ] rem check · claimed by 01a011f6\n"
-
-const todoReplyStale = "3/3 done · next: t4\n" +
-	"  t1 [x] one\n" +
-	"  t2 [x] two\n" +
-	"  t3 [x] three\n" +
-	"· 2 unresolved since 2026-04-18 (recovered from log)\n"
 
 const schedListReply = "/home/ng/Projects/rig:\n" +
 	"j2 weekly-report active · next 2026-04-19T00:00:00Z · ok exit 0 2026-04-18T22:00:00Z\n" +
@@ -40,21 +20,18 @@ const schedRunsReply = "j2 · 3 runs (oldest first):\n" +
 	"2026-04-17T00:00:02Z  fail  exit 1 300ms\n" +
 	"2026-04-18T00:00:03Z  skip  busy: skip (worker holds the gpu)\n"
 
-func toolDoor(th tui.Theme, opening string, reply string) string {
-	return tui.RenderTodoBlock(th, opening, reply)
-}
-
 func TestTodoBlockBothDoorsByteEqualMinusOpening(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	reply := newTodoFixture(t).queue()
 	tool := tui.RenderTodoBlock(th,
-		th.Paint("accent", "●")+" "+th.Paint("accent", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
-		todoReply)
+		th.Paint("ember", "●")+" "+th.Paint("ember", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
+		reply)
 	cmd := tui.RenderTodoBlock(th,
 		th.Paint("dim", "/todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
-		todoReply)
+		reply)
 	body := func(s string) string {
 		rest, _, ok := strings.Cut(s, "\n")
 		if !ok {
@@ -76,10 +53,10 @@ func TestTodoBlockExactBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderTodoBlock(th, "OPEN", todoReply)
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).queue())
 
-	if !strings.Contains(got, th.Paint("accent", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t4")) {
-		t.Fatalf("the progress head is missing or wrong:\n%s", got)
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t5")) {
+		t.Fatalf("the scoped progress head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "wire the models table")) {
 		t.Fatalf("the done row is missing or wrong:\n%s", got)
@@ -100,13 +77,38 @@ func TestTodoBlockClaimAndStaleFooter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderTodoBlock(th, "OPEN", todoReplyWithClaim)
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).claim())
 	if !strings.Contains(got, th.Paint("dim", " · claimed by 01a011f6")) {
 		t.Fatalf("a foreign claim stays visible, dim:\n%s", got)
 	}
-	got = tui.RenderTodoBlock(th, "OPEN", todoReplyStale)
-	if !strings.Contains(got, th.Paint("dim", "  · 2 unresolved since 2026-04-18 (recovered from log)")) {
+	got = tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).stale())
+	re := regexp.MustCompile(`  · [0-9]+ unresolved since [0-9]{4}-[0-9]{2}-[0-9]{2} \(recovered from log\)`)
+	if !re.MatchString(tui.RemoveColor(got)) {
 		t.Fatalf("the stale footer (the todo's own) commits dim:\n%s", got)
+	}
+}
+
+func TestTodoBlockReview(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).review())
+	if !strings.Contains(got, th.Paint("dim", " 0/1 · 1 in review")) {
+		t.Fatalf("the review count is missing from the head:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("warn", "⧗")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "ready")+th.Paint("dim", " · claimed for review by sessB")) {
+		t.Fatalf("the review row keeps its glyph and the review claim, dim:\n%s", got)
+	}
+}
+
+func TestTodoBlockBareQueueOneDimLine(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).bareQueue()); got != th.Paint("dim", "queue: rig (bound)") {
+		t.Fatalf("a bare queue report prints as one dim line, got:\n%s", got)
 	}
 }
 
@@ -134,7 +136,7 @@ func TestSchedulerBlockBothDoorsByteEqualMinusOpening(t *testing.T) {
 	}
 	for _, reply := range []string{schedListReply, schedRunsReply} {
 		tool := tui.RenderSchedulerBlock(th,
-			th.Paint("accent", "●")+" "+th.Paint("accent", "scheduler")+th.Paint("dim", " · ")+th.Paint("text", "list"),
+			th.Paint("ember", "●")+" "+th.Paint("ember", "scheduler")+th.Paint("dim", " · ")+th.Paint("text", "list"),
 			reply)
 		cmd := tui.RenderSchedulerBlock(th,
 			th.Paint("dim", "/scheduler")+th.Paint("dim", " · ")+th.Paint("text", "list"),

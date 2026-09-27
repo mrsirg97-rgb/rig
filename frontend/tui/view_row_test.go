@@ -33,7 +33,7 @@ func TestViewRowShowsPathBothDimensionsAndSize(t *testing.T) {
 			t.Fatalf("the view row must carry %q:\n%s", want, got)
 		}
 	}
-	want := th.Paint("accent", "●") + " " + th.Paint("accent", "view") +
+	want := th.Paint("ember", "●") + " " + th.Paint("ember", "view") +
 		th.Paint("dim", " · ") + th.Paint("text", "shot.png · 2560x1440 -> 1568x882 · 412 KB")
 	if open := firstLine(got); open != want {
 		t.Fatalf("opening = %q, want %q", open, want)

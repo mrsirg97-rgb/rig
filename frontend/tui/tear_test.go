@@ -228,10 +228,7 @@ func TestTearFlushBoundaries(t *testing.T) {
 		}
 	}
 	for i := 0; i < usage; i++ {
-		r := strings.TrimLeft(v.rows[i], " ")
-		if (strings.HasPrefix(r, "| ") || strings.HasPrefix(r, "/ ") ||
-			strings.HasPrefix(r, "- ") || strings.HasPrefix(r, `\ `)) &&
-			strings.Contains(v.rows[i], "thinking") {
+		if isIndicator(v.rows[i]) {
 			t.Fatalf("the indicator landed at row %d, between committed text:\n%q", i, v.rows)
 		}
 	}
@@ -275,12 +272,7 @@ func streamAndScreen(t *testing.T, width int, text string) []string {
 
 func isIndicator(r string) bool {
 	rr := strings.TrimPrefix(r, " ")
-	for _, f := range []string{"|", "/", "-", "\\"} {
-		if strings.HasPrefix(rr, f+" ") || strings.HasPrefix(rr, f+" thinking") || strings.HasPrefix(rr, f+" bash") {
-			return true
-		}
-	}
-	return strings.Contains(rr, "thinking") || strings.Contains(rr, " bash")
+	return rr == "thinking" || rr == "bash"
 }
 
 func TestTearCharByChar(t *testing.T) {

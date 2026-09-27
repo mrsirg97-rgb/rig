@@ -2,6 +2,7 @@ package tui_test
 
 import (
 	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -217,4 +218,101 @@ func TestPaintTrueColorAnd256(t *testing.T) {
 	if got := nc.Paint("accent", "bash"); got != "\x1b[38;5;"+strconv.Itoa(n256)+"m"+`bash`+"\x1b[0m" {
 		t.Fatalf("256 paint = %q, want the downconverted index %d", got, n256)
 	}
+}
+
+func TestEmberBreath(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := th.EmberPaint(0, "thinking"); got != th.Paint("ember", "thinking") {
+		t.Fatalf("the breath starts at the ember, got %q", got)
+	}
+	emberR, emberG, emberB := sgrRGB(t, th.Paint("ember", "x"))
+	darkR, darkG, darkB := sgrRGB(t, th.EmberPaint(6, "x"))
+	if darkR >= emberR || darkG >= emberG || darkB >= emberB {
+		t.Fatalf("the darkest stop must be darker than the ember: %d,%d,%d vs %d,%d,%d", darkR, darkG, darkB, emberR, emberG, emberB)
+	}
+	if diff := abs(darkR*emberG - emberR*darkG); diff*100 > 5*emberR*darkG {
+		t.Fatalf("the darkest stop keeps the ember's hue: %d,%d,%d", darkR, darkG, darkB)
+	}
+	for i := 0; i < 12; i++ {
+		p := th.EmberPaint(i, "thinking")
+		if tui.RemoveColor(p) != "thinking" {
+			t.Fatalf("the label is never split or glyph-prefixed: %q", p)
+		}
+		if strings.Count(p, "38;2;") != 1 {
+			t.Fatalf("one colour per frame, never per character: %q", p)
+		}
+		if len(tui.RemoveColor(p)) != len("thinking") {
+			t.Fatalf("every frame is the same width: %q", p)
+		}
+	}
+	prev := th.EmberPaint(0, "x")
+	for i := 1; i <= 6; i++ {
+		cur := th.EmberPaint(i, "x")
+		cr, cg, cb := sgrRGB(t, cur)
+		pr, pg, pb := sgrRGB(t, prev)
+		if cr >= pr || cg >= pg || cb >= pb {
+			t.Fatalf("the breath descends: stop %d (%d,%d,%d) is not darker than stop %d (%d,%d,%d)", i, cr, cg, cb, i-1, pr, pg, pb)
+		}
+		prev = cur
+	}
+	for i := 1; i <= 5; i++ {
+		if th.EmberPaint(12-i, "x") != th.EmberPaint(i, "x") {
+			t.Fatalf("the breath returns along the same sine: stop %d != stop %d", 12-i, i)
+		}
+	}
+	if th.EmberPaint(12, "thinking") != th.EmberPaint(0, "thinking") {
+		t.Fatalf("the breath wraps at twelve stops")
+	}
+}
+
+func TestEmberBreathCollapseTogglesTwoStops(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", json.RawMessage(`{"base":"oled","slots":{"ember":"#101010"}}`), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := th.EmberPaint(0, "thinking"), th.EmberPaint(1, "thinking")
+	if a == b {
+		t.Fatalf("collapsed stops must still toggle two colours: %q", a)
+	}
+	if th.EmberPaint(2, "thinking") != a || th.EmberPaint(3, "thinking") != b {
+		t.Fatalf("the two-stop toggle alternates at the same cadence")
+	}
+	nc, err := tui.ResolveTheme("oled", nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for i := 0; i < 12; i++ {
+		seen[nc.EmberPaint(i, "x")] = true
+	}
+	if len(seen) < 3 {
+		t.Fatalf("an unconverted-down palette keeps at least three stops: %v", seen)
+	}
+}
+
+func sgrRGB(t *testing.T, s string) (int, int, int) {
+	t.Helper()
+	m := regexp.MustCompile(`\x1b\[38;2;(\d+);(\d+);(\d+)m`).FindStringSubmatch(s)
+	if m == nil {
+		t.Fatalf("no truecolor SGR in %q", s)
+	}
+	return atoiTest(m[1]), atoiTest(m[2]), atoiTest(m[3])
+}
+
+func atoiTest(s string) int {
+	n := 0
+	for _, c := range s {
+		n = n*10 + int(c-'0')
+	}
+	return n
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }

@@ -55,7 +55,7 @@ every number and glyph is a reading of what the runtime already emits.
 - No scanlines, flicker, ANSI-art banners, or any retro effect that
   costs legibility (decision 8's rule).
 - No scrollback search, no tabs or windows, no images, no progress
-  animations beyond the spinner.
+  animations beyond the activity breath.
 - No new events, no new commands, no loop line, no core line: the
   vocabulary is closed; the TUI reads it.
 - No config beyond `settings.theme` and `theme.json` (SPEC_CONFIG's
@@ -149,7 +149,7 @@ every line of the record is reachable.
 Everything above the live region is immutable printed history.
 Everything dynamic lives in the last lines, top to bottom: the
 pending prose line while one is open, the activity line during a turn
-(the spinner, then the current phase: `- thinking`, `| bash`), the
+(the breathing phase label: `thinking`, `bash`), the
 completion menu when one is open (decision 9: its candidate rows,
 then its tail row), the input line (typing steers, as today), and the
 status line (decision 3); always the region's last row. The activity
@@ -559,7 +559,7 @@ One committed block per execution, pane's vocabulary:
 bash ✓ 0.4s
 ```
 
-- `ToolStart` opens the row: accent glyph, tool name, the detail;
+- `ToolStart` opens the row: ember glyph, tool name, the detail;
 - the result body renders head/tail: first N and last M lines with a
   dim `· k lines hidden ·` between (N=6, M=2 at v1; the caps are the
   TUI's, the runtime's own output caps still apply first);
@@ -626,20 +626,29 @@ The blocks are pane's:
 
 ```
 ● todo · start t3
-  ▰▰▰▱▱ 2/5 · next t4
+  [rig] ▰▰▰▱▱ 2/5 · next t4 · 1 in review
   ● t1 wire the models table
+  ⧗ t2 delegated work · claimed for review by 01a011f6
   ◐ t3 the switch seam
   ○ t4 steer verb · requires t3
 ```
 
 - the progress head, then one row per task: status glyph, id, text,
   `· requires tN`/`· blocks tN`/`· waits for k` dim, `· claimed by <sid8>` dim only
-  when the claim is foreign (another session);
+  when the claim is foreign (another session), `· claimed for review
+  by <sid8>` the same;
 - scheduler `list`: `●`/`○`/`✕` per job state with cron, last, next,
   and drift named. The sections are directories (SPEC_STATE's one-store
   list): this cwd's jobs first, then the rest grouped by the job's own
   `cwd`; an empty store is one line naming it (`scheduler: no jobs`).
   `runs`: the run lines with tail previews.
+
+Amended 1.7.2, the scoped reply: the todo store's summary prefixes
+every queue with its scope tag, so the head renders
+`[rig] ▰▰▰▱▱ 2/5 · next t4 · 1 in review` with the tag dim before the
+ember bar; the review count rides the head; a review row renders its
+`[r]` marker as the review glyph in warn; a bare queue report
+(`queue: rig (bound)`) is not a block and commits as one dim line.
 
 The renderers parse the tools' own reply text (the queue the reply
 already carries): no new tool surface, no reaching into stores from
@@ -685,8 +694,9 @@ is grey (amended: `#8a8a8a` on oled, `#8c959f` on paper; it reads as
 the model's margin notes, not a second accent; the phosphors keep
 their dim step). The ember
 (added, amended) is the greeting's and every loader's color; the
-spinner and its label, whatever the phase (thinking, compacting, a
-tool): a pale, neutral orange on the dark themes (`#e8a86b` on oled),
+activity label and its breath, whatever the phase (thinking,
+compacting, a tool): a pale, neutral orange on the dark themes
+(`#e8a86b` on oled),
 a burnt orange on paper, and on the phosphors a warmer step of the
 one hue (retro stays texture, decision 8). Colors are truecolor
 hex; when the terminal reports no truecolor (`COLORTERM` absent), rig
@@ -722,13 +732,18 @@ Selection and override:
 
 The governing sentence: color and glyphs carry state exactly as the
 design language defines; the retro layer touches case, rules, the
-spinner, and palette only. The rules:
+activity breath, and palette only. The rules:
 
 - all lowercase, everywhere: headers, refusals, the status line and
   the startup block (the house voice, committed to);
 - rules are dotted (`·`) lines: they enclosed the deleted banner
   (decision 3), and no block draws one now; no box drawing at all;
-- the spinner is `|/-\`, four frames, on the activity line only;
+- the activity label breathes in one hue on the activity line only
+  (amended 1.7.2): twelve stops from the ember down to a darker step
+  of the same hue and back, one stop per animPeriod (about 1.4s per
+  breath), one colour per frame, never per character; where the stops
+  collapse under the 256-color downconvert the activity toggles two
+  stops at the same cadence;
 - durations and counts stay plain (`0.4s`, `12k`): nothing humanized,
   nothing animated;
 - rejected by the rule, named: scanline effects, deliberate flicker,

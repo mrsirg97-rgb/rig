@@ -433,7 +433,7 @@ func TestBothDoorsThroughFrontend(t *testing.T) {
 	cmdS.await(promptMark(th))
 	cmdS.si.feed("/todo start t3\n")
 
-	cmdS.await(th.Paint(SlotAccent, "/todo"))
+	cmdS.await(th.Paint(SlotEmber, "/todo"))
 	cmdS.si.feed("bye\n")
 	select {
 	case l := <-in:
@@ -1272,11 +1272,51 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	s.tick()
-	s.awaitScreen(50, 19, []string{"streaming text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 19, []string{"streaming text", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
 	s.tick()
-	s.awaitScreen(50, 20, []string{"streaming text", "more", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 20, []string{"streaming text", "more", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+}
+
+func TestActivityLineBreathes(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+	s.fe.Notify(core.TextDelta{Text: "hi"})
+	s.tick()
+	s.await("thinking")
+
+	s.fe.mu.Lock()
+	frames := map[int]string{}
+	for i := 0; i <= 12; i++ {
+		s.fe.frame = i
+		line := s.fe.activityLineLocked()
+		frames[i] = line
+		if plain := RemoveColor(line); plain != "thinking" {
+			s.fe.mu.Unlock()
+			t.Fatalf("frame %d is not the bare label: %q", i, line)
+		}
+		if strings.Contains(line, "|") || strings.Contains(line, "/") {
+			s.fe.mu.Unlock()
+			t.Fatalf("frame %d keeps a spinner glyph: %q", i, line)
+		}
+	}
+	s.fe.mu.Unlock()
+	seen := map[string]bool{}
+	for _, line := range frames {
+		seen[line] = true
+	}
+	if len(seen) < 3 {
+		t.Fatalf("the activity label breathes, not one static colour: %v", seen)
+	}
+	if frames[0] != frames[12] {
+		t.Fatalf("the breath wraps at twelve frames")
+	}
 }
 
 func TestSpacingRule(t *testing.T) {
@@ -1460,7 +1500,7 @@ func TestMargins(t *testing.T) {
 	<-in
 	s.fe.Notify(core.TextDelta{Text: "text"})
 	s.tick()
-	s.awaitScreen(60, 19, []string{"❯ go", "", "text", "", "| thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 19, []string{"❯ go", "", "text", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
 	s.fe.Notify(core.TextDelta{Text: "\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})

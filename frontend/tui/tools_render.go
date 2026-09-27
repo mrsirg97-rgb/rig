@@ -7,28 +7,31 @@ import (
 )
 
 var (
-	todoHeadRe   = regexp.MustCompile(`^(\d+)/(\d+) done( · next: (\S+))?( · (\d+) failed)?$`)
-	todoTaskRe   = regexp.MustCompile(`^  (t\d+) \[([x!~ ])\] (.+)$`)
+	todoHeadRe   = regexp.MustCompile(`^(\[[^\]]+\] )?(\d+)/(\d+) done( · next: (\S+))?( · (\d+) in review)?( · (\d+) failed)?$`)
+	todoTaskRe   = regexp.MustCompile(`^  (t\d+) \[([xr!~ ])\] (.+)$`)
 	todoNotesRe  = regexp.MustCompile(`^    · (\d+) notes?( \(.*\))?$`)
 	schedRunsRe  = regexp.MustCompile(`^(j\d+) · (\d+) runs? \(oldest first\):$`)
 	schedJobHead = regexp.MustCompile(`^(j\d+)(?: (.*))?$`)
 )
 
 type todoTask struct {
-	ID        string
-	Status    string
-	Text      string
-	Links     string
-	Waits     string
-	Claim     string
-	NoteCount string
+	ID          string
+	Status      string
+	Text        string
+	Links       string
+	Waits       string
+	Claim       string
+	ReviewClaim bool
+	NoteCount   string
 }
 
 type todoParsed struct {
+	Scope  string
 	Done   int
 	Total  int
 	Active int
 	Next   string
+	Review int
 	Failed int
 	Tasks  []todoTask
 	Footer string
@@ -48,16 +51,23 @@ func parseTodo(reply string) (todoParsed, bool) {
 	if m == nil {
 		return p, false
 	}
+	p.Scope = m[1]
 	var err error
-	if p.Done, err = atoi(m[1]); err != nil {
+	if p.Done, err = atoi(m[2]); err != nil {
 		return p, false
 	}
-	if p.Total, err = atoi(m[2]); err != nil {
+	if p.Total, err = atoi(m[3]); err != nil {
 		return p, false
 	}
-	p.Next = m[4]
-	if m[6] != "" {
-		p.Failed, err = atoi(m[6])
+	p.Next = m[5]
+	if m[7] != "" {
+		p.Review, err = atoi(m[7])
+		if err != nil {
+			return p, false
+		}
+	}
+	if m[9] != "" {
+		p.Failed, err = atoi(m[9])
 		if err != nil {
 			return p, false
 		}
@@ -96,13 +106,19 @@ func parseTodo(reply string) (todoParsed, bool) {
 		case "~":
 			task.Status = "active"
 			p.Active++
+		case "r":
+			task.Status = "review"
 		default:
 			task.Status = "pending"
 		}
 		rest := tm[3]
-		if j := strings.LastIndex(rest, " · claimed by "); j >= 0 {
-			task.Claim = rest[j+len(" · claimed by "):]
-			rest = rest[:j]
+		for _, verb := range []string{" · claimed for review by ", " · claimed by "} {
+			if j := strings.LastIndex(rest, verb); j >= 0 {
+				task.Claim = rest[j+len(verb):]
+				task.ReviewClaim = verb == " · claimed for review by "
+				rest = rest[:j]
+				break
+			}
 		}
 		if j := strings.LastIndex(rest, " · waits for "); j >= 0 {
 			task.Waits = rest[j+len(" · waits for "):]
@@ -137,6 +153,9 @@ func atoi(s string) (int, error) {
 }
 
 func RenderTodoBlock(t Theme, opening, reply string) string {
+	if !strings.Contains(reply, "\n") && strings.HasPrefix(reply, "queue: ") {
+		return t.Paint(SlotDim, reply)
+	}
 	p, ok := parseTodo(reply)
 	if !ok {
 		return reply
@@ -162,11 +181,17 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	if filled > segs {
 		filled = segs
 	}
-	b.WriteString(t.Paint(SlotAccent, strings.Repeat(t.Glyph(GlyphBarOn), filled)))
+	if p.Scope != "" {
+		b.WriteString(t.Paint(SlotDim, p.Scope))
+	}
+	b.WriteString(t.Paint(SlotEmber, strings.Repeat(t.Glyph(GlyphBarOn), filled)))
 	b.WriteString(t.Paint(SlotDim, strings.Repeat(t.Glyph(GlyphBarOff), segs-filled)))
 	head := fmt.Sprintf(" %d/%d", p.Done, p.Total)
 	if p.Next != "" {
 		head += " · next " + p.Next
+	}
+	if p.Review > 0 {
+		head += fmt.Sprintf(" · %d in review", p.Review)
 	}
 	if p.Failed > 0 {
 		head += fmt.Sprintf(" · %d failed", p.Failed)
@@ -187,7 +212,11 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 			b.WriteString(t.Paint(SlotDim, " · waits for "+task.Waits))
 		}
 		if task.Claim != "" {
-			b.WriteString(t.Paint(SlotDim, " · claimed by "+task.Claim))
+			verb := "claimed by"
+			if task.ReviewClaim {
+				verb = "claimed for review by"
+			}
+			b.WriteString(t.Paint(SlotDim, " · "+verb+" "+task.Claim))
 		}
 		b.WriteString("\n")
 		if task.NoteCount != "" {
@@ -208,6 +237,8 @@ func (t Theme) todoStatusGlyph(status string) (string, string) {
 		return t.Glyph(GlyphDone), SlotSuccess
 	case "active":
 		return t.Glyph(GlyphActive), SlotAccent
+	case "review":
+		return t.Glyph(GlyphReview), SlotWarn
 	case "failed":
 		return t.Glyph(GlyphFail), SlotError
 	default:

@@ -59,7 +59,7 @@ func TestStreamingProseStaysInsideTheViewport(t *testing.T) {
 	if !strings.Contains(paintFree(rows[5]), "out loud here") {
 		t.Fatalf("the pending tail's newest row is not on screen: %q", rows[5])
 	}
-	if paintFree(rows[7]) != "| thinking" {
+	if paintFree(rows[7]) != "thinking" {
 		t.Fatalf("the activity row drifted: %q", rows[7])
 	}
 	if paintFree(rows[9]) != "❯ " {
@@ -691,7 +691,7 @@ func checkParkedShrinkScreen(t *testing.T, label string, v *vt, committed []stri
 		pos = idx
 	}
 	visible := paintFree(strings.Join(v.rows, "\n"))
-	for _, marker := range []string{"| thinking", input, "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"} {
+	for _, marker := range []string{"thinking", input, "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"} {
 		if n := strings.Count(visible, marker); n != 1 {
 			t.Fatalf("%s: the region marker %q appears %d times, want exactly once:\n%q", label, marker, n, v.rows)
 		}

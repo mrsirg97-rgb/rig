@@ -301,7 +301,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 	}
 	prompt := th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
 	inEmpty := prompt + th.Paint(SlotText, " ")
-	activity := th.Paint(SlotDim, "| thinking")
+	activity := th.Paint(SlotEmber, "thinking")
 	inSteer := prompt + th.Paint(SlotText, " fix the retry")
 
 	block := RenderStatus(th, StatusIn{
@@ -359,7 +359,7 @@ func TestLiveRegionProtocol(t *testing.T) {
 		"❯ fix the retry",
 		"",
 		paintFree(usage),
-		"| thinking",
+		"thinking",
 		"❯ ",
 	}
 	if len(v.rows) != len(want) {
@@ -441,7 +441,7 @@ func TestLiveRegionStatusRow(t *testing.T) {
 	}
 	prompt := th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
 	inEmpty := prompt + th.Paint(SlotText, " ")
-	activity := th.Paint(SlotDim, "| thinking")
+	activity := th.Paint(SlotEmber, "thinking")
 	status := th.Paint(SlotDim, "huihui3.8")
 
 	var out strings.Builder
