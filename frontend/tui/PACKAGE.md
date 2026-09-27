@@ -146,6 +146,16 @@ width); no core or loop line (decision 10).
   a height-only shrink (the phone's keyboard) cuts the pane under a
   region painted for a taller one — the first cursor-up after the
   shrink holds inside the pane the repaint finds.
+- A capped aim marks the region (`capped`): the terminal clamped the
+  cursor at the viewport's top, so rows of the taller paint were left
+  standing above it and the app's idea of where it painted diverged
+  from the screen's. A phone terminal brings those rows back into view
+  when it grows (the keyboard closes); no arithmetic can place them.
+  The next repaint after a capped aim is a viewport reset: cursor-up
+  by a full pane (row one wherever the cursor stands), clear below,
+  paint the region from the top. The transcript rows that pane still
+  showed are the price; they live on in the scrollback. The mark
+  clears on the reset and on a submit.
 - The aim starts from the park (SPEC_TUI, the 1.1.3 amendment): the
   keystroke fast path parks the caret `parked` rows above the
   region's bottom, and the repaint never re-anchors through a

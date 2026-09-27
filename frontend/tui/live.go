@@ -20,6 +20,16 @@ type live struct {
 	paintedRows  int
 	paintedWidth int
 
+	// capped is set when a repaint's cursor-up was held inside a pane
+	// shorter than the region (norm), so rows of the older, taller paint
+	// were left standing above the viewport. a phone terminal brings
+	// those rows back into view when it grows (the keyboard closes), and
+	// no arithmetic can place them: the terminal clamped the cursor at
+	// the top, so the app's idea of where it painted diverged from the
+	// screen's. the next repaint therefore goes to the viewport's top
+	// row absolutely, clears it, and paints the region from there.
+	capped bool
+
 	hist []string
 
 	suspended    bool
@@ -176,8 +186,26 @@ func (l *live) redraw(newLines []string) {
 }
 
 func (l *live) replaceRegion(rows []string) {
-	if up := l.norm(l.paintedRows); up > 0 {
-		l.wf(cursorUp(up))
+	if l.capped && l.height > 0 {
+		// the viewport reset: cursor-up by a full pane reaches row one
+		// wherever the cursor stands (terminals clamp at the top), the
+		// clear takes every standing row with it, transcript rows the
+		// pane still showed included — they live on in the scrollback.
+		l.wf(cursorUp(l.height - 1))
+		l.wf(toCol(1))
+		l.wf(clearBelow)
+		l.parked = 0
+		l.capped = false
+	} else {
+		span := l.paintedRows
+		parked := l.parked
+		up := l.norm(span)
+		if up > 0 {
+			l.wf(cursorUp(up))
+		}
+		if span-1-parked > up {
+			l.capped = true
+		}
 	}
 	for i, line := range rows {
 		l.wf(toCol(1))
@@ -337,6 +365,7 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	l.lines = append(l.lines, srows...)
 	l.paintedRows = l.trackRows()
 	l.paintedWidth = l.width
+	l.capped = false
 	l.status = status
 	if len(srows) > 0 {
 		l.guardWrap(srows[len(srows)-1])
