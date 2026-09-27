@@ -101,7 +101,7 @@ model row whose `"vision": true` says it takes images, and `scheduler` and
 | tool | what it does |
 |------|--------------|
 | `bash` | run shell commands; output bounded |
-| `read` / `write` / `edit` | files; edits are exact-match, provenance-checked |
+| `read` / `write` / `edit` | files; read is the observation path (drift-checked), edits are exact-match, provenance-checked |
 | `view` | look at an image: downscaled, content-addressed, sent to a vision model (off unless your model row has `"vision": true`) |
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web_search` | a local SearXNG instance |

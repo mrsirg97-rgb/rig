@@ -138,9 +138,10 @@ plus one registration line, and the loop never names a concrete type.
 - `tool/execwrap`: the landlock subprocess seam: prepends the
   `RIG_EXEC_WRAPPER` helper (`rig -exec <argv>`) to a tool's argv when
   the env names one, so the landlock domain rides the tool's subprocess.
-- `tool/file`: the read, write, and edit tools: exact-match edit with
-  provenance from the threaded session, so edit-after-external-change
-  fails loudly instead of clobbering.
+- `tool/file`: the read, write, and edit tools: read is the observation
+  path (drift-checked), not cat or sed, for any file you may edit;
+  exact-match edit with provenance from the threaded session, so
+  edit-after-external-change fails loudly instead of clobbering.
 - `tool/view`: the image tool (SPEC_VIEW): a path in, one marker line
   out, the bytes content-addressed under the rig home; registered only
   for a model row whose `vision` is true.

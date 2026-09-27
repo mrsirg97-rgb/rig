@@ -142,7 +142,7 @@ func Read() core.Tool { return &readTool{} }
 func (readTool) Name() string { return "read" }
 
 func (readTool) Description() string {
-	return "read a file, or a line range of it (offset/limit). Guidelines: read before you edit — an edit is drift-checked against what you last read; diff: true appends the file's git diff against the working tree, or 'no changes' when clean; a large file -> a narrower range. Reply: the text; a range past the end refuses by name."
+	return "read (with offset/limit for a range), not cat or sed, for any file you may edit. Guidelines: the edit is drift-checked against what you read and a bash read leaves no observation; diff: true appends the file's git diff against the working tree, or 'no changes' when clean. Reply: the text; a range past the end refuses by name."
 }
 
 func (readTool) Schema() json.RawMessage {
@@ -404,7 +404,7 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	}
 	if _, threaded := core.SessionFrom(ctx); threaded {
 		if _, seen := stateOf(ctx, a.Path); !seen {
-			return "", fmt.Errorf("edit: %s was never read this session: read (or write) it first", a.Path)
+			return "", fmt.Errorf("edit: %s was never read this session: read it first", a.Path)
 		}
 	}
 

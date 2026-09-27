@@ -113,6 +113,15 @@ func TestReadRefusesUnknownArg(t *testing.T) {
 	}
 }
 
+func TestReadDescriptionNamesTheObservationPath(t *testing.T) {
+	desc := file.Read().Description()
+	for _, want := range []string{"not cat or sed", "bash read leaves no observation"} {
+		if !strings.Contains(desc, want) {
+			t.Fatalf("the read description must say %q (read is the observation path), got:\n%s", want, desc)
+		}
+	}
+}
+
 func readLines(t *testing.T, content string) []string {
 	t.Helper()
 	return strings.Split(content, "\n")
@@ -349,8 +358,8 @@ func TestEditWithoutPriorReadRefusesThreaded(t *testing.T) {
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "one", "new": "two",
 	}))
-	if err == nil || !strings.Contains(err.Error(), "never read") {
-		t.Fatalf("an edit of a file with no recorded observation must refuse naming the license, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "never read") || !strings.Contains(err.Error(), "read it first") {
+		t.Fatalf("an edit of a file with no recorded observation must refuse naming read as the fix, got %v", err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

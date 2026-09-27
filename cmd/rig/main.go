@@ -54,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.6.0"
+const Version = "1.7.0"
 
 type root struct {
 	pluginMax int
