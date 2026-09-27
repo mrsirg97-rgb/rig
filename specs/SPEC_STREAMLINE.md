@@ -58,7 +58,7 @@ The three dense contracts are trimmed to the shape:
   keeps the verbs, the scope rule, the k cap, and the session-start
   note.
 
-`bash`, `read`, `write`, `edit`, `ls`, `find`, `grep` are already at
+`bash`, `read`, `write`, `edit` are already at
 shape and stay.
 
 ### 2. The compaction fact

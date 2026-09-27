@@ -118,7 +118,7 @@ cmd/rig/                         registration, the concurrency set, the allow de
   a whole, so a call id reused on a later `read` is looked up in the turn
   that issued it and the marker stays text. The result must be exactly the
   marker line and nothing else, which is what `view` replies; a result that
-  carries a smuggled line is text too. A marker inside a `read`, a `grep`
+  carries a smuggled line is text too. A marker inside a `read`
   line, or a `web_fetch` body is text, and a marker in a user or assistant
   message is text too. The rule is at the encoder, so nothing else can grant
   it.

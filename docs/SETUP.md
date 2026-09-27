@@ -122,7 +122,7 @@ directory's project file, not the creating session's.
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | none (a run without one refuses at start, naming the three ways) |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 17 non-worker built-in tools (grows by `scheduler` and `delegate` when a fleet is configured and no operator allow stands) |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 14 non-worker built-in tools (grows by `scheduler` and `delegate` when a fleet is configured and no operator allow stands) |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
@@ -209,7 +209,7 @@ starts fresh: the guard's counts and the steering slot are not persisted.
 
 **On the allow-list**; it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
-permits the 19 built-in tools because a default-deny CLI would ship a
+permits the 16 built-in tools because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar. A `settings.json` that
 writes its own `allow` key replaces that default whole, so it must carry
 `plugin` and `plugins` or every door call is refused. Python plugins
@@ -235,7 +235,7 @@ and an unknown key refuses at start naming the file and the field.
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
-  "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "view", "python", "web_search", "web_fetch", "diff", "todo", "rem", "sessions", "plugin", "plugins"],
+  "allow": ["bash", "read", "write", "edit", "view", "python", "web_search", "web_fetch", "diff", "todo", "rem", "sessions", "plugin", "plugins"],
   "retries": 3,
   "resultCap": 65536,
   "approve": "auto",

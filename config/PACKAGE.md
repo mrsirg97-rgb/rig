@@ -54,7 +54,7 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   deterministically: settings.json, models.json, workers.json,
   theme.json, AGENTS.md (global, then project). `Load` never creates a
   file.
-- The embedded allow is the non-worker native set (16 names): a present
+- The embedded allow is the non-worker native set (14 names): a present
   fleet grows it by `scheduler` and `delegate`, and only when the
   operator named no allow of their own (their list stands as written).
   The embedded models table carries `local` alone; the worker row left

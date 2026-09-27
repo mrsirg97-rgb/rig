@@ -29,7 +29,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/bash"
 	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
-	"github.com/mrsirg97-rgb/rig/tool/fs"
 	sessionstool "github.com/mrsirg97-rgb/rig/tool/sessions"
 )
 
@@ -180,7 +179,6 @@ func newHarness(t *testing.T, row models.Model, activeID string, runtime models.
 		runtime:  runtime,
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": &fakePython{},
 			"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
 			"diff":     diff.New(db),

@@ -27,7 +27,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/bash"
 	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
-	"github.com/mrsirg97-rgb/rig/tool/fs"
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 	sessionstool "github.com/mrsirg97-rgb/rig/tool/sessions"
 )
@@ -133,7 +132,6 @@ func newReloadHarnessWith(t *testing.T, home string, kernel plugins.Kernel, srv 
 		py:          kernel,
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": kernel.(core.Tool),
 			"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
 			"diff": diff.New(store.DB{}), "sessions": sessionstool.New("", dir),

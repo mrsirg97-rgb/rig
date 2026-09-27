@@ -141,8 +141,6 @@ plus one registration line, and the loop never names a concrete type.
 - `tool/file`: the read, write, and edit tools: exact-match edit with
   provenance from the threaded session, so edit-after-external-change
   fails loudly instead of clobbering.
-- `tool/fs`: the named filesystem tools: `ls`, `find`, `grep`, with
-  small schemas a local model can reach for.
 - `tool/view`: the image tool (SPEC_VIEW): a path in, one marker line
   out, the bytes content-addressed under the rig home; registered only
   for a model row whose `vision` is true.

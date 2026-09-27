@@ -25,7 +25,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/bash"
 	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
-	"github.com/mrsirg97-rgb/rig/tool/fs"
 	sessionstool "github.com/mrsirg97-rgb/rig/tool/sessions"
 )
 
@@ -162,7 +161,6 @@ func (*oneLineFrontend) Notify(ev core.Event) {}
 func testTools() map[string]core.Tool {
 	return map[string]core.Tool{
 		"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-		"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 		"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": fakePython{},
 		"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
 
@@ -210,7 +208,7 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	want := []string{"bash", "diff", "edit", "find", "grep", "ls", "plugin", "plugins", "python", "read", "rem", "sessions", "todo", "web_fetch", "web_search", "write"}
+	want := []string{"bash", "diff", "edit", "plugin", "plugins", "python", "read", "rem", "sessions", "todo", "web_fetch", "web_search", "write"}
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("no fleet: the worker tools must stay unregistered: %v, want %v", got, want)
 	}
@@ -223,7 +221,7 @@ func TestWireWithAConfiguredFleetRegistersTheWorkerTools(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.workers = &config.Workers{Model: "local", Slots: 1}
 	k := wire(r)
-	want := []string{"bash", "delegate", "diff", "edit", "find", "grep", "ls", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web_fetch", "web_search", "write"}
+	want := []string{"bash", "delegate", "diff", "edit", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web_fetch", "web_search", "write"}
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("a configured fleet must register the worker tools: %v, want %v", got, want)
 	}
@@ -634,7 +632,7 @@ func TestIsMutatingPredicate(t *testing.T) {
 			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
 		}
 	}
-	for _, n := range []string{"read", "ls", "find", "grep", "web_search", "web_fetch", "todo", "rem", "diff"} {
+	for _, n := range []string{"read", "web_search", "web_fetch", "todo", "rem", "diff"} {
 		if r.isMutating(n) {
 			t.Errorf("%s must pass silently", n)
 		}

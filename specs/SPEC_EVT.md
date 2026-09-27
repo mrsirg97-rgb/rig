@@ -174,7 +174,7 @@ order they finished. A nil predicate is the loop of
 0.11, byte-for-byte.
 
 The root's predicate is **narrower than "not mutating"**: the pure reads
-- `read`, `ls`, `find`, `grep`, `web_search`, `web_fetch`, `diff`: and
+- `read`, `web_search`, `web_fetch`, `diff`: and
 nothing else. `todo` and `rem` write SQLite (serialized transactions
 would collide inside one batch), `python` and every plugin share one
 kernel, `bash`/`write`/`edit`/`scheduler`/`delegate` have effects whose

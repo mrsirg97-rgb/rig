@@ -135,7 +135,7 @@ sees core and models and nothing else.
   redo. The door tools hold the live table as their seam, so the root
   builds the empty table first, the doors over it, then fills it from
   the natives (the doors among them) and the plugins.
-- `sessions` is the nineteenth native (read-only introspection of the
+- `sessions` is the sixteenth native (read-only introspection of the
   session store, SPEC_STATE). It is absent from `mutatingNatives` (it
   never pauses at the gate) and from `concurrentNatives` (it opens a
   store, like `todo`/`rem`/`scheduler`, so it is not a pure observation);
@@ -143,7 +143,7 @@ sees core and models and nothing else.
   in the embedded `allow` default.
 - The worker tools are fleet-gated (SPEC_CONFIG 12): `effectiveNativeNames`
   drops `scheduler` and `delegate` from the registered native set when
-  `Config.Workers` is nil, so a no-fleet start wires sixteen natives
-  instead of eighteen, and the tools map builds the two only when a
+  `Config.Workers` is nil, so a no-fleet start wires fourteen natives
+  instead of sixteen, and the tools map builds the two only when a
   fleet stands (the scheduler fed the fleet's model, the delegate its
   slots). The `serve` path threads `cfg.Workers` into the web server.

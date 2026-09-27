@@ -754,7 +754,7 @@ tool's model default are the fleet's `model`; a job that names its own
 model keeps it (the row carries it, `run-job` fires the row's model).
 
 **The allow default grows with the fleet.** The embedded `allow`
-loses `scheduler` and `delegate` (17 tools: the non-worker natives).
+loses `scheduler` and `delegate` (14 tools: the non-worker natives).
 `view` is in the default allow with the rest of the read-only set: an allow
 entry for a tool the row does not register is inert (SPEC_TOOLS), so the
 fleet-free text row simply never uses it, and switching to a vision row
@@ -842,11 +842,11 @@ case names one, the built binary for the e2e.
 **workers (12):**
 
 - `TestWorkersAbsentIsNoWorkers`: no file: `Config.Workers` is nil,
-  the default allow is the 17 non-worker natives (the two worker tools
+  the default allow is the 14 non-worker natives (the two worker tools
   absent from the default allow-list).
 - `TestWorkersFileNamesTheFleet`: `{"model": "local"}`:
   `Workers{Model: "local", Slots: 1}` (slots defaults to 1); the
-  default allow grows to the 19 natives (the two worker tools present).
+  default allow grows to the 16 natives (the two worker tools present).
 - `TestWorkersModelIsRequired`: `{}` and `{"slots": 1}` refuse
   naming the missing `model`; `{"model": ""}` refuses the same.
 - `TestWorkersModelMustResolveInTheTable`: `{"model": "brain"}` with

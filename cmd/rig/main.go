@@ -46,7 +46,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/tool/delegate"
 	"github.com/mrsirg97-rgb/rig/tool/diff"
 	"github.com/mrsirg97-rgb/rig/tool/file"
-	"github.com/mrsirg97-rgb/rig/tool/fs"
 	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
 	remapi "github.com/mrsirg97-rgb/rig/tool/rem"
 	schedapi "github.com/mrsirg97-rgb/rig/tool/scheduler"
@@ -418,7 +417,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 }
 
 var concurrentNatives = map[string]bool{
-	"read": true, "ls": true, "find": true, "grep": true, "view": true,
+	"read": true, "view": true,
 	"web_search": true, "web_fetch": true, "diff": true,
 	"delegate": true,
 }
@@ -601,7 +600,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "ls", "find", "grep", "view", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
 
 var workerToolNames = []string{"scheduler", "delegate"}
 
@@ -1086,7 +1085,6 @@ func main() {
 		approveDefault: firstNonEmpty(cfg.Settings.Approve, approve.Auto),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-			"ls": fs.LS(), "find": fs.Find(), "grep": fs.Grep(),
 			"todo": todoapi.New(tdb, todoapi.Mode(*prompt != "")), "rem": remapi.New(rdb),
 			"python": py, "web_search": webSearch, "web_fetch": webFetch,
 			"diff": diff.New(sdb), "sessions": sessionstool.New(cfgDir, cwd),
