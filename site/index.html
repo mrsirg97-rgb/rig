@@ -337,15 +337,15 @@ rig -update</pre>
       <p class="num">4</p>
       <div>
         <h2>Run it in a repo</h2>
-        <p>The terminal opens. Ask for something real. <b>Tool calls run in parallel and results land in order,</b> so three reads cost one round trip and the transcript still reads top to bottom.</p>
+        <p>The terminal opens. Ask for something real. <b>Tool calls run in parallel and results land in order,</b> so three reads cost one round trip and the transcript still reads top to bottom. Rig ships a carefully chosen, focused toolset: bash, read, write, edit, python, web, memory, todo, scheduler, workers. <b>Reading is one tool, on purpose:</b> every edit is checked against what the model actually read, and the shell does the listing and searching it already does well.</p>
       </div>
       <pre>cd your-project && rig
 <span class="c">❯ look around, run the tests in the background, remember what you learn</span>
 
 <span class="d">● todo · create   0/3 · next t1
 ● read · AGENTS.md
-● find · PACKAGE.md
-● grep · interface ./core
+● read · core/PACKAGE.md
+● read · core/loop.go · 1-80
   three reads admitted together · results applied in call order
   batch ✓ 0.08s</span></pre>
     </article>
