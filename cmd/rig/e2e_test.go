@@ -132,7 +132,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "e2e", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: workDir, Model: "local", Busy: "skip",
-	}, "/ws/e2e", "sess-e2e", bin+" run-job", fixedNow)
+	}, "/ws/e2e", "sess-e2e", bin+" run-job", cfgDir(t, scratch), fixedNow)
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}

@@ -484,6 +484,24 @@ post-merge corrections)
   a small Go binary or the rig binary itself with a `run-job` verb; it
   needs `-p` one-shot mode (landed with the scheduler) and llama-swap's
   `/running` and `/v1/models` for the busy policy, unchanged.
+- The crontab tag is `# rig-scheduler:<home>:<key>`, `<home>` the 12-hex
+  short sha1 of the rig home path, so `~/.rig` and an embedder's home
+  (~/.orbit) sharing one crontab own disjoint lines and a key only means
+  something inside its home; the hash is over the cleaned path, so a
+  trailing slash in `RIG_HOME` names the same home. The reader and the
+  writer see only this home's `rig-scheduler` lines: another home's
+  line and every old `# pane-scheduler:<key>` line are foreign to them,
+  and the writer emits only the new tag. On the store's next open a
+  one-time migration (a `meta` marker per store) rewrites this home's
+  old-tag lines to the new tag and leaves every other line byte-identical
+  (tagged or not). An old line is this home's only when its key is a job
+  in this store's event log and the runner command on the line is this
+  binary's (`<self> run-job`): an old line has no home, so the key alone
+  cannot attribute it, and two homes sharing a key never claim each
+  other's lines. The migration never runs again; a restored old-tag line
+  is foreign from then on. The migration is handed the runtime's own
+  `Crontab`, never a fresh real one, so a frontend or a test with a fake
+  crontab cannot reach the operator's.
 - `update` is the verb that changes a live job's definition, in place: any
   of `prompt`, `model`, `cwd`, `busy`, `timeout`, `name`, and the cadence. The cadence
   is a 5-field cron, or an `at` that makes the job `once`; create's
@@ -693,7 +711,10 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   jobs first; the crontab line is `jN`; the migration folds two cwd stores
   with colliding `j1`s into distinct ids with their cwds intact and their
   crontab lines rewritten, then is a no-op on the second open; `run-job jN`
-  fires the folded job in its own cwd.
+  fires the folded job in its own cwd. The crontab tag: a crontab holding
+  this home's and another home's lines under both tags round-trips with
+  only this home's lines touched, and an old-tag line is read, rewritten
+  once, and never again.
 - todo binding and prune: a named `project` binds and answers in the same
   call; a bare verb follows the binding; a repo cwd resolves to the repo with
   no binding written; a non-repo cwd refuses every write by name and still

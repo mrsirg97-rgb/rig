@@ -15,7 +15,12 @@ package that dials the swap rides `Transport`.
   what the machine actually has. The probes are read-only; nothing here
   ever writes into `OperatorHome`.
 - `Main`: points `HOME`, `XDG_CONFIG_HOME`, and `RIG_HOME` at one
-  throwaway directory for the whole package run. `RIG_HOME` is set empty
+  throwaway directory for the whole package run, and puts a `crontab`
+  shim first in `PATH` that refuses loudly (exit 3, naming the wall), so
+  a store migration or a verb that reaches `RealCrontab("")` under the
+  suite fails the test instead of editing the operator's crontab. A
+  package that needs a working crontab installs its own fake ahead of it
+  (`cmd/rig` writes one into the binary's `PATH`). `RIG_HOME` is set empty
   so the rig home resolves from the isolated `HOME`; the Go toolchain
   env (`GOPATH`, `GOMODCACHE`, `GOCACHE`) keeps the operator's caches,
   so the tests' `go build` calls stay warm and offline. The throwaway

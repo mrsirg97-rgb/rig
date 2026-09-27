@@ -33,8 +33,6 @@ func landlockFixture(t *testing.T, replies []string, binds []string, py string) 
 	requireLandlockBox(t)
 	bin := sharedRigBin(t)
 	cwd := t.TempDir()
-	h, key := setupJob(t, cwd, nil)
-
 	opHome := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(opHome, "kernel"), 0o755); err != nil {
 		t.Fatal(err)
@@ -46,6 +44,7 @@ func landlockFixture(t *testing.T, replies []string, binds []string, py string) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	h, key := setupJobHome(t, cwd, opHome, nil)
 
 	scratch := filepath.Join(cwd, ".rig-job")
 	if err := os.MkdirAll(scratch, 0o755); err != nil {
@@ -81,7 +80,7 @@ func landlockFixture(t *testing.T, replies []string, binds []string, py string) 
 		SwapURL:      srv.URL,
 		Sandbox:      "landlock",
 		SandboxBinds: binds,
-		RigHome:      opHome,
+		RigHome:      h.rigHome,
 		Now:          func() time.Time { return runnerNow },
 	})
 	mustOK(t, err)

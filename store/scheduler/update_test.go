@@ -13,7 +13,7 @@ import (
 )
 
 func (h *harness) update(in sched.UpdateInput) (string, error) {
-	return sched.Update(context.Background(), h.db, h.ct, in, "sess-core", runnerCmd, func() time.Time { return nowFixed })
+	return sched.Update(context.Background(), h.db, h.ct, in, "sess-core", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 }
 
 func eventOps(t *testing.T, h *harness) []string {
@@ -83,14 +83,14 @@ func TestUpdateRewritesTheOneLineUnderTheSameKey(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "two", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/u2"}); err != nil {
 		t.Fatal(err)
 	}
-	foreignLine := `0 4 * * * ` + runnerCmd + ` j2  # pane-scheduler:j2`
+	foreignLine := `0 4 * * * ` + runnerCmd + ` j2  # rig-scheduler:` + sched.TagHome(h.rigHome) + `:j2`
 	_, err := h.update(sched.UpdateInput{ID: "j1", Cron: "15 6 * * *"})
 	mustOK(t, err)
-	contains(t, h.ct.text, `15 6 * * * `+runnerCmd+` j1  # pane-scheduler:j1`)
+	contains(t, h.ct.text, `15 6 * * * `+runnerCmd+` j1  # rig-scheduler:`+sched.TagHome(h.rigHome)+`:j1`)
 	if strings.Contains(h.ct.text, `0 3 * * * `+runnerCmd+` j1`) {
 		t.Fatalf("the old line must be gone: %s", h.ct.text)
 	}
-	if n := strings.Count(h.ct.text, "pane-scheduler:j1"); n != 1 {
+	if n := strings.Count(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":j1"); n != 1 {
 		t.Fatalf("exactly one line for j1, got %d:\n%s", n, h.ct.text)
 	}
 	contains(t, h.ct.text, foreignLine)
@@ -101,13 +101,13 @@ func TestPausedUpdateStaysPausedAndLandsOnResume(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "p", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u3"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
 	_, err := h.update(sched.UpdateInput{ID: "j1", Cron: "0 7 * * *"})
 	mustOK(t, err)
 	for _, l := range strings.Split(h.ct.text, "\n") {
-		if strings.Contains(l, "pane-scheduler:j1") {
+		if strings.Contains(l, "rig-scheduler:"+sched.TagHome(h.rigHome)+":j1") {
 			if !strings.HasPrefix(l, "# ") {
 				t.Fatalf("a paused job's rewritten line must stay commented: %q", l)
 			}
@@ -118,10 +118,10 @@ func TestPausedUpdateStaysPausedAndLandsOnResume(t *testing.T) {
 	if row["state"] != "paused" {
 		t.Fatalf("update must not change the state: %v", row["state"])
 	}
-	if _, err := sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
-	contains(t, h.ct.text, `0 7 * * * `+runnerCmd+` j1  # pane-scheduler:j1`)
+	contains(t, h.ct.text, `0 7 * * * `+runnerCmd+` j1  # rig-scheduler:`+sched.TagHome(h.rigHome)+`:j1`)
 	list, _ := h.list()
 	if strings.Contains(list, "drift:") {
 		t.Fatalf("clean after resume: %s", list)
@@ -161,7 +161,7 @@ func TestUpdateRefusalsNameTheFaultAndWriteNothing(t *testing.T) {
 		t.Fatalf("the job's own name is not a collision: %v", err)
 	}
 
-	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j2", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j2", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
 	_, err = h.update(sched.UpdateInput{ID: "j2", Model: "brain"})
@@ -195,7 +195,7 @@ func TestUpdateAtMakesTheJobOnceAndCronClearsTheAt(t *testing.T) {
 	if row["at"] != "2026-08-16T03:07:00Z" {
 		t.Fatalf("at %v", row["at"])
 	}
-	contains(t, h.ct.text, `7 3 16 8 * `+runnerCmd+` j1  # pane-scheduler:j1`)
+	contains(t, h.ct.text, `7 3 16 8 * `+runnerCmd+` j1  # rig-scheduler:`+sched.TagHome(h.rigHome)+`:j1`)
 
 	_, err = h.update(sched.UpdateInput{ID: "j1", Cron: "0 9 * * *"})
 	mustOK(t, err)
@@ -206,7 +206,7 @@ func TestUpdateAtMakesTheJobOnceAndCronClearsTheAt(t *testing.T) {
 	if row["at"] != nil {
 		t.Fatalf("at must be cleared: %v", row["at"])
 	}
-	contains(t, h.ct.text, `0 9 * * * `+runnerCmd+` j1  # pane-scheduler:j1`)
+	contains(t, h.ct.text, `0 9 * * * `+runnerCmd+` j1  # rig-scheduler:`+sched.TagHome(h.rigHome)+`:j1`)
 }
 
 func TestUpdateOnADoneJobIsAllowedAndRestoresTheLine(t *testing.T) {
@@ -219,7 +219,7 @@ func TestUpdateOnADoneJobIsAllowedAndRestoresTheLine(t *testing.T) {
 	}
 	_, err := h.update(sched.UpdateInput{ID: "j1", Cron: "0 8 * * *"})
 	mustOK(t, err)
-	contains(t, h.ct.text, `0 8 * * * `+runnerCmd+` j1  # pane-scheduler:j1`)
+	contains(t, h.ct.text, `0 8 * * * `+runnerCmd+` j1  # rig-scheduler:`+sched.TagHome(h.rigHome)+`:j1`)
 }
 
 func TestDriftStaysHonestAfterAnUpdate(t *testing.T) {
@@ -304,7 +304,7 @@ func TestUpdateArgsCarryOnlyTheChangedFieldsAndReplaySurvivesReopen(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := sched.List(context.Background(), db, h.ct, h.sessCwd, nil, func() time.Time { return nowFixed })
+	list, err := sched.List(context.Background(), db, h.ct, h.sessCwd, h.rigHome, nil, func() time.Time { return nowFixed })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestCrontabInstallFailureOnUpdateLeavesTheStoreUntouched(t *testing.T) {
 	fc := failingCrontab{installErr: errors.New("crontab install failed (exit 2): boom")}
 	_, err := sched.Update(context.Background(), h.db, fc,
 		sched.UpdateInput{ID: "j1", Cron: "0 9 * * *"},
-		"sess-core", runnerCmd, func() time.Time { return nowFixed })
+		"sess-core", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 	mustErr(t, err, `crontab install failed`)
 	var n int
 	if err := h.db.DB.QueryRow(`SELECT count(*) FROM events`).Scan(&n); err != nil {
@@ -335,7 +335,7 @@ func TestUpdateRefusesAnUnknownBusy(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "b", Prompt: "p", Cron: "0 1 * * *"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := sched.Update(context.Background(), h.db, h.ct, sched.UpdateInput{ID: "j1", Busy: "banana"}, "sess", runnerCmd, func() time.Time { return nowFixed })
+	_, err := sched.Update(context.Background(), h.db, h.ct, sched.UpdateInput{ID: "j1", Busy: "banana"}, "sess", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 	if err == nil || !strings.Contains(err.Error(), "busy must be") {
 		t.Fatalf("an unknown busy must refuse by name, got %v", err)
 	}

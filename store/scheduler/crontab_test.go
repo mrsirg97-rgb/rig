@@ -10,6 +10,10 @@ import (
 
 const RUNNER = "/x/rig run-job"
 
+const testHome = "/home/u/.rig"
+
+const otherHome = "/home/u/.orbit"
+
 var foreign = strings.Join([]string{
 	"# foreign comment at top",
 	"SHELL=/bin/bash",
@@ -17,21 +21,31 @@ var foreign = strings.Join([]string{
 	"0 5 * * * /usr/local/bin/backup.sh   # user's own trailing comment",
 	"15 3 * * 0  /opt/tool --weekly",
 	"",
-	"# a note mentioning pane-scheduler in prose",
-	"30 6 * * * echo hi # pane-scheduler:NOTOURS  # tag not trailing",
+	"# a note mentioning rig-scheduler in prose",
+	"30 6 * * * echo hi # rig-scheduler:NOTOURS  # tag not trailing",
 }, "\n")
 
 func TestLineForBuildsTheExactTaggedFormat(t *testing.T) {
-	if got := LineFor("j1", "0 */4 * * *", RUNNER); got != `0 */4 * * * /x/rig run-job j1  # pane-scheduler:j1` {
-		t.Fatalf("LineFor(j1) = %q", got)
+	want := `0 */4 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1`
+	if got := LineFor("j1", "0 */4 * * *", RUNNER, testHome); got != want {
+		t.Fatalf("LineFor(j1) = %q, want %q", got, want)
 	}
-	if got := LineFor("cwd-abc123def456:j2", "5 4 * * *", RUNNER); got != `5 4 * * * /x/rig run-job cwd-abc123def456:j2  # pane-scheduler:cwd-abc123def456:j2` {
-		t.Fatalf("LineFor(cwd) = %q", got)
+	if !strings.HasPrefix(want, "0 */4 * * * /x/rig run-job j1  # rig-scheduler:") {
+		t.Fatalf("the writer must emit only the rig-scheduler tag: %q", want)
+	}
+}
+
+func TestTagHomeIsTheShortSha1OfTheHomePath(t *testing.T) {
+	if TagHome(testHome) == TagHome(otherHome) {
+		t.Fatal("two homes must own disjoint tag namespaces")
+	}
+	if got := TagHome(testHome); len(got) != 12 || !regexp.MustCompile(`^[0-9a-f]{12}$`).MatchString(got) {
+		t.Fatalf("TagHome = %q, want 12 hex chars", got)
 	}
 }
 
 func TestUpsertAppendsATaggedLineForeignLinesSurviveByteIdentical(t *testing.T) {
-	text, added := UpsertLine(foreign, "j1", "0 */4 * * *", RUNNER)
+	text, added := UpsertLine(foreign, "j1", "0 */4 * * *", RUNNER, testHome)
 	if !added {
 		t.Fatal("new key must report added=true")
 	}
@@ -45,7 +59,7 @@ func TestUpsertAppendsATaggedLineForeignLinesSurviveByteIdentical(t *testing.T) 
 			t.Fatalf("foreign line %d drifted: %q", i, lines[i])
 		}
 	}
-	const tagged = `0 */4 * * * /x/rig run-job j1  # pane-scheduler:j1`
+	tagged := `0 */4 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1`
 	if last := lines[len(lines)-1]; last != tagged {
 		t.Fatalf("last line %q", last)
 	}
@@ -55,30 +69,30 @@ func TestUpsertAppendsATaggedLineForeignLinesSurviveByteIdentical(t *testing.T) 
 }
 
 func TestUpsertOnAnEmptyCrontabYieldsExactlyOneLine(t *testing.T) {
-	text, added := UpsertLine("", "j1", "0 0 * * *", RUNNER)
-	const want = `0 0 * * * /x/rig run-job j1  # pane-scheduler:j1` + "\n"
+	text, added := UpsertLine("", "j1", "0 0 * * *", RUNNER, testHome)
+	want := `0 0 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1` + "\n"
 	if !added || text != want {
 		t.Fatalf("text %q added %v", text, added)
 	}
 }
 
 func TestUpsertReplacesAnExistingKeyInPlace(t *testing.T) {
-	seeded := foreign + "\n0 0 * * * /x/rig run-job j9  # pane-scheduler:j9\n"
-	text, added := UpsertLine(seeded, "j9", "30 1 * * *", RUNNER)
+	seeded := foreign + "\n0 0 * * * /x/rig run-job j9  # rig-scheduler:" + TagHome(testHome) + ":j9\n"
+	text, added := UpsertLine(seeded, "j9", "30 1 * * *", RUNNER, testHome)
 	if added {
 		t.Fatal("existing key must replace, not append")
 	}
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	var found []string
 	for _, l := range lines {
-		if strings.Contains(l, "pane-scheduler:j9") {
+		if strings.Contains(l, "rig-scheduler:"+TagHome(testHome)+":j9") {
 			found = append(found, l)
 		}
 	}
 	if len(found) != 1 {
 		t.Fatalf("j9 lines = %d, want 1", len(found))
 	}
-	if found[0] != `30 1 * * * /x/rig run-job j9  # pane-scheduler:j9` {
+	if found[0] != `30 1 * * * /x/rig run-job j9  # rig-scheduler:`+TagHome(testHome)+`:j9` {
 		t.Fatalf("replaced line %q", found[0])
 	}
 	idx := -1
@@ -92,9 +106,31 @@ func TestUpsertReplacesAnExistingKeyInPlace(t *testing.T) {
 	}
 }
 
+func TestUpsertLeavesAnotherHomesSameKeyLineAlone(t *testing.T) {
+	other := `0 6 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(otherHome) + `:j1`
+	seeded := foreign + "\n" + other + "\n0 0 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1\n"
+	text, added := UpsertLine(seeded, "j1", "30 1 * * *", RUNNER, testHome)
+	if added {
+		t.Fatal("this home's existing key must replace, not append")
+	}
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	if !strings.Contains(strings.Join(lines, "\n"), other) {
+		t.Fatal("another home's line must survive byte-identical")
+	}
+	ours := 0
+	for _, l := range lines {
+		if strings.Contains(l, "rig-scheduler:"+TagHome(testHome)+":j1") {
+			ours++
+		}
+	}
+	if ours != 1 || lines[len(lines)-1] != `30 1 * * * /x/rig run-job j1  # rig-scheduler:`+TagHome(testHome)+`:j1` || lines[len(lines)-2] != other {
+		t.Fatalf("this home's line must be replaced in place, ours=%d:\n%s", ours, text)
+	}
+}
+
 func TestSetPausedCommentsTheLineTagStaysDiscoverable(t *testing.T) {
-	seeded := foreign + "\n0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
-	text, found := SetPaused(seeded, "j1", true)
+	seeded := foreign + "\n0 0 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1\n"
+	text, found := SetPaused(seeded, "j1", true, testHome)
 	if !found {
 		t.Fatal("must find the line")
 	}
@@ -105,10 +141,10 @@ func TestSetPausedCommentsTheLineTagStaysDiscoverable(t *testing.T) {
 			t.Fatalf("foreign line %d drifted", i)
 		}
 	}
-	if last := lines[len(lines)-1]; last != `# 0 0 * * * /x/rig run-job j1  # pane-scheduler:j1` {
+	if last := lines[len(lines)-1]; last != `# 0 0 * * * /x/rig run-job j1  # rig-scheduler:`+TagHome(testHome)+`:j1` {
 		t.Fatalf("last line %q", last)
 	}
-	scanned := Scan(text)
+	scanned := Scan(text, testHome)
 	var j1 *TaggedLine
 	for i := range scanned {
 		if scanned[i].Key == "j1" {
@@ -121,15 +157,15 @@ func TestSetPausedCommentsTheLineTagStaysDiscoverable(t *testing.T) {
 }
 
 func TestSetPausedIsIdempotent(t *testing.T) {
-	paused := foreign + "\n# 0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
-	text, found := SetPaused(paused, "j1", true)
+	paused := foreign + "\n# 0 0 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1\n"
+	text, found := SetPaused(paused, "j1", true, testHome)
 	if !found || text != paused {
 		t.Fatalf("idempotent pause drifted: %q", text)
 	}
 }
 
 func TestSetPausedOfAMissingKeyChangesNothing(t *testing.T) {
-	text, found := SetPaused(foreign, "j404", true)
+	text, found := SetPaused(foreign, "j404", true, testHome)
 	if found {
 		t.Fatal("missing key must report found=false")
 	}
@@ -139,9 +175,9 @@ func TestSetPausedOfAMissingKeyChangesNothing(t *testing.T) {
 }
 
 func TestResumeStripsExactlyThePrefixByteIdenticalToTheActiveLine(t *testing.T) {
-	active := `0 0 * * * /x/rig run-job j1  # pane-scheduler:j1`
+	active := `0 0 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1`
 	paused := foreign + "\n# " + active + "\n"
-	text, found := SetPaused(paused, "j1", false)
+	text, found := SetPaused(paused, "j1", false, testHome)
 	if !found {
 		t.Fatal("must find the line")
 	}
@@ -152,59 +188,118 @@ func TestResumeStripsExactlyThePrefixByteIdenticalToTheActiveLine(t *testing.T) 
 }
 
 func TestRemoveDeletesTheLineAndLeavesNoTrace(t *testing.T) {
-	active := foreign + "\n0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
-	text, found := RemoveLine(active, "j1")
-	if !found || strings.Contains(text, "pane-scheduler:j1") {
+	active := foreign + "\n0 0 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1\n"
+	text, found := RemoveLine(active, "j1", testHome)
+	if !found || strings.Contains(text, "rig-scheduler:"+TagHome(testHome)+":j1") {
 		t.Fatalf("active remove: found %v text %q", found, text)
 	}
 	if text != foreign+"\n" {
 		t.Fatalf("active remove text %q", text)
 	}
-	pausedLine := foreign + "\n# 0 0 * * * /x/rig run-job j1  # pane-scheduler:j1\n"
-	text, found = RemoveLine(pausedLine, "j1")
-	if !found || strings.Contains(text, "pane-scheduler:j1") {
+	pausedLine := foreign + "\n# 0 0 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1\n"
+	text, found = RemoveLine(pausedLine, "j1", testHome)
+	if !found || strings.Contains(text, "rig-scheduler:"+TagHome(testHome)+":j1") {
 		t.Fatalf("paused remove: found %v text %q", found, text)
 	}
 }
 
 func TestRemoveOfAMissingKeyReportsNotFound(t *testing.T) {
-	if _, found := RemoveLine(foreign, "j404"); found {
+	if _, found := RemoveLine(foreign, "j404", testHome); found {
 		t.Fatal("missing key must report found=false")
 	}
 }
 
 func TestScanFindsTaggedLinesAndExtractsCronFields(t *testing.T) {
 	text := foreign +
-		"\n0 */4 * * * /x/rig run-job j1  # pane-scheduler:j1" +
-		"\n# 5 4 * * * /x/rig run-job cwd-abc123def456:j2  # pane-scheduler:cwd-abc123def456:j2"
-	found := Scan(text)
-	var j1, j2 *TaggedLine
+		"\n0 */4 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1" +
+		"\n# 5 4 * * * /x/rig run-job cwd-abc123def456:j2  # rig-scheduler:" + TagHome(testHome) + ":cwd-abc123def456:j2" +
+		"\n7 3 16 8 * /x/rig run-job j3  # rig-scheduler:" + TagHome(testHome) + ":j3"
+	found := Scan(text, testHome)
+	var j1, j2, j3 *TaggedLine
 	for i := range found {
 		switch found[i].Key {
 		case "j1":
 			j1 = &found[i]
 		case "cwd-abc123def456:j2":
 			j2 = &found[i]
+		case "j3":
+			j3 = &found[i]
 		}
 	}
 	if j1 == nil || j1.Paused || j1.Cron != "0 */4 * * *" {
 		t.Fatalf("j1 = %+v", j1)
 	}
 	if j2 == nil || !j2.Paused || j2.Cron != "5 4 * * *" {
-		t.Fatalf("j2 = %+v", j2)
+		t.Fatalf("the legacy key must still read: j2 = %+v", j2)
+	}
+	if j3 == nil || j3.Paused || j3.Cron != "7 3 16 8 *" {
+		t.Fatalf("j3 = %+v", j3)
+	}
+}
+
+func TestScanIgnoresAnotherHomesTaggedLine(t *testing.T) {
+	text := strings.Join([]string{
+		"0 6 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(otherHome) + ":j1",
+		"0 7 * * * /x/rig run-job j1  # rig-scheduler:" + TagHome(testHome) + ":j1",
+	}, "\n")
+	found := Scan(text, testHome)
+	if len(found) != 1 || found[0].Key != "j1" {
+		t.Fatalf("scan = %+v, want only this home's line", found)
 	}
 }
 
 func TestScanIgnoresLookalikes(t *testing.T) {
 	text := strings.Join([]string{
-		"# prose about pane-scheduler and friends",
-		"30 6 * * * echo hi # pane-scheduler:NOTOURS  # tag not trailing",
-		"# pane-scheduler:standalone",
-		`0 0 * * * /x/rig run-job j1  # pane-scheduler:j1`,
+		"# prose about rig-scheduler and friends",
+		"30 6 * * * echo hi # rig-scheduler:NOTOURS  # tag not trailing",
+		"# rig-scheduler:standalone",
+		`0 0 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1`,
 	}, "\n")
-	found := Scan(text)
+	found := Scan(text, testHome)
 	if len(found) != 1 || found[0].Key != "j1" {
 		t.Fatalf("scan = %+v, want exactly j1", found)
+	}
+}
+
+func TestScanAndWriterNeverSeeAnOldTagLine(t *testing.T) {
+	old := `0 0 * * * /x/rig run-job j1  # pane-scheduler:j1`
+	if found := Scan(foreign+"\n"+old+"\n", testHome); len(found) != 0 {
+		t.Fatalf("an old-tag line is the migration's, never the reader's: %+v", found)
+	}
+	text, added := UpsertLine(foreign+"\n"+old+"\n", "j1", "30 1 * * *", RUNNER, testHome)
+	if !added || !strings.Contains(text, old) {
+		t.Fatalf("the writer must leave an old-tag line byte-identical and append its own:\n%s", text)
+	}
+	if next, found := RemoveLine(foreign+"\n"+old+"\n", "j1", testHome); found || !strings.Contains(next, old) {
+		t.Fatalf("remove must not touch an old-tag line: found %v\n%s", found, next)
+	}
+}
+
+func TestTagHomeIgnoresATrailingSlash(t *testing.T) {
+	if TagHome("/home/u/.rig/") != TagHome("/home/u/.rig") || TagHome("/home/u//.rig") != TagHome("/home/u/.rig") {
+		t.Fatal("the home hash must be over the cleaned path")
+	}
+	if TagHome("/home/u/.rig") == TagHome("/home/u/.orbit") {
+		t.Fatal("two homes must hash apart")
+	}
+}
+
+func TestOldTagLineNamesItsRunner(t *testing.T) {
+	key, cmd, ok := oldTagLine(`0 4 * * * '/home/u/.local/bin/orbit' run-job j1  # pane-scheduler:j1`)
+	if !ok || key != "j1" || cmd != "'/home/u/.local/bin/orbit' run-job" {
+		t.Fatalf("%q %q %v", key, cmd, ok)
+	}
+	if _, cmd, ok := oldTagLine(`# 0 4 * * * /x/rig run-job j2  # pane-scheduler:j2`); !ok || cmd != "/x/rig run-job" {
+		t.Fatalf("a paused old line: %q %v", cmd, ok)
+	}
+	if _, _, ok := oldTagLine(`0 4 * * * /x/rig run-job j1  # pane-scheduler:j2`); ok {
+		t.Fatal("a tag whose key is not the line's last field is nobody's")
+	}
+	if _, _, ok := oldTagLine(`0 4 * * * /x/rig run-job j1  # rig-scheduler:` + TagHome(testHome) + `:j1`); ok {
+		t.Fatal("a new-tag line is not an old one")
+	}
+	if !runnerMatches("/x/rig run-job", "/x/rig  run-job") || runnerMatches("/x/orbit run-job", "/x/rig run-job") {
+		t.Fatal("the runner match is on the normalized command")
 	}
 }
 

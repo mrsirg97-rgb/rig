@@ -54,7 +54,7 @@ func TestLandlockWorkerThreadsAreInsideTheDomain(t *testing.T) {
 		WorkerCmd: []string{bin},
 		SwapURL:   srv.URL,
 		Sandbox:   "landlock",
-		RigHome:   h.home,
+		RigHome:   h.rigHome,
 		Now:       func() time.Time { return runnerNow },
 	})
 	mustOK(t, err)

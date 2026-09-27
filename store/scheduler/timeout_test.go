@@ -115,7 +115,7 @@ func TestACommandJobCarriesItsTimeoutToo(t *testing.T) {
 	}
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	if err := sched.RunJob("j1", sched.RunOpts{
-		Home: h.home, Crontab: h.ct, Fetch: func(string) (json.RawMessage, error) {
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome, Fetch: func(string) (json.RawMessage, error) {
 			return nil, jsonError("busy probe must not run")
 		},
 		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
@@ -235,7 +235,7 @@ func TestMigrationAddsTheTimeoutColumnToASchemaThreeStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gdb, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, newFakeCrontab("")))
+	gdb, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", newFakeCrontab("")))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -227,13 +227,13 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 			Name: "golden", Prompt: "say hi", Cron: "0 5 * * *",
 			Cwd: workDir, Model: "brain", Busy: "skip",
-		}, "/ws/golden", "sess-golden", bin+" run-job", fixedNow)
+		}, "/ws/golden", "sess-golden", bin+" run-job", cfgDir(t, scratch), fixedNow)
 		if err != nil {
 			t.Fatalf("create: %v (%s)", err, reply)
 		}
 		key := "j1"
 		if err := os.WriteFile(filepath.Join(scratch, "spool"),
-			[]byte("0 5 * * * "+bin+" run-job # pane-scheduler:"+key+"\n"), 0o644); err != nil {
+			[]byte("0 5 * * * "+bin+" run-job # rig-scheduler:"+sched.TagHome(cfgDir(t, scratch))+":"+key+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		sandboxOff(t, scratch)
@@ -512,7 +512,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 			Name: "swap", Prompt: "say hi", Cron: "0 5 * * *",
 			Cwd: workDir, Model: "local", Busy: "skip",
-		}, "/ws/swap", "sess-swap", bin+" run-job", fixedNow)
+		}, "/ws/swap", "sess-swap", bin+" run-job", cfgDir(t, scratch), fixedNow)
 		if err != nil {
 			t.Fatalf("create: %v (%s)", err, reply)
 		}
@@ -522,7 +522,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		t.Helper()
 		sp := filepath.Join(scratch, "spool")
 		if err := os.WriteFile(sp,
-			[]byte("0 5 * * * "+bin+" run-job # pane-scheduler:"+key+"\n"), 0o644); err != nil {
+			[]byte("0 5 * * * "+bin+" run-job # rig-scheduler:"+sched.TagHome(cfgDir(t, scratch))+":"+key+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		cmd := exec.Command(bin, "run-job", key)
@@ -646,7 +646,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 			return sched.SpawnResult{Exit: 0}, nil
 		}
 		ct := newFakeCrontab()
-		ct.Install(sched.LineFor(key, "0 5 * * *", bin+" run-job"))
+		ct.Install(sched.LineFor(key, "0 5 * * *", bin+" run-job", cfgDir(t, scratch)))
 		err := sched.RunJob(key, sched.RunOpts{
 			Home:      filepath.Join(cfgDir(t, scratch), "scheduler"),
 			Crontab:   ct,
@@ -655,6 +655,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 			WorkerCmd: []string{bin},
 			SwapURL:   "",
 			Sandbox:   "off",
+			RigHome:   cfgDir(t, scratch),
 			Now:       fixedNow,
 		})
 		if err != nil {
@@ -743,13 +744,13 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "agents", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: workDir, Model: "local", Busy: "skip",
-	}, workDir, "sess-agents", bin+" run-job", fixedNow)
+	}, workDir, "sess-agents", bin+" run-job", cfgDir(t, scratch), fixedNow)
 	if err != nil {
 		t.Fatalf("create: %v (%s)", err, reply)
 	}
 	key := "j1"
 	if err := os.WriteFile(filepath.Join(scratch, "spool"),
-		[]byte("0 5 * * * "+bin+" run-job # pane-scheduler:"+key+"\n"), 0o644); err != nil {
+		[]byte("0 5 * * * "+bin+" run-job # rig-scheduler:"+sched.TagHome(cfgDir(t, scratch))+":"+key+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sandboxOff(t, scratch)

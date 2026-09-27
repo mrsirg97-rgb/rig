@@ -28,6 +28,25 @@ func seedLegacyGlobal(t *testing.T, home string) {
 	}
 }
 
+func seedJobs(t *testing.T, home string, ct *fakeCrontab, names []string) {
+	t.Helper()
+	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	if err != nil {
+		t.Fatalf("seed open: %v", err)
+	}
+	for i, name := range names {
+		if _, err := sched.Create(context.Background(), db, ct, sched.CreateInput{
+			Model: "w",
+			Name:  name, Prompt: "p", Cron: "0 " + strconv.Itoa(i) + " * * *", Cwd: "/dir",
+		}, "/sess", "sess-seed", runnerCmd, home, func() time.Time { return nowFixed }); err != nil {
+			t.Fatalf("seed create %s: %v", name, err)
+		}
+	}
+	if err := db.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func legacyStore(t *testing.T, home, hash string, ct *fakeCrontab, jobs []legacyJob, recRun bool) {
 	t.Helper()
 	db, _, _, err := store.Open(filepath.Join(home, hash+".sqlite"), sched.Statements(), 1)
@@ -38,7 +57,7 @@ func legacyStore(t *testing.T, home, hash string, ct *fakeCrontab, jobs []legacy
 		if _, err := sched.Create(context.Background(), db, ct, sched.CreateInput{
 			Model: "w",
 			Name:  j.Name, Prompt: j.Prompt, Cron: j.Cron, Cwd: j.Cwd,
-		}, "/sess", "sess-legacy", runnerCmd, func() time.Time { return nowFixed }); err != nil {
+		}, "/sess", "sess-legacy", runnerCmd, home, func() time.Time { return nowFixed }); err != nil {
 			t.Fatalf("legacy create: %v", err)
 		}
 	}
@@ -53,7 +72,7 @@ func legacyStore(t *testing.T, home, hash string, ct *fakeCrontab, jobs []legacy
 		t.Fatal(err)
 	}
 	ct.mu.Lock()
-	ct.text = regexp.MustCompile(`pane-scheduler:j(\d+)`).ReplaceAllString(ct.text, "pane-scheduler:cwd-"+hash+":j$1")
+	ct.text = regexp.MustCompile(`rig-scheduler:[0-9a-f]{12}:j(\d+)`).ReplaceAllString(ct.text, "pane-scheduler:cwd-"+hash+":j$1")
 	ct.text = regexp.MustCompile(`run-job j(\d+)`).ReplaceAllString(ct.text, "run-job cwd-"+hash+":j$1")
 	ct.mu.Unlock()
 }
@@ -74,7 +93,7 @@ func TestMigrationFoldsTwoCwdStoresWithCollidingJ1s(t *testing.T) {
 
 	globalPath := filepath.Join(home, "global.sqlite")
 	seedLegacyGlobal(t, home)
-	gdb, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	gdb, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +112,8 @@ func TestMigrationFoldsTwoCwdStoresWithCollidingJ1s(t *testing.T) {
 	if rowA["name"] != "from-a" || rowB["name"] != "from-b" {
 		t.Fatalf("names: %v %v", rowA["name"], rowB["name"])
 	}
-	if !strings.Contains(ct.text, "pane-scheduler:j1") || !strings.Contains(ct.text, "pane-scheduler:j2") {
-		t.Fatalf("crontab not rewritten to the new ids:\n%s", ct.text)
+	if !strings.Contains(ct.text, "rig-scheduler:"+sched.TagHome(home)+":j1") || !strings.Contains(ct.text, "rig-scheduler:"+sched.TagHome(home)+":j2") {
+		t.Fatalf("crontab not rewritten to the new ids under this home's tag:\n%s", ct.text)
 	}
 	if strings.Contains(ct.text, "cwd-") {
 		t.Fatalf("legacy keys still present:\n%s", ct.text)
@@ -131,13 +150,13 @@ func TestMigrationKeepsExistingGlobalJobs(t *testing.T) {
 	if _, err := sched.Create(context.Background(), gdb, ct, sched.CreateInput{
 		Model: "w",
 		Name:  "global-job", Prompt: "p", Cron: "0 2 * * *", Cwd: "/global",
-	}, "/sess", "sess", runnerCmd, func() time.Time { return nowFixed }); err != nil {
+	}, "/sess", "sess", runnerCmd, home, func() time.Time { return nowFixed }); err != nil {
 		t.Fatal(err)
 	}
 	gdb.DB.Close()
 
 	globalPath := filepath.Join(home, "global.sqlite")
-	gdb2, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	gdb2, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,12 +185,12 @@ func TestMigrationIsANoOpOnTheSecondOpen(t *testing.T) {
 	}, false)
 	globalPath := filepath.Join(home, "global.sqlite")
 	seedLegacyGlobal(t, home)
-	if _, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct)); err != nil {
+	if _, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct)); err != nil {
 		t.Fatal(err)
 	} else if !strings.Contains(report, "folded") {
 		t.Fatalf("first open report %q", report)
 	}
-	gdb, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	gdb, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,10 +217,10 @@ func TestMigrationMovesEmptyFileAsideWithNoRow(t *testing.T) {
 	if _, err := sched.Create(context.Background(), db, ct, sched.CreateInput{
 		Model: "w",
 		Name:  "gone", Prompt: "p", Cron: "0 0 * * *", Cwd: "/dir-a",
-	}, "/sess", "sess", runnerCmd, func() time.Time { return nowFixed }); err != nil {
+	}, "/sess", "sess", runnerCmd, home, func() time.Time { return nowFixed }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sched.Remove(context.Background(), db, ct, "j1", "/sess", "sess"); err != nil {
+	if _, err := sched.Remove(context.Background(), db, ct, "j1", "/sess", "sess", home); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.DB.Close(); err != nil {
@@ -209,7 +228,7 @@ func TestMigrationMovesEmptyFileAsideWithNoRow(t *testing.T) {
 	}
 	globalPath := filepath.Join(home, "global.sqlite")
 	seedLegacyGlobal(t, home)
-	gdb, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	gdb, _, report, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +259,7 @@ func TestMigrationRewritesJ1AndJ10WithoutCorruptingEither(t *testing.T) {
 	if !strings.Contains(ct.text, "cwd-aaaa1111bbbb:j10") {
 		t.Fatalf("j10 not staged:\n%s", ct.text)
 	}
-	gdb, _, report, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	gdb, _, report, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +299,7 @@ func TestMigrationFoldsWithNoGlobalStoreYet(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, "global.sqlite")); err == nil {
 		t.Fatal("precondition: no global store")
 	}
-	gdb, _, report, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	gdb, _, report, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +326,7 @@ func TestMigrationMovesTheSidecarsAside(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	gdb, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	gdb, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,6 +338,99 @@ func TestMigrationMovesTheSidecarsAside(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "aaaa1111bbbb.sqlite.migrated")); err != nil {
 		t.Fatal("the legacy store must move aside")
+	}
+}
+
+func TestMigrationRewritesOnlyThisHomesOldTagLines(t *testing.T) {
+	home := t.TempDir()
+	seed := newFakeCrontab("SHELL=/bin/bash\n")
+	seedJobs(t, home, seed, []string{"ours-a", "ours-b"})
+	myHome := sched.TagHome(home)
+	otherHome := sched.TagHome("/home/u/.orbit")
+
+	seeded := []string{
+		"# foreign comment at top",
+		"SHELL=/bin/bash",
+		"",
+		"0 5 * * * /usr/local/bin/backup.sh   # user's own trailing comment",
+		`0 4 * * * /x/rig run-job j1  # pane-scheduler:j1`,
+		`0 7 * * * /x/rig run-job j2  # rig-scheduler:` + myHome + `:j2`,
+		`0 5 * * * /x/rig run-job j9  # pane-scheduler:j9`,
+		`0 6 * * * /x/rig run-job j9  # rig-scheduler:` + otherHome + `:j9`,
+		`0 12 * * * '/x/orbit' run-job j1  # pane-scheduler:j1`,
+		`0 12 * * * '/x/orbit' run-job j2  # pane-scheduler:j2`,
+	}
+	ct := newFakeCrontab(strings.Join(seeded, "\n") + "\n")
+	gdb, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gdb.DB.Close()
+
+	got := strings.Split(strings.TrimRight(ct.text, "\n"), "\n")
+	if len(got) != len(seeded) {
+		t.Fatalf("line count %d, want %d:\n%s", len(got), len(seeded), ct.text)
+	}
+	for i, l := range seeded {
+		want := l
+		if l == `0 4 * * * /x/rig run-job j1  # pane-scheduler:j1` {
+			want = `0 4 * * * /x/rig run-job j1  # rig-scheduler:` + myHome + `:j1`
+		}
+		if got[i] != want {
+			t.Fatalf("line %d drifted:\n got  %q\n want %q\n%s", i, got[i], want, ct.text)
+		}
+	}
+
+	if _, err := sched.Pause(context.Background(), gdb, ct, "j1", "/sess", "sess", home); err != nil {
+		t.Fatal(err)
+	}
+	got = strings.Split(strings.TrimRight(ct.text, "\n"), "\n")
+	for i, l := range seeded {
+		want := l
+		if l == `0 4 * * * /x/rig run-job j1  # pane-scheduler:j1` {
+			want = `# 0 4 * * * /x/rig run-job j1  # rig-scheduler:` + myHome + `:j1`
+		}
+		if got[i] != want {
+			t.Fatalf("after pause line %d drifted:\n got  %q\n want %q\n%s", i, got[i], want, ct.text)
+		}
+	}
+}
+
+func TestMigrationRewritesAnOldTagLineOnceAndNeverAgain(t *testing.T) {
+	home := t.TempDir()
+	seed := newFakeCrontab("SHELL=/bin/bash\n")
+	seedJobs(t, home, seed, []string{"ours"})
+	myHome := sched.TagHome(home)
+	old := `0 4 * * * /x/rig run-job j1  # pane-scheduler:j1`
+	ct := newFakeCrontab("SHELL=/bin/bash\n" + old + "\n")
+	globalPath := filepath.Join(home, "global.sqlite")
+	gdb, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(ct.text, "pane-scheduler:j1") || !strings.Contains(ct.text, "rig-scheduler:"+myHome+":j1") {
+		t.Fatalf("the old-tag line must be read and rewritten once to this home's tag:\n%s", ct.text)
+	}
+	if err := gdb.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restored := `0 5 * * * /x/rig run-job j1  # pane-scheduler:j1`
+	ct.text += restored + "\n"
+	gdb2, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", ct))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gdb2.DB.Close()
+	if !strings.Contains(ct.text, restored) {
+		t.Fatal("a restored old-tag line is never rewritten again:\n" + ct.text)
+	}
+	if found := sched.Scan(ct.text, home); len(found) != 1 || found[0].Key != "j1" || found[0].Cron != "0 4 * * *" {
+		t.Fatalf("after the migration the reader sees only the new-tag line: %+v", found)
+	}
+	var marker string
+	if err := gdb2.DB.QueryRow(`SELECT value FROM meta WHERE key = 'migrated:pane-scheduler'`).Scan(&marker); err != nil || marker != myHome {
+		t.Fatalf("one-time marker %q, %v", marker, err)
 	}
 }
 

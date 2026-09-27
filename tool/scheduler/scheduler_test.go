@@ -173,7 +173,7 @@ func TestExecUpdateLandsInTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cadence update: %v (%s)", err, reply)
 	}
-	if !strings.Contains(h.ct.text, "0 4 * * * /x/rig run-job j1  # pane-scheduler:j1") {
+	if !strings.Contains(h.ct.text, "0 4 * * * /x/rig run-job j1  # rig-scheduler:"+sched.TagHome(h.home)+":j1") {
 		t.Fatalf("the line must be rewritten: %q", h.ct.text)
 	}
 	if strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job j1") {
@@ -196,7 +196,7 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 	if !strings.HasPrefix(reply, "created j1 'surface'") {
 		t.Fatalf("create reply %q", reply)
 	}
-	if !strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job j1  # pane-scheduler:j1") {
+	if !strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job j1  # rig-scheduler:"+sched.TagHome(h.home)+":j1") {
 		t.Fatalf("crontab line missing: %q", h.ct.text)
 	}
 	list, err := exec(t, h, map[string]any{"action": "list"})

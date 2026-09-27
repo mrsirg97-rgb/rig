@@ -152,7 +152,7 @@ func TestMigrationAddsTheStallColumnToASchemaFourStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gdb, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, newFakeCrontab("")))
+	gdb, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, "/x/rig run-job", newFakeCrontab("")))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -192,7 +192,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		return sched.Create(ctx, a.db, a.ct, sched.CreateInput{
 			Name: name, Prompt: g.Prompt, Command: command, Cron: g.Cron, At: g.At,
 			Model: model, Busy: busy, Cwd: jobCwd, Timeout: g.Timeout, Stall: g.Stall, Budget: g.Budget,
-		}, cwd, session, a.runnerCmd, time.Now)
+		}, cwd, session, a.runnerCmd, a.home, time.Now)
 	case "update":
 		if g.ID == "" {
 			return "", fmt.Errorf("scheduler: update requires 'id' (jN)")
@@ -208,20 +208,20 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
 			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron,
 			At: g.At, Cwd: updateCwd, Model: g.Model, Busy: g.Busy, Timeout: g.Timeout, Stall: g.Stall, Budget: g.Budget,
-		}, session, a.runnerCmd, time.Now)
+		}, session, a.runnerCmd, a.home, time.Now)
 	case "list":
-		return sched.List(ctx, a.db, a.ct, cwd, nil, time.Now)
+		return sched.List(ctx, a.db, a.ct, cwd, a.home, nil, time.Now)
 	case "pause", "resume", "remove":
 		if g.ID == "" {
 			return "", fmt.Errorf("scheduler: %s requires 'id' (jN)", g.Action)
 		}
 		switch g.Action {
 		case "pause":
-			return sched.Pause(ctx, a.db, a.ct, g.ID, cwd, session)
+			return sched.Pause(ctx, a.db, a.ct, g.ID, cwd, session, a.home)
 		case "resume":
-			return sched.Resume(ctx, a.db, a.ct, g.ID, cwd, session)
+			return sched.Resume(ctx, a.db, a.ct, g.ID, cwd, session, a.home)
 		default:
-			return sched.Remove(ctx, a.db, a.ct, g.ID, cwd, session)
+			return sched.Remove(ctx, a.db, a.ct, g.ID, cwd, session, a.home)
 		}
 	case "runs":
 		if g.ID == "" {

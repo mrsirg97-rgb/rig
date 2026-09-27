@@ -1,4 +1,23 @@
 # Changelog
+## [1.7.1]: the crontab tag is home-scoped
+
+The crontab tag was `# pane-scheduler:<key>`, a leftover from the port:
+two rig homes (~/.rig and an embedder's ~/.orbit) sharing one crontab
+emitted indistinguishable lines, and a key like `j1` meant something
+different in each home's store. The tag is now
+`# rig-scheduler:<home>:<key>` with `<home>` the 12-hex short sha1 of
+the rig home path: the homes own disjoint lines and a key only means
+something inside its home, hashed over the cleaned path. The reader and
+the writer see only this home's new-tag lines; an old-tag line belongs
+to nobody until the one-time migration on the scheduler store's next
+open claims it, and it claims a line only when the key is a job in this
+store's event log and the runner command on the line is this binary's,
+so two homes sharing a key never take each other's lines. The migration
+runs through the runtime's own crontab seam: the web frontend's store
+cache now takes the server's crontab instead of opening a real one, the
+hole through which a test suite with a fake crontab could rewrite the
+operator's. The version moves to 1.7.1.
+
 ## [1.7.0]: the tool menu reduction
 
 The menu shrinks to the observation path. `ls`, `find`, and `grep` are
