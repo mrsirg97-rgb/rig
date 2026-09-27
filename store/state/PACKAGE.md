@@ -100,3 +100,10 @@ the sanity check that the invocation is right.
   dashboard renders as structure. The generation line, kept here and
   disabled in code: `GOGEN=$PWD; cd ../../../lift/cmd && go run main.go
   -config=$GOGEN/gen.json -source=$GOGEN/source.json`.
+
+- The seek paths beside the generated DDL live in `metadata/extra.sql`
+  (`ExtraStatements`, the todo store's pattern): `messages(session_id,
+  role, seq)` and `faults(session_id)`, the indexes `ListSessions`
+  aggregates through. The listing chooses the n newest sessions in a CTE
+  before it aggregates, so the limit bounds the work. `Cwds` is the
+  distinct-cwd read the dashboard's workspace list uses.

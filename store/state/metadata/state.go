@@ -5,7 +5,34 @@
 // so the FK survives into the generated INSERT.
 package metadata
 
-import "time"
+import (
+	_ "embed"
+	"strings"
+	"time"
+)
+
+//go:embed extra.sql
+var extraSQL []byte
+
+// ExtraStatements is the hand-written DDL beside the generated tables:
+// the indexes the session listing seeks by. IF NOT EXISTS, so an existing
+// store gains them on open with no schema bump.
+func ExtraStatements() []string {
+	var out []string
+	for _, stmt := range strings.Split(string(extraSQL), ";") {
+		var lines []string
+		for _, l := range strings.Split(stmt, "\n") {
+			if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "--") {
+				continue
+			}
+			lines = append(lines, l)
+		}
+		if len(lines) > 0 {
+			out = append(out, strings.Join(lines, "\n"))
+		}
+	}
+	return out
+}
 
 // table:"sessions"
 type Session struct {

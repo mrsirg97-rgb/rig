@@ -13,6 +13,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/store/sqlx"
 	"github.com/mrsirg97-rgb/rig/store/state/ddl"
 	"github.com/mrsirg97-rgb/rig/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/store/state/metadata"
 )
 
 const SchemaVersion = 4
@@ -167,7 +168,7 @@ func SetSessionLabel(ctx context.Context, db store.DB, sessionID, label string) 
 }
 
 func Statements() []string {
-	return ddl.Statements()
+	return append(ddl.Statements(), metadata.ExtraStatements()...)
 }
 
 func RecordSession(ctx context.Context, db store.DB, id, cwd, model, version string) error {

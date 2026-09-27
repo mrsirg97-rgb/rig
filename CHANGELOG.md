@@ -1,4 +1,22 @@
 # Changelog
+## [1.6.0]: the session listing seeks
+
+`state.ListSessions` aggregated per session through correlated
+subqueries over tables with no seek path, and computed them for every
+session before the sort and the limit: 10.5s on a 170-session,
+24k-message store, the same with a limit of five. Every rig start in that
+repo paid it (the claim reap lists sessions), and the dashboard paid it
+once per store for its workspace list, past its 5s read timeout.
+
+The state store gains `metadata.ExtraStatements()` beside its generated
+DDL, the todo store's pattern: indexes on `messages(session_id, role,
+seq)` and `faults(session_id)`, IF NOT EXISTS, so an existing store gains
+them on its next open with no schema bump. The listing selects the n
+newest sessions first and aggregates those n only. The dashboard's
+workspace list reads `state.Cwds` (distinct cwd per store) instead of the
+full listing. Measured on a copy of the same store: 13ms with the
+indexes, 3ms with the limit-first shape.
+
 ## [1.5.9]: the region resets after a capped aim
 
 A pane that shrank under a tall live region (the phone's keyboard
