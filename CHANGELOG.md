@@ -1,4 +1,35 @@
 # Changelog
+## [1.7.2]: the TUI speaks ember and the todo block parses its own queue
+
+The TUI's committed openings were still the accent blue: the tool rows
+(`● bash`), the compact glyph, the `/command` opening, and the todo
+progress bar. Rig's colour is the ember — the status rows, the footer,
+the prompt glyph, the greeting — so the openings and the bar now paint
+the ember, and the accent stays for highlights only (the effort
+ladder, the menu's candidates, markdown headings).
+
+The todo store's summary now prefixes every queue with its scope tag
+(`[rig] 2/5 done · next: t3`), counts tasks in review in the head,
+marks a review row `[r]`, and says `claimed for review by`; the TUI's
+parser was anchored on the bare count and accepted only `[x!~ ]`, so
+the todo block fell back to raw text on every reply. The head regex
+now carries the scope tag and the review count, a review row renders
+its `[r]` as the review glyph in warn, the review claim splits like a
+plain claim, and the scope tag renders dim before the ember bar. A
+bare `queue: rig (bound)` report prints as one dim line, never a
+block.
+
+The todo render tests no longer hand-write their reply text: one
+fixture drives store/todo's real renderer (and tool/todo's bare
+report) through a real store, so the parser and the store cannot
+drift again. The activity line's spinner is gone: the label alone
+(thinking, bash, edit, compacting) breathes within the ember — a
+twelve-stop sine table from the ember down to a darker step of the
+same hue and back, one stop per animPeriod, one colour per frame,
+never per character; where the stops collapse under the 256-color
+downconvert the activity toggles two stops at the same cadence. The
+version moves to 1.7.2.
+
 ## [1.7.1]: the crontab tag is home-scoped
 
 The crontab tag was `# pane-scheduler:<key>`, a leftover from the port:

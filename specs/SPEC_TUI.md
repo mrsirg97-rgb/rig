@@ -626,20 +626,29 @@ The blocks are pane's:
 
 ```
 ● todo · start t3
-  ▰▰▰▱▱ 2/5 · next t4
+  [rig] ▰▰▰▱▱ 2/5 · next t4 · 1 in review
   ● t1 wire the models table
+  ⧗ t2 delegated work · claimed for review by 01a011f6
   ◐ t3 the switch seam
   ○ t4 steer verb · requires t3
 ```
 
 - the progress head, then one row per task: status glyph, id, text,
   `· requires tN`/`· blocks tN`/`· waits for k` dim, `· claimed by <sid8>` dim only
-  when the claim is foreign (another session);
+  when the claim is foreign (another session), `· claimed for review
+  by <sid8>` the same;
 - scheduler `list`: `●`/`○`/`✕` per job state with cron, last, next,
   and drift named. The sections are directories (SPEC_STATE's one-store
   list): this cwd's jobs first, then the rest grouped by the job's own
   `cwd`; an empty store is one line naming it (`scheduler: no jobs`).
   `runs`: the run lines with tail previews.
+
+Amended 1.7.2, the scoped reply: the todo store's summary prefixes
+every queue with its scope tag, so the head renders
+`[rig] ▰▰▰▱▱ 2/5 · next t4 · 1 in review` with the tag dim before the
+ember bar; the review count rides the head; a review row renders its
+`[r]` marker as the review glyph in warn; a bare queue report
+(`queue: rig (bound)`) is not a block and commits as one dim line.
 
 The renderers parse the tools' own reply text (the queue the reply
 already carries): no new tool surface, no reaching into stores from
