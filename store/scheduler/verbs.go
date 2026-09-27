@@ -63,7 +63,7 @@ func onceFields(at string, now time.Time) (string, string, error) {
 	return norm, fmt.Sprintf("%d %d %d %d *", lt.Minute(), lt.Hour(), lt.Day(), int(lt.Month())), nil
 }
 
-func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, session, runnerCmd string, now func() time.Time) (string, error) {
+func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, session, runnerCmd, home string, now func() time.Time) (string, error) {
 	if now == nil {
 		now = time.Now
 	}
@@ -153,7 +153,7 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	if err != nil {
 		return "", err
 	}
-	next, _ := UpsertLine(text, key, cron, runnerCmd)
+	next, _ := UpsertLine(text, key, cron, runnerCmd, home)
 	if err := ct.Install(next); err != nil {
 		return "", err
 	}
@@ -207,19 +207,19 @@ func createdRow(f *fold, seq int64) *jobState {
 	return nil
 }
 
-func Pause(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session string) (string, error) {
-	return stateAction(ctx, db, ct, id, sessionCwd, session, "pause")
+func Pause(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, home string) (string, error) {
+	return stateAction(ctx, db, ct, id, sessionCwd, session, "pause", home)
 }
 
-func Resume(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session string) (string, error) {
-	return stateAction(ctx, db, ct, id, sessionCwd, session, "resume")
+func Resume(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, home string) (string, error) {
+	return stateAction(ctx, db, ct, id, sessionCwd, session, "resume", home)
 }
 
-func Remove(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session string) (string, error) {
-	return stateAction(ctx, db, ct, id, sessionCwd, session, "remove")
+func Remove(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, home string) (string, error) {
+	return stateAction(ctx, db, ct, id, sessionCwd, session, "remove", home)
 }
 
-func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, action string) (string, error) {
+func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, action, home string) (string, error) {
 	_, rtx, err := db.TxReadOnly(ctx)
 	if err != nil {
 		return "", err
@@ -260,11 +260,11 @@ func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session
 	var op func(string) (string, bool)
 	switch action {
 	case "pause":
-		op = func(t string) (string, bool) { return SetPaused(t, key, true) }
+		op = func(t string) (string, bool) { return SetPaused(t, key, true, home) }
 	case "resume":
-		op = func(t string) (string, bool) { return SetPaused(t, key, false) }
+		op = func(t string) (string, bool) { return SetPaused(t, key, false, home) }
 	case "remove":
-		op = func(t string) (string, bool) { return RemoveLine(t, key) }
+		op = func(t string) (string, bool) { return RemoveLine(t, key, home) }
 	}
 	next, foundLine := op(text)
 	if foundLine && next != text {
@@ -321,7 +321,7 @@ type UpdateInput struct {
 	Budget  float64
 }
 
-func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, runnerCmd string, now func() time.Time) (string, error) {
+func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, runnerCmd, home string, now func() time.Time) (string, error) {
 	if now == nil {
 		now = time.Now
 	}
@@ -435,9 +435,9 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 		if err != nil {
 			return "", err
 		}
-		next, _ := UpsertLine(text, in.ID, newCron, runnerCmd)
+		next, _ := UpsertLine(text, in.ID, newCron, runnerCmd, home)
 		if job.State == "paused" {
-			next, _ = SetPaused(next, in.ID, true)
+			next, _ = SetPaused(next, in.ID, true, home)
 		}
 		if err := ct.Install(next); err != nil {
 			return "", err

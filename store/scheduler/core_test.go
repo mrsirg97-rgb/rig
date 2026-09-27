@@ -55,14 +55,22 @@ func (f failingCrontab) Install(string) error  { return f.installErr }
 
 type harness struct {
 	home    string
+	rigHome string
 	db      sched.DB
 	ct      *fakeCrontab
 	sessCwd string
 }
 
 func newHarness(t *testing.T, sessionCwd string) *harness {
+	return newHarnessRigHome(t, sessionCwd, "")
+}
+
+func newHarnessRigHome(t *testing.T, sessionCwd, rigHome string) *harness {
 	t.Helper()
 	home := t.TempDir()
+	if rigHome == "" {
+		rigHome = home
+	}
 	open := func(name string) sched.DB {
 		db, _, _, err := store.Open(filepath.Join(home, name), sched.Statements(), sched.SchemaVersion)
 		if err != nil {
@@ -73,6 +81,7 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	db := open("global.sqlite")
 	return &harness{
 		home:    home,
+		rigHome: rigHome,
 		db:      db,
 		ct:      newFakeCrontab("SHELL=/bin/bash\n"),
 		sessCwd: sessionCwd,
@@ -80,11 +89,11 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 }
 
 func (h *harness) create(in sched.CreateInput) (string, error) {
-	return sched.Create(context.Background(), h.db, h.ct, in, h.sessCwd, "sess-core", runnerCmd, func() time.Time { return nowFixed })
+	return sched.Create(context.Background(), h.db, h.ct, in, h.sessCwd, "sess-core", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 }
 
 func (h *harness) list() (string, error) {
-	return sched.List(context.Background(), h.db, h.ct, h.sessCwd, nil, func() time.Time { return nowFixed })
+	return sched.List(context.Background(), h.db, h.ct, h.sessCwd, h.rigHome, nil, func() time.Time { return nowFixed })
 }
 
 func (h *harness) runs(id string, n int) (string, error) {
@@ -180,7 +189,7 @@ func TestCreateMintsJ1WritesStoreAndTaggedLineForeignIntact(t *testing.T) {
 	contains(t, reply, "created j1 'nightly'")
 
 	contains(t, reply, "next 2026-08-15T16:00:00Z")
-	line := `0 */4 * * * ` + runnerCmd + ` j1  # pane-scheduler:j1`
+	line := `0 */4 * * * ` + runnerCmd + ` j1  # rig-scheduler:` + sched.TagHome(h.rigHome) + `:j1`
 	contains(t, h.ct.text, line)
 	contains(t, h.ct.text, "SHELL=/bin/bash")
 	if _, err := os.Stat(filepath.Join(h.home, "global.sqlite")); err != nil {
@@ -207,7 +216,7 @@ func TestRemovedJobsNameMayBeRecreatedIdsStillMintForward(t *testing.T) {
 	h := newHarness(t, "/ws/nm")
 	_, err := h.create(sched.CreateInput{Model: "w", Name: "recycle", Prompt: "p", Cron: "0 11 * * *"})
 	mustOK(t, err)
-	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
 	_, err = h.create(sched.CreateInput{Model: "w", Name: "recycle", Prompt: "q", Cron: "1 11 * * *"})
@@ -278,7 +287,7 @@ func TestCreateOnceTranslatesToCronFieldsMissingAtRefuses(t *testing.T) {
 	if row["at"] != "2026-08-16T03:07:00Z" {
 		t.Fatalf("at %v (normalized ISO)", row["at"])
 	}
-	contains(t, h.ct.text, `7 3 16 8 * `+runnerCmd+` j1  # pane-scheduler:j1`)
+	contains(t, h.ct.text, `7 3 16 8 * `+runnerCmd+` j1  # rig-scheduler:`+sched.TagHome(h.rigHome)+`:j1`)
 }
 
 func TestListGroupsByDirectoryThisCwdFirst(t *testing.T) {
@@ -308,10 +317,10 @@ func TestJobListedAndPausableFromAnotherDirectory(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "shared", Prompt: "p", Cron: "0 0 * * *", Cwd: "/a"}); err != nil {
 		t.Fatal(err)
 	}
-	list, err := sched.List(context.Background(), h.db, h.ct, "/b", nil, func() time.Time { return nowFixed })
+	list, err := sched.List(context.Background(), h.db, h.ct, "/b", h.rigHome, nil, func() time.Time { return nowFixed })
 	mustOK(t, err)
 	contains(t, list, "j1")
-	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", "/b", "sess-b"); err != nil {
+	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", "/b", "sess-b", h.rigHome); err != nil {
 		t.Fatalf("pause from /b under the same id: %v", err)
 	}
 	row := jobsRow(t, h, "j1")
@@ -328,7 +337,7 @@ func TestIdsAreOneSequenceAcrossDirectories(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "two", Prompt: "p", Cron: "0 1 * * *", Cwd: "/b"}); err != nil {
 		t.Fatal(err)
 	}
-	contains(t, h.ct.text, "j2  # pane-scheduler:j2")
+	contains(t, h.ct.text, "j2  # rig-scheduler:"+sched.TagHome(h.rigHome)+":j2")
 	if got := jobsRow(t, h, "j2")["cwd"]; got != "/b" {
 		t.Fatalf("cwd = %v", got)
 	}
@@ -344,7 +353,7 @@ func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 	}
 
 	h.ct.mu.Lock()
-	h.ct.text = regexp.MustCompile(`(?m).*pane-scheduler:j1.*\n?`).ReplaceAllString(h.ct.text, "")
+	h.ct.text = regexp.MustCompile(`(?m).*rig-scheduler:`+sched.TagHome(h.rigHome)+`:j1.*\n?`).ReplaceAllString(h.ct.text, "")
 	h.ct.mu.Unlock()
 	list, _ := h.list()
 	contains(t, list, "drift: no crontab line")
@@ -355,7 +364,7 @@ func TestDriftMissingLineAlteredCronAndStateSplitAreAllFlagged(t *testing.T) {
 	list, _ = h.list()
 	contains(t, list, "cron differs")
 
-	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j2", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j2", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
 	h.ct.mu.Lock()
@@ -371,7 +380,7 @@ func TestListNamesAnOrphanCrontabLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.ct.mu.Lock()
-	h.ct.text += "5 5 * * * " + runnerCmd + " j99  # pane-scheduler:j99\n"
+	h.ct.text += "5 5 * * * " + runnerCmd + " j99  # rig-scheduler:" + sched.TagHome(h.rigHome) + ":j99\n"
 	h.ct.mu.Unlock()
 	list, _ := h.list()
 	contains(t, list, "orphans:")
@@ -383,7 +392,7 @@ func TestListMarksAJobRunningWhenItsLockIsHeld(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "locked", Prompt: "p", Cron: "0 0 * * *", Cwd: "/ws/h"}); err != nil {
 		t.Fatal(err)
 	}
-	list, err := sched.List(context.Background(), h.db, h.ct, h.sessCwd, func(key string) bool {
+	list, err := sched.List(context.Background(), h.db, h.ct, h.sessCwd, h.rigHome, func(key string) bool {
 		return key == "j1"
 	}, func() time.Time { return nowFixed })
 	mustOK(t, err)
@@ -393,18 +402,18 @@ func TestListMarksAJobRunningWhenItsLockIsHeld(t *testing.T) {
 func TestPauseCommentsTheLineAndResumeRestoresByteIdentical(t *testing.T) {
 	h := newHarness(t, "/ws/i")
 	_, err := sched.Create(context.Background(), h.db, h.ct,
-		sched.CreateInput{Model: "w", Name: "p", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/i"}, "/ws/i", "sess-core", runnerCmd, func() time.Time { return nowFixed })
+		sched.CreateInput{Model: "w", Name: "p", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/i"}, "/ws/i", "sess-core", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 	mustOK(t, err)
 	activeLine := ""
 	for _, l := range strings.Split(h.ct.text, "\n") {
-		if strings.Contains(l, "pane-scheduler:") {
+		if strings.Contains(l, "rig-scheduler:") {
 			activeLine = l
 		}
 	}
 	if activeLine == "" {
 		t.Fatal("no tagged line")
 	}
-	_, err = sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core")
+	_, err = sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome)
 	mustOK(t, err)
 	contains(t, h.ct.text, "# "+activeLine)
 	var ops []string
@@ -431,7 +440,7 @@ func TestPauseCommentsTheLineAndResumeRestoresByteIdentical(t *testing.T) {
 	if sess != "sess-core" {
 		t.Fatalf("pause event session = %q", sess)
 	}
-	_, err = sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core")
+	_, err = sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome)
 	mustOK(t, err)
 	contains(t, h.ct.text, activeLine)
 	list, _ := h.list()
@@ -445,25 +454,25 @@ func TestPauseOnPausedRefusesResumeOnActiveRefuses(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "p", Prompt: "p", Cron: "0 4 * * *", Cwd: "/ws/j"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core")
+	_, err := sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome)
 	mustErr(t, err, `not paused`)
-	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
-	_, err = sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core")
+	_, err = sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome)
 	mustErr(t, err, `already paused`)
-	if _, err := sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
-	_, err = sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core")
+	_, err = sched.Resume(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome)
 	mustErr(t, err, `not paused`)
 }
 
 func TestUnknownIdRefuses(t *testing.T) {
 	h := newHarness(t, "/ws/k")
-	_, err := sched.Pause(context.Background(), h.db, h.ct, "j99", h.sessCwd, "sess-core")
+	_, err := sched.Pause(context.Background(), h.db, h.ct, "j99", h.sessCwd, "sess-core", h.rigHome)
 	mustErr(t, err, `no job 'j99'`)
-	_, err = sched.Remove(context.Background(), h.db, h.ct, "j99", h.sessCwd, "sess-core")
+	_, err = sched.Remove(context.Background(), h.db, h.ct, "j99", h.sessCwd, "sess-core", h.rigHome)
 	mustErr(t, err, `no job 'j99'`)
 }
 
@@ -477,13 +486,13 @@ func TestRemoveTombstonesTheRowAndRunsSurvive(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core"); err != nil {
+	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(h.ct.text, "pane-scheduler:") {
+	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("no trace in crontab")
 	}
-	_, err = sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core")
+	_, err = sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome)
 	mustErr(t, err, `already removed`)
 	row := jobsRow(t, h, "j1")
 	if row == nil || row["state"] != "removed" {
@@ -533,7 +542,7 @@ func TestCrontabInstallFailureRefusesAndLeavesTheStoreUntouched(t *testing.T) {
 	_, err := sched.Create(context.Background(), h.db, fc, sched.CreateInput{
 		Model: "w",
 		Name:  "x", Prompt: "p", Cron: "0 9 * * *", Cwd: "/ws/n",
-	}, "/ws/n", "sess-core", runnerCmd, func() time.Time { return nowFixed })
+	}, "/ws/n", "sess-core", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 	mustErr(t, err, `crontab install failed`)
 	var n int
 	if err := h.db.DB.QueryRow(`SELECT count(*) FROM events`).Scan(&n); err != nil {
@@ -550,7 +559,7 @@ func TestCrontabListFailureRefusesLoudlyBeforeAnythingIsWritten(t *testing.T) {
 	_, err := sched.Create(context.Background(), h.db, fc, sched.CreateInput{
 		Model: "w",
 		Name:  "x", Prompt: "p", Cron: "0 10 * * *", Cwd: "/ws/o",
-	}, "/ws/o", "sess-core", runnerCmd, func() time.Time { return nowFixed })
+	}, "/ws/o", "sess-core", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 	mustErr(t, err, `binary not found`)
 	var n int
 	if err := h.db.DB.QueryRow(`SELECT count(*) FROM events`).Scan(&n); err != nil {

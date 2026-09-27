@@ -349,7 +349,7 @@ func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	text, err := sched.List(ctx, sdb, s.crontab, cwd, nil, time.Now)
+	text, err := sched.List(ctx, sdb, s.crontab, cwd, s.home, nil, time.Now)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -479,7 +479,7 @@ func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply, err := sched.Create(ctx, sdb, s.crontab,
-		in, cwd, sessionName, s.runnerCmd, time.Now)
+		in, cwd, sessionName, s.runnerCmd, s.home, time.Now)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

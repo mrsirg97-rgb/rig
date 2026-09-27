@@ -44,7 +44,7 @@ func runSandboxOpts(h *harness, s sched.Spawn, profile string) sched.RunOpts {
 		SwapURL:   "http://127.0.0.1:8090",
 		Now:       func() time.Time { return runnerNow },
 		Sandbox:   profile,
-		RigHome:   h.home,
+		RigHome:   h.rigHome,
 	}
 }
 

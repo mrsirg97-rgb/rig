@@ -9,12 +9,37 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/store/scope"
 )
 
-var tagRe = regexp.MustCompile(`^(?P<lead>\S.*?)\s+#\s*pane-scheduler:(?P<key>\S+)$`)
+var tagRe = regexp.MustCompile(`^(?P<lead>\S.*?)\s+#\s*(?:(?P<old>pane-scheduler):(?P<oldkey>\S+)|(?P<new>rig-scheduler):(?P<home>[0-9a-f]{12}):(?P<newkey>\S+))$`)
 
-func LineFor(key, cron, runnerCmd string) string {
-	return fmt.Sprintf("%s %s %s  # pane-scheduler:%s", cron, runnerCmd, key, key)
+var oldTagRe = regexp.MustCompile(`(\s*#\s*)pane-scheduler:(\S+)$`)
+
+func TagHome(home string) string {
+	return scope.ShortHash(home)
+}
+
+func LineFor(key, cron, runnerCmd, home string) string {
+	return fmt.Sprintf("%s %s %s  # rig-scheduler:%s:%s", cron, runnerCmd, key, TagHome(home), key)
+}
+
+func scanMatch(line, homeHash string) (key string, ok bool) {
+	m := tagRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", false
+	}
+	oldIdx := tagRe.SubexpIndex("oldkey")
+	newIdx := tagRe.SubexpIndex("newkey")
+	homeIdx := tagRe.SubexpIndex("home")
+	if m[oldIdx] != "" {
+		return m[oldIdx], true
+	}
+	if m[homeIdx] != homeHash {
+		return "", false
+	}
+	return m[newIdx], true
 }
 
 func Normalize(text string) string {
@@ -31,15 +56,16 @@ type TaggedLine struct {
 	Paused bool
 }
 
-func Scan(text string) []TaggedLine {
+func Scan(text, home string) []TaggedLine {
+	homeHash := TagHome(home)
 	var out []TaggedLine
 	for _, raw := range strings.Split(text, "\n") {
 		line := strings.TrimRight(raw, " \t")
 		if line == "" {
 			continue
 		}
-		m := tagRe.FindStringSubmatch(line)
-		if m == nil {
+		key, ok := scanMatch(line, homeHash)
+		if !ok {
 			continue
 		}
 		body := line
@@ -53,7 +79,7 @@ func Scan(text string) []TaggedLine {
 		if len(fields) >= 5 {
 			cron = strings.Join(fields[:5], " ")
 		}
-		out = append(out, TaggedLine{Key: m[2], Cron: cron, Paused: paused})
+		out = append(out, TaggedLine{Key: key, Cron: cron, Paused: paused})
 	}
 	return out
 }
@@ -73,20 +99,21 @@ func joinLines(lines []string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func findTagIndex(lines []string, key string) int {
+func findTagIndex(lines []string, key, home string) int {
+	homeHash := TagHome(home)
 	for i, l := range lines {
-		m := tagRe.FindStringSubmatch(strings.TrimRight(l, " \t"))
-		if m != nil && m[2] == key {
+		found, ok := scanMatch(strings.TrimRight(l, " \t"), homeHash)
+		if ok && found == key {
 			return i
 		}
 	}
 	return -1
 }
 
-func UpsertLine(text, key, cron, runnerCmd string) (string, bool) {
+func UpsertLine(text, key, cron, runnerCmd, home string) (string, bool) {
 	lines := linesOf(text)
-	line := LineFor(key, cron, runnerCmd)
-	idx := findTagIndex(lines, key)
+	line := LineFor(key, cron, runnerCmd, home)
+	idx := findTagIndex(lines, key, home)
 	if idx == -1 {
 		lines = append(lines, line)
 		return joinLines(lines), true
@@ -95,9 +122,9 @@ func UpsertLine(text, key, cron, runnerCmd string) (string, bool) {
 	return joinLines(lines), false
 }
 
-func SetPaused(text, key string, paused bool) (string, bool) {
+func SetPaused(text, key string, paused bool, home string) (string, bool) {
 	lines := linesOf(text)
-	idx := findTagIndex(lines, key)
+	idx := findTagIndex(lines, key, home)
 	if idx == -1 {
 		return joinLines(lines), false
 	}
@@ -115,14 +142,18 @@ func SetPaused(text, key string, paused bool) (string, bool) {
 	return joinLines(lines), true
 }
 
-func RemoveLine(text, key string) (string, bool) {
+func RemoveLine(text, key, home string) (string, bool) {
 	lines := linesOf(text)
-	idx := findTagIndex(lines, key)
+	idx := findTagIndex(lines, key, home)
 	if idx == -1 {
 		return joinLines(lines), false
 	}
 	lines = append(lines[:idx], lines[idx+1:]...)
 	return joinLines(lines), true
+}
+
+func rewriteOldTag(line, homeHash string) string {
+	return oldTagRe.ReplaceAllString(line, "${1}rig-scheduler:"+homeHash+":${2}")
 }
 
 type Crontab interface {

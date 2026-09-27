@@ -9,7 +9,10 @@ never trusted. Removed jobs stay as tombstones so ids and names are never
 reused and remove survives compaction. Runs are structured records in
 their own container (SPEC_STATE's deviation): runs reads are chain reads
 over it and run history survives compaction. Crontab is the scheduling
-truth: tagged lines, surgical rewrites, foreign lines byte-identical,
+truth: tagged lines under `# rig-scheduler:<home>:<key>` (the 12-hex
+short sha1 of the rig home path, so `~/.rig` and an embedder's home
+sharing one crontab own disjoint lines and a key only means something
+inside its home), surgical rewrites, foreign lines byte-identical,
 written before the store commit; drift is surfaced in list.
 
 ## What it includes
@@ -17,7 +20,10 @@ written before the store commit; drift is surfaced in list.
 - `scheduler.go`: the package doc, `SchemaVersion`, `Statements`,
   the `DB` alias.
 - `cron.go`: the vixie cron parser and matcher.
-- `crontab.go`: the tagged-lines crontab edit/merge.
+- `crontab.go`: the tagged-lines crontab edit/merge; `TagHome` is the
+  short-sha1 home, `Scan` accepts the old `pane-scheduler:<key>` tag and
+  this home's `rig-scheduler` lines and ignores another home's, and the
+  writer emits only the new tag.
 - `verbs.go`: the command verbs
   (list/create/update/pause/resume/remove/runs) over the one
   `global.sqlite`; the crontab key is `jN` for every job, `name` unique
@@ -39,7 +45,11 @@ written before the store commit; drift is surfaced in list.
   no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
   The schema-3, schema-4, and schema-5 column adds (`command`,
   `timeout`, `stall`) ride the same function as presence-keyed
-  `ALTER TABLE`s, since it runs on every open.
+  `ALTER TABLE`s, since it runs on every open. The crontab-tag migration
+  rides it too: once per store (a `meta` marker), this home's old-tag
+  lines — old lines whose key is a job in this store's event log — are
+  rewritten to the `rig-scheduler` tag, every other line left byte
+  identical, and a store with no jobs never touches the crontab shim.
 - `runner.go`: the job runner (the worker spawn, bwrap jail, socket
   proxy); the spawn captures each stream to the first and last 128 KiB
   of a 256 KiB budget with a truncation marker, so a verbose worker
@@ -119,6 +129,12 @@ written before the store commit; drift is surfaced in list.
 - Crontab is written before the store commit: drift is surfaced in list,
   and a line orphaned by a crash between the write and the commit is
   listed too (the runner refuses to fire it, naming the row).
+- The tag is home-scoped: the writer never touches another home's line
+  (its `rig-scheduler` home differs, or its key is not this store's), so
+  two homes sharing one crontab stay disjoint; the reader accepts the
+  old `pane-scheduler` tag as this home's line, and the one-time tag
+  migration attributes an old line to the store whose event log knows
+  its key.
 - `update` is the definition change: one `update` op overlays only the
   fields the args carry; the id and the runs stay (remove + create
   re-mints the id and orphans the runs); a cadence change rewrites the

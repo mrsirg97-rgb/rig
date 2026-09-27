@@ -118,11 +118,11 @@ type jobLineSet struct {
 	lines []string
 }
 
-func List(ctx context.Context, db DB, ct Crontab, sessionCwd string, probe func(key string) bool, now func() time.Time) (string, error) {
+func List(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe func(key string) bool, now func() time.Time) (string, error) {
 	var lines map[string]TaggedLine
 	if text, err := ct.List(); err == nil {
 		lines = map[string]TaggedLine{}
-		for _, l := range Scan(text) {
+		for _, l := range Scan(text, home) {
 			lines[l.Key] = l
 		}
 	} else {

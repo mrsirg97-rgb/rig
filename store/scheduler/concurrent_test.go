@@ -84,7 +84,7 @@ func schedCreate(ctx context.Context, h *harness, ct *fakeCrontab, name string) 
 	return sched.Create(ctx, h.db, ct, sched.CreateInput{
 		Model: "w",
 		Name:  name, Prompt: "p", Cron: "0 0 * * *",
-	}, h.sessCwd, "sess-x", runnerCmd, func() time.Time { return nowFixed })
+	}, h.sessCwd, "sess-x", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
 }
 
 func TestConcurrentRunRecordsSerialize(t *testing.T) {

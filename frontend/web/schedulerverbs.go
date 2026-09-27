@@ -39,11 +39,11 @@ func (s *Server) handleSchedulerVerb(w http.ResponseWriter, r *http.Request, ver
 	var reply string
 	switch verb {
 	case "pause":
-		reply, err = sched.Pause(ctx, sdb, s.crontab, id, cwd, sessionName)
+		reply, err = sched.Pause(ctx, sdb, s.crontab, id, cwd, sessionName, s.home)
 	case "resume":
-		reply, err = sched.Resume(ctx, sdb, s.crontab, id, cwd, sessionName)
+		reply, err = sched.Resume(ctx, sdb, s.crontab, id, cwd, sessionName, s.home)
 	case "remove":
-		reply, err = sched.Remove(ctx, sdb, s.crontab, id, cwd, sessionName)
+		reply, err = sched.Remove(ctx, sdb, s.crontab, id, cwd, sessionName, s.home)
 	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -74,7 +74,7 @@ func (s *Server) handleSchedulerUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	reply, err := sched.Update(ctx, sdb, s.crontab, in, sessionName, s.runnerCmd, time.Now)
+	reply, err := sched.Update(ctx, sdb, s.crontab, in, sessionName, s.runnerCmd, s.home, time.Now)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

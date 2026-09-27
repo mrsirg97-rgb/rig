@@ -21,7 +21,7 @@ func TestCommandJobFiresTheLineNotTheWorker(t *testing.T) {
 	})
 	mustOK(t, err)
 	contains(t, reply, "created j1")
-	contains(t, h.ct.text, "20 10 * * * "+runnerCmd+" j1  # pane-scheduler:j1")
+	contains(t, h.ct.text, "20 10 * * * "+runnerCmd+" j1  # rig-scheduler:"+sched.TagHome(h.rigHome)+":j1")
 	row := jobsRow(t, h, "j1")
 	if row["prompt"] != "" || row["model"] != "" {
 		t.Fatalf("a command job carries no prompt and no model: %v", row)
@@ -40,7 +40,7 @@ func TestCommandJobFiresTheLineNotTheWorker(t *testing.T) {
 		return nil, jsonError("busy probe must not run")
 	}
 	if err := sched.RunJob("j1", sched.RunOpts{
-		Home: h.home, Crontab: h.ct, Fetch: fetch, Spawn: spawn.spawn,
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome, Fetch: fetch, Spawn: spawn.spawn,
 		WorkerCmd: []string{"/x/rig"}, Now: func() time.Time { return runnerNow },
 		Sandbox: "off",
 	}); err != nil {
@@ -75,7 +75,7 @@ func TestCommandOnceJobConsumesItselfAfterTheFire(t *testing.T) {
 	mustOK(t, err)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	if err := sched.RunJob("j1", sched.RunOpts{
-		Home: h.home, Crontab: h.ct, Fetch: func(string) (json.RawMessage, error) {
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome, Fetch: func(string) (json.RawMessage, error) {
 			return nil, jsonError("busy probe must not run")
 		},
 		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
@@ -83,7 +83,7 @@ func TestCommandOnceJobConsumesItselfAfterTheFire(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(h.ct.text, "pane-scheduler:j1") {
+	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":j1") {
 		t.Fatalf("a consumed once job's line must be gone: %s", h.ct.text)
 	}
 	if row := jobsRow(t, h, "j1"); row["state"] != "done" {
@@ -101,7 +101,7 @@ func TestCommandJobFailureIsRecordedFail(t *testing.T) {
 	}
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 2, Stderr: "boom"}}
 	if err := sched.RunJob("j1", sched.RunOpts{
-		Home: h.home, Crontab: h.ct, Fetch: func(string) (json.RawMessage, error) {
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome, Fetch: func(string) (json.RawMessage, error) {
 			return nil, jsonError("busy probe must not run")
 		},
 		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
@@ -209,7 +209,7 @@ func TestSchemaThreeAddsTheCommandColumnToAV2Store(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, ct))
+	db, _, _, err := store.Open(path, sched.Statements(), sched.SchemaVersion, sched.Migration(home, home, ct))
 	if err != nil {
 		t.Fatal(err)
 	}

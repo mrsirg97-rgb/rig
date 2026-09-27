@@ -123,7 +123,12 @@ func realCwd(t *testing.T, name string) string {
 
 func setupJob(t *testing.T, cwd string, mutate func(in *sched.CreateInput)) (h *harness, key string) {
 	t.Helper()
-	h = newHarness(t, cwd)
+	return setupJobHome(t, cwd, "", mutate)
+}
+
+func setupJobHome(t *testing.T, cwd, rigHome string, mutate func(in *sched.CreateInput)) (h *harness, key string) {
+	t.Helper()
+	h = newHarnessRigHome(t, cwd, rigHome)
 	in := sched.CreateInput{
 		Name: "job", Prompt: "do the thing", Cron: "0 */4 * * *",
 		Model: "qwen3.8-workers", Busy: "skip",
@@ -142,6 +147,7 @@ func runOpts(h *harness, running []string, spawn *fakeSpawn, extra fetchOpts) sc
 
 	return sched.RunOpts{
 		Home:      h.home,
+		RigHome:   h.rigHome,
 		Crontab:   h.ct,
 		Fetch:     fakeFetch(running, extra),
 		Spawn:     spawn.spawn,
@@ -270,7 +276,7 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 	if row["last_status"] != "ok" {
 		t.Fatalf("last_status %v", row["last_status"])
 	}
-	if !strings.Contains(h.ct.text, "pane-scheduler:") {
+	if !strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("recurring line must stay")
 	}
 }
@@ -392,12 +398,12 @@ func TestOnceFireConsumesTheLineAndMarksDone(t *testing.T) {
 		in.Cron = "once"
 		in.At = "2026-08-16T03:07:00Z"
 	})
-	if !strings.Contains(h.ct.text, "pane-scheduler:") {
+	if !strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("once line present before fire")
 	}
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
-	if strings.Contains(h.ct.text, "pane-scheduler:") {
+	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("line must be consumed")
 	}
 	row := jobsRow(t, h, "j1")
@@ -424,7 +430,7 @@ func TestOnceWithFailingWorkerDoneWithFailNoRetry(t *testing.T) {
 	if row["state"] != "done" {
 		t.Fatalf("state %v", row["state"])
 	}
-	if strings.Contains(h.ct.text, "pane-scheduler:") {
+	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("line must be consumed")
 	}
 }
@@ -477,7 +483,7 @@ func TestZombieLineWithMissingRowLineDeletedSkipRecorded(t *testing.T) {
 	if rec.Args["status"] != "skip" || !regexp.MustCompile(`no job row`).MatchString(toString(rec.Args["reason"])) {
 		t.Fatalf("record %v", rec.Args)
 	}
-	if strings.Contains(h.ct.text, "pane-scheduler:") {
+	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("zombie line must be deleted")
 	}
 }
@@ -495,7 +501,7 @@ func TestCrashWindowRowDoneButLineAliveLineDeletedSkipRecorded(t *testing.T) {
 	if rec.Args["status"] != "skip" || !regexp.MustCompile(`already done`).MatchString(toString(rec.Args["reason"])) {
 		t.Fatalf("record %v", rec.Args)
 	}
-	if strings.Contains(h.ct.text, "pane-scheduler:") {
+	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("line must be healed")
 	}
 }
@@ -597,6 +603,7 @@ func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
 	fc := failingCrontab{listErr: jsonErr("crontab list failed (exit 1): PAM: user not authorized")}
 	err := sched.RunJob(key, sched.RunOpts{
 		Home:      h.home,
+		RigHome:   h.rigHome,
 		Crontab:   fc,
 		Fetch:     fakeFetch(nil, fetchOpts{}),
 		Spawn:     (&fakeSpawn{}).spawn,
@@ -610,7 +617,7 @@ func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
 	if rec := runEvents(t, h, ""); len(rec) != 0 {
 		t.Fatalf("fail closed: nothing recorded, got %d", len(rec))
 	}
-	if !strings.Contains(h.ct.text, "pane-scheduler:") {
+	if !strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
 		t.Fatal("crontab must be untouched")
 	}
 }

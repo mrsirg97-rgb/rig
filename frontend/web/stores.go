@@ -50,7 +50,7 @@ func (c *storeCache) todo(cwd string) (store.DB, error) {
 
 func (c *storeCache) scheduler() (store.DB, error) {
 	shome := filepath.Join(c.home, "scheduler")
-	return c.open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(shome, sched.RealCrontab("")))
+	return c.open(filepath.Join(shome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(shome, c.home, sched.RealCrontab("")))
 }
 
 func (c *storeCache) closeAll() {

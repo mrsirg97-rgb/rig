@@ -54,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.7.0"
+const Version = "1.7.1"
 
 type root struct {
 	pluginMax int
@@ -1038,7 +1038,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, sched.RealCrontab("")))
+	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, sched.RealCrontab("")))
 	if sErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sErr)
 		os.Exit(1)

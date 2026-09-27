@@ -114,7 +114,7 @@ func seedHome(t *testing.T) string {
 	}
 	if _, err := sched.Create(ctx, scdb, &fakeCrontab{},
 		sched.CreateInput{Name: "digest", Prompt: "the digest", Cron: "30 7 * * *", Cwd: testCWD, Model: "worker-test"},
-		testCWD, "seed", "rig run-job", time.Now); err != nil {
+		testCWD, "seed", "rig run-job", home, time.Now); err != nil {
 		t.Fatal(err)
 	}
 	if err := scdb.DB.Close(); err != nil {

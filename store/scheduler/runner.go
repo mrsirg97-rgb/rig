@@ -107,7 +107,7 @@ func RunJob(key string, opts RunOpts) error {
 	if err != nil {
 		return err
 	}
-	if !hasLine(text, key) {
+	if !hasLine(text, key, opts.RigHome) {
 		if e := recordSkip(db, id, "no crontab line (drift)"); e != nil {
 			return e
 		}
@@ -127,19 +127,19 @@ func RunJob(key string, opts RunOpts) error {
 		if e := recordSkip(db, id, "no job row (zombie line)"); e != nil {
 			return e
 		}
-		return installRemoved(opts.Crontab, text, key)
+		return installRemoved(opts.Crontab, text, key, opts.RigHome)
 	}
 	switch job.State {
 	case "done":
 		if e := recordSkip(db, id, "job already done (crash between run and line delete)"); e != nil {
 			return e
 		}
-		return installRemoved(opts.Crontab, text, key)
+		return installRemoved(opts.Crontab, text, key, opts.RigHome)
 	case "removed":
 		if e := recordSkip(db, id, "job removed (stale line)"); e != nil {
 			return e
 		}
-		return installRemoved(opts.Crontab, text, key)
+		return installRemoved(opts.Crontab, text, key, opts.RigHome)
 	case "paused":
 		if e := recordSkip(db, id, "store says paused (line drifted active)"); e != nil {
 			return e
@@ -339,7 +339,7 @@ func RunJob(key string, opts RunOpts) error {
 	}
 
 	if job.At != nil {
-		if err := installRemoved(opts.Crontab, text, key); err != nil {
+		if err := installRemoved(opts.Crontab, text, key, opts.RigHome); err != nil {
 			return err
 		}
 	}
@@ -356,8 +356,8 @@ func recordSkip(db DB, id, reason string) error {
 	return nil
 }
 
-func installRemoved(ct Crontab, text, key string) error {
-	next, found := RemoveLine(text, key)
+func installRemoved(ct Crontab, text, key, home string) error {
+	next, found := RemoveLine(text, key, home)
 	if !found || next == text {
 		return nil
 	}
@@ -389,8 +389,8 @@ func releaseLock(fd *os.File) {
 	fd.Close()
 }
 
-func hasLine(text, key string) bool {
-	for _, l := range Scan(text) {
+func hasLine(text, key, home string) bool {
+	for _, l := range Scan(text, home) {
 		if l.Key == key {
 			return true
 		}

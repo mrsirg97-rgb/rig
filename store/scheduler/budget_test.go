@@ -54,7 +54,7 @@ func remoteModels(t *testing.T) models.Table {
 func TestScheduledJobBudgetStopsFiringAtTheCap(t *testing.T) {
 	cwd := realCwd(t, "job")
 	rigHome := t.TempDir()
-	h, key := setupJob(t, cwd, func(in *sched.CreateInput) {
+	h, key := setupJobHome(t, cwd, rigHome, func(in *sched.CreateInput) {
 		in.Budget = 5
 	})
 	spawn := &budgetSpawn{}
@@ -126,7 +126,7 @@ func TestScheduledJobBudgetStopsFiringAtTheCap(t *testing.T) {
 func TestRemoteJobFireSkipsTheBusyProbe(t *testing.T) {
 	cwd := realCwd(t, "job")
 	rigHome := t.TempDir()
-	h, key := setupJob(t, cwd, func(in *sched.CreateInput) {
+	h, key := setupJobHome(t, cwd, rigHome, func(in *sched.CreateInput) {
 		in.Model = "qwen3.8-workers"
 	})
 	probeCalls := 0
