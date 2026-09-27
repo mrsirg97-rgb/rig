@@ -190,11 +190,13 @@ func (s *Server) workspaces(ctx context.Context) []string {
 			if err != nil {
 				continue
 			}
-			rows, err := state.ListSessions(ctx, db, state.ListCap)
-			if err != nil || len(rows) == 0 {
+			cwds, err := state.Cwds(ctx, db)
+			if err != nil {
 				continue
 			}
-			add(rows[0].Cwd)
+			for _, cwd := range cwds {
+				add(cwd)
+			}
 		}
 	}
 	out := make([]string, 0, len(others)+1)
