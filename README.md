@@ -31,7 +31,7 @@ Each number names its mechanism.
 | scheduler | the turn's batch: concurrent reads beside each other, bounded by the kernel's Parallel (8), effects in call order; background jobs on the operator's crontab, model fires jailed | `loop/batch.go`, `tool/scheduler`, `store/scheduler` |
 | processes | sessions (TUI, piped, one-shot), delegates, drain workers; each worker owns a transcript, sandboxed and resumable | `frontend/`, `tool/delegate`, `swarm/` |
 | IPC | the event stream (`TextDelta`, `ToolCallEvent`, `ToolResult`, `TurnEnd`) and tool calls through the middleware chain; the stores are the shared state across processes | `core/provider.go`, `evt/`, `store/` |
-| filesystem | the workspace through read/write/edit/ls/find/grep, provenance-canonicalized; the stores are SQLite files under the rig home | `tool/file`, `tool/fs`, `store/` |
+| filesystem | the workspace through read/write/edit, provenance-canonicalized; the stores are SQLite files under the rig home | `tool/file`, `store/` |
 | permissions | allowlist, approval gate, pathguard, plugin provenance, worker jail; deny by default, refusals named | `middleware/`, `policy/`, `specs/SPEC_SANDBOX.md` |
 | modules | python plugins, one file one tool, pending until approved; typed Go seams beside them | `plugins/`, `core/` |
 | shells | the frontends: TUI default, piped CLI, `-p` one-shot, web dashboard; user commands are the builtins | `frontend/`, `command/` |
@@ -74,9 +74,9 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 - **first prompt.** `./rig` opens the TUI; `./rig -p "the task"` runs one
   prompt headless. `--base-url` and `--model` point at the endpoint, or set
   `RIG_BASE_URL` and `RIG_MODEL`; `settings.json` is the fallback.
-- **tools.** `bash`, `read`/`write`/`edit`, `ls`/`find`/`grep`, `python`,
-  `web_search`, `web_fetch`, `diff`, `todo`, `rem`, `scheduler`, `delegate`,
-  `sessions`, `plugin`/`plugins`. Results are capped, refusals are named.
+- **tools.** `bash`, `read`/`write`/`edit`, `python`, `web_search`,
+  `web_fetch`, `todo`, `rem`, `scheduler`, `delegate`, `sessions`,
+  `plugin`/`plugins`. Results are capped, refusals are named.
 - **the queue.** `todo` reads the project's tasks (worktrees share one
   board); `todo claim` takes the next unblocked task, `todo complete` lands
   it, `todo notes tN` lists a task's notes. Tasks link with `requires` and
@@ -93,7 +93,7 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 
 ## the tools
 
-rig's default menu is 17 built-in tools: `view` joins the set only for a
+rig's default menu is 13 built-in tools: `view` joins the set only for a
 model row whose `"vision": true` says it takes images, and `scheduler` and
 `delegate` join when a worker fleet is configured. Restrict them with
 `--allow`:
@@ -101,10 +101,8 @@ model row whose `"vision": true` says it takes images, and `scheduler` and
 | tool | what it does |
 |------|--------------|
 | `bash` | run shell commands; output bounded |
-| `read` / `write` / `edit` | files; edits are exact-match, provenance-checked |
-| `ls` / `find` / `grep` | the filesystem, by name and by content |
+| `read` / `write` / `edit` | files; read is the observation path (drift-checked), edits are exact-match, provenance-checked |
 | `view` | look at an image: downscaled, content-addressed, sent to a vision model (off unless your model row has `"vision": true`) |
-| `diff` | the working tree against HEAD, or a tool's two latest observations |
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web_search` | a local SearXNG instance |
 | `web_fetch` | a URL as readable text; private addresses refused |
@@ -225,12 +223,14 @@ plugins/        python plugin discovery (one file, one tool) and the plugin
 store/          the SQLite stores (state, todo, rem, scheduler), the sqlx
                 transaction seam, the project scope identity (store/scope);
                 -resume projects a session back from the state rows
-tool/           Tool implementations: bash(1); file read/write/edit; fs
-                ls/find/grep; view the image reader (a vision row only);
-                todo the job queue; rem memory; scheduler background jobs;
-                delegate the one-shot worker; python the persistent IPython
-                kernel; web search and fetch; diff the observation diff;
-                sessions the soak's vitals
+tool/           Tool implementations: bash(1); file read/write/edit (read
+                appends the file's git diff against HEAD on ask, the
+                drift refusal carries the capped diff); view the image
+                reader (a vision row only); todo the job queue; rem
+                memory; scheduler
+                background jobs; delegate the one-shot worker; python the
+                persistent IPython kernel; web search and fetch; sessions
+                the soak's vitals
 frontend/       Frontend implementations: cli (the piped reference), tui (the
                 terminal default), oneshot (-p worker), web (the serve
                 dashboard)

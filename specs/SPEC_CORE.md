@@ -272,18 +272,16 @@ places. The whole menu; every native's description plus schema; is
 pinned under 14,000 characters by a case in `cmd/rig` over the wire
 golden (13.1k at the amendment: 5.5k of description, 7.5k of schema),
 so growth is a decision (a vision model's row pays 457 more for `view`,
-which joins that menu only for a row whose `vision` flag is set, SPEC_VIEW); the schemas of `rem`, `scheduler`, `todo`, and
-`diff` are 4k of that and the next lever, named. No description carries
+which joins that menu only for a row whose `vision` flag is set, SPEC_VIEW); the schemas of `rem`, `scheduler`, and
+`todo` are 4k of that and the next lever, named. No description carries
 the voice of another harness ("pi", "pane"), pinned by the same case. The
-one-line tools (`bash`, `write`, `edit`, `ls`) keep their line and gain
+one-line tools (`bash`, `write`, `edit`) keep their line and gain
 the shape's clauses without padding.
 
 **An empty reply names its scope** (amended 2026-08-23): "(no matches)"
-from a `grep` whose root defaulted to a subdirectory read as "does not
+from a search whose root defaulted to a subdirectory read as "does not
 exist", and a model spent four turns doubting a file it had just read.
-Every empty reply says what it searched and where: `ls` names the
-directory (`(empty: /abs/dir)`), `find` and `grep` the pattern and the
-root (`(no matches for /re/ under /abs/root, glob 'g')`), `web_search`
+Every empty reply says what it searched and where: `web_search`
 the query, `rem` recall the scopes and the query (`(no memories in rig,
 nor global for 'q')`), `todo` the queue it read (`(no tasks in
 <label>'s queue)`; a subdirectory, a second worktree, and a `project`

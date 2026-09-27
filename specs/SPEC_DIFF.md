@@ -1,5 +1,11 @@
 # tool/diff: the observation diff
 
+**Amended 1.7.0: the tool surface is gone.** `diff` folded into read and
+edit: read's `diff: true` appends the file's `git diff` against HEAD,
+and edit's drift refusal carries the capped diff. The
+package keeps the engine (`Diff`, `Files`) and no native tool; the rest
+is history, kept for the record.
+
 One leaf package, one named read arm in `store/state`, one line at the
 root. The tool is a read path over state the harness already records: the
 loop's recorder already lands every tool call and its result as a row

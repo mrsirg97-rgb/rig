@@ -164,7 +164,7 @@ func TestNativeNamesCarryViewAfterTheReadOnlyGroup(t *testing.T) {
 		if n != "view" {
 			continue
 		}
-		if i == 0 || nativeToolNames[i-1] != "grep" {
+		if i == 0 || nativeToolNames[i-1] != "edit" {
 			t.Fatalf("view belongs with the read-only filesystem group: %v", nativeToolNames)
 		}
 		return

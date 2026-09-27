@@ -138,11 +138,10 @@ plus one registration line, and the loop never names a concrete type.
 - `tool/execwrap`: the landlock subprocess seam: prepends the
   `RIG_EXEC_WRAPPER` helper (`rig -exec <argv>`) to a tool's argv when
   the env names one, so the landlock domain rides the tool's subprocess.
-- `tool/file`: the read, write, and edit tools: exact-match edit with
-  provenance from the threaded session, so edit-after-external-change
-  fails loudly instead of clobbering.
-- `tool/fs`: the named filesystem tools: `ls`, `find`, `grep`, with
-  small schemas a local model can reach for.
+- `tool/file`: the read, write, and edit tools: read is the observation
+  path (drift-checked), not cat or sed, for any file you may edit;
+  exact-match edit with provenance from the threaded session, so
+  edit-after-external-change fails loudly instead of clobbering.
 - `tool/view`: the image tool (SPEC_VIEW): a path in, one marker line
   out, the bytes content-addressed under the rig home; registered only
   for a model row whose `vision` is true.
@@ -150,9 +149,9 @@ plus one registration line, and the loop never names a concrete type.
   result is, and the blob path rule. One stdlib-only leaf beside
   `pathguard`, because `tool/view`, `provider/openai`, and
   `frontend/tui` disagreeing on those bytes breaks the prompt cache.
-- `tool/diff`: the observation diff: `git diff` against the working
-  tree, or the previous observation of the same call, over a pure Go
-  diff engine.
+- `tool/diff`: the diff engine, no tool surface: the pure Go `Diff`
+  (edit's drift refusal) and `Files` (the `git diff` read's `diff: true`
+  appends); read and edit use the package.
 - `tool/python`: the persistent IPython kernel: JSON-lines over stdio,
   one kernel per session, the namespace shared with plugin discovery.
 - `tool/web`: `web_search` against a local SearXNG and `web_fetch`

@@ -142,7 +142,7 @@ func Read() core.Tool { return &readTool{} }
 func (readTool) Name() string { return "read" }
 
 func (readTool) Description() string {
-	return "read a file, or a line range of it (offset/limit). Guidelines: read before you edit — an edit is drift-checked against what you last read; a large file -> a narrower range. Reply: the text; a range past the end refuses by name."
+	return "read (with offset/limit for a range), not cat or sed, for any file you may edit. Guidelines: the edit is drift-checked against what you read and a bash read leaves no observation; diff: true appends the file's git diff against HEAD, or 'no changes' when clean. Reply: the text; a range past the end refuses by name."
 }
 
 func (readTool) Schema() json.RawMessage {
@@ -151,7 +151,8 @@ func (readTool) Schema() json.RawMessage {
 		"properties": {
 			"path":   {"type": "string", "description": "the file to read"},
 			"offset": {"type": "integer", "description": "the 0-based line to start at (default 0); past the end refuses"},
-			"limit":  {"type": "integer", "description": "the number of lines to read (default the rest of the file); negative refuses"}
+			"limit":  {"type": "integer", "description": "the number of lines to read (default the rest of the file); negative refuses"},
+			"diff":   {"type": "boolean", "description": "append the file's git diff against HEAD, or 'no changes' when clean (a non-git cwd refuses)"}
 		},
 		"required": ["path"]
 	}`)
@@ -161,6 +162,7 @@ type readArgs struct {
 	Path   string `json:"path"`
 	Offset *int   `json:"offset"`
 	Limit  *int   `json:"limit"`
+	Diff   bool   `json:"diff"`
 }
 
 func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -208,6 +210,13 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	}
 	if stale {
 		content = "[changed since your observation] " + a.Path + " — re-read before acting on it\n" + content
+	}
+	if a.Diff {
+		d, err := difftool.Files(ctx, "HEAD", []string{a.Path})
+		if err != nil {
+			return "", fmt.Errorf("read: diff: %w", err)
+		}
+		content = content + "\n\n" + d
 	}
 	return content, nil
 }
@@ -395,7 +404,7 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	}
 	if _, threaded := core.SessionFrom(ctx); threaded {
 		if _, seen := stateOf(ctx, a.Path); !seen {
-			return "", fmt.Errorf("edit: %s was never read this session: read (or write) it first", a.Path)
+			return "", fmt.Errorf("edit: %s was never read this session: read it first", a.Path)
 		}
 	}
 

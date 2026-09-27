@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const wireToolsPrefixGolden = "419873e75ebb0556988b97a45a62dc62c5789a92baa4d9e92fa9c57148724e53"
+const wireToolsPrefixGolden = "d73b52bc3a856549437ab4338d097d600ce680633fc24644f975b9e7daaee2eb"
 
 func TestWireToolsPrefixGolden(t *testing.T) {
 	k := wire(testRoot(nullFrontend{}))
@@ -29,6 +29,18 @@ func TestWireToolsPrefixGolden(t *testing.T) {
 	sum := sha256.Sum256(b)
 	if got := hex.EncodeToString(sum[:]); got != wireToolsPrefixGolden {
 		t.Fatalf("the wire tools prefix changed: sha256 %s (want %s) — a schema or description change moves the prefix cache; update the golden deliberately", got, wireToolsPrefixGolden)
+	}
+}
+
+func TestWireHasNoNamedFilesystemTools(t *testing.T) {
+	k := wire(testRoot(nullFrontend{}))
+	for _, tool := range k.Tools {
+		switch tool.Name() {
+		case "ls", "find", "grep":
+			t.Fatalf("the wire must not carry %q: bash ls/find/grep is the shell's, read is the observation path", tool.Name())
+		case "diff":
+			t.Fatalf("the wire must not carry %q: the diff folded into read's diff:true and edit's drift refusal", tool.Name())
+		}
 	}
 }
 

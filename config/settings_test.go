@@ -79,10 +79,10 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.Model != "" {
 		t.Fatalf("model = %q, want no embedded default (0.25.6: a run without one refuses)", s.Model)
 	}
-	if s.System != "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin." {
+	if s.System != "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. Read (with offset/limit for a range), not cat or sed, for any file you may edit: the edit is drift-checked against what you read, and a bash read leaves no observation. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin." {
 		t.Fatalf("system = %q, want the 0.2.0 default system prompt", s.System)
 	}
-	wantAllow := []string{"bash", "read", "write", "edit", "ls", "find", "grep", "view", "todo", "rem", "python", "web_search", "web_fetch", "diff", "plugin", "plugins", "sessions"}
+	wantAllow := []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web_search", "web_fetch", "plugin", "plugins", "sessions"}
 	if !reflect.DeepEqual(s.Allow, wantAllow) {
 		t.Fatalf("allow = %v, want the non-worker default list %v (the two worker tools join it only when workers.json names a fleet)", s.Allow, wantAllow)
 	}

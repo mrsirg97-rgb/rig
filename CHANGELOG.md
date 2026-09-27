@@ -1,4 +1,19 @@
 # Changelog
+## [1.7.0]: the tool menu reduction
+
+The menu shrinks to the observation path. `ls`, `find`, and `grep` are
+gone from the wire and `tool/fs` is deleted: bash `ls`/`find`/`grep` is
+the shell's, and read is the observation path — the drift-checked read
+(with offset/limit for a range), not cat or sed, for any file you may
+edit, because a bash read leaves no observation. `diff` folds into read
+and edit: read's `diff: true` appends the file's git diff against HEAD
+(or `no changes` when clean), edit's drift refusal keeps its capped
+diff, and the `diff` native tool's schema and registration are deleted
+(the `last` verb, a call's newest result against its previous
+observation, dies with it) — `tool/diff` keeps the engine (`Diff`,
+`Files`) as the package read and edit use. The wire goldens re-pin once
+per commit that moved the wire, never before.
+
 ## [1.6.0]: the session listing seeks
 
 `state.ListSessions` aggregated per session through correlated

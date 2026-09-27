@@ -7,10 +7,13 @@ with loud, specific failure messages; provenance from the threaded
 session makes edit-after-external-change fail loudly instead of
 clobbering. Read gains `offset`/`limit` line arguments (SPEC_HARDENING
 decision 9): a narrower read exists to reach for when a capped result's
-"re-read a narrower range" is the teaching. A read that finds a stale
-observation (SPEC_CORE: "a read that finds a stale observation names it")
-prepends `[changed since your observation]` before the content, so the
-model is told its prior read is stale before it acts on it.
+"re-read a narrower range" is the teaching. Read's `diff: true` appends
+the file's git diff against HEAD (`tool/diff`'s `Files`), or
+`no changes` when clean, so the model sees what it is about to edit. A
+read that finds a stale observation (SPEC_CORE: "a read that finds a
+stale observation names it") prepends `[changed since your observation]`
+before the content, so the model is told its prior read is stale before
+it acts on it.
 
 ## What it includes
 
@@ -24,6 +27,9 @@ model is told its prior read is stale before it acts on it.
   cross-session change is named once and the fresh bytes still ride it.
 - read's `offset`/`limit`: select a 0-based line range: `offset` past the
   end and a negative `offset`/`limit` refuse loud, naming the line count.
+- read's `diff`: append the git diff of the read file (HEAD vs working
+  tree), `no changes` when clean; a non-git cwd refuses loud, naming the
+  reason, like the deleted `diff` tool's `files` verb did.
 - read streams the file once: every byte is hashed for provenance while
   only the requested window is captured, capped at one byte past the
   output cap, so a huge file is never materialised through a read. The

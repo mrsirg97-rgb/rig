@@ -17,7 +17,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/tool/bash"
 	"github.com/mrsirg97-rgb/rig/tool/file"
-	"github.com/mrsirg97-rgb/rig/tool/fs"
 	"github.com/mrsirg97-rgb/rig/tool/view"
 )
 
@@ -79,8 +78,6 @@ func TestToolsExpandTheLeadingTildeAtTheBoundary(t *testing.T) {
 		switch call.Name {
 		case "bash":
 			return bash.New().Exec(ctx, call.Args)
-		case "ls":
-			return fs.LS().Exec(ctx, call.Args)
 		case "read":
 			return file.Read().Exec(ctx, call.Args)
 		default:
@@ -92,10 +89,6 @@ func TestToolsExpandTheLeadingTildeAtTheBoundary(t *testing.T) {
 	got, err := exec(context.Background(), core.ToolCall{Name: "bash", Args: json.RawMessage(`{"command":"pwd","cwd":"~/proj"}`)})
 	if err != nil || got != proj+"\n" {
 		t.Fatalf("bash's cwd must expand to the home: %q, %v", got, err)
-	}
-	got, err = exec(context.Background(), core.ToolCall{Name: "ls", Args: json.RawMessage(`{"path":"~/proj"}`)})
-	if err != nil || !strings.Contains(got, "a.txt") {
-		t.Fatalf("ls's path must expand to the home: %q, %v", got, err)
 	}
 	got, err = exec(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/proj/a.txt"}`)})
 	if err != nil || got != "hi" {

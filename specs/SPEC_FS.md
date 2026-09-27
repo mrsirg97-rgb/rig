@@ -1,5 +1,10 @@
 # tool/fs: ls, find, grep
 
+**Amended 1.7.0: the package is gone.** `ls`, `find`, and `grep` were cut
+from the native menu (the shell's `ls`/`find`/`grep` remain); read is the
+observation path, and the `~` boundary below lives on in
+`middleware/paths`. The rest is history, kept for the record.
+
 Named filesystem tools beside bash, read, write, and edit. Named tools with
 small schemas are what a local model reaches for; `bash grep` is where it
 fumbles quoting. One leaf package, three tools, stdlib only.
