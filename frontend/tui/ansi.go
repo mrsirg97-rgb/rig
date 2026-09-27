@@ -19,7 +19,10 @@ func (t Theme) SGR(slot string) string {
 		}
 		return ESC + "1m"
 	}
-	hex := t.slots[slot]
+	return t.sgrHex(t.slots[slot])
+}
+
+func (t Theme) sgrHex(hex string) string {
 	if hex == "" {
 		return ""
 	}
@@ -34,10 +37,17 @@ func (t Theme) SGR(slot string) string {
 }
 
 func (t Theme) Paint(slot, s string) string {
+	return paintSeq(t.SGR(slot), s)
+}
+
+func (t Theme) EmberPaint(i int, s string) string {
+	return paintSeq(t.sgrHex(t.emberHex(i)), s)
+}
+
+func paintSeq(seq, s string) string {
 	if s == "" {
 		return s
 	}
-	seq := t.SGR(slot)
 	if seq == "" {
 		return s
 	}

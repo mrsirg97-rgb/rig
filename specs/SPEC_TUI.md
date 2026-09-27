@@ -55,7 +55,7 @@ every number and glyph is a reading of what the runtime already emits.
 - No scanlines, flicker, ANSI-art banners, or any retro effect that
   costs legibility (decision 8's rule).
 - No scrollback search, no tabs or windows, no images, no progress
-  animations beyond the spinner.
+  animations beyond the activity breath.
 - No new events, no new commands, no loop line, no core line: the
   vocabulary is closed; the TUI reads it.
 - No config beyond `settings.theme` and `theme.json` (SPEC_CONFIG's
@@ -149,7 +149,7 @@ every line of the record is reachable.
 Everything above the live region is immutable printed history.
 Everything dynamic lives in the last lines, top to bottom: the
 pending prose line while one is open, the activity line during a turn
-(the spinner, then the current phase: `- thinking`, `| bash`), the
+(the breathing phase label: `thinking`, `bash`), the
 completion menu when one is open (decision 9: its candidate rows,
 then its tail row), the input line (typing steers, as today), and the
 status line (decision 3); always the region's last row. The activity
@@ -694,8 +694,9 @@ is grey (amended: `#8a8a8a` on oled, `#8c959f` on paper; it reads as
 the model's margin notes, not a second accent; the phosphors keep
 their dim step). The ember
 (added, amended) is the greeting's and every loader's color; the
-spinner and its label, whatever the phase (thinking, compacting, a
-tool): a pale, neutral orange on the dark themes (`#e8a86b` on oled),
+activity label and its breath, whatever the phase (thinking,
+compacting, a tool): a pale, neutral orange on the dark themes
+(`#e8a86b` on oled),
 a burnt orange on paper, and on the phosphors a warmer step of the
 one hue (retro stays texture, decision 8). Colors are truecolor
 hex; when the terminal reports no truecolor (`COLORTERM` absent), rig
@@ -731,13 +732,18 @@ Selection and override:
 
 The governing sentence: color and glyphs carry state exactly as the
 design language defines; the retro layer touches case, rules, the
-spinner, and palette only. The rules:
+activity breath, and palette only. The rules:
 
 - all lowercase, everywhere: headers, refusals, the status line and
   the startup block (the house voice, committed to);
 - rules are dotted (`·`) lines: they enclosed the deleted banner
   (decision 3), and no block draws one now; no box drawing at all;
-- the spinner is `|/-\`, four frames, on the activity line only;
+- the activity label breathes in one hue on the activity line only
+  (amended 1.7.2): twelve stops from the ember down to a darker step
+  of the same hue and back, one stop per animPeriod (about 1.4s per
+  breath), one colour per frame, never per character; where the stops
+  collapse under the 256-color downconvert the activity toggles two
+  stops at the same cadence;
 - durations and counts stay plain (`0.4s`, `12k`): nothing humanized,
   nothing animated;
 - rejected by the rule, named: scanline effects, deliberate flicker,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -318,6 +319,46 @@ func isSlot(k string) bool {
 		}
 	}
 	return false
+}
+
+const emberBreathStops = 12
+
+func emberStops(hex string) [emberBreathStops]string {
+	r, g, b, err := ParseHex(hex)
+	if err != nil {
+		return [emberBreathStops]string{hex}
+	}
+	dr, dg, db := r*40/100, g*40/100, b*40/100
+	var out [emberBreathStops]string
+	for i := range out {
+		j := i
+		if j > emberBreathStops/2 {
+			j = emberBreathStops - j
+		}
+		f := (1 + math.Cos(math.Pi*float64(j)/6)) / 2
+		out[i] = fmt.Sprintf("#%02x%02x%02x",
+			dr+int(math.Round(float64(r-dr)*f)),
+			dg+int(math.Round(float64(g-dg)*f)),
+			db+int(math.Round(float64(b-db)*f)))
+	}
+	return out
+}
+
+func (t Theme) emberCollapsed(stops [emberBreathStops]string) bool {
+	seen := map[int]bool{}
+	for _, s := range stops {
+		seen[Nearest256(s)] = true
+	}
+	return len(seen) < 3
+}
+
+func (t Theme) emberHex(i int) string {
+	stops := emberStops(t.slots[SlotEmber])
+	if !t.TrueColor && t.emberCollapsed(stops) {
+		two := [2]string{stops[0], stops[emberBreathStops/2]}
+		return two[i%2]
+	}
+	return stops[i%emberBreathStops]
 }
 
 func kindOf(raw json.RawMessage) string {

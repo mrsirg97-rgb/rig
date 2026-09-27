@@ -1337,13 +1337,11 @@ func (t *tui) LiveTurn() bool {
 }
 
 func (t *tui) activityLineLocked() string {
-	frame := "|/-\\"[t.frame%4]
 	label := t.phase
 	if label == "" {
 		label = "thinking"
 	}
-
-	return t.theme.Paint(SlotEmber, string(frame)+" "+label)
+	return t.theme.EmberPaint(t.frame, label)
 }
 
 type menuCand struct {
@@ -1810,7 +1808,7 @@ func paintFreeSegs(segs []seg) string {
 }
 
 // framePeriod is the repaint cadence: deltas that arrive inside one window
-// paint together. animPeriod paces the activity spinner on top of it.
+// paint together. animPeriod paces the activity breath on top of it.
 const (
 	framePeriod = 16 * time.Millisecond
 	animPeriod  = 120 * time.Millisecond
