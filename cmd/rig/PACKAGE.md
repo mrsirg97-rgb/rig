@@ -30,6 +30,12 @@ sees core and models and nothing else.
   each refuse loud before the old binary is touched; a directory you
   cannot write names itself and the sudo line; a platform with no asset
   and a build with no release tag each say so.
+- The minisign wire format is pinned by the decode/verify code and its
+  tests (minisign 0.11): every blob carries a 2-byte algorithm tag, then
+  the 8-byte key id, then the payload. The public key is `Ed` + key id
+  + 32-byte ed25519 key (42 bytes); the signature is `Ed` (legacy,
+  covers the file bytes) or `ED` (the default, covers the BLAKE2b-512
+  digest) + key id + 64-byte ed25519 signature (74 bytes).
 - **runJob**: the scheduler verb's cold-shell path: opens the one
   `global.sqlite`, parses the crontab key `jN` only, its own record, the
   busy policy, the worker jail (SPEC_SANDBOX 1, 5).
@@ -65,9 +71,13 @@ sees core and models and nothing else.
   [toolset.Resolve, approve.Gate (auto unless a frontend can ask),
   cutoff, perm.Plugins, perm.Allowlist, guard.Bound,
   guard.Rounds, guard.Cap, paths (the `~` boundary, outermost: every
-  path is expanded before any validation)]. `buildSystem` harvests
-  guidelines from the same constructor, so the prompt can never name a
-  chain the tools do not run. Swapping a seam is a
+  path is expanded before any validation)]. The order is load-bearing:
+  paths expands `~` before any gate validates an argument; cutoff
+  refuses a truncated call before approval spends a prompt on it; the
+  permission gates deny before approval asks and before the retry guard
+  counts a failure; Cap truncates every reply, refusals included.
+  `buildSystem` harvests guidelines from the same constructor, so the
+  prompt can never name a chain the tools do not run. Swapping a seam is a
   change there and nowhere else. The compaction `AutoReflect` seam is
   cut: compaction writes nothing to rem (SPEC_COMPACT 6).
 - The rem store opens with `remstore.Migration(cwd)` (SPEC_STATE: rem is
@@ -98,6 +108,13 @@ sees core and models and nothing else.
   actually working, not in whatever bucket the resume happened to start
   in. A binding read that fails falls back to the launch directory and
   says so on stderr: the reap must still run.
+- The startup reap releases todo claims owned by sessions whose rows
+  have ended, so a dead session's in-progress tasks return to the shared
+  pool at the next open instead of blocking every live session that
+  reads the queue. The ended set comes from this cwd's session store; a
+  SIGKILL'd session leaves its row open, so its claims age out through
+  the todo store's Reap staleness arm. The note names what was freed;
+  an idle reap returns "".
 - The `-p`/`-resume` conflict is refused loud before any store is
   opened (`ErrResumeWithPrompt`: one-shot stays one-shot).
 - `-session-id` is the worker-only identity seam: delegate mints it before
@@ -146,7 +163,13 @@ sees core and models and nothing else.
   `Config.Workers` is nil, so a no-fleet start wires thirteen natives
   instead of fifteen, and the tools map builds the two only when a
   fleet stands (the scheduler fed the fleet's model, the delegate its
-  slots). The `serve` path runs the same composition with the web server
+  slots).
+- `registeredNativeNames` applies the model row's gates on top of that:
+  the worker tools need a fleet and view needs vision, and what is not
+  offered is simply not in the table. `applyVision` is the whole of the
+  vision gate — the view tool exists when the row has vision and does
+  not when it has none — and the model switch re-applies it so the next
+  turn's table follows the row. The `serve` path runs the same composition with the web server
   as the frontend (`command.All()`, the `Env`, and the status adapter
   threaded in) and starts the listener beside `loop.Run`; `-p` is
   refused with `serve`.

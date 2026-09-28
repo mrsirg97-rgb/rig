@@ -20,10 +20,6 @@ import (
 
 const legacySchemaVersion = 1
 
-// EdgeMigration rebuilds the disposable task_deps projection with the
-// edge kind column: requires and blocks live in one table, keyed by
-// kind. The projection is rebuilt from the log inside every transaction
-// and never trusted, so dropping it is safe; the log carries the edges.
 func EdgeMigration(tx *sql.Tx, from, to int) (string, error) {
 	if from >= 4 {
 		return "", nil
@@ -41,12 +37,6 @@ func EdgeMigration(tx *sql.Tx, from, to int) (string, error) {
 	return "todo migration: task_deps gained the edge kind", nil
 }
 
-// ReviewMigration pairs every historical complete event with an accept:
-// complete now means active -> review, so without the pair a log written
-// under the old semantics would replay every finished task as awaiting
-// review. The accept follows its complete in event order (before any
-// later prune that was meant to drop the row), the log is renumbered,
-// and the pairing is a no-op once the store is at SchemaVersion 3.
 func ReviewMigration(tx *sql.Tx, from, to int) (string, error) {
 	if from >= 3 {
 		return "", nil

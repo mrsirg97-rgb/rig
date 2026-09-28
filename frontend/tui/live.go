@@ -13,21 +13,9 @@ type live struct {
 	height int
 	parked int
 
-	// the geometry the screen was last painted in: the region's visual
-	// row count and the width that count was taken at. every aim is
-	// relative to the painted region, so a resize may rebuild rows at
-	// the new width but must still aim with these.
 	paintedRows  int
 	paintedWidth int
 
-	// capped is set when a repaint's cursor-up was held inside a pane
-	// shorter than the region (norm), so rows of the older, taller paint
-	// were left standing above the viewport. a phone terminal brings
-	// those rows back into view when it grows (the keyboard closes), and
-	// no arithmetic can place them: the terminal clamped the cursor at
-	// the top, so the app's idea of where it painted diverged from the
-	// screen's. the next repaint therefore goes to the viewport's top
-	// row absolutely, clears it, and paints the region from there.
 	capped bool
 
 	hist []string
@@ -92,15 +80,6 @@ func (l *live) resume() {
 	l.flush()
 }
 
-// norm returns the cursor-up a repaint needs from the parked position and
-// clears the park. It takes the region's uncapped row count: the park is
-// measured against the logical span, and only the resulting cursor-up is
-// held inside the pane — a pane that shrank under a region painted for a
-// taller one must aim all the way to the region's top, not to the
-// shrunken viewport's. A cursor-down re-anchor would be a no-op after a
-// shrink that cut the rows below the parked caret (tmux deletes bottom
-// rows first), and the following cursor-up would then overshoot by
-// `parked` and overwrite committed rows above the region.
 func (l *live) norm(n int) int {
 	up := n - 1 - l.parked
 	l.parked = 0
@@ -187,10 +166,6 @@ func (l *live) redraw(newLines []string) {
 
 func (l *live) replaceRegion(rows []string) {
 	if l.capped && l.height > 0 {
-		// the viewport reset: cursor-up by a full pane reaches row one
-		// wherever the cursor stands (terminals clamp at the top), the
-		// clear takes every standing row with it, transcript rows the
-		// pane still showed included — they live on in the scrollback.
 		l.wf(cursorUp(l.height - 1))
 		l.wf(toCol(1))
 		l.wf(clearBelow)
@@ -225,17 +200,10 @@ func (l *live) replaceRegion(rows []string) {
 	l.paintedWidth = l.width
 }
 
-// trackRows records the region's logical row count: the span the next
-// repaint aims with, uncapped. The viewport cap belongs to the aim
-// (norm holds the cursor-up inside the pane), because a pane that shrank
-// under a region painted for a taller one still occupies the full logical
-// span — the repaint must reach its top to clear it, not the shrunken
-// viewport's.
 func (l *live) trackRows() int {
 	return l.liveRows()
 }
 
-// liveRows is the region's visual row count as the bookkeeping holds it.
 func (l *live) liveRows() int {
 	n := 0
 	for _, line := range l.lines {
@@ -244,13 +212,6 @@ func (l *live) liveRows() int {
 	return n
 }
 
-// expandTabs makes a row's rendered width match its counted width: a tab
-// advances to the next eight-column stop, which runewidth counts as
-// nothing, so a row painted with raw tabs wraps into more terminal rows
-// than visualRows sees and every row after it drifts down the frame.
-// Committed bytes are external — tool results, command output, faults —
-// and pass through here on the paint seam; SGR sequences copy through at
-// zero width.
 func expandTabs(s string) string {
 	if !strings.Contains(s, "\t") {
 		return s
@@ -322,12 +283,6 @@ func (l *live) enter(fullLine, activity, inputLine, status string) {
 	hadSep := len(l.lines) > 0 && WidthOf(l.lines[0]) == 0
 	l.lastBlank = true
 
-	// aim at the top of the live block above the input: menu or activity
-	// rows are repainted away, but the separator blank between the
-	// transcript and the region survives the submit. a blank first row can
-	// only be that separator: the builder never renders a blank live row
-	// above the input otherwise. with no live block this is the input
-	// row's top, the way submit always painted.
 	aim := 0
 	if hadSep {
 		aim = 1

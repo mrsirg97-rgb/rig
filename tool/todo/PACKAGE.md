@@ -61,6 +61,10 @@ plan in one queue.
   auto-claim an unowned review task, so the parent's flow is read then
   accept/reject with no claim step; a foreign hold still refuses. Notes
   never need the hold.
+- The Worker-mode board door is at the tool's seam: the six
+  board-transition verbs refuse there, so the store's own arms (the
+  swarm controller calls the store directly) stay as they are and the
+  spawned worker records findings instead of moving the board.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
   present (open work first — failed included — then related and
   recent done, ten rows total, the hint naming what is hidden), read

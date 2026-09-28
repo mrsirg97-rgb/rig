@@ -134,10 +134,6 @@ func reasonOf(err error) error {
 	return err
 }
 
-// bounded keeps the head of a child's output at cap and drops the rest,
-// so a huge stream cannot pin memory: the child's writes are always fully
-// consumed (it never blocks) and the kept output is byte-identical to the
-// post-hoc truncation (head + marker).
 type bounded struct {
 	cap       int
 	buf       []byte

@@ -30,9 +30,6 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 	if n <= 0 || n > ListCap {
 		n = ListCap
 	}
-	// the n newest sessions are chosen first; the aggregates run for
-	// those n only (a LIMIT after the select list would compute them for
-	// every session in the store).
 	rows, err := db.DB.QueryContext(ctx, `
 		WITH s AS (SELECT * FROM "sessions" ORDER BY "started_at" DESC LIMIT $1)
 		SELECT s."id", s."cwd", s."started_at",
@@ -116,9 +113,6 @@ func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args str
 	return out, nil
 }
 
-// Cwds is the distinct working directories a store holds sessions for:
-// the dashboard's workspace list, one tiny read per store instead of the
-// full session listing.
 func Cwds(ctx context.Context, db store.DB) ([]string, error) {
 	rows, err := db.DB.QueryContext(ctx, `SELECT DISTINCT "cwd" FROM "sessions" WHERE "cwd" <> '' ORDER BY "cwd"`)
 	if err != nil {

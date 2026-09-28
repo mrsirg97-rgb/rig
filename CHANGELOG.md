@@ -1,4 +1,30 @@
 # Changelog
+## [2.0.2]: the comment-free refactor pass
+
+The repository read its own comments as one corpus, so every `//` line
+is gone from the Go — implementation and tests alike, the only
+exceptions the generated projections and the metadata packages — and
+each load-bearing rationale now lives in its package's `PACKAGE.md`.
+The pass also split the monoliths into one-responsibility files: the
+composition root (`cmd/rig`) into `root`/`env`/`names`/`reap`/`status`/
+`models`/`plugins`, `store/todo`'s 2197-line store into
+`types`/`fold`/`create`/`render`/`verbs`/`read`/`tx`, `frontend/tui`'s
+shell into `shell`/`keys`/`prompt`/`notify`/`commands`/`menu`/`paint`/
+`frame`, `store/scheduler`'s three files into one per responsibility,
+`store/rem` into `base`/`learn`/`prune`/`render`/`read`/`migrate`,
+`frontend/web`'s routes into `router`/`reads`/`writes`/`static`/
+`plumbing`/`shape`, `tool/python` into `tool`/`proc`/`kernel`/`render`/
+`host`/`boot`, `tool/file` into `read`/`write`/`edit`/`state`/`remember`,
+`tool/todo` into `tool`/`exec`/`dispatch`/`resolve`/`items`,
+`provider/openai` into `provider`/`stream`/`wire`/`messages`,
+`swarm` into `controller`/`drain`/`emit`/`verdict`, `config` into the
+settings shape and the parser, `tool/web` into the fetch seam, the
+guard, and the extractor, `frontend/cli` into the input seam, dispatch,
+and notify, and `tool/rem` into `schema`/`tool`/`args`. No behavior
+changed: the suite is the gate at every commit, and the docs
+(`PACKAGE.md` inventories, the README's package list) now name the new
+layouts.
+
 ## [2.0.1]: the repair verb
 
 Drift between the scheduler store and the crontab was surfaced in list

@@ -27,9 +27,11 @@ written before the store commit; drift is surfaced in list.
   the new tag. `oldTagLine` reads an old-tag line for the migration
   alone: its key, and the runner command between the cron fields and
   the key.
-- `verbs.go`: the command verbs
-  (list/create/update/pause/resume/remove/runs/repair) over the one
-  `global.sqlite`; the crontab key is `jN` for every job, `name` unique
+- `verbs.go`: `Create` over the one
+  `global.sqlite`; `state.go`: the state verbs
+  (pause/resume/remove/repair), `update.go`: the update verb, `runs.go`:
+  the run record and the runs read. The crontab key is `jN` for every
+  job, `name` unique
   store-wide, ids one sequence. `Create` takes the model from the
   caller (there is no package default anymore): an empty model refuses,
   naming the fleet's model and the job's own — unless the create carries
@@ -53,8 +55,11 @@ written before the store commit; drift is surfaced in list.
   lines — old lines whose key is a job in this store's event log — are
   rewritten to the `rig-scheduler` tag, every other line left byte
   identical, and a store with no jobs never touches the crontab shim.
-- `runner.go`: the job runner (the worker spawn, bwrap jail, socket
-  proxy); the spawn captures each stream to the first and last 128 KiB
+- `runner.go`: the job runner (`RunJob`); `lock.go`: the fire lock and
+  log pruning, `busy.go`: the busy probe and the spend read, `tokens.go`:
+  the model-row token flock, `spawn.go`: the real spawn and the capture
+  (the worker spawn, bwrap jail, socket proxy);
+  the spawn captures each stream to the first and last 128 KiB
   of a 256 KiB budget with a truncation marker, so a verbose worker
   cannot OOM the runner; the stored cwd is revalidated at fire time (the
   jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
@@ -94,6 +99,11 @@ written before the store commit; drift is surfaced in list.
   `--setenv` takes two arguments; an entry without an `=` refuses), are
   the worker's whole environment, so the operator's exported
   secrets never reach a jailed worker.
+- `landlock.go`: the domain arrives with the image, not in-process: an
+  in-process `restrict_self` cannot cover the worker's own goroutines
+  (it commits per-thread creds and Go's runtime has threads before
+  main), so the runner spawns `rig -exec rig -p ...` and the exec'd
+  worker's every thread inherits the wall.
 - `proxy.go`: the unix-socket proxy (the jail's one hole), the socket
   chmod'd 0600 after listen so no other local user reaches the model
   endpoint through a running job.
@@ -103,7 +113,10 @@ written before the store commit; drift is surfaced in list.
   `TestMain` installs `testenv.Transport` here, which refuses any host
   that is not an httptest server, so a test cannot dial the operator's
   live swap by accident.
-- `fold.go`: the fold/replay over the event log. Jobs carry `budget`
+- `fold.go`: the fold state and the create event; `apply_verbs.go`: the
+  verb and update event application, `compact.go`: the compaction event,
+  `fold_tx.go`: the transaction machinery (the event append, the
+  rewrite). The fold/replay over the event log. Jobs carry `budget`
   (dollars, 0 = unset) and runs carry `cost` (schema v6): a model job's
   fire at the cap records a skip naming the spend, and each fire and
   delegate records its worker's cost (read from the state store's cost

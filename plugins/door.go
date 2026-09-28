@@ -32,9 +32,6 @@ func (d *Door) Description() string {
 }
 
 func (d *Door) Schema() json.RawMessage {
-	// llama-server rejects "enum": [] ("enum must be a non-empty array"),
-	// so a home with no live plugins gets a plain string instead; a name
-	// it does not know still refuses loudly at Exec.
 	nameProps := `"type":"string"`
 	if names := d.Live.PluginNames(); len(names) > 0 {
 		if enum, err := json.Marshal(names); err == nil {

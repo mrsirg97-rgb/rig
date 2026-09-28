@@ -432,9 +432,6 @@ func TestTodoProjectCommand(t *testing.T) {
 	}
 }
 
-// The operator's way of saying "this project": a path where an action
-// would go, then the verb. It binds the session, so the bare verbs that
-// follow land in the same queue.
 func TestTodoPathFormBindsAndActs(t *testing.T) {
 	db := openTodo(t)
 	s := core.NewSession()

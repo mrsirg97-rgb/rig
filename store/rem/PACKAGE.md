@@ -16,9 +16,11 @@ nothing is read into the prompt by a session start.
 
 ## What it includes
 
-- `rem.go`: the store: write/read operations, id minting, the raw
-  statements, prune and supersession, the repo scope, the migration, and
-  the `/rem` command's reads (`List`, `Show`, `Forget`).
+- `base.go`: the shared substrate (raw statements, the repo scope, the
+  id mint, supersession), `learn.go`: the write/read operations,
+  `prune.go`: prune and consolidation, `read.go`: the `/rem` command's
+  reads (`List`, `Show`, `Forget`), `render.go`: the hit render,
+  `migrate.go`: the one-time migration.
 - `path.go`: `FilePath(home)`, the store's file: `<home>/rem/rem.sqlite`.
 - `recall.go`: the pure core: consolidation arithmetic, the lexical
   shapes of the two arms (FTS and trigram), reciprocal rank fusion

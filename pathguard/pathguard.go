@@ -57,8 +57,6 @@ func Within(path, sessionCwd, rigHome string) (string, error) {
 	return cwd, nil
 }
 
-// inside reports whether path is under root in the lexical form or the
-// root's resolved form: a symlinked cwd accepts both spellings.
 func inside(root, path string) bool {
 	if under(root, path) {
 		return true

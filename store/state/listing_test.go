@@ -55,8 +55,6 @@ func TestListSessionsSeeksNotScans(t *testing.T) {
 	if rows[0].Tokens != int64(perSession/2*110) {
 		t.Fatalf("tokens: %d, want %d", rows[0].Tokens, perSession/2*110)
 	}
-	// 200 sessions × 20k messages listed in 10s before the indexes and the
-	// limit-first shape; a generous bound holds the order of magnitude.
 	if took > 2*time.Second {
 		t.Fatalf("ListSessions took %s over %d sessions / %d messages", took, sessions, sessions*perSession)
 	}

@@ -60,9 +60,13 @@ the Apple meta tags, safe-area insets).
 - **The loopback refusal**: `-addr` must name a loopback interface
   (`127.0.0.1`, `::1`, or `localhost`); a non-loopback bind is refused by
   name before the listener opens.
-- **The allow-list router**: every (method, path) is named; an unknown
-  path is a 404 and a known path with the wrong method is a 405 (with the
-  `Allow` header); the static assets are the only non-API surface.
+- **The allow-list router** (`router.go`): every (method, path) is
+  named; an unknown path is a 404 and a known path with the wrong
+  method is a 405 (with the `Allow` header); the static assets are the
+  only non-API surface. `reads.go` carries the read views, `writes.go`
+  the write doors, `plumbing.go` the HTTP plumbing (origin, the read
+  timeout, the JSON shapes), `shape.go` the transcript and row shapes,
+  `static.go` the embedded site.
 - **The read views**: sessions (the list, grouped by workspace, and the
   transcript as structure: messages, reasoning, tool calls and results,
   and the usage rows), todo and scheduler (the store's own text,

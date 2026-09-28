@@ -1991,10 +1991,6 @@ func TestUnknownIdNamesTheQueueItMissed(t *testing.T) {
 	}
 }
 
-// Compaction deletes the create events the id counter was rebuilt from,
-// so the snapshot must carry the high-water marks: with prune freeing ids
-// mid-queue, a snapshot that forgets them hands a freed id to the next
-// task, and a session holding the stale id completes the wrong row.
 func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -2010,8 +2006,6 @@ func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 	if _, err := todostore.Prune(ctx, db, p, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	// Push the log past the compaction threshold with moves: cheap events
-	// that mint no ids of their own.
 	for i := 0; i < todostore.COMPACT_THRESHOLD_EVENTS+10; i++ {
 		if _, err := todostore.Move(ctx, db, p, "t3", 1, "s1"); err != nil {
 			t.Fatal(err)
@@ -2030,7 +2024,6 @@ func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 	if first, last := strings.Index(reply, "t3"), strings.Index(reply, "t4"); first == -1 || last == -1 || first > last {
 		t.Fatalf("a new task joins the end of the queue, not the front:\n%s", reply)
 	}
-	// The stale id is refused, not silently re-targeted.
 	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err == nil ||
 		!strings.Contains(err.Error(), "no task 't1'") {
 		t.Fatalf("the stale id must refuse, got %v", err)

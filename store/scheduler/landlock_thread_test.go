@@ -11,12 +11,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
-// The worker's own goroutines must be inside the domain. An in-process
-// restrict cannot cover them (restrict_self commits per-thread creds and
-// Go's runtime has threads before main), so the domain arrives with the
-// image: the runner spawns rig -exec rig -p ..., the exec'd worker's every
-// thread inherits the wall. This test drives the worker's in-process tools
-// against a path outside every grant.
 func TestLandlockWorkerThreadsAreInsideTheDomain(t *testing.T) {
 	requireLandlockBox(t)
 

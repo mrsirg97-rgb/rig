@@ -60,11 +60,6 @@ func Label(cwd string) string {
 	return label
 }
 
-// InRepo reports whether cwd resolves to a git repository: the common
-// dir differs from the cwd itself, or git says the directory is a bare
-// repository (a bare layout's common dir is the cwd, so the path alone
-// cannot tell it apart). Outside a repo the scope is the cwd hash and
-// callers say so out loud.
 func InRepo(cwd string) bool {
 	if cwd == "" {
 		return false
@@ -72,9 +67,6 @@ func InRepo(cwd string) bool {
 	return Path(cwd) != cwd || Bare(cwd)
 }
 
-// Bare reports whether git says cwd is a bare repository. Its common dir
-// is the cwd itself, so Path cannot distinguish it from a plain
-// directory; the probe answers the one question the path leaves open.
 func Bare(cwd string) bool {
 	if cwd == "" {
 		return false

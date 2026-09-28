@@ -286,10 +286,6 @@ func checkViewportInvariants(t *testing.T, label string, v *vt, wantMark string)
 		t.Fatalf("%s: the protocol relied on %d cursor clamps", label, v.clamped)
 	}
 	rows := v.rows
-	// a frame may end above the viewport's bottom: the live region elides
-	// an oversized pending block, so the status block can sit on the
-	// frame's last row rather than the screen's. The harness holds only
-	// the written rows, never more than the viewport.
 	if len(rows) > v.height {
 		t.Fatalf("%s: the screen holds %d rows, past the %d-row viewport:\n%q", label, len(rows), v.height, rows)
 	}
@@ -355,8 +351,6 @@ func TestResizeMidStreamKeepsTheTranscript(t *testing.T) {
 	v := newVTScreen(50, 14)
 	streamViewportFrames(t, s, v, 10, "pre-resize")
 
-	// the size changes under the TUI with no signal delivered: the next
-	// repaint reads the new geometry and must aim with the painted one
 	size.set(36, 10)
 	v.width = 36
 	streamViewportFrames(t, s, v, 5, "post-resize")
@@ -400,8 +394,6 @@ func TestViewportBoundCountsTheStatusRowsItPaints(t *testing.T) {
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt returned %q", got)
 	}
-	// the usage row is 35 columns on a 24-column pane: the status block
-	// paints five rows where the row count sees four
 	v := newVTScreen(24, 10)
 	streamViewportFrames(t, s, v, 20, "narrow")
 }
@@ -508,19 +500,14 @@ func TestToolResultRendersAtItsCountedWidth(t *testing.T) {
 
 			rows := v.rows
 			joined := paintFree(strings.Join(rows, "\n"))
-			// painted rows are terminal-width exact: a raw tab renders at the
-			// next tab stop while the width math counts nothing, so a row
-			// carrying one wraps into rows the bookkeeping never sees
 			if strings.Contains(joined, "\t") {
 				t.Fatalf("width %d: a painted row carries a raw tab:\n%q", width, rows)
 			}
-			// foreign fragments from other rows must not land in the block
 			for _, frag := range []string{"cache r", "xhigh", "huihui"} {
 				if strings.Count(joined, frag) > 1 {
 					t.Fatalf("width %d: the fragment %q landed twice — torn rows inside the committed block:\n%q", width, frag, rows)
 				}
 			}
-			// the elided block: one marker, and no fail glyph (the tool succeeded)
 			if markers := strings.Count(joined, "lines hidden"); markers != 1 {
 				t.Fatalf("width %d: the block carries %d elide markers, want 1:\n%q", width, markers, rows)
 			}
@@ -531,12 +518,6 @@ func TestToolResultRendersAtItsCountedWidth(t *testing.T) {
 	}
 }
 
-// resizeVT models the pane's reflow under a height change with tmux's
-// screen_resize_y rule: a shrink first cuts as many rows as it can from
-// below the cursor, then moves the remaining rows from the top into
-// history — the cursor rides up with the content — and a grow appends
-// blank rows; the cursor clamps into range. Width changes reflow the
-// rows themselves and go through the winch test.
 func resizeVT(v *vt, w, h int) *vt {
 	nv := newVTScreen(w, h)
 	nv.hist = append([]string(nil), v.hist...)
@@ -589,8 +570,6 @@ func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 		t.Fatalf("the prompt returned %q", got)
 	}
 	v := newVTScreen(50, 14)
-	// one continuous feed index across the resizes: the frames replay in
-	// order onto the pane the way a terminal sees them
 	painted := 0
 	step := func(label string, want string) {
 		t.Helper()
@@ -607,17 +586,12 @@ func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 		step("pre-shrink", "")
 	}
 
-	// the phone's virtual keyboard opens: the pane loses four rows and
-	// the width holds. No signal is needed — the size is read at the
-	// repaint — and the first aim after the shrink must not overshoot
-	// the shorter screen.
 	size.set(50, 10)
 	v = resizeVT(v, 50, 10)
 	for i := 0; i < 6; i++ {
 		step("post-shrink", "word word word")
 	}
 
-	// and it closes again
 	size.set(50, 14)
 	v = resizeVT(v, 50, 14)
 	for i := 0; i < 6; i++ {
@@ -625,10 +599,6 @@ func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 	}
 }
 
-// parkOnStreaming feeds the fixture through a streaming turn, types one
-// character (parking the caret on the input row), and returns the parked
-// amount, the committed rows painted above the region, and the feed index
-// the caller must continue from.
 func parkOnStreaming(t *testing.T, s *scriptedSession, v *vt, n int) (int, []string, int) {
 	t.Helper()
 	painted := 0
@@ -664,9 +634,6 @@ func parkOnStreaming(t *testing.T, s *scriptedSession, v *vt, n int) (int, []str
 	return parked, committed, painted
 }
 
-// checkParkedShrinkScreen asserts that a repaint after a shrink landed
-// while parked kept every committed row (on screen or scrolled into
-// history, in order) and painted the region exactly once.
 func checkParkedShrinkScreen(t *testing.T, label string, v *vt, committed []string, input string) {
 	t.Helper()
 	if v.err != "" {
@@ -710,11 +677,6 @@ func TestParkedShrinkKeepsCommittedRows(t *testing.T) {
 	v := newVTScreen(50, 24)
 	parked, committed, painted := parkOnStreaming(t, s, v, 8)
 
-	// tmux handles a height shrink by deleting rows below the cursor and
-	// only then scrolling the top into history: the cursor stays put, so
-	// a shrink that lands while parked leaves the caret on the bottom
-	// row and the old cursor-down re-anchor becomes a no-op. Cut the
-	// pane by the parked amount before the next repaint.
 	size.set(50, 24-parked)
 	v = resizeVT(v, 50, 24-parked)
 
@@ -751,8 +713,6 @@ func TestParkedShrinkTallRegionPaintsTheParagraphOnce(t *testing.T) {
 		}
 	}
 
-	// a long paragraph with no newline stays the pending line: the live
-	// region grows taller than the pane the shrink will leave behind.
 	words := make([]string, 64)
 	for i := range words {
 		words[i] = "word"
@@ -764,12 +724,6 @@ func TestParkedShrinkTallRegionPaintsTheParagraphOnce(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	feed("paragraph")
 
-	// park the caret, then shrink past the park: tmux cuts the rows below
-	// the cursor (the park), then scrolls the rest of the shrink's rows
-	// from the top into history. The region is taller than the target
-	// pane, so the repaint's aim must be the logical span minus the park —
-	// an aim capped at the shrunken viewport undershoots by the park and
-	// leaves the paragraph's head above the repaint.
 	s.si.feed("x")
 	s.await(promptMark(th) + th.Paint(SlotText, " x"))
 	time.Sleep(30 * time.Millisecond)
@@ -794,10 +748,6 @@ func TestParkedShrinkTallRegionPaintsTheParagraphOnce(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	feed("delta")
 
-	// the committed startup block, the echo, and the answer each appear
-	// exactly once across history and the screen; the pending paragraph's
-	// wrapped rows are one contiguous run of the same length as the line —
-	// a head left above the repaint shows up twice.
 	if v.clamped > 0 {
 		t.Fatalf("the protocol relied on %d cursor clamps", v.clamped)
 	}
@@ -836,9 +786,6 @@ func TestParkedShrinkSteppedKeepsCommittedRows(t *testing.T) {
 		t.Fatalf("the fixture parked %d rows, want the 4-row status block", parked)
 	}
 
-	// the reproduction: shrink through 20/16, grow back through 20/24,
-	// one text delta per step, the caret re-parked before each step. Every
-	// committed row above the region must survive every repaint.
 	steps := []struct {
 		height    int
 		keystroke string
@@ -904,7 +851,6 @@ func TestToolBlockTabGapsHoldNoPreviousFrame(t *testing.T) {
 			t.Fatalf("%s: the protocol relied on %d cursor clamps", label, v.clamped)
 		}
 	}
-	// a small region: the status block sits a few rows above the bottom
 	s.fe.Notify(core.ReasoningDelta{Text: "word word word "})
 	s.tick()
 	time.Sleep(4 * time.Millisecond)
@@ -914,18 +860,11 @@ func TestToolBlockTabGapsHoldNoPreviousFrame(t *testing.T) {
 	}})
 	time.Sleep(4 * time.Millisecond)
 	feed("toolstart")
-	// the tool's content is tab-indented go source: the block's rows
-	// carry the same shape as the pane's previous frame
 	content := "func (l *lockBuf) Reset() {\n\tl.mu.Lock()\n\tdefer l.mu.Unlock()\n\tl.b.Reset()\n}\n"
 	s.fe.Notify(core.ToolResult{Content: content, Duration: 400})
 	time.Sleep(6 * time.Millisecond)
 	feed("toolresult")
 
-	// a tab advances to the next eight-column stop and writes nothing:
-	// the cells it skips keep whatever the previous frame left in them.
-	// The seam paints the gap as spaces, so the block's rows render
-	// exactly as expanded — no fragment of the frame before survives in
-	// the gap (the model info, the effort row, the pend tail).
 	joined := paintFree(strings.Join(v.rows, "\n"))
 	for _, want := range []string{
 		"  func (l *lockBuf) Reset() {",

@@ -152,11 +152,6 @@ func decodeMinisignLine(text []byte) ([]byte, error) {
 	return nil, errors.New("no minisign line found")
 }
 
-// minisign 0.11's wire format: every blob carries a 2-byte algorithm tag,
-// then the 8-byte key id, then the payload. The public key is "Ed" + key id
-// + 32-byte ed25519 key (42 bytes); the signature is "Ed" (legacy, covers
-// the file bytes) or "ED" (the default, covers the BLAKE2b-512 digest) +
-// key id + 64-byte ed25519 signature (74 bytes).
 const (
 	minisignAlgoEd       = "Ed"
 	minisignAlgoHashed   = "ED"

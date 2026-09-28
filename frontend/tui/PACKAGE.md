@@ -13,10 +13,13 @@ width); no core or loop line (decision 10).
 
 ## What it includes
 
-- **The Frontend shell** (`tui.go`): the reader goroutine, the
-  command dispatch, the completion menu, the status line's refresh
-  points, the `Steerer` seam (`Steer`, `Interrupt`, `ClearSlot`,
-  `LiveTurn`, `Ask`), and the live-region protocol.
+- **The Frontend shell** (`shell.go`): the reader goroutine and the
+  constructor; `keys.go` and `prompt.go`: the key handling and the
+  input seam; `notify.go`: the event rendering and the live-region
+  protocol; `commands.go`: the command dispatch and the `Steerer` seam
+  (`Steer`, `Interrupt`, `ClearSlot`, `LiveTurn`, `Ask`); `menu.go`:
+  the completion menu; `paint.go`: the flow and the paint seam;
+  `frame.go`: the repaint cadence.
 - **The live region** (`live.go`): the activity, pending, menu, input,
   and status rows; cursor-up redraw, width handling, the one-op-one-write
   frame (the write gate, decision 2).
@@ -79,7 +82,9 @@ width); no core or loop line (decision 10).
   newline guarantee on `Done`, the fault line, the compact line, the
   empty-turn notice (`RenderEmptyTurn`, its usage added to the turn
   totals), the usage on `TurnEnd`. Events it does not name are ignored
-  (the compat rule).
+  (the compat rule). `toolStarts` keys a wave's in-flight calls by ID,
+  kept by call ID until the result consumes it, so a result block
+  renders the call that produced it, not the wave's latest start.
 - The `Steerer` is the frontend-owned seam (SPEC_COMMANDS 2): `Steer`
   queues text and reports the interrupt; `LiveTurn` is the turn's
   state; `Ask` is the approval gate's door (SPEC_MODES 4).
@@ -183,6 +188,11 @@ width); no core or loop line (decision 10).
   the neighboring character is not a letter or digit (the CommonMark
   rule), so snake_case identifiers keep their underscores; `*` keeps
   the simpler rule.
+- The freeze gate's reopenings are named: `loop` (1.1.4, the fed-back
+  error line, under spec'd deliverables) and the 2.0.1 module-path
+  rename (the root and core files whose import lines move to the /v2
+  path). The re-freeze PR after the merge deletes the exemption and the
+  gate measures the new bytes.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
   exactly at the last column across a write boundary (the tear). A frame

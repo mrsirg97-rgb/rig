@@ -88,8 +88,6 @@ func Parse(line string) (Ref, bool) {
 	return ref, true
 }
 
-// HasControl reports whether s carries a C0 control byte or DEL: a marker
-// line is one line, so such a byte can never legitimately reach it.
 func HasControl(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] < 0x20 || s[i] == 0x7f {

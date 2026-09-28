@@ -150,9 +150,6 @@ func TestCloseStopsTheWinchSignal(t *testing.T) {
 	}
 }
 
-// withStdinPTY puts the pty's slave on fd 0 for the test's lifetime, so
-// the frontend sees a terminal on stdin — the shape the winch guard
-// missed: stdin is fd 0, and the guard keyed on a nonzero fd.
 func withStdinPTY(t *testing.T, fn func(master *os.File)) {
 	t.Helper()
 	master, slave := openPTY(t)
@@ -201,9 +198,6 @@ func awaitStreamCount(t *testing.T, out *lockBuf, want string, n int) {
 	}
 }
 
-// feedStream replays the stream's frames into the harness. The pty's raw
-// mode carries the paste-mode handshake, which is outside the harness's
-// vocabulary: the frames keep the sync pair, the handshake is dropped.
 func feedStream(v *vt, out *lockBuf, from int) int {
 	chunks := out.writeChunks()
 	for ; from < len(chunks); from++ {
@@ -262,10 +256,6 @@ func TestStdinTerminalOwnsWinch(t *testing.T) {
 	})
 }
 
-// TestPTYWinchIdleRepaint: rig idle — no delta, no keystroke — the pane
-// resizes, and the winch must repaint the status block anyway. The input
-// is stdin, so the guard that keyed on a nonzero fd left this shape with
-// no handler at all.
 func TestPTYWinchIdleRepaint(t *testing.T) {
 	th := oledTheme(t)
 	withStdinPTY(t, func(master *os.File) {
@@ -290,11 +280,6 @@ func TestPTYWinchIdleRepaint(t *testing.T) {
 	})
 }
 
-// TestPTYWinchParkedResize: the idle repro. One character parks the
-// caret on the input row; the pane shrinks and tmux deletes the rows
-// below the caret — the status rows — and nothing streams to repaint
-// them. The winch must repaint the block after the shrink and after the
-// regrow, from the parked aim, without overwriting the transcript.
 func TestPTYWinchParkedResize(t *testing.T) {
 	th := oledTheme(t)
 	withStdinPTY(t, func(master *os.File) {
@@ -307,7 +292,6 @@ func TestPTYWinchParkedResize(t *testing.T) {
 		go fe.Input(context.Background())
 
 		awaitStream(t, out, th.Paint(SlotDim, statusRow3))
-		// the shell prompt sits on the pane's bottom row when rig starts
 		v := newVTScreen(80, 44)
 		v.r, v.c, v.bottom = 43, 0, 43
 		painted := feedStream(v, out, 0)

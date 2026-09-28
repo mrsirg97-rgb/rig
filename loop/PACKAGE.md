@@ -31,7 +31,9 @@ the session at the boundary, clean.
   calls the kernel's `Concurrent` predicate admits are dispatched as
   goroutines (at most `Parallel`, default 8); a refused call is a
   barrier; `dispatch(i)` starts the run the cursor reached, every call
-  in a goroutine, each posting its completion.
+  in a goroutine, each posting its completion; `dispatch` returns the
+  wave's exclusive end and the caller owns the `ToolStart` for every
+  call in `[i, end)`, so a wave's starts all land before any result.
 
 ## How it is consumed
 

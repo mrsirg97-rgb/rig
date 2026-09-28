@@ -82,7 +82,14 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 - `compactJSON` re-marshals args compactly so the embedded literal is
   total (`pyLiteral`); the args must parse as JSON.
 - `pyLiteral` escapes backslash and single-quote: JSON text has no raw
-  newlines and no double-quote collisions.
+  newlines and no double-quote collisions. The escaping is total only
+  inside a Python single-quoted non-raw literal, so a raw line break
+  would end the literal early and turn the embedded data into executed
+  code — the cell is refused instead.
+- The door's schema keeps `name` a plain string when no plugins are
+  live: llama-server rejects `"enum": []` ("enum must be a non-empty
+  array"), and a name the server does not know still refuses loudly at
+  Exec.
 - The doors' redo runs at most once per call and never on a known name;
   a failing redo is named in the refusal (`re-discovery failed: ...`).
   The named cost is one full discovery on the failure path (the retry

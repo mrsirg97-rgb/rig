@@ -39,7 +39,9 @@ it acts on it.
   are the same key (without it the drift check can be silently bypassed by
   path spelling).
 - `recordState` / `stateOf`: the `FileState` provenance maintained on the
-  threaded session.
+  threaded session; `SnapshotFiles` returns a copy under the package
+  lock, so a persister that upserts the states cannot race the tools'
+  concurrent records.
 
 ## How it is consumed
 

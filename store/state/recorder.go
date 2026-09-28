@@ -41,9 +41,6 @@ func NewRecorder(inner core.Frontend, db store.DB, cwd, model, version, sid stri
 	}
 }
 
-// Snapshot wires the file tool's snapshot so the recorder can persist
-// the session's recorded file states without racing the tools'
-// concurrent records; the default (nil) skips the files upsert.
 func (r *Recorder) Snapshot(fn func(*core.Session) map[string]core.FileState) *Recorder {
 	r.snapshot = fn
 	return r
@@ -355,9 +352,6 @@ func (r *Recorder) originalErr(id string, i, total int, floor int64) *string {
 	if len(errs) == 0 {
 		return nil
 	}
-	// The tail is the kept, newest slice in transcript order: its i-th
-	// occurrence of the wire id maps to the original at len-total+i.
-	// The floor excludes this compaction's own re-landed rows.
 	idx := len(errs) - total + i
 	if idx < 0 {
 		idx = 0
