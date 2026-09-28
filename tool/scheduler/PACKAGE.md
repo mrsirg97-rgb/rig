@@ -10,7 +10,7 @@ seams).
 ## What it includes
 
 - `Tool`: a `core.Tool` over the scheduler store's verbs
-  (list/create/update/pause/resume/remove/runs), consuming the opened
+  (list/create/update/pause/resume/remove/runs/repair), consuming the opened
   `sched.DB` (the one `global.sqlite`), `sched.Crontab`, the runner
   command, and the fleet's model (the create default the root supplies;
   the tool carries no worker default of its own).
@@ -40,3 +40,8 @@ seams).
   time.
 - The schema carries no `scope` (SPEC_STATE's one-store scheduler): `cwd`
   is the job's own field, ids are one sequence, `name` unique store-wide.
+- `repair` takes an id or none: the id is optional on the schema (none
+  repairs every drifting job), and the verb is a crontab write only —
+  no event, no state change — with the drift it fixed named verbatim
+  (`'jN' is in sync` when nothing drifts, `nothing to repair` for a
+  removed or done job, `nothing drifted` when the walk finds none).

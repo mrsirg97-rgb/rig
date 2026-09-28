@@ -1,4 +1,23 @@
 # Changelog
+## [2.0.1]: the repair verb
+
+Drift between the scheduler store and the crontab was surfaced in list
+but not fixable from inside rig: a line lost to a crash between the
+crontab write and the store commit, an edited cron, a paused job whose
+line went live were all manual crontab edits. `scheduler repair`
+re-derives a drifting job's crontab line — `UpsertLine` with the job's
+cron and the wired runner command, then `SetPaused` to match the state.
+It is a crontab write only: no event, no state change (the state is
+what it is being repaired toward). One id repairs that job — a removed
+or done job refuses `nothing to repair` in the store's voice, and a job
+with no drift replies `'jN' is in sync` and installs nothing; no id
+walks every job and repairs each drifting one, one reply line per
+repair, `nothing drifted` when none. The reply lists the drift it
+fixed, verbatim from `driftOf`. The scheduler tool carries the action
+in its enum and one description line; the dashboard gets
+`POST /api/scheduler/repair` (id optional) beside the other four doors
+and a repair row control shown only when the row carries a drift line.
+
 ## [2.0.0]: the dashboard is the third frontend
 
 `rig serve` is rig with the page as its terminal. The web server

@@ -537,6 +537,17 @@ post-merge corrections)
   stays paused (its line is rewritten commented) and the new line lands on
   resume. `pause` and `resume` stay their own ops; `update` never changes
   the state.
+- `repair` is the drift fix, a crontab write only: no event, no state
+  change (the state is what it is being repaired toward). With an id it
+  re-derives that job's line — `UpsertLine` with the job's cron and the
+  wired runner command, then `SetPaused` to match the state — and a
+  removed or done job refuses by name (`'jN' is removed; nothing to
+  repair`, `'jN' is done; nothing to repair`); a job with no drift
+  replies `'jN' is in sync` and installs nothing. With no id it walks
+  every job and repairs each drifting one, one reply line per job
+  repaired with the drift verbatim from `driftOf`, and `nothing drifted`
+  when none. A crontab read failure refuses loudly: drift cannot be
+  assessed, nothing is written.
 - The `defaultModel` fallback constant is cut (SPEC_CONFIG 12, with
   the settings' `defaultJobModel` key): `Create` takes the model from
   its caller, never a literal; the tool passes the fleet's model

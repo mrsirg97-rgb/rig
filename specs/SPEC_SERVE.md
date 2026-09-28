@@ -604,10 +604,10 @@ active and complete marks it done (the read carries `[~]` then `[x]`);
 an unknown id is the verb's refusal; a malformed id is a 400; the
 Origin wall holds; a GET on the verb is a 405.
 
-### 16. The scheduler's four doors, and the row's hand.
+### 16. The scheduler's five doors, and the row's hand.
 
 The phone could list and create; the TUI held the rest of the job's
-life. This pass puts the four doors beside the create, each calling
+life. This pass puts the five doors beside the create, each calling
 the store verb the `scheduler` tool calls, with the selected cwd as
 the session cwd (as the create carries) and the attribution
 `dashboard`, behind the same walls as every write (POST, the Origin
@@ -625,6 +625,14 @@ check, the body cap), and replying in the store's voice, verbatim:
   root wired (as the create). The store's refusals ride through: an
   unknown id, a removed id, no fields (the verb's "update needs a
   change"), the cadence's exclusivity.
+- `POST /api/scheduler/repair {id?}`: `scheduler.Repair` with the
+  runner command the root wired. Repair is a crontab write only — no
+  event, no state change (the state is what it is being repaired
+  toward) — and its reply lists the drift it fixed verbatim: `'jN'
+  repaired: <drift>`, `'jN' is in sync` when nothing drifts (nothing
+  installed), `nothing to repair` for a removed or done id; an absent
+  id walks every drifting job, one line per repair, `nothing drifted`
+  when none.
 - `GET /api/scheduler/runs?id=jN&n=`: the audit trail, `scheduler.
   Runs`. A read, as the list: the read timeout, no Origin wall. `n`
   is the 1-100 cap the tool carries (absent is the verb's default);
@@ -634,7 +642,8 @@ check, the body cap), and replying in the store's voice, verbatim:
 The list re-reads after a move; no page reload.
 
 The phone rule: every job row carries its controls beside it; pause
-or resume by state (a done row neither), remove, and runs, and an
+or resume by state (a done row neither), remove, runs, and — only
+when the row carries a drift line — repair, and an
 update form that opens in place with the row's current fields
 (cadence, prompt, model, cwd, busy, timeout — a cleared timeout
 submits the reset; the row carries no prompt, so an
@@ -652,7 +661,11 @@ moves the store (pause marks the job paused in the next list read,
 resume marks it active, remove drops it from the list, update changes
 the field the reply names) and replies in the store's voice verbatim;
 the runs read returns the audit trail (a seeded run's status, `n`
-capping the window, the unknown id the named 404); the walls hold (a
+capping the window, the unknown id the named 404); the repair door
+re-derives a drifted line and names the drift verbatim, an in-sync id
+installs nothing, a removed or done id refuses by name, an absent id
+walks every drifting job and reports nothing drifted when none, and
+repair writes no event; the walls hold (a
 no-Origin or foreign-Origin write a 403, an over-cap body a 400, a
 bad id a 400, a GET on a door a 405 with `Allow` naming POST, a POST
 on runs a 405 with `Allow` naming GET); the page carries the
@@ -662,7 +675,7 @@ shipped assets).
 
 ### the diffs this phase implies
 
-- **`frontend/web`**: the four door handlers and the runs read
+- **`frontend/web`**: the five door handlers and the runs read
   (a `schedulerverbs.go` beside the `todoverbs.go`, the allow-list's
   lines), the static assets' row controls and the in-place update
   form (the phone rule), the `PACKAGE.md` update.
