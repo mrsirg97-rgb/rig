@@ -1187,14 +1187,6 @@ func TestToolMenuBudgetAndVocabulary(t *testing.T) {
 				t.Errorf("%s carries another harness's voice: %q", f.Name, bad)
 			}
 		}
-		if f.Name == "web" {
-			for _, sub := range []string{"compact JSON title/url/snippet", "[TRUNCATED] marker naming the full size"} {
-				if !strings.Contains(f.Description, sub) {
-					t.Errorf("web does not name its reply's shape: %q", sub)
-				}
-			}
-			continue
-		}
 		if !strings.Contains(f.Description, "Guidelines:") {
 			t.Errorf("%s has no Guidelines sentence", f.Name)
 		}
