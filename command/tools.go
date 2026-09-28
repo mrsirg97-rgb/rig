@@ -88,9 +88,6 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 	return out, nil
 }
 
-// isTodoAction words the tool's own vocabulary: anything else in the
-// first field is a path, and `+"`todo <path> <verb>`"+` is how the operator
-// says "this project" (the form binds the session's queue).
 func isTodoAction(w string) bool {
 	switch w {
 	case "read", "create", "claim", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "notes", "accept", "reject", "finished", "list", "project":
@@ -216,8 +213,6 @@ func todoArgs(args string) (json.RawMessage, error) {
 	}
 }
 
-// withProjectField folds the path argument into the args the verb parse
-// produced, so one grammar serves both shapes.
 func withProjectField(raw json.RawMessage, project string) (json.RawMessage, error) {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {

@@ -54,6 +54,9 @@ the leaf.
 - **steer**: 7's slot, made a verb: queue the text (latest wins) and
   interrupt a live turn if one is; queue only if not. Empty interrupts
   only.
+- **swarm**: the drain-worker vocabulary over the root's `Swarm` seam
+  (SPEC_SWARM): the command owns the vocabulary; the controller owns the
+  goroutines.
 - **todo/scheduler**: a thin shared adapter over one of the model's own
   tools: parse the line into the tool's JSON args, call `Exec` with the
   session threaded, return the reply verbatim. `todo project [path]` is
@@ -61,7 +64,9 @@ the leaf.
   that project's queue and renders it, bare it reports where the queue
   is; `todo <path> <verb…>` binds and acts in one line, `todo notes
   <id>` lists a task's notes, `todo read <id>` renders one task, and
-  `todo prune` drops the done rows. A leading field that is not one of the tool's
+  `todo prune` drops the done rows. The path form folds the path
+  argument into the args the verb parse produced, so one grammar serves
+  both shapes. A leading field that is not one of the tool's
   verbs reads as a path, so a mistyped verb refuses as a missing
   directory rather than as an unknown action.
   With no fleet the `scheduler` seam is absent, and the command

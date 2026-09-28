@@ -16,8 +16,6 @@ type Steerer interface {
 	LiveTurn() bool
 }
 
-// Swarm is the supervisor seam: the root's drain-worker controller. The
-// command owns the vocabulary; the controller owns the goroutines.
 type Swarm interface {
 	Start(ctx context.Context, in SwarmStart) (string, error)
 	List() []SwarmWorker
