@@ -14,7 +14,8 @@ with no drift replies `'jN' is in sync` and installs nothing; no id
 walks every job and repairs each drifting one, one reply line per
 repair, `nothing drifted` when none. The reply lists the drift it
 fixed, verbatim from `driftOf`. The scheduler tool carries the action
-in its enum and one description line; the dashboard gets
+in its enum and one description line; the `/scheduler` command verb
+carries it too (`repair [id]`); the dashboard gets
 `POST /api/scheduler/repair` (id optional) beside the other four doors
 and a repair row control shown only when the row carries a drift line.
 

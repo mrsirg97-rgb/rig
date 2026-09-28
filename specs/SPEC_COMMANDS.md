@@ -615,6 +615,7 @@ scheduler create <name> <prompt…> <cron>     5-field vixie, or
 scheduler create <name> <prompt…> once <ISO>
 scheduler pause|resume|remove <id>
 scheduler runs <id> [n]
+scheduler repair [id]           re-derive a drifting job's crontab line
 ```
 
 - `create`'s `name` is the first token after the action: the prompt is
@@ -632,6 +633,13 @@ scheduler runs <id> [n]
   line needs text; clearing the queue (`tasks: []`) stays a model-side
   call: the line shape has no spelling for an empty array, and that is
   fine.
+- `scheduler repair` re-derives a drifting job's crontab line (a
+  crontab write only, no event, no state change): `repair <id>` fixes
+  that one job (its drift named verbatim, `'jN' is in sync` when
+  nothing drifts), a bare `repair` walks every drifting job (one line
+  per repair, `nothing drifted` when none), and an id that is removed
+  or done refuses `nothing to repair` in the store's voice. Extras
+  refuse the shape.
 - `todo claim [review]` takes the next claimable task (no args) or the
   first task in review (`claim review` maps to
   `{"action":"claim","status":"review"}`); the reply is the store's

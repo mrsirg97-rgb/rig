@@ -23,7 +23,7 @@ func (t toolCmd) Description() string {
 	case "todo":
 		return "the task queue: read it, add a task, claim work, review, or move one (claim, start, done, fail, retry, accept, reject)"
 	case "scheduler":
-		return "the cron jobs: list, create, update, pause, resume, remove, or show a job's runs"
+		return "the cron jobs: list, create, update, pause, resume, remove, repair, or show a job's runs"
 	}
 	return "over the same " + t.name + " tool the model gets: the line is parsed into the tool's args, the reply printed verbatim"
 }
@@ -54,6 +54,7 @@ func (t toolCmd) Sub() []Sub {
 			{Name: "pause", Desc: "pause a job: pause <id>"},
 			{Name: "resume", Desc: "resume a paused job: resume <id>"},
 			{Name: "remove", Desc: "remove a job: remove <id>"},
+			{Name: "repair", Desc: "re-derive a drifting job's crontab line: repair [id]"},
 		}
 	}
 	return nil
@@ -226,7 +227,7 @@ func withProjectField(raw json.RawMessage, project string) (json.RawMessage, err
 	return json.Marshal(m)
 }
 
-const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>] [cwd <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]"
+const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>] [cwd <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]|repair [id]"
 
 func schedulerArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -249,6 +250,12 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 			m["n"] = n
 		}
 		return json.Marshal(m)
+	case fields[0] == "repair" && (len(fields) == 1 || len(fields) == 2):
+		m := map[string]any{"action": "repair"}
+		if len(fields) == 2 {
+			m["id"] = fields[1]
+		}
+		return json.Marshal(m)
 	case fields[0] == "create" && len(fields) >= 2:
 		return schedulerCreate(fields)
 	}
@@ -263,6 +270,8 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 		return nil, fmt.Errorf("scheduler: %s takes an id (scheduler %s <id>)", fields[0], fields[0])
 	case fields[0] == "runs":
 		return nil, errors.New("scheduler: runs takes an id and an optional n (scheduler runs <id> [n])")
+	case fields[0] == "repair":
+		return nil, errors.New("scheduler: repair takes an optional id (scheduler repair [id])")
 	default:
 		return nil, fmt.Errorf("scheduler: unknown action %q (scheduler %s)", fields[0], schedulerVerbs)
 	}

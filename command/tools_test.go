@@ -282,6 +282,81 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSchedulerRepairCommand(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	ct := newFakeCron()
+	st := schedStores(t, home, cwd)
+	tool := schedapi.New(st, ct, "/bin/true run-job", "qwen3.8-workers", home)
+	env := &command.Env{
+		Session: func() *core.Session { return core.NewSession() },
+		Tools:   map[string]core.Tool{"scheduler": tool},
+	}
+
+	if _, err := runCmd(t, "scheduler", "create nightly report 0 3 * * *", env); err != nil {
+		t.Fatal(err)
+	}
+	ct.mu.Lock()
+	ct.text = strings.Replace(ct.text, "0 3 * * * /bin/true run-job j1", "59 23 * * * /bin/true run-job j1", 1)
+	ct.mu.Unlock()
+
+	repaired, err := runCmd(t, "scheduler", "repair j1", env)
+	if err != nil {
+		t.Fatalf("repair: %v (%s)", err, repaired)
+	}
+	if !strings.Contains(repaired, "'j1' repaired: cron differs (crontab: 59 23 * * *)") {
+		t.Fatalf("repair reply %q, want the drift verbatim", repaired)
+	}
+	if !strings.Contains(ct.text_(), "0 3 * * * /bin/true run-job j1  # rig-scheduler:"+sched.TagHome(home)+":j1") {
+		t.Fatalf("line not re-derived: %q", ct.text_())
+	}
+
+	ct.mu.Lock()
+	ct.text = strings.Replace(ct.text, "0 3 * * * /bin/true run-job j1", "59 23 * * * /bin/true run-job j1", 1)
+	ct.mu.Unlock()
+	walk, err := runCmd(t, "scheduler", "repair", env)
+	if err != nil {
+		t.Fatalf("repair all: %v (%s)", err, walk)
+	}
+	if !strings.Contains(walk, "'j1' repaired: cron differs (crontab: 59 23 * * *)") {
+		t.Fatalf("walk reply %q, want one line per repaired job", walk)
+	}
+	again, err := runCmd(t, "scheduler", "repair", env)
+	if err != nil {
+		t.Fatalf("second walk: %v (%s)", err, again)
+	}
+	if again != "nothing drifted" {
+		t.Fatalf("second walk %q", again)
+	}
+
+	_, err = runCmd(t, "scheduler", "repair j99", env)
+	if err == nil || !strings.Contains(err.Error(), "no job 'j99'") {
+		t.Fatalf("unknown-id voice: %v", err)
+	}
+	_, err = runCmd(t, "scheduler", "repair x y", env)
+	if err == nil || !strings.Contains(err.Error(), "scheduler: repair takes an optional id") {
+		t.Fatalf("shape voice: %v", err)
+	}
+
+	byName := allByName(t)
+	subber, ok := byName["scheduler"].(command.Subber)
+	if !ok {
+		t.Fatal("the scheduler command must implement Sub()")
+	}
+	found := false
+	for _, s := range subber.Sub() {
+		if s.Name == "repair" {
+			found = true
+			if s.Desc == "" {
+				t.Fatal("the repair hint must carry a one-liner")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("the scheduler command must carry a repair hint: %v", subber.Sub())
+	}
+}
+
 type fakeCron struct {
 	mu   sync.Mutex
 	text string
