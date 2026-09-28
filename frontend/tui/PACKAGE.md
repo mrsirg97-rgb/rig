@@ -13,10 +13,13 @@ width); no core or loop line (decision 10).
 
 ## What it includes
 
-- **The Frontend shell** (`tui.go`): the reader goroutine, the
-  command dispatch, the completion menu, the status line's refresh
-  points, the `Steerer` seam (`Steer`, `Interrupt`, `ClearSlot`,
-  `LiveTurn`, `Ask`), and the live-region protocol.
+- **The Frontend shell** (`shell.go`): the reader goroutine and the
+  constructor; `keys.go` and `prompt.go`: the key handling and the
+  input seam; `notify.go`: the event rendering and the live-region
+  protocol; `commands.go`: the command dispatch and the `Steerer` seam
+  (`Steer`, `Interrupt`, `ClearSlot`, `LiveTurn`, `Ask`); `menu.go`:
+  the completion menu; `paint.go`: the flow and the paint seam;
+  `frame.go`: the repaint cadence.
 - **The live region** (`live.go`): the activity, pending, menu, input,
   and status rows; cursor-up redraw, width handling, the one-op-one-write
   frame (the write gate, decision 2).

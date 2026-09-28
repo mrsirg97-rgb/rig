@@ -58,10 +58,13 @@ drops done only, and the summary counts review rows (`· N in review`).
 
 ## What it includes
 
-- `todo.go`: the store: operations (claim, note, notes, accept, reject,
-  the review state), replay, position minting, the requires/blocks DAG
-  validation and cyclePath (both relations), per-scope folds and one
-  shared event-log sequence.
+- `verbs.go`: the mutating operations (claim, note, notes, accept,
+  reject, the review state), `read.go`: the read verbs, `tx.go`: the
+  transaction machinery (the per-scope fold, compaction, the event
+  append), `types.go`: the fold's domain (tasks, positions, the event
+  row), `fold.go`: the event application, `create.go`: the
+  requires/blocks DAG validation and cyclePath (both relations),
+  `render.go`: the queue render; one shared event-log sequence.
 - `task.go`: the structured reads beside the render: `Task` (one task's
   brief: text + notes with sessions) and `Counts` (the fold's
   per-status counts, read-only) — the swarm's brief and status band
