@@ -77,10 +77,12 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 - **tools.** `bash`, `read`/`write`/`edit`, `python`, `web` (search and
   fetch), `todo`, `rem`, `scheduler`, `delegate`, `sessions`,
   `plugin`/`plugins`. Results are capped, refusals are named.
-- **the queue.** `todo` reads the project's tasks (worktrees share one
-  board); `todo claim` takes the next unblocked task, `todo complete` lands
-  it, `todo notes tN` lists a task's notes. Tasks link with `requires` and
-  `blocks`.
+- **the queue.** `todo` reads the project's present (worktrees share one
+  board): open work first, then the related and recent finished, ten
+  rows total, the hint naming what is hidden; `todo finished` lists the
+  n most recent finished. `todo claim` takes the next unblocked task,
+  `todo complete` lands it, `todo notes tN` lists a task's notes. Tasks
+  link with `requires` and `blocks`.
 - **memory.** `rem learn`/`recall`/`reflect`/`prune` at the project's scope;
   a repo and its worktrees share the same memories.
 - **schedules.** `scheduler` puts a job on the crontab; a job is a one-shot

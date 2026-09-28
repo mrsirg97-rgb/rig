@@ -371,7 +371,7 @@ func TestFrameTickerLifecycle(t *testing.T) {
 func TestBothDoorsThroughFrontend(t *testing.T) {
 	th := oledTheme(t)
 	const reply = "→ t3 started\n" +
-		"2/5 done · next: t4\n" +
+		"[rig] 3 open · 2 of 2 finished shown · next: t4\n" +
 		"  t1 [x] wire the models table\n" +
 		"  t2 [x] the switch seam\n" +
 		"  t3 [~] steer verb\n" +

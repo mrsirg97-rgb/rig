@@ -92,13 +92,13 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 // says "this project" (the form binds the session's queue).
 func isTodoAction(w string) bool {
 	switch w {
-	case "read", "create", "claim", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "notes", "accept", "reject", "project":
+	case "read", "create", "claim", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "notes", "accept", "reject", "finished", "list", "project":
 		return true
 	}
 	return false
 }
 
-const todoUsage = "todo read [id]|create <text…>|claim [review]|start|complete|fail|release|retry <id>|move <id> <pos>|note <id> <text…>|notes <id>|accept <id>|reject <id> <reason…>|prune|project <path>|<path> <verb>"
+const todoUsage = "todo read [id]|create <text…>|claim [review]|start|complete|fail|release|retry <id>|move <id> <pos>|note <id> <text…>|notes <id>|accept <id>|reject <id> <reason…>|list finished [n]|prune|project <path>|<path> <verb>"
 
 func todoArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -121,6 +121,18 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return json.Marshal(map[string]any{"action": "read", "id": fields[1]})
 	case fields[0] == "notes" && len(fields) == 2:
 		return json.Marshal(map[string]any{"action": "notes", "id": fields[1]})
+	case fields[0] == "list" && len(fields) >= 2 && fields[1] == "finished":
+		m := map[string]any{"action": "finished"}
+		if len(fields) == 3 {
+			n, err := strconv.Atoi(fields[2])
+			if err != nil {
+				return nil, fmt.Errorf("todo: %q: not an integer (todo list finished [n])", fields[2])
+			}
+			m["n"] = n
+		} else if len(fields) > 3 {
+			return nil, errors.New("todo: list finished takes at most one n (todo list finished [n])")
+		}
+		return json.Marshal(m)
 	case fields[0] == "prune" && len(fields) == 1:
 		return json.RawMessage(`{"action":"prune"}`), nil
 	case fields[0] == "create":
@@ -180,6 +192,8 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return nil, errors.New("todo: read takes no args (todo read) or one id (todo read <id>)")
 	case fields[0] == "notes":
 		return nil, errors.New("todo: notes takes an id (todo notes <id>)")
+	case fields[0] == "list":
+		return nil, errors.New("todo: list finished takes an optional n (todo list finished [n])")
 	case fields[0] == "prune":
 		return nil, errors.New("todo: prune takes no args (todo prune)")
 	case fields[0] == "create":

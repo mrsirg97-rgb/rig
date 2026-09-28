@@ -15,9 +15,16 @@ relation).
 The reply contract (the lean read): a transition echoes the affected
 row, the summary line, and; like every other reply; the stale footer
 when staleness is live; the moment the model acts on recovered state is
-the moment the warning matters most. Read returns the actionable queue
-(done folds into the summary), ReadAll the history, Create the full
-filtered queue. The operation that crosses the compaction threshold
+the moment the warning matters most. Read returns the present — open
+work first in queue order, then the finished work related to it
+(nearest hop over requires/blocks), then the recent finished, newest
+terminal event first, until ten finished rows show in total
+(DefaultFinishedShown), one dim hint line naming what is hidden and
+the finished-list door; ReadFinished lists the n most recent finished
+(default ten, cap FinishedListCap); ReadAll the history; Create the
+full present. Retirement is a view, not a state: a hidden finished task
+still satisfies requires, links resolve by id, and notes and show work
+on any id. The operation that crosses the compaction threshold
 names it in its own reply (`· log compacted (N events folded into the
 snapshot)`), so the stale footer's quieting after the fold reads as
 explained, not as state loss (SPEC_STREAMLINE 2). The unknown-id
@@ -103,12 +110,19 @@ drops done only, and the summary counts review rows (`· N in review`).
   on the task is older than the staleness window (the SIGKILL arm);
   the caller's own claims are never touched. Both append `release`
   events; the note names task and owner, silent when idle.
-- The read contract is lean (SPEC_TODO_LEAN): Read renders the
-  actionable queue; done rows fold into the unconditional summary line
-  `(<label>] N/M done · next: tN · K failed)`, never "(no tasks in
-  <label>'s queue)" on an all-done queue; ReadAll returns the history; a
-  transition echo is the affected row plus the summary. Create keeps the
-  full (filtered) queue: after a merge the whole queue is the news.
+- The read contract is lean (SPEC_TODO_LEAN): Read renders the present
+  — open work first, then related finished (nearest hop), then recent
+  finished, `DefaultFinishedShown` rows total, one dim hint line when
+  anything is hidden; the summary line is unconditional
+  (`[<label>] N open · K of M finished shown · next: tN`), never
+  "(no tasks in <label>'s queue)" on an all-done queue; ReadFinished
+  lists the n most recent finished, newest first, default ten, cap
+  `FinishedListCap`; ReadAll returns the history (the operator's
+  read); a transition echo is the affected row plus the summary.
+  Create keeps the full present: after a merge the whole queue is the
+  news. Retirement never changes semantics: a hidden finished task
+  still satisfies requires, links resolve by id, and notes and show
+  work on any id.
 - One store, every row scoped: `FilePath(home)` is the one `todo.sqlite`,
   and every operation takes a `Project{Key, Label, OutsideRepo}`: the
   queue's identity (the repo's scope, `store/scope`, or the cwd hash

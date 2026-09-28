@@ -435,6 +435,37 @@ func TestTodoNewVerbsParse(t *testing.T) {
 	}
 }
 
+func TestTodoListFinishedCommandParses(t *testing.T) {
+	var got map[string]any
+	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
+		got = map[string]any{}
+		if err := json.Unmarshal(args, &got); err != nil {
+			return "", err
+		}
+		return "listed", nil
+	})
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"todo": capture}}
+
+	if _, err := runCmd(t, "todo", "list finished", env); err != nil {
+		t.Fatalf("todo list finished: %v", err)
+	}
+	if got["action"] != "finished" {
+		t.Fatalf("list finished parse: %v", got)
+	}
+	if _, err := runCmd(t, "todo", "list finished 5", env); err != nil {
+		t.Fatalf("todo list finished 5: %v", err)
+	}
+	if got["action"] != "finished" || got["n"] != float64(5) {
+		t.Fatalf("list finished 5 parse: %v", got)
+	}
+	if _, err := runCmd(t, "todo", "list", env); err == nil || !strings.Contains(err.Error(), "list finished takes an optional n") {
+		t.Fatalf("a bare list must refuse naming the shape, got %v", err)
+	}
+	if _, err := runCmd(t, "todo", "list finished x", env); err == nil || !strings.Contains(err.Error(), "not an integer") {
+		t.Fatalf("a non-integer n must refuse, got %v", err)
+	}
+}
+
 func TestTodoPruneCommand(t *testing.T) {
 	db := openTodo(t)
 	s := core.NewSession()

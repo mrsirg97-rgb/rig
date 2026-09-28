@@ -290,6 +290,22 @@ happens to name (see the binding decision).
   completion gated, blocked skipped by `next`. Minted seq is one sequence
   across scopes (a shared events table), while ids stay `tN` per scope;
   the compact fold and stale footer are per scope.
+- **The default read is the present (1.7.4).** `Read` renders open work
+  first in queue order (pending, active, review), then the finished work
+  related to it — every done or failed task reachable from an open task
+  over requires/blocks, nearest hop first — then recent finished work,
+  newest terminal event first, until `DefaultFinishedShown` (ten)
+  finished rows show in total; related rows count toward the ten, and if
+  the chains alone exceed ten, the ten nearest hops win. One dim hint
+  line follows when anything is hidden:
+  `· 480 more finished · todo list finished 50`. The head becomes
+  `[rig] 6 open · 10 of 490 finished shown · next: t497` (open =
+  pending + active + review; finished = done + failed). `ReadFinished`
+  lists the n most recent finished, newest first, default ten, refusing
+  over `FinishedListCap` (one hundred) naming the range; `ReadAll`
+  stays the operator's full-history read. Retirement is a view, not a
+  state: a hidden finished task still satisfies requires, links resolve
+  by id, and notes and show work on any id.
 - Every reply names the queue it speaks for: the summary leads with
   `[<label>]`, or `[<label> (not a repo)]` for a cwd bucket, and the empty
   reply still says `(no tasks in <label>'s queue)` (SPEC_CORE's naming rule).
