@@ -17,8 +17,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	difftool "github.com/mrsirg97-rgb/rig/tool/diff"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	difftool "github.com/mrsirg97-rgb/rig/v2/tool/diff"
 )
 
 const readCap = 1 << 20

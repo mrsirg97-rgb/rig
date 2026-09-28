@@ -3,8 +3,8 @@ package compact_test
 import (
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	compact "github.com/mrsirg97-rgb/rig/policy/compact"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	compact "github.com/mrsirg97-rgb/rig/v2/policy/compact"
 )
 
 func TestEstimateIsBytesOverFour(t *testing.T) {

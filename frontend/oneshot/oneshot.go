@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const DefaultHeartbeat = 30 * time.Second

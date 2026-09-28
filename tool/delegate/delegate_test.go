@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/store/state"
-	"github.com/mrsirg97-rgb/rig/tool/delegate"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
 )
 
 func modelsJSON(statuses map[string]string) string {

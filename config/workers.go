@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/models"
+	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
 type Workers struct {

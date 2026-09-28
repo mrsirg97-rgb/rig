@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 func RenderSwarmNotice(t Theme, text string) string {

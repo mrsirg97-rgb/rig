@@ -8,9 +8,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/tool/delegate"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
 )
 
 type recordFrontend struct {

@@ -28,7 +28,7 @@ written before the store commit; drift is surfaced in list.
   alone: its key, and the runner command between the cron fields and
   the key.
 - `verbs.go`: the command verbs
-  (list/create/update/pause/resume/remove/runs) over the one
+  (list/create/update/pause/resume/remove/runs/repair) over the one
   `global.sqlite`; the crontab key is `jN` for every job, `name` unique
   store-wide, ids one sequence. `Create` takes the model from the
   caller (there is no package default anymore): an empty model refuses,
@@ -149,6 +149,15 @@ written before the store commit; drift is surfaced in list.
   one crontab line under the same key, a paused job's line rewritten
   commented and the new line landing on resume; `update` never changes
   the state (pause/resume stay their own ops).
+- `repair` is the drift fix, a crontab write only: no event, no state
+  change. With an id it re-derives that job's line (`UpsertLine` with
+  the job's cron and the runner command the caller wired, then
+  `SetPaused` to match the state), a removed or done job refuses
+  (`nothing to repair`), and a job with no drift replies `'jN' is in
+  sync` and installs nothing. With no id it walks every job (ids
+  sorted), one reply line per repaired job with the drift verbatim
+  from `driftOf`, `nothing drifted` when none. A crontab read failure
+  refuses loudly: drift cannot be assessed, nothing is written.
 - `done` is the once-fire's own op: the runner's `RecordRun` appends it
   after the `run` in the same transaction and the fold moves the job to
   `done`; the projection is never written directly (a direct write is

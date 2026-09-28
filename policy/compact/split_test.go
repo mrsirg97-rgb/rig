@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/models"
-	compact "github.com/mrsirg97-rgb/rig/policy/compact"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	compact "github.com/mrsirg97-rgb/rig/v2/policy/compact"
 )
 
 func TestKeepRecentCutsAtPairBoundary(t *testing.T) {

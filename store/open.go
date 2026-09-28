@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/mrsirg97-rgb/rig/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
 )
 
 type DB = sqlx.DB

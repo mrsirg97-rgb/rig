@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
-	tododomain "github.com/mrsirg97-rgb/rig/store/todo/domain"
-	todometa "github.com/mrsirg97-rgb/rig/store/todo/metadata"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	tododdl "github.com/mrsirg97-rgb/rig/v2/store/todo/ddl"
+	tododomain "github.com/mrsirg97-rgb/rig/v2/store/todo/domain"
+	todometa "github.com/mrsirg97-rgb/rig/v2/store/todo/metadata"
 )
 
 const SchemaVersion = 4

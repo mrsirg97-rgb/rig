@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/testenv"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 type scriptSrv struct {

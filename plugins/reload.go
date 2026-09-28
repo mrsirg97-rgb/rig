@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)

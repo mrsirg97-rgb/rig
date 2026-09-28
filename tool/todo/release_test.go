@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
 )
 
 func taskIDText(t *testing.T, reply, text string) string {

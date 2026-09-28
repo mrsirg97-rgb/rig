@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/models"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
 type modelsCmd struct {

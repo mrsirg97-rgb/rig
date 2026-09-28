@@ -12,9 +12,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/config"
-	"github.com/mrsirg97-rgb/rig/plugins"
-	"github.com/mrsirg97-rgb/rig/testenv"
+	"github.com/mrsirg97-rgb/rig/v2/config"
+	"github.com/mrsirg97-rgb/rig/v2/plugins"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 func pluginKernelPy(t *testing.T) string {

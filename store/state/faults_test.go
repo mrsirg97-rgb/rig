@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
 )
 
 func TestSessionFaultsNewestFirst(t *testing.T) {

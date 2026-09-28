@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 var Fields = []string{"path", "root", "cwd", "project", "dir", "directory", "file", "target", "dest", "destination"}

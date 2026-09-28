@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/tool/bash"
-	"github.com/mrsirg97-rgb/rig/tool/file"
-	"github.com/mrsirg97-rgb/rig/tool/view"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
+	"github.com/mrsirg97-rgb/rig/v2/tool/file"
+	"github.com/mrsirg97-rgb/rig/v2/tool/view"
 )
 
 func TestExpandLeadingTildeIsTheHome(t *testing.T) {

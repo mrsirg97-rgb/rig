@@ -9,11 +9,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig"
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/loop"
-	"github.com/mrsirg97-rgb/rig/models"
-	compact "github.com/mrsirg97-rgb/rig/policy/compact"
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/loop"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	compact "github.com/mrsirg97-rgb/rig/v2/policy/compact"
 )
 
 const contextFault = "openai: 400: prompt is too long: context length exceeded"

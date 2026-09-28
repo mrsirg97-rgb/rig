@@ -13,12 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	remdd "github.com/mrsirg97-rgb/rig/store/rem/ddl"
-	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
-	remmeta "github.com/mrsirg97-rgb/rig/store/rem/metadata"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	"github.com/mrsirg97-rgb/rig/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remdd "github.com/mrsirg97-rgb/rig/v2/store/rem/ddl"
+	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
+	remmeta "github.com/mrsirg97-rgb/rig/v2/store/rem/metadata"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
 )
 
 const SchemaVersion = 4

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	"github.com/mrsirg97-rgb/rig/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
 )
 
 const (

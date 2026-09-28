@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/policy/effort"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/policy/effort"
 )
 
 type recProvider struct {

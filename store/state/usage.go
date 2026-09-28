@@ -3,7 +3,7 @@ package state
 import (
 	"context"
 
-	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/v2/store"
 )
 
 type UsageRow struct {

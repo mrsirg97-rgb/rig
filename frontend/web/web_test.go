@@ -14,14 +14,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/config"
-	"github.com/mrsirg97-rgb/rig/models"
-	"github.com/mrsirg97-rgb/rig/store"
-	remstore "github.com/mrsirg97-rgb/rig/store/rem"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	"github.com/mrsirg97-rgb/rig/store/state"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/config"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 const testCWD = "/workspace/alpha"
@@ -904,6 +904,110 @@ func TestSchedulerDoors(t *testing.T) {
 	rec = doReq(t, h, "GET", "/api/scheduler/runs?id=../x", nil, bearer(tok))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("runs of a malformed id: got %d, want 400", rec.Code)
+	}
+}
+
+func TestSchedulerRepairDoor(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	q := "?cwd=" + testCWD
+	hdr := func() http.Header {
+		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+		x.Set("Content-Type", "application/json")
+		return x
+	}
+	say := func(rec *httptest.ResponseRecorder) string {
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if r, ok := body["reply"].(string); ok {
+			return r
+		}
+		if e, ok := body["error"].(string); ok {
+			return e
+		}
+		return rec.Body.String()
+	}
+	list := func() string {
+		rec := doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("list: got %d", rec.Code)
+		}
+		var body map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body["text"]
+	}
+
+	rec := doReq(t, h, "GET", "/api/scheduler/repair"+q, nil, bearer(tok))
+	if rec.Code != http.StatusMethodNotAllowed || !strings.Contains(rec.Header().Get("Allow"), "POST") {
+		t.Fatalf("GET on the repair door: got %d allow %q, want 405 naming POST", rec.Code, rec.Header().Get("Allow"))
+	}
+	foreign := http.Header{"Origin": {"http://evil.example"}, "Authorization": {"Bearer " + tok}}
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{"id":"j1"}`), foreign)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("foreign origin: got %d, want 403", rec.Code)
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(strings.Repeat("x", maxWriteBytes+1)), hdr())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("over-cap repair: got %d, want 400", rec.Code)
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{"id":"../x"}`), hdr())
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "jN") {
+		t.Fatalf("repair of a malformed id: got %d %q, want 400 naming the tool's shape", rec.Code, say(rec))
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{"id":"j99"}`), hdr())
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "no job 'j99'") {
+		t.Fatalf("repair of an unknown id: got %d %q, want 400 with the store's refusal", rec.Code, say(rec))
+	}
+
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{}`), hdr())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("repair all: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(say(rec), "'j1' repaired: no crontab line") {
+		t.Fatalf("repair all reply %q, want the seeded job's drift named", say(rec))
+	}
+	if strings.Contains(list(), "drift:") {
+		t.Fatalf("list after the walk: %q, want clean", list())
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{}`), hdr())
+	if rec.Code != http.StatusOK || say(rec) != "nothing drifted" {
+		t.Fatalf("second walk: got %d %q, want nothing drifted", rec.Code, say(rec))
+	}
+
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{"id":"j1"}`), hdr())
+	if rec.Code != http.StatusOK || say(rec) != "'j1' is in sync" {
+		t.Fatalf("in-sync id repair: got %d %q", rec.Code, say(rec))
+	}
+
+	rec = doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(`{"name":"doorrepair","prompt":"p","cron":"0 6 * * *"}`), hdr())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create: got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	jobID := regexp.MustCompile(`j\d+`).FindString(say(rec))
+	if jobID == "" {
+		t.Fatalf("create: no id in %q", say(rec))
+	}
+	ct := srv.crontab.(*fakeCrontab)
+	ct.text = strings.Replace(ct.text, "0 6 * * * rig run-job "+jobID, "59 23 * * * rig run-job "+jobID, 1)
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{"id":"`+jobID+`"}`), hdr())
+	if rec.Code != http.StatusOK || !strings.Contains(say(rec), "'"+jobID+"' repaired: cron differs (crontab: 59 23 * * *)") {
+		t.Fatalf("drifted id repair: got %d %q, want the drift verbatim", rec.Code, say(rec))
+	}
+	if !strings.Contains(ct.text, "0 6 * * * rig run-job "+jobID) {
+		t.Fatalf("the line must be re-derived: %q", ct.text)
+	}
+
+	rec = doReq(t, h, "POST", "/api/scheduler/remove"+q, strings.NewReader(`{"id":"`+jobID+`"}`), hdr())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("remove: got %d", rec.Code)
+	}
+	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{"id":"`+jobID+`"}`), hdr())
+	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "'"+jobID+"' is removed; nothing to repair") {
+		t.Fatalf("repair of a removed job: got %d %q, want the named refusal", rec.Code, say(rec))
 	}
 }
 

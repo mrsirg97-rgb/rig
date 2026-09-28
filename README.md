@@ -56,7 +56,7 @@ chmod +x rig
 **go install** (needs Go ≥ 1.26.6; the core is stdlib-only):
 
 ```sh
-go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
+go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest
 ```
 
 `rig -update` fetches, verifies, and atomically installs the latest release. The running process keeps the old binary until restart.
@@ -185,7 +185,7 @@ rig serve
 - **chat**: the live session, streamed; approvals answered in place; stop while a turn runs
 - **sessions**: list them per workspace, open a transcript, resume one into the chat
 - **todo**: the queue, with create (one task per line), start, complete, and retry; the rows show the requires/blocks links and claims
-- **scheduler**: the jobs, with create, pause, resume, remove, an in-place update form that opens with the job's current fields, and each job's run audit trail
+- **scheduler**: the jobs, with create, pause, resume, remove, repair (shown on a row that carries a drift line), an in-place update form that opens with the job's current fields, and each job's run audit trail
 - **swarm**: the drain workers, live, with start and stop
 - **models**: the table, switch, and the effort dial
 - **plugins**: approved, pending, disabled; the forge reads and saves a plugin's source into the pending zone

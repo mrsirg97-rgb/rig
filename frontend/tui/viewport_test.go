@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/command"
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 func sizeFixture(w, h int) func() (int, int, bool) {

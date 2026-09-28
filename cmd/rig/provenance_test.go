@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/plugins"
+	"github.com/mrsirg97-rgb/rig/v2/plugins"
 )
 
 func TestListPluginFilesIgnoresThePendingZone(t *testing.T) {

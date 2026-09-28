@@ -1,13 +1,13 @@
 package main
 
 import (
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/middleware/cutoff"
-	"github.com/mrsirg97-rgb/rig/middleware/guard"
-	"github.com/mrsirg97-rgb/rig/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/middleware/perm"
-	"github.com/mrsirg97-rgb/rig/middleware/toolset"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
 )
 
 // canonicalMiddleware is the one written order (see middleware/PACKAGE.md:

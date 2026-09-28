@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mrsirg97-rgb/rig/frontend/web"
+	"github.com/mrsirg97-rgb/rig/v2/frontend/web"
 )
 
 func parseServe(args []string) (string, int) {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
+	scheddomain "github.com/mrsirg97-rgb/rig/v2/store/scheduler/domain"
 )
 
 var jobKeyRe = regexp.MustCompile(`^(j\d+)$`)
@@ -217,6 +217,93 @@ func Resume(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, hom
 
 func Remove(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, home string) (string, error) {
 	return stateAction(ctx, db, ct, id, sessionCwd, session, "remove", home)
+}
+
+func findLine(text, id, home string) *TaggedLine {
+	for _, l := range Scan(text, home) {
+		if l.Key == id {
+			cp := l
+			return &cp
+		}
+	}
+	return nil
+}
+
+func Repair(ctx context.Context, db DB, ct Crontab, id, runnerCmd, home string) (string, error) {
+	_, rtx, err := db.TxReadOnly(ctx)
+	if err != nil {
+		return "", err
+	}
+	f, err := eventsOf(rtx)
+	if err != nil {
+		rtx.Rollback()
+		return "", err
+	}
+	rtx.Rollback()
+
+	text, err := ct.List()
+	if err != nil {
+		return "", err
+	}
+
+	if id != "" {
+		job, found := f.jobs[id]
+		if !found {
+			return "", schedErr("no job '%s'", id)
+		}
+		if job.State == "removed" {
+			return "", schedErr("'%s' is removed; nothing to repair", id)
+		}
+		if job.State == "done" {
+			return "", schedErr("'%s' is done; nothing to repair", id)
+		}
+		d := driftOf(job, findLine(text, id, home))
+		if d == "" {
+			return fmt.Sprintf("'%s' is in sync", id), nil
+		}
+		next, _ := UpsertLine(text, id, job.Cron, runnerCmd, home)
+		if job.State == "paused" {
+			next, _ = SetPaused(next, id, true, home)
+		}
+		if next != text {
+			if err := ct.Install(next); err != nil {
+				return "", err
+			}
+		}
+		return fmt.Sprintf("'%s' repaired: %s", id, d), nil
+	}
+
+	var ids []string
+	for key := range f.jobs {
+		ids = append(ids, key)
+	}
+	sort.Strings(ids)
+	next := text
+	var replies []string
+	for _, key := range ids {
+		j := f.jobs[key]
+		if j.State == "removed" || j.State == "done" {
+			continue
+		}
+		d := driftOf(j, findLine(next, key, home))
+		if d == "" {
+			continue
+		}
+		next, _ = UpsertLine(next, key, j.Cron, runnerCmd, home)
+		if j.State == "paused" {
+			next, _ = SetPaused(next, key, true, home)
+		}
+		replies = append(replies, fmt.Sprintf("'%s' repaired: %s", key, d))
+	}
+	if len(replies) == 0 {
+		return "nothing drifted", nil
+	}
+	if next != text {
+		if err := ct.Install(next); err != nil {
+			return "", err
+		}
+	}
+	return strings.Join(replies, "\n"), nil
 }
 
 func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, action, home string) (string, error) {

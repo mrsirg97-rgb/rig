@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 )
 
 func gateExec(mode string, answer bool, asked *[]string) (core.ToolExec, *int) {

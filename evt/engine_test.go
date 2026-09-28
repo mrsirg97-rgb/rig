@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/evt"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
 func waitFor(t *testing.T, cond func() bool) {

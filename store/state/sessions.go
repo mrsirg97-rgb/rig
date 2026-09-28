@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/v2/store"
 )
 
 var ErrNoSuchSession = errors.New("no such session")

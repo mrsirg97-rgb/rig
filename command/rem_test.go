@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/command"
+	"github.com/mrsirg97-rgb/rig/v2/command"
 )
 
 func recentISO() string {

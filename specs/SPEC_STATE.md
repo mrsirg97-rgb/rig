@@ -81,8 +81,8 @@ go run main.go -config=$RIG/store/todo/gen.json -source=$RIG/store/todo/source.j
 ```
 
 `gen.json` `"name"` is the absolute output root (`$RIG/store/todo`),
-`"module"` is `github.com/mrsirg97-rgb/rig/store/todo`, `"runtime"` is
-`github.com/mrsirg97-rgb/rig/store` (see decisions); `source.json`
+`"module"` is `github.com/mrsirg97-rgb/rig/v2/store/todo`, `"runtime"` is
+`github.com/mrsirg97-rgb/rig/v2/store` (see decisions); `source.json`
 `"sourceDirectory"` is `$RIG/store/todo`, `"name"` is `metadata`. Both
 external paths are verified to work with the current engine (2026-08-15):
 generated files land under the store, generated imports resolve to rig's
@@ -537,6 +537,17 @@ post-merge corrections)
   stays paused (its line is rewritten commented) and the new line lands on
   resume. `pause` and `resume` stay their own ops; `update` never changes
   the state.
+- `repair` is the drift fix, a crontab write only: no event, no state
+  change (the state is what it is being repaired toward). With an id it
+  re-derives that job's line — `UpsertLine` with the job's cron and the
+  wired runner command, then `SetPaused` to match the state — and a
+  removed or done job refuses by name (`'jN' is removed; nothing to
+  repair`, `'jN' is done; nothing to repair`); a job with no drift
+  replies `'jN' is in sync` and installs nothing. With no id it walks
+  every job and repairs each drifting one, one reply line per job
+  repaired with the drift verbatim from `driftOf`, and `nothing drifted`
+  when none. A crontab read failure refuses loudly: drift cannot be
+  assessed, nothing is written.
 - The `defaultModel` fallback constant is cut (SPEC_CONFIG 12, with
   the settings' `defaultJobModel` key): `Create` takes the model from
   its caller, never a literal; the tool passes the fleet's model
@@ -632,7 +643,7 @@ review status are rig's own, the swarm surface — pane has no shared board;
 `next` is not a verb: its semantics ride the render's next pointer,
 blocked-skipping),
 `rem {learn|recall|reflect|prune}`, `scheduler {create|
-update|list|pause|resume|remove|runs}`, and `sessions {list|summary}` (rig's own,
+update|list|pause|resume|remove|runs|repair}`, and `sessions {list|summary}` (rig's own,
 not pane's: an introspection of the session store that migrates an older
 store on open, absent from the root's `mutatingNatives` and from the
 concurrent read set; it opens a store, like `todo`/`rem`/`scheduler`, so
@@ -652,7 +663,7 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   and the camera writes `{{ .Runtime }}/lazy` and `{{ .Runtime }}/sqlx`.
   rig copies `lift/lazy` (two files) and `lift/sqlx/sqlx.go` into
   `store/lazy` and `store/sqlx` once, unchanged, and every store's
-  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/rig/store"`.
+  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/rig/v2/store"`.
   rig stays self-contained: no lift require, and lift has no git remote
   to require it from anyway. The copied runtime is ~400 lines owned in two
   places; a change to it in lift is a named re-copy here, not a drift.

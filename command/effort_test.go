@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/command"
+	"github.com/mrsirg97-rgb/rig/v2/command"
 )
 
 func TestEffortBareShowsActiveAndAvailable(t *testing.T) {

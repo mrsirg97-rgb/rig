@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig"
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/loop"
-	"github.com/mrsirg97-rgb/rig/middleware/guard"
-	"github.com/mrsirg97-rgb/rig/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/loop"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
 )
 
 func reasonEv(s string) core.Event { return core.ReasoningDelta{Text: s} }

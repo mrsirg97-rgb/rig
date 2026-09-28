@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/frontend/tui"
-	"github.com/mrsirg97-rgb/rig/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 )
 
 const viewSHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"

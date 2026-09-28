@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig"
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/loop"
-	"github.com/mrsirg97-rgb/rig/middleware/cutoff"
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/loop"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
 )
 
 type scriptedTurn struct {

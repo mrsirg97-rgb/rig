@@ -9,13 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/store"
-	remdd "github.com/mrsirg97-rgb/rig/store/rem/ddl"
-	remmeta "github.com/mrsirg97-rgb/rig/store/rem/metadata"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	remapi "github.com/mrsirg97-rgb/rig/tool/rem"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remdd "github.com/mrsirg97-rgb/rig/v2/store/rem/ddl"
+	remmeta "github.com/mrsirg97-rgb/rig/v2/store/rem/metadata"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
 )
 
 func newDB(t *testing.T) store.DB {

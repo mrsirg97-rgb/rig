@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/testenv"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 func TestTestsNeverSeeTheOperatorHome(t *testing.T) {

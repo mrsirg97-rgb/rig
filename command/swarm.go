@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const swarmUsage = "swarm [<n> [role=worker|reviewer] [model=<id>] [budget=<dollars>]] | swarm stop"

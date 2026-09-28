@@ -1,6 +1,6 @@
 # rig as a Go module
 
-rig is a module: `github.com/mrsirg97-rgb/rig`. The binary at
+rig is a module: `github.com/mrsirg97-rgb/rig/v2`. The binary at
 `cmd/rig` is one wiring of it. Import the module and the loop, the
 seams, and the stores are yours.
 
@@ -75,11 +75,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig"
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/loop"
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/loop"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 type frontend struct {

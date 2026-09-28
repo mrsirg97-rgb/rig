@@ -20,8 +20,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/tool/execwrap"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
 )
 
 //go:embed kernel_host.py

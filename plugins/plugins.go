@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	pythontool "github.com/mrsirg97-rgb/rig/v2/tool/python"
 )
 
 const defaultTimeoutMs = 120000

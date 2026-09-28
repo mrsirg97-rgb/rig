@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/tool/web"
+	"github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
 func ptr[T any](v T) *T { return &v }

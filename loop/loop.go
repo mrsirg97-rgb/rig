@@ -8,9 +8,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig"
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/evt"
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
 const (

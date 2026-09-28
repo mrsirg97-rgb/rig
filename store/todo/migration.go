@@ -13,9 +13,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	tododdl "github.com/mrsirg97-rgb/rig/store/todo/ddl"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	tododdl "github.com/mrsirg97-rgb/rig/v2/store/todo/ddl"
 )
 
 const legacySchemaVersion = 1

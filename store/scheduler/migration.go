@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/v2/store"
 )
 
 const legacySchemaVersion = 1

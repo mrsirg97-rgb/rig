@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	pythontool "github.com/mrsirg97-rgb/rig/tool/python"
+	pythontool "github.com/mrsirg97-rgb/rig/v2/tool/python"
 )
 
 type fakeKernel struct {

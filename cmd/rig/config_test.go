@@ -17,12 +17,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/config"
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/perm"
-	"github.com/mrsirg97-rgb/rig/models"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	schedapi "github.com/mrsirg97-rgb/rig/tool/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/config"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
 )
 
 var goldenUpdateFlag = flag.Bool("update", false, "regenerate the golden_020 fixtures in place")

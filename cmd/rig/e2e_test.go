@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
 func writeFakeCrontab(t *testing.T, binDir, spool string) {

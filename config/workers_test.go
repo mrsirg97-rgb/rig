@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/config"
+	"github.com/mrsirg97-rgb/rig/v2/config"
 )
 
 var noWorkerAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions"}

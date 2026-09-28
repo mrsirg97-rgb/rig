@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 type rounds struct {

@@ -3,7 +3,7 @@ package command_test
 import (
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/command"
+	"github.com/mrsirg97-rgb/rig/v2/command"
 )
 
 func TestParseCommandShape(t *testing.T) {

@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/models"
-	"github.com/mrsirg97-rgb/rig/store"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
-	"github.com/mrsirg97-rgb/rig/swarm"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 
 var proj = todostore.Project{Key: "swarm", Label: "swarm"}

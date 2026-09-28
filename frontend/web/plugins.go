@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/plugins"
+	"github.com/mrsirg97-rgb/rig/v2/plugins"
 )
 
 type Plugin struct {

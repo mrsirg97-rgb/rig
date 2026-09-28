@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/evt"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
 func TestMonotonicNeverRepeats(t *testing.T) {

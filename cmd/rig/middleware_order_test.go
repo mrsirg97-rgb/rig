@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/middleware/toolset"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
 )
 
 func chainFor(t *testing.T, r *root, inner core.ToolExec) core.ToolExec {

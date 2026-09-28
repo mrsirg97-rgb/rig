@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 )
 
 const goodSHA = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

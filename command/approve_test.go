@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/command"
+	"github.com/mrsirg97-rgb/rig/v2/command"
 )
 
 func TestApproveBareShows(t *testing.T) {

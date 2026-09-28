@@ -3,7 +3,7 @@ package todo
 import (
 	"context"
 
-	"github.com/mrsirg97-rgb/rig/store"
+	"github.com/mrsirg97-rgb/rig/v2/store"
 )
 
 // TaskInfo is the structured read the swarm's brief needs: the task's own

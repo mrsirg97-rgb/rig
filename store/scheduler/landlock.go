@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/mrsirg97-rgb/rig/tool/execwrap"
+	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
 )
 
 const LandlockEnv = "RIG_LANDLOCK"

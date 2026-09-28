@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store/state"
-	"github.com/mrsirg97-rgb/rig/tool/file"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
 
 type probeFe struct{}

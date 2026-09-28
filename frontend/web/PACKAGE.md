@@ -14,7 +14,7 @@ the same `settings.json` model, workers, and commands. The page renders
 the loop's own events in the TUI's grammar over a server-sent stream;
 the stores' views (sessions, todo, scheduler, swarm, plugins, models)
 ride the same JSON routes as before, and the operator's writes (the
-todo create and two hands, the scheduler create and four doors, the
+todo create and two hands, the scheduler create and five doors, the
 plugin create and the forge's doors) are attributed to `dashboard` and
 ride the existing verbs. It is a leaf package wired once at the root,
 beside `cli`/`tui`; the loop never names it. No framework, no build
@@ -94,20 +94,23 @@ the Apple meta tags, safe-area insets).
   `todo.Complete` attributed to `dashboard`, the id checked to the
   tool's shape, the reply verbatim (a model-claimed task refuses in the
   store's voice). Same walls as every write.
-- **The scheduler's four doors** (`schedulerverbs.go`, SPEC_SERVE 16):
-  `POST /api/scheduler/pause`, `/resume`, `/remove` (`{id}`) and
+- **The scheduler's five doors** (`schedulerverbs.go`, SPEC_SERVE 16):
+  `POST /api/scheduler/pause`, `/resume`, `/remove` (`{id}`),
   `POST /api/scheduler/update` (`{id, …}`, the same partial fields the
-  tool carries), plus the read `GET /api/scheduler/runs?id=jN&n=` (the
-  audit trail). Each door calls the store verb the `scheduler` tool
-  calls (`scheduler.Pause`/`Resume`/`Remove`/`Update`/`Runs`) with the
-  selected cwd as the session cwd, the attribution `dashboard`, and the
-  runner command the root wired (for `update`); the id is checked to
-  the tool's shape (`jN`, a bad id a 400) and the store's refusals ride
-  through by name (an unknown id, a removed one, an update with no
-  change). The POST doors ride the write's walls (Origin, the body
-  cap); `runs` rides the read's (the read timeout, `n` capped at 1-100,
-  an unknown id the named 404). The reply is the store's voice,
-  verbatim.
+  tool carries) and `POST /api/scheduler/repair` (`{id?}`), plus the
+  read `GET /api/scheduler/runs?id=jN&n=` (the audit trail). Each door
+  calls the store verb the `scheduler` tool calls
+  (`scheduler.Pause`/`Resume`/`Remove`/`Update`/`Repair`/`Runs`) with
+  the selected cwd as the session cwd, the attribution `dashboard`, and
+  the runner command the root wired (for `update` and `repair`); the id
+  is checked to the tool's shape (`jN`, a bad id a 400; repair's id is
+  optional) and the store's refusals ride through by name (an unknown
+  id, a removed one, an update with no change, a repair's `nothing to
+  repair`). Repair is a crontab write only — no event, no state change —
+  and its reply names the drift it fixed verbatim. The POST doors ride
+  the write's walls (Origin, the body cap); `runs` rides the read's
+  (the read timeout, `n` capped at 1-100, an unknown id the named 404).
+  The reply is the store's voice, verbatim.
 - **The forge** (`forge.go`, SPEC_SERVE 12): `GET /api/plugins/source`
   (a plugin's file, by name and zone), `POST /api/plugins/save` (the
   full source into the pending zone, create or update; the contract:
@@ -148,8 +151,9 @@ the Apple meta tags, safe-area insets).
   indents, Enter keeps the indent), the phone rule (every loaded row a
   disable control, every disabled row an enable one, the list re-read
   after the move; 12c), the scheduler view's row hand (16: every job
-  row carries its controls; pause or resume by state, remove, and
-  runs; beside an update form that opens in place with the row's
+  row carries its controls; pause or resume by state, remove, runs,
+  and — only when the row carries a drift line — repair; beside an
+  update form that opens in place with the row's
   current fields (cadence, prompt, model, cwd, busy) and submits only
   what changed; remove asks once, in-page; the list re-reads after a
   move, no page reload; below 720px the row's controls stay a

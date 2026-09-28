@@ -14,12 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/models"
-	"github.com/mrsirg97-rgb/rig/pathguard"
-	"github.com/mrsirg97-rgb/rig/store"
-	scheddomain "github.com/mrsirg97-rgb/rig/store/scheduler/domain"
-	"github.com/mrsirg97-rgb/rig/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/pathguard"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	scheddomain "github.com/mrsirg97-rgb/rig/v2/store/scheduler/domain"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
 )
 
 type Fetch func(url string) (json.RawMessage, error)

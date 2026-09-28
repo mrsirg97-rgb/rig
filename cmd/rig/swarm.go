@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/mrsirg97-rgb/rig/command"
-	"github.com/mrsirg97-rgb/rig/swarm"
+	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 
 type swarmAdapter struct{ c *swarm.Controller }
