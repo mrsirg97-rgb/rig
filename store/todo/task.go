@@ -6,10 +6,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store"
 )
 
-// TaskInfo is the structured read the swarm's brief needs: the task's own
-// text and its notes, each with the session that wrote it, in order. The
-// rendered Read reply is the model's surface, not a parser contract, so the
-// brief does not parse words.
 type TaskInfo struct {
 	ID    string
 	Text  string
@@ -21,8 +17,6 @@ type TaskNote struct {
 	Session string
 }
 
-// Task returns one task's brief: its text and notes, read-only. The
-// unknown id is refused in the store's voice.
 func Task(ctx context.Context, db store.DB, p Project, id, session string) (TaskInfo, error) {
 	if session == "" {
 		session = anon

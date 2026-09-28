@@ -39,7 +39,10 @@ task whatever the hold — notes are how agents talk about shared work —
 and `read` shows the count (`· N notes`) while the `notes` action lists
 them in order with their session and time, headed by the task's link
 lines; `read` with `id` renders one task, summary-only, and points at
-`notes`. The review gate keys on who completes: `Complete` takes a worker
+`notes`; `notes` reads nothing and appends nothing, and a task without
+notes replies `no notes on tN`. The read's `waits for k` suffix is a
+count of the unfinished tasks that block a target; the links name the
+edges. The review gate keys on who completes: `Complete` takes a worker
 flag — `worker=false` (an interactive session) lands the task done in
 one call, writing the complete/accept pair so the log stays uniform and
 replay is unchanged; `worker=true` (`rig -p`: delegate, swarm) submits
@@ -66,13 +69,26 @@ drops done only, and the summary counts review rows (`· N in review`).
 - `binding.go`: which queue a session works in. `ProjectOf(dir)` mints a
   `Project` from a directory (abs first: one place must not have two
   bucket keys), `Bind`/`BindingOf` record and read a session's binding in
-  `session_project`, `RealSession` says whether a session can hold one.
+  `session_project`, `RealSession` says whether a session can hold one
+  (the anonymous attribution a threadless call gets is shared by every
+  anonymous caller, so a binding recorded under it would leak one
+  session's project onto another's). `Bind` on an unattributable session
+  is inert, not an error: an unthreaded verb still works, it just cannot
+  carry a binding forward. Inside a repo the queue's label is the common
+  dir's own base, so a session in a subdirectory or a second worktree
+  names the project it is in, not the folder it started in; a bare repo's
+  common dir is the repo root itself, so the name is the root's own base.
   The binding is mutable state beside the log: the log decides what a
   queue holds, the binding only which queue a call touches.
 - `path.go`: `FilePath(home)`, the store's file: `<home>/todo/todo.sqlite`.
 - `migration.go`: the one-time 1→2 migration: folds the legacy
   per-cwd stores into `todo.sqlite` (scope = the file's hash) and rem's
-  lazy re-scope of the launch cwd's hash to the repo scope.
+  lazy re-scope of the launch cwd's hash to the repo scope. Old payloads
+  name the wait edge `dependsOn`: it folds as `requires`. `EdgeMigration`
+  rebuilds the disposable `task_deps` projection with the edge kind
+  column — the projection is rebuilt from the log inside every
+  transaction and never trusted, so dropping it is safe; the log carries
+  the edges.
 - `metadata/metadata.go`: hand-written metadata (plus `extra.sql`, which
   now also carries the `session_project` table).
 
@@ -98,8 +114,9 @@ drops done only, and the summary counts review rows (`· N in review`).
   reject auto-claim an unowned review task, so the parent needs no claim
   step; a foreign holder still refuses, and `claim status=review` stays
   for reviewers who want to hold before deciding. Notes are free (no
-  hold needed), bounded at MaxNoteLen, and replayable: they ride the
-  event log and the compact snapshot. Historical completes (pre-1.3.9
+  hold needed), bounded at MaxNoteLen (a note rides the event log and
+  the compact snapshot, so an unbounded note is an unbounded log row),
+  and replayable: they ride the event log and the compact snapshot. Historical completes (pre-1.3.9
   logs) replay as done through ReviewMigration's accept pairing, a
   one-time 2→3 migration that is a no-op on later opens.
 - Release returns a claimed task to pending (the dead-claim door): it
@@ -133,7 +150,14 @@ drops done only, and the summary counts review rows (`· N in review`).
   means; the caller resolves it (the tool holds the order, the
   `session_project` table holds a session's answer). Ids stay `tN` per
   scope; minted event seq is one sequence across scopes; compact folds
-  and stale footers are per scope.
+  and stale footers are per scope. The compact snapshot carries the
+  events the counters were rebuilt from, so it carries the ids: ids are
+  minted from the high-water mark and the create events that advanced it
+  are about to be deleted; forget that and the next mint reissues an id
+  some session still holds. A snapshot written before the counters
+  existed reports neither and 0 means "keep minting from what is here":
+  the mint skips the ids the snapshot still holds, which is the
+  pre-counter behaviour.
 - Every summary names its queue (`[rig] 2/5 done · next: t3`, or
   `[ng (not a repo)]` for a bucket), and the empty reply says so too: a
   reply that could be read as two different queues carries the word that
