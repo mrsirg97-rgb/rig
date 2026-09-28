@@ -24,10 +24,6 @@ type minisignTestKey struct {
 	sign    func([]byte) []byte
 }
 
-// newMinisignKey builds the wire format minisign 0.11 actually produces:
-// the public key is 2-byte "Ed" + 8-byte key id + 32-byte ed25519 key, and
-// the signature is 2-byte "ED" + 8-byte key id + 64-byte ed25519 signature
-// over the BLAKE2b-512 digest of the file (minisign's default hashed mode).
 func newMinisignKey(t *testing.T) minisignTestKey {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -391,13 +387,6 @@ func mustDecodePub(t *testing.T, pubText string) []byte {
 }
 
 func TestVerifyMinisignRealFixtures(t *testing.T) {
-	// Golden fixtures produced by minisign 0.11 (the apt package, the
-	// release workflow's tool): the pubkey line, a default hashed ("ED")
-	// signature, and a legacy ("Ed", raw) signature over the same file.
-	// The fixture pins the real wire format: 2-byte algorithm tag +
-	// 8-byte key id + 32-byte ed25519 key (42), and 2-byte tag + 8-byte
-	// key id + 64-byte signature (74), with "ED" signing the BLAKE2b-512
-	// digest.
 	const (
 		asset = "new binary bytes"
 		pub   = "untrusted comment: minisign public key C4DF2D99EE1004A3\n" +
@@ -423,8 +412,6 @@ func TestVerifyMinisignRealFixtures(t *testing.T) {
 }
 
 func TestVerifyMinisignRefusesTheInventedShortFormat(t *testing.T) {
-	// The pre-0.24.3 format (40-byte key, 72-byte signature, raw data)
-	// was invented: real minisign keys are 42 bytes and signatures 74.
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)

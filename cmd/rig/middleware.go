@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
@@ -10,14 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
 )
 
-// canonicalMiddleware is the one written order (see middleware/PACKAGE.md:
-// loop.Run composes exec = mw.Wrap(exec) over this slice, so the
-// last-listed link runs first). The order is load-bearing: paths expands
-// "~" before any gate validates an argument; cutoff refuses a truncated
-// call before approval spends a prompt on it; the permission gates deny
-// before approval asks and before the retry guard counts a failure; and
-// Cap truncates every reply, refusals included. Reorder only against the
-// chain tests in cmd/rig.
 func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	resultCap := r.resultCap
 	if resultCap == 0 {
@@ -34,4 +28,17 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		guard.Cap(resultCap),
 		paths.Middleware(),
 	}
+}
+
+func guidelinesOf(ms []core.ToolMiddleware) string {
+	var b strings.Builder
+	for _, mw := range ms {
+		if gc, ok := mw.(core.GuidelineContributor); ok {
+			if b.Len() > 0 {
+				b.WriteString("\n\n")
+			}
+			b.WriteString(gc.Guidelines())
+		}
+	}
+	return b.String()
 }
