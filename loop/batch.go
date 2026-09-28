@@ -37,11 +37,6 @@ func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, co
 	return b
 }
 
-// dispatch launches call i if it has not started and returns the
-// exclusive end of the wave it launched: i+1 for a serial call, the end
-// of the consecutive concurrent run for a wave. The caller owns the
-// ToolStart notification for every call in [i, end), so a wave's starts
-// all land on the frontend before any of the wave's results can.
 func (b *batch) dispatch(i int) int {
 	if i < b.dispatched {
 		return b.dispatched
