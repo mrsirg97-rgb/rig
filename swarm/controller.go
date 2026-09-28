@@ -143,12 +143,8 @@ func (c *Controller) addSpent(v float64) {
 }
 
 func (c *Controller) atBudget() bool {
-	if c.budget <= 0 {
-		return false
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.spent >= c.budget
+	spent, budget := c.budgetState()
+	return budget > 0 && spent >= budget
 }
 
 func (c *Controller) budgetState() (float64, float64) {
