@@ -182,7 +182,6 @@ func TestPyLiteralRefusesRawLineBreaks(t *testing.T) {
 			pyLiteral(in)
 		}()
 	}
-	// the marshalled form of the same text is escaped and passes the guard
 	raw, err := json.Marshal("x\ny\rz")
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)

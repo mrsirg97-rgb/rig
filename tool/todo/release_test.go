@@ -40,8 +40,6 @@ func TestReleaseRefusesAFreshForeignClaimThroughTheTool(t *testing.T) {
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	// A second session (different context session id) cannot release a
-	// live claim: the door stays closed until the claim is stale.
 	s := core.NewSession()
 	s.ID = "another-session"
 	sctx := core.WithSession(ctx, s)

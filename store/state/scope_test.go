@@ -294,8 +294,6 @@ func TestRecorderRelandAttributesErrorsToTheRightTurn(t *testing.T) {
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
 	}
-	// Two turns reusing the wire id: the first fails, the second succeeds.
-	// A third turn fails again. The tail keeps the second and third turns.
 	seqs := []int64{}
 	for i := 0; i < 3; i++ {
 		seq, e := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil)

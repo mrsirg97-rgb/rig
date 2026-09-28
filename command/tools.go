@@ -173,8 +173,6 @@ func todoArgs(args string) (json.RawMessage, error) {
 		}
 		return json.Marshal(map[string]any{"action": "move", "id": fields[1], "pos": pos})
 	case fields[0] == "project":
-		// A bare "project" reports where the session's queue is; one with
-		// a path binds the session to it and shows that queue.
 		m := map[string]any{"action": "bind"}
 		if len(fields) == 2 {
 			m["project"] = fields[1]

@@ -216,9 +216,6 @@ func (v *vt) feed(b []byte) {
 				return
 			}
 			if r == '\t' {
-				// a tab advances to the next eight-column stop and writes
-				// nothing: the cells it skips keep whatever the previous
-				// frame left in them
 				v.c += 8 - v.c%8
 				if v.c > v.width {
 					v.c = v.width

@@ -22,7 +22,6 @@ func TestReleaseReturnsAStaleForeignClaimToPendingAndNamesTheOwner(t *testing.T)
 	if _, err := todostore.Start(ctx, db, p, id, sessA, false); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	// The claim is old: the owner is long gone.
 	old := time.Now().Add(-todostore.StaleClaimAfter - time.Hour).UTC().Format(time.RFC3339)
 	rawExec(t, db, "UPDATE events SET ts = ? WHERE op = 'start' AND args = ?", old, `{"id":"`+id+`"}`)
 	released, err := todostore.Release(ctx, db, p, id, sessB)
@@ -92,7 +91,6 @@ func TestReleaseRefusesOwnUnclaimedFreshAndFinished(t *testing.T) {
 	} else if !strings.Contains(err.Error(), sessA) {
 		t.Errorf("fresh-claim refusal must name the owner: %v", err)
 	}
-	// create(1) + start own(2) + auto-start+complete+accept done(3,4,5) + start fresh(6).
 	if got := eventCount(t, db); got != 6 {
 		t.Errorf("refused releases must append nothing: %d events", got)
 	}
@@ -111,21 +109,17 @@ func TestReapReleasesEndedAndStaleClaims(t *testing.T) {
 	fresh := taskIDText(t, reply, "fresh")
 	mine := taskIDText(t, reply, "mine")
 
-	// dead: claimed by sessA, whose session row has ended.
 	if _, err := todostore.Start(ctx, db, p, dead, sessA, false); err != nil {
 		t.Fatalf("start dead: %v", err)
 	}
-	// stale: claimed by sessB a long time ago (the claim event is old).
 	if _, err := todostore.Start(ctx, db, p, stale, sessB, false); err != nil {
 		t.Fatalf("start stale: %v", err)
 	}
 	old := time.Now().Add(-todostore.StaleClaimAfter - time.Hour).UTC().Format(time.RFC3339)
 	rawExec(t, db, "UPDATE events SET ts = ? WHERE op = 'start' AND args = ? AND session = ?", old, `{"id":"`+stale+`"}`, sessB)
-	// fresh: claimed by sessC recently.
 	if _, err := todostore.Start(ctx, db, p, fresh, sessC, false); err != nil {
 		t.Fatalf("start fresh: %v", err)
 	}
-	// mine: claimed by the reaping session itself.
 	if _, err := todostore.Start(ctx, db, p, mine, sessC, false); err != nil {
 		t.Fatalf("start mine: %v", err)
 	}
@@ -203,8 +197,6 @@ func TestStaleClaimSurvivesCompaction(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, id, sessA, false); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	// The claim is old; then a compaction folds the log and must carry
-	// the claim's age with it (the snapshot carries updatedTs).
 	old := time.Now().Add(-todostore.StaleClaimAfter - time.Hour).UTC().Format(time.RFC3339)
 	rawExec(t, db, "UPDATE events SET ts = ? WHERE op = 'start' AND args = ?", old, `{"id":"`+id+`"}`)
 	age(t, db, 1010)

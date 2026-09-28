@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// phoneResize models the terminal a phone shows: on shrink the top rows
-// scroll into history so the cursor stays on screen; on grow those rows
-// come back into view above, the cursor keeping its content row.
 func phoneResize(v *vt, h int) {
 	for len(v.rows) < v.height {
 		v.rows = append(v.rows, "")
@@ -54,15 +51,12 @@ func TestLiveRegionSurvivesPhoneKeyboardShrinkAndGrow(t *testing.T) {
 	l.setHeight(tall)
 	v := newVTScreen(width, tall)
 
-	// a transcript line, then a menu-sized region: 30 rows on a 40-row pane.
 	tallRegion := regionRows("menu ", 28)
 	tallRegion = append(tallRegion, "> /earn", "status")
 	l.draw("committed line", tallRegion, "")
 	v.feed([]byte(out.String()))
 	out.Reset()
 
-	// the keyboard opens: the pane shrinks under the region. the tui
-	// repaints a trimmed region (the menu capped to fit).
 	phoneResize(v, short)
 	l.setHeight(short)
 	shortRegion := append(regionRows("menu ", 8), "> /earn", "status")
@@ -71,8 +65,6 @@ func TestLiveRegionSurvivesPhoneKeyboardShrinkAndGrow(t *testing.T) {
 	v.feed([]byte(out.String()))
 	out.Reset()
 
-	// the keyboard closes: the pane grows and the rows that scrolled off
-	// come back into view above. the tui repaints the tall region again.
 	phoneResize(v, tall)
 	l.setHeight(tall)
 	l.redraw(tallRegion)
@@ -83,8 +75,6 @@ func TestLiveRegionSurvivesPhoneKeyboardShrinkAndGrow(t *testing.T) {
 	}
 
 	screen := strings.Join(v.rows, "\n")
-	// the tall region stands once, from the viewport's top; the rows the
-	// short pane left standing are gone (the reset cleared the viewport).
 	if n := strings.Count(screen, "menu a"); n != 2 {
 		t.Fatalf("the region's repeated row stands %d times on screen, want 2 (its two real rows only):\n%s", n, screen)
 	}
@@ -94,11 +84,6 @@ func TestLiveRegionSurvivesPhoneKeyboardShrinkAndGrow(t *testing.T) {
 	if v.rows[0] != "menu a" {
 		t.Fatalf("the reset must paint the region from the viewport's top row, got %q", v.rows[0])
 	}
-	// the transcript rows the grown pane showed above the region are the
-	// reset's price: cleared from the viewport (a real terminal does not
-	// return cleared rows to its scrollback either). the rows that never
-	// came back into view are untouched in the scrollback.
-	// a plain repaint after the reset aims exactly again: one region.
 	out.Reset()
 	l.redraw(tallRegion)
 	l.flush()
@@ -107,7 +92,6 @@ func TestLiveRegionSurvivesPhoneKeyboardShrinkAndGrow(t *testing.T) {
 	if n := strings.Count(screen, "> /earn"); n != 1 {
 		t.Fatalf("after the reset a normal repaint must stay exact, got %d input rows:\n%s", n, screen)
 	}
-	// and a commit lands with nothing stale standing.
 	out.Reset()
 	l.enter("> /earn", "", "> ", "")
 	v.feed([]byte(out.String()))

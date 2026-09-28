@@ -12,9 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 
-// recorder is the root's r.rec stand-in: the controller resolves the
-// frontend on every notify, so the recorder can appear after wiring and
-// be swapped by /new and /resume.
 type recorder struct {
 	mu sync.Mutex
 	fe core.Frontend
@@ -37,14 +34,11 @@ func TestSwarmFrontendResolvesWhenTheRecorderAppears(t *testing.T) {
 	h := newHarnessResolved(t, rec.resolve)
 	h.create(t, "do the work")
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	// No recorder at wiring time: the drain must emit safely instead of
-	// panicking on a typed-nil frontend.
 	h.waitFor(t, "the task in review with no recorder", func() bool {
 		return h.status(t, "t1") == "review"
 	})
 	got := &recordFrontend{}
 	rec.set(got)
-	// A later start routes its frames to the now-present recorder.
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	notices := waitForNotices(t, got, 1)
 	if notices[0] != "swarm: the board emptied — all workers exited" {
@@ -100,8 +94,6 @@ func TestSwarmPanickingFrontendDoesNotKillTheDrainLoop(t *testing.T) {
 		rows := h.ctl.List()
 		return len(rows) == 1 && rows[0].State == "exited"
 	})
-	// Stop waits for the drain workers, so every emit has run when it
-	// returns; its own frames panic too and must land loud.
 	if _, err := h.ctl.Stop(); err != nil {
 		t.Fatalf("stop: %v", err)
 	}

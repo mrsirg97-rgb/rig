@@ -11,8 +11,6 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
-// The queue a session works in is recorded beside the log, and it moves
-// only when the operator says so.
 func TestBindingRecordsAndMovesASession(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -33,8 +31,6 @@ func TestBindingRecordsAndMovesASession(t *testing.T) {
 	if err != nil || b.Scope != "kb" || !b.OutsideRepo {
 		t.Fatalf("a rebind moves the session: %+v %v", b, err)
 	}
-	// The anonymous attribution is shared: binding it would leak one
-	// caller's project onto another's.
 	if err := todostore.Bind(ctx, db, todostore.Binding{Session: "anon", Scope: "kc", Label: "x"}); err != nil {
 		t.Fatal(err)
 	}
@@ -46,9 +42,6 @@ func TestBindingRecordsAndMovesASession(t *testing.T) {
 	}
 }
 
-// Inside a repo the queue's name is the repo's, not the folder the call
-// named: a subdirectory and a second worktree read one queue and say the
-// same thing.
 func TestProjectOfNamesTheRepoNotTheFolderItStartedIn(t *testing.T) {
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "git"),
@@ -68,9 +61,6 @@ func TestProjectOfNamesTheRepoNotTheFolderItStartedIn(t *testing.T) {
 	}
 }
 
-// Outside a repo the queue is a bucket of that directory, marked as one,
-// and spelled the same however the caller writes it: "." and its absolute
-// path must not mint two buckets for one place.
 func TestProjectOfMarksABucketAndKeysItAbsolutely(t *testing.T) {
 	bin := t.TempDir()
 	t.Setenv("PATH", bin)
@@ -89,10 +79,6 @@ func TestProjectOfMarksABucketAndKeysItAbsolutely(t *testing.T) {
 	}
 }
 
-// A bare repository is still a repository: its common dir is the cwd
-// itself, so the probe cannot tell it apart by path alone, and git says
-// so when asked. It gets the repo's own identity and name, not a shared
-// cwd bucket.
 func TestProjectOfNamesABareRepo(t *testing.T) {
 	dir := t.TempDir()
 	bare := filepath.Join(dir, "bare.git")

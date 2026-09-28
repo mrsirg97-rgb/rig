@@ -343,8 +343,6 @@ func TestPendingTailGuardsExactWidthRows(t *testing.T) {
 	}
 	feed()
 
-	// a no-newline stream of a wide word: every wrapped row is exactly
-	// width wide, so the tail's rows end at the last column.
 	const word = "abcdefghij"
 	para := strings.Repeat(word, 90)
 	s.fe.Notify(core.TextDelta{Text: para[:400]})

@@ -429,9 +429,6 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	}
 }
 
-// A project named on a call is not a one-off: it binds the session, whose
-// bare verbs then act there. The queue follows the work, not the
-// directory the process happened to start in.
 func TestProjectBindsTheSession(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
@@ -465,9 +462,6 @@ func TestProjectBindsTheSession(t *testing.T) {
 	}
 }
 
-// A session launched outside any repo has no project to write into: the
-// shared cwd bucket is a place, not a project, so a bare write refuses and
-// says what to do, while a read stays available and labels itself.
 func TestLaunchOutsideARepoRefusesWrites(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
@@ -503,8 +497,6 @@ func TestLaunchOutsideARepoRefusesWrites(t *testing.T) {
 	}
 }
 
-// Every reply says which queue it speaks for: a shared bucket is the one
-// place where two queues can look identical.
 func TestEveryReplyNamesTheQueue(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
@@ -562,8 +554,6 @@ func TestProjectExpandsTildeAtTheBoundary(t *testing.T) {
 	}
 }
 
-// A read that names a project is a peek, not a move: looking at another
-// repo's queue must not quietly relocate the session's own bare verbs.
 func TestReadWithProjectIsAPeekNotAMove(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
@@ -607,8 +597,6 @@ func TestReadWithProjectIsAPeekNotAMove(t *testing.T) {
 	}
 }
 
-// A write that names a project and fails changes nothing, including the
-// binding: the refusal already named the queue it tried.
 func TestFailedWriteWithProjectLeavesTheBindingAlone(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
@@ -632,7 +620,6 @@ func TestFailedWriteWithProjectLeavesTheBindingAlone(t *testing.T) {
 	if !strings.Contains(reported, "queue: "+filepath.Base(here)) {
 		t.Fatalf("a failed call must not move the session, got %q", reported)
 	}
-	// And the same call, succeeding, does move it.
 	if _, err := exec(t, tool, ctx, map[string]any{
 		"action": "create", "id": "", "project": there,
 		"tasks": []any{map[string]any{"text": "theirs"}}}); err != nil {

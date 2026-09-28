@@ -185,6 +185,11 @@ width); no core or loop line (decision 10).
   the neighboring character is not a letter or digit (the CommonMark
   rule), so snake_case identifiers keep their underscores; `*` keeps
   the simpler rule.
+- The freeze gate's reopenings are named: `loop` (1.1.4, the fed-back
+  error line, under spec'd deliverables) and the 2.0.1 module-path
+  rename (the root and core files whose import lines move to the /v2
+  path). The re-freeze PR after the merge deletes the exemption and the
+  gate measures the new bytes.
 - One op is one write (the write gate): a repaint's escapes and rows
   flush as a single write, so no partial frame and no row left ending
   exactly at the last column across a write boundary (the tear). A frame

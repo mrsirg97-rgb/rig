@@ -119,11 +119,6 @@ func TestFreezeGate(t *testing.T) {
 		base = "main"
 	}
 
-	// the named reopenings: loop/ (1.1.4, the fed-back error line) under
-	// spec'd deliverables, and the 2.0.1 module-path rename (the root and
-	// core files whose import lines move to the /v2 path); the re-freeze
-	// PR after the merge deletes this function and the gate measures the
-	// new bytes.
 	reopened := func(p string) bool {
 		return p == "loop" || strings.HasPrefix(p, "loop/") ||
 			p == "kernel.go" || p == "kernel_test.go" ||

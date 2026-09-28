@@ -352,9 +352,6 @@ func (r *Recorder) originalErr(id string, i, total int, floor int64) *string {
 	if len(errs) == 0 {
 		return nil
 	}
-	// The tail is the kept, newest slice in transcript order: its i-th
-	// occurrence of the wire id maps to the original at len-total+i.
-	// The floor excludes this compaction's own re-landed rows.
 	idx := len(errs) - total + i
 	if idx < 0 {
 		idx = 0

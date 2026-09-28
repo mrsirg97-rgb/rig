@@ -79,13 +79,8 @@ func delegateTimeout(t time.Duration) time.Duration {
 	return t
 }
 
-// slotPollInterval is how often a delegate whose session's slots are all
-// held retries the acquisition while it waits for one to free.
 const slotPollInterval = 50 * time.Millisecond
 
-// busyWaitInterval is how often a delegate waiting for a GPU slot re-checks
-// the swap's running state. The swarm's spawns wait here; the interactive
-// delegate still refuses (busy:skip).
 const busyWaitInterval = time.Second
 
 func delegateBusy(fetch Fetch, swapURL, model string, waitCtx context.Context, wait bool) error {

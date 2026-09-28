@@ -1231,7 +1231,6 @@ func TestWorkerCompleteLandsInReviewAndTheParentsAcceptFinishesIt(t *testing.T) 
 	if got := projStatus(t, db, "delegated work"); got != "done" {
 		t.Errorf("after the parent's accept status = %v, want done", got)
 	}
-	// The pair is written by the parent: the log is uniform, complete then accept.
 	ops := rawEventOps(t, db, "complete")
 	accepts := rawEventOps(t, db, "accept")
 	if ops != 1 || accepts != 1 {

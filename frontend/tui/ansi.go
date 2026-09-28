@@ -91,8 +91,6 @@ const (
 	pasteOff = ESC + "?2004l"
 )
 
-// The synchronized-output mode: the terminal buffers a repaint between the
-// pair and paints once, so a frame never appears half-drawn.
 const (
 	syncOn  = ESC + "?2026h"
 	syncOff = ESC + "?2026l"

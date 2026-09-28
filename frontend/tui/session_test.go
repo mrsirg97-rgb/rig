@@ -1785,8 +1785,6 @@ func waitSlot(t *testing.T, tu *tui, want string) {
 	}
 }
 
-// flipRowCmd is a fake command whose run flips a value the status callback
-// reads, so the test can prove the recapture happens at command time.
 type flipRowCmd struct {
 	name string
 	flip func()
@@ -1828,8 +1826,6 @@ func TestStatusRowsRecaptureOnAnyCommand(t *testing.T) {
 		t.Fatalf("the rows recaptured %d time(s), want 1:\n%s", got, s.out.String())
 	}
 
-	// A second dispatch that keeps the rows proves the redraw tracks the
-	// status function's value, not a one-shot commit.
 	s.si.feed("/x\n")
 	s.await("projects held: 3")
 	if got := bytes.Count(s.out.Bytes(), []byte("projects held: 3")); got != 1 {
