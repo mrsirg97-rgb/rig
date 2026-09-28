@@ -23,6 +23,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/frontend/cli"
 	"github.com/mrsirg97-rgb/rig/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/frontend/web"
 	"github.com/mrsirg97-rgb/rig/imagemarker"
 	"github.com/mrsirg97-rgb/rig/loop"
 	"github.com/mrsirg97-rgb/rig/middleware/approve"
@@ -54,7 +55,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.7.4"
+const Version = "2.0.0"
 
 type root struct {
 	pluginMax int
@@ -705,6 +706,18 @@ func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 	}
 }
 
+func webStatus(r *root, db store.DB) func(context.Context) web.Status {
+	in := tuiStatusIn(r, db)
+	return func(ctx context.Context) web.Status {
+		s := in(ctx)
+		return web.Status{
+			Model: s.Model, Effort: s.Effort, Window: s.Window, Role: s.Role, Approve: s.Approve,
+			Workers: s.Workers, Session: s.Session, Up: s.Up, Down: s.Down, CacheRead: s.CacheRead,
+			Cost: s.Cost, Rows: s.Rows,
+		}
+	}
+}
+
 func sessionFor(resumeID string, resume func(id string) (*core.Session, error)) (*core.Session, error) {
 	if resumeID == "" {
 		return core.NewSession(), nil
@@ -825,8 +838,17 @@ func main() {
 		os.Exit(runJob(os.Args[2:]))
 	}
 
+	serveAddr := ""
 	if len(os.Args) > 1 && os.Args[1] == "serve" {
-		os.Exit(serve(os.Args[2:]))
+		addr, code := parseServe(os.Args[2:])
+		if code >= 0 {
+			os.Exit(code)
+		}
+		serveAddr = addr
+		if *prompt != "" {
+			fmt.Fprintln(os.Stderr, "rig serve: -p is not available with serve (the page is the prompt)")
+			os.Exit(2)
+		}
 	}
 
 	if err := checkOneShot(*prompt, *resumeID); err != nil {
@@ -1227,8 +1249,23 @@ func main() {
 	}
 
 	var fe core.Frontend
+	var webSrv *web.Server
 	closeFrontend := func() {}
-	if *prompt != "" {
+	if serveAddr != "" {
+		srv, werr := web.New(web.Options{
+			Home: cfgDir, CWD: cwd, Models: cfg.Models, Workers: cfg.Workers,
+			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
+			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
+		})
+		if werr != nil {
+			fmt.Fprintln(os.Stderr, "rig serve:", werr)
+			os.Exit(1)
+		}
+		webSrv = srv
+		fe = srv
+		closeFrontend = func() { srv.Close() }
+		defer closeFrontend()
+	} else if *prompt != "" {
 		if err := oneshot.ErrPrompt(*prompt); err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
@@ -1289,6 +1326,16 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if webSrv != nil {
+		fmt.Fprintf(os.Stderr, "rig serve: the dashboard is at http://%s/\n", serveAddr)
+		go func() {
+			if err := webSrv.ListenAndServe(ctx, serveAddr); err != nil {
+				fmt.Fprintln(os.Stderr, "rig serve:", err)
+			}
+			stop()
+		}()
+	}
 
 	runErr := loop.Run(ctx, k)
 	if runErr != nil {

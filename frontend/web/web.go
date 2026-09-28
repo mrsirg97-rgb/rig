@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/config"
+	"github.com/mrsirg97-rgb/rig/core"
 	"github.com/mrsirg97-rgb/rig/models"
 	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
 )
@@ -34,6 +35,10 @@ type Options struct {
 	Natives []string
 
 	Root string
+
+	Commands []core.Command
+	Env      any
+	Status   func(context.Context) Status
 }
 
 type Server struct {
@@ -51,6 +56,8 @@ type Server struct {
 	token   string
 	stores  *storeCache
 	static  fs.FS
+	chat    *chat
+	status  func(context.Context) Status
 }
 
 func New(opts Options) (*Server, error) {
@@ -89,6 +96,8 @@ func New(opts Options) (*Server, error) {
 		root:      root,
 		stores:    newStoreCache(opts.Home, ct, runner),
 		static:    sub,
+		chat:      newChat(opts.Commands, opts.Env),
+		status:    opts.Status,
 	}, nil
 }
 

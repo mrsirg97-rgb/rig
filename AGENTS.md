@@ -182,9 +182,11 @@ plus one registration line, and the loop never names a concrete type.
 - `frontend/tui`: the terminal UI: the same events and commands in a
   live-region design; adds to the CLI's bytes, never changes them; the
   swarm band and the one-line transcript notices (SPEC_SWARM 7).
-- `frontend/web`: the `rig serve` dashboard (SPEC_SERVE): loopback-only
-  net/http over the rig home's stores, token-gated, with the todo,
-  scheduler, and plugin-forge writes.
+- `frontend/web`: the `rig serve` dashboard (SPEC_SERVE): the third
+  frontend of the loop over loopback-only net/http (the live session as
+  a server-sent stream, in the TUI's grammar), token-gated, beside the
+  reads of the rig home's stores and the todo, scheduler, and
+  plugin-forge writes; installable as a home-screen app.
 - `specs/`: the specs, written and agreed before the code (SPEC_CORE
   first); the governing documents the `PACKAGE.md` files cite.
 - `docs/`: the architecture (`DESIGN.md`), setup, usage, the plugins

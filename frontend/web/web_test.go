@@ -1245,14 +1245,22 @@ func TestStaticAssets(t *testing.T) {
 	h := srv.Handler()
 
 	for path, wants := range map[string][]string{
-		"/": {"<!doctype html", `id="nav-toggle" class="nav-toggle"`, `id="cwd-add"`, `id="browse-btn"`, `data-view="plugins"`},
+		"/": {"<!doctype html", `data-view="chat"`, `id="tabs"`, `id="cwd-add"`, `id="browse-btn"`, `data-view="plugins"`, `data-view="swarm"`, "manifest.webmanifest", "apple-mobile-web-app-capable", "viewport-fit=cover", `data-theme-pick="cool"`},
 		"/static/app.js": {
+			"renderChat",
+			"EventSource('/api/chat/events?since='",
+			"post('/api/chat'",
+			"/api/chat/answer",
+			"/api/chat/interrupt",
+			"/api/status",
+			"/api/swarm",
 			"renderSessions",
+			"renderSwarm",
 			"parseTodo",
 			"parseScheduler",
 			"progressBar",
 			"addCwd",
-			"setNavOpen",
+			"applyTheme",
 			"highlightPython",
 			"editorEl",
 			"openForge",
@@ -1268,8 +1276,10 @@ func TestStaticAssets(t *testing.T) {
 			"schedacts",
 			"schedup",
 			"schedconfirm",
+			"claimed for review by",
 		},
-		"/static/style.css": {"--accent", "@media (max-width: 720px)", ".nav-open", ".nav-toggle {\n  display: none;", ".editor", "--effort-xhigh", ".schedacts", ".schedup"},
+		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
+		"/static/manifest.webmanifest": {`"display": "standalone"`, "icon-180.png"},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))
 		if rec.Code != http.StatusOK {
@@ -1300,7 +1310,7 @@ func TestStaticAssetsSchedulerPhoneRow(t *testing.T) {
 	if !strings.Contains(body, ".rowact { display: inline-block; min-height: 44px; padding: 10px 12px; }") {
 		t.Fatal("phone: the 44px tap target rule is gone")
 	}
-	if strings.Contains(body, "flex-direction: column") {
+	if !strings.Contains(body, ".schedacts { display: flex; flex-wrap: wrap;") || strings.Contains(body, ".schedacts { display: flex; flex-direction: column") {
 		t.Fatal("phone: the job row still stacks its controls")
 	}
 }

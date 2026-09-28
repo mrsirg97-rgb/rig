@@ -1,37 +1,59 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="warm">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rig serve</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>rig</title>
+<meta name="theme-color" content="#050505">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="rig">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23050505'/><circle cx='32' cy='32' r='22' fill='none' stroke='%23e8a86b' stroke-width='2' stroke-dasharray='2 4'/><circle cx='32' cy='32' r='6' fill='%23e8a86b'/><circle cx='50' cy='20' r='3' fill='%23d8d8d8'/></svg>">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <div class="brand">
-    <button id="nav-toggle" class="nav-toggle" aria-label="toggle the navigation" aria-expanded="false">≡</button>
-    <h1><span class="ember">rig</span><span class="sub"> serve</span></h1>
-  </div>
-  <form id="cwd-form" class="cwdpick">
-    <span class="dim">cwd</span>
-    <select id="cwd" aria-label="workspace"></select>
-    <input id="cwd-add" type="text" placeholder="add a workspace path…" spellcheck="false" autocomplete="off">
-    <button id="cwd-add-btn" type="submit">add</button>
-    <button id="browse-btn" type="button" aria-expanded="false">browse</button>
-  </form>
-</header>
-<div id="browser" hidden></div>
-<div class="layout">
-  <nav id="nav" aria-label="views">
-    <button data-view="sessions" class="active">sessions</button>
-    <button data-view="todos">todo</button>
-    <button data-view="scheduler">scheduler</button>
-    <button data-view="models">models</button>
-    <button data-view="plugins">plugins</button>
-  </nav>
-  <div id="backdrop" hidden></div>
+<div class="app">
+  <aside id="side">
+    <div class="brand"><span class="ember">rig</span><span class="dim"> serve</span></div>
+    <nav id="nav" aria-label="views">
+      <button data-view="chat" class="active">chat</button>
+      <button data-view="sessions">sessions</button>
+      <button data-view="todos">todo</button>
+      <button data-view="scheduler">scheduler</button>
+      <button data-view="swarm">swarm</button>
+      <button data-view="plugins">plugins</button>
+      <button data-view="models">models</button>
+    </nav>
+    <div id="side-status" class="band" aria-live="polite"></div>
+    <div class="side-foot">
+      <form id="cwd-form" class="cwdpick">
+        <span class="dim">cwd</span>
+        <select id="cwd" aria-label="workspace"></select>
+        <input id="cwd-add" type="text" placeholder="add a workspace path…" spellcheck="false" autocomplete="off">
+        <button id="cwd-add-btn" type="submit">add</button>
+        <button id="browse-btn" type="button" aria-expanded="false">browse</button>
+      </form>
+      <div class="themepick"><span class="dim">theme</span>
+        <button type="button" data-theme-pick="warm" class="active">warm</button>
+        <button type="button" data-theme-pick="cool">cool</button>
+      </div>
+    </div>
+  </aside>
   <main id="main" aria-live="polite"></main>
+  <nav id="tabs" class="tabs" aria-label="views">
+    <button data-view="chat" class="active"><span class="g">❯</span>chat</button>
+    <button data-view="sessions"><span class="g">●</span>sessions</button>
+    <button data-view="todos"><span class="g">▰</span>todo</button>
+    <button data-view="scheduler"><span class="g">⧗</span>jobs</button>
+    <button data-view="swarm"><span class="g">◐</span>swarm</button>
+    <button data-view="more"><span class="g">⋯</span>more</button>
+  </nav>
 </div>
+<div id="browser" hidden></div>
 <script src="/static/app.js"></script>
 </body>
 </html>

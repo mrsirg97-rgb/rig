@@ -1,4 +1,27 @@
 # Changelog
+## [2.0.0]: the dashboard is the third frontend
+
+`rig serve` is rig with the page as its terminal. The web server
+satisfies the loop's frontend seam (`Input`, `Notify`, and the TUI's
+optional doors: ask, steer, interrupt), `serve` composes the whole root
+exactly as the terminal does and hands the server to the loop, so a
+session started from the phone is an ordinary session in the same
+store, resumable from the TUI, on the same `settings.json` model,
+workers, and commands. The loop's events ride a server-sent stream as
+sequenced frames (deltas coalesced, results capped by name, a ring for
+reconnects); a prompt posts to `/api/chat`, a `/command` dispatches at
+once, a line during a live turn steers, and manual approvals are
+answered in place. The page is rewritten in the TUI's grammar: the home
+view is the live session (the `❯` prompt, the folded reasoning, the
+tool blocks, the status line, the breathing activity label), the
+sidebar folds into a bottom tab bar on the phone (chat, sessions, todo,
+jobs, swarm, more), sessions resume into the chat, models switch from
+the table, swarm is a live view, and the todo render parses the scoped
+reply. Two palettes ship, `warm` (the terminal's) and `cool` (orbit's).
+A web manifest, the Apple meta tags, and the icons make "add to home
+screen" install it as an app; a native wrapper is one allowed origin
+away. The tests cover the seam end to end through the routes.
+
 ## [1.7.4]: the todo default read is the present
 
 The default queue read was the ledger: every finished row rendered in

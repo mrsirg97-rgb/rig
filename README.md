@@ -180,12 +180,14 @@ Each key resolves in this order: flag, environment, file, built-in default. `/mo
 rig serve
 ```
 
-The dashboard serves the rig stores on loopback only. On first run it prints an access token, stores it with mode `0600`, and includes it in the URL. The page exchanges the token for a cookie. Mobile friendly.
+`rig serve` is rig with the page as its terminal: the same loop, model, workers, stores, and commands as `rig` in a shell, on loopback only, token-gated (printed once, stored `0600`, exchanged for a cookie). The home view is the live session in the TUI's grammar, with `/models`, `/effort`, `/new`, `/sessions resume` and the rest typed into the same `❯` prompt; a sidebar on desktop, a tab bar on the phone; `warm` and `cool` palettes. From Safari, share → add to home screen installs it as an app.
 
-- **sessions**: list them per workspace, and open a transcript mid-work
+- **chat**: the live session, streamed; approvals answered in place; stop while a turn runs
+- **sessions**: list them per workspace, open a transcript, resume one into the chat
 - **todo**: the queue, with create (one task per line), start, complete, and retry; the rows show the requires/blocks links and claims
 - **scheduler**: the jobs, with create, pause, resume, remove, an in-place update form that opens with the job's current fields, and each job's run audit trail
-- **models**: the table, with the effort dial
+- **swarm**: the drain workers, live, with start and stop
+- **models**: the table, switch, and the effort dial
 - **plugins**: approved, pending, disabled; the forge reads and saves a plugin's source into the pending zone
 
 ## docs

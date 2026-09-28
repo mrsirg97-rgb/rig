@@ -85,6 +85,14 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 		return setOf("POST"), true
 	case path == "/api/fs":
 		return setOf("GET"), true
+	case path == "/api/chat":
+		return setOf("POST"), true
+	case path == "/api/chat/events":
+		return setOf("GET"), true
+	case path == "/api/chat/answer" || path == "/api/chat/interrupt":
+		return setOf("POST"), true
+	case path == "/api/status" || path == "/api/swarm":
+		return setOf("GET"), true
 	}
 	return nil, false
 }
@@ -143,6 +151,18 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handlePluginEnable(w, r)
 	case path == "/api/fs":
 		s.handleBrowse(w, r)
+	case path == "/api/chat":
+		s.handleChatSend(w, r)
+	case path == "/api/chat/events":
+		s.handleChatEvents(w, r)
+	case path == "/api/chat/answer":
+		s.handleChatAnswer(w, r)
+	case path == "/api/chat/interrupt":
+		s.handleChatInterrupt(w, r)
+	case path == "/api/status":
+		s.handleStatus(w, r)
+	case path == "/api/swarm":
+		s.handleSwarm(w, r)
 	}
 }
 
@@ -685,6 +705,12 @@ func mimeFor(name string) string {
 		return "text/css; charset=utf-8"
 	case strings.HasSuffix(name, ".html"):
 		return "text/html; charset=utf-8"
+	case strings.HasSuffix(name, ".webmanifest"):
+		return "application/manifest+json"
+	case strings.HasSuffix(name, ".svg"):
+		return "image/svg+xml"
+	case strings.HasSuffix(name, ".png"):
+		return "image/png"
 	default:
 		return "application/octet-stream"
 	}

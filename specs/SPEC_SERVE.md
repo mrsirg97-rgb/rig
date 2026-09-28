@@ -667,4 +667,100 @@ shipped assets).
   lines), the static assets' row controls and the in-place update
   form (the phone rule), the `PACKAGE.md` update.
 - **`specs/SPEC_SERVE.md`**: this section.
-- **`CHANGELOG.md`**: the entry under [Unreleased].
+- **`CHANGELOG.md`**: the 2.0.0 entry.
+
+## phase 3: the live session, and the page as an app
+
+### 17. The server is the third frontend.
+
+Phase 1 named "a live session" a non-goal and built a reader. This
+phase makes the dashboard a frontend of the loop, on the same seam the
+CLI and the TUI satisfy (`core.Frontend`: `Input`, `Notify`, and the
+optional `Ask`, `Steer`, `Interrupt`, `ClearSlot`, `LiveTurn`), and
+nothing else: no second loop, no second wire, no second prompt. `rig
+serve` composes the root exactly as `rig` does (the config, the model,
+the tools, the middleware, the stores, the recorder, `command.All()`
+and the `Env`), hands the `web.Server` to the loop as `fe`, and starts
+the listener beside `loop.Run`; a session started from the page is an
+ordinary session in the same store, resumable from the terminal, on
+the same `settings.json` model and workers, with the same commands.
+`-p` is refused with `serve`: the page is the prompt.
+
+`Input` blocks on the prompt channel the way the CLI blocks on stdin.
+`POST /api/chat {text}` feeds it, with the CLI's three cases: a
+`/command` dispatches at once through the command set and publishes a
+`command` frame (the reply, or the error, or the unknown-command line
+naming the known set); a plain line during a live turn steers (the
+slot plus the turn's interrupt); a plain line between turns is the
+next prompt, one queued at a time (a second is a 409 naming the wait).
+`Notify` maps every event of `core` to a JSON frame with a sequence
+number; consecutive text and reasoning deltas coalesce up to 4 KB; a
+tool result is capped at 16 KB with the hidden byte count named; the
+last 4096 frames are the ring. `GET /api/chat/events?since=N` is a
+server-sent stream: `hello` (the live flag, the replay count), the ring
+after `since`, live frames, a keep-alive every 15 s; the connection's
+write deadline is cleared so the server's write timeout cannot cut a
+long turn. `Ask` publishes an `ask` frame and waits for `POST
+/api/chat/answer {id, yes}` or the turn's end, so manual approval works
+from the page; `POST /api/chat/interrupt` is the interrupt door. `GET
+/api/status` is the TUI's status band (mapped at the root) plus the
+live flag; `GET /api/swarm` is the last swarm status the loop
+published. The POST doors ride the write's walls; the stream and the
+reads ride the token gate. The page is one session per process, as the
+terminal is: every open tab sees the same stream.
+
+### 18. The page is the terminal, and installs as an app.
+
+The home view is the live session in the TUI's grammar, rendered from
+the frames: `❯ prompt`, reasoning folded to one line after the turn,
+the prose, `● tool · detail` with the capped result and `tool ✓ 0.4s`,
+the compaction and usage lines, the status line above the composer, the
+swarm band, the activity label breathing in the ember (the TUI's 1.7.2
+breath, as CSS), the ask panel, and the `❯` composer (Enter sends,
+Shift+Enter breaks, `/` completes the command names, the button is
+`stop` while a turn is live). The sidebar folds into a bottom tab bar
+below 720px (chat, sessions, todo, jobs, swarm, more) with 44px tap
+targets and the safe-area insets; `more` holds plugins, models, the
+theme, the workspace picker, and the install note. Two palettes ship,
+`warm` (the TUI's oled table) and `cool` (orbit's), as `data-theme`
+tokens remembered in the browser. The page carries a web manifest, the
+Apple meta tags, and the home-screen icons, so "add to home screen"
+installs it full-screen beside the other apps with the token cookie
+kept; a native wrapper (Capacitor) is the same page plus one allowed
+origin, a later line, not a rewrite. The stores' views are unchanged in
+substance; sessions gain `resume` (a `/sessions resume <id>` through
+the chat) and `new session`, models gain `switch` and the effort dial
+(`/models`, `/effort` through the chat), swarm is a new read over
+`/api/swarm` with start and stop through `/swarm`, and the todo render
+parses the scoped head, the review marker, and a lone task row (the
+1.7.2 and 1.7.4 shapes).
+
+### testing
+
+The phase 1 and 2 cases stay green, plus (failing first): a prompt
+posted between turns is the next `Input` and is published for every
+tab, a second one before the turn starts is a 409; the stream replays
+the ring after `since` with the deltas coalesced and the tool result
+capped by name, then carries live frames; a `/command` dispatches at
+once and publishes its reply, its error, or the unknown-command line,
+and never reaches the loop as a prompt; a prompt during a live turn
+steers (the turn's interrupt fires, the line is the next input); `Ask`
+round-trips through `/api/chat/answer` and an unknown question is a
+404; the walls hold (no Origin a 403, a GET on the prompt a 405, an
+empty line a 400, the stream without the token a 401); `/api/status`
+carries the root's band and the live flag and `/api/swarm` the last
+published status; the shipped page carries the chat, the tab bar, the
+two palettes, the manifest, and the meta tags.
+
+### the diffs this phase implies
+
+- **`frontend/web`**: `chat.go` (the seam, the hub, the stream, the
+  doors), the `Options` (`Commands`, `Env`, `Status`), the allow-list
+  lines, the static assets rewritten, the manifest and icons, the
+  `PACKAGE.md`.
+- **`cmd/rig`**: `serve` parses its flags and falls through to the one
+  composition with the server as the frontend (`serve.go` shrinks to
+  the parse; `main.go` selects it first and starts the listener beside
+  `loop.Run`); the status adapter.
+- **`specs/SPEC_SERVE.md`**: this section.
+- **`CHANGELOG.md`**: the 2.0.0 entry.
