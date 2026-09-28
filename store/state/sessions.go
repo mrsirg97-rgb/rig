@@ -116,9 +116,6 @@ func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args str
 	return out, nil
 }
 
-// Cwds is the distinct working directories a store holds sessions for:
-// the dashboard's workspace list, one tiny read per store instead of the
-// full session listing.
 func Cwds(ctx context.Context, db store.DB) ([]string, error) {
 	rows, err := db.DB.QueryContext(ctx, `SELECT DISTINCT "cwd" FROM "sessions" WHERE "cwd" <> '' ORDER BY "cwd"`)
 	if err != nil {
