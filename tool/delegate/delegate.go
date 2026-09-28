@@ -73,11 +73,12 @@ func (a *adapter) Description() string {
 		stance = fmt.Sprintf("up to %d in flight per session", a.Slots)
 	}
 	return "spawn a headless worker on a task now, wait, and return its last message. Guidelines: a bounded " +
-		"sub-task whose result is a message — a long compute, a sweep, a review — never a conversation; " +
-		"fan out: several delegate calls in one turn, " + stance + " and extras wait for a slot. Reply: the " +
-		"worker's message plus a trailer (exit, duration, session id, log); a held GPU refuses naming the " +
-		"holder. cwd must be under the session's cwd or the rig home; the model defaults to " + a.DefaultModel +
-		"; the timeout to 10 minutes (ceiling 30)."
+		"sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. Fan out " +
+		"with several delegate calls in one turn; " + stance + ", and extras wait for a slot. When the GPU is " +
+		"held by your own model the worker cannot start and the call refuses, naming the holder: do the work " +
+		"yourself or schedule it. cwd must be under the session's cwd or the rig home; the model defaults to " +
+		a.DefaultModel + "; the timeout to 10 minutes, ceiling 30. Reply: the worker's message plus a trailer " +
+		"with exit, duration, session id and log."
 }
 
 func (a *adapter) Schema() json.RawMessage {
