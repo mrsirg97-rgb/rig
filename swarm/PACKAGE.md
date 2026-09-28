@@ -6,7 +6,15 @@ vocabulary (`command.Env.Swarm`); this package owns the goroutines and
 the supervisor's in-memory truth.
 
 - `Controller` / `New`: one drain-worker swarm. `Start(ctx, in)` begins n
-  more drain workers; `StartOpts.Budget` (dollars, `swarm <n>
+  more drain workers; the architect is the session the command threads —
+  the swarm works its bound queue, and the supervisor's doors attribute
+  to it. `MaxWorkers` (16) bounds one swarm: the induced work cap, the
+  same shape as the fleet's slots bounding the delegates. `defaultPoll`
+  (2s) is the idle wait between empty claims when `Opts.Poll` is unset:
+  the workers do not wake together and do not spin on an empty queue.
+  `maxVerdictReason` caps the reviewer's reject reason at the store's
+  note bound, so a long verdict cannot fail the review protocol.
+  `StartOpts.Budget` (dollars, `swarm <n>
   budget=<dollars>`) caps the controller's claims — the spend is summed
   from each delegate result's cost (the cost column) and at the cap the
   worker stops claiming with the notice `swarm: budget reached —
