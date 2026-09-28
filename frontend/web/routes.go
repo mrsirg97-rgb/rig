@@ -67,7 +67,8 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 	case path == "/api/scheduler":
 		return setOf("GET", "POST"), true
 	case path == "/api/scheduler/pause" || path == "/api/scheduler/resume" ||
-		path == "/api/scheduler/remove" || path == "/api/scheduler/update":
+		path == "/api/scheduler/remove" || path == "/api/scheduler/update" ||
+		path == "/api/scheduler/repair":
 		return setOf("POST"), true
 	case path == "/api/scheduler/runs":
 		return setOf("GET"), true
@@ -131,6 +132,8 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleSchedulerVerb(w, r, "remove")
 	case path == "/api/scheduler/update":
 		s.handleSchedulerUpdate(w, r)
+	case path == "/api/scheduler/repair":
+		s.handleSchedulerRepair(w, r)
 	case path == "/api/scheduler/runs":
 		s.handleSchedulerRuns(w, r)
 	case path == "/api/models":

@@ -30,7 +30,9 @@ const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D M
 	"costs (SPEC_HOSTED 5): a model fire at the cap records a skip naming the spend; " +
 	"update with -1 resets the cap; command jobs take no budget. command jobs run a fixed " +
 	"shell line instead of a worker session: no GPU, no busy policy, prompt/model/busy refused; for " +
-	"deterministic scripts (pollers, digests, backups), never for anything needing judgment."
+	"deterministic scripts (pollers, digests, backups), never for anything needing judgment. " +
+	"repair re-derives a drifting job's crontab line (crontab write only, no event, no state change): " +
+	"one id repairs that job ('jN' is in sync when nothing drifts), no id repairs every drifting one."
 
 func schemaJSON(defModel string) string {
 	return `{
@@ -38,7 +40,7 @@ func schemaJSON(defModel string) string {
 	"properties": {
 		"action": {
 			"type": "string",
-			"enum": ["create", "update", "list", "pause", "resume", "remove", "runs"]
+			"enum": ["create", "update", "list", "pause", "resume", "remove", "runs", "repair"]
 		},
 		"name": {
 			"type": "string",
@@ -91,7 +93,7 @@ func schemaJSON(defModel string) string {
 		},
 		"id": {
 			"type": "string",
-			"description": "Job id jN (as shown by list). Required for pause/resume/remove/runs."
+			"description": "Job id jN (as shown by list). Required for pause/resume/remove/runs; repair takes it or none (none repairs every drifting job)."
 		},
 		"n": {
 			"type": "integer",
@@ -232,6 +234,8 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			n = *g.N
 		}
 		return sched.Runs(ctx, a.db, g.ID, n)
+	case "repair":
+		return sched.Repair(ctx, a.db, a.ct, g.ID, a.runnerCmd, a.home)
 	default:
 		return "", fmt.Errorf("scheduler: unknown action '%s'", g.Action)
 	}

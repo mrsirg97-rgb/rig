@@ -386,15 +386,17 @@ const SCHED_DOORS = {
   resume: '/api/scheduler/resume',
   remove: '/api/scheduler/remove',
   update: '/api/scheduler/update',
+  repair: '/api/scheduler/repair',
 };
 
-function schedActsEl(j, onAction) {
+function schedActsEl(j, onAction, drift) {
   const acts = el('div', 'schedacts');
   const tap = (verb) => (e) => { e.stopPropagation(); onAction(verb, j); };
   if (j.state === 'active') acts.appendChild(button('pause', 'rowact', tap('pause')));
   if (j.state === 'paused') acts.appendChild(button('resume', 'rowact', tap('resume')));
   acts.appendChild(button('remove', 'rowact', tap('remove')));
   acts.appendChild(button('runs', 'rowact', tap('runs')));
+  if (drift) acts.appendChild(button('repair', 'rowact', tap('repair')));
   return acts;
 }
 
@@ -511,7 +513,7 @@ function schedulerBodyEl(p, onAction) {
         e.appendChild(dl);
       }
       if (onAction) {
-        e.appendChild(schedActsEl(j, onAction));
+        e.appendChild(schedActsEl(j, onAction, j.detail.some((d) => d.startsWith('drift: '))));
         j.slot = el('div', 'schedslot');
         e.appendChild(j.slot);
       }
@@ -1143,7 +1145,7 @@ async function renderScheduler(q) {
         setEcho(out, e.message, true);
       }
     };
-    if (action === 'pause' || action === 'resume') {
+    if (action === 'pause' || action === 'resume' || action === 'repair') {
       move(action);
       return;
     }

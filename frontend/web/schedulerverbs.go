@@ -52,6 +52,38 @@ func (s *Server) handleSchedulerVerb(w http.ResponseWriter, r *http.Request, ver
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
+func (s *Server) handleSchedulerRepair(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
+	cwd := r.URL.Query().Get("cwd")
+	if cwd == "" {
+		writeErr(w, http.StatusBadRequest, "cwd is required")
+		return
+	}
+	var in struct {
+		ID string `json:"id"`
+	}
+	if !s.writeBody(w, r, &in) {
+		return
+	}
+	id := strings.TrimSpace(in.ID)
+	if id != "" && !jobIDRe.MatchString(id) {
+		writeErr(w, http.StatusBadRequest, "a job id as the tool shows it (jN) is required")
+		return
+	}
+	sdb, err := s.stores.scheduler()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	reply, err := sched.Repair(ctx, sdb, s.crontab, id, s.runnerCmd, s.home)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
+}
+
 func (s *Server) handleSchedulerUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
