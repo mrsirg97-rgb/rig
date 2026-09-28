@@ -2,21 +2,28 @@
 
 ## What it is
 
-The web tools: `web_search` (the local SearXNG instance over net/http) and
-`web_fetch` (a guarded HTTP reader with trafilatura extraction and a
-stdlib text pass). Stdlib only; no third-party Go client, no new venv.
+The one web tool: `web`, action `search` (the local SearXNG instance
+over net/http) or `fetch` (a guarded HTTP reader with trafilatura
+extraction and a stdlib text pass). Stdlib only; no third-party Go
+client, no new venv.
 
 ## What it includes
 
-- `web_search`: a `core.Tool` over the SearXNG `/search` JSON.
-- `web_fetch`: a `core.Tool`: resolves the host, refuses private
-  addresses (SSRF guard), follows redirects with re-checks and a hop cap,
-  extracts via trafilatura or the stdlib text pass.
+- The `web` tool: `action` `search|fetch` on one `target` field (the
+  query, or the URL), the per-action optionals (`maxResults`,
+  `maxChars`, `timeoutMs`), and the dispatch that validates at the
+  boundary and refuses an unknown action.
+- The engines behind it: the SearXNG `/search` JSON call, and the
+  guarded reader — resolves the host, refuses private addresses (SSRF
+  guard), follows redirects with re-checks and a hop cap, extracts via
+  trafilatura or the stdlib text pass.
 
 ## How it is consumed
 
-- Registered at the root as native tools: `WebFetchProxy`/`Trafilatura`
-  presence-aware settings feed the fetch path.
+- Registered at the root as one native tool; `WebFetchProxy`/
+  `Trafilatura` presence-aware settings feed the fetch engine.
+- One allow entry: the permission gate keys on `web`, and approval is
+  per tool name, so fetch is allowed with search.
 
 ## Gotchas
 
@@ -41,3 +48,5 @@ stdlib text pass). Stdlib only; no third-party Go client, no new venv.
   pipes past the deadline.
 - An empty `WebFetchProxy`/`Trafilatura` is a choice (direct egress / the
   stdlib text pass), not an unset.
+- One name means one gate: there is no way to allow `search` while
+  refusing `fetch`.

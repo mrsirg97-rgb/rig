@@ -74,8 +74,8 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 - **first prompt.** `./rig` opens the TUI; `./rig -p "the task"` runs one
   prompt headless. `--base-url` and `--model` point at the endpoint, or set
   `RIG_BASE_URL` and `RIG_MODEL`; `settings.json` is the fallback.
-- **tools.** `bash`, `read`/`write`/`edit`, `python`, `web_search`,
-  `web_fetch`, `todo`, `rem`, `scheduler`, `delegate`, `sessions`,
+- **tools.** `bash`, `read`/`write`/`edit`, `python`, `web` (search and
+  fetch), `todo`, `rem`, `scheduler`, `delegate`, `sessions`,
   `plugin`/`plugins`. Results are capped, refusals are named.
 - **the queue.** `todo` reads the project's tasks (worktrees share one
   board); `todo claim` takes the next unblocked task, `todo complete` lands
@@ -104,8 +104,7 @@ model row whose `"vision": true` says it takes images, and `scheduler` and
 | `read` / `write` / `edit` | files; read is the observation path (drift-checked), edits are exact-match, provenance-checked |
 | `view` | look at an image: downscaled, content-addressed, sent to a vision model (off unless your model row has `"vision": true`) |
 | `python` | a persistent IPython kernel; variables and imports survive |
-| `web_search` | a local SearXNG instance |
-| `web_fetch` | a URL as readable text; private addresses refused |
+| `web` | search a local SearXNG, or fetch a URL as readable text; private addresses refused |
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |

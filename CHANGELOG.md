@@ -1,4 +1,25 @@
 # Changelog
+## [1.7.3]: the two web tools fold into one `web`
+
+web_search and web_fetch were two native tools, two allow entries, and
+two wire slots for one capability family: search a local SearXNG, fetch
+a public URL. They are now one `web` tool with `action` `search|fetch`
+and one `target` field (the query, or the URL); the per-action
+optionals (`maxResults`, `maxChars`, `timeoutMs`) ride the same object,
+the description says search "<query>" and fetch <url> one line each,
+and the reply shapes are unchanged — search's compact JSON and fetch's
+capped text with the named TRUNCATED markers.
+
+The fold touches every name-keyed surface: `nativeToolNames`, the
+embedded allow default (`config/settings.json`, now keying on `web`),
+and `concurrentNatives` (`web` takes the slot; neither tool was on
+orbit's fire wire). Approval is per tool name, so fetch is allowed with
+search — one allow entry, one gate, no way to split the pair.
+`tool/web` keeps its engines (the SearXNG call and the guarded fetch,
+its seams and every voice), and `commit.go`'s detail line now shows the
+query or the URL for `web` by action. The wire goldens re-pin once with
+this commit. Version moves to 1.7.3.
+
 ## [1.7.2]: the TUI speaks ember and the todo block parses its own queue
 
 The TUI's committed openings were still the accent blue: the tool rows

@@ -235,7 +235,7 @@ and an unknown key refuses at start naming the file and the field.
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
-  "allow": ["bash", "read", "write", "edit", "view", "python", "web_search", "web_fetch", "todo", "rem", "sessions", "plugin", "plugins"],
+  "allow": ["bash", "read", "write", "edit", "view", "python", "web", "todo", "rem", "sessions", "plugin", "plugins"],
   "retries": 3,
   "resultCap": 65536,
   "approve": "auto",

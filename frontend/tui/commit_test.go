@@ -110,44 +110,6 @@ func TestToolBlockHeadTailElided(t *testing.T) {
 	}
 }
 
-func TestToolBlockDiffShowsVerbAndStaysDefaultPath(t *testing.T) {
-	th, err := tui.ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var body strings.Builder
-	for i := 1; i <= 10; i++ {
-		if i > 1 {
-			body.WriteString("\n")
-		}
-		body.WriteString("line" + itoa(i))
-	}
-	got := tui.RenderToolBlock(th, "diff", json.RawMessage(`{"mode":"files","ref":"base"}`), body.String()+"\n", false, 400*time.Millisecond)
-	lines := strings.Split(got, "\n")
-
-	want := []string{
-		th.Paint("ember", "●") + " " + th.Paint("ember", "diff") + th.Paint("dim", " · ") + th.Paint("text", "files"),
-		th.Paint("dim", "  line1"), th.Paint("dim", "  line2"), th.Paint("dim", "  line3"),
-		th.Paint("dim", "  line4"), th.Paint("dim", "  line5"), th.Paint("dim", "  line6"),
-		th.Paint("dim", "  · 2 lines hidden ·"),
-		th.Paint("dim", "  line9"), th.Paint("dim", "  line10"),
-		th.Paint("dim", "diff") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.4s"),
-	}
-	if len(lines) != len(want) {
-		t.Fatalf("block = %d lines, want %d:\n%s", len(lines), len(want), got)
-	}
-	for i := range want {
-		if lines[i] != want[i] {
-			t.Fatalf("line %d = %q, want %q", i, lines[i], want[i])
-		}
-	}
-
-	got = tui.RenderToolBlock(th, "diff", json.RawMessage(`{"mode":"last","tool":"bash"}`), "no earlier observation", true, time.Second)
-	if !strings.Contains(got, th.Paint("error", "✕")) {
-		t.Fatalf("a failed diff block must keep the default failure outcome:\n%s", got)
-	}
-}
-
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
@@ -202,14 +164,9 @@ func TestToolDetailTable(t *testing.T) {
 		{"read", `{"path":"/home/ng/x.go"}`, "/home/ng/x.go"},
 		{"write", `{"path":"src/a.go","content":"x"}`, "src/a.go"},
 		{"edit", `{"path":"src/a.go","old":"x","new":"y"}`, "src/a.go"},
-		{"ls", `{"path":"src"}`, "src"},
-		{"find", `{"pattern":"*.go","root":"src"}`, "*.go"},
-		{"grep", `{"pattern":"panic"}`, "panic"},
 		{"python", `{"code":"import os\nprint(os)"}`, "import os"},
-		{"web_search", `{"query":"golang tui"}`, "golang tui"},
-		{"web_fetch", `{"url":"https://example.com/x"}`, "https://example.com/x"},
-		{"diff", `{"mode":"files","ref":"base"}`, "files"},
-		{"diff", `{"mode":"last","tool":"bash","args":{"command":"ls"}}`, "last"},
+		{"web", `{"action":"search","target":"golang tui"}`, "golang tui"},
+		{"web", `{"action":"fetch","target":"https://example.com/x"}`, "https://example.com/x"},
 		{"rem", `{"action":"recall","query":"pty"}`, ""},
 	}
 	for _, c := range cases {

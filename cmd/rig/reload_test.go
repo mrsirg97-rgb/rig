@@ -132,7 +132,7 @@ func newReloadHarnessWith(t *testing.T, home string, kernel plugins.Kernel, srv 
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": kernel.(core.Tool),
-			"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
+			"web": fakeWeb{},
 			"sessions": sessionstool.New("", dir),
 		},
 	}

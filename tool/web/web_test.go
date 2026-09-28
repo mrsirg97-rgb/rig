@@ -74,6 +74,19 @@ func has(t *testing.T, s string, sub string) {
 	}
 }
 
+func webTool(cfg web.Config) interface {
+	Exec(context.Context, json.RawMessage) (string, error)
+} {
+	return web.New(cfg)
+}
+
+func execArgs(t *testing.T, w interface {
+	Exec(context.Context, json.RawMessage) (string, error)
+}, args string) (string, error) {
+	t.Helper()
+	return w.Exec(context.Background(), json.RawMessage(args))
+}
+
 func TestIPisPrivateV4Table(t *testing.T) {
 	priv := []string{
 		"0.0.0.0", "10.1.2.3", "127.0.0.1", "169.254.169.254",
@@ -353,7 +366,8 @@ func TestE2ERealServerThroughTheSeamHTMLExtracted(t *testing.T) {
 		t.Fatalf("final URL = %q, want %q", got.FinalURL, want)
 	}
 
-	content, err := f.Exec(context.Background(), json.RawMessage(`{"url":`+`"`+srv.URL+"/hop"+`"}`))
+	w := webTool(web.Config{Fetch: web.FetchConfig{Lookup: publicLookup, Do: direct()}})
+	content, err := execArgs(t, w, `{"action":"fetch","target":`+`"`+srv.URL+"/hop"+`"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,47 +417,107 @@ func TestE2ETimeoutSurfacesAsAClearError(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct()})
-	_, err := f.Exec(context.Background(), json.RawMessage(
-		`{"url":"`+srv.URL+`/slow","timeoutMs":1000}`))
+	w := webTool(web.Config{Fetch: web.FetchConfig{Lookup: publicLookup, Do: direct()}})
+	_, err := execArgs(t, w, `{"action":"fetch","target":"`+srv.URL+`/slow","timeoutMs":1000}`)
 	if err == nil || !regexp.MustCompile(`(?i)timed out`).MatchString(err.Error()) {
 		t.Fatalf("want a timeout error, got %v", err)
 	}
 }
 
 func TestExecuteReportsGuardRefusalsAsToolErrorsNotThrows(t *testing.T) {
-	f := web.NewFetch(web.FetchConfig{Lookup: privateLookup})
-	_, err := f.Exec(context.Background(), json.RawMessage(`{"url":"http://internal.example/"}`))
+	w := webTool(web.Config{Fetch: web.FetchConfig{Lookup: privateLookup}})
+	_, err := execArgs(t, w, `{"action":"fetch","target":"http://internal.example/"}`)
 	if err == nil || !regexp.MustCompile(`(?i)private|refused`).MatchString(err.Error()) {
 		t.Fatalf("want the refusal as the tool error, got %v", err)
 	}
 }
 
-func TestToolRegistrationNameRequiredURLGuidelinesExist(t *testing.T) {
-	f := web.Fetch()
-	if f.Name() != "web_fetch" {
-		t.Fatalf("name = %q", f.Name())
+func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
+	w := web.Web()
+	if w.Name() != "web" {
+		t.Fatalf("name = %q, want web", w.Name())
 	}
-	s := getSchema(t, f)
-	if len(s.Required) != 1 || s.Required[0] != "url" {
-		t.Fatalf("required = %v, want [url]", s.Required)
+	s := getSchema(t, w)
+	if len(s.Required) != 2 || s.Required[0] != "action" || s.Required[1] != "target" {
+		t.Fatalf("required = %v, want [action target]", s.Required)
 	}
-	if _, ok := s.Properties["url"]; !ok {
-		t.Fatal("the url parameter is missing from the schema")
+	if _, ok := s.Properties["action"]; !ok {
+		t.Fatal("the action parameter is missing from the schema")
 	}
-	has(t, f.Description(), "search finds, fetch reads")
+	if _, ok := s.Properties["target"]; !ok {
+		t.Fatal("the target parameter is missing from the schema")
+	}
+	has(t, w.Description(), `search "<query>"`)
+	has(t, w.Description(), "fetch <url>")
+	has(t, w.Description(), "multi-word natural queries")
+	has(t, w.Description(), "never for code already in the workspace")
+	has(t, w.Description(), "compact JSON title/url/snippet")
+	has(t, w.Description(), "[TRUNCATED] marker naming the full size")
+	has(t, w.Description(), "private addresses refused")
+	has(t, w.Description(), "local services -> bash")
+}
+
+func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {
+	s := getSchema(t, web.Web())
+	if len(s.Required) != 2 || s.Required[0] != "action" || s.Required[1] != "target" {
+		t.Fatalf("required = %v, want [action target]", s.Required)
+	}
+	act := s.Properties["action"]
+	if act == nil {
+		t.Fatal("action is missing from the schema")
+	}
+	enum, ok := act["enum"].([]any)
+	if !ok || len(enum) != 2 || enum[0] != "search" || enum[1] != "fetch" {
+		t.Fatalf("action enum = %v, want [search fetch]", act["enum"])
+	}
+	mr := s.Properties["maxResults"]
+	if mr == nil {
+		t.Fatal("maxResults is missing from the schema")
+	}
+	if mr["minimum"] != float64(1) || mr["maximum"] != float64(20) {
+		t.Fatalf("maxResults bounds = %v, want 1..20", mr)
+	}
+	props, ok := s.Properties["timeoutMs"]
+	if !ok {
+		t.Fatal("schema missing timeoutMs")
+	}
+	if props["minimum"] != float64(1000) || props["maximum"] != float64(300000) {
+		t.Fatalf("timeoutMs bounds = %v/%v, want 1000/300000", props["minimum"], props["maximum"])
+	}
+	mc := s.Properties["maxChars"]
+	if mc == nil || mc["minimum"] != float64(100) {
+		t.Fatalf("maxChars = %v, want a minimum of 100", mc)
+	}
+}
+
+func TestUnknownActionIsRefused(t *testing.T) {
+	w := webTool(web.Config{})
+	_, err := execArgs(t, w, `{"action":"both","target":"x"}`)
+	if err == nil || !regexp.MustCompile(`(?i)unknown action`).MatchString(err.Error()) {
+		t.Fatalf("want an unknown-action refusal, got %v", err)
+	}
+}
+
+func TestMissingActionOrTargetIsRefused(t *testing.T) {
+	w := webTool(web.Config{})
+	for _, args := range []string{`{"target":"x"}`, `{"action":"search"}`, `{"action":"fetch"}`, `{}`} {
+		_, err := execArgs(t, w, args)
+		if err == nil {
+			t.Fatalf("%s must refuse (action and target are both required)", args)
+		}
+	}
 }
 
 func TestQueryIsEncodedAndSentToLocalSearXNGJSONAPI(t *testing.T) {
 	var seen *http.Request
-	s := web.NewSearch(web.SearchConfig{
+	w := webTool(web.Config{Search: web.SearchConfig{
 		Do: func(req *http.Request) (*http.Response, error) {
 			seen = req
 			return httpResp(200, map[string]string{"Content-Type": "application/json"},
 				`{"results":[]}`), nil
 		},
-	})
-	if _, err := s.Exec(context.Background(), json.RawMessage(`{"query":"rust simd & memchr"}`)); err != nil {
+	}})
+	if _, err := execArgs(t, w, `{"action":"search","target":"rust simd & memchr"}`); err != nil {
 		t.Fatal(err)
 	}
 	if seen == nil {
@@ -459,7 +533,7 @@ func TestQueryIsEncodedAndSentToLocalSearXNGJSONAPI(t *testing.T) {
 }
 
 func TestResultsMapToTitleURLSnippetWithTagsStrippedAndSnippetCapped(t *testing.T) {
-	s := web.NewSearch(web.SearchConfig{
+	w := webTool(web.Config{Search: web.SearchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{
 				"results": [
@@ -468,8 +542,8 @@ func TestResultsMapToTitleURLSnippetWithTagsStrippedAndSnippetCapped(t *testing.
 					{"title":"long","url":"https://x.example/","content":"`+strings.Repeat("y", 500)+`"}
 				]}`), nil
 		},
-	})
-	content, err := s.Exec(context.Background(), json.RawMessage(`{"query":"q"}`))
+	}})
+	content, err := execArgs(t, w, `{"action":"search","target":"q"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,15 +571,15 @@ func TestMaxResultsSlicesDefaultIsFive(t *testing.T) {
 		many[i] = map[string]string{"title": fmt.Sprintf("t%d", i), "url": fmt.Sprintf("https://x.example/%d", i)}
 	}
 	body, _ := json.Marshal(map[string]any{"results": many})
-	s := web.NewSearch(web.SearchConfig{
+	w := webTool(web.Config{Search: web.SearchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, string(body)), nil
 		},
-	})
+	}})
 
 	cut := func(t *testing.T, args string) int {
 		t.Helper()
-		content, err := s.Exec(context.Background(), json.RawMessage(args))
+		content, err := execArgs(t, w, args)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -515,22 +589,22 @@ func TestMaxResultsSlicesDefaultIsFive(t *testing.T) {
 		}
 		return len(got)
 	}
-	if n := cut(t, `{"query":"q"}`); n != 5 {
+	if n := cut(t, `{"action":"search","target":"q"}`); n != 5 {
 		t.Fatalf("default slice: got %d results, want 5", n)
 	}
-	if n := cut(t, `{"query":"q","maxResults":2}`); n != 2 {
+	if n := cut(t, `{"action":"search","target":"q","maxResults":2}`); n != 2 {
 		t.Fatalf("maxResults slice: got %d results, want 2", n)
 	}
 }
 
 func TestMissingFieldsDegradeToEmptyStringsEmptyResultsSaySo(t *testing.T) {
-	s := web.NewSearch(web.SearchConfig{
+	w := webTool(web.Config{Search: web.SearchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"},
 				`{"results":[{}]}`), nil
 		},
-	})
-	content, err := s.Exec(context.Background(), json.RawMessage(`{"query":"q","maxResults":1}`))
+	}})
+	content, err := execArgs(t, w, `{"action":"search","target":"q","maxResults":1}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -542,13 +616,13 @@ func TestMissingFieldsDegradeToEmptyStringsEmptyResultsSaySo(t *testing.T) {
 		t.Fatalf("missing fields must degrade to empty strings: %v", parsed[0])
 	}
 
-	empty := web.NewSearch(web.SearchConfig{
+	empty := webTool(web.Config{Search: web.SearchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"},
 				`{"results":[]}`), nil
 		},
-	})
-	got, err := empty.Exec(context.Background(), json.RawMessage(`{"query":"q"}`))
+	}})
+	got, err := execArgs(t, empty, `{"action":"search","target":"q"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,12 +632,12 @@ func TestMissingFieldsDegradeToEmptyStringsEmptyResultsSaySo(t *testing.T) {
 }
 
 func TestSearXNGBeingDownSurfacesAsALoudError(t *testing.T) {
-	s := web.NewSearch(web.SearchConfig{
+	w := webTool(web.Config{Search: web.SearchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(502, map[string]string{"Content-Type": "application/json"}, `{}`), nil
 		},
-	})
-	_, err := s.Exec(context.Background(), json.RawMessage(`{"query":"q"}`))
+	}})
+	_, err := execArgs(t, w, `{"action":"search","target":"q"}`)
 	if err == nil || !strings.Contains(err.Error(), "SearXNG search failed: HTTP 502") {
 		t.Fatalf("want the 502 voice, got %v", err)
 	}
@@ -574,24 +648,10 @@ func TestSearXNGBeingDownSurfacesAsALoudError(t *testing.T) {
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
-	down := web.NewSearch(web.SearchConfig{BaseURL: fmt.Sprintf("http://127.0.0.1:%d", port)})
-	_, err = down.Exec(context.Background(), json.RawMessage(`{"query":"q"}`))
+	down := webTool(web.Config{Search: web.SearchConfig{BaseURL: fmt.Sprintf("http://127.0.0.1:%d", port)}})
+	_, err = execArgs(t, down, `{"action":"search","target":"q"}`)
 	if err == nil || !regexp.MustCompile(`(?i)connection refused|ECONNREFUSED`).MatchString(err.Error()) {
 		t.Fatalf("want a refused-connection error, got %v", err)
-	}
-}
-
-func TestSchemaRequiresQueryAndBoundsMaxResults(t *testing.T) {
-	s := getSchema(t, web.Search())
-	if len(s.Required) != 1 || s.Required[0] != "query" {
-		t.Fatalf("required = %v, want [query]", s.Required)
-	}
-	mr := s.Properties["maxResults"]
-	if mr == nil {
-		t.Fatal("maxResults is missing from the schema")
-	}
-	if mr["minimum"] != float64(1) || mr["maximum"] != float64(20) {
-		t.Fatalf("maxResults bounds = %v, want 1..20", mr)
 	}
 }
 
@@ -619,10 +679,10 @@ func TestTheEgressProxyIsUsedWhenSet(t *testing.T) {
 	}))
 	defer proxy.Close()
 
-	f := web.NewFetch(web.FetchConfig{
+	w := webTool(web.Config{Fetch: web.FetchConfig{
 		Proxy: proxy.URL, Lookup: publicLookup, Trafilatura: off(),
-	})
-	content, err := f.Exec(context.Background(), json.RawMessage(`{"url":`+`"`+target.URL+`"}`))
+	}})
+	content, err := execArgs(t, w, `{"action":"fetch","target":"`+target.URL+`"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -640,8 +700,8 @@ func TestAnUnreachableProxyNamesItselfAndTheFix(t *testing.T) {
 	proxy := fmt.Sprintf("http://127.0.0.1:%d", l.Addr().(*net.TCPAddr).Port)
 	l.Close()
 
-	f := web.NewFetch(web.FetchConfig{Proxy: proxy, Lookup: publicLookup})
-	_, err = f.Exec(context.Background(), json.RawMessage(`{"url":"http://example.example/"}`))
+	w := webTool(web.Config{Fetch: web.FetchConfig{Proxy: proxy, Lookup: publicLookup}})
+	_, err = execArgs(t, w, `{"action":"fetch","target":"http://example.example/"}`)
 	if err == nil {
 		t.Fatal("want the unreachable-proxy error")
 	}
@@ -658,8 +718,8 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Trafilatura: off(), Do: direct()})
-	content, err := f.Exec(context.Background(), json.RawMessage(`{"url":`+`"`+srv.URL+`"}`))
+	w := webTool(web.Config{Fetch: web.FetchConfig{Lookup: publicLookup, Trafilatura: off(), Do: direct()}})
+	content, err := execArgs(t, w, `{"action":"fetch","target":"`+srv.URL+`"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -671,8 +731,8 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 	if web.DefaultTrafilatura() == "" {
 		t.Skip("no trafilatura on this box")
 	}
-	f2 := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct()})
-	content, err = f2.Exec(context.Background(), json.RawMessage(`{"url":`+`"`+srv.URL+`"}`))
+	w2 := webTool(web.Config{Fetch: web.FetchConfig{Lookup: publicLookup, Do: direct()}})
+	content, err = execArgs(t, w2, `{"action":"fetch","target":"`+srv.URL+`"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -716,7 +776,7 @@ func TestTrafilaturaResolutionSharedVenvFirstThenPATHExplicitWins(t *testing.T) 
 
 func TestTheSearchBudgetBitesOnAHangingEndpoint(t *testing.T) {
 	start := time.Now()
-	s := web.NewSearch(web.SearchConfig{
+	w := webTool(web.Config{Search: web.SearchConfig{
 
 		Do: func(req *http.Request) (*http.Response, error) {
 			select {
@@ -726,10 +786,10 @@ func TestTheSearchBudgetBitesOnAHangingEndpoint(t *testing.T) {
 			}
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
 		},
-	})
+	}})
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	_, err := s.Exec(ctx, json.RawMessage(`{"query":"q"}`))
+	_, err := w.Exec(ctx, json.RawMessage(`{"action":"search","target":"q"}`))
 	if err == nil {
 		t.Fatal("an expired ctx must surface as an error")
 	}
@@ -761,18 +821,18 @@ func TestLookupRidesTheRequestContext(t *testing.T) {
 }
 
 func TestOutOfRangeMaxResultsRefusesInsteadOfPanicking(t *testing.T) {
-	s := web.NewSearch(web.SearchConfig{
+	w := webTool(web.Config{Search: web.SearchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
 		},
-	})
+	}})
 	for _, args := range []string{
-		`{"query":"q","maxResults":-1}`,
-		`{"query":"q","maxResults":0}`,
-		`{"query":"q","maxResults":21}`,
-		`{"query":"q","maxResults":999999999999}`,
+		`{"action":"search","target":"q","maxResults":-1}`,
+		`{"action":"search","target":"q","maxResults":0}`,
+		`{"action":"search","target":"q","maxResults":21}`,
+		`{"action":"search","target":"q","maxResults":999999999999}`,
 	} {
-		_, err := s.Exec(context.Background(), json.RawMessage(args))
+		_, err := execArgs(t, w, args)
 		if err == nil {
 			t.Fatalf("out-of-range maxResults %s must refuse, not run", args)
 		}
@@ -785,13 +845,13 @@ func TestOutOfRangeMaxCharsRefusesInsteadOfPanicking(t *testing.T) {
 		io.WriteString(w, "body")
 	}))
 	defer srv.Close()
-	f := web.NewFetch(web.FetchConfig{Lookup: publicLookup, Do: direct(), Trafilatura: off()})
+	w := webTool(web.Config{Fetch: web.FetchConfig{Lookup: publicLookup, Do: direct(), Trafilatura: off()}})
 	for _, args := range []string{
-		`{"url":"` + srv.URL + `","maxChars":-1}`,
-		`{"url":"` + srv.URL + `","maxChars":0}`,
-		`{"url":"` + srv.URL + `","maxChars":99}`,
+		`{"action":"fetch","target":"` + srv.URL + `","maxChars":-1}`,
+		`{"action":"fetch","target":"` + srv.URL + `","maxChars":0}`,
+		`{"action":"fetch","target":"` + srv.URL + `","maxChars":99}`,
 	} {
-		_, err := f.Exec(context.Background(), json.RawMessage(args))
+		_, err := execArgs(t, w, args)
 		if err == nil {
 			t.Fatalf("out-of-range maxChars %s must refuse, not run", args)
 		}
@@ -799,27 +859,36 @@ func TestOutOfRangeMaxCharsRefusesInsteadOfPanicking(t *testing.T) {
 }
 
 func TestOutOfRangeTimeoutMsRefusesInsteadOfRunning(t *testing.T) {
-	f := web.NewFetch(web.FetchConfig{
+	w := webTool(web.Config{Fetch: web.FetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "text/plain"}, "ok"), nil
 		},
-	})
+	}})
 	for _, n := range []int{0, 1, 999, 300001, 1 << 30} {
-		_, err := f.Exec(context.Background(), []byte(fmt.Sprintf(`{"url":"http://example.com/","timeoutMs":%d}`, n)))
+		_, err := execArgs(t, w, fmt.Sprintf(`{"action":"fetch","target":"http://example.com/","timeoutMs":%d}`, n))
 		if err == nil || !strings.Contains(err.Error(), "timeoutMs must be between") {
 			t.Fatalf("timeoutMs=%d: want a refusal naming the range, got %v", n, err)
 		}
 	}
 }
 
-func TestSchemaDeclaresTheTimeoutBound(t *testing.T) {
-	s := getSchema(t, web.NewFetch(web.FetchConfig{}))
-	props, ok := s.Properties["timeoutMs"]
-	if !ok {
-		t.Fatal("schema missing timeoutMs")
+func TestSearchActionIgnoresFetchParamsAndViceVersa(t *testing.T) {
+	var seenURL string
+	w := webTool(web.Config{Search: web.SearchConfig{
+		Do: func(req *http.Request) (*http.Response, error) {
+			seenURL = req.URL.String()
+			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
+		},
+	}})
+	content, err := execArgs(t, w, `{"action":"search","target":"q","maxChars":500,"timeoutMs":5000}`)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if props["minimum"] != float64(1000) || props["maximum"] != float64(300000) {
-		t.Fatalf("timeoutMs bounds = %v/%v, want 1000/300000", props["minimum"], props["maximum"])
+	if seenURL == "" || !strings.Contains(seenURL, "q=") {
+		t.Fatalf("the fetch params must not disturb the search URL: %q", seenURL)
+	}
+	if !strings.HasPrefix(content, "no results for") {
+		t.Fatalf("search reply = %q", content)
 	}
 }

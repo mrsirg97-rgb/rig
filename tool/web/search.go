@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,23 +17,6 @@ const (
 	snippetCap    = 300
 	searchBodyCap = 1 << 20
 )
-
-const searchDescription = "search the web (a local SearXNG)."
-
-const searchGuidelines = "Guidelines: current or external information; never for code already in the workspace. " +
-	"Prefer natural-language multi-word queries: a leading brand or single-token query often returns " +
-	"navigational or dictionary junk from the engines. For a known authoritative URL use web_fetch, not search. " +
-	"On junk results, reword the query once; an identical retry returns the same junk. " +
-	"Reply: compact JSON — title, url, snippet per result."
-
-const searchSchema = `{
-	"type": "object",
-	"properties": {
-		"query": {"type": "string", "description": "Search query"},
-		"maxResults": {"type": "integer", "description": "Max results (default 5)", "minimum": 1, "maximum": 20}
-	},
-	"required": ["query"]
-}`
 
 var (
 	searchTag = regexp.MustCompile(`<[^>]+>`)
@@ -51,8 +33,6 @@ type search struct {
 	do        func(*http.Request) (*http.Response, error)
 }
 
-func Search() *search { return NewSearch(SearchConfig{}) }
-
 func NewSearch(cfg SearchConfig) *search {
 	base := cfg.BaseURL
 	if base == "" {
@@ -67,12 +47,6 @@ func NewSearch(cfg SearchConfig) *search {
 	return s
 }
 
-func (s *search) Name() string { return "web_search" }
-
-func (s *search) Description() string { return searchDescription + "\n\n" + searchGuidelines }
-
-func (s *search) Schema() json.RawMessage { return json.RawMessage(searchSchema) }
-
 type searxngResult struct {
 	Title   *string `json:"title"`
 	URL     *string `json:"url"`
@@ -85,33 +59,15 @@ type result struct {
 	Snippet string `json:"snippet"`
 }
 
-func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error) {
-	var p struct {
-		Query      string `json:"query"`
-		MaxResults *int   `json:"maxResults"`
-	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("web_search: bad args: %v", err)
-	}
-	if p.Query == "" {
-		return "", errors.New("web_search: no query supplied")
-	}
-	n := 5
-	if p.MaxResults != nil {
-		n = *p.MaxResults
-	}
-	if n < 1 || n > 20 {
-		return "", fmt.Errorf("web_search: maxResults must be between 1 and 20, got %d", n)
-	}
-
+func (s *search) exec(ctx context.Context, query string, maxResults int) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
 
-	q := strings.ReplaceAll(url.QueryEscape(p.Query), "+", "%20")
+	q := strings.ReplaceAll(url.QueryEscape(query), "+", "%20")
 	req, err := http.NewRequestWithContext(cctx, http.MethodGet,
 		s.searchURL+"?q="+q+"&format=json", nil)
 	if err != nil {
-		return "", fmt.Errorf("web_search: invalid query: %v", err)
+		return "", fmt.Errorf("web: invalid query: %v", err)
 	}
 	req.Header.Set("Accept", "application/json")
 
@@ -128,18 +84,18 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	}
 	body, err := io.ReadAll(io.LimitReader(res.Body, searchBodyCap))
 	if err != nil {
-		return "", fmt.Errorf("web_search: reading the response: %v", err)
+		return "", fmt.Errorf("web: reading the response: %v", err)
 	}
 	var data struct {
 		Results []searxngResult `json:"results"`
 	}
 	if err := json.Unmarshal(body, &data); err != nil {
-		return "", fmt.Errorf("web_search: SearXNG did not return JSON: %v", err)
+		return "", fmt.Errorf("web: SearXNG did not return JSON: %v", err)
 	}
 
-	out := make([]result, 0, n)
+	out := make([]result, 0, maxResults)
 	for i := range data.Results {
-		if i >= n {
+		if i >= maxResults {
 			break
 		}
 		r := data.Results[i]
@@ -150,7 +106,7 @@ func (s *search) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		})
 	}
 	if len(out) == 0 {
-		return fmt.Sprintf("no results for %q", p.Query), nil
+		return fmt.Sprintf("no results for %q", query), nil
 	}
 	b, err := json.MarshalIndent(out, "", " ")
 	if err != nil {

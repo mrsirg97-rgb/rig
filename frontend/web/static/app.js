@@ -509,12 +509,9 @@ function toolDetail(name, argsStr) {
   const first = (x) => { const i = x.indexOf('\n'); return i >= 0 ? x.slice(0, i) : x; };
   switch (name) {
     case 'bash': if (s('command')) return '$ ' + first(s('command')); break;
-    case 'read': case 'write': case 'edit': case 'ls': if (s('path')) return s('path'); break;
-    case 'find': case 'grep': if (s('pattern')) return s('pattern'); break;
+    case 'read': case 'write': case 'edit': if (s('path')) return s('path'); break;
     case 'python': if (s('code')) return first(s('code')); break;
-    case 'web_search': if (s('query')) return s('query'); break;
-    case 'web_fetch': if (s('url')) return s('url'); break;
-    case 'diff': if (s('mode')) return s('mode'); break;
+    case 'web': if (s('target')) return s('target'); break;
     case 'todo': case 'scheduler': case 'rem': case 'plugins_reload':
       if (s('action')) return s('action') + (s('id') ? ' ' + s('id') : ''); break;
     case 'plugin': case 'plugins':
@@ -1141,8 +1138,8 @@ async function browseTo(path) {
   }
   browser.innerHTML = '';
   const head = el('div', 'browse-path');
-  head.appendChild(span(G.done + ' ', 'accent'));
-  head.appendChild(span('ls', 'accent'));
+  head.appendChild(span(G.done + ' ', 'ember'));
+  head.appendChild(span('ls', 'ember'));
   head.appendChild(span(' ' + G.dot + ' ', 'dim'));
   head.appendChild(span(d.path, 'text'));
   head.appendChild(button('use this folder', 'primary', () => { addCwd(d.path); setBrowser(false); }));

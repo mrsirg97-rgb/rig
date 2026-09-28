@@ -305,7 +305,7 @@ func TestTwoViewsLandInToolCallOrderWhateverTheResultOrder(t *testing.T) {
 func TestAMarkerFromAnyOtherToolIsTextOnly(t *testing.T) {
 	dir := t.TempDir()
 	sha := writeBlob(t, dir, blobPayload)
-	for _, toolName := range []string{"read", "grep", "web_fetch", "bash", "python", "viewx", "view "} {
+	for _, toolName := range []string{"read", "grep", "web", "bash", "python", "viewx", "view "} {
 		e := captureEndpoint(t)
 		msgs := []core.Message{
 			{Role: core.RoleUser, Content: "read it"},

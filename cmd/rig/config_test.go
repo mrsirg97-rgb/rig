@@ -448,8 +448,8 @@ func TestPrecedencePresenceKeyEnvEmptyBeatsFile(t *testing.T) {
 		}
 		switch {
 		case toolResult == "":
-			w.Write([]byte(`data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","type":"function","function":{"name":"web_fetch","arguments":"` +
-				`{\"url\":\"` + target + `\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n"))
+			w.Write([]byte(`data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","type":"function","function":{"name":"web","arguments":"` +
+				`{\"action\":\"fetch\",\"target\":\"` + target + `\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n"))
 		default:
 			ans := strings.ReplaceAll(toolResult[:min(24, len(toolResult))], `"`, `\"`)
 			w.Write([]byte(`data: {"choices":[{"delta":{"content":"RESULT: ` + ans + `"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}` + "\n"))
@@ -1186,6 +1186,14 @@ func TestToolMenuBudgetAndVocabulary(t *testing.T) {
 			if strings.Contains(text, bad) {
 				t.Errorf("%s carries another harness's voice: %q", f.Name, bad)
 			}
+		}
+		if f.Name == "web" {
+			for _, sub := range []string{"compact JSON title/url/snippet", "[TRUNCATED] marker naming the full size"} {
+				if !strings.Contains(f.Description, sub) {
+					t.Errorf("web does not name its reply's shape: %q", sub)
+				}
+			}
+			continue
 		}
 		if !strings.Contains(f.Description, "Guidelines:") {
 			t.Errorf("%s has no Guidelines sentence", f.Name)
