@@ -25,3 +25,7 @@ bounded. Stdlib only.
   unsearchable cwd fails with `bash: cwd X: <reason>` and no content
   (the loop feeds the error text into the result content once), never a
   fork/exec line naming /usr/bin/bash.
+- The result writer keeps the head of the child's output at the cap and
+  drops the rest, so a huge stream cannot pin memory: the child's
+  writes are always fully consumed (it never blocks) and the kept output
+  is byte-identical to the post-hoc truncation (head + marker).
