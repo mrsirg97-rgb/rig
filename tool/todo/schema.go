@@ -32,7 +32,7 @@ const schemaJSON = `{
 		},
 		"id": {
 			"type": "string",
-			"description": "Task id as shown by the tool. Required for start/complete/fail/release/retry/move/note/notes/accept/reject and read with id."
+			"description": "The task, as tN from a reply. Required for every action but create and read."
 		},
 		"note": {
 			"type": "string",
@@ -65,19 +65,13 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "the task queue for the session's project. Guidelines: any job of three or more steps -> " +
-	"create before the first edit (tasks: [{text, requires?, blocks?}]); requires = I wait for it; blocks = " +
-	"it waits for me; claim takes the next pending task nothing waits for, complete lands your task done " +
-	"here (solo); a worker (rig -p: delegate, swarm) is read/note-only — the supervisor owns the board, and " +
-	"the worker's findings go in note and rem; accept or reject a task in review — the parent's flow is " +
-	"read then accept/reject, an unowned review task auto-claims, a foreign hold refuses, and reject takes " +
-	"the reason as note; note attaches a message to any task; notes with id lists a task's notes in order " +
-	"with their session and time, read shows the count and read with id points at notes; read shows the " +
-	"present (all:true for history); finished lists the n most recent finished, newest first, default 10, " +
-	"cap 100; move reorders by a 1-based pos; prune drops the done rows. " +
-	"Every reply names the queue it acted on ([rig]); name project when the work is in a repo you did not " +
-	"start in, which binds the session. Reply: the affected row and the summary; a refusal names the rule. " +
-	"Ids (tN) are minted by the tool — copy, never invent."
+const description = "the task queue for this repo. Guidelines: any job of three or more steps: create the tasks before " +
+	"the first edit, start one before working on it, complete or fail it when done, leave the queue empty at the " +
+	"end. read shows what is open. note attaches a finding to a task. claim takes the next task nothing waits for, " +
+	"when other sessions share the queue. requires links a task to one it waits for; blocks links it to one that " +
+	"waits for it. Task ids (tN) come from the tool's replies: copy them, never invent them. Set project only when " +
+	"the repo differs from the one you started in. " +
+	"Reply: the affected row and the queue's summary, named by its repo ([rig]); a refusal names the rule."
 
 const (
 	srcProject = "project"
