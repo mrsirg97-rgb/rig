@@ -25,26 +25,27 @@ func TestTodoBlockBothDoorsByteEqualMinusOpening(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reply := newTodoFixture(t).queue()
-	tool := tui.RenderTodoBlock(th,
-		th.Paint("ember", "●")+" "+th.Paint("ember", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
-		reply)
-	cmd := tui.RenderTodoBlock(th,
-		th.Paint("dim", "/todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
-		reply)
-	body := func(s string) string {
-		rest, _, ok := strings.Cut(s, "\n")
-		if !ok {
-			t.Fatal("no opening line")
+	for _, reply := range []string{newTodoFixture(t).queue(), newTodoFixture(t).completeEcho()} {
+		tool := tui.RenderTodoBlock(th,
+			th.Paint("ember", "●")+" "+th.Paint("ember", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
+			reply)
+		cmd := tui.RenderTodoBlock(th,
+			th.Paint("dim", "/todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
+			reply)
+		body := func(s string) string {
+			rest, _, ok := strings.Cut(s, "\n")
+			if !ok {
+				t.Fatal("no opening line")
+			}
+			_ = rest
+			return s[len(rest)+1:]
 		}
-		_ = rest
-		return s[len(rest)+1:]
-	}
-	if body(tool) != body(cmd) {
-		t.Fatalf("the two doors differ below the opening line:\n[tool]\n%s\n[cmd]\n%s", body(tool), body(cmd))
-	}
-	if tool == cmd {
-		t.Fatal("the opening lines must differ (the door is the difference)")
+		if body(tool) != body(cmd) {
+			t.Fatalf("the two doors differ below the opening line:\n[tool]\n%s\n[cmd]\n%s", body(tool), body(cmd))
+		}
+		if tool == cmd {
+			t.Fatal("the opening lines must differ (the door is the difference)")
+		}
 	}
 }
 
@@ -112,20 +113,56 @@ func TestTodoBlockBareQueueOneDimLine(t *testing.T) {
 	}
 }
 
-func TestTodoBlockParseFailureDegradesToRaw(t *testing.T) {
+func TestTodoBlockUnrecognizedKeepsTheOpeningAndRendersDim(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	raw := "all good, queue is healthy"
-	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != raw {
-		t.Fatalf("an unparseable reply commits raw, got:\n%s", got)
+	want := "OPEN\n" + th.Paint(tui.SlotDim, raw)
+	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != want {
+		t.Fatalf("an unparseable reply must keep the opening and go dim, got:\n%s", got)
 	}
 
 	raw = "2/2 done\n  t1 ?? text"
-	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != raw {
-		t.Fatalf("a malformed task row degrades to raw, got:\n%s", got)
+	want = "OPEN\n" + th.Paint(tui.SlotDim, "2/2 done") + "\n" + th.Paint(tui.SlotDim, "  t1 ?? text")
+	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != want {
+		t.Fatalf("a malformed task row must keep the opening and go dim, got:\n%s", got)
+	}
+}
+
+func TestTodoBlockEchoRendersNoteAndRowThroughTheQueuePainter(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).completeEcho())
+	if !strings.HasPrefix(got, "OPEN\n") {
+		t.Fatalf("the echo must keep the opening, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "\u2192 't1' auto-started and completed")) {
+		t.Fatalf("the echo's note renders dim, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotSuccess, "\u25cf")+" "+th.Paint(tui.SlotDim, "t1")+" "+th.Paint(tui.SlotText, "wire the models table")) {
+		t.Fatalf("the echo's row must ride the queue's task-line painter, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "[rig] ")+th.Paint(tui.SlotEmber, "\u25b0")+th.Paint(tui.SlotDim, " 1/1")) {
+		t.Fatalf("the echo's summary renders as the head, got:\n%s", got)
+	}
+}
+
+func TestTodoBlockNoteEchoRendersNoteAndRow(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).noteEcho())
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "\u2192 note added to 't1'")) {
+		t.Fatalf("the note echo's note renders dim, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "    \u00b7 1 note")) {
+		t.Fatalf("the note echo's count rides the row, got:\n%s", got)
 	}
 }
 

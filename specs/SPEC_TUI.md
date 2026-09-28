@@ -652,11 +652,25 @@ ember bar; the review count rides the head; a review row renders its
 
 The renderers parse the tools' own reply text (the queue the reply
 already carries): no new tool surface, no reaching into stores from
-the render path. If parsing fails (a future voice change), the raw
-reply commits as-is: degrade to the CLI, never hide. An empty todo
-queue is one such raw case: the reply `(no tasks in <label>'s queue)`
-names the queue it read (SPEC_CORE) and commits as-is through both
-doors; no renderer structure sees new text, so no golden moves.
+the render path. If parsing fails (a future voice change), the block
+keeps its opening and prints the reply dim beneath it — the bare
+string is never returned, so a todo reply can never drop its door
+line again. The one exception stays: a bare queue report
+(`queue: rig (bound)`) is not a block and commits as one dim line.
+An empty todo queue is one dim case: the reply
+`(no tasks in <label>'s queue)` names the queue it read (SPEC_CORE)
+and commits as opening plus one dim line through both doors; no
+renderer structure sees new text, so no golden moves.
+
+Amended 1.7.4, the one-row echo: a transition reply
+(`→ 't1' auto-started and completed` plus the affected row and the
+queue summary, the shape `renderOne` and the transition echo both
+use) now parses like the queue — the summary renders as the head,
+the note renders dim under it, and each row rides the same
+task-line painter the queue block uses, so start/complete/accept/
+note look like the queue, one row. The block never returns the
+reply's raw bytes: rows wrap by the TUI's own wrap rules, never the
+terminal's.
 
 The ambient scheduler news line that lived here; one dim line at
 session start when the store had news since the last session; is

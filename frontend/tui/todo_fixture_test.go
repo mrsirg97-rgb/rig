@@ -172,6 +172,37 @@ func (f *todoFixture) stale() string {
 	return out
 }
 
+func (f *todoFixture) bindSession(ctx context.Context, session string) {
+	f.t.Helper()
+	if err := todostore.Bind(ctx, f.db, todostore.Binding{Session: session, Scope: f.proj.Key, Label: f.proj.Label}); err != nil {
+		f.t.Fatalf("bind: %v", err)
+	}
+}
+
+func (f *todoFixture) completeEcho() string {
+	f.t.Helper()
+	reply := f.create("s1", todostore.CreateItem{Text: "wire the models table"})
+	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
+	f.bindSession(ctx, "s1")
+	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"complete","id":"`+f.id(reply, "wire the models table")+`"}`))
+	if err != nil {
+		f.t.Fatalf("complete: %v", err)
+	}
+	return out
+}
+
+func (f *todoFixture) noteEcho() string {
+	f.t.Helper()
+	reply := f.create("s1", todostore.CreateItem{Text: "wire the models table"})
+	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
+	f.bindSession(ctx, "s1")
+	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"note","id":"`+f.id(reply, "wire the models table")+`","note":"on it"}`))
+	if err != nil {
+		f.t.Fatalf("note: %v", err)
+	}
+	return out
+}
+
 func (f *todoFixture) bareQueue() string {
 	f.t.Helper()
 	ctx := core.WithSession(context.Background(), &core.Session{ID: "sess-1"})
