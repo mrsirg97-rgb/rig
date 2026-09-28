@@ -79,7 +79,9 @@ width); no core or loop line (decision 10).
   newline guarantee on `Done`, the fault line, the compact line, the
   empty-turn notice (`RenderEmptyTurn`, its usage added to the turn
   totals), the usage on `TurnEnd`. Events it does not name are ignored
-  (the compat rule).
+  (the compat rule). `toolStarts` keys a wave's in-flight calls by ID,
+  kept by call ID until the result consumes it, so a result block
+  renders the call that produced it, not the wave's latest start.
 - The `Steerer` is the frontend-owned seam (SPEC_COMMANDS 2): `Steer`
   queues text and reports the interrupt; `LiveTurn` is the turn's
   state; `Ask` is the approval gate's door (SPEC_MODES 4).
