@@ -77,6 +77,7 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 		"re-create it to retry",
 		"self-deletes after one fire",
 		"running in its own cwd",
+		"repair re-derives a drifting job's crontab line",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing voice fragment: %q", want)
@@ -98,7 +99,7 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("schema missing action")
 	}
 	enum, _ := action["enum"].([]any)
-	if want := []string{"create", "update", "list", "pause", "resume", "remove", "runs"}; len(enum) != len(want) {
+	if want := []string{"create", "update", "list", "pause", "resume", "remove", "runs", "repair"}; len(enum) != len(want) {
 		t.Fatalf("action enum %v", enum)
 	} else {
 		for i, v := range want {
@@ -111,7 +112,7 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("the scope arg must be gone from the schema")
 	}
 	id, _ := schema.Properties["id"].(map[string]any)
-	if got, _ := id["description"].(string); got != "Job id jN (as shown by list). Required for pause/resume/remove/runs." {
+	if got, _ := id["description"].(string); got != "Job id jN (as shown by list). Required for pause/resume/remove/runs; repair takes it or none (none repairs every drifting job)." {
 		t.Fatalf("id description %q", got)
 	}
 }
@@ -212,6 +213,64 @@ func TestExecMappingLandsInTheStore(t *testing.T) {
 	}
 	if !strings.Contains(paused, "paused") {
 		t.Fatalf("pause reply %q", paused)
+	}
+}
+
+func TestExecRepairLandsInTheStore(t *testing.T) {
+	h := newHarness(t, "/ws/sa")
+	if _, err := exec(t, h, map[string]any{"action": "create", "name": "drifty", "prompt": "p", "cron": "0 3 * * *"}); err != nil {
+		t.Fatal(err)
+	}
+	h.ct.mu.Lock()
+	h.ct.text = strings.Replace(h.ct.text, "0 3 * * * /x/rig run-job j1", "59 23 * * * /x/rig run-job j1", 1)
+	h.ct.mu.Unlock()
+
+	reply, err := exec(t, h, map[string]any{"action": "repair", "id": "j1"})
+	if err != nil {
+		t.Fatalf("repair: %v (%s)", err, reply)
+	}
+	if !strings.Contains(reply, "'j1' repaired: cron differs (crontab: 59 23 * * *)") {
+		t.Fatalf("repair reply %q", reply)
+	}
+	if !strings.Contains(h.ct.text, "0 3 * * * /x/rig run-job j1  # rig-scheduler:"+sched.TagHome(h.home)+":j1") {
+		t.Fatalf("line not re-derived: %q", h.ct.text)
+	}
+	reply, err = exec(t, h, map[string]any{"action": "repair", "id": "j1"})
+	if err != nil {
+		t.Fatalf("second repair: %v (%s)", err, reply)
+	}
+	if reply != "'j1' is in sync" {
+		t.Fatalf("in-sync reply %q", reply)
+	}
+}
+
+func TestExecRepairAllWalksEveryDriftingJob(t *testing.T) {
+	h := newHarness(t, "/ws/sa")
+	for _, name := range []string{"one", "two"} {
+		if _, err := exec(t, h, map[string]any{"action": "create", "name": name, "prompt": "p", "cron": "0 3 * * *"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.ct.mu.Lock()
+	h.ct.text = strings.Replace(h.ct.text, "0 3 * * * /x/rig run-job j2", "59 23 * * * /x/rig run-job j2", 1)
+	h.ct.mu.Unlock()
+
+	reply, err := exec(t, h, map[string]any{"action": "repair"})
+	if err != nil {
+		t.Fatalf("repair all: %v (%s)", err, reply)
+	}
+	if !strings.Contains(reply, "'j2' repaired: cron differs (crontab: 59 23 * * *)") {
+		t.Fatalf("walk reply %q, want one line per repaired job", reply)
+	}
+	if strings.Contains(reply, "j1") {
+		t.Fatalf("an in-sync job must not be listed: %q", reply)
+	}
+	reply, err = exec(t, h, map[string]any{"action": "repair"})
+	if err != nil {
+		t.Fatalf("second walk: %v (%s)", err, reply)
+	}
+	if reply != "nothing drifted" {
+		t.Fatalf("second walk %q", reply)
 	}
 }
 
