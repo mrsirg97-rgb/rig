@@ -146,4 +146,7 @@ sees core and models and nothing else.
   `Config.Workers` is nil, so a no-fleet start wires thirteen natives
   instead of fifteen, and the tools map builds the two only when a
   fleet stands (the scheduler fed the fleet's model, the delegate its
-  slots). The `serve` path threads `cfg.Workers` into the web server.
+  slots). The `serve` path runs the same composition with the web server
+  as the frontend (`command.All()`, the `Env`, and the status adapter
+  threaded in) and starts the listener beside `loop.Run`; `-p` is
+  refused with `serve`.

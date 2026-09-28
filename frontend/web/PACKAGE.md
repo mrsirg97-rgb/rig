@@ -3,18 +3,52 @@
 ## What it is
 
 The local dashboard (SPEC_SERVE): a loopback-only `net/http` server that
-reads the rig home's stores and renders them as one embedded page. It is
-a *reader* of the same SQLite files a live session is writing; the same
-rig home, the same pragmas, the same store verbs, and it carries the
-operator's writes beside the model's tools (the todo create and two
-hands, the scheduler create and four doors, the plugin create and the
-forge's doors), each attributed to `dashboard` and riding the existing
-verb or the provenance rule's landing zone. It is a leaf package wired
-once at the root, beside `cli`/`tui`; the loop never names it. No
-framework, no build step, no external asset: `go build` alone ships it.
+is the third frontend of the loop (phase 3, SPEC_SERVE 17) and a reader
+of the rig home's stores in one embedded page. `Server` satisfies
+`core.Frontend` (`Input`, `Notify`) and the optional doors the TUI has
+(`Ask`, `Steer`, `Interrupt`, `ClearSlot`, `LiveTurn`): `rig serve`
+composes the whole root exactly as the terminal does and hands the
+server to the loop as its frontend, so a session started from the page
+is an ordinary session in the same store, resumable from the TUI, on
+the same `settings.json` model, workers, and commands. The page renders
+the loop's own events in the TUI's grammar over a server-sent stream;
+the stores' views (sessions, todo, scheduler, swarm, plugins, models)
+ride the same JSON routes as before, and the operator's writes (the
+todo create and two hands, the scheduler create and four doors, the
+plugin create and the forge's doors) are attributed to `dashboard` and
+ride the existing verbs. It is a leaf package wired once at the root,
+beside `cli`/`tui`; the loop never names it. No framework, no build
+step, no external asset: `go build` alone ships it, and the page
+installs from Safari's share sheet as a home-screen app (a manifest,
+the Apple meta tags, safe-area insets).
 
 ## What it includes
 
+- **The chat** (`chat.go`, SPEC_SERVE 17): the frontend seam over HTTP.
+  `Input` blocks on the prompt channel the way the CLI blocks on stdin;
+  `POST /api/chat {text}` feeds it: a `/command` dispatches at once
+  through the root's command set (the same `command.All()` and `Env`
+  the TUI gets; the reply and every dispatch are published as a
+  `command` frame), a plain line during a live turn steers (the slot
+  plus the turn's interrupt, as the CLI), and a plain line between
+  turns is the next prompt (one queued at a time; a second is a 409).
+  `Notify` turns every loop event into a JSON frame (`prompt`, `text`,
+  `reasoning`, `tool_start`, `tool_result` capped at 16 KB by name,
+  `done`, `empty_turn`, `compacting`, `compacted`, `fault`, `turn_end`,
+  `swarm_status`, `swarm_notice`, `ask`, `ask_done`, `steer`,
+  `command`) with a sequence number, coalesces consecutive text and
+  reasoning deltas up to 4 KB, keeps a ring of the last 4096 frames,
+  and fans out to every open stream. `GET /api/chat/events?since=N` is
+  the server-sent stream: a `hello` (the live flag, the replay count),
+  the ring after `since`, then live frames, a keep-alive comment every
+  15 s, the connection's write deadline cleared so the server's write
+  timeout never cuts it. `Ask` publishes an `ask` frame and waits for
+  `POST /api/chat/answer {id, yes}` (or the turn's end); `POST
+  /api/chat/interrupt` is the interrupt door. `GET /api/status` is the
+  status band (the TUI's `StatusIn`, mapped at the root) plus the live
+  flag; `GET /api/swarm` is the last swarm status the loop published.
+  The POST doors ride the write's walls (Origin, the body cap); the
+  stream and the reads ride the token gate.
 - **`Server` / `New` / `ListenAndServe` / `Handler` / `Close`**: the
   dashboard: the static inputs (the rig home, the serve cwd, the models
   table, the crontab, the runner command), the token, the allowed
@@ -92,13 +126,22 @@ framework, no build step, no external asset: `go build` alone ships it.
   unless asked, the listing capped at 500, a path outside the root a
   403 by name.
 - **The static assets** (`static/`): the single page in the TUI's own
-  grammar (decision 14): every view is a tool block (`● name · detail`,
-  the body, `name ✓`), input is a `❯` prompt row, the nav marks the
-  active view with `❯`, nothing sits in a panel; the oled palette's
-  values and the effort ramp (the `frontend/tui` `theme.go` table), the
-  glyph set, the todo and scheduler text parsed by the
-  `tools_render.go` rules mirrored in JS (decision 10; unparseable text
-  falls back to the verbatim `<pre>`), the models view in the `/models`
+  grammar (decision 14): the home view is the live session as a
+  terminal (the feed of the loop's frames: `❯ prompt`, the reasoning
+  folded to one line after the turn, the prose, `● tool · detail` with
+  the capped result and `tool ✓ 0.4s`, the compaction and usage lines;
+  the status line, the swarm band, the breathing activity label, the
+  ask panel, and the `❯` composer with Enter to send, `/` completion,
+  and stop while a turn is live), every other view is a tool block
+  (`● name · detail`, the body, `name ✓`), the sidebar marks the
+  active view with `❯` and folds into a bottom tab bar below 720px
+  (chat, sessions, todo, jobs, swarm, more), nothing sits in a panel;
+  two palettes, `warm` (the TUI's oled table) and `cool` (orbit's),
+  as `data-theme` tokens with the effort ramp, the glyph set, the todo
+  and scheduler text parsed by the `tools_render.go` rules mirrored in
+  JS (decision 10; the scoped head, the review marker and claim verb,
+  a lone task row rendered as a row; unparseable text falls back to
+  dim lines, never a bare `<pre>`), the models view in the `/models`
   table's shape with the effort list in the ramp's colors, the plugins
   view split approved | pending | disabled with the forge's editor (a
   gutter, a highlighted mirror over a transparent textarea; Tab
@@ -201,6 +244,13 @@ reads it back through the same listing.
 - The mobile nav toggle is `.nav-toggle` (hidden above 720px by class,
   not by id; the first round's button carried only the id and showed
   on desktop).
+- The chat is one session per process, as the terminal is: every open
+  tab sees the same stream, and a prompt from any tab is the next
+  input. The page reconnects with `since=<last seq>` and replays what
+  it missed; a frame older than the ring is gone, which the `hello`'s
+  replay count makes visible. `LiveTurn` is the truth the page paints
+  the composer by; a turn's usage line is summed on the page from the
+  `done` frames between `prompt` and `turn_end`.
 - The homage's parsers mirror `frontend/tui/tools_render.go` line for
   line (decision 10): the todo head/task/footer rules, the scheduler
   section/job/detail rules, the bar's fill, the glyph and slot mapping.
