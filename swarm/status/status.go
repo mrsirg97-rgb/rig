@@ -22,9 +22,6 @@ func New(notify func(core.Event)) *Emitter {
 	return &Emitter{notify: notify}
 }
 
-// Emit delivers at most one frame per window. The snapshot is built lazily,
-// only when the frame is due: the caller passes the builder, so a streaming
-// worker's per-chunk emits never fold the store.
 func (e *Emitter) Emit(st func() core.SwarmStatus) {
 	if e == nil {
 		return
@@ -35,7 +32,6 @@ func (e *Emitter) Emit(st func() core.SwarmStatus) {
 	e.notify(st())
 }
 
-// Force always delivers: the exit's last frame must land.
 func (e *Emitter) Force(st func() core.SwarmStatus) {
 	if e == nil {
 		return
