@@ -28,6 +28,8 @@ adapter's problem; the loop sees `core.Event` only.
   at compile time.
 - Helpers: `sseData`, `accumulate`, `sortedPending`, `wireMessages`,
   `wireTools`, `endpoint`.
+- `BlobsDir` empty is the text path: the model has no store to read, so
+  no image part ever appears on the wire.
 
 ## How it is consumed
 
@@ -52,7 +54,9 @@ adapter's problem; the loop sees `core.Event` only.
   `Client.Timeout` would kill it.
 - A transport error emits `Fault` (or closes the channel torn-down, with
   no `Done`/`Fault`, when the ctx is dead). A non-2xx status emits `Fault`
-  with a response snippet read capped at 256 bytes.
+  with a response snippet read capped at 256 bytes: the error body is
+  untrusted, so the cap is the most a hostile endpoint can make the
+  process hold, and the same read decides the every-row empty-5xx retry.
 - SSE comment lines (`":"`) are the server's keep-alive through a long
   prefill: ignored, never a fault. An unrecognized line or a malformed
   chunk is a `Fault`.
@@ -88,6 +92,14 @@ adapter's problem; the loop sees `core.Event` only.
   link refuses a marked call before the tool, so the half of a call
   never executes or poisons the transcript (SPEC_HARDENING 10); a
   missing finish marker still faults "stream truncated".
+- A tool result is paired with the assistant message that owns its
+  batch: the batch runs from that assistant message until the next
+  message that is not a tool result, so a reused call id on a later
+  turn is looked up in the turn that issued it, never in the transcript
+  as a whole.
+- The view contract is one line and nothing else: only a view result
+  that is exactly the marker it wrote is honored as an image, so a path
+  that smuggled a marker line stays text.
 - The scanner buffer is bounded (64 KiB initial, 4 MiB max).
 - The wire is pinned by tests (`wire_test.go`): the same request
   marshaled twice is byte-identical, and a later turn's message array
