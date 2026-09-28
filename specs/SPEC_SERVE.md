@@ -667,7 +667,7 @@ shipped assets).
   lines), the static assets' row controls and the in-place update
   form (the phone rule), the `PACKAGE.md` update.
 - **`specs/SPEC_SERVE.md`**: this section.
-- **`CHANGELOG.md`**: the entry under [Unreleased].
+- **`CHANGELOG.md`**: the 2.0.0 entry.
 
 ## phase 3: the live session, and the page as an app
 
@@ -763,4 +763,4 @@ two palettes, the manifest, and the meta tags.
   the parse; `main.go` selects it first and starts the listener beside
   `loop.Run`); the status adapter.
 - **`specs/SPEC_SERVE.md`**: this section.
-- **`CHANGELOG.md`**: the entry under [Unreleased].
+- **`CHANGELOG.md`**: the 2.0.0 entry.

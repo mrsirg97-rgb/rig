@@ -1,5 +1,5 @@
 # Changelog
-## [Unreleased]: the dashboard is the third frontend
+## [2.0.0]: the dashboard is the third frontend
 
 `rig serve` is rig with the page as its terminal. The web server
 satisfies the loop's frontend seam (`Input`, `Notify`, and the TUI's
