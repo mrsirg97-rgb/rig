@@ -94,6 +94,11 @@ written before the store commit; drift is surfaced in list.
   `--setenv` takes two arguments; an entry without an `=` refuses), are
   the worker's whole environment, so the operator's exported
   secrets never reach a jailed worker.
+- `landlock.go`: the domain arrives with the image, not in-process: an
+  in-process `restrict_self` cannot cover the worker's own goroutines
+  (it commits per-thread creds and Go's runtime has threads before
+  main), so the runner spawns `rig -exec rig -p ...` and the exec'd
+  worker's every thread inherits the wall.
 - `proxy.go`: the unix-socket proxy (the jail's one hole), the socket
   chmod'd 0600 after listen so no other local user reaches the model
   endpoint through a running job.
