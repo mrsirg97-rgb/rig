@@ -14,12 +14,8 @@ const DefaultSearXNG = "http://127.0.0.1:8888"
 
 const DefaultProxy = "http://127.0.0.1:8889"
 
-const webDescription = "search the web (a local SearXNG): target is the query.\n" +
-	"fetch a public http(s) URL as readable text (article extraction for HTML, the raw body for JSON and plain text): target is the URL."
-
-const webGuidelines = "Guidelines: search finds, fetch reads — snippets are not the page; web pages and textual APIs only (local files -> read, local services -> bash). " +
-	"Search: current or external information; never for code already in the workspace. Prefer natural-language multi-word queries: a leading brand or single-token query often returns navigational or dictionary junk from the engines. For a known authoritative URL use fetch, not search. On junk results, reword the query once; an identical retry returns the same junk. Reply: compact JSON — title, url, snippet per result. " +
-	"Fetch: reply the text, capped with a [TRUNCATED] marker naming the full size — refetch with a larger maxChars only if the missing part matters; private and internal addresses are refused."
+const webDescription = "search \"<query>\" (a local SearXNG; multi-word natural queries, reword once on junk, never for code already in the workspace; reply compact JSON title/url/snippet)\n" +
+	"and fetch <url> (public http(s) as readable text, capped with a [TRUNCATED] marker naming the full size, refetch larger only if the missing part matters; private addresses refused; local files -> read, local services -> bash)."
 
 const webSchema = `{
 	"type": "object",
@@ -53,7 +49,7 @@ func Web() *web {
 
 func (w *web) Name() string { return "web" }
 
-func (w *web) Description() string { return webDescription + "\n\n" + webGuidelines }
+func (w *web) Description() string { return webDescription }
 
 func (w *web) Schema() json.RawMessage { return json.RawMessage(webSchema) }
 

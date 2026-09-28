@@ -20,7 +20,7 @@ body:
     id: surface
     attributes:
       label: surface
-      description: the tool, command, or frontend involved (bash, edit, tui, serve, web_fetch, ...)
+      description: the tool, command, or frontend involved (bash, edit, tui, serve, web, ...)
     validations:
       required: true
   - type: textarea

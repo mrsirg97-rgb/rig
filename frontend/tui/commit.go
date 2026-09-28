@@ -117,7 +117,7 @@ func toolDetail(name string, args json.RawMessage, content string) string {
 		if c := s("command"); c != "" {
 			return "$ " + first(c)
 		}
-	case "read", "write", "edit", "ls":
+	case "read", "write", "edit":
 		if p := s("path"); p != "" {
 			return p
 		}
@@ -130,10 +130,6 @@ func toolDetail(name string, args json.RawMessage, content string) string {
 			return d + " · " + img
 		}
 		return d
-	case "find", "grep":
-		if p := s("pattern"); p != "" {
-			return p
-		}
 	case "python":
 		if c := s("code"); c != "" {
 			return first(c)
@@ -148,10 +144,6 @@ func toolDetail(name string, args json.RawMessage, content string) string {
 			if u := s("target"); u != "" {
 				return u
 			}
-		}
-	case "diff":
-		if m := s("mode"); m != "" {
-			return m
 		}
 	}
 	return ""

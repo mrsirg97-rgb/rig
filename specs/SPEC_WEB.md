@@ -30,12 +30,17 @@ net, os/exec; no third-party Go client.
   deadline: the subprocess gets the remaining budget (its 20 s cap is
   the floor), and a one-second WaitDelay keeps an orphaned grandchild
   from holding the output pipes past it.
-- The surface is one `core.Tool`: the description carries the two
-  one-line clauses (search "<query>", fetch <url>) and folds both
-  guidelines into one paragraph; the schema is hand-written:
-  `required: ["action", "target"]`, action enum `[search, fetch]`, the
-  integer bounds (maxResults 1..20; maxChars min 100; timeoutMs min
-  1000). Every runtime voice is pane's verbatim.
+- The surface is one `core.Tool`: the description is one line per
+  action — search "<query>" (a local SearXNG; multi-word natural
+  queries, reword once on junk, never for code already in the
+  workspace; reply compact JSON title/url/snippet) and fetch <url>
+  (public http(s) as readable text, capped with a [TRUNCATED] marker
+  naming the full size, refetch larger only if the missing part
+  matters; private addresses refused; local files -> read, local
+  services -> bash) — about half the pair's description bytes; the
+  schema is hand-written: `required: ["action", "target"]`, action enum
+  `[search, fetch]`, the integer bounds (maxResults 1..20; maxChars min
+  100; timeoutMs min 1000). Every runtime voice is pane's verbatim.
 
 ## non-goals
 
@@ -203,19 +208,19 @@ truncation markers) are unchanged.
 - **Query strings are built by hand**, in pane's order
   (`?q=<escaped>&format=json`), not url.Values (which would sort the
   keys); the named case asserts pane's exact URL.
-- **The guidelines teach both shapes** (1.2.12, folded 1.7.3). The live
-  SearXNG serves navigational and dictionary junk for brand-heavy
-  queries from whichever engine answers, and every session relearned
-  the failure mode by burning queries on it. The one paragraph now
-  opens with the pair's split (`search finds, fetch reads — snippets
-  are not the page; web pages and textual APIs only`), then the
-  Search: head (natural-language multi-word queries, refuse leading
-  brand/single-token shapes, route known URLs to fetch, demand a
-  reword rather than an identical retry on junk, compact JSON reply)
-  and the Fetch: head (the capped text reply, the named elision
-  marker, private and internal addresses refused). Prompt-facing only:
-  the schema and every runtime voice are untouched; the golden_020
-  request pins carry the new description bytes.
+- **The description teaches both shapes** (1.2.12, folded 1.7.3,
+  compressed 1.7.3). The live SearXNG serves navigational and
+  dictionary junk for brand-heavy queries from whichever engine
+  answers, and every session relearned the failure mode by burning
+  queries on it. The two one-line clauses carry the essentials:
+  search — a local SearXNG, multi-word natural queries, reword once on
+  junk, never for code already in the workspace, compact JSON
+  title/url/snippet reply; fetch — public http(s) as readable text,
+  capped with a [TRUNCATED] marker naming the full size, refetch larger
+  only if the missing part matters, private addresses refused, local
+  files -> read and local services -> bash. Prompt-facing only: the
+  schema and every runtime voice are untouched; the golden_020 request
+  pins carry the new description bytes.
 
 ## testing
 

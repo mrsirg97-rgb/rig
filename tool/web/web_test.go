@@ -447,11 +447,14 @@ func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
 	if _, ok := s.Properties["target"]; !ok {
 		t.Fatal("the target parameter is missing from the schema")
 	}
-	has(t, w.Description(), "search the web (a local SearXNG)")
-	has(t, w.Description(), "fetch a public http(s) URL")
-	has(t, w.Description(), "target is the query")
-	has(t, w.Description(), "target is the URL")
-	has(t, w.Description(), "search finds, fetch reads")
+	has(t, w.Description(), `search "<query>"`)
+	has(t, w.Description(), "fetch <url>")
+	has(t, w.Description(), "multi-word natural queries")
+	has(t, w.Description(), "never for code already in the workspace")
+	has(t, w.Description(), "compact JSON title/url/snippet")
+	has(t, w.Description(), "[TRUNCATED] marker naming the full size")
+	has(t, w.Description(), "private addresses refused")
+	has(t, w.Description(), "local services -> bash")
 }
 
 func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {
