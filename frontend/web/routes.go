@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/store/state"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 const (

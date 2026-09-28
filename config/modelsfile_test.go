@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/models"
+	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
 func TestModelsMalformedNamesFileRowAndField(t *testing.T) {

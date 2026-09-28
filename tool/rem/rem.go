@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store"
-	remstore "github.com/mrsirg97-rgb/rig/store/rem"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 )
 
 const schemaJSON = `{

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
 )
 
 func TestShippedThemesCarryEverySlot(t *testing.T) {

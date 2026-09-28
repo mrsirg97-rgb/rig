@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
 )
 
 const schedListReply = "/home/ng/Projects/rig:\n" +

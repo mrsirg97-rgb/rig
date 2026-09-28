@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/pathguard"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/pathguard"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
 func description(defModel string) string {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 const sessC = "sess-c"

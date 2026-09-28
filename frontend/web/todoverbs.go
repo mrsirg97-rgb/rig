@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 var todoIDRe = regexp.MustCompile(`^t\d{1,9}$`)

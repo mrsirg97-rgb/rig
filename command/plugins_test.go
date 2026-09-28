@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/command"
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 func pluginsCmd(t *testing.T) core.Command {

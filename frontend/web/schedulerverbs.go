@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
 var jobIDRe = regexp.MustCompile(`^j\d{1,9}$`)

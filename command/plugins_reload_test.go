@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/command"
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const createTemplate = "author a plugin: %s; the contract is DESCRIPTION, SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending directory (SPEC_SANDBOX); the operator installs it with /plugins approve; then call it through the plugin door and test it with one call."

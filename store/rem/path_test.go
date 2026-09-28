@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	remstore "github.com/mrsirg97-rgb/rig/store/rem"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 )
 
 func TestFilePathRoundTrip(t *testing.T) {

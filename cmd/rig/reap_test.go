@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/state"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 func taskIDText(t *testing.T, reply, text string) string {

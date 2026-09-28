@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 )
 
 const provenanceVoice = "plugins install by the operator's /plugins approve; write to plugins/pending/"

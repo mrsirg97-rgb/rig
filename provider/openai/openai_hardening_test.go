@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/provider/openai"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 )
 
 func sseServer(t *testing.T, body string) *httptest.Server {

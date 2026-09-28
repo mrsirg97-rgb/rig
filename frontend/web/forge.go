@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/plugins"
+	"github.com/mrsirg97-rgb/rig/v2/plugins"
 )
 
 func (s *Server) pluginPath(name, zone string) (string, bool) {

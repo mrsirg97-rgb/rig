@@ -12,7 +12,7 @@ import (
 	sqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
-	"github.com/mrsirg97-rgb/rig/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
 )
 
 func TestTxWaitsOutTheWriteLock(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/pathguard"
+	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 )
 
 func realRoot(t *testing.T) string {

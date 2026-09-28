@@ -12,8 +12,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/tool/file"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
 
 func argsJSON(t *testing.T, args map[string]any) json.RawMessage {

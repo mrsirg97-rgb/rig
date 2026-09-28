@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 type bound struct {

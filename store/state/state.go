@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/sqlx"
-	"github.com/mrsirg97-rgb/rig/store/state/ddl"
-	"github.com/mrsirg97-rgb/rig/store/state/domain"
-	"github.com/mrsirg97-rgb/rig/store/state/metadata"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v2/store/state/ddl"
+	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/v2/store/state/metadata"
 )
 
 const SchemaVersion = 4

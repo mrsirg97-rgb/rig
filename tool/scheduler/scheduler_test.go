@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	adapter "github.com/mrsirg97-rgb/rig/tool/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	adapter "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
 )
 
 type fakeCrontab struct {

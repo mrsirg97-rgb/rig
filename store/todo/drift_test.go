@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	todo "github.com/mrsirg97-rgb/rig/store/todo"
-	"github.com/mrsirg97-rgb/rig/testenv"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	todo "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 func TestGeneratedMatchesCommitted(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store/scope"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
 
 var tagRe = regexp.MustCompile(`^(?P<lead>\S.*?)\s+#\s*(?:(?P<old>pane-scheduler):(?P<oldkey>\S+)|(?P<new>rig-scheduler):(?P<home>[0-9a-f]{12}):(?P<newkey>\S+))$`)

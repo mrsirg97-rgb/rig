@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/testenv"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 func TestTransportRefusesANonServerHost(t *testing.T) {

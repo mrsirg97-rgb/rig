@@ -14,14 +14,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/config"
-	"github.com/mrsirg97-rgb/rig/models"
-	"github.com/mrsirg97-rgb/rig/store"
-	remstore "github.com/mrsirg97-rgb/rig/store/rem"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	"github.com/mrsirg97-rgb/rig/store/state"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/config"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 const testCWD = "/workspace/alpha"

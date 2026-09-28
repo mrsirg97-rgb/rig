@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/store"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 const schemaJSON = `{

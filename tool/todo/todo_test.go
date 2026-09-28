@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/store"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
-	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
 )
 
 func newDB(t *testing.T) store.DB {

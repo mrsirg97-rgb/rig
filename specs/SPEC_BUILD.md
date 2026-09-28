@@ -41,7 +41,7 @@ alignment in the drift commit; the exception is named, not hidden).
   the installer (`curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh
   | sh`), the release binary (the same asset the installer fetches,
   downloaded directly), and
-  `go install github.com/mrsirg97-rgb/rig/cmd/rig@latest` (README
+  `go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest` (README
   quickstart, `docs/SETUP.md` build section).
 
 ## non-goals (the point)
@@ -226,7 +226,7 @@ than downgrading.
 external assets. The page carries the name, one line on what rig is
 (AGENTS.md's overview), the install line `curl -fsSL
 https://mrsirg97-rgb.github.io/rig/install.sh | sh`, the `go install
-github.com/mrsirg97-rgb/rig/cmd/rig@latest` alternative, and links to the
+github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest` alternative, and links to the
 README, `specs/`, and the latest release. The pages job copies
 `install.sh` into the artifact so the site URL serves the same bytes as
 the repo root.

@@ -56,7 +56,7 @@ chmod +x rig
 **go install** (needs Go ≥ 1.26.6; the core is stdlib-only):
 
 ```sh
-go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
+go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest
 ```
 
 `rig -update` fetches, verifies, and atomically installs the latest release. The running process keeps the old binary until restart.

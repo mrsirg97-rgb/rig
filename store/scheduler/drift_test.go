@@ -9,7 +9,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/testenv"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 func TestGeneratedMatchesCommitted(t *testing.T) {

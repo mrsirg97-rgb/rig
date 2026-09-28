@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	remdom "github.com/mrsirg97-rgb/rig/store/rem/domain"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	"github.com/mrsirg97-rgb/rig/testenv"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 type probe struct {

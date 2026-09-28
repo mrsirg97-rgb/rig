@@ -81,8 +81,8 @@ go run main.go -config=$RIG/store/todo/gen.json -source=$RIG/store/todo/source.j
 ```
 
 `gen.json` `"name"` is the absolute output root (`$RIG/store/todo`),
-`"module"` is `github.com/mrsirg97-rgb/rig/store/todo`, `"runtime"` is
-`github.com/mrsirg97-rgb/rig/store` (see decisions); `source.json`
+`"module"` is `github.com/mrsirg97-rgb/rig/v2/store/todo`, `"runtime"` is
+`github.com/mrsirg97-rgb/rig/v2/store` (see decisions); `source.json`
 `"sourceDirectory"` is `$RIG/store/todo`, `"name"` is `metadata`. Both
 external paths are verified to work with the current engine (2026-08-15):
 generated files land under the store, generated imports resolve to rig's
@@ -663,7 +663,7 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   and the camera writes `{{ .Runtime }}/lazy` and `{{ .Runtime }}/sqlx`.
   rig copies `lift/lazy` (two files) and `lift/sqlx/sqlx.go` into
   `store/lazy` and `store/sqlx` once, unchanged, and every store's
-  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/rig/store"`.
+  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/rig/v2/store"`.
   rig stays self-contained: no lift require, and lift has no git remote
   to require it from anyway. The copied runtime is ~400 lines owned in two
   places; a change to it in lift is a named re-copy here, not a drift.

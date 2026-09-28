@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/tool/execwrap"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
 	"golang.org/x/sys/unix"
 )
 

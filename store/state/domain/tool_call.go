@@ -7,8 +7,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store/lazy"
-	"github.com/mrsirg97-rgb/rig/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v2/store/lazy"
+	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
 )
 
 type ToolCall struct {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
 func taggedLine(t *testing.T, h *harness, id string) string {

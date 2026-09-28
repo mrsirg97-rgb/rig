@@ -18,6 +18,8 @@ in its enum and one description line; the `/scheduler` command verb
 carries it too (`repair [id]`); the dashboard gets
 `POST /api/scheduler/repair` (id optional) beside the other four doors
 and a repair row control shown only when the row carries a drift line.
+The module path is now `github.com/mrsirg97-rgb/rig/v2`, so dependants
+can pin 2.x.
 
 ## [2.0.0]: the dashboard is the third frontend
 

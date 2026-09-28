@@ -3,7 +3,7 @@ package compact
 import (
 	"fmt"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 func Estimate(msgs []core.Message) int {

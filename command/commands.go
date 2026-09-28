@@ -1,6 +1,6 @@
 package command
 
-import "github.com/mrsirg97-rgb/rig/core"
+import "github.com/mrsirg97-rgb/rig/v2/core"
 
 func All() []core.Command {
 	return []core.Command{

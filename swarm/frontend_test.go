@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/swarm"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 
 // recorder is the root's r.rec stand-in: the controller resolves the

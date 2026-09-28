@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 // The queue a session works in is recorded beside the log, and it moves

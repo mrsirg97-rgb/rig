@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const SummarySystem = "You write summaries of agent transcripts."

@@ -63,7 +63,7 @@ chmod +x rig
 matching patch automatically):
 
 ```sh
-go install github.com/mrsirg97-rgb/rig/cmd/rig@latest
+go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest
 ```
 
 `rig -update` fetches, verifies, and atomically installs the latest release.

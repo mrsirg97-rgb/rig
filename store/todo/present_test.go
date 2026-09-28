@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 func completeText(t *testing.T, db store.DB, id string) {

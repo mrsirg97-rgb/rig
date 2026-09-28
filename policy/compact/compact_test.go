@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/models"
-	"github.com/mrsirg97-rgb/rig/policy"
-	compact "github.com/mrsirg97-rgb/rig/policy/compact"
-	"github.com/mrsirg97-rgb/rig/store"
-	remstore "github.com/mrsirg97-rgb/rig/store/rem"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/policy"
+	compact "github.com/mrsirg97-rgb/rig/v2/policy/compact"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 )
 
 var testRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}

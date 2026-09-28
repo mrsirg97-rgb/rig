@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/models"
-	"github.com/mrsirg97-rgb/rig/pathguard"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/swarm/status"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/pathguard"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/swarm/status"
 )
 
 const (

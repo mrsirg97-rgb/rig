@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/models"
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/state"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
-	"github.com/mrsirg97-rgb/rig/swarm"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 
 func workerSessionFromArgv(argv string) string {

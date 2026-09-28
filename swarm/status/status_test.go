@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/swarm/status"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/swarm/status"
 )
 
 type rec struct {

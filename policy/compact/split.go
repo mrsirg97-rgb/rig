@@ -1,7 +1,7 @@
 package compact
 
 import (
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 func split(msgs []core.Message, factor float64, keepRecent int) (older, tail []core.Message) {

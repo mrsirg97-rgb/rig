@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 func TestReadShowsNoteCountAndNoNoteText(t *testing.T) {

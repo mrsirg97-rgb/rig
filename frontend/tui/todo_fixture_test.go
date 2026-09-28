@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
-	tooltodo "github.com/mrsirg97-rgb/rig/tool/todo"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	tooltodo "github.com/mrsirg97-rgb/rig/v2/tool/todo"
 )
 
 type todoFixture struct {

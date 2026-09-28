@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/mrsirg97-rgb/rig/core"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 func reproScreen(t *testing.T, s *scriptedSession, width int) []string {

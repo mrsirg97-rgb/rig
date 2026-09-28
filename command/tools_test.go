@@ -8,14 +8,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/command"
-	"github.com/mrsirg97-rgb/rig/core"
-	"github.com/mrsirg97-rgb/rig/store"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/store/scope"
-	todostore "github.com/mrsirg97-rgb/rig/store/todo"
-	schedapi "github.com/mrsirg97-rgb/rig/tool/scheduler"
-	todoapi "github.com/mrsirg97-rgb/rig/tool/todo"
+	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
+	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
 )
 
 func runCmd(t *testing.T, name, args string, env *command.Env) (string, error) {

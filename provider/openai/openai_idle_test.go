@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/provider/openai"
+	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 )
 
 func TestAStallingStreamFaultsAfterTheIdleBound(t *testing.T) {

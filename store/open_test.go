@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
 )
 
 var probeDDL = []string{"CREATE TABLE IF NOT EXISTS probe (x INTEGER PRIMARY KEY)"}

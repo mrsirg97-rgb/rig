@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	"github.com/mrsirg97-rgb/rig/store/scope"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
 
 // ProjectOf resolves a directory to the queue it owns: the repo's scope

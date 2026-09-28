@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/store"
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
 var nowFixed = time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)

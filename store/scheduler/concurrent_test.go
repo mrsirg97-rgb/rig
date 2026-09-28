@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	sched "github.com/mrsirg97-rgb/rig/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
 func TestConcurrentCreatesSerialize(t *testing.T) {
