@@ -3,7 +3,6 @@ package web
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,24 +29,6 @@ const (
 	trafilaturaTime  = 20 * time.Second
 	trafilaturaCap   = 2 * maxBytesDefault
 )
-
-const description = "fetch a public http(s) URL as readable text (article extraction for HTML, the raw body " +
-	"for JSON and plain text)."
-
-const guidelines = "Guidelines: search finds, fetch reads — snippets are not the page; web pages and textual " +
-	"APIs only (local files -> read, local services -> bash). Reply: the text, capped with a [TRUNCATED] " +
-	"marker naming the full size — refetch with a larger maxChars only if the missing part matters; " +
-	"private and internal addresses are refused."
-
-const schemaJSON = `{
-	"type": "object",
-	"properties": {
-		"url": {"type": "string", "description": "Absolute http(s) URL to fetch"},
-		"maxChars": {"type": "integer", "description": "Max chars returned (default 20000)", "minimum": 100},
-		"timeoutMs": {"type": "integer", "description": "Total timeout in ms (default 30000)", "minimum": 1000, "maximum": 300000}
-	},
-	"required": ["url"]
-}`
 
 var (
 	textualRE = regexp.MustCompile(`(?i)^(text/|application/(json|xml|xhtml\+xml|rss\+xml|atom\+xml|[\w.-]+\+(json|xml))(\s*;|$))`)
@@ -79,10 +60,6 @@ type fetch struct {
 	lookup   LookupFn
 	do       func(*http.Request) (*http.Response, error)
 	maxBytes int
-}
-
-func Fetch() *fetch {
-	return NewFetch(FetchConfig{Proxy: DefaultProxy})
 }
 
 func NewFetch(cfg FetchConfig) *fetch {
@@ -127,12 +104,6 @@ func NewFetch(cfg FetchConfig) *fetch {
 	}}).Do
 	return f
 }
-
-func (f *fetch) Name() string { return "web_fetch" }
-
-func (f *fetch) Description() string { return description + "\n\n" + guidelines }
-
-func (f *fetch) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
 var reservedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("0.0.0.0/8"),
@@ -337,39 +308,13 @@ func isConnRefused(err error) bool {
 	return strings.Contains(err.Error(), "connection refused")
 }
 
-func (f *fetch) Exec(ctx context.Context, args json.RawMessage) (string, error) {
-	var p struct {
-		URL       string `json:"url"`
-		MaxChars  *int   `json:"maxChars"`
-		TimeoutMs *int   `json:"timeoutMs"`
-	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("web_fetch: bad args: %v", err)
-	}
-	if p.URL == "" {
-		return "", errors.New("web_fetch: no url supplied")
-	}
-	maxC := maxChars
-	if p.MaxChars != nil {
-		maxC = *p.MaxChars
-	}
-	if maxC < 100 {
-		return "", fmt.Errorf("web_fetch: maxChars must be at least 100, got %d", maxC)
-	}
-	timeoutMs := defaultTimeoutMs
-	if p.TimeoutMs != nil {
-		timeoutMs = *p.TimeoutMs
-	}
-	if timeoutMs < minTimeoutMs || timeoutMs > maxTimeoutMs {
-		return "", fmt.Errorf("web_fetch: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, timeoutMs)
-	}
-
+func (f *fetch) exec(ctx context.Context, raw string, maxC, timeoutMs int) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	fetched, err := f.Guarded(cctx, p.URL)
+	fetched, err := f.Guarded(cctx, raw)
 	if err != nil {
-		return "", fmt.Errorf("web_fetch: %s", err)
+		return "", fmt.Errorf("web: %s", err)
 	}
 
 	var readable string

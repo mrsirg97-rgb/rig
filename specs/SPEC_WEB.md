@@ -1,19 +1,22 @@
-# tool/web: web_search and web_fetch
+# tool/web: the one web tool (search and fetch)
 
-One leaf package, two tools: pane's web_search and web_fetch, ported.
-Search talks to the local SearXNG instance (the ~/docker/web-tools
-compose, :8888); fetch is a guarded HTTP reader (DNS re-check, redirect
-re-guard, byte/char caps, egress proxy through the compose's tinyproxy
-:8889) with HTML extraction via trafilatura and a stdlib fallback.
-Stdlib only: net/http, net, os/exec; no third-party Go client.
+One leaf package, one tool: pane's web_search and web_fetch, ported,
+then folded in 1.7.3 behind the single `web` name. Search talks to the
+local SearXNG instance (the ~/docker/web-tools compose, :8888); fetch
+is a guarded HTTP reader (DNS re-check, redirect re-guard, byte/char
+caps, egress proxy through the compose's tinyproxy :8889) with HTML
+extraction via trafilatura and a stdlib fallback. Stdlib only: net/http,
+net, os/exec; no third-party Go client.
 
 ## goals
 
-- web_search: SearXNG JSON over net/http: endpoint from env
+- One tool, one name: `web`, action `search` or `fetch`, on one `target`
+  field (the query, or the URL).
+- search: SearXNG JSON over net/http: endpoint from env
   (RIG_SEARXNG_URL, default pane's http://127.0.0.1:8888); results
   mapped to title/url/snippet with the 300-char snippet cap and the
   maxResults slice (1..20, default 5), loud `no results for "<query>"`.
-- web_fetch: pane's guarded fetch verbatim: http(s) only, DNS resolution
+- fetch: pane's guarded fetch verbatim: http(s) only, DNS resolution
   refuses private and link-local space with a readable error, every
   redirect hop re-checked, hop cap, textual content types only, declared
   Content-Length and streaming byte cap (5 MiB) with loud truncation,
@@ -27,8 +30,12 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
   deadline: the subprocess gets the remaining budget (its 20 s cap is
   the floor), and a one-second WaitDelay keeps an orphaned grandchild
   from holding the output pipes past it.
-- Pane's surface verbatim: descriptions, promptGuidelines, schemas, and
-  every runtime voice.
+- The surface is one `core.Tool`: the description carries the two
+  one-line clauses (search "<query>", fetch <url>) and folds both
+  guidelines into one paragraph; the schema is hand-written:
+  `required: ["action", "target"]`, action enum `[search, fetch]`, the
+  integer bounds (maxResults 1..20; maxChars min 100; timeoutMs min
+  1000). Every runtime voice is pane's verbatim.
 
 ## non-goals
 
@@ -43,38 +50,52 @@ Stdlib only: net/http, net, os/exec; no third-party Go client.
   injected seams; the suite is green on a box with no SearXNG and no
   trafilatura.
 - No search-side guard: SearXNG is loopback by design (127.0.0.1): the
-  fetch tool carries the guard.
+  fetch engine carries the guard.
+- No split approvals: one tool name means one allow entry; the gate
+  cannot allow search while refusing fetch (approval is per tool name).
 
 ## layout
 
 ```
 tool/web/
-  web.go      package doc; the defaults (SearXNG, proxy) and the
-              trafilatura resolution (shared venv -> PATH)
-  search.go   web_search: the SearXNG call, the result mapping, the schema
-  fetch.go    web_fetch: the guarded fetch, extraction, caps, the schema
-  web_test.go pane's named cases in pane's order + the rig-side cases
+  web.go      the one tool: Config/New/Web, the dispatch, the schema
+  search.go   the SearXNG engine: the call, the result mapping
+  fetch.go    the guarded fetch engine: the guard, extraction, caps
+  web_test.go pane's named cases in pane's order + the fold cases
 ```
 
 `core/`, `loop/`, `middleware/`, `policy/`, `provider/`: untouched.
 
 ## interfaces
 
-`core.Tool` as-is, two implementations in one package (the tool/file
-pattern):
+One `core.Tool`, the engines behind it:
 
 ```go
-// search.go; concrete types unexported with named constructors,
+// web.go; the concrete type unexported with the named constructor,
 // the core/tool.go house shape
 const DefaultSearXNG = "http://127.0.0.1:8888" // pane's PI_SEARXNG_URL default
-type search struct{ /* searchURL, transport, the 15s budget */ }
-func Search() *search                     // pane's default: the web-tools compose
-func NewSearch(cfg SearchConfig) *search  // cfg: BaseURL (pane appends /search, so does this), Do seam
-func (s *search) Name() string            // "web_search"
+const DefaultProxy   = "http://127.0.0.1:8889" // pane's PI_WEB_FETCH_PROXY default
+type Config struct {
+    Search SearchConfig   // BaseURL (pane appends /search), Do seam
+    Fetch  FetchConfig    // Proxy, Trafilatura, Lookup, Do, MaxBytes
+}
+type web struct{ search *search; fetch *fetch }
+func New(cfg Config) *web          // the injection seam (pane's Deps)
+func Web() *web                    // the defaults: SearXNG default, proxy on
+func (w *web) Name() string        // "web"
+func (w *web) Description() string // search line + fetch line, then the guidelines
+func (w *web) Schema() json.RawMessage
+func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error)
+    // unmarshal action/target + optionals; validate at the boundary;
+    // dispatch to w.search.exec or w.fetch.exec
 
-// fetch.go
+// search.go: the engine, pane's functions verbatim
+type SearchConfig struct{ BaseURL string; Do func(*http.Request) (*http.Response, error) }
+func NewSearch(cfg SearchConfig) *search
+func (s *search) exec(ctx, query string, maxResults int) (string, error)
+
+// fetch.go: the engine
 const (
-    DefaultProxy     = "http://127.0.0.1:8889" // pane's PI_WEB_FETCH_PROXY default
     maxBytesDefault  = 5 * 1024 * 1024         // pane's MAX_BYTES
     maxChars         = 20_000                  // pane's MAX_CHARS
     defaultTimeoutMs = 30_000                  // pane's DEFAULT_TIMEOUT_MS
@@ -89,9 +110,9 @@ type FetchConfig struct {
 }
 type Fetched struct{ FinalURL string; Status int; ContentType string; Body string; BodyTruncated bool } // pane's Fetched
 type fetch struct{ /* config, resolved trafilatura */ }
-func NewFetch(cfg FetchConfig) *fetch  // the injection seam (pane's Deps)
-func Fetch() *fetch                    // pane's defaults: proxy on, trafilatura resolved
+func NewFetch(cfg FetchConfig) *fetch
 func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) // pane's fetchGuarded
+func (f *fetch) exec(ctx, raw string, maxC, timeoutMs int) (string, error)
 
 // shared surface, pane's functions verbatim
 func IPisPrivate(ip string) bool            // pane's ipIsPrivate over net/netip, same refusal set as a superset
@@ -101,17 +122,26 @@ func ExtractReadable(html string, trafilatura *string) (string, string) // + the
 func DefaultTrafilatura() string            // shared venv -> PATH, "" when absent
 ```
 
-Both `Description()`s fold pane's promptGuidelines after the description
-(the python/scheduler house fold). `Schema()`s are pane's parameters,
-hand-written: `required: ["query"]` / `required: ["url"]`, the integer
-bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
+The dispatch owns the boundary voices: bad args, a missing target,
+out-of-range bounds, and an unknown action read `web: ...`; the engine
+voices (the SearXNG status, the guard refusals, the proxy fix-it, the
+truncation markers) are unchanged.
 
 ## decisions
 
-- **One leaf package, two tools.** pane ships the pair as two
-  extensions; rig's design test wants one leaf package per
-  capability family plus registration lines at the root. tool/file's
-  three tools set the precedent.
+- **One name, one approval.** web_search and web_fetch were two tools
+  and two allow entries for one capability family. The wire slot, the
+  approval gate, and the system prompt all key on tool name, and the
+  model was being asked to hold two names for one leaf package. The
+  pair folds into `web`; the allow list keys on it, and approval being
+  per tool name means fetch is allowed with search. The engines stay:
+  two files, one dispatch, no loop change.
+- **Action first.** `action` is required and validated at the boundary
+  (an unknown action refuses, naming the two values), and `target` is
+  the one content field — the query for search, the URL for fetch — so
+  the schema cannot ask the model to fill two differently-named fields.
+  The per-action optionals ride one flat object; the other action's
+  optionals are ignored (a search carrying maxChars still searches).
 - **Extraction: the documented external, not a bundled dependency.**
   trafilatura is a soft dependency; without it the tool still works
   (pane's htmlToText is a real path, not a stub), so it degrades loudly
@@ -166,28 +196,33 @@ bounds (maxResults 1..20; maxChars min 100; timeoutMs min 1000).
 - **Voices are pane's verbatim**, including the fix-it: an unreachable
   proxy reads `egress proxy <url> is unreachable. Start it: cd
   ~/docker/web-tools && docker compose up -d`. The search error is
-  `SearXNG search failed: HTTP <status>`; the fetch errors keep the
-  `web_fetch: ` prefix pane's execute wraps. One named port difference:
+  `SearXNG search failed: HTTP <status>`. One named port difference:
   a refused connection is Go's voice (`dial tcp ...: connect:
   connection refused`), not Node's ECONNREFUSED; the named case asserts
   the loud shape, not the OS string.
 - **Query strings are built by hand**, in pane's order
   (`?q=<escaped>&format=json`), not url.Values (which would sort the
   keys); the named case asserts pane's exact URL.
-- **The search guidelines teach query shape** (rig over pane, 1.2.12).
-  The live SearXNG serves navigational and dictionary junk for
-  brand-heavy queries from whichever engine answers, and every session
-  relearned the failure mode by burning queries on it. The guidelines
-  now prefer natural-language multi-word queries, refuse leading
-  brand/single-token shapes, route known URLs to web_fetch, and demand
-  a reword rather than an identical retry on junk. Prompt-facing only:
+- **The guidelines teach both shapes** (1.2.12, folded 1.7.3). The live
+  SearXNG serves navigational and dictionary junk for brand-heavy
+  queries from whichever engine answers, and every session relearned
+  the failure mode by burning queries on it. The one paragraph now
+  opens with the pair's split (`search finds, fetch reads — snippets
+  are not the page; web pages and textual APIs only`), then the
+  Search: head (natural-language multi-word queries, refuse leading
+  brand/single-token shapes, route known URLs to fetch, demand a
+  reword rather than an identical retry on junk, compact JSON reply)
+  and the Fetch: head (the capped text reply, the named elision
+  marker, private and internal addresses refused). Prompt-facing only:
   the schema and every runtime voice are untouched; the golden_020
   request pins carry the new description bytes.
 
 ## testing
 
 Pane's suite, by name, in pane's order, against httptest servers and
-injected seams (no live SearXNG, no live proxy, no required trafilatura):
+injected seams (no live SearXNG, no live proxy, no required trafilatura);
+the exec-driven cases now run through the one tool's dispatch with the
+`{"action": ...}` shape:
 
 fetch (pane's web-fetch.test.mjs order):
 
@@ -210,7 +245,7 @@ fetch (pane's web-fetch.test.mjs order):
 - e2e: real server through the seam, html extracted
 - e2e: timeout surfaces as a clear error
 - execute reports guard refusals as tool errors, not throws
-- tool registration: name, required url, guidelines exist
+- tool registration: one name `web`, required action/target, guidelines exist
 
 search (pane's web-search.test.mjs order):
 
@@ -219,7 +254,7 @@ search (pane's web-search.test.mjs order):
 - maxResults slices, default is 5
 - missing fields degrade to empty strings, empty results say so
 - SearXNG being down surfaces as a loud error
-- schema requires query and bounds maxResults
+- schema requires action/target and bounds maxResults, maxChars, timeoutMs
 
 rig-side named cases (the port's own surface):
 
@@ -232,6 +267,10 @@ rig-side named cases (the port's own surface):
 - the search URL is built in pane's key order
 - the search respects the caller ctx (the transport seam sees the
   request context; expiry surfaces as an error and does not hang)
+- the fold's own cases: an unknown action refuses naming the two
+  values, action and target are both required, out-of-range optionals
+  refuse instead of panicking, and the other action's optionals are
+  ignored
 
 Skip gates: the trafilatura-present cases skip cleanly when neither the
 shared venv nor PATH has the binary; everything else needs no network
@@ -239,7 +278,8 @@ beyond loopback httptest servers, so the suite is green on a bare box.
 
 ## scope
 
-One leaf package (three files, two tools), two registration lines at the
-root, the allow-list default growing by `web_search,web_fetch`, three env
-knobs read in main (RIG_SEARXNG_URL, RIG_WEB_FETCH_PROXY,
-RIG_TRAFILATURA). The loop is byte-identical.
+One leaf package (three files, one tool), one registration line at the
+root, the allow-list default's `web_search,web_fetch` pair shrinking to
+`web` (one entry, per-tool-name approval), three env knobs read in main
+(RIG_SEARXNG_URL, RIG_WEB_FETCH_PROXY, RIG_TRAFILATURA) unchanged. The
+loop is byte-identical; the wire goldens re-pin once with the fold.

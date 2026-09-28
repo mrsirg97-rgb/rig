@@ -33,7 +33,7 @@ person's daily driver.
 
 ## the boundaries
 
-- **web_fetch** resolves and pins the dial: private, loopback, link-local,
+- **web fetch** resolves and pins the dial: private, loopback, link-local,
   multicast, and reserved ranges are refused before the request, and every
   redirect hop is re-validated. When the egress proxy is in use, the
   address check still runs per hop but the dial goes through the proxy and

@@ -138,13 +138,16 @@ func toolDetail(name string, args json.RawMessage, content string) string {
 		if c := s("code"); c != "" {
 			return first(c)
 		}
-	case "web_search":
-		if q := s("query"); q != "" {
-			return q
-		}
-	case "web_fetch":
-		if u := s("url"); u != "" {
-			return u
+	case "web":
+		switch s("action") {
+		case "search":
+			if q := s("target"); q != "" {
+				return q
+			}
+		case "fetch":
+			if u := s("target"); u != "" {
+				return u
+			}
 		}
 	case "diff":
 		if m := s("mode"); m != "" {

@@ -154,8 +154,8 @@ plus one registration line, and the loop never names a concrete type.
   appends); read and edit use the package.
 - `tool/python`: the persistent IPython kernel: JSON-lines over stdio,
   one kernel per session, the namespace shared with plugin discovery.
-- `tool/web`: `web_search` against a local SearXNG and `web_fetch`
-  with the SSRF guard and extraction.
+- `tool/web`: the one `web` tool — search against a local SearXNG, and
+  fetch with the SSRF guard and extraction.
 - `tool/todo`, `tool/rem`, `tool/scheduler`: thin adapters over their
   stores: session attribution and the store's shapes, verbatim. The rem
   tool's description carries the contract sentence (rem is deliberate).

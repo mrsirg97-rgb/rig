@@ -571,9 +571,9 @@ bash ✓ 0.4s
 
 The detail line per tool is a table in `tools_render.go`, one line
 each: bash the command, read/write/edit the path, ls/find/grep the
-pattern or path, python the first line of code, web_search the query,
-web_fetch the url, todo/scheduler the action (their blocks are
-decision 6's). `view` is the one detail read from the *result* and not
+pattern or path, python the first line of code, web the query or the
+url (the action picks which), todo/scheduler the action (their blocks
+are decision 6's). `view` is the one detail read from the *result* and not
 the arguments: path, then the marker's `2560x1440 -> 1568x882` when rig
 resampled (its own size alone when it did not), then the sent bytes; the
 arrow is what tells the model-facing downscale from a pass-through

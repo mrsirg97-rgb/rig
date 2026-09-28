@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "1.7.2" {
-		t.Fatalf("Version = %q, want 1.7.2", Version)
+	if Version != "1.7.3" {
+		t.Fatalf("Version = %q, want 1.7.3", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -120,25 +120,14 @@ func (fakePython) Exec(ctx context.Context, args json.RawMessage) (string, error
 	return "", nil
 }
 
-type fakeWebSearch struct{}
+type fakeWeb struct{}
 
-func (fakeWebSearch) Name() string { return "web_search" }
-func (fakeWebSearch) Description() string {
-	return "fake web_search surface"
+func (fakeWeb) Name() string { return "web" }
+func (fakeWeb) Description() string {
+	return "fake web surface"
 }
-func (fakeWebSearch) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
-func (fakeWebSearch) Exec(ctx context.Context, args json.RawMessage) (string, error) {
-	return "", nil
-}
-
-type fakeWebFetch struct{}
-
-func (fakeWebFetch) Name() string { return "web_fetch" }
-func (fakeWebFetch) Description() string {
-	return "fake web_fetch surface"
-}
-func (fakeWebFetch) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
-func (fakeWebFetch) Exec(ctx context.Context, args json.RawMessage) (string, error) {
+func (fakeWeb) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (fakeWeb) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	return "", nil
 }
 
@@ -161,7 +150,7 @@ func testTools() map[string]core.Tool {
 	return map[string]core.Tool{
 		"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 		"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": fakePython{},
-		"web_search": fakeWebSearch{}, "web_fetch": fakeWebFetch{},
+		"web": fakeWeb{},
 
 		"sessions": sessionstool.New("", ""),
 
@@ -207,7 +196,7 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	want := []string{"bash", "edit", "plugin", "plugins", "python", "read", "rem", "sessions", "todo", "web_fetch", "web_search", "write"}
+	want := []string{"bash", "edit", "plugin", "plugins", "python", "read", "rem", "sessions", "todo", "web", "write"}
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("no fleet: the worker tools must stay unregistered: %v, want %v", got, want)
 	}
@@ -220,7 +209,7 @@ func TestWireWithAConfiguredFleetRegistersTheWorkerTools(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.workers = &config.Workers{Model: "local", Slots: 1}
 	k := wire(r)
-	want := []string{"bash", "delegate", "edit", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web_fetch", "web_search", "write"}
+	want := []string{"bash", "delegate", "edit", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web", "write"}
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("a configured fleet must register the worker tools: %v, want %v", got, want)
 	}
@@ -631,7 +620,7 @@ func TestIsMutatingPredicate(t *testing.T) {
 			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
 		}
 	}
-	for _, n := range []string{"read", "web_search", "web_fetch", "todo", "rem"} {
+	for _, n := range []string{"read", "web", "todo", "rem"} {
 		if r.isMutating(n) {
 			t.Errorf("%s must pass silently", n)
 		}

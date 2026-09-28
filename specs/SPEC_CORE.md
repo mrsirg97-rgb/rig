@@ -54,7 +54,7 @@ rig/
     rem/         memory
     scheduler/   background jobs
     python/      the persistent IPython kernel
-    web/         web_search, web_fetch
+    web/         web (search and fetch)
   frontend/
     cli/         stdin/stdout REPL
   command/       the user-command leaf (deliverable 9, SPEC_COMMANDS): the
@@ -281,7 +281,7 @@ the shape's clauses without padding.
 **An empty reply names its scope** (amended 2026-08-23): "(no matches)"
 from a search whose root defaulted to a subdirectory read as "does not
 exist", and a model spent four turns doubting a file it had just read.
-Every empty reply says what it searched and where: `web_search`
+Every empty reply says what it searched and where: `web` search
 the query, `rem` recall the scopes and the query (`(no memories in rig,
 nor global for 'q')`), `todo` the queue it read (`(no tasks in
 <label>'s queue)`; a subdirectory, a second worktree, and a `project`

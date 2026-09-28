@@ -119,7 +119,7 @@ cmd/rig/                         registration, the concurrency set, the allow de
   that issued it and the marker stays text. The result must be exactly the
   marker line and nothing else, which is what `view` replies; a result that
   carries a smuggled line is text too. A marker inside a `read`
-  line, or a `web_fetch` body is text, and a marker in a user or assistant
+  line, or a `web` fetch body is text, and a marker in a user or assistant
   message is text too. The rule is at the encoder, so nothing else can grant
   it.
 - **Placement is the format's**: every tool message of one assistant turn is

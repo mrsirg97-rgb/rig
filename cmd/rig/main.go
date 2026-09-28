@@ -54,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.7.2"
+const Version = "1.7.3"
 
 type root struct {
 	pluginMax int
@@ -417,7 +417,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 
 var concurrentNatives = map[string]bool{
 	"read": true, "view": true,
-	"web_search": true, "web_fetch": true,
+	"web": true,
 	"delegate": true,
 }
 
@@ -599,7 +599,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "scheduler", "delegate", "python", "web_search", "web_fetch", "plugin", "plugins", "sessions"}
+var nativeToolNames = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "scheduler", "delegate", "python", "web", "plugin", "plugins", "sessions"}
 
 var workerToolNames = []string{"scheduler", "delegate"}
 
@@ -922,7 +922,6 @@ func main() {
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
 
-	webSearch := webtool.NewSearch(webtool.SearchConfig{BaseURL: envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)})
 	proxy := ""
 	if cfg.Settings.WebFetchProxy != nil {
 		proxy = *cfg.Settings.WebFetchProxy
@@ -934,7 +933,10 @@ func main() {
 	if v, ok := os.LookupEnv("RIG_TRAFILATURA"); ok {
 		traf = &v
 	}
-	webFetch := webtool.NewFetch(webtool.FetchConfig{Proxy: proxy, Trafilatura: traf})
+	webTool := webtool.New(webtool.Config{
+		Search: webtool.SearchConfig{BaseURL: envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)},
+		Fetch:  webtool.FetchConfig{Proxy: proxy, Trafilatura: traf},
+	})
 
 	pluginsDir := filepath.Join(cfgDir, "plugins")
 	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
@@ -1085,7 +1087,7 @@ func main() {
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"todo": todoapi.New(tdb, todoapi.Mode(*prompt != "")), "rem": remapi.New(rdb),
-			"python": py, "web_search": webSearch, "web_fetch": webFetch,
+			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
 		workers:     cfg.Workers,

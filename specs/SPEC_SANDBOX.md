@@ -203,13 +203,12 @@ pending | plugins approve <name> | plugins reload | plugins create
 
 Compute is jailed and netless (1); egress is the host's, guarded:
 
-- `web_search` and `web_fetch` execute in the rig process (they
-  already do; they are Go, not kernel python), outside the jail,
-  with their existing rails: the loopback/private-range refusal, the
-  proxy, the trafilatura pass. Nothing new lands here; the decision
-  is that nothing needs to.
-- A jailed worker that wants the network must want it through those
-  two tools, where the policy lives. bash's `curl` and the kernel's
+- `web` executes in the rig process (it already does; it is Go, not
+  kernel python), outside the jail, with its existing rails: the
+  loopback/private-range refusal, the proxy, the trafilatura pass.
+  Nothing new lands here; the decision is that nothing needs to.
+- A jailed worker that wants the network must want it through that
+  one tool, where the policy lives. bash's `curl` and the kernel's
   `urllib` simply fail (no namespace); the loud teaching failure.
 - The model-call socket (1) is not egress: it reaches exactly the
   provider and nothing else.
