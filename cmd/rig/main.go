@@ -417,7 +417,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 
 var concurrentNatives = map[string]bool{
 	"read": true, "view": true,
-	"web": true,
+	"web":      true,
 	"delegate": true,
 }
 
