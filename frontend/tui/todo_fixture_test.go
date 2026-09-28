@@ -211,12 +211,19 @@ func (f *todoFixture) present() string {
 		todostore.CreateItem{Text: "dep2", Requires: ptrTo("dep1")},
 		todostore.CreateItem{Text: "dep3", Requires: ptrTo("dep2")},
 		todostore.CreateItem{Text: "root", Requires: ptrTo("dep3")},
+		todostore.CreateItem{Text: "later", Requires: ptrTo("dep1")},
 	)
 	for _, text := range []string{"dep1", "dep2", "dep3"} {
 		f.exec(func() (string, error) {
 			return todostore.Complete(context.Background(), f.db, f.proj, f.id(reply, text), "s1", false)
 		})
 	}
+	f.exec(func() (string, error) {
+		return todostore.Start(context.Background(), f.db, f.proj, f.id(reply, "later"), "s1", false)
+	})
+	f.exec(func() (string, error) {
+		return todostore.Fail(context.Background(), f.db, f.proj, f.id(reply, "later"), "s1", false)
+	})
 	more := f.create("s1",
 		todostore.CreateItem{Text: "r1"},
 		todostore.CreateItem{Text: "r2"},

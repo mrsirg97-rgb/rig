@@ -632,7 +632,7 @@ The blocks are pane's:
   ⧗ t5 delegated work · claimed for review by 01a011f6
   ● t1 wire the models table
   ● t2 the switch seam
-  · 3 more finished · todo list finished 10
+  · 3 more finished · todo list finished 5
 ```
 
 - the progress head, then one row per task: status glyph, id, text,
@@ -653,11 +653,15 @@ one dim line.
 
 Amended 1.7.4, the present: the todo store's default read is the
 present, so the head renders
-`[rig] ▰▰▰▰▰▱▱▱ 3 open · 2 of 5 finished shown · next t5` — open first,
-then the related finished (nearest hop), then the recent finished,
-never more than ten; a hidden remainder gets one dim hint line
-(`· 480 more finished · todo list finished 50`), which the parser
-accepts beside the stale footer. The finished list
+`[rig] ▰▰▰▰▰▱▱▱ 3 open · 2 of 5 finished shown · next t5` — open work
+first (pending, active, review, failed — a failed row keeps its ✕
+marker and counts toward open, so retry stays reachable), then the
+related done (nearest hop), then the recent done, never more than
+ten; a hidden remainder gets one dim hint line
+(`· 480 more finished · todo list finished 100`), naming the largest
+window, never the count already shown, and the parser accepts it
+beside the stale footer. The `· K of M finished shown` head clause is
+optional — it is omitted when nothing is finished. The finished list
 (`todo list finished <n>`) renders the same head with the list's own
 shown count.
 

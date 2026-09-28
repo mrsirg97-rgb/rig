@@ -169,7 +169,7 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(reply, "2 open · 0 of 0 finished shown") || !strings.Contains(reply, "next: ") {
+	if !strings.Contains(reply, "2 open") || !strings.Contains(reply, "next: ") {
 		t.Errorf("counts/next missing:\n%s", reply)
 	}
 	if !strings.Contains(reply, "requires t1") {
@@ -383,7 +383,7 @@ func TestFinishedActionListsNewestFirst(t *testing.T) {
 	if !strings.Contains(listed, "[x] c") || !strings.Contains(listed, "[x] b") {
 		t.Fatalf("the finished list must be newest first:\n%s", listed)
 	}
-	if !strings.Contains(listed, "· 1 more finished · todo list finished 2") {
+	if !strings.Contains(listed, "· 1 more finished · todo list finished 3") {
 		t.Fatalf("the finished list names its hidden rows:\n%s", listed)
 	}
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "finished", "n": 101}); err == nil ||

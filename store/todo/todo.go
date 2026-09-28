@@ -34,13 +34,8 @@ const anon = "anon"
 // on arrival.
 const StaleClaimAfter = 24 * time.Hour
 
-// DefaultFinishedShown is how many finished rows the default read
-// shows: one phone screen, so the queue reads as a present, not a
-// ledger (SPEC_CORE).
 const DefaultFinishedShown = 10
 
-// FinishedListCap bounds one finished list: one tool result, the
-// model's window on the history (SPEC_CORE).
 const FinishedListCap = 100
 
 // Project is one queue's identity: Key partitions the log, Label names
@@ -433,11 +428,9 @@ func (f *folded) applyVerb(e eventRow) {
 		if ts.status == "in_progress" {
 			ts.status = "failed"
 			ts.owner = ""
-			ts.finishedSeq = e.seq
 		} else if ts.status == "review" {
 			ts.status = "failed"
 			ts.owner = ""
-			ts.finishedSeq = e.seq
 		}
 	case "release":
 		if ts.status == "in_progress" {
@@ -449,7 +442,6 @@ func (f *folded) applyVerb(e eventRow) {
 	case "retry":
 		if ts.status == "failed" {
 			ts.status = "pending"
-			ts.finishedSeq = 0
 		}
 	}
 	ts.updatedSeq = e.seq
@@ -737,7 +729,7 @@ func summaryOf(f *folded, shown int) string {
 	open, finished := 0, 0
 	nextID := ""
 	for _, ts := range ordered {
-		if ts.status == statusDone || ts.status == statusFailed {
+		if ts.status == statusDone {
 			finished++
 		} else {
 			open++
@@ -751,7 +743,10 @@ func summaryOf(f *folded, shown int) string {
 	}
 	var b strings.Builder
 	b.WriteString(scopeTag(f))
-	fmt.Fprintf(&b, "%d open \u00b7 %d of %d finished shown", open, shown, finished)
+	fmt.Fprintf(&b, "%d open", open)
+	if finished > 0 {
+		fmt.Fprintf(&b, " \u00b7 %d of %d finished shown", shown, finished)
+	}
 	if nextID != "" {
 		fmt.Fprintf(&b, " \u00b7 next: %s", nextID)
 	}
@@ -759,7 +754,7 @@ func summaryOf(f *folded, shown int) string {
 }
 
 func isFinished(ts *taskState) bool {
-	return ts.status == statusDone || ts.status == statusFailed
+	return ts.status == statusDone
 }
 
 func finishedCount(f *folded) int {
@@ -779,9 +774,6 @@ func defaultShown(f *folded) int {
 	return DefaultFinishedShown
 }
 
-// relatedFinished lists the done and failed tasks reachable from an
-// open task over the requires/blocks links, nearest hop first: the
-// finished work the present depends on or feeds, not the ledger.
 func relatedFinished(f *folded) []*taskState {
 	adj := map[string][]string{}
 	for _, ts := range f.tasks {
@@ -832,8 +824,6 @@ func relatedFinished(f *folded) []*taskState {
 	return out
 }
 
-// recentFinished lists the finished tasks newest terminal event first,
-// so the read's tail is the present's recent past, not the ledger.
 func recentFinished(f *folded) []*taskState {
 	var out []*taskState
 	for _, ts := range f.tasks {
@@ -853,8 +843,6 @@ func recentFinished(f *folded) []*taskState {
 	return out
 }
 
-// finishedRows picks up to n finished rows: related work first (nearest
-// hop), then the most recent, never a duplicate.
 func finishedRows(f *folded, n int, related bool) []*taskState {
 	out := make([]*taskState, 0, n)
 	seen := map[string]bool{}
@@ -997,7 +985,11 @@ func renderQueue(f *folded, session string, mode readMode, n int, label string) 
 		b.WriteString("\n" + renderTask(f, ts, session))
 	}
 	if hidden := finishedCount(f) - shown; hidden > 0 {
-		fmt.Fprintf(&b, "\n\u00b7 %d more finished \u00b7 todo list finished %d", hidden, shown)
+		window := finishedCount(f)
+		if window > FinishedListCap {
+			window = FinishedListCap
+		}
+		fmt.Fprintf(&b, "\n\u00b7 %d more finished \u00b7 todo list finished %d", hidden, window)
 	}
 	return b.String()
 }
@@ -1706,10 +1698,6 @@ func ReadAll(ctx context.Context, db store.DB, p Project, session string) (strin
 	return read(ctx, db, p, session, modeAll, 0)
 }
 
-// ReadFinished lists the n most recent finished tasks, newest terminal
-// event first. A non-positive n reads the default ten; over
-// FinishedListCap refuses naming the range, so the model's one window
-// on the history is bounded (SPEC_CORE).
 func ReadFinished(ctx context.Context, db store.DB, p Project, session string, n int) (string, error) {
 	if n <= 0 {
 		n = DefaultFinishedShown
@@ -1874,7 +1862,7 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session, scope s
 	tsStr := nowRFC3339()
 	for _, ts := range f.tasks {
 		ts.createdSeq, ts.updatedSeq, ts.updatedTs = seq, seq, tsStr
-		if ts.status == statusDone || ts.status == statusFailed {
+		if ts.status == statusDone {
 			ts.finishedSeq = seq
 		}
 	}
@@ -2039,7 +2027,7 @@ func (f *folded) applyCompactEvent(e eventRow) {
 	for _, ts := range tasks {
 		ts.createdSeq = e.seq
 		ts.updatedSeq = e.seq
-		if ts.status == statusDone || ts.status == statusFailed {
+		if ts.status == statusDone {
 			ts.finishedSeq = e.seq
 		}
 	}

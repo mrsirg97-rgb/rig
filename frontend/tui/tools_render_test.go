@@ -95,7 +95,7 @@ func TestTodoBlockReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).review())
-	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open · 0 of 0 finished shown")) {
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open")) {
 		t.Fatalf("the review queue's head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("warn", "⧗")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "ready")+th.Paint("dim", " · claimed for review by sessB")) {
@@ -109,8 +109,11 @@ func TestTodoBlockPresentRendersHeadAndHint(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).present())
-	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰▰▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open · 10 of 13 finished shown · next t4")) {
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰▰▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 2 open · 10 of 13 finished shown · next t4")) {
 		t.Fatalf("the present head is missing or wrong:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("error", "✕")+" "+th.Paint("dim", "t5")+" "+th.Paint("text", "later")+th.Paint("dim", " · requires t1")) {
+		t.Fatalf("a failed row is open work, marked, and stays in the block:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t3")+" "+th.Paint("text", "dep3")+th.Paint("dim", " · requires t2")) {
 		t.Fatalf("the nearest related hop leads the finished rows:\n%s", got)
@@ -118,10 +121,10 @@ func TestTodoBlockPresentRendersHeadAndHint(t *testing.T) {
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "dep1")) {
 		t.Fatalf("the farthest related hop closes the chain:\n%s", got)
 	}
-	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t14")+" "+th.Paint("text", "r10")) {
+	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t15")+" "+th.Paint("text", "r10")) {
 		t.Fatalf("the recent finished rows follow the chain:\n%s", got)
 	}
-	if !strings.Contains(got, th.Paint("dim", "  · 3 more finished · todo list finished 10")) {
+	if !strings.Contains(got, th.Paint("dim", "  · 3 more finished · todo list finished 13")) {
 		t.Fatalf("the hint names what is hidden and the door:\n%s", got)
 	}
 }
@@ -138,7 +141,7 @@ func TestTodoBlockFinishedListPinsTheStore(t *testing.T) {
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t3")+" "+th.Paint("text", "c")) {
 		t.Fatalf("the newest finished leads:\n%s", got)
 	}
-	if !strings.Contains(got, th.Paint("dim", "  · 1 more finished · todo list finished 2")) {
+	if !strings.Contains(got, th.Paint("dim", "  · 1 more finished · todo list finished 3")) {
 		t.Fatalf("the finished list names its hidden rows:\n%s", got)
 	}
 }

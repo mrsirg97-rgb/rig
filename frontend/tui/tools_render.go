@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	todoHeadRe   = regexp.MustCompile(`^(\[[^\]]+\] )?(\d+) open · (\d+) of (\d+) finished shown( · next: (\S+))?$`)
+	todoHeadRe   = regexp.MustCompile(`^(\[[^\]]+\] )?(\d+) open( · (\d+) of (\d+) finished shown)?( · next: (\S+))?$`)
 	todoTaskRe   = regexp.MustCompile(`^  (t\d+) \[([xr!~ ])\] (.+)$`)
 	todoNotesRe  = regexp.MustCompile(`^    · (\d+) notes?( \(.*\))?$`)
 	schedRunsRe  = regexp.MustCompile(`^(j\d+) · (\d+) runs? \(oldest first\):$`)
@@ -61,13 +61,15 @@ func parseTodo(reply string) (todoParsed, bool) {
 	if p.Open, err = atoi(m[2]); err != nil {
 		return p, false
 	}
-	if p.Shown, err = atoi(m[3]); err != nil {
-		return p, false
+	if m[4] != "" {
+		if p.Shown, err = atoi(m[4]); err != nil {
+			return p, false
+		}
+		if p.Finished, err = atoi(m[5]); err != nil {
+			return p, false
+		}
 	}
-	if p.Finished, err = atoi(m[4]); err != nil {
-		return p, false
-	}
-	p.Next = m[6]
+	p.Next = m[7]
 	for j := i; j < len(lines); j++ {
 		if j == head {
 			continue
@@ -194,7 +196,10 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	}
 	b.WriteString(t.Paint(SlotEmber, strings.Repeat(t.Glyph(GlyphBarOn), filled)))
 	b.WriteString(t.Paint(SlotDim, strings.Repeat(t.Glyph(GlyphBarOff), segs-filled)))
-	head := fmt.Sprintf(" %d open · %d of %d finished shown", p.Open, p.Shown, p.Finished)
+	head := fmt.Sprintf(" %d open", p.Open)
+	if p.Finished > 0 {
+		head += fmt.Sprintf(" · %d of %d finished shown", p.Shown, p.Finished)
+	}
 	if p.Next != "" {
 		head += " · next " + p.Next
 	}

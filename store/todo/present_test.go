@@ -17,8 +17,6 @@ func completeText(t *testing.T, db store.DB, id string) {
 	}
 }
 
-// The present chain: root pending requires dep3, dep3 done requires dep2,
-// dep2 done requires dep1, dep1 done. Fourteen unrelated done follow.
 func presentQueue(t *testing.T, db store.DB) string {
 	t.Helper()
 	ctx := context.Background()
@@ -74,7 +72,7 @@ func TestReadDefaultIsThePresent(t *testing.T) {
 		"  t14 [x] r10\n" +
 		"  t13 [x] r9\n" +
 		"  t12 [x] r8\n" +
-		"· 7 more finished · todo list finished 10"
+		"· 7 more finished · todo list finished 17"
 	if got != want {
 		t.Fatalf("the present must render open work, then the related chain, then recent finished:\n%s\nwant:\n%s", got, want)
 	}
@@ -102,7 +100,7 @@ func TestReadDefaultRelatedChainsCapAtTheTenNearest(t *testing.T) {
 	if !strings.Contains(read, "[ws] 1 open · 10 of 12 finished shown · next: t13") {
 		t.Fatalf("the head must name the cap:\n%s", read)
 	}
-	if !strings.Contains(read, "· 2 more finished · todo list finished 10") {
+	if !strings.Contains(read, "· 2 more finished · todo list finished 12") {
 		t.Fatalf("the hint must name the hidden two:\n%s", read)
 	}
 	if !strings.Contains(read, "  t12 [x] d12 · requires t11\n  t11 [x] d11 · requires t10") {
@@ -138,7 +136,7 @@ func TestReadFinishedListsNewestFirst(t *testing.T) {
 	want := "[ws] 1 open · 2 of 3 finished shown · next: t4\n" +
 		"  t3 [x] c\n" +
 		"  t2 [x] b\n" +
-		"· 1 more finished · todo list finished 2"
+		"· 1 more finished · todo list finished 3"
 	if got != want {
 		t.Fatalf("the finished list must be newest first:\n%s\nwant:\n%s", got, want)
 	}
@@ -163,7 +161,7 @@ func TestReadFinishedDefaultsToTenAndCapsAtOneHundred(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read finished default: %v", err)
 	}
-	if !strings.Contains(got, "[ws] 1 open · 10 of 15 finished shown") || !strings.Contains(got, "· 5 more finished · todo list finished 10") {
+	if !strings.Contains(got, "[ws] 1 open · 10 of 15 finished shown") || !strings.Contains(got, "· 5 more finished · todo list finished 15") {
 		t.Fatalf("the default finished list must show ten:\n%s", got)
 	}
 	if _, err := todostore.ReadFinished(ctx, db, p, "s1", todostore.FinishedListCap+1); err == nil ||
@@ -172,7 +170,7 @@ func TestReadFinishedDefaultsToTenAndCapsAtOneHundred(t *testing.T) {
 	}
 }
 
-func TestHiddenFinishedStillSatisfiesRequires(t *testing.T) {
+func TestHiddenFinishedStillResolvesByID(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	items := []item{{Text: "d1"}}
@@ -187,8 +185,34 @@ func TestHiddenFinishedStillSatisfiesRequires(t *testing.T) {
 	for i := 1; i <= 12; i++ {
 		completeText(t, db, taskIDText(t, reply, "d"+itoa(i)))
 	}
-	// A failed task beyond the ten nearest hops, requiring the hidden d1.
-	extra, err := todostore.Create(ctx, db, p, []item{{Text: "later", Requires: ptrTo("d1")}}, "s1")
+	read, err := todostore.Read(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(read, "[x] d1\n") || strings.Contains(read, "[x] d2\n") {
+		t.Fatalf("the two farthest hops must stay hidden:\n%s", read)
+	}
+	if !strings.Contains(read, "[x] d3 \u00b7 requires t2") {
+		t.Fatalf("the hidden id still resolves in the shown row's link:\n%s", read)
+	}
+	if _, err := todostore.ReadOne(ctx, db, p, "t1", "s1"); err != nil {
+		t.Fatalf("the hidden id must still resolve by id: %v", err)
+	}
+	if _, err := todostore.Notes(ctx, db, p, "t1", "s1"); err != nil {
+		t.Fatalf("notes on the hidden id must work: %v", err)
+	}
+}
+
+func TestFailedRowsStayOpenAndReachable(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	drop, err := todostore.Create(ctx, db, p, []item{{Text: "drop"}}, "s1")
+	if err != nil {
+		t.Fatalf("create drop: %v", err)
+	}
+	dropID := taskIDText(t, drop, "drop")
+	completeText(t, db, dropID)
+	extra, err := todostore.Create(ctx, db, p, []item{{Text: "later", Requires: ptrTo("drop")}}, "s1")
 	if err != nil {
 		t.Fatalf("create later: %v", err)
 	}
@@ -203,21 +227,13 @@ func TestHiddenFinishedStillSatisfiesRequires(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if strings.Contains(read, "[x] d1\n") {
-		t.Fatalf("d1 (the farthest hop) must be retired from the view:\n%s", read)
+	if !strings.Contains(read, "[!] later") || !strings.Contains(read, "1 open") {
+		t.Fatalf("a failed row is open work and stays in the default read with its marker:\n%s", read)
 	}
-	// Retirement is a view, not a state: the hidden d1 still satisfies
-	// later's requires, links resolve by id, and the read/notes doors work.
 	if _, err := todostore.Retry(ctx, db, p, later, "s1"); err != nil {
-		t.Fatalf("retry the task that requires the hidden d1: %v", err)
+		t.Fatalf("retry the failed row: %v", err)
 	}
 	if _, err := todostore.Start(ctx, db, p, later, "s1", false); err != nil {
-		t.Fatalf("the hidden done dependency must still satisfy requires: %v", err)
-	}
-	if _, err := todostore.ReadOne(ctx, db, p, "t1", "s1"); err != nil {
-		t.Fatalf("the hidden id must still resolve by id: %v", err)
-	}
-	if _, err := todostore.Notes(ctx, db, p, "t1", "s1"); err != nil {
-		t.Fatalf("notes on the hidden id must work: %v", err)
+		t.Fatalf("the done dependency must still satisfy requires after the retry: %v", err)
 	}
 }

@@ -111,18 +111,20 @@ drops done only, and the summary counts review rows (`· N in review`).
   the caller's own claims are never touched. Both append `release`
   events; the note names task and owner, silent when idle.
 - The read contract is lean (SPEC_TODO_LEAN): Read renders the present
-  — open work first, then related finished (nearest hop), then recent
-  finished, `DefaultFinishedShown` rows total, one dim hint line when
-  anything is hidden; the summary line is unconditional
-  (`[<label>] N open · K of M finished shown · next: tN`), never
-  "(no tasks in <label>'s queue)" on an all-done queue; ReadFinished
-  lists the n most recent finished, newest first, default ten, cap
-  `FinishedListCap`; ReadAll returns the history (the operator's
-  read); a transition echo is the affected row plus the summary.
-  Create keeps the full present: after a merge the whole queue is the
-  news. Retirement never changes semantics: a hidden finished task
-  still satisfies requires, links resolve by id, and notes and show
-  work on any id.
+  — open work first (pending, active, review, failed), then related
+  done (nearest hop), then recent done, `DefaultFinishedShown` rows
+  total, one dim hint line when anything is hidden, naming the largest
+  window (`todo list finished <min(done, FinishedListCap)>`); the
+  summary line is unconditional
+  (`[<label>] N open · K of M finished shown · next: tN`, the finished
+  clause omitted when nothing is done), never "(no tasks in
+  <label>'s queue)" on an all-done queue; ReadFinished lists the n
+  most recent done, newest first, default ten, cap `FinishedListCap`;
+  ReadAll returns the history (the operator's read); a transition echo
+  is the affected row plus the summary. Create keeps the full present:
+  after a merge the whole queue is the news. Retirement never changes
+  semantics: a hidden done task still resolves by id, links resolve by
+  id, and notes and show work on any id.
 - One store, every row scoped: `FilePath(home)` is the one `todo.sqlite`,
   and every operation takes a `Project{Key, Label, OutsideRepo}`: the
   queue's identity (the repo's scope, `store/scope`, or the cwd hash

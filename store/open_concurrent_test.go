@@ -63,7 +63,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 			t.Fatalf("read %d: %v", wi, err)
 		}
 		head := strings.Split(reply, "\n")[0]
-		if want := fmt.Sprintf("%d open · 0 of 0 finished shown", perDB*len(dbs)); !strings.Contains(head, want) {
+		if want := fmt.Sprintf("%d open", perDB*len(dbs)); !strings.Contains(head, want) {
 			t.Fatalf("read %d: head %q, want %s", wi, head, want)
 		}
 	}
