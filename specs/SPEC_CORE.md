@@ -290,11 +290,17 @@ override all name the queue they read, never "this directory's"),
 ("the working directory"). The rule generalises: a reply that could be
 read two ways carries the word that picks one. It reaches past the empty
 reply for the queue (1.3.3): a `todo` summary names its queue on every
-call — `[rig] 3/7 done · next: t4`, and `[ng (not a repo)]` for a bucket
-minted from a directory that is not one — because a session bound to one
-project can be reading a queue two projects away, and only the label
-tells the two apart. Edit is exact-match string replacement with
-loud, specific failure messages; a fuzzy edit tool silently corrupts files.
+call — `[rig] 6 open · 10 of 490 finished shown · next: t497`, and
+`[ng (not a repo)]` for a bucket minted from a directory that is not
+one — because a session bound to one project can be reading a queue two
+projects away, and only the label tells the two apart. The summary's
+bounds are named, beside `StaleClaimAfter` in `store/todo`: ten
+finished rows by default (`DefaultFinishedShown`) because one phone
+screen is the present the model needs, not the ledger; one hundred
+rows per finished list (`FinishedListCap`) because one tool result is
+the model's window on history. Edit is exact-match string replacement
+with loud, specific failure messages; a fuzzy edit tool silently
+corrupts files.
 
 **A read that finds a stale observation names it** (amended for the
 daily driver): when the path was recorded in the threaded session's

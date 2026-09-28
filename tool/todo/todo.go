@@ -18,7 +18,7 @@ const schemaJSON = `{
 	"required": ["action"],
 	"properties": {
 		"action": {
-			"enum": ["create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read", "note", "notes", "accept", "reject"],
+			"enum": ["create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read", "note", "notes", "accept", "reject", "finished"],
 			"description": "The action to perform. Required."
 		},
 		"tasks": {
@@ -63,7 +63,13 @@ const schemaJSON = `{
 		},
 		"all": {
 			"type": "boolean",
-			"description": "read all:true returns the full history (done rows included); the default read is the actionable queue."
+			"description": "read all:true returns the full history (done rows included); the default read is the present."
+		},
+		"n": {
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 100,
+			"description": "How many finished rows to list for action='finished' (default 10, cap 100)."
 		},
 		"project": {
 			"type": "string",
@@ -80,7 +86,8 @@ const description = "the task queue for the session's project. Guidelines: any j
 	"read then accept/reject, an unowned review task auto-claims, a foreign hold refuses, and reject takes " +
 	"the reason as note; note attaches a message to any task; notes with id lists a task's notes in order " +
 	"with their session and time, read shows the count and read with id points at notes; read shows the " +
-	"actionable queue (all:true for history); move reorders by a 1-based pos; prune drops the done rows. " +
+	"present (all:true for history); finished lists the n most recent finished, newest first, default 10, " +
+	"cap 100; move reorders by a 1-based pos; prune drops the done rows. " +
 	"Every reply names the queue it acted on ([rig]); name project when the work is in a repo you did not " +
 	"start in, which binds the session. Reply: the affected row and the summary; a refusal names the rule. " +
 	"Ids (tN) are minted by the tool — copy, never invent."
@@ -125,6 +132,7 @@ type given struct {
 	ID      string           `json:"id"`
 	Pos     *int             `json:"pos"`
 	All     *bool            `json:"all"`
+	N       *int             `json:"n"`
 	Note    string           `json:"note"`
 	Status  string           `json:"status"`
 	Project *string          `json:"project"`
@@ -294,6 +302,12 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 			return todostore.ReadAll(ctx, a.db, p, session)
 		}
 		return todostore.Read(ctx, a.db, p, session)
+	case "finished":
+		n := 0
+		if g.N != nil {
+			n = *g.N
+		}
+		return todostore.ReadFinished(ctx, a.db, p, session, n)
 	default:
 		return "", fmt.Errorf("todo: unknown action %q", g.Action)
 	}

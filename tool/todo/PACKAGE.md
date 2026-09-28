@@ -62,14 +62,16 @@ plan in one queue.
   accept/reject with no claim step; a foreign hold still refuses. Notes
   never need the hold.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
-  actionable queue (done folds into the summary line), read all:true
-  returns the history, read with id renders one task summary-only and
-  points at `notes`, and a transition echo is the affected row plus
-  the summary; never the full queue. Create keeps the full (filtered)
-  queue because after a merge the whole queue is the news. Read no
-  longer inlines note text: a task with notes shows `· N notes` and the
-  `notes` action lists them with their session and time; the swarm
-  brief's `TaskInfo` still carries the full notes.
+  present (open work first — failed included — then related and
+  recent done, ten rows total, the hint naming what is hidden), read
+  all:true returns the history (the operator's read), finished lists
+  the n most recent done (default 10, cap 100), read with id renders one task
+  summary-only and points at `notes`, and a transition echo is the
+  affected row plus the summary; never the full queue. Create keeps
+  the full present because after a merge the whole queue is the news.
+  Read no longer inlines note text: a task with notes shows `· N notes`
+  and the `notes` action lists them with their session and time; the
+  swarm brief's `TaskInfo` still carries the full notes.
 - The description is shape only (SPEC_STREAMLINE 1): the state machine,
   the claim rules, and the compaction rule ride the store's voices; the
   replies teach on contact, the standing context does not double-teach.

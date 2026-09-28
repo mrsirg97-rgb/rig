@@ -626,17 +626,19 @@ The blocks are pane's:
 
 ```
 ● todo · start t3
-  [rig] ▰▰▰▱▱ 2/5 · next t4 · 1 in review
-  ● t1 wire the models table
-  ⧗ t2 delegated work · claimed for review by 01a011f6
+  [rig] ▰▰▰▰▰▱▱▱ 3 open · 2 of 5 finished shown · next t5
   ◐ t3 the switch seam
   ○ t4 steer verb · requires t3
+  ⧗ t5 delegated work · claimed for review by 01a011f6
+  ● t1 wire the models table
+  ● t2 the switch seam
+  · 3 more finished · todo list finished 5
 ```
 
 - the progress head, then one row per task: status glyph, id, text,
   `· requires tN`/`· blocks tN`/`· waits for k` dim, `· claimed by <sid8>` dim only
   when the claim is foreign (another session), `· claimed for review
-  by <sid8>` the same;
+  by <sid8>` the same; the bar's fill is finished over open+finished;
 - scheduler `list`: `●`/`○`/`✕` per job state with cron, last, next,
   and drift named. The sections are directories (SPEC_STATE's one-store
   list): this cwd's jobs first, then the rest grouped by the job's own
@@ -644,19 +646,46 @@ The blocks are pane's:
   `runs`: the run lines with tail previews.
 
 Amended 1.7.2, the scoped reply: the todo store's summary prefixes
-every queue with its scope tag, so the head renders
-`[rig] ▰▰▰▱▱ 2/5 · next t4 · 1 in review` with the tag dim before the
-ember bar; the review count rides the head; a review row renders its
-`[r]` marker as the review glyph in warn; a bare queue report
-(`queue: rig (bound)`) is not a block and commits as one dim line.
+every queue with its scope tag; the review count rides the head; a
+review row renders its `[r]` marker as the review glyph in warn; a
+bare queue report (`queue: rig (bound)`) is not a block and commits as
+one dim line.
+
+Amended 1.7.4, the present: the todo store's default read is the
+present, so the head renders
+`[rig] ▰▰▰▰▰▱▱▱ 3 open · 2 of 5 finished shown · next t5` — open work
+first (pending, active, review, failed — a failed row keeps its ✕
+marker and counts toward open, so retry stays reachable), then the
+related done (nearest hop), then the recent done, never more than
+ten; a hidden remainder gets one dim hint line
+(`· 480 more finished · todo list finished 100`), naming the largest
+window, never the count already shown, and the parser accepts it
+beside the stale footer. The `· K of M finished shown` head clause is
+optional — it is omitted when nothing is finished. The finished list
+(`todo list finished <n>`) renders the same head with the list's own
+shown count.
 
 The renderers parse the tools' own reply text (the queue the reply
 already carries): no new tool surface, no reaching into stores from
-the render path. If parsing fails (a future voice change), the raw
-reply commits as-is: degrade to the CLI, never hide. An empty todo
-queue is one such raw case: the reply `(no tasks in <label>'s queue)`
-names the queue it read (SPEC_CORE) and commits as-is through both
-doors; no renderer structure sees new text, so no golden moves.
+the render path. If parsing fails (a future voice change), the block
+keeps its opening and prints the reply dim beneath it — the bare
+string is never returned, so a todo reply can never drop its door
+line again. The one exception stays: a bare queue report
+(`queue: rig (bound)`) is not a block and commits as one dim line.
+An empty todo queue is one dim case: the reply
+`(no tasks in <label>'s queue)` names the queue it read (SPEC_CORE)
+and commits as opening plus one dim line through both doors; no
+renderer structure sees new text, so no golden moves.
+
+Amended 1.7.4, the one-row echo: a transition reply
+(`→ 't1' auto-started and completed` plus the affected row and the
+queue summary, the shape `renderOne` and the transition echo both
+use) now parses like the queue — the summary renders as the head,
+the note renders dim under it, and each row rides the same
+task-line painter the queue block uses, so start/complete/accept/
+note look like the queue, one row. The block never returns the
+reply's raw bytes: rows wrap by the TUI's own wrap rules, never the
+terminal's.
 
 The ambient scheduler news line that lived here; one dim line at
 session start when the store had news since the last session; is

@@ -34,6 +34,10 @@ const anon = "anon"
 // on arrival.
 const StaleClaimAfter = 24 * time.Hour
 
+const DefaultFinishedShown = 10
+
+const FinishedListCap = 100
+
 // Project is one queue's identity: Key partitions the log, Label names
 // the queue in every reply so a reader can never mistake whose queue a
 // line belongs to. OutsideRepo marks a bucket minted from a directory
@@ -77,17 +81,18 @@ type noteState struct {
 }
 
 type taskState struct {
-	id         string
-	text       string
-	status     string
-	pos        int
-	requires   string
-	blocks     string
-	owner      string
-	createdSeq int64
-	updatedSeq int64
-	updatedTs  string
-	notes      []noteState
+	id          string
+	text        string
+	status      string
+	pos         int
+	requires    string
+	blocks      string
+	owner       string
+	createdSeq  int64
+	updatedSeq  int64
+	finishedSeq int64
+	updatedTs   string
+	notes       []noteState
 }
 
 type folded struct {
@@ -232,6 +237,7 @@ func (f *folded) applyAcceptEvent(e eventRow) {
 	ts.status = statusDone
 	ts.owner = ""
 	ts.updatedSeq = e.seq
+	ts.finishedSeq = e.seq
 	ts.updatedTs = e.ts
 }
 
@@ -718,18 +724,15 @@ func staleFooter(f *folded) string {
 	return fmt.Sprintf("\u00b7 %d unresolved since %s (recovered from log)", n, latest)
 }
 
-func summaryOf(f *folded) string {
+func summaryOf(f *folded, shown int) string {
 	ordered := orderedTaskStates(f)
-	done, failed, review := 0, 0, 0
+	open, finished := 0, 0
 	nextID := ""
 	for _, ts := range ordered {
-		switch ts.status {
-		case statusDone:
-			done++
-		case statusFailed:
-			failed++
-		case statusReview:
-			review++
+		if ts.status == statusDone {
+			finished++
+		} else {
+			open++
 		}
 	}
 	for _, ts := range ordered {
@@ -740,17 +743,129 @@ func summaryOf(f *folded) string {
 	}
 	var b strings.Builder
 	b.WriteString(scopeTag(f))
-	fmt.Fprintf(&b, "%d/%d done", done, len(ordered))
+	fmt.Fprintf(&b, "%d open", open)
+	if finished > 0 {
+		fmt.Fprintf(&b, " \u00b7 %d of %d finished shown", shown, finished)
+	}
 	if nextID != "" {
 		fmt.Fprintf(&b, " \u00b7 next: %s", nextID)
 	}
-	if review != 0 {
-		fmt.Fprintf(&b, " \u00b7 %d in review", review)
-	}
-	if failed != 0 {
-		fmt.Fprintf(&b, " \u00b7 %d failed", failed)
-	}
 	return b.String()
+}
+
+func isFinished(ts *taskState) bool {
+	return ts.status == statusDone
+}
+
+func finishedCount(f *folded) int {
+	n := 0
+	for _, ts := range f.tasks {
+		if isFinished(ts) {
+			n++
+		}
+	}
+	return n
+}
+
+func defaultShown(f *folded) int {
+	if n := finishedCount(f); n < DefaultFinishedShown {
+		return n
+	}
+	return DefaultFinishedShown
+}
+
+func relatedFinished(f *folded) []*taskState {
+	adj := map[string][]string{}
+	for _, ts := range f.tasks {
+		for _, ref := range []string{ts.requires, ts.blocks} {
+			if ref == "" || f.tasks[ref] == nil {
+				continue
+			}
+			adj[ts.id] = append(adj[ts.id], ref)
+			adj[ref] = append(adj[ref], ts.id)
+		}
+	}
+	byOrder := map[string]*taskState{}
+	for _, ts := range f.tasks {
+		byOrder[ts.id] = ts
+	}
+	var queue []*taskState
+	seen := map[string]bool{}
+	for _, ts := range orderedTaskStates(f) {
+		if !isFinished(ts) {
+			seen[ts.id] = true
+			queue = append(queue, ts)
+		}
+	}
+	hop := func(a, b *taskState) bool {
+		if a.pos != b.pos {
+			return a.pos < b.pos
+		}
+		return a.createdSeq < b.createdSeq
+	}
+	var out []*taskState
+	for i := 0; i < len(queue); i++ {
+		ts := queue[i]
+		if isFinished(ts) {
+			out = append(out, ts)
+		}
+		nbrs := make([]*taskState, 0, len(adj[ts.id]))
+		for _, id := range adj[ts.id] {
+			nbrs = append(nbrs, byOrder[id])
+		}
+		sort.Slice(nbrs, func(a, b int) bool { return hop(nbrs[a], nbrs[b]) })
+		for _, nb := range nbrs {
+			if !seen[nb.id] {
+				seen[nb.id] = true
+				queue = append(queue, nb)
+			}
+		}
+	}
+	return out
+}
+
+func recentFinished(f *folded) []*taskState {
+	var out []*taskState
+	for _, ts := range f.tasks {
+		if isFinished(ts) {
+			out = append(out, ts)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].finishedSeq != out[j].finishedSeq {
+			return out[i].finishedSeq > out[j].finishedSeq
+		}
+		if out[i].pos != out[j].pos {
+			return out[i].pos < out[j].pos
+		}
+		return out[i].createdSeq < out[j].createdSeq
+	})
+	return out
+}
+
+func finishedRows(f *folded, n int, related bool) []*taskState {
+	out := make([]*taskState, 0, n)
+	seen := map[string]bool{}
+	if related {
+		for _, ts := range relatedFinished(f) {
+			if len(out) >= n {
+				break
+			}
+			out = append(out, ts)
+			seen[ts.id] = true
+		}
+	}
+	for _, ts := range recentFinished(f) {
+		if len(out) >= n {
+			break
+		}
+		if seen[ts.id] {
+			continue
+		}
+		out = append(out, ts)
+		seen[ts.id] = true
+	}
+	return out
 }
 
 // scopeTag names the queue a reply speaks about. Every summary carries
@@ -826,7 +941,15 @@ func renderOne(f *folded, ts *taskState, session string) string {
 	return line
 }
 
-func renderQueue(f *folded, session string, all bool, label string) string {
+type readMode int
+
+const (
+	modePresent readMode = iota
+	modeAll
+	modeFinished
+)
+
+func renderQueue(f *folded, session string, mode readMode, n int, label string) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
 		if f.notRepo && label != "" {
@@ -834,13 +957,39 @@ func renderQueue(f *folded, session string, all bool, label string) string {
 		}
 		return fmt.Sprintf("(no tasks in %s's queue)", label)
 	}
-	var b strings.Builder
-	b.WriteString(summaryOf(f))
-	for _, ts := range ordered {
-		if !all && ts.status == statusDone {
-			continue
+	var rows []*taskState
+	shown := 0
+	switch mode {
+	case modeAll:
+		rows = ordered
+		shown = finishedCount(f)
+	case modeFinished:
+		rows = finishedRows(f, n, false)
+		shown = len(rows)
+	default:
+		for _, ts := range ordered {
+			if !isFinished(ts) {
+				rows = append(rows, ts)
+			}
 		}
+		rows = append(rows, finishedRows(f, DefaultFinishedShown, true)...)
+		for _, ts := range rows {
+			if isFinished(ts) {
+				shown++
+			}
+		}
+	}
+	var b strings.Builder
+	b.WriteString(summaryOf(f, shown))
+	for _, ts := range rows {
 		b.WriteString("\n" + renderTask(f, ts, session))
+	}
+	if hidden := finishedCount(f) - shown; hidden > 0 {
+		window := finishedCount(f)
+		if window > FinishedListCap {
+			window = FinishedListCap
+		}
+		fmt.Fprintf(&b, "\n\u00b7 %d more finished \u00b7 todo list finished %d", hidden, window)
 	}
 	return b.String()
 }
@@ -853,7 +1002,7 @@ func echoTask(f *folded, session, id, note string) string {
 	if ts := f.tasks[id]; ts != nil {
 		b.WriteString(renderTask(f, ts, session))
 	}
-	b.WriteString("\n" + summaryOf(f))
+	b.WriteString("\n" + summaryOf(f, defaultShown(f)))
 	if foot := staleFooter(f); foot != "" {
 		b.WriteString("\n" + foot)
 	}
@@ -896,7 +1045,7 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(replyText(f, session, note, false, p.Label), foot), nil
+		return withFoot(replyText(f, session, note, modePresent, 0, p.Label), foot), nil
 	})
 }
 
@@ -1502,7 +1651,7 @@ func Prune(ctx context.Context, db store.DB, p Project, session string) (string,
 			}
 		}
 		if n == 0 {
-			return withFoot(replyText(f, session, "nothing to prune (no done tasks)", false, p.Label), foot), nil
+			return withFoot(replyText(f, session, "nothing to prune (no done tasks)", modePresent, 0, p.Label), foot), nil
 		}
 		seq := f.nextSeq()
 		args, _ := json.Marshal(map[string]any{"done": n})
@@ -1514,7 +1663,7 @@ func Prune(ctx context.Context, db store.DB, p Project, session string) (string,
 			return "", e
 		}
 		note := "pruned " + strconv.Itoa(n) + " done task" + claimPlural(n)
-		return withFoot(replyText(f, session, note, false, p.Label), foot), nil
+		return withFoot(replyText(f, session, note, modePresent, 0, p.Label), foot), nil
 	})
 }
 
@@ -1542,14 +1691,24 @@ func claimPlural(n int) string {
 }
 
 func Read(ctx context.Context, db store.DB, p Project, session string) (string, error) {
-	return read(ctx, db, p, session, false)
+	return read(ctx, db, p, session, modePresent, 0)
 }
 
 func ReadAll(ctx context.Context, db store.DB, p Project, session string) (string, error) {
-	return read(ctx, db, p, session, true)
+	return read(ctx, db, p, session, modeAll, 0)
 }
 
-func read(ctx context.Context, db store.DB, p Project, session string, all bool) (string, error) {
+func ReadFinished(ctx context.Context, db store.DB, p Project, session string, n int) (string, error) {
+	if n <= 0 {
+		n = DefaultFinishedShown
+	}
+	if n < 1 || n > FinishedListCap {
+		return "", fmt.Errorf("todo: finished count must be an integer 1-%d, got %d", FinishedListCap, n)
+	}
+	return read(ctx, db, p, session, modeFinished, n)
+}
+
+func read(ctx context.Context, db store.DB, p Project, session string, mode readMode, n int) (string, error) {
 	if session == "" {
 		session = anon
 	}
@@ -1557,7 +1716,7 @@ func read(ctx context.Context, db store.DB, p Project, session string, all bool)
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return replyText(f, session, "", all, p.Label), nil
+		return replyText(f, session, "", mode, n, p.Label), nil
 	})
 }
 
@@ -1577,7 +1736,7 @@ func ReadOne(ctx context.Context, db store.DB, p Project, id, session string) (s
 		}
 		var b strings.Builder
 		b.WriteString(renderOne(f, ts, session))
-		b.WriteString("\n" + summaryOf(f))
+		b.WriteString("\n" + summaryOf(f, defaultShown(f)))
 		if foot := staleFooter(f); foot != "" {
 			b.WriteString("\n" + foot)
 		}
@@ -1665,12 +1824,12 @@ func verb(
 	})
 }
 
-func replyText(f *folded, session, note string, all bool, label string) string {
+func replyText(f *folded, session, note string, mode readMode, n int, label string) string {
 	var b strings.Builder
 	if note != "" {
 		fmt.Fprintf(&b, "\u2192 %s\n", note)
 	}
-	b.WriteString(renderQueue(f, session, all, label))
+	b.WriteString(renderQueue(f, session, mode, n, label))
 	if foot := staleFooter(f); foot != "" {
 		b.WriteString("\n" + foot)
 	}
@@ -1703,6 +1862,9 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session, scope s
 	tsStr := nowRFC3339()
 	for _, ts := range f.tasks {
 		ts.createdSeq, ts.updatedSeq, ts.updatedTs = seq, seq, tsStr
+		if ts.status == statusDone {
+			ts.finishedSeq = seq
+		}
 	}
 	if _, e := tx.Exec("DELETE FROM events WHERE scope = ? AND seq < ?", scope, seq); e != nil {
 		return "", fmt.Errorf("todo: compact: %w", e)
@@ -1865,6 +2027,9 @@ func (f *folded) applyCompactEvent(e eventRow) {
 	for _, ts := range tasks {
 		ts.createdSeq = e.seq
 		ts.updatedSeq = e.seq
+		if ts.status == statusDone {
+			ts.finishedSeq = e.seq
+		}
 	}
 	// A snapshot written before the counters existed reports neither, and
 	// 0 means "keep minting from what is here": the mint skips ids the

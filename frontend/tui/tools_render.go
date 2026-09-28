@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	todoHeadRe   = regexp.MustCompile(`^(\[[^\]]+\] )?(\d+)/(\d+) done( · next: (\S+))?( · (\d+) in review)?( · (\d+) failed)?$`)
+	todoHeadRe   = regexp.MustCompile(`^(\[[^\]]+\] )?(\d+) open( · (\d+) of (\d+) finished shown)?( · next: (\S+))?$`)
 	todoTaskRe   = regexp.MustCompile(`^  (t\d+) \[([xr!~ ])\] (.+)$`)
 	todoNotesRe  = regexp.MustCompile(`^    · (\d+) notes?( \(.*\))?$`)
 	schedRunsRe  = regexp.MustCompile(`^(j\d+) · (\d+) runs? \(oldest first\):$`)
@@ -26,15 +26,15 @@ type todoTask struct {
 }
 
 type todoParsed struct {
-	Scope  string
-	Done   int
-	Total  int
-	Active int
-	Next   string
-	Review int
-	Failed int
-	Tasks  []todoTask
-	Footer string
+	Scope    string
+	Open     int
+	Finished int
+	Shown    int
+	Next     string
+	Note     string
+	Echo     bool
+	Tasks    []todoTask
+	Footers  []string
 }
 
 func parseTodo(reply string) (todoParsed, bool) {
@@ -42,48 +42,44 @@ func parseTodo(reply string) (todoParsed, bool) {
 	p := todoParsed{}
 	i := 0
 	if i < len(lines) && strings.HasPrefix(lines[i], "→ ") {
+		p.Note = strings.TrimPrefix(lines[i], "→ ")
 		i++
 	}
-	if i >= len(lines) {
+	head := -1
+	for j := i; j < len(lines); j++ {
+		if todoHeadRe.MatchString(lines[j]) {
+			head = j
+			break
+		}
+	}
+	if head < 0 {
 		return p, false
 	}
-	m := todoHeadRe.FindStringSubmatch(lines[i])
-	if m == nil {
-		return p, false
-	}
+	m := todoHeadRe.FindStringSubmatch(lines[head])
 	p.Scope = m[1]
 	var err error
-	if p.Done, err = atoi(m[2]); err != nil {
+	if p.Open, err = atoi(m[2]); err != nil {
 		return p, false
 	}
-	if p.Total, err = atoi(m[3]); err != nil {
-		return p, false
-	}
-	p.Next = m[5]
-	if m[7] != "" {
-		p.Review, err = atoi(m[7])
-		if err != nil {
+	if m[4] != "" {
+		if p.Shown, err = atoi(m[4]); err != nil {
+			return p, false
+		}
+		if p.Finished, err = atoi(m[5]); err != nil {
 			return p, false
 		}
 	}
-	if m[9] != "" {
-		p.Failed, err = atoi(m[9])
-		if err != nil {
-			return p, false
+	p.Next = m[7]
+	for j := i; j < len(lines); j++ {
+		if j == head {
+			continue
 		}
-	}
-	i++
-	for i < len(lines) {
-		line := lines[i]
-		i++
+		line := lines[j]
 		if line == "" {
 			continue
 		}
 		if strings.HasPrefix(line, "· ") {
-			if p.Footer != "" {
-				return p, false
-			}
-			p.Footer = line
+			p.Footers = append(p.Footers, line)
 			continue
 		}
 		if todoNotesRe.MatchString(line) {
@@ -105,7 +101,6 @@ func parseTodo(reply string) (todoParsed, bool) {
 			task.Status = "failed"
 		case "~":
 			task.Status = "active"
-			p.Active++
 		case "r":
 			task.Status = "review"
 		default:
@@ -138,6 +133,13 @@ func parseTodo(reply string) (todoParsed, bool) {
 		task.Text = rest
 		p.Tasks = append(p.Tasks, task)
 	}
+	p.Echo = false
+	for j := i; j < head; j++ {
+		if todoTaskRe.MatchString(lines[j]) {
+			p.Echo = true
+			break
+		}
+	}
 	return p, true
 }
 
@@ -158,13 +160,21 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	}
 	p, ok := parseTodo(reply)
 	if !ok {
-		return reply
+		var b strings.Builder
+		b.WriteString(opening)
+		b.WriteString("\n")
+		for _, line := range strings.Split(strings.TrimRight(reply, "\n"), "\n") {
+			b.WriteString(t.Paint(SlotDim, line))
+			b.WriteString("\n")
+		}
+		return strings.TrimSuffix(b.String(), "\n")
 	}
 	var b strings.Builder
 	b.WriteString(opening)
 	b.WriteString("\n")
 
-	segs := p.Total
+	total := p.Open + p.Finished
+	segs := total
 	if segs > 8 {
 		segs = 8
 	}
@@ -172,9 +182,9 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 		segs = 1
 	}
 	filled := 0
-	if p.Total > 0 {
-		filled = (p.Done + p.Active) * segs / p.Total
-		if rem := (p.Done + p.Active) * segs % p.Total; rem*2 >= p.Total {
+	if total > 0 {
+		filled = p.Finished * segs / total
+		if rem := p.Finished * segs % total; rem*2 >= total {
 			filled++
 		}
 	}
@@ -186,18 +196,19 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 	}
 	b.WriteString(t.Paint(SlotEmber, strings.Repeat(t.Glyph(GlyphBarOn), filled)))
 	b.WriteString(t.Paint(SlotDim, strings.Repeat(t.Glyph(GlyphBarOff), segs-filled)))
-	head := fmt.Sprintf(" %d/%d", p.Done, p.Total)
+	head := fmt.Sprintf(" %d open", p.Open)
+	if p.Finished > 0 {
+		head += fmt.Sprintf(" · %d of %d finished shown", p.Shown, p.Finished)
+	}
 	if p.Next != "" {
 		head += " · next " + p.Next
 	}
-	if p.Review > 0 {
-		head += fmt.Sprintf(" · %d in review", p.Review)
-	}
-	if p.Failed > 0 {
-		head += fmt.Sprintf(" · %d failed", p.Failed)
-	}
 	b.WriteString(t.Paint(SlotDim, head))
 	b.WriteString("\n")
+	if p.Echo && p.Note != "" {
+		b.WriteString(t.Paint(SlotDim, "→ "+p.Note))
+		b.WriteString("\n")
+	}
 	for _, task := range p.Tasks {
 		glyph, slot := t.todoStatusGlyph(task.Status)
 		b.WriteString(t.Paint(slot, glyph))
@@ -224,8 +235,8 @@ func RenderTodoBlock(t Theme, opening, reply string) string {
 			b.WriteString("\n")
 		}
 	}
-	if p.Footer != "" {
-		b.WriteString(t.Paint(SlotDim, "  "+p.Footer))
+	for _, footer := range p.Footers {
+		b.WriteString(t.Paint(SlotDim, "  "+footer))
 		b.WriteString("\n")
 	}
 	return strings.TrimSuffix(b.String(), "\n")

@@ -63,7 +63,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 			t.Fatalf("read %d: %v", wi, err)
 		}
 		head := strings.Split(reply, "\n")[0]
-		if want := fmt.Sprintf("0/%d done", perDB*len(dbs)); !strings.Contains(head, want) {
+		if want := fmt.Sprintf("%d open", perDB*len(dbs)); !strings.Contains(head, want) {
 			t.Fatalf("read %d: head %q, want %s", wi, head, want)
 		}
 	}
@@ -121,11 +121,11 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("%d of 40 concurrent completes failed: %v", len(errs), errs[0])
 	}
-	reply, err := todostore.Read(context.Background(), d1, p, "")
+	reply, err := todostore.ReadAll(context.Background(), d1, p, "")
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("read all: %v", err)
 	}
-	if head := strings.Split(reply, "\n")[0]; !strings.Contains(head, "40/40 done") {
-		t.Fatalf("head %q, want every task done", head)
+	if head := strings.Split(reply, "\n")[0]; !strings.Contains(head, "0 open · 40 of 40 finished shown") {
+		t.Fatalf("head %q, want every task finished", head)
 	}
 }

@@ -1127,8 +1127,8 @@ func TestSummaryCountsTasksInReview(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(read, "0/1 done") || !strings.Contains(read, "1 in review") {
-		t.Fatalf("the summary must count the review row:\n%s", read)
+	if !strings.Contains(read, "[ws] 1 open") {
+		t.Fatalf("the summary must count the review row as open:\n%s", read)
 	}
 }
 

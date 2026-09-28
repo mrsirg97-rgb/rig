@@ -371,7 +371,7 @@ func TestFrameTickerLifecycle(t *testing.T) {
 func TestBothDoorsThroughFrontend(t *testing.T) {
 	th := oledTheme(t)
 	const reply = "→ t3 started\n" +
-		"2/5 done · next: t4\n" +
+		"[rig] 3 open · 2 of 2 finished shown · next: t4\n" +
 		"  t1 [x] wire the models table\n" +
 		"  t2 [x] the switch seam\n" +
 		"  t3 [~] steer verb\n" +
@@ -1006,7 +1006,7 @@ func TestCompletionMenu(t *testing.T) {
 	}
 
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 21, []string{
+	s.awaitScreen(50, 22, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
@@ -1020,7 +1020,7 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("done", "a task's id")))
 
 	s.si.feed("\n")
-	s.awaitScreen(50, 17, []string{"❯ /todo done ", "", status, stance, usage})
+	s.awaitScreen(50, 18, []string{"❯ /todo done ", "", status, stance, usage})
 	if todo.calls != 1 {
 		t.Fatalf("the accepted line dispatched: %d calls, want 1 (Enter after navigation accepts, it does not run)", todo.calls)
 	}

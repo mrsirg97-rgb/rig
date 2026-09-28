@@ -25,26 +25,27 @@ func TestTodoBlockBothDoorsByteEqualMinusOpening(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reply := newTodoFixture(t).queue()
-	tool := tui.RenderTodoBlock(th,
-		th.Paint("ember", "●")+" "+th.Paint("ember", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
-		reply)
-	cmd := tui.RenderTodoBlock(th,
-		th.Paint("dim", "/todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
-		reply)
-	body := func(s string) string {
-		rest, _, ok := strings.Cut(s, "\n")
-		if !ok {
-			t.Fatal("no opening line")
+	for _, reply := range []string{newTodoFixture(t).queue(), newTodoFixture(t).completeEcho()} {
+		tool := tui.RenderTodoBlock(th,
+			th.Paint("ember", "●")+" "+th.Paint("ember", "todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
+			reply)
+		cmd := tui.RenderTodoBlock(th,
+			th.Paint("dim", "/todo")+th.Paint("dim", " · ")+th.Paint("text", "start t3"),
+			reply)
+		body := func(s string) string {
+			rest, _, ok := strings.Cut(s, "\n")
+			if !ok {
+				t.Fatal("no opening line")
+			}
+			_ = rest
+			return s[len(rest)+1:]
 		}
-		_ = rest
-		return s[len(rest)+1:]
-	}
-	if body(tool) != body(cmd) {
-		t.Fatalf("the two doors differ below the opening line:\n[tool]\n%s\n[cmd]\n%s", body(tool), body(cmd))
-	}
-	if tool == cmd {
-		t.Fatal("the opening lines must differ (the door is the difference)")
+		if body(tool) != body(cmd) {
+			t.Fatalf("the two doors differ below the opening line:\n[tool]\n%s\n[cmd]\n%s", body(tool), body(cmd))
+		}
+		if tool == cmd {
+			t.Fatal("the opening lines must differ (the door is the difference)")
+		}
 	}
 }
 
@@ -55,7 +56,7 @@ func TestTodoBlockExactBytes(t *testing.T) {
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).queue())
 
-	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱▱")+th.Paint("dim", " 2/5 · next t5")) {
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰")+th.Paint("dim", "▱▱▱")+th.Paint("dim", " 3 open · 2 of 2 finished shown · next t5")) {
 		t.Fatalf("the scoped progress head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "wire the models table")) {
@@ -94,11 +95,54 @@ func TestTodoBlockReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).review())
-	if !strings.Contains(got, th.Paint("dim", " 0/1 · 1 in review")) {
-		t.Fatalf("the review count is missing from the head:\n%s", got)
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open")) {
+		t.Fatalf("the review queue's head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("warn", "⧗")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "ready")+th.Paint("dim", " · claimed for review by sessB")) {
 		t.Fatalf("the review row keeps its glyph and the review claim, dim:\n%s", got)
+	}
+}
+
+func TestTodoBlockPresentRendersHeadAndHint(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).present())
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰▰▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 2 open · 10 of 13 finished shown · next t4")) {
+		t.Fatalf("the present head is missing or wrong:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("error", "✕")+" "+th.Paint("dim", "t5")+" "+th.Paint("text", "later")+th.Paint("dim", " · requires t1")) {
+		t.Fatalf("a failed row is open work, marked, and stays in the block:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t3")+" "+th.Paint("text", "dep3")+th.Paint("dim", " · requires t2")) {
+		t.Fatalf("the nearest related hop leads the finished rows:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "dep1")) {
+		t.Fatalf("the farthest related hop closes the chain:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t15")+" "+th.Paint("text", "r10")) {
+		t.Fatalf("the recent finished rows follow the chain:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("dim", "  · 3 more finished · todo list finished 13")) {
+		t.Fatalf("the hint names what is hidden and the door:\n%s", got)
+	}
+}
+
+func TestTodoBlockFinishedListPinsTheStore(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).finishedList())
+	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open · 2 of 3 finished shown · next t4")) {
+		t.Fatalf("the finished list head is missing or wrong:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t3")+" "+th.Paint("text", "c")) {
+		t.Fatalf("the newest finished leads:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint("dim", "  · 1 more finished · todo list finished 3")) {
+		t.Fatalf("the finished list names its hidden rows:\n%s", got)
 	}
 }
 
@@ -112,20 +156,56 @@ func TestTodoBlockBareQueueOneDimLine(t *testing.T) {
 	}
 }
 
-func TestTodoBlockParseFailureDegradesToRaw(t *testing.T) {
+func TestTodoBlockUnrecognizedKeepsTheOpeningAndRendersDim(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	raw := "all good, queue is healthy"
-	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != raw {
-		t.Fatalf("an unparseable reply commits raw, got:\n%s", got)
+	want := "OPEN\n" + th.Paint(tui.SlotDim, raw)
+	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != want {
+		t.Fatalf("an unparseable reply must keep the opening and go dim, got:\n%s", got)
 	}
 
 	raw = "2/2 done\n  t1 ?? text"
-	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != raw {
-		t.Fatalf("a malformed task row degrades to raw, got:\n%s", got)
+	want = "OPEN\n" + th.Paint(tui.SlotDim, "2/2 done") + "\n" + th.Paint(tui.SlotDim, "  t1 ?? text")
+	if got := tui.RenderTodoBlock(th, "OPEN", raw); got != want {
+		t.Fatalf("a malformed task row must keep the opening and go dim, got:\n%s", got)
+	}
+}
+
+func TestTodoBlockEchoRendersNoteAndRowThroughTheQueuePainter(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).completeEcho())
+	if !strings.HasPrefix(got, "OPEN\n") {
+		t.Fatalf("the echo must keep the opening, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "\u2192 't1' auto-started and completed")) {
+		t.Fatalf("the echo's note renders dim, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotSuccess, "\u25cf")+" "+th.Paint(tui.SlotDim, "t1")+" "+th.Paint(tui.SlotText, "wire the models table")) {
+		t.Fatalf("the echo's row must ride the queue's task-line painter, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "[rig] ")+th.Paint(tui.SlotEmber, "\u25b0")+th.Paint(tui.SlotDim, " 0 open · 1 of 1 finished shown")) {
+		t.Fatalf("the echo's summary renders as the head, got:\n%s", got)
+	}
+}
+
+func TestTodoBlockNoteEchoRendersNoteAndRow(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).noteEcho())
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "\u2192 note added to 't1'")) {
+		t.Fatalf("the note echo's note renders dim, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "    \u00b7 1 note")) {
+		t.Fatalf("the note echo's count rides the row, got:\n%s", got)
 	}
 }
 

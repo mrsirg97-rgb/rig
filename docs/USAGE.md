@@ -67,6 +67,10 @@ is a loud line naming the known set, never silently a prompt.
   notes in order with their session and time, `read <id>` renders one
   task summary-only, `done` lands it done in a solo session and submits
   it for review from a worker (`rig -p`), and `accept`/`reject` decide.
+  `read` is the present — open work first, then related and recent
+  finished, ten rows total with the hint naming what is hidden — and
+  `list finished <n>` lists the n most recent finished (default 10,
+  cap 100); `read all:true` stays the operator's full-history read.
   Tasks carry two links, one each: `requires tN` (I wait for it) and
   `blocks tN` (it waits for me), gating claim and finish
   (`specs/SPEC_TODO_EDGES.md`).

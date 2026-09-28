@@ -169,7 +169,7 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(reply, "0/2 done") || !strings.Contains(reply, "next: ") {
+	if !strings.Contains(reply, "2 open") || !strings.Contains(reply, "next: ") {
 		t.Errorf("counts/next missing:\n%s", reply)
 	}
 	if !strings.Contains(reply, "requires t1") {
@@ -354,6 +354,44 @@ func TestClaimStatusOnlyKnowsReview(t *testing.T) {
 	}
 }
 
+func TestFinishedActionListsNewestFirst(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "a"},
+		map[string]any{"text": "b"},
+		map[string]any{"text": "c"},
+		map[string]any{"text": "work"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	rows := strings.Split(reply, "\n")
+	a := strings.Fields(rows[2])[0]
+	b := strings.Fields(rows[3])[0]
+	c := strings.Fields(rows[4])[0]
+	for _, id := range []string{a, b, c} {
+		if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
+			t.Fatalf("complete %s: %v", id, err)
+		}
+	}
+	listed, err := exec(t, tool, ctx, map[string]any{"action": "finished", "n": 2})
+	if err != nil {
+		t.Fatalf("finished: %v", err)
+	}
+	if !strings.Contains(listed, "[x] c") || !strings.Contains(listed, "[x] b") {
+		t.Fatalf("the finished list must be newest first:\n%s", listed)
+	}
+	if !strings.Contains(listed, "· 1 more finished · todo list finished 3") {
+		t.Fatalf("the finished list names its hidden rows:\n%s", listed)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "finished", "n": 101}); err == nil ||
+		!strings.Contains(err.Error(), "1-100") {
+		t.Fatalf("over the cap must refuse naming the range, got %v", err)
+	}
+}
+
 func TestReadAllTrueReturnsHistory(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
@@ -376,8 +414,8 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if strings.Contains(defaultRead, "drop") {
-		t.Errorf("default read leaked the done row:\n%s", defaultRead)
+	if !strings.Contains(defaultRead, "drop") {
+		t.Errorf("default read must keep the recent finished row visible:\n%s", defaultRead)
 	}
 	history, err := exec(t, tool, ctx, map[string]any{"action": "read", "all": true})
 	if err != nil {

@@ -1,4 +1,39 @@
 # Changelog
+## [1.7.4]: the todo default read is the present
+
+The default queue read was the ledger: every finished row rendered in
+front of the open work, on every read, for the model and the operator
+alike. The default is now the present — open work first in queue order
+(pending, active, review, failed: failed is open work, keeps its ✕
+marker and counts toward open, so retry stays reachable), then the
+done work related to it (every done task reachable from an open task
+over requires/blocks, nearest hop first), then the recent done, newest
+terminal event first, until ten done rows show in total
+(`DefaultFinishedShown`, one phone screen: SPEC_CORE). When the chains
+alone exceed ten, the ten nearest hops win; anything hidden gets one
+dim hint line naming the largest window that would show it —
+`· 480 more finished · todo list finished 100` — and the head becomes
+`[rig] 6 open · 10 of 490 finished shown · next: t497`, with the
+finished clause omitted when nothing is done. Retirement is a view,
+not a state: a hidden done task still resolves by id, its links
+resolve, and notes and show work on any id.
+
+The new read is `todo list finished <n>`: the n most recent done,
+newest first, default 10, capped at 100 (`FinishedListCap`, one tool
+result: SPEC_CORE) — the same in the terminal as `/todo list finished
+<n>`; an over-cap count refuses naming the range. Read all stays for
+the operator only.
+
+The TUI's todo block parses the new head and the hint line: the one-row
+transition echo (`→ 't1' auto-started and completed` plus the affected
+row and the summary) renders the note dim and the row through the same
+task-line painter the queue block uses, and a reply the parser does not
+recognize keeps the opening and prints dim beneath it — never the bare
+string, so rows wrap by the TUI's own rules, never the terminal's. The
+fixture drives every shape from store/todo's real renderer through
+tool/todo. The wire goldens re-pin once with this release; version
+moves to 1.7.4.
+
 ## [1.7.3]: the two web tools fold into one `web`
 
 web_search and web_fetch were two native tools, two allow entries, and

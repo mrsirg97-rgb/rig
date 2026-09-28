@@ -1615,7 +1615,7 @@ func rowCount(reply string) int {
 	return n
 }
 
-func TestReadDefaultHidesDoneRows(t *testing.T) {
+func TestReadDefaultRendersThePresent(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	reply, err := todostore.Create(ctx, db, p, []item{{Text: "keep"}, {Text: "drop"}}, "s1")
@@ -1633,21 +1633,21 @@ func TestReadDefaultHidesDoneRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if strings.Contains(read, "drop") {
-		t.Errorf("done row leaked into the actionable read:\n%s", read)
-	}
 	if !strings.Contains(read, "keep") {
-		t.Errorf("actionable row missing:\n%s", read)
+		t.Errorf("the open row must be first:\n%s", read)
 	}
-	if !strings.Contains(read, "1/2 done") {
-		t.Errorf("summary fold missing:\n%s", read)
+	if !strings.Contains(read, "1 open · 1 of 1 finished shown") {
+		t.Errorf("the head must count open and finished:\n%s", read)
 	}
-	if rowCount(read) != 1 {
-		t.Errorf("default read row count = %d, want only the actionable row:\n%s", rowCount(read), read)
+	if !strings.Contains(read, "[x] drop") {
+		t.Errorf("the one finished row is recent work and stays visible:\n%s", read)
+	}
+	if rowCount(read) != 2 {
+		t.Errorf("default read row count = %d, want the open row plus the recent finished:\n%s", rowCount(read), read)
 	}
 }
 
-func TestAllDoneQueueRendersSummaryOnly(t *testing.T) {
+func TestAllDoneQueueRendersFinishedRows(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "a"}, {Text: "b"}}, "s1"); err != nil {
@@ -1668,11 +1668,11 @@ func TestAllDoneQueueRendersSummaryOnly(t *testing.T) {
 	if strings.Contains(read, "(no tasks") {
 		t.Errorf("an all-done queue must never say '(no tasks…)':\n%s", read)
 	}
-	if !strings.Contains(read, "2/2 done") {
+	if !strings.Contains(read, "0 open · 2 of 2 finished shown") {
 		t.Errorf("summary fold missing:\n%s", read)
 	}
-	if rowCount(read) != 0 {
-		t.Errorf("all-done queue must render as summary with zero rows:\n%s", read)
+	if rowCount(read) != 2 {
+		t.Errorf("all-done queue must render its finished rows:\n%s", read)
 	}
 }
 
@@ -1700,7 +1700,7 @@ func TestReadAllShowsDoneRows(t *testing.T) {
 	if !strings.Contains(full, "[x] drop") {
 		t.Errorf("done marker missing:\n%s", full)
 	}
-	if !strings.Contains(full, "1/2 done") {
+	if !strings.Contains(full, "1 open · 1 of 1 finished shown") {
 		t.Errorf("summary fold missing:\n%s", full)
 	}
 	if rowCount(full) != 2 {

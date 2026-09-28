@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
@@ -172,6 +173,101 @@ func (f *todoFixture) stale() string {
 	return out
 }
 
+func (f *todoFixture) bindSession(ctx context.Context, session string) {
+	f.t.Helper()
+	if err := todostore.Bind(ctx, f.db, todostore.Binding{Session: session, Scope: f.proj.Key, Label: f.proj.Label}); err != nil {
+		f.t.Fatalf("bind: %v", err)
+	}
+}
+
+func (f *todoFixture) completeEcho() string {
+	f.t.Helper()
+	reply := f.create("s1", todostore.CreateItem{Text: "wire the models table"})
+	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
+	f.bindSession(ctx, "s1")
+	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"complete","id":"`+f.id(reply, "wire the models table")+`"}`))
+	if err != nil {
+		f.t.Fatalf("complete: %v", err)
+	}
+	return out
+}
+
+func (f *todoFixture) noteEcho() string {
+	f.t.Helper()
+	reply := f.create("s1", todostore.CreateItem{Text: "wire the models table"})
+	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
+	f.bindSession(ctx, "s1")
+	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"note","id":"`+f.id(reply, "wire the models table")+`","note":"on it"}`))
+	if err != nil {
+		f.t.Fatalf("note: %v", err)
+	}
+	return out
+}
+
+func (f *todoFixture) present() string {
+	f.t.Helper()
+	reply := f.create("s1",
+		todostore.CreateItem{Text: "dep1"},
+		todostore.CreateItem{Text: "dep2", Requires: ptrTo("dep1")},
+		todostore.CreateItem{Text: "dep3", Requires: ptrTo("dep2")},
+		todostore.CreateItem{Text: "root", Requires: ptrTo("dep3")},
+		todostore.CreateItem{Text: "later", Requires: ptrTo("dep1")},
+	)
+	for _, text := range []string{"dep1", "dep2", "dep3"} {
+		f.exec(func() (string, error) {
+			return todostore.Complete(context.Background(), f.db, f.proj, f.id(reply, text), "s1", false)
+		})
+	}
+	f.exec(func() (string, error) {
+		return todostore.Start(context.Background(), f.db, f.proj, f.id(reply, "later"), "s1", false)
+	})
+	f.exec(func() (string, error) {
+		return todostore.Fail(context.Background(), f.db, f.proj, f.id(reply, "later"), "s1", false)
+	})
+	more := f.create("s1",
+		todostore.CreateItem{Text: "r1"},
+		todostore.CreateItem{Text: "r2"},
+		todostore.CreateItem{Text: "r3"},
+		todostore.CreateItem{Text: "r4"},
+		todostore.CreateItem{Text: "r5"},
+		todostore.CreateItem{Text: "r6"},
+		todostore.CreateItem{Text: "r7"},
+		todostore.CreateItem{Text: "r8"},
+		todostore.CreateItem{Text: "r9"},
+		todostore.CreateItem{Text: "r10"},
+	)
+	for i := 1; i <= 10; i++ {
+		f.exec(func() (string, error) {
+			return todostore.Complete(context.Background(), f.db, f.proj, f.id(more, "r"+strconv.Itoa(i)), "s1", false)
+		})
+	}
+	out, err := todostore.Read(context.Background(), f.db, f.proj, "s1")
+	if err != nil {
+		f.t.Fatalf("read present: %v", err)
+	}
+	return out
+}
+
+func (f *todoFixture) finishedList() string {
+	f.t.Helper()
+	reply := f.create("s1",
+		todostore.CreateItem{Text: "a"},
+		todostore.CreateItem{Text: "b"},
+		todostore.CreateItem{Text: "c"},
+		todostore.CreateItem{Text: "work"},
+	)
+	for _, text := range []string{"a", "b", "c"} {
+		f.exec(func() (string, error) {
+			return todostore.Complete(context.Background(), f.db, f.proj, f.id(reply, text), "s1", false)
+		})
+	}
+	out, err := todostore.ReadFinished(context.Background(), f.db, f.proj, "s1", 2)
+	if err != nil {
+		f.t.Fatalf("read finished: %v", err)
+	}
+	return out
+}
+
 func (f *todoFixture) bareQueue() string {
 	f.t.Helper()
 	ctx := core.WithSession(context.Background(), &core.Session{ID: "sess-1"})
@@ -184,3 +280,5 @@ func (f *todoFixture) bareQueue() string {
 	}
 	return out
 }
+
+func ptrTo(s string) *string { return &s }

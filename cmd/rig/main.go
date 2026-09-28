@@ -54,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/tool/web"
 )
 
-const Version = "1.7.3"
+const Version = "1.7.4"
 
 type root struct {
 	pluginMax int
@@ -417,7 +417,7 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 
 var concurrentNatives = map[string]bool{
 	"read": true, "view": true,
-	"web": true,
+	"web":      true,
 	"delegate": true,
 }
 
