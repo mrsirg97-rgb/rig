@@ -1,4 +1,24 @@
 # Changelog
+## [2.1.7]: the session line and the idempotent todo
+
+The session line named the cwd and the home but never said whether the
+cwd is a repo, so a session started in the home made its first todo
+create with no `project` and learned the rule from the refusal
+(`no project: /home/ng is not a repo...`), then retried with the
+project set. Outside a repo the session line now adds one sentence —
+`It is not a repo: name project on todo and rem calls, as a path to
+the repo the work is in.` — using the same repo test `store/scope`
+already uses (`InRepo`), fail-closed: an unprobeable cwd reads as not a
+repo and the sentence stands. `complete` on a task that is already done
+refused with `'tN' is done; read-only`, and the model read the refusal
+as "I did something wrong" and spent a thought on it, though there was
+nothing to fix. Complete on a done task and start on a task already in
+progress by the same session are no-ops that look like success: they
+answer with the echo a fresh call would give — the row (`[x]`/`[~]`)
+and the queue summary — write no event and run no compaction. A foreign
+start of an owned task still refuses naming the claimer; done stays
+read-only for every other verb.
+
 ## [2.1.6]: the link fill and the API reply
 
 The todo tool treated any string in `requires` or `blocks` as a link

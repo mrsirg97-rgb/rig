@@ -309,6 +309,71 @@ func TestNewVerbsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCompleteTwiceIsIdempotentThroughTheTool(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db, todoapi.Interactive)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "twice"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	before := len(rawEvents(t, db))
+	again, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id})
+	if err != nil {
+		t.Fatalf("complete on a done task must be a no-op success through the tool: %v", err)
+	}
+	if !strings.Contains(again, "[x] twice") {
+		t.Errorf("the tool reply must show the done row:\n%s", again)
+	}
+	if !strings.Contains(again, "0 open") {
+		t.Errorf("the tool reply must carry the queue summary:\n%s", again)
+	}
+	if got := len(rawEvents(t, db)); got != before {
+		t.Errorf("the no-op must write no event: %d -> %d", before, got)
+	}
+}
+
+func TestStartTwiceIsIdempotentThroughTheTool(t *testing.T) {
+	db := newDB(t)
+	tool := todoapi.New(db, todoapi.Interactive)
+	sess := core.NewSession()
+	ctx := core.WithSession(context.Background(), sess)
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "again"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	before := len(rawEvents(t, db))
+	again, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id})
+	if err != nil {
+		t.Fatalf("start on an in-progress task must be a no-op success through the tool: %v", err)
+	}
+	if !strings.Contains(again, "[~] again") {
+		t.Errorf("the tool reply must show the in-progress row:\n%s", again)
+	}
+	if !strings.Contains(again, "1 open") {
+		t.Errorf("the tool reply must carry the queue summary:\n%s", again)
+	}
+	if got := len(rawEvents(t, db)); got != before {
+		t.Errorf("the no-op must write no event: %d -> %d", before, got)
+	}
+}
+
 func TestModeKeysTheGate(t *testing.T) {
 	db := newDB(t)
 	solo := todoapi.New(db, todoapi.Interactive)

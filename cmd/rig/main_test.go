@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.1.6" {
-		t.Fatalf("Version = %q, want 2.1.6", Version)
+	if Version != "2.1.7" {
+		t.Fatalf("Version = %q, want 2.1.7", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -482,7 +482,7 @@ func TestSystemPromptNamesTheSessionCwdAndHome(t *testing.T) {
 	r.agents = "G\n\nP"
 	got := r.buildSystem()
 	want := "be terse" + "\n\n" +
-		"The session's working directory is /work/proj and the session home is /home/ng. A leading ~ in a tool path expands to the session home." +
+		"The session's working directory is /work/proj and the session home is /home/ng. A leading ~ in a tool path expands to the session home. It is not a repo: name project on todo and rem calls, as a path to the repo the work is in." +
 		"\n\n" + "G\n\nP"
 	if got != want {
 		t.Fatalf("the session assembly = %q, want %q (the cwd and the home are named so the model never guesses)", got, want)

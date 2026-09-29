@@ -1502,20 +1502,19 @@ func TestDoneTasksNeverReportABlocker(t *testing.T) {
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "dep", Requires: d("c")}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := todostore.Complete(ctx, db, p, "t1", "s1", false)
-	if err == nil {
-		t.Fatal("expected refusal")
-	}
-	voice := err.Error()
-	if !strings.Contains(voice, "done; read-only") {
-		t.Fatalf("voice: %v", err)
+	voice, err := todostore.Complete(ctx, db, p, "t1", "s1", false)
+	if err != nil {
+		t.Fatalf("complete on a done task must be a no-op success: %v", err)
 	}
 	if strings.Contains(voice, "blocked by") {
-		t.Fatalf("done task reported a blocker: %v", err)
+		t.Fatalf("done task reported a blocker: %v", voice)
+	}
+	if !strings.Contains(voice, "[x]") {
+		t.Fatalf("the no-op echo must show the done row:\n%s", voice)
 	}
 }
 
-func TestLifecycleDoneIsReadOnly(t *testing.T) {
+func TestLifecycleDoneStaysReadOnlyExceptIdempotent(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, p, []item{{Text: "lc"}}, "s1"); err != nil {
@@ -1530,17 +1529,77 @@ func TestLifecycleDoneIsReadOnly(t *testing.T) {
 	if got := projStatus(t, db, "lc"); got != "done" {
 		t.Fatalf("status = %q, want done", got)
 	}
-	for _, verb := range []func() error{
-		func() error {
-			_, err := todostore.Complete(ctx, db, p, "t1", "s1", false)
-			return err
-		},
-		func() error { _, err := todostore.Start(ctx, db, p, "t1", "s1", false); return err },
-	} {
-		err := verb()
-		if err == nil || !strings.Contains(err.Error(), "done; read-only") {
-			t.Fatalf("read-only voice: %v", err)
-		}
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err != nil {
+		t.Fatalf("complete twice must be the idempotent echo: %v", err)
+	}
+	if _, err := todostore.Start(ctx, db, p, "t1", "s1", false); err == nil || !strings.Contains(err.Error(), "done; read-only") {
+		t.Fatalf("start on done stays read-only: %v", err)
+	}
+}
+
+func TestCompleteTwiceIsIdempotent(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "twice"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "twice")
+	if _, err := todostore.Start(ctx, db, p, id, sessA, false); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, p, id, sessA, false); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	before := eventCount(t, db)
+	again, err := todostore.Complete(ctx, db, p, id, sessA, false)
+	if err != nil {
+		t.Fatalf("complete on a done task must be a no-op success: %v", err)
+	}
+	if !strings.Contains(again, "[x] twice") {
+		t.Errorf("the echo must show the done row:\n%s", again)
+	}
+	if !strings.Contains(again, "0 open") {
+		t.Errorf("the echo must carry the queue summary:\n%s", again)
+	}
+	if got := eventCount(t, db); got != before {
+		t.Errorf("the no-op must write no event: %d -> %d", before, got)
+	}
+	if got := projStatus(t, db, "twice"); got != "done" {
+		t.Errorf("status = %q, want done", got)
+	}
+}
+
+func TestStartTwiceIsIdempotent(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "again"}}, sessA)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "again")
+	if _, err := todostore.Start(ctx, db, p, id, sessA, false); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	before := eventCount(t, db)
+	again, err := todostore.Start(ctx, db, p, id, sessA, false)
+	if err != nil {
+		t.Fatalf("start on an in-progress task must be a no-op success: %v", err)
+	}
+	if !strings.Contains(again, "[~] again") {
+		t.Errorf("the echo must show the in-progress row:\n%s", again)
+	}
+	if !strings.Contains(again, "1 open") {
+		t.Errorf("the echo must carry the queue summary:\n%s", again)
+	}
+	if got := eventCount(t, db); got != before {
+		t.Errorf("the no-op must write no event: %d -> %d", before, got)
+	}
+	if got := projStatus(t, db, "again"); got != "in_progress" {
+		t.Errorf("status = %q, want in_progress", got)
+	}
+	if _, err := todostore.Start(ctx, db, p, id, sessB, false); err == nil || !strings.Contains(err.Error(), "claimed by "+sessA) {
+		t.Errorf("a foreign start of an owned task still refuses: %v", err)
 	}
 }
 

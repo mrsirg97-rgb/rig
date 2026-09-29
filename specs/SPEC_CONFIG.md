@@ -512,7 +512,13 @@ the `core.GuidelineContributor` prose of the middleware participants
 contributes; `perm` and `guard` are wrap-only). The session section
 (the working directory and the session home, named so the model never
 guesses where it is; 1.1.4) and AGENTS.md sit **between the system
-prompt and the participant guidelines**:
+prompt and the participant guidelines**; outside a repo the section
+adds one sentence — `It is not a repo: name project on todo and rem
+calls, as a path to the repo the work is in.` (2.1.7) — so a session
+started in the home knows its first todo/rem write needs the project
+named, instead of learning it from the refusal. The repo test is the
+one `store/scope` already uses (`InRepo`), fail-closed: an unprobeable
+cwd reads as not a repo and the sentence stands:
 
 ```
 fullSystem = join( [system, session, AGENTS.md(global+project), guidelines], "\n\n" )

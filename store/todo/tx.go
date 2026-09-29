@@ -17,24 +17,27 @@ func verb(
 	db store.DB,
 	p Project,
 	session, id string,
-	check func(f *folded, ts *taskState) (ok bool, voice string),
+	check func(f *folded, ts *taskState) (ok, noop bool, voice string),
 	op, toStatus, note string,
 ) (string, error) {
 	if session == "" {
 		session = anon
 	}
 	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		foot, e := maybeCompact(bound, tx, f, session, p.Key)
-		if e != nil {
-			return "", e
-		}
 		ts, ok := f.tasks[id]
 		if !ok {
 			return "", unknownTask(p, id)
 		}
-		ok, voice := check(f, ts)
+		ok, noop, voice := check(f, ts)
 		if !ok {
 			return "", fmt.Errorf("%s", voice)
+		}
+		if noop {
+			return echoTask(f, session, id, note), nil
+		}
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
+		if e != nil {
+			return "", e
 		}
 		args, _ := json.Marshal(map[string]any{"id": id})
 		seq := f.nextSeq()
