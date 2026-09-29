@@ -183,10 +183,11 @@ an empty or absent zone. `/plugins approve <name>` checks in order and
 refuses loud: the pending file (absent, named); a name that collides
 with a native tool (the existing collision rule at the new door, its
 voice: `plugins: name collision: "<name>" (<name>.py) is already a
-native tool`); a file of the name already at the top level (a clobber
-is not an operator's verb by accident: `plugins: approve: "<name>" is
-already installed (<path> exists; remove it to install the pending
-one)`). The move is the atomic rename, named on success (`plugins:
+native tool`). An approve of a name already at the top level is an
+update: the one atomic rename replaces the installed file, no refusal
+and no flag, and the success line names the replacement (`plugins:
+approved <name>, replacing the installed one (<from> -> <to>)`).
+The move is the atomic rename, named on success (`plugins:
 approved <name> (<from> -> <to>)`), and post-SPEC_PLUGINS-8 the
 approved plugin's reload rides the same verb: its reply follows the
 move's line, and a reload failure after the move keeps the move (the

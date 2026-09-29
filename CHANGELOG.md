@@ -1,4 +1,13 @@
 # Changelog
+## [2.1.4]: the approve update
+
+An approve of a name that is already installed was a refusal (the
+command door) or a 409 needing an explicit replace flag (the dashboard
+forge). It is an update now: both doors rename the pending file over
+the installed one, one atomic rename, no refusal, no flag, and the
+reply names the replacement. The page's "approve with replace" button
+is gone with the 409.
+
 ## [2.1.3]: the notch
 
 The top safe-area inset lived on the sidebar, and the sidebar is hidden

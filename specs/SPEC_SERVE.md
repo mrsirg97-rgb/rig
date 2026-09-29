@@ -500,9 +500,9 @@ the name wall):
   by presence (`DESCRIPTION`, `SCHEMA`, `def run(`); a native name is
   the collision refusal. An edit of an approved plugin saves a pending
   revision under the same name; nothing reaches `plugins/` by saving.
-- `POST /api/plugins/approve {name, replace?}`: the command's verb,
-  verbatim: pending → `plugins/`; a native name refused; an installed
-  name a 409 naming `replace` until it is explicit, then the swap. The
+- `POST /api/plugins/approve {name}`: the command's verb, verbatim:
+  pending → `plugins/`; a native name refused; an installed name is
+  replaced in the one call (the reply says approved and replaced). The
   reply names what a live session needs: its next `plugins reload`.
 
 The phase-2 create form (`POST /api/plugins`, the run body wrapped)
@@ -576,7 +576,7 @@ The phase 1 and 2 cases stay green, minus the memory read (now the 404
 case), plus (failing first): the forge's source by zone and its
 refusals; save creates then updates, checks the contract, refuses a
 native name, and holds the Origin wall; approve moves the file, finds
-nothing the second time, 409s over an installed name until replace, and
+nothing the second time, replaces an installed name in one call, and
 refuses a native; the browser's root listing (folders only, hidden off,
 no parent), hidden on request, a child with its parent, the outside-root
 and traversal 403s, the absent 404, the file 400, the 405; the static
