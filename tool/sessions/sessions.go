@@ -37,7 +37,7 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "the session store. list shows sessions; summary shows the vitals: models, faults, cache " +
+const description = "The session store. list shows sessions; summary shows the vitals: models, faults, cache " +
 	"ratio. Guidelines: this workspace by default; project and n widen it. Reply: a line per session, or " +
 	"the vitals."
 

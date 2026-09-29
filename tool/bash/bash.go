@@ -26,7 +26,7 @@ func New() core.Tool { return &tool{} }
 func (tool) Name() string { return "bash" }
 
 func (tool) Description() string {
-	return "run a bash(1) command. Guidelines: shell work, builds, git, any CLI. To read a file use read, so the edit that follows has an observation to check against; for a computation use python. Reply: stdout and stderr together, in order, capped with a [TRUNCATED] marker naming the full size."
+	return "Runs a bash command in the session's working directory. Guidelines: use it for shell work, builds, git, and any CLI. To read a file you may edit, use read instead, so the edit that follows has something to check against; for a computation, use python. Reply: stdout and stderr together, in order, capped with a [TRUNCATED] marker that names the full size."
 }
 
 func (tool) Schema() json.RawMessage {

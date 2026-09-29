@@ -23,11 +23,11 @@ const (
 	waitDelay        = 2 * time.Second
 )
 
-const description = "run Python in a persistent IPython kernel: variables, imports and definitions persist " +
-	"across calls; numpy and pandas are available."
+const description = "Runs Python in a persistent IPython kernel: variables, imports and definitions persist " +
+	"across calls, and numpy and pandas are available."
 
-const guidelines = "Guidelines: arithmetic, data shaping, parsing and bulk text are computed here, never estimated; " +
-	"compute once and query the result in later calls. The kernel starts in the session's working directory. " +
+const guidelines = "Guidelines: arithmetic, data shaping, parsing and bulk text are computed here, never estimated. " +
+	"Compute once, then query the result in later calls. The kernel starts in the session's working directory. " +
 	"Reply: stdout and the last expression's value; action vars lists the namespace, reset clears it."
 
 const schemaJSON = `{
