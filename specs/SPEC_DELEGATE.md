@@ -87,8 +87,8 @@ delegate spawns, exactly as `run-job` spawns one.
 ```
 
 - `task` (required): the prompt the worker runs.
-- `cwd` (default the session's cwd): canonicalized, must be under the
-  session's cwd or the rig home; anything else refuses by name. The
+- `cwd` (default the session's workspace): canonicalized, must be under
+  the session's workspace or the rig home; anything else refuses by name. The
   requested path and both allowed roots resolve symlinks before the
   containment check, so a lexical child cannot escape through a link.
 - `model` (default the workers file's `model`: SPEC_CONFIG 12's

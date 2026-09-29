@@ -162,7 +162,7 @@ func sessionSection(cwd, home string) string {
 	}
 	section := fmt.Sprintf("The session's workspace is %s.", cwd)
 	if home != "" {
-		section = fmt.Sprintf("The session's workspace is %s and the session home is %s. A leading ~ in a tool path expands to the session home.", cwd, home)
+		section = fmt.Sprintf("The session's workspace is %s and the rig home is %s. A leading ~ in a tool path expands to the rig home.", cwd, home)
 	}
 	return section
 }

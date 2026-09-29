@@ -246,8 +246,8 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &s); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if !strings.Contains(s.Properties["project"].Description, "another workspace, as a path") {
-		t.Fatalf("the project field must name another workspace, as a path: %q", s.Properties["project"].Description)
+	if got := s.Properties["project"].Description; got != "another workspace, as a path; later calls act there until you name a different one. ~ expands." {
+		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
 }
 

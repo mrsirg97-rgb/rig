@@ -62,7 +62,7 @@ the state store.
 - `cwd` containment is the one rule in `pathguard` (shared with the
   scheduler tool): the requested directory and both allowed roots resolve
   symlinks before the worker starts, a lexical child that resolves outside
-  refuses, and a file is not a cwd (it refuses at the boundary, not at
+  refuses, and a file is not a workspace (it refuses at the boundary, not at
   spawn).
 - `Exec` reads `os.Getwd()` for the session cwd, so the tests pin the
   real test cwd, not a fixture path.

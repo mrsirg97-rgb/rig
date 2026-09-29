@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const wireToolsPrefixGolden = "2c47f745ff04b6aead2cb6a47574a644c02ca0bad78b6928498dee91e2538154"
+const wireToolsPrefixGolden = "6e7cd0d1f9003abe1c68c21b3e25e50bea18c5206c3a0b7a4655f79749797517"
 
 func TestWireToolsPrefixGolden(t *testing.T) {
 	k := wire(testRoot(nullFrontend{}))

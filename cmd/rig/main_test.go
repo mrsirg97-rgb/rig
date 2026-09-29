@@ -482,7 +482,7 @@ func TestSystemPromptNamesTheSessionCwdAndHome(t *testing.T) {
 	r.agents = "G\n\nP"
 	got := r.buildSystem()
 	want := "be terse" + "\n\n" +
-		"The session's workspace is /work/proj and the session home is /home/ng. A leading ~ in a tool path expands to the session home." +
+		"The session's workspace is /work/proj and the rig home is /home/ng. A leading ~ in a tool path expands to the rig home." +
 		"\n\n" + "G\n\nP"
 	if got != want {
 		t.Fatalf("the session assembly = %q, want %q (the workspace and the home are named so the model never guesses)", got, want)

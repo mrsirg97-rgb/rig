@@ -35,7 +35,7 @@ func Within(path, sessionCwd, rigHome string) (string, error) {
 					(inside(sessionCwd, resolved) || inside(rigHome, resolved)) {
 					return "", err
 				}
-				return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
+				return "", fmt.Errorf("workspace %q is outside the session's workspace (%s) and the rig home (%s)", filepath.Clean(abs), sessionCwd, rigHome)
 			}
 		}
 		return "", err
@@ -52,7 +52,7 @@ func Within(path, sessionCwd, rigHome string) (string, error) {
 		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 	}
 	if !canonicalUnder(sessionCwd) && !canonicalUnder(rigHome) {
-		return "", fmt.Errorf("cwd %q is outside the session's cwd (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
+		return "", fmt.Errorf("workspace %q is outside the session's workspace (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
 	}
 	return cwd, nil
 }

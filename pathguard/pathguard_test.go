@@ -100,7 +100,7 @@ func TestWithinRefusesOutsideTheRoots(t *testing.T) {
 	session := realRoot(t)
 	rigHome := realRoot(t)
 	_, err := pathguard.Within("/etc", session, rigHome)
-	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
 		t.Fatalf("a path outside both roots must refuse naming the rule, got %v", err)
 	}
 }
@@ -113,7 +113,7 @@ func TestWithinRefusesASymlinkEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := pathguard.Within(link, session, filepath.Join(session, "nowhere"))
-	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
 		t.Fatalf("a lexical child that resolves outside must refuse, got %v", err)
 	}
 }
@@ -153,7 +153,7 @@ func TestWithinFailureNamesTheSpecificRuleUnderASymlinkedCwd(t *testing.T) {
 		if !strings.Contains(err.Error(), "not a directory") {
 			t.Fatalf("a file inside the session must name the directory rule, got %v", err)
 		}
-		if strings.Contains(err.Error(), "outside the session's cwd") {
+		if strings.Contains(err.Error(), "outside the session's workspace") {
 			t.Fatalf("an inside file must not be reported as outside: %q gave %v", form, err)
 		}
 	}
@@ -178,7 +178,7 @@ func TestWithinFailureNamesTheSpecificRuleForAMissingPathUnderASymlinkedCwd(t *t
 		if !strings.Contains(err.Error(), "no such file") {
 			t.Fatalf("a missing path inside the session must name the missing rule, got %v", err)
 		}
-		if strings.Contains(err.Error(), "outside the session's cwd") {
+		if strings.Contains(err.Error(), "outside the session's workspace") {
 			t.Fatalf("an inside missing path must not be reported as outside: %q gave %v", form, err)
 		}
 	}
@@ -189,7 +189,7 @@ func TestWithinFailureRefusesAMissingPathOutsideTheRoots(t *testing.T) {
 	rigHome := realRoot(t)
 	outside := realRoot(t)
 	_, err := pathguard.Within(filepath.Join(outside, "missing"), session, rigHome)
-	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
 		t.Fatalf("a missing path outside both roots must name the containment rule, got %v", err)
 	}
 }

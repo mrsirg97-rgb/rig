@@ -34,9 +34,9 @@ seams).
   on update `-1` is the explicit reset to the runner default (an absent
   field means unchanged). The timeout belongs to the job, not to the
   kind: command jobs carry one too.
-- `create` and `update` run the one cwd rule in `pathguard` (shared with
-  the delegate tool): a cwd outside the session's cwd or the rig home
-  refuses at the boundary, and the runner rechecks the stored cwd at fire
+- `create` and `update` run the one workspace rule in `pathguard` (shared
+  with the delegate tool): a workspace outside the session's workspace or
+  the rig home refuses at the boundary, and the runner rechecks the stored cwd at fire
   time.
 - The schema carries no `scope` (SPEC_STATE's one-store scheduler): `cwd`
   is the job's own field, ids are one sequence, `name` unique store-wide.

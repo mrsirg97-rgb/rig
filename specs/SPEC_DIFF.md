@@ -45,7 +45,7 @@ Schema, Exec), two verbs in one schema, selected by a required `mode`
   process's cwd; the tool takes no cwd argument) and says so in its
   description, with `ref` the form is `git diff --no-color -U3
   <ref>`, the one-dot ref-vs-working-tree diff, never `ref..HEAD`. A
-  non-git cwd refuses loud, naming the reason. Optional
+  non-git workspace refuses loud, naming the reason. Optional
   `paths` restricts the diff. This is git being honest, not rig
   reinventing it.
 - `last`: the previous result of the same tool call vs the newest. Args
@@ -289,7 +289,7 @@ Description:
 ```text
 diff a tool call's result against its previous observation, or the working tree against HEAD.
 
-mode 'files': the tool shells out to `git diff` and says so: the working tree against HEAD (or ref, optional), optional paths; a non-git cwd refuses loud, naming the reason.
+mode 'files': the tool shells out to `git diff` and says so: the working tree against HEAD (or ref, optional), optional paths; a non-git workspace refuses loud, naming the reason.
 
 mode 'last': the recorded tool calls of this session only (a resumed session is the same session; another session is another world): the newest result of the same call (tool name + exact args; key order and whitespace do not matter, values do) against its n-th previous (n optional, default 1). a read path over state the harness already recorded; nothing new is written.
 
@@ -416,7 +416,7 @@ diff last bash {"command":"ls"} · old 2026-08-16T09:58:12Z seq 14 · new 2026-0
 
 Refusals (loud, naming the reason):
 
-- `diff files: not a git repository (cwd /path/to/cwd)`
+- `diff files: not a git repository (workspace /path/to/cwd)`
 - `diff files: <git's first stderr line, trimmed>` (other git
   failures, e.g. `diff files: fatal: ambiguous argument 'v9'`)
 - `diff last: no session in context (the loop threads one)`
@@ -459,7 +459,7 @@ files:
 - a clean tree replies `identical`
 - a dirty tree's body is capped at 100 lines, the `… K more lines`
   marker exact, K counting the elided lines
-- a non-git cwd refuses loud, naming the reason (the cwd in the voice)
+- a non-git workspace refuses loud, naming the reason (the workspace in the voice)
 - a ref is honored: the one-dot form `git diff <ref>` (ref vs
   working tree), not `ref..HEAD`
 - paths are honored (the diff is restricted to them)

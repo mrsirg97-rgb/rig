@@ -19,10 +19,10 @@ bounded. Stdlib only.
 
 - The command runs through a shell (`bash -c`) by design: the model
   authors the command string; quoting is the model's, not the tool's.
-- A failure reply carries the cwd line (the failure voice): a success
-  reply is byte-identical to the process output. The cwd is stat'ed and
+- A failure reply carries the workspace line (the failure voice): a success
+  reply is byte-identical to the process output. The workspace is stat'ed and
   checked before the child starts: a missing, non-directory, or
-  unsearchable cwd fails with `bash: cwd X: <reason>` and no content
+  unsearchable workspace fails with `bash: workspace X: <reason>` and no content
   (the loop feeds the error text into the result content once), never a
   fork/exec line naming /usr/bin/bash.
 - The result writer keeps the head of the child's output at the cap and

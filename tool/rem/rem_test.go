@@ -252,7 +252,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 		t.Fatalf("name %q", tool.Name())
 	}
 	d := tool.Description()
-	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "ids (mN)", "name project when the fact belongs to a workspace other than the one you started in"} {
+	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "ids (mN)", "this workspace first, then global", "name project when the fact belongs to a workspace other than the one you started in"} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing %q:\n%s", want, d)
 		}
@@ -283,8 +283,8 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 	if _, ok := schema.Props["project"]; !ok {
 		t.Fatal("the schema must carry a project field (the deliberate project)")
 	}
-	if !strings.Contains(schema.Props["project"].Description, "another workspace, as a path") {
-		t.Fatalf("the project field must name another workspace, as a path: %q", schema.Props["project"].Description)
+	if got := schema.Props["project"].Description; got != "another workspace, as a path; later calls act there until you name a different one. ~ expands." {
+		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
 }
 

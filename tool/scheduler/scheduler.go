@@ -14,20 +14,20 @@ import (
 )
 
 func description(defModel string) string {
-	return "Background jobs on the user's crontab. Each job is a headless worker session on the worker " +
-		"model (default: " + defModel + "), running in its own cwd; a job with command runs that shell " +
+	return "Background jobs on the operator's crontab. Each job is a headless worker session on the worker " +
+		"model (default: " + defModel + "), running in its own workspace; a job with command runs that shell " +
 		"line instead, with no model and no GPU."
 }
 
 const guidelines = "Guidelines: create for work that recurs (cron 'M H D Mo DOW') or runs later (once with at, " +
-	"which self-deletes after one fire). list shows every job, this directory first, then the rest by cwd, " +
-	"with any drift between the store and the crontab; a drifting job is not trustworthy until the note " +
-	"clears, and repair re-derives its crontab line, one job by id or every drifting one with none. runs is " +
-	"the audit trail. Job ids (jN) come from list: copy them, never invent them. busy:skip, the default, skips " +
-	"a fire while another model holds the GPU; force evicts it, and only when the user wants the GPU now. A " +
-	"failed once job is done; re-create it to retry. Command jobs are for deterministic scripts (pollers, " +
-	"digests, backups), never for anything needing judgment. timeout, stall and budget bound each fire; the " +
-	"fields say how. Reply: the job row or the list."
+	"which self-deletes after one fire). list shows every job, this workspace first, then the rest by " +
+	"workspace, with any drift between the store and the crontab; a drifting job is not trustworthy until the " +
+	"note clears, and repair re-derives its crontab line, one job by id or every drifting one with none. runs " +
+	"is the audit trail. Job ids (jN) come from list: copy them, never invent them. busy:skip, the default, " +
+	"skips a fire while another model holds the GPU; force evicts it, and only when the operator wants the " +
+	"GPU now. A failed once job is done; re-create it to retry. Command jobs are for deterministic scripts " +
+	"(pollers, digests, backups), never for anything needing judgment. timeout, stall and budget bound each " +
+	"fire; the fields say how. Reply: the job row or the list."
 
 func schemaJSON(defModel string) string {
 	return `{
@@ -47,7 +47,7 @@ func schemaJSON(defModel string) string {
 		},
 		"command": {
 			"type": "string",
-			"description": "Shell line run by sh -c in the job's cwd instead of a worker session (no model, no GPU). Refuses prompt/model/busy in the same call."
+			"description": "Shell line run by sh -c in the job's workspace instead of a worker session (no model, no GPU). Refuses prompt/model/busy in the same call."
 		},
 		"cron": {
 			"type": "string",
@@ -84,7 +84,7 @@ func schemaJSON(defModel string) string {
 		},
 		"cwd": {
 			"type": "string",
-			"description": "Working directory the job runs in (default: this session's cwd)."
+			"description": "the workspace the job runs in (default: this session's workspace)."
 		},
 		"id": {
 			"type": "string",

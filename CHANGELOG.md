@@ -21,6 +21,22 @@ say so; the 2.1.7 name-project sentence and its two tests are gone, and
 `OutsideRepo` stays in the store and the binding table with nothing
 rendering it.
 
+The same vocabulary now covers every model-facing string: the place is
+`workspace` everywhere — bash's description and its `workspace` field
+(the JSON key `cwd` stays only on the scheduler and delegate, described
+as `the workspace the job runs in`), bash's failure line and refusal,
+python's kernel sentence, the embedded system prompt, the session line,
+the read `diff` field (`a non-git workspace refuses`), the diff
+refusal, the shared `pathguard` voice (the scheduler and delegate
+refuse `outside the session's workspace`), the scheduler's list
+sentence and its `cwd` field, and the delegate's cwd sentence and field.
+The home is the `rig home` everywhere, the session line included. The
+person is the `operator` (the scheduler's two `user`s), the delegate's
+worker model says `the worker model defaults to`, and the todo and rem
+`project` fields both read `another workspace, as a path; later calls
+act there until you name a different one. ~ expands.` with rem's recall
+sentence `this workspace first, then global`.
+
 ## [2.1.7]: the session line and the idempotent todo
 
 The session line named the cwd and the home but never said whether the

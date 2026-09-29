@@ -26,23 +26,23 @@ func New() core.Tool { return &tool{} }
 func (tool) Name() string { return "bash" }
 
 func (tool) Description() string {
-	return "Runs a bash command in the session's working directory. Guidelines: use it for shell work, builds, git, and any CLI. To read a file you may edit, use read instead, so the edit that follows has something to check against; for a computation, use python. Reply: stdout and stderr together, in order, capped with a [TRUNCATED] marker that names the full size."
+	return "Runs a bash command in the session's workspace. Guidelines: use it for shell work, builds, git, and any CLI. To read a file you may edit, use read instead, so the edit that follows has something to check against; for a computation, use python. Reply: stdout and stderr together, in order, capped with a [TRUNCATED] marker that names the full size."
 }
 
 func (tool) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"command": {"type": "string", "description": "the command line to run under bash(1)"},
-			"cwd":     {"type": "string", "description": "working directory for the command"}
+			"command":   {"type": "string", "description": "the command line to run under bash(1)"},
+			"workspace": {"type": "string", "description": "the workspace the command runs in"}
 		},
 		"required": ["command"]
 	}`)
 }
 
 type args struct {
-	Command string `json:"command"`
-	Cwd     string `json:"cwd,omitempty"`
+	Command   string `json:"command"`
+	Workspace string `json:"workspace,omitempty"`
 }
 
 func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -56,11 +56,11 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 
 	argv := execwrap.Args([]string{"bash", "-c", a.Command})
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	if a.Cwd != "" {
-		if err := checkCwd(a.Cwd); err != nil {
-			return "", fmt.Errorf("bash: cwd %s: %v", a.Cwd, err)
+	if a.Workspace != "" {
+		if err := checkCwd(a.Workspace); err != nil {
+			return "", fmt.Errorf("bash: workspace %s: %v", a.Workspace, err)
 		}
-		cmd.Dir = a.Cwd
+		cmd.Dir = a.Workspace
 	}
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -78,7 +78,7 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 
 	content := out.String()
 	if err != nil {
-		dir := a.Cwd
+		dir := a.Workspace
 		if dir == "" {
 			if d, werr := os.Getwd(); werr == nil {
 				dir = d
@@ -87,11 +87,11 @@ func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 		withCwd := content
 		switch {
 		case withCwd == "":
-			withCwd = "(cwd " + dir + ")"
+			withCwd = "(workspace " + dir + ")"
 		case strings.HasSuffix(withCwd, "\n"):
-			withCwd += "(cwd " + dir + ")"
+			withCwd += "(workspace " + dir + ")"
 		default:
-			withCwd += "\n(cwd " + dir + ")"
+			withCwd += "\n(workspace " + dir + ")"
 		}
 		if ctx.Err() != nil {
 			return withCwd, ctx.Err()

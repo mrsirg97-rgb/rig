@@ -11,7 +11,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-var Fields = []string{"path", "root", "cwd", "project", "dir", "directory", "file", "target", "dest", "destination"}
+var Fields = []string{"path", "root", "cwd", "project", "dir", "directory", "file", "target", "dest", "destination", "workspace"}
 
 func Expand(p string) string {
 	if p == "" || p[0] != '~' {

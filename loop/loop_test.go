@@ -598,7 +598,7 @@ func TestToolErrorIsAppendedOnItsOwnLine(t *testing.T) {
 }
 
 func TestRefusedCwdCarriesTheReasonExactlyOnce(t *testing.T) {
-	boom := errors.New("bash: cwd /missing: no such file or directory")
+	boom := errors.New("bash: workspace /missing: no such file or directory")
 	bash := &scriptedTool{name: "bash", fail: 1, failErr: boom, result: "recovered"}
 	p := &scriptedProvider{turns: []scriptedTurn{
 		{events: []core.Event{
@@ -624,10 +624,10 @@ func TestRefusedCwdCarriesTheReasonExactlyOnce(t *testing.T) {
 	}
 
 	content := session.Messages[2].Content
-	if content != "bash: cwd /missing: no such file or directory" {
+	if content != "bash: workspace /missing: no such file or directory" {
 		t.Fatalf("the tool message must carry the refusal exactly once, got %q", content)
 	}
-	if strings.Count(content, "bash: cwd") != 1 || strings.Count(content, "no such file or directory") != 1 {
+	if strings.Count(content, "bash: workspace") != 1 || strings.Count(content, "no such file or directory") != 1 {
 		t.Fatalf("the reason must appear exactly once, got %q", content)
 	}
 }

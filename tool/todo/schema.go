@@ -60,7 +60,7 @@ const schemaJSON = `{
 		},
 		"project": {
 			"type": "string",
-			"description": "another workspace, as a path: it binds the session, whose later bare verbs then act there (worktree-safe; ~ expands)"
+			"description": "another workspace, as a path; later calls act there until you name a different one. ~ expands."
 		}
 	}
 }`

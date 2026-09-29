@@ -86,9 +86,9 @@ func TestToolsExpandTheLeadingTildeAtTheBoundary(t *testing.T) {
 	}
 	exec := paths.Middleware().Wrap(inner)
 
-	got, err := exec(context.Background(), core.ToolCall{Name: "bash", Args: json.RawMessage(`{"command":"pwd","cwd":"~/proj"}`)})
+	got, err := exec(context.Background(), core.ToolCall{Name: "bash", Args: json.RawMessage(`{"command":"pwd","workspace":"~/proj"}`)})
 	if err != nil || got != proj+"\n" {
-		t.Fatalf("bash's cwd must expand to the home: %q, %v", got, err)
+		t.Fatalf("bash's workspace must expand to the home: %q, %v", got, err)
 	}
 	got, err = exec(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/proj/a.txt"}`)})
 	if err != nil || got != "hi" {
