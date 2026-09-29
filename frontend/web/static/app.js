@@ -1491,7 +1491,7 @@ async function renderPlugins() {
   tb.body.appendChild(listEl);
   const hint = el('div', 'hint');
   hint.textContent = zone === 'approved'
-    ? 'tap a plugin to read it; an edit saves a pending revision, approve (replace) swaps it in'
+    ? 'tap a plugin to read it; an edit saves a pending revision, approve swaps it in'
     : zone === 'pending' ? 'tap a plugin to edit it; approve moves it into plugins/, and the session loads it at its next plugins reload'
     : 'disabled plugins live in ~/.rig/plugins/disabled/; enable moves one back';
   tb.body.appendChild(hint);
@@ -1547,30 +1547,23 @@ async function openForge(host, name, zone) {
     }
   });
   act.appendChild(save);
-  const approve = button('approve', null, () => doApprove(false));
+  const approve = button('approve', null, () => doApprove());
   approve.hidden = zone !== 'pending';
-  const replace = button('approve with replace', 'danger', () => doApprove(true));
-  replace.hidden = true;
-  async function doApprove(force) {
+  async function doApprove() {
     approve.disabled = true;
-    replace.disabled = true;
     try {
-      const r = await post('/api/plugins/approve', { name: nameIn.value.trim(), replace: force });
+      const r = await post('/api/plugins/approve', { name: nameIn.value.trim() });
       setEcho(out, r.reply);
-      replace.hidden = true;
       approve.hidden = true;
       state.pluginZone = 'approved';
       setTimeout(renderPlugins, 900);
     } catch (e) {
       setEcho(out, e.message, true);
-      if (e.status === 409) replace.hidden = false;
     } finally {
       approve.disabled = false;
-      replace.disabled = false;
     }
   }
   act.appendChild(approve);
-  act.appendChild(replace);
   act.appendChild(button('close', null, () => { host.hidden = true; host.innerHTML = ''; }));
   host.appendChild(act);
   async function refreshCounts() {

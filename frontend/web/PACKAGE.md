@@ -120,8 +120,8 @@ the Apple meta tags, safe-area insets).
   full source into the pending zone, create or update; the contract:
   `DESCRIPTION`, `SCHEMA`, `def run(`; checked; a native name refused),
   `POST /api/plugins/approve` (pending → `plugins/`, the command's
-  verb; a native name refused; an installed name a 409 until `replace`
-  is explicit), `POST /api/plugins/disable` and `POST
+  verb; a native name refused; an installed name replaced in the one
+  call), `POST /api/plugins/disable` and `POST
   /api/plugins/enable` (the command's move between `plugins/` and
   `plugins/disabled/`, each calling `plugins.Move`, each replying in
   the command's voice; a plugin not in the source zone is the named
@@ -247,8 +247,8 @@ reads it back through the same listing.
   folder browser feeds it: a pick is an add, nothing more.
 - A save always lands in `plugins/pending/`: also an edit of a loaded
   plugin, which becomes a pending revision under the same name; approve
-  then refuses with a 409 until `replace: true`, the one explicit
-  overwrite. Nothing reaches `plugins/` except through approve.
+  then swaps the revision over the installed file, the one atomic
+  rename. Nothing reaches `plugins/` except through approve.
 - The mobile nav toggle is `.nav-toggle` (hidden above 720px by class,
   not by id; the first round's button carried only the id and showed
   on desktop).

@@ -1499,16 +1499,15 @@ func TestForgeSourceSaveApprove(t *testing.T) {
 		t.Fatalf("save revision: got %d %s", rec.Code, rec.Body.String())
 	}
 	body, _ = json.Marshal(map[string]any{"name": "draft"})
-	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusConflict {
-		t.Fatalf("approve over installed: got %d, want 409", rec.Code)
-	}
-	body, _ = json.Marshal(map[string]any{"name": "draft", "replace": true})
-	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "replaced") {
-		t.Fatalf("approve replace: got %d %s", rec.Code, rec.Body.String())
+	if rec = doReq(t, h, "POST", "/api/plugins/approve", strings.NewReader(string(body)), hdr()); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "approved and replaced") {
+		t.Fatalf("approve over installed: got %d %s", rec.Code, rec.Body.String())
 	}
 	got, _ = os.ReadFile(filepath.Join(srv.home, "plugins", "draft.py"))
 	if string(got) != rev {
-		t.Fatalf("replace did not swap the file: %q", string(got))
+		t.Fatalf("the installed file must carry the pending revision: %q", string(got))
+	}
+	if _, statErr := os.Stat(filepath.Join(srv.home, "plugins", "pending", "draft.py")); !os.IsNotExist(statErr) {
+		t.Fatalf("the pending file must be gone after the replace (stat: %v)", statErr)
 	}
 
 	if err := os.WriteFile(filepath.Join(srv.home, "plugins", "pending", "read.py"), []byte(src), 0o644); err != nil {

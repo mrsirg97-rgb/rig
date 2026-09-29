@@ -153,19 +153,28 @@ func TestPluginsApproveNativeCollisionRefuses(t *testing.T) {
 	}
 }
 
-func TestPluginsApproveInstalledCollisionRefuses(t *testing.T) {
+func TestPluginsApproveInstalledReplaces(t *testing.T) {
 	home := homeWithZone(t, map[string]string{"echo.py": goodPending}, "echo.py")
 	pluginsDir := filepath.Join(home, "plugins")
-	_, err := pluginsCmd(t).Run(context.Background(), "approve echo", &command.Env{
+	src := filepath.Join(pluginsDir, "pending", "echo.py")
+	dst := filepath.Join(pluginsDir, "echo.py")
+	out, err := pluginsCmd(t).Run(context.Background(), "approve echo", &command.Env{
 		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: pluginsDir,
 		Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
 	})
-	if err == nil {
-		t.Fatal("an installed collision must refuse")
+	if err != nil {
+		t.Fatalf("an approve over an installed name is an update, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "already installed") || !strings.Contains(err.Error(), filepath.Join(pluginsDir, "echo.py")) {
-		t.Fatalf("the refusal must name the installed file, got %v", err)
+	if !strings.Contains(out, "replacing the installed one") || !strings.Contains(out, src) || !strings.Contains(out, dst) {
+		t.Fatalf("the reply must name the replacement and both sides, got %q", out)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil || string(got) != goodPending {
+		t.Fatalf("the installed file must carry the pending source: %v %q", err, string(got))
+	}
+	if _, statErr := os.Stat(src); !os.IsNotExist(statErr) {
+		t.Fatalf("the pending file must be gone after the replace (stat: %v)", statErr)
 	}
 }
 

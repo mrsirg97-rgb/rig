@@ -241,13 +241,15 @@ func approve(ctx context.Context, env any, name string) (string, error) {
 		}
 	}
 	dst := filepath.Join(e.PluginsDir, name+".py")
-	if _, err := os.Stat(dst); err == nil {
-		return "", fmt.Errorf("plugins: approve: %q is already installed (%s exists — remove it to install the pending one)", name, dst)
-	}
+	_, statErr := os.Stat(dst)
+	replacing := statErr == nil
 	if err := os.Rename(src, dst); err != nil {
 		return "", fmt.Errorf("plugins: approve: %v", err)
 	}
 	line := fmt.Sprintf("plugins: approved %s (%s -> %s)", name, src, dst)
+	if replacing {
+		line = fmt.Sprintf("plugins: approved %s, replacing the installed one (%s -> %s)", name, src, dst)
+	}
 	if e.Reload == nil {
 		return line + "; the discovery loads it at the next start", nil
 	}

@@ -99,8 +99,7 @@ func (s *Server) handlePluginSave(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePluginApprove(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Name    string `json:"name"`
-		Replace bool   `json:"replace"`
+		Name string `json:"name"`
 	}
 	if !s.writeBody(w, r, &in) {
 		return
@@ -123,16 +122,14 @@ func (s *Server) handlePluginApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dst, _ := s.pluginPath(name, "loaded")
-	if _, err := os.Stat(dst); err == nil && !in.Replace {
-		writeErr(w, http.StatusConflict, "'"+name+"' is already installed (plugins/"+name+".py); approve with replace to overwrite it")
-		return
-	}
+	_, statErr := os.Stat(dst)
+	replacing := statErr == nil
 	if err := os.Rename(src, dst); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	verb := "approved"
-	if in.Replace {
+	if replacing {
 		verb = "approved and replaced"
 	}
 	reply := verb + " '" + name + "' (pending -> plugins); a live session loads it at its next plugins reload"
