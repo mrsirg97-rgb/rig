@@ -1,4 +1,19 @@
 # Changelog
+## [2.1.0]: plain words
+
+Every tool description and the system prompt rewritten in plain sentences,
+one tool per commit. The house shape stays: what the tool is, a Guidelines
+sentence, a Reply sentence. What left was restatement and internal voice:
+todo's description explained sixteen verbs to a model that uses seven and
+now says the three-verb life; scheduler's guidelines decide while its fields
+explain; delegate says what to do when the GPU is held; web joins the house
+shape and loses its exemption; bash, read, edit, write, python, view, rem
+and sessions trade arrows and parentheses for sentences. The system prompt
+says only what the tools cannot: the harness, its guards, the refusal rule,
+the plugin rule, the shape of a finished answer. The menu test now reads
+the real menu, since its recorded wire was stale since 2.0.0; the goldens
+are regenerated. No behavior changed.
+
 ## [2.0.2]: the comment-free refactor pass
 
 The repository read its own comments as one corpus, so every `//` line
