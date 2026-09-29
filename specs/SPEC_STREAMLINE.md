@@ -89,18 +89,6 @@ The todo store's unknown-id refusal, at every verb
 The `no task 'tN'` prefix stays, so the existing containment
 assertions hold; the parenthetical is the teaching, on contact.
 
-Two verbs take the id the reply already names (amended 2.1.9): `start`
-without `id` starts `next`, the first pending task nothing waits for
-(claim's order), and `complete` without `id` completes the one task this
-session holds in progress. Each resolves inside the transaction that
-acts on it. When the choice is not one task the call refuses and says
-why: `nothing to start: no pending task is ready (name one as id)`,
-`nothing in progress for this session (name the task as id)`, `2 tasks
-in progress (t2, t5); name one as id`. A worker's `complete` with no id
-finishes the task it claimed. The other verbs still require `id`: fail,
-release, retry, move, note, notes, accept, and reject name a target the
-queue cannot infer.
-
 ### 4. The door's self-heal
 
 the `plugin` door takes a `redo` seam at construction; both arms

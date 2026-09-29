@@ -124,12 +124,6 @@ drops done only, and the summary counts review rows (`· N in review`).
   refusal as a mistake. A foreign session's start of an owned task still
   refuses naming the claimer; done stays read-only for every other verb
   (start, fail, release, accept, reject).
-- Start and complete take an empty id (2.1.9): start picks the first
-  pending task nothing waits for (`next`, claim's order), complete the one
-  task this session holds in progress; `verbOn` resolves the pick inside
-  the transaction that acts, and the event logs the resolved id, so
-  replay never re-picks. No candidate, or several in progress, refuses
-  naming them and asking for an id.
 - The review gate (1.3.9) keys on who completes: a worker's complete ends
   in review, an interactive one lands done with the pair; accept ends in
   done, reject returns to pending with the reason as a note. Accept and

@@ -100,44 +100,12 @@ func TestCreateMalformedTasksFailLoudly(t *testing.T) {
 
 func TestStateVerbsRefuseIdAbsenceLoudly(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	for _, action := range []string{"fail", "retry", "note", "notes", "accept", "reject"} {
+	for _, action := range []string{"start", "complete", "fail", "retry", "note", "notes", "accept", "reject"} {
 		if _, err := exec(t, tool, context.Background(), map[string]any{"action": action}); err == nil {
 			t.Fatalf("%s without id succeeded", action)
 		} else if want := "action '" + action + "' requires id"; err.Error() != want {
 			t.Errorf("%s voice:\n%q", action, err.Error())
 		}
-	}
-}
-
-func TestStartAndCompleteWithoutIdWorkTheNextTaskThroughTheTool(t *testing.T) {
-	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
-		map[string]any{"text": "first"},
-		map[string]any{"text": "second", "requires": "1"},
-	}}); err != nil {
-		t.Fatalf("create with a positional link: %v", err)
-	}
-	started, err := exec(t, tool, ctx, map[string]any{"action": "start"})
-	if err != nil {
-		t.Fatalf("start without id: %v", err)
-	}
-	if !strings.Contains(started, "'t1' started") {
-		t.Errorf("start without id takes next:\n%s", started)
-	}
-	completed, err := exec(t, tool, ctx, map[string]any{"action": "complete"})
-	if err != nil {
-		t.Fatalf("complete without id: %v", err)
-	}
-	if !strings.Contains(completed, "'t1' completed") {
-		t.Errorf("complete without id finishes the one in progress:\n%s", completed)
-	}
-	next, err := exec(t, tool, ctx, map[string]any{"action": "start"})
-	if err != nil {
-		t.Fatalf("second start without id: %v", err)
-	}
-	if !strings.Contains(next, "'t2' started") {
-		t.Errorf("the dependent becomes next once its requirement is done:\n%s", next)
 	}
 }
 

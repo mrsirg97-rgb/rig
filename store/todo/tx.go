@@ -20,39 +20,15 @@ func verb(
 	check func(f *folded, ts *taskState) (ok, noop bool, voice string),
 	op, toStatus, note string,
 ) (string, error) {
-	return verbOn(ctx, db, p, session, fixedID(id), func(_ string, f *folded, ts *taskState) (bool, bool, string) {
-		return check(f, ts)
-	}, op, toStatus, func(string) string { return note })
-}
-
-func fixedID(id string) func(*folded) (string, error) {
-	return func(*folded) (string, error) { return id, nil }
-}
-
-func verbOn(
-	ctx context.Context,
-	db store.DB,
-	p Project,
-	session string,
-	pick func(f *folded) (string, error),
-	check func(id string, f *folded, ts *taskState) (ok, noop bool, voice string),
-	op, toStatus string,
-	noteOf func(id string) string,
-) (string, error) {
 	if session == "" {
 		session = anon
 	}
 	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		id, err := pick(f)
-		if err != nil {
-			return "", err
-		}
-		note := noteOf(id)
 		ts, ok := f.tasks[id]
 		if !ok {
 			return "", unknownTask(p, id)
 		}
-		ok, noop, voice := check(id, f, ts)
+		ok, noop, voice := check(f, ts)
 		if !ok {
 			return "", fmt.Errorf("%s", voice)
 		}

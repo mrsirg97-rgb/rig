@@ -77,11 +77,6 @@ plan in one queue.
   this session (or unowned) reply with the echo a fresh call would give
   — the row and the queue summary — no error, no event. A foreign start
   of an owned task still refuses naming the claimer.
-- Start and complete take no id (2.1.9): start picks `next`, complete
-  the one task this session holds in progress; the store resolves the
-  pick inside its transaction and refuses naming why when there is not
-  exactly one. Fail, release, and retry keep the `requires id` guard at
-  the seam.
 - The Worker-mode board door is at the tool's seam: the six
   board-transition verbs refuse there, so the store's own arms (the
   swarm controller calls the store directly) stay as they are and the

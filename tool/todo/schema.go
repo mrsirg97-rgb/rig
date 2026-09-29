@@ -32,7 +32,7 @@ const schemaJSON = `{
 		},
 		"id": {
 			"type": "string",
-			"description": "The task, as tN from a reply. Required for every action but create and read; start without id takes next, complete without id finishes the one task you have in progress."
+			"description": "The task, as tN from a reply. Required for every action but create and read."
 		},
 		"note": {
 			"type": "string",
