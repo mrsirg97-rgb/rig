@@ -261,7 +261,15 @@ happens to name (see the binding decision).
   positions minted never mutated; move via events; claim semantics (start
   claims, foreign complete refuses, fail frees; completing your own
   unclaimed pending task implicitly claims and completes; start+complete,
-  both events, the echo noting auto-started); the swarm surface (1.3.9):
+  both events, the echo noting auto-started); **the state the caller
+  asked for is a no-op, not a refusal (2.1.7)**: complete on a done task
+  and start on a task already in progress by the same session (or
+  unowned) answer with the echo a fresh call would give — the row and
+  the queue summary — write no event and run no compaction, so the model
+  sees `[x]`/`[~]` instead of reading a refusal as a mistake; a foreign
+  session's start of an owned task still refuses naming the claimer
+  (fail it first to take over), and done stays read-only for every other
+  verb; the swarm surface (1.3.9):
   `claim` takes the first pending task nothing waits for (the same order
   `next` shows) and marks it active for this session, or with
   `status=review` the first task in review that no reviewer holds; `note`

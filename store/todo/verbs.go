@@ -61,25 +61,24 @@ func mergeNote(given, fresh int) string {
 }
 
 func Start(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
-	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
+	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok, noop bool, voice string) {
 		switch ts.status {
 		case statusPending:
 			if worker {
-				return false, "'" + id + "' is not claimed by you; a worker does not start the supervisor's board entries"
+				return false, false, "'" + id + "' is not claimed by you; a worker does not start the supervisor's board entries"
 			}
-			return true, ""
+			return true, false, ""
 		case statusActive:
-			voice := "'" + id + "' is already in progress"
-			if ts.owner != "" {
-				voice += " (claimed by " + ts.owner + ")"
+			if ts.owner == "" || ts.owner == session {
+				return true, true, ""
 			}
-			return false, voice
+			return false, false, "'" + id + "' is already in progress (claimed by " + ts.owner + ")"
 		case statusReview:
-			return false, "'" + id + "' is in review; accept or reject it first"
+			return false, false, "'" + id + "' is in review; accept or reject it first"
 		case statusDone:
-			return false, "'" + id + "' is done; read-only"
+			return false, false, "'" + id + "' is done; read-only"
 		default:
-			return false, "'" + id + "' failed; retry it first"
+			return false, false, "'" + id + "' failed; retry it first"
 		}
 	}, "start", statusActive, "'"+id+"' started")
 }
@@ -89,21 +88,21 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 		session = anon
 	}
 	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		foot, e := maybeCompact(bound, tx, f, session, p.Key)
-		if e != nil {
-			return "", e
-		}
 		ts, ok := f.tasks[id]
 		if !ok {
 			return "", unknownTask(p, id)
 		}
 		switch ts.status {
+		case statusDone:
+			return echoTask(f, session, id, "'"+id+"' completed"), nil
 		case statusReview:
 			return "", fmt.Errorf("'%s' is in review; accept or reject it first", id)
-		case statusDone:
-			return "", fmt.Errorf("'%s' is done; read-only", id)
 		case statusFailed:
 			return "", fmt.Errorf("'%s' failed; retry it first", id)
+		}
+		foot, e := maybeCompact(bound, tx, f, session, p.Key)
+		if e != nil {
+			return "", e
 		}
 		if ts.owner != "" && ts.owner != session {
 			if worker {
@@ -223,11 +222,11 @@ func Fail(ctx context.Context, db store.DB, p Project, id, session string, worke
 }
 
 func Retry(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
-	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok bool, voice string) {
+	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok, noop bool, voice string) {
 		if ts.status == statusFailed {
-			return true, ""
+			return true, false, ""
 		}
-		return false, "'" + id + "' is not failed; nothing to retry"
+		return false, false, "'" + id + "' is not failed; nothing to retry"
 	}, "retry", statusPending, "'"+id+"' back to pending")
 }
 

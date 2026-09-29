@@ -111,6 +111,14 @@ drops done only, and the summary counts review rows (`· N in review`).
 - Complete on the caller's own unclaimed pending task implicitly claims
   and submits: start+complete, both events appended, the echo noting the
   auto-start. Foreign-claim and blocked-by-dependency refusals stay.
+- Complete and start are idempotent at the state they ask for (2.1.7):
+  complete on a done task and start on a task already in progress by the
+  same session (or unowned) answer with the echo a fresh call would give
+  — the row and the queue summary — write no event and run no
+  compaction, so the model reads `[x]`/`[~]` instead of treating a
+  refusal as a mistake. A foreign session's start of an owned task still
+  refuses naming the claimer; done stays read-only for every other verb
+  (start, fail, release, accept, reject).
 - The review gate (1.3.9) keys on who completes: a worker's complete ends
   in review, an interactive one lands done with the pair; accept ends in
   done, reject returns to pending with the reason as a note. Accept and

@@ -68,6 +68,11 @@ plan in one queue.
   auto-claim an unowned review task, so the parent's flow is read then
   accept/reject with no claim step; a foreign hold still refuses. Notes
   never need the hold.
+- Complete and start are idempotent at the state they ask for (2.1.7):
+  complete on a done task and start on a task already in progress by
+  this session (or unowned) reply with the echo a fresh call would give
+  — the row and the queue summary — no error, no event. A foreign start
+  of an owned task still refuses naming the claimer.
 - The Worker-mode board door is at the tool's seam: the six
   board-transition verbs refuse there, so the store's own arms (the
   swarm controller calls the store directly) stay as they are and the
