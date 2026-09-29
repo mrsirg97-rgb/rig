@@ -1,4 +1,13 @@
 # Changelog
+## [2.1.1]: the tools speak in the system prompt's voice
+
+A second pass over every tool description, in the voice the 2.1.0 system
+prompt set: an opening sentence that says what the tool does, Guidelines
+that say when and how, a Reply that names only what a good call returns,
+with the refusals moved up to where the model decides. plugin and plugins
+get their first rewrite. The pinned wire and view hashes and the recorded
+goldens move with the words. No code path changed.
+
 ## [2.1.0]: plain words
 
 Every tool description and the system prompt rewritten in plain sentences,
