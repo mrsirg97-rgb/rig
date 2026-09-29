@@ -453,8 +453,119 @@ func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
 	has(t, w.Description(), "never search for code already in the workspace")
 	has(t, w.Description(), "compact JSON title/url/snippet")
 	has(t, w.Description(), "[TRUNCATED] marker that names the full size")
+	has(t, w.Description(), "an API reply comes back as its shape and a head; parse the rest in python or bash")
 	has(t, w.Description(), "private addresses refuse")
 	has(t, w.Description(), "local services to bash")
+}
+
+func TestJSONShapeNamesTopLevelTypeKeysAndArrayLengths(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`{"a":[1,2],"b":{"c":3},"d":"x","e":true,"f":null}`,
+			"object{a: array[2], b: object, d: string, e: boolean, f: null}"},
+		{`[{"x":1},{"x":2}]`, "array[2]"},
+		{`"hello"`, "string"},
+		{`42`, "number"},
+		{`true`, "boolean"},
+		{`null`, "null"},
+	}
+	for _, c := range cases {
+		var v any
+		if err := json.Unmarshal([]byte(c.in), &v); err != nil {
+			t.Fatal(err)
+		}
+		if got := web.JSONShape(v); got != c.want {
+			t.Errorf("JSONShape(%s) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestJSONFetchReplyIsShapeThenCompact(t *testing.T) {
+	body := "{\n\t\"count\": 2,\n\t\"results\": [\n\t\t{\"title\": \"a\"},\n\t\t{\"title\": \"b\"}\n\t]\n}"
+	w := webTool(web.Config{Fetch: web.FetchConfig{
+		Lookup: publicLookup,
+		Do: func(*http.Request) (*http.Response, error) {
+			return httpResp(200, map[string]string{"Content-Type": "application/json"}, body), nil
+		},
+	}})
+	content, err := execArgs(t, w, `{"action":"fetch","target":"https://api.example/v1"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shape, compact, found := strings.Cut(content, "\n")
+	if !found {
+		t.Fatalf("the reply must lead with the shape line, got %q", content)
+	}
+	if shape != "shape: object{count: number, results: array[2]}" {
+		t.Fatalf("shape line = %q", shape)
+	}
+	if compact != `{"count":2,"results":[{"title":"a"},{"title":"b"}]}` {
+		t.Fatalf("compacted JSON = %q", compact)
+	}
+	if !json.Valid([]byte(compact)) {
+		t.Fatalf("the compact part is not JSON: %q", compact)
+	}
+}
+
+func TestJSONBodyWithoutJSONContentTypeIsShaped(t *testing.T) {
+	w := webTool(web.Config{Fetch: web.FetchConfig{
+		Lookup: publicLookup,
+		Do: func(*http.Request) (*http.Response, error) {
+			return httpResp(200, map[string]string{"Content-Type": "text/plain"}, `[1, 2, 3]`), nil
+		},
+	}})
+	content, err := execArgs(t, w, `{"action":"fetch","target":"https://api.example/v2"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content != "shape: array[3]\n[1,2,3]" {
+		t.Fatalf("a JSON body must be shaped even under a plain content type, got %q", content)
+	}
+}
+
+func TestNonJSONFetchBodyIsUnchanged(t *testing.T) {
+	w := webTool(web.Config{Fetch: web.FetchConfig{
+		Lookup: publicLookup,
+		Do: func(*http.Request) (*http.Response, error) {
+			return httpResp(200, map[string]string{"Content-Type": "text/plain"}, "plain body"), nil
+		},
+	}})
+	content, err := execArgs(t, w, `{"action":"fetch","target":"https://plain.example/"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content != "plain body" {
+		t.Fatalf("a plain text body must pass through unchanged, got %q", content)
+	}
+	if strings.HasPrefix(content, "shape:") {
+		t.Fatalf("a non-JSON body must not gain a shape line: %q", content)
+	}
+}
+
+func TestJSONReplyIsCappedUnderTheSameMarker(t *testing.T) {
+	items := make([]map[string]int, 1000)
+	for i := range items {
+		items[i] = map[string]int{"i": i}
+	}
+	body, err := json.Marshal(map[string]any{"items": items})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := webTool(web.Config{Fetch: web.FetchConfig{
+		Lookup: publicLookup,
+		Do: func(*http.Request) (*http.Response, error) {
+			return httpResp(200, map[string]string{"Content-Type": "application/json"}, string(body)), nil
+		},
+	}})
+	content, err := execArgs(t, w, `{"action":"fetch","target":"https://api.example/v3","maxChars":200}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(content, "shape: object{items: array[1000]}") {
+		t.Fatalf("the shape line must lead even when capped: %q", content)
+	}
+	if !strings.Contains(content, "[TRUNCATED: showing 200 of ") {
+		t.Fatalf("the cap marker must name the true total: %q", content)
+	}
 }
 
 func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {

@@ -23,6 +23,12 @@ net, os/exec; no third-party Go client.
   20 000-char cap with the named elision marker, 30 s default timeout,
   optional egress proxy from env (default http://127.0.0.1:8889, the
   web-tools compose's tinyproxy) with the unreachable-proxy fix-it voice.
+- JSON replies are shaped (amended 2.1.6): a response whose content type
+  is JSON, or whose body parses as JSON, comes back as one shape line
+  (the top-level type, its keys, each array's length) then the
+  compacted JSON, both under the same maxChars cap and [TRUNCATED]
+  marker; a body the content type calls JSON but that does not parse
+  (a truncated download) falls back to the raw text unchanged.
 - Extraction: trafilatura as a documented external (pane's own mechanism),
   resolved from the shared agent venv then PATH, overridable by
   RIG_TRAFILATURA; absent or failing degrades to pane's stdlib text
@@ -36,8 +42,10 @@ net, os/exec; no third-party Go client.
   workspace; reply compact JSON title/url/snippet) and fetch <url>
   (public http(s) as readable text, capped with a [TRUNCATED] marker
   naming the full size, refetch larger only if the missing part
-  matters; private addresses refused; local files -> read, local
-  services -> bash) — about half the pair's description bytes; the
+  matters, an API reply comes back as its shape and a head — parse the
+  rest in python or bash; private addresses refused; local files ->
+  read, local services -> bash) — about half the pair's description
+  bytes; the
   schema is hand-written: `required: ["action", "target"]`, action enum
   `[search, fetch]`, the integer bounds (maxResults 1..20; maxChars min
   100; timeoutMs min 1000). Every runtime voice is pane's verbatim.
@@ -65,7 +73,10 @@ net, os/exec; no third-party Go client.
 tool/web/
   web.go      the one tool: Config/New/Web, the dispatch, the schema
   search.go   the SearXNG engine: the call, the result mapping
-  fetch.go    the guarded fetch engine: the guard, extraction, caps
+  fetch.go    the guarded fetch engine: the config, the DNS guard, the pins
+  guarded.go  the hop loop, the capped read, the exec dispatch
+  extract.go  html-to-text, capChars, the trafilatura subprocess
+  shape.go    the JSON reply: detection, the shape line, compaction
   web_test.go pane's named cases in pane's order + the fold cases
 ```
 
@@ -198,6 +209,19 @@ truncation markers) are unchanged.
   is read to the cap and the truncation is named in the content
   (`[TRUNCATED: download hit the byte cap; content is partial.]`), with
   the char cap applied after extraction and its own louder marker.
+- **A JSON reply is shaped, not dumped (amended 2.1.6).** pane returned
+  the body verbatim, and a 77 KB API reply was unreadable — the model
+  fell back to curl and jq. A response whose content type is JSON, or
+  whose body parses as JSON, now comes back as one shape line then the
+  compacted JSON, both under the same maxChars cap and [TRUNCATED]
+  marker: the shape names the top-level type, its keys, and each
+  array's length, so the model sees `shape: object{count: number,
+  results: array[2]}` and the head of the data, and parses the rest in
+  python or bash. Detection is the content type or the parse: a JSON
+  body under a plain content type is still shaped, while a body the
+  content type calls JSON but that does not parse (a truncated
+  download) falls back to the raw text unchanged — fail closed, the
+  shape must come from real bytes.
 - **Voices are pane's verbatim**, including the fix-it: an unreachable
   proxy reads `egress proxy <url> is unreachable. Start it: cd
   ~/docker/web-tools && docker compose up -d`. The search error is
@@ -269,6 +293,11 @@ rig-side named cases (the port's own surface):
 - an unreachable proxy names itself and the fix
 - the trafilatura fallback is announced in the content (rig over pane)
 - trafilatura resolution: shared venv first, then PATH, explicit wins
+- jsonShape names the top-level type, its keys, and each array's length
+- a JSON fetch reply is the shape line then the compacted JSON
+- a JSON body under a plain content type is still shaped
+- a non-JSON body passes through unchanged
+- a JSON reply is capped under the same marker (the shape line leads)
 - the search URL is built in pane's key order
 - the search respects the caller ctx (the transport seam sees the
   request context; expiry surfaces as an error and does not hang)
@@ -283,8 +312,9 @@ beyond loopback httptest servers, so the suite is green on a bare box.
 
 ## scope
 
-One leaf package (three files, one tool), one registration line at the
+One leaf package (seven files, one tool), one registration line at the
 root, the allow-list default's `web_search,web_fetch` pair shrinking to
 `web` (one entry, per-tool-name approval), three env knobs read in main
 (RIG_SEARXNG_URL, RIG_WEB_FETCH_PROXY, RIG_TRAFILATURA) unchanged. The
-loop is byte-identical; the wire goldens re-pin once with the fold.
+loop is byte-identical; the wire goldens re-pin once with the fold,
+and again whenever the description moves.
