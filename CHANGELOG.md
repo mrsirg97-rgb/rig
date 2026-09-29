@@ -1,4 +1,15 @@
 # Changelog
+## [2.1.2]: the dashboard on the phone
+
+Three phone fixes. The token cookie now lives 90 days instead of the
+browser session, and the web manifest is served per request with the
+token in its start_url, so a home-screen install on iOS, which opens in
+its own cookie jar, signs itself in on first launch instead of landing
+on 401. The composer's status row shows the model and the counters, not
+the session id, and the input has no placeholder. The sessions list is
+two lines per row, the id and date with resume on the first, turns and
+exit and label on the second, so nothing overlaps at phone width.
+
 ## [2.1.1]: the tools speak in the system prompt's voice
 
 A second pass over every tool description, in the voice the 2.1.0 system

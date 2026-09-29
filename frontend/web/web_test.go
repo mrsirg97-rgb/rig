@@ -211,7 +211,8 @@ func TestTokenGate(t *testing.T) {
 	cookie := rec.Header().Get("Set-Cookie")
 	if !strings.Contains(cookie, cookieName+"="+tok) ||
 		!strings.Contains(cookie, "HttpOnly") ||
-		!strings.Contains(cookie, "SameSite=Strict") {
+		!strings.Contains(cookie, "SameSite=Strict") ||
+		!strings.Contains(cookie, "Max-Age=") {
 		t.Fatalf("?token=: bad Set-Cookie: %q", cookie)
 	}
 	ch := http.Header{}
@@ -1383,7 +1384,7 @@ func TestStaticAssets(t *testing.T) {
 			"claimed for review by",
 		},
 		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
-		"/static/manifest.webmanifest": {`"display": "standalone"`, "icon-180.png"},
+		"/static/manifest.webmanifest": {`"display": "standalone"`, "icon-180.png", `"start_url": "/?token=`},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))
 		if rec.Code != http.StatusOK {

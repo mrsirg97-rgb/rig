@@ -581,7 +581,7 @@ function paintStatus() {
   const parts = fmtStatus(state.status);
   const paint = (host, sep) => {
     host.innerHTML = '';
-    parts.forEach(([k, v], i) => {
+    parts.filter(([k]) => !(sep && k === 'session')).forEach(([k, v], i) => {
       if (i && sep) host.appendChild(span(sep, 'dim'));
       host.appendChild(span(k + ' ', 'k'));
       host.appendChild(span(v, 'v'));
@@ -876,7 +876,6 @@ function renderChat() {
   row.appendChild(span(G.prompt, 'mark'));
   const input = el('textarea');
   input.rows = 1;
-  input.placeholder = 'ask for something real…';
   input.spellcheck = false;
   input.setAttribute('autocapitalize', 'sentences');
   input.setAttribute('enterkeyhint', 'send');
@@ -955,13 +954,21 @@ async function renderSessions(q) {
   for (const s of sessions) {
     const row = el('div', 'sess');
     const [g, cls] = exitGlyph(s.exit);
-    row.appendChild(span(g + ' ', cls));
-    row.appendChild(span(s.id.slice(0, 12), 'text'));
-    row.appendChild(span(s.started.replace('T', ' ').replace(/Z$/, '').slice(0, 16), 'dim'));
-    row.appendChild(span(s.turns + ' turns', 'dim'));
-    row.appendChild(span(s.exit, 'exit-' + s.exit));
-    if (s.label) row.appendChild(span(s.label.slice(0, 48), 'dim'));
-    row.appendChild(button('resume', 'rowact', (e) => { e.stopPropagation(); chatCommand('/sessions resume ' + s.id); }));
+    const head = el('div', 'sess-head');
+    head.appendChild(span(g, cls));
+    head.appendChild(span(s.id.slice(0, 12), 'text'));
+    head.appendChild(span(s.started.replace('T', ' ').replace(/Z$/, '').slice(0, 16), 'dim'));
+    head.appendChild(button('resume', 'rowact', (e) => { e.stopPropagation(); chatCommand('/sessions resume ' + s.id); }));
+    row.appendChild(head);
+    const meta = el('div', 'sess-meta');
+    meta.appendChild(span(s.turns + (s.turns === 1 ? ' turn' : ' turns'), 'dim'));
+    meta.appendChild(span(' ' + G.dot + ' ', 'dim'));
+    meta.appendChild(span(s.exit, 'exit-' + s.exit));
+    if (s.label) {
+      meta.appendChild(span(' ' + G.dot + ' ', 'dim'));
+      meta.appendChild(span(s.label.slice(0, 48), 'dim'));
+    }
+    row.appendChild(meta);
     row.addEventListener('click', () => renderTranscript(s.id, q));
     tb.body.appendChild(row);
   }
@@ -1619,7 +1626,7 @@ function renderMore() {
 
   const inst = el('div', 'group');
   inst.appendChild(el('h2', null, 'install'));
-  inst.appendChild(el('div', 'dim', 'share ' + G.dot + ' add to home screen puts rig beside your other apps. it opens full-screen and remembers the token.'));
+  inst.appendChild(el('div', 'dim', 'share ' + G.dot + ' add to home screen puts rig beside your other apps. it opens full-screen and stays signed in.'));
   main.appendChild(inst);
 
   if (state.status) {

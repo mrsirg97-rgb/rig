@@ -87,6 +87,8 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 	switch {
 	case path == "/":
 		s.serveStatic(w, "index.html", "text/html; charset=utf-8")
+	case path == "/static/manifest.webmanifest":
+		s.serveManifest(w, r)
 	case strings.HasPrefix(path, "/static/"):
 		s.serveStaticFile(w, r, strings.TrimPrefix(path, "/static/"))
 	case path == "/api/cwds":

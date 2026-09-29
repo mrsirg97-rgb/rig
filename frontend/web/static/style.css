@@ -189,9 +189,11 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 .seg button.active { color: var(--text); border-bottom-color: var(--ember); }
 .seg button.active::before { content: "❯ "; color: var(--ember); }
 
-.sess { padding: 2px 0; cursor: pointer; white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; }
+.sess { padding: 4px 0; cursor: pointer; overflow-wrap: anywhere; }
 .sess:hover { background: color-mix(in srgb, var(--ember) 8%, transparent); }
-.sess .rowact { text-indent: 0; }
+.sess-head { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; }
+.sess-head .rowact { margin-left: auto; }
+.sess-meta { padding-left: 2ch; white-space: pre-wrap; }
 .exit-open { color: var(--ember); }
 .exit-ok { color: var(--success); }
 .exit-fault { color: var(--error); }
@@ -357,7 +359,7 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
   .schedconfirm { margin-left: 2ch; }
   .prompt .label { width: 7ch; }
   .tb-body { padding-left: 1ch; }
-  .line, .sess { padding-left: 2ch; text-indent: -2ch; }
+  .line { padding-left: 2ch; text-indent: -2ch; }
   .line.detail { padding-left: 3ch; text-indent: -1ch; }
   .taskact { display: block; padding-left: 2ch; text-indent: 0; margin: 2px 0 4px; }
   .taskact > .dim:first-child { display: none; }
