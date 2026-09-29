@@ -28,7 +28,7 @@ it acts on it.
 - read's `offset`/`limit`: select a 0-based line range: `offset` past the
   end and a negative `offset`/`limit` refuse loud, naming the line count.
 - read's `diff`: append the git diff of the read file (HEAD vs working
-  tree), `no changes` when clean; a non-git cwd refuses loud, naming the
+  tree), `no changes` when clean; a non-git workspace refuses loud, naming the
   reason, like the deleted `diff` tool's `files` verb did.
 - read streams the file once: every byte is hashed for provenance while
   only the requested window is captured, capped at one byte past the

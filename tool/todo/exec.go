@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
@@ -36,10 +35,6 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	t, err := a.resolve(ctx, g, session)
 	if err != nil {
 		return "", err
-	}
-	if t.source == srcHost && isWrite(g.Action) {
-		wd, _ := os.Getwd()
-		return "", fmt.Errorf("todo: no project: %s is not a repo, so its queue is shared by every session started there (project: \"~/Projects/x\" binds this session, \"~\" claims this bucket)", wd)
 	}
 	committed := false
 	if g.Action == "bind" {

@@ -38,6 +38,6 @@ The shared kernel is also the plugin discovery/execution surface
   when the Go side forwards only a cmd, so an unguarded action is an ok
   reply that ran nothing (SPEC_PYTHON, amended).
 
-- The kernel is born in the session's working directory (`SetCwd`, wired
+- The kernel is born in the session's workspace (`SetCwd`, wired
   at the root before first start); relative paths in kernel code resolve
   against the project, not wherever the rig process happened to start.

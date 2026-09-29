@@ -61,33 +61,33 @@ func TestFailureNamesTheCwd(t *testing.T) {
 	if err == nil {
 		t.Fatal("the failure must stay an error")
 	}
-	if want := "visible\n(cwd " + wd + ")"; got != want {
-		t.Fatalf("the failing reply must name the cwd as its trailing line, got %q", got)
+	if want := "visible\n(workspace " + wd + ")"; got != want {
+		t.Fatalf("the failing reply must name the workspace as its trailing line, got %q", got)
 	}
 
 	got, err = tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "false",
-		"cwd":     dir,
+		"command":   "false",
+		"workspace": dir,
 	}))
 	if err == nil {
 		t.Fatal("the failure must stay an error")
 	}
-	if want := "(cwd " + dir + ")"; got != want {
-		t.Fatalf("an empty failure still names the cwd alone (no leading blank), got %q", got)
+	if want := "(workspace " + dir + ")"; got != want {
+		t.Fatalf("an empty failure still names the workspace alone (no leading blank), got %q", got)
 	}
 }
 
 func TestMissingCwdNamesTheReason(t *testing.T) {
 	tool := bash.New()
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "pwd",
-		"cwd":     filepath.Join(t.TempDir(), "missing"),
+		"command":   "pwd",
+		"workspace": filepath.Join(t.TempDir(), "missing"),
 	}))
-	if err == nil || !strings.Contains(err.Error(), "bash: cwd ") || !strings.Contains(err.Error(), "no such file or directory") {
-		t.Fatalf("a refused cwd must be a failure naming the cwd and the reason: %q, %v", got, err)
+	if err == nil || !strings.Contains(err.Error(), "bash: workspace ") || !strings.Contains(err.Error(), "no such file or directory") {
+		t.Fatalf("a refused workspace must be a failure naming the workspace and the reason: %q, %v", got, err)
 	}
 	if got != "" {
-		t.Fatalf("a refused cwd carries no content (the loop feeds the error line once), got %q", got)
+		t.Fatalf("a refused workspace carries no content (the loop feeds the error line once), got %q", got)
 	}
 }
 
@@ -102,14 +102,14 @@ func TestUnreadableCwdNamesTheReason(t *testing.T) {
 	t.Cleanup(func() { os.Chmod(dir, 0o755) })
 	tool := bash.New()
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "pwd",
-		"cwd":     dir,
+		"command":   "pwd",
+		"workspace": dir,
 	}))
-	if err == nil || !strings.Contains(err.Error(), "bash: cwd ") || !strings.Contains(err.Error(), "permission denied") {
-		t.Fatalf("a refused cwd must be a failure naming the cwd and the reason: %q, %v", got, err)
+	if err == nil || !strings.Contains(err.Error(), "bash: workspace ") || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("a refused workspace must be a failure naming the workspace and the reason: %q, %v", got, err)
 	}
 	if got != "" {
-		t.Fatalf("a refused cwd carries no content (the loop feeds the error line once), got %q", got)
+		t.Fatalf("a refused workspace carries no content (the loop feeds the error line once), got %q", got)
 	}
 }
 
@@ -126,14 +126,14 @@ func TestSuccessStaysByteIdentical(t *testing.T) {
 	}
 	dir := t.TempDir()
 	got, err = tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "pwd",
-		"cwd":     dir,
+		"command":   "pwd",
+		"workspace": dir,
 	}))
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
 	if got != dir+"\n" {
-		t.Fatalf("the explicit cwd's success is byte-identical, got %q", got)
+		t.Fatalf("the explicit workspace's success is byte-identical, got %q", got)
 	}
 }
 
@@ -154,8 +154,8 @@ func TestCwdIsRespected(t *testing.T) {
 	dir := t.TempDir()
 	tool := bash.New()
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "pwd",
-		"cwd":     dir,
+		"command":   "pwd",
+		"workspace": dir,
 	}))
 	if err != nil {
 		t.Fatalf("exec: %v", err)

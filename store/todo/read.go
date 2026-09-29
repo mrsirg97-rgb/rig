@@ -73,7 +73,7 @@ func Notes(ctx context.Context, db store.DB, p Project, id, session string) (str
 	if err != nil {
 		return "", err
 	}
-	f.label, f.notRepo = p.Label, p.OutsideRepo
+	f.label = p.Label
 	ts, ok := f.tasks[id]
 	if !ok {
 		return "", unknownTask(p, id)

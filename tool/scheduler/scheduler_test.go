@@ -71,12 +71,12 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	for _, want := range []string{
 		"come from list: copy them, never invent them",
 		"busy:skip, the default, skips a fire while another model holds the GPU",
-		"force evicts it, and only when the user wants the GPU now",
+		"force evicts it, and only when the operator wants the GPU now",
 		"(default: qwen3.8-workers)",
 		"until the note clears",
 		"re-create it to retry",
 		"self-deletes after one fire",
-		"running in its own cwd",
+		"running in its own workspace",
 		"repair re-derives its crontab line",
 	} {
 		if !strings.Contains(d, want) {
@@ -114,6 +114,10 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 	id, _ := schema.Properties["id"].(map[string]any)
 	if got, _ := id["description"].(string); got != "Job id jN (as shown by list). Required for pause/resume/remove/runs; repair takes it or none (none repairs every drifting job)." {
 		t.Fatalf("id description %q", got)
+	}
+	cwd, _ := schema.Properties["workspace"].(map[string]any)
+	if got, _ := cwd["description"].(string); got != "the workspace the job runs in (default: this session's workspace)." {
+		t.Fatalf("cwd description %q", got)
 	}
 }
 
@@ -350,10 +354,10 @@ func TestCreateRefusesACwdOutsideTheSessionRoot(t *testing.T) {
 	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
 	tool := adapter.New(db, ct, "/x/rig run-job", "qwen3.8-workers", home)
 	raw, _ := json.Marshal(map[string]any{
-		"action": "create", "name": "escape", "prompt": "p", "cron": "1 0 * * *", "cwd": "/etc",
+		"action": "create", "name": "escape", "prompt": "p", "cron": "1 0 * * *", "workspace": "/etc",
 	})
 	_, err = tool.Exec(context.Background(), raw)
-	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
-		t.Fatalf("a cwd outside the session's cwd and the rig home must be refused, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
+		t.Fatalf("a cwd outside the session's workspace and the rig home must be refused, got %v", err)
 	}
 }

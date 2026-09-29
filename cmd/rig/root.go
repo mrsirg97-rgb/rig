@@ -20,7 +20,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
 	viewtool "github.com/mrsirg97-rgb/rig/v2/tool/view"
@@ -161,12 +160,9 @@ func sessionSection(cwd, home string) string {
 	if cwd == "" {
 		return ""
 	}
-	section := fmt.Sprintf("The session's working directory is %s.", cwd)
+	section := fmt.Sprintf("The session's workspace is %s.", cwd)
 	if home != "" {
-		section = fmt.Sprintf("The session's working directory is %s and the session home is %s. A leading ~ in a tool path expands to the session home.", cwd, home)
-	}
-	if !scope.InRepo(cwd) {
-		section += " It is not a repo: name project on todo and rem calls, as a path to the repo the work is in."
+		section = fmt.Sprintf("The session's workspace is %s and the rig home is %s. A leading ~ in a tool path expands to the rig home.", cwd, home)
 	}
 	return section
 }

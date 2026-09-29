@@ -34,7 +34,7 @@ func Files(ctx context.Context, ref string, paths []string) (string, error) {
 	if err := cmd.Run(); err != nil {
 		stderr := errb.String()
 		if strings.Contains(strings.ToLower(stderr), "not a git repository") {
-			return "", fmt.Errorf("diff files: not a git repository (cwd %s)", cwd)
+			return "", fmt.Errorf("diff files: not a git repository (workspace %s)", cwd)
 		}
 		first := firstLine(stderr)
 		if first == "" {

@@ -1,4 +1,45 @@
 # Changelog
+## [2.1.8]: the workspace vocabulary and the cwd bucket
+
+The todo tool refused every write when the session's cwd was not in a
+git repo (`no project: … is not a repo, so its queue is shared by every
+session started there`), though the store beneath it already keys a
+non-repo directory by its path and serves it — the same queue a
+`project: "~"` write reaches — and every repo queue is shared by every
+session in it too, with `claim` as the door. The refusal guarded
+nothing. A non-repo cwd is now its own workspace keyed by its path, and
+writes land there; the `(not a repo)` decoration is gone from the queue
+head, the empty reply, and the unknown-id refusal; and the bind report
+says `queue: <label> (this workspace; not bound)` when unbound and
+`queue: <label> (bound)` when bound. The vocabulary the model reads is
+now one set: a workspace is the directory the session runs in, resolved
+to the repo root when inside one (worktrees keep sharing), and project
+is the field that binds the session to another workspace, given as a
+path. The todo and rem descriptions, the project field descriptions in
+both schemas, and the session line (`The session's workspace is <cwd>`)
+say so; the 2.1.7 name-project sentence and its two tests are gone, and
+`OutsideRepo` stays in the store and the binding table with nothing
+rendering it.
+
+The same vocabulary now covers every model-facing string: the place is
+`workspace` everywhere, and the place field is `workspace` on all three
+tools — bash, scheduler, and delegate — described `the workspace the
+job runs in`. bash's failure line and refusal, python's kernel
+sentence, the embedded system prompt, the session line, the read
+`diff` field (`a non-git workspace refuses`), the diff refusal, the
+shared `pathguard` voice (the scheduler and delegate refuse `outside
+the session's workspace`), the scheduler's list sentence, and its
+create refusal (`create requires a workspace`) all say workspace, and
+todo's no-cwd refusal does too (`todo: no workspace`). The home is the
+`rig home` everywhere, the session line included. The person is the
+`operator` (the scheduler's two `user`s), the delegate's worker model
+says `the worker model defaults to`, and the todo and rem `project`
+fields both read `another workspace, as a path; later calls act there
+until you name a different one. ~ expands.` with rem's recall sentence
+`this workspace first, then global` and its project clause `when the
+fact belongs to a different workspace than the one you started in`,
+matching todo.
+
 ## [2.1.7]: the session line and the idempotent todo
 
 The session line named the cwd and the home but never said whether the

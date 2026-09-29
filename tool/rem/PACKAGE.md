@@ -32,6 +32,6 @@ compaction, nothing is read into the prompt by a session start.
   re-voice.
 - The deliberate project (SPEC_STATE): when `project` is set, its path
   replaces the session cwd as the `cwd` handed to the store; the scope
-  is the repo the fact belongs to, not the directory rig started in.
-  `~` expands at the `middleware/paths` boundary (the `project` field is
-  in its `Fields`); `project` + `scope: global` refuses by name.
+  is the workspace the fact belongs to, not the one the session started
+  in. `~` expands at the `middleware/paths` boundary (the `project` field
+  is in its `Fields`); `project` + `scope: global` refuses by name.

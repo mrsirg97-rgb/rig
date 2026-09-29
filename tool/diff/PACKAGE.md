@@ -19,7 +19,7 @@ wire's observation vocabulary folded into read and edit).
   an empty `ref` is HEAD), via
   `git diff --no-color --no-ext-diff -U3` in the process's cwd, capped
   at 100 lines with the loud elision marker; `no changes` on a clean
-  tree, a loud refusal on a non-git cwd or a git failure. The diff is
+  tree, a loud refusal on a non-git workspace or a git failure. The diff is
   HEAD vs the working tree, never the index: a staged edit still shows.
 
 ## How it is consumed
@@ -32,7 +32,7 @@ wire's observation vocabulary folded into read and edit).
 - O(N*M) is deliberate: the inputs are file contents and tool results
   (KBs) and the reply is capped, so the table is bounded by the bound
   the cap already imposes.
-- `Files` is the session cwd's git: a file outside the repository
+- `Files` is the session workspace's git: a file outside the repository
   refuses like any other git failure. `--no-ext-diff` is deliberate: a
   repository's `diff.external` is not a program rig should run for the
   model's chosen path.

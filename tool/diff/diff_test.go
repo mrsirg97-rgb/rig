@@ -146,7 +146,7 @@ func TestFilesNonGitCwdRefusesLoud(t *testing.T) {
 	if err == nil {
 		t.Fatal("a non-git cwd must refuse")
 	}
-	want := "diff files: not a git repository (cwd " + dir + ")"
+	want := "diff files: not a git repository (workspace " + dir + ")"
 	if err.Error() != want {
 		t.Fatalf("voice = %q, want %q", err.Error(), want)
 	}

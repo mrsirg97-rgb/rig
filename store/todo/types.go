@@ -84,7 +84,6 @@ type folded struct {
 	maxIdNum   int
 	globalSeq  int64
 	label      string
-	notRepo    bool
 }
 
 func newFolded() *folded {

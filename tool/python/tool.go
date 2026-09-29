@@ -27,7 +27,7 @@ const description = "Runs Python in a persistent IPython kernel: variables, impo
 	"across calls, and numpy and pandas are available."
 
 const guidelines = "Guidelines: arithmetic, data shaping, parsing and bulk text are computed here, never estimated. " +
-	"Compute once, then query the result in later calls. The kernel starts in the session's working directory. " +
+	"Compute once, then query the result in later calls. The kernel starts in the session's workspace. " +
 	"Reply: stdout and the last expression's value; action vars lists the namespace, reset clears it."
 
 const schemaJSON = `{

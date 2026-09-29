@@ -37,7 +37,7 @@ func (readTool) Schema() json.RawMessage {
 			"path":   {"type": "string", "description": "the file to read"},
 			"offset": {"type": "integer", "description": "the 0-based line to start at (default 0); past the end refuses"},
 			"limit":  {"type": "integer", "description": "the number of lines to read (default the rest of the file); negative refuses"},
-			"diff":   {"type": "boolean", "description": "append the file's git diff against HEAD, or 'no changes' when clean (a non-git cwd refuses)"}
+			"diff":   {"type": "boolean", "description": "append the file's git diff against HEAD, or 'no changes' when clean (a non-git workspace refuses)"}
 		},
 		"required": ["path"]
 	}`)

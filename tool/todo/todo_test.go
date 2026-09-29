@@ -12,6 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
 )
@@ -217,6 +218,36 @@ func TestSiblingTextLinkResolvesInOneCreate(t *testing.T) {
 	}
 	if !strings.Contains(reply, "next: t1") {
 		t.Fatalf("the linked task must not be the next:\n%s", reply)
+	}
+}
+
+func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	d := tool.Description()
+	for _, want := range []string{
+		"The task queue for this workspace.",
+		"different workspace than the one you started in.",
+		"named by its workspace ([rig]).",
+	} {
+		if !strings.Contains(d, want) {
+			t.Fatalf("the description misses %q:\n%s", want, d)
+		}
+	}
+	for _, bad := range []string{"this repo", "repo differs", "named by its repo"} {
+		if strings.Contains(d, bad) {
+			t.Fatalf("the description must not speak repo: %q", bad)
+		}
+	}
+	var s struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema(), &s); err != nil {
+		t.Fatalf("schema: %v", err)
+	}
+	if got := s.Properties["project"].Description; got != "another workspace, as a path; later calls act there until you name a different one. ~ expands." {
+		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
 }
 
@@ -588,31 +619,45 @@ func TestProjectBindsTheSession(t *testing.T) {
 	}
 }
 
-func TestLaunchOutsideARepoRefusesWrites(t *testing.T) {
+func TestLaunchOutsideARepoWritesItsOwnWorkspace(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
-	t.Chdir(t.TempDir())
+	dir := t.TempDir()
+	t.Chdir(dir)
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := exec(t, tool, ctx, map[string]any{
+	reply, err := exec(t, tool, ctx, map[string]any{
 		"action": "create", "tasks": []any{map[string]any{"text": "a chore"}},
-	}); err == nil || !strings.Contains(err.Error(), "no project") {
-		t.Fatalf("a bare write outside a repo must refuse naming the rule, got %v", err)
+	})
+	if err != nil {
+		t.Fatalf("a bare write outside a repo must land in its own workspace: %v", err)
+	}
+	if !strings.Contains(reply, "["+scope.Label(dir)+"] ") {
+		t.Fatalf("a non-repo workspace's head must name the directory, got %q", reply)
+	}
+	if strings.Contains(reply, "not a repo") {
+		t.Fatalf("the head must not carry the not-a-repo decoration:\n%s", reply)
 	}
 	read, err := exec(t, tool, ctx, map[string]any{"action": "read"})
 	if err != nil {
 		t.Fatalf("a read must stay available: %v", err)
 	}
-	if !strings.Contains(read, "not a repo") {
-		t.Fatalf("a non-repo queue must say so:\n%s", read)
+	if !strings.HasPrefix(read, "["+scope.Label(dir)+"] ") {
+		t.Fatalf("the read names the same workspace:\n%s", read)
 	}
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
-		map[string]any{"text": "a chore"}}}); err == nil {
-		t.Fatal("the refusal must hold for every write verb")
+	reported, err := exec(t, tool, ctx, map[string]any{"action": "bind"})
+	if err != nil {
+		t.Fatalf("a bare bind reports: %v", err)
 	}
-	home := t.TempDir()
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "project": home,
-		"tasks": []any{map[string]any{"text": "a chore"}}}); err != nil {
+	if !strings.Contains(reported, "queue: "+scope.Label(dir)+" (this workspace; not bound)") {
+		t.Fatalf("an unbound report must name the workspace and say it is not bound, got %q", reported)
+	}
+	named, err := exec(t, tool, ctx, map[string]any{"action": "create", "project": dir,
+		"tasks": []any{map[string]any{"text": "a named chore"}}})
+	if err != nil {
 		t.Fatalf("naming a project lets the write land: %v", err)
+	}
+	if !strings.Contains(named, "bound to") {
+		t.Fatalf("the named write must bind:\n%s", named)
 	}
 	started, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1"})
 	if err != nil {

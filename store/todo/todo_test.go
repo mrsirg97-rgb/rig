@@ -1983,7 +1983,7 @@ func TestPruneKeepsFailedRows(t *testing.T) {
 	}
 }
 
-func TestSummaryNamesTheQueueAndSaysWhenItIsNotARepo(t *testing.T) {
+func TestSummaryNamesTheQueue(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	repo := todostore.Project{Key: "rigkey", Label: "rig"}
@@ -2005,8 +2005,11 @@ func TestSummaryNamesTheQueueAndSaysWhenItIsNotARepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(out, "[ng (not a repo)] ") {
-		t.Fatalf("a cwd bucket must say it is not a repo, got %q", out)
+	if !strings.HasPrefix(out, "[ng] ") {
+		t.Fatalf("a non-repo workspace must head like any other, got %q", out)
+	}
+	if strings.Contains(out, "not a repo") {
+		t.Fatalf("the head must not carry the not-a-repo decoration:\n%s", out)
 	}
 	if _, err := todostore.Prune(ctx, db, host, "s1"); err != nil {
 		t.Fatal(err)
@@ -2015,8 +2018,11 @@ func TestSummaryNamesTheQueueAndSaysWhenItIsNotARepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(empty, "(no tasks in zz's queue, not a repo)") {
-		t.Fatalf("an empty reply names its scope and its kind, got %q", empty)
+	if !strings.Contains(empty, "(no tasks in zz's queue)") {
+		t.Fatalf("an empty reply names its workspace, got %q", empty)
+	}
+	if strings.Contains(empty, "not a repo") {
+		t.Fatalf("the empty reply must not carry the not-a-repo decoration:\n%s", empty)
 	}
 }
 
@@ -2045,8 +2051,8 @@ func TestUnknownIdNamesTheQueueItMissed(t *testing.T) {
 	}
 	host := todostore.Project{Key: "homekey", Label: "ng", OutsideRepo: true}
 	if _, err := todostore.Complete(ctx, db, host, "t7", "s1", false); err == nil ||
-		!strings.Contains(err.Error(), "in ng (not a repo)") {
-		t.Fatalf("a bucket's refusal says so: %v", err)
+		!strings.Contains(err.Error(), "in ng") || strings.Contains(err.Error(), "not a repo") {
+		t.Fatalf("a non-repo workspace's refusal names the queue, nothing more: %v", err)
 	}
 }
 

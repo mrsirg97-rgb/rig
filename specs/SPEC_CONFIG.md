@@ -187,7 +187,7 @@ The embedded defaults (the move is exact; 0.2.0's values):
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
-  "system": "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's working directory, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard, an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. A capability you build twice belongs in a plugin. When the work is done, answer in plain text: what changed, what you verified, what is left.",
+  "system": "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's workspace, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard, an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. A capability you build twice belongs in a plugin. When the work is done, answer in plain text: what changed, what you verified, what is left.",
   "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web"],
   "retries": 3,
   "searxngUrl": "http://127.0.0.1:8888",
@@ -510,15 +510,9 @@ already assembles `system + "\n\n" + guidelines`, where `guidelines` is
 the `core.GuidelineContributor` prose of the middleware participants
 (SPEC_HARDENING decision 6's collection; today no participant
 contributes; `perm` and `guard` are wrap-only). The session section
-(the working directory and the session home, named so the model never
+(the workspace and the rig home, named so the model never
 guesses where it is; 1.1.4) and AGENTS.md sit **between the system
-prompt and the participant guidelines**; outside a repo the section
-adds one sentence — `It is not a repo: name project on todo and rem
-calls, as a path to the repo the work is in.` (2.1.7) — so a session
-started in the home knows its first todo/rem write needs the project
-named, instead of learning it from the refusal. The repo test is the
-one `store/scope` already uses (`InRepo`), fail-closed: an unprobeable
-cwd reads as not a repo and the sentence stands:
+prompt and the participant guidelines**:
 
 ```
 fullSystem = join( [system, session, AGENTS.md(global+project), guidelines], "\n\n" )

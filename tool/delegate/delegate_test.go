@@ -260,13 +260,39 @@ func TestDelegateHappyPathFeedsBackAndRecords(t *testing.T) {
 	}
 }
 
+func TestDelegateDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
+	d := tool.Description()
+	for _, want := range []string{
+		"the workspace must be under the session's workspace or the rig home",
+		"the worker model defaults to",
+	} {
+		if !strings.Contains(d, want) {
+			t.Fatalf("description missing %q:\n%s", want, d)
+		}
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	if got := schema.Properties["workspace"].Description; got != "the workspace the job runs in (default the session's workspace; must be under it or the rig home)" {
+		t.Fatalf("cwd description %q", got)
+	}
+}
+
 func TestDelegateCwdRefusalNamesThePath(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": "/elsewhere"})
+	b, _ := json.Marshal(map[string]any{"task": "t", "workspace": "/elsewhere"})
 	out, err := tool.Exec(context.Background(), b)
-	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
 		t.Fatalf("the cwd refusal must name the path: (%q, %v)", out, err)
 	}
 	if len(spawn.calls) != 0 {
@@ -292,9 +318,9 @@ func TestDelegateCwdSymlinkEscapeRefuses(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(old) })
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": link})
+	b, _ := json.Marshal(map[string]any{"task": "t", "workspace": link})
 	_, err = tool.Exec(context.Background(), b)
-	if err == nil || !strings.Contains(err.Error(), "outside the session's cwd") {
+	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
 		t.Fatalf("the resolved symlink escape must refuse: %v", err)
 	}
 	if spawn.count() != 0 {
@@ -319,7 +345,7 @@ func TestDelegateCwdFileRefuses(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(old) })
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": file})
+	b, _ := json.Marshal(map[string]any{"task": "t", "workspace": file})
 	_, err = tool.Exec(context.Background(), b)
 	if err == nil || !strings.Contains(err.Error(), "not a directory") {
 		t.Fatalf("a file cwd must refuse naming the directory rule: %v", err)

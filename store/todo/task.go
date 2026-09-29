@@ -30,7 +30,7 @@ func Task(ctx context.Context, db store.DB, p Project, id, session string) (Task
 	if err != nil {
 		return TaskInfo{}, err
 	}
-	f.label, f.notRepo = p.Label, p.OutsideRepo
+	f.label = p.Label
 	ts, ok := f.tasks[id]
 	if !ok {
 		return TaskInfo{}, unknownTask(p, id)
@@ -59,7 +59,7 @@ func Counts(ctx context.Context, db store.DB, p Project) (QueueCounts, error) {
 	if err != nil {
 		return QueueCounts{}, err
 	}
-	f.label, f.notRepo = p.Label, p.OutsideRepo
+	f.label = p.Label
 	var out QueueCounts
 	for _, ts := range f.tasks {
 		switch ts.status {

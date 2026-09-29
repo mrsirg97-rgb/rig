@@ -76,9 +76,9 @@ func (a *adapter) Description() string {
 		"bounded sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. " +
 		"Fan out with several delegate calls in one turn; " + stance + ", and extras wait for a slot. When the " +
 		"GPU is held by your own model the worker cannot start and the call refuses, naming the holder: do the " +
-		"work yourself or schedule it. cwd must be under the session's cwd or the rig home; the model defaults " +
-		"to " + a.DefaultModel + "; the timeout to 10 minutes, ceiling 30. Reply: the worker's message plus a " +
-		"trailer with exit, duration, session id and log."
+		"work yourself or schedule it. the workspace must be under the session's workspace or the rig home; " +
+		"the worker model defaults to " + a.DefaultModel + "; the timeout to 10 minutes, ceiling 30. Reply: " +
+		"the worker's message plus a trailer with exit, duration, session id and log."
 }
 
 func (a *adapter) Schema() json.RawMessage {
@@ -86,7 +86,7 @@ func (a *adapter) Schema() json.RawMessage {
 		"type": "object",
 		"properties": {
 			"task":      {"type": "string", "description": "the prompt the worker runs (required)"},
-			"cwd":       {"type": "string", "description": "working directory (default the session's cwd; must be under it or the rig home)"},
+			"workspace": {"type": "string", "description": "the workspace the job runs in (default the session's workspace; must be under it or the rig home)"},
 			"model":     {"type": "string", "description": "worker model id (default ` + a.DefaultModel + `)"},
 			"timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"},
 			"stallMs":   {"type": "integer", "minimum": 1, "description": "stall window in ms: a worker writing nothing for longer is killed as hung (0 = off; the timeout stays the spend ceiling)"}
@@ -97,7 +97,7 @@ func (a *adapter) Schema() json.RawMessage {
 
 type args struct {
 	Task      string `json:"task"`
-	Cwd       string `json:"cwd,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
 	Model     string `json:"model,omitempty"`
 	TimeoutMs int64  `json:"timeoutMs,omitempty"`
 	StallMs   int64  `json:"stallMs,omitempty"`
@@ -124,8 +124,8 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		return "", fmt.Errorf("delegate: %v", err)
 	}
 	cwd := sessionCwd
-	if g.Cwd != "" {
-		cwd, err = pathguard.Within(g.Cwd, sessionCwd, a.RigHome)
+	if g.Workspace != "" {
+		cwd, err = pathguard.Within(g.Workspace, sessionCwd, a.RigHome)
 		if err != nil {
 			return "", fmt.Errorf("delegate: %w", err)
 		}

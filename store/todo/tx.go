@@ -281,9 +281,6 @@ func unknownTask(p Project, id string) error {
 	if where == "" {
 		where = "this queue"
 	}
-	if p.OutsideRepo {
-		where += " (not a repo)"
-	}
 	return fmt.Errorf("no task '%s' in %s (ids are minted by the tool; copy from a reply)", id, where)
 }
 
@@ -304,7 +301,7 @@ func mutate(ctx context.Context, db store.DB, p Project, act func(bound context.
 	if err != nil {
 		return "", err
 	}
-	f.label, f.notRepo = p.Label, p.OutsideRepo
+	f.label = p.Label
 	reply, err := act(bound, tx, f)
 	if err != nil {
 		return "", err
