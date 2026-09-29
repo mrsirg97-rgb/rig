@@ -1383,7 +1383,7 @@ func TestStaticAssets(t *testing.T) {
 			"schedconfirm",
 			"claimed for review by",
 		},
-		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
+		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", "main.chat { padding-top: env(safe-area-inset-top, 0px); }", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
 		"/static/manifest.webmanifest": {`"display": "standalone"`, "icon-180.png", `"start_url": "/?token=`},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))

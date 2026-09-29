@@ -1,4 +1,11 @@
 # Changelog
+## [2.1.3]: the notch
+
+The top safe-area inset lived on the sidebar, and the sidebar is hidden
+on the phone, so an installed app started under the notch. The main
+column takes the inset in the phone layout now, for the chat and the
+store views alike.
+
 ## [2.1.2]: the dashboard on the phone
 
 Three phone fixes. The token cookie now lives 90 days instead of the
