@@ -202,6 +202,70 @@
   .step pre.tui .t-off { color: #5a5a5a; }
   .step pre.tui .t-bold { font-weight: 600; }
 
+  /* ---------- statement ---------- */
+  .statement { display: flex; flex-direction: column; gap: 1.1rem; }
+  .statement blockquote {
+    margin: 0; padding-left: 1.2rem; border-left: 3px solid var(--ember-deep);
+    font-family: var(--cond); font-weight: 600; font-size: clamp(26px, 4.6vw, 36px); line-height: 1.12;
+    text-transform: uppercase; text-wrap: balance; letter-spacing: 0.005em;
+  }
+  .statement blockquote em { font-style: normal; color: var(--ember); }
+  .statement .receipt { margin: 0; padding-left: 1.2rem; font-family: var(--mono); font-size: 13px; color: var(--dim); }
+  .statement .receipt a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .statement .receipt a:hover { color: var(--ember); border-color: var(--ember); }
+
+  /* ---------- spec sheet ---------- */
+  .sheet { display: flex; flex-direction: column; gap: 1.4rem; }
+  .sheet-intro { margin: 0; color: var(--dim); max-width: 58ch; }
+  .sheet-intro b { font-weight: 500; color: var(--text); }
+  .table { border: 1px solid var(--rule); background: var(--panel); }
+  .table .row {
+    display: grid; grid-template-columns: 116px 1fr; column-gap: 1.2rem;
+    padding: 0.85rem 1.1rem; border-bottom: 1px solid var(--rule);
+  }
+  .table .row:last-child { border-bottom: 0; }
+  .table .row:hover { background: var(--panel-2); }
+  .table .row:hover .os { color: var(--ember); }
+  .table .os {
+    font-family: var(--cond); font-weight: 600; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--dim); padding-top: 0.15rem; transition: color 120ms;
+  }
+  .table .what { margin: 0; font-size: 16px; line-height: 1.45; }
+  .table .where { display: block; margin-top: 0.3rem; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+  .table .what code { font-family: var(--mono); font-size: 14px; color: var(--ember); }
+
+  /* ---------- the refusal teaches ---------- */
+  .teach { display: flex; flex-direction: column; gap: 1.4rem; }
+  .teach h2 {
+    margin: 0; font-family: var(--cond); font-weight: 600; font-size: 28px; line-height: 1.1; letter-spacing: 0.01em; text-transform: uppercase; text-wrap: balance;
+  }
+  .teach > p { margin: 0; color: var(--dim); max-width: 58ch; }
+  .teach > p b { font-weight: 500; color: var(--text); }
+  .teach pre {
+    margin: 0; font-family: var(--mono); font-size: 13.5px; line-height: 1.6; color: #d8d8d8;
+    background: #050505; border: 1px solid var(--rule); border-left: 3px solid var(--ember-deep);
+    padding: 1rem 1.1rem; overflow-x: auto;
+  }
+  .teach pre .t-dim { color: #6e6e6e; }
+  .teach pre .t-ember { color: #e8a86b; }
+  .teach pre .t-ok { color: #98c379; }
+  .teach pre .t-err { color: #e06c75; }
+  .teach pre .t-note { color: #4d4a45; font-style: italic; }
+
+  details.more { grid-column: 2; }
+  details.more summary {
+    cursor: pointer; list-style: none; width: max-content;
+    font-family: var(--cond); font-weight: 600; font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim);
+    border-bottom: 1px solid var(--rule); padding-bottom: 2px;
+  }
+  details.more summary::-webkit-details-marker { display: none; }
+  details.more summary::before { content: "+ "; color: var(--ember-deep); }
+  details.more[open] summary::before { content: "− "; }
+  details.more summary:hover, details.more summary:focus-visible { color: var(--ember); border-color: var(--ember); outline: none; }
+  details.more > .more-body { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+  details.more .file { grid-column: auto; margin: 0 0 -0.5rem; }
+  details.more pre { grid-column: auto; }
+
   /* ---------- footer ---------- */
   footer { display: flex; flex-direction: column; gap: 2rem; padding-top: 2.6rem; border-top: 1px solid var(--rule); }
   .built { margin: 0; font-size: 16px; color: var(--dim); max-width: 62ch; }
@@ -220,7 +284,8 @@
     .rating > div { border-right: 0; border-bottom: 1px solid var(--rule); }
     .rating > div:last-child { border-bottom: 0; }
     .step { grid-template-columns: 1fr; }
-    .step pre, .step .file { grid-column: 1; }
+    .step pre, .step .file, details.more { grid-column: 1; }
+    .table .row { grid-template-columns: 1fr; row-gap: 0.3rem; }
     .num { font-size: 56px; }
     .lede p { font-size: 18px; }
   }
@@ -254,8 +319,8 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
   </section>
 
   <section class="rating" aria-label="measured">
-    <div><span class="n">99<small>%</small></span><span class="l">of every token served from cache, over thousands of real turns</span></div>
-    <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the whole agent loop, batch included</span></div>
+    <div><span class="n">99<small>%</small></span><span class="l">of prompt tokens served from cache over 2,925 turns, because the prefix never changes a byte</span></div>
+    <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the whole agent loop, batch included, stdlib only</span></div>
     <div><span class="n">{{RIG_COMMITS}}</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
   </section>
 
@@ -266,6 +331,43 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
     <p>Close the laptop. <strong>Pick the session back up from your phone.</strong></p>
   </section>
 
+  <section class="statement" aria-label="how rig was built">
+    <p class="eyebrow">provenance</p>
+    <blockquote>Built by hand until it could finish one turn. <em>Everything after that, rig wrote inside itself,</em> on local models, driven from a phone.</blockquote>
+    <p class="receipt">{{RIG_COMMITS}} commits · <a href="https://github.com/mrsirg97-rgb/rig/commits/main">the git log is the receipt</a></p>
+  </section>
+
+  <section class="sheet" aria-labelledby="sheet-heading">
+    <p class="eyebrow" id="sheet-heading">the spec sheet</p>
+    <p class="sheet-intro">Call it <b>a small operating system for agents</b> and mean it. Every part an OS has, rig has, and each one lives in a directory you can read in an afternoon.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">kernel</span><p class="what"><code>loop.Run(ctx, kernel)</code> over typed seams. It names no tool, no provider, no frontend.<span class="where">loop/ · core/ · kernel.go</span></p></div>
+      <div class="row" role="listitem"><span class="os">scheduler</span><p class="what">Reads run side by side, eight at a time; effects land in call order. Background jobs go on real cron, and each one fires jailed.<span class="where">loop/batch.go · tool/scheduler</span></p></div>
+      <div class="row" role="listitem"><span class="os">processes</span><p class="what">Sessions, delegates, drain workers. Each worker owns a transcript, sandboxed and resumable.<span class="where">frontend/ · tool/delegate · swarm/</span></p></div>
+      <div class="row" role="listitem"><span class="os">ipc</span><p class="what">One event stream, tool calls through the middleware chain, and the stores as the shared state between processes.<span class="where">core/provider.go · evt/ · store/</span></p></div>
+      <div class="row" role="listitem"><span class="os">filesystem</span><p class="what">The workspace through read, write, edit; every path canonicalized before it is trusted.<span class="where">tool/file · pathguard/</span></p></div>
+      <div class="row" role="listitem"><span class="os">permissions</span><p class="what">Allowlist, approval gate, pathguard, plugin provenance, worker jail. Deny by default; every refusal has a name.<span class="where">middleware/ · policy/</span></p></div>
+      <div class="row" role="listitem"><span class="os">modules</span><p class="what">One Python file is one tool, pending until you approve it.<span class="where">plugins/</span></p></div>
+      <div class="row" role="listitem"><span class="os">shells</span><p class="what">The TUI, the piped CLI, the one-shot, the web dashboard: four frontends over one session.<span class="where">frontend/ · command/</span></p></div>
+    </div>
+  </section>
+
+  <section class="teach" aria-labelledby="teach-heading">
+    <p class="eyebrow">the protocol</p>
+    <h2 id="teach-heading">The loop never retries. The refusal teaches.</h2>
+    <p>A failed call runs once and the model is told why, <b>in words it can act on.</b> No hidden retry, no guessing. The rules of the board, the files, and the sandbox are not in the prompt; they arrive the moment they matter, which is why small models get good at rig fast.</p>
+    <pre><span class="t-ember">●</span> <span class="t-ember">edit</span><span class="t-dim"> · </span>core/turn.go
+<span class="t-err">✗</span> <span class="t-dim">edit: core/turn.go was never read this session: read it first</span>
+<span class="t-ember">●</span> <span class="t-ember">read</span><span class="t-dim"> · </span>core/turn.go
+<span class="t-ember">●</span> <span class="t-ember">edit</span><span class="t-dim"> · </span>core/turn.go
+<span class="t-ok">✓</span> <span class="t-dim">core/turn.go · 214 bytes replaced</span>
+
+<span class="t-ember">●</span> <span class="t-ember">todo</span><span class="t-dim"> · </span>complete t2
+<span class="t-err">✗</span> <span class="t-dim">'t2' is blocked by 't1' (pending; start it first)</span>
+<span class="t-ember">●</span> <span class="t-ember">todo</span><span class="t-dim"> · </span>start t1
+<span class="t-note">  one refusal, one correction, the rest of the session clean</span></pre>
+  </section>
+
   <section class="steps" aria-labelledby="setup-heading">
     <p class="eyebrow" id="setup-heading">getting set up</p>
 
@@ -273,7 +375,7 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
       <p class="num">1</p>
       <div>
         <h2>Install it</h2>
-        <p>One file lands in your path. Signed releases, and it <b>updates itself in place.</b></p>
+        <p>One file lands in your path. Checksum-verified, and it <b>updates itself in place.</b></p>
       </div>
       <pre>curl -fsSL https://tryrig.ai/install.sh | sh
 <span class="d">✓ rig {{RIG_VERSION}} installed to ~/.local/bin/rig</span>
@@ -295,6 +397,9 @@ rig -update</pre>
   <span class="k">"sandbox"</span>: <span class="s">"off"</span>,
   <span class="k">"plugins"</span>: { <span class="k">"enabled"</span>: [] }
 }</pre>
+      <details class="more">
+        <summary>models.json and workers.json</summary>
+        <div class="more-body">
       <p class="file">~/.rig/models.json · one row per model: its window, its budget, its dials</p>
       <pre>[
   {
@@ -324,6 +429,8 @@ rig -update</pre>
   <span class="k">"model"</span>: <span class="s">"local"</span>,
   <span class="k">"slots"</span>: <span class="d">2</span>
 }</pre>
+        </div>
+      </details>
     </article>
 
     <article class="step">
@@ -458,7 +565,7 @@ rig -update</pre>
   </section>
 
   <footer>
-    <p class="built">rig was built by hand until it could finish one turn. Everything after that was written by local models running inside rig, from a phone. <a href="https://github.com/mrsirg97-rgb/rig/commits/main">The git log is the receipt.</a></p>
+    <p class="built">Small enough to read before you trust it. <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">Start with the specs.</a></p>
     <nav class="links" aria-label="links">
       <a href="https://github.com/mrsirg97-rgb/rig">github</a>
       <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
