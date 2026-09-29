@@ -1383,7 +1383,7 @@ func TestStaticAssets(t *testing.T) {
 			"schedconfirm",
 			"claimed for review by",
 		},
-		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", "main.chat { padding-top: env(safe-area-inset-top, 0px); }", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
+		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", "main.chat { padding: env(safe-area-inset-top, 0px) 0 0; }", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
 		"/static/manifest.webmanifest": {`"display": "standalone"`, "icon-180.png", `"start_url": "/?token=`},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))
@@ -1405,6 +1405,23 @@ func TestStaticAssets(t *testing.T) {
 	rec = doReq(t, h, "GET", "/static/../web.go", nil, bearer(tok))
 	if rec.Code == http.StatusOK {
 		t.Fatalf("traversal: got 200, want a refusal")
+	}
+}
+
+func TestStaticAssetsPhoneMainKeepsTheTopInset(t *testing.T) {
+	srv, tok := newTestServer(t)
+	rec := doReq(t, srv.Handler(), "GET", "/static/style.css", nil, bearer(tok))
+	body := rec.Body.String()
+	phone := body[strings.Index(body, "@media (max-width: 720px)"):]
+	for _, sel := range []string{"main {", "main.chat {"} {
+		last := strings.LastIndex(phone, "\n  "+sel)
+		if last < 0 {
+			t.Fatalf("phone: no %s rule", sel)
+		}
+		rule := phone[last : last+strings.Index(phone[last:], "}")]
+		if !strings.Contains(rule, "env(safe-area-inset-top") {
+			t.Fatalf("phone: the last %s rule drops the top inset, so an installed app starts under the notch: %q", sel, rule)
+		}
 	}
 }
 
