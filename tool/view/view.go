@@ -47,7 +47,7 @@ func New(blobsDir string) core.Tool {
 func (toolView) Name() string { return "view" }
 
 func (toolView) Description() string {
-	return "look at an image file: png, jpeg, webp, or the first frame of a gif. Guidelines: for pixels only; text, code, or a log -> read, a crop or a resize -> bash. Reply: one line naming the stored image's mime, dimensions, size, and source. Over 20 MiB, over 16 megapixels, or not an image is refused."
+	return "look at an image file: png, jpeg, webp, or the first frame of a gif. Guidelines: for pixels only; for text, code or a log use read; for a crop or a resize use bash. Reply: one line naming the stored image's mime, dimensions, size and source. Over 20 MiB, over 16 megapixels, or not an image refuses."
 }
 
 func (toolView) Schema() json.RawMessage {

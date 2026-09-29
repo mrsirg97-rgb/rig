@@ -69,15 +69,15 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	d := h.tool.Description()
 	for _, want := range []string{
-		"are minted — copy from list, never invent",
+		"come from list: copy them, never invent them",
 		"busy:skip (default) skips a fire while another model holds the GPU",
-		"force evicts it — only when the user wants the GPU now",
+		"force evicts it, only when the user wants the GPU now",
 		"(default: qwen3.8-workers)",
 		"until the note clears",
 		"re-create it to retry",
 		"self-deletes after one fire",
 		"running in its own cwd",
-		"repair re-derives a drifting job's crontab line",
+		"repair re-derives its crontab line",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing voice fragment: %q", want)

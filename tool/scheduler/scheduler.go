@@ -14,25 +14,20 @@ import (
 )
 
 func description(defModel string) string {
-	return "background jobs on the user's crontab: each job is a headless worker session on the worker " +
-		"model (default: " + defModel + "), running in its own cwd; or, when command is set, a plain " +
-		"cron command in that cwd (no model, no GPU)."
+	return "background jobs on the user's crontab. Each job is a headless worker session on the worker " +
+		"model (default: " + defModel + "), running in its own cwd; a job with command runs that shell " +
+		"line instead, with no model and no GPU."
 }
 
-const guidelines = "Guidelines: recurring or later work -> create (cron 'M H D Mo DOW', or once + at:<ISO>, which " +
-	"self-deletes after one fire); list is one list, this directory first, the rest grouped by each job's cwd, with any drift between store and crontab; " +
-	"pause/resume/remove; runs is the audit trail. Reply: the job row or the list; ids (jN) are minted — copy from list, never invent. busy:skip (default) skips a fire while another model holds " +
-	"the GPU, force evicts it — only when the user wants the GPU now; a drifting job is not trustworthy " +
-	"until the note clears; a failed once job is done — re-create it to retry. A job bounds each fire " +
-	"with timeout (minutes, default 30, ceiling 24h; update with -1 resets it) and stall (minutes, the " +
-	"silence window: a fire that writes nothing for longer is killed as hung; NULL/0 = ceiling only; " +
-	"update with -1 resets it). budget is dollars, summed from the recorded run " +
-	"costs (SPEC_HOSTED 5): a model fire at the cap records a skip naming the spend; " +
-	"update with -1 resets the cap; command jobs take no budget. command jobs run a fixed " +
-	"shell line instead of a worker session: no GPU, no busy policy, prompt/model/busy refused; for " +
-	"deterministic scripts (pollers, digests, backups), never for anything needing judgment. " +
-	"repair re-derives a drifting job's crontab line (crontab write only, no event, no state change): " +
-	"one id repairs that job ('jN' is in sync when nothing drifts), no id repairs every drifting one."
+const guidelines = "Guidelines: create for work that recurs (cron 'M H D Mo DOW') or runs later (once with at, " +
+	"which self-deletes after one fire). list shows every job, this directory first, then the rest by cwd, " +
+	"with any drift between the store and the crontab; a drifting job is not trustworthy until the note " +
+	"clears, and repair re-derives its crontab line, one job by id or every drifting one with none. runs is " +
+	"the audit trail. Job ids (jN) come from list: copy them, never invent them. busy:skip (default) skips a " +
+	"fire while another model holds the GPU; force evicts it, only when the user wants the GPU now. A failed " +
+	"once job is done; re-create it to retry. Command jobs are for deterministic scripts (pollers, digests, " +
+	"backups), never for anything needing judgment. timeout, stall and budget bound each fire; the fields say " +
+	"how. Reply: the job row or the list; a refusal names the rule."
 
 func schemaJSON(defModel string) string {
 	return `{

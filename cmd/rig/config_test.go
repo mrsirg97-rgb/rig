@@ -282,7 +282,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 }
 
 func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
-	const embeddedSystem = "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. Read (with offset/limit for a range), not cat or sed, for any file you may edit: the edit is drift-checked against what you read, and a bash read leaves no observation. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin."
+	const embeddedSystem = "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's working directory, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard, an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. A capability you build twice belongs in a plugin. When the work is done, answer in plain text: what changed, what you verified, what is left."
 	cases := []struct {
 		name string
 		file string
@@ -763,7 +763,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	sysMu.Lock()
 	sys := workerSystem
 	sysMu.Unlock()
-	const defaultSystem = "You are rig, a minimal coding agent. Use the tools to inspect, change, and run things in the working directory; answer in plain text when done. Read (with offset/limit for a range), not cat or sed, for any file you may edit: the edit is drift-checked against what you read, and a bash read leaves no observation. The harness enforces its walls — an allowlist, a retry guard, an approval gate, a plugin landing zone — and names each refusal; a refusal is final for that call: change the call or ask, never reach the same effect through another tool. Memory is a tool: recall before re-deriving a project fact, learn deliberately what the next session should not re-derive, supersede by id when the code disagrees. Python is a persistent kernel: compute there, don't estimate; a capability you build twice belongs in a plugin."
+	const defaultSystem = "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's working directory, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard, an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. A capability you build twice belongs in a plugin. When the work is done, answer in plain text: what changed, what you verified, what is left."
 	want := defaultSystem + "\n\n" + sessionSection(workDir, scratch) + "\n\n" + global + "\n\n" + jobAgents
 	if sys != want {
 		t.Fatalf("the worker's system message = %q, want the default plus the session section, the global and the job cwd's AGENTS.md (not the session's):\n%q", sys, want)
@@ -1186,14 +1186,6 @@ func TestToolMenuBudgetAndVocabulary(t *testing.T) {
 			if strings.Contains(text, bad) {
 				t.Errorf("%s carries another harness's voice: %q", f.Name, bad)
 			}
-		}
-		if f.Name == "web" {
-			for _, sub := range []string{"compact JSON title/url/snippet", "[TRUNCATED] marker naming the full size"} {
-				if !strings.Contains(f.Description, sub) {
-					t.Errorf("web does not name its reply's shape: %q", sub)
-				}
-			}
-			continue
 		}
 		if !strings.Contains(f.Description, "Guidelines:") {
 			t.Errorf("%s has no Guidelines sentence", f.Name)

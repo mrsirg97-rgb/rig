@@ -27,7 +27,7 @@ func Read() core.Tool { return &readTool{} }
 func (readTool) Name() string { return "read" }
 
 func (readTool) Description() string {
-	return "read (with offset/limit for a range), not cat or sed, for any file you may edit. Guidelines: the edit is drift-checked against what you read and a bash read leaves no observation; diff: true appends the file's git diff against HEAD, or 'no changes' when clean. Reply: the text; a range past the end refuses by name."
+	return "read a file, or a range of it with offset and limit. Guidelines: use read, not cat or sed, for any file you may edit: edit checks the file against what you read, and a bash read leaves no observation. diff: true appends the file's git diff against HEAD. Reply: the text; a range past the end refuses by name."
 }
 
 func (readTool) Schema() json.RawMessage {

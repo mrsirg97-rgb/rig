@@ -16,7 +16,7 @@ func Write() core.Tool { return &writeTool{} }
 func (writeTool) Name() string { return "write" }
 
 func (writeTool) Description() string {
-	return "create or overwrite a file with the full content. Guidelines: new files and whole rewrites; a change inside an existing file -> edit. Reply: the path written; a plugin you author lands in plugins/pending/ for the operator to approve."
+	return "create or overwrite a file with its full content. Guidelines: new files and whole rewrites; for a change inside an existing file use edit. Reply: the path and the bytes written. A plugin you write lands in plugins/pending/ until the operator approves it."
 }
 
 func (writeTool) Schema() json.RawMessage {

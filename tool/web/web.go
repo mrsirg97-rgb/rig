@@ -14,8 +14,11 @@ const DefaultSearXNG = "http://127.0.0.1:8888"
 
 const DefaultProxy = "http://127.0.0.1:8889"
 
-const webDescription = "search \"<query>\" (a local SearXNG; multi-word natural queries, reword once on junk, never for code already in the workspace; reply compact JSON title/url/snippet)\n" +
-	"and fetch <url> (public http(s) as readable text, capped with a [TRUNCATED] marker naming the full size, refetch larger only if the missing part matters; private addresses refused; local files -> read, local services -> bash)."
+const webDescription = "search the web or fetch a page. search takes a query; fetch takes a public http(s) URL. " +
+	"Guidelines: multi-word natural queries; reword once on junk; never for code already in the workspace. " +
+	"fetch reads the page as text; refetch larger only if the missing part matters. Local files are read's, " +
+	"local services are bash's; private addresses refuse. Reply: search gives compact JSON title/url/snippet; " +
+	"fetch gives the text, capped with a [TRUNCATED] marker naming the full size."
 
 const webSchema = `{
 	"type": "object",

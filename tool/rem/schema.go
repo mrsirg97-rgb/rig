@@ -70,9 +70,9 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "memory across sessions: learn commits a fact or constraint (idempotent), recall finds past " +
-	"solutions by intent (project scope first, global fill), reflect stores a distilled memory with its source, " +
-	"prune removes, reduces, or consolidates. Guidelines: recall before re-deriving a project fact; learn " +
-	"deliberately what the next session should not re-derive; supersede by id when the code disagrees; name " +
-	"project when the fact belongs to a repo you did not start in. Reply: the hits with their ids (mN) and " +
-	"strength, or the written row; copy ids, never invent; no query is a browse."
+const description = "memory across sessions. learn commits a fact or constraint, once. recall finds past solutions " +
+	"by intent, project scope first, then global; recall without a query browses. reflect stores a distilled " +
+	"memory with its source. prune removes, reduces, or consolidates. Guidelines: recall before re-deriving a " +
+	"project fact; learn what the next session should not re-derive; supersede by id when the code disagrees; " +
+	"name project when the fact belongs to a repo you did not start in. Reply: the hits with their ids (mN) " +
+	"and strength, or the written row; copy ids, never invent them."
