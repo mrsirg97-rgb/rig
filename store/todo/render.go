@@ -293,9 +293,6 @@ func scopeTag(f *folded) string {
 	if f.label == "" {
 		return ""
 	}
-	if f.notRepo {
-		return "[" + f.label + " (not a repo)] "
-	}
 	return "[" + f.label + "] "
 }
 
@@ -367,9 +364,6 @@ const (
 func renderQueue(f *folded, session string, mode readMode, n int, label string) string {
 	ordered := orderedTaskStates(f)
 	if len(ordered) == 0 {
-		if f.notRepo && label != "" {
-			return fmt.Sprintf("(no tasks in %s's queue, not a repo)", label)
-		}
 		return fmt.Sprintf("(no tasks in %s's queue)", label)
 	}
 	var rows []*taskState

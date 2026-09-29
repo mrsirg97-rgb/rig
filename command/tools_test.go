@@ -419,8 +419,11 @@ func TestTodoProjectCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("todo project unknown: %v", err)
 	}
-	if !strings.Contains(empty, "(no tasks in "+scope.Label(unknown)+"'s queue, not a repo)") {
-		t.Fatalf("an unknown path's empty queue must name its scope and say it is not a repo:\n%s", empty)
+	if !strings.Contains(empty, "(no tasks in "+scope.Label(unknown)+"'s queue)") {
+		t.Fatalf("an unknown path's empty queue must name its workspace:\n%s", empty)
+	}
+	if strings.Contains(empty, "not a repo") {
+		t.Fatalf("an unknown path's empty queue must not carry the not-a-repo decoration:\n%s", empty)
 	}
 
 	reported, err := runCmd(t, "todo", "project", env)

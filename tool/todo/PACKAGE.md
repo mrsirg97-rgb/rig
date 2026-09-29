@@ -7,15 +7,15 @@ the threaded ctx; replies exactly as the store shapes them. The adapter
 owns one question: *whose queue is this call*, answered in a fixed order
 and nowhere else —
 
-1. the `project` field, if given: it resolves the queue (repo scope via
-   `store/scope`, else the directory's own bucket). On a write it then
-   binds the session, once the action succeeded (`→ bound to <label>`);
-   on a `read` it is a peek and the session stays where it was; the
-   `bind` action is the declaration and records whatever the read does;
+1. the `project` field, if given: it resolves the queue (the workspace's
+   scope via `store/scope`, else the directory's own workspace). On a
+   write it then binds the session, once the action succeeded
+   (`→ bound to <label>`); on a `read` it is a peek and the session stays
+   where it was; the `bind` action is the declaration and records
+   whatever the read does;
 2. else the session's recorded binding (`session_project`);
-3. else the launch directory, when it is a repo;
-4. else the launch directory's bucket, where a write refuses with the
-   rule and a read answers labelled.
+3. else the launch directory's own workspace: inside a repo that is the
+   repo's queue, outside one the directory's, and writes land there.
 
 `~` is expanded at the `middleware/paths` boundary. Nothing is inferred
 from the paths a call names: a session that reads three repos keeps its
@@ -47,17 +47,17 @@ plan in one queue.
   requires: "gate"}` links t2 to t1. `null` clears an existing link.
 - `project` is resolved through `store/todo.ProjectOf` (`scope.Key`/
   `scope.Label` inside): a subdirectory and a second worktree reach the
-  repo's one queue, a non-repo directory its own bucket. Naming it on a
+  repo's one queue, a non-repo directory its own workspace. Naming it on a
   write binds the session — so a session launched in `~` can work one
-  repo's queue by naming it once — while naming it on a read just reads:
-  an agent glancing at a neighbour's queue does not move its own plan. A
-  failed write changes nothing, the binding included; `bind` with no
-  project reports where the queue is and touches nothing.
-- Outside a repo a bare write refuses (`todo: no project: … is not a
-  repo …`) rather than quietly filling a bucket every session on that
-  directory shares; reads stay open. A session with no id at all (`anon`)
-  binds nothing: the attribution is shared, so a binding under it would
-  leak one caller's project onto another's.
+  workspace's queue by naming it once — while naming it on a read just
+  reads: an agent glancing at a neighbour's queue does not move its own
+  plan. A failed write changes nothing, the binding included; `bind` with
+  no project reports where the queue is and touches nothing.
+- Outside a repo a bare write lands in the directory's own workspace:
+  every session started there shares the queue, and claim is the door. A
+  session with no id at all (`anon`) binds nothing: the attribution is
+  shared, so a binding under it would leak one caller's project onto
+  another's.
 - `prune` is the door for the done rows the summary keeps counting; the
   log keeps them.
 - Complete on your own unclaimed pending task implicitly claims and

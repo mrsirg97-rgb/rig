@@ -655,11 +655,11 @@ scheduler repair [id]           re-derive a drifting job's crontab line
   decision). With a path it binds the session to that project's queue and
   renders it — `→ bound to <label>`, or `→ bound to <label> (was <old>)`
   when the binding moves — and with nothing it reports where the queue is
-  and touches nothing (`queue: <label> (bound)`). A path that is not a
+  and touches nothing (`queue: <label> (bound)`, or `queue: <label>
+  (this workspace; not bound)` before one). A path that is not a
   directory refuses `todo: no such project directory: <path>`; an empty
-  queue renders `(no tasks in <label>'s queue)`, with `, not a repo` on a
-  bucket minted from a directory that is not one: the empty reply names
-  the scope it read (SPEC_CORE).
+  queue renders `(no tasks in <label>'s queue)`: the empty reply names
+  the workspace it read (SPEC_CORE).
 - `todo <path> <verb…>` is the same door in the other order: a first
   field that is not one of the tool's verbs is the project, and what
   follows parses by the verb rules below (`todo ~/Projects/rig start t3`,

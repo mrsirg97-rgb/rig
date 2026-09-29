@@ -1,4 +1,26 @@
 # Changelog
+## [2.1.8]: the workspace vocabulary and the cwd bucket
+
+The todo tool refused every write when the session's cwd was not in a
+git repo (`no project: … is not a repo, so its queue is shared by every
+session started there`), though the store beneath it already keys a
+non-repo directory by its path and serves it — the same queue a
+`project: "~"` write reaches — and every repo queue is shared by every
+session in it too, with `claim` as the door. The refusal guarded
+nothing. A non-repo cwd is now its own workspace keyed by its path, and
+writes land there; the `(not a repo)` decoration is gone from the queue
+head, the empty reply, and the unknown-id refusal; and the bind report
+says `queue: <label> (this workspace; not bound)` when unbound and
+`queue: <label> (bound)` when bound. The vocabulary the model reads is
+now one set: a workspace is the directory the session runs in, resolved
+to the repo root when inside one (worktrees keep sharing), and project
+is the field that binds the session to another workspace, given as a
+path. The todo and rem descriptions, the project field descriptions in
+both schemas, and the session line (`The session's workspace is <cwd>`)
+say so; the 2.1.7 name-project sentence and its two tests are gone, and
+`OutsideRepo` stays in the store and the binding table with nothing
+rendering it.
+
 ## [2.1.7]: the session line and the idempotent todo
 
 The session line named the cwd and the home but never said whether the

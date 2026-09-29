@@ -74,11 +74,7 @@ func (a adapter) resolve(ctx context.Context, g given, session string) (target, 
 			return target{}, fmt.Errorf("todo: no working directory: %v", err)
 		}
 		p = todostore.ProjectOf(wd)
-		if p.OutsideRepo {
-			source = srcHost
-		} else {
-			source = srcCwd
-		}
+		source = srcCwd
 	}
 	t := target{p: p, session: session, named: named, source: source}
 	if named && todostore.RealSession(session) {
@@ -97,14 +93,10 @@ func (a adapter) report(ctx context.Context, session string) (string, error) {
 		return "", err
 	}
 	p, source := t.p, t.source
-	switch source {
-	case srcBinding:
+	if source == srcBinding {
 		return "queue: " + p.Label + " (bound)", nil
-	case srcCwd:
-		return "queue: " + p.Label + " (this directory's repo; not bound: name project)", nil
-	default:
-		return "queue: " + p.Label + " (this directory is not a repo; not bound: todo project <path>)", nil
 	}
+	return "queue: " + p.Label + " (this workspace; not bound)", nil
 }
 
 func isWrite(action string) bool {

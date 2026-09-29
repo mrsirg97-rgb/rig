@@ -210,9 +210,9 @@ does not announce a move it did not make, and a write that failed does not
 announce one it did not keep — the note is a record, not an echo of the
 argument.
 
-Every reply names its queue (`[rig] 3/7 done · next: t4`), and a bucket
-minted from a directory that is not a repo says so
-(`[ng (not a repo)]`). A session can be two projects away from the queue
+Every reply names its queue (`[rig] 3/7 done · next: t4`); a workspace
+outside a repo is its own queue like any other (`[ng]`). A session can be
+two workspaces away from the queue
 it is reading; a reply that could be read two ways carries the word that
 picks one (SPEC_CORE's naming rule, extended).
 

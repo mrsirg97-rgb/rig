@@ -60,23 +60,22 @@ const schemaJSON = `{
 		},
 		"project": {
 			"type": "string",
-			"description": "the queue's project as a directory: it binds the session, whose later bare verbs then act there (worktree-safe; ~ expands)"
+			"description": "another workspace, as a path: it binds the session, whose later bare verbs then act there (worktree-safe; ~ expands)"
 		}
 	}
 }`
 
-const description = "The task queue for this repo. Guidelines: for any job of three or more steps, create the tasks " +
+const description = "The task queue for this workspace. Guidelines: for any job of three or more steps, create the tasks " +
 	"before the first edit, start one before working on it, complete or fail it when done, and leave the queue " +
 	"empty at the end. read shows what is open. note attaches a finding to a task. claim takes the next task " +
 	"nothing waits for, when other sessions share the queue. requires links a task to one it waits for; blocks " +
 	"links it to one that waits for it; in one create, a link may name a sibling task's exact text. Task ids " +
 	"(tN) come from the tool's replies: copy them, never invent " +
-	"them. Set project only when the repo differs from the one you started in. " +
-	"Reply: the affected row and the queue's summary, named by its repo ([rig])."
+	"them. Set project only when the work is in a different workspace than the one you started in. " +
+	"Reply: the affected row and the queue's summary, named by its workspace ([rig])."
 
 const (
 	srcProject = "project"
 	srcBinding = "binding"
 	srcCwd     = "cwd"
-	srcHost    = "host"
 )

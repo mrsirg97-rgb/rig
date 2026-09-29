@@ -70,8 +70,8 @@ drops done only, and the summary counts review rows (`· N in review`).
   per-status counts, read-only) — the swarm's brief and status band
   never parse the rendered reply.
 - `binding.go`: which queue a session works in. `ProjectOf(dir)` mints a
-  `Project` from a directory (abs first: one place must not have two
-  bucket keys), `Bind`/`BindingOf` record and read a session's binding in
+  `Project` from a directory (abs first: one workspace must not have two
+  keys), `Bind`/`BindingOf` record and read a session's binding in
   `session_project`, `RealSession` says whether a session can hold one
   (the anonymous attribution a threadless call gets is shared by every
   anonymous caller, so a binding recorded under it would leak one
@@ -79,7 +79,7 @@ drops done only, and the summary counts review rows (`· N in review`).
   is inert, not an error: an unthreaded verb still works, it just cannot
   carry a binding forward. Inside a repo the queue's label is the common
   dir's own base, so a session in a subdirectory or a second worktree
-  names the project it is in, not the folder it started in; a bare repo's
+  names the workspace it is in, not the folder it started in; a bare repo's
   common dir is the repo root itself, so the name is the root's own base.
   The binding is mutable state beside the log: the log decides what a
   queue holds, the binding only which queue a call touches.
@@ -155,10 +155,11 @@ drops done only, and the summary counts review rows (`· N in review`).
   id, and notes and show work on any id.
 - One store, every row scoped: `FilePath(home)` is the one `todo.sqlite`,
   and every operation takes a `Project{Key, Label, OutsideRepo}`: the
-  queue's identity (the repo's scope, `store/scope`, or the cwd hash
-  outside a repo), its display label, and whether that hash is a bucket
-  rather than a project. The store does not decide which project a call
-  means; the caller resolves it (the tool holds the order, the
+  queue's identity (the workspace's scope, `store/scope`, or the cwd hash
+  outside a repo), its display label, and whether that hash belongs to a
+  non-repo directory — the flag lives on in the store and the binding
+  table, nothing renders it. The store does not decide which project a
+  call means; the caller resolves it (the tool holds the order, the
   `session_project` table holds a session's answer). Ids stay `tN` per
   scope; minted event seq is one sequence across scopes; compact folds
   and stale footers are per scope. The compact snapshot carries the
@@ -169,10 +170,10 @@ drops done only, and the summary counts review rows (`· N in review`).
   existed reports neither and 0 means "keep minting from what is here":
   the mint skips the ids the snapshot still holds, which is the
   pre-counter behaviour.
-- Every summary names its queue (`[rig] 2/5 done · next: t3`, or
-  `[ng (not a repo)]` for a bucket), and the empty reply says so too: a
-  reply that could be read as two different queues carries the word that
-  picks one (SPEC_CORE).
+- Every summary names its queue (`[rig] 2/5 done · next: t3`; a
+  workspace outside a repo is `[ng]` like any other), and the empty reply
+  says so too: a reply that could be read as two different queues carries
+  the word that picks one (SPEC_CORE).
 - `Prune` drops the done rows and is itself an event, so a replay drops
   the same rows and a later compact snapshot carries only what survived;
   failed rows stay (they still ask for a retry) and an idle prune appends
