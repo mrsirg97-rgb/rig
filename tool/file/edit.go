@@ -24,7 +24,7 @@ func Edit() core.Tool { return &editTool{} }
 func (editTool) Name() string { return "edit" }
 
 func (editTool) Description() string {
-	return "replace one occurrence of old with new in a file. Guidelines: read the file first, then put enough of it in old to match exactly once. A file you did not read this session, an old that matches never or more than once, or a file changed since your read, refuses by name. Reply: the path and the bytes replaced."
+	return "Replaces one occurrence of old with new in a file. Guidelines: read the file first, then put enough of it in old to match exactly once. The call refuses, naming why, when you did not read the file this session, when old matches never or more than once, or when the file changed since your read. Reply: the path and the bytes replaced."
 }
 
 func (editTool) Schema() json.RawMessage {

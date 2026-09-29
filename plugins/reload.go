@@ -174,7 +174,7 @@ func NewEcosystem(home string, natives map[string]bool, k Kernel, swap func(ctx 
 func (e *Ecosystem) Name() string { return "plugins" }
 
 func (e *Ecosystem) Description() string {
-	return "the plugin ecosystem: {\"action\": \"list\"|\"create\"|\"delete\"|\"reload\", ...}. list shows the loaded and the skipped; create <name, source> writes a new plugin into plugins/pending/; delete <name> moves a loaded plugin into plugins/disabled/; reload re-runs the discovery over plugins/. Guidelines: a created plugin lands in plugins/pending/ untrusted — the operator installs it with /plugins approve. Reply: the listing, the write/disable, or the discovery's list — loaded, and skipped with reasons."
+	return "The plugin ecosystem: {\"action\": \"list\"|\"create\"|\"delete\"|\"reload\", ...}. list shows the loaded and the skipped; create writes a new plugin from name and source into plugins/pending/; delete moves a loaded plugin into plugins/disabled/; reload re-runs discovery over plugins/. Guidelines: a created plugin lands in plugins/pending/ untrusted, and the operator installs it with /plugins approve. Reply: the listing, the write or the disable, or the discovery's list: loaded, and skipped with reasons."
 }
 
 func (e *Ecosystem) Schema() json.RawMessage {

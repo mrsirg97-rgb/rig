@@ -450,11 +450,11 @@ func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
 	has(t, w.Description(), "search takes a query")
 	has(t, w.Description(), "fetch takes a public http(s) URL")
 	has(t, w.Description(), "multi-word natural queries")
-	has(t, w.Description(), "never for code already in the workspace")
+	has(t, w.Description(), "never search for code already in the workspace")
 	has(t, w.Description(), "compact JSON title/url/snippet")
-	has(t, w.Description(), "[TRUNCATED] marker naming the full size")
+	has(t, w.Description(), "[TRUNCATED] marker that names the full size")
 	has(t, w.Description(), "private addresses refuse")
-	has(t, w.Description(), "local services are bash's")
+	has(t, w.Description(), "local services to bash")
 }
 
 func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {
