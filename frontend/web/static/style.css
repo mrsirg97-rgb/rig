@@ -325,6 +325,8 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 
 @media (max-width: 720px) {
   #side { display: none; }
+  main { padding-top: calc(18px + env(safe-area-inset-top, 0px)); }
+  main.chat { padding-top: env(safe-area-inset-top, 0px); }
   .app { flex-direction: column; }
   main { padding: 12px 12px 24px; }
   main.chat { padding: 0; }
