@@ -38,6 +38,13 @@ plan in one queue.
 
 - Replies are the store's shapes, verbatim: the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
+- The link fields are `id (tN) | exact text | null`; an empty string is
+  the same as omitting the field (no edge, no refusal), because a model
+  filling every field with `requires: ""` was refused with `not found`
+  and then believed a link needed a second call. A link may name a
+  sibling task's exact text in the same create: `resolveDep` runs over
+  the batch, so one create of `{text: "gate"}` and `{text: "work",
+  requires: "gate"}` links t2 to t1. `null` clears an existing link.
 - `project` is resolved through `store/todo.ProjectOf` (`scope.Key`/
   `scope.Label` inside): a subdirectory and a second worktree reach the
   repo's one queue, a non-repo directory its own bucket. Naming it on a

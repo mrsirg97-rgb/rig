@@ -1,4 +1,22 @@
 # Changelog
+## [2.1.6]: the link fill and the API reply
+
+The todo tool treated any string in `requires` or `blocks` as a link
+target, so a create carrying `requires: ""` or `blocks: ""` (a model
+filling every field) refused with `'' not found`, and the model then
+believed a link needed a second call — though `requires` takes the exact
+text of a sibling task in the same create. An empty string is now the
+same as omitting the field: no link, no refusal. The schema's two link
+descriptions end with "omit when none", and the todo description's
+links sentence names the one-create sibling rule. `web fetch` returned
+a JSON body as raw text up to the cap, so a 77 KB API reply was
+unreadable and the model fell back to curl and jq. A JSON response (the
+content type, or a body that parses) now comes back as one shape line
+first — the top-level type, its keys, each array's length and its
+first element's shape — then the compacted JSON, both under the same
+cap and [TRUNCATED] marker; the fetch sentence says an API reply comes
+back as its shape and a head.
+
 ## [2.1.5]: the notch, for real
 
 2.1.3 put the top safe-area inset on the main column in the phone

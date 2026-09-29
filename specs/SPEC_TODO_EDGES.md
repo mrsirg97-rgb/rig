@@ -7,6 +7,9 @@ exact text | null`, one edge per field from the row's point of view.
 `requires tN`: I cannot start until tN is done. `blocks tN`: tN cannot
 complete until I am done. `dependsOn` is renamed; old payloads (create
 events and compact snapshots) fold as `requires` at replay, verbatim.
+An empty string is the same as omitting the field: no edge, no refusal
+(a model filling every field does not invent a link to ""); `null`
+clears an existing link (amended 2.1.6).
 
 - `blocked(t)` = t.requires unfinished OR any task with blocks == t
   unfinished. Unfinished is pending, in_progress, review, failed: the

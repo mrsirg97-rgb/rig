@@ -135,7 +135,9 @@ func (f *fetch) exec(ctx context.Context, raw string, maxC, timeoutMs int) (stri
 	}
 
 	var readable string
-	if htmlishRE.MatchString(fetched.ContentType) {
+	if reply, ok := jsonReply(fetched); ok {
+		readable = reply
+	} else if htmlishRE.MatchString(fetched.ContentType) {
 		var note string
 		readable, note = ExtractReadable(cctx, fetched.Body, &f.traf)
 		if note != "" {

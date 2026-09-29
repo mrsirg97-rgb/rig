@@ -31,7 +31,9 @@ func itemsOf(tasks []map[string]any) ([]todostore.CreateItem, error) {
 				case nil:
 					link.set(&item, true)
 				case string:
-					link.ptr(&item, &dep)
+					if dep != "" {
+						link.ptr(&item, &dep)
+					}
 				default:
 					return nil, fmt.Errorf("todo: tasks[].%s must be a task id, exact text, or null", link.key)
 				}

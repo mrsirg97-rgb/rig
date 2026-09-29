@@ -184,6 +184,67 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 	}
 }
 
+func TestEmptyRequiresOrBlocksIsNoLink(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "gate", "requires": "", "blocks": ""},
+		map[string]any{"text": "work", "requires": "", "blocks": ""},
+	}})
+	if err != nil {
+		t.Fatalf("an empty link must be the same as omitting the field, got: %v", err)
+	}
+	if strings.Contains(reply, "\u00b7 requires") || strings.Contains(reply, "\u00b7 blocks") {
+		t.Fatalf("empty links must create no edges:\n%s", reply)
+	}
+	if !strings.Contains(reply, "next: t1") {
+		t.Fatalf("an empty link must not block the queue:\n%s", reply)
+	}
+}
+
+func TestSiblingTextLinkResolvesInOneCreate(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "gate"},
+		map[string]any{"text": "work", "requires": "gate"},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if !strings.Contains(reply, "\u00b7 requires t1") {
+		t.Fatalf("a sibling's exact text must resolve to its id in the same create:\n%s", reply)
+	}
+	if !strings.Contains(reply, "next: t1") {
+		t.Fatalf("the linked task must not be the next:\n%s", reply)
+	}
+}
+
+func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	if d := tool.Description(); !strings.Contains(d, "in one create, a link may name a sibling task's exact text") {
+		t.Fatalf("the description misses the one-create sibling-link sentence: %q", d)
+	}
+	var s struct {
+		Properties map[string]struct {
+			Items struct {
+				Properties map[string]struct {
+					Description string `json:"description"`
+				} `json:"properties"`
+			} `json:"items"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema(), &s); err != nil {
+		t.Fatalf("schema: %v", err)
+	}
+	for _, key := range []string{"requires", "blocks"} {
+		desc := s.Properties["tasks"].Items.Properties[key].Description
+		if !strings.HasSuffix(desc, "omit when none") {
+			t.Fatalf("%s description must end with 'omit when none': %q", key, desc)
+		}
+	}
+}
+
 func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sessA := core.NewSession()

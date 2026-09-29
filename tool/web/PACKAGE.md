@@ -46,6 +46,15 @@ client, no new venv.
   deadline, and the subprocess has a one-second `WaitDelay`, so a
   trafilatura child's orphaned grandchildren cannot hold the output
   pipes past the deadline.
+- A JSON reply (the content type, or a body that parses) comes back as
+  one shape line then the compacted JSON, both under the same `maxChars`
+  cap and `[TRUNCATED]` marker: a 77 KB API reply was raw text, and the
+  model fell back to curl and jq. The shape names the top-level type,
+  its keys, each array's length and its first element's shape
+  (`shape: object{count: number, results: array[2] of object{title:
+  string}}`); a body that the content type calls JSON but
+  that does not parse (a truncated download) falls back to the raw text
+  unchanged.
 - An empty `WebFetchProxy`/`Trafilatura` is a choice (direct egress / the
   stdlib text pass), not an unset.
 - One name means one gate: there is no way to allow `search` while
