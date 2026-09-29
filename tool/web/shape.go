@@ -11,18 +11,9 @@ import (
 func JSONShape(v any) string {
 	switch t := v.(type) {
 	case map[string]any:
-		keys := make([]string, 0, len(t))
-		for k := range t {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		parts := make([]string, 0, len(keys))
-		for _, k := range keys {
-			parts = append(parts, k+": "+valueShape(t[k]))
-		}
-		return "object{" + strings.Join(parts, ", ") + "}"
+		return shapeObject(t)
 	case []any:
-		return fmt.Sprintf("array[%d]", len(t))
+		return shapeArray(t)
 	case nil:
 		return "null"
 	case string:
@@ -36,12 +27,33 @@ func JSONShape(v any) string {
 	}
 }
 
+func shapeObject(t map[string]any) string {
+	keys := make([]string, 0, len(t))
+	for k := range t {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+": "+valueShape(t[k]))
+	}
+	return "object{" + strings.Join(parts, ", ") + "}"
+}
+
+func shapeArray(t []any) string {
+	s := fmt.Sprintf("array[%d]", len(t))
+	if len(t) > 0 {
+		s += " of " + valueShape(t[0])
+	}
+	return s
+}
+
 func valueShape(v any) string {
 	switch t := v.(type) {
 	case []any:
-		return fmt.Sprintf("array[%d]", len(t))
+		return shapeArray(t)
 	case map[string]any:
-		return "object"
+		return shapeObject(t)
 	case nil:
 		return "null"
 	case string:

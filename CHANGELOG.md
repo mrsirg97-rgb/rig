@@ -12,9 +12,10 @@ links sentence names the one-create sibling rule. `web fetch` returned
 a JSON body as raw text up to the cap, so a 77 KB API reply was
 unreadable and the model fell back to curl and jq. A JSON response (the
 content type, or a body that parses) now comes back as one shape line
-first — the top-level type, its keys, each array's length — then the
-compacted JSON, both under the same cap and [TRUNCATED] marker; the
-fetch sentence says an API reply comes back as its shape and a head.
+first — the top-level type, its keys, each array's length and its
+first element's shape — then the compacted JSON, both under the same
+cap and [TRUNCATED] marker; the fetch sentence says an API reply comes
+back as its shape and a head.
 
 ## [2.1.5]: the notch, for real
 

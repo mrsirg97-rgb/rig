@@ -25,8 +25,9 @@ net, os/exec; no third-party Go client.
   web-tools compose's tinyproxy) with the unreachable-proxy fix-it voice.
 - JSON replies are shaped (amended 2.1.6): a response whose content type
   is JSON, or whose body parses as JSON, comes back as one shape line
-  (the top-level type, its keys, each array's length) then the
-  compacted JSON, both under the same maxChars cap and [TRUNCATED]
+  (the top-level type, its keys, each array's length and its first
+  element's shape) then the compacted JSON, both under the same
+  maxChars cap and [TRUNCATED]
   marker; a body the content type calls JSON but that does not parse
   (a truncated download) falls back to the raw text unchanged.
 - Extraction: trafilatura as a documented external (pane's own mechanism),
@@ -214,10 +215,11 @@ truncation markers) are unchanged.
   fell back to curl and jq. A response whose content type is JSON, or
   whose body parses as JSON, now comes back as one shape line then the
   compacted JSON, both under the same maxChars cap and [TRUNCATED]
-  marker: the shape names the top-level type, its keys, and each
-  array's length, so the model sees `shape: object{count: number,
-  results: array[2]}` and the head of the data, and parses the rest in
-  python or bash. Detection is the content type or the parse: a JSON
+  marker: the shape names the top-level type, its keys, each array's
+  length and its first element's shape, so the model sees `shape:
+  object{count: number, results: array[2] of object{title: string}}`
+  and the head of the data, and parses the rest in python or bash.
+  Detection is the content type or the parse: a JSON
   body under a plain content type is still shaped, while a body the
   content type calls JSON but that does not parse (a truncated
   download) falls back to the raw text unchanged — fail closed, the
@@ -293,7 +295,8 @@ rig-side named cases (the port's own surface):
 - an unreachable proxy names itself and the fix
 - the trafilatura fallback is announced in the content (rig over pane)
 - trafilatura resolution: shared venv first, then PATH, explicit wins
-- jsonShape names the top-level type, its keys, and each array's length
+- jsonShape names the top-level type, its keys, each array's length and
+  its first element's shape
 - a JSON fetch reply is the shape line then the compacted JSON
 - a JSON body under a plain content type is still shaped
 - a non-JSON body passes through unchanged

@@ -458,11 +458,13 @@ func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
 	has(t, w.Description(), "local services to bash")
 }
 
-func TestJSONShapeNamesTopLevelTypeKeysAndArrayLengths(t *testing.T) {
+func TestJSONShapeNamesTypeKeysAndArrayRecords(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{`{"a":[1,2],"b":{"c":3},"d":"x","e":true,"f":null}`,
-			"object{a: array[2], b: object, d: string, e: boolean, f: null}"},
-		{`[{"x":1},{"x":2}]`, "array[2]"},
+			"object{a: array[2] of number, b: object{c: number}, d: string, e: boolean, f: null}"},
+		{`[{"x":1},{"x":2}]`, "array[2] of object{x: number}"},
+		{`{"results":[{"title":"a","tags":["x","y"]}]}`,
+			"object{results: array[1] of object{tags: array[2] of string, title: string}}"},
 		{`"hello"`, "string"},
 		{`42`, "number"},
 		{`true`, "boolean"},
@@ -495,7 +497,7 @@ func TestJSONFetchReplyIsShapeThenCompact(t *testing.T) {
 	if !found {
 		t.Fatalf("the reply must lead with the shape line, got %q", content)
 	}
-	if shape != "shape: object{count: number, results: array[2]}" {
+	if shape != "shape: object{count: number, results: array[2] of object{title: string}}" {
 		t.Fatalf("shape line = %q", shape)
 	}
 	if compact != `{"count":2,"results":[{"title":"a"},{"title":"b"}]}` {
@@ -517,7 +519,7 @@ func TestJSONBodyWithoutJSONContentTypeIsShaped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if content != "shape: array[3]\n[1,2,3]" {
+	if content != "shape: array[3] of number\n[1,2,3]" {
 		t.Fatalf("a JSON body must be shaped even under a plain content type, got %q", content)
 	}
 }
@@ -560,7 +562,7 @@ func TestJSONReplyIsCappedUnderTheSameMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(content, "shape: object{items: array[1000]}") {
+	if !strings.HasPrefix(content, "shape: object{items: array[1000] of object{i: number}}") {
 		t.Fatalf("the shape line must lead even when capped: %q", content)
 	}
 	if !strings.Contains(content, "[TRUNCATED: showing 200 of ") {
