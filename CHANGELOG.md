@@ -1,4 +1,13 @@
 # Changelog
+## [2.1.5]: the notch, for real
+
+2.1.3 put the top safe-area inset on the main column in the phone
+layout, and two rules further down the same block reset the padding
+shorthand and took it back, so the installed app still started under
+the notch. The inset now lives in the rules that apply, and a test reads
+the last main rules in the phone block and refuses a version that drops
+it.
+
 ## [2.1.4]: the approve update
 
 An approve of a name that is already installed was a refusal (the
@@ -7,7 +16,6 @@ forge). It is an update now: both doors rename the pending file over
 the installed one, one atomic rename, no refusal, no flag, and the
 reply names the replacement. The page's "approve with replace" button
 is gone with the 409.
-
 ## [2.1.3]: the notch
 
 The top safe-area inset lived on the sidebar, and the sidebar is hidden
