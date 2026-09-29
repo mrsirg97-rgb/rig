@@ -738,8 +738,11 @@ theme, the workspace picker, and the install note. Two palettes ship,
 `warm` (the TUI's oled table) and `cool` (orbit's), as `data-theme`
 tokens remembered in the browser. The page carries a web manifest, the
 Apple meta tags, and the home-screen icons, so "add to home screen"
-installs it full-screen beside the other apps with the token cookie
-kept; a native wrapper (Capacitor) is the same page plus one allowed
+installs it full-screen beside the other apps and stays signed in: the
+cookie lives 90 days, and the manifest is served per request with the
+token in its `start_url`, since a home-screen app on iOS opens in its own
+cookie jar and launches at that URL, so the gate sets the cookie again on
+the first open (19); a native wrapper (Capacitor) is the same page plus one allowed
 origin, a later line, not a rewrite. The stores' views are unchanged in
 substance; sessions gain `resume` (a `/sessions resume <id>` through
 the chat) and `new session`, models gain `switch` and the effort dial
@@ -747,6 +750,21 @@ the chat) and `new session`, models gain `switch` and the effort dial
 `/api/swarm` with start and stop through `/swarm`, and the todo render
 parses the scoped head, the review marker, and a lone task row (the
 1.7.2 and 1.7.4 shapes).
+
+### 19. The install signs itself in.
+
+A home-screen app on iOS opens in its own cookie jar and launches at the
+manifest's `start_url`, so a manifest that says `/` lands the install on
+401 with nothing to hand the gate. The manifest is therefore served per
+request, not as a static file: the same document with the token in its
+`start_url`, `Cache-Control: no-store`, and the `<link rel="manifest">`
+fetched with credentials so the gate admits the request. The cookie the
+gate sets lives 90 days rather than the browser session. Nothing else
+changes: the token is the one already in the operator's URL, the page it
+launches is the same page, and a stale token in an old install is a 401
+that the next `?token=` open repairs. Cases: the manifest body carries
+`"start_url": "/?token=<the token>"`; the cookie the `?token=` open sets
+carries `Max-Age`.
 
 ### testing
 

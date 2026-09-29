@@ -14,6 +14,7 @@ import (
 const (
 	tokenFileName = "serve.token"
 	cookieName    = "rig_serve"
+	cookieMaxAge  = 90 * 24 * 60 * 60
 )
 
 func tokenPath(home string) string {
@@ -92,6 +93,7 @@ func gate(token string, next http.Handler) http.Handler {
 				Path:     "/",
 				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
+				MaxAge:   cookieMaxAge,
 			})
 		}
 		next.ServeHTTP(w, r)
