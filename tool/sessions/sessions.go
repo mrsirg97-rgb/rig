@@ -37,8 +37,8 @@ const schemaJSON = `{
 	}
 }`
 
-const description = "the session store: list sessions, or summary the vitals (models, faults, cache " +
-	"ratio); an older store is migrated on open. Guidelines: this workspace by default, or project and n. Reply: a line per session, or " +
+const description = "the session store. list shows sessions; summary shows the vitals: models, faults, cache " +
+	"ratio. Guidelines: this workspace by default; project and n widen it. Reply: a line per session, or " +
 	"the vitals."
 
 type adapter struct {
