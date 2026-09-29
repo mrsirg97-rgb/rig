@@ -24,7 +24,7 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		modified, given, fresh, problems := planCreate(f, items)
 		if len(problems) != 0 {
 			sort.Strings(problems)
-			return "", fmt.Errorf("todo: %s", strings.Join(problems, "; "))
+			return "", fmt.Errorf("todo: %s%s", strings.Join(problems, "; "), linkFormsHint(problems))
 		}
 		note := mergeNote(given, fresh)
 		if len(items) == 0 {

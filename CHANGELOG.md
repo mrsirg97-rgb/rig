@@ -1,4 +1,28 @@
 # Changelog
+## [2.1.9]: positional links
+
+A 4B model planned five steps as one create with `requires: "1"`,
+`requires: "2"`, the numbering it wrote in its own plan. The store
+refused (`requires '1' not found`) without saying what a link is, and
+the model fell back to thirteen single-task creates. Within one
+create, a bare number N is now the task at 1-based position N of that
+call's `tasks`, tried after the id and the exact text: ids are always
+`tN`, so no link that resolved before changes meaning. A position that
+lands on its own task refuses as a self-link, the replay path resolves
+positions from the logged payload and skips a self-link the same way,
+and an unknown link's refusal now ends, once, with the forms a link
+takes: `(a link is tN from a reply, a sibling's exact text, or its
+position in this create)`.
+
+The same session also called `start` and `complete` without an id; the
+verbs keep requiring one. The big models copy the id from the reply
+every time, and a second way to name the same act is the kind of menu
+growth the words pass removed, so that half was left out.
+
+The link fields' descriptions and the tool's one-line link sentence name
+the new form; the three pinned request bodies (`golden_020`) carry them.
+SPEC_TODO_EDGES 1 is amended, named 2.1.9.
+
 ## [2.1.8]: the workspace vocabulary and the cwd bucket
 
 The todo tool refused every write when the session's cwd was not in a

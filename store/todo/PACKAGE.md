@@ -107,7 +107,12 @@ drops done only, and the summary counts review rows (`· N in review`).
   thrown.
 - Positions are minted, never mutated in place: moves are events.
 - Create is the only link-mutation point: the requires/blocks DAG is
-  validated there at the boundary (SPEC_TODO_EDGES).
+  validated there at the boundary (SPEC_TODO_EDGES). A link resolves as
+  an id, then a sibling's or an existing task's exact text, then a bare
+  number as the 1-based position in that create's `tasks` (2.1.9); replay
+  resolves the same way from the logged payload, and a link that lands
+  on its own task is refused as a self-link at create and skipped at
+  replay. An unknown link's refusal ends with the link forms, once.
 - Complete on the caller's own unclaimed pending task implicitly claims
   and submits: start+complete, both events appended, the echo noting the
   auto-start. Foreign-claim and blocked-by-dependency refusals stay.

@@ -9,7 +9,12 @@ complete until I am done. `dependsOn` is renamed; old payloads (create
 events and compact snapshots) fold as `requires` at replay, verbatim.
 An empty string is the same as omitting the field: no edge, no refusal
 (a model filling every field does not invent a link to ""); `null`
-clears an existing link (amended 2.1.6).
+clears an existing link (amended 2.1.6). Within one `create`, a bare
+number N is the task at 1-based position N of that call's `tasks`,
+tried after the id and the exact text: ids are always `tN`, so no link
+that resolved before changes meaning, and a model numbering its own
+plan links it in one call instead of one create per task (amended
+2.1.9).
 
 - `blocked(t)` = t.requires unfinished OR any task with blocks == t
   unfinished. Unfinished is pending, in_progress, review, failed: the
@@ -21,9 +26,11 @@ clears an existing link (amended 2.1.6).
   blocked task stays legal: the board does not stop a session that
   begins prep work, it just refuses the finish.
 - `create` refuses loudly and names the tasks: an unknown link
-  (`requires 'x' not found`), a link to itself (`'x' cannot require
-  itself`), and a cycle through either relation (`links would form a
-  cycle: t1 -> t2 -> t1`). The graph is the waits-for relation:
+  (`requires 'x' not found`, then once per refusal the forms a link
+  takes: `a link is tN from a reply, a sibling's exact text, or its
+  position in this create`), a link to itself by text or position
+  (`'x' cannot require itself`), and a cycle through either relation
+  (`links would form a cycle: t1 -> t2 -> t1`). The graph is the waits-for relation:
   `requires` gives t -> required, `blocks` gives target -> blocker;
   `cyclePath` walks both.
 - Same events, fold, compaction, replay. The compact snapshot carries
