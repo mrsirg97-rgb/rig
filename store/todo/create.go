@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -75,7 +76,9 @@ func (f *folded) applyCreate(e eventRow) {
 	seen := map[string]bool{}
 	preIDs := depPreIDs(f)
 	batchTexts := map[string]*taskState{}
+	order := make([]string, 0, len(items))
 	for _, item := range items {
+		order = append(order, item.text)
 		if item.text == "" || seen[item.text] {
 			continue
 		}
@@ -111,7 +114,7 @@ func (f *folded) applyCreate(e eventRow) {
 			setLink(pr.ts, pr.kind, "")
 			continue
 		}
-		if ref := resolveDep(preIDs, batchTexts, f, pr.ref); ref != "" {
+		if ref := resolveDep(preIDs, batchTexts, order, f, pr.ref); ref != "" && ref != pr.ts.id {
 			setLink(pr.ts, pr.kind, ref)
 		}
 	}
@@ -133,7 +136,7 @@ func depPreIDs(f *folded) map[string]bool {
 	return out
 }
 
-func resolveDep(preIDs map[string]bool, batchTexts map[string]*taskState, f *folded, raw string) string {
+func resolveDep(preIDs map[string]bool, batchTexts map[string]*taskState, order []string, f *folded, raw string) string {
 	if preIDs[raw] {
 		return raw
 	}
@@ -143,7 +146,26 @@ func resolveDep(preIDs map[string]bool, batchTexts map[string]*taskState, f *fol
 	if ts := f.byText(raw); ts != nil {
 		return ts.id
 	}
+	if n, ok := batchPosition(raw, len(order)); ok {
+		if ts, ok := batchTexts[order[n-1]]; ok {
+			return ts.id
+		}
+		if ts := f.byText(order[n-1]); ts != nil {
+			return ts.id
+		}
+	}
 	return ""
+}
+
+func batchPosition(raw string, size int) (int, bool) {
+	if raw == "" || strings.TrimLeft(raw, "0123456789") != "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > size {
+		return 0, false
+	}
+	return n, true
 }
 
 func (f *folded) applyVerb(e eventRow) {
@@ -204,8 +226,10 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fr
 	var refs []depRef
 	seen := map[string]bool{}
 	preIDs := depPreIDs(f)
+	order := make([]string, 0, len(items))
 	for _, item := range items {
 		raw := item.raw()
+		order = append(order, raw.text)
 		if raw.text == "" || seen[raw.text] {
 			continue
 		}
@@ -242,7 +266,11 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fr
 			setLink(dr.ts, dr.kind, "")
 			continue
 		}
-		if dr.dep == dr.text {
+		resolved := ""
+		if dr.dep != dr.text {
+			resolved = resolveDep(preIDs, planned, order, f, dr.dep)
+		}
+		if dr.dep == dr.text || resolved == dr.ts.id {
 			verb := "require"
 			if dr.kind == "blocks" {
 				verb = "block"
@@ -250,7 +278,7 @@ func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fr
 			addOnce(&problems, fmt.Sprintf("'%s' cannot %s itself", dr.text, verb))
 			continue
 		}
-		if resolved := resolveDep(preIDs, planned, f, dr.dep); resolved != "" {
+		if resolved != "" {
 			setLink(dr.ts, dr.kind, resolved)
 			modified = append(modified, dr.ts)
 		} else {
@@ -322,4 +350,15 @@ func cyclePath(f *folded, planned map[string]*taskState) []string {
 		}
 	}
 	return nil
+}
+
+const linkForms = " (a link is tN from a reply, a sibling's exact text, or its position in this create)"
+
+func linkFormsHint(problems []string) string {
+	for _, problem := range problems {
+		if strings.HasSuffix(problem, " not found") {
+			return linkForms
+		}
+	}
+	return ""
 }

@@ -63,15 +63,15 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 			return "", fmt.Errorf("action 'reject' requires a reason")
 		}
 		return todostore.Reject(ctx, a.db, p, g.ID, g.Note, session)
-	case "start", "complete", "fail", "release", "retry":
+	case "start":
+		return todostore.Start(ctx, a.db, p, g.ID, session, bool(a.mode))
+	case "complete":
+		return todostore.Complete(ctx, a.db, p, g.ID, session, bool(a.mode))
+	case "fail", "release", "retry":
 		if g.ID == "" {
 			return "", fmt.Errorf("action '%s' requires id", g.Action)
 		}
 		switch g.Action {
-		case "start":
-			return todostore.Start(ctx, a.db, p, g.ID, session, bool(a.mode))
-		case "complete":
-			return todostore.Complete(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "fail":
 			return todostore.Fail(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "release":

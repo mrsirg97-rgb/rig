@@ -38,13 +38,17 @@ plan in one queue.
 
 - Replies are the store's shapes, verbatim: the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
-- The link fields are `id (tN) | exact text | null`; an empty string is
-  the same as omitting the field (no edge, no refusal), because a model
-  filling every field with `requires: ""` was refused with `not found`
-  and then believed a link needed a second call. A link may name a
+- The link fields are `id (tN) | exact text | position | null`; an empty
+  string is the same as omitting the field (no edge, no refusal), because
+  a model filling every field with `requires: ""` was refused with `not
+  found` and then believed a link needed a second call. A link may name a
   sibling task's exact text in the same create: `resolveDep` runs over
   the batch, so one create of `{text: "gate"}` and `{text: "work",
-  requires: "gate"}` links t2 to t1. `null` clears an existing link.
+  requires: "gate"}` links t2 to t1. A bare number is the sibling's
+  1-based position in that create, tried last (2.1.9): a small model
+  numbering its plan wrote `requires: "1"`, was refused, and fell back to
+  one create per task. The `not found` refusal names the link forms once.
+  `null` clears an existing link.
 - `project` is resolved through `store/todo.ProjectOf` (`scope.Key`/
   `scope.Label` inside): a subdirectory and a second worktree reach the
   repo's one queue, a non-repo directory its own workspace. Naming it on a
@@ -73,6 +77,11 @@ plan in one queue.
   this session (or unowned) reply with the echo a fresh call would give
   — the row and the queue summary — no error, no event. A foreign start
   of an owned task still refuses naming the claimer.
+- Start and complete take no id (2.1.9): start picks `next`, complete
+  the one task this session holds in progress; the store resolves the
+  pick inside its transaction and refuses naming why when there is not
+  exactly one. Fail, release, and retry keep the `requires id` guard at
+  the seam.
 - The Worker-mode board door is at the tool's seam: the six
   board-transition verbs refuse there, so the store's own arms (the
   swarm controller calls the store directly) stay as they are and the

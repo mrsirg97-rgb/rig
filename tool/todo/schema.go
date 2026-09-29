@@ -21,18 +21,18 @@ const schemaJSON = `{
 					},
 					"requires": {
 						"type": ["string", "null"],
-						"description": "Task id (tN) or exact text this task cannot start until done; null clears the link; omit when none"
+						"description": "Task id (tN), exact text, or position in this create that this task cannot start until done; null clears the link; omit when none"
 					},
 					"blocks": {
 						"type": ["string", "null"],
-						"description": "Task id (tN) or exact text that cannot complete until this task is done; null clears the link; omit when none"
+						"description": "Task id (tN), exact text, or position in this create that cannot complete until this task is done; null clears the link; omit when none"
 					}
 				}
 			}
 		},
 		"id": {
 			"type": "string",
-			"description": "The task, as tN from a reply. Required for every action but create and read."
+			"description": "The task, as tN from a reply. Required for every action but create and read; start without id takes next, complete without id finishes the one task you have in progress."
 		},
 		"note": {
 			"type": "string",
@@ -69,7 +69,7 @@ const description = "The task queue for this workspace. Guidelines: for any job 
 	"before the first edit, start one before working on it, complete or fail it when done, and leave the queue " +
 	"empty at the end. read shows what is open. note attaches a finding to a task. claim takes the next task " +
 	"nothing waits for, when other sessions share the queue. requires links a task to one it waits for; blocks " +
-	"links it to one that waits for it; in one create, a link may name a sibling task's exact text. Task ids " +
+	"links it to one that waits for it; in one create, a link may name a sibling task's exact text or its position. Task ids " +
 	"(tN) come from the tool's replies: copy them, never invent " +
 	"them. Set project only when the work is in a different workspace than the one you started in. " +
 	"Reply: the affected row and the queue's summary, named by its workspace ([rig])."

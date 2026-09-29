@@ -24,7 +24,7 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		modified, given, fresh, problems := planCreate(f, items)
 		if len(problems) != 0 {
 			sort.Strings(problems)
-			return "", fmt.Errorf("todo: %s", strings.Join(problems, "; "))
+			return "", fmt.Errorf("todo: %s%s", strings.Join(problems, "; "), linkFormsHint(problems))
 		}
 		note := mergeNote(given, fresh)
 		if len(items) == 0 {
@@ -61,7 +61,11 @@ func mergeNote(given, fresh int) string {
 }
 
 func Start(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
-	return verb(ctx, db, p, session, id, func(f *folded, ts *taskState) (ok, noop bool, voice string) {
+	pick := fixedID(id)
+	if id == "" {
+		pick = nextReady
+	}
+	return verbOn(ctx, db, p, session, pick, func(id string, f *folded, ts *taskState) (ok, noop bool, voice string) {
 		switch ts.status {
 		case statusPending:
 			if worker {
@@ -80,7 +84,33 @@ func Start(ctx context.Context, db store.DB, p Project, id, session string, work
 		default:
 			return false, false, "'" + id + "' failed; retry it first"
 		}
-	}, "start", statusActive, "'"+id+"' started")
+	}, "start", statusActive, func(id string) string { return "'" + id + "' started" })
+}
+
+func nextReady(f *folded) (string, error) {
+	for _, ts := range orderedTaskStates(f) {
+		if ts.status == statusPending && len(blockedBy(f, ts)) == 0 {
+			return ts.id, nil
+		}
+	}
+	return "", fmt.Errorf("nothing to start: no pending task is ready (name one as id)")
+}
+
+func ownInProgress(f *folded, session string) (string, error) {
+	var ids []string
+	for _, ts := range orderedTaskStates(f) {
+		if ts.status == statusActive && ts.owner == session {
+			ids = append(ids, ts.id)
+		}
+	}
+	switch len(ids) {
+	case 1:
+		return ids[0], nil
+	case 0:
+		return "", fmt.Errorf("nothing in progress for this session (name the task as id)")
+	default:
+		return "", fmt.Errorf("%d tasks in progress (%s); name one as id", len(ids), strings.Join(ids, ", "))
+	}
 }
 
 func Complete(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
@@ -88,6 +118,13 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 		session = anon
 	}
 	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if id == "" {
+			picked, err := ownInProgress(f, session)
+			if err != nil {
+				return "", err
+			}
+			id = picked
+		}
 		ts, ok := f.tasks[id]
 		if !ok {
 			return "", unknownTask(p, id)

@@ -107,7 +107,12 @@ drops done only, and the summary counts review rows (`· N in review`).
   thrown.
 - Positions are minted, never mutated in place: moves are events.
 - Create is the only link-mutation point: the requires/blocks DAG is
-  validated there at the boundary (SPEC_TODO_EDGES).
+  validated there at the boundary (SPEC_TODO_EDGES). A link resolves as
+  an id, then a sibling's or an existing task's exact text, then a bare
+  number as the 1-based position in that create's `tasks` (2.1.9); replay
+  resolves the same way from the logged payload, and a link that lands
+  on its own task is refused as a self-link at create and skipped at
+  replay. An unknown link's refusal ends with the link forms, once.
 - Complete on the caller's own unclaimed pending task implicitly claims
   and submits: start+complete, both events appended, the echo noting the
   auto-start. Foreign-claim and blocked-by-dependency refusals stay.
@@ -119,6 +124,12 @@ drops done only, and the summary counts review rows (`· N in review`).
   refusal as a mistake. A foreign session's start of an owned task still
   refuses naming the claimer; done stays read-only for every other verb
   (start, fail, release, accept, reject).
+- Start and complete take an empty id (2.1.9): start picks the first
+  pending task nothing waits for (`next`, claim's order), complete the one
+  task this session holds in progress; `verbOn` resolves the pick inside
+  the transaction that acts, and the event logs the resolved id, so
+  replay never re-picks. No candidate, or several in progress, refuses
+  naming them and asking for an id.
 - The review gate (1.3.9) keys on who completes: a worker's complete ends
   in review, an interactive one lands done with the pair; accept ends in
   done, reject returns to pending with the reason as a note. Accept and

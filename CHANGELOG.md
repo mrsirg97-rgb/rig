@@ -1,4 +1,38 @@
 # Changelog
+## [2.1.9]: positional links and the id the reply already names
+
+A 4B model planned five steps as one create with `requires: "1"`,
+`requires: "2"`, the numbering it wrote in its own plan. The store
+refused (`requires '1' not found`) without saying what a link is, and
+the model fell back to thirteen single-task creates. Within one
+create, a bare number N is now the task at 1-based position N of that
+call's `tasks`, tried after the id and the exact text: ids are always
+`tN`, so no link that resolved before changes meaning. A position that
+lands on its own task refuses as a self-link, the replay path resolves
+positions from the logged payload and skips a self-link the same way,
+and an unknown link's refusal now ends, once, with the forms a link
+takes: `(a link is tN from a reply, a sibling's exact text, or its
+position in this create)`.
+
+The same session then called `start` and `complete` without an id and
+was refused twice, though the next task and the task in progress were
+each unambiguous. `start` without `id` now starts `next`, the first
+pending task nothing waits for, and `complete` without `id` completes
+the one task this session holds in progress (a worker's, the task it
+claimed, ending in review). Both resolve inside the transaction that
+acts, through a `pick` seam on the verb helper (`verbOn`), and the
+event logs the resolved id, so replay never re-picks. When the choice
+is not one task the call refuses and says why: `nothing to start: no
+pending task is ready (name one as id)`, `nothing in progress for this
+session (name the task as id)`, `2 tasks in progress (t2, t5); name
+one as id`. Fail, release, retry, and the other verbs still require
+`id`.
+
+The link fields' and the `id` field's descriptions, and the tool's
+one-line link sentence, name the new forms; the three pinned request
+bodies (`golden_020`) carry them. SPEC_TODO_EDGES 1 and SPEC_STREAMLINE
+3 are amended, named 2.1.9.
+
 ## [2.1.8]: the workspace vocabulary and the cwd bucket
 
 The todo tool refused every write when the session's cwd was not in a

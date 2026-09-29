@@ -346,3 +346,87 @@ func TestAcceptOnABlockedReviewTaskRefusesNamingWhatItWaitsFor(t *testing.T) {
 		t.Fatalf("accept work after the blocker done: %v", err)
 	}
 }
+
+func TestPositionalLinkNamesASiblingInTheSameCreate(t *testing.T) {
+	db := newDB(t)
+	reply, err := todostore.Create(context.Background(), db, p, []item{
+		{Text: "read the spec"},
+		{Text: "write the tests", Requires: ptrTo("1")},
+		{Text: "land the change", Requires: ptrTo("2"), Blocks: ptrTo("4")},
+		{Text: "ship"},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("a numbered plan must link in one create: %v", err)
+	}
+	spec, tests, ship := taskIDText(t, reply, "read the spec"), taskIDText(t, reply, "write the tests"), taskIDText(t, reply, "ship")
+	if !strings.Contains(reply, "· requires "+spec) || !strings.Contains(reply, "· requires "+tests) {
+		t.Errorf("positions must resolve to the siblings' ids:\n%s", reply)
+	}
+	if !strings.Contains(reply, "· blocks "+ship) {
+		t.Errorf("blocks takes a position too:\n%s", reply)
+	}
+	replayed, err := todostore.Read(context.Background(), db, p, "s1")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	for _, want := range []string{"· requires " + spec, "· requires " + tests, "· blocks " + ship} {
+		if !strings.Contains(replayed, want) {
+			t.Errorf("replay from the log must keep %q:\n%s", want, replayed)
+		}
+	}
+}
+
+func TestPositionCountsWithinThisCreateNotTheQueue(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, p, []item{{Text: "older"}}, "s1"); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	reply, err := todostore.Create(ctx, db, p, []item{{Text: "first new"}, {Text: "second new", Requires: ptrTo("1")}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if first := taskIDText(t, reply, "first new"); !strings.Contains(reply, "· requires "+first) {
+		t.Errorf("position 1 is this create's first task, not the queue's:\n%s", reply)
+	}
+}
+
+func TestExactTextWinsOverPosition(t *testing.T) {
+	db := newDB(t)
+	reply, err := todostore.Create(context.Background(), db, p, []item{
+		{Text: "2"},
+		{Text: "x"},
+		{Text: "z", Requires: ptrTo("2")},
+	}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if named := taskIDText(t, reply, "2"); !strings.Contains(reply, "· requires "+named) {
+		t.Errorf("a sibling whose text is '2' wins over position 2:\n%s", reply)
+	}
+}
+
+func TestPositionOutOfRangeRefusesTeachingTheLinkForms(t *testing.T) {
+	db := newDB(t)
+	_, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", Requires: ptrTo("3")}, {Text: "b", Requires: ptrTo("0")}}, "s1")
+	if err == nil {
+		t.Fatal("an out-of-range position linked")
+	}
+	for _, want := range []string{"requires '3' not found", "requires '0' not found", "a link is tN from a reply, a sibling's exact text, or its position in this create"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in: %v", want, err)
+		}
+	}
+	if strings.Count(err.Error(), "a link is tN") != 1 {
+		t.Errorf("the link forms are taught once per refusal: %v", err)
+	}
+}
+
+func TestPositionalSelfLinkRefusesAsSelf(t *testing.T) {
+	db := newDB(t)
+	if _, err := todostore.Create(context.Background(), db, p, []item{{Text: "a"}, {Text: "b", Blocks: ptrTo("2")}}, "s1"); err == nil {
+		t.Fatal("a positional self-block succeeded")
+	} else if !strings.Contains(err.Error(), "'b' cannot block itself") {
+		t.Errorf("self-by-position voice: %v", err)
+	}
+}
