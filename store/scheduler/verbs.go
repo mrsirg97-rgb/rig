@@ -100,7 +100,7 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 		jobCwd = sessionCwd
 	}
 	if jobCwd == "" {
-		return "", schedErr("create requires a working directory (cwd or a session cwd)")
+		return "", schedErr("create requires a workspace (workspace or a session workspace)")
 	}
 	model := in.Model
 	if command == "" && model == "" {

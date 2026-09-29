@@ -115,7 +115,7 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 	if got, _ := id["description"].(string); got != "Job id jN (as shown by list). Required for pause/resume/remove/runs; repair takes it or none (none repairs every drifting job)." {
 		t.Fatalf("id description %q", got)
 	}
-	cwd, _ := schema.Properties["cwd"].(map[string]any)
+	cwd, _ := schema.Properties["workspace"].(map[string]any)
 	if got, _ := cwd["description"].(string); got != "the workspace the job runs in (default: this session's workspace)." {
 		t.Fatalf("cwd description %q", got)
 	}
@@ -354,7 +354,7 @@ func TestCreateRefusesACwdOutsideTheSessionRoot(t *testing.T) {
 	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
 	tool := adapter.New(db, ct, "/x/rig run-job", "qwen3.8-workers", home)
 	raw, _ := json.Marshal(map[string]any{
-		"action": "create", "name": "escape", "prompt": "p", "cron": "1 0 * * *", "cwd": "/etc",
+		"action": "create", "name": "escape", "prompt": "p", "cron": "1 0 * * *", "workspace": "/etc",
 	})
 	_, err = tool.Exec(context.Background(), raw)
 	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {

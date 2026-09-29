@@ -71,7 +71,7 @@ func (a adapter) resolve(ctx context.Context, g given, session string) (target, 
 		}
 		wd, err := os.Getwd()
 		if err != nil {
-			return target{}, fmt.Errorf("todo: no working directory: %v", err)
+			return target{}, fmt.Errorf("todo: no workspace: %v", err)
 		}
 		p = todostore.ProjectOf(wd)
 		source = srcCwd

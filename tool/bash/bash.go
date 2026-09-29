@@ -34,7 +34,7 @@ func (tool) Schema() json.RawMessage {
 		"type": "object",
 		"properties": {
 			"command":   {"type": "string", "description": "the command line to run under bash(1)"},
-			"workspace": {"type": "string", "description": "the workspace the command runs in"}
+			"workspace": {"type": "string", "description": "the workspace the job runs in"}
 		},
 		"required": ["command"]
 	}`)

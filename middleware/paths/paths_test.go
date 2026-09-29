@@ -104,7 +104,7 @@ func TestMiddlewareRewritesOnlyThePathFieldsAtTheBoundary(t *testing.T) {
 		seen = call
 		return "ok", nil
 	})
-	in := core.ToolCall{ID: "c1", Name: "edit", Args: json.RawMessage(`{"path":"~/a.txt","old":"~/keep","new":"~","root":"~/r","cwd":"~","content":"~/c","n":3}`)}
+	in := core.ToolCall{ID: "c1", Name: "edit", Args: json.RawMessage(`{"path":"~/a.txt","old":"~/keep","new":"~","root":"~/r","workspace":"~","content":"~/c","n":3}`)}
 	if _, err := exec(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestMiddlewareRewritesOnlyThePathFieldsAtTheBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]any{
-		"path": filepath.Join(home, "a.txt"), "root": filepath.Join(home, "r"), "cwd": home,
+		"path": filepath.Join(home, "a.txt"), "root": filepath.Join(home, "r"), "workspace": home,
 		"old": "~/keep", "new": "~", "content": "~/c", "n": float64(3),
 	}
 	for k, v := range want {
@@ -128,7 +128,7 @@ func TestMiddlewareRewritesOnlyThePathFieldsAtTheBoundary(t *testing.T) {
 
 func TestMiddlewareLeavesBytesAloneWhenNothingExpands(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	for _, raw := range []string{`{"path":"/abs/x","cwd":"rel","z":"~/not-a-path"}`, `{"path":5}`, `[1,2]`, `null`, `not json`, `{}`} {
+	for _, raw := range []string{`{"path":"/abs/x","workspace":"rel","z":"~/not-a-path"}`, `{"path":5}`, `[1,2]`, `null`, `not json`, `{}`} {
 		var seen core.ToolCall
 		exec := paths.Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 			seen = call

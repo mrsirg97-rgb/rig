@@ -82,7 +82,7 @@ func schemaJSON(defModel string) string {
 			"minimum": -1,
 			"description": "Dollar cap for the job's model fires, summed from the recorded run costs. On update, -1 resets the cap. Command jobs take no budget."
 		},
-		"cwd": {
+		"workspace": {
 			"type": "string",
 			"description": "the workspace the job runs in (default: this session's workspace)."
 		},
@@ -101,20 +101,20 @@ func schemaJSON(defModel string) string {
 }
 
 type given struct {
-	Action  string  `json:"action"`
-	Name    string  `json:"name"`
-	Prompt  string  `json:"prompt"`
-	Command string  `json:"command"`
-	Cron    string  `json:"cron"`
-	At      string  `json:"at"`
-	Model   string  `json:"model"`
-	Busy    string  `json:"busy"`
-	Timeout int     `json:"timeout"`
-	Stall   int     `json:"stall"`
-	Budget  float64 `json:"budget"`
-	Cwd     string  `json:"cwd"`
-	ID      string  `json:"id"`
-	N       *int    `json:"n"`
+	Action    string  `json:"action"`
+	Name      string  `json:"name"`
+	Prompt    string  `json:"prompt"`
+	Command   string  `json:"command"`
+	Cron      string  `json:"cron"`
+	At        string  `json:"at"`
+	Model     string  `json:"model"`
+	Busy      string  `json:"busy"`
+	Timeout   int     `json:"timeout"`
+	Stall     int     `json:"stall"`
+	Budget    float64 `json:"budget"`
+	Workspace string  `json:"workspace"`
+	ID        string  `json:"id"`
+	N         *int    `json:"n"`
 }
 
 type adapter struct {
@@ -178,7 +178,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		} else if g.Model != "" || g.Busy != "" {
 			return "", fmt.Errorf("scheduler: a command job takes no model and no busy policy")
 		}
-		jobCwd := g.Cwd
+		jobCwd := g.Workspace
 		if jobCwd != "" {
 			validated, err := pathguard.Within(jobCwd, cwd, a.home)
 			if err != nil {
@@ -194,7 +194,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.ID == "" {
 			return "", fmt.Errorf("scheduler: update requires 'id' (jN)")
 		}
-		updateCwd := g.Cwd
+		updateCwd := g.Workspace
 		if updateCwd != "" {
 			validated, err := pathguard.Within(updateCwd, cwd, a.home)
 			if err != nil {

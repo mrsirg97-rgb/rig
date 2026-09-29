@@ -702,7 +702,7 @@ unthreaded; the tools' existing behavior), same store.
 Scheduler ids are one sequence across the single store (SPEC_STATE): a
 `jN` names the same job from any directory, the grammar has no `scope`
 (the tool's schema lost it), and `name` is unique store-wide. `list` is
-one list grouped by the job's own `cwd`, this directory first.
+one list grouped by the job's own `workspace`, this workspace first.
 
 ### 9. One-shot and run-job: commands are interactive-only
 

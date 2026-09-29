@@ -63,7 +63,7 @@ accordingly and is named in the PR.
 - A leading `~`, `~/…`, or `~user/…` in a path-shaped argument (`path`,
   `root`, `cwd`) is the home, expanded once at the tool boundary:
   `middleware/paths`, innermost in the root's chain, so read/write/edit,
-  ls/find/grep, bash's `workspace`, and delegate's and the scheduler's `cwd` all
+  ls/find/grep, bash's, delegate's and the scheduler's `workspace` all
   inherit it and no tool carries its own copy. The tools stay pure. A `~`
   anywhere else, an unknown user, or an unset home stand as given; the
   shell expands its own command line. The rig home is the process

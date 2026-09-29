@@ -281,7 +281,7 @@ func TestDelegateDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
 		t.Fatal(err)
 	}
-	if got := schema.Properties["cwd"].Description; got != "the workspace the job runs in (default the session's workspace; must be under it or the rig home)" {
+	if got := schema.Properties["workspace"].Description; got != "the workspace the job runs in (default the session's workspace; must be under it or the rig home)" {
 		t.Fatalf("cwd description %q", got)
 	}
 }
@@ -290,7 +290,7 @@ func TestDelegateCwdRefusalNamesThePath(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": "/elsewhere"})
+	b, _ := json.Marshal(map[string]any{"task": "t", "workspace": "/elsewhere"})
 	out, err := tool.Exec(context.Background(), b)
 	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
 		t.Fatalf("the cwd refusal must name the path: (%q, %v)", out, err)
@@ -318,7 +318,7 @@ func TestDelegateCwdSymlinkEscapeRefuses(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(old) })
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": link})
+	b, _ := json.Marshal(map[string]any{"task": "t", "workspace": link})
 	_, err = tool.Exec(context.Background(), b)
 	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
 		t.Fatalf("the resolved symlink escape must refuse: %v", err)
@@ -345,7 +345,7 @@ func TestDelegateCwdFileRefuses(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(old) })
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "cwd": file})
+	b, _ := json.Marshal(map[string]any{"task": "t", "workspace": file})
 	_, err = tool.Exec(context.Background(), b)
 	if err == nil || !strings.Contains(err.Error(), "not a directory") {
 		t.Fatalf("a file cwd must refuse naming the directory rule: %v", err)

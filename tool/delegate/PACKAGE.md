@@ -3,7 +3,7 @@
 ## What it is
 
 The one-shot worker tool (`specs/SPEC_DELEGATE.md`): spawn a headless
-worker on a task now, in a cwd, wait, and feed back its last message.
+worker on a task now, in a workspace, wait, and feed back its last message.
 Fan-out is N delegate calls in one turn, bounded by `workers.json`
 `slots`: the calls run concurrently up to the slot count and extras
 wait for a slot rather than failing, so one slot runs them in
@@ -19,7 +19,7 @@ the state store.
 - `delegate.go`: `Opts` (the root's wiring, carrying the fleet's
   `Slots`) and `New`, the adapter with the description (the in-flight
   bound and the wait phrased by the slot count), schema, and `Exec`;
-  the `pathguard` cwd rule (canonicalization, the
+  the `pathguard` workspace rule (canonicalization, the
   outside-the-session/rig-home refusal, the directory check); the
   output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
@@ -59,8 +59,8 @@ the state store.
   path via `jailSpawn`'s sessions-dir bind (SPEC_DELEGATE 3); the
   parent mints its id and passes it as `-session-id`, so concurrent
   delegates cannot claim one another's transcript.
-- `cwd` containment is the one rule in `pathguard` (shared with the
-  scheduler tool): the requested directory and both allowed roots resolve
+- `workspace` containment is the one rule in `pathguard` (shared with
+  the scheduler tool): the requested directory and both allowed roots resolve
   symlinks before the worker starts, a lexical child that resolves outside
   refuses, and a file is not a workspace (it refuses at the boundary, not at
   spawn).
