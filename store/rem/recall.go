@@ -101,7 +101,7 @@ func ftsQuery(tokens []string) string {
 			parts[i] = tok
 		}
 	}
-	return strings.Join(parts, " AND ")
+	return strings.Join(parts, " OR ")
 }
 
 type armHit struct {

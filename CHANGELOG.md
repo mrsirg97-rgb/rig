@@ -1,4 +1,39 @@
 # Changelog
+## [2.3.0]: recall degrades by relevance, corruption refuses by name
+
+The full-text arm of recall joined its tokens with AND, so a natural
+query ("how does the scheduler handle drift") matched only a memory
+containing every word — and in the operator's stores, where 141 of 144
+recall queries run four words or longer, five queries returned nothing
+and the trigram arm carried retrieval alone. The fusion that outranks a
+hit both arms reach almost never saw two arms, and nothing in a reply
+named which arm had found a hit, so none of this was measurable from a
+session. The arm now ORs its tokens and orders by FTS5's own rank
+(bm25): a long query degrades by relevance instead of to nothing.
+Reserved words stay quoted, and the arm's cap and the scope and kind
+filters are unchanged. Each hit line names how it was found — fts,
+fuzzy, or both — one word after the strength, and the rem tool's Reply
+sentence says so: `the hits with their ids, strength and arm`.
+
+`daysSince` read an unparseable or future `last_consolidated_at` as
+fresh, no decay — the one silent error path in the package, over
+timestamps the store writes itself. Recall and consolidation now refuse
+the memory by name, `rem: mN has an unreadable last_consolidated_at;
+prune it by id`, instead of ranking a corrupt row as the freshest; an
+empty timestamp is still "never", not corruption, and a refused recall
+does not reinforce. A property test walks query lengths 1 to 20 over a
+stored memory plus noise words and holds the full-text arm on the
+memory; the refusals are pinned in prune and in recall, query and
+browse.
+
+The store's PACKAGE.md carries the two named trades: recall is a write,
+since it reinforces its hits inside its own transaction (recalls
+serialize with learns; a swarm contending on it records the access
+after the read rather than dropping it), and the mN id is a local
+handle minted from a counter — a mesh converges rows on content_sha256,
+which learn is already idempotent on, and each node mints its own mN.
+The golden_020 fixtures carry the one Reply-sentence line.
+
 ## [2.2.0]: the retry guard named by its rule
 
 The guard list in the embedded default system prompt named the retry

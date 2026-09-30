@@ -92,10 +92,10 @@ func TestGramsOfDeduplicatesPerMemory(t *testing.T) {
 }
 
 func TestFtsQueryQuotesReservedOperators(t *testing.T) {
-	if got, want := ftsQuery([]string{"to", "or", "not"}), `to AND "or" AND "not"`; got != want {
+	if got, want := ftsQuery([]string{"to", "or", "not"}), `to OR "or" OR "not"`; got != want {
 		t.Errorf("ftsQuery = %q, want %q", got, want)
 	}
-	if got, want := ftsQuery([]string{"run", "fast"}), "run AND fast"; got != want {
+	if got, want := ftsQuery([]string{"run", "fast"}), "run OR fast"; got != want {
 		t.Errorf("ftsQuery = %q, want %q", got, want)
 	}
 }
