@@ -22,7 +22,9 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
   max-tokens clamp.
 - `compact.split`, `callIn`: the keep-recent cut.
 - `compact.RenderTranscript`, `SummaryInput`, `summarize`: the summary
-  call's shape and execution.
+  call's shape and execution; `summarize` returns the `Done` echo's
+  model beside the usage, so the `Compacted` event names the id that
+  produced the summary call.
 - `compact.Decorator`, `classifiesContextLength`: the overflow recovery.
 - `compact.recoveryOwed`, `spendBudget`, `calibrate`: the once budget and
   the delta-only factor update.

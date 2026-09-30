@@ -15,7 +15,10 @@ import (
 	sessions "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
 )
 
-type usageRow struct{ prompt, cacheRead int64 }
+type usageRow struct {
+	prompt, cacheRead int64
+	model             string
+}
 type faultRow struct {
 	at  time.Time
 	msg string
@@ -46,7 +49,11 @@ func seedSession(t *testing.T, db store.DB, s seedSpec) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := state.RecordUsage(ctx, db, seq, u.prompt, 0, u.cacheRead, 0, 0); err != nil {
+		var model *string
+		if u.model != "" {
+			model = &u.model
+		}
+		if err := state.RecordUsage(ctx, db, seq, u.prompt, 0, u.cacheRead, 0, 0, model); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -334,7 +341,36 @@ func TestSessionsToolMigratesAnOlderProjectStoreToTheBuildVersion(t *testing.T) 
 	if err := db.QueryRow(`SELECT "value" FROM "meta" WHERE "key" = 'schema_version'`).Scan(&v); err != nil {
 		t.Fatal(err)
 	}
-	if v != "4" {
+	if v != "5" {
 		t.Fatalf("the store must land on the build version after the read, got %s", v)
+	}
+}
+
+func TestSessionsSummarySplitsTokensByModelForAMixedSession(t *testing.T) {
+	home := t.TempDir()
+	cwd := "/workspace/split"
+	base := time.Now().Add(-time.Hour)
+	openProject(t, home, cwd,
+		seedSpec{id: "a0000001", model: "dsv4", version: "0.16.1", turns: 1,
+			usage: []usageRow{
+				{prompt: 100, cacheRead: 40, model: "dsv4"},
+				{prompt: 100, cacheRead: 40, model: "ox-alpha"},
+			}},
+		seedSpec{id: "b0000002", model: "qwen3.8-workers", version: "0.16.1", turns: 1,
+			usage:  []usageRow{{prompt: 150, cacheRead: 60}},
+			faults: []faultRow{{at: base, msg: "provider: the stream died"}}},
+	)
+	tool := sessions.New(home, cwd)
+	out, err := run(t, tool, `{"action":"summary"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "split: 2 sessions, 2 turns\n" +
+		"models: dsv4 0.16.1, qwen3.8-workers 0.16.1\n" +
+		"tokens: dsv4 100, ox-alpha 100, qwen3.8-workers 150\n" +
+		"faults: 1 — last: provider: the stream died\n" +
+		"cache ratio: 40% (cache_read 140 / prompt 350)"
+	if out != want {
+		t.Fatalf("the summary must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}
 }

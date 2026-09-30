@@ -51,6 +51,7 @@ type EmptyTurn struct {
 	Resample int
 	Limit    int
 	Usage    Usage
+	Model    string
 }
 
 func (EmptyTurn) event() {}
@@ -101,6 +102,7 @@ type Compacted struct {
 	Dropped int
 	Kept    int
 	Usage   Usage
+	Model   string
 }
 
 func (Compacted) event() {}

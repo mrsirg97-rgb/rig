@@ -13,13 +13,16 @@ type UsageRow struct {
 	CacheRead  int64
 	CacheWrite int64
 	Cost       float64
+	Model      string
 }
 
 func SessionUsage(ctx context.Context, db store.DB, sessionID string) ([]UsageRow, error) {
 	rows, err := db.DB.QueryContext(ctx, `
-		SELECT u."message_seq", u."prompt", u."completion", u."cache_read", u."cache_write", u."cost"
+		SELECT u."message_seq", u."prompt", u."completion", u."cache_read", u."cache_write", u."cost",
+			COALESCE(u."model", s."model")
 		FROM "usage" u
 		JOIN "messages" m ON m."seq" = u."message_seq"
+		JOIN "sessions" s ON s."id" = m."session_id"
 		WHERE m."session_id" = ?
 		ORDER BY u."message_seq"`, sessionID)
 	if err != nil {
@@ -29,7 +32,7 @@ func SessionUsage(ctx context.Context, db store.DB, sessionID string) ([]UsageRo
 	var out []UsageRow
 	for rows.Next() {
 		var r UsageRow
-		if err := rows.Scan(&r.Seq, &r.Prompt, &r.Completion, &r.CacheRead, &r.CacheWrite, &r.Cost); err != nil {
+		if err := rows.Scan(&r.Seq, &r.Prompt, &r.Completion, &r.CacheRead, &r.CacheWrite, &r.Cost, &r.Model); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

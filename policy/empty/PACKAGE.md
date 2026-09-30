@@ -12,7 +12,9 @@ identical request, at most twice, then a fault surfaces. Stdlib only.
 - `Decorator(inner)`: wraps a `core.Provider`. `Stream` calls the inner
   provider and relays its events; on an empty turn it withholds the
   attempt's `Done` and deltas, emits `core.EmptyTurn` (the notice plus the
-  discarded usage), and resamples by calling `inner.Stream` with the same
+  discarded usage and the swallowed `Done`'s model — the store stamps the
+  usage row with the id that made the discarded call), and resamples by
+  calling `inner.Stream` with the same
   request. The relay is one goroutine, so the retry is invisible to the
   loop.
 - `faultMessage`: the surfaced fault's plain words, with the "tool call

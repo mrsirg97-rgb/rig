@@ -82,6 +82,7 @@ type Usage struct {
 	CacheRead  int64    `alias:"name=cache_read,nullable=false"`
 	CacheWrite int64    `alias:"name=cache_write,nullable=false"`
 	Cost       float64  `alias:"name=cost,nullable=false"`
+	Model      *string  `alias:"name=model,nullable=true"`
 }
 
 // table:"files"

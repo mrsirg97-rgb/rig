@@ -37,7 +37,7 @@ func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan core.E
 func (d *decorator) relay(ctx context.Context, out chan<- core.Event, req core.Request, ch <-chan core.Event) {
 	attempt := 1
 	for {
-		usage, reasoning, empty := d.relayOnce(ctx, out, ch)
+		usage, model, reasoning, empty := d.relayOnce(ctx, out, ch)
 		if ctx.Err() != nil {
 			return
 		}
@@ -50,7 +50,7 @@ func (d *decorator) relay(ctx context.Context, out chan<- core.Event, req core.R
 			}
 			return
 		}
-		if !emit(ctx, out, core.EmptyTurn{Resample: attempt, Limit: maxResamples, Usage: usage}) {
+		if !emit(ctx, out, core.EmptyTurn{Resample: attempt, Limit: maxResamples, Usage: usage, Model: model}) {
 			return
 		}
 		attempt++
@@ -68,7 +68,7 @@ func (d *decorator) relay(ctx context.Context, out chan<- core.Event, req core.R
 	}
 }
 
-func (d *decorator) relayOnce(ctx context.Context, out chan<- core.Event, ch <-chan core.Event) (core.Usage, string, bool) {
+func (d *decorator) relayOnce(ctx context.Context, out chan<- core.Event, ch <-chan core.Event) (core.Usage, string, string, bool) {
 	var (
 		content strings.Builder
 		reason  strings.Builder
@@ -78,7 +78,7 @@ func (d *decorator) relayOnce(ctx context.Context, out chan<- core.Event, ch <-c
 		select {
 		case ev, ok := <-ch:
 			if !ok {
-				return core.Usage{}, "", false
+				return core.Usage{}, "", "", false
 			}
 			switch e := ev.(type) {
 			case core.TextDelta:
@@ -91,19 +91,19 @@ func (d *decorator) relayOnce(ctx context.Context, out chan<- core.Event, ch <-c
 			switch e := ev.(type) {
 			case core.Done:
 				if e.StopReason == "stop" && strings.TrimSpace(content.String()) == "" && calls == 0 {
-					return e.Usage, reason.String(), true
+					return e.Usage, e.Model, reason.String(), true
 				}
 				if !emit(ctx, out, ev) {
-					return core.Usage{}, "", false
+					return core.Usage{}, "", "", false
 				}
-				return core.Usage{}, "", false
+				return core.Usage{}, "", "", false
 			default:
 				if !emit(ctx, out, ev) {
-					return core.Usage{}, "", false
+					return core.Usage{}, "", "", false
 				}
 			}
 		case <-ctx.Done():
-			return core.Usage{}, "", false
+			return core.Usage{}, "", "", false
 		}
 	}
 }

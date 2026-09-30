@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.3.3" {
-		t.Fatalf("Version = %q, want 2.3.3", Version)
+	if Version != "2.3.4" {
+		t.Fatalf("Version = %q, want 2.3.4", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -539,6 +539,7 @@ func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
 
 func TestModelSwitchResetsAForeignEffort(t *testing.T) {
 	r := testRoot(nullFrontend{})
+	storeRoot(t, r)
 	speaks, err := models.New(
 		models.Model{Role: models.RoleInteractive, ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Efforts: []string{"low", "medium", "xhigh"}},
 		models.Model{Role: models.RoleInteractive, ID: "onlymax", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Efforts: []string{"max"}},
@@ -671,4 +672,56 @@ func TestEffortForWireFallsBackToTheRow(t *testing.T) {
 	if got := r.effortForWire(); got != "low" {
 		t.Fatalf("the dial must override the row: %q", got)
 	}
+}
+
+func TestModelSwitchUpdatesTheSessionRow(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	db := storeRoot(t, r)
+
+	speaks, err := models.New(
+		models.Model{Role: models.RoleInteractive, ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
+		models.Model{Role: models.RoleInteractive, ID: "ox-alpha", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.runtime = speaks
+	wire(r)
+
+	if _, err := r.switchModel(context.Background(), "ox-alpha"); err != nil {
+		t.Fatalf("switchModel: %v", err)
+	}
+	s := mustReadSession(t, db, r.session.ID)
+	if s.Model != "ox-alpha" {
+		t.Fatalf("session row model = %q, want the switched id ox-alpha", s.Model)
+	}
+}
+
+func storeRoot(t *testing.T, r *root) store.DB {
+	t.Helper()
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	r.sdb = db
+	r.rec = state.NewRecorder(nullFrontend{}, db, "/tmp/wt", r.activeID, Version, r.session.ID, r.session)
+	return db
+}
+
+func mustReadSession(t *testing.T, db store.DB, id string) *domain.Session {
+	t.Helper()
+	c, tx, err := db.Tx(context.Background())
+	if err != nil {
+		t.Fatalf("read tx: %v", err)
+	}
+	defer tx.Rollback()
+	s, err := domain.NewSessionDomain().GetSession(c, id).Row()
+	if err != nil {
+		t.Fatalf("read session: %v", err)
+	}
+	if s == nil {
+		t.Fatalf("session %s: no row", id)
+	}
+	return s
 }

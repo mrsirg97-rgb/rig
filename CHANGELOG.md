@@ -1,4 +1,36 @@
 # Changelog
+## [2.3.4]: usage carries the model that made the call
+
+The store said one thing and the truth said another: `sessions.model`
+held the id the session opened with, never moved, and the usage rows
+named no model at all. The last three PR sessions ran on ox-alpha while
+every turn in their stores read dsv4. The vitals were unreadable at the
+one place they mattered — which model spent the tokens.
+
+`usage` gains a nullable `model` column (schema v5, an ALTER on open):
+the id that produced the call, stamped by the recorder from `Done`'s
+echo. The discarded attempts of an empty turn stamp their own id — the
+`EmptyTurn` event now carries the swallowed `Done`'s model — and the
+compaction row stamps the summary call's, which `Compacted` carries in
+the same way. A row left modelless by an older build reads, at every
+read path, as its session's start model; no backfill, the session row
+remains the fallback.
+
+The `/models` switch now moves the open session's row with it:
+`Recorder.UpdateModel` writes the new id to `sessions.model` before the
+loop applies the switch, so the row names the current id rather than the
+open-time one, and a refused write refuses the switch instead of
+diverging silently.
+
+The `sessions` tool's `summary` acts on the new column: when a session
+in the slice ran on more than one model, a `tokens:` line splits the
+slice's prompt+completion totals by the producing id, sorted by name.
+A slice of single-model sessions prints nothing extra.
+
+Migration dry-run against a copy of this rig home's 19 stores
+(233 MB, 34k usage rows): 19/19 landed on v5, zero failures, the
+oldest through the full v2→v5 chain.
+
 ## [2.3.3]: edit applies on a match, teaches with bytes on a miss
 
 The read-first refusal is retired. Since 2.1.0 the operator's sessions

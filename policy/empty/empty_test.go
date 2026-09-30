@@ -351,3 +351,25 @@ func TestResampleStreamErrorSurfaces(t *testing.T) {
 		t.Fatalf("a resample stream error must surface as a fault: %v", fe.snapshot())
 	}
 }
+
+func TestEmptyTurnCarriesTheSwallowedModel(t *testing.T) {
+	prov := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{core.Done{StopReason: "stop", Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 1}}}},
+		{events: []core.Event{core.TextDelta{Text: "answer"}, core.Done{StopReason: "stop", Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 2}}}},
+	}}
+	fe := &testFrontend{inputs: []string{"go"}}
+	run(t, prov, fe)
+
+	saw := false
+	for _, ev := range fe.snapshot() {
+		if e, ok := ev.(core.EmptyTurn); ok {
+			saw = true
+			if e.Model != "ox-alpha" {
+				t.Fatalf("EmptyTurn = %+v, want the swallowed Done's model ox-alpha", e)
+			}
+		}
+	}
+	if !saw {
+		t.Fatalf("the empty turn must be noticed at all: %v", fe.snapshot())
+	}
+}

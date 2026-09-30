@@ -48,7 +48,7 @@ func recordWorkerCost(t *testing.T, rigHome, cwd, session string, cost float64) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordUsage(ctx, db, seq, 10, 5, 0, 0, cost); err != nil {
+	if err := state.RecordUsage(ctx, db, seq, 10, 5, 0, 0, cost, nil); err != nil {
 		t.Fatal(err)
 	}
 }

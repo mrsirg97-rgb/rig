@@ -93,6 +93,9 @@ func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("models: no row for %q (known: %s)", id, strings.Join(r.runtime.Known(), ", "))
 	}
+	if err := r.rec.UpdateModel(id); err != nil {
+		return "", fmt.Errorf("models: the session row refused the switch: %v", err)
+	}
 
 	note := ""
 	if r.effort != "" && !hasLevel(row.Efforts, r.effort) {

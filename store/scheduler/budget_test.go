@@ -88,7 +88,7 @@ func TestScheduledJobBudgetStopsFiringAtTheCap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := state.RecordUsage(ctx, db, seq, 10, 5, 0, 0, 6); err != nil {
+		if err := state.RecordUsage(ctx, db, seq, 10, 5, 0, 0, 6, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

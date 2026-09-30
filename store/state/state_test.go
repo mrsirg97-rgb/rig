@@ -60,7 +60,7 @@ func TestStateRecordsAndReadsBack(t *testing.T) {
 	if err := state.RecordToolResult(ctx, db, "s1", seq2, "call_1", "out", nil); err != nil {
 		t.Fatalf("record tool result: %v", err)
 	}
-	if err := state.RecordUsage(ctx, db, seq2, 10, 3, 0, 0, 0); err != nil {
+	if err := state.RecordUsage(ctx, db, seq2, 10, 3, 0, 0, 0, nil); err != nil {
 		t.Fatalf("record usage: %v", err)
 	}
 	if err := state.RecordFile(ctx, db, "s1", "/tmp/wt/a", "hash-a", time.Now().UnixNano()); err != nil {
@@ -246,6 +246,87 @@ var v2Schema = []string{
   "prompt" INTEGER NOT NULL,
   PRIMARY KEY ("message_seq")
 )`,
+}
+
+var v4Schema = []string{
+	v2Schema[0], v2Schema[1],
+	`CREATE TABLE IF NOT EXISTS "messages" (
+  "seq" INTEGER NOT NULL,
+  "content" TEXT NOT NULL,
+  "created_at" TIMESTAMP NOT NULL,
+  "model" TEXT,
+  "reasoning" TEXT,
+  "role" TEXT NOT NULL,
+  "session_id" TEXT NOT NULL,
+  "tool_id" TEXT,
+  PRIMARY KEY ("seq")
+)`,
+	`CREATE TABLE IF NOT EXISTS "sessions" (
+  "id" TEXT NOT NULL,
+  "cwd" TEXT NOT NULL,
+  "ended_at" TIMESTAMP,
+  "exit" TEXT NOT NULL,
+  "label" TEXT,
+  "model" TEXT NOT NULL,
+  "started_at" TIMESTAMP NOT NULL,
+  "version" TEXT NOT NULL,
+  PRIMARY KEY ("id")
+)`,
+	v2Schema[4],
+	`CREATE TABLE IF NOT EXISTS "usage" (
+  "message_seq" INTEGER NOT NULL,
+  "cache_read" INTEGER NOT NULL,
+  "cache_write" INTEGER NOT NULL,
+  "completion" INTEGER NOT NULL,
+  "cost" REAL NOT NULL DEFAULT 0,
+  "prompt" INTEGER NOT NULL,
+  PRIMARY KEY ("message_seq")
+)`,
+}
+
+func TestMigrationV4ToV5AddsUsageModel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.sqlite")
+	db, _, _, err := store.Open(path, v4Schema, 4, state.Migration())
+	if err != nil {
+		t.Fatalf("open v4: %v", err)
+	}
+	ctx := context.Background()
+	if err := state.RecordSession(ctx, db, "s1", "/w", "dsv4", "0.1.0"); err != nil {
+		t.Fatalf("record v4 session: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO "messages" ("seq", "content", "created_at", "role", "session_id")
+		VALUES (1, 'old turn', CURRENT_TIMESTAMP, 'assistant', 's1')`); err != nil {
+		t.Fatalf("insert v4 row: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO "usage" ("message_seq", "prompt", "completion", "cache_read", "cache_write", "cost")
+		VALUES (1, 100, 50, 10, 5, 0.25)`); err != nil {
+		t.Fatalf("insert v4 usage: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close v4: %v", err)
+	}
+
+	db2, _, report, err := store.Open(path, state.Statements(), state.SchemaVersion, state.Migration())
+	if err != nil {
+		t.Fatalf("reopen v5: %v", err)
+	}
+	defer db2.Close()
+	if !strings.Contains(report, "usage") {
+		t.Fatalf("migration report should name the usage model change: %q", report)
+	}
+	u := mustRead(t, db2, func(c context.Context) (any, error) {
+		return domain.NewUsageDomain().GetUsage(c, 1).Row()
+	}).(*domain.Usage)
+	if u.Model != nil {
+		t.Fatalf("pre-migration row carries no model: %+v", u.Model)
+	}
+	rows, err := state.SessionUsage(ctx, db2, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Model != "dsv4" {
+		t.Fatalf("usage rows = %+v, want the modelless row read as the session's start model dsv4", rows)
+	}
 }
 
 func TestMigrationV2ToV3AddsMessagesModel(t *testing.T) {
