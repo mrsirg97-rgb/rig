@@ -1,4 +1,26 @@
 # Changelog
+## [2.1.10]: the read truncation facts
+
+The read tool capped a reply at 1 MiB and appended `[output truncated]`
+with no numbers, so a model reading a big file in ranges could not know
+how much had come back or what the next offset was. The cap now cuts at
+a line boundary when one exists inside it — the reply ends at a complete
+line — and the marker carries the next step: `[output truncated: N of M
+lines; continue at offset X]`, X the offset the next read needs
+(offset+N, N the complete lines in the reply and M the file's line
+count, the same "lines" the offset and the past-the-end refusal use). A
+single line longer than the cap still falls back to a rune boundary, so
+no rune is ever split, and gets its own marker — `[output truncated:
+line N is longer than the 1 MiB cap; slice it with bash]` — because a
+read can never make progress on it: bash owns that line. The read
+description names the reply for what it is — the file's text, exactly as
+edit will match it — and the cap sentence left it: the marker carries
+the cap, so the description carries only the rule. The guideline names
+the tool the model picks between — use read, not bash (cat or sed) —
+and says why: edit checks the file against what you read, and a bash
+read leaves no observation for it to check against. No behavior changed
+elsewhere: the suite is the gate at every commit.
+
 ## [2.1.9]: positional links
 
 A 4B model planned five steps as one create with `requires: "1"`,

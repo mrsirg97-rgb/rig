@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -27,7 +28,7 @@ func Read() core.Tool { return &readTool{} }
 func (readTool) Name() string { return "read" }
 
 func (readTool) Description() string {
-	return "Reads a file, or a range of it with offset and limit. Guidelines: use read, not cat or sed, for any file you may edit: edit checks the file against what you read, and a bash read leaves no observation. Set diff to true to append the file's git diff against HEAD. A range past the end refuses by name. Reply: the text."
+	return "Reads a file, or a range of it with offset and limit. Guidelines: use read, not bash (cat or sed), for any file you may edit: edit checks the file against what you read, and a bash read leaves no observation for it to check against. Set diff to true to append the file's git diff against HEAD. A range past the end refuses, naming the file and its total lines. Reply: the file's text, exactly as edit will match it."
 }
 
 func (readTool) Schema() json.RawMessage {
@@ -87,11 +88,7 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, a.Path, content)
 	if len(content) > readCap {
-		cut := readCap
-		for !utf8.RuneStart(content[cut]) {
-			cut--
-		}
-		content = content[:cut] + "\n[output truncated]"
+		content = capReply(content, total, offset)
 	}
 	if stale {
 		content = "[changed since your observation] " + a.Path + " — re-read before acting on it\n" + content
@@ -104,6 +101,20 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		content = content + "\n\n" + d
 	}
 	return content, nil
+}
+
+func capReply(content string, total, offset int) string {
+	cut := strings.LastIndexByte(content[:readCap], '\n')
+	if cut < 0 {
+		cut = readCap
+		for !utf8.RuneStart(content[cut]) {
+			cut--
+		}
+		return content[:cut] + fmt.Sprintf("\n[output truncated: line %d is longer than the 1 MiB cap; slice it with bash]", offset+1)
+	}
+	cut++
+	lines := strings.Count(content[:cut], "\n")
+	return content[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines; continue at offset %d]", lines, total, offset+lines)
 }
 
 func readWindow(path string, offset, limit int) (string, int, [32]byte, error) {
