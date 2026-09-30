@@ -211,7 +211,7 @@ loop            the concrete turn runtime (fault/cancel-aware)
 evt             the event loop (SPEC_EVT): one consumer, many producers; the
                 turn runtime's engine
 kernel.go       the composition kernel
-command/        the user commands (/compact, /models, /sessions, /effort, ...)
+command/        the user commands (/compact, /models, /sessions, /effort, /theme, ...)
 config/         the four-layer config resolution (flag > env > file > embedded)
 models/         the per-model table (window, compaction numbers, role, effort)
 policy/         ContextPolicy implementations: compact (per-model trigger),

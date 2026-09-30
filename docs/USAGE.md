@@ -111,6 +111,13 @@ is a loud line naming the known set, never silently a prompt.
   an interactive delegate, none when nothing runs (1.5.4). The usage
   line shows the session's dollars when the endpoint reported a cost
   (`up 214k down 18k · cache r 187k 87% · $1.23`, 1.5.0).
+- `/theme`: the interface theme (2.3.2): bare shows the active preset;
+  `/theme warm|cool|custom` sets it — warm is the default palette,
+  cool is the cool palette, and custom is `theme.json` in the rig
+  home, which refuses by name when the file is absent. The choice is
+  written to the `theme` key of settings.json (persistent), and the
+  TUI repaints immediately: new output in the new theme, committed
+  scrollback keeps its bytes.
 
 **Hosted rows** (`specs/SPEC_HOSTED.md`): a row with `remote: true` or
 `provider: "<name>"` speaks the OpenAI wire at its `baseUrl`, the key

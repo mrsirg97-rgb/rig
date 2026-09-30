@@ -91,6 +91,8 @@ type Env struct {
 	SetEffort   func(ctx context.Context, level string) error
 	Role        func() string
 	SetRole     func(ctx context.Context, name string) error
+	Theme       func() string
+	SetTheme    func(ctx context.Context, name string) error
 
 	Approve    func() string
 	SetApprove func(ctx context.Context, mode string) error

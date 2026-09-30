@@ -221,7 +221,7 @@ func TestGoldenStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p1ascii, err := ResolveTheme("p1", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
+	p1ascii, err := ResolveTheme("", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestGoldenStreamProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p1ascii, err := ResolveTheme("p1", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
+	p1ascii, err := ResolveTheme("", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
 	if err != nil {
 		t.Fatal(err)
 	}

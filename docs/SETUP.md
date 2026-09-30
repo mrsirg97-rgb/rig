@@ -111,7 +111,7 @@ the file is a contract, not a filter.
 | `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row), and the hosted run site: `remote` (bool), `provider` (a name like `openrouter` implies remote), `baseUrl` (required for a remote row), `apiKey` (sent as `Authorization: Bearer <key>`; never logged or rendered), `concurrency` (the row's parallel-spawn token bound, default 1), `reasoning` (`reasoning_content` default, `reasoning` for OpenRouter), `providerPin` and `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for remote rows) |
 | `workers.json`    | the fleet: `{"model": "<id>", "slots": N, "reviewer": "<id>"}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session); `reviewer` is optional and must resolve too — the swarm's reviewer default (`/swarm role=reviewer`). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
-| `theme.json`      | the terminal frontend's theme (`specs/SPEC_TUI.md` 7): `base` (one of `oled`, `paper`, `p1`, `p3`, required), optional `slots` (the eight slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema |
+| `theme.json`      | the terminal frontend's custom theme (`specs/SPEC_TUI.md` 7), the `/theme custom` preset: `base` (one of `warm`, `cool`, `paper`, `p1`, `p3`, or the legacy `oled`; required), optional `slots` (the slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema. The preset dial itself is settings.json's `theme` key (`/theme warm|cool|custom`) |
 
 `<cwd>/AGENTS.md` is read from the working directory: the REPL's cwd, or,
 for a scheduled worker, the job's cwd; the job inherits its own working
@@ -407,14 +407,17 @@ speak the CLI's bytes.
 - `--tui auto` (the default) picks by the terminal: stdout a terminal
   → the TUI; piped or redirected → the CLI. `--tui=true` forces the
   TUI (a pty, `tmux capture-pane`); `--tui=false` forces the CLI.
-- **Theme**: `~/.rig/theme.json`, three keys: `base` (the
-  shipped palette: `oled`, `paper`, `p1`, `p3`), `slots` (any of the
-  eight; `accent`, `dim`, `error`, `reasoning`, `rule`, `success`,
-  `text`, `warn`; mapped to a `#rrggbb` color), `glyphs` (`unicode`,
-  the default, or `ascii` for the bracket/`>`/`#` set). Color depth is
-  the terminal's, not yours: `COLORTERM` 24-bit → truecolor, else the
-  nearest 256 index. A malformed file refuses at start, naming the
-  file and the key.
+- **Theme**: `/theme warm|cool|custom` in the REPL (2.3.2), persistent
+  as settings.json's `theme` key; the TUI repaints at once. `custom`
+  is `~/.rig/theme.json`, three keys: `base` (the shipped palette:
+  `warm`, `cool`, `paper`, `p1`, `p3`; `oled` is the legacy alias of
+  `warm`), `slots` (any of the slot names; `accent`, `dim`, `error`,
+  `reasoning`, `rule`, `success`, `text`, `warn`; mapped to a
+  `#rrggbb` color), `glyphs` (`unicode`, the default, or `ascii` for
+  the bracket/`>`/`#` set). Color depth is the terminal's, not yours:
+  `COLORTERM` 24-bit → truecolor, else the nearest 256 index. A
+  malformed file refuses at start, naming the file and the key;
+  `custom` without the file refuses by name.
 - **Input**: the line's arrows and Home/End move the cursor;
   Backspace and Delete cross a wide glyph whole; Up/Down walk the
   session's history (in memory, the draft preserved around a trip).

@@ -399,7 +399,7 @@ func TestLiveRegionWidthExact(t *testing.T) {
 }
 
 func TestLiveRegionImmutability(t *testing.T) {
-	th, err := ResolveTheme("p1", json.RawMessage(`{"base":"p1","glyphs":"ascii"}`), true)
+	th, err := ResolveTheme("", json.RawMessage(`{"base":"p1","glyphs":"ascii"}`), true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -48,7 +48,7 @@ func Load(dir, cwd string) (*Config, error) {
 	if w != nil && !fileAllow {
 		s.Allow = appendWorkerTools(s.Allow)
 	}
-	th, err := readTheme(dir)
+	th, err := ReadTheme(dir)
 	if err != nil {
 		return nil, err
 	}

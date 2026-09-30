@@ -1,4 +1,55 @@
 # Changelog
+## [2.3.2]: /theme, the operator's dial over the three presets
+
+The theme was a config-file affair: the `theme` key in settings.json
+naming a shipped palette, theme.json overriding it when present, and
+no way to move between them without editing a file and restarting. The
+web dashboard has had the two-preset picker since its first release —
+warm (the default) and cool — persisted in the browser's localStorage;
+the terminal, the frontend the operator actually types into, had
+neither a picker nor a persistent choice.
+
+`/theme` is the operator's verb over the same vocabulary, one command
+in the standard set: bare shows the active preset (`theme: warm
+(default)`, `theme: custom (theme.json)`), and `theme warm|cool|
+custom` sets it. Warm is the default palette — yesterday's `oled`
+table under its preset name, `oled` kept as a legacy alias for
+settings keys and theme.json bases already in the wild. Cool is the
+dashboard's cool palette ported to the slot table, hue for hue. Custom
+is theme.json in the rig home, read at selection time: a missing file
+refuses by name (`theme: no theme.json in the rig home (~/.rig/
+theme.json)`) and nothing is persisted; a malformed one refuses in
+config's voice.
+
+The choice is persistent where the theme's key already lived:
+`config.SetTheme` writes the `theme` key of settings.json in place —
+the file's other keys preserved, the write atomic (temp then rename),
+the value one of the three presets. Resolution is now one dial: a set
+`theme` key names the theme alone (`custom` names the file), and the
+file is the theme only when the key is unset — the old "the file wins"
+rule is replaced, because a dial that loses to the file it is supposed
+to override would lie at the next start. An operator with both a
+theme.json and a settings key keeps their file verbatim; `/theme
+custom` is how they return to it.
+
+The TUI repaints on the spot: the root's seam resolves the new theme
+through `tui.ResolveTheme` and pushes it over an optional
+`RepaintTheme` interface assertion on the frontend — the loop, the
+commands, and the other frontends never see it. New output paints in
+the new theme; committed scrollback keeps its bytes, the
+scrollback-native rule. The command set is fourteen: `theme` rides
+`All()` with its three presets as the TUI menu's argument hints, and
+the piped CLI's unknown-command line names it in the known set.
+
+Tests pin the three voices (the bare read, the set reply, the named
+refusals), `config.SetTheme`'s preserve-and-atomic-write contract, the
+warm/cool tables slot for slot, the one-dial resolution (the dial
+beats the file; `custom` requires the file; no dial and no file is
+warm; no dial with a file is the file), and the root's switchTheme
+persisting, refusing, and repainting. The golden fixtures that typed a
+named settings key to carry a glyph override now resolve the file
+alone, where the file is the theme.
+
 ## [2.3.1]: the separating blank belongs to the tool block
 
 The blank line that separates tool blocks was flowed on `ToolStart`. In

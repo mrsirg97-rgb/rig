@@ -37,7 +37,7 @@ func TestCompactedLineExact(t *testing.T) {
 	if got != want {
 		t.Fatalf("compacted line = %q, want %q", got, want)
 	}
-	as, _ := tui.ResolveTheme("oled", json.RawMessage(`{"base":"oled","glyphs":"ascii"}`), true)
+	as, _ := tui.ResolveTheme("", json.RawMessage(`{"base":"oled","glyphs":"ascii"}`), true)
 	if got := tui.RenderCompacted(as, ev); !strings.HasPrefix(got, as.Paint("ember", "=")+" ") {
 		t.Fatalf("the ascii compact glyph is the = set: %q", got)
 	}

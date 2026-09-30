@@ -40,8 +40,12 @@ TDD.
   `system`, `allow`, `retries`, `python`, `searxngUrl`,
   `webFetchProxy`, `trafilatura`, `swapUrl`; plus `defaultJobModel`,
   the scheduler's job-model default moved by the sweep (5, 8), and
-  `theme`, the shipped-theme name SPEC_TUI 7 selects by (the loader
-  carries the string; the TUI owns the vocabulary and the refusal).
+  `theme`, the shipped-theme name or `custom` SPEC_TUI 7 selects by
+  (the loader carries the string; the TUI owns the vocabulary and the
+  refusal). `SetTheme` is the key's one writer (2.3.2, the `/theme`
+  command's persistence): the file's other keys preserved, the write
+  atomic, the value verbatim; a malformed existing file refuses in
+  the loader's voice.
 - JSON only, stdlib `encoding/json`: a YAML dep is rejected, named (1).
 - A malformed or unreadable file is a loud refusal at start naming the
   file and the field; an absent file is silent (3).

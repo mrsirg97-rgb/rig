@@ -31,8 +31,8 @@ func TestOledIsTheDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no settings, no theme.json: %v", err)
 	}
-	if th.Name() != "oled" {
-		t.Fatalf("default = %q, want oled", th.Name())
+	if th.Name() != "warm" {
+		t.Fatalf("default = %q, want warm (oled's table under its preset name)", th.Name())
 	}
 }
 
@@ -50,7 +50,7 @@ func TestGlyphSets(t *testing.T) {
 		}
 	}
 	doc := []byte(`{"base":"oled","glyphs":"ascii"}`)
-	as, err := tui.ResolveTheme("oled", json.RawMessage(doc), true)
+	as, err := tui.ResolveTheme("", json.RawMessage(doc), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +70,8 @@ func TestThemeJSONSchemaRefusals(t *testing.T) {
 		doc  string
 		want string
 	}{
-		{"unknown base", `{"base":"plasma"}`, `unknown base "plasma" (known: oled, p1, p3, paper)`},
-		{"missing base", `{"glyphs":"ascii"}`, `base required (known: oled, p1, p3, paper)`},
+		{"unknown base", `{"base":"plasma"}`, `unknown base "plasma" (known: cool, oled, p1, p3, paper, warm)`},
+		{"missing base", `{"glyphs":"ascii"}`, `base required (known: cool, oled, p1, p3, paper, warm)`},
 		{"unknown slot", `{"base":"oled","slots":{"hue":"#ff9e64"}}`, `unknown slot "hue" (known: accent, dim, effortHigh, effortLow, effortMax, effortMedium, effortMinimal, effortOff, effortXhigh, ember, error, reasoning, rule, success, text, warn)`},
 		{"bad hex short", `{"base":"oled","slots":{"accent":"#ff9e6"}}`, `accent: #ff9e6: expected #rrggbb`},
 		{"bad hex digits", `{"base":"oled","slots":{"accent":"#ffzz64"}}`, `accent: #ffzz64: expected #rrggbb`},
@@ -81,7 +81,7 @@ func TestThemeJSONSchemaRefusals(t *testing.T) {
 		{"bad glyphs", `{"base":"oled","glyphs":"emoji"}`, `glyphs: unknown "emoji" (known: ascii, unicode)`},
 		{"unknown key", `{"base":"oled","palette":"oled"}`, `unknown key "palette" (known: base, glyphs, slots)`},
 		{"not an object", `[1,2,3]`, `theme.json: expected a JSON object`},
-		{"empty object missing base", `{}`, `base required (known: oled, p1, p3, paper)`},
+		{"empty object missing base", `{}`, `base required (known: cool, oled, p1, p3, paper, warm)`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -98,7 +98,7 @@ func TestThemeJSONSchemaRefusals(t *testing.T) {
 
 func TestThemeJSONSlotOverrideAndGlyphs(t *testing.T) {
 	doc := []byte(`{"base":"paper","slots":{"accent":"#FF9E64","reasoning":"#5a5a5a"},"glyphs":"ascii"}`)
-	th, err := tui.ResolveTheme("oled", json.RawMessage(doc), true)
+	th, err := tui.ResolveTheme("", json.RawMessage(doc), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,16 +117,16 @@ func TestThemeJSONSlotOverrideAndGlyphs(t *testing.T) {
 	}
 }
 
-func TestThemeJSONWinsOverSettings(t *testing.T) {
+func TestThemeJSONAloneIsTheLegacyPath(t *testing.T) {
 
 	doc := []byte(`{"base":"p3"}`)
-	th, err := tui.ResolveTheme("paper", json.RawMessage(doc), true)
+	th, err := tui.ResolveTheme("", json.RawMessage(doc), true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want, _ := tui.ResolveTheme("p3", nil, true)
 	if th.Slot("text") != want.Slot("text") {
-		t.Fatalf("text = %q, want p3's %q (the file wins over settings.theme)", th.Slot("text"), want.Slot("text"))
+		t.Fatalf("text = %q, want p3's %q (with no dial the file is the theme)", th.Slot("text"), want.Slot("text"))
 	}
 }
 
@@ -135,7 +135,7 @@ func TestSettingsThemeUnknownRefusesNamingKnown(t *testing.T) {
 	if err == nil {
 		t.Fatal("settings.theme=plasma: no refusal")
 	}
-	if !strings.Contains(err.Error(), `theme: unknown value "plasma" (known: oled, p1, p3, paper)`) {
+	if !strings.Contains(err.Error(), `theme: unknown value "plasma" (known: cool, oled, p1, p3, paper, warm)`) {
 		t.Fatalf("refusal %q does not name the shipped set", err.Error())
 	}
 }
@@ -269,7 +269,7 @@ func TestEmberBreath(t *testing.T) {
 }
 
 func TestEmberBreathCollapseTogglesTwoStops(t *testing.T) {
-	th, err := tui.ResolveTheme("oled", json.RawMessage(`{"base":"oled","slots":{"ember":"#101010"}}`), false)
+	th, err := tui.ResolveTheme("", json.RawMessage(`{"base":"oled","slots":{"ember":"#101010"}}`), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,4 +315,87 @@ func abs(n int) int {
 		return -n
 	}
 	return n
+}
+
+func TestWarmShipsTheDefaultPalette(t *testing.T) {
+	th, err := tui.ResolveTheme("warm", nil, true)
+	if err != nil {
+		t.Fatalf("ResolveTheme(warm): %v", err)
+	}
+	if th.Name() != "warm" {
+		t.Fatalf("name = %q, want warm", th.Name())
+	}
+	for slot, want := range map[string]string{
+		"text": "#d8d8d8", "dim": "#6e6e6e", "accent": "#61afef", "success": "#98c379",
+		"error": "#e06c75", "warn": "#e5c07b", "rule": "#3c3c3c", "reasoning": "#8a8a8a",
+		"ember": "#e8a86b", "effortOff": "#5a5a5a", "effortXhigh": "#d183e8", "effortMax": "#ff5fff",
+	} {
+		if got := th.Slot(slot); got != want {
+			t.Fatalf("warm slot %s = %q, want %q", slot, got, want)
+		}
+	}
+}
+
+func TestCoolShipsTheCoolPalette(t *testing.T) {
+	th, err := tui.ResolveTheme("cool", nil, true)
+	if err != nil {
+		t.Fatalf("ResolveTheme(cool): %v", err)
+	}
+	if th.Name() != "cool" {
+		t.Fatalf("name = %q, want cool", th.Name())
+	}
+	for slot, want := range map[string]string{
+		"text": "#b8bfcc", "dim": "#3a4150", "accent": "#8a9bbd", "success": "#6fa38a",
+		"error": "#a36f6f", "warn": "#a39a6f", "rule": "#2a303b", "reasoning": "#4f5868",
+		"ember": "#6b7fa3", "effortOff": "#3a4150", "effortMax": "#ff5fff",
+	} {
+		if got := th.Slot(slot); got != want {
+			t.Fatalf("cool slot %s = %q, want %q", slot, got, want)
+		}
+	}
+}
+
+func TestOledStaysTheLegacyAlias(t *testing.T) {
+	warm, err := tui.ResolveTheme("warm", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oled, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatalf("the legacy name must keep resolving: %v", err)
+	}
+	for _, slot := range []string{"text", "dim", "accent", "ember", "effortLow"} {
+		if oled.Slot(slot) != warm.Slot(slot) {
+			t.Fatalf("oled slot %s = %q, want warm's %q", slot, oled.Slot(slot), warm.Slot(slot))
+		}
+	}
+}
+
+func TestSettingsKeyBeatsTheFile(t *testing.T) {
+	doc := json.RawMessage(`{"base": "paper", "slots": {"accent": "#ff0000"}}`)
+	th, err := tui.ResolveTheme("cool", doc, true)
+	if err != nil {
+		t.Fatalf("ResolveTheme: %v", err)
+	}
+	if th.Name() != "cool" || th.Slot("accent") != "#8a9bbd" {
+		t.Fatalf("the settings dial must name the theme alone, got %s %s", th.Name(), th.Slot("accent"))
+	}
+}
+
+func TestCustomWithoutTheFileRefusesLoud(t *testing.T) {
+	_, err := tui.ResolveTheme("custom", nil, true)
+	if err == nil || !strings.Contains(err.Error(), "theme.json") {
+		t.Fatalf("custom without the file = %v, want a loud refusal naming theme.json", err)
+	}
+}
+
+func TestCustomResolvesTheFile(t *testing.T) {
+	doc := json.RawMessage(`{"base": "warm", "slots": {"accent": "#ff9e64"}, "glyphs": "ascii"}`)
+	th, err := tui.ResolveTheme("custom", doc, true)
+	if err != nil {
+		t.Fatalf("ResolveTheme(custom): %v", err)
+	}
+	if th.Name() != "warm" || th.Slot("accent") != "#ff9e64" || th.Glyph("prompt") != ">" {
+		t.Fatalf("the custom theme = %s %s %q, want the file's base, slot, and glyphs", th.Name(), th.Slot("accent"), th.Glyph("prompt"))
+	}
 }

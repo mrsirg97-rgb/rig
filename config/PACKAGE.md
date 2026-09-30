@@ -31,7 +31,10 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   a positive integer; unknown keys refuse naming `model, slots`.
 - `loadModels` / `parseRows` / `mergeRows`: the model table out of code.
 - `readAgents`: the AGENTS.md pair.
-- `readTheme`: the theme.json read.
+- `ReadTheme`: the theme.json read (the `/theme custom` load reads it fresh).
+- `SetTheme`: the `theme` key's one writer (2.3.2): the file's other
+  keys preserved, the write atomic (temp then rename), the value
+  verbatim; a malformed existing file refuses in the loader's voice.
 - The per-key decoders: `jsonString`, `jsonInt`, `jsonAllow`,
   `jsonStringArray`, `gojson`, and the `readErr` voice.
 

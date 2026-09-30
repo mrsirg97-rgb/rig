@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -166,6 +168,46 @@ func (r *root) switchRole(ctx context.Context, name string) error {
 	return nil
 }
 
+func (r *root) switchTheme(ctx context.Context, name string) error {
+	if name != "warm" && name != "cool" && name != "custom" {
+		return fmt.Errorf("theme: %q is not a preset (warm, cool, custom)", name)
+	}
+	home := r.rigHome
+	if home == "" {
+		h, err := rigHome()
+		if err != nil {
+			return err
+		}
+		home = h
+		r.rigHome = home
+	}
+	doc := r.themeDoc
+	if name == "custom" {
+		fresh, err := config.ReadTheme(home)
+		if err != nil {
+			return err
+		}
+		if fresh == nil {
+			return fmt.Errorf("theme: no theme.json in the rig home (%s)", filepath.Join(home, "theme.json"))
+		}
+		doc = fresh
+	}
+	th, err := tui.ResolveTheme(name, doc, r.themeTrueColor)
+	if err != nil {
+		return err
+	}
+	if err := config.SetTheme(home, name); err != nil {
+		return err
+	}
+	r.theme = name
+	if rp, ok := r.fe.(interface {
+		RepaintTheme(tui.Theme)
+	}); ok {
+		rp.RepaintTheme(th)
+	}
+	return nil
+}
+
 func (r *root) commandEnv() *command.Env {
 	workersEnv := command.Workers{File: filepath.Join(r.pluginsHome, "workers.json")}
 	if r.workers != nil {
@@ -190,6 +232,8 @@ func (r *root) commandEnv() *command.Env {
 		SetEffort:     r.switchEffort,
 		Role:          func() string { return r.role },
 		SetRole:       r.switchRole,
+		Theme:         func() string { return r.theme },
+		SetTheme:      r.switchTheme,
 		Approve:       func() string { return r.approve },
 		SetApprove:    r.switchApprove,
 		Tools:         r.tools,
