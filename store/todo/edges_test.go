@@ -412,7 +412,7 @@ func TestPositionOutOfRangeRefusesTeachingTheLinkForms(t *testing.T) {
 	if err == nil {
 		t.Fatal("an out-of-range position linked")
 	}
-	for _, want := range []string{"requires '3' not found", "requires '0' not found", "a link is tN from a reply, a sibling's exact text, or its position in this create"} {
+	for _, want := range []string{"requires '3' not found", "requires '0' not found", "a link is tN from a reply, a sibling's exact text, or its number in this list"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("missing %q in: %v", want, err)
 		}

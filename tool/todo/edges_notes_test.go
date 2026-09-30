@@ -102,7 +102,7 @@ func TestSchemaCarriesBothLinksAndNotes(t *testing.T) {
 
 func TestToolDescriptionNamesTheLinks(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	if !strings.Contains(tool.Description(), "requires links a task to one it waits for; blocks links it to one that waits for it") {
+	if !strings.Contains(tool.Description(), "A task can wait for another: set requires on the one that waits.") {
 		t.Errorf("the description must name the links in one line")
 	}
 }
