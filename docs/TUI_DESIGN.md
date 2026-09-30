@@ -128,7 +128,8 @@ tail of the record above the offset that fits the row budget.
 The commit points are the events, exactly (SPEC_TUI decision 2):
 ReasoningDelta and TextDelta stream as they arrive (reasoning dim and
 only while the toggle is on), ToolStart switches the activity line to the
-tool name, ToolResult commits the whole tool block, Done guarantees a
+tool name, ToolResult commits the whole tool block (the separating blank
+flows here when another block precedes it), Done guarantees a
 trailing newline and the status line's used takes its Usage, TurnEnd
 commits the usage line and resets the live region to the input line,
 Compacted commits the compact line and the status line's used takes the

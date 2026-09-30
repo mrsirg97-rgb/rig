@@ -78,8 +78,10 @@ width); no core or loop line (decision 10).
   slot is delivered before blocking, a command line is dispatched and
   consumed there, blank lines are no-ops, EOF ends the REPL.
 - `Notify` observes the stream events and renders at the commit points
-  exactly: deltas as they arrive, the tool block on `ToolResult`, the
-  newline guarantee on `Done`, the fault line, the compact line, the
+  exactly: deltas as they arrive, the tool block on `ToolResult` (the
+  separating blank flowed there when the last committed thing was a
+  tool block, the start's newline kept only after text or reasoning),
+  the newline guarantee on `Done`, the fault line, the compact line, the
   empty-turn notice (`RenderEmptyTurn`, its usage added to the turn
   totals), the usage on `TurnEnd`. Events it does not name are ignored
   (the compat rule). `toolStarts` keys a wave's in-flight calls by ID,
@@ -99,7 +101,10 @@ width); no core or loop line (decision 10).
 - The TUI's one departure from the CLI's bytes is the spacing rule
   (decision 2): the transcript never carries two blank rows, and a
   reasoning or tool block's close gets exactly one blank row before what
-  follows. The turn's end gets the same guarantee: the last committed
+  follows, and a tool block gets one before it when another block
+  precedes it — the separating blank is the result's, flowed on
+  `ToolResult`, the start's newline kept only after text or reasoning,
+  so a parallel wave renders as the alternating one does. The turn's end gets the same guarantee: the last committed
   row and the input line stand one blank apart, whether or not the reply
   ended with a newline (`TurnEnd` commits the blank after the pending
   text drains; `live.draw`'s blank merge keeps a double out). The CLI

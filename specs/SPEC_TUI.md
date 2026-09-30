@@ -297,7 +297,12 @@ boundary bytes landing on an already-blank line, collapse to one, and
 a reasoning block that ends gets exactly one blank row before the text
 or the tool that follows, and a tool block's close gets exactly one
 before whatever streams next, whether or not the model emitted a
-newline there. This is the TUI's one departure from the CLI's bytes, named:
+newline there, and a tool block whose predecessor is another tool
+block gets exactly one before its opening line: the separating blank
+is the block's, flowed on the result, not the start's, and the start's
+newline is kept only after text or reasoning, where it closes the open
+line or lands as the gap before the first block, so a wave of parallel
+calls renders as the alternating one does. This is the TUI's one departure from the CLI's bytes, named:
 the CLI is the piped reference and keeps every byte; the TUI is read
 by a person, and the model's whitespace is not information (decision
 8). The per-turn usage line is gone from the transcript: the turn's

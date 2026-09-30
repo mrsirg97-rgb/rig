@@ -1432,6 +1432,157 @@ func TestBlockSpacingRule(t *testing.T) {
 	}
 }
 
+func TestParallelToolBlocksSpaceApart(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+
+	s.fe.Notify(core.TextDelta{Text: "hello\n"})
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "read", Args: []byte(`{"path":"/tmp/a"}`)}})
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c2", Name: "read", Args: []byte(`{"path":"/tmp/b"}`)}})
+	s.fe.Notify(core.ToolResult{ID: "c1", Content: "a\n", Duration: 0})
+	s.fe.Notify(core.ToolResult{ID: "c2", Content: "b\n", Duration: 0})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.tick()
+	s.await(th.Paint(SlotDim, "  b"))
+
+	rows := screenLines(t, s, 60)
+
+	for i := 1; i < len(rows); i++ {
+		if rows[i] == "" && rows[i-1] == "" {
+			t.Fatalf("two blank rows in a row at %d:\n%q", i, rows)
+		}
+	}
+
+	find := func(prefix string) int {
+		for i, r := range rows {
+			if strings.HasPrefix(r, prefix) {
+				return i
+			}
+		}
+		return -1
+	}
+	hello, first := find("hello"), find("● read · /tmp/a")
+	if hello < 0 || first < 0 || first != hello+2 || rows[hello+1] != "" {
+		t.Fatalf("prose -> one blank -> the first block (hello %d, block %d):\n%q", hello, first, rows)
+	}
+	close1, second := find("read "), find("● read · /tmp/b")
+	if close1 < 0 || second < 0 || second != close1+2 || rows[close1+1] != "" {
+		t.Fatalf("one blank between the two parallel blocks (close %d, next %d):\n%q", close1, second, rows)
+	}
+}
+
+func TestSequentialToolPairRendersUnchanged(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+
+	s.fe.Notify(core.TextDelta{Text: "hello\n"})
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "read", Args: []byte(`{"path":"/tmp/a"}`)}})
+	s.fe.Notify(core.ToolResult{ID: "c1", Content: "a\n", Duration: 0})
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c2", Name: "read", Args: []byte(`{"path":"/tmp/b"}`)}})
+	s.fe.Notify(core.ToolResult{ID: "c2", Content: "b\n", Duration: 0})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.tick()
+	s.await(th.Paint(SlotDim, "  b"))
+
+	rows := screenLines(t, s, 60)
+	find := func(prefix string) int {
+		for i, r := range rows {
+			if strings.HasPrefix(r, prefix) {
+				return i
+			}
+		}
+		return -1
+	}
+	hello, first := find("hello"), find("● read · /tmp/a")
+	if hello < 0 || first < 0 || first != hello+2 || rows[hello+1] != "" {
+		t.Fatalf("the golden's shape, prose -> one blank -> the block (hello %d, block %d):\n%q", hello, first, rows)
+	}
+	close1, second := find("read "), find("● read · /tmp/b")
+	if close1 < 0 || second < 0 || second != close1+2 || rows[close1+1] != "" {
+		t.Fatalf("one blank between the sequential blocks (close %d, next %d):\n%q", close1, second, rows)
+	}
+
+	s2 := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s2.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+
+	s2.fe.Notify(core.TextDelta{Text: "hello"})
+	s2.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "read", Args: []byte(`{"path":"/tmp/a"}`)}})
+	s2.fe.Notify(core.ToolResult{ID: "c1", Content: "a\n", Duration: 0})
+	s2.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c2", Name: "read", Args: []byte(`{"path":"/tmp/b"}`)}})
+	s2.fe.Notify(core.ToolResult{ID: "c2", Content: "b\n", Duration: 0})
+	s2.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s2.tick()
+	s2.await(th.Paint(SlotDim, "  b"))
+
+	rows2 := screenLines(t, s2, 60)
+	find2 := func(prefix string) int {
+		for i, r := range rows2 {
+			if strings.HasPrefix(r, prefix) {
+				return i
+			}
+		}
+		return -1
+	}
+	hello2, first2 := find2("hello"), find2("● read · /tmp/a")
+	if hello2 < 0 || first2 < 0 || first2 != hello2+1 {
+		t.Fatalf("open prose closes on the start's newline, the block stands right under it (hello %d, block %d):\n%q", hello2, first2, rows2)
+	}
+	close2, second2 := find2("read "), find2("● read · /tmp/b")
+	if close2 < 0 || second2 < 0 || second2 != close2+2 || rows2[close2+1] != "" {
+		t.Fatalf("one blank between the sequential blocks (close %d, next %d):\n%q", close2, second2, rows2)
+	}
+}
+
+func TestProseThenToolBlockKeepsItsSingleGap(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("the prompt = %q, want go", got)
+	}
+
+	s.fe.Notify(core.TextDelta{Text: "hello\n"})
+	s.fe.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "read", Args: []byte(`{"path":"/tmp/a"}`)}})
+	s.fe.Notify(core.ToolResult{ID: "c1", Content: "a\n", Duration: 0})
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.tick()
+	s.await(th.Paint(SlotDim, "  a"))
+
+	rows := screenLines(t, s, 60)
+	for i := 1; i < len(rows); i++ {
+		if rows[i] == "" && rows[i-1] == "" {
+			t.Fatalf("two blank rows in a row at %d:\n%q", i, rows)
+		}
+	}
+	hello, block := -1, -1
+	for i, r := range rows {
+		if r == "hello" {
+			hello = i
+		}
+		if strings.HasPrefix(r, "● read · /tmp/a") {
+			block = i
+		}
+	}
+	if hello < 0 || block < 0 || block != hello+2 || rows[hello+1] != "" {
+		t.Fatalf("prose then a block keeps its single gap (hello %d, block %d):\n%q", hello, block, rows)
+	}
+}
+
 func TestUsageRowIsLiveWithinTheTurn(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, th, WithWidth(60),

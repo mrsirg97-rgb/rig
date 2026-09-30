@@ -1,4 +1,26 @@
 # Changelog
+## [2.3.1]: the separating blank belongs to the tool block
+
+The blank line that separates tool blocks was flowed on `ToolStart`. In
+a parallel turn every start arrives before any result, so the gaps
+landed together at the top of the wave and the results committed back
+to back — a read block's closing `read ✓ 0.0s` standing directly under
+the next `● read ·` opening. Sequential turns never saw it, because
+start and result alternate.
+
+The separating line is the block's now: on `ToolResult`, when the last
+committed thing was a tool block (`lastSlot == slotAfterTool`, read
+before the result reassigns it), one newline flows before the block
+commits, and the `ToolStart` newline is kept only when the last slot
+was text or reasoning — where it closes the open line or lands as the
+single gap before the first block. Every rendered turn, sequential or
+parallel, carries exactly one blank row between consecutive tool
+blocks, prose keeps its gap before the first block, and no boundary
+gets two. The golden streams are byte-identical: a sequential pair
+renders exactly as it did. The TUI's session harness pins the wave:
+two parallel results one blank apart, a sequential pair unchanged, and
+prose then a block keeping its single gap.
+
 ## [2.3.0]: recall degrades by relevance, corruption refuses by name
 
 The full-text arm of recall joined its tokens with AND, so a natural
