@@ -120,7 +120,6 @@ func TestReadDescriptionNamesTheObservationPath(t *testing.T) {
 	for _, want := range []string{
 		"use read, not bash (cat or sed)",
 		"a bash read leaves no observation for it to check against",
-		"output truncated: N of M lines",
 		"exactly as edit will match it",
 	} {
 		if !strings.Contains(desc, want) {
@@ -561,23 +560,19 @@ func TestDriftRefusalCapsARewrite(t *testing.T) {
 
 const readCap = 1 << 20
 
-// truncMarkerRe matches the truncation marker at the end of a capped reply:
-// the complete lines returned (N) and the file's line count (M) — the same
-// "lines" the offset and the past-the-end refusal use, so the next offset is
-// exact: offset+N.
-var truncMarkerRe = regexp.MustCompile(`\n\[output truncated: (\d+) of (\d+) lines\]$`)
+var truncMarkerRe = regexp.MustCompile(`\n\[output truncated: (\d+) of (\d+) lines; continue at offset (\d+)\]$`)
 
-// splitTruncMarker splits a read reply at the truncation marker, returning
-// the body, the complete lines it holds (N), the file's line count (M), and
-// whether the reply was capped at all.
-func splitTruncMarker(rep string) (body string, n, m int, capped bool) {
+var longLineMarkerRe = regexp.MustCompile(`\n\[output truncated: line (\d+) is longer than the 1 MiB cap; slice it with bash\]$`)
+
+func splitTruncMarker(rep string) (body string, n, m, nextOffset int, capped bool) {
 	mm := truncMarkerRe.FindStringSubmatch(rep)
 	if mm == nil {
-		return rep, 0, 0, false
+		return rep, 0, 0, 0, false
 	}
 	n, _ = strconv.Atoi(mm[1])
 	m, _ = strconv.Atoi(mm[2])
-	return rep[:len(rep)-len(mm[0])], n, m, true
+	nextOffset, _ = strconv.Atoi(mm[3])
+	return rep[:len(rep)-len(mm[0])], n, m, nextOffset, true
 }
 
 func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
@@ -600,7 +595,7 @@ func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
 	if len(want) > readCap {
 		cut := strings.LastIndexByte(want[:readCap], '\n') + 1
 		n := strings.Count(want[:cut], "\n")
-		want = want[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines]", n, len(lines))
+		want = want[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines; continue at offset %d]", n, len(lines), n)
 	}
 	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
@@ -652,13 +647,14 @@ func TestReadOneHugeLineFallsBackToARuneBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	body, n, m, capped := splitTruncMarker(got)
-	if !capped {
+	mm := longLineMarkerRe.FindStringSubmatch(got)
+	if mm == nil {
 		t.Fatalf("a readCap+1-byte file must come back capped, got %d bytes", len(got))
 	}
-	if n != 0 || m != 1 {
-		t.Fatalf("a whole-file capped read of one huge line must report 0 of 1 lines, got %d of %d", n, m)
+	if mm[1] != "1" {
+		t.Fatalf("the long-line marker must name line 1, got %q", mm[1])
 	}
+	body := got[:len(got)-len(mm[0])]
 	if !utf8.ValidString(body) {
 		t.Fatalf("the cap must not split a rune, got tail %q", body[len(body)-8:])
 	}
@@ -673,13 +669,14 @@ func TestReadOneHugeLineFallsBackToARuneBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	body, n, m, capped = splitTruncMarker(got)
-	if !capped {
+	mm = longLineMarkerRe.FindStringSubmatch(got)
+	if mm == nil {
 		t.Fatalf("a readCap+1-byte file must come back capped, got %d bytes", len(got))
 	}
-	if n != 0 || m != 1 {
-		t.Fatalf("a capped read of one huge line must report 0 of 1 lines, got %d of %d", n, m)
+	if mm[1] != "1" {
+		t.Fatalf("the long-line marker must name line 1, got %q", mm[1])
 	}
+	body = got[:len(got)-len(mm[0])]
 	if !utf8.ValidString(body) {
 		t.Fatalf("the cap must not split a rune, got tail %q", body[len(body)-8:])
 	}
@@ -695,7 +692,7 @@ func TestReadOneHugeLineCapsByteIdentical(t *testing.T) {
 	if err := os.WriteFile(path, []byte(huge), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	want := huge[:readCap] + "\n[output truncated: 0 of 1 lines]"
+	want := huge[:readCap] + "\n[output truncated: line 1 is longer than the 1 MiB cap; slice it with bash]"
 	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -753,7 +750,7 @@ func TestReadBigFileRangesReassembleExactly(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read at offset %d: %v", offset, err)
 		}
-		body, n, _, capped := splitTruncMarker(rep)
+		body, n, _, nextOffset, capped := splitTruncMarker(rep)
 		got.WriteString(body)
 		if !capped {
 			break
@@ -761,7 +758,10 @@ func TestReadBigFileRangesReassembleExactly(t *testing.T) {
 		if n == 0 {
 			t.Fatalf("a capped read reported 0 complete lines at offset %d; the walk cannot advance", offset)
 		}
-		offset += n
+		if nextOffset != offset+n {
+			t.Fatalf("the marker's next offset %d must be offset+n (%d) at offset %d", nextOffset, offset+n, offset)
+		}
+		offset = nextOffset
 	}
 	if got.String() != string(want) {
 		t.Fatalf("the marker-guided ranges reassembled to %d bytes, want %d", got.Len(), len(want))

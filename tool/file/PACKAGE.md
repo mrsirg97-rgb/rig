@@ -35,6 +35,17 @@ it acts on it.
   output cap, so a huge file is never materialised through a read. The
   returned bytes follow the split-join contract exactly (the
   trailing-newline line count included).
+- read's cap marker: a capped reply is cut at a line boundary when one
+  exists inside the cap, so the reply ends at a complete line, and the
+  marker carries the next step — `[output truncated: N of M lines;
+  continue at offset X]`, X the offset the next read needs (offset+N,
+  N the complete lines in the reply and M the file's line count, the
+  same "lines" the offset and the past-the-end refusal use) — so a
+  model reading a big file in ranges walks it exactly. A single line
+  longer than the cap falls back to a rune boundary, so no rune is ever
+  split, and gets its own marker — `[output truncated: line N is longer
+  than the 1 MiB cap; slice it with bash]` — because a read can never
+  make progress on it: bash owns that line.
 - `normalizePath`: canonicalizes at the boundary so `a.go` and `./a.go`
   are the same key (without it the drift check can be silently bypassed by
   path spelling).
