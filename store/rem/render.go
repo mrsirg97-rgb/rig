@@ -14,7 +14,7 @@ func indent(text string) string {
 }
 
 func renderMemoryLine(h Hit) string {
-	head := fmt.Sprintf("m%d [%.2f] %s · %s", h.ID, h.EffectiveStrength, h.ScopeLabel, h.Kind)
+	head := fmt.Sprintf("m%d [%.2f %s] %s · %s", h.ID, h.EffectiveStrength, h.Match, h.ScopeLabel, h.Kind)
 	if h.SupersededBy != nil {
 		head += fmt.Sprintf(" · superseded by m%d", *h.SupersededBy)
 	}

@@ -181,8 +181,11 @@ func consolidatePass(bound context.Context, in PruneInput, cwd string) (int, err
 	nowT := time.Now().UTC()
 	now := nowT.Format(time.RFC3339)
 	for i := range rows {
-		next := consolidate(rows[i].Strength, daysSince(rows[i].LastConsolidatedAt, nowT), rows[i].AccessCount, rows[i].Importance)
-		rows[i].Strength = next
+		days, err := daysSince(rows[i].LastConsolidatedAt, nowT)
+		if err != nil {
+			return 0, fmt.Errorf("rem: m%d has an unreadable last_consolidated_at; prune it by id", rows[i].Id)
+		}
+		rows[i].Strength = consolidate(rows[i].Strength, days, rows[i].AccessCount, rows[i].Importance)
 		rows[i].AccessCount = 0
 		rows[i].LastConsolidatedAt = now
 		if _, err := remdom.NewMemoryDomain().UpdateMemory(bound, rows[i]); err != nil {
@@ -192,15 +195,18 @@ func consolidatePass(bound context.Context, in PruneInput, cwd string) (int, err
 	return len(rows), nil
 }
 
-func daysSince(older string, now time.Time) float64 {
+func daysSince(older string, now time.Time) (float64, error) {
 	if older == "" {
-		return 0
+		return 0, nil
 	}
 	t, err := time.Parse(time.RFC3339, older)
-	if err != nil || !t.Before(now) {
-		return 0
+	if err != nil {
+		return 0, fmt.Errorf("rem: unreadable timestamp %q", older)
 	}
-	return now.Sub(t).Hours() / 24
+	if t.After(now) {
+		return 0, fmt.Errorf("rem: future timestamp %q", older)
+	}
+	return now.Sub(t).Hours() / 24, nil
 }
 
 func removeMemories(bound context.Context, in PruneInput, cwd string) (int, error) {

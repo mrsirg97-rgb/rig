@@ -75,5 +75,5 @@ const description = "Your memory across sessions. learn commits a fact or constr
 	"distilled memory with its source. prune removes, reduces, or consolidates. Guidelines: recall before " +
 	"re-deriving a project fact; learn what the next session should not have to re-derive; supersede by id when " +
 	"the code disagrees; name project when the fact belongs to a different workspace than the one you started in. Memory ids (mN) " +
-	"come from the replies: copy them, never invent them. Reply: the hits with their ids and strength, or the " +
+	"come from the replies: copy them, never invent them. Reply: the hits with their ids, strength and arm, or the " +
 	"written row."

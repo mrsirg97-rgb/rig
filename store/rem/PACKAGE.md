@@ -23,8 +23,8 @@ nothing is read into the prompt by a session start.
   `migrate.go`: the one-time migration.
 - `path.go`: `FilePath(home)`, the store's file: `<home>/rem/rem.sqlite`.
 - `recall.go`: the pure core: consolidation arithmetic, the lexical
-  shapes of the two arms (FTS and trigram), reciprocal rank fusion
-  (RRF, k=60). Zero I/O.
+  shapes of the two arms (FTS OR-union and trigram), reciprocal rank
+  fusion (RRF, k=60). Zero I/O.
 - `recall_db.go`: recall's DB-level path: the two named raw arms, fusion
   over their rankings, browse, and the effective-strength blend.
 - `metadata/rem.go`: hand-written metadata for the rem store.
@@ -36,7 +36,9 @@ nothing is read into the prompt by a session start.
   (SPEC_COMMANDS 11). The compaction reflection seam is cut.
 - Ids are minted from a meta counter inside the caller's transaction:
   strictly increasing, never reused (the AUTOINCREMENT rule, kept by
-  minting).
+  minting). The mN id is a local handle, not a global identity: a mesh
+  converges rows on content_sha256, which learn is already idempotent
+  on, and each node mints its own mN.
 
 ## Gotchas
 
@@ -65,10 +67,20 @@ nothing is read into the prompt by a session start.
 - Recall's effective computation uses exactly the consolidation inputs, so
   the two paths agree: effective-at-recall equals what consolidate would
   persist, and consolidating later cannot double-count.
+- Recall and consolidation refuse a memory whose last_consolidated_at is
+  unparseable or in the future (`rem: mN has an unreadable
+  last_consolidated_at; prune it by id`); an empty one is never, not
+  corruption.
+- Recall is a write: it reinforces its hits inside its own transaction,
+  so recalls serialize with learns; if a swarm ever contends on it,
+  record the access after the read rather than dropping it.
 - The trigram arm uses the pg_trgm convention (two-space padding): the
   fuzzy arm enforces a minimum absolute overlap and a containment floor.
 - Fusion is reciprocal rank (k=60) over the arms' rankings, deduped by
-  memory id, annotated with the reaching arm. The natural-key dedup
+  memory id, annotated with the reaching arm. The fts arm ORs its tokens
+  and orders by FTS5's own rank (bm25), so a long query degrades by
+  relevance instead of to nothing; reserved words stay quoted, the arm's
+  cap and the scope and kind filters are unchanged. The natural-key dedup
   digest is sha256, and the v2->v4 migration rehashes legacy rows and
   renames the column (`content_md5` -> `content_sha256`) so the field,
   the column, and the unique index all agree.

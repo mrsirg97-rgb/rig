@@ -165,7 +165,10 @@ func recallScoped(bound context.Context, scopes []string, in RecallInput, k int)
 		if !ok {
 			continue
 		}
-		eff := consolidate(r.Strength, daysSince(r.LastConsolidatedAt, now), r.AccessCount, r.Importance)
+		eff, err := effectiveAt(r, now)
+		if err != nil {
+			return nil, fmt.Errorf("rem: m%d has an unreadable last_consolidated_at; prune it by id", r.Id)
+		}
 		scored = append(scored, hitOf(r, eff, f.match))
 		rowByID[r.Id] = r
 	}
@@ -204,6 +207,14 @@ func recallScoped(bound context.Context, scopes []string, in RecallInput, k int)
 		}
 	}
 	return top, nil
+}
+
+func effectiveAt(r remdom.Memory, now time.Time) (float64, error) {
+	days, err := daysSince(r.LastConsolidatedAt, now)
+	if err != nil {
+		return 0, err
+	}
+	return consolidate(r.Strength, days, r.AccessCount, r.Importance), nil
 }
 
 func hitOf(r remdom.Memory, eff float64, match string) Hit {
@@ -380,7 +391,11 @@ func browse(bound context.Context, cwd string, in RecallInput, k int) ([]Hit, er
 		if err != nil {
 			return nil, fmt.Errorf("rem: browse: %w", err)
 		}
-		hits = append(hits, hitOf(m, consolidate(m.Strength, daysSince(m.LastConsolidatedAt, now), m.AccessCount, m.Importance), "browse"))
+		eff, err := effectiveAt(m, now)
+		if err != nil {
+			return nil, fmt.Errorf("rem: m%d has an unreadable last_consolidated_at; prune it by id", m.Id)
+		}
+		hits = append(hits, hitOf(m, eff, "browse"))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rem: browse: %w", err)
