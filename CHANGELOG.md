@@ -1,4 +1,42 @@
 # Changelog
+## [2.1.11]: the plain-words contract and the plan rule
+
+The todo tool's contract had grown by append: 2.1.6 through 2.1.9 each
+added a clause to `tool/todo/schema.go`, and the description and the
+link fields read like a contract — `Task id (tN), exact text, or
+position in this create that this task cannot start until done; null
+clears the link; omit when none` — while `tasks` and `status` still
+carried the older plain-words pass. The words are now one set. The
+description decides: the one line of what the tool is, its verbs, the
+argument shapes, the reply's shape. The fields explain: each field's
+description says what that field is, in plain words — `action` is
+`What to do.`, `tasks` is `The tasks to add, in order. Required for
+create. An empty list clears the queue.`, and the two links each carry
+their own sentence (`The task this one waits for: its id (tN), its
+exact text, or its number in this list, where 1 is the first. Omit when
+none; null removes a link.`). `blocks` is a field, not a sentence: its
+meaning is no longer folded into the description's prose, and the
+description's link line is the one plain sentence `A task can wait for
+another: set requires on the one that waits.` The unknown-link refusal
+names the forms in the same words: `(a link is tN from a reply, a
+sibling's exact text, or its number in this list)`.
+
+The planning rule moved too. On 2026-09-29 the operator's AGENTS.md
+lost its todo line as redundant with the todo description, and sessions
+that used todo fell from 55 of 60 to 4 of 7. A rule inside a tool
+description is read only once the model has reached for the tool; a
+rule in the system prompt is read every turn. The system prompt now
+carries the one sentence, after `A capability you build twice belongs
+in a plugin.`: `For any job of three or more steps, or one that touches
+several files, plan it in todo before the first edit: create the tasks,
+start one before working on it, complete or fail it when done, and
+leave the queue empty at the end.` The description keeps its Guidelines
+sentence as the arrival text: the system prompt decides when, the
+description is there when the model arrives. No behavior changed: the
+verbs, the store, and the refusal rules are untouched. The three pinned
+request bodies (`golden_020`) carry the new words, deliberately, and
+the tool menu's byte count goes down with them.
+
 ## [2.1.10]: the read truncation facts
 
 The read tool capped a reply at 1 MiB and appended `[output truncated]`
