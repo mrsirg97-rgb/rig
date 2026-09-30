@@ -36,7 +36,7 @@ const schemaJSON = `{
 		},
 		"note": {
 			"type": "string",
-			"description": "The note text, or the reason where rejecting."
+			"description": "The note text, or the reason when rejecting."
 		},
 		"status": {
 			"type": "string",
