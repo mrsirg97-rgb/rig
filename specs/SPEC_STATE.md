@@ -153,14 +153,19 @@ The session transcript as rows. One file per session under
   model (nullable; the served model as the provider's own response echo,
   stamped on assistant rows by the recorder at `Done`; user, compaction,
   and re-landed rows stay null — `sessions.model` is the requested id at
-  open, the message rows are what actually served, and the divergence is
+  open, updated in place by the `/models` switch, the message rows are
+  what actually served, and the divergence is
   the diagnostic), created_at.
 - `tool_calls`: id (primary: the provider's call id), message_seq (link
   messages), name, args (TEXT json), result (TEXT, nullable until it lands),
   err (nullable), started_at, ended_at.
 - `usage`: message_seq (primary, link messages), prompt, completion,
   cache_read, cache_write, cost (the endpoint's dollars, 0 when it
-  reported none; schema v4, SPEC_HOSTED 3). `SessionCost` sums it, the
+  reported none; schema v4, SPEC_HOSTED 3), model (nullable; the id that
+  produced the call, schema v5 — the recorder stamps `Done`'s echo, the
+  discarded attempt's own id on `EmptyTurn`, the summary call's on
+  `Compacted`; a row left modelless by an older build reads as its
+  session's start model at every read path). `SessionCost` sums it, the
   sessions list and the TUI footer show it, and the swarm and the
   scheduler runner read a worker's spend from it.
 - `files`: session_id + path (primary), hash, mtime. `Session.Files`
@@ -211,7 +216,11 @@ newest first, and `SessionUsage(ctx, db, sessionId)` its usage total. The
 tool's `summary` action aggregates over the recent `n` sessions: the
 session and turn counts, the distinct models with their versions, the
 fault count with the latest fault's first line, and the aggregate cache
-ratio (`cache_read*100/prompt`, the status row's arithmetic). Two small
+ratio (`cache_read*100/prompt`, the status row's arithmetic). A session
+that ran on more than one model — `usage.model` naming the id that
+produced each call — splits the summary's token totals by that id (the
+`tokens:` line, present only when the slice holds such a session; a
+modelless row reads as its session's start model). Two small
 recorder additions for the `new` / `sessions resume` handoff (SPEC_COMMANDS
 4): `Ensure` (the session row exists before any row lands under the id,
 idempotent) and `Retarget` (the retiring recorder is re-pointed before

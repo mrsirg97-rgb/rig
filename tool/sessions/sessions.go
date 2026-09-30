@@ -139,6 +139,8 @@ func (a adapter) summary(ctx context.Context, db store.DB, project string, n int
 	turns := 0
 	faultCount := 0
 	models := map[string]bool{}
+	tokensByModel := map[string]int64{}
+	mixed := false
 	var prompt, cacheRead int64
 	var lastFault *state.FaultRow
 	for _, r := range rows {
@@ -149,9 +151,15 @@ func (a adapter) summary(ctx context.Context, db store.DB, project string, n int
 		if err != nil {
 			return "", fmt.Errorf("sessions: %v", err)
 		}
+		seen := map[string]bool{}
 		for _, u := range usage {
 			prompt += u.Prompt
 			cacheRead += u.CacheRead
+			tokensByModel[u.Model] += u.Prompt + u.Completion
+			seen[u.Model] = true
+		}
+		if len(seen) > 1 {
+			mixed = true
 		}
 		faults, err := state.SessionFaults(ctx, db, r.ID)
 		if err != nil {
@@ -169,6 +177,11 @@ func (a adapter) summary(ctx context.Context, db store.DB, project string, n int
 		modelLines = append(modelLines, m)
 	}
 	sort.Strings(modelLines)
+	servedLines := make([]string, 0, len(tokensByModel))
+	for m, tokens := range tokensByModel {
+		servedLines = append(servedLines, fmt.Sprintf("%s %d", m, tokens))
+	}
+	sort.Strings(servedLines)
 	pct := 0
 	if prompt > 0 {
 		pct = int(cacheRead * 100 / prompt)
@@ -177,6 +190,9 @@ func (a adapter) summary(ctx context.Context, db store.DB, project string, n int
 	fmt.Fprintf(&b, "%s: %d session%s, %d turn%s\n",
 		scope.Label(project), len(rows), plural(len(rows)), turns, plural(turns))
 	fmt.Fprintf(&b, "models: %s\n", strings.Join(modelLines, ", "))
+	if mixed {
+		fmt.Fprintf(&b, "tokens: %s\n", strings.Join(servedLines, ", "))
+	}
 	if faultCount == 0 {
 		b.WriteString("faults: 0\n")
 	} else {

@@ -20,7 +20,7 @@ func TestSessionUsageReturnsRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordUsage(ctx, db, seq, 111, 222, 333, 444, 0); err != nil {
+	if err := state.RecordUsage(ctx, db, seq, 111, 222, 333, 444, 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := state.SessionUsage(ctx, db, "s1")
@@ -73,10 +73,10 @@ func TestCostRecordedAndSummed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordUsage(ctx, db, seq, 100, 50, 10, 5, 0.25); err != nil {
+	if err := state.RecordUsage(ctx, db, seq, 100, 50, 10, 5, 0.25, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.AddUsage(ctx, db, seq, 0, 0, 0, 0, 0.10); err != nil {
+	if err := state.AddUsage(ctx, db, seq, 0, 0, 0, 0, 0.10, nil); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := state.SessionUsage(ctx, db, "s1")

@@ -35,7 +35,8 @@ is a loud line naming the known set, never silently a prompt.
   sessions (models, faults, the cache ratio); `show <id>` renders a
   transcript; `resume <id>` swaps to it in-process.
 - `/models`: the per-model table with the active row marked; `/models <id>`
-  switches for the next turn.
+  switches for the next turn and moves the open session's model row with
+  it, so the store records the current id rather than the open-time one.
 - `/steer <text>`: queue for the next boundary (interrupts a live turn);
   bare `/steer` interrupts only.
 - `/todo`, `/scheduler`: the same tools the model gets, same queue, same

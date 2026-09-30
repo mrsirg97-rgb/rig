@@ -132,6 +132,7 @@ func TestTheModelSwitchMovesViewWithTheRow(t *testing.T) {
 	r := visionRoot(t)
 	r.row = defaultRow()
 	r.activeID = "local"
+	storeRoot(t, r)
 	wire(r)
 	if names := liveNames(r); strings.Contains(names, "view") {
 		t.Fatalf("the live table must not carry view for a text row: %s", names)

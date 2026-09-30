@@ -656,3 +656,36 @@ func TestOversizedOlderSliceRespectsTheCallBoundary(t *testing.T) {
 		t.Fatalf("the call and its result must stay together in the remainder, got %d messages", len(s.Messages))
 	}
 }
+
+func TestCompactedCarriesTheSummaryCallModel(t *testing.T) {
+	s := core.NewSession()
+	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
+	s.Append(core.Message{
+		Role: core.RoleAssistant, Content: strings.Repeat("a", 200),
+		ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: []byte(`{}`)}},
+	})
+	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})
+
+	prov := &scriptedProvider{turns: []scriptedTurn{
+		{events: []core.Event{core.TextDelta{Text: "SUMMARY"}, core.Done{Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 1}}}},
+	}}
+	fe := &captureFrontend{}
+	pol, err := compact.New(prov, fe, s, "S", testRow)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := pol.Assemble(context.Background(), s); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	evs := stripCue(fe.snapshot())
+	if len(evs) != 1 {
+		t.Fatalf("events = %v, want exactly the Compacted", evs)
+	}
+	c, ok := evs[0].(core.Compacted)
+	if !ok {
+		t.Fatalf("event = %T, want Compacted", evs[0])
+	}
+	if c.Model != "ox-alpha" {
+		t.Fatalf("Compacted model = %q, want the summary call's own id ox-alpha", c.Model)
+	}
+}

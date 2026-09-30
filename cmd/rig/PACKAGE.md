@@ -46,7 +46,9 @@ sees core and models and nothing else.
   re-wiring.
 - **The seam closures**: `buildSystem` (prompt assembly), `buildPair`
   (the provider+policy rebuild), `swapIn`, `compactNow`, `newSession`,
-  `sessionList/Show/Resume`, `switchModel`, `switchEffort`, `switchRole`,
+  `sessionList/Show/Resume`, `switchModel` (the recorder's row write
+  happens before the switch applies: a refused write refuses the
+  switch), `switchEffort`, `switchRole`,
   `switchApprove`, `reloadPlugins` / `swapPlugins`, `nativeTools`,
   `runtimeTable`, and the `/rem` command's closures
   (`RemList`/`RemShow`/`RemForget` over `store/rem`).

@@ -34,7 +34,7 @@ func TestListSessionsSeeksNotScans(t *testing.T) {
 				t.Fatal(err)
 			}
 			if role == "assistant" {
-				if err := state.RecordUsage(ctx, db, seq, 100, 10, 90, 0, 0); err != nil {
+				if err := state.RecordUsage(ctx, db, seq, 100, 10, 90, 0, 0, nil); err != nil {
 					t.Fatal(err)
 				}
 			}

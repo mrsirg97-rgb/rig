@@ -114,7 +114,7 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	}
 
 	p.fe.Notify(core.Compacting{})
-	summary, usage, err := p.summarize(ctx, input, minInt(p.row.MaxTokens, p.row.Window-est))
+	summary, usage, model, err := p.summarize(ctx, input, minInt(p.row.MaxTokens, p.row.Window-est))
 	if err != nil {
 		return core.Compacted{}, false, err
 	}
@@ -132,24 +132,26 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 		Dropped: int(float64(Estimate(older)) * factor),
 		Kept:    int(float64(Estimate(tail)) * factor),
 		Usage:   usage,
+		Model:   model,
 	}
 	return ev, true, nil
 }
 
-func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens int) (string, core.Usage, error) {
+func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens int) (string, core.Usage, string, error) {
 	effort := p.row.Effort
 	if effort == "" {
 		effort = "medium"
 	}
 	ch, err := p.provider.Stream(ctx, core.Request{Messages: input, MaxTokens: maxTokens, ReasoningEffort: effort})
 	if err != nil {
-		return "", core.Usage{}, fmt.Errorf("compact: summary call: %w", err)
+		return "", core.Usage{}, "", fmt.Errorf("compact: summary call: %w", err)
 	}
 	var (
-		body  strings.Builder
-		usage core.Usage
-		done  bool
-		fault error
+		body   strings.Builder
+		usage  core.Usage
+		served string
+		done   bool
+		fault  error
 	)
 	for ev := range ch {
 		switch e := ev.(type) {
@@ -158,21 +160,22 @@ func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens 
 		case core.Done:
 			done = true
 			usage = e.Usage
+			served = e.Model
 		case core.Fault:
 			fault = e.Err
 		}
 	}
 	if fault != nil {
-		return "", core.Usage{}, fmt.Errorf("compact: summary call: %w", fault)
+		return "", core.Usage{}, "", fmt.Errorf("compact: summary call: %w", fault)
 	}
 	if !done {
-		return "", core.Usage{}, errors.New("compact: the summary call's stream ended without Done")
+		return "", core.Usage{}, "", errors.New("compact: the summary call's stream ended without Done")
 	}
 	text := body.String()
 	if strings.TrimSpace(text) == "" {
-		return "", core.Usage{}, errors.New("compact: the summary call returned no text")
+		return "", core.Usage{}, "", errors.New("compact: the summary call returned no text")
 	}
-	return text, usage, nil
+	return text, usage, served, nil
 }
 
 func (p *policy) recoveryOwed() bool {

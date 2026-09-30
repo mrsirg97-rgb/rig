@@ -8,7 +8,12 @@ open. `list` is the recent sessions, newest first, one line each (short id,
 started, model, version, turns, faults); `summary` is the vitals over the
 same slice; session and turn counts, the models with their versions, the
 fault count with the last fault's first line, and the aggregate cache ratio
-(cache_read over prompt, the status row's arithmetic). It reuses the
+(cache_read over prompt, the status row's arithmetic). When a session in
+the slice ran on more than one model — usage rows carry the id that
+produced each call — the summary adds a `tokens:` line splitting the
+slice's prompt+completion totals by that id, sorted by name; a slice of
+single-model sessions prints nothing extra, the session row's model being
+the whole story. It reuses the
 store's typed verbs (`ListSessions`, `SessionUsage`, `SessionFaults`) and
 opens the project's state file itself, so it reads any workspace, not only
 the session's own. The open carries `state.Migration()`: the same
@@ -46,4 +51,7 @@ rows are touched.
 - `summary` fans out over the slice: one `SessionUsage` and one
   `SessionFaults` per session, then aggregates in the tool (the store
   verbs stay per-session; the aggregation is the tool's, as the usage
-  total is on the dashboard).
+  total is on the dashboard). `SessionUsage` resolves a modelless row to
+  the session's start model, so the `tokens:` split needs no nil handling
+  in the tool; a session counts as mixed on the distinct ids of its own
+  usage rows, and the split line appears only when one is in the slice.

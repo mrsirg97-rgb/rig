@@ -10,7 +10,10 @@ loop already emits; the read side rebuilds a session from the log.
 
 - `state.go`: `SchemaVersion`, `DDL`, `Statements`, `Migration`, the `DB`
   alias; `RecordUsage` and `AddUsage` (the upsert-add a discarded turn's
-  usage uses: one row per message, two discards in one turn merge into it).
+  usage uses: one row per message, two discards in one turn merge into it,
+  the row keeping the call that created it); `SetSessionModel` (the
+  `/models` switch's row write: the session's current id, overwritten,
+  beside the write-once label).
 - `recorder.go`: the observing `core.Frontend`: forwards every
   Input/Notify untouched, appends rows for the loop's events. On
   `core.EmptyTurn` (SPEC_EMPTY) it discards the partial buffer and adds
@@ -27,15 +30,22 @@ loop already emits; the read side rebuilds a session from the log.
   file per cwd under `<home>/sessions`, keyed by the first six sha1
   bytes of the cwd.
 - `usage.go`: `UsageRow` and `SessionUsage(ctx, db, sessionID)`, the
-  typed usage read (prompt/completion/cache/cost per message, transcript
-  order) the dashboard and the `sessions` tool build from; `SessionCost`
+  typed usage read (prompt/completion/cache/cost/model per message,
+  transcript order) the dashboard and the `sessions` tool build from;
+  `SessionCost`
   sums one session's cost column (SPEC_HOSTED 5: the swarm and the
   scheduler runner read a worker's spend from here).
 - `metadata/state.go`: hand-written metadata.
 - The served model rides the transcript: assistant message rows carry
   `model` (nullable), stamped by the recorder from `core.Done`'s echo;
   user, compaction, and re-landed rows stay null. v2 files gain the
-  column on open (schema v3); pre-migration rows read null.
+  column on open (schema v3); pre-migration rows read null. The usage
+  rows carry it too (schema v5): `usage.model` is the id that produced
+  the call, stamped by the recorder from `Done`'s echo, the empty-turn
+  and compaction events carrying their own. A modelless row reads, at
+  every read path, as its session's start model; the recorder stamps the
+  `/models` switch onto the session row (`Recorder.UpdateModel`), so
+  `sessions.model` is the current id, not just the open-time one.
 - The session row carries `label` (nullable), `tokens` (the sum of
   prompt + completion usage), and `cost` (the sum of the cost column):
   the label is the first user prompt's first line (trimmed, 60 runes),
