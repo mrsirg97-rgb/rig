@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -115,7 +117,12 @@ func TestReadRefusesUnknownArg(t *testing.T) {
 
 func TestReadDescriptionNamesTheObservationPath(t *testing.T) {
 	desc := file.Read().Description()
-	for _, want := range []string{"not cat or sed", "bash read leaves no observation"} {
+	for _, want := range []string{
+		"use read, not bash (cat or sed)",
+		"a bash read leaves no observation for it to check against",
+		"output truncated: N of M lines",
+		"exactly as edit will match it",
+	} {
 		if !strings.Contains(desc, want) {
 			t.Fatalf("the read description must say %q (read is the observation path), got:\n%s", want, desc)
 		}
@@ -554,6 +561,25 @@ func TestDriftRefusalCapsARewrite(t *testing.T) {
 
 const readCap = 1 << 20
 
+// truncMarkerRe matches the truncation marker at the end of a capped reply:
+// the complete lines returned (N) and the file's line count (M) — the same
+// "lines" the offset and the past-the-end refusal use, so the next offset is
+// exact: offset+N.
+var truncMarkerRe = regexp.MustCompile(`\n\[output truncated: (\d+) of (\d+) lines\]$`)
+
+// splitTruncMarker splits a read reply at the truncation marker, returning
+// the body, the complete lines it holds (N), the file's line count (M), and
+// whether the reply was capped at all.
+func splitTruncMarker(rep string) (body string, n, m int, capped bool) {
+	mm := truncMarkerRe.FindStringSubmatch(rep)
+	if mm == nil {
+		return rep, 0, 0, false
+	}
+	n, _ = strconv.Atoi(mm[1])
+	m, _ = strconv.Atoi(mm[2])
+	return rep[:len(rep)-len(mm[0])], n, m, true
+}
+
 func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "big.txt")
@@ -572,7 +598,9 @@ func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
 	joined := strings.Join(lines, "\n")
 	want := joined
 	if len(want) > readCap {
-		want = want[:readCap] + "\n[output truncated]"
+		cut := strings.LastIndexByte(want[:readCap], '\n') + 1
+		n := strings.Count(want[:cut], "\n")
+		want = want[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines]", n, len(lines))
 	}
 	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
@@ -614,7 +642,7 @@ func TestReadWindowOfABigFileIsByteIdentical(t *testing.T) {
 	}
 }
 
-func TestReadCapEndsOnARuneBoundary(t *testing.T) {
+func TestReadOneHugeLineFallsBackToARuneBoundary(t *testing.T) {
 	dir := t.TempDir()
 	straddle := filepath.Join(dir, "straddle.txt")
 	if err := os.WriteFile(straddle, []byte(strings.Repeat("a", readCap-1)+"é"+"tail"), 0o644); err != nil {
@@ -624,9 +652,12 @@ func TestReadCapEndsOnARuneBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	body, _, ok := strings.Cut(got, "\n[output truncated]")
-	if !ok {
+	body, n, m, capped := splitTruncMarker(got)
+	if !capped {
 		t.Fatalf("a readCap+1-byte file must come back capped, got %d bytes", len(got))
+	}
+	if n != 0 || m != 1 {
+		t.Fatalf("a whole-file capped read of one huge line must report 0 of 1 lines, got %d of %d", n, m)
 	}
 	if !utf8.ValidString(body) {
 		t.Fatalf("the cap must not split a rune, got tail %q", body[len(body)-8:])
@@ -642,9 +673,12 @@ func TestReadCapEndsOnARuneBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	body, _, ok = strings.Cut(got, "\n[output truncated]")
-	if !ok {
+	body, n, m, capped = splitTruncMarker(got)
+	if !capped {
 		t.Fatalf("a readCap+1-byte file must come back capped, got %d bytes", len(got))
+	}
+	if n != 0 || m != 1 {
+		t.Fatalf("a capped read of one huge line must report 0 of 1 lines, got %d of %d", n, m)
 	}
 	if !utf8.ValidString(body) {
 		t.Fatalf("the cap must not split a rune, got tail %q", body[len(body)-8:])
@@ -661,7 +695,7 @@ func TestReadOneHugeLineCapsByteIdentical(t *testing.T) {
 	if err := os.WriteFile(path, []byte(huge), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	want := huge[:readCap] + "\n[output truncated]"
+	want := huge[:readCap] + "\n[output truncated: 0 of 1 lines]"
 	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -685,13 +719,52 @@ func TestReadBigFileDoesNotAllocateTheWholeFile(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 	runtime.ReadMemStats(&after)
-	if !strings.HasSuffix(got, "[output truncated]") {
-		t.Fatalf("a %d-byte file must come back capped, got %d bytes", size, len(got))
+	if !truncMarkerRe.MatchString(got) {
+		t.Fatalf("a %d-byte file must come back capped with the line-facts marker, got %d bytes", size, len(got))
 	}
 	allocated := after.TotalAlloc - before.TotalAlloc
 	const bound = 16 << 20
 	if allocated > bound {
 		t.Fatalf("the read allocated %d bytes for a %d-byte file, want <= %d (the cap is %d; the whole file must not be materialised)", allocated, size, bound, readCap)
+	}
+}
+
+func TestReadBigFileRangesReassembleExactly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.txt")
+	var b strings.Builder
+	for b.Len() < 3*readCap+4096 {
+		fmt.Fprintf(&b, "line %08d\n", b.Len())
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got strings.Builder
+	offset := 0
+	for reads := 0; ; reads++ {
+		if reads >= 10 {
+			t.Fatal("the range walk did not terminate")
+		}
+		rep, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "offset": offset}))
+		if err != nil {
+			t.Fatalf("read at offset %d: %v", offset, err)
+		}
+		body, n, _, capped := splitTruncMarker(rep)
+		got.WriteString(body)
+		if !capped {
+			break
+		}
+		if n == 0 {
+			t.Fatalf("a capped read reported 0 complete lines at offset %d; the walk cannot advance", offset)
+		}
+		offset += n
+	}
+	if got.String() != string(want) {
+		t.Fatalf("the marker-guided ranges reassembled to %d bytes, want %d", got.Len(), len(want))
 	}
 }
 

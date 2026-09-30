@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -27,7 +28,7 @@ func Read() core.Tool { return &readTool{} }
 func (readTool) Name() string { return "read" }
 
 func (readTool) Description() string {
-	return "Reads a file, or a range of it with offset and limit. Guidelines: use read, not cat or sed, for any file you may edit: edit checks the file against what you read, and a bash read leaves no observation. Set diff to true to append the file's git diff against HEAD. A range past the end refuses by name. Reply: the text."
+	return "Reads a file, or a range of it with offset and limit. Guidelines: use read, not bash (cat or sed), for any file you may edit: edit checks the file against what you read, and a bash read leaves no observation for it to check against. One read is capped at 1 MiB; a capped reply ends with [output truncated: N of M lines], so continue with the next offset (offset+N after a range). Set diff to true to append the file's git diff against HEAD. A range past the end refuses, naming the file and its total lines. Reply: the file's text, exactly as edit will match it."
 }
 
 func (readTool) Schema() json.RawMessage {
@@ -87,11 +88,7 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, a.Path, content)
 	if len(content) > readCap {
-		cut := readCap
-		for !utf8.RuneStart(content[cut]) {
-			cut--
-		}
-		content = content[:cut] + "\n[output truncated]"
+		content = capReply(content, total)
 	}
 	if stale {
 		content = "[changed since your observation] " + a.Path + " — re-read before acting on it\n" + content
@@ -104,6 +101,26 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		content = content + "\n\n" + d
 	}
 	return content, nil
+}
+
+// capReply cuts a capped read at a line boundary when one exists inside the
+// cap, so the reply ends at a complete line; a single line longer than the
+// cap falls back to a rune boundary, so no rune is ever split. The marker
+// names the complete lines returned and the file's line count — the same
+// "lines" the offset and the past-the-end refusal use — so the next offset
+// is exact: offset+N.
+func capReply(content string, total int) string {
+	cut := strings.LastIndexByte(content[:readCap], '\n')
+	if cut < 0 {
+		cut = readCap
+		for !utf8.RuneStart(content[cut]) {
+			cut--
+		}
+	} else {
+		cut++ // keep the newline: the reply ends at a complete line
+	}
+	lines := strings.Count(content[:cut], "\n")
+	return content[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines]", lines, total)
 }
 
 func readWindow(path string, offset, limit int) (string, int, [32]byte, error) {
