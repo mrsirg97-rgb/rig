@@ -1,4 +1,27 @@
 # Changelog
+## [2.2.0]: the retry guard named by its rule
+
+The guard list in the embedded default system prompt named the retry
+guard without its rule: `an allowlist, a retry guard, an approval gate,
+a plugin landing zone`. Read cold, a model could take the guard for a
+per-tool mute — three failures of a tool and the tool stops — when the
+bound is narrower and kinder than that: the streak keys on identical
+args, a corrected call always executes, and the strike note appends to
+the real error rather than replacing it. The default prompt now says so
+in the one clause: `a retry guard (three identical failing calls to one
+tool in a turn exhaust the bound; a corrected call always executes)`,
+the guard's PACKAGE.md words. The pinned default string in
+`config/settings_test.go` carries the same words; no behavior changed.
+
+The failure etiquette moved in beside the refusal rule. After `never
+reach the same effect through another tool.`, the default prompt now
+carries the two sentences the operator's agent contract kept for
+itself: `When a tool fails, read the error and work out why before
+calling again. Do not retry blindly, and stop when the environment or
+the plan is wrong.` The guard bounds the blind retry; the prompt asks
+for the diagnosis first. A rule in the system prompt is read every
+turn.
+
 ## [2.1.11]: the plain-words contract and the plan rule
 
 The todo tool's contract had grown by append: 2.1.6 through 2.1.9 each
