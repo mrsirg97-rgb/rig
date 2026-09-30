@@ -6,26 +6,26 @@ const schemaJSON = `{
 	"properties": {
 		"action": {
 			"enum": ["create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read", "note", "notes", "accept", "reject", "finished"],
-			"description": "The action to perform. Required."
+			"description": "What to do."
 		},
 		"tasks": {
 			"type": "array",
-			"description": "The queue as given: create merges by text, [] clears. Required when action='create'.",
+			"description": "The tasks to add, in order. Required for create. An empty list clears the queue.",
 			"items": {
 				"type": "object",
 				"required": ["text"],
 				"properties": {
 					"text": {
 						"type": "string",
-						"description": "What needs doing"
+						"description": "What needs doing."
 					},
 					"requires": {
 						"type": ["string", "null"],
-						"description": "Task id (tN), exact text, or position in this create that this task cannot start until done; null clears the link; omit when none"
+						"description": "The task this one waits for: its id (tN), its exact text, or its number in this list, where 1 is the first. Omit when none; null removes a link."
 					},
 					"blocks": {
 						"type": ["string", "null"],
-						"description": "Task id (tN), exact text, or position in this create that cannot complete until this task is done; null clears the link; omit when none"
+						"description": "The task that waits for this one, named the same way. Omit when none; null removes a link."
 					}
 				}
 			}
@@ -36,43 +36,42 @@ const schemaJSON = `{
 		},
 		"note": {
 			"type": "string",
-			"description": "The note text, or the reason for action='reject'. Required for action='note' and action='reject'."
+			"description": "The note text, or the reason where rejecting."
 		},
 		"status": {
 			"type": "string",
 			"enum": ["review"],
-			"description": "Optional claim filter: action='claim' with status='review' takes the first task in review for this session."
+			"description": "For claim: review takes the next task awaiting review."
 		},
 		"pos": {
 			"type": "integer",
 			"minimum": 1,
-			"description": "Queue position (1-based, first = 1) for action='move'."
+			"description": "For move: the new position, where 1 is first."
 		},
 		"all": {
 			"type": "boolean",
-			"description": "read all:true returns the full history (done rows included); the default read is the present."
+			"description": "For read: true includes finished tasks."
 		},
 		"n": {
 			"type": "integer",
 			"minimum": 1,
 			"maximum": 100,
-			"description": "How many finished rows to list for action='finished' (default 10, cap 100)."
+			"description": "For finished: how many to list. 10 by default, 100 at most."
 		},
 		"project": {
 			"type": "string",
-			"description": "another workspace, as a path; later calls act there until you name a different one. ~ expands."
+			"description": "Another workspace, as a path. Later calls act there until you name a different one. ~ expands."
 		}
 	}
 }`
 
 const description = "The task queue for this workspace. Guidelines: for any job of three or more steps, create the tasks " +
-	"before the first edit, start one before working on it, complete or fail it when done, and leave the queue " +
+	"before the first edit. Start a task before working on it, complete or fail it when done, and leave the queue " +
 	"empty at the end. read shows what is open. note attaches a finding to a task. claim takes the next task " +
-	"nothing waits for, when other sessions share the queue. requires links a task to one it waits for; blocks " +
-	"links it to one that waits for it; in one create, a link may name a sibling task's exact text or its position. Task ids " +
-	"(tN) come from the tool's replies: copy them, never invent " +
-	"them. Set project only when the work is in a different workspace than the one you started in. " +
-	"Reply: the affected row and the queue's summary, named by its workspace ([rig])."
+	"nothing waits for, when other sessions share the queue. A task can wait for another: set requires on the one " +
+	"that waits. Task ids (tN) come from the tool's replies: copy them, never invent them. Set project only when " +
+	"the work is in a different workspace than the one you started in. Reply: the affected row and the queue's " +
+	"summary, named by its workspace ([rig])."
 
 const (
 	srcProject = "project"

@@ -95,3 +95,12 @@ plan in one queue.
 - The description is shape only (SPEC_STREAMLINE 1): the state machine,
   the claim rules, and the compaction rule ride the store's voices; the
   replies teach on contact, the standing context does not double-teach.
+  Inside that shape the description decides and the fields explain: the
+  one line of what the tool is, the verbs, and the reply's shape live in
+  the description, and each field's description says what that field is,
+  in the plain words the house uses. `blocks` is a field, not a sentence:
+  it is described on its own, like `requires`, and no link's meaning is
+  folded into the description's prose. The planning rule is repeated in
+  the description on purpose: the system prompt decides when (its one
+  sentence is read every turn), and the description is there when the
+  model arrives at the tool.
