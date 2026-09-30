@@ -42,9 +42,12 @@ func (t *tui) Notify(ev core.Event) {
 		}
 		t.toolStarts[e.Call.ID] = startInfo{name: e.Call.Name, args: e.Call.Args}
 		t.phase = e.Call.Name
+		gap := t.lastSlot == SlotText || t.lastSlot == SlotReasoning
 		t.mu.Unlock()
 
-		t.flow(SlotText, "\n")
+		if gap {
+			t.flow(SlotText, "\n")
+		}
 	case core.ToolResult:
 		t.mu.Lock()
 		name, args := t.toolName, t.toolArgs
@@ -52,12 +55,16 @@ func (t *tui) Notify(ev core.Event) {
 			name, args = si.name, si.args
 			delete(t.toolStarts, e.ID)
 		}
+		gap := t.lastSlot == slotAfterTool
 		block := RenderToolBlock(t.theme, name, args, e.Content, e.Err != nil, e.Duration)
 		t.phase = "thinking"
 		t.toolName = ""
 		t.toolArgs = nil
 		t.lastSlot = slotAfterTool
 		t.mu.Unlock()
+		if gap {
+			t.flow("", "\n")
+		}
 		t.commit(block)
 	case core.Done:
 
