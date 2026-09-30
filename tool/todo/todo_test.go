@@ -246,15 +246,15 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &s); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if got := s.Properties["project"].Description; got != "another workspace, as a path; later calls act there until you name a different one. ~ expands." {
+	if got := s.Properties["project"].Description; got != "Another workspace, as a path. Later calls act there until you name a different one. ~ expands." {
 		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
 }
 
 func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	if d := tool.Description(); !strings.Contains(d, "in one create, a link may name a sibling task's exact text") {
-		t.Fatalf("the description misses the one-create sibling-link sentence: %q", d)
+	if d := tool.Description(); !strings.Contains(d, "A task can wait for another: set requires on the one that waits.") {
+		t.Fatalf("the description misses the one-line link sentence: %q", d)
 	}
 	var s struct {
 		Properties map[string]struct {
@@ -268,10 +268,13 @@ func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &s); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	for _, key := range []string{"requires", "blocks"} {
-		desc := s.Properties["tasks"].Items.Properties[key].Description
-		if !strings.HasSuffix(desc, "omit when none") {
-			t.Fatalf("%s description must end with 'omit when none': %q", key, desc)
+	want := map[string]string{
+		"requires": "The task this one waits for: its id (tN), its exact text, or its number in this list, where 1 is the first. Omit when none; null removes a link.",
+		"blocks":   "The task that waits for this one, named the same way. Omit when none; null removes a link.",
+	}
+	for key, wantDesc := range want {
+		if desc := s.Properties["tasks"].Items.Properties[key].Description; desc != wantDesc {
+			t.Fatalf("%s description = %q, want %q", key, desc, wantDesc)
 		}
 	}
 }
