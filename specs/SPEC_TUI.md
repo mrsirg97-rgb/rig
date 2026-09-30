@@ -29,7 +29,8 @@ every number and glyph is a reading of what the runtime already emits.
   (decision 3, amended).
 - One renderer per tool for todo and scheduler, used byte-identically
   by the tool-result path and the command path (decision 6).
-- Four shipped themes (`oled`, `paper`, `p1`, `p3`), a glyph table with
+- Six shipped themes (`warm`, `cool`, `paper`, `p1`, `p3`; `oled` the
+  legacy alias of `warm`), a glyph table with
   an `ascii` set, and `theme.json` as a user palette: this spec owns
   the schema SPEC_CONFIG reserved (decision 7).
 - Retro as texture, never information (decision 8).
@@ -79,9 +80,10 @@ frontend/tui/         NEW package, main module (decision 10 names the
   input.go            raw mode, the key parser (Tab and Shift-Tab),
                       single-line editing, history, the completion
                       menu's state
-  theme.go            the palette table (oled, paper, p1, p3), the
-                      glyph table (unicode, ascii), theme.json schema
-                      and merge
+  theme.go            the palette table (warm, cool, paper, p1, p3;
+                      oled the legacy alias of warm), the glyph table
+                      (unicode, ascii), theme.json schema and merge,
+                      the one-dial resolution, repaint.go's live swap
   ansi.go             escape helpers: color, cursor, clear-line
   *_test.go           golden blocks per theme at 50 and 100 columns,
                       escape-capture live-region cases, both-doors
@@ -708,10 +710,14 @@ setup: an OLED-black profile and a font shortlist (Berkeley Mono,
 Departure Mono, Terminus, IBM 3270). rig's palettes are tuned to pop
 on true black.
 
-The palette is a table of named slots, four shipped:
+The palette is a table of named slots, six shipped:
 
-- `oled` (default dark): pane's hues re-tuned for `#000`: dims lifted,
-  accents brightened;
+- `warm` (the default dark): pane's hues re-tuned for `#000`: dims
+  lifted, accents brightened; the dashboard's warm look on the same
+  slots. `oled` is its legacy alias, kept for settings keys and
+  theme.json bases already in the wild;
+- `cool`: the dashboard's cool palette ported to the slots, hue for
+  hue;
 - `paper` (light): ink on near-white, each hue picked for paper, not
   mathematically inverted;
 - `p1` (green phosphor) and `p3` (amber): monochrome ramps, four
@@ -743,8 +749,15 @@ compatibility fallback, one mechanism.
 
 Selection and override:
 
-- `settings.theme`: one of the shipped names (SPEC_CONFIG's key;
-  unknown refuses loud at start naming the known);
+- `settings.theme`: one of the shipped names or `custom`
+  (SPEC_CONFIG's key; unknown refuses loud at start naming the known);
+  the `/theme` command (2.3.2) is the operator's hand on the key: it
+  validates the preset, loads theme.json fresh when the preset is
+  `custom` (a missing file refuses by name, nothing persisted),
+  writes the key with `config.SetTheme` (atomic, the other keys
+  preserved), and pushes the resolved theme at the TUI over an
+  optional `RepaintTheme` assertion — new output paints in the new
+  theme, committed scrollback keeps its bytes;
 - `theme.json` (the file SPEC_CONFIG reads raw and this spec owns):
 
 ```json
@@ -758,9 +771,11 @@ Selection and override:
   `base` names a shipped theme (required; unknown refuses); `slots`
   overrides named slots (unknown slot names refuse, naming the
   vocabulary; values must parse as `#rrggbb`); `glyphs` selects the
-  set. `theme.json` present with `settings.theme` also set: the file
-  wins (it is the more specific intent); named. Malformed refuses at
-  start in SPEC_CONFIG's voice.
+  set. Resolution is one dial: a set `settings.theme` names the theme
+  alone and the file is read only under `custom` (a dial that loses to
+  the file it overrides would lie at the next start); with the key
+  unset the file is the theme when present, else the shipped default.
+  Malformed refuses at start in SPEC_CONFIG's voice.
 
 ### 8. Retro is texture, never information
 

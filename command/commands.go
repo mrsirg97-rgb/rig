@@ -17,6 +17,7 @@ func All() []core.Command {
 		roleCmd{},
 		approveCmd{},
 		swarmCmd{},
+		themeCmd{},
 	}
 }
 

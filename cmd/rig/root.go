@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -52,6 +53,10 @@ type root struct {
 
 	effort string
 	role   string
+
+	theme          string
+	themeDoc       json.RawMessage
+	themeTrueColor bool
 
 	approve        string
 	approveDefault string

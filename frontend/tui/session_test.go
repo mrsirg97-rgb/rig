@@ -289,7 +289,7 @@ func TestWithTitleCustomRowsTaglineAndFallbackName(t *testing.T) {
 		t.Fatalf("the default rig row still renders %d time(s):\n%s", got, s.out.String())
 	}
 
-	ath, err := ResolveTheme("oled", []byte(`{"base":"oled","glyphs":"ascii"}`), true)
+	ath, err := ResolveTheme("", []byte(`{"base":"oled","glyphs":"ascii"}`), true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,9 +12,9 @@ the leaf.
 
 - The prefix rule (`IsCommandLine`), the escape (`Unescape`), and the
   line splitter (`Parse`).
-- `All()`: the standard set of thirteen commands: `compact`, `new`,
+- `All()`: the standard set of fourteen commands: `compact`, `new`,
   `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
-  `rem`, `effort`, `role`, `approve`, `swarm`.
+  `rem`, `effort`, `role`, `approve`, `swarm`, `theme`.
 - `Env`: the command's world, built at the root: closures, not
   handles. `Env.Workers` carries the fleet (the model, the slots, the
   file, the configured fact) and is what a missing `scheduler` tool
@@ -85,6 +85,13 @@ the leaf.
   `disable <name>` move the file between `plugins/` and `plugins/disabled/`
   and reload (SPEC_GROWTH 9, amended); `disabled` lists that zone
   (SPEC_GROWTH 9, the hide/turn-off surface).
+- **theme**: the operator's dial over the three presets (2.3.2): bare
+  shows the active one (`theme: warm (default)`, `theme: custom
+  (theme.json)`), `theme warm|cool|custom` sets it through the env's
+  `Theme`/`SetTheme` seams; an unknown name refuses naming the three,
+  a second field refuses as usage, and `custom`'s load and write live
+  at the root (the file read, the persistence, the repaint push), not
+  here.
 
 ## Gotchas
 

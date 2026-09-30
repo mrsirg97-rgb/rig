@@ -40,7 +40,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.3.1"
+const Version = "2.3.2"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -374,6 +374,9 @@ func main() {
 
 		approve:        firstNonEmpty(cfg.Settings.Approve, approve.Auto),
 		approveDefault: firstNonEmpty(cfg.Settings.Approve, approve.Auto),
+		theme:          cfg.Settings.Theme,
+		themeDoc:       cfg.Theme,
+		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
 			"todo": todoapi.New(tdb, todoapi.Mode(*prompt != "")), "rem": remapi.New(rdb),

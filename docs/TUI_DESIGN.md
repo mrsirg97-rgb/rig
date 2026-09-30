@@ -188,13 +188,19 @@ home, and the `theme` string key in settings.json. The config package
 carries both raw (`Config.Theme` is the theme.json document;
 `Config.Settings.Theme` is the string) and the TUI owns the schemas:
 `theme.json` is `base` (required, one of the shipped names), `slots`
-(any of the eight slot names to a `#rrggbb`), and `glyphs`
-(`unicode` or `ascii`), unknown keys refused in the TUI's voice; the
-settings key must name a shipped palette (config's voice for a wrong
-type, the TUI's for an unknown name). Base resolution: the settings
-key, then theme.json's `base` (required when the file is present),
-then the shipped default (`oled`); the slots and glyphs come from
-theme.json alone. A malformed theme.json refuses at start, naming the
+(any of the slot names to a `#rrggbb`), and `glyphs` (`unicode` or
+`ascii`), unknown keys refused in the TUI's voice; the settings key
+must name a shipped palette or `custom` (config's voice for a wrong
+type, the TUI's for an unknown name). Resolution is one dial: a set
+key names the theme alone — `custom` names the file, which must
+exist; with no key the file is the theme when present, else the
+shipped default (`warm`). `/theme` (2.3.2) is the operator's hand on
+the dial: it validates the preset, reads theme.json fresh when the
+preset is `custom` (a missing file refuses by name), writes the key
+with `config.SetTheme` (atomic, the other keys preserved), and pushes
+the resolved theme at the TUI over an optional `RepaintTheme`
+assertion — new output paints in the new theme, committed scrollback
+keeps its bytes. A malformed theme.json refuses at start, naming the
 file and the key.
 
 ## the key table
@@ -228,7 +234,9 @@ doors, differing only in the opening line.
 
 ## the theme tables
 
-Eight named slots, four shipped palettes, two glyph sets. The phosphor
+Sixteen named slots, six shipped palettes, two glyph sets. Warm and
+cool are the dashboard's two looks on the same slots (warm is the
+default; `oled` is its legacy alias). The phosphor
 ramps (p1 green, p3 amber) are four brightnesses of one hue: text on the
 brightest, accent and success on the next, error, warn, and reasoning on
 the middle, dim and rule on the deepest, so the state hierarchy survives

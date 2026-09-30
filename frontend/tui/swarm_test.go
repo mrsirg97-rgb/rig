@@ -46,7 +46,7 @@ func TestSwarmBandRows(t *testing.T) {
 }
 
 func TestSwarmBandRulesAndGlyphsFollowTheTheme(t *testing.T) {
-	th, err := ResolveTheme("p1", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
+	th, err := ResolveTheme("", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -55,9 +55,17 @@ width); no core or loop line (decision 10).
 - **Input** (`input.go`): raw mode, the key parser (Tab, Shift-Tab as
   CSI Z, arrows), single-line editing with history, bracketed paste, and
   the completion menu's state.
-- **Themes** (`theme.go`): the four shipped palettes (`oled`, `paper`,
-  `p1`, `p3`), the glyph table (`unicode`, `ascii`), the effort ramp's
-  slots, `theme.json` schema and merge, the 256 downconvert.
+- **Themes** (`theme.go`): the six shipped palettes (`warm`, `cool`,
+  `paper`, `p1`, `p3`; `oled` the legacy alias of `warm`), the glyph
+  table (`unicode`, `ascii`), the effort ramp's slots, `theme.json`
+  schema and merge, the 256 downconvert, and the one-dial resolution:
+  a set settings key names the theme alone (`custom` names the file,
+  which must exist); with no key the file is the theme when present,
+  else `warm`.
+- **Repaint** (`repaint.go`): the optional `RepaintTheme(tui.Theme)`
+  seam `/theme`'s root pushes through — the live swap of `t.theme`;
+  the dispatcher's post-command redraw paints the status and the live
+  region in the new theme, and committed scrollback keeps its bytes.
 - **Escape helpers** (`ansi.go`), the markdown pass (`markdown.go`),
   the pager (`pager.go`), width and wrap (`width.go`, `wrap.go`).
 

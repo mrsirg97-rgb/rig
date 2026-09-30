@@ -79,7 +79,7 @@ func (t Theme) Slot(name string) string { return t.slots[name] }
 func (t Theme) Glyph(name string) string { return t.glyphs[name] }
 
 var Shipped = map[string]map[string]string{
-	"oled": {
+	"warm": {
 		SlotText:      "#d8d8d8",
 		SlotDim:       "#6e6e6e",
 		SlotAccent:    "#61afef",
@@ -92,6 +92,25 @@ var Shipped = map[string]map[string]string{
 
 		SlotEffortOff:     "#5a5a5a",
 		SlotEffortMinimal: "#6e6e6e",
+		SlotEffortLow:     "#5f87af",
+		SlotEffortMedium:  "#81a2be",
+		SlotEffortHigh:    "#b294bb",
+		SlotEffortXhigh:   "#d183e8",
+		SlotEffortMax:     "#ff5fff",
+	},
+	"cool": {
+		SlotText:      "#b8bfcc",
+		SlotDim:       "#3a4150",
+		SlotAccent:    "#8a9bbd",
+		SlotSuccess:   "#6fa38a",
+		SlotError:     "#a36f6f",
+		SlotWarn:      "#a39a6f",
+		SlotRule:      "#2a303b",
+		SlotReasoning: "#4f5868",
+		SlotEmber:     "#6b7fa3",
+
+		SlotEffortOff:     "#3a4150",
+		SlotEffortMinimal: "#4f5868",
 		SlotEffortLow:     "#5f87af",
 		SlotEffortMedium:  "#81a2be",
 		SlotEffortHigh:    "#b294bb",
@@ -157,9 +176,14 @@ var Shipped = map[string]map[string]string{
 	},
 }
 
+var legacyNames = map[string]string{"oled": "warm"}
+
 var shippedNames = func() []string {
-	out := make([]string, 0, len(Shipped))
+	out := make([]string, 0, len(Shipped)+len(legacyNames))
 	for n := range Shipped {
+		out = append(out, n)
+	}
+	for n := range legacyNames {
 		out = append(out, n)
 	}
 	sort.Strings(out)
@@ -215,26 +239,40 @@ func palette256(n int) (r, g, b int) {
 }
 
 func ResolveTheme(settingsTheme string, doc json.RawMessage, trueColor bool) (Theme, error) {
-	if settingsTheme != "" {
-		if _, ok := Shipped[settingsTheme]; !ok {
-			return Theme{}, fmt.Errorf("theme: unknown value %q (known: %s)", settingsTheme, strings.Join(shippedNames, ", "))
+	if l, ok := legacyNames[settingsTheme]; ok {
+		settingsTheme = l
+	}
+	if settingsTheme == "custom" {
+		if len(doc) == 0 {
+			return Theme{}, errors.New("theme: custom: no theme.json is loaded")
 		}
+		return resolveDoc(doc, trueColor)
 	}
-	base := "oled"
-	if settingsTheme != "" {
-		base = settingsTheme
+	if settingsTheme == "" {
+		if len(doc) == 0 {
+			return baseTheme("warm", trueColor), nil
+		}
+		return resolveDoc(doc, trueColor)
 	}
+	if _, ok := Shipped[settingsTheme]; !ok {
+		return Theme{}, fmt.Errorf("theme: unknown value %q (known: %s)", settingsTheme, strings.Join(shippedNames, ", "))
+	}
+	return baseTheme(settingsTheme, trueColor), nil
+}
+
+func baseTheme(name string, trueColor bool) Theme {
 	slots := map[string]string{}
-	for k, v := range Shipped[base] {
+	for k, v := range Shipped[name] {
 		slots[k] = v
 	}
 	glyphs := map[string]string{}
 	for k, v := range glyphsUnicode {
 		glyphs[k] = v
 	}
-	if len(doc) == 0 {
-		return Theme{name: base, TrueColor: trueColor, slots: slots, glyphs: glyphs}, nil
-	}
+	return Theme{name: name, TrueColor: trueColor, slots: slots, glyphs: glyphs}
+}
+
+func resolveDoc(doc json.RawMessage, trueColor bool) (Theme, error) {
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(doc, &keys); err != nil || keys == nil {
 		return Theme{}, errors.New("theme.json: expected a JSON object")
@@ -249,12 +287,7 @@ func ResolveTheme(settingsTheme string, doc json.RawMessage, trueColor bool) (Th
 		sort.Strings(unknown)
 		return Theme{}, fmt.Errorf("theme.json: unknown key %q (known: base, glyphs, slots)", unknown[0])
 	}
-	var baseRaw json.RawMessage
-	hasBase := false
-	if raw, ok := keys["base"]; ok {
-		hasBase = true
-		baseRaw = raw
-	}
+	baseRaw, hasBase := keys["base"]
 	if !hasBase {
 		return Theme{}, fmt.Errorf("theme.json: base required (known: %s)", strings.Join(shippedNames, ", "))
 	}
@@ -262,14 +295,13 @@ func ResolveTheme(settingsTheme string, doc json.RawMessage, trueColor bool) (Th
 	if err := json.Unmarshal(baseRaw, &baseName); err != nil || baseName == "" {
 		return Theme{}, fmt.Errorf("theme.json: base: expected a string, got %s", strings.TrimSpace(string(baseRaw)))
 	}
-	sh, ok := Shipped[baseName]
-	if !ok {
+	if l, ok := legacyNames[baseName]; ok {
+		baseName = l
+	}
+	if _, ok := Shipped[baseName]; !ok {
 		return Theme{}, fmt.Errorf("theme.json: unknown base %q (known: %s)", baseName, strings.Join(shippedNames, ", "))
 	}
-	slots = map[string]string{}
-	for k, v := range sh {
-		slots[k] = v
-	}
+	th := baseTheme(baseName, trueColor)
 	if raw, ok := keys["slots"]; ok {
 		var smap map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &smap); err != nil || smap == nil {
@@ -291,7 +323,7 @@ func ResolveTheme(settingsTheme string, doc json.RawMessage, trueColor bool) (Th
 			if _, _, _, err := ParseHex(v); err != nil {
 				return Theme{}, fmt.Errorf("theme.json: slots: %s: %v", k, err)
 			}
-			slots[k] = strings.ToLower(v)
+			th.slots[k] = strings.ToLower(v)
 		}
 	}
 	if raw, ok := keys["glyphs"]; ok {
@@ -303,13 +335,13 @@ func ResolveTheme(settingsTheme string, doc json.RawMessage, trueColor bool) (Th
 		case "unicode":
 		case "ascii":
 			for k, v := range glyphsASCII {
-				glyphs[k] = v
+				th.glyphs[k] = v
 			}
 		default:
 			return Theme{}, fmt.Errorf("theme.json: glyphs: unknown %q (known: ascii, unicode)", gs)
 		}
 	}
-	return Theme{name: baseName, TrueColor: trueColor, slots: slots, glyphs: glyphs}, nil
+	return th, nil
 }
 
 func isSlot(k string) bool {
