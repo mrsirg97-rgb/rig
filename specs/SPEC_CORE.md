@@ -311,12 +311,18 @@ push that `diff last` would otherwise force the model to go ask for.
 The note rides the content it already returns; nothing new is written,
 and a fresh observation re-records as usual.
 
-**An edit against a path with no recorded observation refuses** (amended
-for the daily driver): the threaded session's `Files` is the edit's
-license. `read` or `write` mints it, an external or cross-session change
-invalidates it, and a standalone exec (no session) carries no license to
-check. The rule is at the tool, so grep-first stays a guideline while an
-unlicensed edit is a refusal that names the missing observation.
+**An edit of a path with no recorded observation applies on a match and
+teaches with bytes on a miss** (amended 2.3.3, retiring the read-first
+refusal): an `old` that matches exactly once cannot come from a model
+that never saw the file, so the edit applies. A mismatch is not a
+refusal but the file's text exactly as a read returns it (the same cap
+and truncation marker), ending with `[edit: <path> was not read this
+session; its text is above, now edit it]`, and the reply records the
+observation, so the edit that follows is drift-checked like any other
+read. A file the session has read keeps today's refusals: a mismatch
+names the occurrence count, a change since the read names the drift
+(the `Files` license, below), and a standalone exec carries no license
+to check.
 
 ### ToolMiddleware
 

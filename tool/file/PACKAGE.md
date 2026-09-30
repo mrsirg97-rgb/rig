@@ -18,10 +18,16 @@ it acts on it.
 ## What it includes
 
 - `read`, `write`, `edit`: a `core.Tool` each, over `os`/`path/filepath`.
-- The edit license: a threaded session refuses an edit whose path has no
-  recorded `FileState` — `read` or `write` mints the license, so a blind
-  edit of a file the model never observed cannot slip past the drift
-  check. A standalone exec carries no session and so no license to check.
+- The edit license, narrowed to the drift check: an edit of a path with
+  no recorded `FileState` applies when `old` matches exactly once (an
+  exact-once match cannot come from a model that never saw the bytes);
+  on a miss the reply is the file's text exactly as a read returns it —
+  the same cap and truncation marker — ending with `[edit: <path> was
+  not read this session; its text is above, now edit it]`, and the
+  reply records the observation, so the edit that follows is
+  drift-checked like any other. `read` or `write` still mints the
+  license, an external change invalidates it, and a standalone exec
+  carries no session and so no license to check.
 - The stale-observation note on read: compared against the recorded
   `FileState` *before* the read re-records it, so an external or
   cross-session change is named once and the fresh bytes still ride it.
@@ -65,6 +71,10 @@ it acts on it.
 
 - `normalizePath` canonicalizes (absolute + clean): a symlinked path that
   bypasses the spelling still keys on the canonical string.
+- The teaching reply is read's bytes by construction (`readWindow` plus
+  `capReply`), never a second renderer; the zero-width `old` refusal and
+  the missing-file error stand ahead of it, because both are about the
+  call, not the observation.
 - The drift check refuses when the file's hash or mtime differs from the
   recorded `FileState`; edit-after-external-change never silently
   clobbers.

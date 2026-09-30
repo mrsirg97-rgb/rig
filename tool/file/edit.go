@@ -24,7 +24,7 @@ func Edit() core.Tool { return &editTool{} }
 func (editTool) Name() string { return "edit" }
 
 func (editTool) Description() string {
-	return "Replaces one occurrence of old with new in a file. Guidelines: read the file first, then put enough of it in old to match exactly once. The call refuses, naming why, when you did not read the file this session, when old matches never or more than once, or when the file changed since your read. Reply: the path and the bytes replaced."
+	return "Updates the content of an existing file, replacing one occurrence of old with new. Guidelines: put enough of the file in old to match exactly once. On a file you have not read this session, an old that does not match once comes back as the file's text instead of a refusal, and the next call edits it. On a file you have read, the call refuses and names why: old matched never or more than once, or the file changed since your read. Reply: the path and the bytes replaced."
 }
 
 func (editTool) Schema() json.RawMessage {
@@ -54,18 +54,16 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if a.Old == "" {
 		return "", errors.New("edit: zero-width old string")
 	}
-	if _, threaded := core.SessionFrom(ctx); threaded {
-		if _, seen := stateOf(ctx, a.Path); !seen {
-			return "", fmt.Errorf("edit: %s was never read this session: read it first", a.Path)
-		}
-	}
+	_, threaded := core.SessionFrom(ctx)
+	recorded, seen := stateOf(ctx, a.Path)
+	fresh := threaded && !seen
 
 	fileData, err := os.ReadFile(a.Path)
 	if err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
 
-	if recorded, seen := stateOf(ctx, a.Path); seen {
+	if seen {
 		sum := sha256.Sum256(fileData)
 		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
 			return "", fmt.Errorf("%s", driftRefusal(ctx, a.Path, string(fileData)))
@@ -73,6 +71,9 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	}
 
 	count := strings.Count(string(fileData), a.Old)
+	if fresh && count != 1 {
+		return unreadObservation(ctx, a.Path)
+	}
 	switch {
 	case count == 0:
 		return "", fmt.Errorf("edit: old string not found in %s", a.Path)
@@ -88,6 +89,20 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, a.Path, string(updated))
 	return fmt.Sprintf("edited %s: replaced %d byte(s)", a.Path, len(a.Old)), nil
+}
+
+func unreadObservation(ctx context.Context, path string) (string, error) {
+	content, total, sum, err := readWindow(path, 0, -1)
+	if err != nil {
+		return "", fmt.Errorf("edit: %w", err)
+	}
+	recordDigest(ctx, path, sum)
+	s, _ := core.SessionFrom(ctx)
+	rememberContent(s, path, content)
+	if len(content) > readCap {
+		content = capReply(content, total, 0)
+	}
+	return content + "\n[edit: " + path + " was not read this session; its text is above, now edit it]", nil
 }
 
 func mtimeOf(path string) int64 {

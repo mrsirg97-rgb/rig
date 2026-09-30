@@ -115,15 +115,15 @@ func TestReadRefusesUnknownArg(t *testing.T) {
 	}
 }
 
-func TestReadDescriptionNamesTheObservationPath(t *testing.T) {
+func TestReadDescriptionNamesWhatEditChecksAgainst(t *testing.T) {
 	desc := file.Read().Description()
 	for _, want := range []string{
-		"use read, not bash (cat or sed)",
-		"a bash read leaves no observation for it to check against",
+		"the way to look at a file",
+		"What you read is what edit checks against",
 		"exactly as edit will match it",
 	} {
 		if !strings.Contains(desc, want) {
-			t.Fatalf("the read description must say %q (read is the observation path), got:\n%s", want, desc)
+			t.Fatalf("the read description must say %q (read is the way to look at a file), got:\n%s", want, desc)
 		}
 	}
 }
@@ -354,7 +354,202 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 	}
 }
 
-func TestEditWithoutPriorReadRefusesThreaded(t *testing.T) {
+func TestEditDescriptionNamesTheTeachingReply(t *testing.T) {
+	desc := file.Edit().Description()
+	for _, want := range []string{
+		"an old that does not match once comes back as the file's text instead of a refusal",
+		"the next call edits it",
+		"the file changed since your read",
+	} {
+		if !strings.Contains(desc, want) {
+			t.Fatalf("the edit description must say %q (the unread mismatch teaches with bytes), got:\n%s", want, desc)
+		}
+	}
+}
+
+func TestEditWithoutPriorReadAppliesWhenOldMatchesOnce(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "one", "new": "two",
+	}))
+	if err != nil {
+		t.Fatalf("an old matching exactly once applies without a prior read: %v", err)
+	}
+	if got == "" {
+		t.Fatal("edit must report what it did")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "two" {
+		t.Fatalf("content = %q, want two", data)
+	}
+}
+
+func TestEditWithoutPriorReadMismatchReturnsTheFileText(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	content := "alpha\nbeta\ngamma\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "absent", "new": "x",
+	}))
+	if err != nil {
+		t.Fatalf("a mismatch on an unread file hands back the text instead of a refusal: %v", err)
+	}
+	want := content + "\n[edit: " + path + " was not read this session; its text is above, now edit it]"
+	if got != want {
+		t.Fatalf("the reply must be the file's text ending with the marker:\n got %q\nwant %q", got, want)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != content {
+		t.Fatal("the teaching reply must not mutate the file")
+	}
+}
+
+func TestEditWithoutPriorReadAmbiguousReturnsTheFileText(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("x y x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "x", "new": "z",
+	}))
+	if err != nil {
+		t.Fatalf("an ambiguous old on an unread file hands back the text too: %v", err)
+	}
+	if !strings.HasSuffix(got, "\n[edit: "+path+" was not read this session; its text is above, now edit it]") {
+		t.Fatalf("the ambiguous reply must end with the marker, got %q", got)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "x y x" {
+		t.Fatal("the teaching reply must not mutate the file")
+	}
+}
+
+func TestEditWithoutPriorReadReplyIsReadPlusTheMarker(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("alpha\nbeta\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fromRead, err := file.Read().Exec(core.WithSession(context.Background(), core.NewSession()), argsJSON(t, map[string]any{"path": path}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "absent", "new": "x",
+	}))
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	want := fromRead + "\n[edit: " + path + " was not read this session; its text is above, now edit it]"
+	if got != want {
+		t.Fatalf("the teaching reply must be the read's bytes plus the marker:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestEditWithoutPriorReadReplyCapsLikeRead(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.txt")
+	var b strings.Builder
+	for b.Len() < readCap+4096 {
+		fmt.Fprintf(&b, "line %06d\n", b.Len())
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "absent", "new": "x",
+	}))
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	editMarker := "\n[edit: " + path + " was not read this session; its text is above, now edit it]"
+	if !strings.HasSuffix(got, editMarker) {
+		t.Fatalf("the teaching reply must end with the marker, got %q", got)
+	}
+	if !strings.Contains(got, "[output truncated: ") {
+		t.Fatalf("a file over the cap must carry read's truncation marker, got %d bytes", len(got))
+	}
+	fromRead, err := file.Read().Exec(core.WithSession(context.Background(), core.NewSession()), argsJSON(t, map[string]any{"path": path}))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if body := got[:len(got)-len(editMarker)]; body != fromRead {
+		t.Fatalf("the capped teaching reply must be the read's bytes plus the marker, got %d bytes want %d", len(body), len(fromRead))
+	}
+}
+
+func TestEditAfterUnreadTeachingReplyIsDriftChecked(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("alpha\nbeta\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "absent", "new": "x",
+	})); err != nil {
+		t.Fatalf("the teaching reply: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("alpha\nBETA\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "beta", "new": "gamma",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
+		t.Fatalf("the edit that follows the teaching reply must be drift-checked like any other, got %v", err)
+	}
+}
+
+func TestEditAfterUnreadTeachingReplyAppliesWithoutARead(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("alpha\nbeta\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "absent", "new": "x",
+	})); err != nil {
+		t.Fatalf("the teaching reply: %v", err)
+	}
+	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": path, "old": "beta", "new": "gamma",
+	})); err != nil {
+		t.Fatalf("the follow-up edit must apply without a separate read: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "alpha\ngamma\n" {
+		t.Fatalf("content = %q, want alpha\\ngamma\\n", data)
+	}
+}
+
+func TestEditWithoutPriorReadZeroWidthOldRefusesLoud(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
@@ -362,17 +557,20 @@ func TestEditWithoutPriorReadRefusesThreaded(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path": path, "old": "one", "new": "two",
+		"path": path, "old": "", "new": "x",
 	}))
-	if err == nil || !strings.Contains(err.Error(), "never read") || !strings.Contains(err.Error(), "read it first") {
-		t.Fatalf("an edit of a file with no recorded observation must refuse naming read as the fix, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "zero-width") {
+		t.Fatalf("a zero-width old is an args problem, unread file or not, got %v", err)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "one" {
-		t.Fatal("a refused edit must not mutate the file")
+}
+
+func TestEditWithoutPriorReadMissingFileRefusesLoud(t *testing.T) {
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		"path": filepath.Join(t.TempDir(), "absent.txt"), "old": "x", "new": "y",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "absent.txt") {
+		t.Fatalf("a missing file is not a teaching moment, got %v", err)
 	}
 }
 

@@ -1,4 +1,51 @@
 # Changelog
+## [2.3.3]: edit applies on a match, teaches with bytes on a miss
+
+The read-first refusal is retired. Since 2.1.0 the operator's sessions
+carried 332 edits; 57 were refused with "was never read this session:
+read it first", and 114 reads existed only to satisfy that rule — an
+edit of the same file followed at once. The rule spent 171 calls per
+332 edits to catch 2 drifts, and the read-first sentences in bash,
+read, and edit never changed how the model explores: it looks with
+bash and edits what it saw there. The refusal asked whether the model
+had seen the file, but the tool's own contract already proves it: an
+`old` that matches exactly once cannot come from a model that never
+saw the bytes.
+
+An edit of a file the session has not observed now applies when old
+matches exactly once. On a miss — never, or more than once — the call
+does not refuse: the reply is the file's text exactly as a read would
+return it, the same 1 MiB cap and truncation marker, ending with
+`[edit: <path> was not read this session; its text is above, now edit
+it]`. The reply records the observation — the digest and the
+remembered bytes — so the edit that follows is drift-checked like any
+other read: an external change between the teaching reply and the next
+edit still refuses, naming the diff against what the model was shown.
+The 2 drifts the old rule caught, it caught through the drift check,
+which is untouched. A file the session has read keeps today's
+refusals whole: a mismatch names the occurrence count, a change since
+the read names the drift, and the 3 old-mismatch refusals now teach
+with bytes instead of dead-ending the turn.
+
+The refusals about the call, not the observation, stand ahead of the
+teaching reply: a zero-width `old` and a missing file error loudly as
+before, and a standalone exec (no threaded session) behaves as it
+always has, because there is no session to record an observation into.
+
+The tool descriptions move with the behavior: read is "the way to look
+at a file", and edit describes the teaching reply — one refusal
+trigger fewer on the menu, and the explore-refuse-read-edit dance
+becomes edit, edit. The wire sha and the 0.2.0 request goldens move
+deliberately: the fixtures' schemas, messages, and tool count are
+byte-identical, only the two descriptions moved.
+
+Tests pin the new contract at every edge: the exact-once apply without
+a prior read, the mismatch and the ambiguous old handing back the
+bytes, the reply's byte-parity with read (capped and uncapped), the
+drift check on the edit that follows the teaching reply, the follow-up
+edit applying without a separate read, and the two call-shaped
+refusals surviving. The description pins name the new phrases.
+
 ## [2.3.2]: /theme, the operator's dial over the three presets
 
 The theme was a config-file affair: the `theme` key in settings.json
