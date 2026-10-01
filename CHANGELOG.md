@@ -1,4 +1,26 @@
 # Changelog
+## [2.5.3]: the resident resolves to a row
+
+Every unnamed fire under a resident the models table names differently
+died in 3ms with `models: no row for "glm5.3-flash"`: `ResidentModel`
+returns llama-swap's canonical id, the models table names that model
+by its alias (`ox-alpha`), and both the runner and the delegate
+passed the canonical id straight to `-model` — a run row and a fire
+log for a spawn that never lived, repeated every interval the fleet
+sat on that model (j8 burned 39 fires in a day, and the daily
+optimizer skipped with it).
+
+One resolver serves both call sites now: the resident id resolves to
+the models-table row whose id is the resident id or one of its
+llama-swap aliases (`canonicalModels` already carried the alias map).
+The gate still takes the canonical id; `-model`, the run record, and
+the fire log take the row id. A resident with no row never spawns:
+the fire records a skip naming it and the known rows, a delegate
+refuses the same way. An unreachable swap is not that case — the
+delegate falls to the session's default as it always did (a
+remote-row worker never needed the swap), the fire skips as a failed
+check.
+
 ## [2.5.2]: the line spells the unnamed job
 
 The 2.5.1 unnamed job had no spelling from the user command:
