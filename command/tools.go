@@ -49,7 +49,7 @@ func (t toolCmd) Sub() []Sub {
 		return []Sub{
 			{Name: "list", Desc: "show the jobs"},
 			{Name: "create", Desc: "add a job: create <name> <prompt…> <cron>"},
-			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [model <m>] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"},
+			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"},
 			{Name: "runs", Desc: "show a job's runs: runs <id> [n]"},
 			{Name: "pause", Desc: "pause a job: pause <id>"},
 			{Name: "resume", Desc: "resume a paused job: resume <id>"},
@@ -217,7 +217,7 @@ func withProjectField(raw json.RawMessage, project string) (json.RawMessage, err
 	return json.Marshal(m)
 }
 
-const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]|repair [id]"
+const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]|repair [id]"
 
 func schedulerArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -277,7 +277,7 @@ func isUpdateKey(s string) bool {
 
 func schedulerUpdate(fields []string) (json.RawMessage, error) {
 	const keys = "name, prompt, cron, at, model, workspace, busy"
-	const shape = "scheduler update <id> [name <n>] [model <m>] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"
+	const shape = "scheduler update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"
 	m := map[string]any{"action": "update", "id": fields[1]}
 	rest := fields[2:]
 	i := 0
@@ -301,7 +301,17 @@ func schedulerUpdate(fields []string) (json.RawMessage, error) {
 			}
 			m[key] = strings.Join(rest[i:i+want], " ")
 			i += want
-		case "name", "at", "model", "workspace", "busy":
+		case "model":
+			if i >= len(rest) {
+				return nil, fmt.Errorf("scheduler: update: %q needs a value (%s)", key, shape)
+			}
+			if rest[i] == "none" {
+				m[key] = ""
+			} else {
+				m[key] = rest[i]
+			}
+			i++
+		case "name", "at", "workspace", "busy":
 			if i >= len(rest) {
 				return nil, fmt.Errorf("scheduler: update: %q needs a value (%s)", key, shape)
 			}
