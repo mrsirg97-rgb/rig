@@ -8,11 +8,14 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 
-type swarmAdapter struct{ c *swarm.Controller }
+type swarmAdapter struct {
+	c   *swarm.Controller
+	why string
+}
 
 func (a swarmAdapter) Start(ctx context.Context, in command.SwarmStart) (string, error) {
 	if a.c == nil {
-		return "", errors.New("swarm: no swarm seam (the root did not wire it)")
+		return "", errors.New(a.why)
 	}
 	return a.c.Start(ctx, swarm.StartOpts{Role: in.Role, Model: in.Model, Budget: in.Budget})
 }

@@ -190,6 +190,16 @@ func (h *reloadHarness) waitPong(n int) {
 	h.t.Fatalf("output has %d×pong, want %d:\n%s", strings.Count(h.out.String(), "pong"), n, h.out.String())
 }
 
+func withoutDelegate(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		if n != "delegate" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 func toolNames(body []byte) []string {
 	var req struct {
 		Tools []struct {

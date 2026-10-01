@@ -213,7 +213,7 @@ func (r *root) switchTheme(ctx context.Context, name string) error {
 
 func (r *root) commandEnv() *command.Env {
 	return &command.Env{
-		Swarm:         swarmAdapter{r.swarm},
+		Swarm:         swarmAdapter{r.swarm, r.swarmWhy},
 		Session:       func() *core.Session { return r.session },
 		Compact:       r.compactNow,
 		NewSession:    r.newSession,

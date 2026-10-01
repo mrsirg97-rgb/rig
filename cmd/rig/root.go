@@ -65,7 +65,8 @@ type root struct {
 	rec     *state.Recorder
 	tools   map[string]core.Tool
 
-	swarm *swarm.Controller
+	swarm    *swarm.Controller
+	swarmWhy string
 
 	pluginTools []core.Tool
 

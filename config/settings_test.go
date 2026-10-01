@@ -142,7 +142,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy, workers)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -249,6 +249,39 @@ func TestSettingsThemeIsAKnownKey(t *testing.T) {
 	if cfg.Settings.Theme != "paper" {
 		t.Fatalf("theme = %q, want paper", cfg.Settings.Theme)
 	}
+}
+
+func TestSettingsWorkersIsATriState(t *testing.T) {
+	t.Run("absent is unset (the capability decides)", func(t *testing.T) {
+		cfg := load(t, t.TempDir(), t.TempDir())
+		if cfg.Settings.Workers != nil {
+			t.Fatalf("workers = %v, want nil (no embedded default writes over the read)", *cfg.Settings.Workers)
+		}
+	})
+	t.Run("false is the operator's off", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"workers": false}`)
+		cfg := load(t, dir, t.TempDir())
+		if cfg.Settings.Workers == nil || *cfg.Settings.Workers {
+			t.Fatalf("workers = %v, want false", cfg.Settings.Workers)
+		}
+	})
+	t.Run("true is explicit but still capability-gated", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"workers": true}`)
+		cfg := load(t, dir, t.TempDir())
+		if cfg.Settings.Workers == nil || !*cfg.Settings.Workers {
+			t.Fatalf("workers = %v, want true", cfg.Settings.Workers)
+		}
+	})
+	t.Run("a non-bool refuses by name", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"workers": "off"}`)
+		_, err := config.Load(dir, t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), "workers") {
+			t.Fatalf("the refusal must name the key, got %v", err)
+		}
+	})
 }
 
 func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {

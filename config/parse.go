@@ -166,6 +166,13 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		}
 		s.Trafilatura = &v
 	}
+	if raw, ok := keys["workers"]; ok {
+		v, err := jsonBool(raw)
+		if err != nil {
+			return Settings{}, fmt.Errorf("config: %s: workers: %v", path, err)
+		}
+		s.Workers = &v
+	}
 	if raw, ok := keys["plugins"]; ok {
 		var obj map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &obj); err != nil {

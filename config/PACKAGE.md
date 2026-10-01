@@ -13,8 +13,10 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `Load(dir, cwd)`: reads the user files under `dir` (the rig home)
   and the AGENTS.md pair (`dir` + `cwd`), each merged over its embedded
   default; returns `*Config`.
-- `Config`: `Settings`, `Models` (`models.Table`), `Agents`, `Theme`,
-  `Notices`. `Notices` carries the once-at-start lines: a present
+- `Config`: `Settings` (`Workers *bool` is the drain pair's tri-state:
+  nil = the capability decides, false = off even on a capable machine,
+  true = still capability-gated), `Models` (`models.Table`), `Agents`,
+  `Theme`, `Notices`. `Notices` carries the once-at-start lines: a present
   `workers.json` (retired, SPEC_WORKERS: the fleet is the resident
   model), a present `concurrency` key in models.json, and the legacy
   `defaultJobModel` — all read, ignored, named.

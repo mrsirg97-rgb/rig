@@ -89,7 +89,12 @@ is a loud line naming the known set, never silently a prompt.
   proxy, recorded run), and finishes it itself: workers submit for
   review, reviewers parse the worker's last `verdict: accept|reject
   <reason>` line and call `accept`/`reject`. A worker on a hosted row
-  skips the local swap and the gate entirely. Against a running swarm a
+  skips the local swap and the gate entirely. The drain pair is wired
+  only where a second request can run — the session's model row is
+  remote, or the resident server reports more than one slot, one live
+  read at wire time (`workers: false` turns it off; the scheduler is
+  wired everywhere; `/swarm` names the reason when it refuses).
+  Against a running swarm a
   start adds workers (the roles mix); `swarm stop` ends it and releases
   the in-flight claims (`swarm: stopped N agents`; `specs/SPEC_SWARM.md`).
   The task workers run
@@ -137,7 +142,9 @@ rem (`specs/SPEC_STATE.md`: rem is deliberate).
 The `delegate` tool (SPEC_DELEGATE) spawns a headless worker on a task
 now: a bounded sub-task whose result is a message, not a conversation,
 on the resident model (the session's default when nothing is
-resident), in a cwd under your session's or the rig home.
+resident), in a cwd under your session's or the rig home — wired where
+a second request can run (a remote row, or more than one slot on the
+resident server).
 Several delegate calls in one turn run in parallel, up to the free
 slots the swap reports at claim time; the turn blocks until each worker
 finishes or times out. `timeoutMs` is the spend ceiling (default 10

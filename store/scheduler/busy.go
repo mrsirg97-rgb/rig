@@ -100,6 +100,27 @@ func ResidentModel(fetch Fetch, swapURL string) (string, error) {
 	return resident[0], nil
 }
 
+// FleetCapacity reports the widest slot count the resident server
+// runs, from one live read of the same /slots the gate reads; nothing
+// resident is the zero value.
+func FleetCapacity(fetch Fetch, swapURL string) (int, error) {
+	_, resident, err := canonicalModels(fetch, swapURL)
+	if err != nil {
+		return 0, err
+	}
+	widest := 0
+	for _, model := range resident {
+		_, total, err := FreeSlots(fetch, swapURL, model)
+		if err != nil {
+			return 0, err
+		}
+		if total > widest {
+			widest = total
+		}
+	}
+	return widest, nil
+}
+
 type slotSet struct {
 	free  int
 	total int

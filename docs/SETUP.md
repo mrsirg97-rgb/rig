@@ -238,12 +238,17 @@ and an unknown key refuses at start naming the file and the field.
   "resultCap": 65536,
   "approve": "auto",
   "sandbox": "jailed",
-  "sandboxBinds": []
+  "sandboxBinds": [],
+  "workers": true
 }
 ```
 
 `baseUrl` and `model` are the two a run needs; the rest are the
-embedded defaults written out. `allow` is the one to be careful with:
+embedded defaults written out. `workers` is the drain pair's switch
+(2.4.0): `false` keeps `delegate` and the swarm off a capable machine,
+`true` (or absent) still waits for the live slot read — nothing turns
+them on where the slots are not (SPEC_WORKERS 5). `allow` is the one
+to be careful with:
 an `allow` you write replaces the default whole (default-deny below
 it), so it must carry `plugin` and `plugins` or every door call is
 refused, and it must carry `scheduler` and `delegate` when you also
@@ -283,8 +288,13 @@ default — and the gate is the live free-slot read from
 up to its timeout, then skips naming the holder; a delegate inside a
 turn reads once and refuses; the swarm starts one drain worker per
 free slot and grows as slots free. `busy: force` is retired: eviction
-is the operator's act. A `workers.json` left in the rig home is named
-once at start and ignored; delete it to silence the line.
+is the operator's act. `delegate` and the swarm are wired only where
+a second request can run — the session's model row is remote, or the
+resident server reports more than one slot, one live read at wire
+time; the scheduler is wired everywhere; the menu says nothing about
+what is absent, and `/swarm` names the reason when it refuses. A
+`workers.json` left in the rig home is named once at start and
+ignored; delete it to silence the line.
 
 ## plugins
 

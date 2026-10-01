@@ -90,7 +90,10 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 - **the swarm.** `swarm start` drains the queue, one drain worker per
   free slot on the resident model: workers claim, run one-shot, and
   submit; reviewers accept or reject. `swarm stop` ends it;
-  `swarm start budget=5` caps the spend.
+  `swarm start budget=5` caps the spend. The drain pair is wired only
+  where a second request can run — a remote row, or more than one slot
+  on the resident server (`workers: false` turns it off; the scheduler
+  is wired everywhere).
 - **resume.** `sessions` lists the vitals; `rig --resume <id>` replays a
   session from the state store in one read-only transaction.
 
@@ -111,7 +114,7 @@ model row whose `"vision": true` says it takes images, and `scheduler` and
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
-| `delegate` | a headless worker for a bounded subtask; several run in parallel in one turn, up to the free slots the swap reports live |
+| `delegate` | a headless worker for a bounded subtask; wired where a second request can run (a remote row, or more than one slot on the resident server) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |
 | `plugin` / `plugins` | the door into your python plugins, and their ecosystem |
 

@@ -20,8 +20,12 @@ the only one`); the swarm starts one drain worker per free slot and
 grows as slots free. Nothing evicts: `busy: force` is retired,
 create and update refuse it. `workers.json` and `RIG_MODEL_CONCURRENCY`
 are read, ignored, and named once at start — deleting the file silences
-the line. The worker tools (`scheduler`, `delegate`) register for every
-run now: there is always a worker model.
+the line. `delegate` and the swarm are wired only where a second
+request can run — the session's model row is remote, or the resident
+server reports more than one slot, one live read of the same `/slots`
+at wire time — and settings `"workers": false` turns the pair off on a
+capable machine; the scheduler is wired everywhere, and the menu says
+nothing about what is absent.
 
 Timeout, stall, and budget stay: they bound a fire, not the fleet.
 Remote rows keep skipping the gate entirely; their `concurrency` token

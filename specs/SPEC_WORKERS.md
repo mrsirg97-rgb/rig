@@ -110,17 +110,21 @@ the free slots are the count`). The roster shows the swarm's model
 as `resident` when it resolves per task, the `model=` override when
 one is named.
 
-### 5. The worker tools always register
+### 5. The drain pair is a capability, read once at wire time
 
-There is always a worker model — the resident one, or the session's
-default — so `scheduler` and `delegate` leave the fleet's presence
-rule: they are on the wire for every run, the default allow carries
-them whenever no operator allow stands, and the fleet-free refusals
-(`no workers configured`) go. The scheduler description's
-`(default: X)` is the session's default model. The TUI's startup line
-names the fleet `resident`. The tool-menu budget moves with the two
-permanent entries (14000 → 15500): the menu is the price of a fleet
-that never needs configuring.
+`scheduler` is wired everywhere: a fire waits and skips by itself, on
+any machine. `delegate` and the swarm are wired only where a second
+request can run: the session's model row is remote (the gate never
+consults the local swap), or the resident server reports more than
+one slot — one live read of the same `/upstream/<model>/slots` the
+gate reads, made once at wire time, nothing stored. Nothing resident
+at start is not capability, and neither is an unreadable swap: the
+wire happens once, at start, and fails closed. Nothing turns the
+pair on where the slots are not — settings.json's `"workers": false`
+turns it off on a capable machine, and `"workers": true` (or absent)
+still waits for the read. The menu says nothing about what is
+absent; `/swarm` names the reason when it refuses. The tool-menu
+budget returns to 14000: the recorded golden is a one-slot wire.
 
 ### 6. What stays
 

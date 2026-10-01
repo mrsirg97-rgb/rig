@@ -390,43 +390,49 @@ func main() {
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
-	r.tools["delegate"] = delegate.New(delegate.Opts{
-		DB:           scdb,
-		Home:         schedHome,
-		RigHome:      cfgDir,
-		StateDir:     filepath.Join(cfgDir, "sessions"),
-		SwapURL:      swapURL,
-		WorkerCmd:    []string{self},
-		DefaultModel: modelID,
-		Sandbox:      cfg.Settings.Sandbox,
-		SandboxBinds: cfg.Settings.SandboxBinds,
-		Allow:        allowList,
-		Fetch:        sched.RealFetch(0),
-		Spawn:        sched.RealSpawn,
-		Models:       func() models.Table { return r.runtime },
-		Notify:       func(ev core.Event) { r.rec.Notify(ev) },
-	})
-	r.swarm = swarm.New(swarm.Opts{
-		TodoDB:  tdb,
-		SchedDB: scdb,
-		Home:    schedHome,
-		Project: func(ctx context.Context, session string) (todostore.Project, error) {
-			return sessionQueue(ctx, tdb, cwd, session)
-		},
-		Cwd:          cwd,
-		WorkerCmd:    []string{self},
-		Fetch:        sched.RealFetch(0),
-		Spawn:        sched.RealSpawn,
-		SwapURL:      swapURL,
-		Sandbox:      cfg.Settings.Sandbox,
-		SandboxBinds: cfg.Settings.SandboxBinds,
-		RigHome:      cfgDir,
-		StateDir:     filepath.Join(cfgDir, "sessions"),
-		Allow:        allowList,
-		DefaultModel: modelID,
-		Models:       func() models.Table { return r.runtime },
-		Frontend:     func() core.Frontend { return r.rec },
-	})
+	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
+	if delegateOn {
+		r.tools["delegate"] = delegate.New(delegate.Opts{
+			DB:           scdb,
+			Home:         schedHome,
+			RigHome:      cfgDir,
+			StateDir:     filepath.Join(cfgDir, "sessions"),
+			SwapURL:      swapURL,
+			WorkerCmd:    []string{self},
+			DefaultModel: modelID,
+			Sandbox:      cfg.Settings.Sandbox,
+			SandboxBinds: cfg.Settings.SandboxBinds,
+			Allow:        allowList,
+			Fetch:        sched.RealFetch(0),
+			Spawn:        sched.RealSpawn,
+			Models:       func() models.Table { return r.runtime },
+			Notify:       func(ev core.Event) { r.rec.Notify(ev) },
+		})
+	}
+	if delegateOn {
+		r.swarm = swarm.New(swarm.Opts{
+			TodoDB:  tdb,
+			SchedDB: scdb,
+			Home:    schedHome,
+			Project: func(ctx context.Context, session string) (todostore.Project, error) {
+				return sessionQueue(ctx, tdb, cwd, session)
+			},
+			Cwd:          cwd,
+			WorkerCmd:    []string{self},
+			Fetch:        sched.RealFetch(0),
+			Spawn:        sched.RealSpawn,
+			SwapURL:      swapURL,
+			Sandbox:      cfg.Settings.Sandbox,
+			SandboxBinds: cfg.Settings.SandboxBinds,
+			RigHome:      cfgDir,
+			StateDir:     filepath.Join(cfgDir, "sessions"),
+			Allow:        allowList,
+			DefaultModel: modelID,
+			Models:       func() models.Table { return r.runtime },
+			Frontend:     func() core.Frontend { return r.rec },
+		})
+	}
+	r.swarmWhy = swarmWhy
 
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t
