@@ -57,8 +57,10 @@ written before the store commit; drift is surfaced in list.
   identical, and a store with no jobs never touches the crontab shim.
 - `runner.go`: the job runner (`RunJob`); `lock.go`: the fire lock and
   log pruning, `busy.go`: the swap gate (the resident set and the live
-  free-slot read, `ResidentModel`/`FreeSlots`/`FleetCapacity` — the
-  wire-time capability read) and the spend read,
+  free-slot read, `ResidentModel`/`FreeSlots`) with `FleetCapacity`,
+  the wire-time capability read — the widest slot count the resident
+  server runs, from one live read of the same `/slots` the gate reads,
+  nothing resident the zero value — and the spend read,
   `spawn.go`: the real spawn and the capture
   (the worker spawn, bwrap jail, socket proxy);
   the spawn captures each stream to the first and last 128 KiB
