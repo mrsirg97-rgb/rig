@@ -28,14 +28,22 @@ time. Time and money stay; counts go.
 ### 1. The model resolves at claim time
 
 A worker's model is, in order: the named one (the tool arg, the job
-row, the swarm's `model=`), else the resident model (the swap's loaded
-set, canonicalized through the aliases as `busyState` did), else the
+row, the swarm's `model=`), else the resident model resolved to the
+models-table row whose id is the resident id or one of its llama-swap
+aliases (the swap's alias map already carries them), else the
 session's own default — the resolved `RIG_MODEL` > `settings.json`
 `model` chain, the same default a session uses. Resolution happens
 inside `sched.Delegate` (it holds the fetch seam) so all three sites
-share it; the runner's job rows always name one. A resolved model with
-no row in the models table is not special: the worker process resolves
-rows itself and refuses by name.
+share it; the runner's unnamed job rows resolve the same way at fire
+time. The gate keeps the canonical id; the row id rides the argv's
+`-model`, the run record, and the fire log — the worker process
+resolves rows by the id it is handed, so an unresolvable id burned a
+run row for a spawn that died in milliseconds. A resident with no row
+never spawns: the fire records a skip naming it and the known rows,
+the delegate refuses the same way. An unreachable swap is not that
+case: the delegate falls to the session's default as it always did (a
+remote-row worker never needed the swap), the fire skips as a failed
+check.
 
 The retired surfaces are read and named, not parsed:
 
@@ -146,11 +154,13 @@ Failing first, against a fake `/slots` (the scripted fetch gains
 
 - **The delegate**: a one-slot model with its only slot processing
   refuses with the pinned voice and spawns nothing; a free slot
-  spawns; an unnamed model spawns the resident model, and the
-  session's default when nothing is resident; a named model while
-  another is resident refuses naming the holder; a failed check fails
-  closed; the flocks are gone (two concurrent delegates on a two-slot
-  model both spawn).
+  spawns; an unnamed model spawns the resident model resolved to its
+  row (the alias case fires the row id, a resident id that is itself
+  a row is unchanged), the session's default when nothing is resident,
+  and a resident with no row refuses naming it and the known rows; a
+  named model while another is resident refuses naming the holder; a
+  failed check fails closed; the flocks are gone (two concurrent
+  delegates on a two-slot model both spawn).
 - **The fire**: waits for a free slot up to its timeout (the fixture
   frees one mid-wait and the worker spawns), skips naming the holder
   and the wait when it expires, skips immediately when another model

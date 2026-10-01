@@ -70,10 +70,14 @@ written before the store commit; drift is surfaced in list.
   cannot OOM the runner; the stored cwd is revalidated at fire time (the
   jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
   with a recorded reason. An unnamed job's model resolves at fire time —
-  the resident model (`ResidentModel`), else `RunOpts.DefaultModel` (the
-  root's settings' model), a fire with neither recording a skip that
-  names it — and the resolved id rides the gate, the argv's `-model`,
-  the fire log's `model=` line, and the run record's `model`. The spawn context is bounded by the row's own
+  the resident model resolved to the models-table row whose id is the
+  resident id or one of its llama-swap aliases (`resolveResidentModel`,
+  `busy.go`), else `RunOpts.DefaultModel` (the root's settings' model),
+  a fire with neither recording a skip that names it — the gate keeps
+  the canonical id, while the row id rides the argv's `-model`, the
+  fire log's `model=` line, and the run record's `model`; a resident
+  with no row records a skip naming it and the known rows, and the
+  fire never spawns. The spawn context is bounded by the row's own
   `timeout`, else `RunOpts.Timeout`, else `DefaultRunTimeout` (30 min).
   The `Spawn` seam carries an output observer: every byte the worker
   writes touches the row's `stall` window (a silent fire past it is
@@ -88,8 +92,10 @@ written before the store commit; drift is surfaced in list.
   the crontab line itself carries.
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE, the model
   resolution and gate of SPEC_WORKERS): the model resolves at claim
-  time (named, else the resident model, else `DefaultModel` — the
-  session's default), the gate is the live free-slot read (skipped for
+  time (named, else the resident model resolved to its models-table
+  row, else `DefaultModel` — the session's default; an unreachable
+  swap falls to the default as it always did, a resident with no row
+  refuses naming it and the known rows), the gate is the live free-slot read (skipped for
   a remote row via the `Models` seam — the swap is never consulted;
   `WaitBusy` waits like a fire up to `Timeout`, the claim-time read
   refuses at once), the ad-hoc record (a minted job row with no crontab line), the

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,17 +71,30 @@ func delegateInput(in DelegateInput) DelegateInput {
 
 const maxDelegateTimeout = 24 * time.Hour
 
-func resolveWorkerModel(in DelegateInput) (string, error) {
+func resolveWorkerModel(in DelegateInput) (string, string, error) {
 	if in.Model != "" {
-		return in.Model, nil
+		return in.Model, in.Model, nil
 	}
-	if resident, err := ResidentModel(in.Fetch, in.SwapURL); err == nil && resident != "" {
-		return resident, nil
+	table := models.Table{}
+	if in.Models != nil {
+		table = in.Models()
+	}
+	row, canonical, err := resolveResidentModel(in.Fetch, in.SwapURL, table)
+	if err != nil {
+		var noRow noRowError
+		if !errors.As(err, &noRow) {
+			row, canonical = "", ""
+		} else {
+			return "", "", err
+		}
+	}
+	if row != "" {
+		return row, canonical, nil
 	}
 	if in.DefaultModel == "" {
-		return "", fmt.Errorf("no model: the swap has nothing resident and no default is wired (the session's model is the default)")
+		return "", "", fmt.Errorf("no model: the swap has nothing resident and no default is wired (the session's model is the default)")
 	}
-	return in.DefaultModel, nil
+	return in.DefaultModel, in.DefaultModel, nil
 }
 
 func isRemoteRow(in DelegateInput) bool {
@@ -119,7 +133,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
 
-	model, err := resolveWorkerModel(in)
+	model, gateModel, err := resolveWorkerModel(in)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: %w", err)
 	}
@@ -127,12 +141,12 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	if !isRemoteRow(in) {
 		if in.WaitBusy {
 			waitCtx, cancelWait := context.WithTimeout(waitCtx, delegateTimeout(in.Timeout))
-			err := gateWait(in.Fetch, in.SwapURL, model, waitCtx)
+			err := gateWait(in.Fetch, in.SwapURL, gateModel, waitCtx)
 			cancelWait()
 			if err != nil {
 				return DelegateResult{}, fmt.Errorf("delegate: %w", err)
 			}
-		} else if err := gateOnce(in.Fetch, in.SwapURL, model); err != nil {
+		} else if err := gateOnce(in.Fetch, in.SwapURL, gateModel); err != nil {
 			return DelegateResult{}, fmt.Errorf("delegate: %w", err)
 		}
 	}
