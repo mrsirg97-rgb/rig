@@ -354,9 +354,10 @@ TUI; each view renders the way the TUI renders that tool's output.
   session's `scheduler` tool calls. The form carries name, prompt, cron
   (five fields, or `once` plus an ISO `at`), and the `cwd` (the page's
   cwd by default; the job runs where its `cwd` says, no scope arg).
-  The create body's model defaults to the fleet's model (SPEC_CONFIG
-  12): the server fills it when the body names none, and a job that
-  names its own model keeps it. The verb's reply is shown verbatim, the
+  The create body's model is the job's own: a body that names one
+  keeps it, and a body that names none stores the unnamed job (the
+  fire resolves the resident model, else the settings' model;
+  SPEC_STATE). The verb's reply is shown verbatim, the
   list re-read after. With no fleet (`workers.json` absent), the POST
   refuses by name (400, the command's voice); the view says the same
   instead of offering the form (the view's refusal, below).
@@ -435,9 +436,9 @@ seeded temp home):
 
 - **The scheduler create.** A same-Origin `POST /api/scheduler` with
   name/prompt/cron returns the verb's reply (`created jN 'name'
-  (scope)`) and the list carries the job; the job's model is the
-  fleet's model when the body names none (the server fills it), and a
-  body that names its own model keeps it; a `once` plus a valid `at`
+  (scope)`) and the list carries the job; the job's model is empty
+  when the body names none (the unnamed job; the fire resolves it),
+  and a body that names its own model keeps it; a `once` plus a valid `at`
   lands; a duplicate name in the same scope is a named refusal; a bad
   cron is the verb's refusal; a no-Origin or foreign-Origin write is a
   403; an over-cap body is a 400; `DELETE /api/scheduler` is a 405 with

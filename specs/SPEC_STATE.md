@@ -512,7 +512,8 @@ post-merge corrections)
   (active|paused|done|removed), last_status (ok|fail|skip, nullable),
   last_ts, last_exit, created_seq, updated_seq.
 - `runs`: seq (primary), job_id (link jobs), started_at, ended_at, status,
-  exit, log_path. Pane records these as run events; a container makes
+  exit, log_path, model (nullable; the resolved id the fire ran on).
+  Pane records these as run events; a container makes
   `runs {id, n}` a chain read instead of a log scan.
 - Crontab remains the scheduling truth (tagged lines, surgical rewrites,
   written before the store commit; drift surfaced in `list`, and a line
@@ -540,7 +541,9 @@ post-merge corrections)
   `Crontab`, never a fresh real one, so a frontend or a test with a fake
   crontab cannot reach the operator's.
 - `update` is the verb that changes a live job's definition, in place: any
-  of `prompt`, `model`, `cwd`, `busy`, `timeout`, `name`, and the cadence. The cadence
+  of `prompt`, `model`, `cwd`, `busy`, `timeout`, `name`, and the cadence
+  (`model` absent means unchanged, a null or empty value clears to the
+  unnamed job). The cadence
   is a 5-field cron, or an `at` that makes the job `once`; create's
   refusals apply verbatim (a bad ISO, an invalid cron, a `once` without its
   `at`), and a 5-field cron and an `at` in the same call are mutually
@@ -568,18 +571,24 @@ post-merge corrections)
   assessed, nothing is written.
 - The `defaultModel` fallback constant is cut (SPEC_CONFIG 12, with
   the settings' `defaultJobModel` key): `Create` takes the model from
-  its caller, never a literal; the tool passes the fleet's model
-  (SPEC_CONFIG 12) or the job's own, the dashboard's create fills the
-  fleet's model (SPEC_SERVE), and a direct `Create` with an empty
-  model refuses by name. The worker's model is the operator's: named
-  by `workers.json`, defined by the operator's `models.json` row,
-  baked into no binary. No schema change, no path change: the job row
-  carries its model (set at create), and `run-job` fires the row's
-  model; a fire needs no `workers.json`, so a fleet removed after
-  jobs were created leaves them firing on their recorded model. The
-  tools follow the config: no fleet, no worker tools registered
-  (SPEC_CONFIG 12's presence rule); the store and the runner are
-  unchanged underneath.
+  its caller, never a literal. A named model stores verbatim; an
+  empty model is the unnamed job, whose fire resolves at run time —
+  the resident model, else the runner's `DefaultModel` (the settings'
+  model, the `RIG_MODEL` overlay riding along) — and a fire with
+  neither records a skip that says so. The named rule stands: the gate
+  refuses a model the resident server does not hold, naming the
+  holder, so a named job never evicts and an unnamed one rides
+  whatever the fleet serves now. The worker's model is the operator's:
+  named by `workers.json`, defined by the operator's `models.json` row,
+  baked into no binary. The job row carries its model (set at create,
+  cleared to the unnamed job by `update`'s null or empty), and
+  `run-job` fires the row's model when it names one; a fleet removed
+  after jobs were created leaves named jobs firing on their recorded
+  model. The tools follow the config: no fleet, no worker tools
+  registered (SPEC_CONFIG 12's presence rule). Schema 7 adds
+  `runs.model` (nullable; NULL is a command job or a skip that
+  resolved nothing) with the same presence-keyed idempotent add, and
+  the fire log names the resolved model beside the key.
 - Command jobs: `create` takes `command` (a shell line run by `sh -c`
   in the job's cwd) instead of a `prompt`; a prompt and a command in
   one call are mutually exclusive, refused by name, as are `command`

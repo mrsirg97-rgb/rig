@@ -1,4 +1,32 @@
 # Changelog
+## [2.5.1]: the scheduler's unnamed job
+
+A scheduler job named its model at create: `Create` refused an empty
+model, the tool filled the session's model when the call named none,
+and the dashboard's create did the same. The cost showed every GLM
+session: jobs pinned to the worker model skipped with "the GPU is held
+by glm5.3-flash" while the machine sat idle, because a stored id never
+re-reads the room. The delegate already resolved an unnamed model
+resident-first; the runner did not.
+
+Create and update now accept no model and store the empty string: the
+unnamed job. Update takes `model` as a pointer, absent means unchanged
+and `model: null` clears a named model back to unnamed. At fire time
+the runner resolves an empty model — the resident model first, else
+the settings' model (`RIG_MODEL` overlays as everywhere else) — and
+passes the resolved id to the busy gate and to `-model`; nothing
+resident and no default is a skip that says so. A named model keeps
+the rule it had: the gate refuses a model the resident server does
+not hold, naming the holder, so a named job never evicts. The run
+record and the fire log name the resolved model (schema 7 adds
+`runs.model`, the same presence-keyed column add; `runs` shows it
+beside the exit and the duration). The tool's schema says the
+contract: omit the model to run on whatever is resident, default
+`<model>` when nothing is. The dashboard no longer fills the fleet's
+model on create, and an empty model field on its job form clears to
+unnamed. The request fixtures move with the description; the wire sha
+does not (its root wires a fake scheduler surface).
+
 ## [2.5.0]: edit takes a list of changes, all or none
 
 Edit's arguments were `path`, `old`, `new`: one replacement per call.
