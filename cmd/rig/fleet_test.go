@@ -109,14 +109,13 @@ func TestFleetWiringWorkersFalseTurnsThePairOffOnACapableMachine(t *testing.T) {
 	}
 }
 
-func TestFleetWiringNothingResidentIsNotCapability(t *testing.T) {
+func TestFleetWiringNothingResidentWiresTheDrainPairOn(t *testing.T) {
 	on, why := fleetWiring(swapFetch(nil, 2), "http://127.0.0.1:8090", "local", localTable(t), true)
-	if on {
-		t.Fatal("nothing resident at start is not capability: the pair stays off")
+	if !on {
+		t.Fatalf("nothing resident defers to the claim-time gate (the model that loads is the session's default), refusal %q", why)
 	}
-	want := "swarm: the fleet needs more than one slot (nothing resident at start)"
-	if why != want {
-		t.Fatalf("the swarm refusal = %q, want %q", why, want)
+	if why != "" {
+		t.Fatalf("a wired fleet carries no refusal, got %q", why)
 	}
 }
 

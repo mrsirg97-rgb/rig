@@ -118,11 +118,13 @@ request can run: the session's model row is remote (the gate never
 consults the local swap), or the resident server reports more than
 one slot — one live read of the same `/upstream/<model>/slots` the
 gate reads, made once at wire time, nothing stored. Nothing resident
-at start is not capability, and neither is an unreadable swap: the
-wire happens once, at start, and fails closed. Nothing turns the
-pair on where the slots are not — settings.json's `"workers": false`
-turns it off on a capable machine, and `"workers": true` (or absent)
-still waits for the read. The menu says nothing about what is
+at start wires the pair on: the model that loads is the session's
+default, and the claim-time gate already refuses on one slot — the
+read cannot know better than the gate. Only an unreadable swap, one
+resident slot, or `"workers": false` wires it off: the wire happens
+once, at start, an unreadable swap fails closed, and nothing turns
+the pair on where the slots are not (`"workers": true`, or absent,
+still waits for the read). The menu says nothing about what is
 absent; `/swarm` names the reason when it refuses. The tool-menu
 budget returns to 14000: the recorded golden is a one-slot wire.
 
