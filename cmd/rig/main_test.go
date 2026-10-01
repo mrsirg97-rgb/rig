@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.3.4" {
-		t.Fatalf("Version = %q, want 2.3.4", Version)
+	if Version != "2.4.0" {
+		t.Fatalf("Version = %q, want 2.4.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -196,22 +196,12 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	want := []string{"bash", "edit", "plugin", "plugins", "python", "read", "rem", "sessions", "todo", "web", "write"}
+	want := []string{"bash", "delegate", "edit", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web", "write"}
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("no fleet: the worker tools must stay unregistered: %v, want %v", got, want)
+		t.Fatalf("the worker tools always register (the fleet is the resident model): %v, want %v", got, want)
 	}
 	if len(k.Middleware) != 9 {
 		t.Fatalf("middleware = %d links, want the approval gate, the path boundary, the router, the cutoff link, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decisions 9 and 10; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
-	}
-}
-
-func TestWireWithAConfiguredFleetRegistersTheWorkerTools(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	r.workers = &config.Workers{Model: "local", Slots: 1}
-	k := wire(r)
-	want := []string{"bash", "delegate", "edit", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web", "write"}
-	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("a configured fleet must register the worker tools: %v, want %v", got, want)
 	}
 }
 

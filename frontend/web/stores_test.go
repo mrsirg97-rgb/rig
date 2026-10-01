@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
@@ -34,7 +33,7 @@ func TestSchedulerStoreMigratesThroughTheServersCrontab(t *testing.T) {
 	ours := "30 7 * * * rig run-job j1  # pane-scheduler:j1"
 	theirs := "0 12 * * * '/x/orbit' run-job j1  # pane-scheduler:j1"
 	ct := &fakeCrontab{text: ours + "\n" + theirs + "\n"}
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Workers: &config.Workers{Model: "worker-test", Slots: 1}, Crontab: ct, RunnerCmd: "rig run-job", Natives: []string{"bash", "read"}, Root: home})
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), DefaultModel: "worker-test", Crontab: ct, RunnerCmd: "rig run-job", Natives: []string{"bash", "read"}, Root: home})
 	if err != nil {
 		t.Fatal(err)
 	}

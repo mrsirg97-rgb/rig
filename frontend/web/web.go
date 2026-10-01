@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -24,7 +23,7 @@ type Options struct {
 
 	Models models.Table
 
-	Workers *config.Workers
+	DefaultModel string
 
 	Crontab sched.Crontab
 
@@ -42,15 +41,15 @@ type Options struct {
 }
 
 type Server struct {
-	home      string
-	cwd       string
-	models    models.Table
-	workers   *config.Workers
-	crontab   sched.Crontab
-	runnerCmd string
-	readTO    time.Duration
-	natives   map[string]bool
-	root      string
+	home         string
+	cwd          string
+	models       models.Table
+	defaultModel string
+	crontab      sched.Crontab
+	runnerCmd    string
+	readTO       time.Duration
+	natives      map[string]bool
+	root         string
 
 	origins []string
 	token   string
@@ -85,19 +84,19 @@ func New(opts Options) (*Server, error) {
 		root, _ = os.UserHomeDir()
 	}
 	return &Server{
-		home:      opts.Home,
-		cwd:       opts.CWD,
-		models:    opts.Models,
-		workers:   opts.Workers,
-		crontab:   ct,
-		runnerCmd: runner,
-		readTO:    opts.ReadTimeout,
-		natives:   natives,
-		root:      root,
-		stores:    newStoreCache(opts.Home, ct, runner),
-		static:    sub,
-		chat:      newChat(opts.Commands, opts.Env),
-		status:    opts.Status,
+		home:         opts.Home,
+		cwd:          opts.CWD,
+		models:       opts.Models,
+		defaultModel: opts.DefaultModel,
+		crontab:      ct,
+		runnerCmd:    runner,
+		readTO:       opts.ReadTimeout,
+		natives:      natives,
+		root:         root,
+		stores:       newStoreCache(opts.Home, ct, runner),
+		static:       sub,
+		chat:         newChat(opts.Commands, opts.Env),
+		status:       opts.Status,
 	}, nil
 }
 

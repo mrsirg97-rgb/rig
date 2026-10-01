@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
@@ -30,7 +29,7 @@ func newChatServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := seedHome(t)
 	srv, err := New(Options{
-		Home: home, CWD: testCWD, Models: modelsTable(t), Workers: &config.Workers{Model: "worker-test", Slots: 1},
+		Home: home, CWD: testCWD, Models: modelsTable(t), DefaultModel: "worker-test",
 		Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home,
 		Commands: []core.Command{echoCmd{}},
 		Status: func(context.Context) Status {

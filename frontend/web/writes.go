@@ -77,12 +77,8 @@ func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "a JSON body {name, prompt, cron, at?, cwd?} is required: "+err.Error())
 		return
 	}
-	if s.workers == nil {
-		writeErr(w, http.StatusBadRequest, "scheduler: no workers configured ("+filepath.Join(s.home, "workers.json")+" names the model)")
-		return
-	}
 	if in.Model == "" {
-		in.Model = s.workers.Model
+		in.Model = s.defaultModel
 	}
 	sdb, err := s.stores.scheduler()
 	if err != nil {

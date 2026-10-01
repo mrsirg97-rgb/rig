@@ -8,7 +8,6 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
@@ -66,8 +65,7 @@ type root struct {
 	rec     *state.Recorder
 	tools   map[string]core.Tool
 
-	workers *config.Workers
-	swarm   *swarm.Controller
+	swarm *swarm.Controller
 
 	pluginTools []core.Tool
 
@@ -110,7 +108,7 @@ func wire(r *root) *rig.Kernel {
 	r.live.SetPlugins(r.pluginNames()...)
 	if r.natives == nil {
 		r.natives = make(map[string]bool)
-		for _, name := range effectiveNativeNames(r.workers) {
+		for _, name := range effectiveNativeNames() {
 			r.natives[name] = true
 		}
 	}
@@ -181,7 +179,7 @@ func remRow(m remdom.Memory) command.RemRow {
 }
 
 func (r *root) nativeTools() []core.Tool {
-	names := registeredNativeNames(r.workers, r.row.Vision)
+	names := registeredNativeNames(r.row.Vision)
 	out := make([]core.Tool, 0, len(names))
 	for _, name := range names {
 		tool, ok := r.tools[name]

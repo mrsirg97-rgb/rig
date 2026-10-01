@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
 const DelegateEnv = "RIG_DELEGATE"
@@ -20,7 +22,6 @@ type DelegateInput struct {
 	Task          string
 	Model         string
 	WorkerSession string
-	Slots         int
 	Fetch         Fetch
 	Spawn         Spawn
 	WorkerCmd     []string
@@ -36,8 +37,8 @@ type DelegateInput struct {
 	Now           func() time.Time
 	Context       context.Context
 	WaitBusy      bool
-	Remote        bool
-	Concurrency   int
+	DefaultModel  string
+	Models        func() models.Table
 	Observe       func([]byte)
 	SpawnCtx      context.Context
 }
@@ -69,6 +70,27 @@ func delegateInput(in DelegateInput) DelegateInput {
 
 const maxDelegateTimeout = 24 * time.Hour
 
+func resolveWorkerModel(in DelegateInput) (string, error) {
+	if in.Model != "" {
+		return in.Model, nil
+	}
+	if resident, err := ResidentModel(in.Fetch, in.SwapURL); err == nil && resident != "" {
+		return resident, nil
+	}
+	if in.DefaultModel == "" {
+		return "", fmt.Errorf("no model: the swap has nothing resident and no default is wired (the session's model is the default)")
+	}
+	return in.DefaultModel, nil
+}
+
+func isRemoteRow(in DelegateInput) bool {
+	if in.Models == nil {
+		return false
+	}
+	row, ok := in.Models().Get(in.Model)
+	return ok && row.Remote
+}
+
 func delegateTimeout(t time.Duration) time.Duration {
 	if t <= 0 {
 		return DefaultRunTimeout
@@ -77,54 +99,6 @@ func delegateTimeout(t time.Duration) time.Duration {
 		return maxDelegateTimeout
 	}
 	return t
-}
-
-const slotPollInterval = 50 * time.Millisecond
-
-const busyWaitInterval = time.Second
-
-func delegateBusy(fetch Fetch, swapURL, model string, waitCtx context.Context, wait bool) error {
-	for {
-		st := busyState(fetch, swapURL, model)
-		switch st.kind {
-		case "run":
-			return nil
-		case "error":
-			return fmt.Errorf("delegate: busy check failed: %s", st.reason)
-		case "busy":
-			if !wait {
-				return fmt.Errorf("delegate: the GPU is held by %s (busy:skip — no eviction from inside a turn); a delegate from inside a turn cannot win this box — schedule a once-job instead, it fires between turns", st.names)
-			}
-			select {
-			case <-waitCtx.Done():
-				return fmt.Errorf("delegate: the GPU never freed while waiting (busy: %s)", st.names)
-			case <-time.After(busyWaitInterval):
-			}
-		}
-	}
-}
-
-func acquireSlot(ctx context.Context, home, session string, slots int) (*os.File, error) {
-	start := time.Now()
-	for {
-		for i := 0; i < slots; i++ {
-			fd, held, err := acquireLock(home, fmt.Sprintf("delegate:%s:%d", session, i))
-			if err != nil {
-				return nil, fmt.Errorf("delegate: lock: %w", err)
-			}
-			if held {
-				return fd, nil
-			}
-		}
-		select {
-		case <-ctx.Done():
-			if slots == 1 {
-				return nil, fmt.Errorf("delegate: a delegation is already in flight (this session)")
-			}
-			return nil, fmt.Errorf("delegate: the session's delegate slots are full (slots %d); waited %s for a slot", slots, time.Since(start).Truncate(time.Millisecond))
-		case <-time.After(slotPollInterval):
-		}
-	}
 }
 
 func Delegate(in DelegateInput) (DelegateResult, error) {
@@ -136,32 +110,31 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: worker session is required")
 	}
 
-	slots := in.Slots
-	if slots < 1 {
-		slots = 1
-	}
 	waitCtx := in.Context
 	if waitCtx == nil {
 		waitCtx = context.Background()
 	}
-	lockFD, err := acquireSlot(waitCtx, in.Home, in.Session, slots)
-	if err != nil {
-		return DelegateResult{}, err
-	}
-	defer releaseLock(lockFD)
 
 	if os.Getenv(DelegateEnv) != "" {
 		return DelegateResult{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
 
-	if in.Remote {
-		token, err := acquireRowTokens(waitCtx, in.Home, in.Model, in.Concurrency)
-		if err != nil {
-			return DelegateResult{}, err
+	model, err := resolveWorkerModel(in)
+	if err != nil {
+		return DelegateResult{}, fmt.Errorf("delegate: %w", err)
+	}
+	in.Model = model
+	if !isRemoteRow(in) {
+		if in.WaitBusy {
+			waitCtx, cancelWait := context.WithTimeout(waitCtx, delegateTimeout(in.Timeout))
+			err := gateWait(in.Fetch, in.SwapURL, model, waitCtx)
+			cancelWait()
+			if err != nil {
+				return DelegateResult{}, fmt.Errorf("delegate: %w", err)
+			}
+		} else if err := gateOnce(in.Fetch, in.SwapURL, model); err != nil {
+			return DelegateResult{}, fmt.Errorf("delegate: %w", err)
 		}
-		defer releaseLock(token)
-	} else if err := delegateBusy(in.Fetch, in.SwapURL, in.Model, waitCtx, in.WaitBusy); err != nil {
-		return DelegateResult{}, err
 	}
 
 	id, err := adHocCreate(context.Background(), in.DB, in)

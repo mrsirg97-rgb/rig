@@ -120,7 +120,7 @@ func TestCreateRefusesACommandMixedWithTheModelPayloads(t *testing.T) {
 	for _, in := range []sched.CreateInput{
 		{Name: "a", Command: "true", Prompt: "p", Cron: "0 3 * * *", Model: "w"},
 		{Name: "b", Command: "true", Cron: "0 3 * * *", Model: "w"},
-		{Name: "c", Command: "true", Cron: "0 3 * * *", Busy: "force"},
+		{Name: "c", Command: "true", Cron: "0 3 * * *", Busy: "skip"},
 		{Name: "d", Cron: "0 3 * * *", Model: "w"},
 	} {
 		_, err := h.create(in)

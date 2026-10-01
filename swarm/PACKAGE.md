@@ -64,6 +64,10 @@ the supervisor's in-memory truth.
   so the `Counts` fold never runs per stream chunk. The snapshot is the
   roster (`List`) plus the bound queue's fold counts (`todo.Counts`).
 - Pure supervisor side: stdlib plus core, models, store/todo,
-  store/scheduler, the `status` throttle leaf. No command. A worker's
-  model row resolves at spawn: a remote row's delegate skips the swap
-  busy probe and carries the row's concurrency token bound.
+  store/scheduler, the `status` throttle leaf. No command. The worker
+  model resolves per task (the resident model, else the session's
+  default — the roster shows `resident` unless `model=` names one), and
+  the swarm's parallelism is the free slots the swap reports live: one
+  drain worker per free slot at start, growing as they free
+  (`grow.go`), never past the cap, never into an empty queue. A remote
+  row's delegate skips the swap gate entirely.

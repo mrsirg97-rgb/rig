@@ -44,7 +44,6 @@ func (f *fakeSwarm) Stop() (string, error) {
 
 func swarmEnv(swarm command.Swarm) *command.Env {
 	return &command.Env{
-		Workers: command.Workers{Model: "qwen3.8-workers", Slots: 1, File: "/home/ng/.rig/workers.json", Configured: true},
 		Swarm:   swarm,
 		Session: func() *core.Session { return core.NewSession() },
 	}
@@ -64,46 +63,54 @@ func runSwarm(t *testing.T, env *command.Env, args string) (string, error) {
 func TestSwarmStartParsesBudget(t *testing.T) {
 	f := &fakeSwarm{}
 	env := swarmEnv(f)
-	if _, err := runSwarm(t, env, "2 budget=5.50"); err != nil {
+	if _, err := runSwarm(t, env, "start budget=5.50"); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if len(f.started) != 1 || f.started[0].Budget != 5.50 {
 		t.Fatalf("start = %+v, want budget 5.50", f.started)
 	}
-	if _, err := runSwarm(t, env, "1 budget=-1"); err == nil {
+	if _, err := runSwarm(t, env, "start budget=-1"); err == nil {
 		t.Fatal("a negative budget must refuse")
 	}
-	if _, err := runSwarm(t, env, "1 budget=nope"); err == nil {
+	if _, err := runSwarm(t, env, "start budget=nope"); err == nil {
 		t.Fatal("a non-numeric budget must refuse")
 	}
 }
 
-func TestSwarmStartParsesCountRoleAndModel(t *testing.T) {
+func TestSwarmStartParsesRoleAndModel(t *testing.T) {
 	f := &fakeSwarm{}
 	env := swarmEnv(f)
-	got, err := runSwarm(t, env, "3")
+	got, err := runSwarm(t, env, "start")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if got != "swarm: added 1 agent (role worker · model qwen3.8-workers)" {
 		t.Errorf("reply = %q", got)
 	}
-	if len(f.started) != 1 || f.started[0].Count != 3 || f.started[0].Role != "worker" || f.started[0].Model != "" {
-		t.Errorf("start = %+v, want 3 workers", f.started)
+	if len(f.started) != 1 || f.started[0].Role != "worker" || f.started[0].Model != "" {
+		t.Errorf("start = %+v, want one worker", f.started)
 	}
-	got, err = runSwarm(t, env, "2 role=reviewer model=qwen3.8-review")
+	got, err = runSwarm(t, env, "start role=reviewer model=qwen3.8-review")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if len(f.started) != 2 || f.started[1].Count != 2 || f.started[1].Role != "reviewer" || f.started[1].Model != "qwen3.8-review" {
+	if len(f.started) != 2 || f.started[1].Role != "reviewer" || f.started[1].Model != "qwen3.8-review" {
 		t.Errorf("second start = %+v", f.started[1])
 	}
-	got, err = runSwarm(t, env, "1 model=qwen3.8-workers role=reviewer")
+	got, err = runSwarm(t, env, "start model=qwen3.8-workers role=reviewer")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if f.started[2].Role != "reviewer" || f.started[2].Model != "qwen3.8-workers" {
 		t.Errorf("the role/model tokens must be order-independent: %+v", f.started[2])
+	}
+}
+
+func TestSwarmCountRefuses(t *testing.T) {
+	env := swarmEnv(&fakeSwarm{})
+	_, err := runSwarm(t, env, "3")
+	if err == nil || !strings.Contains(err.Error(), "a count is not taken") {
+		t.Fatalf("the count refusal must name the retirement: %v", err)
 	}
 }
 
@@ -151,26 +158,15 @@ func TestSwarmStopEndsTheWorkers(t *testing.T) {
 
 func TestSwarmUsageRefusals(t *testing.T) {
 	env := swarmEnv(&fakeSwarm{})
-	for _, args := range []string{"x", "1 2", "2 role=worker role=reviewer", "2 role=", "2 bogus", "stop extra"} {
+	for _, args := range []string{"x", "3", "start role=worker role=reviewer", "start role=", "start bogus", "stop extra"} {
 		if _, err := runSwarm(t, env, args); err == nil {
 			t.Errorf("/swarm %q must refuse", args)
 		}
 	}
 }
 
-func TestSwarmNoFleetRefusesByName(t *testing.T) {
-	env := &command.Env{Workers: command.Workers{File: "/home/ng/.rig/workers.json"}, Swarm: &fakeSwarm{}}
-	_, err := runSwarm(t, env, "2")
-	if err == nil {
-		t.Fatal("a start without a fleet must refuse")
-	}
-	if !strings.Contains(err.Error(), "no workers configured") || !strings.Contains(err.Error(), "workers.json") {
-		t.Errorf("no-fleet voice: %v", err)
-	}
-}
-
 func TestSwarmNoSeamListsEmptyAndStopRefuses(t *testing.T) {
-	env := &command.Env{Workers: command.Workers{Configured: true}}
+	env := &command.Env{}
 	got, err := runSwarm(t, env, "")
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -186,7 +182,7 @@ func TestSwarmNoSeamListsEmptyAndStopRefuses(t *testing.T) {
 func TestSwarmThreadsTheLiveSession(t *testing.T) {
 	f := &fakeSwarm{}
 	env := swarmEnv(f)
-	if _, err := runSwarm(t, env, "1"); err != nil {
+	if _, err := runSwarm(t, env, "start"); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if len(f.started) != 1 {
@@ -196,7 +192,7 @@ func TestSwarmThreadsTheLiveSession(t *testing.T) {
 
 func TestSwarmStartErrorSurfacesVerbatim(t *testing.T) {
 	f := &fakeSwarm{startErr: context.DeadlineExceeded}
-	if _, err := runSwarm(t, swarmEnv(f), "1"); err != context.DeadlineExceeded {
+	if _, err := runSwarm(t, swarmEnv(f), "start"); err != context.DeadlineExceeded {
 		t.Errorf("start error = %v, want verbatim", err)
 	}
 }
@@ -211,7 +207,7 @@ func TestSwarmSubHints(t *testing.T) {
 			t.Fatal("swarm must be a Subber")
 		}
 		subs := s.Sub()
-		if len(subs) != 2 || subs[0].Name != "stop" || subs[1].Name != "<n>" {
+		if len(subs) != 2 || subs[0].Name != "start" || subs[1].Name != "stop" {
 			t.Errorf("sub hints = %+v", subs)
 		}
 		return

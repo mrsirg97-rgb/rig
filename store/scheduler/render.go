@@ -88,7 +88,7 @@ func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time)
 	if j.BudgetSet {
 		payload += fmt.Sprintf(" · budget $%.2f", j.Budget)
 	}
-	line2 := fmt.Sprintf("  cron %s%s · %s%s · %s",
+	line2 := fmt.Sprintf("  cron %s%s · %s · %s",
 		j.Cron,
 		func() string {
 			if j.At != "" {
@@ -97,12 +97,6 @@ func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time)
 			return ""
 		}(),
 		payload,
-		func() string {
-			if j.Command == "" && j.Busy == "force" {
-				return " · busy force"
-			}
-			return ""
-		}(),
 		j.Cwd)
 	lines := []string{head, line2}
 	if d := driftOf(j, line); d != "" {

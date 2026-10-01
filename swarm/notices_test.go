@@ -78,7 +78,7 @@ func TestSwarmNoticesTaskFailed(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "do the work")
 	h.spawn.queue = []sched.SpawnResult{{Exit: 1}, {Exit: 1}}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	got := waitForNotices(t, h.fe, 4)
 	want := []string{
 		"swarm: w1 died — t1 restarted",
@@ -105,8 +105,8 @@ func TestSwarmNoticesReviewerRejected(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 0, Stdout: "looks good\nverdict: accept\n"},
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "reviewer"})
 	got := waitForNotices(t, h.fe, 2)
 	want := []string{
 		"swarm: t1 rejected — tests are missing",
@@ -123,8 +123,8 @@ func TestSwarmNoticesReviewerRejected(t *testing.T) {
 }
 
 func TestSwarmNoticesBoardEmptiedAndStop(t *testing.T) {
-	h := newHarness(t)
-	h.start(t, swarm.StartOpts{Count: 2, Role: "worker"})
+	h := twoSlotHarness(t)
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	got := waitForNotices(t, h.fe, 1)
 	if got[0] != "swarm: the board emptied — all workers exited" {
 		t.Fatalf("board notice = %q", got[0])
@@ -146,7 +146,7 @@ func TestSwarmStatusEmitsThrottled(t *testing.T) {
 			observe([]byte("rig: heartbeat\n"))
 		}
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "the task in review", func() bool {
 		return h.status(t, "t1") == "review"
 	})

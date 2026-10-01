@@ -205,11 +205,7 @@ func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	worker := ""
-	if s.workers != nil {
-		worker = s.workers.Model
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "text": text, "worker": worker})
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "text": text, "worker": "resident"})
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {

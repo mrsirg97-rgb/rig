@@ -16,10 +16,7 @@ func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
 		if eff == "" {
 			eff = r.row.Effort
 		}
-		b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve}
-		if r.workers != nil {
-			b.Workers = r.workers.Model
-		}
+		b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve, Workers: "resident"}
 		if r.session == nil {
 			return b
 		}

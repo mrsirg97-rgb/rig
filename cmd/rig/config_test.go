@@ -830,7 +830,7 @@ func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	}
 }
 
-func TestDefaultJobModelMintsTheFleetAtStart(t *testing.T) {
+func TestDefaultJobModelLegacyKeyIsNamedAtStart(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
@@ -853,13 +853,12 @@ func TestDefaultJobModelMintsTheFleetAtStart(t *testing.T) {
 	if got := s.count(); got != 1 {
 		t.Fatalf("the minted run must make exactly one model call, got %d", got)
 	}
-	want := `defaultJobModel moved to workers.json — minted`
+	want := `defaultJobModel moved to model — the fleet is the resident model; delete the key`
 	if !strings.Contains(string(out), want) {
-		t.Fatalf("the start must mint the fleet once and say so: %q", out)
+		t.Fatalf("the legacy key must be named once at start: %q", out)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "workers.json"))
-	if err != nil || !strings.Contains(string(b), `"model": "local"`) {
-		t.Fatalf("workers.json must carry the legacy model: %q (%v)", b, err)
+	if _, err := os.Stat(filepath.Join(dir, "workers.json")); !os.IsNotExist(err) {
+		t.Fatalf("nothing mints a workers.json anymore (stat err: %v)", err)
 	}
 }
 
@@ -889,7 +888,7 @@ func TestOneshotWireCarriesTheWorkerToolsWithAFleet(t *testing.T) {
 	}
 }
 
-func TestUnresolvedFleetModelRefusesAtStart(t *testing.T) {
+func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()
 	dir := cfgDir(t, scratch)
@@ -903,38 +902,24 @@ func TestUnresolvedFleetModelRefusesAtStart(t *testing.T) {
 	cmd := exec.Command(bin, "-p", "hello")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(scratch, "")
-	out, runErr := cmd.CombinedOutput()
-	if runErr == nil {
-		t.Fatalf("an unresolved fleet model must refuse at start: %q", out)
-	}
-	if !strings.Contains(string(out), `model "ghost": no row in the models table`) {
-		t.Fatalf("the voice = %q, want it to name the missing row", out)
+	out, _ := cmd.CombinedOutput()
+	if !strings.Contains(string(out), "workers.json retired: the fleet is the resident model") {
+		t.Fatalf("the retired file must be named once at start: %q", out)
 	}
 }
 
-func TestSchedulerCreateDefaultsToTheFleetModel(t *testing.T) {
+func TestSchedulerCreateDefaultsToTheSessionModel(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
-		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Load(dir, t.TempDir())
-	if err != nil {
+	if _, err := config.Load(dir, t.TempDir()); err != nil {
 		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Workers == nil {
-		t.Fatal("Load: the workers.json fleet is nil")
 	}
 
 	home := t.TempDir()
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
-	tool := schedapi.New(st, ct, "rig run-job", cfg.Workers.Model, home)
-	if !strings.Contains(tool.Description(), "(default: "+cfg.Workers.Model+")") {
-		t.Fatalf("the tool description must name the fleet's model: %q", tool.Description())
+	tool := schedapi.New(st, ct, "rig run-job", "local", home)
+	if !strings.Contains(tool.Description(), "(default: local)") {
+		t.Fatalf("the tool description must name the session's model: %q", tool.Description())
 	}
 	raw, err := json.Marshal(map[string]any{
 		"action": "create", "name": "defaulted", "prompt": "p",
@@ -951,8 +936,8 @@ func TestSchedulerCreateDefaultsToTheFleetModel(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
-	if m != cfg.Workers.Model {
-		t.Fatalf("the job's model = %q, want the fleet's model %q", m, cfg.Workers.Model)
+	if m != "local" {
+		t.Fatalf("the job's model = %q, want the session's model %q", m, "local")
 	}
 }
 
@@ -1097,7 +1082,7 @@ func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 	for _, n := range cfg.Settings.Allow {
 		allowed[n] = true
 	}
-	for _, n := range effectiveNativeNames(nil) {
+	for _, n := range effectiveNativeNames() {
 		if !allowed[n] {
 			t.Errorf("native %q is not in the embedded allow default (no fleet: the worker tools stay out)", n)
 		}
@@ -1130,9 +1115,9 @@ func TestEmbeddedAllowGrowsWithTheFleet(t *testing.T) {
 	for _, n := range cfg.Settings.Allow {
 		allowed[n] = true
 	}
-	for _, n := range workerToolNames {
+	for _, n := range []string{"scheduler", "delegate"} {
 		if !allowed[n] {
-			t.Errorf("worker tool %q is not in the allow default once a fleet stands", n)
+			t.Errorf("worker tool %q is not in the allow default", n)
 		}
 	}
 }
@@ -1176,7 +1161,7 @@ func TestToolMenuBudgetAndVocabulary(t *testing.T) {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		t.Fatal(err)
 	}
-	const budget = 14000
+	const budget = 15500
 	total := 0
 	for _, tl := range wire.Tools {
 		f := tl.Function

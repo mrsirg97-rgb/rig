@@ -1,4 +1,38 @@
 # Changelog
+## [2.4.0]: the fleet is the resident model
+
+Every slot count rig kept — `workers.json`'s `slots`, `models.json`'s
+`concurrency`, the delegate's `Slots`, the swarm's `count`, `busy`'s
+`force` — restated one fact that was never rig's to store: the resident
+server's `-np`, which llama-swap owns and exposes live at
+`GET /upstream/<model>/slots` (per slot, `is_processing`). A slot is
+held per request, so an idle session holds none. And the stores said
+what that drift costs: every delegate refusal read `the GPU is held by
+<model>` — a worker asked for the fleet model while another was
+resident.
+
+The counts go. A worker's model resolves at claim time: the named one,
+else the resident model, else the session's own default — and the gate
+is the live free-slot read, never a stored number. A fire waits for a
+free slot up to its timeout, then skips naming the holder; a delegate
+inside a turn reads once and refuses (`no free slot; this turn holds
+the only one`); the swarm starts one drain worker per free slot and
+grows as slots free. Nothing evicts: `busy: force` is retired,
+create and update refuse it. `workers.json` and `RIG_MODEL_CONCURRENCY`
+are read, ignored, and named once at start — deleting the file silences
+the line. The worker tools (`scheduler`, `delegate`) register for every
+run now: there is always a worker model.
+
+Timeout, stall, and budget stay: they bound a fire, not the fleet.
+Remote rows keep skipping the gate entirely; their `concurrency` token
+flock goes with the count — the endpoint's own 429 retry is the
+backpressure. SPEC_WORKERS is the one page; SPEC_DELEGATE,
+SPEC_HOSTED, SPEC_SWARM, and SPEC_CONFIG 12 point at it.
+
+Migration: none — no schema moved. Delete `~/.rig/workers.json` when
+the start line nags; move `settings.json`'s legacy `defaultJobModel`
+to `model` by hand.
+
 ## [2.3.4]: usage carries the model that made the call
 
 The store said one thing and the truth said another: `sessions.model`

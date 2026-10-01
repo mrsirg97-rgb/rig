@@ -712,6 +712,11 @@ a user-config fact, and the fixture runs' scratch home has neither
 
 ### 12. workers.json: the worker fleet (0.19.0)
 
+**Retired by SPEC_WORKERS (2.4.0)**: the file is read, ignored, and
+named once at start (`workers.json retired: the fleet is the resident
+model`); the fleet is the resident model and the worker tools always
+register. The rest of this section is historical.
+
 **The problem this answers.** The worker's model id was baked into the
 binary three times: the `store/scheduler` fallback constant, the
 embedded `settings.json`'s `defaultJobModel`, and a row in the embedded

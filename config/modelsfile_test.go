@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -181,8 +182,12 @@ func TestModelsHostedRowKeys(t *testing.T) {
 	if !m.Remote || m.Provider != "openrouter" || m.BaseURL != "https://openrouter.ai/api/v1" || m.APIKey != "sk-test" {
 		t.Fatalf("row run site = %+v", m)
 	}
-	if m.Concurrency != 4 || m.Reasoning != "reasoning" || len(m.ProviderPin) != 1 || m.ProviderPin[0] != "Together" || !m.CacheControl || m.Retries != 3 {
-		t.Fatalf("hosted fields = %+v, want concurrency 4 reasoning reasoning pin [Together] cacheControl retries 3 (the remote default)", m)
+	if m.Reasoning != "reasoning" || len(m.ProviderPin) != 1 || m.ProviderPin[0] != "Together" || !m.CacheControl || m.Retries != 3 {
+		t.Fatalf("hosted fields = %+v, want reasoning reasoning pin [Together] cacheControl retries 3 (the remote default)", m)
+	}
+	want := "config: " + filepath.Join(dir, "models.json") + ": concurrency retired: the fleet is the resident model"
+	if len(cfg.Notices) != 1 || cfg.Notices[0] != want {
+		t.Fatalf("notices = %v, want [%q] (the concurrency key is read, ignored, named)", cfg.Notices, want)
 	}
 }
 

@@ -56,8 +56,9 @@ written before the store commit; drift is surfaced in list.
   rewritten to the `rig-scheduler` tag, every other line left byte
   identical, and a store with no jobs never touches the crontab shim.
 - `runner.go`: the job runner (`RunJob`); `lock.go`: the fire lock and
-  log pruning, `busy.go`: the busy probe and the spend read, `tokens.go`:
-  the model-row token flock, `spawn.go`: the real spawn and the capture
+  log pruning, `busy.go`: the swap gate (the resident set and the live
+  free-slot read, `ResidentModel`/`FreeSlots`) and the spend read,
+  `spawn.go`: the real spawn and the capture
   (the worker spawn, bwrap jail, socket proxy);
   the spawn captures each stream to the first and last 128 KiB
   of a 256 KiB budget with a truncation marker, so a verbose worker
@@ -76,14 +77,15 @@ written before the store commit; drift is surfaced in list.
   the jail: `sh -c` over the stored line with the process environment,
   in the job's cwd — the payload is the operator's own, the same trust
   the crontab line itself carries.
-- `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE): the busy
-  rule (skipped for a remote row: `Remote` in `DelegateInput` — the swap
-  is never consulted, and the row's `Concurrency` token flock rides
-  beside the per-session slots), the ad-hoc record (a minted job row with no crontab line), the
-  state-store bind and explicit identity for the resumable transcript, the per-session
-  delegate-slot flock (one slot per `slots`; a call that finds the set
-  full waits on a short poll for a slot until its context ends, the
-  refusal naming the wait time), the no-recursion marker, and the
+- `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE, the model
+  resolution and gate of SPEC_WORKERS): the model resolves at claim
+  time (named, else the resident model, else `DefaultModel` — the
+  session's default), the gate is the live free-slot read (skipped for
+  a remote row via the `Models` seam — the swap is never consulted;
+  `WaitBusy` waits like a fire up to `Timeout`, the claim-time read
+  refuses at once), the ad-hoc record (a minted job row with no crontab line), the
+  state-store bind and explicit identity for the resumable transcript,
+  the no-recursion marker, and the
   `Stall` watch: a set window kills a worker silent past it (the
   result marked `Stalled`, the stderr and the log naming the reason)
   while `Timeout` stays the spend ceiling (the seam's cap is 24h, the

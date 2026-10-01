@@ -212,14 +212,7 @@ func (r *root) switchTheme(ctx context.Context, name string) error {
 }
 
 func (r *root) commandEnv() *command.Env {
-	workersEnv := command.Workers{File: filepath.Join(r.pluginsHome, "workers.json")}
-	if r.workers != nil {
-		workersEnv.Model = r.workers.Model
-		workersEnv.Slots = r.workers.Slots
-		workersEnv.Configured = true
-	}
 	return &command.Env{
-		Workers:       workersEnv,
 		Swarm:         swarmAdapter{r.swarm},
 		Session:       func() *core.Session { return r.session },
 		Compact:       r.compactNow,

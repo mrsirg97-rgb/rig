@@ -122,6 +122,12 @@ the sessions list and the TUI footer show the session's dollars.
 
 ### 4. Remote spawns
 
+**Amended by SPEC_WORKERS (2.4.0)**: `Concurrency` and the row's
+token flock are retired — a remote row carries no parallelism bound;
+the endpoint's own 429 retry is the backpressure. A remote delegate
+skips the gate entirely (the swap is never consulted — not even for
+the names a failure would name). The rest stands.
+
 `DelegateInput` gains `Remote bool` and `Concurrency int`. A remote
 delegate skips `delegateBusy` entirely (the swap is never consulted —
 not even for the names a failure would name) and acquires the row's

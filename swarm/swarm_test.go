@@ -82,9 +82,12 @@ func runningJSON(models ...string) string {
 }
 
 type fetchState struct {
-	mu      sync.Mutex
-	busy    int
-	failing string
+	mu       sync.Mutex
+	busy     int
+	failing  string
+	resident []string
+	slots    [][]bool
+	reads    int
 }
 
 func (f *fetchState) fetch(url string) (json.RawMessage, error) {
@@ -101,7 +104,27 @@ func (f *fetchState) fetch(url string) (json.RawMessage, error) {
 			f.busy--
 			return json.RawMessage(runningJSON("qwen3.8-27b")), nil
 		}
-		return json.RawMessage(runningJSON()), nil
+		return json.RawMessage(runningJSON(f.resident...)), nil
+	case strings.Contains(url, "/upstream/"):
+		served := []bool{false}
+		if len(f.slots) > 0 {
+			idx := f.reads
+			if idx > len(f.slots)-1 {
+				idx = len(f.slots) - 1
+			}
+			served = f.slots[idx]
+			f.reads++
+		}
+		type slot struct {
+			ID           int  `json:"id"`
+			IsProcessing bool `json:"is_processing"`
+		}
+		var out []slot
+		for i, pr := range served {
+			out = append(out, slot{ID: i, IsProcessing: pr})
+		}
+		b, _ := json.Marshal(out)
+		return json.RawMessage(b), nil
 	}
 	return nil, jsonError("unexpected url " + url)
 }
@@ -204,23 +227,22 @@ func newHarnessResolved(t *testing.T, resolve func() core.Frontend) *harness {
 		resolve = func() core.Frontend { return h.fe }
 	}
 	h.ctl = swarm.New(swarm.Opts{
-		TodoDB:        todoDB,
-		SchedDB:       schedDB,
-		Home:          h.home,
-		Project:       func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
-		Cwd:           h.cwd,
-		WorkerCmd:     []string{"/x/rig"},
-		Fetch:         h.fetch.fetch,
-		Spawn:         h.spawn.spawn,
-		SwapURL:       "http://127.0.0.1:8090",
-		Sandbox:       "off",
-		RigHome:       h.rigHome,
-		StateDir:      t.TempDir(),
-		FleetModel:    "qwen3.8-workers",
-		ReviewerModel: "qwen3.8-review",
-		Models:        func() models.Table { return modelRows(t) },
-		Poll:          20 * time.Millisecond,
-		Frontend:      resolve,
+		TodoDB:       todoDB,
+		SchedDB:      schedDB,
+		Home:         h.home,
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Cwd:          h.cwd,
+		WorkerCmd:    []string{"/x/rig"},
+		Fetch:        h.fetch.fetch,
+		Spawn:        h.spawn.spawn,
+		SwapURL:      "http://127.0.0.1:8090",
+		Sandbox:      "off",
+		RigHome:      h.rigHome,
+		StateDir:     t.TempDir(),
+		DefaultModel: "qwen3.8-workers",
+		Models:       func() models.Table { return modelRows(t) },
+		Poll:         20 * time.Millisecond,
+		Frontend:     resolve,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	return h
@@ -276,9 +298,9 @@ func (h *harness) waitFor(t *testing.T, what string, fn func() bool) {
 }
 
 func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
-	h := newHarness(t)
+	h := twoSlotHarness(t)
 	h.create(t, "write the parser", "write the tests", "write the docs")
-	h.start(t, swarm.StartOpts{Count: 2, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "all three tasks in review", func() bool {
 		return h.status(t, "t1") == "review" && h.status(t, "t2") == "review" && h.status(t, "t3") == "review"
 	})
@@ -302,8 +324,8 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 		t.Errorf("done total = %d, want 3 (%+v)", rows[0].Done+rows[1].Done, rows)
 	}
 	for _, r := range rows {
-		if r.Model != "qwen3.8-workers" {
-			t.Errorf("worker model = %q, want the fleet's", r.Model)
+		if r.Model != "resident" {
+			t.Errorf("worker model = %q, want the resident fleet", r.Model)
 		}
 	}
 }
@@ -317,8 +339,8 @@ func TestSwarmReviewerRejectsAndAWorkerPicksItUp(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 0, Stdout: "looks good now\nverdict: accept\n"},
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "reviewer"})
 	h.waitFor(t, "the rejection picked up and accepted", func() bool {
 		return h.status(t, "t1") == "done"
 	})
@@ -353,7 +375,7 @@ func TestSwarmDeadWorkerClaimReleasedAndRestartedOnce(t *testing.T) {
 		{Exit: 1, Stderr: "the worker died\n"},
 		{Exit: 0, Stdout: "done\n"},
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "the first spawn", func() bool { return h.spawn.count() == 1 })
 	h.waitFor(t, "the dead claim released", func() bool {
 		rows, err := h.todoDB.DB.Query(`SELECT op FROM events WHERE scope = 'swarm' AND op = 'release'`)
@@ -392,7 +414,7 @@ func TestSwarmSecondDeathFailsTheTask(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "doomed")
 	h.spawn.result = sched.SpawnResult{Exit: 1, Stderr: "dead\n"}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "the task failed", func() bool { return h.status(t, "t1") == "failed" })
 	if got := h.spawn.count(); got != 2 {
 		t.Fatalf("spawn calls = %d, want the first try plus one restart (2)", got)
@@ -413,7 +435,7 @@ func TestSwarmReviewerSecondDeathRejectsWithTheReason(t *testing.T) {
 		t.Fatalf("complete: %v", err)
 	}
 	h.spawn.result = sched.SpawnResult{Exit: 1, Stderr: "reviewer died\n"}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Role: "reviewer"})
 	h.waitFor(t, "the review rejected after the restart", func() bool {
 		return h.status(t, "t1") == "pending"
 	})
@@ -428,7 +450,7 @@ func TestSwarmReviewerSecondDeathRejectsWithTheReason(t *testing.T) {
 
 func TestSwarmExitsAfterThreeEmptyClaims(t *testing.T) {
 	h := newHarness(t)
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "the worker exited", func() bool {
 		rows := h.ctl.List()
 		return len(rows) == 1 && rows[0].State == "exited"
@@ -442,12 +464,26 @@ func TestSwarmExitsAfterThreeEmptyClaims(t *testing.T) {
 	}
 }
 
-func TestSwarmBusyWaitsAtLlamaSwap(t *testing.T) {
+func TestSwarmWorkerRunsTheResidentModel(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "wait for the gpu")
-	h.fetch.busy = 2
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	h.waitFor(t, "the spawn after the gpu freed", func() bool { return h.spawn.count() == 1 })
+	h.fetch.resident = []string{"qwen3.8-27b"}
+	h.fetch.slots = [][]bool{{false}}
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.waitFor(t, "the spawn", func() bool { return h.spawn.count() == 1 })
+	if got := h.spawn.argv(0); !strings.Contains(got, "-model qwen3.8-27b") {
+		t.Errorf("the worker must run the resident model: %s", got)
+	}
+	h.waitFor(t, "the task in review", func() bool { return h.status(t, "t1") == "review" })
+}
+
+func TestSwarmWaitsForAFreeSlotAtTheSwap(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "wait for the gpu")
+	h.fetch.resident = []string{"qwen3.8-27b-workers"}
+	h.fetch.slots = [][]bool{{true}, {false}}
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.waitFor(t, "the spawn after the slot freed", func() bool { return h.spawn.count() == 1 })
 	h.waitFor(t, "the task in review", func() bool { return h.status(t, "t1") == "review" })
 }
 
@@ -459,7 +495,9 @@ func TestSwarmListsWorkersAndStops(t *testing.T) {
 	h.spawn.onCall = func(observe func([]byte)) {
 		observe([]byte("rig: heartbeat\n"))
 	}
-	h.start(t, swarm.StartOpts{Count: 2, Role: "worker", Model: "qwen3.8-review"})
+	h.fetch.resident = []string{"qwen3.8-review"}
+	h.fetch.slots = [][]bool{{false, false}}
+	h.start(t, swarm.StartOpts{Role: "worker", Model: "qwen3.8-review"})
 	var busy swarm.Worker
 	h.waitFor(t, "a worker holding the task with a heartbeat", func() bool {
 		for _, r := range h.ctl.List() {
@@ -494,41 +532,86 @@ func TestSwarmListsWorkersAndStops(t *testing.T) {
 	}
 }
 
-func TestSwarmReviewerModelDefaultAndOverride(t *testing.T) {
+func TestSwarmModelDefaultsToResidentAndOverrideWins(t *testing.T) {
 	h := newHarness(t)
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "reviewer"})
 	rows := h.ctl.List()
 	if len(rows) != 2 {
 		t.Fatalf("rows = %d", len(rows))
 	}
 	for _, r := range rows {
-		if r.Role == "reviewer" && r.Model != "qwen3.8-review" {
-			t.Errorf("reviewer model = %q, want the configured reviewer model", r.Model)
-		}
-		if r.Role == "worker" && r.Model != "qwen3.8-workers" {
-			t.Errorf("worker model = %q, want the fleet model", r.Model)
+		if r.Model != "resident" {
+			t.Errorf("model = %q, want the resident fleet (the roster shows it)", r.Model)
 		}
 	}
 	h2 := newHarness(t)
-	h2.start(t, swarm.StartOpts{Count: 1, Role: "reviewer", Model: "qwen3.8-workers"})
+	h2.start(t, swarm.StartOpts{Role: "reviewer", Model: "qwen3.8-workers"})
 	if got := h2.ctl.List()[0].Model; got != "qwen3.8-workers" {
 		t.Errorf("override model = %q, want qwen3.8-workers", got)
 	}
+}
+
+func TestSwarmStartsOneWorkerPerFreeSlot(t *testing.T) {
+	h := twoSlotHarness(t)
+	h.create(t, "task one", "task two")
+	h.spawn.block = make(chan struct{})
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.waitFor(t, "both workers running", func() bool { return len(h.ctl.List()) == 2 })
+	for _, r := range h.ctl.List() {
+		if r.Model != "resident" {
+			t.Errorf("worker model = %q, want resident (the slot read is on it)", r.Model)
+		}
+	}
+}
+
+func TestSwarmGrowsAsSlotsFree(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "task one", "task two", "task three", "task four")
+	h.fetch.resident = []string{"qwen3.8-workers"}
+	h.fetch.slots = [][]bool{{false}, {false, false}}
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	if len(h.ctl.List()) != 1 {
+		t.Fatalf("one free slot must start one worker, got %d", len(h.ctl.List()))
+	}
+	h.spawn.block = make(chan struct{})
+	h.waitFor(t, "the swarm to grow into the freed slot", func() bool { return len(h.ctl.List()) == 2 })
+}
+
+func TestSwarmGrowsNeverPastTheCap(t *testing.T) {
+	h := newHarness(t)
+	h.fetch.resident = []string{"qwen3.8-workers"}
+	var many []bool
+	for i := 0; i < 20; i++ {
+		many = append(many, false)
+	}
+	h.fetch.slots = [][]bool{many}
+	h.create(t, "task one")
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	if len(h.ctl.List()) != swarm.MaxWorkers {
+		t.Fatalf("workers = %d, want the %d cap", len(h.ctl.List()), swarm.MaxWorkers)
+	}
+}
+
+func twoSlotHarness(t *testing.T) *harness {
+	h := newHarness(t)
+	h.fetch.resident = []string{"qwen3.8-workers"}
+	h.fetch.slots = [][]bool{{false, false}}
+	return h
 }
 
 func TestSwarmStartRefusalsByName(t *testing.T) {
 	h := newHarness(t)
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	for _, in := range []swarm.StartOpts{
-		{Count: 0}, {Count: 17}, {Count: 1, Role: "boss"}, {Count: 1, Model: "nope"},
+		{Role: "boss"}, {Model: "nope"},
 	} {
 		if _, err := h.ctl.Start(ctx, in); err == nil {
 			t.Errorf("Start(%+v) must refuse", in)
 		}
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	reply := h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	reply := h.start(t, swarm.StartOpts{Role: "reviewer"})
 	if !strings.Contains(reply, "added") {
 		t.Errorf("a start against a running swarm must add workers: %q", reply)
 	}
@@ -540,7 +623,7 @@ func TestSwarmStartRefusalsByName(t *testing.T) {
 func TestSwarmUnknownModelNamesTheKnown(t *testing.T) {
 	h := newHarness(t)
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	_, err := h.ctl.Start(ctx, swarm.StartOpts{Count: 1, Model: "nope"})
+	_, err := h.ctl.Start(ctx, swarm.StartOpts{Model: "nope"})
 	if err == nil {
 		t.Fatal("an unknown model must refuse")
 	}
@@ -552,7 +635,7 @@ func TestSwarmUnknownModelNamesTheKnown(t *testing.T) {
 func TestSwarmTaskWorkerRecordLandsInTheSchedulerStore(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "recorded work")
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "the task in review", func() bool { return h.status(t, "t1") == "review" })
 	rows, err := h.schedDB.DB.Query(`SELECT name FROM jobs WHERE name LIKE 'delegate:%'`)
 	if err != nil {
@@ -575,7 +658,7 @@ func TestSwarmReleasesClaimsOnStopWithAReviewHeld(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "stop me")
 	h.spawn.block = make(chan struct{})
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "the spawn running", func() bool { return h.spawn.count() == 1 })
 	h.ctl.Stop()
 	if got := h.status(t, "t1"); got != "pending" {
@@ -602,8 +685,8 @@ func TestSwarmReviewerNoVerdictCappedAtTwoRejectsThenFails(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 0},
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "reviewer"})
 	h.waitFor(t, "the task failed after the reject cap", func() bool {
 		return h.status(t, "t1") == "failed"
 	})
@@ -631,8 +714,8 @@ func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 1, Stderr: "reviewer died\n"},
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "reviewer"})
 	h.waitFor(t, "the task failed from the shared retry budget", func() bool {
 		return h.status(t, "t1") == "failed"
 	})
@@ -669,7 +752,7 @@ func TestSwarmHeartbeatResetsOnEachSpawn(t *testing.T) {
 		close(retrySpawn)
 		<-releaseRetry
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "a worker holding t1 with a heartbeat", func() bool {
 		for _, r := range h.ctl.List() {
 			if r.Task == "t1" && !r.Heartbeat.IsZero() {
@@ -706,13 +789,15 @@ func TestSwarmHeartbeatResetsOnEachSpawn(t *testing.T) {
 
 func TestSwarmStartAndStopReplyVoice(t *testing.T) {
 	h := newHarness(t)
-	reply := h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
-	want := "swarm: added 1 agent (role worker · model qwen3.8-workers)"
+	reply := h.start(t, swarm.StartOpts{Role: "worker"})
+	want := "swarm: added 1 agent (role worker · model resident)"
 	if reply != want {
 		t.Errorf("start reply = %q, want %q", reply, want)
 	}
-	reply = h.start(t, swarm.StartOpts{Count: 2, Role: "reviewer"})
-	want = "swarm: added 2 agents (role reviewer · model qwen3.8-review)"
+	h.fetch.resident = []string{"qwen3.8-workers"}
+	h.fetch.slots = [][]bool{{false, false}}
+	reply = h.start(t, swarm.StartOpts{Role: "reviewer"})
+	want = "swarm: added 2 agents (role reviewer · model resident)"
 	if reply != want {
 		t.Errorf("a start against a running swarm replies %q, want %q", reply, want)
 	}

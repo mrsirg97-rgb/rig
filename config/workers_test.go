@@ -1,187 +1,95 @@
 package config_test
 
 import (
-	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/config"
 )
 
-var noWorkerAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions"}
-var fleetAllow = append(append(append([]string{}, noWorkerAllow...), "scheduler"), "delegate")
+var fleetAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions", "scheduler", "delegate"}
 
-func TestWorkersAbsentIsNoWorkers(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
-	if cfg.Workers != nil {
-		t.Fatalf("Workers = %+v, want nil with no workers.json", cfg.Workers)
-	}
-	if !reflect.DeepEqual(cfg.Settings.Allow, noWorkerAllow) {
-		t.Fatalf("allow = %v, want the 16 non-worker natives (no fleet, no worker tools)", cfg.Settings.Allow)
-	}
-}
-
-func TestWorkersFileNamesTheFleet(t *testing.T) {
+func TestWorkersFileIsReadIgnoredAndNamedOnce(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "workers.json", `{"model": "local"}`)
+	wp := write(t, dir, "workers.json", `{"model": "local", "slots": 2, "reviewer": "review"}`)
 	cfg := load(t, dir, t.TempDir())
-	want := &config.Workers{Model: "local", Slots: 1}
-	if !reflect.DeepEqual(cfg.Workers, want) {
-		t.Fatalf("Workers = %+v, want %+v (slots defaults to 1)", cfg.Workers, want)
+	want := "config: " + wp + ": workers.json retired: the fleet is the resident model"
+	if len(cfg.Notices) != 1 || cfg.Notices[0] != want {
+		t.Fatalf("notices = %v, want [%q]", cfg.Notices, want)
 	}
-	if !reflect.DeepEqual(cfg.Settings.Allow, fleetAllow) {
+	if !hasAllow(cfg.Settings.Allow, fleetAllow) {
 		t.Fatalf("allow = %v, want the default grown by the two worker tools", cfg.Settings.Allow)
 	}
 }
 
-func TestWorkersSlotsIsKept(t *testing.T) {
-	dir := t.TempDir()
-	write(t, dir, "workers.json", `{"model": "local", "slots": 2}`)
-	cfg := load(t, dir, t.TempDir())
-	if cfg.Workers == nil || cfg.Workers.Slots != 2 {
-		t.Fatalf("Workers = %+v, want slots 2 (the file's)", cfg.Workers)
-	}
-}
-
-func TestWorkersModelIsRequired(t *testing.T) {
-	cases := []struct {
-		content string
-		want    string
-	}{
-		{`{}`, `"model" is required`},
-		{`{"slots": 1}`, `"model" is required`},
-		{`{"model": ""}`, `model: expected a non-empty string, got the empty string`},
-	}
-	for _, c := range cases {
+func TestWorkersContentIsNeverInterpreted(t *testing.T) {
+	for _, content := range []string{
+		`{"model": "no-such-row"}`,
+		`{"slots": 0}`,
+		`{"unknown": true}`,
+		`not json at all`,
+		`{}`,
+	} {
 		dir := t.TempDir()
-		p := write(t, dir, "workers.json", c.content)
-		err := loadErr(t, dir, t.TempDir())
-		if err.Error() != "config: "+p+": "+c.want {
-			t.Fatalf("content %s: the voice = %q, want %q", c.content, err.Error(), "config: "+p+": "+c.want)
+		write(t, dir, "workers.json", content)
+		cfg := load(t, dir, t.TempDir())
+		if len(cfg.Notices) != 1 || !strings.Contains(cfg.Notices[0], "workers.json retired") {
+			t.Fatalf("content %q: notices = %v, want the one retirement line", content, cfg.Notices)
 		}
 	}
 }
 
-func TestWorkersModelMustResolveInTheTable(t *testing.T) {
-	dir := t.TempDir()
-	p := write(t, dir, "workers.json", `{"model": "brain"}`)
-	err := loadErr(t, dir, t.TempDir())
-	want := "config: " + p + `: model "brain": no row in the models table (known: local)`
-	if err.Error() != want {
-		t.Fatalf("the voice = %q, want %q", err.Error(), want)
+func TestWorkersAbsentIsSilent(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	if len(cfg.Notices) != 0 {
+		t.Fatalf("notices = %v, want none", cfg.Notices)
 	}
+	if !hasAllow(cfg.Settings.Allow, fleetAllow) {
+		t.Fatalf("allow = %v, want the default grown by the two worker tools", cfg.Settings.Allow)
+	}
+}
 
-	dir = t.TempDir()
+func TestModelsConcurrencyKeyIsReadIgnoredAndNamedOnce(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "local", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker", "concurrency": 4}]`)
+	cfg := load(t, dir, t.TempDir())
+	want := "config: " + filepath.Join(dir, "models.json") + ": concurrency retired: the fleet is the resident model"
+	if len(cfg.Notices) != 1 || cfg.Notices[0] != want {
+		t.Fatalf("notices = %v, want [%q]", cfg.Notices, want)
+	}
+	if _, ok := cfg.Models.Get("local"); !ok {
+		t.Fatal("the row must still load")
+	}
+}
+
+func TestModelsConcurrencyOverlayEnvIsGone(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "local", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}]`)
+	t.Setenv("RIG_MODEL_CONCURRENCY", "4")
+	cfg := load(t, dir, t.TempDir())
+	if len(cfg.Notices) != 0 {
+		t.Fatalf("notices = %v, want none (the env key is gone, not retired)", cfg.Notices)
+	}
+}
+
+func TestDefaultJobModelLegacyKeyIsNamedAndIgnored(t *testing.T) {
+	dir := t.TempDir()
+	sp := write(t, dir, "settings.json", `{"defaultJobModel": "brain"}`)
 	write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}]`)
-	write(t, dir, "workers.json", `{"model": "brain"}`)
 	cfg := load(t, dir, t.TempDir())
-	if cfg.Workers == nil || cfg.Workers.Model != "brain" {
-		t.Fatalf("Workers = %+v, want the file's brain (the operator's row resolves)", cfg.Workers)
+	want := "config: " + sp + ": defaultJobModel moved to model — the fleet is the resident model; delete the key"
+	if len(cfg.Notices) != 1 || cfg.Notices[0] != want {
+		t.Fatalf("notices = %v, want [%q]", cfg.Notices, want)
 	}
 }
 
-func TestWorkersSlotsValidation(t *testing.T) {
-	cases := []struct {
-		slots string
-		want  string
-	}{
-		{`0`, `slots: expected a positive number, got 0`},
-		{`-1`, `slots: expected a positive number, got -1`},
-		{`"two"`, `slots: expected an integer, got "two"`},
-	}
-	for _, c := range cases {
-		dir := t.TempDir()
-		p := write(t, dir, "workers.json", `{"model": "local", "slots": `+c.slots+`}`)
-		err := loadErr(t, dir, t.TempDir())
-		if err.Error() != "config: "+p+": "+c.want {
-			t.Fatalf("slots %s: the voice = %q, want %q", c.slots, err.Error(), "config: "+p+": "+c.want)
-		}
-	}
-}
-
-func TestWorkersUnknownKeyRefuses(t *testing.T) {
+func TestDefaultJobModelUnknownToTheTableIsStillOnlyNamed(t *testing.T) {
 	dir := t.TempDir()
-	p := write(t, dir, "workers.json", `{"model": "local", "slot": 1}`)
-	err := loadErr(t, dir, t.TempDir())
-	if err.Error() != `config: `+p+`: unknown key "slot" (known: model, reviewer, slots)` {
-		t.Fatalf("the voice = %q", err.Error())
-	}
-}
-
-func TestWorkersAllowGrowsOnlyOverTheDefault(t *testing.T) {
-	dir := t.TempDir()
-	write(t, dir, "workers.json", `{"model": "local"}`)
-	write(t, dir, "settings.json", `{"allow": ["bash", "read"]}`)
+	sp := write(t, dir, "settings.json", `{"defaultJobModel": "brain"}`)
 	cfg := load(t, dir, t.TempDir())
-	want := []string{"bash", "read"}
-	if !reflect.DeepEqual(cfg.Settings.Allow, want) {
-		t.Fatalf("allow = %v, want the operator's list as written (no worker tools appended over an operator allow)", cfg.Settings.Allow)
-	}
-	if cfg.Workers == nil {
-		t.Fatal("the fleet must still load beside the operator's allow")
-	}
-}
-
-func TestDefaultJobModelMigratesOnceIntoWorkersJSON(t *testing.T) {
-	dir := t.TempDir()
-	sp := write(t, dir, "settings.json", `{"defaultJobModel": "local"}`)
-	cfg := load(t, dir, t.TempDir())
-	wp := filepath.Join(dir, "workers.json")
-	if cfg.Workers == nil || cfg.Workers.Model != "local" || cfg.Workers.Slots != 1 {
-		t.Fatalf("the legacy key must mint the fleet: %+v", cfg.Workers)
-	}
-	b, err := os.ReadFile(wp)
-	if err != nil || string(b) != "{\"model\": \"local\"}\n" {
-		t.Fatalf("workers.json minted = %q (%v)", b, err)
-	}
-	want := "config: " + sp + ": defaultJobModel moved to workers.json — minted " + wp + " with model \"local\"; delete the key"
-	if cfg.Notice != want {
-		t.Fatalf("notice = %q, want %q", cfg.Notice, want)
-	}
-	again := load(t, dir, t.TempDir())
-	if again.Notice != "config: "+sp+": defaultJobModel is ignored (workers.json names the fleet); delete the key" {
-		t.Fatalf("the second start ignores the key with a notice, got %q", again.Notice)
-	}
-	if b2, _ := os.ReadFile(wp); string(b2) != string(b) {
-		t.Fatal("the mint must happen once")
-	}
-}
-
-func TestDefaultJobModelDisagreeingWithTheFleetRefuses(t *testing.T) {
-	dir := t.TempDir()
-	write(t, dir, "models.json", `[{"id": "other", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}]`)
-	write(t, dir, "workers.json", `{"model": "other"}`)
-	sp := write(t, dir, "settings.json", `{"defaultJobModel": "local"}`)
-	err := loadErr(t, dir, t.TempDir())
-	want := "config: " + sp + ": defaultJobModel \"local\" disagrees with workers.json's model \"other\"; delete the key"
-	if err.Error() != want {
-		t.Fatalf("two truths must refuse: %q, want %q", err.Error(), want)
-	}
-}
-
-func TestDefaultJobModelUnknownToTheTableRefuses(t *testing.T) {
-	dir := t.TempDir()
-	sp := write(t, dir, "settings.json", `{"defaultJobModel": "ghost"}`)
-	err := loadErr(t, dir, t.TempDir())
-	if !strings.HasPrefix(err.Error(), "config: "+sp+": defaultJobModel \"ghost\": no row in the models table") {
-		t.Fatalf("a legacy model the table lacks must refuse naming it: %q", err.Error())
-	}
-	if _, statErr := os.Stat(filepath.Join(dir, "workers.json")); statErr == nil {
-		t.Fatal("nothing minted on a refusal")
-	}
-}
-
-func TestEmptyDefaultJobModelIsANotice(t *testing.T) {
-	dir := t.TempDir()
-	sp := write(t, dir, "settings.json", `{"defaultJobModel": ""}`)
-	cfg := load(t, dir, t.TempDir())
-	if cfg.Workers != nil {
-		t.Fatal("an empty legacy key mints nothing")
-	}
-	if cfg.Notice != "config: "+sp+": defaultJobModel is cut (the fleet is workers.json); delete the key" {
-		t.Fatalf("notice = %q", cfg.Notice)
+	if len(cfg.Notices) != 1 || !strings.Contains(cfg.Notices[0], sp) {
+		t.Fatalf("notices = %v, want the one retirement line", cfg.Notices)
 	}
 }
 
@@ -195,55 +103,29 @@ func TestDefaultJobModelStaysInTheKnownList(t *testing.T) {
 	}
 }
 
-func TestWorkersReviewerIsOptionalAndResolves(t *testing.T) {
+func TestWorkersRetirementJoinsTheOtherNotices(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "models.json", `[{"id": "review", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}]`)
-	write(t, dir, "workers.json", `{"model": "local", "reviewer": "review"}`)
-	cfg := load(t, dir, t.TempDir())
-	if cfg.Workers == nil || cfg.Workers.Reviewer != "review" {
-		t.Fatalf("Workers = %+v, want the reviewer row", cfg.Workers)
-	}
-
-	dir = t.TempDir()
+	write(t, dir, "models.json", `[{"id": "local", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker", "concurrency": 2}]`)
 	write(t, dir, "workers.json", `{"model": "local"}`)
-	cfg = load(t, dir, t.TempDir())
-	if cfg.Workers == nil || cfg.Workers.Reviewer != "" {
-		t.Fatalf("absent reviewer must stay empty: %+v", cfg.Workers)
+	cfg := load(t, dir, t.TempDir())
+	if len(cfg.Notices) != 2 {
+		t.Fatalf("notices = %v, want the concurrency and the workers lines", cfg.Notices)
+	}
+	if !strings.Contains(cfg.Notices[0], "concurrency retired") || !strings.Contains(cfg.Notices[1], "workers.json retired") {
+		t.Fatalf("notices = %v, want the models line first, the workers line second", cfg.Notices)
 	}
 }
 
-func TestWorkersReviewerMustResolveInTheTable(t *testing.T) {
-	dir := t.TempDir()
-	p := write(t, dir, "workers.json", `{"model": "local", "reviewer": "brain"}`)
-	err := loadErr(t, dir, t.TempDir())
-	want := "config: " + p + `: reviewer "brain": no row in the models table (known: local)`
-	if err.Error() != want {
-		t.Fatalf("the voice = %q, want %q", err.Error(), want)
+func hasAllow(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
 	}
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
-func TestWorkersReviewerMalformedRefuses(t *testing.T) {
-	dir := t.TempDir()
-	p := write(t, dir, "workers.json", `{"model": "local", "reviewer": ""}`)
-	err := loadErr(t, dir, t.TempDir())
-	want := "config: " + p + ": reviewer: expected a non-empty string, got the empty string"
-	if err.Error() != want {
-		t.Fatalf("the voice = %q, want %q", err.Error(), want)
-	}
-	dir = t.TempDir()
-	p = write(t, dir, "workers.json", `{"model": "local", "reviewer": 1}`)
-	err = loadErr(t, dir, t.TempDir())
-	want = "config: " + p + ": reviewer: expected a string, got 1"
-	if err.Error() != want {
-		t.Fatalf("the voice = %q, want %q", err.Error(), want)
-	}
-}
-
-func TestWorkersUnknownKeyNamesReviewer(t *testing.T) {
-	dir := t.TempDir()
-	p := write(t, dir, "workers.json", `{"model": "local", "slot": 1}`)
-	err := loadErr(t, dir, t.TempDir())
-	if err.Error() != `config: `+p+`: unknown key "slot" (known: model, reviewer, slots)` {
-		t.Fatalf("the voice = %q", err.Error())
-	}
-}
+var _ = config.Load

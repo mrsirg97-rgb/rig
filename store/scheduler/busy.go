@@ -3,28 +3,28 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/url"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 )
 
-type busyResult struct {
-	kind   string
-	names  string
-	reason string
-}
+const busyWaitInterval = time.Second
 
-func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
+func canonicalModels(fetch Fetch, swapURL string) (map[string]string, []string, error) {
 	modelsRaw, err := fetch(swapURL + "/v1/models")
 	if err != nil {
-		return busyResult{kind: "error", reason: "busy check failed: " + err.Error()}
+		return nil, nil, fmt.Errorf("gate check failed: %v", err)
 	}
 	runningRaw, err := fetch(swapURL + "/running")
 	if err != nil {
-		return busyResult{kind: "error", reason: "busy check failed: " + err.Error()}
+		return nil, nil, fmt.Errorf("gate check failed: %v", err)
 	}
 
 	var models struct {
@@ -41,7 +41,7 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(modelsRaw, &models); err != nil {
-		return busyResult{kind: "error", reason: "busy check failed: models: " + err.Error()}
+		return nil, nil, fmt.Errorf("gate check failed: models: %v", err)
 	}
 	var running struct {
 		Running []struct {
@@ -49,7 +49,7 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 		} `json:"running"`
 	}
 	if err := json.Unmarshal(runningRaw, &running); err != nil {
-		return busyResult{kind: "error", reason: "busy check failed: running: " + err.Error()}
+		return nil, nil, fmt.Errorf("gate check failed: running: %v", err)
 	}
 
 	canon := map[string]string{}
@@ -58,34 +58,144 @@ func busyState(fetch Fetch, swapURL, jobModel string) busyResult {
 			canon[n] = m.ID
 		}
 	}
-	norm := func(n string) string {
+	var resident []string
+	seen := map[string]bool{}
+	add := func(n string) {
 		if c, ok := canon[n]; ok {
-			return c
+			n = c
 		}
-		return n
+		if !seen[n] {
+			seen[n] = true
+			resident = append(resident, n)
+		}
 	}
-	own := norm(jobModel)
 	for _, m := range models.Data {
-		if norm(m.ID) == own && m.Status.Value == "loaded" {
-			return busyResult{kind: "run"}
+		if m.Status.Value == "loaded" {
+			add(m.ID)
 		}
 	}
-	resident := map[string]bool{}
 	for _, r := range running.Running {
-		resident[norm(r.Model)] = true
+		add(r.Model)
 	}
-	if resident[own] {
-		return busyResult{kind: "run"}
+	sort.Strings(resident)
+	return canon, resident, nil
+}
+
+func FreeSlots(fetch Fetch, swapURL, model string) (int, int, error) {
+	slots, err := slotRead(fetch, swapURL, model)
+	if err != nil {
+		return 0, 0, err
+	}
+	return slots.free, slots.total, nil
+}
+
+func ResidentModel(fetch Fetch, swapURL string) (string, error) {
+	_, resident, err := canonicalModels(fetch, swapURL)
+	if err != nil {
+		return "", err
 	}
 	if len(resident) == 0 {
-		return busyResult{kind: "run"}
+		return "", nil
 	}
-	var names []string
-	for n := range resident {
-		names = append(names, n)
+	return resident[0], nil
+}
+
+type slotSet struct {
+	free  int
+	total int
+}
+
+func slotRead(fetch Fetch, swapURL, model string) (slotSet, error) {
+	raw, err := fetch(swapURL + "/upstream/" + url.PathEscape(model) + "/slots")
+	if err != nil {
+		return slotSet{}, fmt.Errorf("gate check failed: slots: %v", err)
 	}
-	sort.Strings(names)
-	return busyResult{kind: "busy", names: strings.Join(names, ", ")}
+	var slots []struct {
+		IsProcessing bool `json:"is_processing"`
+	}
+	if err := json.Unmarshal(raw, &slots); err != nil {
+		return slotSet{}, fmt.Errorf("gate check failed: slots: %v", err)
+	}
+	out := slotSet{total: len(slots)}
+	for _, s := range slots {
+		if !s.IsProcessing {
+			out.free++
+		}
+	}
+	return out, nil
+}
+
+func holderRefusal(resident []string) error {
+	return fmt.Errorf("the GPU is held by %s (the fleet is the resident model; eviction is the operator's act)", strings.Join(resident, ", "))
+}
+
+func gateOnce(fetch Fetch, swapURL, model string) error {
+	canon, resident, err := canonicalModels(fetch, swapURL)
+	if err != nil {
+		return err
+	}
+	if len(resident) == 0 {
+		return nil
+	}
+	own := model
+	if c, ok := canon[model]; ok {
+		own = c
+	}
+	if !contains(resident, own) {
+		return fmt.Errorf("%w; run on the resident model or schedule a once-job — it fires between turns", holderRefusal(resident))
+	}
+	slots, err := slotRead(fetch, swapURL, own)
+	if err != nil {
+		return err
+	}
+	if slots.free > 0 {
+		return nil
+	}
+	if slots.total == 1 {
+		return fmt.Errorf("no free slot; this turn holds the only one")
+	}
+	return fmt.Errorf("no free slot (all %d slots are processing)", slots.total)
+}
+
+func gateWait(fetch Fetch, swapURL, model string, waitCtx context.Context) error {
+	canon, resident, err := canonicalModels(fetch, swapURL)
+	if err != nil {
+		return err
+	}
+	if len(resident) == 0 {
+		return nil
+	}
+	own := model
+	if c, ok := canon[model]; ok {
+		own = c
+	}
+	if !contains(resident, own) {
+		return holderRefusal(resident)
+	}
+	start := time.Now()
+	for {
+		slots, err := slotRead(fetch, swapURL, own)
+		if err != nil {
+			return err
+		}
+		if slots.free > 0 {
+			return nil
+		}
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("no free slot on %s after %s (the slots are held)", own, time.Since(start).Truncate(time.Millisecond))
+		case <-time.After(busyWaitInterval):
+		}
+	}
+}
+
+func contains(all []string, one string) bool {
+	for _, s := range all {
+		if s == one {
+			return true
+		}
+	}
+	return false
 }
 
 func jobSpent(db DB, id string) (float64, error) {

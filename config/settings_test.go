@@ -82,9 +82,9 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.System != "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's workspace, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. When a tool fails, read the error and work out why before calling again. Do not retry blindly, and stop when the environment or the plan is wrong. A capability you build twice belongs in a plugin. For any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, start one before working on it, complete or fail it when done, and leave the queue empty at the end. When the work is done, answer in plain text: what changed, what you verified, what is left." {
 		t.Fatalf("system = %q, want the embedded default system prompt", s.System)
 	}
-	wantAllow := []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions"}
+	wantAllow := []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions", "scheduler", "delegate"}
 	if !reflect.DeepEqual(s.Allow, wantAllow) {
-		t.Fatalf("allow = %v, want the non-worker default list %v (the two worker tools join it only when workers.json names a fleet)", s.Allow, wantAllow)
+		t.Fatalf("allow = %v, want the default grown by the two worker tools %v (the fleet is the resident model)", s.Allow, wantAllow)
 	}
 	if s.Retries != 3 {
 		t.Fatalf("retries = %d, want the 0.2.0 default 3", s.Retries)
@@ -125,9 +125,6 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	}
 	if got := len(cfg.Models.Known()); got != 1 {
 		t.Fatalf("the embedded table = %d rows, want the one local row (%v)", got, cfg.Models.Known())
-	}
-	if cfg.Workers != nil {
-		t.Fatalf("Workers = %+v, want nil with no workers.json (no fleet, no worker tools)", cfg.Workers)
 	}
 }
 

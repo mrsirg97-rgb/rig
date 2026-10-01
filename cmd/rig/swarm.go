@@ -12,9 +12,9 @@ type swarmAdapter struct{ c *swarm.Controller }
 
 func (a swarmAdapter) Start(ctx context.Context, in command.SwarmStart) (string, error) {
 	if a.c == nil {
-		return "", errors.New("swarm: no workers configured (workers.json names the model)")
+		return "", errors.New("swarm: no swarm seam (the root did not wire it)")
 	}
-	return a.c.Start(ctx, swarm.StartOpts{Count: in.Count, Role: in.Role, Model: in.Model, Budget: in.Budget})
+	return a.c.Start(ctx, swarm.StartOpts{Role: in.Role, Model: in.Model, Budget: in.Budget})
 }
 
 func (a swarmAdapter) List() []command.SwarmWorker {

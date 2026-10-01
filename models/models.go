@@ -30,7 +30,6 @@ type Model struct {
 	Provider     string
 	BaseURL      string
 	APIKey       string
-	Concurrency  int
 	Reasoning    string
 	ProviderPin  []string
 	CacheControl bool
@@ -58,9 +57,6 @@ func (m Model) Check() error {
 	if m.Role != RoleInteractive && m.Role != RoleWorker {
 		return fmt.Errorf("models: %s: role: %q (allowed: interactive, worker)", m.ID, m.Role)
 	}
-	if m.Concurrency < 0 {
-		return fmt.Errorf("models: %s: Concurrency %d must be >= 0", m.ID, m.Concurrency)
-	}
 	if m.Retries < 0 {
 		return fmt.Errorf("models: %s: Retries %d must be >= 0", m.ID, m.Retries)
 	}
@@ -69,9 +65,6 @@ func (m Model) Check() error {
 	}
 	if m.Remote && m.BaseURL == "" {
 		return fmt.Errorf("models: %s: a remote row needs a baseUrl (the endpoint it runs against)", m.ID)
-	}
-	if m.Remote && m.Concurrency == 0 {
-		return fmt.Errorf("models: %s: a remote row needs a concurrency (>= 1)", m.ID)
 	}
 	if (len(m.ProviderPin) > 0 || m.CacheControl) && m.Provider != "openrouter" {
 		return fmt.Errorf("models: %s: providerPin and cacheControl are openrouter-only (provider: %q)", m.ID, m.Provider)
@@ -84,9 +77,6 @@ func normalize(m Model) Model {
 		m.Remote = true
 	}
 	if m.Remote {
-		if m.Concurrency == 0 {
-			m.Concurrency = 1
-		}
 		if m.Retries == 0 {
 			m.Retries = 3
 		}
@@ -131,7 +121,6 @@ func overlay(m Model, env func(string) (string, bool)) (Model, error) {
 		"RIG_MODEL_MAX_TOKENS":  func(n int) { m.MaxTokens = n },
 		"RIG_MODEL_RESERVE":     func(n int) { m.Reserve = n },
 		"RIG_MODEL_KEEP_RECENT": func(n int) { m.KeepRecent = n },
-		"RIG_MODEL_CONCURRENCY": func(n int) { m.Concurrency = n },
 		"RIG_MODEL_RETRIES":     func(n int) { m.Retries = n },
 	} {
 		raw, ok := env(key)

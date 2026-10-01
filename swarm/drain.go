@@ -88,7 +88,6 @@ func (c *Controller) work(w *worker, id string) workResult {
 		return workResult{}
 	}
 	c.stream(w, []byte(fmt.Sprintf("## swarm task %s (%s)\n", id, w.role)))
-	row, _ := c.opts.Models().Get(w.model)
 	res, err := sched.Delegate(sched.DelegateInput{
 		DB:            c.opts.SchedDB,
 		Home:          c.opts.Home,
@@ -97,7 +96,8 @@ func (c *Controller) work(w *worker, id string) workResult {
 		Task:          c.brief(w, task),
 		Model:         w.model,
 		WorkerSession: core.NewSession().ID,
-		Slots:         1,
+		DefaultModel:  c.opts.DefaultModel,
+		Models:        c.opts.Models,
 		Fetch:         c.opts.Fetch,
 		Spawn:         c.opts.Spawn,
 		WorkerCmd:     c.opts.WorkerCmd,
@@ -112,8 +112,6 @@ func (c *Controller) work(w *worker, id string) workResult {
 		Context:       w.ctx,
 		SpawnCtx:      w.ctx,
 		WaitBusy:      true,
-		Remote:        row.Remote,
-		Concurrency:   row.Concurrency,
 		Observe:       func(p []byte) { c.stream(w, p) },
 	})
 	c.addSpent(res.Cost)

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
@@ -88,7 +89,6 @@ func delegateInput(t *testing.T, fetch sched.Fetch, spawn sched.Spawn, mutate fu
 		Task:          "do the thing",
 		Model:         "qwen3.8-27b-workers",
 		WorkerSession: "worker-sess",
-		Slots:         1,
 		Fetch:         fetch,
 		Spawn:         spawn,
 		WorkerCmd:     []string{"/x/rig"},
@@ -102,45 +102,28 @@ func delegateInput(t *testing.T, fetch sched.Fetch, spawn sched.Spawn, mutate fu
 	return in
 }
 
-func TestDelegateBusyWaitWaitsForTheGpuSlot(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	in := delegateInput(t, delegateFetch(t, true, ""), spawn.spawn, func(in *sched.DelegateInput) {
-		in.WaitBusy = true
-	})
-	started := time.Now()
-	if _, err := sched.Delegate(in); err != nil {
-		t.Fatalf("delegate: %v", err)
-	}
-	if spawn.count() != 1 {
-		t.Fatalf("spawn calls = %d, want 1", spawn.count())
-	}
-	if time.Since(started) < time.Second {
-		t.Fatalf("the busy wait must poll the swap before spawning (waited %v)", time.Since(started))
-	}
-}
-
-func TestDelegateBusySkipStillRefuses(t *testing.T) {
+func TestDelegateHolderSkipStillRefuses(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, true, ""), spawn.spawn, nil)
 	if _, err := sched.Delegate(in); err == nil {
-		t.Fatal("a busy GPU with the default policy must refuse")
-	} else if !strings.Contains(err.Error(), "busy") {
-		t.Errorf("busy voice: %v", err)
+		t.Fatal("a named model while another is resident must refuse")
+	} else if !strings.Contains(err.Error(), "held by") {
+		t.Errorf("holder voice: %v", err)
 	}
 	if spawn.count() != 0 {
 		t.Fatalf("no spawn may happen on a skip: %d", spawn.count())
 	}
 }
 
-func TestDelegateBusyCheckFailureFailsClosed(t *testing.T) {
+func TestDelegateCheckFailureFailsClosed(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, true, "models down"), spawn.spawn, func(in *sched.DelegateInput) {
 		in.WaitBusy = true
 	})
 	if _, err := sched.Delegate(in); err == nil {
-		t.Fatal("a failed busy check must refuse")
-	} else if !strings.Contains(err.Error(), "busy check failed") {
-		t.Errorf("busy-check voice: %v", err)
+		t.Fatal("a failed gate check must refuse")
+	} else if !strings.Contains(err.Error(), "gate check failed") {
+		t.Errorf("gate voice: %v", err)
 	}
 	if spawn.count() != 0 {
 		t.Fatalf("no spawn may happen on a failed check: %d", spawn.count())
@@ -274,63 +257,26 @@ func TestDelegateStallKeepsAWritingWorkerPastTheOldCeiling(t *testing.T) {
 	}
 }
 
-func TestRemoteDelegateWaitsForTheRowsConcurrencyTokens(t *testing.T) {
+func TestRemoteDelegateNeverConsultsTheSwap(t *testing.T) {
 	failing := func(url string) (json.RawMessage, error) {
 		return nil, jsonError("the swap must never be consulted: " + url)
 	}
-	spawned := make(chan struct{})
-	first := &delegateSpawn{
-		result: sched.SpawnResult{Exit: 0, Stdout: "done\n"},
-		block:  make(chan struct{}),
-		onSpawn: func(ctx context.Context, observe func([]byte)) {
-			close(spawned)
-		},
-	}
-	second := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	in1 := delegateInput(t, failing, first.spawn, func(in *sched.DelegateInput) {
-		in.Remote = true
-		in.Concurrency = 1
-		in.WorkerSession = "worker-1"
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	in := delegateInput(t, failing, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Model = "brain"
+		in.Models = func() models.Table {
+			tbl, err := models.New(models.Model{ID: "brain", Window: 1024, MaxTokens: 128, Reserve: 8, KeepRecent: 8, Role: models.RoleWorker, Remote: true, BaseURL: "https://endpoint.example/v1"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return tbl
+		}
 	})
-	in2 := in1
-	in2.Spawn = second.spawn
-	in2.WorkerSession = "worker-2"
-	done1 := make(chan struct{})
-	go func() {
-		if _, err := sched.Delegate(in1); err != nil {
-			t.Errorf("first delegate: %v", err)
-		}
-		close(done1)
-	}()
-	select {
-	case <-spawned:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the first delegate's worker never started")
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
 	}
-	done2 := make(chan struct{})
-	go func() {
-		if _, err := sched.Delegate(in2); err != nil {
-			t.Errorf("second delegate: %v", err)
-		}
-		close(done2)
-	}()
-	time.Sleep(100 * time.Millisecond)
-	if second.count() != 0 {
-		t.Fatalf("the second delegate must wait for the row's token, spawned %d times", second.count())
-	}
-	close(first.block)
-	select {
-	case <-done1:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the first delegate never finished")
-	}
-	select {
-	case <-done2:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the second delegate never got the token")
-	}
-	if second.count() != 1 {
-		t.Fatalf("after the token freed, the second delegate must spawn once, got %d", second.count())
+	if spawn.count() != 1 {
+		t.Fatalf("a remote delegate must spawn without the gate, spawned %d times", spawn.count())
 	}
 }
 

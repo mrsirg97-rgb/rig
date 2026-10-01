@@ -10,6 +10,13 @@ result for review. The session supervises: the bare `/swarm` lists the
 workers (role, model, current task, last heartbeat from the run stream,
 tasks done/failed), and `/swarm stop` ends them.
 
+**Amended by SPEC_WORKERS (2.4.0)**: the count `n` is retired — the
+swarm starts one drain worker per free slot read live from the swap
+and grows as slots free (decision 2's `WaitBusy` waits on that same
+read); `workers.json` and its `reviewer` key are gone, and the
+worker model resolves per task (the resident model, else the
+session's default).
+
 ## what it is not (named)
 
 - **Not a scheduler.** No crontab line, no once-fire, no cron run records:

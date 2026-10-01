@@ -70,8 +70,8 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	d := h.tool.Description()
 	for _, want := range []string{
 		"come from list: copy them, never invent them",
-		"busy:skip, the default, skips a fire while another model holds the GPU",
-		"force evicts it, and only when the operator wants the GPU now",
+		"busy:skip is the only policy: a fire waits for a free slot up to its timeout, or skips naming the holder",
+		"eviction is the operator's act (the fleet is the resident model)",
 		"(default: qwen3.8-workers)",
 		"until the note clears",
 		"re-create it to retry",

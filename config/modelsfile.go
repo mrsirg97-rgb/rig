@@ -43,32 +43,42 @@ var knownRowKeysSet = func() map[string]bool {
 	return m
 }()
 
-func loadModels(dir string) (models.Table, error) {
+func loadModels(dir string) (models.Table, bool, error) {
 	embeddedData, err := embedded.ReadFile("models.json")
 	if err != nil {
 		panic("config: embedded models.json: " + err.Error())
 	}
 	embDocs, err := parseRows(embeddedData, "config/models.json (embedded)")
 	if err != nil {
-		return models.Table{}, err
+		return models.Table{}, false, err
 	}
 	embTable, err := mergeRows(models.Table{}, embDocs, "config/models.json (embedded)")
 	if err != nil {
-		return models.Table{}, err
+		return models.Table{}, false, err
 	}
 	p := filepath.Join(dir, "models.json")
 	data, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return embTable, nil
+			return embTable, false, nil
 		}
-		return models.Table{}, readErr(p, err)
+		return models.Table{}, false, readErr(p, err)
 	}
 	userDocs, err := parseRows(data, p)
 	if err != nil {
-		return models.Table{}, err
+		return models.Table{}, false, err
 	}
-	return mergeRows(embTable, userDocs, p)
+	t, err := mergeRows(embTable, userDocs, p)
+	return t, rowsCarriedConcurrency(userDocs), err
+}
+
+func rowsCarriedConcurrency(docs []rowDoc) bool {
+	for _, d := range docs {
+		if d.concurrency != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func parseRows(data []byte, path string) ([]rowDoc, error) {
@@ -327,9 +337,6 @@ func applyHosted(m *models.Model, d *rowDoc) {
 	}
 	if d.apiKey != nil {
 		m.APIKey = *d.apiKey
-	}
-	if d.concurrency != nil {
-		m.Concurrency = *d.concurrency
 	}
 	if d.reasoning != nil {
 		m.Reasoning = *d.reasoning
