@@ -71,6 +71,8 @@ type bodySrv struct {
 	bodies [][]byte
 
 	reply string
+	slots int
+	model string
 }
 
 func newBodySrv(t *testing.T, s *bodySrv) *httptest.Server {
@@ -81,12 +83,29 @@ func newBodySrv(t *testing.T, s *bodySrv) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		switch {
-		case r.Method == "GET" && (r.URL.Path == "/v1/models" || r.URL.Path == "/running"):
-			if r.URL.Path == "/v1/models" {
-				w.Write([]byte(`{"data":[]}`))
-			} else {
-				w.Write([]byte(`{"running":[]}`))
+		case r.Method == "GET" && r.URL.Path == "/v1/models":
+			w.Write([]byte(`{"data":[{"id":"` + s.model + `","status":{"value":"loaded"}}]}`))
+			return
+		case r.Method == "GET" && r.URL.Path == "/running":
+			w.Write([]byte(`{"running":[{"model":"` + s.model + `"}]}`))
+			return
+		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/upstream/"):
+			s.mu.Lock()
+			slots := s.slots
+			s.mu.Unlock()
+			if slots == 0 {
+				slots = 1
 			}
+			type slot struct {
+				ID           int  `json:"id"`
+				IsProcessing bool `json:"is_processing"`
+			}
+			var out []slot
+			for i := 0; i < slots; i++ {
+				out = append(out, slot{ID: i})
+			}
+			b, _ := json.Marshal(out)
+			w.Write(b)
 			return
 		default:
 			s.mu.Lock()
@@ -152,12 +171,13 @@ func buildBin(t *testing.T, binDir string) string {
 	return bin
 }
 
-func rigEnv(scratch, binDir string) []string {
+func rigEnv(scratch, binDir string, extra ...string) []string {
 	env := append(os.Environ(),
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
 		"RIG_MODEL=local",
 	)
+	env = append(env, extra...)
 	if binDir != "" {
 		env = append(env, "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
@@ -178,7 +198,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 		cmdDir := t.TempDir()
 		cmd.Dir = cmdDir
-		cmd.Env = rigEnv(scratch, "")
+		cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -196,7 +216,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		cmd := exec.Command(bin, "-base-url", srv.URL+"/v1")
 		cmdDir := t.TempDir()
 		cmd.Dir = cmdDir
-		cmd.Env = rigEnv(scratch, "")
+		cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
 		cmd.Stdin = strings.NewReader("hello\n")
 		out, err := cmd.CombinedOutput()
 		_ = err
@@ -209,7 +229,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		goldenCheckSession(t, "repl.json", s.last(), cmdDir, scratch)
 	})
 	t.Run("runjob", func(t *testing.T) {
-		s := &bodySrv{}
+		s := &bodySrv{model: "brain"}
 		srv := newBodySrv(t, s)
 		binDir := t.TempDir()
 		bin := buildBin(t, binDir)
@@ -830,7 +850,7 @@ func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	}
 }
 
-func TestDefaultJobModelMintsTheFleetAtStart(t *testing.T) {
+func TestDefaultJobModelLegacyKeyIsNamedAtStart(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
@@ -853,18 +873,59 @@ func TestDefaultJobModelMintsTheFleetAtStart(t *testing.T) {
 	if got := s.count(); got != 1 {
 		t.Fatalf("the minted run must make exactly one model call, got %d", got)
 	}
-	want := `defaultJobModel moved to workers.json — minted`
+	want := `defaultJobModel moved to model — the fleet is the resident model; delete the key`
 	if !strings.Contains(string(out), want) {
-		t.Fatalf("the start must mint the fleet once and say so: %q", out)
+		t.Fatalf("the legacy key must be named once at start: %q", out)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "workers.json"))
-	if err != nil || !strings.Contains(string(b), `"model": "local"`) {
-		t.Fatalf("workers.json must carry the legacy model: %q (%v)", b, err)
+	if _, err := os.Stat(filepath.Join(dir, "workers.json")); !os.IsNotExist(err) {
+		t.Fatalf("nothing mints a workers.json anymore (stat err: %v)", err)
 	}
 }
 
-func TestOneshotWireCarriesTheWorkerToolsWithAFleet(t *testing.T) {
+func TestOneSlotWireRecordsTheMenuWithoutTheDrainPair(t *testing.T) {
 	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the run must succeed: %v\n%s", err, out)
+	}
+	if !hasToolName(s.last(), "scheduler") {
+		t.Fatalf("the scheduler is wired everywhere: %v", toolNames(s.last()))
+	}
+	if hasToolName(s.last(), "delegate") {
+		t.Fatalf("a one-slot server hosts no second request: %v", toolNames(s.last()))
+	}
+	for _, tl := range wireTools(t, s.last()) {
+		if strings.Contains(tl.Description, "absent") || strings.Contains(tl.Description, "not wired") {
+			t.Fatalf("the menu says nothing about what is absent: %s", tl.Name)
+		}
+	}
+}
+
+func TestTwoSlotWirePutsTheDrainPairOn(t *testing.T) {
+	s := &bodySrv{slots: 2}
+	srv := newBodySrv(t, s)
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the run must succeed: %v\n%s", err, out)
+	}
+	if !hasToolName(s.last(), "delegate") {
+		t.Fatalf("a two-slot server hosts the fleet: %v", toolNames(s.last()))
+	}
+}
+
+func TestWorkersFalseKeepsTheDrainPairOffAtTwoSlots(t *testing.T) {
+	s := &bodySrv{slots: 2}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()
@@ -872,24 +933,50 @@ func TestOneshotWireCarriesTheWorkerToolsWithAFleet(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
-		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"workers": false}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
-	for _, want := range []string{"scheduler", "delegate"} {
-		if !hasToolName(s.last(), want) {
-			t.Fatalf("a configured fleet must put %s on the wire: %v", want, toolNames(s.last()))
-		}
+	if hasToolName(s.last(), "delegate") {
+		t.Fatalf("workers:false turns the drain pair off on a capable machine: %v", toolNames(s.last()))
+	}
+	if !hasToolName(s.last(), "scheduler") {
+		t.Fatalf("the scheduler is wired everywhere: %v", toolNames(s.last()))
 	}
 }
 
-func TestUnresolvedFleetModelRefusesAtStart(t *testing.T) {
+func TestRemoteSessionRowWiresTheDrainPairWithoutSlots(t *testing.T) {
+	s := &bodySrv{slots: 1}
+	srv := newBodySrv(t, s)
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	dir := cfgDir(t, scratch)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	row := `{"id": "brain", "window": 8192, "maxTokens": 1024, "reserve": 64, "keepRecent": 128, "remote": true, "baseUrl": "` + srv.URL + `/v1", "apiKey": "sk-test"}`
+	if err := os.WriteFile(filepath.Join(dir, "models.json"), []byte("["+row+"]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL, "RIG_MODEL=brain")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the run must succeed: %v\n%s", err, out)
+	}
+	if !hasToolName(s.last(), "delegate") {
+		t.Fatalf("a remote row runs its own parallelism: %v", toolNames(s.last()))
+	}
+}
+
+func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()
 	dir := cfgDir(t, scratch)
@@ -903,38 +990,24 @@ func TestUnresolvedFleetModelRefusesAtStart(t *testing.T) {
 	cmd := exec.Command(bin, "-p", "hello")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(scratch, "")
-	out, runErr := cmd.CombinedOutput()
-	if runErr == nil {
-		t.Fatalf("an unresolved fleet model must refuse at start: %q", out)
-	}
-	if !strings.Contains(string(out), `model "ghost": no row in the models table`) {
-		t.Fatalf("the voice = %q, want it to name the missing row", out)
+	out, _ := cmd.CombinedOutput()
+	if !strings.Contains(string(out), "workers.json retired: the fleet is the resident model") {
+		t.Fatalf("the retired file must be named once at start: %q", out)
 	}
 }
 
-func TestSchedulerCreateDefaultsToTheFleetModel(t *testing.T) {
+func TestSchedulerCreateDefaultsToTheSessionModel(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
-		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Load(dir, t.TempDir())
-	if err != nil {
+	if _, err := config.Load(dir, t.TempDir()); err != nil {
 		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Workers == nil {
-		t.Fatal("Load: the workers.json fleet is nil")
 	}
 
 	home := t.TempDir()
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
-	tool := schedapi.New(st, ct, "rig run-job", cfg.Workers.Model, home)
-	if !strings.Contains(tool.Description(), "(default: "+cfg.Workers.Model+")") {
-		t.Fatalf("the tool description must name the fleet's model: %q", tool.Description())
+	tool := schedapi.New(st, ct, "rig run-job", "local", home)
+	if !strings.Contains(tool.Description(), "(default: local)") {
+		t.Fatalf("the tool description must name the session's model: %q", tool.Description())
 	}
 	raw, err := json.Marshal(map[string]any{
 		"action": "create", "name": "defaulted", "prompt": "p",
@@ -951,8 +1024,8 @@ func TestSchedulerCreateDefaultsToTheFleetModel(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
-	if m != cfg.Workers.Model {
-		t.Fatalf("the job's model = %q, want the fleet's model %q", m, cfg.Workers.Model)
+	if m != "local" {
+		t.Fatalf("the job's model = %q, want the session's model %q", m, "local")
 	}
 }
 
@@ -1097,7 +1170,7 @@ func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 	for _, n := range cfg.Settings.Allow {
 		allowed[n] = true
 	}
-	for _, n := range effectiveNativeNames(nil) {
+	for _, n := range effectiveNativeNames() {
 		if !allowed[n] {
 			t.Errorf("native %q is not in the embedded allow default (no fleet: the worker tools stay out)", n)
 		}
@@ -1130,9 +1203,9 @@ func TestEmbeddedAllowGrowsWithTheFleet(t *testing.T) {
 	for _, n := range cfg.Settings.Allow {
 		allowed[n] = true
 	}
-	for _, n := range workerToolNames {
+	for _, n := range []string{"scheduler", "delegate"} {
 		if !allowed[n] {
-			t.Errorf("worker tool %q is not in the allow default once a fleet stands", n)
+			t.Errorf("worker tool %q is not in the allow default", n)
 		}
 	}
 }

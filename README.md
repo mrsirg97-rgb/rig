@@ -87,9 +87,13 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
   a repo and its worktrees share the same memories.
 - **schedules.** `scheduler` puts a job on the crontab; a job is a one-shot
   `rig -p` in its own cwd, jailed by default.
-- **the swarm.** `swarm 2` drains the queue: workers claim, run one-shot,
-  and submit; reviewers accept or reject. `swarm stop` ends it;
-  `swarm 2 budget=5` caps the spend.
+- **the swarm.** `swarm start` drains the queue, one drain worker per
+  free slot on the resident model: workers claim, run one-shot, and
+  submit; reviewers accept or reject. `swarm stop` ends it;
+  `swarm start budget=5` caps the spend. The drain pair is wired only
+  where a second request can run — a remote row, or more than one slot
+  on the resident server (`workers: false` turns it off; the scheduler
+  is wired everywhere).
 - **resume.** `sessions` lists the vitals; `rig --resume <id>` replays a
   session from the state store in one read-only transaction.
 
@@ -110,7 +114,7 @@ model row whose `"vision": true` says it takes images, and `scheduler` and
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
-| `delegate` | a headless worker for a bounded subtask; several run in parallel in one turn, up to the fleet's slots |
+| `delegate` | a headless worker for a bounded subtask; wired where a second request can run (a remote row, or more than one slot on the resident server) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |
 | `plugin` / `plugins` | the door into your python plugins, and their ecosystem |
 
@@ -126,7 +130,7 @@ model row, not a new provider. A row says where it runs:
 ```json
 {"id": "openrouter-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000,
  "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1",
- "apiKey": "sk-or-...", "concurrency": 4, "reasoning": "reasoning",
+ "apiKey": "sk-or-...", "reasoning": "reasoning",
  "providerPin": "Together", "cacheControl": true}
 ```
 
@@ -137,8 +141,8 @@ the state store's cost column and shows in the TUI footer; OpenRouter
 rows read and echo `reasoning` / `reasoning_details` while everything
 else keeps `reasoning_content`; remote rows omit llama-server-only
 fields. A remote row's delegate and scheduled fire skip the local swap
-entirely — no busy probe — and bound parallelism by the row's
-`concurrency` tokens beside the fleet's slots. `swarm <n> budget=5`
+entirely — no gate at all; the endpoint's own 429 retry is the
+backpressure. `swarm start budget=5`
 and a scheduled job's `budget` cap spend in dollars, summed from the
 cost column (SPEC_HOSTED).
 
@@ -146,10 +150,12 @@ cost column (SPEC_HOSTED).
 
 `delegate` runs a bounded sub-task on a headless worker and waits for its
 last message. In one turn you can fan out several delegates: they run in
-parallel, the turn blocks until each finishes or times out, and
-`workers.json`'s `slots` bounds how many run at once, with extras waiting
-for a slot. A worker runs only when the model's GPU slot is free; a held
-GPU refuses by name (`busy:skip`, never an eviction from inside a turn).
+parallel, the turn blocks until each finishes or times out, and the free
+slots llama-swap reports live bound how many run — one with no free slot
+refuses (`no free slot; this turn holds the only one` on a one-slot
+model). A worker runs on the resident model; a model you name asks for a
+swap only when nothing is resident, and a different resident model
+refuses, naming the holder (never an eviction from inside a turn).
 Workers are sandboxed, cannot delegate in turn (`RIG_DELEGATE`), and their
 transcripts are resumable with `sessions resume <id>`.
 
@@ -165,9 +171,8 @@ Configuration lives in `~/.rig/`. Set `$RIG_HOME` to move it. Every file is opti
 | file | what it holds |
 |------|---------------|
 | `settings.json` | the knobs: endpoint, model, the allow-list, the retry bound, the approval dial, the worker sandbox |
-| `models.json` | the per-model table: context window, max tokens, the compaction reserve, the role (`worker`/`interactive`), the effort levels, `vision` (the model takes images, which unlocks `view`), and the hosted run site: `remote`/`provider` (where it runs), `baseUrl`, `apiKey`, `concurrency`, `reasoning`, `providerPin`, `cacheControl`, `retries` |
+| `models.json` | the per-model table: context window, max tokens, the compaction reserve, the role (`worker`/`interactive`), the effort levels, `vision` (the model takes images, which unlocks `view`), and the hosted run site: `remote`/`provider` (where it runs), `baseUrl`, `apiKey`, `reasoning`, `providerPin`, `cacheControl`, `retries` |
 | `blobs/` | the images `view` has read, named by sha256; delete anything, and rig never rewrites a file it did not create |
-| `workers.json` | the worker fleet: `{"model": "<id>", "slots": N}`. Unlocks `scheduler` and `delegate`; `slots` bounds concurrent delegates per session |
 | `AGENTS.md` | global instructions, read before the project's `<cwd>/AGENTS.md` |
 | `theme.json` | the terminal theme: base, slot colors, glyph set |
 | `plugins/` | your python plugins (top-level files are live) |

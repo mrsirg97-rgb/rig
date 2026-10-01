@@ -39,7 +39,6 @@ const (
 )
 
 type StartOpts struct {
-	Count  int
 	Role   string
 	Model  string
 	Budget float64
@@ -57,25 +56,24 @@ type Worker struct {
 }
 
 type Opts struct {
-	TodoDB        store.DB
-	SchedDB       sched.DB
-	Home          string
-	Project       func(ctx context.Context, session string) (todostore.Project, error)
-	Cwd           string
-	WorkerCmd     []string
-	Fetch         sched.Fetch
-	Spawn         sched.Spawn
-	SwapURL       string
-	Sandbox       string
-	SandboxBinds  []string
-	RigHome       string
-	StateDir      string
-	Allow         []string
-	FleetModel    string
-	ReviewerModel string
-	Models        func() models.Table
-	Poll          time.Duration
-	Frontend      func() core.Frontend
+	TodoDB       store.DB
+	SchedDB      sched.DB
+	Home         string
+	Project      func(ctx context.Context, session string) (todostore.Project, error)
+	Cwd          string
+	WorkerCmd    []string
+	Fetch        sched.Fetch
+	Spawn        sched.Spawn
+	SwapURL      string
+	Sandbox      string
+	SandboxBinds []string
+	RigHome      string
+	StateDir     string
+	Allow        []string
+	DefaultModel string
+	Models       func() models.Table
+	Poll         time.Duration
+	Frontend     func() core.Frontend
 }
 
 type Controller struct {
@@ -93,6 +91,8 @@ type Controller struct {
 	budget    float64
 	spent     float64
 	emitter   *status.Emitter
+	role      string
+	model     string
 }
 
 type worker struct {
@@ -155,19 +155,17 @@ func (c *Controller) budgetState() (float64, float64) {
 
 func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if in.Count < 1 || in.Count > MaxWorkers {
-		return "", fmt.Errorf("swarm: worker count must be 1..%d (got %d)", MaxWorkers, in.Count)
-	}
 	role := in.Role
 	if role == "" {
 		role = RoleWorker
 	}
 	if role != RoleWorker && role != RoleReviewer {
+		c.mu.Unlock()
 		return "", fmt.Errorf("swarm: unknown role %q (worker, reviewer)", role)
 	}
 	model, err := c.modelFor(role, in.Model)
 	if err != nil {
+		c.mu.Unlock()
 		return "", err
 	}
 	session := ""
@@ -176,16 +174,28 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	}
 	proj, err := c.opts.Project(ctx, session)
 	if err != nil {
+		c.mu.Unlock()
 		return "", fmt.Errorf("swarm: queue: %w", err)
 	}
-	if c.ctx == nil {
+	growing := c.ctx == nil
+	if growing {
 		c.ctx, c.cancel = context.WithCancel(ctx)
+	}
+	if c.role == "" {
+		c.role, c.model = role, model
 	}
 	c.proj = proj
 	c.architect = session
 	c.budget = in.Budget
+	count := c.freeSlots()
+	if count < 1 {
+		count = 1
+	}
+	if count > MaxWorkers {
+		count = MaxWorkers
+	}
 	base := len(c.workers)
-	for i := 1; i <= in.Count; i++ {
+	for i := 1; i <= count; i++ {
 		w := &worker{
 			id: base + i, role: role, model: model,
 			identity:  core.NewSession().ID,
@@ -198,7 +208,19 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 		c.wg.Add(1)
 		go c.run(w)
 	}
-	return fmt.Sprintf("swarm: added %d %s (role %s · model %s)", in.Count, plural(in.Count, "agent"), role, model), nil
+	c.mu.Unlock()
+	if growing {
+		c.wg.Add(1)
+		go c.growLoop()
+	}
+	return fmt.Sprintf("swarm: added %d %s (role %s · model %s)", count, plural(count, "agent"), role, modelName(model)), nil
+}
+
+func modelName(m string) string {
+	if m == "" {
+		return "resident"
+	}
+	return m
 }
 
 func (c *Controller) modelFor(role, override string) (string, error) {
@@ -209,10 +231,7 @@ func (c *Controller) modelFor(role, override string) (string, error) {
 		}
 		return override, nil
 	}
-	if role == RoleReviewer && c.opts.ReviewerModel != "" {
-		return c.opts.ReviewerModel, nil
-	}
-	return c.opts.FleetModel, nil
+	return "", nil
 }
 
 func (c *Controller) List() []Worker {
@@ -221,7 +240,7 @@ func (c *Controller) List() []Worker {
 	out := make([]Worker, len(c.workers))
 	for i, w := range c.workers {
 		out[i] = Worker{
-			ID: w.id, Role: w.role, Model: w.model, Task: w.task,
+			ID: w.id, Role: w.role, Model: modelName(w.model), Task: w.task,
 			Heartbeat: w.heartbeat, Done: w.done, Failed: w.failed, State: w.state,
 		}
 	}
@@ -249,6 +268,8 @@ func (c *Controller) Stop() (string, error) {
 	c.workers = nil
 	c.ctx = nil
 	c.cancel = nil
+	c.role = ""
+	c.model = ""
 	c.mu.Unlock()
 	if _, err := todostore.Reap(context.Background(), c.opts.TodoDB, proj, ended, architect); err != nil {
 		return "", fmt.Errorf("swarm: stop: release: %w", err)

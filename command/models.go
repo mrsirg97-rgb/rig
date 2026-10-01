@@ -102,9 +102,6 @@ func renderTable(t models.Table, active string) string {
 			if m.Provider != "" {
 				where += " " + m.Provider
 			}
-			if m.Concurrency > 1 {
-				where += fmt.Sprintf(" concurrency %d", m.Concurrency)
-			}
 			if m.BaseURL != "" {
 				where += " " + m.BaseURL
 			}

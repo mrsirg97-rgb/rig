@@ -57,6 +57,14 @@ var Transport http.RoundTripper
 
 const ReportBack = "\n\nReport back: when you finish, persist durable findings with the rem tool (project scope: this job's cwd) and end your reply with a short summary of what you found and did."
 
+func (opts RunOpts) modelRow(model string) (models.Model, bool) {
+	if opts.Models == nil {
+		return models.Model{}, false
+	}
+	row, ok := opts.Models().Get(model)
+	return row, ok
+}
+
 func RunJob(key string, opts RunOpts) error {
 	if opts.Crontab == nil || opts.Fetch == nil || opts.Spawn == nil {
 		return fmt.Errorf("run-job: crontab, fetch, and spawn seams are required")
@@ -184,29 +192,15 @@ func RunJob(key string, opts RunOpts) error {
 		spawnEnv = os.Environ()
 	} else {
 		row, rowOK := opts.modelRow(job.Model)
-		if rowOK && row.Remote {
+		if !(rowOK && row.Remote) {
 			waitCtx, cancelWait := context.WithTimeout(context.Background(), timeout)
-			token, err := acquireRowTokens(waitCtx, opts.Home, job.Model, row.Concurrency)
+			err := gateWait(opts.Fetch, opts.SwapURL, job.Model, waitCtx)
 			cancelWait()
 			if err != nil {
-				return fmt.Errorf("run-job: concurrency: %w", err)
-			}
-			defer releaseLock(token)
-		} else {
-			st := busyState(opts.Fetch, opts.SwapURL, job.Model)
-			switch st.kind {
-			case "error":
-				if e := recordSkip(db, id, st.reason); e != nil {
+				if e := recordSkip(db, id, err.Error()); e != nil {
 					return e
 				}
 				return nil
-			case "busy":
-				if job.Busy != "force" {
-					if e := recordSkip(db, id, "busy: "+st.names+" resident (policy skip)"); e != nil {
-						return e
-					}
-					return nil
-				}
 			}
 		}
 

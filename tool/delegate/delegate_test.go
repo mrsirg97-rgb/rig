@@ -52,18 +52,43 @@ func runningJSON(models ...string) string {
 }
 
 func fakeFetch(resident string) func(url string) (json.RawMessage, error) {
+	return fakeFetchSlots(resident)
+}
+
+func fakeFetchSlots(resident string, slots ...[]bool) func(url string) (json.RawMessage, error) {
+	var mu sync.Mutex
+	reads := 0
 	return func(url string) (json.RawMessage, error) {
 		switch {
 		case strings.HasSuffix(url, "/v1/models"):
-			if resident == "" {
-				return json.RawMessage(modelsJSON(nil)), nil
-			}
 			return json.RawMessage(modelsJSON(nil)), nil
 		case strings.HasSuffix(url, "/running"):
 			if resident == "" {
 				return json.RawMessage(runningJSON()), nil
 			}
 			return json.RawMessage(runningJSON(resident)), nil
+		case strings.Contains(url, "/upstream/"):
+			mu.Lock()
+			defer mu.Unlock()
+			served := []bool{false}
+			if len(slots) > 0 {
+				idx := reads
+				if idx > len(slots)-1 {
+					idx = len(slots) - 1
+				}
+				served = slots[idx]
+				reads++
+			}
+			type slot struct {
+				ID           int  `json:"id"`
+				IsProcessing bool `json:"is_processing"`
+			}
+			var out []slot
+			for i, p := range served {
+				out = append(out, slot{ID: i, IsProcessing: p})
+			}
+			b, _ := json.Marshal(out)
+			return json.RawMessage(b), nil
 		}
 		return nil, jsonError("unexpected url " + url)
 	}
@@ -168,11 +193,6 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 
 func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) core.Tool {
 	t.Helper()
-	return h.newToolSlots(t, 0, fetch, spawn)
-}
-
-func (h *harness) newToolSlots(t *testing.T, slots int, fetch sched.Fetch, spawn sched.Spawn) core.Tool {
-	t.Helper()
 	return delegate.New(delegate.Opts{
 		DB:           h.db,
 		Home:         h.home,
@@ -181,7 +201,6 @@ func (h *harness) newToolSlots(t *testing.T, slots int, fetch sched.Fetch, spawn
 		SwapURL:      "http://127.0.0.1:8090",
 		WorkerCmd:    []string{"/x/rig"},
 		DefaultModel: "qwen3.8-workers",
-		Slots:        slots,
 		Sandbox:      "off",
 		Fetch:        fetch,
 		Spawn:        spawn,
@@ -204,6 +223,11 @@ func seedSession(t *testing.T, rigHome, cwd string) string {
 
 func runArgs(task string) json.RawMessage {
 	b, _ := json.Marshal(map[string]any{"task": task})
+	return b
+}
+
+func runArgsModel(model string) json.RawMessage {
+	b, _ := json.Marshal(map[string]any{"task": "t", "model": model})
 	return b
 }
 
@@ -355,11 +379,26 @@ func TestDelegateCwdFileRefuses(t *testing.T) {
 	}
 }
 
-func TestDelegateBusyRefusalNamesTheHolder(t *testing.T) {
+func TestDelegateUnnamedModelRunsTheResidentModel(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}}
+	tool := h.newTool(t, fakeFetch("other-model"), spawn.spawn)
+	if _, err := tool.Exec(context.Background(), runArgs("t")); err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+	}
+	if got := strings.Join(spawn.calls[0].Argv, " "); !strings.Contains(got, "-model other-model") {
+		t.Fatalf("the unnamed worker must run the resident model: %s", got)
+	}
+}
+
+func TestDelegateNamedModelWhileAnotherResidentRefuses(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	spawn := &fakeSpawn{}
 	tool := h.newTool(t, fakeFetch("other-model"), spawn.spawn)
-	out, err := tool.Exec(context.Background(), runArgs("t"))
+	out, err := tool.Exec(context.Background(), runArgsModel("brain"))
 	if err == nil || !strings.Contains(err.Error(), "held by other-model") {
 		t.Fatalf("the busy refusal must name the holder: (%q, %v)", out, err)
 	}
@@ -390,126 +429,65 @@ func TestDelegateTimeoutNamesItAndTheSpawnSawTheDeadline(t *testing.T) {
 	}
 }
 
-func TestDelegateSlotsOneRunsThreeInSequence(t *testing.T) {
-	h := newHarness(t, "/ws/sess")
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}}
-	tool := h.newToolSlots(t, 1, fakeFetch(""), spawn.spawn)
-	done := make(chan error, 3)
-	for _, task := range []string{"t1", "t2", "t3"} {
-		go func(task string) {
-			_, err := tool.Exec(context.Background(), runArgs(task))
-			done <- err
-		}(task)
-	}
-	for i := 0; i < 3; i++ {
-		if err := <-done; err != nil {
-			t.Fatalf("call %d must succeed: %v", i, err)
-		}
-	}
-	if spawn.count() != 3 {
-		t.Fatalf("three spawns, got %d", spawn.count())
-	}
-	assertSequential(t, spawn.calls)
-}
-
-func TestDelegateSlotsFullWaitsAndNamesTheWait(t *testing.T) {
+func TestDelegateFanOutOnTwoFreeSlotsSpawnsBoth(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	block := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
-	tool := h.newToolSlots(t, 2, fakeFetch(""), spawn.spawn)
-	done := make(chan struct{}, 2)
+	tool := h.newTool(t, fakeFetchSlots("qwen3.8-workers", []bool{false, false}), spawn.spawn)
+	done := make(chan error, 2)
 	for _, task := range []string{"t1", "t2"} {
 		go func(task string) {
-			out, err := tool.Exec(context.Background(), runArgs(task))
-			if err != nil {
-				t.Logf("call %s: %v (%s)", task, err, out)
-			}
-			done <- struct{}{}
+			_, err := tool.Exec(context.Background(), runArgs(task))
+			done <- err
 		}(task)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
 	for spawn.count() < 2 {
 		if time.Now().After(deadline) {
-			t.Fatalf("both slots never started (count %d)", spawn.count())
+			t.Fatalf("both delegates never started (count %d)", spawn.count())
 		}
 		time.Sleep(time.Millisecond)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancel()
-	out, err := tool.Exec(ctx, runArgs("t3"))
-	if err == nil || !strings.Contains(err.Error(), "delegate slots are full (slots 2)") {
-		t.Fatalf("the third call must refuse naming the full set: (%q, %v)", out, err)
-	}
-	if !strings.Contains(err.Error(), "waited ") || !strings.Contains(err.Error(), "for a slot") {
-		t.Fatalf("the refusal must name the wait time: %v", err)
-	}
 	close(block)
-	<-done
-	<-done
-	if spawn.count() != 2 {
-		t.Fatalf("no worker may spawn for the refused call, got %d spawns", spawn.count())
+	for i := 0; i < 2; i++ {
+		if err := <-done; err != nil {
+			t.Fatalf("call %d must succeed: %v", i, err)
+		}
 	}
+	if spawn.count() != 2 {
+		t.Fatalf("two spawns, got %d", spawn.count())
+	}
+	assertOverlap(t, spawn.calls)
 }
 
-func TestDelegateSlotsOneKeepsTheStandingVoice(t *testing.T) {
+func TestDelegateSecondFanOutOnASingleSlotRefusesWithThePinnedVoice(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	block := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
-	tool := h.newToolSlots(t, 1, fakeFetch(""), spawn.spawn)
+	tool := h.newTool(t, fakeFetchSlots("qwen3.8-workers", []bool{false}, []bool{true}), spawn.spawn)
 	first := make(chan struct{}, 1)
 	go func() {
-		_, _ = tool.Exec(context.Background(), runArgs("t"))
+		_, _ = tool.Exec(context.Background(), runArgs("t1"))
 		first <- struct{}{}
 	}()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for spawn.count() == 0 {
 		if time.Now().After(deadline) {
-			t.Fatal("spawn never started")
+			t.Fatal("the first delegate never spawned")
 		}
 		time.Sleep(time.Millisecond)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancel()
-	out, err := tool.Exec(ctx, runArgs("t2"))
-	if err == nil || !strings.Contains(err.Error(), "a delegation is already in flight (this session)") {
-		t.Fatalf("slots 1 must keep the standing voice: (%q, %v)", out, err)
+	out, err := tool.Exec(context.Background(), runArgs("t2"))
+	if err == nil || !strings.Contains(err.Error(), "delegate: no free slot; this turn holds the only one") {
+		t.Fatalf("the second delegate must refuse with the pinned voice: (%q, %v)", out, err)
 	}
 	close(block)
 	<-first
-}
-
-func TestDelegateSlotsThreeFanOutRunsConcurrently(t *testing.T) {
-	h := newHarness(t, "/ws/sess")
-	block := make(chan struct{})
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
-	tool := h.newToolSlots(t, 3, fakeFetch(""), spawn.spawn)
-	done := make(chan error, 3)
-	for _, task := range []string{"t1", "t2", "t3"} {
-		go func(task string) {
-			_, err := tool.Exec(context.Background(), runArgs(task))
-			done <- err
-		}(task)
+	if spawn.count() != 1 {
+		t.Fatalf("no worker may spawn for the refused call, got %d spawns", spawn.count())
 	}
-
-	deadline := time.Now().Add(2 * time.Second)
-	for spawn.count() < 3 {
-		if time.Now().After(deadline) {
-			t.Fatalf("all three never started (count %d)", spawn.count())
-		}
-		time.Sleep(time.Millisecond)
-	}
-	close(block)
-	for i := 0; i < 3; i++ {
-		if err := <-done; err != nil {
-			t.Fatalf("call %d must succeed: %v", i, err)
-		}
-	}
-	if spawn.count() != 3 {
-		t.Fatalf("three spawns, got %d", spawn.count())
-	}
-	assertOverlap(t, spawn.calls)
 }
 
 func TestDelegateNoRecursionRefuses(t *testing.T) {

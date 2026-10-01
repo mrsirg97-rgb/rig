@@ -47,14 +47,14 @@ func TestUpdateKeepsTheIdAndTheRuns(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	reply, err := h.update(sched.UpdateInput{ID: "j1", Prompt: "p2", Model: "brain", Busy: "force"})
+	reply, err := h.update(sched.UpdateInput{ID: "j1", Prompt: "p2", Model: "brain", Busy: "skip"})
 	mustOK(t, err)
 	contains(t, reply, "updated j1")
 	row := jobsRow(t, h, "j1")
 	if row == nil {
 		t.Fatal("j1 must survive the update (no re-mint)")
 	}
-	if row["prompt"] != "p2" || row["model"] != "brain" || row["busy"] != "force" {
+	if row["prompt"] != "p2" || row["model"] != "brain" || row["busy"] != "skip" {
 		t.Fatalf("the changed fields must be overlaid: %v", row)
 	}
 	if row["name"] != "keep" || row["cron"] != "0 3 * * *" {
@@ -251,11 +251,11 @@ func TestListShowsTheUpdatedFields(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "oldname", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u8"}); err != nil {
 		t.Fatal(err)
 	}
-	reply, err := h.update(sched.UpdateInput{ID: "j1", Name: "newname", Model: "brain", Busy: "force", Cwd: "/else/where"})
+	reply, err := h.update(sched.UpdateInput{ID: "j1", Name: "newname", Model: "brain", Busy: "skip", Cwd: "/else/where"})
 	mustOK(t, err)
 	contains(t, reply, "newname")
 	contains(t, reply, "brain")
-	contains(t, reply, "busy force")
+	contains(t, reply, "newname")
 	list, err := h.list()
 	mustOK(t, err)
 	contains(t, list, "newname")

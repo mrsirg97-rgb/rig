@@ -17,6 +17,7 @@ type Settings struct {
 	SearXNG       string
 	WebFetchProxy *string
 	Trafilatura   *string
+	Workers       *bool
 	SwapURL       string
 	Theme         string
 	Sandbox       string
@@ -33,7 +34,7 @@ type SettingsPlugins struct {
 	Max int
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "updateKey", "webFetchProxy"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "updateKey", "webFetchProxy", "workers"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -124,6 +125,9 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.UpdateKey != "" {
 		out.UpdateKey = file.UpdateKey
+	}
+	if file.Workers != nil {
+		out.Workers = file.Workers
 	}
 	return out
 }

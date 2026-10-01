@@ -82,9 +82,9 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.System != "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's workspace, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. When a tool fails, read the error and work out why before calling again. Do not retry blindly, and stop when the environment or the plan is wrong. A capability you build twice belongs in a plugin. For any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, start one before working on it, complete or fail it when done, and leave the queue empty at the end. When the work is done, answer in plain text: what changed, what you verified, what is left." {
 		t.Fatalf("system = %q, want the embedded default system prompt", s.System)
 	}
-	wantAllow := []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions"}
+	wantAllow := []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions", "scheduler", "delegate"}
 	if !reflect.DeepEqual(s.Allow, wantAllow) {
-		t.Fatalf("allow = %v, want the non-worker default list %v (the two worker tools join it only when workers.json names a fleet)", s.Allow, wantAllow)
+		t.Fatalf("allow = %v, want the default grown by the two worker tools %v (the fleet is the resident model)", s.Allow, wantAllow)
 	}
 	if s.Retries != 3 {
 		t.Fatalf("retries = %d, want the 0.2.0 default 3", s.Retries)
@@ -126,9 +126,6 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if got := len(cfg.Models.Known()); got != 1 {
 		t.Fatalf("the embedded table = %d rows, want the one local row (%v)", got, cfg.Models.Known())
 	}
-	if cfg.Workers != nil {
-		t.Fatalf("Workers = %+v, want nil with no workers.json (no fleet, no worker tools)", cfg.Workers)
-	}
 }
 
 func TestSettingsMalformedNamesFileAndField(t *testing.T) {
@@ -145,7 +142,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy, workers)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -252,6 +249,39 @@ func TestSettingsThemeIsAKnownKey(t *testing.T) {
 	if cfg.Settings.Theme != "paper" {
 		t.Fatalf("theme = %q, want paper", cfg.Settings.Theme)
 	}
+}
+
+func TestSettingsWorkersIsATriState(t *testing.T) {
+	t.Run("absent is unset (the capability decides)", func(t *testing.T) {
+		cfg := load(t, t.TempDir(), t.TempDir())
+		if cfg.Settings.Workers != nil {
+			t.Fatalf("workers = %v, want nil (no embedded default writes over the read)", *cfg.Settings.Workers)
+		}
+	})
+	t.Run("false is the operator's off", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"workers": false}`)
+		cfg := load(t, dir, t.TempDir())
+		if cfg.Settings.Workers == nil || *cfg.Settings.Workers {
+			t.Fatalf("workers = %v, want false", cfg.Settings.Workers)
+		}
+	})
+	t.Run("true is explicit but still capability-gated", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"workers": true}`)
+		cfg := load(t, dir, t.TempDir())
+		if cfg.Settings.Workers == nil || !*cfg.Settings.Workers {
+			t.Fatalf("workers = %v, want true", cfg.Settings.Workers)
+		}
+	})
+	t.Run("a non-bool refuses by name", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"workers": "off"}`)
+		_, err := config.Load(dir, t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), "workers") {
+			t.Fatalf("the refusal must name the key, got %v", err)
+		}
+	})
 }
 
 func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {

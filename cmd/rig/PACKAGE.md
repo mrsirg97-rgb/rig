@@ -160,15 +160,25 @@ sees core and models and nothing else.
   store, like `todo`/`rem`/`scheduler`, so it is not a pure observation);
   `tool/sessions.New(cfgDir, cwd)` is wired in the root's tools map and
   in the embedded `allow` default.
-- The worker tools are fleet-gated (SPEC_CONFIG 12): `effectiveNativeNames`
-  drops `scheduler` and `delegate` from the registered native set when
-  `Config.Workers` is nil, so a no-fleet start wires thirteen natives
-  instead of fifteen, and the tools map builds the two only when a
-  fleet stands (the scheduler fed the fleet's model, the delegate its
-  slots).
+- The worker tools are not fleet-gated (SPEC_WORKERS 5):
+  `effectiveNativeNames` is the whole native set — there is always a
+  worker model, the resident one or the session's default — and the
+  scheduler is wired everywhere. The drain pair (`delegate` and the
+  swarm) is a capability, read once at wire time by `fleetWiring` from
+  one live `GET /upstream/<model>/slots`, the same read the gate makes:
+  the session's model row is remote (the gate never consults the local
+  swap), or the resident server reports more than one slot, or nothing
+  is resident — the model that loads is the session's default and the
+  claim-time gate already refuses on one slot, so the read cannot know
+  better than the gate. An unreadable swap, one resident slot, or
+  settings.json's `"workers": false` wires the pair off: the wire
+  happens once, at start, an unreadable swap fails closed, and nothing
+  turns the pair on where the slots are not. The menu says nothing
+  about what is absent; the swarm adapter carries the read's verdict
+  and `/swarm` names it when it refuses.
 - `registeredNativeNames` applies the model row's gates on top of that:
-  the worker tools need a fleet and view needs vision, and what is not
-  offered is simply not in the table. `applyVision` is the whole of the
+  view needs vision, and what is not offered is simply not in the
+  table. `applyVision` is the whole of the
   vision gate — the view tool exists when the row has vision and does
   not when it has none — and the model switch re-applies it so the next
   turn's table follows the row. The `serve` path runs the same composition with the web server

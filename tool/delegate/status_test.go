@@ -68,7 +68,6 @@ func TestDelegateEmitsSwarmStatus(t *testing.T) {
 		DefaultModel: "qwen3.8-workers",
 		Fetch:        fakeFetch(""),
 		Spawn:        spawn.spawn,
-		Slots:        1,
 		Sandbox:      "off",
 		Notify:       fe.Notify,
 	})

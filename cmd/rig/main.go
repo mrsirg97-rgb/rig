@@ -40,7 +40,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.3.4"
+const Version = "2.4.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -145,8 +145,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	if cfg.Notice != "" {
-		fmt.Fprintln(os.Stderr, "rig:", cfg.Notice)
+	for _, n := range cfg.Notices {
+		fmt.Fprintln(os.Stderr, "rig:", n)
 	}
 
 	passed := map[string]bool{}
@@ -239,7 +239,7 @@ func main() {
 		os.Exit(1)
 	}
 	native := make(map[string]bool)
-	for _, name := range effectiveNativeNames(cfg.Workers) {
+	for _, name := range effectiveNativeNames() {
 		native[name] = true
 	}
 	pluginReports := make([]plugins.Report, 0)
@@ -383,15 +383,15 @@ func main() {
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
-		workers:     cfg.Workers,
 		pluginTools: pluginTools,
 		py:          py,
 		pluginsHome: cfgDir,
 		pluginInfos: pluginInfos,
 	}
 
-	if workers := cfg.Workers; workers != nil {
-		r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", workers.Model, cfgDir)
+	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
+	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
+	if delegateOn {
 		r.tools["delegate"] = delegate.New(delegate.Opts{
 			DB:           scdb,
 			Home:         schedHome,
@@ -399,8 +399,7 @@ func main() {
 			StateDir:     filepath.Join(cfgDir, "sessions"),
 			SwapURL:      swapURL,
 			WorkerCmd:    []string{self},
-			DefaultModel: workers.Model,
-			Slots:        workers.Slots,
+			DefaultModel: modelID,
 			Sandbox:      cfg.Settings.Sandbox,
 			SandboxBinds: cfg.Settings.SandboxBinds,
 			Allow:        allowList,
@@ -409,6 +408,8 @@ func main() {
 			Models:       func() models.Table { return r.runtime },
 			Notify:       func(ev core.Event) { r.rec.Notify(ev) },
 		})
+	}
+	if delegateOn {
 		r.swarm = swarm.New(swarm.Opts{
 			TodoDB:  tdb,
 			SchedDB: scdb,
@@ -416,22 +417,22 @@ func main() {
 			Project: func(ctx context.Context, session string) (todostore.Project, error) {
 				return sessionQueue(ctx, tdb, cwd, session)
 			},
-			Cwd:           cwd,
-			WorkerCmd:     []string{self},
-			Fetch:         sched.RealFetch(0),
-			Spawn:         sched.RealSpawn,
-			SwapURL:       swapURL,
-			Sandbox:       cfg.Settings.Sandbox,
-			SandboxBinds:  cfg.Settings.SandboxBinds,
-			RigHome:       cfgDir,
-			StateDir:      filepath.Join(cfgDir, "sessions"),
-			Allow:         allowList,
-			FleetModel:    workers.Model,
-			ReviewerModel: workers.Reviewer,
-			Models:        func() models.Table { return r.runtime },
-			Frontend:      func() core.Frontend { return r.rec },
+			Cwd:          cwd,
+			WorkerCmd:    []string{self},
+			Fetch:        sched.RealFetch(0),
+			Spawn:        sched.RealSpawn,
+			SwapURL:      swapURL,
+			Sandbox:      cfg.Settings.Sandbox,
+			SandboxBinds: cfg.Settings.SandboxBinds,
+			RigHome:      cfgDir,
+			StateDir:     filepath.Join(cfgDir, "sessions"),
+			Allow:        allowList,
+			DefaultModel: modelID,
+			Models:       func() models.Table { return r.runtime },
+			Frontend:     func() core.Frontend { return r.rec },
 		})
 	}
+	r.swarmWhy = swarmWhy
 
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t
@@ -449,7 +450,7 @@ func main() {
 	closeFrontend := func() {}
 	if serveAddr != "" {
 		srv, werr := web.New(web.Options{
-			Home: cfgDir, CWD: cwd, Models: cfg.Models, Workers: cfg.Workers,
+			Home: cfgDir, CWD: cwd, Models: cfg.Models, DefaultModel: modelID,
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
 		})
@@ -590,8 +591,8 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
 	}
-	if cfg.Notice != "" {
-		fmt.Fprintln(os.Stderr, "rig:", cfg.Notice)
+	for _, n := range cfg.Notices {
+		fmt.Fprintln(os.Stderr, "rig:", n)
 	}
 	swapURL := cfg.Settings.SwapURL
 	if v := os.Getenv("RIG_SWAP_URL"); v != "" {

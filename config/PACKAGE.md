@@ -13,10 +13,13 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `Load(dir, cwd)`: reads the user files under `dir` (the rig home)
   and the AGENTS.md pair (`dir` + `cwd`), each merged over its embedded
   default; returns `*Config`.
-- `Config`: `Settings`, `Models` (`models.Table`), `Workers`,
-  `Agents`, `Theme`. `Workers` (`*Workers`) is the fleet from
-  `workers.json`, `nil` when the file is absent (SPEC_CONFIG 12: no
-  fleet, no worker tools, no worker entries in the default allow).
+- `Config`: `Settings` (`Workers *bool` is the drain pair's tri-state:
+  nil = the capability decides, false = off even on a capable machine,
+  true = still capability-gated), `Models` (`models.Table`), `Agents`,
+  `Theme`, `Notices`. `Notices` carries the once-at-start lines: a present
+  `workers.json` (retired, SPEC_WORKERS: the fleet is the resident
+  model), a present `concurrency` key in models.json, and the legacy
+  `defaultJobModel` — all read, ignored, named.
   `Settings.Plugins` (`SettingsPlugins{Enabled, Max}`) is the plugin
 - `plugins`: `max` caps the door's enum: `enabled` is retired (SPEC_GROWTH 9,
   amended); a non-empty one refuses at load naming the directory switch
@@ -24,12 +27,12 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `loadSettings` / `parseSettings` / `mergeSettings`: the settings
   chain's file-over-embedded layer. The chain also reports whether the
   file named its own allow; a present `defaultJobModel` is carried to
-  `Load`, which mints `workers.json` from it once (`Config.Notice`
-  says so), ignores it with a notice after, and refuses a disagreement.
-- `loadWorkers`: the `workers.json` fleet: `model` required, must
-  resolve in the merged models table; `slots` defaults to 1 and must be
-  a positive integer; unknown keys refuse naming `model, slots`.
-- `loadModels` / `parseRows` / `mergeRows`: the model table out of code.
+  `Load`, which names it once and ignores it (SPEC_WORKERS).
+- `workersRetired`: the retired `workers.json` read: existence only,
+  the content never interpreted; `Load` turns it into the one notice.
+- `loadModels` / `parseRows` / `mergeRows`: the model table out of code;
+  `concurrency` stays a known row key whose value is read and dropped
+  (the retired count), reported up as the notice.
 - `readAgents`: the AGENTS.md pair.
 - `ReadTheme`: the theme.json read (the `/theme custom` load reads it fresh).
 - `SetTheme`: the `theme` key's one writer (2.3.2): the file's other
@@ -57,11 +60,11 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   deterministically: settings.json, models.json, workers.json,
   theme.json, AGENTS.md (global, then project). `Load` never creates a
   file.
-- The embedded allow is the non-worker native set (13 names): a present
-  fleet grows it by `scheduler` and `delegate`, and only when the
-  operator named no allow of their own (their list stands as written).
-  The embedded models table carries `local` alone; the worker row left
-  code for `workers.json`.
+- The embedded allow is the native set (13 names) grown by `scheduler`
+  and `delegate` whenever the operator named no allow of their own
+  (their list stands as written) — the worker tools register for every
+  run now (SPEC_WORKERS). The embedded models table carries `local`
+  alone.
 - The settings chain is embedded < file, with the flag/env layers applied
   by the root above; zero means unset at the file layer (an empty string
   or zero descends), except the two presence-aware keys
@@ -72,7 +75,7 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   takes the defaults (role interactive, effort ""); unlisted embedded
   rows are kept. The hosted keys (SPEC_HOSTED 1) merge the same way:
   `remote`, `provider` (a name implies remote), `baseUrl`, `apiKey`
-  (never rendered by `/models`), `concurrency`, `reasoning`,
+  (never rendered by `/models`), `reasoning`,
   `providerPin` (a string or an array), `cacheControl`, `retries`. A
   duplicate id in the same file refuses at the second
   occurrence.

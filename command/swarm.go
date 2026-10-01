@@ -11,20 +11,20 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-const swarmUsage = "swarm [<n> [role=worker|reviewer] [model=<id>] [budget=<dollars>]] | swarm stop"
+const swarmUsage = "swarm start [role=worker|reviewer] [model=<id>] [budget=<dollars>] | swarm stop | bare swarm lists"
 
 type swarmCmd struct{}
 
 func (swarmCmd) Name() string { return "swarm" }
 
 func (swarmCmd) Description() string {
-	return "the drain workers: start N workers on the session's queue, list the live ones, stop them (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>], bare swarm lists, swarm stop ends)"
+	return "the drain workers: one per free slot on the resident model, growing as slots free (swarm start [role=worker|reviewer] [model=<id>] [budget=<dollars>], bare swarm lists, swarm stop ends)"
 }
 
 func (swarmCmd) Sub() []Sub {
 	return []Sub{
+		{Name: "start", Desc: "start the drain workers (one per free slot)"},
 		{Name: "stop", Desc: "end the swarm"},
-		{Name: "<n>", Desc: "start N drain workers"},
 	}
 }
 
@@ -37,6 +37,9 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	if len(fields) == 0 {
 		return swarmList(e), nil
 	}
+	if _, err := strconv.Atoi(fields[0]); err == nil {
+		return "", fmt.Errorf("swarm: a count is not taken: the free slots are the count (the fleet is the resident model)")
+	}
 	if fields[0] == "stop" {
 		if len(fields) != 1 {
 			return "", errors.New("swarm: stop takes no args (swarm stop)")
@@ -46,17 +49,16 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		}
 		return e.Swarm.Stop()
 	}
-	n, err := strconv.Atoi(fields[0])
-	if err != nil {
-		return "", fmt.Errorf("swarm: %q: not a worker count (%s)", fields[0], swarmUsage)
+	if fields[0] != "start" {
+		return "", fmt.Errorf("swarm: unknown token %q (%s)", fields[0], swarmUsage)
 	}
-	in := SwarmStart{Count: n, Role: "worker"}
+	in := SwarmStart{Role: "worker"}
 	roleSeen, modelSeen, budgetSeen := false, false, false
 	for _, f := range fields[1:] {
 		switch {
 		case strings.HasPrefix(f, "role="):
 			if roleSeen {
-				return "", errors.New("swarm: role given twice (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>])")
+				return "", errors.New("swarm: role given twice (" + swarmUsage + ")")
 			}
 			roleSeen = true
 			in.Role = strings.TrimPrefix(f, "role=")
@@ -65,7 +67,7 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 			}
 		case strings.HasPrefix(f, "model="):
 			if modelSeen {
-				return "", errors.New("swarm: model given twice (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>])")
+				return "", errors.New("swarm: model given twice (" + swarmUsage + ")")
 			}
 			modelSeen = true
 			in.Model = strings.TrimPrefix(f, "model=")
@@ -74,7 +76,7 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 			}
 		case strings.HasPrefix(f, "budget="):
 			if budgetSeen {
-				return "", errors.New("swarm: budget given twice (swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>])")
+				return "", errors.New("swarm: budget given twice (" + swarmUsage + ")")
 			}
 			budgetSeen = true
 			raw := strings.TrimPrefix(f, "budget=")
@@ -89,9 +91,6 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		default:
 			return "", fmt.Errorf("swarm: unknown token %q (%s)", f, swarmUsage)
 		}
-	}
-	if !e.Workers.Configured {
-		return "", fmt.Errorf("swarm: no workers configured (%s names the model)", e.Workers.File)
 	}
 	if e.Swarm == nil {
 		return "", errors.New("swarm: no swarm seam (the root did not wire it)")

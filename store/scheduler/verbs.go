@@ -82,6 +82,9 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	if command != "" && in.Busy != "" {
 		return "", schedErr("command jobs need no busy policy")
 	}
+	if in.Busy != "" && in.Busy != "skip" {
+		return "", schedErr("busy must be 'skip' (force is retired: eviction is the operator's act), got '%s'", in.Busy)
+	}
 	if command != "" && in.Budget != 0 {
 		return "", schedErr("command jobs need no budget")
 	}

@@ -107,9 +107,9 @@ the file is a contract, not a filter.
 
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
-| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is cut; a present one mints `workers.json` once at start (the notice says so), then nags until deleted |
-| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row), and the hosted run site: `remote` (bool), `provider` (a name like `openrouter` implies remote), `baseUrl` (required for a remote row), `apiKey` (sent as `Authorization: Bearer <key>`; never logged or rendered), `concurrency` (the row's parallel-spawn token bound, default 1), `reasoning` (`reasoning_content` default, `reasoning` for OpenRouter), `providerPin` and `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for remote rows) |
-| `workers.json`    | the fleet: `{"model": "<id>", "slots": N, "reviewer": "<id>"}`. `model` is required and must resolve in the merged models table; `slots` defaults to `1` and is a positive integer (the concurrent `delegate` bound per session); `reviewer` is optional and must resolve too — the swarm's reviewer default (`/swarm role=reviewer`). Absent = no fleet: no `scheduler`/`delegate` tools, no worker entries in the default allow, `workers: none` on the status row |
+| `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is retired (2.4.0): a present one is named once at start and ignored — move it to `model` by hand, then delete the key |
+| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row), and the hosted run site: `remote` (bool), `provider` (a name like `openrouter` implies remote), `baseUrl` (required for a remote row), `apiKey` (sent as `Authorization: Bearer <key>`; never logged or rendered), `reasoning` (`reasoning_content` default, `reasoning` for OpenRouter), `providerPin` and `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for remote rows) |
+| `workers.json`    | **retired (2.4.0)**: the fleet is the resident model. A present file is read, ignored, and named once at start (`workers.json retired: the fleet is the resident model`); deleting it silences the line. Its content is never interpreted |
 | `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's custom theme (`specs/SPEC_TUI.md` 7), the `/theme custom` preset: `base` (one of `warm`, `cool`, `paper`, `p1`, `p3`, or the legacy `oled`; required), optional `slots` (the slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema. The preset dial itself is settings.json's `theme` key (`/theme warm|cool|custom`) |
 
@@ -132,7 +132,7 @@ directory's project file, not the creating session's.
 | web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
-| fleet model   |                |;                      | `workers.json` → `model` | none without the file (the worker tools are absent); a job's explicit `model` arg beats the fleet's |
+| session model |                | `RIG_MODEL`            | `model`          | no embedded default; the worker model resolves at claim time: the named one, else the resident model, else this |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
 | approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
@@ -161,9 +161,7 @@ value is the choice.
 **On hosted mode** (`specs/SPEC_HOSTED.md`); a row that runs on a remote
 endpoint says where: `remote: true` or `provider: "openrouter"` (a name
 implies remote), plus `baseUrl` (the endpoint), `apiKey` (the bearer
-key, from the file or `RIG_MODEL_API_KEY`), `concurrency` (the row's
-parallel-spawn token bound; the delegate's busy probe and `WaitBusy`
-are skipped for remote rows), `reasoning` (OpenRouter rows use
+key, from the file or `RIG_MODEL_API_KEY`), `reasoning` (OpenRouter rows use
 `reasoning` / `reasoning_details` and echo them back; the default stays
 `reasoning_content` for llama-server and DeepSeek), and the
 openrouter-only `providerPin` (the `provider.order` upstream pin) and
@@ -240,12 +238,17 @@ and an unknown key refuses at start naming the file and the field.
   "resultCap": 65536,
   "approve": "auto",
   "sandbox": "jailed",
-  "sandboxBinds": []
+  "sandboxBinds": [],
+  "workers": true
 }
 ```
 
 `baseUrl` and `model` are the two a run needs; the rest are the
-embedded defaults written out. `allow` is the one to be careful with:
+embedded defaults written out. `workers` is the drain pair's switch
+(2.4.0): `false` keeps `delegate` and the swarm off a capable machine,
+`true` (or absent) still waits for the live slot read — nothing turns
+them on where the slots are not (SPEC_WORKERS 5). `allow` is the one
+to be careful with:
 an `allow` you write replaces the default whole (default-deny below
 it), so it must carry `plugin` and `plugins` or every door call is
 refused, and it must carry `scheduler` and `delegate` when you also
@@ -262,7 +265,7 @@ rows:
 [
   {"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]},
   {"id": "worker", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "role": "worker", "efforts": ["low", "medium"]},
-  {"id": "openrouter-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000, "remote": true, "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-or-...", "concurrency": 4, "reasoning": "reasoning", "providerPin": "Together", "cacheControl": true}
+  {"id": "openrouter-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000, "remote": true, "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-or-...", "reasoning": "reasoning", "providerPin": "Together", "cacheControl": true}
 ]
 ```
 
@@ -272,26 +275,26 @@ row. `role` is `interactive` (the default) or `worker`; `efforts` is
 the `/effort` dial's vocabulary. The third row is a hosted run site
 (`specs/SPEC_HOSTED.md`): `remote` and `provider` (a name implies
 remote), `baseUrl` (the endpoint), `apiKey` (the bearer key, from the
-file or `RIG_MODEL_API_KEY`), `concurrency` (the row's parallel-spawn
-token bound), `reasoning` (`reasoning` for OpenRouter, the default
+file or `RIG_MODEL_API_KEY`), `reasoning` (`reasoning` for OpenRouter, the default
 `reasoning_content` otherwise), `providerPin` and `cacheControl`
 (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for
 remote rows).
 
-**`workers.json`**: the fleet that unlocks `scheduler` and `delegate`:
-
-```json
-{"model": "worker", "slots": 2, "reviewer": "worker"}
-```
-
-`model` must resolve in the merged models table (the `worker` row
-above); `slots` is the concurrent `delegate` bound per session and
-defaults to `1`. A fan-out can issue more delegate calls than slots:
-the extras wait for a slot rather than fail. `reviewer` is optional:
-the swarm's reviewer default, same row contract as `model` (absent, a
-swarm reviewer uses the fleet's model). Absent file, no fleet: the
-worker tools are absent, the default allow does not grow, and the
-status row says `workers: none`.
+**The workers** (`specs/SPEC_WORKERS.md`): the fleet is the resident
+model. A worker's model resolves at claim time — the named one, else
+the resident model (what the swap has loaded), else the session's
+default — and the gate is the live free-slot read from
+`GET /upstream/<model>/slots`. A scheduler fire waits for a free slot
+up to its timeout, then skips naming the holder; a delegate inside a
+turn reads once and refuses; the swarm starts one drain worker per
+free slot and grows as slots free. `busy: force` is retired: eviction
+is the operator's act. `delegate` and the swarm are wired only where
+a second request can run — the session's model row is remote, or the
+resident server reports more than one slot, one live read at wire
+time; the scheduler is wired everywhere; the menu says nothing about
+what is absent, and `/swarm` names the reason when it refuses. A
+`workers.json` left in the rig home is named once at start and
+ignored; delete it to silence the line.
 
 ## plugins
 

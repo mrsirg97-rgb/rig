@@ -78,9 +78,10 @@ is a loud line naming the known set, never silently a prompt.
 - `/rem project <path>`: a one-off read or write of another project's
   memories: the path resolves to a repo identity (worktrees share).
 - `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's
-  workers (`w1 worker qwen3.8-workers · task t3 · heartbeat 2s ago ·
-  done 1 failed 0`); `swarm <n> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
-  starts n drain workers on this session's queue (a budget stops the
+  workers (`w1 worker resident · task t3 · heartbeat 2s ago ·
+  done 1 failed 0`); `swarm start [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
+  starts one drain worker per free slot the swap reports live, and
+  grows as slots free (a budget stops the
   controller's claims at the cap with a notice, the spend summed from
   the recorded run costs); the reply is `swarm: added N agents (role X ·
   model M)` whether the swarm was empty or running — each claims a task,
@@ -88,8 +89,11 @@ is a loud line naming the known set, never silently a prompt.
   proxy, recorded run), and finishes it itself: workers submit for
   review, reviewers parse the worker's last `verdict: accept|reject
   <reason>` line and call `accept`/`reject`. A worker on a hosted row
-  skips the local swap and the busy probe entirely, its parallelism
-  riding the row's `concurrency` tokens beside the fleet's slots.
+  skips the local swap and the gate entirely. The drain pair is wired
+  only where a second request can run — the session's model row is
+  remote, or the resident server reports more than one slot, one live
+  read at wire time (`workers: false` turns it off; the scheduler is
+  wired everywhere; `/swarm` names the reason when it refuses).
   Against a running swarm a
   start adds workers (the roles mix); `swarm stop` ends it and releases
   the in-flight claims (`swarm: stopped N agents`; `specs/SPEC_SWARM.md`).
@@ -137,14 +141,19 @@ rem (`specs/SPEC_STATE.md`: rem is deliberate).
 
 The `delegate` tool (SPEC_DELEGATE) spawns a headless worker on a task
 now: a bounded sub-task whose result is a message, not a conversation,
-on the worker model, in a cwd under your session's or the rig home.
-Several delegate calls in one turn run in parallel, up to the fleet's
-slots, and extras wait for a slot; the turn blocks until each worker
+on the resident model (the session's default when nothing is
+resident), in a cwd under your session's or the rig home — wired where
+a second request can run (a remote row, or more than one slot on the
+resident server).
+Several delegate calls in one turn run in parallel, up to the free
+slots the swap reports at claim time; the turn blocks until each worker
 finishes or times out. `timeoutMs` is the spend ceiling (default 10
 minutes, ceiling 30); `stallMs` sets the silence window beside it, so
 a worker that writes nothing for longer is killed as hung while one
-still producing output is never killed for the clock. A held GPU
-refuses by name (busy:skip, never an eviction from inside a turn). The
+still producing output is never killed for the clock. No free slot
+refuses by name (`no free slot; this turn holds the only one` on a
+one-slot model); a different resident model refuses too — never an
+eviction from inside a turn. The
 worker's last message comes back as the tool result, the run is
 recorded in the one scheduler store under an ad-hoc key, so
 `scheduler runs` shows it beside cron runs, and the worker's

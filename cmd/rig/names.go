@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
@@ -37,22 +36,12 @@ func userHome() string {
 
 var nativeToolNames = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "scheduler", "delegate", "python", "web", "plugin", "plugins", "sessions"}
 
-var workerToolNames = []string{"scheduler", "delegate"}
-
-func effectiveNativeNames(workers *config.Workers) []string {
-	drop := workers == nil
-	out := make([]string, 0, len(nativeToolNames))
-	for _, name := range nativeToolNames {
-		if drop && isWorkerTool(name) {
-			continue
-		}
-		out = append(out, name)
-	}
-	return out
+func effectiveNativeNames() []string {
+	return append([]string{}, nativeToolNames...)
 }
 
-func registeredNativeNames(workers *config.Workers, vision bool) []string {
-	names := effectiveNativeNames(workers)
+func registeredNativeNames(vision bool) []string {
+	names := effectiveNativeNames()
 	if vision {
 		return names
 	}
@@ -64,15 +53,6 @@ func registeredNativeNames(workers *config.Workers, vision bool) []string {
 		out = append(out, name)
 	}
 	return out
-}
-
-func isWorkerTool(name string) bool {
-	for _, n := range workerToolNames {
-		if n == name {
-			return true
-		}
-	}
-	return false
 }
 
 func rigHome() (string, error) {

@@ -99,8 +99,8 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if budget != 0 && budget < 0 {
 		return "", schedErr("budget must be >= 0 dollars, got %v", budget)
 	}
-	if busy != "" && busy != "skip" && busy != "force" {
-		return "", schedErr("busy must be 'skip' or 'force', got '%s'", busy)
+	if busy != "" && busy != "skip" {
+		return "", schedErr("busy must be 'skip' (force is retired: eviction is the operator's act), got '%s'", busy)
 	}
 	if timeout != 0 && (timeout < 1 || timeout > MaxTimeoutMinutes) {
 		return "", timeoutErr(timeout)

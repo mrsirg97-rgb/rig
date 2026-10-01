@@ -5,9 +5,6 @@ import (
 )
 
 func busyOf(b string) string {
-	if b == "force" {
-		return "force"
-	}
 	return "skip"
 }
 

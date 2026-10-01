@@ -2,23 +2,23 @@
 
 ## What it is
 
-The one-shot worker tool (`specs/SPEC_DELEGATE.md`): spawn a headless
-worker on a task now, in a workspace, wait, and feed back its last message.
-Fan-out is N delegate calls in one turn, bounded by `workers.json`
-`slots`: the calls run concurrently up to the slot count and extras
-wait for a slot rather than failing, so one slot runs them in
-sequence. One tool over the existing runner; the jail per the sandbox
-setting (fail closed exactly as workers do), the socket proxy, the
-worker command, the GPU busy rule with `busy:skip` semantics, with a
-recorded run in the cwd-scope scheduler store under a minted ad-hoc
-key (no crontab line, nothing scheduled) and a resumable transcript in
-the state store.
+The one-shot worker tool (`specs/SPEC_DELEGATE.md`, the workers of
+`specs/SPEC_WORKERS.md`): spawn a headless worker on a task now, in a
+workspace, wait, and feed back its last message. The worker model
+resolves at claim time — the named one, else the resident model, else
+the session's default — and the gate is the live free-slot read: a
+call with no free slot refuses (`no free slot; this turn holds the
+only one` on a one-slot model). One tool over the existing runner; the
+jail per the sandbox setting (fail closed exactly as workers do), the
+socket proxy, the worker command, with a recorded run in the
+cwd-scope scheduler store under a minted ad-hoc key (no crontab line,
+nothing scheduled) and a resumable transcript in the state store.
 
 ## What it includes
 
-- `delegate.go`: `Opts` (the root's wiring, carrying the fleet's
-  `Slots`) and `New`, the adapter with the description (the in-flight
-  bound and the wait phrased by the slot count), schema, and `Exec`;
+- `delegate.go`: `Opts` (the root's wiring, carrying the session's
+  default model) and `New`, the adapter with the description (the
+  claim-time resolution and the slot gate), schema, and `Exec`;
   the `pathguard` workspace rule (canonicalization, the
   outside-the-session/rig-home refusal, the directory check); the
   output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`

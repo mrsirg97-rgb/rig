@@ -69,6 +69,7 @@ func runningJSON(models ...string) string {
 type fetchOpts struct {
 	failing  string
 	statuses map[string]string
+	slots    [][]bool
 }
 
 func fakeFetch(running []string, opts fetchOpts) func(url string) (json.RawMessage, error) {
@@ -81,6 +82,21 @@ func fakeFetch(running []string, opts fetchOpts) func(url string) (json.RawMessa
 			return json.RawMessage(modelsJSON(opts.statuses)), nil
 		case strings.HasSuffix(url, "/running"):
 			return json.RawMessage(runningJSON(running...)), nil
+		case strings.Contains(url, "/upstream/"):
+			served := []bool{false}
+			if len(opts.slots) > 0 {
+				served = opts.slots[0]
+			}
+			type slot struct {
+				ID           int  `json:"id"`
+				IsProcessing bool `json:"is_processing"`
+			}
+			var out []slot
+			for i, pr := range served {
+				out = append(out, slot{ID: i, IsProcessing: pr})
+			}
+			b, _ := json.Marshal(out)
+			return json.RawMessage(b), nil
 		}
 		return nil, jsonError("unexpected url " + url)
 	}
@@ -290,7 +306,7 @@ func TestNothingResidentRuns(t *testing.T) {
 	}
 }
 
-func TestSomethingElseResidentBusySkipRecordsAndSpawnsNothing(t *testing.T) {
+func TestSomethingElseResidentSkipRecordsAndSpawnsNothing(t *testing.T) {
 	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{}
 	before := h.ct.text
@@ -300,7 +316,7 @@ func TestSomethingElseResidentBusySkipRecordsAndSpawnsNothing(t *testing.T) {
 	if rec.Args["status"] != "skip" {
 		t.Fatalf("status %v", rec.Args["status"])
 	}
-	if !regexp.MustCompile(`busy`).MatchString(toString(rec.Args["reason"])) {
+	if !regexp.MustCompile(`held by`).MatchString(toString(rec.Args["reason"])) {
 		t.Fatalf("reason %v", rec.Args["reason"])
 	}
 	if !regexp.MustCompile(`qwen3\.8-27b`).MatchString(toString(rec.Args["reason"])) {
@@ -311,15 +327,6 @@ func TestSomethingElseResidentBusySkipRecordsAndSpawnsNothing(t *testing.T) {
 	}
 	if h.ct.text != before {
 		t.Fatal("line must stay untouched")
-	}
-}
-
-func TestSomethingElseResidentBusyForceRunsAndEatsTheEviction(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Busy = "force" })
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	mustOK(t, sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{})))
-	if len(spawn.calls) != 1 {
-		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
 	}
 }
 
@@ -343,7 +350,7 @@ func TestOwnModelNotLoadedSomethingElseResidentSkips(t *testing.T) {
 	}))
 	mustOK(t, err)
 	rec := runEvents(t, h, "")[0]
-	if rec.Args["status"] != "skip" || !regexp.MustCompile(`busy`).MatchString(toString(rec.Args["reason"])) {
+	if rec.Args["status"] != "skip" || !regexp.MustCompile(`held by`).MatchString(toString(rec.Args["reason"])) {
 		t.Fatalf("record %v", rec.Args)
 	}
 	if len(spawn.calls) != 0 {
@@ -360,7 +367,7 @@ func TestBusyCheckFetchFailureFailsClosedWithReason(t *testing.T) {
 	if rec.Args["status"] != "skip" {
 		t.Fatalf("status %v", rec.Args["status"])
 	}
-	if !regexp.MustCompile(`busy check failed`).MatchString(toString(rec.Args["reason"])) {
+	if !regexp.MustCompile(`gate check failed`).MatchString(toString(rec.Args["reason"])) {
 		t.Fatalf("reason %v", rec.Args["reason"])
 	}
 	if !regexp.MustCompile(`ECONNREFUSED`).MatchString(toString(rec.Args["reason"])) {

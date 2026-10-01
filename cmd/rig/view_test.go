@@ -120,7 +120,7 @@ func TestViewIsConcurrentAndNeverMutating(t *testing.T) {
 	}
 	r := visionRoot(t)
 	r.natives = map[string]bool{}
-	for _, n := range effectiveNativeNames(nil) {
+	for _, n := range effectiveNativeNames() {
 		r.natives[n] = true
 	}
 	if r.isMutating("view") {

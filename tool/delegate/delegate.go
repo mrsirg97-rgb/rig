@@ -33,7 +33,6 @@ type Opts struct {
 	SwapURL      string
 	WorkerCmd    []string
 	DefaultModel string
-	Slots        int
 	Sandbox      string
 	SandboxBinds []string
 	Allow        []string
@@ -68,17 +67,15 @@ type adapter struct {
 func (a *adapter) Name() string { return "delegate" }
 
 func (a *adapter) Description() string {
-	stance := "one in flight per session"
-	if a.Slots > 1 {
-		stance = fmt.Sprintf("up to %d in flight per session", a.Slots)
-	}
 	return "Spawns a headless worker on a task now, waits, and returns its last message. Guidelines: give it a " +
 		"bounded sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. " +
-		"Fan out with several delegate calls in one turn; " + stance + ", and extras wait for a slot. When the " +
-		"GPU is held by your own model the worker cannot start and the call refuses, naming the holder: do the " +
-		"work yourself or schedule it. the workspace must be under the session's workspace or the rig home; " +
-		"the worker model defaults to " + a.DefaultModel + "; the timeout to 10 minutes, ceiling 30. Reply: " +
-		"the worker's message plus a trailer with exit, duration, session id and log."
+		"Fan out with several delegate calls in one turn; each reads the resident model's free slots at claim " +
+		"time, and one with no free slot refuses (do the work yourself or schedule it). The worker runs on the " +
+		"resident model; a model you name asks for a swap only when nothing is resident, and a different " +
+		"resident model refuses, naming the holder. the workspace must be under the session's workspace or the " +
+		"rig home; the worker model defaults to the resident model (" + a.DefaultModel + " when nothing is " +
+		"resident); the timeout to 10 minutes, ceiling 30. Reply: the worker's message plus a trailer with " +
+		"exit, duration, session id and log."
 }
 
 func (a *adapter) Schema() json.RawMessage {
@@ -87,7 +84,7 @@ func (a *adapter) Schema() json.RawMessage {
 		"properties": {
 			"task":      {"type": "string", "description": "the prompt the worker runs (required)"},
 			"workspace": {"type": "string", "description": "the workspace the job runs in (default the session's workspace; must be under it or the rig home)"},
-			"model":     {"type": "string", "description": "worker model id (default ` + a.DefaultModel + `)"},
+			"model":     {"type": "string", "description": "worker model id (default the resident model; ` + a.DefaultModel + ` when nothing is resident)"},
 			"timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"},
 			"stallMs":   {"type": "integer", "minimum": 1, "description": "stall window in ms: a worker writing nothing for longer is killed as hung (0 = off; the timeout stays the spend ceiling)"}
 		},
@@ -130,16 +127,7 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 			return "", fmt.Errorf("delegate: %w", err)
 		}
 	}
-	model := a.DefaultModel
-	if g.Model != "" {
-		model = g.Model
-	}
-	remote, concurrency := false, 0
-	if a.Models != nil {
-		if row, ok := a.Models().Get(model); ok {
-			remote, concurrency = row.Remote, row.Concurrency
-		}
-	}
+	model := g.Model
 	timeout := defaultTimeout
 	if g.TimeoutMs > 0 {
 		timeout = time.Duration(g.TimeoutMs) * time.Millisecond
@@ -161,11 +149,10 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		Task:          g.Task,
 		Model:         model,
 		WorkerSession: core.NewSession().ID,
-		Slots:         a.Slots,
+		DefaultModel:  a.DefaultModel,
+		Models:        a.Models,
 		Fetch:         a.Fetch,
 		Spawn:         a.Spawn,
-		Remote:        remote,
-		Concurrency:   concurrency,
 		WorkerCmd:     a.WorkerCmd,
 		SwapURL:       a.SwapURL,
 		Timeout:       timeout,

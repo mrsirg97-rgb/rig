@@ -63,7 +63,7 @@ func TestSwarmBudgetStopsClaimsWithANotice(t *testing.T) {
 		}
 		recordWorkerCost(t, h.rigHome, h.cwd, session, 6)
 	}
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Budget: 5})
+	h.start(t, swarm.StartOpts{Role: "worker", Budget: 5})
 	h.waitFor(t, "the budget notice", func() bool {
 		for _, n := range h.fe.notices() {
 			if strings.Contains(n.Text, "budget reached") {
@@ -104,32 +104,31 @@ func TestSwarmRemoteRowNeverConsultsTheSwap(t *testing.T) {
 	tbl, err := models.New(models.Model{
 		ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384,
 		Role: models.RoleWorker, Remote: true, Provider: "openrouter",
-		BaseURL: "https://openrouter.ai/api/v1", APIKey: "sk-test", Concurrency: 2,
+		BaseURL: "https://openrouter.ai/api/v1", APIKey: "sk-test",
 	})
 	if err != nil {
 		t.Fatalf("models: %v", err)
 	}
 	h.ctl = swarm.New(swarm.Opts{
-		TodoDB:        h.todoDB,
-		SchedDB:       h.schedDB,
-		Home:          h.home,
-		Project:       func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
-		Cwd:           h.cwd,
-		WorkerCmd:     []string{"/x/rig"},
-		Fetch:         h.fetch.fetch,
-		Spawn:         h.spawn.spawn,
-		SwapURL:       "http://127.0.0.1:8090",
-		Sandbox:       "off",
-		RigHome:       h.rigHome,
-		StateDir:      t.TempDir(),
-		FleetModel:    "qwen3.8-workers",
-		ReviewerModel: "qwen3.8-review",
-		Models:        func() models.Table { return tbl },
-		Poll:          20 * time.Millisecond,
-		Frontend:      func() core.Frontend { return h.fe },
+		TodoDB:       h.todoDB,
+		SchedDB:      h.schedDB,
+		Home:         h.home,
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Cwd:          h.cwd,
+		WorkerCmd:    []string{"/x/rig"},
+		Fetch:        h.fetch.fetch,
+		Spawn:        h.spawn.spawn,
+		SwapURL:      "http://127.0.0.1:8090",
+		Sandbox:      "off",
+		RigHome:      h.rigHome,
+		StateDir:     t.TempDir(),
+		DefaultModel: "qwen3.8-workers",
+		Models:       func() models.Table { return tbl },
+		Poll:         20 * time.Millisecond,
+		Frontend:     func() core.Frontend { return h.fe },
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
-	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Role: "worker"})
 	h.waitFor(t, "the task to complete", func() bool {
 		return h.status(t, "t1") == "review"
 	})

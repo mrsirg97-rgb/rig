@@ -13,6 +13,11 @@ store, and a resumable transcript in the state store. It
 adds no new process topology: the worker is a `rig -p` subprocess the
 delegate spawns, exactly as `run-job` spawns one.
 
+**Amended by SPEC_WORKERS (2.4.0)**: the fleet's `slots` gate and the
+per-session flocks are retired — the worker model resolves at claim
+time (the resident model, else the session's default) and the gate is
+the live free-slot read; decision 6's slot bounds below are historical.
+
 ## what it is not (named)
 
 - **Not a distributed work queue.** The "notify the workers and the

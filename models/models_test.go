@@ -306,8 +306,8 @@ func TestRemoteRowDefaultsConcurrencyAndRetries(t *testing.T) {
 	if !ok {
 		t.Fatal("row lost")
 	}
-	if m.Concurrency != 1 || m.Retries != 3 {
-		t.Fatalf("defaults = concurrency %d retries %d, want 1 and 3", m.Concurrency, m.Retries)
+	if m.Retries != 3 {
+		t.Fatalf("defaults = retries %d, want 3", m.Retries)
 	}
 }
 
@@ -318,15 +318,12 @@ func TestRemoteRowInvariantsRefuse(t *testing.T) {
 		part string
 	}{
 		{"missing baseUrl", func(m *models.Model) { m.Remote = true; m.BaseURL = "" }, "baseUrl"},
-		{"zero concurrency", func(m *models.Model) { m.Remote = true; m.BaseURL = "/x"; m.Concurrency = 0 }, "concurrency"},
-		{"negative concurrency", func(m *models.Model) { m.Concurrency = -1 }, "Concurrency"},
 		{"negative retries", func(m *models.Model) { m.Retries = -1 }, "Retries"},
 		{"bad reasoning", func(m *models.Model) { m.Reasoning = "chain" }, "reasoning"},
 		{"pin without openrouter", func(m *models.Model) {
 			m.Provider = "deepseek"
 			m.Remote = true
 			m.BaseURL = "/x"
-			m.Concurrency = 1
 			m.ProviderPin = []string{"X"}
 		}, "openrouter-only"},
 	}
@@ -348,14 +345,14 @@ func TestRemoteRowInvariantsRefuse(t *testing.T) {
 func TestResolveEnvOverlaysHostedKeys(t *testing.T) {
 	env := map[string]string{
 		"RIG_MODEL_REMOTE": "true", "RIG_MODEL_BASE_URL": "https://api.deepseek.com",
-		"RIG_MODEL_API_KEY": "sk-env", "RIG_MODEL_CONCURRENCY": "2", "RIG_MODEL_REASONING": "reasoning",
+		"RIG_MODEL_API_KEY": "sk-env", "RIG_MODEL_REASONING": "reasoning",
 	}
 	lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
 	m, err := models.Resolve(table(), "local", lookup)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if !m.Remote || m.BaseURL != "https://api.deepseek.com" || m.APIKey != "sk-env" || m.Concurrency != 2 || m.Reasoning != "reasoning" {
+	if !m.Remote || m.BaseURL != "https://api.deepseek.com" || m.APIKey != "sk-env" || m.Reasoning != "reasoning" {
 		t.Fatalf("hosted overlay = %+v", m)
 	}
 }

@@ -23,7 +23,6 @@ type Swarm interface {
 }
 
 type SwarmStart struct {
-	Count  int
 	Role   string
 	Model  string
 	Budget float64
@@ -62,16 +61,8 @@ type RemRow struct {
 	Content    string
 }
 
-type Workers struct {
-	Model      string
-	Slots      int
-	File       string
-	Configured bool
-}
-
 type Env struct {
-	Workers Workers
-	Swarm   Swarm
+	Swarm Swarm
 
 	Session func() *core.Session
 
