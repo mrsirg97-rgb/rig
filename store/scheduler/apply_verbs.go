@@ -68,7 +68,7 @@ func (j *jobState) applyUpdate(args string) {
 		Cron    string   `json:"cron"`
 		At      *string  `json:"at"`
 		Cwd     string   `json:"cwd"`
-		Model   string   `json:"model"`
+		Model   *string  `json:"model"`
 		Busy    string   `json:"busy"`
 		Timeout *int64   `json:"timeout"`
 		Stall   *int64   `json:"stall"`
@@ -97,8 +97,8 @@ func (j *jobState) applyUpdate(args string) {
 	if u.Cwd != "" {
 		j.Cwd = u.Cwd
 	}
-	if u.Model != "" {
-		j.Model = u.Model
+	if u.Model != nil {
+		j.Model = *u.Model
 	}
 	if u.Busy != "" {
 		j.Busy = busyOf(u.Busy)

@@ -996,7 +996,7 @@ func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
 	}
 }
 
-func TestSchedulerCreateDefaultsToTheSessionModel(t *testing.T) {
+func TestSchedulerCreateWithoutAModelStoresTheUnnamedJob(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := config.Load(dir, t.TempDir()); err != nil {
 		t.Fatalf("Load: %v", err)
@@ -1006,7 +1006,7 @@ func TestSchedulerCreateDefaultsToTheSessionModel(t *testing.T) {
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
 	tool := schedapi.New(st, ct, "rig run-job", "local", home)
-	if !strings.Contains(tool.Description(), "(default: local)") {
+	if !strings.Contains(tool.Description(), "(default local when nothing is)") {
 		t.Fatalf("the tool description must name the session's model: %q", tool.Description())
 	}
 	raw, err := json.Marshal(map[string]any{
@@ -1024,8 +1024,8 @@ func TestSchedulerCreateDefaultsToTheSessionModel(t *testing.T) {
 	if err := st.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
-	if m != "local" {
-		t.Fatalf("the job's model = %q, want the session's model %q", m, "local")
+	if m != "" {
+		t.Fatalf("the job's model = %q, want empty (unnamed; the fire resolves it)", m)
 	}
 }
 

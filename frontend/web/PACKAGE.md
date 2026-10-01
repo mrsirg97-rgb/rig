@@ -79,8 +79,9 @@ the Apple meta tags, safe-area insets).
 - **The writes** (SPEC_SERVE phase 2): a todo create (one task per
   line, `todo.Create`), a scheduler create (`scheduler.Create`, the
   runner command the root wired; no fleet refuses 400 naming the
-  `workers.json` move, a present fleet supplies the model when the
-  body names none), and a plugin create (one file into
+  `workers.json` move, a body naming a model keeps it and a body
+  naming none stores the unnamed job — the fire resolves the resident
+  model, else the settings' model), and a plugin create (one file into
   `plugins/pending/`, the contract's `DESCRIPTION`/`SCHEMA`/`run`). Each
   is Origin-checked (same-origin only), body-capped, POST-only, the
   reply verbatim; the only `db.Tx` (not `TxReadOnly`) the dashboard

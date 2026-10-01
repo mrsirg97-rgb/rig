@@ -33,8 +33,10 @@ written before the store commit; drift is surfaced in list.
   the run record and the runs read. The crontab key is `jN` for every
   job, `name` unique
   store-wide, ids one sequence. `Create` takes the model from the
-  caller (there is no package default anymore): an empty model refuses,
-  naming the fleet's model and the job's own — unless the create carries
+  caller: a named model stores verbatim, an empty model is the unnamed
+  job (the fire resolves it at run time), and `update` takes the model
+  as a pointer — absent means unchanged, null or empty clears to the
+  unnamed job — unless the create carries
   `command` (a shell line run by `sh -c` in the job's cwd instead of a
   worker prompt), which refuses `model` and `busy` and needs neither.
   `timeout` (minutes, 1..1440, refused outside the range by name) bounds
@@ -48,9 +50,9 @@ written before the store commit; drift is surfaced in list.
   runs re-keyed, crontab lines rewritten from `cwd-<hash>:jN` to the new
   `jN`), moves the old files aside as `<hash>.sqlite.migrated`, and is a
   no-op on the second open (no `<hash>.sqlite` remains; the fold keys on the files, not the version, so a fresh `global.sqlite` folds too).
-  The schema-3, schema-4, and schema-5 column adds (`command`,
-  `timeout`, `stall`) ride the same function as presence-keyed
-  `ALTER TABLE`s, since it runs on every open. The crontab-tag migration
+  The schema-3 through schema-7 column adds (`command`,
+  `timeout`, `stall`, the budget/cost pair, `runs.model`) ride the same
+  function as presence-keyed `ALTER TABLE`s, since it runs on every open. The crontab-tag migration
   rides it too: once per store (a `meta` marker), this home's old-tag
   lines — old lines whose key is a job in this store's event log — are
   rewritten to the `rig-scheduler` tag, every other line left byte
@@ -67,7 +69,11 @@ written before the store commit; drift is surfaced in list.
   of a 256 KiB budget with a truncation marker, so a verbose worker
   cannot OOM the runner; the stored cwd is revalidated at fire time (the
   jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
-  with a recorded reason. The spawn context is bounded by the row's own
+  with a recorded reason. An unnamed job's model resolves at fire time —
+  the resident model (`ResidentModel`), else `RunOpts.DefaultModel` (the
+  root's settings' model), a fire with neither recording a skip that
+  names it — and the resolved id rides the gate, the argv's `-model`,
+  the fire log's `model=` line, and the run record's `model`. The spawn context is bounded by the row's own
   `timeout`, else `RunOpts.Timeout`, else `DefaultRunTimeout` (30 min).
   The `Spawn` seam carries an output observer: every byte the worker
   writes touches the row's `stall` window (a silent fire past it is

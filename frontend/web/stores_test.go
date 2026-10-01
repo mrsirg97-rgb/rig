@@ -33,7 +33,7 @@ func TestSchedulerStoreMigratesThroughTheServersCrontab(t *testing.T) {
 	ours := "30 7 * * * rig run-job j1  # pane-scheduler:j1"
 	theirs := "0 12 * * * '/x/orbit' run-job j1  # pane-scheduler:j1"
 	ct := &fakeCrontab{text: ours + "\n" + theirs + "\n"}
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), DefaultModel: "worker-test", Crontab: ct, RunnerCmd: "rig run-job", Natives: []string{"bash", "read"}, Root: home})
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Crontab: ct, RunnerCmd: "rig run-job", Natives: []string{"bash", "read"}, Root: home})
 	if err != nil {
 		t.Fatal(err)
 	}

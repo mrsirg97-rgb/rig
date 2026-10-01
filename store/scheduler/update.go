@@ -16,7 +16,7 @@ type UpdateInput struct {
 	Cron    string
 	At      string
 	Cwd     string
-	Model   string
+	Model   *string
 	Busy    string
 	Timeout int
 	Stall   int
@@ -30,7 +30,7 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	name := strings.TrimSpace(in.Name)
 	prompt := in.Prompt
 	command := strings.TrimSpace(in.Command)
-	model := strings.TrimSpace(in.Model)
+	model := in.Model
 	cwd := strings.TrimSpace(in.Cwd)
 	cron := strings.TrimSpace(in.Cron)
 	at := in.At
@@ -93,7 +93,7 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if job.State == "removed" {
 		return "", schedErr("job '%s' is removed", in.ID)
 	}
-	if name == "" && prompt == "" && command == "" && cron == "" && at == "" && model == "" && cwd == "" && busy == "" && in.Timeout == 0 && in.Stall == 0 && in.Budget == 0 {
+	if name == "" && prompt == "" && command == "" && cron == "" && at == "" && model == nil && cwd == "" && busy == "" && in.Timeout == 0 && in.Stall == 0 && in.Budget == 0 {
 		return "", schedErr("update needs a change")
 	}
 	if budget != 0 && budget < 0 {
@@ -115,7 +115,7 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if prompt != "" && jobCommand != "" {
 		return "", schedErr("job '%s' runs a command; update takes command (remove + create to convert it to a prompt)", in.ID)
 	}
-	if model != "" && jobCommand != "" {
+	if model != nil && jobCommand != "" {
 		return "", schedErr("command jobs need no model (job '%s' runs a command)", in.ID)
 	}
 	if busy != "" && jobCommand != "" {
@@ -159,8 +159,8 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	if command != "" {
 		args["command"] = command
 	}
-	if model != "" {
-		args["model"] = model
+	if model != nil {
+		args["model"] = strings.TrimSpace(*model)
 	}
 	if cwd != "" {
 		args["cwd"] = cwd

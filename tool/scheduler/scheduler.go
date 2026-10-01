@@ -14,9 +14,9 @@ import (
 )
 
 func description(defModel string) string {
-	return "Background jobs on the operator's crontab. Each job is a headless worker session on the worker " +
-		"model (default: " + defModel + "), running in its own workspace; a job with command runs that shell " +
-		"line instead, with no model and no GPU."
+	return "Background jobs on the operator's crontab. Each job is a headless worker session on a worker " +
+		"model: omit it and the fire runs on whatever is resident (default " + defModel + " when nothing is), " +
+		"running in its own workspace; a job with command runs that shell line instead, with no model and no GPU."
 }
 
 const guidelines = "Guidelines: create for work that recurs (cron 'M H D Mo DOW') or runs later (once with at, " +
@@ -59,7 +59,7 @@ func schemaJSON(defModel string) string {
 		},
 		"model": {
 			"type": "string",
-			"description": "worker model id (default ` + defModel + `)."
+			"description": "model: the worker model id; omit to run on whatever is resident (default ` + defModel + ` when nothing is)."
 		},
 		"busy": {
 			"type": "string",
@@ -107,7 +107,7 @@ type given struct {
 	Command   string  `json:"command"`
 	Cron      string  `json:"cron"`
 	At        string  `json:"at"`
-	Model     string  `json:"model"`
+	Model     *string `json:"model"`
 	Busy      string  `json:"busy"`
 	Timeout   int     `json:"timeout"`
 	Stall     int     `json:"stall"`
@@ -127,6 +127,25 @@ type adapter struct {
 
 func New(db sched.DB, ct sched.Crontab, runnerCmd, defModel, home string) core.Tool {
 	return adapter{db: db, ct: ct, runnerCmd: runnerCmd, defModel: defModel, home: home}
+}
+
+func updateModelArg(args json.RawMessage) (*string, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(args, &fields); err != nil {
+		return nil, fmt.Errorf("scheduler: %v", err)
+	}
+	raw, ok := fields["model"]
+	if !ok {
+		return nil, nil
+	}
+	if string(raw) == "null" {
+		return new(string), nil
+	}
+	var m string
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("scheduler: model must be a string or null: %v", err)
+	}
+	return &m, nil
 }
 
 func (a adapter) Name() string { return "scheduler" }
@@ -167,12 +186,11 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		model := ""
 		busy := ""
 		if command == "" {
-			model = a.defModel
-			if g.Model != "" {
-				model = g.Model
+			if g.Model != nil {
+				model = strings.TrimSpace(*g.Model)
 			}
 			busy = "skip"
-		} else if g.Model != "" || g.Busy != "" {
+		} else if (g.Model != nil && *g.Model != "") || g.Busy != "" {
 			return "", fmt.Errorf("scheduler: a command job takes no model and no busy policy")
 		}
 		jobCwd := g.Workspace
@@ -199,9 +217,13 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			}
 			updateCwd = validated
 		}
+		updateModel, err := updateModelArg(args)
+		if err != nil {
+			return "", err
+		}
 		return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
 			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron,
-			At: g.At, Cwd: updateCwd, Model: g.Model, Busy: g.Busy, Timeout: g.Timeout, Stall: g.Stall, Budget: g.Budget,
+			At: g.At, Cwd: updateCwd, Model: updateModel, Busy: g.Busy, Timeout: g.Timeout, Stall: g.Stall, Budget: g.Budget,
 		}, session, a.runnerCmd, a.home, time.Now)
 	case "list":
 		return sched.List(ctx, a.db, a.ct, cwd, a.home, nil, time.Now)

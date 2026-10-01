@@ -45,6 +45,11 @@ func Migration(home, rigHome, runnerCmd string, ct Crontab) func(*sql.Tx, int, i
 				return "", err
 			}
 		}
+		if from > 0 && from < 7 {
+			if err := addRunModelColumn(tx); err != nil {
+				return "", err
+			}
+		}
 		entries, err := os.ReadDir(home)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -340,6 +345,20 @@ func addRunCostColumn(tx *sql.Tx) error {
 		return nil
 	}
 	if _, err := tx.Exec(`ALTER TABLE runs ADD COLUMN cost REAL`); err != nil {
+		return fmt.Errorf("scheduler: migration: %w", err)
+	}
+	return nil
+}
+
+func addRunModelColumn(tx *sql.Tx) error {
+	var n int64
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('runs') WHERE name='model'`).Scan(&n); err != nil {
+		return fmt.Errorf("scheduler: migration: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := tx.Exec(`ALTER TABLE runs ADD COLUMN model TEXT`); err != nil {
 		return fmt.Errorf("scheduler: migration: %w", err)
 	}
 	return nil

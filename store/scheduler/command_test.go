@@ -3,6 +3,7 @@ package scheduler_test
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -158,7 +159,7 @@ func TestUpdateNeverConvertsAJobsKind(t *testing.T) {
 	} else {
 		contains(t, err.Error(), "runs a command")
 	}
-	if _, err := h.update(sched.UpdateInput{ID: "j1", Model: "w"}); err == nil {
+	if _, err := h.update(sched.UpdateInput{ID: "j1", Model: strPtr("w")}); err == nil {
 		t.Fatal("a model update on a command job must refuse")
 	} else {
 		contains(t, err.Error(), "command jobs need no model")
@@ -218,8 +219,8 @@ func TestSchemaThreeAddsTheCommandColumnToAV2Store(t *testing.T) {
 	if err := db.DB.QueryRow(`SELECT value FROM meta WHERE key='schema_version'`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != "6" {
-		t.Fatalf("the version must move to head (6), got %s", version)
+	if version != fmt.Sprintf("%d", sched.SchemaVersion) {
+		t.Fatalf("the version must move to head (%d), got %s", sched.SchemaVersion, version)
 	}
 	if row := jobsRow(t, h, "j1"); row == nil || row["prompt"] != "p" || row["command"] != nil {
 		t.Fatalf("the legacy model job must survive with a NULL command: %v", row)

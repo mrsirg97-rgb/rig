@@ -150,7 +150,7 @@ func modelsTable(t *testing.T) models.Table {
 func newTestServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := seedHome(t)
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), DefaultModel: "worker-test", Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home})
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -627,7 +627,7 @@ func TestSchedulerCreate(t *testing.T) {
 	}
 }
 
-func TestSchedulerCreateDefaultsToTheWiredModel(t *testing.T) {
+func TestSchedulerCreateWithoutAModelStoresTheUnnamedJob(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	q := "?cwd=" + testCWD
@@ -655,8 +655,8 @@ func TestSchedulerCreateDefaultsToTheWiredModel(t *testing.T) {
 	if err := sdb.DB.QueryRow(`SELECT model FROM jobs WHERE name = 'fleetdefault'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
-	if m != "worker-test" {
-		t.Fatalf("the job's model = %q, want the wired default worker-test", m)
+	if m != "" {
+		t.Fatalf("the job's model = %q, want empty (unnamed; the fire resolves it)", m)
 	}
 }
 

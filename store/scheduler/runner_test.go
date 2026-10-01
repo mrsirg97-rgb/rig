@@ -693,3 +693,80 @@ func TestRealSpawnCapturesTheKillingSignal(t *testing.T) {
 		t.Errorf("signal = %v, want SIGKILL", res.Signal)
 	}
 }
+
+func TestUnnamedJobFiresOnTheResidentModel(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	mustOK(t, sched.RunJob(key, runOpts(h, []string{"glm5.3-flash"}, spawn, fetchOpts{})))
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+	}
+	tail := spawn.calls[0].Argv[len(spawn.calls[0].Argv)-2:]
+	if tail[0] != "-model" || tail[1] != "glm5.3-flash" {
+		t.Fatalf("an unnamed job must fire on the resident model, argv tail %v", tail)
+	}
+	rec := runEvents(t, h, "")[0]
+	if rec.Args["status"] != "ok" || rec.Args["model"] != "glm5.3-flash" {
+		t.Fatalf("the run record must name the resolved model: %v", rec.Args)
+	}
+	out, err := h.runs("j1", 5)
+	if err != nil || !strings.Contains(out, "model glm5.3-flash") {
+		t.Fatalf("runs must show the resolved model: %q, %v", out, err)
+	}
+	logPath, _ := rec.Args["log"].(string)
+	log, err := os.ReadFile(filepath.Join(h.home, logPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(log), "model=glm5.3-flash") {
+		t.Fatal("the fire log must name the resolved model")
+	}
+}
+
+func TestUnnamedJobNothingResidentFiresOnTheDefault(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	opts := runOpts(h, nil, spawn, fetchOpts{})
+	opts.DefaultModel = "dsv4"
+	mustOK(t, sched.RunJob(key, opts))
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+	}
+	tail := spawn.calls[0].Argv[len(spawn.calls[0].Argv)-2:]
+	if tail[0] != "-model" || tail[1] != "dsv4" {
+		t.Fatalf("nothing resident must fall to the wired default, argv tail %v", tail)
+	}
+	rec := runEvents(t, h, "")[0]
+	if rec.Args["status"] != "ok" || rec.Args["model"] != "dsv4" {
+		t.Fatalf("the run record must name the default: %v", rec.Args)
+	}
+}
+
+func TestUnnamedJobNoDefaultNothingResidentSkipsNamed(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
+	spawn := &fakeSpawn{}
+	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
+	if len(spawn.calls) != 0 {
+		t.Fatal("no model anywhere must not spawn")
+	}
+	rec := runEvents(t, h, "")[0]
+	if rec.Args["status"] != "skip" || !strings.Contains(toString(rec.Args["reason"]), "no model") {
+		t.Fatalf("the skip must name the missing model: %v", rec.Args)
+	}
+}
+
+func TestNamedModelAnotherResidentStillSkipsNamingTheHolder(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "dsv4" })
+	spawn := &fakeSpawn{}
+	mustOK(t, sched.RunJob(key, runOpts(h, []string{"glm5.3-flash"}, spawn, fetchOpts{})))
+	if len(spawn.calls) != 0 {
+		t.Fatal("a named model never evicts the resident")
+	}
+	rec := runEvents(t, h, "")[0]
+	if rec.Args["status"] != "skip" {
+		t.Fatalf("status %v", rec.Args["status"])
+	}
+	if !strings.Contains(toString(rec.Args["reason"]), "held by glm5.3-flash") {
+		t.Fatalf("the skip must name the holder: %v", rec.Args["reason"])
+	}
+}

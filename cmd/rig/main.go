@@ -40,7 +40,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.5.0"
+const Version = "2.5.1"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -450,7 +450,7 @@ func main() {
 	closeFrontend := func() {}
 	if serveAddr != "" {
 		srv, werr := web.New(web.Options{
-			Home: cfgDir, CWD: cwd, Models: cfg.Models, DefaultModel: modelID,
+			Home: cfgDir, CWD: cwd, Models: cfg.Models,
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
 		})
@@ -598,6 +598,10 @@ func runJob(args []string) int {
 	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
 		swapURL = v
 	}
+	model := cfg.Settings.Model
+	if v := os.Getenv("RIG_MODEL"); v != "" {
+		model = v
+	}
 	self, err := os.Executable()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
@@ -621,6 +625,7 @@ func runJob(args []string) int {
 		RigHome:      cfgDir,
 		StateDir:     filepath.Join(cfgDir, "sessions"),
 		Models:       func() models.Table { return cfg.Models },
+		DefaultModel: model,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1

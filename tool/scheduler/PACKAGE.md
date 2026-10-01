@@ -12,8 +12,8 @@ seams).
 - `Tool`: a `core.Tool` over the scheduler store's verbs
   (list/create/update/pause/resume/remove/runs/repair), consuming the opened
   `sched.DB` (the one `global.sqlite`), `sched.Crontab`, the runner
-  command, and the fleet's model (the create default the root supplies;
-  the tool carries no worker default of its own).
+  command, and the fleet's model (the fire-time default the description
+  names; the tool carries no worker default of its own).
 
 ## How it is consumed
 
@@ -25,10 +25,11 @@ seams).
 
 - `create` carries a job name, a prompt or a command, and a cron: the
   store validates the cron it gets (the adapter parses, the store
-  teaches). A `command` create is the deterministic payload (no model,
-  no busy policy): the adapter fills the fleet's model only for the
-  prompt path, and the guidelines steer commands to scripts, never to
-  work needing judgment.
+  teaches). A create without a model stores the unnamed job — the fire
+  resolves the resident model, else the wired default — and an update's
+  `model: null` clears back to it. A `command` create is the
+  deterministic payload (no model, no busy policy), and the guidelines
+  steer commands to scripts, never to work needing judgment.
 - `timeout` (minutes) bounds one fire: the adapter passes it through on
   create and update, the store refuses it outside 1..1440 by name, and
   on update `-1` is the explicit reset to the runner default (an absent
