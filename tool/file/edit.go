@@ -110,12 +110,6 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		return "", fmt.Errorf("edit: hunk %d of %d: old matched %d times, want exactly 1; nothing landed", miss.index+1, len(a.Edits), miss.count)
 	}
 
-	if now, err := os.ReadFile(a.Path); err != nil {
-		return "", fmt.Errorf("edit: %w", err)
-	} else if nowSum := sha256.Sum256(now); nowSum != sum {
-		return "", fmt.Errorf("edit: %s changed on disk mid-call: the validated bytes are sha256 %s, the bytes on disk now are sha256 %s; nothing landed", a.Path, digestShort(sum), digestShort(nowSum))
-	}
-
 	if err := os.WriteFile(a.Path, []byte(updated), 0o644); err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
@@ -148,10 +142,6 @@ func applyHunks(content string, hunks []editHunk) (string, *hunkMiss) {
 		updated = strings.Replace(updated, h.Old, h.New, 1)
 	}
 	return updated, nil
-}
-
-func digestShort(sum [32]byte) string {
-	return hex.EncodeToString(sum[:])[:12]
 }
 
 func unreadObservation(ctx context.Context, path string) (string, error) {

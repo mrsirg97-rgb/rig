@@ -333,9 +333,7 @@ itself, its match count, and what it found, a change since the read
 names the drift (the `Files` license, below), and a standalone exec
 carries no license to check. The bounds stand ahead of any I/O — at
 most 32 hunks, total old plus new under read's ceiling, no zero-width
-old — and the write is gated on one more read: the file's digest must
-still be the validated bytes, a change on disk mid-call refusing with
-nothing landed. The reply is one line per hunk, then the path and total
+old. The reply is one line per hunk, then the path and total
 bytes replaced.
 
 ### ToolMiddleware

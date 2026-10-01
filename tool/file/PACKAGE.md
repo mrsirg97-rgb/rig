@@ -33,10 +33,8 @@ it acts on it.
   follows is drift-checked like any other. A file the session has read
   refuses by name: the first missing hunk, its match count, and what it
   found. The bounds stand ahead of any I/O: at most 32 hunks, total old
-  plus new under read's ceiling, no zero-width old. Before the write the
-  file is read again and the digest compared with the validated bytes: a
-  change on disk mid-call refuses, naming both digests, and nothing
-  lands. `read` or `write` still mints the license, an external change
+  plus new under read's ceiling, no zero-width old. `read` or `write`
+  still mints the license, an external change
   invalidates it, and a standalone exec carries no session and so no
   license to check.
 - The stale-observation note on read: compared against the recorded
@@ -92,11 +90,7 @@ it acts on it.
 - The hunks are applied by a pure function over the file's bytes
   (`applyHunks`): no I/O, no session, and the miss report (hunk index,
   match count) comes out of it, so the imperative shell only reads,
-  validates, re-verifies the digest, and writes.
-- The mid-call digest re-read is a second `os.ReadFile` just before the
-  write: the window between validation and write is where an external
-  writer would be clobbered, and the check is on the digest only — an
-  mtime-only touch of identical bytes is not a clobber.
+  validates, and writes.
 - The remembered bytes a drift refusal diffs against live in a bounded
   cache keyed by session ID and path (16 MiB, FIFO-evicted): two
   sessions sharing one process each diff against their own observation,

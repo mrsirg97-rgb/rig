@@ -22,11 +22,6 @@ zero-width old, an empty list refused.
 The observation contract is 2.3.3's, unchanged: an unread file with
 every hunk matching once applies; a miss on an unread file teaches once
 with the whole file, read's bytes and cap; a read file refuses by name.
-The drift check is joined by one more gate: between the validation and
-the write the file is read again and its digest compared with the
-validated bytes — a change on disk mid-call refuses, naming both
-digests, and nothing lands. An editor or a formatter writing during the
-call can no longer be clobbered in the window the write used to own.
 
 The reply is one line per hunk, then the path and total bytes replaced,
 and the observation is refreshed by the result. The description's

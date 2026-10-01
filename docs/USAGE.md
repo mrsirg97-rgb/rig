@@ -263,9 +263,8 @@ The file tools normalize paths before any provenance decision, and `edit`
 validates that the file is still what it was when last read; external drift
 is named and the write is refused. Edit takes a list of `{old, new}`
 changes applied in order, every hunk validated against the content the
-earlier hunks leave, all or none, and the write gated on one more read
-of the file's digest — a change on disk mid-call refuses with nothing
-landed. An edit of a file the session has not read applies when every
+earlier hunks leave, all or none. An edit of a file the session has not
+read applies when every
 hunk matches exactly once; on a miss it hands back the file's text
 (capped like a read) so the next call edits from it. Ambiguous
 old-strings are never guessed at: a read file's edit refuses naming the
