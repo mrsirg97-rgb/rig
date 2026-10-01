@@ -313,16 +313,30 @@ and a fresh observation re-records as usual.
 
 **An edit of a path with no recorded observation applies on a match and
 teaches with bytes on a miss** (amended 2.3.3, retiring the read-first
-refusal): an `old` that matches exactly once cannot come from a model
-that never saw the file, so the edit applies. A mismatch is not a
-refusal but the file's text exactly as a read returns it (the same cap
-and truncation marker), ending with `[edit: <path> was not read this
-session; its text is above, now edit it]`, and the reply records the
-observation, so the edit that follows is drift-checked like any other
-read. A file the session has read keeps today's refusals: a mismatch
-names the occurrence count, a change since the read names the drift
-(the `Files` license, below), and a standalone exec carries no license
-to check.
+refusal; 2.5.0 restates the call as a list): an `old` that matches
+exactly once cannot come from a model that never saw the file, so the
+edit applies. Edit takes `path` and `edits`, a list of `{old, new}`
+applied in order — a single change is a list of one, the top-level
+`old`/`new` are gone from the schema — and every hunk is validated
+against the content as the earlier hunks leave it, each matching exactly
+once, before anything writes: all or none, and a later hunk may match
+text an earlier one created (the evidence: since 2.1.0, 412 edits, 22%
+of them another edit to the file the previous call had just edited —
+several changes to one file belong in one call, applied once,
+drift-checked once). A mismatch is not a refusal but the file's text
+exactly as a read returns it (the same cap and truncation marker,
+taught once), ending with `[edit: <path> was not read this session; its
+text is above, now edit it]`, and the reply records the observation, so
+the edit that follows is drift-checked like any other read. A file the
+session has read keeps today's refusals: the first missing hunk names
+itself, its match count, and what it found, a change since the read
+names the drift (the `Files` license, below), and a standalone exec
+carries no license to check. The bounds stand ahead of any I/O — at
+most 32 hunks, total old plus new under read's ceiling, no zero-width
+old — and the write is gated on one more read: the file's digest must
+still be the validated bytes, a change on disk mid-call refusing with
+nothing landed. The reply is one line per hunk, then the path and total
+bytes replaced.
 
 ### ToolMiddleware
 
