@@ -1,4 +1,19 @@
 # Changelog
+## [2.5.2]: the line spells the unnamed job
+
+The 2.5.1 unnamed job had no spelling from the user command:
+`/scheduler update` marshals every value as a string, so
+`update j8 model null` stored the literal id `null` and
+`update j8 model none` stored `none` — both then fail at fire time as
+a model the resident server does not hold, while the job's own intent
+was to stop pinning one. The tool's update already treats `null` and
+`""` as the clear (the unnamed job); the line could produce neither.
+
+`model none` now marshals `"model": ""`, the unnamed job the fire
+resolves (resident first, else the settings' model); any other value
+stays a string. No other key changes: `name none` is a job called
+none. The shape strings name it: `[model <m>|none]`.
+
 ## [2.5.1]: the scheduler's unnamed job
 
 A scheduler job named its model at create: `Create` refused an empty
