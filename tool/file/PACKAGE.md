@@ -18,16 +18,25 @@ it acts on it.
 ## What it includes
 
 - `read`, `write`, `edit`: a `core.Tool` each, over `os`/`path/filepath`.
-- The edit license, narrowed to the drift check: an edit of a path with
-  no recorded `FileState` applies when `old` matches exactly once (an
-  exact-once match cannot come from a model that never saw the bytes);
-  on a miss the reply is the file's text exactly as a read returns it —
-  the same cap and truncation marker — ending with `[edit: <path> was
-  not read this session; its text is above, now edit it]`, and the
-  reply records the observation, so the edit that follows is
-  drift-checked like any other. `read` or `write` still mints the
-  license, an external change invalidates it, and a standalone exec
-  carries no session and so no license to check.
+- The edit license, narrowed to the drift check: edit takes `path` and
+  `edits`, a list of `{old, new}` applied in order; a single change is a
+  list of one, and the top-level `old`/`new` are gone from the schema.
+  Every hunk is validated against the content as the earlier hunks leave
+  it, each matching exactly once, before anything writes — all or none;
+  a later hunk may match text an earlier one created. An edit of a path
+  with no recorded `FileState` applies when every hunk matches exactly
+  once (an exact-once match cannot come from a model that never saw the
+  bytes); on any miss the reply is the file's text exactly as a read
+  returns it — the same cap and truncation marker, taught once — ending
+  with `[edit: <path> was not read this session; its text is above, now
+  edit it]`, and the reply records the observation, so the edit that
+  follows is drift-checked like any other. A file the session has read
+  refuses by name: the first missing hunk, its match count, and what it
+  found. The bounds stand ahead of any I/O: at most 32 hunks, total old
+  plus new under read's ceiling, no zero-width old. `read` or `write`
+  still mints the license, an external change
+  invalidates it, and a standalone exec carries no session and so no
+  license to check.
 - The stale-observation note on read: compared against the recorded
   `FileState` *before* the read re-records it, so an external or
   cross-session change is named once and the fresh bytes still ride it.
@@ -78,6 +87,10 @@ it acts on it.
 - The drift check refuses when the file's hash or mtime differs from the
   recorded `FileState`; edit-after-external-change never silently
   clobbers.
+- The hunks are applied by a pure function over the file's bytes
+  (`applyHunks`): no I/O, no session, and the miss report (hunk index,
+  match count) comes out of it, so the imperative shell only reads,
+  validates, and writes.
 - The remembered bytes a drift refusal diffs against live in a bounded
   cache keyed by session ID and path (16 MiB, FIFO-evicted): two
   sessions sharing one process each diff against their own observation,
