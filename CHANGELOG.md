@@ -1,4 +1,41 @@
 # Changelog
+## [2.5.0]: edit takes a list of changes, all or none
+
+Edit's arguments were `path`, `old`, `new`: one replacement per call.
+Since 2.1.0 the operator's sessions carried 412 edits; 22% of them were
+another edit to the file the previous call had just edited (65 runs of
+two or more, one of eight) — each run an extra call, and each call an
+extra point where the drift check can fire between hunks. The model
+already groups its changes; the tool made it do them one at a time.
+
+Edit now takes `path` and `edits`, a list of `{old, new}` applied in
+order; a single change is a list of one, and the top-level `old`/`new`
+are gone from the schema. Every hunk is validated against the content
+as the earlier hunks leave it, each matching exactly once, before
+anything writes: all or none, so a refused call lands nothing and names
+the hunk, its match count, and what it found. A later hunk may match
+text an earlier one created — the validation walks the content the
+earlier hunks leave, not the file as it was. The bounds stand ahead of
+any I/O: at most 32 hunks, total old plus new under read's ceiling, no
+zero-width old, an empty list refused.
+
+The observation contract is 2.3.3's, unchanged: an unread file with
+every hunk matching once applies; a miss on an unread file teaches once
+with the whole file, read's bytes and cap; a read file refuses by name.
+The drift check is joined by one more gate: between the validation and
+the write the file is read again and its digest compared with the
+validated bytes — a change on disk mid-call refuses, naming both
+digests, and nothing lands. An editor or a formatter writing during the
+call can no longer be clobbered in the window the write used to own.
+
+The reply is one line per hunk, then the path and total bytes replaced,
+and the observation is refreshed by the result. The description's
+guideline says it: put enough of the file in each `old` to match
+exactly once; several changes to one file go in one call, applied in
+order, all or none. The wire sha and the golden_020 request fixtures
+move deliberately: the edit tool's schema and description are the only
+bytes that moved.
+
 ## [2.4.0]: the fleet is the resident model
 
 Every slot count rig kept — `workers.json`'s `slots`, `models.json`'s
