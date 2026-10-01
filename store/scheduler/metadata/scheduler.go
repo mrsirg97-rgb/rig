@@ -62,7 +62,8 @@ type Job struct {
 // only-record). Runs reads become a chain read over this container and
 // survive compaction, which an event-args-only shape would have dropped.
 // The full record shape is kept: status, exit, duration, reason, log path.
-// Seq pairs the record with its run event (the event's seq).
+// Seq pairs the record with its run event (the event's seq). Model is the
+// resolved id the fire ran on (NULL for a command job and for a skip).
 type Run struct {
 	Seq        int64    `primary:"true" alias:"name=seq,nullable=false"`
 	JobID      string   `alias:"name=job_id,nullable=false"`
@@ -75,4 +76,5 @@ type Run struct {
 	Reason     *string  `alias:"name=reason,nullable=true"`
 	LogPath    *string  `alias:"name=log_path,nullable=true"`
 	Cost       *float64 `alias:"name=cost,nullable=true"`
+	Model      *string  `alias:"name=model,nullable=true"`
 }

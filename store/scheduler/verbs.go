@@ -106,9 +106,6 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 		return "", schedErr("create requires a workspace (workspace or a session workspace)")
 	}
 	model := in.Model
-	if command == "" && model == "" {
-		return "", schedErr("create requires a non-empty model (the fleet's model, or the job's own)")
-	}
 	busy := busyOf(in.Busy)
 
 	cron := strings.TrimSpace(in.Cron)

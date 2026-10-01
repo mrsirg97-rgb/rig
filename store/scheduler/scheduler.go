@@ -5,7 +5,7 @@ import (
 	schedddl "github.com/mrsirg97-rgb/rig/v2/store/scheduler/ddl"
 )
 
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 func Statements() []string { return schedddl.Statements() }
 

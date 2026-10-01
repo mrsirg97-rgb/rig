@@ -247,20 +247,17 @@ func TestCreateRefusesDuplicateNameNothingWritten(t *testing.T) {
 	}
 }
 
-func TestCreateWithoutModelRefusesNamingTheCaller(t *testing.T) {
+func TestCreateWithoutModelStoresTheUnnamedJob(t *testing.T) {
 	h := newHarness(t, "/ws/d2")
-	before := h.ct.text
-	_, err := h.create(sched.CreateInput{Name: "nomodel", Prompt: "p", Cron: "0 0 * * *"})
-	mustErr(t, err, `create requires a non-empty model \(the fleet's model, or the job's own\)`)
-	if h.ct.text != before {
-		t.Fatal("crontab must be untouched")
-	}
-	var n int
-	if err := h.db.QueryRow(`SELECT COUNT(*) FROM jobs`).Scan(&n); err != nil {
+	if _, err := h.create(sched.CreateInput{Name: "nomodel", Prompt: "p", Cron: "0 0 * * *"}); err != nil {
 		t.Fatal(err)
 	}
-	if n != 0 {
-		t.Fatalf("jobs = %d rows, want none (the refusal is before the write)", n)
+	row := jobsRow(t, h, "j1")
+	if row["model"] != "" {
+		t.Fatalf("model = %v, want empty (resolved at fire time)", row["model"])
+	}
+	if !strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":j1") {
+		t.Fatalf("the unnamed job still owns its line: %q", h.ct.text)
 	}
 }
 

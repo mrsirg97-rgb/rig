@@ -19,6 +19,7 @@ type Run struct {
 	Exit       *int64   `db:"exit"`
 	JobId      string   `db:"job_id"`
 	LogPath    *string  `db:"log_path"`
+	Model      *string  `db:"model"`
 	Reason     *string  `db:"reason"`
 	StartedAt  string   `db:"started_at"`
 	Status     string   `db:"status"`
@@ -48,6 +49,7 @@ func ScanRun(row lazy.ScanRow) (Run, error) {
 		&out.Exit,
 		&out.JobId,
 		&out.LogPath,
+		&out.Model,
 		&out.Reason,
 		&out.StartedAt,
 		&out.Status,
@@ -75,7 +77,7 @@ func (d *runDomain) GetRun(ctx context.Context, seq int64) *lazy.Lazy[Run] {
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status" FROM "runs" WHERE "seq" = $1`,
+		`SELECT "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "model", "reason", "started_at", "status" FROM "runs" WHERE "seq" = $1`,
 		seq,
 	)
 	out, err := ScanRun(row)
@@ -112,7 +114,7 @@ func (d *runDomain) GetRunBatch(ctx context.Context, keys []int64) *lazy.Lazy[Ru
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status" FROM "runs" WHERE "seq" IN (`+ph+`)`, args...)
+		`SELECT "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "model", "reason", "started_at", "status" FROM "runs" WHERE "seq" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -140,7 +142,7 @@ func (d *runDomain) InsertRun(ctx context.Context, row Run) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "runs" ("seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "runs" ("seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "model", "reason", "started_at", "status") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "model", "reason", "started_at", "status"`,
 		row.Seq,
 		row.Cost,
 		row.DurationMs,
@@ -148,6 +150,7 @@ func (d *runDomain) InsertRun(ctx context.Context, row Run) (*Run, error) {
 		row.Exit,
 		row.JobId,
 		row.LogPath,
+		row.Model,
 		row.Reason,
 		row.StartedAt,
 		row.Status,
@@ -163,7 +166,7 @@ func (d *runDomain) DeleteRun(ctx context.Context, seq int64) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "runs" WHERE "seq" = $1 RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "runs" WHERE "seq" = $1 RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "model", "reason", "started_at", "status"`,
 		seq,
 	)
 	if err != nil {
@@ -177,13 +180,14 @@ func (d *runDomain) UpdateRun(ctx context.Context, row Run) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "runs" SET "cost" = $1, "duration_ms" = $2, "ended_at" = $3, "exit" = $4, "job_id" = $5, "log_path" = $6, "reason" = $7, "started_at" = $8, "status" = $9 WHERE "seq" = $10 RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "reason", "started_at", "status"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "runs" SET "cost" = $1, "duration_ms" = $2, "ended_at" = $3, "exit" = $4, "job_id" = $5, "log_path" = $6, "model" = $7, "reason" = $8, "started_at" = $9, "status" = $10 WHERE "seq" = $11 RETURNING "seq", "cost", "duration_ms", "ended_at", "exit", "job_id", "log_path", "model", "reason", "started_at", "status"`,
 		row.Cost,
 		row.DurationMs,
 		row.EndedAt,
 		row.Exit,
 		row.JobId,
 		row.LogPath,
+		row.Model,
 		row.Reason,
 		row.StartedAt,
 		row.Status,

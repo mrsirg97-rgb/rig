@@ -72,7 +72,7 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 		"come from list: copy them, never invent them",
 		"busy:skip is the only policy: a fire waits for a free slot up to its timeout, or skips naming the holder",
 		"eviction is the operator's act (the fleet is the resident model)",
-		"(default: qwen3.8-workers)",
+		"omit it and the fire runs on whatever is resident (default qwen3.8-workers when nothing is)",
 		"until the note clears",
 		"re-create it to retry",
 		"self-deletes after one fire",
@@ -278,11 +278,11 @@ func TestExecRepairAllWalksEveryDriftingJob(t *testing.T) {
 	}
 }
 
-func TestDefaultJobModelRidesTheSurface(t *testing.T) {
+func TestModelSurfaceCarriesTheResidentRule(t *testing.T) {
 	h := newHarnessModel(t, "/ws/sa-model", "brain")
 	d := h.tool.Description()
-	if !strings.Contains(d, "(default: brain)") {
-		t.Fatalf("description = %q, want the passed default named", d)
+	if !strings.Contains(d, "omit it and the fire runs on whatever is resident (default brain when nothing is)") {
+		t.Fatalf("description = %q, want the resident rule with the default named", d)
 	}
 	var schema struct {
 		Properties map[string]any `json:"properties"`
@@ -291,12 +291,13 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	model, _ := schema.Properties["model"].(map[string]any)
-	if got, _ := model["description"].(string); got != "worker model id (default brain)." {
-		t.Fatalf("schema model description %q, want the passed default named", got)
+	want := "model: the worker model id; omit to run on whatever is resident (default brain when nothing is)."
+	if got, _ := model["description"].(string); got != want {
+		t.Fatalf("schema model description %q, want %q", got, want)
 	}
 
 	reply, err := exec(t, h, map[string]any{
-		"action": "create", "name": "defaulted", "prompt": "p",
+		"action": "create", "name": "unnamed", "prompt": "p",
 		"cron": "0 5 * * *",
 	})
 	if err != nil {
@@ -306,8 +307,8 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 	if err := h.db.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
 		t.Fatal(err)
 	}
-	if m != "brain" {
-		t.Fatalf("the job's model = %q, want the passed default brain", m)
+	if m != "" {
+		t.Fatalf("the unnamed job's model = %q, want empty (resolved at fire time)", m)
 	}
 
 	reply, err = exec(t, h, map[string]any{
@@ -321,7 +322,43 @@ func TestDefaultJobModelRidesTheSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m != "qwen3.8-workers" {
-		t.Fatalf("the explicit model must beat the default: %q", m)
+		t.Fatalf("the named model must be stored verbatim: %q", m)
+	}
+}
+
+func TestUpdateModelNullClearsToTheUnnamedJob(t *testing.T) {
+	h := newHarnessModel(t, "/ws/sa-null", "brain")
+	reply, err := exec(t, h, map[string]any{
+		"action": "create", "name": "named", "prompt": "p",
+		"cron": "0 5 * * *", "model": "brain",
+	})
+	if err != nil {
+		t.Fatalf("create: %v (%s)", err, reply)
+	}
+	reply, err = exec(t, h, map[string]any{
+		"action": "update", "id": "j1", "model": nil,
+	})
+	if err != nil {
+		t.Fatalf("update: %v (%s)", err, reply)
+	}
+	var m string
+	if err := h.db.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
+		t.Fatal(err)
+	}
+	if m != "" {
+		t.Fatalf("model = %q, want cleared to the unnamed job", m)
+	}
+	reply, err = exec(t, h, map[string]any{
+		"action": "update", "id": "j1", "model": "brain",
+	})
+	if err != nil {
+		t.Fatalf("re-name: %v (%s)", err, reply)
+	}
+	if err := h.db.DB.QueryRow(`SELECT model FROM jobs WHERE id = 'j1'`).Scan(&m); err != nil {
+		t.Fatal(err)
+	}
+	if m != "brain" {
+		t.Fatalf("model = %q, want brain", m)
 	}
 }
 

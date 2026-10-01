@@ -47,7 +47,7 @@ func TestUpdateKeepsTheIdAndTheRuns(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	reply, err := h.update(sched.UpdateInput{ID: "j1", Prompt: "p2", Model: "brain", Busy: "skip"})
+	reply, err := h.update(sched.UpdateInput{ID: "j1", Prompt: "p2", Model: strPtr("brain"), Busy: "skip"})
 	mustOK(t, err)
 	contains(t, reply, "updated j1")
 	row := jobsRow(t, h, "j1")
@@ -144,7 +144,7 @@ func TestUpdateRefusalsNameTheFaultAndWriteNothing(t *testing.T) {
 	_, err = h.update(sched.UpdateInput{ID: "j1", Cron: "0 5 * * *", At: "2026-08-16T03:07:00Z"})
 	mustErr(t, err, `both`)
 
-	_, err = h.update(sched.UpdateInput{ID: "j99", Model: "brain"})
+	_, err = h.update(sched.UpdateInput{ID: "j99", Model: strPtr("brain")})
 	mustErr(t, err, `no job 'j99'`)
 
 	_, err = h.update(sched.UpdateInput{ID: "j1", Name: "b"})
@@ -164,7 +164,7 @@ func TestUpdateRefusalsNameTheFaultAndWriteNothing(t *testing.T) {
 	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j2", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
-	_, err = h.update(sched.UpdateInput{ID: "j2", Model: "brain"})
+	_, err = h.update(sched.UpdateInput{ID: "j2", Model: strPtr("brain")})
 	mustErr(t, err, `job 'j2' is removed`)
 }
 
@@ -233,7 +233,7 @@ func TestDriftStaysHonestAfterAnUpdate(t *testing.T) {
 	list, _ := h.list()
 	contains(t, list, "cron differs")
 
-	_, err := h.update(sched.UpdateInput{ID: "j1", Model: "brain"})
+	_, err := h.update(sched.UpdateInput{ID: "j1", Model: strPtr("brain")})
 	mustOK(t, err)
 	list, _ = h.list()
 	contains(t, list, "cron differs")
@@ -251,7 +251,7 @@ func TestListShowsTheUpdatedFields(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "oldname", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u8"}); err != nil {
 		t.Fatal(err)
 	}
-	reply, err := h.update(sched.UpdateInput{ID: "j1", Name: "newname", Model: "brain", Busy: "skip", Cwd: "/else/where"})
+	reply, err := h.update(sched.UpdateInput{ID: "j1", Name: "newname", Model: strPtr("brain"), Busy: "skip", Cwd: "/else/where"})
 	mustOK(t, err)
 	contains(t, reply, "newname")
 	contains(t, reply, "brain")
@@ -271,7 +271,7 @@ func TestUpdateWithoutACadenceChangeLeavesTheCrontabByteIdentical(t *testing.T) 
 		t.Fatal(err)
 	}
 	before := h.ct.text
-	_, err := h.update(sched.UpdateInput{ID: "j1", Model: "brain", Cron: "0 3 * * *"})
+	_, err := h.update(sched.UpdateInput{ID: "j1", Model: strPtr("brain"), Cron: "0 3 * * *"})
 	mustOK(t, err)
 	if h.ct.text != before {
 		t.Fatalf("the same cron is not a change: %q", h.ct.text)
@@ -283,7 +283,7 @@ func TestUpdateArgsCarryOnlyTheChangedFieldsAndReplaySurvivesReopen(t *testing.T
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "ev", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u10"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := h.update(sched.UpdateInput{ID: "j1", Model: "brain"})
+	_, err := h.update(sched.UpdateInput{ID: "j1", Model: strPtr("brain")})
 	mustOK(t, err)
 	var args string
 	if err := h.db.DB.QueryRow(`SELECT args FROM events WHERE op = 'update'`).Scan(&args); err != nil {
@@ -340,3 +340,25 @@ func TestUpdateRefusesAnUnknownBusy(t *testing.T) {
 		t.Fatalf("an unknown busy must refuse by name, got %v", err)
 	}
 }
+
+func TestUpdateClearsTheModelToTheUnnamedJob(t *testing.T) {
+	h := newHarness(t, "/ws/u13")
+	if _, err := h.create(sched.CreateInput{Name: "named", Prompt: "p", Cron: "0 3 * * *", Model: "brain", Busy: "skip"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.update(sched.UpdateInput{ID: "j1", Model: strPtr("")}); err != nil {
+		t.Fatal(err)
+	}
+	row := jobsRow(t, h, "j1")
+	if row["model"] != "" {
+		t.Fatalf("model = %v, want the unnamed job (empty)", row["model"])
+	}
+	if _, err := h.update(sched.UpdateInput{ID: "j1", Prompt: "p2"}); err != nil {
+		t.Fatal(err)
+	}
+	if row := jobsRow(t, h, "j1"); row["model"] != "" {
+		t.Fatalf("an update without model must leave it cleared: %v", row["model"])
+	}
+}
+
+func strPtr(v string) *string { return &v }

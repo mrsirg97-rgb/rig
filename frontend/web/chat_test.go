@@ -29,7 +29,7 @@ func newChatServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := seedHome(t)
 	srv, err := New(Options{
-		Home: home, CWD: testCWD, Models: modelsTable(t), DefaultModel: "worker-test",
+		Home: home, CWD: testCWD, Models: modelsTable(t),
 		Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home,
 		Commands: []core.Command{echoCmd{}},
 		Status: func(context.Context) Status {

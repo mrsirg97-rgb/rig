@@ -20,6 +20,7 @@ type RunRecordInput struct {
 	Ended    string
 	Cost     *float64
 	Done     bool
+	Model    string
 }
 
 func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
@@ -33,10 +34,14 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 		return 0, err
 	}
 	status := statusOf(in.Status)
-	argsJSON, _ := json.Marshal(map[string]any{
+	runArgs := map[string]any{
 		"id": in.ID, "status": status, "exit": in.Exit,
 		"durationMs": in.Duration, "log": in.Log, "reason": in.Reason,
-	})
+	}
+	if in.Model != "" {
+		runArgs["model"] = in.Model
+	}
+	argsJSON, _ := json.Marshal(runArgs)
 	seq, err := appendEvent(bound, f.maxSeq+1, "run", string(argsJSON), "")
 	if err != nil {
 		return 0, err
@@ -58,7 +63,7 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 		}
 		f.apply(eventRow{seq: doneSeq, ts: nowRFC3339(), op: "done", args: string(doneJSON)})
 	}
-	var reason, log *string
+	var reason, log, model *string
 	if in.Reason != "" {
 		r := in.Reason
 		reason = &r
@@ -66,6 +71,10 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 	if in.Log != "" {
 		l := in.Log
 		log = &l
+	}
+	if in.Model != "" {
+		m := in.Model
+		model = &m
 	}
 	started := in.Started
 	if started == "" {
@@ -79,7 +88,7 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 		Seq: seq, JobId: in.ID,
 		StartedAt: started, EndedAt: ended,
 		Status: status, Exit: in.Exit, DurationMs: in.Duration,
-		Reason: reason, LogPath: log, Cost: in.Cost,
+		Reason: reason, LogPath: log, Cost: in.Cost, Model: model,
 	}); err != nil {
 		return 0, fmt.Errorf("scheduler: run record: %w", err)
 	}
@@ -117,6 +126,7 @@ type runRecord struct {
 	DurationMs *int64
 	Reason     *string
 	LogPath    *string
+	Model      *string
 }
 
 func Runs(ctx context.Context, db DB, id string, n int) (string, error) {
@@ -139,7 +149,7 @@ func Runs(ctx context.Context, db DB, id string, n int) (string, error) {
 		return "", schedErr("no job '%s'", id)
 	}
 
-	rows, err := tx.Query(`SELECT seq, started_at, status, exit, duration_ms, reason, log_path FROM runs WHERE job_id = ? ORDER BY seq DESC LIMIT ?`, id, n)
+	rows, err := tx.Query(`SELECT seq, started_at, status, exit, duration_ms, reason, log_path, model FROM runs WHERE job_id = ? ORDER BY seq DESC LIMIT ?`, id, n)
 	if err != nil {
 		return "", fmt.Errorf("scheduler: runs: %w", err)
 	}
@@ -147,7 +157,7 @@ func Runs(ctx context.Context, db DB, id string, n int) (string, error) {
 	var out []runRecord
 	for rows.Next() {
 		var r runRecord
-		if err := rows.Scan(&r.Seq, &r.Started, &r.Status, &r.Exit, &r.DurationMs, &r.Reason, &r.LogPath); err != nil {
+		if err := rows.Scan(&r.Seq, &r.Started, &r.Status, &r.Exit, &r.DurationMs, &r.Reason, &r.LogPath, &r.Model); err != nil {
 			return "", fmt.Errorf("scheduler: runs: %w", err)
 		}
 		out = append(out, r)
@@ -180,6 +190,9 @@ func runDetail(r runRecord) string {
 	}
 	if r.DurationMs != nil {
 		bits = append(bits, fmt.Sprintf("%dms", *r.DurationMs))
+	}
+	if r.Model != nil {
+		bits = append(bits, "model "+*r.Model)
 	}
 	if r.LogPath != nil {
 		bits = append(bits, *r.LogPath)

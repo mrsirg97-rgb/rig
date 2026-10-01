@@ -52,6 +52,7 @@ func Statements() []string {
   "exit" INTEGER,
   "job_id" TEXT NOT NULL,
   "log_path" TEXT,
+  "model" TEXT,
   "reason" TEXT,
   "started_at" TEXT NOT NULL,
   "status" TEXT NOT NULL,

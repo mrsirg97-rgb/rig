@@ -45,6 +45,7 @@ type RunOpts struct {
 	StateDir     string
 	LandlockABI  func() (int, error)
 	Models       func() models.Table
+	DefaultModel string
 }
 
 const DefaultRunTimeout = 30 * time.Minute
@@ -63,6 +64,20 @@ func (opts RunOpts) modelRow(model string) (models.Model, bool) {
 	}
 	row, ok := opts.Models().Get(model)
 	return row, ok
+}
+
+func resolveFireModel(fetch Fetch, swapURL, def string) (string, error) {
+	resident, err := ResidentModel(fetch, swapURL)
+	if err != nil {
+		return "", err
+	}
+	if resident != "" {
+		return resident, nil
+	}
+	if def == "" {
+		return "", fmt.Errorf("no model: the swap has nothing resident and no default is wired (the settings' model is the default)")
+	}
+	return def, nil
 }
 
 func RunJob(key string, opts RunOpts) error {
@@ -186,15 +201,28 @@ func RunJob(key string, opts RunOpts) error {
 		proxy         *SocketProxy
 		spawnEnv      []string
 		workerSession string
+		workerModel   string
 	)
 	if command != "" {
 		argv = []string{"sh", "-c", command}
 		spawnEnv = os.Environ()
 	} else {
-		row, rowOK := opts.modelRow(job.Model)
+		model := job.Model
+		if model == "" {
+			resolved, err := resolveFireModel(opts.Fetch, opts.SwapURL, opts.DefaultModel)
+			if err != nil {
+				if e := recordSkip(db, id, err.Error()); e != nil {
+					return e
+				}
+				return nil
+			}
+			model = resolved
+		}
+		workerModel = model
+		row, rowOK := opts.modelRow(model)
 		if !(rowOK && row.Remote) {
 			waitCtx, cancelWait := context.WithTimeout(context.Background(), timeout)
-			err := gateWait(opts.Fetch, opts.SwapURL, job.Model, waitCtx)
+			err := gateWait(opts.Fetch, opts.SwapURL, model, waitCtx)
 			cancelWait()
 			if err != nil {
 				if e := recordSkip(db, id, err.Error()); e != nil {
@@ -227,12 +255,12 @@ func RunJob(key string, opts RunOpts) error {
 				"-p", prompt,
 				"-session-id", workerSession,
 				"-base-url", opts.SwapURL+"/v1",
-				"-model", job.Model)
+				"-model", model)
 			spawnEnv = os.Environ()
 		} else {
 			var refuse string
 			var err error
-			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, job.Model, prompt, "", workerSession)
+			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, model, prompt, "", workerSession)
 			if err != nil {
 				return fmt.Errorf("run-job: jail: %w", err)
 			}
@@ -297,9 +325,13 @@ func RunJob(key string, opts RunOpts) error {
 	}
 	ended := opts.Now().UTC().Format(time.RFC3339)
 	durationMs := opts.Now().UTC().Sub(startedTime).Milliseconds()
+	modelLine := ""
+	if workerModel != "" {
+		modelLine = "model=" + workerModel + "\n"
+	}
 	content := fmt.Sprintf(
-		"# rig-scheduler run\nkey=%s\nstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
-		key, started, res.Exit, durationMs, res.Stdout, res.Stderr)
+		"# rig-scheduler run\nkey=%s\n%sstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
+		key, modelLine, started, res.Exit, durationMs, res.Stdout, res.Stderr)
 	if err := os.WriteFile(filepath.Join(dir, logName), []byte(content), 0o644); err != nil {
 		return fmt.Errorf("run-job: log write: %w", err)
 	}
@@ -322,7 +354,7 @@ func RunJob(key string, opts RunOpts) error {
 	if _, err := RecordRun(context.Background(), db, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
 		Log: logRel, Started: started, Ended: ended, Cost: cost, Done: job.At != nil,
-		Reason: spawnReason(ctx, res, stalled),
+		Reason: spawnReason(ctx, res, stalled), Model: workerModel,
 	}); err != nil {
 		return fmt.Errorf("run-job: record: %w", err)
 	}
