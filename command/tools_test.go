@@ -574,6 +574,47 @@ func TestTodoReleaseCommandParsesTheVerb(t *testing.T) {
 	}
 }
 
+func TestSchedulerUpdateModelNoneMarshalsTheUnnamedJob(t *testing.T) {
+	var raw string
+	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
+		raw = string(args)
+		return "updated", nil
+	})
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"scheduler": capture}}
+	if _, err := runCmd(t, "scheduler", "update j8 model none", env); err != nil {
+		t.Fatal(err)
+	}
+	if raw != `{"action":"update","id":"j8","model":""}` {
+		t.Fatalf("model none must marshal the unnamed job, got %s", raw)
+	}
+	if _, err := runCmd(t, "scheduler", "update j8 model dsv4", env); err != nil {
+		t.Fatal(err)
+	}
+	if raw != `{"action":"update","id":"j8","model":"dsv4"}` {
+		t.Fatalf("a named model must stay a string, got %s", raw)
+	}
+}
+
+func TestSchedulerUpdateShapeNamesModelNone(t *testing.T) {
+	var update *command.Sub
+	for _, s := range allByName(t)["scheduler"].(command.Subber).Sub() {
+		if s.Name == "update" {
+			update = &s
+		}
+	}
+	if update == nil {
+		t.Fatal("the scheduler menu must carry the update verb")
+	}
+	if !strings.Contains(update.Desc, "[model <m>|none]") {
+		t.Fatalf("the menu shape must name none: %s", update.Desc)
+	}
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"scheduler": fakeExecFunc(nil)}}
+	_, err := runCmd(t, "scheduler", "update j8 model", env)
+	if err == nil || !strings.Contains(err.Error(), "[model <m>|none]") {
+		t.Fatalf("the shape refusal must name none, got %v", err)
+	}
+}
+
 func TestSchedulerUpdatePromptKeepsKeyWords(t *testing.T) {
 	var got map[string]any
 	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
