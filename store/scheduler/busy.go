@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"os"
@@ -87,6 +88,46 @@ func FreeSlots(fetch Fetch, swapURL, model string) (int, int, error) {
 		return 0, 0, err
 	}
 	return slots.free, slots.total, nil
+}
+
+type noRowError struct {
+	resident string
+	known    string
+}
+
+func (e noRowError) Error() string {
+	return fmt.Sprintf("no model row for the resident %q (known: %s)", e.resident, e.known)
+}
+
+func resolveResidentModel(fetch Fetch, swapURL string, table models.Table) (string, string, error) {
+	canon, resident, err := canonicalModels(fetch, swapURL)
+	if err != nil {
+		return "", "", err
+	}
+	if len(resident) == 0 {
+		return "", "", nil
+	}
+	id := resident[0]
+	if _, ok := table.Get(id); ok {
+		return id, id, nil
+	}
+	for _, alias := range aliasNames(canon, id) {
+		if _, ok := table.Get(alias); ok {
+			return alias, id, nil
+		}
+	}
+	return "", "", noRowError{resident: id, known: strings.Join(table.Known(), ", ")}
+}
+
+func aliasNames(canon map[string]string, id string) []string {
+	var out []string
+	for name, c := range canon {
+		if name != id && c == id {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func ResidentModel(fetch Fetch, swapURL string) (string, error) {

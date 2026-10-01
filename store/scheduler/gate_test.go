@@ -30,6 +30,7 @@ type gateFetch struct {
 	mu        sync.Mutex
 	resident  []string
 	statuses  map[string]string
+	models    []swapModel
 	slots     [][]bool
 	failing   string
 	slotReads int
@@ -43,6 +44,9 @@ func (f *gateFetch) fetch(url string) (json.RawMessage, error) {
 	}
 	switch {
 	case strings.HasSuffix(url, "/v1/models"):
+		if f.models != nil {
+			return json.RawMessage(swapModelsJSON(f.models)), nil
+		}
 		return json.RawMessage(modelsJSON(f.statuses)), nil
 	case strings.HasSuffix(url, "/running"):
 		return json.RawMessage(runningJSON(f.resident...)), nil
@@ -107,7 +111,9 @@ func spawnModel(t *testing.T, spawn *delegateSpawn) string {
 func TestDelegateOneSlotHeldRefusesWithThePinnedVoice(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, nil)
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Models = modelTable(t, "qwen3.8-27b-workers")
+	})
 	if _, err := sched.Delegate(in); err == nil {
 		t.Fatal("a one-slot model with its only slot processing must refuse")
 	} else if !strings.Contains(err.Error(), "delegate: no free slot; this turn holds the only one") {
@@ -121,7 +127,9 @@ func TestDelegateOneSlotHeldRefusesWithThePinnedVoice(t *testing.T) {
 func TestDelegateNoFreeSlotNamesTheSlotCount(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true, true, true}}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, nil)
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Models = modelTable(t, "qwen3.8-27b-workers")
+	})
 	if _, err := sched.Delegate(in); err == nil {
 		t.Fatal("an all-processing slot set must refuse")
 	} else if !strings.Contains(err.Error(), "no free slot (all 3 slots are processing)") {
@@ -135,7 +143,9 @@ func TestDelegateNoFreeSlotNamesTheSlotCount(t *testing.T) {
 func TestDelegateFreeSlotSpawnsTheWorker(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true, false}}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, nil)
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Models = modelTable(t, "qwen3.8-27b-workers")
+	})
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
@@ -144,10 +154,76 @@ func TestDelegateFreeSlotSpawnsTheWorker(t *testing.T) {
 	}
 }
 
+func TestDelegateUnnamedResidentAliasRunsTheTableRow(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	fetch := &gateFetch{
+		resident: []string{"glm5.3-flash"},
+		models:   []swapModel{{ID: "glm5.3-flash", Alias: []string{"ox-alpha"}}},
+		slots:    [][]bool{{false}},
+	}
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Model = ""
+		in.Models = modelTable(t, "ox-alpha")
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if got := spawnModel(t, spawn); got != "ox-alpha" {
+		t.Fatalf("the resident's alias must run the models-table row, got %q", got)
+	}
+	row := in.DB.DB.QueryRow(`SELECT args FROM events WHERE op = 'create'`)
+	var args string
+	if err := row.Scan(&args); err != nil {
+		t.Fatal(err)
+	}
+	var record map[string]any
+	if err := json.Unmarshal([]byte(args), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record["model"] != "ox-alpha" {
+		t.Fatalf("the ad-hoc record must name the row id: %v", record)
+	}
+}
+
+func TestDelegateUnnamedResidentRowRunsUnchanged(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	fetch := &gateFetch{resident: []string{"qwen3.8-27b"}, slots: [][]bool{{false}}}
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Model = ""
+		in.Models = modelTable(t, "qwen3.8-27b")
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if got := spawnModel(t, spawn); got != "qwen3.8-27b" {
+		t.Fatalf("a resident id that is itself a row must run unchanged, got %q", got)
+	}
+}
+
+func TestDelegateUnnamedResidentWithoutARowRefusesNamingItAndTheKnownRows(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	fetch := &gateFetch{resident: []string{"glm5.3-flash"}}
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Model = ""
+		in.Models = modelTable(t, "dsv4", "ox-alpha")
+	})
+	if _, err := sched.Delegate(in); err == nil {
+		t.Fatal("a resident with no row must refuse")
+	} else if !strings.Contains(err.Error(), "glm5.3-flash") || !strings.Contains(err.Error(), "known:") ||
+		!strings.Contains(err.Error(), "dsv4") || !strings.Contains(err.Error(), "ox-alpha") {
+		t.Errorf("the refusal must name the resident and the known rows: %v", err)
+	} else if spawn.count() != 0 {
+		t.Fatalf("no spawn may happen without a row: %d", spawn.count())
+	}
+}
+
 func TestDelegateUnnamedModelRunsTheResidentModel(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	fetch := &gateFetch{resident: []string{"resident-a"}, slots: [][]bool{{false}}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) { in.Model = "" })
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.Model = ""
+		in.Models = modelTable(t, "resident-a")
+	})
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
@@ -202,7 +278,10 @@ func TestDelegateSlotReadFailureFailsClosed(t *testing.T) {
 func TestFireWaitsForAFreeSlotThenSpawns(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}, {false}}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) { in.WaitBusy = true })
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
+		in.WaitBusy = true
+		in.Models = modelTable(t, "qwen3.8-27b-workers")
+	})
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
@@ -220,6 +299,7 @@ func TestFireSkipNamesTheHolderWhenTheWaitExpires(t *testing.T) {
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
 		in.WaitBusy = true
 		in.Timeout = 1200 * time.Millisecond
+		in.Models = modelTable(t, "qwen3.8-27b-workers")
 	})
 	started := time.Now()
 	if _, err := sched.Delegate(in); err == nil {

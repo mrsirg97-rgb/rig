@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/models"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
@@ -27,7 +28,13 @@ var modelsFixture = []struct {
 	{ID: "qwen3.8-27b-workers", Alias: []string{"qwen3.8-workers"}},
 }
 
-func modelsJSON(statuses map[string]string) string {
+type swapModel struct {
+	ID     string
+	Alias  []string
+	Status string
+}
+
+func swapModelsJSON(all []swapModel) string {
 	type alias struct {
 		Aliases []string `json:"aliases"`
 	}
@@ -43,15 +50,39 @@ func modelsJSON(statuses map[string]string) string {
 		Status status `json:"status"`
 	}
 	var data []model
-	for _, m := range modelsFixture {
-		st := "unloaded"
-		if statuses != nil {
-			st = statuses[m.ID]
+	for _, m := range all {
+		st := m.Status
+		if st == "" {
+			st = "unloaded"
 		}
 		data = append(data, model{ID: m.ID, Meta: meta{LLamaSwap: alias{Aliases: m.Alias}}, Status: status{Value: st}})
 	}
 	b, _ := json.Marshal(map[string]any{"data": data, "object": "list"})
 	return string(b)
+}
+
+func modelsJSON(statuses map[string]string) string {
+	var all []swapModel
+	for _, m := range modelsFixture {
+		all = append(all, swapModel{ID: m.ID, Alias: m.Alias, Status: statuses[m.ID]})
+	}
+	return swapModelsJSON(all)
+}
+
+func modelTable(t *testing.T, ids ...string) func() models.Table {
+	t.Helper()
+	var rows []models.Model
+	for _, id := range ids {
+		rows = append(rows, models.Model{
+			ID: id, Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384,
+			Role: models.RoleWorker,
+		})
+	}
+	tbl, err := models.New(rows...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func() models.Table { return tbl }
 }
 
 func runningJSON(models ...string) string {
@@ -69,6 +100,7 @@ func runningJSON(models ...string) string {
 type fetchOpts struct {
 	failing  string
 	statuses map[string]string
+	models   []swapModel
 	slots    [][]bool
 }
 
@@ -79,6 +111,9 @@ func fakeFetch(running []string, opts fetchOpts) func(url string) (json.RawMessa
 		}
 		switch {
 		case strings.HasSuffix(url, "/v1/models"):
+			if opts.models != nil {
+				return json.RawMessage(swapModelsJSON(opts.models)), nil
+			}
 			return json.RawMessage(modelsJSON(opts.statuses)), nil
 		case strings.HasSuffix(url, "/running"):
 			return json.RawMessage(runningJSON(running...)), nil
@@ -697,7 +732,9 @@ func TestRealSpawnCapturesTheKillingSignal(t *testing.T) {
 func TestUnnamedJobFiresOnTheResidentModel(t *testing.T) {
 	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	mustOK(t, sched.RunJob(key, runOpts(h, []string{"glm5.3-flash"}, spawn, fetchOpts{})))
+	opts := runOpts(h, []string{"glm5.3-flash"}, spawn, fetchOpts{})
+	opts.Models = modelTable(t, "glm5.3-flash")
+	mustOK(t, sched.RunJob(key, opts))
 	if len(spawn.calls) != 1 {
 		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
 	}
@@ -720,6 +757,77 @@ func TestUnnamedJobFiresOnTheResidentModel(t *testing.T) {
 	}
 	if !strings.Contains(string(log), "model=glm5.3-flash") {
 		t.Fatal("the fire log must name the resolved model")
+	}
+}
+
+func TestUnnamedJobResidentAliasFiresOnTheTableRow(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	opts := runOpts(h, []string{"glm5.3-flash"}, spawn, fetchOpts{
+		models: []swapModel{{ID: "glm5.3-flash", Alias: []string{"ox-alpha"}}},
+	})
+	opts.Models = modelTable(t, "ox-alpha")
+	mustOK(t, sched.RunJob(key, opts))
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+	}
+	tail := spawn.calls[0].Argv[len(spawn.calls[0].Argv)-2:]
+	if tail[0] != "-model" || tail[1] != "ox-alpha" {
+		t.Fatalf("the resident's alias must fire on the models-table row, argv tail %v", tail)
+	}
+	rec := runEvents(t, h, "")
+	if rec[0].Args["status"] != "ok" || rec[0].Args["model"] != "ox-alpha" {
+		t.Fatalf("the run record must name the row id: %v", rec[0].Args)
+	}
+	logPath, _ := rec[0].Args["log"].(string)
+	log, err := os.ReadFile(filepath.Join(h.home, logPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(log), "model=ox-alpha") {
+		t.Fatal("the fire log must name the row id")
+	}
+	out, err := h.runs("j1", 5)
+	if err != nil || !strings.Contains(out, "model ox-alpha") {
+		t.Fatalf("runs must show the row id: %q, %v", out, err)
+	}
+}
+
+func TestUnnamedJobResidentRowFiresUnchanged(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	opts := runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{})
+	opts.Models = modelTable(t, "qwen3.8-27b")
+	mustOK(t, sched.RunJob(key, opts))
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+	}
+	tail := spawn.calls[0].Argv[len(spawn.calls[0].Argv)-2:]
+	if tail[0] != "-model" || tail[1] != "qwen3.8-27b" {
+		t.Fatalf("a resident id that is itself a row must fire unchanged, argv tail %v", tail)
+	}
+	rec := runEvents(t, h, "")
+	if rec[0].Args["status"] != "ok" || rec[0].Args["model"] != "qwen3.8-27b" {
+		t.Fatalf("the run record must name the row id: %v", rec[0].Args)
+	}
+}
+
+func TestUnnamedJobResidentWithoutARowSkipsNamingItAndTheKnownRows(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
+	spawn := &fakeSpawn{}
+	opts := runOpts(h, []string{"glm5.3-flash"}, spawn, fetchOpts{})
+	opts.Models = modelTable(t, "dsv4", "ox-alpha")
+	mustOK(t, sched.RunJob(key, opts))
+	if len(spawn.calls) != 0 {
+		t.Fatal("a resident with no row must never spawn")
+	}
+	rec := runEvents(t, h, "")
+	reason := toString(rec[0].Args["reason"])
+	if rec[0].Args["status"] != "skip" || !strings.Contains(reason, "glm5.3-flash") {
+		t.Fatalf("the skip must name the resident: %v", rec[0].Args)
+	}
+	if !strings.Contains(reason, "known:") || !strings.Contains(reason, "dsv4") || !strings.Contains(reason, "ox-alpha") {
+		t.Fatalf("the skip must name the known rows: %v", reason)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
 
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -204,7 +205,20 @@ func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) co
 		Sandbox:      "off",
 		Fetch:        fetch,
 		Spawn:        spawn,
+		Models:       modelTable(t),
 	})
+}
+
+func modelTable(t *testing.T) func() models.Table {
+	t.Helper()
+	tbl, err := models.New(
+		models.Model{ID: "other-model", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
+		models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func() models.Table { return tbl }
 }
 
 func seedSession(t *testing.T, rigHome, cwd string) string {

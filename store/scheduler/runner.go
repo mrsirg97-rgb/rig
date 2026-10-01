@@ -66,18 +66,18 @@ func (opts RunOpts) modelRow(model string) (models.Model, bool) {
 	return row, ok
 }
 
-func resolveFireModel(fetch Fetch, swapURL, def string) (string, error) {
-	resident, err := ResidentModel(fetch, swapURL)
+func resolveFireModel(fetch Fetch, swapURL string, table models.Table, def string) (string, string, error) {
+	row, canonical, err := resolveResidentModel(fetch, swapURL, table)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	if resident != "" {
-		return resident, nil
+	if row != "" {
+		return row, canonical, nil
 	}
 	if def == "" {
-		return "", fmt.Errorf("no model: the swap has nothing resident and no default is wired (the settings' model is the default)")
+		return "", "", fmt.Errorf("no model: the swap has nothing resident and no default is wired (the settings' model is the default)")
 	}
-	return def, nil
+	return def, def, nil
 }
 
 func RunJob(key string, opts RunOpts) error {
@@ -208,21 +208,27 @@ func RunJob(key string, opts RunOpts) error {
 		spawnEnv = os.Environ()
 	} else {
 		model := job.Model
+		gateModel := model
 		if model == "" {
-			resolved, err := resolveFireModel(opts.Fetch, opts.SwapURL, opts.DefaultModel)
+			table := models.Table{}
+			if opts.Models != nil {
+				table = opts.Models()
+			}
+			fireModel, canonical, err := resolveFireModel(opts.Fetch, opts.SwapURL, table, opts.DefaultModel)
 			if err != nil {
 				if e := recordSkip(db, id, err.Error()); e != nil {
 					return e
 				}
 				return nil
 			}
-			model = resolved
+			model = fireModel
+			gateModel = canonical
 		}
 		workerModel = model
 		row, rowOK := opts.modelRow(model)
 		if !(rowOK && row.Remote) {
 			waitCtx, cancelWait := context.WithTimeout(context.Background(), timeout)
-			err := gateWait(opts.Fetch, opts.SwapURL, model, waitCtx)
+			err := gateWait(opts.Fetch, opts.SwapURL, gateModel, waitCtx)
 			cancelWait()
 			if err != nil {
 				if e := recordSkip(db, id, err.Error()); e != nil {

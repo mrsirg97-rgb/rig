@@ -33,6 +33,7 @@ var modelsFixture = []struct {
 func modelRows(t *testing.T) models.Table {
 	t.Helper()
 	tbl, err := models.New(
+		models.Model{ID: "qwen3.8-27b", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 		models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 		models.Model{ID: "qwen3.8-review", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 	)
