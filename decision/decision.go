@@ -45,12 +45,14 @@ type Decider interface {
 }
 
 type Final struct {
-	Scope    string
-	Site     string
-	State    string
-	Question Question
-	Answer   string
-	Decider  string
+	Scope      string
+	Site       string
+	State      string
+	Question   Question
+	Answer     string
+	Confidence *float64
+	Unsure     bool
+	Decider    string
 }
 
 type Recorder interface {

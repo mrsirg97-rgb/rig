@@ -31,7 +31,7 @@ func capPlugins(reports []plugins.Report, max int) []plugins.Report {
 func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (string, error) {
 	reports = capPlugins(reports, r.pluginMax)
 	infos := make([]command.PluginInfo, 0, len(reports))
-	tools := r.nativeTools()
+	tools := r.tableTools()
 	for _, rep := range reports {
 		infos = append(infos, command.PluginInfo{
 			Name: rep.Name, Description: rep.Description, File: rep.File,

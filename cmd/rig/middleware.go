@@ -36,6 +36,9 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	if r.proposals != nil {
 		mw = append(mw, decision.Site(r.proposals))
 	}
+	if r.decide != nil {
+		mw = append(mw, decision.Guide())
+	}
 	return mw
 }
 

@@ -6,16 +6,17 @@ The decision store (SPEC_DECISION), Go over the generated substrate: one
 sqlite file under the rig home (`decision/decision.sqlite`), scoped like
 todo — rows carry the project scope, the file does not. A row per
 decision: site, state (the site's own JSON), the typed question (JSON),
-answer, confidence (null for a rule, which does not estimate), decider,
-session (null for a fire), status (`final`, `pending`, `approved`,
-`denied`), reviewer, the reviewer's answer, the outcome once known, scope,
-ts. The gates write `final` rows, the proposer writes `pending` rows, the
-reviewer settles to `approved`/`denied` naming itself, and `Outcome`
-writes the one fact that arrives later.
+answer, confidence (null for a rule, which does not estimate), unsure
+(false for a rule; the decide tool marks the choices whose confidence is
+under one half), decider, session (null for a fire), status (`final`,
+`pending`, `approved`, `denied`), reviewer, the reviewer's answer, the
+outcome once known, scope, ts. The gates write `final` rows, the proposer
+writes `pending` rows, the reviewer settles to `approved`/`denied` naming
+itself, and `Outcome` writes the one fact that arrives later.
 
 ## What it includes
 
-- `decision.go`: the package doc, `SchemaVersion`, `Statements` (the
+- `decision.go`: the package doc, `SchemaVersion` (2), `Statements` (the
   generated DDL plus the extra indexes), `FilePath`.
 - `verbs.go`: `RecordFinal`, `Propose` (refuses a confidence outside
   0..1), `Pending` (the pending rows in id order; a row whose question
@@ -28,14 +29,18 @@ writes the one fact that arrives later.
   fills the scope from the root when the row carries none, names the
   ctx session, bounds nothing else, and swallows store errors (loud on
   the wired log): recording never changes a decision.
+- `migrate.go`: the schema migration. `unsure` is schema version 2; the
+  migration adds the column to a version 1 file (old rows read 0) and
+  `store.Open` runs it at both open sites.
 - `metadata/`: hand-written metadata; `ddl/` and `domain/` are generated
   from it (edit and regenerate, never hand-edit).
 
 ## How it is consumed
 
-- `cmd/rig` opens the store, wires the recorder into the five gates and
-  the runner's `RunOpts.Decisions`, and (with `decisionUrl` set) hands
-  the proposer and the reviewer their sinks and sources.
+- `cmd/rig` opens the store (with the migration), wires the recorder
+  into the five gates, the runner's `RunOpts.Decisions`, and the decide
+  tool, and (with `decisionUrl` set) hands the proposer and the reviewer
+  their sinks and sources.
 
 ## Gotchas
 

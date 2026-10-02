@@ -23,6 +23,8 @@ type Kernel struct {
 	Parallel int
 }
 
+const DefaultParallel = 8
+
 type Option func(*Kernel)
 
 func New(opts ...Option) *Kernel {
@@ -77,6 +79,13 @@ func WithConcurrent(pred func(call core.ToolCall) bool) Option {
 
 func WithParallel(n int) Option {
 	return func(k *Kernel) { k.Parallel = n }
+}
+
+func (k *Kernel) EffectiveParallel() int {
+	if k.Parallel <= 0 {
+		return DefaultParallel
+	}
+	return k.Parallel
 }
 
 func (k *Kernel) SortedToolNames() []string {

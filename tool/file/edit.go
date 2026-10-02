@@ -80,8 +80,8 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 			return "", fmt.Errorf("edit: hunk %d of %d: zero-width old string", i+1, len(a.Edits))
 		}
 	}
-	if total >= readCap {
-		return "", fmt.Errorf("edit: the hunks total %d bytes, the read ceiling is %d; split the call", total, readCap)
+	if total >= ReadCap {
+		return "", fmt.Errorf("edit: the hunks total %d bytes, the read ceiling is %d; split the call", total, ReadCap)
 	}
 
 	fileData, err := os.ReadFile(a.Path)
@@ -152,7 +152,7 @@ func unreadObservation(ctx context.Context, path string) (string, error) {
 	recordDigest(ctx, path, sum)
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, path, content)
-	if len(content) > readCap {
+	if len(content) > ReadCap {
 		content = capReply(content, total, 0)
 	}
 	return content + "\n[edit: " + path + " was not read this session; its text is above, now edit it]", nil

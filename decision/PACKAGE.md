@@ -55,6 +55,22 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   changes, dangerous, each label described) over the command, the
   workspace, and how the call ended. The call never waits: the proposal
   rides the queue's channel and returns at once.
+- `decide.go`: the decide tool, the model's delegate door (SPEC_DECISION,
+  the delegate section): one typed question — a choice with a
+  description per label, a yes/no, or a score — and a list of items; one
+  request per item through the `Decider` (the state on the wire is the
+  item), up to the tool's `Parallel` at once, and the reply grouped: for
+  each label the items that got it (numbered from 1, first line), then
+  the unsure items in full for the model to judge itself. A choice is
+  unsure when its confidence is under one half; a yes/no and a score are
+  never unsure. The bound holds ahead of any I/O: the items' total stays
+  under the read ceiling (`file.ReadCap`, the read tool's), and bad
+  arguments refuse before a request goes out. A server error refuses —
+  nothing was sorted and no row was written. Every answered item is
+  recorded through the `Recorder` (site `decide`, final, the server as
+  decider, its confidence, unsure marked); a nil recorder records
+  nothing. `Guide` is the one-link `ToolMiddleware` whose
+  `Guidelines()` joins the system prompt when the tool is wired.
 
 ## How it is consumed
 

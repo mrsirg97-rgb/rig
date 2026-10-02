@@ -25,6 +25,7 @@ func Statements() []string {
   "state" TEXT NOT NULL,
   "status" TEXT NOT NULL,
   "ts" TEXT NOT NULL,
+  "unsure" INTEGER NOT NULL,
   PRIMARY KEY ("id")
 )`,
 		`CREATE TABLE IF NOT EXISTS "meta" (

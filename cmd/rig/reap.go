@@ -12,6 +12,7 @@ var concurrentNatives = map[string]bool{
 	"read": true, "view": true,
 	"web":      true,
 	"delegate": true,
+	"decide":   true,
 }
 
 var mutatingNatives = map[string]bool{
