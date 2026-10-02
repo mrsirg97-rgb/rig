@@ -1,4 +1,34 @@
 # Changelog
+## [2.7.0]: the decisions are kept, the answers are reviewed
+
+rig decides all day and kept none of it. The stores held thousands of
+bash calls and a couple of dozen gate refusals, and nothing a decision
+model could learn from: no question, no answer, no confidence, no
+verdict, no outcome. This release gives rig's decisions a place to land
+and the one rule that shapes it: an answer is a proposal an LLM reviews,
+never an action.
+
+The seam is `decision` (SPEC_DECISION): a question is typed — choice,
+score, yes/no — and an answer carries a confidence and its decider. The
+store is one sqlite file under the rig home, scoped like todo: a row per
+decision with site, state, question, answer, confidence, decider,
+session, status, reviewer, the reviewer's answer, and the outcome once
+known. The gates record their final rows — approve the operator's
+verdict (both of them: the yes is the gold label), perm a denial, paths
+an expansion it applied, guard a bound or round-cap refusal, the
+scheduler's skip — and recording never changes a decision, a store error
+never fails a call.
+
+The proposer is opt-in: settings `decisionUrl` points at a local
+decision server, and every bash call then gets a pending risk proposal
+(safe, changes, dangerous) written after the call returns — the call
+never waits on it. A landing wakes a reviewer, as the swarm's wake does:
+when the slot is next free it takes every pending row in one headless
+fire and replies one verdict line per row, parsed like the swarm
+reviewer's. Partial replies settle what they name and leave the rest
+pending; a fire that settles nothing waits for the next landing. No
+timer, no poll.
+
 ## [2.6.0]: the router reads the queue, the workers run the tasks
 
 The swarm's drain loop was a poll. Each worker claimed on its own

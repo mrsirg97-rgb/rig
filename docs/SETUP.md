@@ -133,6 +133,7 @@ directory's project file, not the creating session's.
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
 | session model |                | `RIG_MODEL`            | `model`          | no embedded default; the worker model resolves at claim time: the named one, else the resident model, else this |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
+| decision server |;            | `RIG_DECISION_URL`     | `decisionUrl`     | none; set it and every bash call gets a pending risk proposal the reviewer settles (SPEC_DECISION); unset, nothing proposes |
 | approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |

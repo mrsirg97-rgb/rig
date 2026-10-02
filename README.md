@@ -28,6 +28,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 - **the wire is pinned.** The exact bytes sent to the model are golden-tested. The cache win is a measured property, not a claim.
 - **the loop never retries.** A failed call executes once and the model is told. Results are capped with loud markers; denials are named refusals with reasons.
 - **state belongs to the repo.** Tasks, memory, and schedules carry the project's identity, shared by worktrees. A session resumes from the store in one read-only transaction.
+- **decisions are kept, answers are reviewed.** The gates record what they decide, an optional decision server proposes and an LLM reviews: one sqlite store of questions, answers, confidences, and verdicts (SPEC_DECISION) — proposals, never actions.
 - **default deny at the boundary.** Allowlist, approval gate, pathguard, plugin provenance, worker jail. Narrowing is the operator's act.
 - **spec first.** Every behavior is one sentence in specs/ with a test that holds it there. Core is frozen.
 
