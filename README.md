@@ -8,8 +8,16 @@ rig assembles context, streams the model, executes tool calls, returns results, 
 
 Each number names its mechanism.
 
-- **99.1% cache hit over 2,925 turns.** The request prefix is byte-stable, so the provider's prefix cache reuses it. The ratio is `cache_read/prompt` from the usage table, the same arithmetic `sessions summary` uses (`TestSessionsSummaryCacheRatioFixture`). 297M of 299M prompt tokens came from cache.
-- **208M prompt tokens on 2026-09-22.** The same query, that day alone.
+- **99.0% of 4.1B prompt tokens served from cache, over every recorded turn.** The fleet's stores hold 1,529 sessions and 36,125 turns, the earliest on 0.2.0, three days after v0.1.0. The ratio is `cache_read/prompt` from the usage table, the same arithmetic `sessions summary` uses (`TestSessionsSummaryCacheRatioFixture`); the prefix is byte-stable, so the provider's cache reuses it. The cost per turn is the curve:
+
+| era | turns | new tokens / turn | completion / turn | cache |
+|-------|--------|------|------|--------|
+| 0.x | 14,006 | 1,499 | 722 | 98.65% |
+| 1.0–1.3 | 7,440 | 933 | 676 | 99.13% |
+| 1.4–1.9 | 10,045 | 962 | 525 | 99.26% |
+| 2.x | 4,634 | 711 | 438 | 99.24% |
+
+The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery; the kink is visible. One SQL read of the state store: the store is the receipt.
 - **7k byte-stable preamble.** The system prompt, the tool schemas, and the append-only transcript are a few thousand bytes, pinned by `TestWireToolsPrefixGolden` (a sha256 over the fleet's wire shape), `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`, and `TestSystemPromptIsByteStableAcrossBuilds`, so a stray timestamp cannot silently kill the cache.
 - **720 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
 - **34,336 lines of Go, 53,815 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
@@ -99,10 +107,10 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
 
 ## the tools
 
-rig's default menu is 13 built-in tools: `view` joins the set only for a
-model row whose `"vision": true` says it takes images, and `scheduler` and
-`delegate` join when a worker fleet is configured. Restrict them with
-`--allow`:
+rig's default menu is 13 built-in tools on a model row without vision;
+`view` joins for a row whose `"vision": true` says it takes images.
+`scheduler` and `delegate` are on the menu everywhere and refuse by name
+where no worker fleet stands. Restrict them with `--allow`:
 
 | tool | what it does |
 |------|--------------|

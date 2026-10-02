@@ -319,9 +319,20 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
   </section>
 
   <section class="rating" aria-label="measured">
-    <div><span class="n">99<small>%</small></span><span class="l">of prompt tokens served from cache over 2,925 turns, because the prefix never changes a byte</span></div>
+    <div><span class="n">4.1<small>B</small></span><span class="l">prompt tokens served, 99% of them from cache — the prefix never changes a byte</span></div>
     <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the whole agent loop, batch included, stdlib only</span></div>
     <div><span class="n">{{RIG_COMMITS}}</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
+  </section>
+
+  <section class="sheet" aria-labelledby="trend-heading">
+    <p class="eyebrow" id="trend-heading">the consolidation, measured</p>
+    <p class="sheet-intro">Every recorded turn since the first store, one SQL read of the state store. The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery: the turn got cheaper and never went back.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">0.x</span><p class="what">14,006 turns · 1,499 new tokens a turn · 722 out · 98.65% cache</p></div>
+      <div class="row" role="listitem"><span class="os">1.0–1.3</span><p class="what">7,440 turns · 933 new tokens a turn · 676 out · 99.13% cache</p></div>
+      <div class="row" role="listitem"><span class="os">1.4–1.9</span><p class="what">10,045 turns · 962 new tokens a turn · 525 out · 99.26% cache</p></div>
+      <div class="row" role="listitem"><span class="os">2.x</span><p class="what">4,634 turns · 711 new tokens a turn · 438 out · 99.24% cache</p></div>
+    </div>
   </section>
 
   <section class="lede">
@@ -398,7 +409,7 @@ rig -update</pre>
   <span class="k">"plugins"</span>: { <span class="k">"enabled"</span>: [] }
 }</pre>
       <details class="more">
-        <summary>models.json and workers.json</summary>
+        <summary>models.json</summary>
         <div class="more-body">
       <p class="file">~/.rig/models.json · one row per model: its window, its budget, its dials</p>
       <pre>[
@@ -409,8 +420,8 @@ rig -update</pre>
     <span class="k">"reserve"</span>: <span class="d">104858</span>,
     <span class="k">"keepRecent"</span>: <span class="d">98304</span>,
     <span class="k">"role"</span>: <span class="s">"interactive"</span>,
-    <span class="k">"effort"</span>: <span class="s">"max"</span>,
-    <span class="k">"efforts"</span>: [<span class="s">"low"</span>, <span class="s">"high"</span>, <span class="s">"max"</span>],
+    <span class="k">"effort"</span>: <span class="s">"xhigh"</span>,
+    <span class="k">"efforts"</span>: [<span class="s">"low"</span>, <span class="s">"medium"</span>, <span class="s">"xhigh"</span>],
     <span class="k">"vision"</span>: <span class="d">true</span>
   },
   {
@@ -424,11 +435,7 @@ rig -update</pre>
   }
 ]
 <span class="c"># switch any time: /models sonnet</span></pre>
-      <p class="file">~/.rig/workers.json · the fleet: which model background workers run on, and how many at once</p>
-      <pre>{
-  <span class="k">"model"</span>: <span class="s">"local"</span>,
-  <span class="k">"slots"</span>: <span class="d">2</span>
-}</pre>
+      <p class="file">the fleet · background workers run on the resident model — the live slots your model server reports are the parallelism</p>
         </div>
       </details>
     </article>
@@ -441,7 +448,7 @@ rig -update</pre>
       </div>
       <p class="file">~/.rig/theme.json</p>
       <pre>{
-  <span class="k">"base"</span>: <span class="s">"oled"</span>,
+  <span class="k">"base"</span>: <span class="s">"warm"</span>,
   <span class="k">"slots"</span>: {
     <span class="k">"ember"</span>: <span class="s">"#6b7fa3"</span>,
     <span class="k">"text"</span>: <span class="s">"#b8bfcc"</span>,
@@ -558,9 +565,9 @@ rig -update</pre>
 
 <span class="t-ember">❯</span><span class="t-text"> </span>
 
-<span class="t-text">huihui3.8</span><span class="t-dim"> · </span><span class="t-dim">214k/368k</span>
-<span class="t-xhigh">xhigh</span><span class="t-dim"> · </span><span class="t-dim">default</span><span class="t-dim"> · </span><span class="t-warn">auto</span>
-<span class="t-dim">up 214k down 18k · cache r 187k 87%</span></pre>
+<span class="t-text">ox-alpha</span><span class="t-dim"> · </span><span class="t-dim">149k/393k</span>
+<span class="t-xhigh">max</span><span class="t-dim"> · </span><span class="t-dim">default</span><span class="t-dim"> · </span><span class="t-warn">auto</span>
+<span class="t-dim">up 3.9M down 16k · cache r 3.9M 99%</span></pre>
     </article>
   </section>
 
@@ -572,7 +579,6 @@ rig -update</pre>
       <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup</a>
       <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
       <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
-      <a href="https://discoverorbit.ai">orbit</a>
     </nav>
     <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
   </footer>
