@@ -436,7 +436,7 @@ def run(args):
 `)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(scratch, py)
+	cmd.Env = append(pluginEnv(scratch, py), "RIG_SWAP_URL="+srv.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -638,7 +638,7 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 	scratch := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
