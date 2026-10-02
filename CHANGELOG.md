@@ -1,4 +1,22 @@
 # Changelog
+## [2.5.4]: the docs read the code back
+
+The docs had drifted from the code they describe. Three tool counts
+lived side by side — SETUP said "13 non-worker" in one table and "15"
+in another, USAGE said "17, 19 with a fleet", the README said 13 — and
+the `--version` examples still printed 1.5.8. The 2.1.x consolidation
+shrank the toolset; none of the counts followed it.
+
+The code is the one source now, and the docs say what it says:
+thirteen native tools register on a model row without vision, fourteen
+with `vision: true`; the embedded default allow-list carries twelve
+base names, and `scheduler` and `delegate` join it where a fleet
+stands and no operator allow does — a menu that never names what is
+absent, refusals that do. The README's measured numbers name their
+population (the fleet: every workspace's store, not one), the SETUP
+examples print a placeholder instead of a release that has long moved
+on, and the pages site carries the same thirteen.
+
 ## [2.5.3]: the resident resolves to a row
 
 Every unnamed fire under a resident the models table names differently
