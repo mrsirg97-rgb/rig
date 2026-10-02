@@ -14,9 +14,6 @@ import (
 
 var OperatorHome = os.Getenv("HOME")
 
-// ClosedSwapURL is the loopback port nothing listens on: a spawned
-// binary pointed here gets the gate's fail-closed wiring, whatever the
-// host happens to run.
 const ClosedSwapURL = "http://127.0.0.1:1"
 
 var (

@@ -21,6 +21,12 @@ adapter's problem; the loop sees `core.Event` only.
   case, `reasoning_content`).
 - `NewWithHeaderTimeout(baseURL, model, headerTimeout)`: the same with a
   dialed time-to-headers bound; `New` applies the 5-minute default.
+  `Config.HeaderTimeout` carries the same knob: zero is the 5-minute
+  default and `HeaderTimeoutOff` (-1) removes the bound entirely — the
+  transport's `ResponseHeaderTimeout` lands at 0, so a queued request
+  waits as long as its server takes to answer and the request's context
+  is the only deadline. The root builds every non-remote row with the
+  off value and leaves remote rows on the default.
 - `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
   `core.Event`s.
 - The wire shapes (`wireRequest`, `wireMessage`, `wireTool`,

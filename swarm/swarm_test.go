@@ -880,3 +880,31 @@ func TestHolderRefusalReleasesAndStopsTheWorker(t *testing.T) {
 		t.Fatalf("spawn calls = %d, want the refusal to precede the spawn", got)
 	}
 }
+
+func TestStoppedWorkerIsOutBeforeTheRouterWakes(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "held out", "held longer")
+	h.fetch.resident = []string{"glm5.3-flash"}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "dsv4"})
+	got := waitForNotices(t, h.fe, 1)
+	if !strings.Contains(got[0], "held by glm5.3-flash") {
+		t.Fatalf("the stop notice must name the holder: %q", got[0])
+	}
+	h.waitFor(t, "both tasks pending", func() bool {
+		return h.status(t, "t1") == "pending" && h.status(t, "t2") == "pending"
+	})
+	var t2Claims int
+	if err := h.todoDB.DB.QueryRow(`SELECT count(*) FROM events WHERE op = 'claim' AND args LIKE '%t2%'`).Scan(&t2Claims); err != nil {
+		t.Fatal(err)
+	}
+	if t2Claims != 0 {
+		t.Fatalf("t2 claimed %d times: the worker must be out before the router wakes", t2Claims)
+	}
+	if got := h.spawn.count(); got != 0 {
+		t.Fatalf("spawn calls = %d, want never", got)
+	}
+	rows := h.ctl.List()
+	if len(rows) != 1 || rows[0].State != swarm.StateExited {
+		t.Fatalf("worker rows = %+v, want the worker stopped", rows)
+	}
+}

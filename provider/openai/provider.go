@@ -67,19 +67,9 @@ func NewWithVision(baseURL, model, blobsDir string) core.Provider {
 	return NewWithConfig(Config{BaseURL: baseURL, Model: model, BlobsDir: blobsDir})
 }
 
-// HeaderTimeoutOff disables the response-header bound: the request's
-// context is the only deadline, so a queued request waits as long as
-// its server takes to answer.
 const HeaderTimeoutOff time.Duration = -1
 
 func NewWithConfig(cfg Config) core.Provider {
-	headerTimeout := cfg.HeaderTimeout
-	if headerTimeout < 0 {
-		headerTimeout = 0
-	}
-	if headerTimeout == 0 {
-		headerTimeout = defaultHeaderTimeout
-	}
 	idleTimeout := cfg.IdleTimeout
 	if idleTimeout <= 0 {
 		idleTimeout = defaultIdleTimeout
@@ -88,10 +78,16 @@ func NewWithConfig(cfg Config) core.Provider {
 	if cfg.BlobsDir != "" {
 		imgs = &imageStore{dir: cfg.BlobsDir}
 	}
-	return newProvider(cfg.BaseURL, cfg.Model, headerTimeout, idleTimeout, imgs, cfg)
+	return newProvider(cfg.BaseURL, cfg.Model, cfg.HeaderTimeout, idleTimeout, imgs, cfg)
 }
 
 func newProvider(baseURL, model string, headerTimeout, idleTimeout time.Duration, imgs *imageStore, cfg Config) core.Provider {
+	if headerTimeout == 0 {
+		headerTimeout = defaultHeaderTimeout
+	}
+	if headerTimeout < 0 {
+		headerTimeout = 0
+	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = headerTimeout

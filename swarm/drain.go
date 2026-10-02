@@ -27,10 +27,12 @@ func (c *Controller) run(w *worker) {
 			}
 			res := c.work(w, id)
 			c.settle(w, id, res)
+			if res.holder != nil {
+				c.set(w, func() { w.state = StateExited })
+			}
 			c.emit(true)
 			c.Wake()
 			if res.holder != nil {
-				c.set(w, func() { w.state = StateExited })
 				return
 			}
 		}

@@ -211,12 +211,15 @@ func (r *root) buildProvider() core.Provider {
 		headerTimeout = 0
 	}
 	if !r.row.Remote && r.row.APIKey == "" {
-		return openai.NewWithConfig(openai.Config{
+		cfg := openai.Config{
 			BaseURL:       r.baseURL,
 			Model:         r.activeID,
-			BlobsDir:      r.blobsDir(),
 			HeaderTimeout: headerTimeout,
-		})
+		}
+		if r.row.Vision {
+			cfg.BlobsDir = r.blobsDir()
+		}
+		return openai.NewWithConfig(cfg)
 	}
 	baseURL := r.baseURL
 	if r.row.Remote {

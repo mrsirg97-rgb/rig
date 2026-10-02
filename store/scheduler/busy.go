@@ -182,8 +182,6 @@ func slotRead(fetch Fetch, swapURL, model string) (slotSet, error) {
 	return out, nil
 }
 
-// ErrNotResident is the gate's refusal: the named model is not the
-// resident one, and rig never evicts. Callers match it with errors.Is.
 var ErrNotResident = errors.New("a different model is resident")
 
 func holderRefusal(resident []string) error {

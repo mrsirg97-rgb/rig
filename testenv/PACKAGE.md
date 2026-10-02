@@ -24,11 +24,11 @@ package that dials the swap rides `Transport`.
   so the rig home resolves from the isolated `HOME`; the Go toolchain
   env (`GOPATH`, `GOMODCACHE`, `GOCACHE`) keeps the operator's caches,
   so the tests' `go build` calls stay warm and offline. `RIG_SWAP_URL`
-  is pinned to `ClosedSwapURL`, a loopback port nothing listens on, so a
-  spawned binary in a test gets the gate's fail-closed wiring whatever
-  the host runs; the test helpers in `cmd/rig` (`rigEnv`, `pluginEnv`)
-  scrub and re-pin it so a test's own fixture always wins. The throwaway
-  home is removed after the run.
+  is pinned to `ClosedSwapURL` (`http://127.0.0.1:1`, a loopback port
+  nothing listens on), so a spawned binary in a test gets the gate's
+  fail-closed wiring whatever the host runs; the test helpers in
+  `cmd/rig` (`rigEnv`, `pluginEnv`) scrub and re-pin it so a test's own
+  fixture always wins. The throwaway home is removed after the run.
 - `Server`: the only way a test's httptest server gets dialed. It
   registers the server's host with `Transport` and unregisters it on
   cleanup.
