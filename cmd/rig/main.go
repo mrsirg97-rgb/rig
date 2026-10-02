@@ -461,6 +461,23 @@ func main() {
 	}
 	r.tools["todo"] = todoapi.New(tdb, todoapi.Mode(*prompt != ""), todoWake)
 
+	decisionURL := cfg.Settings.DecisionURL
+	if v := os.Getenv("RIG_DECISION_URL"); v != "" {
+		decisionURL = v
+	}
+	if decisionURL != "" {
+		loud := func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }
+		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
+		if derr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
+			os.Exit(1)
+		}
+		rev := decision.NewReviewer(&dbReviews{db: decdb}, r.reviewFire(schedHome, scdb, swapURL, self, modelID, cfgDir, allowList), modelID, loud)
+		r.decRev = rev
+		r.decQ = decision.NewQueue(dec, &dbSink{db: decdb, scope: scope.Key(cwd)}, rev.Wake, loud)
+		r.proposals = r.decQ
+	}
+
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t
 	}
@@ -549,6 +566,11 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if r.decQ != nil {
+		go r.decQ.Run(ctx)
+		go r.decRev.Run(ctx)
+	}
 
 	if webSrv != nil {
 		fmt.Fprintf(os.Stderr, "rig serve: the dashboard is at http://%s/\n", serveAddr)

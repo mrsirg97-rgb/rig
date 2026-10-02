@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/guard"
@@ -17,7 +18,7 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	if resultCap == 0 {
 		resultCap = defaultResultCap
 	}
-	return []core.ToolMiddleware{
+	mw := []core.ToolMiddleware{
 		toolset.Resolve(r.live),
 		approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating, r.drec),
 		cutoff.Middleware(),
@@ -28,6 +29,10 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		guard.Cap(resultCap),
 		paths.Middleware(r.drec),
 	}
+	if r.proposals != nil {
+		mw = append(mw, decision.Site(r.proposals))
+	}
+	return mw
 }
 
 func guidelinesOf(ms []core.ToolMiddleware) string {

@@ -46,6 +46,10 @@ type root struct {
 
 	drec decision.Recorder
 
+	proposals decision.Proposer
+	decQ      *decision.Queue
+	decRev    *decision.Reviewer
+
 	pluginsDir string
 	rigHome    string
 
