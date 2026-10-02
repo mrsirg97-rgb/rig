@@ -31,7 +31,7 @@ is a loud line naming the known set, never silently a prompt.
 - `/compact`: force a compaction now (the `⧉` line reports dropped/kept),
   or `compact: nothing to drop`.
 - `/new`: close the session row ok, mint a fresh session, same process.
-- `/sessions`: list; `summary` shows the soak's vitals over the recent
+- `/sessions`: list; `summary` shows the vitals over the recent
   sessions (models, faults, the cache ratio); `show <id>` renders a
   transcript; `resume <id>` swaps to it in-process.
 - `/models`: the per-model table with the active row marked; `/models <id>`
@@ -248,8 +248,10 @@ rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits the 17 built-in
-tools, 19 when a worker fleet is configured. Python plugins (outside the
+refusal goes back to the model. The default permits every native tool —
+thirteen on a model row without vision, fourteen with `vision: true`;
+`scheduler` and `delegate` refuse by name where no fleet stands. Python
+plugins (outside the
 default) are admitted by their
 presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7); an installed
 plugin's own allow-list entry; not by an `allow` line; a plugin still

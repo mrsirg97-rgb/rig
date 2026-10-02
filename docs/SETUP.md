@@ -40,7 +40,7 @@ builds, and bubblewrap for jailed workers.
 git clone git@github.com:mrsirg97-rgb/rig.git
 cd rig
 go build ./cmd/rig     # produces ./rig
-./rig --version        # rig 1.5.8
+./rig --version        # prints the rig version
 ```
 
 Choose an install path (`specs/SPEC_BUILD.md` 5):
@@ -86,9 +86,8 @@ Every knob is a four-layer resolution, per key:
 **flag > env > file > embedded default** (`specs/SPEC_CONFIG.md`). A key
 set at any layer beats the layers below; an unset layer descends. A flag
 you typed always wins, whatever its value; an empty env or file value
-descends, except the two presence keys (below). No file present is the
-0.2.0 behavior, exactly; the embedded layer is the 0.2.0 values moved
-out of code.
+descends, except the two presence keys (below). No file present runs
+the embedded defaults alone (the 0.2.0 values moved out of code).
 
 The files live in the rig home, `~/.rig/`; the same directory the
 stores use (the `.pi`/`.omp` convention, not the XDG one). The home
@@ -119,10 +118,10 @@ directory's project file, not the creating session's.
 
 | knob          | flag           | env                    | file key        | embedded default |
 |---------------|----------------|------------------------|-----------------|------------------|
-| endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the worker swap) |
+| endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the model server; a jailed worker's proxy forwards here) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | none (a run without one refuses at start, naming the three ways) |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the 13 non-worker built-in tools (grows by `scheduler` and `delegate` when a fleet is configured and no operator allow stands) |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the embedded default allow (twelve base names; `scheduler` and `delegate` join where a fleet stands and no operator allow does) |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
@@ -207,7 +206,7 @@ starts fresh: the guard's counts and the steering slot are not persisted.
 
 **On the allow-list**; it is default-deny below it: any tool not named is
 refused at the boundary and the refusal is fed back to the model. The default
-permits the 15 built-in tools because a default-deny CLI would ship a
+permits the built-in set because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar. A `settings.json` that
 writes its own `allow` key replaces that default whole, so it must carry
 `plugin` and `plugins` or every door call is refused. Python plugins
@@ -244,7 +243,7 @@ and an unknown key refuses at start naming the file and the field.
 ```
 
 `baseUrl` and `model` are the two a run needs; the rest are the
-embedded defaults written out. `workers` is the drain pair's switch
+embedded defaults written out. `workers` is the fleet's switch
 (2.4.0): `false` keeps `delegate` and the swarm off a capable machine,
 `true` (or absent) still waits for the live slot read — nothing turns
 them on where the slots are not (SPEC_WORKERS 5). `allow` is the one
@@ -438,7 +437,7 @@ speak the CLI's bytes.
 ## verify
 
 ```sh
-./rig --version                 # prints: rig 1.5.8
+./rig --version                 # prints the rig version
 ./rig --base-url $YOUR_ENDPOINT --model $NAME --system "be terse"
 ```
 
