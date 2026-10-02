@@ -63,7 +63,7 @@ func TestSwarmBudgetStopsClaimsWithANotice(t *testing.T) {
 		}
 		recordWorkerCost(t, h.rigHome, h.cwd, session, 6)
 	}
-	h.start(t, swarm.StartOpts{Role: "worker", Budget: 5})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Budget: 5})
 	h.waitFor(t, "the budget notice", func() bool {
 		for _, n := range h.fe.notices() {
 			if strings.Contains(n.Text, "budget reached") {
@@ -85,6 +85,14 @@ func TestSwarmBudgetStopsClaimsWithANotice(t *testing.T) {
 	})
 	if got := h.spawn.count(); got != 1 {
 		t.Fatalf("spawn calls = %d, want 1 (the second task must never be claimed at the cap)", got)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got := h.spawn.count(); got != 1 {
+		t.Fatalf("spawn calls = %d after the settle, the cap must hold", got)
+	}
+	rows := h.ctl.List()
+	if len(rows) != 1 || rows[0].Task != "" {
+		t.Fatalf("worker rows = %+v, want the worker alive and idle at the cap", rows)
 	}
 	found := false
 	for _, n := range h.fe.notices() {
@@ -124,11 +132,10 @@ func TestSwarmRemoteRowNeverConsultsTheSwap(t *testing.T) {
 		StateDir:     t.TempDir(),
 		DefaultModel: "qwen3.8-workers",
 		Models:       func() models.Table { return tbl },
-		Poll:         20 * time.Millisecond,
 		Frontend:     func() core.Frontend { return h.fe },
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the task to complete", func() bool {
 		return h.status(t, "t1") == "review"
 	})

@@ -69,13 +69,11 @@ func (a *adapter) Name() string { return "delegate" }
 func (a *adapter) Description() string {
 	return "Spawns a headless worker on a task now, waits, and returns its last message. Guidelines: give it a " +
 		"bounded sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. " +
-		"Fan out with several delegate calls in one turn; each reads the resident model's free slots at claim " +
-		"time, and one with no free slot refuses (do the work yourself or schedule it). The worker runs on the " +
-		"resident model; a model you name asks for a swap only when nothing is resident, and a different " +
-		"resident model refuses, naming the holder. the workspace must be under the session's workspace or the " +
-		"rig home; the worker model defaults to the resident model (" + a.DefaultModel + " when nothing is " +
-		"resident); the timeout to 10 minutes, ceiling 30. Reply: the worker's message plus a trailer with " +
-		"exit, duration, session id and log."
+		"Fan out with several delegate calls in one turn; each sends and waits on the server's queue; the " +
+		"worker model defaults to the resident one (" + a.DefaultModel + " when nothing is resident), and a " +
+		"model that is not resident refuses, naming the holder. the workspace must be under the session's " +
+		"workspace or the rig home. Reply: the worker's message plus a trailer with exit, duration, session " +
+		"id and log."
 }
 
 func (a *adapter) Schema() json.RawMessage {
@@ -83,10 +81,9 @@ func (a *adapter) Schema() json.RawMessage {
 		"type": "object",
 		"properties": {
 			"task":      {"type": "string", "description": "the prompt the worker runs (required)"},
-			"workspace": {"type": "string", "description": "the workspace the job runs in (default the session's workspace; must be under it or the rig home)"},
-			"model":     {"type": "string", "description": "worker model id (default the resident model; ` + a.DefaultModel + ` when nothing is resident)"},
-			"timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"},
-			"stallMs":   {"type": "integer", "minimum": 1, "description": "stall window in ms: a worker writing nothing for longer is killed as hung (0 = off; the timeout stays the spend ceiling)"}
+			"workspace": {"type": "string", "description": "where the job runs (default the session's)"},
+			"model":     {"type": "string", "description": "worker model id"},
+			"timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"}
 		},
 		"required": ["task"]
 	}`)
@@ -97,7 +94,6 @@ type args struct {
 	Workspace string `json:"workspace,omitempty"`
 	Model     string `json:"model,omitempty"`
 	TimeoutMs int64  `json:"timeoutMs,omitempty"`
-	StallMs   int64  `json:"stallMs,omitempty"`
 }
 
 func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -135,17 +131,12 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 			timeout = delegateTimeoutCap
 		}
 	}
-	stall := time.Duration(0)
-	if g.StallMs > 0 {
-		stall = time.Duration(g.StallMs) * time.Millisecond
-	}
 
 	res, err := sched.Delegate(sched.DelegateInput{
 		DB:            a.DB,
 		Home:          a.Home,
 		Session:       session,
 		Cwd:           cwd,
-		Context:       ctx,
 		Task:          g.Task,
 		Model:         model,
 		WorkerSession: core.NewSession().ID,
@@ -156,7 +147,6 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		WorkerCmd:     a.WorkerCmd,
 		SwapURL:       a.SwapURL,
 		Timeout:       timeout,
-		Stall:         stall,
 		Sandbox:       a.Sandbox,
 		SandboxBinds:  a.SandboxBinds,
 		RigHome:       a.RigHome,
@@ -177,8 +167,6 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	content += "\n" + trailer
 
 	switch {
-	case res.Stalled:
-		return content, fmt.Errorf("delegate: the worker stalled after %s (process tree killed)", res.Duration.Round(time.Millisecond))
 	case res.TimedOut:
 		return content, fmt.Errorf("delegate: the worker timed out after %s (process tree killed)", res.Duration.Round(time.Millisecond))
 	case res.Exit != 0:

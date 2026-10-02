@@ -28,7 +28,6 @@ type DelegateInput struct {
 	WorkerCmd     []string
 	SwapURL       string
 	Timeout       time.Duration
-	Stall         time.Duration
 	Sandbox       string
 	SandboxBinds  []string
 	RigHome       string
@@ -36,8 +35,6 @@ type DelegateInput struct {
 	Allow         []string
 	LandlockABI   func() (int, error)
 	Now           func() time.Time
-	Context       context.Context
-	WaitBusy      bool
 	DefaultModel  string
 	Models        func() models.Table
 	Observe       func([]byte)
@@ -49,7 +46,6 @@ type DelegateResult struct {
 	Stdout    string
 	Stderr    string
 	TimedOut  bool
-	Stalled   bool
 	Duration  time.Duration
 	ID        string
 	LogRel    string
@@ -106,7 +102,10 @@ func isRemoteRow(in DelegateInput) bool {
 }
 
 func delegateTimeout(t time.Duration) time.Duration {
-	if t <= 0 {
+	if t < 0 {
+		return 0
+	}
+	if t == 0 {
 		return DefaultRunTimeout
 	}
 	if t > maxDelegateTimeout {
@@ -124,11 +123,6 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: worker session is required")
 	}
 
-	waitCtx := in.Context
-	if waitCtx == nil {
-		waitCtx = context.Background()
-	}
-
 	if os.Getenv(DelegateEnv) != "" {
 		return DelegateResult{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
@@ -139,14 +133,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	}
 	in.Model = model
 	if !isRemoteRow(in) {
-		if in.WaitBusy {
-			waitCtx, cancelWait := context.WithTimeout(waitCtx, delegateTimeout(in.Timeout))
-			err := gateWait(in.Fetch, in.SwapURL, gateModel, waitCtx)
-			cancelWait()
-			if err != nil {
-				return DelegateResult{}, fmt.Errorf("delegate: %w", err)
-			}
-		} else if err := gateOnce(in.Fetch, in.SwapURL, gateModel); err != nil {
+		if err := gateOnce(in.Fetch, in.SwapURL, gateModel); err != nil {
 			return DelegateResult{}, fmt.Errorf("delegate: %w", err)
 		}
 	}
@@ -200,40 +187,21 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		defer proxy.Close()
 	}
 
-	base := in.SpawnCtx
-	if base == nil {
-		base = context.Background()
+	ctx := in.SpawnCtx
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(base, delegateTimeout(in.Timeout))
-	defer cancel()
+	if limit := delegateTimeout(in.Timeout); limit > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, limit)
+		defer cancel()
+	}
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 
-	var watch *stallWatch
-	if in.Stall > 0 {
-		watch = newStallWatch(in.Stall, cancel)
-	}
-	observe := in.Observe
-	if watch != nil {
-		observe = func(p []byte) {
-			watch.touch()
-			if in.Observe != nil {
-				in.Observe(p)
-			}
-		}
-	}
-	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, observe)
-	if watch != nil {
-		watch.stop()
-	}
+	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, in.Observe)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
-	}
-	stalled := false
-	if watch != nil && watch.hasFired() && ctx.Err() == context.Canceled {
-		stalled = true
-		res.Stderr += "\n[runner: killed after stall]\n"
-		res.Exit = 1
 	}
 	ended := in.Now().UTC()
 	durationMs := ended.Sub(started).Milliseconds()
@@ -268,14 +236,14 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	if _, err := RecordRun(context.Background(), in.DB, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
 		Log: logRel, Started: startedStr, Ended: ended.Format(time.RFC3339), Cost: costPtr,
-		Reason: spawnReason(ctx, res, stalled),
+		Reason: spawnReason(ctx, res, false),
 	}); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: record: %w", err)
 	}
 
 	return DelegateResult{
 		Exit: res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
-		TimedOut: res.TimedOut, Stalled: stalled, Duration: ended.Sub(started),
+		TimedOut: res.TimedOut, Duration: ended.Sub(started),
 		ID: id, LogRel: logRel, Started: startedStr, SessionID: in.WorkerSession, Note: note,
 		Cost: cost,
 	}, nil

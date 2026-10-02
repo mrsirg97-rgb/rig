@@ -40,7 +40,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.5.5"
+const Version = "2.6.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -379,7 +379,7 @@ func main() {
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-			"todo": todoapi.New(tdb, todoapi.Mode(*prompt != "")), "rem": remapi.New(rdb),
+			"rem":    remapi.New(rdb),
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
@@ -433,6 +433,11 @@ func main() {
 		})
 	}
 	r.swarmWhy = swarmWhy
+	var todoWake func()
+	if delegateOn {
+		todoWake = r.swarm.Wake
+	}
+	r.tools["todo"] = todoapi.New(tdb, todoapi.Mode(*prompt != ""), todoWake)
 
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t

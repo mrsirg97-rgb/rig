@@ -1,4 +1,47 @@
 # Changelog
+## [2.6.0]: the router reads the queue, the workers run the tasks
+
+The swarm's drain loop was a poll. Each worker claimed on its own
+two-second tick, counted empty claims, and exited after the third; the
+supervisor grew the roster from the swap's slot read and shrank it as
+workers exited. The shape made the swarm a busy-waiter on its own
+queue and made worker lifetimes a function of queue luck: a review in
+flight kept a worker alive, a fast drain emptied the board and ended
+it. This release replaces the loop with a router: one goroutine
+attached to the session's todo queue is the only queue reader, and it
+runs on events — the start, a task created or completed (the todo tool
+calls a wake callback wired at the root), a worker finishing. Each
+pass claims a ready task for each idle worker and hands it over;
+workers never read the queue and wait on the handoff. `/swarm start
+<n>` names the count again (the 2.4.0 per-slot growth is gone), the
+claim poll is gone, the empty-claim exit is gone, and the "board
+emptied" notice with it — idle workers wait, they do not exit.
+
+The spawn side lost its clock. A worker queued at the llama-server
+writes nothing until the server hands it the slot, so the 10-minute
+stall kill would have shot healthy workers, and the 2h timeout was a
+spend guess on top of a queue of unknown depth. The swarm's spawn
+carries neither: the caller's context is the only bound, and
+`DelegateInput.Timeout` negative now means no wrapper deadline (zero
+keeps the runner default). The same evidence retires the slot gate
+everywhere: a second request queues at the server, so the delegate
+and the scheduler fire send and wait instead of counting free slots,
+`this turn holds the only one` is gone, and one slot hosts the
+drain pair — the fleet wiring is now `workers on and the swap
+readable`, with an unreadable swap failing closed. With the slot gate
+goes the stall kill: the delegate's `Stall` input, the delegate
+tool's `stallMs`, and the scheduler tool's `busy` and `stall` keys
+are gone (the store keeps the columns and replays historical rows as
+written); the timeouts stay, because they are spend ceilings, not
+liveness guesses.
+
+The menu paid for the delegate's return to the one-slot wire out of
+the scheduler tool: the description and schema lost their wait and
+stall text, the `n` knob, and the `workspace` override (a job runs in
+the session's workspace; the store keeps the column and the guard).
+The tool menu holds under its 14,000-character budget with the
+delegate wired on a one-slot box, and the recorded golden says so.
+
 ## [2.5.5]: the bare read names what paints
 
 The one-dial rule landed in 2.3.2 with a read that still spoke the

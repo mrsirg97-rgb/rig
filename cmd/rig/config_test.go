@@ -882,7 +882,7 @@ func TestDefaultJobModelLegacyKeyIsNamedAtStart(t *testing.T) {
 	}
 }
 
-func TestOneSlotWireRecordsTheMenuWithoutTheDrainPair(t *testing.T) {
+func TestOneSlotWireRecordsTheMenuWithTheDrainPair(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
@@ -897,8 +897,8 @@ func TestOneSlotWireRecordsTheMenuWithoutTheDrainPair(t *testing.T) {
 	if !hasToolName(s.last(), "scheduler") {
 		t.Fatalf("the scheduler is wired everywhere: %v", toolNames(s.last()))
 	}
-	if hasToolName(s.last(), "delegate") {
-		t.Fatalf("a one-slot server hosts no second request: %v", toolNames(s.last()))
+	if !hasToolName(s.last(), "delegate") {
+		t.Fatalf("a one-slot wire hosts the drain pair: %v", toolNames(s.last()))
 	}
 	for _, tl := range wireTools(t, s.last()) {
 		if strings.Contains(tl.Description, "absent") || strings.Contains(tl.Description, "not wired") {

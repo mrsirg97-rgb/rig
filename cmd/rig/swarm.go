@@ -17,7 +17,7 @@ func (a swarmAdapter) Start(ctx context.Context, in command.SwarmStart) (string,
 	if a.c == nil {
 		return "", errors.New(a.why)
 	}
-	return a.c.Start(ctx, swarm.StartOpts{Role: in.Role, Model: in.Model, Budget: in.Budget})
+	return a.c.Start(ctx, swarm.StartOpts{Count: in.Count, Role: in.Role, Model: in.Model, Budget: in.Budget})
 }
 
 func (a swarmAdapter) List() []command.SwarmWorker {

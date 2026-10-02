@@ -10,68 +10,25 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
+const noTimeout = time.Duration(-1)
+
 func (c *Controller) run(w *worker) {
 	defer c.wg.Done()
-	empties := 0
 	for {
-		if w.ctx.Err() != nil {
+		select {
+		case <-w.ctx.Done():
+			c.set(w, func() { w.state = StateExited })
 			return
-		}
-		if c.atBudget() {
-			spent, budget := c.budgetState()
-			c.notice(fmt.Sprintf("swarm: budget reached — $%.2f / $%.2f — the swarm stops claiming", spent, budget))
-			c.finish(w, true)
-			return
-		}
-		status := ""
-		if w.role == RoleReviewer {
-			status = "review"
-		}
-		reply, err := todostore.Claim(w.ctx, c.opts.TodoDB, w.proj, w.identity, status)
-		if err != nil {
-			c.loud(w, "w%d: claim: %v\n", w.id, err)
-			c.finish(w, false)
-			return
-		}
-		if reply == "nothing to do" {
-			if c.anyBusy() {
-				c.idle(w)
-				continue
-			}
-			empties++
-			if empties >= emptyClaimsBeforeExit {
-				c.finish(w, true)
+		case id := <-w.tasks:
+			if w.ctx.Err() != nil {
+				c.set(w, func() { w.state = StateExited })
 				return
 			}
-			c.idle(w)
-			continue
+			res := c.work(w, id)
+			c.settle(w, id, res)
+			c.emit(true)
+			c.Wake()
 		}
-		empties = 0
-		id := claimID(reply)
-		if id == "" {
-			c.loud(w, "w%d: claim reply unreadable: %q\n", w.id, reply)
-			c.finish(w, false)
-			return
-		}
-		c.set(w, func() { w.task = id })
-		c.emit(false)
-		res := c.work(w, id)
-		if res.ok {
-			c.set(w, func() { w.done++ })
-		} else {
-			c.bump(w, "retries", id)
-			if c.countOf("retries", id) == 1 {
-				c.notice(fmt.Sprintf("swarm: w%d died — %s restarted", w.id, id))
-				c.release(w, id)
-				c.idle(w)
-			} else {
-				c.notice(fmt.Sprintf("swarm: w%d died — %s exited", w.id, id))
-				c.failTask(w, id, res.noVerdict)
-				c.set(w, func() { w.failed++ })
-			}
-		}
-		c.emit(false)
-		c.set(w, func() { w.task = "" })
 	}
 }
 
@@ -88,7 +45,7 @@ func (c *Controller) work(w *worker, id string) workResult {
 		return workResult{}
 	}
 	c.stream(w, []byte(fmt.Sprintf("## swarm task %s (%s)\n", id, w.role)))
-	res, err := sched.Delegate(sched.DelegateInput{
+	res, err := c.delegate(sched.DelegateInput{
 		DB:            c.opts.SchedDB,
 		Home:          c.opts.Home,
 		Session:       w.identity,
@@ -102,16 +59,13 @@ func (c *Controller) work(w *worker, id string) workResult {
 		Spawn:         c.opts.Spawn,
 		WorkerCmd:     c.opts.WorkerCmd,
 		SwapURL:       c.opts.SwapURL,
-		Timeout:       workerTimeout,
-		Stall:         workerStall,
+		Timeout:       noTimeout,
 		Sandbox:       c.opts.Sandbox,
 		SandboxBinds:  c.opts.SandboxBinds,
 		RigHome:       c.opts.RigHome,
 		StateDir:      c.opts.StateDir,
 		Allow:         c.opts.Allow,
-		Context:       w.ctx,
 		SpawnCtx:      w.ctx,
-		WaitBusy:      true,
 		Observe:       func(p []byte) { c.stream(w, p) },
 	})
 	c.addSpent(res.Cost)
@@ -147,6 +101,30 @@ func (c *Controller) work(w *worker, id string) workResult {
 		c.loud(w, "w%d: complete %s: %v\n", w.id, id, err)
 	}
 	return workResult{ok: err == nil}
+}
+
+func (c *Controller) delegate(in sched.DelegateInput) (sched.DelegateResult, error) {
+	if c.opts.Delegate != nil {
+		return c.opts.Delegate(in)
+	}
+	return sched.Delegate(in)
+}
+
+func (c *Controller) settle(w *worker, id string, res workResult) {
+	if res.ok {
+		c.set(w, func() { w.done++; w.task = "" })
+		return
+	}
+	c.bump(w, "retries", id)
+	if c.countOf("retries", id) == 1 {
+		c.notice(fmt.Sprintf("swarm: w%d died — %s restarted", w.id, id))
+		c.release(w, id)
+		c.set(w, func() { w.task = "" })
+		return
+	}
+	c.notice(fmt.Sprintf("swarm: w%d died — %s exited", w.id, id))
+	c.failTask(w, id, res.noVerdict)
+	c.set(w, func() { w.failed++; w.task = "" })
 }
 
 func (c *Controller) release(w *worker, id string) {
@@ -216,17 +194,6 @@ func (c *Controller) bump(w *worker, key, id string) {
 	}
 }
 
-func (c *Controller) idle(w *worker) {
-	poll := c.opts.Poll
-	if poll <= 0 {
-		poll = defaultPoll
-	}
-	select {
-	case <-w.ctx.Done():
-	case <-time.After(poll):
-	}
-}
-
 func (c *Controller) loud(w *worker, format string, args ...any) {
 	if w.ctx.Err() != nil {
 		return
@@ -234,38 +201,8 @@ func (c *Controller) loud(w *worker, format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "swarm: "+format, args...)
 }
 
-func (c *Controller) anyBusy() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, w := range c.workers {
-		if w.task != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *Controller) allExited() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, w := range c.workers {
-		if w.state != StateExited {
-			return false
-		}
-	}
-	return true
-}
-
 func (c *Controller) set(w *worker, fn func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	fn()
-}
-
-func (c *Controller) finish(w *worker, natural bool) {
-	c.set(w, func() { w.state = StateExited })
-	if natural && c.allExited() {
-		c.notice("swarm: the board emptied — all workers exited")
-	}
-	c.emit(true)
 }

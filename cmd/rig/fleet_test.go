@@ -67,14 +67,13 @@ func remoteTable(t *testing.T) models.Table {
 	return tbl
 }
 
-func TestFleetWiringOneSlotKeepsTheDrainPairOff(t *testing.T) {
+func TestFleetWiringOneSlotWiresTheDrainPair(t *testing.T) {
 	on, why := fleetWiring(swapFetch([]string{"local"}, 1), "http://127.0.0.1:8090", "local", localTable(t), true)
-	if on {
-		t.Fatal("a one-slot server cannot host a second request: the drain pair stays off")
+	if !on {
+		t.Fatalf("one slot hosts the pair: the server queues the workers' requests, refusal %q", why)
 	}
-	want := "swarm: the fleet needs more than one slot (the resident server runs one, and a turn holds it)"
-	if why != want {
-		t.Fatalf("the swarm refusal = %q, want %q", why, want)
+	if why != "" {
+		t.Fatalf("a wired fleet carries no refusal, got %q", why)
 	}
 }
 
@@ -127,14 +126,14 @@ func TestFleetWiringUnreadableSwapFailsClosed(t *testing.T) {
 	if on {
 		t.Fatal("an unreadable swap is not capability: the pair stays off")
 	}
-	want := "swarm: the fleet needs more than one slot (the swap is unreadable at start)"
+	want := "swarm: the swap is unreadable at start (the pair fails closed)"
 	if why != want {
 		t.Fatalf("the swarm refusal = %q, want %q", why, want)
 	}
 }
 
 func TestSwarmAdapterRefusesWithTheWireReason(t *testing.T) {
-	want := "swarm: the fleet needs more than one slot (the resident server runs one, and a turn holds it)"
+	want := "swarm: the swap is unreadable at start (the pair fails closed)"
 	a := swarmAdapter{c: nil, why: want}
 	_, err := a.Start(context.Background(), command.SwarmStart{Role: "worker"})
 	if err == nil || err.Error() != want {

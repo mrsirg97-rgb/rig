@@ -63,11 +63,11 @@ func runSwarm(t *testing.T, env *command.Env, args string) (string, error) {
 func TestSwarmStartParsesBudget(t *testing.T) {
 	f := &fakeSwarm{}
 	env := swarmEnv(f)
-	if _, err := runSwarm(t, env, "start budget=5.50"); err != nil {
+	if _, err := runSwarm(t, env, "start 1 budget=5.50"); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if len(f.started) != 1 || f.started[0].Budget != 5.50 {
-		t.Fatalf("start = %+v, want budget 5.50", f.started)
+	if len(f.started) != 1 || f.started[0].Budget != 5.50 || f.started[0].Count != 1 {
+		t.Fatalf("start = %+v, want count 1 and budget 5.50", f.started)
 	}
 	if _, err := runSwarm(t, env, "start budget=-1"); err == nil {
 		t.Fatal("a negative budget must refuse")
@@ -80,24 +80,24 @@ func TestSwarmStartParsesBudget(t *testing.T) {
 func TestSwarmStartParsesRoleAndModel(t *testing.T) {
 	f := &fakeSwarm{}
 	env := swarmEnv(f)
-	got, err := runSwarm(t, env, "start")
+	got, err := runSwarm(t, env, "start 2")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if got != "swarm: added 1 agent (role worker · model qwen3.8-workers)" {
 		t.Errorf("reply = %q", got)
 	}
-	if len(f.started) != 1 || f.started[0].Role != "worker" || f.started[0].Model != "" {
-		t.Errorf("start = %+v, want one worker", f.started)
+	if len(f.started) != 1 || f.started[0].Role != "worker" || f.started[0].Model != "" || f.started[0].Count != 2 {
+		t.Errorf("start = %+v, want two workers", f.started)
 	}
-	got, err = runSwarm(t, env, "start role=reviewer model=qwen3.8-review")
+	got, err = runSwarm(t, env, "start 1 role=reviewer model=qwen3.8-review")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if len(f.started) != 2 || f.started[1].Role != "reviewer" || f.started[1].Model != "qwen3.8-review" {
 		t.Errorf("second start = %+v", f.started[1])
 	}
-	got, err = runSwarm(t, env, "start model=qwen3.8-workers role=reviewer")
+	got, err = runSwarm(t, env, "start 1 model=qwen3.8-workers role=reviewer")
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -106,11 +106,28 @@ func TestSwarmStartParsesRoleAndModel(t *testing.T) {
 	}
 }
 
-func TestSwarmCountRefuses(t *testing.T) {
+func TestSwarmCountRidesStart(t *testing.T) {
 	env := swarmEnv(&fakeSwarm{})
 	_, err := runSwarm(t, env, "3")
-	if err == nil || !strings.Contains(err.Error(), "a count is not taken") {
-		t.Fatalf("the count refusal must name the retirement: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "the count rides start") {
+		t.Fatalf("a bare count must name start: %v", err)
+	}
+	for _, args := range []string{"start", "start abc"} {
+		if _, err := runSwarm(t, env, args); err == nil {
+			t.Errorf("/swarm %q must refuse", args)
+		} else if !strings.Contains(err.Error(), "count") {
+			t.Errorf("the refusal must name the count: %v", err)
+		}
+	}
+	f := &fakeSwarm{}
+	env = swarmEnv(f)
+	for _, args := range []string{"start 0", "start 17"} {
+		if _, err := runSwarm(t, env, args); err != nil {
+			t.Errorf("/swarm %q must reach the seam (the controller owns the bounds): %v", args, err)
+		}
+	}
+	if f.started[len(f.started)-1].Count != 17 {
+		t.Errorf("the parsed count must ride through: %+v", f.started)
 	}
 }
 
@@ -158,7 +175,7 @@ func TestSwarmStopEndsTheWorkers(t *testing.T) {
 
 func TestSwarmUsageRefusals(t *testing.T) {
 	env := swarmEnv(&fakeSwarm{})
-	for _, args := range []string{"x", "3", "start role=worker role=reviewer", "start role=", "start bogus", "stop extra"} {
+	for _, args := range []string{"x", "3", "start 1 role=worker role=reviewer", "start 1 role=", "start 1 bogus", "stop extra"} {
 		if _, err := runSwarm(t, env, args); err == nil {
 			t.Errorf("/swarm %q must refuse", args)
 		}
@@ -182,7 +199,7 @@ func TestSwarmNoSeamListsEmptyAndStopRefuses(t *testing.T) {
 func TestSwarmThreadsTheLiveSession(t *testing.T) {
 	f := &fakeSwarm{}
 	env := swarmEnv(f)
-	if _, err := runSwarm(t, env, "start"); err != nil {
+	if _, err := runSwarm(t, env, "start 1"); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if len(f.started) != 1 {
@@ -192,7 +209,7 @@ func TestSwarmThreadsTheLiveSession(t *testing.T) {
 
 func TestSwarmStartErrorSurfacesVerbatim(t *testing.T) {
 	f := &fakeSwarm{startErr: context.DeadlineExceeded}
-	if _, err := runSwarm(t, swarmEnv(f), "start"); err != context.DeadlineExceeded {
+	if _, err := runSwarm(t, swarmEnv(f), "start 1"); err != context.DeadlineExceeded {
 		t.Errorf("start error = %v, want verbatim", err)
 	}
 }

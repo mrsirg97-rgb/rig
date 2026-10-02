@@ -1,6 +1,7 @@
 package scheduler_test
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"regexp"
@@ -108,35 +109,17 @@ func spawnModel(t *testing.T, spawn *delegateSpawn) string {
 	return ""
 }
 
-func TestDelegateOneSlotHeldRefusesWithThePinnedVoice(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+func TestDelegateFullSlotSetStillSendsAndWaits(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}}}
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
 		in.Models = modelTable(t, "qwen3.8-27b-workers")
 	})
-	if _, err := sched.Delegate(in); err == nil {
-		t.Fatal("a one-slot model with its only slot processing must refuse")
-	} else if !strings.Contains(err.Error(), "delegate: no free slot; this turn holds the only one") {
-		t.Errorf("pinned voice: %v", err)
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("a resident model with every slot processing must send and wait on the server's queue: %v", err)
 	}
-	if spawn.count() != 0 {
-		t.Fatalf("no spawn may happen without a free slot: %d", spawn.count())
-	}
-}
-
-func TestDelegateNoFreeSlotNamesTheSlotCount(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
-	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true, true, true}}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
-		in.Models = modelTable(t, "qwen3.8-27b-workers")
-	})
-	if _, err := sched.Delegate(in); err == nil {
-		t.Fatal("an all-processing slot set must refuse")
-	} else if !strings.Contains(err.Error(), "no free slot (all 3 slots are processing)") {
-		t.Errorf("count voice: %v", err)
-	}
-	if spawn.count() != 0 {
-		t.Fatalf("no spawn may happen: %d", spawn.count())
+	if spawn.count() != 1 {
+		t.Fatalf("spawn calls = %d, want 1 (the server queues the request)", spawn.count())
 	}
 }
 
@@ -260,14 +243,14 @@ func TestDelegateNamedModelWhileAnotherResidentRefusesNamingTheHolder(t *testing
 	}
 }
 
-func TestDelegateSlotReadFailureFailsClosed(t *testing.T) {
+func TestDelegateGateReadFailureFailsClosed(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}}}
-	fetch.failing = "slots endpoint down"
+	fetch.failing = "models endpoint down"
 	in := gateDelegateInput(t, fetch, spawn.spawn, nil)
 	if _, err := sched.Delegate(in); err == nil {
-		t.Fatal("a failed slot read must refuse")
-	} else if !strings.Contains(err.Error(), "gate check failed") || !strings.Contains(err.Error(), "slots endpoint down") {
+		t.Fatal("a failed gate read must refuse")
+	} else if !strings.Contains(err.Error(), "gate check failed") || !strings.Contains(err.Error(), "models endpoint down") {
 		t.Errorf("gate voice: %v", err)
 	}
 	if spawn.count() != 0 {
@@ -275,64 +258,42 @@ func TestDelegateSlotReadFailureFailsClosed(t *testing.T) {
 	}
 }
 
-func TestFireWaitsForAFreeSlotThenSpawns(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
-	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}, {false}}}
+func TestDelegateNegativeTimeoutRunsOnTheCallerContext(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	fetch := &gateFetch{}
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
-		in.WaitBusy = true
-		in.Models = modelTable(t, "qwen3.8-27b-workers")
+		in.Timeout = -1
 	})
+	deadlineSeen := false
+	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+		if _, ok := ctx.Deadline(); ok {
+			deadlineSeen = true
+		}
+	}
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
-	if fetch.slotReads < 2 {
-		t.Fatalf("the wait must poll the slots before spawning (reads = %d)", fetch.slotReads)
-	}
-	if spawn.count() != 1 {
-		t.Fatalf("spawn calls = %d, want 1 after the slot freed", spawn.count())
+	if deadlineSeen {
+		t.Fatal("a negative timeout must run on the caller's context alone (no deadline)")
 	}
 }
 
-func TestFireSkipNamesTheHolderWhenTheWaitExpires(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
-	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
-		in.WaitBusy = true
-		in.Timeout = 1200 * time.Millisecond
-		in.Models = modelTable(t, "qwen3.8-27b-workers")
-	})
-	started := time.Now()
-	if _, err := sched.Delegate(in); err == nil {
-		t.Fatal("an expired wait must refuse")
-	} else if !strings.Contains(err.Error(), "no free slot on qwen3.8-27b-workers") {
-		t.Errorf("skip voice: %v", err)
+func TestDelegateZeroTimeoutKeepsTheDefault(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	fetch := &gateFetch{}
+	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) { in.Timeout = 0 })
+	var limit time.Duration
+	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+		deadline, ok := ctx.Deadline()
+		if ok {
+			limit = time.Until(deadline)
+		}
 	}
-	if time.Since(started) < time.Second {
-		t.Fatalf("the wait must ride the timeout before refusing (waited %v)", time.Since(started))
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
 	}
-	if spawn.count() != 0 {
-		t.Fatalf("no spawn may happen on an expired wait: %d", spawn.count())
-	}
-}
-
-func TestFireSkipsImmediatelyWhenAnotherModelIsResident(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
-	fetch := &gateFetch{resident: []string{"other-model"}}
-	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
-		in.Model = "brain"
-		in.WaitBusy = true
-	})
-	started := time.Now()
-	if _, err := sched.Delegate(in); err == nil {
-		t.Fatal("a different resident model must refuse even with the wait policy")
-	} else if !strings.Contains(err.Error(), "held by other-model") {
-		t.Errorf("holder voice: %v", err)
-	}
-	if time.Since(started) > 500*time.Millisecond {
-		t.Fatalf("the holder refusal must not wait for an eviction (took %v)", time.Since(started))
-	}
-	if spawn.count() != 0 {
-		t.Fatalf("no spawn may happen on a holder refusal: %d", spawn.count())
+	if limit <= 0 || limit > sched.DefaultRunTimeout {
+		t.Fatalf("the zero timeout must wrap the default run timeout, got %v", limit)
 	}
 }
 
@@ -351,25 +312,21 @@ func TestRunJobWaitsForAFreeSlotUpToTheFireTimeout(t *testing.T) {
 	}
 }
 
-func TestRunJobSkipNamesTheHolderWhenTheWaitExpires(t *testing.T) {
+func TestRunJobSendsAndWaitsWhileEverySlotIsProcessing(t *testing.T) {
 	h, key := setupJob(t, realCwd(t, "job"), nil)
-	spawn := &fakeSpawn{}
-	gf := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	gf := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true, true}}}
 	opts := runOpts(h, []string{"qwen3.8-27b-workers"}, spawn, fetchOpts{})
 	opts.Fetch = gf.fetch
-	opts.Timeout = 1200 * time.Millisecond
 	if err := sched.RunJob(key, opts); err != nil {
 		t.Fatalf("run-job: %v", err)
 	}
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1 (the fire's request queues at the server)", len(spawn.calls))
+	}
 	rec := runEvents(t, h, "")[0]
-	if rec.Args["status"] != "skip" {
-		t.Fatalf("status %v", rec.Args["status"])
-	}
-	if !regexp.MustCompile(`no free slot on qwen3\.8-27b-workers`).MatchString(toString(rec.Args["reason"])) {
-		t.Fatalf("reason must name the model and the wait: %v", rec.Args["reason"])
-	}
-	if len(spawn.calls) != 0 {
-		t.Fatal("no spawn on an expired wait")
+	if rec.Args["status"] == "skip" {
+		t.Fatalf("a full slot set must not skip: %v", rec.Args)
 	}
 }
 

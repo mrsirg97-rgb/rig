@@ -283,15 +283,16 @@ remote rows).
 model. A worker's model resolves at claim time — the named one, else
 the resident model (what the swap has loaded), else the session's
 default — and the gate is the live free-slot read from
-`GET /upstream/<model>/slots`. A scheduler fire waits for a free slot
-up to its timeout, then skips naming the holder; a delegate inside a
-turn reads once and refuses; the swarm starts one drain worker per
-free slot and grows as slots free. `busy: force` is retired: eviction
-is the operator's act. `delegate` and the swarm are wired only where
-a second request can run — the session's model row is remote, or the
-resident server reports more than one slot, one live read at wire
-time; the scheduler is wired everywhere; the menu says nothing about
-what is absent, and `/swarm` names the reason when it refuses. A
+`GET /upstream/<model>/slots` at dispatch, and a model that is not
+resident refuses, naming the holder: the resident server queues
+requests, so every spawn site — a delegate, a scheduler fire, the
+swarm's worker — sends and waits. `busy` and the stall kill retire
+with the slot gate: the fire waits on nothing and is not shot for
+silence; the timeout stays the spend ceiling. `delegate` and the
+swarm are wired wherever the worker tools are on and the swap is
+readable at start — one slot hosts the pair; the scheduler is wired
+everywhere; the menu says nothing about what is absent, and `/swarm`
+names the reason when it refuses. A
 `workers.json` left in the rig home is named once at start and
 ignored; delete it to silence the line.
 
