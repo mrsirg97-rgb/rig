@@ -125,6 +125,7 @@ where no worker fleet stands. Restrict them with `--allow`:
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
 | `delegate` | a headless worker for a bounded subtask; wired where a second request can run (a remote row, or more than one slot on the resident server) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |
+| `decide` | hand many items to a decision server against one typed question instead of reading them (on the menu only when `decisionUrl` is set) |
 | `plugin` / `plugins` | the door into your python plugins, and their ecosystem |
 
 Every tool result is capped. Repeated identical failures are bounded. An

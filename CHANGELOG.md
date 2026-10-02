@@ -1,4 +1,40 @@
 # Changelog
+## [2.8.0]: decide — the model hands the sorting to the decision server
+
+The evidence sat in the transcript: 27,035 bash calls and 4,935 reads,
+many of them steps like "which of these items match X", where the whole
+output fed the context only so the model could sort it. With
+`decisionUrl` set — the same setting that already proposes a risk row
+per bash call — the live tool table now carries one built-in entry
+named `decide` (SPEC_DECISION, the delegate section). The arguments are
+one typed question, a choice with a description per label, a yes/no, or
+a score, and a list of items. The tool sends one request per item
+through the 2.7.0 proposer, up to the kernel's Parallel at once, and
+replies grouped: for each label, the items that got it, numbered from 1
+with the first line; then the unsure items in full for the model to
+judge itself. A choice is unsure when its top probability is under one
+half; a yes/no is never unsure, so a question that needs a middle uses
+a choice.
+
+The bound holds ahead of any I/O: the items' total stays under the read
+ceiling, the read tool's own, and a list at it refuses before a request
+goes out. A server error is a refusal the model reads, never a dead
+turn — nothing was sorted and no row was written, so the retry starts
+clean. Every answered item lands in the decision store as a final row:
+site `decide`, the server as decider, its confidence, unsure marked;
+none are queued for review. The mark is a column — `unsure`, schema
+version 2 — and the migration adds it to a version 1 file with the old
+rows reading 0, the same one-time move the rem store made.
+
+When `decisionUrl` is set, one guideline joins the system prompt
+through the GuidelineContributor seam: when a step is sorting or
+filtering many items against a question you can state, hand the items
+to decide instead of reading them. Unset, nothing moves: the fixed tool
+menu, the wire sha, and the system prompt are byte-identical, the same
+invariant the wire goldens pin. The decide name is native to the
+plugins — a plugin file named `decide` collides — and the allowlist
+carries it in the embedded default.
+
 ## [2.7.0]: the decisions are kept, the answers are reviewed
 
 rig decides all day and kept none of it. The stores held thousands of

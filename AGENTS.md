@@ -83,8 +83,10 @@ plus one registration line, and the loop never names a concrete type.
   (choice, score, yes/no), the answer with its confidence and its
   decider, the `Decider` a decision server implements, the `Recorder`
   the gates hold; beside them the HTTP proposer, the bounded proposal
-  queue, the bash site, and the reviewer. An answer is a proposal an
-  LLM reviews, never an action.
+  queue, the bash site, the reviewer, and the decide tool the model
+  hands its sorting to (a built-in entry of the live table when
+  `decisionUrl` is set). An answer is a proposal an LLM reviews, never
+  an action.
 - `middleware/approve`: the manual tool-approval gate (SPEC_MODES 4):
   in manual mode a mutating call pauses for the operator's y/n at the
   frontend's ask door; a denial is a teaching refusal the model reads.

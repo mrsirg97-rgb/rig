@@ -8,7 +8,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/config"
 )
 
-var fleetAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "plugin", "plugins", "sessions", "scheduler", "delegate"}
+var fleetAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "decide", "plugin", "plugins", "sessions", "scheduler", "delegate"}
 
 func TestWorkersFileIsReadIgnoredAndNamedOnce(t *testing.T) {
 	dir := t.TempDir()
