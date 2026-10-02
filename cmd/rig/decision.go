@@ -56,9 +56,6 @@ func (r *dbReviews) Settle(ctx context.Context, id int64, approved bool, reviewe
 	})
 }
 
-// reviewFire wires the reviewer's fire: the scheduler's Delegate, jailed
-// like a swarm worker (the sandbox the operator chose), with no tools —
-// the fire reads the rows and replies on stdout.
 func (r *root) reviewFire(home string, db store.DB, swapURL, self, model, cfgDir, sandbox string, sandboxBinds []string) decision.Fire {
 	return func(ctx context.Context, prompt string) (string, error) {
 		res, err := sched.Delegate(sched.DelegateInput{

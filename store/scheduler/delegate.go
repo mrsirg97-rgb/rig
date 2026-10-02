@@ -42,9 +42,6 @@ type DelegateInput struct {
 	SpawnCtx      context.Context
 }
 
-// NoToolsAllow is the -allow value that runs a worker with no tool at
-// all: the allowlist denies every native tool and the plugin door is
-// shut with it.
 const NoToolsAllow = "none"
 
 type DelegateResult struct {
@@ -160,8 +157,6 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	prompt := in.Task + ReportBack
 	allow := joinAllow(in.Allow)
 	if in.NoTools {
-		// a toolless fire reads the task and replies on stdout: no
-		// report-back detour, and the worker runs with no tool at all
 		prompt = in.Task
 		allow = NoToolsAllow
 	}

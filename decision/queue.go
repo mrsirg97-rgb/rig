@@ -31,10 +31,6 @@ type Queue struct {
 	loud func(string)
 }
 
-// NewQueue wires the proposal queue; land is called when a proposal lands
-// in the store (a landing marks the reviewer dirty — the wake is the
-// session's turn end, not the landing), and may be nil where nothing
-// reviews.
 func NewQueue(dec Decider, sink Sink, land func(), loud func(string)) *Queue {
 	return &Queue{
 		ch:   make(chan Pending, QueueCap),

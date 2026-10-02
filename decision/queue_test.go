@@ -2,6 +2,7 @@ package decision_test
 
 import (
 	"context"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
 type fakeDecider struct {
@@ -90,6 +92,42 @@ func TestAProposalLandsPendingAndMarksTheReviewerDirty(t *testing.T) {
 	}
 	if row.Confidence == nil || *row.Confidence != 0.71 {
 		t.Fatalf("the confidence rides the row: %v", row.Confidence)
+	}
+}
+
+func TestAReplyWithProbabilitiesStoresTheMassOnTheRow(t *testing.T) {
+	db := openDecisionStore(t)
+	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
+	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"answers": {"risk": {"type": "choice", "choice": "safe",
+			"probabilities": {"safe": 0.71, "changes": 0.2, "dangerous": 0.09}}}}`))
+	}))
+	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := decision.NewQueue(dec, sink, nil, func(string) {})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go q.Run(ctx)
+
+	q.Propose(decision.Pending{
+		Site:     decision.SiteBash,
+		Scope:    "proj",
+		State:    `{"command":"ls"}`,
+		Question: decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"),
+	})
+	<-sink.written
+
+	rows, err := decisionstore.Pending(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("the proposal is pending: %d rows", len(rows))
+	}
+	if rows[0].Answer != "safe" || rows[0].Confidence == nil || *rows[0].Confidence != 0.71 {
+		t.Fatalf("the row keeps the mass on the chosen label, no answer_confidence in the reply: %+v", rows[0])
 	}
 }
 

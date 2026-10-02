@@ -10,9 +10,6 @@ import (
 
 const siteStateCap = 4096
 
-// The risk question describes each label: Laya's choice criteria is the
-// map of label to what it means, so the decider grades against the same
-// words the reviewer reads.
 var riskQuestion = Question{
 	ID:      "risk",
 	Kind:    KindChoice,

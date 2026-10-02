@@ -44,6 +44,19 @@ sees core and models and nothing else.
   state the command's closures read and rewrite at call time, so a swap
   (new, a resume, a model switch) is visible to every closure with no
   re-wiring.
+- **The decision wiring** (`decision.go`, the `decisionUrl` block in
+  main, `root.frontend`): the decision store opens with the others; the
+  gates' recorder holds it and records finals that never fail a call.
+  With `decisionUrl` set, one queue proposes — a bash call's risk
+  proposal rides a bounded channel, and a landing marks the reviewer
+  dirty — and the reviewer reviews at the session's turn end, never
+  per proposal. Only an interactive session reviews; a headless worker
+  proposes and never reviews. The reviewer's fire is the scheduler's
+  `Delegate`, jailed like a swarm worker (the sandbox the operator
+  chose) with no tools: it reads the rows and replies on stdout. The
+  loop's frontend is the recorder wrapped with the reviewer's turn-end
+  wake when one reviews; the wrap stays off `r.fe`, whose `Ask` the
+  session reads directly.
 - **The seam closures**: `buildSystem` (prompt assembly), `buildPair`
   (the provider+policy rebuild), `swapIn`, `compactNow`, `newSession`,
   `sessionList/Show/Resume`, `switchModel` (the recorder's row write

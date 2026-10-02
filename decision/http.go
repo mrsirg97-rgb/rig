@@ -55,29 +55,21 @@ func NewHTTP(o HTTPOptions) (Decider, error) {
 	}, nil
 }
 
-// Laya's wire: the questions ride keyed by their id, each as its type,
-// the instructions, and the criteria — a map of label to what it means
-// for a choice, the ordered criteria list for a score, nothing for a
-// noul.
 type wireRequest struct {
 	State     string                     `json:"state"`
 	Questions map[string]json.RawMessage `json:"questions"`
 }
 
-// wireNoul is Laya's name for a yes/no.
 const wireNoul = "noul"
 
 type wireAnswer struct {
-	Type             string   `json:"type"`
-	Choice           string   `json:"choice"`
-	Noul             *float64 `json:"noul"`
-	Score            *float64 `json:"score"`
-	AnswerConfidence float64  `json:"answer_confidence"`
+	Type          string             `json:"type"`
+	Choice        string             `json:"choice"`
+	Noul          *float64           `json:"noul"`
+	Score         *float64           `json:"score"`
+	Probabilities map[string]float64 `json:"probabilities"`
 }
 
-// wireReply is the envelope Laya answers with; the model, the usage, the
-// routing, and the action block on each answer are ignored, so the decode
-// tolerates any field it does not know.
 type wireReply struct {
 	Answers map[string]wireAnswer `json:"answers"`
 }
@@ -114,14 +106,14 @@ func (d *httpDecider) Decide(ctx context.Context, state string, questions []Ques
 	}
 	var out []Answer
 	for id, a := range parsed.Answers {
-		value, ok := answerValue(a)
+		value, conf, ok := answerOf(a)
 		if !ok {
 			continue
 		}
-		if a.AnswerConfidence < 0 || a.AnswerConfidence > 1 {
+		if conf < 0 || conf > 1 {
 			continue
 		}
-		out = append(out, Answer{Question: id, Value: value, Confidence: a.AnswerConfidence, Decider: d.name})
+		out = append(out, Answer{Question: id, Value: value, Confidence: conf, Decider: d.name})
 	}
 	return out, nil
 }
@@ -168,30 +160,39 @@ func described(q Question) map[string]string {
 	return out
 }
 
-// answerValue reads the value off Laya's answer: a choice names the label,
-// a noul is the probability of the yes option so the answer is that side
-// (yes at 0.5, no below) and the answer_confidence is the mass on it, a
-// score is the expected level. An answer of no known type, or one missing
-// its value, is no answer.
-func answerValue(a wireAnswer) (string, bool) {
+func answerOf(a wireAnswer) (string, float64, bool) {
 	switch a.Type {
 	case KindChoice:
-		return a.Choice, a.Choice != ""
+		p, ok := a.Probabilities[a.Choice]
+		if a.Choice == "" || !ok {
+			return "", 0, false
+		}
+		return a.Choice, p, true
 	case wireNoul:
 		if a.Noul == nil {
-			return "", false
+			return "", 0, false
 		}
 		if *a.Noul >= 0.5 {
-			return "yes", true
+			return "yes", *a.Noul, true
 		}
-		return "no", true
+		return "no", 1 - *a.Noul, true
 	case KindScore:
-		if a.Score == nil {
-			return "", false
+		if a.Score == nil || len(a.Probabilities) == 0 {
+			return "", 0, false
 		}
-		return strconv.FormatFloat(*a.Score, 'f', -1, 64), true
+		return strconv.FormatFloat(*a.Score, 'f', -1, 64), mass(a.Probabilities), true
 	}
-	return "", false
+	return "", 0, false
+}
+
+func mass(p map[string]float64) float64 {
+	top := 0.0
+	for _, v := range p {
+		if v > top {
+			top = v
+		}
+	}
+	return top
 }
 
 func decodeReply(r io.Reader) (wireReply, error) {

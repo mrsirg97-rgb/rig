@@ -532,7 +532,6 @@ func main() {
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		if headless {
-			// a headless worker proposes and never reviews
 			r.decQ = decision.NewQueue(dec, sink, nil, loud)
 		} else {
 			rev := decision.NewReviewer(&dbReviews{db: decdb},

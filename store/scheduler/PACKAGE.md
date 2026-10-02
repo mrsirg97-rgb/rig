@@ -168,6 +168,10 @@ A command job's fire skips the busy probe and
 - Crontab is written before the store commit: drift is surfaced in list,
   and a line orphaned by a crash between the write and the commit is
   listed too (the runner refuses to fire it, naming the row).
+- `NoToolsAllow` (`-allow none`) runs a worker with no tool at all: the
+  allowlist denies every native tool and the plugin door shuts with it.
+  A no-tools fire also skips the report-back suffix — a toolless worker
+  cannot `rem`, so its stdout is the reply.
 - The tag is home-scoped: the writer never touches another home's line
   (its `rig-scheduler` home differs, or its key is not this store's), so
   two homes sharing one crontab stay disjoint. An old `pane-scheduler`

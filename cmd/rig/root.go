@@ -127,9 +127,6 @@ func wire(r *root) *rig.Kernel {
 
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
-	// The loop's frontend: the recorder, wrapped with the reviewer's
-	// turn-end wake when one reviews. The wrap stays off r.fe, whose
-	// Ask the session read directly.
 	fe := r.frontend()
 	k := rig.New(
 		rig.WithProvider(provider),
@@ -272,8 +269,6 @@ func (r *root) blobsDir() string {
 	return imagemarker.BlobsDir(r.rigHome)
 }
 
-// frontend is the session's frontend as the loop sees it: the
-// recorder, wrapped with the reviewer's turn-end wake when one reviews.
 func (r *root) frontend() core.Frontend {
 	if r.decRev == nil {
 		return r.rec

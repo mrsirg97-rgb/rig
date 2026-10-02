@@ -55,12 +55,13 @@ wire byte-identical. Set: an HTTP `Decider` speaking Laya's wire —
 {"<id>": {"type": "choice", "instructions": ..., "criteria": ...}}}` — a
 choice's criteria is the map of label to what it means, a score's is the
 ordered criteria list, a yes/no rides as type `noul` with no criteria —
-replying `{"answers": {"<id>": {"type", "choice", "probabilities",
-"answer_confidence", ...}}}` beside the model, the usage, and the routing
-the decode ignores. The confidence a row keeps is `answer_confidence`; a
-choice's value is its label, a noul's is the side its probability names
-(yes at 0.5, no below — the mass on that side is the answer_confidence), a
-score's is its expected level. The decider recorded is the URL's host. One
+replying `{"answers": {"<id>": {"type", "choice", "probabilities", ...}}}`
+beside the model, the usage, and the routing the decode ignores. The
+confidence a row keeps is the mass on the value the answer names: a
+choice's is its label's entry in `probabilities`, a noul's is the mass on
+the side its probability names (yes at 0.5, no below), a score's is the
+top entry; `answer_confidence` is not read. The decider recorded is the
+URL's host. One
 site: every `bash` call gets a pending risk proposal — `choice: safe,
 changes, dangerous`, each label described on the wire — over the command,
 the workspace, and how the call ended, written after the call returns. The
@@ -105,8 +106,9 @@ reviewer's name on the row is the model that reviewed.
 - proposer: no `decisionUrl`, no link in the chain and nothing proposed;
   a bash call's proposal is pending and the reply is unchanged; the HTTP
   client speaks Laya's wire shape (the fake server replies the full Laya
-  payload, unknown fields included) and drops an out-of-range
-  answer_confidence.
+  payload, unknown fields included); a reply with probabilities and no
+  `answer_confidence` stores the mass on the value named, and an
+  out-of-range confidence drops.
 - reviewer: three pending rows are reviewed in one fire; a deny stores the
   corrected answer; a partial reply leaves the unnamed row pending; a fire
   that settles nothing waits for the next landing; a landing marks the

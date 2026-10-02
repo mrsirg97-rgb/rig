@@ -39,9 +39,6 @@ type Reviewer struct {
 	loud     func(string)
 }
 
-// NewReviewer wires the reviewer; budget is the reviewer model row's
-// window minus its reserve, in tokens — the room one fire's prompt may
-// take. Rows that do not fit stay pending for the next turn end.
 func NewReviewer(reviews Reviews, fire Fire, reviewer string, budget int, loud func(string)) *Reviewer {
 	return &Reviewer{
 		wake:     make(chan struct{}, 1),
@@ -53,12 +50,8 @@ func NewReviewer(reviews Reviews, fire Fire, reviewer string, budget int, loud f
 	}
 }
 
-// Land marks the reviewer dirty: a proposal landed in the store.
 func (r *Reviewer) Land() { r.dirty.Store(true) }
 
-// Wake nudges the reviewer at a turn end; the pass runs only when a
-// landing has marked it dirty, so a turn end with nothing landed costs
-// nothing.
 func (r *Reviewer) Wake() {
 	if !r.dirty.Load() {
 		return
@@ -69,9 +62,6 @@ func (r *Reviewer) Wake() {
 	}
 }
 
-// TurnEnds wraps a frontend so the session's turn end wakes the reviewer:
-// only an interactive session reviews, and the wake is the turn end,
-// never the landing.
 func TurnEnds(fe core.Frontend, r *Reviewer) core.Frontend {
 	return turnEndWake{inner: fe, rev: r}
 }
@@ -180,10 +170,6 @@ func rowBlock(row ReviewRow) string {
 	return b.String()
 }
 
-// fitRows takes the oldest rows whose review fits the fire's prompt budget
-// in tokens, at the codebase's own four bytes to the token; the rest stay
-// pending for the next turn end. A row that cannot fit alone still goes,
-// so one huge row cannot wedge the queue.
 func fitRows(rows []ReviewRow, header string, budget int) []ReviewRow {
 	used := tokens(header)
 	take := 0

@@ -15,17 +15,17 @@ func testClient() *http.Client {
 	return &http.Client{Transport: testenv.Transport()}
 }
 
-// layaReply is Laya's /v1/systemone payload in its full shape: the answers
+// layaChoiceReply is Laya's /v1/systemone payload in its full shape: the answers
 // are keyed by question id, each answer carries its type, its value, the
-// probabilities, the entropy confidence beside the answer_confidence, and
-// the action block; the envelope carries the model and the usage and the
-// routing a client ignores. The decoder must take all of it.
+// probabilities, the entropy confidence, and the action block; the envelope
+// carries the model and the usage and the routing a client ignores. The
+// decoder must take all of it.
 const layaChoiceReply = `{
 	"model": "laya-rl-agent",
 	"answers": {
 		"risk": {"type": "choice", "choice": "safe",
 		         "probabilities": {"safe": 0.71, "changes": 0.2, "dangerous": 0.09},
-		         "confidence": 0.55, "answer_confidence": 0.71,
+		         "confidence": 0.55,
 		         "action": {"act_probability": 1.0}}
 	},
 	"usage": {"input_tokens": 83, "output_tokens": 0, "state_tokens": 12,
@@ -67,7 +67,7 @@ func TestTheClientSpeaksLayasWire(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(answers) != 1 || answers[0].Value != "safe" || answers[0].Confidence != 0.71 {
-		t.Fatalf("the answer is the chosen label and the answer_confidence, not the entropy confidence: %+v", answers)
+		t.Fatalf("the answer is the chosen label with its entry in the probabilities: %+v", answers)
 	}
 	if answers[0].Decider != "laya" {
 		t.Fatalf("the answer names its decider: %+v", answers[0])
@@ -95,6 +95,47 @@ func TestTheClientSpeaksLayasWire(t *testing.T) {
 	}
 }
 
+func TestAnAnswerConfidenceBesideTheProbabilitiesIsNotRead(t *testing.T) {
+	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"answers": {"risk": {"type": "choice", "choice": "safe",
+			"probabilities": {"safe": 0.71, "changes": 0.2, "dangerous": 0.09},
+			"answer_confidence": 0.99}}}`))
+	}))
+	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answers, err := dec.Decide(context.Background(), "s", []decision.Question{
+		decision.Choice("risk", "risk?", "safe", "changes", "dangerous"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(answers) != 1 || answers[0].Confidence != 0.71 {
+		t.Fatalf("the mass on the chosen label is the confidence, answer_confidence or not: %+v", answers)
+	}
+}
+
+func TestAChoiceWithoutItsMassIsNoAnswer(t *testing.T) {
+	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"answers": {"risk": {"type": "choice", "choice": "safe",
+			"probabilities": {"changes": 0.2, "dangerous": 0.09}}}}`))
+	}))
+	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answers, err := dec.Decide(context.Background(), "s", []decision.Question{
+		decision.Choice("risk", "risk?", "safe", "changes", "dangerous"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(answers) != 0 {
+		t.Fatalf("a choice with no mass on its label is no answer: %+v", answers)
+	}
+}
+
 func TestAYesNoQuestionIsNoul(t *testing.T) {
 	var got struct {
 		Questions map[string]struct {
@@ -107,7 +148,7 @@ func TestAYesNoQuestionIsNoul(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		_, _ = w.Write([]byte(`{"answers": {"ok": {"type": "noul", "noul": 0.87, "confidence": 0.87, "answer_confidence": 0.87}}, "usage": {}}`))
+		_, _ = w.Write([]byte(`{"answers": {"ok": {"type": "noul", "noul": 0.87, "confidence": 0.87}}, "usage": {}}`))
 	}))
 	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
 	if err != nil {
@@ -118,7 +159,7 @@ func TestAYesNoQuestionIsNoul(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(answers) != 1 || answers[0].Value != "yes" || answers[0].Confidence != 0.87 {
-		t.Fatalf("the noul answer is the side the probability names: %+v", answers)
+		t.Fatalf("the noul answer is the side the probability names, with its mass: %+v", answers)
 	}
 	q, ok := got.Questions["ok"]
 	if !ok || q.Type != "noul" || q.Instructions != "ok?" {
@@ -131,7 +172,7 @@ func TestAYesNoQuestionIsNoul(t *testing.T) {
 
 func TestANoulBelowHalfIsNo(t *testing.T) {
 	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"answers": {"ok": {"type": "noul", "noul": 0.4, "answer_confidence": 0.6}}}`))
+		_, _ = w.Write([]byte(`{"answers": {"ok": {"type": "noul", "noul": 0.4}}}`))
 	}))
 	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
 	if err != nil {
@@ -158,7 +199,7 @@ func TestAScoreQuestionTakesACriteriaList(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		_, _ = w.Write([]byte(`{"answers": {"urgency": {"type": "score", "score": 1.7, "legend": {"1": "firm", "2": "angry"}, "probabilities": {"1": 0.5, "2": 0.3}, "answer_confidence": 0.5}}}`))
+		_, _ = w.Write([]byte(`{"answers": {"urgency": {"type": "score", "score": 1.7, "legend": {"1": "firm", "2": "angry"}, "probabilities": {"1": 0.5, "2": 0.3}}}}`))
 	}))
 	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
 	if err != nil {
@@ -178,7 +219,7 @@ func TestAScoreQuestionTakesACriteriaList(t *testing.T) {
 		t.Fatalf("the score carries its criteria list in order: %+v", q.Criteria)
 	}
 	if len(answers) != 1 || answers[0].Value != "1.7" || answers[0].Confidence != 0.5 {
-		t.Fatalf("the score answer is the expected level: %+v", answers)
+		t.Fatalf("the score answer is the expected level with the top mass: %+v", answers)
 	}
 }
 
@@ -201,11 +242,11 @@ func TestAnUnknownAnswerTypeIsNoAnswer(t *testing.T) {
 	}
 }
 
-func TestAnOutOfRangeAnswerConfidenceIsDropped(t *testing.T) {
+func TestAnOutOfRangeConfidenceIsDropped(t *testing.T) {
 	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"answers": {
-			"risk": {"type": "choice", "choice": "safe", "answer_confidence": 1.5},
-			"other": {"type": "choice", "choice": "changes", "answer_confidence": 0.4}}}`))
+			"risk": {"type": "choice", "choice": "safe", "probabilities": {"safe": 1.5}},
+			"other": {"type": "choice", "choice": "changes", "probabilities": {"changes": 0.4}}}}`))
 	}))
 	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
 	if err != nil {

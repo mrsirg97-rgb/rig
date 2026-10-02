@@ -23,12 +23,14 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   label to meaning for a choice, the ordered list for a score, nothing
   for a noul), the answers keyed by id and decoded tolerantly (the
   model, the usage, the routing, and each answer's action block are
-  ignored). The confidence a row keeps is `answer_confidence`; a
-  choice's value is its label, a noul's is the side its probability
-  names (yes at 0.5, no below), a score's is its expected level. The
+  ignored). An answer's confidence is the mass on the value it names:
+  a choice's is its label's entry in `probabilities`, a noul's is the
+  mass on the side its probability names (yes at 0.5, no below), a
+  score's is the top entry; `answer_confidence` is not read. The
   decider recorded is the configured name, else the URL's host. An
-  answer whose confidence is not a probability, whose value is missing,
-  or whose type is unknown drops; the reply body is capped at 1 MiB.
+  answer whose confidence is not a probability, whose value or its
+  mass is missing, or whose type is unknown drops; the reply body is
+  capped at 1 MiB.
 - `queue.go`: the proposal queue: `Propose` enqueues on a bounded channel
   (`QueueCap`), `Run` is the one goroutine that decides, writes through
   the `Sink`, and calls `land` on a landing — a landing marks the
@@ -77,8 +79,9 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   a call, and the swallow is loud only where the root wired a log.
 - The confidence is a probability; the store refuses anything outside
   0..1, and the HTTP client drops such answers before they reach it.
-  The confidence a row keeps is Laya's `answer_confidence`, never the
-  entropy `confidence` beside it.
+  The confidence a row keeps is the mass on the value the answer
+  names, read off `probabilities` — `answer_confidence` and the
+  entropy `confidence` beside it are not read.
 - `-allow none` (the delegate's `NoTools`) runs a worker with no tool at
   all: the allowlist denies every native tool and the plugin door is
   shut with it. An allow list that is nil means no tools; a run with
