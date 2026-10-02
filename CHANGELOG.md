@@ -1,4 +1,22 @@
 # Changelog
+## [2.5.5]: the bare read names what paints
+
+The one-dial rule landed in 2.3.2 with a read that still spoke the
+older world. The bare `/theme` echoed the settings key, so a home with
+a theme.json and no key painted the file while the read said
+`theme: warm (default)` — the dial and the file disagreed in the one
+place the operator is told which is active. The root now mints the
+read's name from the same facts the paint resolves: the key when one
+is set, `custom` when the key is unset and the file stands, empty when
+neither, and the command's own words are unchanged (`theme: warm
+(default)`, `theme: custom (theme.json)`, `theme: <preset>`). After
+`/theme cool` with a file on disk the read says cool, naming the dial
+that beat the file. `switchTheme` already wrote the dial's value into
+the root; only the construction-time copy of the raw key was wrong.
+`ResolveTheme` keeps returning the palette alone and the command
+package is untouched; a consumer that ports the root takes the same
+mint at its construction.
+
 ## [2.5.4]: the docs read the code back
 
 The docs had drifted from the code they describe. Three tool counts

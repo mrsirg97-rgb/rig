@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,6 +121,48 @@ func TestSwitchThemeCustomWithAMalformedFileRefusesByName(t *testing.T) {
 	err := r.switchTheme(context.Background(), "custom")
 	if err == nil || !strings.Contains(err.Error(), "config: ") {
 		t.Fatalf("the malformed file = %v, want the config voice naming the file", err)
+	}
+}
+
+func TestThemeReadNameMintsFromTheDialAndTheFile(t *testing.T) {
+	doc := json.RawMessage(`{"base": "cool"}`)
+	cases := []struct {
+		key  string
+		doc  json.RawMessage
+		want string
+	}{
+		{"", nil, ""},
+		{"", doc, "custom"},
+		{"cool", nil, "cool"},
+		{"cool", doc, "cool"},
+		{"custom", doc, "custom"},
+	}
+	for _, c := range cases {
+		if got := themeName(c.key, c.doc); got != c.want {
+			t.Errorf("themeName(%q with file=%v) = %q, want %q", c.key, c.doc != nil, got, c.want)
+		}
+	}
+}
+
+func TestSwitchThemeWithTheFileOnDiskReadsTheDial(t *testing.T) {
+	fe := &themeRepaintFrontend{}
+	r := themeRoot(t, fe)
+	if err := os.WriteFile(filepath.Join(r.rigHome, "theme.json"), []byte(`{"base": "oled", "slots": {"accent": "#ff9e64"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := config.ReadTheme(r.rigHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.theme = themeName("", doc)
+	if r.theme != "custom" {
+		t.Fatalf("the minted read = %q, want custom (the file paints when no key is set)", r.theme)
+	}
+	if err := r.switchTheme(context.Background(), "cool"); err != nil {
+		t.Fatalf("switchTheme(cool): %v", err)
+	}
+	if env := r.commandEnv(); env.Theme() != "cool" {
+		t.Fatalf("the bare read = %q, want cool (the dial beats the file)", env.Theme())
 	}
 }
 
