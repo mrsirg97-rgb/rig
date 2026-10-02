@@ -79,6 +79,12 @@ plus one registration line, and the loop never names a concrete type.
   directory and refuse one outside the session's cwd or the rig home;
   the delegate and scheduler tools and the runner's fire-time
   revalidation all call it.
+- `decision`: the decision seam (SPEC_DECISION): the typed question
+  (choice, score, yes/no), the answer with its confidence and its
+  decider, the `Decider` a decision server implements, the `Recorder`
+  the gates hold; beside them the HTTP proposer, the bounded proposal
+  queue, the bash site, and the reviewer. An answer is a proposal an
+  LLM reviews, never an action.
 - `middleware/approve`: the manual tool-approval gate (SPEC_MODES 4):
   in manual mode a mutating call pauses for the operator's y/n at the
   frontend's ask door; a denial is a teaching refusal the model reads.
@@ -127,6 +133,13 @@ plus one registration line, and the loop never names a concrete type.
   consolidation arithmetic, supersession; scope is a repo identity
   (worktrees share), a one-time migration on the schema bump, and every
   operation is deliberate.
+- `store/decision`: the decision store (SPEC_DECISION): one sqlite file
+  under the rig home, scoped like todo; a row per decision with site,
+  state, question, answer, confidence, decider, session, status (final,
+  pending, approved, denied), reviewer, the reviewer's answer, and the
+  outcome once known. The gates record final rows; the reviewer settles
+  pending rows. Recording never changes a decision and a store error
+  never fails a call.
 - `store/scheduler`: the background-jobs store: the event log, the
   crontab as scheduling truth, the worker runner with the bwrap jail,
   the socket proxy, the per-job stall watch, and the live run tail.

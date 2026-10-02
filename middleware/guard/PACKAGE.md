@@ -16,7 +16,10 @@ that bounds every tool result before the transcript.
 
 ## What it includes
 
-- `Bound(limit)`: the constructor: returns a `core.ToolMiddleware`.
+- `Bound(limit, rec ...)`: the constructor: returns a `core.ToolMiddleware`;
+  the optional recorder (SPEC_DECISION) takes one final row per bound
+  refusal (the round cap records too); a store error never changes the
+  refusal.
 - `bound` (unexported): the per-turn state: `limit`, `counts` (tool
   name -> consecutive identical failures this turn), and `lastFailed`
   (tool name -> the canonical args of the last failure; the streak's

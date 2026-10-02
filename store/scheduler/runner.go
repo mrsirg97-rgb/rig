@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -46,6 +47,7 @@ type RunOpts struct {
 	LandlockABI  func() (int, error)
 	Models       func() models.Table
 	DefaultModel string
+	Decisions    decision.Recorder
 }
 
 const DefaultRunTimeout = 30 * time.Minute
@@ -115,7 +117,7 @@ func RunJob(key string, opts RunOpts) error {
 	if held {
 		defer releaseLock(lockFD)
 	} else {
-		if e := recordSkip(db, id, "lock held (previous run still active)"); e != nil {
+		if e := recordSkip(db, opts, id, "lock held (previous run still active)", ""); e != nil {
 			return e
 		}
 		return nil
@@ -126,7 +128,7 @@ func RunJob(key string, opts RunOpts) error {
 		return err
 	}
 	if !hasLine(text, key, opts.RigHome) {
-		if e := recordSkip(db, id, "no crontab line (drift)"); e != nil {
+		if e := recordSkip(db, opts, id, "no crontab line (drift)", ""); e != nil {
 			return e
 		}
 		return nil
@@ -142,24 +144,24 @@ func RunJob(key string, opts RunOpts) error {
 		return fmt.Errorf("run-job: job row: %w", err)
 	}
 	if job == nil {
-		if e := recordSkip(db, id, "no job row (zombie line)"); e != nil {
+		if e := recordSkip(db, opts, id, "no job row (zombie line)", ""); e != nil {
 			return e
 		}
 		return installRemoved(opts.Crontab, text, key, opts.RigHome)
 	}
 	switch job.State {
 	case "done":
-		if e := recordSkip(db, id, "job already done (crash between run and line delete)"); e != nil {
+		if e := recordSkip(db, opts, id, "job already done (crash between run and line delete)", job.Cwd); e != nil {
 			return e
 		}
 		return installRemoved(opts.Crontab, text, key, opts.RigHome)
 	case "removed":
-		if e := recordSkip(db, id, "job removed (stale line)"); e != nil {
+		if e := recordSkip(db, opts, id, "job removed (stale line)", job.Cwd); e != nil {
 			return e
 		}
 		return installRemoved(opts.Crontab, text, key, opts.RigHome)
 	case "paused":
-		if e := recordSkip(db, id, "store says paused (line drifted active)"); e != nil {
+		if e := recordSkip(db, opts, id, "store says paused (line drifted active)", job.Cwd); e != nil {
 			return e
 		}
 		return nil
@@ -174,7 +176,7 @@ func RunJob(key string, opts RunOpts) error {
 
 	canonical, err := pathguard.Canonical(job.Cwd)
 	if err != nil || canonical != job.Cwd {
-		if e := recordSkip(db, id, "job cwd was replaced or moved (refusing the read-write bind); re-create the job"); e != nil {
+		if e := recordSkip(db, opts, id, "job cwd was replaced or moved (refusing the read-write bind); re-create the job", job.Cwd); e != nil {
 			return e
 		}
 		return nil
@@ -190,7 +192,7 @@ func RunJob(key string, opts RunOpts) error {
 			return fmt.Errorf("run-job: budget: %w", err)
 		}
 		if spent >= *job.Budget {
-			if e := recordSkip(db, id, fmt.Sprintf("budget reached (%.2f of %.2f spent)", spent, *job.Budget)); e != nil {
+			if e := recordSkip(db, opts, id, fmt.Sprintf("budget reached (%.2f of %.2f spent)", spent, *job.Budget), job.Cwd); e != nil {
 				return e
 			}
 			return nil
@@ -216,7 +218,7 @@ func RunJob(key string, opts RunOpts) error {
 			}
 			fireModel, canonical, err := resolveFireModel(opts.Fetch, opts.SwapURL, table, opts.DefaultModel)
 			if err != nil {
-				if e := recordSkip(db, id, err.Error()); e != nil {
+				if e := recordSkip(db, opts, id, err.Error(), job.Cwd); e != nil {
 					return e
 				}
 				return nil
@@ -228,7 +230,7 @@ func RunJob(key string, opts RunOpts) error {
 		row, rowOK := opts.modelRow(model)
 		if !(rowOK && row.Remote) {
 			if err := gateOnce(opts.Fetch, opts.SwapURL, gateModel); err != nil {
-				if e := recordSkip(db, id, err.Error()); e != nil {
+				if e := recordSkip(db, opts, id, err.Error(), job.Cwd); e != nil {
 					return e
 				}
 				return nil
@@ -268,7 +270,7 @@ func RunJob(key string, opts RunOpts) error {
 				return fmt.Errorf("run-job: jail: %w", err)
 			}
 			if refuse != "" {
-				if e := recordSkip(db, id, refuse); e != nil {
+				if e := recordSkip(db, opts, id, refuse, job.Cwd); e != nil {
 					return e
 				}
 				return nil

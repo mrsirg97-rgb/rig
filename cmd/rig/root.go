@@ -9,6 +9,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
@@ -42,6 +43,12 @@ type root struct {
 	remDB store.DB
 	cwd   string
 	home  string
+
+	drec decision.Recorder
+
+	proposals decision.Proposer
+	decQ      *decision.Queue
+	decRev    *decision.Reviewer
 
 	pluginsDir string
 	rigHome    string
@@ -120,9 +127,10 @@ func wire(r *root) *rig.Kernel {
 
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
+	fe := r.frontend()
 	k := rig.New(
 		rig.WithProvider(provider),
-		rig.WithFrontend(r.rec),
+		rig.WithFrontend(fe),
 		rig.WithPolicy(pol),
 		rig.WithTools(append(
 			r.nativeTools(),
@@ -261,11 +269,18 @@ func (r *root) blobsDir() string {
 	return imagemarker.BlobsDir(r.rigHome)
 }
 
+func (r *root) frontend() core.Frontend {
+	if r.decRev == nil {
+		return r.rec
+	}
+	return decision.TurnEnds(r.rec, r.decRev)
+}
+
 func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	r.rec.Retarget(s.ID, s)
 	r.rec = rec2
 	r.session = s
-	r.k.Frontend = rec2
+	r.k.Frontend = r.frontend()
 	r.k.Session = s
 
 	r.fullSystem = r.buildSystem()

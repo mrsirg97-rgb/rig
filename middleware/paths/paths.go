@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 )
 
 var Fields = []string{"path", "root", "project", "dir", "directory", "file", "target", "dest", "destination", "workspace"}
@@ -36,10 +37,26 @@ func Expand(p string) string {
 	return filepath.Join(home, rest)
 }
 
-func Middleware() core.ToolMiddleware {
+func Middleware(rec ...decision.Recorder) core.ToolMiddleware {
+	var record decision.Recorder
+	if len(rec) > 0 {
+		record = rec[0]
+	}
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
-			if args, changed := Rewrite(call.Args); changed {
+			onExpand := func(field, raw, expanded string) {
+				record.Record(ctx, decision.Final{
+					Site:     decision.SitePaths,
+					State:    raw,
+					Question: decision.YesNo("expand", "expand ~ in "+field+"?"),
+					Answer:   expanded,
+					Decider:  decision.SitePaths,
+				})
+			}
+			if record == nil {
+				onExpand = nil
+			}
+			if args, changed := rewrite(call.Args, onExpand); changed {
 				call.Args = args
 			}
 			return next(ctx, call)
@@ -48,6 +65,10 @@ func Middleware() core.ToolMiddleware {
 }
 
 func Rewrite(args json.RawMessage) (json.RawMessage, bool) {
+	return rewrite(args, nil)
+}
+
+func rewrite(args json.RawMessage, onExpand func(field, raw, expanded string)) (json.RawMessage, bool) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(args, &m); err != nil || m == nil {
 		return args, false
@@ -69,6 +90,9 @@ func Rewrite(args json.RawMessage) (json.RawMessage, bool) {
 			}
 			m[f] = b
 			changed = true
+			if onExpand != nil {
+				onExpand(f, s, e)
+			}
 		}
 	}
 	if !changed {

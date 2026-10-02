@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 )
 
 const (
@@ -23,7 +24,11 @@ func Mode(s string) (string, bool) {
 	return "", false
 }
 
-func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool, mutating func(name string) bool) core.ToolMiddleware {
+func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool, mutating func(name string) bool, rec ...decision.Recorder) core.ToolMiddleware {
+	var record decision.Recorder
+	if len(rec) > 0 {
+		record = rec[0]
+	}
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
 			if mode() != Manual || !mutating(call.Name) {
@@ -32,7 +37,20 @@ func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool,
 			if ask == nil {
 				return "approve: manual mode with no ask door (this frontend cannot ask) — the call was not run", nil
 			}
-			if !ask(ctx, Prompt(call)) {
+			verdict := "no"
+			if ask(ctx, Prompt(call)) {
+				verdict = "yes"
+			}
+			if record != nil {
+				record.Record(ctx, decision.Final{
+					Site:     decision.SiteApprove,
+					State:    Prompt(call),
+					Question: decision.YesNo("run", "run this call?"),
+					Answer:   verdict,
+					Decider:  decision.SiteApprove,
+				})
+			}
+			if verdict == "no" {
 				return "approve: the operator declined " + call.Name + " — do not retry the same call; adjust, or ask what they want", nil
 			}
 			return next(ctx, call)

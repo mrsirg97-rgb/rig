@@ -66,6 +66,11 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	} else if ok && v != "" {
 		s.SwapURL = v
 	}
+	if v, ok, err := str("decisionUrl"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		s.DecisionURL = v
+	}
 	if v, ok, err := str("defaultJobModel"); err != nil {
 		return Settings{}, err
 	} else if ok {

@@ -110,6 +110,9 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.SwapURL != "http://127.0.0.1:8090" {
 		t.Fatalf("swapUrl = %q, want the 0.2.0 runner default", s.SwapURL)
 	}
+	if s.DecisionURL != "" {
+		t.Fatalf("decisionUrl = %q, want empty (unset: no proposer)", s.DecisionURL)
+	}
 	m, ok := cfg.Models.Get("local")
 	if !ok {
 		t.Fatal("the embedded table has no row for local")
@@ -142,7 +145,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy, workers)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy, workers)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -282,6 +285,18 @@ func TestSettingsWorkersIsATriState(t *testing.T) {
 			t.Fatalf("the refusal must name the key, got %v", err)
 		}
 	})
+}
+
+func TestDecisionURLWiresTheProposer(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"decisionUrl": "http://127.0.0.1:8712"}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.DecisionURL != "http://127.0.0.1:8712" {
+		t.Fatalf("decisionUrl = %q, want the file's URL", cfg.Settings.DecisionURL)
+	}
+	if cfg := load(t, t.TempDir(), t.TempDir()); cfg.Settings.DecisionURL != "" {
+		t.Fatalf("absent decisionUrl = %q, want empty (unset: no proposer)", cfg.Settings.DecisionURL)
+	}
 }
 
 func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {

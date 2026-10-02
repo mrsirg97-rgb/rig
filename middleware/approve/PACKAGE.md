@@ -12,7 +12,9 @@ denial is a teaching refusal the model reads, never a dead turn.
 
 - `Auto`, `Manual`, `Mode(s)`: the dial's vocabulary; empty descends
   to auto; anything else is the caller's refusal to name.
-- `Gate(mode, ask, mutating)`: the gate. `mode` is read at call time (a
+- `Gate(mode, ask, mutating, rec ...)`: the gate. The optional recorder
+  (SPEC_DECISION) takes one final row per ask, the operator's verdict
+  included; a store error never changes the verdict. `mode` is read at call time (a
   flip applies to the very next call); `ask` blocks for the operator's
   answer (false declines); `mutating` names the calls that pause; the
   read set passes silently, or manual is death by a thousand confirms.

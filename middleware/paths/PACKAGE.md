@@ -26,7 +26,9 @@ so every tool inherits it and nothing drifts.
 - `Rewrite(args)`: the top-level object's `Fields` that are strings and
   expand; bytes pass through untouched when nothing expands (the recorder
   and the approval prompt see what the model sent unless a `~` moved).
-- `Middleware()`: the `core.ToolMiddleware` over `Rewrite`.
+- `Middleware(rec ...)`: the `core.ToolMiddleware` over `Rewrite`; the
+  optional recorder (SPEC_DECISION) takes one final row per expansion
+  it applied; a store error never changes the rewrite.
 
 ## How it is consumed
 

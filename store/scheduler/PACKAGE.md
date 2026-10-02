@@ -89,7 +89,10 @@ written before the store commit; drift is surfaced in list.
   end. A delegate passes no observer unless its `Stall` is set — the
   watch rides the same observer, so an interactive session keeps the
   plain timeout and a caller that states a window gets the kill.
-  A command job's fire skips the busy probe and
+  The runner's `RunOpts.Decisions` (SPEC_DECISION) records one final row
+per skip past the job-row read (the pre-row skips have no scope and
+record nothing); a store error never changes the skip.
+A command job's fire skips the busy probe and
   the jail: `sh -c` over the stored line with the process environment,
   in the job's cwd — the payload is the operator's own, the same trust
   the crontab line itself carries.
@@ -165,6 +168,10 @@ written before the store commit; drift is surfaced in list.
 - Crontab is written before the store commit: drift is surfaced in list,
   and a line orphaned by a crash between the write and the commit is
   listed too (the runner refuses to fire it, naming the row).
+- `NoToolsAllow` (`-allow none`) runs a worker with no tool at all: the
+  allowlist denies every native tool and the plugin door shuts with it.
+  A no-tools fire also skips the report-back suffix — a toolless worker
+  cannot `rem`, so its stdout is the reply.
 - The tag is home-scoped: the writer never touches another home's line
   (its `rig-scheduler` home differs, or its key is not this store's), so
   two homes sharing one crontab stay disjoint. An old `pane-scheduler`

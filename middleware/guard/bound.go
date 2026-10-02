@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 )
 
 type bound struct {
@@ -15,13 +16,18 @@ type bound struct {
 	limit      int
 	counts     map[string]int
 	lastFailed map[string]string
+	record     decision.Recorder
 }
 
-func Bound(limit int) core.ToolMiddleware {
+func Bound(limit int, rec ...decision.Recorder) core.ToolMiddleware {
 	if limit < 1 {
 		limit = 1
 	}
-	return &bound{limit: limit, counts: map[string]int{}, lastFailed: map[string]string{}}
+	b := &bound{limit: limit, counts: map[string]int{}, lastFailed: map[string]string{}}
+	if len(rec) > 0 {
+		b.record = rec[0]
+	}
+	return b
 }
 
 func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
@@ -33,6 +39,15 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 		}
 		if g.counts[call.Name] >= g.limit {
 			g.mu.Unlock()
+			if g.record != nil {
+				g.record.Record(ctx, decision.Final{
+					Site:     decision.SiteGuard,
+					State:    args,
+					Question: decision.YesNo("retry", "issue the identical failing call again?"),
+					Answer:   "no",
+					Decider:  decision.SiteGuard,
+				})
+			}
 			msg := fmt.Sprintf("bound exhausted: %s has failed %d times; stop reissuing this call", call.Name, g.limit)
 			return msg, errors.New(msg)
 		}

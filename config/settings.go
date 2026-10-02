@@ -19,6 +19,7 @@ type Settings struct {
 	Trafilatura   *string
 	Workers       *bool
 	SwapURL       string
+	DecisionURL   string
 	Theme         string
 	Sandbox       string
 	SandboxBinds  []string
@@ -34,7 +35,7 @@ type SettingsPlugins struct {
 	Max int
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "defaultJobModel", "model", "plugins", "python", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "updateKey", "webFetchProxy", "workers"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUrl", "defaultJobModel", "model", "plugins", "python", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "updateKey", "webFetchProxy", "workers"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -107,6 +108,9 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.SwapURL != "" {
 		out.SwapURL = file.SwapURL
+	}
+	if file.DecisionURL != "" {
+		out.DecisionURL = file.DecisionURL
 	}
 	if file.Theme != "" {
 		out.Theme = file.Theme

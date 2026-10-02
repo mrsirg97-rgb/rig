@@ -192,6 +192,33 @@ func TestDelegateDefaultsAreUnchanged(t *testing.T) {
 	}
 }
 
+func TestANoToolsFireRunsAllowNoneAndNoReportBack(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "verdict: 1 approve\n"}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
+	in.NoTools = true
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+	}
+	var allow, prompt string
+	for i, a := range spawn.calls[0].Argv {
+		switch a {
+		case "-allow":
+			allow = spawn.calls[0].Argv[i+1]
+		case "-p":
+			prompt = spawn.calls[0].Argv[i+1]
+		}
+	}
+	if allow != sched.NoToolsAllow {
+		t.Fatalf("a no-tools fire runs with no tool at all: %v", spawn.calls[0].Argv)
+	}
+	if prompt != in.Task {
+		t.Fatalf("a fire with no tools cannot report back through rem: %q", prompt)
+	}
+}
+
 func TestRemoteDelegateNeverConsultsTheSwap(t *testing.T) {
 	failing := func(url string) (json.RawMessage, error) {
 		return nil, jsonError("the swap must never be consulted: " + url)

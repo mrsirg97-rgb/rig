@@ -17,6 +17,8 @@ attributed so downstream guards can bound the repetition.
   (the live plugin table's membership): a name the door admits passes
   though absent from the static list. The door speaks for plugins only
   (never a native); a nil door is `Allowlist`.
+- The constructors take an optional `decision.Recorder` (SPEC_DECISION):
+  a denial records one final row; a store error never changes the denial.
 - `Plugins(pluginsDir)`: the plugin provenance rule (SPEC_SANDBOX 2)
   for `write` and `edit`.
 - `resolvedPath` (unexported): expands a leading `~` (the `paths`
