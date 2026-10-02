@@ -28,7 +28,7 @@ func (c *Controller) run(w *worker) {
 			res := c.work(w, id)
 			c.settle(w, id, res)
 			if res.holder != nil {
-				c.set(w, func() { w.state = StateExited })
+				c.set(w, func() { w.state = StateExited; w.task = "" })
 			}
 			c.emit(true)
 			c.Wake()
@@ -125,7 +125,6 @@ func (c *Controller) settle(w *worker, id string, res workResult) {
 	if res.holder != nil {
 		c.notice(fmt.Sprintf("swarm: w%d stopped — %v", w.id, res.holder))
 		c.release(w, id)
-		c.set(w, func() { w.task = "" })
 		return
 	}
 	if res.ok {
