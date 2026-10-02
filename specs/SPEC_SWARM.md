@@ -17,6 +17,26 @@ read); `workers.json` and its `reviewer` key are gone, and the
 worker model resolves per task (the resident model, else the
 session's default).
 
+**Amended in 2.6.0 (the router)**: the count rides the command again —
+`/swarm start <n>` starts n workers (1..`MaxWorkers`), stored nowhere.
+One router goroutine, attached to the session's todo queue, is the only
+queue reader: it claims a ready task for each idle worker, running on
+events — the start, a task created or completed (the todo tool calls a
+wake callback wired at the root), a worker finishing. Workers never
+read the queue; each waits on the router's handoff and returns to it
+when the task ends. Gone with the grow loop: the claim poll (`Poll`),
+the empty-claim exit count, the "board emptied" notice (idle workers
+wait; they do not exit), and the swarm's own `Stall`/`Timeout` — a
+worker queued at the server writes nothing, and the silence or spend
+kill would shoot it; the caller's context is the only bound
+(`DelegateInput.Timeout` negative means no wrapper deadline). The
+delegate's `WaitBusy` field retires with the slot read (SPEC_WORKERS
+2.6.0): the spawn sends and waits on the server's queue like every
+other second request. The controller gains `Opts.Delegate` (the
+injectable spawn seam, default `sched.Delegate`) and an exported
+`Wake` (the todo tool's callback). The notices, the retry and reject
+caps, the Reap release, and the verdict protocol are unchanged.
+
 ## what it is not (named)
 
 - **Not a scheduler.** No crontab line, no once-fire, no cron run records:
@@ -57,6 +77,9 @@ session's default).
 - Fail closed: a worker that dies mid-task has its claim released and the
   task retried once; a second death fails the task (workers) or rejects it
   with the reason (reviewers). No task is ever left held by a dead identity.
+  A dispatch the gate refuses because the worker's model is not resident is
+  not a death: the claim is released, the worker stops with a notice naming
+  the holder, and the task stays pending.
 
 ## decisions
 

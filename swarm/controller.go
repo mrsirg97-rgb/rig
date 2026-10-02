@@ -26,19 +26,13 @@ const (
 
 	MaxWorkers = 16
 
-	emptyClaimsBeforeExit = 3
-
-	defaultPoll = 2 * time.Second
-
 	maxVerdictReason = todostore.MaxNoteLen
-
-	workerTimeout = 2 * time.Hour
-	workerStall   = 10 * time.Minute
 
 	heartbeatLine = "rig: heartbeat"
 )
 
 type StartOpts struct {
+	Count  int
 	Role   string
 	Model  string
 	Budget float64
@@ -72,27 +66,29 @@ type Opts struct {
 	Allow        []string
 	DefaultModel string
 	Models       func() models.Table
-	Poll         time.Duration
 	Frontend     func() core.Frontend
+	Delegate     func(sched.DelegateInput) (sched.DelegateResult, error)
 }
 
 type Controller struct {
 	opts Opts
 
-	mu        sync.Mutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	workers   []*worker
-	wg        sync.WaitGroup
-	architect string
-	proj      todostore.Project
-	retries   map[string]int
-	rejects   map[string]int
-	budget    float64
-	spent     float64
-	emitter   *status.Emitter
-	role      string
-	model     string
+	mu         sync.Mutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	workers    []*worker
+	wg         sync.WaitGroup
+	architect  string
+	proj       todostore.Project
+	retries    map[string]int
+	rejects    map[string]int
+	budget     float64
+	spent      float64
+	budgetSaid bool
+	emitter    *status.Emitter
+	role       string
+	model      string
+	wake       chan struct{}
 }
 
 type worker struct {
@@ -108,10 +104,11 @@ type worker struct {
 	done      int
 	failed    int
 	state     string
+	tasks     chan string
 }
 
 func New(o Opts) *Controller {
-	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}}
+	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}, wake: make(chan struct{}, 1)}
 	if o.Frontend != nil {
 		c.emitter = status.New(c.safeNotify)
 	}
@@ -142,19 +139,16 @@ func (c *Controller) addSpent(v float64) {
 	c.spent += v
 }
 
-func (c *Controller) atBudget() bool {
-	spent, budget := c.budgetState()
-	return budget > 0 && spent >= budget
-}
-
-func (c *Controller) budgetState() (float64, float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.spent, c.budget
-}
-
 func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	c.mu.Lock()
+	if in.Count < 1 {
+		c.mu.Unlock()
+		return "", fmt.Errorf("swarm: count %d is below one (swarm start <count> [role=…] [model=…] [budget=…])", in.Count)
+	}
+	if in.Count > MaxWorkers {
+		c.mu.Unlock()
+		return "", fmt.Errorf("swarm: count %d is past the %d cap", in.Count, MaxWorkers)
+	}
 	role := in.Role
 	if role == "" {
 		role = RoleWorker
@@ -177,8 +171,8 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 		c.mu.Unlock()
 		return "", fmt.Errorf("swarm: queue: %w", err)
 	}
-	growing := c.ctx == nil
-	if growing {
+	growing := c.ctx != nil
+	if !growing {
 		c.ctx, c.cancel = context.WithCancel(ctx)
 	}
 	if c.role == "" {
@@ -187,15 +181,8 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	c.proj = proj
 	c.architect = session
 	c.budget = in.Budget
-	count := c.freeSlots()
-	if count < 1 {
-		count = 1
-	}
-	if count > MaxWorkers {
-		count = MaxWorkers
-	}
 	base := len(c.workers)
-	for i := 1; i <= count; i++ {
+	for i := 1; i <= in.Count; i++ {
 		w := &worker{
 			id: base + i, role: role, model: model,
 			identity:  core.NewSession().ID,
@@ -203,17 +190,19 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 			proj:      proj,
 			architect: session,
 			state:     StateRunning,
+			tasks:     make(chan string, 1),
 		}
 		c.workers = append(c.workers, w)
 		c.wg.Add(1)
 		go c.run(w)
 	}
-	c.mu.Unlock()
-	if growing {
+	if !growing {
 		c.wg.Add(1)
-		go c.growLoop()
+		go c.route(c.ctx)
 	}
-	return fmt.Sprintf("swarm: added %d %s (role %s · model %s)", count, plural(count, "agent"), role, modelName(model)), nil
+	c.mu.Unlock()
+	c.Wake()
+	return fmt.Sprintf("swarm: added %d %s (role %s · model %s)", in.Count, plural(in.Count, "agent"), role, modelName(model)), nil
 }
 
 func modelName(m string) string {
@@ -249,7 +238,7 @@ func (c *Controller) List() []Worker {
 
 func (c *Controller) Stop() (string, error) {
 	c.mu.Lock()
-	if len(c.workers) == 0 {
+	if c.ctx == nil {
 		c.mu.Unlock()
 		return "", errors.New("swarm: no swarm running")
 	}

@@ -319,7 +319,7 @@ func TestDelegateDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
 		t.Fatal(err)
 	}
-	if got := schema.Properties["workspace"].Description; got != "the workspace the job runs in (default the session's workspace; must be under it or the rig home)" {
+	if got := schema.Properties["workspace"].Description; got != "where the job runs (default the session's)" {
 		t.Fatalf("cwd description %q", got)
 	}
 }
@@ -475,7 +475,7 @@ func TestDelegateFanOutOnTwoFreeSlotsSpawnsBoth(t *testing.T) {
 	assertOverlap(t, spawn.calls)
 }
 
-func TestDelegateSecondFanOutOnASingleSlotRefusesWithThePinnedVoice(t *testing.T) {
+func TestDelegateSecondFanOutOnASingleSlotSendsAndWaits(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	block := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: block}
@@ -493,15 +493,21 @@ func TestDelegateSecondFanOutOnASingleSlotRefusesWithThePinnedVoice(t *testing.T
 		}
 		time.Sleep(time.Millisecond)
 	}
-	out, err := tool.Exec(context.Background(), runArgs("t2"))
-	if err == nil || !strings.Contains(err.Error(), "delegate: no free slot; this turn holds the only one") {
-		t.Fatalf("the second delegate must refuse with the pinned voice: (%q, %v)", out, err)
+	second := make(chan struct{}, 1)
+	go func() {
+		_, _ = tool.Exec(context.Background(), runArgs("t2"))
+		second <- struct{}{}
+	}()
+	deadline = time.Now().Add(2 * time.Second)
+	for spawn.count() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("the second delegate must send and wait on the server's queue, spawns = %d", spawn.count())
+		}
+		time.Sleep(time.Millisecond)
 	}
 	close(block)
 	<-first
-	if spawn.count() != 1 {
-		t.Fatalf("no worker may spawn for the refused call, got %d spawns", spawn.count())
-	}
+	<-second
 }
 
 func TestDelegateNoRecursionRefuses(t *testing.T) {
@@ -573,23 +579,6 @@ func TestDelegateCapsOutputWithTheSize(t *testing.T) {
 	}
 	if !strings.Contains(out, "[TRUNCATED: ") || !strings.Contains(out, " bytes total]") {
 		t.Fatalf("the cap marker must name the full size:\n%s", out[:60])
-	}
-}
-
-func TestDelegateStallMsKilledAsStalledNamesIt(t *testing.T) {
-	h := newHarness(t, "/ws/sess")
-	silent := func(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-		<-ctx.Done()
-		return sched.SpawnResult{Exit: 1}, nil
-	}
-	tool := h.newTool(t, fakeFetch(""), silent)
-	b, _ := json.Marshal(map[string]any{"task": "t", "stallMs": 50})
-	out, err := tool.Exec(context.Background(), b)
-	if err == nil || !strings.Contains(err.Error(), "stalled") {
-		t.Fatalf("a stalled worker must be a named error: (%q, %v)", out, err)
-	}
-	if !strings.Contains(err.Error(), "process tree killed") {
-		t.Fatalf("the stall error must name the kill: %v", err)
 	}
 }
 

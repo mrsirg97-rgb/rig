@@ -269,15 +269,15 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 
 func isUpdateKey(s string) bool {
 	switch s {
-	case "name", "prompt", "cron", "at", "model", "workspace", "busy":
+	case "name", "prompt", "cron", "at", "model", "workspace":
 		return true
 	}
 	return false
 }
 
 func schedulerUpdate(fields []string) (json.RawMessage, error) {
-	const keys = "name, prompt, cron, at, model, workspace, busy"
-	const shape = "scheduler update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"
+	const keys = "name, prompt, cron, at, model, workspace"
+	const shape = "scheduler update <id> [name <n>] [model <m>|none] [workspace <dir>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"
 	m := map[string]any{"action": "update", "id": fields[1]}
 	rest := fields[2:]
 	i := 0
@@ -311,7 +311,7 @@ func schedulerUpdate(fields []string) (json.RawMessage, error) {
 				m[key] = rest[i]
 			}
 			i++
-		case "name", "at", "workspace", "busy":
+		case "name", "at", "workspace":
 			if i >= len(rest) {
 				return nil, fmt.Errorf("scheduler: update: %q needs a value (%s)", key, shape)
 			}

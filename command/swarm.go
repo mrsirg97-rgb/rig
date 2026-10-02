@@ -11,19 +11,19 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-const swarmUsage = "swarm start [role=worker|reviewer] [model=<id>] [budget=<dollars>] | swarm stop | bare swarm lists"
+const swarmUsage = "swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>] | swarm stop | bare swarm lists"
 
 type swarmCmd struct{}
 
 func (swarmCmd) Name() string { return "swarm" }
 
 func (swarmCmd) Description() string {
-	return "the drain workers: one per free slot on the resident model, growing as slots free (swarm start [role=worker|reviewer] [model=<id>] [budget=<dollars>], bare swarm lists, swarm stop ends)"
+	return "the drain pair: one router on the session's queue hands each ready task to an idle worker (swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>], bare swarm lists, swarm stop ends)"
 }
 
 func (swarmCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "start", Desc: "start the drain workers (one per free slot)"},
+		{Name: "start", Desc: "start N workers (swarm start 3)"},
 		{Name: "stop", Desc: "end the swarm"},
 	}
 }
@@ -38,7 +38,7 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		return swarmList(e), nil
 	}
 	if _, err := strconv.Atoi(fields[0]); err == nil {
-		return "", fmt.Errorf("swarm: a count is not taken: the free slots are the count (the fleet is the resident model)")
+		return "", fmt.Errorf("swarm: the count rides start (%s)", swarmUsage)
 	}
 	if fields[0] == "stop" {
 		if len(fields) != 1 {
@@ -53,8 +53,16 @@ func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		return "", fmt.Errorf("swarm: unknown token %q (%s)", fields[0], swarmUsage)
 	}
 	in := SwarmStart{Role: "worker"}
+	if len(fields) < 2 {
+		return "", fmt.Errorf("swarm: start takes a count (swarm start <count> [role=…] [model=…] [budget=…])")
+	}
+	count, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return "", fmt.Errorf("swarm: start takes a count (swarm start <count> [role=…] [model=…] [budget=…])")
+	}
+	in.Count = count
 	roleSeen, modelSeen, budgetSeen := false, false, false
-	for _, f := range fields[1:] {
+	for _, f := range fields[2:] {
 		switch {
 		case strings.HasPrefix(f, "role="):
 			if roleSeen {

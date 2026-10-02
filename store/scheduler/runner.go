@@ -227,10 +227,7 @@ func RunJob(key string, opts RunOpts) error {
 		workerModel = model
 		row, rowOK := opts.modelRow(model)
 		if !(rowOK && row.Remote) {
-			waitCtx, cancelWait := context.WithTimeout(context.Background(), timeout)
-			err := gateWait(opts.Fetch, opts.SwapURL, gateModel, waitCtx)
-			cancelWait()
-			if err != nil {
+			if err := gateOnce(opts.Fetch, opts.SwapURL, gateModel); err != nil {
 				if e := recordSkip(db, id, err.Error()); e != nil {
 					return e
 				}

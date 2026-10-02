@@ -206,26 +206,36 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 }
 
 func (r *root) buildProvider() core.Provider {
+	headerTimeout := openai.HeaderTimeoutOff
+	if r.row.Remote {
+		headerTimeout = 0
+	}
 	if !r.row.Remote && r.row.APIKey == "" {
-		if !r.row.Vision {
-			return openai.New(r.baseURL, r.activeID)
+		cfg := openai.Config{
+			BaseURL:       r.baseURL,
+			Model:         r.activeID,
+			HeaderTimeout: headerTimeout,
 		}
-		return openai.NewWithVision(r.baseURL, r.activeID, r.blobsDir())
+		if r.row.Vision {
+			cfg.BlobsDir = r.blobsDir()
+		}
+		return openai.NewWithConfig(cfg)
 	}
 	baseURL := r.baseURL
 	if r.row.Remote {
 		baseURL = r.row.BaseURL
 	}
 	return openai.NewWithConfig(openai.Config{
-		BaseURL:      baseURL,
-		Model:        r.activeID,
-		APIKey:       r.row.APIKey,
-		Remote:       r.row.Remote,
-		Reasoning:    r.row.Reasoning,
-		ProviderPin:  r.row.ProviderPin,
-		CacheControl: r.row.CacheControl,
-		Retries:      r.row.Retries,
-		BlobsDir:     r.blobsDir(),
+		BaseURL:       baseURL,
+		Model:         r.activeID,
+		APIKey:        r.row.APIKey,
+		Remote:        r.row.Remote,
+		Reasoning:     r.row.Reasoning,
+		ProviderPin:   r.row.ProviderPin,
+		CacheControl:  r.row.CacheControl,
+		Retries:       r.row.Retries,
+		BlobsDir:      r.blobsDir(),
+		HeaderTimeout: headerTimeout,
 	})
 }
 

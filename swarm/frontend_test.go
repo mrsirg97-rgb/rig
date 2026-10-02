@@ -33,15 +33,18 @@ func TestSwarmFrontendResolvesWhenTheRecorderAppears(t *testing.T) {
 	rec := &recorder{}
 	h := newHarnessResolved(t, rec.resolve)
 	h.create(t, "do the work")
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the task in review with no recorder", func() bool {
 		return h.status(t, "t1") == "review"
 	})
 	got := &recordFrontend{}
 	rec.set(got)
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	if _, err := h.ctl.Stop(); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
 	notices := waitForNotices(t, got, 1)
-	if notices[0] != "swarm: the board emptied — all workers exited" {
+	if notices[0] != "swarm: /swarm exited — 2 workers stopped" {
 		t.Fatalf("the notice must land in the recorder once it exists, got %q", notices[0])
 	}
 }
@@ -51,18 +54,23 @@ func TestSwarmSessionSwapRoutesNoticesToTheNewRecorder(t *testing.T) {
 	first := &recordFrontend{}
 	rec.set(first)
 	h := newHarnessResolved(t, rec.resolve)
-	h.create(t, "do the work")
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	if _, err := h.ctl.Stop(); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
 	notices := waitForNotices(t, first, 1)
-	if notices[0] != "swarm: the board emptied — all workers exited" {
+	if notices[0] != "swarm: /swarm exited — 1 worker stopped" {
 		t.Fatalf("the first recorder got %q", notices[0])
 	}
 
 	second := &recordFrontend{}
 	rec.set(second)
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	if _, err := h.ctl.Stop(); err != nil {
+		t.Fatalf("second stop: %v", err)
+	}
 	notices = waitForNotices(t, second, 1)
-	if notices[0] != "swarm: the board emptied — all workers exited" {
+	if notices[0] != "swarm: /swarm exited — 1 worker stopped" {
 		t.Fatalf("the swap must route to the new recorder, got %q", notices[0])
 	}
 	if got := len(first.notices()); got != 1 {
@@ -86,13 +94,9 @@ func TestSwarmPanickingFrontendDoesNotKillTheDrainLoop(t *testing.T) {
 	}
 	os.Stderr = w
 
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the task in review", func() bool {
 		return h.status(t, "t1") == "review"
-	})
-	h.waitFor(t, "the worker exited", func() bool {
-		rows := h.ctl.List()
-		return len(rows) == 1 && rows[0].State == "exited"
 	})
 	if _, err := h.ctl.Stop(); err != nil {
 		t.Fatalf("stop: %v", err)

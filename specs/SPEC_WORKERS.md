@@ -23,6 +23,27 @@ time. Time and money stay; counts go.
   at start.
 - Timeout, stall, and budget stay: they bound a fire, not the fleet.
 
+**Amended in 2.6.0**: the slot read goes. A second request queues at
+the llama-server itself — the evidence is the queue on a one-slot
+box: a live session's turn holds the slot while it streams, and a
+delegate or a scheduled fire still runs the moment it is sent. Every
+spawn site sends and waits on the server's queue: the delegate, the
+fire, the swarm's task worker. The one read at dispatch refuses only
+a model that is not resident, naming the holder; `this turn holds
+the only one` is gone. The gate shapes collapse to one: nothing
+resident, another resident (refuse), own resident (send and wait).
+The wiring follows: `delegate` and the swarm are wired wherever the
+worker tools are on and the swap is readable at start — one slot
+hosts the pair, an unreadable swap wires them off, and a remote
+model row never consults the swap. The stall kill retires with the
+slot gate: a worker that is only queued writes nothing, so silence
+no longer implies a hang, and the kill would shoot healthy workers.
+The delegate's `Stall` input and the delegate tool's `stallMs` are
+gone; the scheduler tool's `busy` and `stall` keys are gone (the
+fire waits on nothing and is not shot for silence); the store keeps
+the columns and replays historical rows as written. The timeouts
+stay — they are the spend ceilings, not liveness guesses.
+
 ## decisions
 
 ### 1. The model resolves at claim time

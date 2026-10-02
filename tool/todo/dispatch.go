@@ -30,7 +30,12 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 		if err != nil {
 			return "", err
 		}
-		return todostore.Create(ctx, a.db, p, items, session)
+		reply, err := todostore.Create(ctx, a.db, p, items, session)
+		if err != nil {
+			return reply, err
+		}
+		a.wakeRouter()
+		return reply, nil
 	case "bind":
 		return todostore.Read(ctx, a.db, p, session)
 	case "prune":
@@ -71,7 +76,12 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 		case "start":
 			return todostore.Start(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "complete":
-			return todostore.Complete(ctx, a.db, p, g.ID, session, bool(a.mode))
+			reply, err := todostore.Complete(ctx, a.db, p, g.ID, session, bool(a.mode))
+			if err != nil {
+				return reply, err
+			}
+			a.wakeRouter()
+			return reply, nil
 		case "fail":
 			return todostore.Fail(ctx, a.db, p, g.ID, session, bool(a.mode))
 		case "release":

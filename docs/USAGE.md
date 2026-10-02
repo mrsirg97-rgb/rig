@@ -79,12 +79,14 @@ is a loud line naming the known set, never silently a prompt.
   memories: the path resolves to a repo identity (worktrees share).
 - `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's
   workers (`w1 worker resident · task t3 · heartbeat 2s ago ·
-  done 1 failed 0`); `swarm start [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
-  starts one drain worker per free slot the swap reports live, and
-  grows as slots free (a budget stops the
+  done 1 failed 0`); `swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
+  starts that many workers (a budget stops the
   controller's claims at the cap with a notice, the spend summed from
   the recorded run costs); the reply is `swarm: added N agents (role X ·
-  model M)` whether the swarm was empty or running — each claims a task,
+  model M)` whether the swarm was empty or running — one router on the
+  session's queue is the only reader of it, and it hands each ready
+  task to an idle worker on the events (a task created, completed, or
+  a worker finishing); each claims a task,
   spawns a one-shot `rig -p` through the delegate path (jail, socket
   proxy, recorded run), and finishes it itself: workers submit for
   review, reviewers parse the worker's last `verdict: accept|reject
@@ -142,18 +144,14 @@ rem (`specs/SPEC_STATE.md`: rem is deliberate).
 The `delegate` tool (SPEC_DELEGATE) spawns a headless worker on a task
 now: a bounded sub-task whose result is a message, not a conversation,
 on the resident model (the session's default when nothing is
-resident), in a cwd under your session's or the rig home — wired where
-a second request can run (a remote row, or more than one slot on the
-resident server).
-Several delegate calls in one turn run in parallel, up to the free
-slots the swap reports at claim time; the turn blocks until each worker
-finishes or times out. `timeoutMs` is the spend ceiling (default 10
-minutes, ceiling 30); `stallMs` sets the silence window beside it, so
-a worker that writes nothing for longer is killed as hung while one
-still producing output is never killed for the clock. No free slot
-refuses by name (`no free slot; this turn holds the only one` on a
-one-slot model); a different resident model refuses too — never an
-eviction from inside a turn. The
+resident), in a cwd under your session's or the rig home — wired
+wherever the worker tools are on and the swap is readable (one slot
+hosts it; the request queues at the server).
+Several delegate calls in one turn run in parallel; the turn blocks
+until each worker finishes or times out. `timeoutMs` is the spend
+ceiling (default 10 minutes, ceiling 30). A model that is not resident
+refuses by name, naming the holder — never an eviction from inside a
+turn. The
 worker's last message comes back as the tool result, the run is
 recorded in the one scheduler store under an ad-hoc key, so
 `scheduler runs` shows it beside cron runs, and the worker's

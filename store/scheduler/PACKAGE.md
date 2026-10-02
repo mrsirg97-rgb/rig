@@ -60,6 +60,9 @@ written before the store commit; drift is surfaced in list.
 - `runner.go`: the job runner (`RunJob`); `lock.go`: the fire lock and
   log pruning, `busy.go`: the swap gate (the resident set and the live
   free-slot read, `ResidentModel`/`FreeSlots`) with `FleetCapacity`,
+  the not-resident refusal carried as `ErrNotResident` so a caller
+  matches it with `errors.Is` instead of its text (the swarm's drain
+  treats it as a stop, not a death),
   the wire-time capability read — the widest slot count the resident
   server runs, from one live read of the same `/slots` the gate reads,
   nothing resident the zero value — and the spend read,

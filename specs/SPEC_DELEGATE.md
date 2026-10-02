@@ -239,6 +239,15 @@ error, so the operator always has the session id and log path.
   death). It is the run-job `acquireLock` shape, keyed per session
   per slot. The gate already counts, so raising `slots` is a file
   edit, not a code change.
+- **Amended in 2.6.0**: the send-and-wait gate replaces the slot
+  read and `WaitBusy` (SPEC_WORKERS 2.6.0): the spawn's request
+  queues at the llama-server, so a busy GPU is waited on by the
+  server, not by rig; the one read at dispatch refuses only a model
+  that is not resident. `Stall` retires with the stall kill: a
+  queued worker writes nothing and the silence kill would shoot it;
+  the timeout stays the spend ceiling. `Observe` and `SpawnCtx`
+  stay as amended below.
+
 - **Four swarm amendments (SPEC_SWARM)**, all defaulted to today's
   behavior. `WaitBusy` (false): a busy GPU is waited on — the busy
   check polls `busyState` on a short interval until the model runs or

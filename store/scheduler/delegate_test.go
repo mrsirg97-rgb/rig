@@ -117,9 +117,7 @@ func TestDelegateHolderSkipStillRefuses(t *testing.T) {
 
 func TestDelegateCheckFailureFailsClosed(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
-	in := delegateInput(t, delegateFetch(t, true, "models down"), spawn.spawn, func(in *sched.DelegateInput) {
-		in.WaitBusy = true
-	})
+	in := delegateInput(t, delegateFetch(t, true, "models down"), spawn.spawn, nil)
 	if _, err := sched.Delegate(in); err == nil {
 		t.Fatal("a failed gate check must refuse")
 	} else if !strings.Contains(err.Error(), "gate check failed") {
@@ -194,69 +192,6 @@ func TestDelegateDefaultsAreUnchanged(t *testing.T) {
 	}
 }
 
-func TestDelegateStallKillsASilentWorker(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1}}
-	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
-		<-ctx.Done()
-	}
-	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
-		in.Stall = 60 * time.Millisecond
-	})
-	res, err := sched.Delegate(in)
-	if err != nil {
-		t.Fatalf("delegate: %v", err)
-	}
-	if !res.Stalled {
-		t.Fatal("a worker silent past the window must be marked stalled")
-	}
-	if res.Exit != 1 {
-		t.Fatalf("a stalled worker must record exit 1, got %d", res.Exit)
-	}
-	if !strings.Contains(res.Stderr, "[runner: killed after stall]") {
-		t.Errorf("a stalled worker must name the reason in its stderr: %q", res.Stderr)
-	}
-	logBody, err := os.ReadFile(filepath.Join(in.Home, filepath.FromSlash(res.LogRel)))
-	if err != nil {
-		t.Fatalf("read run log: %v", err)
-	}
-	if !strings.Contains(string(logBody), "[runner: killed after stall]") {
-		t.Errorf("the run log must name the stall: %s", logBody)
-	}
-}
-
-func TestDelegateStallKeepsAWritingWorkerPastTheOldCeiling(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	var remaining time.Duration
-	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
-		dl, ok := ctx.Deadline()
-		if !ok {
-			t.Fatal("the spawn context must carry the delegate timeout")
-		}
-		remaining = time.Until(dl)
-		for i := 0; i < 8; i++ {
-			observe([]byte("rig: heartbeat\n"))
-			time.Sleep(20 * time.Millisecond)
-		}
-	}
-	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
-		in.Stall = 60 * time.Millisecond
-		in.Timeout = 2 * time.Hour
-	})
-	res, err := sched.Delegate(in)
-	if err != nil {
-		t.Fatalf("delegate: %v", err)
-	}
-	if res.Stalled || res.TimedOut {
-		t.Fatalf("a writing worker must never stall: stalled=%v timedOut=%v", res.Stalled, res.TimedOut)
-	}
-	if res.Exit != 0 {
-		t.Fatalf("a writing worker must finish, got exit %d", res.Exit)
-	}
-	if remaining > 2*time.Hour || remaining < 90*time.Minute {
-		t.Fatalf("the 2h spend ceiling must not clamp to the old 30m default, got %v", remaining)
-	}
-}
-
 func TestRemoteDelegateNeverConsultsTheSwap(t *testing.T) {
 	failing := func(url string) (json.RawMessage, error) {
 		return nil, jsonError("the swap must never be consulted: " + url)
@@ -299,7 +234,6 @@ func TestDelegateRecordsCanceledReason(t *testing.T) {
 	defer cancel()
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
 		in.SpawnCtx = ctx
-		in.Context = ctx
 	})
 	done := make(chan struct{})
 	go func() {
@@ -335,23 +269,9 @@ func TestDelegateRecordsSignalReason(t *testing.T) {
 	}
 }
 
-func TestDelegateRecordsStallAndTimeoutReasons(t *testing.T) {
-	stallSpawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1}}
-	stallSpawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
-		<-ctx.Done()
-	}
-	in := delegateInput(t, delegateFetch(t, false, ""), stallSpawn.spawn, func(in *sched.DelegateInput) {
-		in.Stall = 60 * time.Millisecond
-	})
-	if _, err := sched.Delegate(in); err != nil {
-		t.Fatalf("delegate: %v", err)
-	}
-	if got := runReason(t, in, "j1"); got != "killed after stall" {
-		t.Errorf("a stalled worker must record the reason, got %q", got)
-	}
-
+func TestDelegateRecordsTimeoutReason(t *testing.T) {
 	timeoutSpawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1, TimedOut: true}}
-	in = delegateInput(t, delegateFetch(t, false, ""), timeoutSpawn.spawn, nil)
+	in := delegateInput(t, delegateFetch(t, false, ""), timeoutSpawn.spawn, nil)
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}

@@ -3,6 +3,8 @@ package scheduler_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -70,7 +72,7 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	d := h.tool.Description()
 	for _, want := range []string{
 		"come from list: copy them, never invent them",
-		"busy:skip is the only policy: a fire waits for a free slot up to its timeout, or skips naming the holder",
+		"the fire sends and waits on the queue; a different resident model skips, naming the holder",
 		"eviction is the operator's act (the fleet is the resident model)",
 		"omit it and the fire runs on whatever is resident (default qwen3.8-workers when nothing is)",
 		"until the note clears",
@@ -112,12 +114,11 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("the scope arg must be gone from the schema")
 	}
 	id, _ := schema.Properties["id"].(map[string]any)
-	if got, _ := id["description"].(string); got != "Job id jN (as shown by list). Required for pause/resume/remove/runs; repair takes it or none (none repairs every drifting job)." {
+	if got, _ := id["description"].(string); got != "Job id jN from list; required for pause/resume/remove/runs; repair takes it or none." {
 		t.Fatalf("id description %q", got)
 	}
-	cwd, _ := schema.Properties["workspace"].(map[string]any)
-	if got, _ := cwd["description"].(string); got != "the workspace the job runs in (default: this session's workspace)." {
-		t.Fatalf("cwd description %q", got)
+	if _, ok := schema.Properties["workspace"]; ok {
+		t.Fatal("the workspace arg must be gone from the schema (the job runs in the session's workspace)")
 	}
 }
 
@@ -381,20 +382,57 @@ func TestExecAttributionFallsBackToAnon(t *testing.T) {
 	}
 }
 
-func TestCreateRefusesACwdOutsideTheSessionRoot(t *testing.T) {
-	home := t.TempDir()
-	globalPath := filepath.Join(home, "global.sqlite")
-	db, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion)
-	if err != nil {
+func TestExecWorkspaceLandsInTheStore(t *testing.T) {
+	h := newHarness(t, "/ws/sa")
+	inside := filepath.Join(h.home, "sub")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ct := &fakeCrontab{text: "SHELL=/bin/bash\n"}
-	tool := adapter.New(db, ct, "/x/rig run-job", "qwen3.8-workers", home)
-	raw, _ := json.Marshal(map[string]any{
-		"action": "create", "name": "escape", "prompt": "p", "cron": "1 0 * * *", "workspace": "/etc",
-	})
-	_, err = tool.Exec(context.Background(), raw)
-	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
-		t.Fatalf("a cwd outside the session's workspace and the rig home must be refused, got %v", err)
+	if _, err := exec(t, h, map[string]any{
+		"action": "create", "name": "scoped", "prompt": "work",
+		"cron": "0 3 * * *", "workspace": inside,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var cwd string
+	if err := h.db.DB.QueryRow(`SELECT cwd FROM jobs WHERE id = 'j1'`).Scan(&cwd); err != nil {
+		t.Fatal(err)
+	}
+	if cwd != inside {
+		t.Fatalf("job cwd = %q, want the validated workspace %q", cwd, inside)
+	}
+	if _, err := exec(t, h, map[string]any{
+		"action": "update", "id": "j1", "workspace": "/etc",
+	}); err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
+		t.Fatalf("a workspace outside the session root must be refused, got %v", err)
+	}
+}
+
+func TestExecRunsHonorsTheCount(t *testing.T) {
+	h := newHarness(t, "/ws/sa")
+	if _, err := exec(t, h, map[string]any{
+		"action": "create", "name": "audited", "prompt": "work", "cron": "0 3 * * *",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 3; i++ {
+		if _, err := h.db.DB.Exec(`INSERT INTO runs (seq, job_id, started_at, ended_at, status, model) VALUES (?, 'j1', ?, ?, 'ok', 'm')`,
+			i, fmt.Sprintf("2026-01-0%dT00:00:00Z", i), fmt.Sprintf("2026-01-0%dT00:01:00Z", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	one, err := exec(t, h, map[string]any{"action": "runs", "id": "j1", "n": 1})
+	if err != nil {
+		t.Fatalf("runs: %v", err)
+	}
+	if !strings.Contains(one, "j1 · 1 run") || !strings.Contains(one, "2026-01-03") {
+		t.Fatalf("runs n=1 must show the newest run only:\n%s", one)
+	}
+	all, err := exec(t, h, map[string]any{"action": "runs", "id": "j1"})
+	if err != nil {
+		t.Fatalf("runs: %v", err)
+	}
+	if !strings.Contains(all, "j1 · 3 runs") || !strings.Contains(all, "2026-01-01") {
+		t.Fatalf("runs without n must show the default window, oldest first:\n%s", all)
 	}
 }

@@ -4,16 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v2/swarm"
 	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
 )
 
@@ -805,5 +811,173 @@ func TestFailedWriteWithProjectLeavesTheBindingAlone(t *testing.T) {
 	}
 	if !strings.Contains(moved, "queue: "+filepath.Base(there)+" (bound)") {
 		t.Fatalf("a successful write must move the binding, got %q", moved)
+	}
+}
+
+func TestTodoCreateAndCompleteWakeTheRouter(t *testing.T) {
+	var mu sync.Mutex
+	var calls []string
+	tool := todoapi.New(newDB(t), todoapi.Interactive, func() {
+		mu.Lock()
+		calls = append(calls, "wake")
+		mu.Unlock()
+	})
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "the work"}},
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	mu.Lock()
+	if len(calls) != 1 {
+		t.Fatalf("wake calls after create = %d, want 1", len(calls))
+	}
+	mu.Unlock()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "read"}); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "note", "id": "t1", "note": "a finding"}); err != nil {
+		t.Fatalf("note: %v", err)
+	}
+	mu.Lock()
+	if len(calls) != 1 {
+		t.Fatalf("a read and a note must not wake the router: %v", calls)
+	}
+	mu.Unlock()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": "t1"}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	mu.Lock()
+	if len(calls) != 2 {
+		t.Fatalf("wake calls after the completion = %d, want 2: %v", len(calls), calls)
+	}
+	mu.Unlock()
+}
+
+type routerSpawn struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (r *routerSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
+	r.mu.Lock()
+	r.calls = append(r.calls, strings.Join(argv, " "))
+	r.mu.Unlock()
+	return sched.SpawnResult{Exit: 0, Stdout: "done\n"}, nil
+}
+
+func TestTodoCreateWakesTheRouterToClaimIt(t *testing.T) {
+	db := newDB(t)
+	home := t.TempDir()
+	schedDB, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	if err != nil {
+		t.Fatalf("sched store: %v", err)
+	}
+	dir := t.TempDir()
+	proj := todostore.ProjectOf(dir)
+	spawn := &routerSpawn{}
+	fetch := func(url string) (json.RawMessage, error) {
+		if strings.HasSuffix(url, "/v1/models") {
+			return json.RawMessage(`{"data":[],"object":"list"}`), nil
+		}
+		if strings.HasSuffix(url, "/running") {
+			return json.RawMessage(`{"running":[]}`), nil
+		}
+		return nil, fmt.Errorf("unexpected url %s", url)
+	}
+	tbl, err := models.New(models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker})
+	if err != nil {
+		t.Fatalf("models: %v", err)
+	}
+	ctl := swarm.New(swarm.Opts{
+		TodoDB:  db,
+		SchedDB: schedDB,
+		Home:    home,
+		Project: func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Cwd:     dir, WorkerCmd: []string{"/x/rig"}, Fetch: fetch, Spawn: spawn.spawn,
+		SwapURL: "http://127.0.0.1:8090", Sandbox: "off", RigHome: t.TempDir(), StateDir: t.TempDir(),
+		DefaultModel: "qwen3.8-workers", Models: func() models.Table { return tbl },
+	})
+	defer ctl.Stop()
+	sess := core.NewSession()
+	tool := todoapi.New(db, todoapi.Interactive, ctl.Wake)
+	ctx := core.WithSession(context.Background(), sess)
+	if _, err := ctl.Start(ctx, swarm.StartOpts{Count: 1, Role: "worker"}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "project": dir, "tasks": []any{map[string]any{"text": "the work"}},
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		spawn.mu.Lock()
+		n := len(spawn.calls)
+		argv := ""
+		if n > 0 {
+			argv = spawn.calls[0]
+		}
+		spawn.mu.Unlock()
+		if n == 1 {
+			if !strings.Contains(argv, "the work") {
+				t.Fatalf("the router's handout must carry the task brief: %s", argv)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the create must wake the router to a spawn, calls = %d", n)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestTodoUpdateRemovingARequiresLinkWakesTheRouter(t *testing.T) {
+	var mu sync.Mutex
+	var calls int
+	tool := todoapi.New(newDB(t), todoapi.Interactive, func() {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+	})
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "the blocker"}},
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "the dependent", "requires": "the blocker"}},
+	}); err != nil {
+		t.Fatalf("the linked create: %v", err)
+	}
+	mu.Lock()
+	if calls != 2 {
+		t.Fatalf("wake calls = %d, want one per create", calls)
+	}
+	mu.Unlock()
+	shown, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(shown, "requires t1") {
+		t.Fatalf("the link must show before the update:\n%s", shown)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "the dependent", "requires": nil}},
+	}); err != nil {
+		t.Fatalf("the update: %v", err)
+	}
+	mu.Lock()
+	if calls != 3 {
+		t.Fatalf("removing the requires link must wake the router, wake calls = %d", calls)
+	}
+	mu.Unlock()
+	shown, err = exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(shown, "requires") {
+		t.Fatalf("the update must clear the link:\n%s", shown)
 	}
 }

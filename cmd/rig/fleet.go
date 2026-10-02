@@ -12,12 +12,8 @@ func fleetWiring(fetch sched.Fetch, swapURL, modelID string, tbl models.Table, w
 	if row, ok := tbl.Get(modelID); ok && row.Remote {
 		return true, ""
 	}
-	total, err := sched.FleetCapacity(fetch, swapURL)
-	if err != nil {
-		return false, "swarm: the fleet needs more than one slot (the swap is unreadable at start)"
-	}
-	if total == 1 {
-		return false, "swarm: the fleet needs more than one slot (the resident server runs one, and a turn holds it)"
+	if _, err := sched.ResidentModel(fetch, swapURL); err != nil {
+		return false, "swarm: the swap is unreadable at start (the pair fails closed)"
 	}
 	return true, ""
 }

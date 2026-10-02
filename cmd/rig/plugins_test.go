@@ -436,7 +436,7 @@ def run(args):
 `)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(scratch, py)
+	cmd.Env = append(pluginEnv(scratch, py), "RIG_SWAP_URL="+srv.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -459,9 +459,9 @@ def run(args):
 	}
 
 	tools := wireTools(t, s.body(0))
-	want := withoutDelegate(registeredNativeNames(false))
+	want := registeredNativeNames(false)
 	if len(tools) != len(want) {
-		t.Fatalf("tools = %d, want %d (a one-slot wire carries no drain pair; the plugins live behind the door)", len(tools), len(want))
+		t.Fatalf("tools = %d, want %d (a one-slot wire hosts the drain pair; the plugins live behind the door)", len(tools), len(want))
 	}
 	for i, name := range want {
 		if tools[i].Name != name {
@@ -638,14 +638,14 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 	scratch := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
 	tools := wireTools(t, s.last())
-	want := withoutDelegate(registeredNativeNames(false))
+	want := registeredNativeNames(false)
 	if len(tools) != len(want) {
-		t.Fatalf("tools = %d, want the native set minus the drain pair (a one-slot wire; a text row: no view; no plugins directory, no plugins)", len(tools))
+		t.Fatalf("tools = %d, want the native set with the drain pair (a one-slot wire; a text row: no view; no plugins directory, no plugins)", len(tools))
 	}
 	for i, name := range want {
 		if tools[i].Name != name {

@@ -3,11 +3,11 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -15,8 +15,6 @@ import (
 	"os"
 	"path/filepath"
 )
-
-const busyWaitInterval = time.Second
 
 func canonicalModels(fetch Fetch, swapURL string) (map[string]string, []string, error) {
 	modelsRaw, err := fetch(swapURL + "/v1/models")
@@ -184,8 +182,10 @@ func slotRead(fetch Fetch, swapURL, model string) (slotSet, error) {
 	return out, nil
 }
 
+var ErrNotResident = errors.New("a different model is resident")
+
 func holderRefusal(resident []string) error {
-	return fmt.Errorf("the GPU is held by %s (the fleet is the resident model; eviction is the operator's act)", strings.Join(resident, ", "))
+	return fmt.Errorf("%w: the GPU is held by %s (the fleet is the resident model; eviction is the operator's act)", ErrNotResident, strings.Join(resident, ", "))
 }
 
 func gateOnce(fetch Fetch, swapURL, model string) error {
@@ -203,49 +203,7 @@ func gateOnce(fetch Fetch, swapURL, model string) error {
 	if !contains(resident, own) {
 		return fmt.Errorf("%w; run on the resident model or schedule a once-job — it fires between turns", holderRefusal(resident))
 	}
-	slots, err := slotRead(fetch, swapURL, own)
-	if err != nil {
-		return err
-	}
-	if slots.free > 0 {
-		return nil
-	}
-	if slots.total == 1 {
-		return fmt.Errorf("no free slot; this turn holds the only one")
-	}
-	return fmt.Errorf("no free slot (all %d slots are processing)", slots.total)
-}
-
-func gateWait(fetch Fetch, swapURL, model string, waitCtx context.Context) error {
-	canon, resident, err := canonicalModels(fetch, swapURL)
-	if err != nil {
-		return err
-	}
-	if len(resident) == 0 {
-		return nil
-	}
-	own := model
-	if c, ok := canon[model]; ok {
-		own = c
-	}
-	if !contains(resident, own) {
-		return holderRefusal(resident)
-	}
-	start := time.Now()
-	for {
-		slots, err := slotRead(fetch, swapURL, own)
-		if err != nil {
-			return err
-		}
-		if slots.free > 0 {
-			return nil
-		}
-		select {
-		case <-waitCtx.Done():
-			return fmt.Errorf("no free slot on %s after %s (the slots are held)", own, time.Since(start).Truncate(time.Millisecond))
-		case <-time.After(busyWaitInterval):
-		}
-	}
+	return nil
 }
 
 func contains(all []string, one string) bool {

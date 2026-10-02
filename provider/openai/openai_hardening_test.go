@@ -356,3 +356,44 @@ func TestAStallingServerBoundsTheWaitForHeaders(t *testing.T) {
 		t.Fatalf("the header timeout must bound the wait, took %s", elapsed)
 	}
 }
+
+func TestALocalRowKeepsWaitingForHeadersPastTheOldBound(t *testing.T) {
+	held := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-held
+		time.Sleep(120 * time.Millisecond)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"late\"}}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	tight := openai.NewWithHeaderTimeout(srv.URL, "local", 50*time.Millisecond)
+	events, err := drain(t, context.Background(), tight, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %v, want exactly the one transport fault", kinds(events))
+	}
+	f, ok := events[0].(core.Fault)
+	if !ok || !strings.Contains(f.Err.Error(), "timeout") {
+		t.Fatalf("event 0 = %+v, want the header timeout fault", events[0])
+	}
+
+	close(held)
+	loose := openai.NewWithConfig(openai.Config{
+		BaseURL:       srv.URL,
+		Model:         "local",
+		HeaderTimeout: openai.HeaderTimeoutOff,
+	})
+	events, err = drain(t, context.Background(), loose, userReq())
+	if err != nil {
+		t.Fatalf("the local row must wait out the old bound: %v", err)
+	}
+	if got := kinds(events); got != "delta,done" {
+		t.Fatalf("events = %v, want the late headers delivered", got)
+	}
+}

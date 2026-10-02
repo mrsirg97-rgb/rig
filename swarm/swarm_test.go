@@ -36,6 +36,7 @@ func modelRows(t *testing.T) models.Table {
 		models.Model{ID: "qwen3.8-27b", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 		models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 		models.Model{ID: "qwen3.8-review", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
+		models.Model{ID: "dsv4", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 	)
 	if err != nil {
 		t.Fatalf("models: %v", err)
@@ -242,7 +243,6 @@ func newHarnessResolved(t *testing.T, resolve func() core.Frontend) *harness {
 		StateDir:     t.TempDir(),
 		DefaultModel: "qwen3.8-workers",
 		Models:       func() models.Table { return modelRows(t) },
-		Poll:         20 * time.Millisecond,
 		Frontend:     resolve,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
@@ -298,10 +298,197 @@ func (h *harness) waitFor(t *testing.T, what string, fn func() bool) {
 	}
 }
 
+func TestSwarmHandsOutOneTaskPerIdleWorker(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "write the parser", "write the tests")
+	h.spawn.block = make(chan struct{})
+	h.start(t, swarm.StartOpts{Count: 3, Role: "worker"})
+	h.waitFor(t, "both tasks handed out", func() bool { return h.spawn.count() == 2 })
+	idle := 0
+	busy := 0
+	for _, r := range h.ctl.List() {
+		if r.Task == "" {
+			idle++
+		} else {
+			busy++
+		}
+	}
+	if idle != 1 || busy != 2 {
+		t.Fatalf("idle = %d busy = %d, want one of three holding nothing:\n%+v", idle, busy, h.ctl.List())
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got := h.spawn.count(); got != 2 {
+		t.Fatalf("spawn calls = %d, want two (the queue holds nothing more for the idle worker)", got)
+	}
+}
+
+func TestSwarmWorkerFinishingIsTheNextHandout(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "first", "second")
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.waitFor(t, "both tasks ran on the one worker", func() bool { return h.spawn.count() == 2 })
+	h.waitFor(t, "the board drained", func() bool {
+		return h.status(t, "t1") == "review" && h.status(t, "t2") == "review"
+	})
+	rows := h.ctl.List()
+	if len(rows) != 1 || rows[0].Done != 2 {
+		t.Fatalf("worker rows = %+v, want one worker with done 2", rows)
+	}
+	if rows[0].Task != "" {
+		t.Errorf("the finished worker must be idle again, holds %q", rows[0].Task)
+	}
+}
+
+func TestSwarmQueuedWorkerLivesPastTheOldStallBound(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "queued behind the session")
+	h.spawn.onCall = func(observe func([]byte)) {
+		time.Sleep(150 * time.Millisecond)
+	}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.waitFor(t, "the silent worker's task in review", func() bool {
+		return h.status(t, "t1") == "review"
+	})
+}
+
+func TestSwarmSpawnCarriesNoStallNoTimeoutAndWaitsOnTheServer(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "shaped work")
+	captured := make(chan sched.DelegateInput, 1)
+	h.ctl = swarm.New(swarm.Opts{
+		TodoDB:       h.todoDB,
+		SchedDB:      h.schedDB,
+		Home:         h.home,
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Cwd:          h.cwd,
+		WorkerCmd:    []string{"/x/rig"},
+		Fetch:        h.fetch.fetch,
+		Spawn:        h.spawn.spawn,
+		SwapURL:      "http://127.0.0.1:8090",
+		Sandbox:      "off",
+		RigHome:      h.rigHome,
+		StateDir:     t.TempDir(),
+		DefaultModel: "qwen3.8-workers",
+		Models:       func() models.Table { return modelRows(t) },
+		Frontend:     func() core.Frontend { return h.fe },
+		Delegate: func(in sched.DelegateInput) (sched.DelegateResult, error) {
+			captured <- in
+			return sched.DelegateResult{Exit: 0, Stdout: "done\n"}, nil
+		},
+	})
+	t.Cleanup(func() { h.ctl.Stop() })
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	in := <-captured
+	if in.Timeout >= 0 {
+		t.Errorf("timeout = %v, want the caller's context as the only bound (negative)", in.Timeout)
+	}
+	if in.Observe == nil {
+		t.Error("the run stream's observer must stay")
+	}
+}
+
+func TestSwarmDeadWorkerTaskReleasedAndHandedToAnother(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "survive a crash")
+	h.spawn.queue = []sched.SpawnResult{
+		{Exit: 1, Stderr: "the worker died\n"},
+		{Exit: 0, Stdout: "done\n"},
+	}
+	h.start(t, swarm.StartOpts{Count: 2, Role: "worker"})
+	h.waitFor(t, "the dead claim released", func() bool {
+		rows, err := h.todoDB.DB.Query(`SELECT op FROM events WHERE scope = 'swarm' AND op = 'release'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		return rows.Next()
+	})
+	h.waitFor(t, "the retry spawn", func() bool { return h.spawn.count() == 2 })
+	if !strings.Contains(h.spawn.argv(1), "survive a crash") {
+		t.Errorf("the retry must carry the same task brief:\n%s", h.spawn.argv(1))
+	}
+	h.waitFor(t, "the task submitted for review", func() bool {
+		return h.status(t, "t1") == "review"
+	})
+	rows := h.ctl.List()
+	done := 0
+	for _, r := range rows {
+		done += r.Done
+	}
+	if done != 1 {
+		t.Errorf("done total = %d, want 1 (%+v)", done, rows)
+	}
+}
+
+func TestSwarmTwoSessionsOnOneQueueNeverRunATaskTwice(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "one task, two routers")
+	first := h.ctl
+	second := swarm.New(swarm.Opts{
+		TodoDB:       h.todoDB,
+		SchedDB:      h.schedDB,
+		Home:         h.home,
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Cwd:          h.cwd,
+		WorkerCmd:    []string{"/x/rig"},
+		Fetch:        h.fetch.fetch,
+		Spawn:        h.spawn.spawn,
+		SwapURL:      "http://127.0.0.1:8090",
+		Sandbox:      "off",
+		RigHome:      h.rigHome,
+		StateDir:     t.TempDir(),
+		DefaultModel: "qwen3.8-workers",
+		Models:       func() models.Table { return modelRows(t) },
+		Frontend:     func() core.Frontend { return h.fe },
+	})
+	t.Cleanup(func() { second.Stop() })
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := first.Start(ctx, swarm.StartOpts{Count: 1, Role: "worker"}); err != nil {
+		t.Fatalf("first start: %v", err)
+	}
+	if _, err := second.Start(ctx, swarm.StartOpts{Count: 1, Role: "worker"}); err != nil {
+		t.Fatalf("second start: %v", err)
+	}
+	h.waitFor(t, "the task claimed exactly once", func() bool { return h.spawn.count() == 1 })
+	time.Sleep(50 * time.Millisecond)
+	if got := h.spawn.count(); got != 1 {
+		t.Fatalf("spawn calls across both swarms = %d, want 1 (the claim is atomic)", got)
+	}
+	h.waitFor(t, "the one run submitted for review", func() bool {
+		return h.status(t, "t1") == "review"
+	})
+	time.Sleep(50 * time.Millisecond)
+	if got := h.spawn.count(); got != 1 {
+		t.Fatalf("spawn calls across both swarms = %d, want 1 (the claim is atomic)", got)
+	}
+	done := 0
+	for _, rows := range [][]swarm.Worker{first.List(), second.List()} {
+		for _, r := range rows {
+			done += r.Done
+		}
+	}
+	if done != 1 {
+		t.Errorf("done total across both swarms = %d, want 1 (one task, one run):\n%+v %+v", done, first.List(), second.List())
+	}
+}
+
+func TestSwarmCountBounds(t *testing.T) {
+	h := newHarness(t)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	for _, in := range []swarm.StartOpts{{Count: 0, Role: "worker"}, {Count: -2, Role: "worker"}, {Count: swarm.MaxWorkers + 1, Role: "worker"}} {
+		if _, err := h.ctl.Start(ctx, in); err == nil {
+			t.Errorf("Start(%+v) must refuse a count outside 1..%d", in, swarm.MaxWorkers)
+		}
+	}
+	if rows := h.ctl.List(); len(rows) != 0 {
+		t.Errorf("a refused start must start nothing: %+v", rows)
+	}
+}
+
 func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
-	h := twoSlotHarness(t)
+	h := newHarness(t)
 	h.create(t, "write the parser", "write the tests", "write the docs")
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 2, Role: "worker"})
 	h.waitFor(t, "all three tasks in review", func() bool {
 		return h.status(t, "t1") == "review" && h.status(t, "t2") == "review" && h.status(t, "t3") == "review"
 	})
@@ -316,19 +503,56 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 			t.Errorf("spawn %d must tell the worker the supervisor owns the board entry:\n%s", i, h.spawn.argv(i))
 		}
 	}
-	h.waitFor(t, "both workers exited", func() bool {
-		rows := h.ctl.List()
-		return len(rows) == 2 && rows[0].State == "exited" && rows[1].State == "exited"
-	})
 	rows := h.ctl.List()
-	if rows[0].Done+rows[1].Done != 3 {
-		t.Errorf("done total = %d, want 3 (%+v)", rows[0].Done+rows[1].Done, rows)
+	done := 0
+	for _, r := range rows {
+		done += r.Done
+	}
+	if done != 3 {
+		t.Errorf("done total = %d, want 3 (%+v)", done, rows)
 	}
 	for _, r := range rows {
 		if r.Model != "resident" {
 			t.Errorf("worker model = %q, want the resident fleet", r.Model)
 		}
 	}
+}
+
+func TestSwarmCompletedRequirementHandsTheDependentOut(t *testing.T) {
+	h := newHarness(t)
+	req := "t1"
+	if _, err := todostore.Create(context.Background(), h.todoDB, proj, []todostore.CreateItem{{Text: "the blocker"}}, "sess-architect"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := todostore.Create(context.Background(), h.todoDB, proj, []todostore.CreateItem{{Text: "the dependent", Requires: &req}}, "sess-architect"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	h.spawn.queue = []sched.SpawnResult{
+		{Exit: 0, Stdout: "done\n"},
+		{Exit: 0, Stdout: "looks good\nverdict: accept\n"},
+		{Exit: 0, Stdout: "done\n"},
+	}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
+	h.waitFor(t, "only the blocker claimed while it blocked", func() bool {
+		return h.spawn.count() == 1 && h.status(t, "t1") == "review"
+	})
+	h.waitFor(t, "the dependent handed out on the completion", func() bool {
+		return h.spawn.count() == 3 && h.status(t, "t1") == "done" && h.status(t, "t2") == "review"
+	})
+}
+
+func TestSwarmSpawnsWhileEverySlotIsProcessing(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "queued on the server")
+	h.fetch.resident = []string{"qwen3.8-27b"}
+	h.fetch.slots = [][]bool{{true, true}}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.waitFor(t, "the spawn against a full slot set", func() bool { return h.spawn.count() == 1 })
+	if got := h.spawn.argv(0); !strings.Contains(got, "-model qwen3.8-27b") {
+		t.Errorf("the worker must run the resident model: %s", got)
+	}
+	h.waitFor(t, "the task in review", func() bool { return h.status(t, "t1") == "review" })
 }
 
 func TestSwarmReviewerRejectsAndAWorkerPicksItUp(t *testing.T) {
@@ -340,8 +564,8 @@ func TestSwarmReviewerRejectsAndAWorkerPicksItUp(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 0, Stdout: "looks good now\nverdict: accept\n"},
 	}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.start(t, swarm.StartOpts{Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	h.waitFor(t, "the rejection picked up and accepted", func() bool {
 		return h.status(t, "t1") == "done"
 	})
@@ -369,53 +593,11 @@ func TestSwarmReviewerRejectsAndAWorkerPicksItUp(t *testing.T) {
 	}
 }
 
-func TestSwarmDeadWorkerClaimReleasedAndRestartedOnce(t *testing.T) {
-	h := newHarness(t)
-	h.create(t, "survive a crash")
-	h.spawn.queue = []sched.SpawnResult{
-		{Exit: 1, Stderr: "the worker died\n"},
-		{Exit: 0, Stdout: "done\n"},
-	}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.waitFor(t, "the first spawn", func() bool { return h.spawn.count() == 1 })
-	h.waitFor(t, "the dead claim released", func() bool {
-		rows, err := h.todoDB.DB.Query(`SELECT op FROM events WHERE scope = 'swarm' AND op = 'release'`)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer rows.Close()
-		return rows.Next()
-	})
-	h.waitFor(t, "the retry spawn", func() bool { return h.spawn.count() == 2 })
-	if !strings.Contains(h.spawn.argv(1), "survive a crash") {
-		t.Errorf("the retry must carry the same task brief:\n%s", h.spawn.argv(1))
-	}
-	h.waitFor(t, "the task submitted for review", func() bool {
-		return h.status(t, "t1") == "review"
-	})
-	h.waitFor(t, "the worker exited", func() bool {
-		rows := h.ctl.List()
-		return len(rows) == 1 && rows[0].State == "exited"
-	})
-	rows := h.ctl.List()
-	if rows[0].Done != 1 || rows[0].Failed != 0 {
-		t.Errorf("worker counters = done %d failed %d, want 1/0", rows[0].Done, rows[0].Failed)
-	}
-	releaseRows, err := h.todoDB.DB.Query(`SELECT op FROM events WHERE scope = 'swarm' AND op = 'release'`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer releaseRows.Close()
-	if !releaseRows.Next() {
-		t.Fatal("the dead worker's claim must be released (a release event on the log)")
-	}
-}
-
 func TestSwarmSecondDeathFailsTheTask(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "doomed")
 	h.spawn.result = sched.SpawnResult{Exit: 1, Stderr: "dead\n"}
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the task failed", func() bool { return h.status(t, "t1") == "failed" })
 	if got := h.spawn.count(); got != 2 {
 		t.Fatalf("spawn calls = %d, want the first try plus one restart (2)", got)
@@ -436,7 +618,7 @@ func TestSwarmReviewerSecondDeathRejectsWithTheReason(t *testing.T) {
 		t.Fatalf("complete: %v", err)
 	}
 	h.spawn.result = sched.SpawnResult{Exit: 1, Stderr: "reviewer died\n"}
-	h.start(t, swarm.StartOpts{Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	h.waitFor(t, "the review rejected after the restart", func() bool {
 		return h.status(t, "t1") == "pending"
 	})
@@ -449,42 +631,15 @@ func TestSwarmReviewerSecondDeathRejectsWithTheReason(t *testing.T) {
 	}
 }
 
-func TestSwarmExitsAfterThreeEmptyClaims(t *testing.T) {
-	h := newHarness(t)
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.waitFor(t, "the worker exited", func() bool {
-		rows := h.ctl.List()
-		return len(rows) == 1 && rows[0].State == "exited"
-	})
-	if got := h.spawn.count(); got != 0 {
-		t.Fatalf("an empty queue must spawn nothing, got %d spawns", got)
-	}
-	rows := h.ctl.List()
-	if rows[0].Done != 0 || rows[0].Failed != 0 {
-		t.Errorf("empty-worker counters = %+v", rows[0])
-	}
-}
-
 func TestSwarmWorkerRunsTheResidentModel(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "wait for the gpu")
 	h.fetch.resident = []string{"qwen3.8-27b"}
-	h.fetch.slots = [][]bool{{false}}
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the spawn", func() bool { return h.spawn.count() == 1 })
 	if got := h.spawn.argv(0); !strings.Contains(got, "-model qwen3.8-27b") {
 		t.Errorf("the worker must run the resident model: %s", got)
 	}
-	h.waitFor(t, "the task in review", func() bool { return h.status(t, "t1") == "review" })
-}
-
-func TestSwarmWaitsForAFreeSlotAtTheSwap(t *testing.T) {
-	h := newHarness(t)
-	h.create(t, "wait for the gpu")
-	h.fetch.resident = []string{"qwen3.8-27b-workers"}
-	h.fetch.slots = [][]bool{{true}, {false}}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.waitFor(t, "the spawn after the slot freed", func() bool { return h.spawn.count() == 1 })
 	h.waitFor(t, "the task in review", func() bool { return h.status(t, "t1") == "review" })
 }
 
@@ -497,8 +652,7 @@ func TestSwarmListsWorkersAndStops(t *testing.T) {
 		observe([]byte("rig: heartbeat\n"))
 	}
 	h.fetch.resident = []string{"qwen3.8-review"}
-	h.fetch.slots = [][]bool{{false, false}}
-	h.start(t, swarm.StartOpts{Role: "worker", Model: "qwen3.8-review"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "qwen3.8-review"})
 	var busy swarm.Worker
 	h.waitFor(t, "a worker holding the task with a heartbeat", func() bool {
 		for _, r := range h.ctl.List() {
@@ -535,8 +689,8 @@ func TestSwarmListsWorkersAndStops(t *testing.T) {
 
 func TestSwarmModelDefaultsToResidentAndOverrideWins(t *testing.T) {
 	h := newHarness(t)
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.start(t, swarm.StartOpts{Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	rows := h.ctl.List()
 	if len(rows) != 2 {
 		t.Fatalf("rows = %d", len(rows))
@@ -547,72 +701,24 @@ func TestSwarmModelDefaultsToResidentAndOverrideWins(t *testing.T) {
 		}
 	}
 	h2 := newHarness(t)
-	h2.start(t, swarm.StartOpts{Role: "reviewer", Model: "qwen3.8-workers"})
+	h2.start(t, swarm.StartOpts{Count: 1, Role: "reviewer", Model: "qwen3.8-workers"})
 	if got := h2.ctl.List()[0].Model; got != "qwen3.8-workers" {
 		t.Errorf("override model = %q, want qwen3.8-workers", got)
 	}
-}
-
-func TestSwarmStartsOneWorkerPerFreeSlot(t *testing.T) {
-	h := twoSlotHarness(t)
-	h.create(t, "task one", "task two")
-	h.spawn.block = make(chan struct{})
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.waitFor(t, "both workers running", func() bool { return len(h.ctl.List()) == 2 })
-	for _, r := range h.ctl.List() {
-		if r.Model != "resident" {
-			t.Errorf("worker model = %q, want resident (the slot read is on it)", r.Model)
-		}
-	}
-}
-
-func TestSwarmGrowsAsSlotsFree(t *testing.T) {
-	h := newHarness(t)
-	h.create(t, "task one", "task two", "task three", "task four")
-	h.fetch.resident = []string{"qwen3.8-workers"}
-	h.fetch.slots = [][]bool{{false}, {false, false}}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	if len(h.ctl.List()) != 1 {
-		t.Fatalf("one free slot must start one worker, got %d", len(h.ctl.List()))
-	}
-	h.spawn.block = make(chan struct{})
-	h.waitFor(t, "the swarm to grow into the freed slot", func() bool { return len(h.ctl.List()) == 2 })
-}
-
-func TestSwarmGrowsNeverPastTheCap(t *testing.T) {
-	h := newHarness(t)
-	h.fetch.resident = []string{"qwen3.8-workers"}
-	var many []bool
-	for i := 0; i < 20; i++ {
-		many = append(many, false)
-	}
-	h.fetch.slots = [][]bool{many}
-	h.create(t, "task one")
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	if len(h.ctl.List()) != swarm.MaxWorkers {
-		t.Fatalf("workers = %d, want the %d cap", len(h.ctl.List()), swarm.MaxWorkers)
-	}
-}
-
-func twoSlotHarness(t *testing.T) *harness {
-	h := newHarness(t)
-	h.fetch.resident = []string{"qwen3.8-workers"}
-	h.fetch.slots = [][]bool{{false, false}}
-	return h
 }
 
 func TestSwarmStartRefusalsByName(t *testing.T) {
 	h := newHarness(t)
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	for _, in := range []swarm.StartOpts{
-		{Role: "boss"}, {Model: "nope"},
+		{Count: 1, Role: "boss"}, {Count: 1, Model: "nope"},
 	} {
 		if _, err := h.ctl.Start(ctx, in); err == nil {
 			t.Errorf("Start(%+v) must refuse", in)
 		}
 	}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	reply := h.start(t, swarm.StartOpts{Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	reply := h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	if !strings.Contains(reply, "added") {
 		t.Errorf("a start against a running swarm must add workers: %q", reply)
 	}
@@ -624,7 +730,7 @@ func TestSwarmStartRefusalsByName(t *testing.T) {
 func TestSwarmUnknownModelNamesTheKnown(t *testing.T) {
 	h := newHarness(t)
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	_, err := h.ctl.Start(ctx, swarm.StartOpts{Model: "nope"})
+	_, err := h.ctl.Start(ctx, swarm.StartOpts{Count: 1, Model: "nope"})
 	if err == nil {
 		t.Fatal("an unknown model must refuse")
 	}
@@ -636,7 +742,7 @@ func TestSwarmUnknownModelNamesTheKnown(t *testing.T) {
 func TestSwarmTaskWorkerRecordLandsInTheSchedulerStore(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "recorded work")
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the task in review", func() bool { return h.status(t, "t1") == "review" })
 	rows, err := h.schedDB.DB.Query(`SELECT name FROM jobs WHERE name LIKE 'delegate:%'`)
 	if err != nil {
@@ -659,7 +765,7 @@ func TestSwarmReleasesClaimsOnStopWithAReviewHeld(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "stop me")
 	h.spawn.block = make(chan struct{})
-	h.start(t, swarm.StartOpts{Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the spawn running", func() bool { return h.spawn.count() == 1 })
 	h.ctl.Stop()
 	if got := h.status(t, "t1"); got != "pending" {
@@ -686,8 +792,8 @@ func TestSwarmReviewerNoVerdictCappedAtTwoRejectsThenFails(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 0},
 	}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.start(t, swarm.StartOpts{Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	h.waitFor(t, "the task failed after the reject cap", func() bool {
 		return h.status(t, "t1") == "failed"
 	})
@@ -715,8 +821,8 @@ func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 1, Stderr: "reviewer died\n"},
 	}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.start(t, swarm.StartOpts{Role: "reviewer"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
+	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	h.waitFor(t, "the task failed from the shared retry budget", func() bool {
 		return h.status(t, "t1") == "failed"
 	})
@@ -732,72 +838,14 @@ func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
 	}
 }
 
-func TestSwarmHeartbeatResetsOnEachSpawn(t *testing.T) {
-	h := newHarness(t)
-	h.create(t, "work")
-	h.spawn.queue = []sched.SpawnResult{{Exit: -1}, {Exit: 0}}
-	releaseFirst := make(chan struct{})
-	releaseRetry := make(chan struct{})
-	retrySpawn := make(chan struct{})
-	calls := 0
-	h.spawn.onCall = func(observe func([]byte)) {
-		h.spawn.mu.Lock()
-		calls++
-		n := calls
-		h.spawn.mu.Unlock()
-		if n == 1 {
-			observe([]byte("rig: heartbeat\n"))
-			<-releaseFirst
-			return
-		}
-		close(retrySpawn)
-		<-releaseRetry
-	}
-	h.start(t, swarm.StartOpts{Role: "worker"})
-	h.waitFor(t, "a worker holding t1 with a heartbeat", func() bool {
-		for _, r := range h.ctl.List() {
-			if r.Task == "t1" && !r.Heartbeat.IsZero() {
-				return true
-			}
-		}
-		return false
-	})
-	close(releaseFirst)
-	h.waitFor(t, "the restarted task's spawn", func() bool {
-		select {
-		case <-retrySpawn:
-			return true
-		default:
-			return false
-		}
-	})
-	rows := h.ctl.List()
-	found := false
-	for _, r := range rows {
-		if r.Task != "t1" {
-			continue
-		}
-		found = true
-		if !r.Heartbeat.IsZero() {
-			t.Errorf("the restarted run's heartbeat must reset to none, holds %v", r.Heartbeat)
-		}
-	}
-	if !found {
-		t.Fatalf("the worker rows lost the task:\n%+v", rows)
-	}
-	close(releaseRetry)
-}
-
 func TestSwarmStartAndStopReplyVoice(t *testing.T) {
 	h := newHarness(t)
-	reply := h.start(t, swarm.StartOpts{Role: "worker"})
+	reply := h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	want := "swarm: added 1 agent (role worker · model resident)"
 	if reply != want {
 		t.Errorf("start reply = %q, want %q", reply, want)
 	}
-	h.fetch.resident = []string{"qwen3.8-workers"}
-	h.fetch.slots = [][]bool{{false, false}}
-	reply = h.start(t, swarm.StartOpts{Role: "reviewer"})
+	reply = h.start(t, swarm.StartOpts{Count: 2, Role: "reviewer"})
 	want = "swarm: added 2 agents (role reviewer · model resident)"
 	if reply != want {
 		t.Errorf("a start against a running swarm replies %q, want %q", reply, want)
@@ -811,5 +859,52 @@ func TestSwarmStartAndStopReplyVoice(t *testing.T) {
 	}
 	if got != "swarm: stopped 3 agents" {
 		t.Errorf("stop reply = %q, want stopped 3 agents", got)
+	}
+}
+
+func TestHolderRefusalReleasesAndStopsTheWorker(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "held out")
+	h.fetch.resident = []string{"glm5.3-flash"}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "dsv4"})
+	got := waitForNotices(t, h.fe, 1)
+	if !strings.Contains(got[0], "w1 stopped") || !strings.Contains(got[0], "held by glm5.3-flash") {
+		t.Fatalf("the stop notice must name the holder: %q", got[0])
+	}
+	h.waitFor(t, "the release", func() bool { return h.status(t, "t1") == "pending" })
+	rows := h.ctl.List()
+	if len(rows) != 1 || rows[0].State != swarm.StateExited {
+		t.Fatalf("worker rows = %+v, want the worker stopped", rows)
+	}
+	if got := h.spawn.count(); got != 0 {
+		t.Fatalf("spawn calls = %d, want the refusal to precede the spawn", got)
+	}
+}
+
+func TestStoppedWorkerIsOutBeforeTheRouterWakes(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "held out", "held longer")
+	h.fetch.resident = []string{"glm5.3-flash"}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "dsv4"})
+	got := waitForNotices(t, h.fe, 1)
+	if !strings.Contains(got[0], "held by glm5.3-flash") {
+		t.Fatalf("the stop notice must name the holder: %q", got[0])
+	}
+	h.waitFor(t, "both tasks pending", func() bool {
+		return h.status(t, "t1") == "pending" && h.status(t, "t2") == "pending"
+	})
+	var t2Claims int
+	if err := h.todoDB.DB.QueryRow(`SELECT count(*) FROM events WHERE op = 'claim' AND args LIKE '%t2%'`).Scan(&t2Claims); err != nil {
+		t.Fatal(err)
+	}
+	if t2Claims != 0 {
+		t.Fatalf("t2 claimed %d times: the worker must be out before the router wakes", t2Claims)
+	}
+	if got := h.spawn.count(); got != 0 {
+		t.Fatalf("spawn calls = %d, want never", got)
+	}
+	rows := h.ctl.List()
+	if len(rows) != 1 || rows[0].State != swarm.StateExited {
+		t.Fatalf("worker rows = %+v, want the worker stopped", rows)
 	}
 }
