@@ -15,7 +15,13 @@ stands and no operator allow does — a menu that never names what is
 absent, refusals that do. The README's measured numbers name their
 population (the fleet: every workspace's store, not one), the SETUP
 examples print a placeholder instead of a release that has long moved
-on, and the pages site carries the same thirteen.
+on, and the pages site carries the same thirteen. The measured section
+stopped bragging in point-in-time: the 2,925-turn day and the 208M line
+gave way to the whole curve — 4.1B prompt tokens over every recorded
+turn (1,529 sessions, the earliest on 0.2.0), 99.0% served from cache,
+and the era table where the consolidation shows as the kink: 1,499 new
+tokens a turn in 0.x, 711 in 2.x. The site's rating strip carries the
+same number; under it, the table.
 
 ## [2.5.3]: the resident resolves to a row
 

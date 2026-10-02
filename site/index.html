@@ -319,9 +319,20 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
   </section>
 
   <section class="rating" aria-label="measured">
-    <div><span class="n">99<small>%</small></span><span class="l">of prompt tokens served from cache over 2,925 turns, because the prefix never changes a byte</span></div>
+    <div><span class="n">4.1<small>B</small></span><span class="l">prompt tokens served, 99% of them from cache — the prefix never changes a byte</span></div>
     <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the whole agent loop, batch included, stdlib only</span></div>
     <div><span class="n">{{RIG_COMMITS}}</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
+  </section>
+
+  <section class="sheet" aria-labelledby="trend-heading">
+    <p class="eyebrow" id="trend-heading">the consolidation, measured</p>
+    <p class="sheet-intro">Every recorded turn since the first store, one SQL read of the state store. The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery: the turn got cheaper and never went back.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">0.x</span><p class="what">14,006 turns · 1,499 new tokens a turn · 722 out · 98.65% cache</p></div>
+      <div class="row" role="listitem"><span class="os">1.0–1.3</span><p class="what">7,440 turns · 933 new tokens a turn · 676 out · 99.13% cache</p></div>
+      <div class="row" role="listitem"><span class="os">1.4–1.9</span><p class="what">10,045 turns · 962 new tokens a turn · 525 out · 99.26% cache</p></div>
+      <div class="row" role="listitem"><span class="os">2.x</span><p class="what">4,634 turns · 711 new tokens a turn · 438 out · 99.24% cache</p></div>
+    </div>
   </section>
 
   <section class="lede">
