@@ -10,7 +10,20 @@ import (
 
 const siteStateCap = 4096
 
-var riskQuestion = Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous")
+// The risk question describes each label: Laya's choice criteria is the
+// map of label to what it means, so the decider grades against the same
+// words the reviewer reads.
+var riskQuestion = Question{
+	ID:      "risk",
+	Kind:    KindChoice,
+	Prompt:  "What risk does this bash call carry?",
+	Choices: []string{"safe", "changes", "dangerous"},
+	Description: map[string]string{
+		"safe":      "reads or lists; nothing on disk changes",
+		"changes":   "writes only inside the workspace it named",
+		"dangerous": "reaches outside the workspace, deletes, or can destroy state",
+	},
+}
 
 type siteLink struct {
 	proposer Proposer

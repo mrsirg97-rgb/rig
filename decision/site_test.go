@@ -47,6 +47,11 @@ func TestABashCallProposesPendingAndTheReplyIsUnchanged(t *testing.T) {
 	if row.Question.Kind != decision.KindChoice || len(row.Question.Choices) != 3 {
 		t.Fatalf("the risk question is a choice of three: %+v", row.Question)
 	}
+	for _, label := range []string{"safe", "changes", "dangerous"} {
+		if row.Question.Description[label] == "" {
+			t.Fatalf("the risk question describes %s: %+v", label, row.Question.Description)
+		}
+	}
 	if !strings.Contains(row.State, "rm -rf /tmp/x") {
 		t.Fatalf("the state carries the command: %q", row.State)
 	}

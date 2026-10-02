@@ -27,16 +27,20 @@ type Queue struct {
 	ch   chan Pending
 	dec  Decider
 	sink Sink
-	wake func()
+	land func()
 	loud func(string)
 }
 
-func NewQueue(dec Decider, sink Sink, wake func(), loud func(string)) *Queue {
+// NewQueue wires the proposal queue; land is called when a proposal lands
+// in the store (a landing marks the reviewer dirty — the wake is the
+// session's turn end, not the landing), and may be nil where nothing
+// reviews.
+func NewQueue(dec Decider, sink Sink, land func(), loud func(string)) *Queue {
 	return &Queue{
 		ch:   make(chan Pending, QueueCap),
 		dec:  dec,
 		sink: sink,
-		wake: wake,
+		land: land,
 		loud: loud,
 	}
 }
@@ -78,8 +82,8 @@ func (q *Queue) decide(ctx context.Context, p Pending) {
 			q.say("decision: propose %s: %v", p.Site, err)
 			continue
 		}
-		if q.wake != nil {
-			q.wake()
+		if q.land != nil {
+			q.land()
 		}
 	}
 }

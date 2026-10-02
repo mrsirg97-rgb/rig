@@ -57,7 +57,7 @@ func openDecisionStore(t *testing.T) store.DB {
 	return db
 }
 
-func TestAProposalLandsPendingAndWakes(t *testing.T) {
+func TestAProposalLandsPendingAndMarksTheReviewerDirty(t *testing.T) {
 	db := openDecisionStore(t)
 	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
 	woken := make(chan struct{}, 1)

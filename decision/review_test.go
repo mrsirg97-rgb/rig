@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -40,14 +41,18 @@ type fakeFire struct {
 	stdouts []string
 	calls   int
 	prompts []string
+	fired   chan struct{}
 }
 
 func (f *fakeFire) fire(ctx context.Context, prompt string) (string, error) {
-	if f.calls >= len(f.stdouts) {
+	f.calls++
+	f.prompts = append(f.prompts, prompt)
+	if f.fired != nil {
+		f.fired <- struct{}{}
+	}
+	if f.calls > len(f.stdouts) {
 		return "", nil
 	}
-	f.prompts = append(f.prompts, prompt)
-	f.calls++
 	return f.stdouts[f.calls-1], nil
 }
 
@@ -74,7 +79,11 @@ func openReviewedStore(t *testing.T, n int) store.DB {
 }
 
 func reviewer(db store.DB, f *fakeFire) *decision.Reviewer {
-	return decision.NewReviewer(storeReviews{db: db}, f.fire, "dsv4", func(string) {})
+	return reviewerWithBudget(db, f, 1<<30)
+}
+
+func reviewerWithBudget(db store.DB, f *fakeFire, budget int) *decision.Reviewer {
+	return decision.NewReviewer(storeReviews{db: db}, f.fire, "dsv4", budget, func(string) {})
 }
 
 func TestThreePendingRowsAreReviewedInOneFire(t *testing.T) {
@@ -153,15 +162,104 @@ func TestADenyWithoutACorrectionIsNotAVerdict(t *testing.T) {
 	}
 }
 
-func TestAFireThatSettlesNothingDoesNotSelfWake(t *testing.T) {
+func TestAFireTakesTheOldestRowsThatFitTheWindow(t *testing.T) {
 	db := openReviewedStore(t, 2)
-	f := &fakeFire{stdouts: []string{"I have no idea"}}
-	r := reviewer(db, f)
+	// a row's state alone is past the budget, so one fire carries one row
+	_, err := db.Exec(`UPDATE decisions SET state = ?`, strings.Repeat("x", 8000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve", "verdict: 2 approve"}}
+	r := reviewerWithBudget(db, f, 1000)
 	if err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if f.calls != 1 {
-		t.Fatalf("a garbage fire converges, got %d fires", f.calls)
+	if f.calls != 1 || strings.Count(f.prompts[0], "\n== ") != 1 {
+		t.Fatalf("the fire took the one row that fits: %d fires, %d rows in the prompt", f.calls, strings.Count(f.prompts[0], "\n== "))
+	}
+	rows, _ := decisionstore.Pending(context.Background(), db)
+	if len(rows) != 1 || rows[0].ID != 2 {
+		t.Fatalf("the row past the budget stays pending: %+v", rows)
+	}
+}
+
+func TestALandingMarksDirtyAndTheTurnEndWakes(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
+	r := reviewer(db, f)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.Run(ctx)
+
+	r.Land()
+	r.Wake()
+	select {
+	case <-f.fired:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a landing marks the reviewer dirty; the turn end is the wake")
+	}
+}
+
+func TestATurnEndWithNoLandingCostsNothing(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
+	r := reviewer(db, f)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.Run(ctx)
+
+	r.Wake()
+	select {
+	case <-f.fired:
+		t.Fatal("a turn end with no landing behind it reviews nothing")
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestTheRowsPastTheBudgetStayDirtyForTheNextTurnEnd(t *testing.T) {
+	db := openReviewedStore(t, 2)
+	_, err := db.Exec(`UPDATE decisions SET state = ?`, strings.Repeat("x", 8000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve", "verdict: 2 approve"}, fired: make(chan struct{}, 4)}
+	r := reviewerWithBudget(db, f, 1000)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.Run(ctx)
+
+	r.Land()
+	r.Wake()
+	<-f.fired
+	r.Wake() // the next turn end: the overflow is still dirty
+	<-f.fired
+	select {
+	case <-f.fired:
+		t.Fatal("both rows settled, the reviewer is clean")
+	case <-time.After(200 * time.Millisecond):
+	}
+	rows, _ := decisionstore.Pending(context.Background(), db)
+	if len(rows) != 0 {
+		t.Fatalf("the overflow converged over the turn ends: %d pending", len(rows))
+	}
+}
+
+func TestAFireThatSettlesNothingWaitsForTheNextLanding(t *testing.T) {
+	db := openReviewedStore(t, 2)
+	f := &fakeFire{stdouts: []string{"I have no idea"}, fired: make(chan struct{}, 4)}
+	r := reviewer(db, f)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.Run(ctx)
+
+	r.Land()
+	r.Wake()
+	<-f.fired
+	r.Wake()
+	select {
+	case <-f.fired:
+		t.Fatal("a fire that settles nothing waits for the next landing, not the next turn end")
+	case <-time.After(200 * time.Millisecond):
 	}
 	rows, _ := decisionstore.Pending(context.Background(), db)
 	if len(rows) != 2 {

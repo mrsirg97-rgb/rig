@@ -181,7 +181,11 @@ func main() {
 		allowList = splitCSV(v)
 	}
 	if passed["allow"] {
-		allowList = splitCSV(*allow)
+		if *allow == sched.NoToolsAllow {
+			allowList = nil // no tools: the fire reads the task and replies
+		} else {
+			allowList = splitCSV(*allow)
+		}
 	}
 	envInt := func(key string, def int) int {
 		v := os.Getenv(key)
@@ -461,23 +465,6 @@ func main() {
 	}
 	r.tools["todo"] = todoapi.New(tdb, todoapi.Mode(*prompt != ""), todoWake)
 
-	decisionURL := cfg.Settings.DecisionURL
-	if v := os.Getenv("RIG_DECISION_URL"); v != "" {
-		decisionURL = v
-	}
-	if decisionURL != "" {
-		loud := func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }
-		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
-		if derr != nil {
-			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
-			os.Exit(1)
-		}
-		rev := decision.NewReviewer(&dbReviews{db: decdb}, r.reviewFire(schedHome, scdb, swapURL, self, modelID, cfgDir, allowList), modelID, loud)
-		r.decRev = rev
-		r.decQ = decision.NewQueue(dec, &dbSink{db: decdb, scope: scope.Key(cwd)}, rev.Wake, loud)
-		r.proposals = r.decQ
-	}
-
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t
 	}
@@ -531,6 +518,32 @@ func main() {
 		fe = cli.New(os.Stdin, os.Stdout, cli.WithCommands(command.All(), env))
 	}
 
+	decisionURL := cfg.Settings.DecisionURL
+	if v := os.Getenv("RIG_DECISION_URL"); v != "" {
+		decisionURL = v
+	}
+	if decisionURL != "" {
+		loud := func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }
+		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
+		if derr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
+			os.Exit(1)
+		}
+		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
+		_, headless := fe.(*oneshot.OneShot)
+		if headless {
+			// a headless worker proposes and never reviews
+			r.decQ = decision.NewQueue(dec, sink, nil, loud)
+		} else {
+			rev := decision.NewReviewer(&dbReviews{db: decdb},
+				r.reviewFire(schedHome, scdb, swapURL, self, modelID, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
+				modelID, row.Window-row.Reserve, loud)
+			r.decRev = rev
+			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
+		}
+		r.proposals = r.decQ
+	}
+
 	session, err := sessionFor(*resumeID, func(id string) (*core.Session, error) {
 		return state.Resume(context.Background(), sdb, id)
 	})
@@ -569,6 +582,8 @@ func main() {
 
 	if r.decQ != nil {
 		go r.decQ.Run(ctx)
+	}
+	if r.decRev != nil {
 		go r.decRev.Run(ctx)
 	}
 

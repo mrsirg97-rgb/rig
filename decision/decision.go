@@ -25,10 +25,12 @@ const (
 )
 
 type Question struct {
-	ID      string   `json:"id"`
-	Kind    string   `json:"kind"`
-	Prompt  string   `json:"prompt"`
-	Choices []string `json:"choices,omitempty"`
+	ID          string            `json:"id"`
+	Kind        string            `json:"kind"`
+	Prompt      string            `json:"prompt"`
+	Choices     []string          `json:"choices,omitempty"`
+	Description map[string]string `json:"description,omitempty"`
+	Criteria    []string          `json:"criteria,omitempty"`
 }
 
 type Answer struct {
@@ -59,8 +61,8 @@ func Choice(id, prompt string, choices ...string) Question {
 	return Question{ID: id, Kind: KindChoice, Prompt: prompt, Choices: choices}
 }
 
-func Score(id, prompt string) Question {
-	return Question{ID: id, Kind: KindScore, Prompt: prompt}
+func Score(id, prompt string, criteria ...string) Question {
+	return Question{ID: id, Kind: KindScore, Prompt: prompt, Criteria: criteria}
 }
 
 func YesNo(id, prompt string) Question {

@@ -90,6 +90,51 @@ func TestAProposerAddsOneSiteLink(t *testing.T) {
 	}
 }
 
+type fakePluginTool struct{}
+
+func (fakePluginTool) Name() string            { return "myplug" }
+func (fakePluginTool) Description() string     { return "a plugin for the door test" }
+func (fakePluginTool) Schema() json.RawMessage { return nil }
+func (fakePluginTool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
+	return "plugin ran", nil
+}
+
+func TestANoToolsRunExecutesNothingNotEvenPlugins(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.allow = nil // the fire's worker: -allow none
+	r.pluginTools = []core.Tool{fakePluginTool{}}
+	k := wire(r)
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return "ran", nil
+	}
+	for _, mw := range k.Middleware {
+		exec = mw.Wrap(exec)
+	}
+	if _, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}); err == nil {
+		t.Fatal("a no-tools run executes no native tool")
+	}
+	if out, err := exec(context.Background(), core.ToolCall{ID: "c2", Name: "myplug", Args: nil}); err == nil {
+		t.Fatalf("a no-tools run executes no plugin either: the door is shut (got %q)", out)
+	}
+}
+
+func TestAnAllowedRunKeepsThePluginDoorOpen(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	r.allow = []string{"bash"}
+	r.pluginTools = []core.Tool{fakePluginTool{}}
+	k := wire(r)
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return "ran", nil
+	}
+	for _, mw := range k.Middleware {
+		exec = mw.Wrap(exec)
+	}
+	out, err := exec(context.Background(), core.ToolCall{ID: "c2", Name: "myplug", Args: nil})
+	if err != nil || out != "plugin ran" {
+		t.Fatalf("the door passes an installed plugin where tools are allowed: (%q, %v)", out, err)
+	}
+}
+
 func TestWithNoProposerNothingProposes(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	k := wire(r)

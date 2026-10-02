@@ -1,5 +1,3 @@
-// Package decision is the decision store (SPEC_DECISION): one sqlite
-// file under the rig home, a row per decision, scoped like todo.
 package decision
 
 import (

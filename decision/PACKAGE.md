@@ -14,31 +14,45 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
 
 - `decision.go`: the types (Question, Answer, Final), the two interfaces,
   the kind/status/site vocabulary as constants, and the question
-  constructors (`Choice`, `Score`, `YesNo`).
-- `http.go`: the HTTP `Decider` (settings `decisionUrl`): POST
-  `<decisionUrl>/v1/systemone` with the state and the typed questions,
-  the reply's answers stamped with the decider (the configured name,
-  else the URL's host). An answer whose confidence is not a probability
-  or whose value is empty drops; the reply body is capped at 1 MiB.
+  constructors (`Choice`, `Score`, `YesNo`). A choice carries a
+  description per label (`Description`), a score carries its ordered
+  criteria list (`Criteria`).
+- `http.go`: the HTTP `Decider` (settings `decisionUrl`), speaking
+  Laya's wire: POST `<decisionUrl>/v1/systemone` with the state and the
+  questions keyed by id (`type`, `instructions`, `criteria` — the map of
+  label to meaning for a choice, the ordered list for a score, nothing
+  for a noul), the answers keyed by id and decoded tolerantly (the
+  model, the usage, the routing, and each answer's action block are
+  ignored). The confidence a row keeps is `answer_confidence`; a
+  choice's value is its label, a noul's is the side its probability
+  names (yes at 0.5, no below), a score's is its expected level. The
+  decider recorded is the configured name, else the URL's host. An
+  answer whose confidence is not a probability, whose value is missing,
+  or whose type is unknown drops; the reply body is capped at 1 MiB.
 - `queue.go`: the proposal queue: `Propose` enqueues on a bounded channel
   (`QueueCap`), `Run` is the one goroutine that decides, writes through
-  the `Sink`, and wakes the reviewer on a landing. A full queue drops
-  loudly (a proposal is not a decision); a decider or sink error drops
-  loudly and lands nothing.
-- `review.go`: the reviewer: a size-one wake channel (no timer, no
-  poll), `Run` the loop, `Drain` the pass — every pending row in one
-  fire through the `Fire` seam (the root wires the scheduler's
-  `Delegate`, which waits on the free-slot gate), one verdict line per
+  the `Sink`, and calls `land` on a landing — a landing marks the
+  reviewer dirty; the wake is the session's turn end. `land` is nil
+  where nothing reviews. A full queue drops loudly (a proposal is not a
+  decision); a decider or sink error drops loudly and lands nothing.
+- `review.go`: the reviewer: a landing (`Land`) marks it dirty, the
+  session's turn end (`Wake`, through `TurnEnds`' frontend wrap) is the
+  wake, and a turn end with nothing landed costs nothing. `Run` is the
+  loop, `Drain` the pass — the pending rows oldest first, up to what the
+  reviewer's model row leaves for a prompt (the window minus its
+  reserve, at four bytes to the token; a row that cannot fit alone
+  still goes), one fire through the `Fire` seam, one verdict line per
   row parsed like the swarm reviewer's (`verdict: <id> approve` or
   `verdict: <id> deny <corrected answer>`), last naming wins, a deny
-  without a correction is not a verdict, unnamed rows stay pending, a
-  fire that settled something and left pending rows self-wakes once, a
-  fire that settled nothing waits for the next landing.
+  without a correction is not a verdict, unnamed rows stay pending. A
+  fire that settled something and left pending rows leaves the reviewer
+  dirty, so the next turn end takes the rest; a fire that settled
+  nothing waits for the next landing.
 - `site.go`: the bash site: one link at the chain's inner end; after a
   bash call returns it proposes the risk question (choice: safe,
-  changes, dangerous) over the command, the workspace, and how the
-  call ended. The call never waits: the proposal rides the queue's
-  channel and returns at once.
+  changes, dangerous, each label described) over the command, the
+  workspace, and how the call ended. The call never waits: the proposal
+  rides the queue's channel and returns at once.
 
 ## How it is consumed
 
@@ -48,9 +62,12 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   at their decision points.
 - `cmd/rig` wires the store as the queue's `Sink` and the reviewer's
   `Reviews` (the adapters in `cmd/rig/decision.go`), the reviewer's fire
-  through the scheduler's `Delegate`, and starts the queue's and the
-  reviewer's `Run` on the session's context; the site link joins the
-  middleware chain only when a proposer stands.
+  through the scheduler's `Delegate` with `NoTools` (the worker runs
+  `-allow none` and no report-back) and the sandbox the operator chose,
+  and starts the queue's and the reviewer's `Run` on the session's
+  context. Only an interactive session gets the reviewer; a headless
+  worker gets the queue with no `land` and proposes and never reviews.
+  The site link joins the middleware chain only when a proposer stands.
 - `store/decision` implements the row shapes; `cmd/rig` is the only
   package that wires them together.
 
@@ -60,3 +77,9 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   a call, and the swallow is loud only where the root wired a log.
 - The confidence is a probability; the store refuses anything outside
   0..1, and the HTTP client drops such answers before they reach it.
+  The confidence a row keeps is Laya's `answer_confidence`, never the
+  entropy `confidence` beside it.
+- `-allow none` (the delegate's `NoTools`) runs a worker with no tool at
+  all: the allowlist denies every native tool and the plugin door is
+  shut with it. An allow list that is nil means no tools; a run with
+  tools keeps the door open.

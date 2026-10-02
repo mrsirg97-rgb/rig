@@ -18,12 +18,16 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	if resultCap == 0 {
 		resultCap = defaultResultCap
 	}
+	door := r.pluginDoor()
+	if r.allow == nil {
+		door = nil // no tools: the fire's worker executes nothing, plugins included
+	}
 	mw := []core.ToolMiddleware{
 		toolset.Resolve(r.live),
 		approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating, r.drec),
 		cutoff.Middleware(),
 		perm.Plugins(r.pluginsDir, r.drec),
-		perm.AllowlistWithDoor(r.allow, r.pluginDoor(), r.drec),
+		perm.AllowlistWithDoor(r.allow, door, r.drec),
 		guard.Bound(r.retries, r.drec),
 		guard.Rounds(r.rounds, r.drec),
 		guard.Cap(resultCap),
