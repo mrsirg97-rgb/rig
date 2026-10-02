@@ -30,6 +30,7 @@ type Decision struct {
 	Decider        string   `alias:"name=decider,nullable=false"`
 	Session        *string  `alias:"name=session,nullable=true"`
 	Status         string   `alias:"name=status,nullable=false"`
+	Unsure         bool     `alias:"name=unsure,nullable=false"`
 	Reviewer       *string  `alias:"name=reviewer,nullable=true"`
 	ReviewerAnswer *string  `alias:"name=reviewer_answer,nullable=true"`
 	Outcome        *string  `alias:"name=outcome,nullable=true"`

@@ -17,7 +17,7 @@ import (
 	difftool "github.com/mrsirg97-rgb/rig/v2/tool/diff"
 )
 
-const readCap = 1 << 20
+const ReadCap = 1 << 20
 
 const readChunk = 64 * 1024
 
@@ -87,7 +87,7 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	recordDigest(ctx, a.Path, sum)
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, a.Path, content)
-	if len(content) > readCap {
+	if len(content) > ReadCap {
 		content = capReply(content, total, offset)
 	}
 	if stale {
@@ -104,9 +104,9 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 }
 
 func capReply(content string, total, offset int) string {
-	cut := strings.LastIndexByte(content[:readCap], '\n')
+	cut := strings.LastIndexByte(content[:ReadCap], '\n')
 	if cut < 0 {
-		cut = readCap
+		cut = ReadCap
 		for !utf8.RuneStart(content[cut]) {
 			cut--
 		}
@@ -124,10 +124,10 @@ func readWindow(path string, offset, limit int) (string, int, [32]byte, error) {
 	}
 	defer f.Close()
 	h := sha256.New()
-	lr := lineReader{r: bufio.NewReaderSize(io.TeeReader(f, h), readChunk), cap: readCap + 1}
+	lr := lineReader{r: bufio.NewReaderSize(io.TeeReader(f, h), readChunk), cap: ReadCap + 1}
 	var window []byte
 	appendWindow := func(b []byte) {
-		if room := readCap + 1 - len(window); len(b) >= room {
+		if room := ReadCap + 1 - len(window); len(b) >= room {
 			window = append(window, b[:room]...)
 		} else {
 			window = append(window, b...)

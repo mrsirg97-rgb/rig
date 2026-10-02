@@ -1199,6 +1199,7 @@ func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 	for _, n := range nativeToolNames {
 		natives[n] = true
 	}
+	natives["decide"] = true
 	for _, n := range cfg.Settings.Allow {
 		if !natives[n] {
 			t.Errorf("embedded allow names %q, which is not a native", n)

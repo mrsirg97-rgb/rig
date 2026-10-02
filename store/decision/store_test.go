@@ -2,7 +2,9 @@ package decision_test
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -227,5 +229,114 @@ func TestTheRecorderLandsTheRowAndSwallowsAStoreError(t *testing.T) {
 	dead.Record(context.Background(), decision.Final{Site: decision.SiteGuard, Question: decision.YesNo("retry", "again?"), Answer: "no", Decider: decision.SiteGuard})
 	if !strings.Contains(said, "decision") {
 		t.Fatalf("the swallow is loud when a log is wired: %q", said)
+	}
+}
+
+func TestAFinalRowKeepsItsConfidenceAndUnsure(t *testing.T) {
+	db := open(t)
+	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
+	conf := 0.42
+	_, err := decisionstore.RecordFinal(ctx, db, decisionstore.FinalInput{
+		Scope: "proj", Site: decision.SiteDecide, State: `{"item":"one"}`,
+		Question: decision.Choice("item", "risk?", "safe", "changes"), Answer: "safe",
+		Confidence: &conf, Unsure: true, Decider: "laya",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var answer string
+	var confidence float64
+	var unsure bool
+	var status string
+	if err := db.QueryRow(`SELECT answer, confidence, unsure, status FROM decisions WHERE site = 'decide'`).Scan(&answer, &confidence, &unsure, &status); err != nil {
+		t.Fatal(err)
+	}
+	if answer != "safe" || confidence != 0.42 || !unsure || status != decision.StatusFinal {
+		t.Fatalf("the decide row keeps its answer, confidence, unsure and status: %q %g %v %q", answer, confidence, unsure, status)
+	}
+}
+
+func TestAFinalRuleKeepsNullConfidenceAndZeroUnsure(t *testing.T) {
+	db := open(t)
+	_, err := decisionstore.RecordFinal(context.Background(), db, decisionstore.FinalInput{
+		Scope: "proj", Site: decision.SitePerm, State: "{}",
+		Question: decision.YesNo("allow", "allow bash?"), Answer: "no", Decider: decision.SitePerm,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var confidence *float64
+	var unsure bool
+	if err := db.QueryRow(`SELECT confidence, unsure FROM decisions WHERE site = 'perm'`).Scan(&confidence, &unsure); err != nil {
+		t.Fatal(err)
+	}
+	if confidence != nil || unsure {
+		t.Fatalf("a rule does not estimate: confidence %v unsure %v", confidence, unsure)
+	}
+}
+
+func TestAnOutOfRangeConfidenceRefuses(t *testing.T) {
+	db := open(t)
+	conf := 1.5
+	_, err := decisionstore.RecordFinal(context.Background(), db, decisionstore.FinalInput{
+		Scope: "proj", Site: decision.SiteDecide, State: "{}",
+		Question: decision.Choice("item", "risk?", "safe", "changes"), Answer: "safe",
+		Confidence: &conf, Decider: "laya",
+	})
+	if err == nil || !strings.Contains(err.Error(), "probability") {
+		t.Fatalf("a confidence outside 0..1 refuses: %v", err)
+	}
+}
+
+func TestTheMigrationAddsUnsureToAVersionOneFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "decision.sqlite")
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1 := `CREATE TABLE IF NOT EXISTS "decisions" (
+  "id" INTEGER NOT NULL,
+  "answer" TEXT NOT NULL,
+  "confidence" REAL,
+  "decider" TEXT NOT NULL,
+  "outcome" TEXT,
+  "question" TEXT NOT NULL,
+  "reviewer" TEXT,
+  "reviewer_answer" TEXT,
+  "scope" TEXT NOT NULL,
+  "session" TEXT,
+  "site" TEXT NOT NULL,
+  "state" TEXT NOT NULL,
+  "status" TEXT NOT NULL,
+  "ts" TEXT NOT NULL,
+  PRIMARY KEY ("id")
+)`
+	for _, stmt := range []string{v1, `CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)`, `INSERT INTO meta (key, value) VALUES ('schema_version', '1')`, `INSERT INTO decisions (id, scope, site, state, question, answer, decider, status, ts) VALUES (1, 'proj', 'bash', '{}', '{}', 'safe', 'rule', 'final', '2026-01-01')`} {
+		if _, err := raw.Exec(stmt); err != nil {
+			t.Fatalf("v1 seed: %v", err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, _, _, err := store.Open(path, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var version string
+	if err := db.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != strconv.Itoa(decisionstore.SchemaVersion) {
+		t.Fatalf("the version moved to %s, want %d", version, decisionstore.SchemaVersion)
+	}
+	var unsure bool
+	var confidence *float64
+	if err := db.QueryRow(`SELECT unsure, confidence FROM decisions WHERE id = 1`).Scan(&unsure, &confidence); err != nil {
+		t.Fatalf("the unsure column must exist and read the old row: %v", err)
+	}
+	if unsure || confidence != nil {
+		t.Fatalf("the pre-migration row is a rule: unsure %v confidence %v", unsure, confidence)
 	}
 }

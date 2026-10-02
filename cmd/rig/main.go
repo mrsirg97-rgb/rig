@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -43,7 +44,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.7.0"
+const Version = "2.8.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -245,9 +246,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
+	decisionURL := cfg.Settings.DecisionURL
+	if v := os.Getenv("RIG_DECISION_URL"); v != "" {
+		decisionURL = v
+	}
 	native := make(map[string]bool)
 	for _, name := range effectiveNativeNames() {
 		native[name] = true
+	}
+	if decisionURL != "" {
+		native["decide"] = true
 	}
 	pluginReports := make([]plugins.Report, 0)
 	if len(pluginFiles) > 0 {
@@ -319,7 +327,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	decdb, dQuarantined, dReport, dErr := store.Open(decisionPath, decisionstore.Statements(), decisionstore.SchemaVersion)
+	decdb, dQuarantined, dReport, dErr := store.Open(decisionPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
 	if dErr != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", dErr)
 		os.Exit(1)
@@ -518,10 +526,6 @@ func main() {
 		fe = cli.New(os.Stdin, os.Stdout, cli.WithCommands(command.All(), env))
 	}
 
-	decisionURL := cfg.Settings.DecisionURL
-	if v := os.Getenv("RIG_DECISION_URL"); v != "" {
-		decisionURL = v
-	}
 	if decisionURL != "" {
 		loud := func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }
 		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
@@ -529,6 +533,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
 			os.Exit(1)
 		}
+		dtool, derr := decision.NewDecide(decision.DecideOptions{
+			Decider:  dec,
+			Recorder: r.drec,
+			Parallel: rig.DefaultParallel,
+		})
+		if derr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
+			os.Exit(1)
+		}
+		r.decide = dtool
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		if headless {
@@ -679,7 +693,7 @@ func runJob(args []string) int {
 	var jobDecisions decision.Recorder
 	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
-	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion); jerr != nil {
+	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
 	} else {
 		defer jdb.DB.Close()

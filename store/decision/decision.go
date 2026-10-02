@@ -7,7 +7,7 @@ import (
 	decisionmeta "github.com/mrsirg97-rgb/rig/v2/store/decision/metadata"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 func DDL() []string { return decisionddl.Statements() }
 

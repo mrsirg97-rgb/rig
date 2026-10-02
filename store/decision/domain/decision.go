@@ -26,6 +26,7 @@ type Decision struct {
 	State          string   `db:"state"`
 	Status         string   `db:"status"`
 	Ts             string   `db:"ts"`
+	Unsure         bool     `db:"unsure"`
 }
 
 type DecisionDomain interface {
@@ -59,6 +60,7 @@ func ScanDecision(row lazy.ScanRow) (Decision, error) {
 		&out.State,
 		&out.Status,
 		&out.Ts,
+		&out.Unsure,
 	)
 	return out, err
 }
@@ -83,7 +85,7 @@ func (d *decisionDomain) GetDecision(ctx context.Context, id int64) *lazy.Lazy[D
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts" FROM "decisions" WHERE "id" = $1`,
+		`SELECT "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts", "unsure" FROM "decisions" WHERE "id" = $1`,
 		id,
 	)
 	out, err := ScanDecision(row)
@@ -120,7 +122,7 @@ func (d *decisionDomain) GetDecisionBatch(ctx context.Context, keys []int64) *la
 		args[i] = keys[i]
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts" FROM "decisions" WHERE "id" IN (`+ph+`)`, args...)
+		`SELECT "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts", "unsure" FROM "decisions" WHERE "id" IN (`+ph+`)`, args...)
 	if err != nil {
 		l.FillAll(nil, err)
 		return l
@@ -148,7 +150,7 @@ func (d *decisionDomain) InsertDecision(ctx context.Context, row Decision) (*Dec
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "decisions" ("id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "decisions" ("id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts", "unsure") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts", "unsure"`,
 		row.Id,
 		row.Answer,
 		row.Confidence,
@@ -163,6 +165,7 @@ func (d *decisionDomain) InsertDecision(ctx context.Context, row Decision) (*Dec
 		row.State,
 		row.Status,
 		row.Ts,
+		row.Unsure,
 	)
 	if err != nil {
 		return nil, err
@@ -175,7 +178,7 @@ func (d *decisionDomain) DeleteDecision(ctx context.Context, id int64) (*Decisio
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "decisions" WHERE "id" = $1 RETURNING "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "decisions" WHERE "id" = $1 RETURNING "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts", "unsure"`,
 		id,
 	)
 	if err != nil {
@@ -189,7 +192,7 @@ func (d *decisionDomain) UpdateDecision(ctx context.Context, row Decision) (*Dec
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "decisions" SET "answer" = $1, "confidence" = $2, "decider" = $3, "outcome" = $4, "question" = $5, "reviewer" = $6, "reviewer_answer" = $7, "scope" = $8, "session" = $9, "site" = $10, "state" = $11, "status" = $12, "ts" = $13 WHERE "id" = $14 RETURNING "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "decisions" SET "answer" = $1, "confidence" = $2, "decider" = $3, "outcome" = $4, "question" = $5, "reviewer" = $6, "reviewer_answer" = $7, "scope" = $8, "session" = $9, "site" = $10, "state" = $11, "status" = $12, "ts" = $13, "unsure" = $14 WHERE "id" = $15 RETURNING "id", "answer", "confidence", "decider", "outcome", "question", "reviewer", "reviewer_answer", "scope", "session", "site", "state", "status", "ts", "unsure"`,
 		row.Answer,
 		row.Confidence,
 		row.Decider,
@@ -203,6 +206,7 @@ func (d *decisionDomain) UpdateDecision(ctx context.Context, row Decision) (*Dec
 		row.State,
 		row.Status,
 		row.Ts,
+		row.Unsure,
 		row.Id,
 	)
 	if err != nil {

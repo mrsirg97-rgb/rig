@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
-
-const defaultParallel = 8
 
 type outcome struct {
 	content string
@@ -30,7 +29,7 @@ func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, co
 	b := &batch{ctx: ctx, exec: exec, calls: calls, concurrent: concurrent, post: post}
 	if concurrent != nil {
 		if parallel <= 0 {
-			parallel = defaultParallel
+			parallel = rig.DefaultParallel
 		}
 		b.sem = make(chan struct{}, parallel)
 	}

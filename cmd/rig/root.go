@@ -49,6 +49,7 @@ type root struct {
 	proposals decision.Proposer
 	decQ      *decision.Queue
 	decRev    *decision.Reviewer
+	decide    *decision.Decide
 
 	pluginsDir string
 	rigHome    string
@@ -111,7 +112,7 @@ func wire(r *root) *rig.Kernel {
 			}
 			r.tools["plugin"] = plugins.NewDoor(r.live, redo)
 		}
-		r.live.Set(append(r.nativeTools(), r.pluginTools...))
+		r.live.Set(append(r.tableTools(), r.pluginTools...))
 	}
 	r.live.SetPlugins(r.pluginNames()...)
 	if r.natives == nil {
@@ -119,6 +120,9 @@ func wire(r *root) *rig.Kernel {
 		for _, name := range effectiveNativeNames() {
 			r.natives[name] = true
 		}
+	}
+	if r.decide != nil {
+		r.natives["decide"] = true
 	}
 	mw := r.middleware
 	if mw == nil {
@@ -133,13 +137,16 @@ func wire(r *root) *rig.Kernel {
 		rig.WithFrontend(fe),
 		rig.WithPolicy(pol),
 		rig.WithTools(append(
-			r.nativeTools(),
+			r.tableTools(),
 			r.pluginTools...,
 		)...),
 		rig.WithMiddleware(mw...),
 		rig.WithConcurrent(func(c core.ToolCall) bool { return concurrentNatives[c.Name] }),
 	)
 	k.Session = r.session
+	if r.decide != nil {
+		r.decide.SetParallel(k.EffectiveParallel())
+	}
 	r.k = k
 	return k
 }
@@ -185,6 +192,14 @@ func remRow(m remdom.Memory) command.RemRow {
 		src = *m.Source
 	}
 	return command.RemRow{ID: m.Id, Kind: m.Kind, ScopeLabel: m.ScopeLabel, CreatedAt: m.CreatedAt, Strength: m.Strength, Importance: m.Importance, Source: src, Superseded: m.SupersededBy, Content: m.Content}
+}
+
+func (r *root) tableTools() []core.Tool {
+	out := r.nativeTools()
+	if r.decide != nil {
+		out = append(out, r.decide)
+	}
+	return out
 }
 
 func (r *root) nativeTools() []core.Tool {

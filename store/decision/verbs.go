@@ -15,13 +15,15 @@ import (
 const stateCap = 4096
 
 type FinalInput struct {
-	Scope    string
-	Session  string
-	Site     string
-	State    string
-	Question decision.Question
-	Answer   string
-	Decider  string
+	Scope      string
+	Session    string
+	Site       string
+	State      string
+	Question   decision.Question
+	Answer     string
+	Confidence *float64
+	Unsure     bool
+	Decider    string
 }
 
 type ProposeInput struct {
@@ -56,10 +58,13 @@ type SettleInput struct {
 }
 
 func RecordFinal(ctx context.Context, db store.DB, in FinalInput) (int64, error) {
+	if in.Confidence != nil && (*in.Confidence < 0 || *in.Confidence > 1) {
+		return 0, fmt.Errorf("decision: confidence %g is not a probability", *in.Confidence)
+	}
 	return insert(ctx, db, row{
 		scope: in.Scope, session: in.Session, site: in.Site, state: in.State,
-		question: in.Question, answer: in.Answer, confidence: nil,
-		status: decision.StatusFinal, decider: in.Decider,
+		question: in.Question, answer: in.Answer, confidence: in.Confidence,
+		unsure: in.Unsure, status: decision.StatusFinal, decider: in.Decider,
 	})
 }
 
@@ -82,6 +87,7 @@ type row struct {
 	question   decision.Question
 	answer     string
 	confidence *float64
+	unsure     bool
 	status     string
 	decider    string
 }
@@ -120,6 +126,7 @@ func insert(ctx context.Context, db store.DB, r row) (int64, error) {
 		Question:       string(qjson),
 		Answer:         r.answer,
 		Confidence:     r.confidence,
+		Unsure:         r.unsure,
 		Decider:        r.decider,
 		Session:        nullable(r.session),
 		Status:         r.status,
