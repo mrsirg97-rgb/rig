@@ -77,6 +77,9 @@ caps, the Reap release, and the verdict protocol are unchanged.
 - Fail closed: a worker that dies mid-task has its claim released and the
   task retried once; a second death fails the task (workers) or rejects it
   with the reason (reviewers). No task is ever left held by a dead identity.
+  A dispatch the gate refuses because the worker's model is not resident is
+  not a death: the claim is released, the worker stops with a notice naming
+  the holder, and the task stays pending.
 
 ## decisions
 

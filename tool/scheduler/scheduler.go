@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
@@ -93,6 +94,9 @@ type given struct {
 
 	Budget float64 `json:"budget"`
 	ID     string  `json:"id"`
+
+	Workspace string `json:"workspace"`
+	N         *int   `json:"n"`
 }
 
 type adapter struct {
@@ -167,9 +171,17 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		} else if g.Model != nil && *g.Model != "" {
 			return "", fmt.Errorf("scheduler: a command job takes no model and no busy policy")
 		}
+		jobCwd := g.Workspace
+		if jobCwd != "" {
+			validated, err := pathguard.Within(jobCwd, cwd, a.home)
+			if err != nil {
+				return "", fmt.Errorf("scheduler: %w", err)
+			}
+			jobCwd = validated
+		}
 		return sched.Create(ctx, a.db, a.ct, sched.CreateInput{
 			Name: name, Prompt: g.Prompt, Command: command, Cron: g.Cron, At: g.At,
-			Model: model, Cwd: "", Timeout: g.Timeout, Budget: g.Budget,
+			Model: model, Cwd: jobCwd, Timeout: g.Timeout, Budget: g.Budget,
 		}, cwd, session, a.runnerCmd, a.home, time.Now)
 	case "update":
 		if g.ID == "" {
@@ -179,9 +191,17 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if err != nil {
 			return "", err
 		}
+		updateCwd := g.Workspace
+		if updateCwd != "" {
+			validated, err := pathguard.Within(updateCwd, cwd, a.home)
+			if err != nil {
+				return "", fmt.Errorf("scheduler: %w", err)
+			}
+			updateCwd = validated
+		}
 		return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
 			ID: g.ID, Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron,
-			At: g.At, Cwd: "", Model: updateModel, Timeout: g.Timeout, Budget: g.Budget,
+			At: g.At, Cwd: updateCwd, Model: updateModel, Timeout: g.Timeout, Budget: g.Budget,
 		}, session, a.runnerCmd, a.home, time.Now)
 	case "list":
 		return sched.List(ctx, a.db, a.ct, cwd, a.home, nil, time.Now)
@@ -201,7 +221,11 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.ID == "" {
 			return "", fmt.Errorf("scheduler: runs requires 'id' (jN)")
 		}
-		return sched.Runs(ctx, a.db, g.ID, 0)
+		n := 0
+		if g.N != nil {
+			n = *g.N
+		}
+		return sched.Runs(ctx, a.db, g.ID, n)
 	case "repair":
 		return sched.Repair(ctx, a.db, a.ct, g.ID, a.runnerCmd, a.home)
 	default:

@@ -36,6 +36,7 @@ func modelRows(t *testing.T) models.Table {
 		models.Model{ID: "qwen3.8-27b", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 		models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 		models.Model{ID: "qwen3.8-review", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
+		models.Model{ID: "dsv4", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 	)
 	if err != nil {
 		t.Fatalf("models: %v", err)
@@ -858,5 +859,24 @@ func TestSwarmStartAndStopReplyVoice(t *testing.T) {
 	}
 	if got != "swarm: stopped 3 agents" {
 		t.Errorf("stop reply = %q, want stopped 3 agents", got)
+	}
+}
+
+func TestHolderRefusalReleasesAndStopsTheWorker(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "held out")
+	h.fetch.resident = []string{"glm5.3-flash"}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "dsv4"})
+	got := waitForNotices(t, h.fe, 1)
+	if !strings.Contains(got[0], "w1 stopped") || !strings.Contains(got[0], "held by glm5.3-flash") {
+		t.Fatalf("the stop notice must name the holder: %q", got[0])
+	}
+	h.waitFor(t, "the release", func() bool { return h.status(t, "t1") == "pending" })
+	rows := h.ctl.List()
+	if len(rows) != 1 || rows[0].State != swarm.StateExited {
+		t.Fatalf("worker rows = %+v, want the worker stopped", rows)
+	}
+	if got := h.spawn.count(); got != 0 {
+		t.Fatalf("spawn calls = %d, want the refusal to precede the spawn", got)
 	}
 }

@@ -51,6 +51,11 @@ the supervisor's in-memory truth.
   rejects it with the reason (reviewers). The reject doors are capped
   per task: the third rejection fails it with a note instead of
   returning it to the workers.
+- A dispatch refused because the worker's model is not resident is not
+  a death: the gate's refusal (`sched.ErrNotResident`) releases the
+  claim, stops that worker with a notice naming the holder, and fails
+  nothing — the task stays pending for the resident fleet or for a
+  later start on the right model.
 - The optional `Frontend` seam is the transcript door (SPEC_SWARM 7),
   a resolver read on every notify (the root wires it once as
   `func() core.Frontend { return r.rec }`, so the recorder can appear

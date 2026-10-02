@@ -931,3 +931,53 @@ func TestTodoCreateWakesTheRouterToClaimIt(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+func TestTodoUpdateRemovingARequiresLinkWakesTheRouter(t *testing.T) {
+	var mu sync.Mutex
+	var calls int
+	tool := todoapi.New(newDB(t), todoapi.Interactive, func() {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+	})
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "the blocker"}},
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "the dependent", "requires": "the blocker"}},
+	}); err != nil {
+		t.Fatalf("the linked create: %v", err)
+	}
+	mu.Lock()
+	if calls != 2 {
+		t.Fatalf("wake calls = %d, want one per create", calls)
+	}
+	mu.Unlock()
+	shown, err := exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(shown, "requires t1") {
+		t.Fatalf("the link must show before the update:\n%s", shown)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{
+		"action": "create", "tasks": []any{map[string]any{"text": "the dependent", "requires": nil}},
+	}); err != nil {
+		t.Fatalf("the update: %v", err)
+	}
+	mu.Lock()
+	if calls != 3 {
+		t.Fatalf("removing the requires link must wake the router, wake calls = %d", calls)
+	}
+	mu.Unlock()
+	shown, err = exec(t, tool, ctx, map[string]any{"action": "read"})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(shown, "requires") {
+		t.Fatalf("the update must clear the link:\n%s", shown)
+	}
+}

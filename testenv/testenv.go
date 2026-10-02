@@ -14,6 +14,11 @@ import (
 
 var OperatorHome = os.Getenv("HOME")
 
+// ClosedSwapURL is the loopback port nothing listens on: a spawned
+// binary pointed here gets the gate's fail-closed wiring, whatever the
+// host happens to run.
+const ClosedSwapURL = "http://127.0.0.1:1"
+
 var (
 	mu    sync.Mutex
 	hosts = map[string]bool{}
@@ -48,6 +53,7 @@ func isolate() {
 	os.Setenv("HOME", testHome)
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(testHome, ".config"))
 	os.Setenv("RIG_HOME", "")
+	os.Setenv("RIG_SWAP_URL", ClosedSwapURL)
 	wallCrontab(testHome)
 	os.Setenv("GOPATH", gopath)
 	os.Setenv("GOMODCACHE", gomod)

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -181,8 +182,12 @@ func slotRead(fetch Fetch, swapURL, model string) (slotSet, error) {
 	return out, nil
 }
 
+// ErrNotResident is the gate's refusal: the named model is not the
+// resident one, and rig never evicts. Callers match it with errors.Is.
+var ErrNotResident = errors.New("a different model is resident")
+
 func holderRefusal(resident []string) error {
-	return fmt.Errorf("the GPU is held by %s (the fleet is the resident model; eviction is the operator's act)", strings.Join(resident, ", "))
+	return fmt.Errorf("%w: the GPU is held by %s (the fleet is the resident model; eviction is the operator's act)", ErrNotResident, strings.Join(resident, ", "))
 }
 
 func gateOnce(fetch Fetch, swapURL, model string) error {

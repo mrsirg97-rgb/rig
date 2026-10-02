@@ -3,11 +3,16 @@ package testenv_test
 import (
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
+
+func TestMain(m *testing.M) {
+	testenv.Main(m)
+}
 
 func TestTransportRefusesANonServerHost(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8090/running", nil)
@@ -36,5 +41,11 @@ func TestTransportAllowsAServerHost(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "ok" {
 		t.Fatalf("the server body = %q, want ok", body)
+	}
+}
+
+func TestIsolatePinsTheSwapToAClosedPort(t *testing.T) {
+	if got := os.Getenv("RIG_SWAP_URL"); got != testenv.ClosedSwapURL {
+		t.Fatalf("RIG_SWAP_URL = %q, want the closed port", got)
 	}
 }

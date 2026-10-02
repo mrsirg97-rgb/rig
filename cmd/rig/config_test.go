@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/config"
@@ -22,6 +24,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/testenv"
 	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
 )
 
@@ -172,16 +175,37 @@ func buildBin(t *testing.T, binDir string) string {
 }
 
 func rigEnv(scratch, binDir string, extra ...string) []string {
-	env := append(os.Environ(),
+	env := scrubSwap(os.Environ())
+	env = append(env,
 		"HOME="+scratch,
 		"XDG_CONFIG_HOME="+scratch,
 		"RIG_MODEL=local",
 	)
-	env = append(env, extra...)
+	env = append(env, swapPinned(extra)...)
 	if binDir != "" {
 		env = append(env, "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 	return env
+}
+
+func scrubSwap(env []string) []string {
+	out := env[:0:0]
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "RIG_SWAP_URL=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
+func swapPinned(extra []string) []string {
+	for _, kv := range extra {
+		if strings.HasPrefix(kv, "RIG_SWAP_URL=") {
+			return extra
+		}
+	}
+	return append([]string{"RIG_SWAP_URL=" + testenv.ClosedSwapURL}, extra...)
 }
 
 func cfgDir(t *testing.T, scratch string) string {
@@ -547,11 +571,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		}
 		cmd := exec.Command(bin, "run-job", key)
 		cmd.Dir = workDir
-		env := rigEnv(scratch, binDir)
-		if swapURL != "" {
-			env = append(env, "RIG_SWAP_URL="+swapURL)
-		}
-		cmd.Env = env
+		cmd.Env = rigEnv(scratch, binDir, "RIG_SWAP_URL="+swapURL)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("run-job: %v\n%s", err, out)
 		}
@@ -1290,5 +1310,68 @@ func TestNoModelRefusesBeforeAnyRequest(t *testing.T) {
 	}
 	if s.count() != 0 {
 		t.Fatalf("requests = %d, want 0 (the refusal precedes any call)", s.count())
+	}
+}
+
+func TestSpawnedRigWithoutASwapFixtureNeverReadsTheDefaultSwapPort(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:8090")
+	if err != nil {
+		t.Skipf("8090 is already in use (%v); the box runs its own swap", err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	var dials int32
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+			atomic.AddInt32(&dials, 1)
+		}
+	}()
+
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(scratch, "")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the run must succeed: %v\n%s", err, out)
+	}
+	if got := atomic.LoadInt32(&dials); got != 0 {
+		t.Fatalf("the binary read the default swap port %d times, want never", got)
+	}
+	if hasToolName(s.last(), "delegate") {
+		t.Fatalf("a closed swap wires the pair off, whatever answers the default port: %v", toolNames(s.last()))
+	}
+	if !hasToolName(s.last(), "scheduler") {
+		t.Fatalf("the scheduler is wired everywhere: %v", toolNames(s.last()))
+	}
+}
+
+func TestRigEnvPinsTheSwapUnlessTheTestNamesOne(t *testing.T) {
+	t.Setenv("RIG_SWAP_URL", "http://127.0.0.1:8090")
+	count := func(env []string) (int, string) {
+		n := 0
+		val := ""
+		for _, kv := range env {
+			if strings.HasPrefix(kv, "RIG_SWAP_URL=") {
+				n++
+				val = kv
+			}
+		}
+		return n, val
+	}
+	n, val := count(rigEnv(t.TempDir(), ""))
+	if n != 1 || val != "RIG_SWAP_URL="+testenv.ClosedSwapURL {
+		t.Fatalf("the default env must carry exactly the closed port, got %d × %q", n, val)
+	}
+	n, val = count(rigEnv(t.TempDir(), "", "RIG_SWAP_URL=http://127.0.0.1:9"))
+	if n != 1 || val != "RIG_SWAP_URL=http://127.0.0.1:9" {
+		t.Fatalf("the test's own swap must win exactly once, got %d × %q", n, val)
 	}
 }

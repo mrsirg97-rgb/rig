@@ -1,6 +1,7 @@
 package swarm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -28,6 +29,10 @@ func (c *Controller) run(w *worker) {
 			c.settle(w, id, res)
 			c.emit(true)
 			c.Wake()
+			if res.holder != nil {
+				c.set(w, func() { w.state = StateExited })
+				return
+			}
 		}
 	}
 }
@@ -35,6 +40,7 @@ func (c *Controller) run(w *worker) {
 type workResult struct {
 	ok        bool
 	noVerdict bool
+	holder    error
 }
 
 func (c *Controller) work(w *worker, id string) workResult {
@@ -71,6 +77,9 @@ func (c *Controller) work(w *worker, id string) workResult {
 	c.addSpent(res.Cost)
 	if err != nil {
 		c.loud(w, "w%d: task %s: %v\n", w.id, id, err)
+		if errors.Is(err, sched.ErrNotResident) {
+			return workResult{holder: err}
+		}
 		return workResult{}
 	}
 	if res.Exit != 0 || res.TimedOut {
@@ -111,6 +120,12 @@ func (c *Controller) delegate(in sched.DelegateInput) (sched.DelegateResult, err
 }
 
 func (c *Controller) settle(w *worker, id string, res workResult) {
+	if res.holder != nil {
+		c.notice(fmt.Sprintf("swarm: w%d stopped — %v", w.id, res.holder))
+		c.release(w, id)
+		c.set(w, func() { w.task = "" })
+		return
+	}
 	if res.ok {
 		c.set(w, func() { w.done++; w.task = "" })
 		return

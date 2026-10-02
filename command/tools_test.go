@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -231,6 +232,17 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 	updated, err := runCmd(t, "scheduler", "update j1 model brain prompt do the nightly thing", env)
 	if err != nil || !strings.Contains(updated, "updated j1") {
 		t.Fatalf("update must land in the store verbatim:\n%s\n%v", updated, err)
+	}
+	workspace := filepath.Join(home, "w")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := runCmd(t, "scheduler", "update j1 workspace "+workspace, env)
+	if err != nil || !strings.Contains(moved, "updated j1") {
+		t.Fatalf("the workspace update must land:\n%s\n%v", moved, err)
+	}
+	if _, err := runCmd(t, "scheduler", "update j1 busy skip", env); err == nil || !strings.Contains(err.Error(), "unknown key") {
+		t.Fatalf("busy is off the slash shape, got %v", err)
 	}
 	if _, err := runCmd(t, "scheduler", "update j1 cron 1 3 * * *", env); err != nil {
 		t.Fatalf("cadence update: %v", err)
