@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -169,6 +170,16 @@ func (r *root) switchRole(ctx context.Context, name string) error {
 	r.k.Provider = provider
 	r.k.Policy = pol
 	return nil
+}
+
+func themeName(key string, doc json.RawMessage) string {
+	if key != "" {
+		return key
+	}
+	if len(doc) > 0 {
+		return "custom"
+	}
+	return ""
 }
 
 func (r *root) switchTheme(ctx context.Context, name string) error {

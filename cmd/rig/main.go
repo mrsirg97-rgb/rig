@@ -40,7 +40,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.5.4"
+const Version = "2.5.5"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -374,7 +374,7 @@ func main() {
 
 		approve:        firstNonEmpty(cfg.Settings.Approve, approve.Auto),
 		approveDefault: firstNonEmpty(cfg.Settings.Approve, approve.Auto),
-		theme:          cfg.Settings.Theme,
+		theme:          themeName(cfg.Settings.Theme, cfg.Theme),
 		themeDoc:       cfg.Theme,
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{

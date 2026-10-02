@@ -45,7 +45,9 @@ TDD.
   refusal). `SetTheme` is the key's one writer (2.3.2, the `/theme`
   command's persistence): the file's other keys preserved, the write
   atomic, the value verbatim; a malformed existing file refuses in
-  the loader's voice.
+  the loader's voice. The bare read names the position the paint came
+  from: the key when one is set, `custom` when the key is unset and
+  the file stands, warm when neither (2.5.5).
 - JSON only, stdlib `encoding/json`: a YAML dep is rejected, named (1).
 - A malformed or unreadable file is a loud refusal at start naming the
   file and the field; an absent file is silent (3).
