@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,10 +10,23 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+
+	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
 
-func recordSkip(db DB, id, reason string) error {
-
+func recordSkip(db DB, opts RunOpts, id, reason, cwd string) error {
+	if opts.Decisions != nil && cwd != "" {
+		state, _ := json.Marshal(map[string]string{"job": id, "reason": reason})
+		opts.Decisions.Record(context.Background(), decision.Final{
+			Scope:    scope.Key(cwd),
+			Site:     decision.SiteScheduler,
+			State:    string(state),
+			Question: decision.YesNo("fire", "run job "+id+" now?"),
+			Answer:   "no",
+			Decider:  decision.SiteScheduler,
+		})
+	}
 	if _, err := RecordRun(context.Background(), db, RunRecordInput{
 		ID: id, Status: "skip", Reason: reason,
 	}); err != nil {

@@ -10,12 +10,30 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 )
 
+func recordPerm(r decision.Recorder, ctx context.Context, call core.ToolCall, target string) {
+	if r == nil {
+		return
+	}
+	r.Record(ctx, decision.Final{
+		Site:     decision.SitePerm,
+		State:    target,
+		Question: decision.YesNo("allow", "allow "+call.Name+"?"),
+		Answer:   "no",
+		Decider:  decision.SitePerm,
+	})
+}
+
 const provenanceVoice = "plugins install by the operator's /plugins approve; write to plugins/pending/"
 
-func Plugins(pluginsDir string) core.ToolMiddleware {
+func Plugins(pluginsDir string, rec ...decision.Recorder) core.ToolMiddleware {
+	var record decision.Recorder
+	if len(rec) > 0 {
+		record = rec[0]
+	}
 	root, rootErr := resolvedPath(pluginsDir)
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
@@ -59,9 +77,11 @@ func Plugins(pluginsDir string) core.ToolMiddleware {
 				}
 			}
 			if targetIn {
+				recordPerm(record, ctx, call, target)
 				msg := fmt.Sprintf("permission denied: %s is in plugins/ outside plugins/pending/ (%s)", target, provenanceVoice)
 				return msg, errors.New(msg)
 			}
+			recordPerm(record, ctx, call, lex)
 			msg := fmt.Sprintf("permission denied: %s resolves outside the plugins root (%s) (%s)", lex, target, provenanceVoice)
 			return msg, errors.New(msg)
 		}

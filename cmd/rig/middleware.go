@@ -19,14 +19,14 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	}
 	return []core.ToolMiddleware{
 		toolset.Resolve(r.live),
-		approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating),
+		approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating, r.drec),
 		cutoff.Middleware(),
-		perm.Plugins(r.pluginsDir),
-		perm.AllowlistWithDoor(r.allow, r.pluginDoor()),
-		guard.Bound(r.retries),
-		guard.Rounds(r.rounds),
+		perm.Plugins(r.pluginsDir, r.drec),
+		perm.AllowlistWithDoor(r.allow, r.pluginDoor(), r.drec),
+		guard.Bound(r.retries, r.drec),
+		guard.Rounds(r.rounds, r.drec),
 		guard.Cap(resultCap),
-		paths.Middleware(),
+		paths.Middleware(r.drec),
 	}
 }
 

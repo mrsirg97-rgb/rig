@@ -9,6 +9,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
@@ -42,6 +43,8 @@ type root struct {
 	remDB store.DB
 	cwd   string
 	home  string
+
+	drec decision.Recorder
 
 	pluginsDir string
 	rigHome    string

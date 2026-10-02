@@ -15,6 +15,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/cli"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
@@ -24,8 +25,10 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/plugins"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
 	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
@@ -307,6 +310,24 @@ func main() {
 	}
 	defer tdb.DB.Close()
 
+	decisionPath := decisionstore.FilePath(cfgDir)
+	if err := os.MkdirAll(filepath.Dir(decisionPath), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	decdb, dQuarantined, dReport, dErr := store.Open(decisionPath, decisionstore.Statements(), decisionstore.SchemaVersion)
+	if dErr != nil {
+		fmt.Fprintln(os.Stderr, "rig: decision store:", dErr)
+		os.Exit(1)
+	}
+	if dQuarantined != "" {
+		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt decision file: %s\n", dQuarantined)
+	}
+	if dReport != "" {
+		fmt.Fprintln(os.Stderr, "rig:", dReport)
+	}
+	defer decdb.DB.Close()
+
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
@@ -354,6 +375,7 @@ func main() {
 	}
 
 	r := &root{
+		drec:       decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Log: func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }},
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
 		system:     systemPrompt,
@@ -617,6 +639,16 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
 	}
+	decPath := decisionstore.FilePath(cfgDir)
+	var jobDecisions decision.Recorder
+	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
+	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion); jerr != nil {
+		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
+	} else {
+		defer jdb.DB.Close()
+		jobDecisions = decisionstore.Recorder{DB: jdb, Log: func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }}
+	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
 		Home:      home,
 		Crontab:   sched.RealCrontab(""),
@@ -631,6 +663,7 @@ func runJob(args []string) int {
 		StateDir:     filepath.Join(cfgDir, "sessions"),
 		Models:       func() models.Table { return cfg.Models },
 		DefaultModel: model,
+		Decisions:    jobDecisions,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
