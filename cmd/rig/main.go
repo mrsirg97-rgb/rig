@@ -47,7 +47,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.9.3"
+const Version = "2.9.4"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -108,6 +108,10 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	if *prompt != "" {
+		signal.Ignore(syscall.SIGPIPE)
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "run-job" {
@@ -569,7 +573,7 @@ func main() {
 		} else {
 			rev := decision.NewReviewer(&dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				row.Window-row.Reserve, loud)
+				cfg.Settings.ReviewBatchOrDefault(), row, loud)
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
 		}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -50,13 +51,29 @@ type DelegateResult struct {
 	Stdout    string
 	Stderr    string
 	TimedOut  bool
+	Signal    syscall.Signal
 	Duration  time.Duration
 	ID        string
 	LogRel    string
 	Started   string
 	SessionID string
 	Note      string
+	Reason    string
 	Cost      float64
+}
+
+func (res DelegateResult) FireError(home string) error {
+	if res.Exit == 0 && !res.TimedOut {
+		return nil
+	}
+	msg := fmt.Sprintf("the review fire ended exit %d (timed out %v)", res.Exit, res.TimedOut)
+	if res.Reason != "" {
+		msg += ": " + res.Reason
+	}
+	if res.LogRel != "" {
+		msg += "; the run log: " + filepath.Join(home, res.LogRel)
+	}
+	return errors.New(msg)
 }
 
 func delegateInput(in DelegateInput) DelegateInput {
@@ -230,6 +247,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		return DelegateResult{}, fmt.Errorf("delegate: log prune: %w", err)
 	}
 
+	reason := spawnReason(ctx, res, false)
 	status := "ok"
 	if res.Exit != 0 {
 		status = "fail"
@@ -244,7 +262,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	if _, err := RecordRun(context.Background(), in.DB, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
 		Log: logRel, Started: startedStr, Ended: ended.Format(time.RFC3339), Cost: costPtr,
-		Reason: spawnReason(ctx, res, false),
+		Reason: reason,
 	}); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: record: %w", err)
 	}
@@ -252,9 +270,9 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	return DelegateResult{
 		Model: model,
 		Exit:  res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
-		TimedOut: res.TimedOut, Duration: ended.Sub(started),
+		TimedOut: res.TimedOut, Signal: res.Signal, Duration: ended.Sub(started),
 		ID: id, LogRel: logRel, Started: startedStr, SessionID: in.WorkerSession, Note: note,
-		Cost: cost,
+		Reason: reason, Cost: cost,
 	}, nil
 }
 

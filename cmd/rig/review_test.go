@@ -1,0 +1,167 @@
+package main
+
+import (
+	"context"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/store/state"
+)
+
+type countingDecider struct{ answers []decision.Answer }
+
+func (d *countingDecider) Decide(ctx context.Context, state string, questions []decision.Question) ([]decision.Answer, error) {
+	return d.answers, nil
+}
+
+func openDecisionStore(t *testing.T) store.DB {
+	t.Helper()
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "decision.sqlite"), decisionstore.Statements(), decisionstore.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func waitCount(t *testing.T, db store.DB, status string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var n int
+		if err := db.QueryRow(`SELECT count(*) FROM decisions WHERE status = ?`, status).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n == want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("the rows never settled to %d %s", want, status)
+}
+
+type biteFire struct {
+	mu      sync.Mutex
+	prompts []string
+}
+
+func (f *biteFire) fire(ctx context.Context, prompt string) (string, string, error) {
+	f.mu.Lock()
+	f.prompts = append(f.prompts, prompt)
+	f.mu.Unlock()
+	var b strings.Builder
+	for i, seg := range strings.Split(prompt, "\n== ") {
+		if i == 0 {
+			continue
+		}
+		if id, _, ok := strings.Cut(seg, " "); ok {
+			b.WriteString("verdict: " + id + " approve\n")
+		}
+	}
+	return b.String(), "local", nil
+}
+
+func (f *biteFire) calls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.prompts)
+}
+
+func (f *biteFire) prompt(i int) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.prompts[i]
+}
+
+func TestATurnEndFiresOneBiteAndTheNextTakesTheRest(t *testing.T) {
+	decDB := openDecisionStore(t)
+	r := testRoot(nullFrontend{})
+	sdb, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sdb.Close() })
+	r.rec = state.NewRecorder(nullFrontend{}, sdb, t.TempDir(), "local", Version, r.session.ID, r.session)
+	f := &biteFire{}
+	r.decRev = decision.NewReviewer(&dbReviews{db: decDB}, f.fire, 10,
+		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, func(string) {})
+	r.decQ = decision.NewQueue(&countingDecider{answers: []decision.Answer{{
+		Question: "risk", Value: "safe", Confidence: 0.71, Decider: "laya",
+	}}}, &dbSink{db: decDB}, r.decRev.Land, func(string) {})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.decQ.Run(ctx)
+	go r.decRev.Run(ctx)
+
+	for i := 0; i < 12; i++ {
+		r.decQ.Propose(decision.Pending{
+			Site: decision.SiteBash, Scope: "proj", State: `{"command":"ls"}`,
+			Question: decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"),
+		})
+	}
+	waitCount(t, decDB, "pending", 12)
+
+	r.frontend().Notify(core.TurnEnd{})
+	waitCount(t, decDB, "approved", 10)
+	if rows := strings.Count(f.prompt(0), "\n== "); rows != 10 {
+		t.Fatalf("the turn end took a bite of %d rows, want 10", rows)
+	}
+	if !strings.Contains(f.prompt(0), "\n== 1 ") || strings.Contains(f.prompt(0), "\n== 12 ") {
+		t.Fatalf("the bite is the oldest rows: %.120s", f.prompt(0))
+	}
+	r.frontend().Notify(core.TurnEnd{})
+	waitCount(t, decDB, "approved", 12)
+	if f.calls() != 2 {
+		t.Fatalf("the backlog left dirty takes the next turn end, got %d fires", f.calls())
+	}
+	waitCount(t, decDB, "pending", 0)
+}
+
+func TestTheReviewFireNamesTheDeathAndTheRunLog(t *testing.T) {
+	home := t.TempDir()
+	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
+	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
+		return sched.DelegateResult{
+			Model: "ox-alpha", Exit: -1, Reason: "killed by signal 13",
+			LogRel: filepath.Join("runs", "j31", "2026-08-15T12-00-00-000Z.log"),
+		}, nil
+	}
+	fire := r.reviewFire(home, store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
+	_, _, err := fire(context.Background(), "review these")
+	if err == nil {
+		t.Fatal("a dead fire is an error")
+	}
+	for _, want := range []string{
+		"the review fire ended exit -1 (timed out false)",
+		"killed by signal 13",
+		filepath.Join(home, "runs", "j31", "2026-08-15T12-00-00-000Z.log"),
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the fire error names the death and the log, missing %q: %v", want, err)
+		}
+	}
+}
+
+func TestAHealthyReviewFireReturnsTheReply(t *testing.T) {
+	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
+	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
+		return sched.DelegateResult{Model: "ox-alpha", Exit: 0, Stdout: "verdict: 1 approve\n"}, nil
+	}
+	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
+	reply, model, err := fire(context.Background(), "review these")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply != "verdict: 1 approve\n" || model != "ox-alpha" {
+		t.Fatalf("fire = %q %q", reply, model)
+	}
+}

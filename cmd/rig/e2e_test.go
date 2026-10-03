@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -306,5 +307,79 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 	var exit string
 	if err := db.DB.QueryRow(`SELECT exit FROM sessions`).Scan(&exit); err != nil || exit != "ok" {
 		t.Fatalf("session exit = %q (%v), want ok", exit, err)
+	}
+}
+
+func TestAWorkerWhoseStderrReaderClosesStillAnswers(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratch := t.TempDir()
+	bin := filepath.Join(t.TempDir(), "rig")
+	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher := w.(http.Flusher)
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, `data: {"choices":[{"delta":{"reasoning_content":"thinking"},"finish_reason":null}]}`+"\n")
+		flusher.Flush()
+		time.Sleep(400 * time.Millisecond)
+		io.WriteString(w, `data: {"choices":[{"delta":{"reasoning_content":" more"},"finish_reason":null}]}`+"\n")
+		flusher.Flush()
+		io.WriteString(w, `data: {"choices":[{"delta":{"content":"the answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`+"\n")
+		flusher.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pw.Close()
+	cmd := exec.Command(bin, "-p", "review this", "-model", "e2e", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(os.Environ(),
+		"HOME="+scratch,
+		"XDG_CONFIG_HOME="+scratch,
+		"RIG_MODEL_WINDOW=4000",
+		"RIG_MODEL_RESERVE=100",
+		"RIG_MODEL_KEEP_RECENT=1000",
+		"RIG_MODEL_MAX_TOKENS=500",
+	)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = pw
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	broken := make(chan struct{})
+	go func() {
+		one := make([]byte, 1)
+		var seen strings.Builder
+		for {
+			n, rerr := pr.Read(one)
+			if n > 0 {
+				seen.Write(one[:n])
+			}
+			if rerr != nil || strings.Contains(seen.String(), "thinking") {
+				break
+			}
+		}
+		pr.Close()
+		close(broken)
+	}()
+	select {
+	case <-broken:
+	case <-time.After(10 * time.Second):
+		t.Fatal("no reasoning reached stderr before the deadline")
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("a broken stderr costs the reasoning stream, never the run: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "the answer") {
+		t.Fatalf("the answer must land on stdout: %q", stdout.String())
 	}
 }

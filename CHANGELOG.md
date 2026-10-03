@@ -1,4 +1,34 @@
 # Changelog
+## [2.9.4]: the review takes a bite
+
+Run j31 woke the reviewer at a turn end with 264 pending bash rows and
+fired them as one 177 KB prompt: 1,344 s of reasoning, `killed by signal
+13` on 131 KB of streamed stderr, stdout empty, nothing settled, and the
+same batch re-fired at the next turn end while the operator typed. The
+notice said only `the review fire ended exit -1 (timed out false)`.
+
+The wake was right and the bite was wrong. The reviewer still wakes at
+the turn end — a landing marks it dirty, a turn end with nothing landed
+costs nothing — and one fire now takes the oldest rows up to
+`reviewBatch` (settings.json, rows per fire, the default 10; 0 leaves
+the reviewer off while proposals keep landing; a negative or
+non-integer refuses at start, naming the key), settles what the fire
+answers, and leaves the rest pending for the next turn end. Two
+ceilings stay underneath the batch, never above it: the reply (one
+verdict line per row, bounded by the reviewer row's max output tokens
+over a verdict line's token cost, derived from the review contract's
+own verdict templates, never a constant) and the window minus its
+reserve. A bite that answers rows and leaves the backlog marks the
+reviewer dirty, so a quiet turn end with a backlog still takes the
+next bite; a fire that answers nothing waits for the next landing, so
+a garbage fire cannot spin.
+
+Two fixes ride the fire. The headless worker (`-p`) ignores SIGPIPE,
+so a broken stderr costs the reasoning stream and never the run. And
+the fire's error carries the delegate's reason — the spawnReason, the
+signal — and the run log path joined onto the scheduler home, so
+`killed by signal 13` is readable instead of a bare `exit -1`.
+
 ## [2.9.3]: the prompt rides stdin
 
 `decision: review: fire: delegate: spawn: fork/exec rig: argument list

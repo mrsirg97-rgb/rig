@@ -309,3 +309,44 @@ func TestDelegateRecordsTimeoutReason(t *testing.T) {
 		t.Errorf("a timed-out worker must record the reason, got %q", got)
 	}
 }
+
+func TestADelegateFireNamesItsDeathAndItsLog(t *testing.T) {
+	h, _ := setupJob(t, realCwd(t, "del"), nil)
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: -1, Signal: 13}}
+	res, err := sched.Delegate(sched.DelegateInput{
+		DB: h.db, Home: h.home, Session: "sess-del", Cwd: h.sessCwd, Task: "do it",
+		WorkerSession: "wsess-del", Model: "qwen3.8-workers",
+		Fetch: fakeFetch([]string{"qwen3.8-27b-workers"}, fetchOpts{statuses: map[string]string{"qwen3.8-27b-workers": "loaded"}}),
+		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
+		SwapURL: "http://127.0.0.1:8090",
+		RigHome: h.rigHome, StateDir: filepath.Join(h.rigHome, "sessions"),
+		NoTools: true, Sandbox: "off",
+		Models: modelTable(t, "qwen3.8-27b-workers"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Reason != "killed by signal 13" {
+		t.Fatalf("the result carries the spawn's death: %q", res.Reason)
+	}
+	if res.LogRel == "" {
+		t.Fatal("the result carries the run log path")
+	}
+	ferr := res.FireError(h.home)
+	if ferr == nil {
+		t.Fatal("a dead fire is an error")
+	}
+	if !strings.Contains(ferr.Error(), "killed by signal 13") || !strings.Contains(ferr.Error(), res.LogRel) {
+		t.Fatalf("the fire error names the death and the log: %v", ferr)
+	}
+	if !strings.Contains(ferr.Error(), "the review fire ended exit -1 (timed out false)") {
+		t.Fatalf("the old wording stays: %v", ferr)
+	}
+}
+
+func TestAHealthyFireIsNoError(t *testing.T) {
+	res := sched.DelegateResult{Exit: 0}
+	if err := res.FireError("home"); err != nil {
+		t.Fatalf("exit 0 is no error: %v", err)
+	}
+}

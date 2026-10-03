@@ -145,7 +145,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUrl, defaultJobModel, model, plugins, python, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy, workers)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUrl, defaultJobModel, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy, workers)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -351,5 +351,54 @@ func TestPluginsEnabledKeyIsRetired(t *testing.T) {
 	}
 	if cfg.Settings.Plugins.Max != 3 {
 		t.Fatalf("max survives beside it: %d", cfg.Settings.Plugins.Max)
+	}
+}
+
+func TestReviewBatchDefaultsToTen(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	if got := cfg.Settings.ReviewBatchOrDefault(); got != 10 {
+		t.Fatalf("absent reviewBatch = %d, want the default 10", got)
+	}
+	if cfg.Settings.ReviewBatch != nil {
+		t.Fatalf("absent reviewBatch = %v, want nil (no embedded default writes over the read)", cfg.Settings.ReviewBatch)
+	}
+}
+
+func TestReviewBatchIsTheOperators(t *testing.T) {
+	t.Run("25 rows a bite", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"reviewBatch": 25}`)
+		if got := load(t, dir, t.TempDir()).Settings.ReviewBatchOrDefault(); got != 25 {
+			t.Fatalf("reviewBatch = %d, want 25", got)
+		}
+	})
+	t.Run("zero is the reviewer off", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"reviewBatch": 0}`)
+		if got := load(t, dir, t.TempDir()).Settings.ReviewBatchOrDefault(); got != 0 {
+			t.Fatalf("reviewBatch = %d, want 0 (the reviewer stays off)", got)
+		}
+	})
+}
+
+func TestReviewBatchRefusesByName(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"negative", `{"reviewBatch": -1}`, `reviewBatch: expected a non-negative number, got -1`},
+		{"word", `{"reviewBatch": "ten"}`, `reviewBatch: expected an integer, got "ten"`},
+		{"fractional", `{"reviewBatch": 1.5}`, `reviewBatch: expected an integer, got 1.5`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			p := write(t, dir, "settings.json", c.content)
+			err := loadErr(t, dir, t.TempDir())
+			if err.Error() != "config: "+p+": "+c.want {
+				t.Fatalf("the voice = %q, want %q", err, "config: "+p+": "+c.want)
+			}
+		})
 	}
 }

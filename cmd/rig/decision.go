@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -87,8 +86,8 @@ func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandb
 		if err != nil {
 			return "", "", err
 		}
-		if res.Exit != 0 || res.TimedOut {
-			return "", res.Model, fmt.Errorf("the review fire ended exit %d (timed out %v)", res.Exit, res.TimedOut)
+		if ferr := res.FireError(home); ferr != nil {
+			return "", res.Model, ferr
 		}
 		return res.Stdout, res.Model, nil
 	}

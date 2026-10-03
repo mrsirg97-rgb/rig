@@ -471,11 +471,12 @@ env names**, lowerCamel of the env minus the `RIG_` prefix:
 | `webFetchProxy` | `RIG_WEB_FETCH_PROXY`| `http://127.0.0.1:8889` (presence key) |
 | `trafilatura`   | `RIG_TRAFILATURA`   | (none: auto; presence key)        |
 | `swapUrl`       | `RIG_SWAP_URL`      | `http://127.0.0.1:8090`            |
+| `reviewBatch`   | —                   | `10` (2.9.4: rows per review fire, SPEC_DECISION; `0` leaves the reviewer off; a negative or non-integer refuses) |
 
 Shapes: `allow` is a **JSON array of tool names** in the file (the env
 stays CSV; the 0.2.0 env surface is unchanged); the rest are strings
-or the integer `retries`. `allow`'s array elements are strings; a
-non-string refuses (`allow[2]: …`).
+or the integers `retries` and `reviewBatch`. `allow`'s array elements
+are strings; a non-string refuses (`allow[2]: …`).
 
 Amended (0.25.6): `model` carries no embedded value — a run that
 resolves no model refuses at start, naming `--model`, `RIG_MODEL`, and
