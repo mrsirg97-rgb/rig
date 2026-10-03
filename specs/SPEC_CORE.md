@@ -330,9 +330,9 @@ refusal; 2.5.0 restates the call as a list): an `old` that matches
 exactly once cannot come from a model that never saw the file, so the
 edit applies. Edit takes `path` and `edits`, a list of `{old, new}`
 applied in order — a single change is a list of one, the top-level
-`old`/`new` are gone from the schema — and every hunk is validated
-against the content as the earlier hunks leave it, each matching exactly
-once, before anything writes: all or none, and a later hunk may match
+`old`/`new` are gone from the schema — and every chunk is validated
+against the content as the earlier chunks leave it, each matching exactly
+once, before anything writes: all or none, and a later chunk may match
 text an earlier one created (the evidence: since 2.1.0, 412 edits, 22%
 of them another edit to the file the previous call had just edited —
 several changes to one file belong in one call, applied once,
@@ -341,12 +341,12 @@ exactly as a read returns it (the same cap and truncation marker,
 taught once), ending with `[edit: <path> was not read this session; its
 text is above, now edit it]`, and the reply records the observation, so
 the edit that follows is drift-checked like any other read. A file the
-session has read keeps today's refusals: the first missing hunk names
+session has read keeps today's refusals: the first missing chunk names
 itself, its match count, and what it found, a change since the read
 names the drift (the `Files` license, below), and a standalone exec
 carries no license to check. The bounds stand ahead of any I/O — at
-most 32 hunks, total old plus new under read's ceiling, no zero-width
-old. The reply is one line per hunk, then the path and total
+most 32 chunks, total old plus new under read's ceiling, no zero-width
+old. The reply is one line per chunk, then the path and total
 bytes replaced.
 
 ### ToolMiddleware

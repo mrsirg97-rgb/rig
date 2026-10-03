@@ -18,9 +18,9 @@ import (
 
 const driftCap = 20
 
-const editHunkCap = 32
+const editChunkCap = 32
 
-type editHunk struct {
+type editChunk struct {
 	Old string `json:"old"`
 	New string `json:"new"`
 }
@@ -30,8 +30,8 @@ type editTool struct{ tool.Definition }
 func Edit() core.Tool { return &editTool{tool.Def("edit")} }
 
 type editArgs struct {
-	Path  string     `json:"path"`
-	Edits []editHunk `json:"edits"`
+	Path  string      `json:"path"`
+	Edits []editChunk `json:"edits"`
 }
 
 func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -43,18 +43,18 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	if len(a.Edits) == 0 {
 		return "", errors.New("edit: the edits list is empty")
 	}
-	if len(a.Edits) > editHunkCap {
-		return "", fmt.Errorf("edit: %d hunks is over the %d-hunk bound; split the call", len(a.Edits), editHunkCap)
+	if len(a.Edits) > editChunkCap {
+		return "", fmt.Errorf("edit: %d chunks is over the %d-chunk bound; split the call", len(a.Edits), editChunkCap)
 	}
 	total := 0
 	for i, h := range a.Edits {
 		total += len(h.Old) + len(h.New)
 		if h.Old == "" {
-			return "", fmt.Errorf("edit: hunk %d of %d: zero-width old string", i+1, len(a.Edits))
+			return "", fmt.Errorf("edit: chunk %d of %d: zero-width old string", i+1, len(a.Edits))
 		}
 	}
 	if total >= ReadCap {
-		return "", fmt.Errorf("edit: the hunks total %d bytes, the read ceiling is %d; split the call", total, ReadCap)
+		return "", fmt.Errorf("edit: the chunks total %d bytes, the read ceiling is %d; split the call", total, ReadCap)
 	}
 
 	fileData, err := os.ReadFile(a.Path)
@@ -72,15 +72,15 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		}
 	}
 
-	updated, miss := applyHunks(string(fileData), a.Edits)
+	updated, miss := applyChunks(string(fileData), a.Edits)
 	if miss != nil {
 		if fresh {
 			return unreadObservation(ctx, a.Path)
 		}
 		if miss.count == 0 {
-			return "", fmt.Errorf("edit: hunk %d of %d: old matched 0 times (absent from the file as the earlier hunks leave it); nothing landed", miss.index+1, len(a.Edits))
+			return "", fmt.Errorf("edit: chunk %d of %d: old matched 0 times (absent from the file as the earlier chunks leave it); nothing landed", miss.index+1, len(a.Edits))
 		}
-		return "", fmt.Errorf("edit: hunk %d of %d: old matched %d times, want exactly 1; nothing landed", miss.index+1, len(a.Edits), miss.count)
+		return "", fmt.Errorf("edit: chunk %d of %d: old matched %d times, want exactly 1; nothing landed", miss.index+1, len(a.Edits), miss.count)
 	}
 
 	if err := os.WriteFile(a.Path, []byte(updated), 0o644); err != nil {
@@ -93,24 +93,24 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	var b strings.Builder
 	replaced := 0
 	for i, h := range a.Edits {
-		fmt.Fprintf(&b, "hunk %d: replaced %d byte(s)\n", i+1, len(h.Old))
+		fmt.Fprintf(&b, "chunk %d: replaced %d byte(s)\n", i+1, len(h.Old))
 		replaced += len(h.Old)
 	}
 	fmt.Fprintf(&b, "edited %s: replaced %d byte(s)", a.Path, replaced)
 	return b.String(), nil
 }
 
-type hunkMiss struct {
+type chunkMiss struct {
 	index int
 	count int
 }
 
-func applyHunks(content string, hunks []editHunk) (string, *hunkMiss) {
+func applyChunks(content string, chunks []editChunk) (string, *chunkMiss) {
 	updated := content
-	for i, h := range hunks {
+	for i, h := range chunks {
 		count := strings.Count(updated, h.Old)
 		if count != 1 {
-			return content, &hunkMiss{index: i, count: count}
+			return content, &chunkMiss{index: i, count: count}
 		}
 		updated = strings.Replace(updated, h.Old, h.New, 1)
 	}
