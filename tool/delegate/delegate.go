@@ -17,6 +17,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/swarm/status"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 const (
@@ -49,7 +50,7 @@ type workerState struct {
 }
 
 func New(o Opts) core.Tool {
-	a := &adapter{Opts: o, workers: map[int64]workerState{}}
+	a := &adapter{Definition: tool.Def("delegate").Fill("{default_model}", o.DefaultModel), Opts: o, workers: map[int64]workerState{}}
 	if o.Notify != nil {
 		a.emitter = status.New(o.Notify)
 	}
@@ -57,36 +58,12 @@ func New(o Opts) core.Tool {
 }
 
 type adapter struct {
+	tool.Definition
 	Opts
 	mu      sync.Mutex
 	seq     int64
 	workers map[int64]workerState
 	emitter *status.Emitter
-}
-
-func (a *adapter) Name() string { return "delegate" }
-
-func (a *adapter) Description() string {
-	return "Spawns a headless worker on a task now, waits, and returns its last message. Guidelines: give it a " +
-		"bounded sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. " +
-		"Fan out with several delegate calls in one turn; each sends and waits on the server's queue; the " +
-		"worker model defaults to the resident one (" + a.DefaultModel + " when nothing is resident), and a " +
-		"model that is not resident refuses, naming the holder. the workspace must be under the session's " +
-		"workspace or the rig home. Reply: the worker's message plus a trailer with exit, duration, session " +
-		"id and log."
-}
-
-func (a *adapter) Schema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"task":      {"type": "string", "description": "the prompt the worker runs (required)"},
-			"workspace": {"type": "string", "description": "where the job runs (default the session's)"},
-			"model":     {"type": "string", "description": "worker model id"},
-			"timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"}
-		},
-		"required": ["task"]
-	}`)
 }
 
 type args struct {

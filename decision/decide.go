@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
 
@@ -20,7 +21,7 @@ const decideQuestionID = "item"
 
 const unsureUnder = 0.5
 
-const decideGuideline = "When a step is sorting or filtering many items against a question you can state, hand the items to decide instead of reading them."
+const decideGuideline = "when a step is sorting or filtering many items against a question you can state, hand the items to decide instead of reading them."
 
 type DecideOptions struct {
 	Decider  Decider
@@ -29,6 +30,7 @@ type DecideOptions struct {
 }
 
 type Decide struct {
+	tool.Definition
 	dec      Decider
 	rec      Recorder
 	parallel int
@@ -41,27 +43,7 @@ func NewDecide(o DecideOptions) (*Decide, error) {
 	if o.Parallel <= 0 {
 		return nil, fmt.Errorf("decision: parallel %d: the fan-out needs a bound", o.Parallel)
 	}
-	return &Decide{dec: o.Decider, rec: o.Recorder, parallel: o.Parallel}, nil
-}
-
-func (t *Decide) Name() string { return "decide" }
-
-func (t *Decide) Description() string {
-	return "Hand many items to the decision server against one typed question instead of reading them: a choice (each label described), a yes/no, or a score over the list. The reply groups the items by the label each got, numbered from 1 with the first line; unsure choices come back in full for you to judge. A server error refuses: nothing was sorted."
-}
-
-func (t *Decide) Schema() json.RawMessage {
-	return json.RawMessage(`{
-	"type": "object",
-	"properties": {
-		"kind":     {"type": "string", "enum": ["choice", "yesno", "score"], "description": "the question's kind"},
-		"prompt":   {"type": "string", "description": "the question, stated so one item is answered by one label or value"},
-		"labels":   {"type": "array", "description": "choice: two or more labels, each with what it means", "items": {"type": "object", "properties": {"label": {"type": "string"}, "description": {"type": "string"}}, "required": ["label"]}},
-		"criteria": {"type": "array", "description": "score: the ordered criteria, worst first", "items": {"type": "string"}},
-		"items":    {"type": "array", "description": "the items to sort, in order; the reply numbers them from 1", "items": {"type": "string"}}
-	},
-	"required": ["kind", "prompt", "items"]
-}`)
+	return &Decide{Definition: tool.Def("decide"), dec: o.Decider, rec: o.Recorder, parallel: o.Parallel}, nil
 }
 
 func (t *Decide) SetParallel(n int) {

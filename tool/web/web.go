@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,48 +15,24 @@ const DefaultSearXNG = "http://127.0.0.1:8888"
 
 const DefaultProxy = "http://127.0.0.1:8889"
 
-const webDescription = "Searches the web or fetches a page. search takes a query; fetch takes a public http(s) URL. " +
-	"Guidelines: write multi-word natural queries and reword once on junk; never search for code already in the " +
-	"workspace. fetch reads the page as text; refetch larger only if the missing part matters; an API reply comes " +
-	"back as its shape and a head; parse the rest in python or bash. Local files belong " +
-	"to read, local services to bash; private addresses refuse. Reply: search gives compact JSON " +
-	"title/url/snippet; fetch gives the text, capped with a [TRUNCATED] marker that names the full size."
-
-const webSchema = `{
-	"type": "object",
-	"properties": {
-		"action": {"type": "string", "enum": ["search", "fetch"], "description": "search <target> or fetch <target>"},
-		"target": {"type": "string", "description": "Search query, or the absolute http(s) URL to fetch"},
-		"maxResults": {"type": "integer", "description": "Max results (default 5)", "minimum": 1, "maximum": 20},
-		"maxChars": {"type": "integer", "description": "Max chars returned (default 20000)", "minimum": 100},
-		"timeoutMs": {"type": "integer", "description": "Total timeout in ms (default 30000)", "minimum": 1000, "maximum": 300000}
-	},
-	"required": ["action", "target"]
-}`
-
 type Config struct {
 	Search SearchConfig
 	Fetch  FetchConfig
 }
 
 type web struct {
+	tool.Definition
 	search *search
 	fetch  *fetch
 }
 
 func New(cfg Config) *web {
-	return &web{search: NewSearch(cfg.Search), fetch: NewFetch(cfg.Fetch)}
+	return &web{Definition: tool.Def("web"), search: NewSearch(cfg.Search), fetch: NewFetch(cfg.Fetch)}
 }
 
 func Web() *web {
 	return New(Config{Fetch: FetchConfig{Proxy: DefaultProxy}})
 }
-
-func (w *web) Name() string { return "web" }
-
-func (w *web) Description() string { return webDescription }
-
-func (w *web) Schema() json.RawMessage { return json.RawMessage(webSchema) }
 
 func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {

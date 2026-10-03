@@ -1,4 +1,47 @@
 # Changelog
+## [2.8.1]: the words are data
+
+The text the model reads was scattered: `read` and `edit` returned their
+descriptions inline, `rem` kept a const beside its schema, `scheduler`
+built its from a function, and `todo`, `python`, `web`, `delegate`,
+`sessions`, `plugin`, `plugins`, `view` and `decide` each kept their
+own. A words pass meant grepping twelve packages, and the house shape
+(what it is, `Guidelines:`, `Reply:`) was a convention nothing checked.
+
+`tool/registry.json`, embedded, is now the one file holding every
+native tool's words: an entry per tool with `name`, `enabled`, `what`,
+`guidelines`, `reply` and the `schema` object as it goes on the wire.
+`tool.Def(name)` hands a tool its `Definition`, which it embeds to
+satisfy `Name()`, `Description()` and `Schema()`; the tool writes only
+`Exec`. The description is composed from the three parts, so the shape
+is the type, not a habit. `scheduler` and `delegate` fill the default
+model into a `{default_model}` slot at construction; `plugin` adds the
+live names to the registry's schema. The root derives its native tool
+list from the registry's enabled entries, so flipping `enabled` to
+false removes a tool from the build's menu without deleting its words.
+
+With the words in one file, the operator took a pass over all of them
+in one voice: every word lowercase, the labels (`guidelines:`, `reply:`)
+and the system prompt with them, the house shape kept, the facts kept.
+Formal names and symbols keep their case: `JSON`, `API`, `URL`, `CLI`,
+`HEAD`, `[TRUNCATED]`, the id patterns `tN`/`jN`/`mN`, the cron fields. `python` and `scheduler` had put a blank line before
+`Guidelines:` where every other tool put a space; `decide` carried no
+`Guidelines:` or `Reply:` clause; `bash` and `web` described their cap
+as "a [TRUNCATED] marker that names the full size", now "when capped,
+shows a [TRUNCATED] line with the total size". A schema field that
+restates a rule from its tool's description now uses the description's
+own words (scheduler's `model`, delegate's `workspace`, rem's `query`,
+python's `action`, edit's `old`, read's `diff`, web's `target`,
+plugin's `action`, decide's `labels`). The three golden_020 fixtures
+and the tools-prefix sha move with the words; the menu is 13,973 of
+the 14,000 budget.
+
+Tests: every entry composes into the shape and carries an object
+schema; every wired tool has an entry and every entry is wired; the
+native list follows the registry's enabled order; no `.go` file outside
+`tool/registry.go` carries tool words (a file scan). AGENTS.md names
+the rule: the model's words are in `tool/registry.json`.
+
 ## [2.8.0]: decide — the model hands the sorting to the decision server
 
 The evidence sat in the transcript: 27,035 bash calls and 4,935 reads,

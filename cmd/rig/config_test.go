@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -326,7 +327,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 }
 
 func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
-	const embeddedSystem = "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's workspace, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. When a tool fails, read the error and work out why before calling again. Do not retry blindly, and stop when the environment or the plan is wrong. A capability you build twice belongs in a plugin. For any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, start one before working on it, complete or fail it when done, and leave the queue empty at the end. When the work is done, answer in plain text: what changed, what you verified, what is left."
+	const embeddedSystem = "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, start one before working on it, complete or fail it when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left."
 	cases := []struct {
 		name string
 		file string
@@ -803,7 +804,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	sysMu.Lock()
 	sys := workerSystem
 	sysMu.Unlock()
-	const defaultSystem = "You are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. You act on the session's workspace, using the available tools to inspect, change, and run things in it. The toolset is focused on purpose, with each tool's description saying when to use it. Do not attempt to use a tool that does not exist in rig. The harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. Every refusal names its rule and is there to guide you, not punish you. A refusal is final for that call: change the call or ask, never reach the same effect through another tool. When a tool fails, read the error and work out why before calling again. Do not retry blindly, and stop when the environment or the plan is wrong. A capability you build twice belongs in a plugin. For any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, start one before working on it, complete or fail it when done, and leave the queue empty at the end. When the work is done, answer in plain text: what changed, what you verified, what is left."
+	const defaultSystem = "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, start one before working on it, complete or fail it when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left."
 	want := defaultSystem + "\n\n" + sessionSection(workDir, scratch) + "\n\n" + global + "\n\n" + jobAgents
 	if sys != want {
 		t.Fatalf("the worker's system message = %q, want the default plus the session section, the global and the job cwd's AGENTS.md (not the session's):\n%q", sys, want)
@@ -1276,15 +1277,15 @@ func TestToolMenuBudgetAndVocabulary(t *testing.T) {
 		f := tl.Function
 		total += len(f.Description) + len(f.Parameters)
 		text := f.Description + string(f.Parameters)
-		for _, bad := range []string{"pi ", "pane"} {
-			if strings.Contains(text, bad) {
+		for _, bad := range []string{"pi", "pane"} {
+			if otherVoice(text, bad) {
 				t.Errorf("%s carries another harness's voice: %q", f.Name, bad)
 			}
 		}
-		if !strings.Contains(f.Description, "Guidelines:") {
+		if !strings.Contains(f.Description, "guidelines:") {
 			t.Errorf("%s has no Guidelines sentence", f.Name)
 		}
-		if !strings.Contains(f.Description, "Reply:") {
+		if !strings.Contains(f.Description, "reply:") {
 			t.Errorf("%s does not name its reply's shape", f.Name)
 		}
 	}
@@ -1375,4 +1376,8 @@ func TestRigEnvPinsTheSwapUnlessTheTestNamesOne(t *testing.T) {
 	if n != 1 || val != "RIG_SWAP_URL=http://127.0.0.1:9" {
 		t.Fatalf("the test's own swap must win exactly once, got %d × %q", n, val)
 	}
+}
+
+func otherVoice(text, word string) bool {
+	return regexp.MustCompile(`\b` + word + `\b`).MatchString(text)
 }

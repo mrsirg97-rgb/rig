@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -158,6 +159,7 @@ func WritePending(home string, natives map[string]bool, name, source string) (pa
 }
 
 type Ecosystem struct {
+	tool.Definition
 	home    string
 	Kernel  Kernel
 	natives map[string]bool
@@ -168,17 +170,7 @@ type Ecosystem struct {
 var _ core.Tool = (*Ecosystem)(nil)
 
 func NewEcosystem(home string, natives map[string]bool, k Kernel, swap func(ctx context.Context, reports []Report) (string, error), list func() (string, error)) *Ecosystem {
-	return &Ecosystem{home: home, natives: natives, Kernel: k, swap: swap, list: list}
-}
-
-func (e *Ecosystem) Name() string { return "plugins" }
-
-func (e *Ecosystem) Description() string {
-	return "The plugin ecosystem: {\"action\": \"list\"|\"create\"|\"delete\"|\"reload\", ...}. list shows the loaded and the skipped; create writes a new plugin from name and source into plugins/pending/; delete moves a loaded plugin into plugins/disabled/; reload re-runs discovery over plugins/. Guidelines: a created plugin lands in plugins/pending/ untrusted, and the operator installs it with /plugins approve. Reply: the listing, the write or the disable, or the discovery's list: loaded, and skipped with reasons."
-}
-
-func (e *Ecosystem) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"action":{"enum":["list","create","delete","reload"],"description":"the ecosystem verb"},"name":{"type":"string","description":"the plugin name (create/delete)"},"source":{"type":"string","description":"the plugin source (create)"}},"required":["action"]}`)
+	return &Ecosystem{Definition: tool.Def("plugins"), home: home, natives: natives, Kernel: k, swap: swap, list: list}
 }
 
 func (e *Ecosystem) Exec(ctx context.Context, args json.RawMessage) (string, error) {

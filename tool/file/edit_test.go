@@ -343,7 +343,7 @@ func TestEditDescriptionNamesTheGuideline(t *testing.T) {
 		"comes back as the file's text instead of a refusal",
 		"the next call edits it",
 		"the file changed since your read",
-		"one line per hunk",
+		"one line per chunk",
 	} {
 		if !strings.Contains(desc, want) {
 			t.Fatalf("the edit description must say %q, got:\n%s", want, desc)

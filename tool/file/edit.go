@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	difftool "github.com/mrsirg97-rgb/rig/v2/tool/diff"
 )
 
@@ -24,37 +25,9 @@ type editHunk struct {
 	New string `json:"new"`
 }
 
-type editTool struct{}
+type editTool struct{ tool.Definition }
 
-func Edit() core.Tool { return &editTool{} }
-
-func (editTool) Name() string { return "edit" }
-
-func (editTool) Description() string {
-	return "Updates the content of an existing file, replacing exact text. Guidelines: put enough of the file in each old to match exactly once; several changes to one file go in one call, applied in order, all or none. On a file you have not read this session, a hunk that does not match once comes back as the file's text instead of a refusal, and the next call edits it. On a file you have read, the call refuses and names why: a hunk matched never or more than once as the earlier hunks leave it, or the file changed since your read. Reply: one line per hunk, then the path and total bytes replaced."
-}
-
-func (editTool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"path":  {"type": "string", "description": "the file to edit"},
-			"edits": {
-				"type": "array",
-				"description": "the changes, applied in order; a single change is a list of one",
-				"items": {
-					"type": "object",
-					"properties": {
-						"old": {"type": "string", "description": "the exact text to replace; must occur exactly once as the earlier hunks leave it"},
-						"new": {"type": "string", "description": "the replacement text"}
-					},
-					"required": ["old", "new"]
-				}
-			}
-		},
-		"required": ["path", "edits"]
-	}`)
-}
+func Edit() core.Tool { return &editTool{tool.Def("edit")} }
 
 type editArgs struct {
 	Path  string     `json:"path"`

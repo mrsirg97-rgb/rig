@@ -7,18 +7,16 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"os"
 )
 
-type adapter struct{ db store.DB }
-
-func New(db store.DB) core.Tool { return adapter{db: db} }
-
-func (a adapter) Name() string        { return "rem" }
-func (a adapter) Description() string { return description }
-func (a adapter) Schema() json.RawMessage {
-	return json.RawMessage(schemaJSON)
+type adapter struct {
+	tool.Definition
+	db store.DB
 }
+
+func New(db store.DB) core.Tool { return adapter{Definition: tool.Def("rem"), db: db} }
 
 type given struct {
 	Action            string   `json:"action"`

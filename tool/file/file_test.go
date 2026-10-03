@@ -118,8 +118,8 @@ func TestReadRefusesUnknownArg(t *testing.T) {
 func TestReadDescriptionNamesWhatEditChecksAgainst(t *testing.T) {
 	desc := file.Read().Description()
 	for _, want := range []string{
-		"the way to look at a file",
-		"What you read is what edit checks against",
+		"the native way to look at a file",
+		"the edit tool checks against the output of read",
 		"exactly as edit will match it",
 	} {
 		if !strings.Contains(desc, want) {

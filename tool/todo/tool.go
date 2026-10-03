@@ -1,10 +1,9 @@
 package todo
 
 import (
-	"encoding/json"
-
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 type Mode bool
@@ -15,13 +14,14 @@ const (
 )
 
 type adapter struct {
+	tool.Definition
 	db   store.DB
 	mode Mode
 	wake func()
 }
 
 func New(db store.DB, mode Mode, wake ...func()) core.Tool {
-	a := adapter{db: db, mode: mode}
+	a := adapter{Definition: tool.Def("todo"), db: db, mode: mode}
 	if len(wake) > 0 {
 		a.wake = wake[0]
 	}
@@ -33,9 +33,3 @@ func (a adapter) wakeRouter() {
 		a.wake()
 	}
 }
-
-func (a adapter) Name() string { return "todo" }
-
-func (a adapter) Description() string { return description }
-
-func (a adapter) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }

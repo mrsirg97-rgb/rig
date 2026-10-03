@@ -259,6 +259,16 @@ type Tool interface {
 Schemas are authored by hand next to the tool. Reflection-derived schemas
 drift from intent and add deps.
 
+**The words are data** (amended 2.8.1): every native tool's description
+and schema live in one embedded file, `tool/registry.json`, as `what`,
+`guidelines`, `reply` and the schema object, all lowercase in the operator's voice (the labels too: `guidelines:`, `reply:`). A tool embeds its
+`tool.Definition` and writes only `Exec`; the description is composed
+from the three parts, so the shape below is the type. A tool whose text
+carries a runtime value (`scheduler`, `delegate`) fills a named slot at
+construction; `plugin` adds the live names to its schema. An entry's
+`enabled` flag decides whether the root wires the tool, so a tool can
+leave a build without losing its words.
+
 **The description's shape** (amended 0.12.2): every description is the
 same four parts, in order; *what* it does (one sentence); *when* to
 reach for it and when not (a `Guidelines:` sentence, on every tool; it

@@ -686,7 +686,7 @@ func TestViewCarriesTheToolContractOnTheWire(t *testing.T) {
 	if tool.Name() != "view" {
 		t.Fatalf("name = %q", tool.Name())
 	}
-	if !strings.Contains(tool.Description(), "Guidelines:") {
+	if !strings.Contains(tool.Description(), "guidelines:") {
 		t.Fatalf("every description carries the Guidelines clause (SPEC_CORE): %q", tool.Description())
 	}
 }

@@ -11,75 +11,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
-
-func description(defModel string) string {
-	return "Background jobs on the operator's crontab: each is a headless worker session on a worker " +
-		"model: omit it and the fire runs on whatever is resident (default " + defModel + " when nothing is), " +
-		"running in its own workspace; a command job runs a shell line with no model and no GPU.\n\nGuidelines: create for " +
-		"work that recurs (cron 'M H D Mo DOW') or once (at, self-deletes after one fire); command jobs are " +
-		"for deterministic scripts, never " +
-		"judgment calls. list shows every job with any store-vs-crontab drift — a drifting job is untrustworthy " +
-		"until the note clears; repair re-derives its crontab line, one job by id or every drifting one. " +
-		"runs is the audit trail; job ids (jN) come from list: copy them, never invent them. the fire sends and " +
-		"waits on the " +
-		"queue; a different resident model skips, naming the holder; eviction is the operator's act (the fleet " +
-		"is the resident model). " +
-		"A failed once job is done; re-create it to retry. timeout and budget bound each fire. Reply: the job " +
-		"row or the list."
-}
-
-func schemaJSON(defModel string) string {
-	return `{
-	"type": "object",
-	"properties": {
-		"action": {
-			"type": "string",
-			"enum": ["create", "update", "list", "pause", "resume", "remove", "runs", "repair"]
-		},
-		"name": {
-			"type": "string",
-			"description": "Unique job name; required."
-		},
-		"prompt": {
-			"type": "string",
-			"description": "The prompt the worker session runs; required unless command is set."
-		},
-		"command": {
-			"type": "string",
-			"description": "Shell line for sh -c in the job's workspace; refuses prompt/model."
-		},
-		"cron": {
-			"type": "string",
-			"description": "5-field vixie cron 'M H D Mo DOW' or 'once'; required."
-		},
-		"at": {
-			"type": "string",
-			"description": "ISO time."
-		},
-		"model": {
-			"type": "string",
-			"description": "model: the worker model id; omit to run on whatever is resident (default ` + defModel + ` when nothing is)."
-		},
-		"timeout": {
-			"type": "integer",
-			"minimum": -1,
-			"maximum": 1440,
-			"description": "Wall-clock cap per fire, minutes (default 30, ceiling 1440); -1 resets."
-		},
-		"budget": {
-			"type": "number",
-			"minimum": -1,
-			"description": "Dollar cap on the job's model fires, from the run costs; -1 resets; command jobs take none."
-		},
-		"id": {
-			"type": "string",
-			"description": "Job id jN from list; required for pause/resume/remove/runs; repair takes it or none."
-		}
-	},
-	"required": ["action"]
-}`
-}
 
 type given struct {
 	Action  string  `json:"action"`
@@ -100,15 +33,15 @@ type given struct {
 }
 
 type adapter struct {
+	tool.Definition
 	db        sched.DB
 	ct        sched.Crontab
 	runnerCmd string
-	defModel  string
 	home      string
 }
 
 func New(db sched.DB, ct sched.Crontab, runnerCmd, defModel, home string) core.Tool {
-	return adapter{db: db, ct: ct, runnerCmd: runnerCmd, defModel: defModel, home: home}
+	return adapter{Definition: tool.Def("scheduler").Fill("{default_model}", defModel), db: db, ct: ct, runnerCmd: runnerCmd, home: home}
 }
 
 func updateModelArg(args json.RawMessage) (*string, error) {
@@ -129,12 +62,6 @@ func updateModelArg(args json.RawMessage) (*string, error) {
 	}
 	return &m, nil
 }
-
-func (a adapter) Name() string { return "scheduler" }
-
-func (a adapter) Description() string { return description(a.defModel) }
-
-func (a adapter) Schema() json.RawMessage { return json.RawMessage(schemaJSON(a.defModel)) }
 
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given

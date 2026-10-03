@@ -319,7 +319,7 @@ func TestDelegateDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
 		t.Fatal(err)
 	}
-	if got := schema.Properties["workspace"].Description; got != "where the job runs (default the session's)" {
+	if got := schema.Properties["workspace"].Description; got != "where the worker runs; must be under the session's workspace or the rig home" {
 		t.Fatalf("cwd description %q", got)
 	}
 }

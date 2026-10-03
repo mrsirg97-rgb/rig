@@ -20,6 +20,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	_ "golang.org/x/image/webp"
 )
 
@@ -37,21 +38,12 @@ type viewArgs struct {
 }
 
 type toolView struct {
+	tool.Definition
 	blobs string
 }
 
 func New(blobsDir string) core.Tool {
-	return &toolView{blobs: blobsDir}
-}
-
-func (toolView) Name() string { return "view" }
-
-func (toolView) Description() string {
-	return "Looks at an image file: png, jpeg, webp, or the first frame of a gif. Guidelines: for pixels only; for text, code or a log use read; for a crop or a resize use bash. Anything over 20 MiB, over 16 megapixels, or not an image refuses. Reply: one line naming the stored image's mime, dimensions, size and source."
-}
-
-func (toolView) Schema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"the image file to look at (png, jpeg, webp, gif; a leading ~ expands)"}},"required":["path"]}`)
+	return &toolView{Definition: tool.Def("view"), blobs: blobsDir}
 }
 
 func (v *toolView) Exec(ctx context.Context, data json.RawMessage) (string, error) {

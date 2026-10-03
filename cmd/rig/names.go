@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/models"
+
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 var ErrResumeWithPrompt = errors.New("rig: -resume is not available with -p (one-shot stays one-shot)")
@@ -34,7 +36,17 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var nativeToolNames = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "scheduler", "delegate", "python", "web", "plugin", "plugins", "sessions"}
+var conditionalNatives = map[string]bool{"decide": true}
+
+var nativeToolNames = func() []string {
+	var out []string
+	for _, name := range tool.Names() {
+		if !conditionalNatives[name] {
+			out = append(out, name)
+		}
+	}
+	return out
+}()
 
 func effectiveNativeNames() []string {
 	return append([]string{}, nativeToolNames...)

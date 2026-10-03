@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 //go:embed kernel_host.py
@@ -22,22 +23,6 @@ const (
 	stderrTailLen    = 4096
 	waitDelay        = 2 * time.Second
 )
-
-const description = "Runs Python in a persistent IPython kernel: variables, imports and definitions persist " +
-	"across calls, and numpy and pandas are available."
-
-const guidelines = "Guidelines: arithmetic, data shaping, parsing and bulk text are computed here, never estimated. " +
-	"Compute once, then query the result in later calls. The kernel starts in the session's workspace. " +
-	"Reply: stdout and the last expression's value; action vars lists the namespace, reset clears it."
-
-const schemaJSON = `{
-	"type": "object",
-	"properties": {
-		"code": {"type": "string", "description": "Python source to execute"},
-		"action": {"type": "string", "enum": ["code", "vars", "reset"], "description": "'code' (or omitted) runs code; 'vars' summarises the namespace; 'reset' clears it."},
-		"timeoutMs": {"type": "integer", "description": "Timeout in ms (default 120000)", "minimum": 1000, "maximum": 600000}
-	}
-}`
 
 type Reply struct {
 	ID     *string `json:"id"`
@@ -61,29 +46,24 @@ type given struct {
 	TimeoutMs *int    `json:"timeoutMs"`
 }
 
-type Tool struct{ k *kernel }
+type Tool struct {
+	tool.Definition
+	k *kernel
+}
 
 var _ core.Tool = (*Tool)(nil)
 
 func New() *Tool {
-	return &Tool{k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1)}}
+	return &Tool{Definition: tool.Def("python"), k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1)}}
 }
 
 func NewWith(python, host string) *Tool {
-	return &Tool{k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true}}
+	return &Tool{Definition: tool.Def("python"), k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true}}
 }
 
 func (t *Tool) Host() string { return t.k.host }
 
 func (t *Tool) SetCwd(cwd string) { t.k.cwd = cwd }
-
-func (t *Tool) Name() string { return "python" }
-
-func (t *Tool) Description() string { return description + "\n\n" + guidelines }
-
-func Guidelines() string { return guidelines }
-
-func (t *Tool) Schema() json.RawMessage { return json.RawMessage(schemaJSON) }
 
 func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a given

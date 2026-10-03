@@ -14,6 +14,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 const (
@@ -21,37 +22,14 @@ const (
 	maxN     = state.ListCap
 )
 
-const schemaJSON = `{
-	"type": "object",
-	"required": ["action"],
-	"properties": {
-		"action": {
-			"enum": ["list", "summary"]
-		},
-		"project": {
-			"type": "string"
-		},
-		"n": {
-			"type": "integer"
-		}
-	}
-}`
-
-const description = "The session store. list shows sessions; summary shows the vitals: models, faults, cache " +
-	"ratio. Guidelines: this workspace by default; project and n widen it. Reply: a line per session, or " +
-	"the vitals."
-
 type adapter struct {
+	tool.Definition
 	home string
 	cwd  string
 }
 
-func New(home, cwd string) core.Tool { return adapter{home: home, cwd: cwd} }
-
-func (a adapter) Name() string        { return "sessions" }
-func (a adapter) Description() string { return description }
-func (a adapter) Schema() json.RawMessage {
-	return json.RawMessage(schemaJSON)
+func New(home, cwd string) core.Tool {
+	return adapter{Definition: tool.Def("sessions"), home: home, cwd: cwd}
 }
 
 type given struct {

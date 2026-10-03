@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	difftool "github.com/mrsirg97-rgb/rig/v2/tool/diff"
 )
 
@@ -21,28 +22,9 @@ const ReadCap = 1 << 20
 
 const readChunk = 64 * 1024
 
-type readTool struct{}
+type readTool struct{ tool.Definition }
 
-func Read() core.Tool { return &readTool{} }
-
-func (readTool) Name() string { return "read" }
-
-func (readTool) Description() string {
-	return "Reads the content of a file, or a range of it by line with offset and limit. Guidelines: the way to look at a file. A range past the cap says how many lines came back and where to continue. A file that changed since you last read it says so; diff: true appends its git diff against HEAD; a range past the end refuses, naming the file's total lines. What you read is what edit checks against. Reply: the file's text, exactly as edit will match it."
-}
-
-func (readTool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"path":   {"type": "string", "description": "the file to read"},
-			"offset": {"type": "integer", "description": "the 0-based line to start at (default 0); past the end refuses"},
-			"limit":  {"type": "integer", "description": "the number of lines to read (default the rest of the file); negative refuses"},
-			"diff":   {"type": "boolean", "description": "append the file's git diff against HEAD, or 'no changes' when clean (a non-git workspace refuses)"}
-		},
-		"required": ["path"]
-	}`)
-}
+func Read() core.Tool { return &readTool{tool.Def("read")} }
 
 type readArgs struct {
 	Path   string `json:"path"`
