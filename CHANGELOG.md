@@ -1,4 +1,38 @@
 # Changelog
+## [2.8.1]: the words are data
+
+The text the model reads was scattered: `read` and `edit` returned their
+descriptions inline, `rem` kept a const beside its schema, `scheduler`
+built its from a function, and `todo`, `python`, `web`, `delegate`,
+`sessions`, `plugin`, `plugins`, `view` and `decide` each kept their
+own. A words pass meant grepping twelve packages, and the house shape
+(what it is, `Guidelines:`, `Reply:`) was a convention nothing checked.
+
+`tool/registry.json`, embedded, is now the one file holding every
+native tool's words: an entry per tool with `name`, `enabled`, `what`,
+`guidelines`, `reply` and the `schema` object as it goes on the wire.
+`tool.Def(name)` hands a tool its `Definition`, which it embeds to
+satisfy `Name()`, `Description()` and `Schema()`; the tool writes only
+`Exec`. The description is composed from the three parts, so the shape
+is the type, not a habit. `scheduler` and `delegate` fill the default
+model into a `{default_model}` slot at construction; `plugin` adds the
+live names to the registry's schema. The root derives its native tool
+list from the registry's enabled entries, so flipping `enabled` to
+false removes a tool from the build's menu without deleting its words.
+
+Two descriptions did not fit the shape: `python` and `scheduler` put a
+blank line before `Guidelines:` where every other tool put a space.
+They now put a space, and the three golden_020 fixtures move by those
+two bytes; the tools-prefix sha does not move. `decide`'s description,
+which carried no `Guidelines:` or `Reply:` clause, is rewritten into
+the shape with the same facts.
+
+Tests: every entry composes into the shape and carries an object
+schema; every wired tool has an entry and every entry is wired; the
+native list follows the registry's enabled order; no `.go` file outside
+`tool/registry.go` carries tool words (a file scan). AGENTS.md names
+the rule: the model's words are in `tool/registry.json`.
+
 ## [2.8.0]: decide — the model hands the sorting to the decision server
 
 The evidence sat in the transcript: 27,035 bash calls and 4,935 reads,

@@ -7,28 +7,12 @@ import (
 	"os"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
-type writeTool struct{}
+type writeTool struct{ tool.Definition }
 
-func Write() core.Tool { return &writeTool{} }
-
-func (writeTool) Name() string { return "write" }
-
-func (writeTool) Description() string {
-	return "Creates or overwrites a file with its full content. Guidelines: use it for new files and whole rewrites; for a change inside an existing file, use edit. A plugin you write lands in plugins/pending/ until the operator approves it. Reply: the path and the bytes written."
-}
-
-func (writeTool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"path":    {"type": "string", "description": "the file to write"},
-			"content": {"type": "string", "description": "the full new content"}
-		},
-		"required": ["path", "content"]
-	}`)
-}
+func Write() core.Tool { return &writeTool{tool.Def("write")} }
 
 type writeArgs struct {
 	Path    string `json:"path"`

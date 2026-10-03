@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 type Live interface {
@@ -15,6 +16,7 @@ type Live interface {
 }
 
 type Door struct {
+	tool.Definition
 	Live Live
 	redo func(ctx context.Context) error
 }
@@ -22,24 +24,20 @@ type Door struct {
 var _ core.Tool = (*Door)(nil)
 
 func NewDoor(live Live, redo func(ctx context.Context) error) *Door {
-	return &Door{Live: live, redo: redo}
-}
-
-func (d *Door) Name() string { return "plugin" }
-
-func (d *Door) Description() string {
-	return "Runs a live plugin by name with its args, or fetches its contract: {\"action\": \"run\"|\"schema\", \"name\": ..., \"args\": ...}. Guidelines: the name enum is the live set. Call schema first when you do not know a plugin's args. An unknown name re-discovers once, then refuses. Plugins are also importable from python by name. Reply: the plugin's text, or its description and schema."
+	return &Door{Definition: tool.Def("plugin"), Live: live, redo: redo}
 }
 
 func (d *Door) Schema() json.RawMessage {
-	nameProps := `"type":"string"`
-	if names := d.Live.PluginNames(); len(names) > 0 {
-		if enum, err := json.Marshal(names); err == nil {
-			nameProps += `,"enum":` + string(enum)
-		}
+	schema := string(d.Definition.Schema())
+	names := d.Live.PluginNames()
+	if len(names) == 0 {
+		return json.RawMessage(schema)
 	}
-	nameProps += `,"description":"the live plugin"`
-	return json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{"action":{"enum":["run","schema"],"description":"run the plugin, or fetch its contract"},"name":{%s},"args":{"type":"object","description":"the plugin's args, pass-through (run)"}},"required":["action","name"]}`, nameProps))
+	enum, err := json.Marshal(names)
+	if err != nil {
+		return json.RawMessage(schema)
+	}
+	return json.RawMessage(strings.Replace(schema, `"name":{"type":"string",`, `"name":{"type":"string","enum":`+string(enum)+`,`, 1))
 }
 
 func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {

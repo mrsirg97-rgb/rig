@@ -13,39 +13,23 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
 	"golang.org/x/sys/unix"
 )
 
 const outputCap = 256 * 1024
 
-type tool struct{}
+type bashTool struct{ tool.Definition }
 
-func New() core.Tool { return &tool{} }
-
-func (tool) Name() string { return "bash" }
-
-func (tool) Description() string {
-	return "Runs a bash command in the session's workspace. Guidelines: use it for shell work, builds, git, and any CLI. To read a file you may edit, use read instead, so the edit that follows has something to check against; for a computation, use python. Reply: stdout and stderr together, in order, capped with a [TRUNCATED] marker that names the full size."
-}
-
-func (tool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"command":   {"type": "string", "description": "the command line to run under bash(1)"},
-			"workspace": {"type": "string", "description": "the workspace the job runs in"}
-		},
-		"required": ["command"]
-	}`)
-}
+func New() core.Tool { return &bashTool{tool.Def("bash")} }
 
 type args struct {
 	Command   string `json:"command"`
 	Workspace string `json:"workspace,omitempty"`
 }
 
-func (tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
+func (bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a args
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("bash: args: %w", err)

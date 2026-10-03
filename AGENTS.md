@@ -32,6 +32,10 @@ plus one registration line, and the loop never names a concrete type.
   changes.
 - Keep things lean and terse. Follow the established patterns, and apply
   a new pattern only if it is genuinely better.
+- The model's words are in `tool/registry.json`: every native tool's
+  description (`what`, `guidelines`, `reply`) and schema live there and
+  nowhere else; a tool embeds its `tool.Definition` and writes only
+  `Exec`. A words pass is a diff on that file.
 - Be security conscious at all times. This is a harness agents work in,
   with filesystem and shell access, running untrusted model output:
   deny by default, canonicalize untrusted input before acting on it,
@@ -148,6 +152,12 @@ plus one registration line, and the loop never names a concrete type.
 - `store/{rem,scheduler,state,todo}/metadata`: hand-written container
   metadata: the source for the generated `ddl`/`domain` accessors. Edit
   and regenerate; never hand-edit the generated projections.
+- `tool`: the registry of the model's words: `registry.json`, embedded,
+  one entry per native tool (`name`, `enabled`, `what`, `guidelines`,
+  `reply`, `schema`); `Definition` is the value a tool embeds for
+  `Name()`, `Description()` and `Schema()`; `Fill` for the two tools
+  whose text names the default model; `Names()` is the root's native
+  list, in file order, enabled only.
 - `tool/bash`: bash(1) execution: real subprocesses, output surfaced
   and bounded.
 - `tool/execwrap`: the landlock subprocess seam: prepends the
