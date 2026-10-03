@@ -12,25 +12,30 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
 
 - `registry.json`: one entry per native tool: `name`, `enabled`, `what`,
   `guidelines`, `reply`, `schema`. File order is menu order for the root.
-- `Definition`: the value a tool embeds to satisfy three of `core.Tool`'s
-  four methods: `Name()`, `Description()` (composed as
+- `Definition`: the interface a tool embeds to satisfy three of
+  `core.Tool`'s four methods: `Name()`, `Description()` (composed as
   `<what> guidelines: <guidelines> reply: <reply>`), `Schema()` (a copy of
-  the raw object, key order preserved). `Enabled()` reads the flag.
-- `Def(name)`: the entry by name; an unknown name panics, since a tool
-  asking for words it does not have is a programmer error caught at
-  start, never at the model's call.
-- `Fill(slot, value)`: a copy with a slot replaced in the words and the
-  schema, for the two tools whose text carries a runtime value
-  (`scheduler` and `delegate` name the default model as
-  `{default_model}`); the registry's own copy is never changed.
+  the raw object, key order preserved), and `Enabled()`. Since 2.9.5 it
+  is an interface, not a struct: the registry's entry is the one
+  concrete behind it, unexported, and nothing outside the package names
+  it; a tool holds the abstraction and a test can hand it any
+  Definition.
+- `Def(name)`: the entry by name, as the interface; an unknown name
+  panics, since a tool asking for words it does not have is a
+  programmer error caught at start, never at the model's call.
+- `Fill(d, slot, value)`: a Definition wrapping another with a slot
+  replaced in the description and the schema, for the two tools whose
+  text carries a runtime value (`scheduler` and `delegate` name the
+  default model as `{default_model}`); delegation by embedding, the
+  registry's own copy never changes.
 - `Names()`: the enabled names in file order; `AllNames()`: every entry.
 
 ## How it is consumed
 
 - Each tool package embeds `tool.Definition` in its tool type and writes
-  only `Exec`; the two with live text override one method. `plugin`
-  overrides `Schema()` to add the live name enum to the registry's
-  schema.
+  only `Exec`; the two with live text wrap theirs with `Fill`. `plugin`
+  implements `Schema()` itself to add the live name enum to the
+  registry's schema: the embedded interface supplies the rest.
 - `cmd/rig` derives the native tool list from `Names()`, so flipping
   `enabled` to false removes a tool from the build's menu without
   deleting its words.

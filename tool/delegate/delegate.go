@@ -50,7 +50,7 @@ type workerState struct {
 }
 
 func New(o Opts) core.Tool {
-	a := &adapter{Definition: tool.Def("delegate").Fill("{default_model}", o.DefaultModel), Opts: o, workers: map[int64]workerState{}}
+	a := &adapter{Definition: tool.Fill(tool.Def("delegate"), "{default_model}", o.DefaultModel), Opts: o, workers: map[int64]workerState{}}
 	if o.Notify != nil {
 		a.emitter = status.New(o.Notify)
 	}

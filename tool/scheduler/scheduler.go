@@ -41,7 +41,7 @@ type adapter struct {
 }
 
 func New(db sched.DB, ct sched.Crontab, runnerCmd, defModel, home string) core.Tool {
-	return adapter{Definition: tool.Def("scheduler").Fill("{default_model}", defModel), db: db, ct: ct, runnerCmd: runnerCmd, home: home}
+	return adapter{Definition: tool.Fill(tool.Def("scheduler"), "{default_model}", defModel), db: db, ct: ct, runnerCmd: runnerCmd, home: home}
 }
 
 func updateModelArg(args json.RawMessage) (*string, error) {

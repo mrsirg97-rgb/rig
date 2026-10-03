@@ -66,7 +66,7 @@ func TestFillReplacesTheSlotEverywhereAndLeavesTheOriginal(t *testing.T) {
 	if !strings.Contains(d.Description(), "{default_model}") || !strings.Contains(string(d.Schema()), "{default_model}") {
 		t.Fatal("scheduler's registry text must carry the {default_model} slot in both the description and the schema")
 	}
-	f := d.Fill("{default_model}", "dsv4")
+	f := tool.Fill(d, "{default_model}", "dsv4")
 	if strings.Contains(f.Description(), "{default_model}") || strings.Contains(string(f.Schema()), "{default_model}") {
 		t.Fatal("Fill must replace the slot in the description and the schema")
 	}

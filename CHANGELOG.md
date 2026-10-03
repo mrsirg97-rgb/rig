@@ -1,4 +1,21 @@
 # Changelog
+## [2.9.5]: the definition is an interface
+
+2.8.1 lifted the model's words into `tool/registry.json` and gave every
+tool a `tool.Definition` to embed. It was a struct with methods, and the
+struct leaked at once: the schema had to be a string to keep it
+comparable, and `plugin` overrode `Schema()` by shadowing a method on an
+embedded value. The operator asked for an interface then; this is it.
+
+`Definition` is now the interface (`Name`, `Enabled`, `Description`,
+`Schema`); the registry's entry is its one concrete, unexported, with
+the JSON struct as the type the way lift's `JSONConfig` is; `Fill` is a
+Definition wrapping another with a slot replaced, delegation by
+embedding, instead of a method copying a struct. A tool embeds the
+abstraction, the door implements `Schema()` because that is its
+contract, and a test can hand a tool any Definition without the
+registry. The wire does not move: the goldens, the prefix sha and the
+menu budget are untouched.
 ## [2.9.4]: the review takes a bite
 
 Run j31 woke the reviewer at a turn end with 264 pending bash rows and
