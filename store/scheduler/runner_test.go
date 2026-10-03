@@ -152,10 +152,11 @@ type fakeSpawn struct {
 type fakeCall struct {
 	Argv []string
 	Cwd  string
+	Ctx  context.Context
 }
 
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
+	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
 	return f.result, f.err
 }
 
@@ -271,10 +272,13 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 	mustOK(t, err)
 
 	c := spawn.calls[0]
-	if len(c.Argv) < 5 || c.Argv[0] != "/x/rig" || c.Argv[1] != "-p" {
-		t.Fatalf("argv prefix %v", c.Argv)
+	if len(c.Argv) < 5 || c.Argv[0] != "/x/rig" || c.Argv[1] != "-p" || c.Argv[2] != "-" {
+		t.Fatalf("argv prefix %v, want the prompt read from stdin (-p -)", c.Argv)
 	}
-	prompt := c.Argv[2]
+	prompt, carried := sched.PromptFrom(c.Ctx)
+	if !carried {
+		t.Fatal("the prompt must ride the spawn context to the child's stdin, never argv")
+	}
 	if !strings.HasPrefix(prompt, "do the thing") {
 		t.Fatal("job prompt must lead")
 	}

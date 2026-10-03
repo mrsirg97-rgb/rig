@@ -94,7 +94,11 @@ opening brace), then one coverage line (packages or modules mapped of
 those present — distinct directories of the files table over distinct
 directories of the walk). A cited file whose sha moved is re-extracted
 first, synchronously, before its lines are quoted. A bare name defined
-in two places refuses, naming both. The pack is bounded by the read
+in two places refuses, naming both; a qualified name whose package has
+no such symbol refuses naming where the map has it (`no Kernel in
+package loop; the map has v2.Kernel`); an import path (`github.com/…/v2.Kernel`)
+refuses and names the package tail, since a target with a slash is a
+file (2.9.3). The pack is bounded by the read
 ceiling (`ReadCap`) and registers no observation: it writes no file
 state into the session, so an edit's drift check still demands a real
 read.

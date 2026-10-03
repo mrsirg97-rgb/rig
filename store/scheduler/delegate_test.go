@@ -202,15 +202,18 @@ func TestANoToolsFireRunsAllowNoneAndNoReportBack(t *testing.T) {
 	if len(spawn.calls) != 1 {
 		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
 	}
-	var allow, prompt string
+	var allow string
 	for i, a := range spawn.calls[0].Argv {
 		switch a {
 		case "-allow":
 			allow = spawn.calls[0].Argv[i+1]
 		case "-p":
-			prompt = spawn.calls[0].Argv[i+1]
+			if spawn.calls[0].Argv[i+1] != "-" {
+				t.Fatalf("the prompt must not ride argv: %v", spawn.calls[0].Argv)
+			}
 		}
 	}
+	prompt, _ := sched.PromptFrom(spawn.calls[0].Ctx)
 	if allow != sched.NoToolsAllow {
 		t.Fatalf("a no-tools fire runs with no tool at all: %v", spawn.calls[0].Argv)
 	}

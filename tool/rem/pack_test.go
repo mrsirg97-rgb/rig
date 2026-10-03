@@ -276,3 +276,24 @@ func TestPackArgsCarryTheWireShape(t *testing.T) {
 		t.Fatal("the target field carries no description")
 	}
 }
+
+func TestPackTeachesTheQualifierShape(t *testing.T) {
+	root, q, tool := packModule(t)
+	ctx := context.Background()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root}); err != nil {
+		t.Fatalf("index: %v", err)
+	}
+	q.Drain(ctx)
+	_, err := packExec(t, tool, root, "example.com/m/alpha.Helper", nil)
+	if err == nil || !strings.Contains(err.Error(), "import path") || !strings.Contains(err.Error(), "alpha.Helper") {
+		t.Fatalf("an import path must refuse naming the package tail, got %v", err)
+	}
+	_, err = packExec(t, tool, root, "beta.Helper", nil)
+	if err == nil || !strings.Contains(err.Error(), "no Helper in package beta") || !strings.Contains(err.Error(), "alpha.Helper") {
+		t.Fatalf("a wrong package tail must name where the map has the symbol, got %v", err)
+	}
+	_, err = packExec(t, tool, root, "alpha/a.go", nil)
+	if err != nil {
+		t.Fatalf("a real file path still packs the file: %v", err)
+	}
+}

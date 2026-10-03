@@ -1,4 +1,24 @@
 # Changelog
+## [2.9.3]: the prompt rides stdin
+
+`decision: review: fire: delegate: spawn: fork/exec rig: argument list
+too long`, at every turn end. The reviewer sizes one fire by the model's
+window (about 1.5 MB on GLM) and the delegate handed the prompt to the
+child as the single `-p` argument; Linux caps one argument at 128 KiB,
+and 262 pending bash rows made a 176 KB prompt. Nothing settled, and the
+same fire failed again at the next turn end.
+
+A prompt never rides argv now. `rig -p -` reads the prompt from stdin;
+the plain, bwrap and landlock spawns all say `-p -`, the spawn context
+carries the text (`WithPrompt`, `PromptFrom`) and `RealSpawn` pipes it.
+The `Spawn` seam and the fakes are unchanged; the argv tests read the
+prompt from the context. `-p -` with nothing on stdin refuses by name.
+
+`rem pack` refuses two more targets with the words that teach the
+shape: an import path (`github.com/…/v2.Kernel`) names the package tail,
+and a qualified name whose package has no such symbol names where the
+map has it.
+
 ## [2.9.2]: the menu in the command's own color, and its words for the operator
 
 The completion menu painted command and verb names in the accent while

@@ -82,6 +82,9 @@ written before the store commit; drift is surfaced in list.
   with no row records a skip naming it and the known rows, and the
   fire never spawns. The spawn context is bounded by the row's own
   `timeout`, else `RunOpts.Timeout`, else `DefaultRunTimeout` (30 min).
+  The worker's prompt rides the spawn context (`WithPrompt`), never
+  argv: every spawn says `-p -` and `RealSpawn` pipes the prompt to the
+  child's stdin (2.9.3; one argument is capped at 128 KiB on Linux).
   The `Spawn` seam carries an output observer: every byte the worker
   writes touches the row's `stall` window (a silent fire past it is
   killed as hung, the log naming the reason) and streams to a live

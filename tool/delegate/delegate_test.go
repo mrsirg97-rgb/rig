@@ -266,8 +266,11 @@ func TestDelegateHappyPathFeedsBackAndRecords(t *testing.T) {
 	if c.Cwd != wd || len(c.Argv) < 5 || c.Argv[1] != "-p" {
 		t.Fatalf("spawn argv/cwd: %v %v", c.Argv, c.Cwd)
 	}
-	if !strings.Contains(c.Argv[2], "do the sweep") {
-		t.Fatalf("the prompt must carry the task: %q", c.Argv[2])
+	if c.Argv[2] != "-" {
+		t.Fatalf("the prompt must not ride argv: %v", c.Argv)
+	}
+	if prompt, _ := sched.PromptFrom(c.Ctx); !strings.Contains(prompt, "do the sweep") {
+		t.Fatalf("the prompt on the spawn context must carry the task: %q", prompt)
 	}
 	foundSession := false
 	for i := range c.Argv[:len(c.Argv)-1] {

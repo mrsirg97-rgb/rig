@@ -121,7 +121,10 @@ while another model is resident (2.8.3). One fire takes the pending rows oldest 
 reviewer's model row leaves for a prompt (the window minus its reserve, at
 four bytes to the token); the rest stay pending for the next turn end, and
 a row that cannot fit alone still goes, so one huge row cannot wedge the
-queue. It replies with one verdict line per row, parsed like the swarm
+queue. The prompt reaches the fire on stdin (`rig -p -`, 2.9.3): on the
+operator's box 262 pending bash rows made a 176 KB prompt, over Linux's
+128 KiB cap on one argument, and every fire died with `argument list
+too long` until the carrier moved. It replies with one verdict line per row, parsed like the swarm
 reviewer's:
 
     verdict: <id> approve

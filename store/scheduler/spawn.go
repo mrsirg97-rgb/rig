@@ -34,6 +34,19 @@ func RealFetch(timeout time.Duration) Fetch {
 	}
 }
 
+const PromptStdin = "-"
+
+type promptKey struct{}
+
+func WithPrompt(ctx context.Context, prompt string) context.Context {
+	return context.WithValue(ctx, promptKey{}, prompt)
+}
+
+func PromptFrom(ctx context.Context) (string, bool) {
+	p, ok := ctx.Value(promptKey{}).(string)
+	return p, ok
+}
+
 func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (SpawnResult, error) {
 	if len(argv) == 0 {
 		return SpawnResult{}, errors.New("spawn: empty argv")
@@ -41,6 +54,9 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, obs
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if cwd != "" {
 		cmd.Dir = cwd
+	}
+	if p, ok := PromptFrom(ctx); ok {
+		cmd.Stdin = strings.NewReader(p)
 	}
 	cmd.Env = env
 	cmd.SysProcAttr = spawnSysProcAttr()

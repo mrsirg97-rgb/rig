@@ -189,6 +189,16 @@ func (f *fakeSpawn) argv(i int) string {
 	return strings.Join(f.calls[i].Argv, " ")
 }
 
+func (f *fakeSpawn) prompt(i int) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if i >= len(f.calls) {
+		return ""
+	}
+	p, _ := sched.PromptFrom(f.calls[i].Ctx)
+	return p
+}
+
 type harness struct {
 	todoDB  store.DB
 	schedDB store.DB
@@ -404,8 +414,8 @@ func TestSwarmDeadWorkerTaskReleasedAndHandedToAnother(t *testing.T) {
 		return rows.Next()
 	})
 	h.waitFor(t, "the retry spawn", func() bool { return h.spawn.count() == 2 })
-	if !strings.Contains(h.spawn.argv(1), "survive a crash") {
-		t.Errorf("the retry must carry the same task brief:\n%s", h.spawn.argv(1))
+	if !strings.Contains(h.spawn.prompt(1), "survive a crash") {
+		t.Errorf("the retry must carry the same task brief:\n%s", h.spawn.prompt(1))
 	}
 	h.waitFor(t, "the task submitted for review", func() bool {
 		return h.status(t, "t1") == "review"
@@ -496,11 +506,11 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 		t.Fatalf("spawn calls = %d, want one per task (3)", got)
 	}
 	for i, text := range []string{"write the parser", "write the tests", "write the docs"} {
-		if !strings.Contains(h.spawn.argv(i), text) {
-			t.Errorf("spawn %d must carry the task brief %q:\n%s", i, text, h.spawn.argv(i))
+		if !strings.Contains(h.spawn.prompt(i), text) {
+			t.Errorf("spawn %d must carry the task brief %q:\n%s", i, text, h.spawn.prompt(i))
 		}
-		if !strings.Contains(h.spawn.argv(i), "The supervisor owns this board entry") {
-			t.Errorf("spawn %d must tell the worker the supervisor owns the board entry:\n%s", i, h.spawn.argv(i))
+		if !strings.Contains(h.spawn.prompt(i), "The supervisor owns this board entry") {
+			t.Errorf("spawn %d must tell the worker the supervisor owns the board entry:\n%s", i, h.spawn.prompt(i))
 		}
 	}
 	rows := h.ctl.List()

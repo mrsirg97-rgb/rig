@@ -272,9 +272,21 @@ func (q *Queue) Pack(ctx context.Context, cwd, target string) (string, error) {
 		return "", err
 	}
 	if strings.Contains(target, "/") || isFile(filepath.Join(cwd, target)) || isFile(target) {
+		if looksQualified(target) && !isFile(filepath.Join(cwd, target)) && !isFile(target) {
+			return "", fmt.Errorf("graph: %s reads as an import path; name the symbol by its package tail (%s), or a file path", target, tailOf(target))
+		}
 		return q.packFile(ctx, db, root, cwd, target)
 	}
 	return q.packSymbol(ctx, db, root, module, target)
+}
+
+func looksQualified(target string) bool {
+	last := target[strings.LastIndex(target, "/")+1:]
+	return strings.Contains(last, ".") && !strings.Contains(last, " ") && filepath.Ext(target) != "" && LanguageOf(target) == ""
+}
+
+func tailOf(target string) string {
+	return target[strings.LastIndex(target, "/")+1:]
 }
 
 func isFile(p string) bool {
@@ -369,6 +381,19 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 		}
 	}
 	if len(rows) == 0 {
+		if qual, name, ok := strings.Cut(target, "."); ok && qual != "" && name != "" {
+			elsewhere, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ? ORDER BY package`, name)
+			if err != nil {
+				return "", err
+			}
+			if len(elsewhere) > 0 {
+				var names []string
+				for _, s := range elsewhere {
+					names = append(names, baseName(s.Package)+"."+s.Name)
+				}
+				return "", fmt.Errorf("graph: no %s in package %s; the map has %s", name, qual, strings.Join(names, ", "))
+			}
+		}
 		return "", fmt.Errorf("graph: %s is not in the map; run index first", target)
 	}
 	pkgs := map[string]bool{}

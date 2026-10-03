@@ -112,8 +112,12 @@ bwrap
   --ro-bind <the rig binary> <the rig binary>
   [--ro-bind or --bind per sandbox.binds]
   --chdir <job cwd>
-  -- <the rig binary> -p <the job's prompt...>
+  -- <the rig binary> -p -
 ```
+
+The prompt never rides argv (2.9.3): `-p -` reads it from stdin, which
+the spawn pipes in; Linux caps one argument at 128 KiB and a review
+fire's prompt is sized by the model's window.
 
 - The whole worker process tree is inside: bash, the kernel, the
   kernel's children, a plugin's subprocesses. One boundary.

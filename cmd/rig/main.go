@@ -4,12 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/mrsirg97-rgb/rig/v2"
@@ -45,7 +47,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.9.2"
+const Version = "2.9.3"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -125,6 +127,18 @@ func main() {
 		}
 	}
 
+	if *prompt == sched.PromptStdin {
+		text, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "rig: -p -:", err)
+			os.Exit(2)
+		}
+		if strings.TrimSpace(string(text)) == "" {
+			fmt.Fprintln(os.Stderr, "rig: -p -: nothing on stdin (the prompt arrives there)")
+			os.Exit(2)
+		}
+		*prompt = string(text)
+	}
 	if err := checkOneShot(*prompt, *resumeID); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(2)
