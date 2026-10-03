@@ -2,40 +2,15 @@ package decision_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
 )
-
-type storeReviews struct {
-	db store.DB
-}
-
-func (r storeReviews) Pending(ctx context.Context) ([]decision.ReviewRow, error) {
-	rows, err := decisionstore.Pending(ctx, r.db)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]decision.ReviewRow, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, decision.ReviewRow{
-			ID: row.ID, Site: row.Site, State: row.State, Question: row.Question,
-			Answer: row.Answer, Confidence: row.Confidence, Decider: row.Decider,
-		})
-	}
-	return out, nil
-}
-
-func (r storeReviews) Settle(ctx context.Context, id int64, approved bool, reviewer, answer string) error {
-	return decisionstore.Settle(ctx, r.db, decisionstore.SettleInput{
-		ID: id, Approved: approved, Reviewer: reviewer, ReviewerAnswer: answer,
-	})
-}
 
 type fakeFire struct {
 	stdouts []string
@@ -83,14 +58,18 @@ func reviewer(db store.DB, f *fakeFire) *decision.Reviewer {
 }
 
 func reviewerWithBudget(db store.DB, f *fakeFire, budget int) *decision.Reviewer {
-	return decision.NewReviewer(storeReviews{db: db}, f.fire, budget, func(string) {})
+	return reviewerWithReply(db, f, budget, 1<<30)
+}
+
+func reviewerWithReply(db store.DB, f *fakeFire, budget, maxOut int) *decision.Reviewer {
+	return decision.NewReviewer(decisionstore.Reviews{DB: db}, f.fire, budget, maxOut, func(string) {})
 }
 
 func TestThreePendingRowsAreReviewedInOneFire(t *testing.T) {
 	db := openReviewedStore(t, 3)
 	f := &fakeFire{stdouts: []string{"reading\nverdict: 1 approve\nverdict: 2 approve\nverdict: 3 approve"}}
 	r := reviewer(db, f)
-	if err := r.Drain(context.Background()); err != nil {
+	if _, err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if f.calls != 1 {
@@ -116,7 +95,7 @@ func TestADenyStoresTheCorrectedAnswer(t *testing.T) {
 	db := openReviewedStore(t, 1)
 	f := &fakeFire{stdouts: []string{"the call removes a tree\nverdict: 1 deny changes"}}
 	r := reviewer(db, f)
-	if err := r.Drain(context.Background()); err != nil {
+	if _, err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	var status, rev string
@@ -133,7 +112,7 @@ func TestAPartialReplyLeavesTheUnnamedRowPending(t *testing.T) {
 	db := openReviewedStore(t, 2)
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}}
 	r := reviewer(db, f)
-	if err := r.Drain(context.Background()); err != nil {
+	if _, err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	rows, _ := decisionstore.Pending(context.Background(), db)
@@ -153,7 +132,7 @@ func TestADenyWithoutACorrectionIsNotAVerdict(t *testing.T) {
 	db := openReviewedStore(t, 1)
 	f := &fakeFire{stdouts: []string{"verdict: 1 deny"}}
 	r := reviewer(db, f)
-	if err := r.Drain(context.Background()); err != nil {
+	if _, err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	rows, _ := decisionstore.Pending(context.Background(), db)
@@ -164,14 +143,13 @@ func TestADenyWithoutACorrectionIsNotAVerdict(t *testing.T) {
 
 func TestAFireTakesTheOldestRowsThatFitTheWindow(t *testing.T) {
 	db := openReviewedStore(t, 2)
-	// a row's state alone is past the budget, so one fire carries one row
 	_, err := db.Exec(`UPDATE decisions SET state = ?`, strings.Repeat("x", 8000))
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve", "verdict: 2 approve"}}
 	r := reviewerWithBudget(db, f, 1000)
-	if err := r.Drain(context.Background()); err != nil {
+	if _, err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if f.calls != 1 || strings.Count(f.prompts[0], "\n== ") != 1 {
@@ -183,86 +161,100 @@ func TestAFireTakesTheOldestRowsThatFitTheWindow(t *testing.T) {
 	}
 }
 
-func TestALandingMarksDirtyAndTheTurnEndWakes(t *testing.T) {
-	db := openReviewedStore(t, 1)
-	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
-	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
-
-	r.Land()
-	r.Wake()
-	select {
-	case <-f.fired:
-	case <-time.After(2 * time.Second):
-		t.Fatal("a landing marks the reviewer dirty; the turn end is the wake")
+func TestTheReplyBoundTakesFortyOfTwoHundredSixtyFourRows(t *testing.T) {
+	db := openReviewedStore(t, 264)
+	var reply strings.Builder
+	for i := 1; i <= 40; i++ {
+		fmt.Fprintf(&reply, "verdict: %d approve\n", i)
+	}
+	f := &fakeFire{stdouts: []string{reply.String()}}
+	r := reviewerWithReply(db, f, 1<<30, 40*decision.VerdictLineCost())
+	summary, err := r.Drain(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.calls != 1 {
+		t.Fatalf("one door is one fire, got %d fires", f.calls)
+	}
+	if rows := strings.Count(f.prompts[0], "\n== "); rows != 40 {
+		t.Fatalf("the fire took %d rows, want the 40 verdict lines the reply budget fits", rows)
+	}
+	pending, _ := decisionstore.Pending(context.Background(), db)
+	if len(pending) != 224 {
+		t.Fatalf("the rest stay pending for the next door: %d", len(pending))
+	}
+	if !strings.Contains(summary, "40") || !strings.Contains(summary, "224") {
+		t.Fatalf("the summary names the fire and what stays: %q", summary)
 	}
 }
 
-func TestATurnEndWithNoLandingCostsNothing(t *testing.T) {
-	db := openReviewedStore(t, 1)
-	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
-	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
-
-	r.Wake()
-	select {
-	case <-f.fired:
-		t.Fatal("a turn end with no landing behind it reviews nothing")
-	case <-time.After(200 * time.Millisecond):
-	}
-}
-
-func TestTheRowsPastTheBudgetStayDirtyForTheNextTurnEnd(t *testing.T) {
+func TestTheWindowBoundHoldsUnderAReplyBudgetThatFitsEverything(t *testing.T) {
 	db := openReviewedStore(t, 2)
 	_, err := db.Exec(`UPDATE decisions SET state = ?`, strings.Repeat("x", 8000))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeFire{stdouts: []string{"verdict: 1 approve", "verdict: 2 approve"}, fired: make(chan struct{}, 4)}
-	r := reviewerWithBudget(db, f, 1000)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
-
-	r.Land()
-	r.Wake()
-	<-f.fired
-	r.Wake() // the next turn end: the overflow is still dirty
-	<-f.fired
-	select {
-	case <-f.fired:
-		t.Fatal("both rows settled, the reviewer is clean")
-	case <-time.After(200 * time.Millisecond):
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve", "verdict: 2 approve"}}
+	r := reviewerWithReply(db, f, 1000, 1<<30)
+	if _, err := r.Drain(context.Background()); err != nil {
+		t.Fatal(err)
 	}
-	rows, _ := decisionstore.Pending(context.Background(), db)
-	if len(rows) != 0 {
-		t.Fatalf("the overflow converged over the turn ends: %d pending", len(rows))
+	if rows := strings.Count(f.prompts[0], "\n== "); rows != 1 {
+		t.Fatalf("the window minus the reserve is still the second bound: %d rows", rows)
 	}
 }
 
-func TestAFireThatSettlesNothingWaitsForTheNextLanding(t *testing.T) {
-	db := openReviewedStore(t, 2)
-	f := &fakeFire{stdouts: []string{"I have no idea"}, fired: make(chan struct{}, 4)}
-	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
+func TestAMaxOutputUnderOneVerdictLineStillFiresOneRow(t *testing.T) {
+	db := openReviewedStore(t, 3)
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve\nverdict: 2 approve\nverdict: 3 approve"}}
+	r := reviewerWithReply(db, f, 1<<30, decision.VerdictLineCost()-1)
+	if _, err := r.Drain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if rows := strings.Count(f.prompts[0], "\n== "); rows != 1 {
+		t.Fatalf("one row still goes out under a budget that fits no line: %d rows", rows)
+	}
+}
 
-	r.Land()
-	r.Wake()
-	<-f.fired
-	r.Wake()
-	select {
-	case <-f.fired:
-		t.Fatal("a fire that settles nothing waits for the next landing, not the next turn end")
-	case <-time.After(200 * time.Millisecond):
+func TestTheVerdictLineCostIsDerivedFromTheContract(t *testing.T) {
+	cost := decision.VerdictLineCost()
+	if cost <= 0 {
+		t.Fatal("the contract lost its verdict lines; the reply bound cannot be derived")
+	}
+	if again := decision.VerdictLineCost(); again != cost {
+		t.Fatalf("the derivation is not deterministic: %d then %d", cost, again)
+	}
+}
+
+func TestAFireThatSettlesNothingLeavesTheRowsPending(t *testing.T) {
+	db := openReviewedStore(t, 2)
+	f := &fakeFire{stdouts: []string{"I have no idea"}}
+	r := reviewer(db, f)
+	summary, err := r.Drain(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
 	rows, _ := decisionstore.Pending(context.Background(), db)
 	if len(rows) != 2 {
 		t.Fatalf("nothing settled: %d pending", len(rows))
+	}
+	if !strings.Contains(summary, "settled 0") {
+		t.Fatalf("the summary names the outcome: %q", summary)
+	}
+}
+
+func TestADoorWithNothingPendingCostsNoFire(t *testing.T) {
+	db := openReviewedStore(t, 0)
+	f := &fakeFire{}
+	r := reviewer(db, f)
+	summary, err := r.Drain(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.calls != 0 {
+		t.Fatalf("nothing pending fires nothing, got %d fires", f.calls)
+	}
+	if summary == "" {
+		t.Fatal("the door still gets a summary")
 	}
 }

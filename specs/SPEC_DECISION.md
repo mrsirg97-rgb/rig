@@ -109,34 +109,65 @@ of reading them. Unset, the system prompt is byte-identical.
 ## the reviewer
 
 Only an interactive session reviews: headless workers and fires propose and
-never review. A landing marks the reviewer dirty; the session's turn end is
-the wake — a size-one channel, no timer, no poll, and a turn end with
-nothing landed costs nothing. The fire is a headless worker the root wires
-through the scheduler's `Delegate` (which waits on the free-slot gate) with
-no tools — it reads the rows and replies on stdout — jailed like a swarm
-worker. The fire names no model: it resolves to the resident model's row
-as a scheduled fire does (2.5.3), with the session's active model as the
-fallback when nothing is resident; it never fires on the settings default
-while another model is resident (2.8.3). One fire takes the pending rows oldest first up to what the
-reviewer's model row leaves for a prompt (the window minus its reserve, at
-four bytes to the token); the rest stay pending for the next turn end, and
-a row that cannot fit alone still goes, so one huge row cannot wedge the
-queue. The prompt reaches the fire on stdin (`rig -p -`, 2.9.3): on the
+never review. The review is deliberate (2.9.4): nothing wakes the reviewer
+on its own. Until 2.9.4 a landing marked the reviewer dirty and the
+session's turn end was the wake — that door is gone: a review is a chore
+with no deadline, and the turn end is the moment the operator is about to
+want the slot again. Run j31 fired the 264 pending bash rows as one
+177 KB prompt at a turn end, the worker reasoned 1,344 s, and the operator
+typed into a busy slot while the same batch re-fired at the next turn end.
+Two doors fire it now, both existing primitives:
+
+- `/decide review` (SPEC_COMMANDS 14) drains the pending rows now, in the
+  session that owns them; the fire runs beside the turn and the outcome
+  arrives as a notice.
+- the `review` job (SPEC_SCHEDULER) is the standing chore: a job whose
+  prompt is `review`, created once by the operator or by the model's own
+  `scheduler create` call, fired at the operator's hour by the runner
+  like any job — gated by the fleet, busy skips — whose fire drains the
+  store instead of running a prompt.
+
+The fire is a headless worker the door wires through the scheduler's
+`Delegate` (which waits on the free-slot gate) with no tools — it reads
+the rows and replies on stdout — jailed like a swarm worker. The fire
+names no model: it resolves to the resident model's row as a scheduled
+fire does (2.5.3), with the session's active model as the fallback when
+nothing is resident; it never fires on the settings default while another
+model is resident (2.8.3).
+
+Three bounds hold on any fire, whichever door:
+
+- The headless worker (`-p`) ignores SIGPIPE (2.9.4), so a broken stderr
+costs the reasoning stream and never the run: j31's worker died with
+`killed by signal 13` on 131 KB of streamed reasoning, stdout empty,
+nothing settled. The fire's error names the delegate's reason — the
+spawnReason, the signal — and the run log path joined onto the scheduler
+home, so the death is readable.
+- One fire is sized by its reply as well as the window. It replies with
+one verdict line per row, so the rows per fire are bounded by the
+reviewer row's max output tokens over a verdict line's token cost — the
+cost derived from the contract's own verdict templates at their worst
+(a full-width id, a correction at the 1,024-byte cap), never a constant —
+and the window minus its reserve stays the second bound, at four bytes to
+the token. The rest stay pending for the next door, and a row that cannot
+fit alone still goes, so one huge row cannot wedge the queue.
+
+The prompt reaches the fire on stdin (`rig -p -`, 2.9.3): on the
 operator's box 262 pending bash rows made a 176 KB prompt, over Linux's
 128 KiB cap on one argument, and every fire died with `argument list
-too long` until the carrier moved. It replies with one verdict line per row, parsed like the swarm
+too long` until the carrier moved.
+
+It replies with one verdict line per row, parsed like the swarm
 reviewer's:
 
     verdict: <id> approve
     verdict: <id> deny <corrected answer>
 
 Lines scan in reply order, last naming wins, an unnamed or malformed row
-stays pending, a deny without a correction is not a verdict. A fire that
-settled something and left pending rows leaves the reviewer dirty, so the
-next turn end takes the rest and a partial converges; a fire that settles
-nothing waits for the next landing, so a garbage fire cannot spin. The
-reviewer's name on the row is the model that reviewed: the one the fire
-resolved to, carried back on the delegate's result.
+stays pending, a deny without a correction is not a verdict. The fire
+reports what it fired, what settled, and what stays pending; the row's
+reviewer name is the model that reviewed: the one the fire resolved to,
+carried back on the delegate's result.
 
 Nothing the queue or the reviewer has to say reaches stderr while a
 frontend owns the screen: a dropped proposal, a decide error, a store
@@ -164,11 +195,13 @@ reviewer being refused and printing it.
   out-of-range confidence drops.
 - reviewer: three pending rows are reviewed in one fire; a deny stores the
   corrected answer; a partial reply leaves the unnamed row pending; a fire
-  that settles nothing waits for the next landing; a landing marks the
-  reviewer dirty and a turn end with none costs nothing; a fire takes the
-  oldest rows that fit the window minus the reserve and the rest stay
-  pending for the next turn end; a no-tools run executes nothing, plugins
-  included.
+  that settles nothing leaves the rows pending and says so; a turn end
+  with pending rows fires nothing; a fire takes the oldest rows that fit
+  the window minus the reserve and the rest stay pending for the next
+  door; 264 small rows against a reply budget that fits 40 verdict lines
+  produce a 40-row fire; a max output under one verdict line still fires
+  one row; the door with nothing pending costs no fire; a no-tools run
+  executes nothing, plugins included.
 - the delegate: three labels group correctly and an item whose top
   probability is under one half comes back in full under unsure; an
   over-size list refuses before any request; one request per item rides

@@ -24,6 +24,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/policy/empty"
 	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -53,12 +54,13 @@ type root struct {
 
 	drec decision.Recorder
 
-	proposals decision.Proposer
-	decQ      *decision.Queue
-	decRev    *decision.Reviewer
-	decide    *decision.Decide
-	delegate  func(sched.DelegateInput) (sched.DelegateResult, error)
-	eco       *plugins.Ecosystem
+	proposals  decision.Proposer
+	decQ       *decision.Queue
+	decRev     *decision.Reviewer
+	decReviews decisionstore.Reviews
+	decide     *decision.Decide
+	delegate   func(sched.DelegateInput) (sched.DelegateResult, error)
+	eco        *plugins.Ecosystem
 
 	pluginsDir string
 	rigHome    string
@@ -294,10 +296,7 @@ func (r *root) blobsDir() string {
 }
 
 func (r *root) frontend() core.Frontend {
-	if r.decRev == nil {
-		return r.rec
-	}
-	return decision.TurnEnds(r.rec, r.decRev)
+	return r.rec
 }
 
 func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {

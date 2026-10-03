@@ -91,6 +91,9 @@ type Env struct {
 	SetApprove func(ctx context.Context, mode string) error
 	Tools      map[string]core.Tool
 
+	Review         func(ctx context.Context) (string, error)
+	PendingReviews func(ctx context.Context) (int, error)
+
 	RemList   func(ctx context.Context, project string) ([]RemRow, error)
 	RemShow   func(ctx context.Context, id int64) (RemRow, error)
 	RemForget func(ctx context.Context, id int64) error

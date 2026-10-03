@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"time"
 
@@ -31,29 +31,31 @@ func (s *dbSink) ProposePending(ctx context.Context, p decision.Pending, a decis
 	return err
 }
 
-type dbReviews struct {
-	db store.DB
-}
-
-func (r *dbReviews) Pending(ctx context.Context) ([]decision.ReviewRow, error) {
-	rows, err := decisionstore.Pending(ctx, r.db)
+func (r *root) pendingReviewCount(ctx context.Context) (int, error) {
+	if r.decRev == nil {
+		return 0, errors.New("decide: no reviewer (headless workers and jobs never review)")
+	}
+	rows, err := r.decReviews.Pending(ctx)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	out := make([]decision.ReviewRow, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, decision.ReviewRow{
-			ID: row.ID, Site: row.Site, State: row.State, Question: row.Question,
-			Answer: row.Answer, Confidence: row.Confidence, Decider: row.Decider,
-		})
-	}
-	return out, nil
+	return len(rows), nil
 }
 
-func (r *dbReviews) Settle(ctx context.Context, id int64, approved bool, reviewer, answer string) error {
-	return decisionstore.Settle(ctx, r.db, decisionstore.SettleInput{
-		ID: id, Approved: approved, Reviewer: reviewer, ReviewerAnswer: answer,
-	})
+func (r *root) reviewNow(ctx context.Context) (string, error) {
+	if r.decRev == nil {
+		return "", errors.New("decide: no reviewer (headless workers and jobs never review)")
+	}
+	go func() {
+		summary, err := r.decRev.Drain(ctx)
+		switch {
+		case err != nil:
+			r.notice("decision", "review: "+err.Error())
+		case summary != "":
+			r.notice("decision", "review: "+summary)
+		}
+	}()
+	return "the review fire is running; the outcome arrives as a notice", nil
 }
 
 func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string) decision.Fire {
@@ -87,8 +89,8 @@ func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandb
 		if err != nil {
 			return "", "", err
 		}
-		if res.Exit != 0 || res.TimedOut {
-			return "", res.Model, fmt.Errorf("the review fire ended exit %d (timed out %v)", res.Exit, res.TimedOut)
+		if ferr := res.FireError(home); ferr != nil {
+			return "", res.Model, ferr
 		}
 		return res.Stdout, res.Model, nil
 	}

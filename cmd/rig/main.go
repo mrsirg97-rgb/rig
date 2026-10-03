@@ -47,7 +47,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.9.3"
+const Version = "2.9.4"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -108,6 +108,10 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	if *prompt != "" {
+		signal.Ignore(syscall.SIGPIPE)
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "run-job" {
@@ -565,13 +569,14 @@ func main() {
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		if headless {
-			r.decQ = decision.NewQueue(dec, sink, nil, loud)
+			r.decQ = decision.NewQueue(dec, sink, loud)
 		} else {
-			rev := decision.NewReviewer(&dbReviews{db: decdb},
+			r.decReviews = decisionstore.Reviews{DB: decdb}
+			rev := decision.NewReviewer(r.decReviews,
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				row.Window-row.Reserve, loud)
+				row.Window-row.Reserve, row.MaxTokens, loud)
 			r.decRev = rev
-			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
+			r.decQ = decision.NewQueue(dec, sink, loud)
 		}
 		r.proposals = r.decQ
 	}
@@ -615,9 +620,6 @@ func main() {
 	go gq.Run(ctx)
 	if r.decQ != nil {
 		go r.decQ.Run(ctx)
-	}
-	if r.decRev != nil {
-		go r.decRev.Run(ctx)
 	}
 
 	if webSrv != nil {
@@ -711,6 +713,7 @@ func runJob(args []string) int {
 	}
 	decPath := decisionstore.FilePath(cfgDir)
 	var jobDecisions decision.Recorder
+	var jobReviews decision.Reviews
 	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
 	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
@@ -718,6 +721,7 @@ func runJob(args []string) int {
 	} else {
 		defer jdb.DB.Close()
 		jobDecisions = decisionstore.Recorder{DB: jdb, Log: func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }}
+		jobReviews = decisionstore.Reviews{DB: jdb}
 	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
 		Home:      home,
@@ -734,6 +738,7 @@ func runJob(args []string) int {
 		Models:       func() models.Table { return cfg.Models },
 		DefaultModel: model,
 		Decisions:    jobDecisions,
+		Reviews:      jobReviews,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1

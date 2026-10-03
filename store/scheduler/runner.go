@@ -48,6 +48,7 @@ type RunOpts struct {
 	Models       func() models.Table
 	DefaultModel string
 	Decisions    decision.Recorder
+	Reviews      decision.Reviews
 }
 
 const DefaultRunTimeout = 30 * time.Minute
@@ -209,6 +210,8 @@ func RunJob(key string, opts RunOpts) error {
 	if command != "" {
 		argv = []string{"sh", "-c", command}
 		spawnEnv = os.Environ()
+	} else if job.Prompt == ReviewPrompt {
+		return runReviewJob(db, opts, job, text, timeout)
 	} else {
 		model := job.Model
 		gateModel := model
