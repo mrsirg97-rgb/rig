@@ -12,6 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
+	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
 )
 
 func (r *root) canonicalMiddleware() []core.ToolMiddleware {
@@ -43,6 +44,7 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	}
 	if r.decide != nil {
 		mw = append(mw, decision.Guide())
+		mw = append(mw, remapi.Guide())
 	}
 	return mw
 }

@@ -47,7 +47,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.9.6"
+const Version = "2.10.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -577,6 +577,17 @@ func main() {
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
 		}
+		var land func()
+		if r.decRev != nil {
+			land = r.decRev.Land
+		}
+		psc, perr := decision.NewPackScorer(dec, sink, land, loud, rig.DefaultParallel)
+		if perr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
+			os.Exit(1)
+		}
+		r.packScorer = psc
+		gq.SetScorer(psc)
 		r.proposals = r.decQ
 	}
 

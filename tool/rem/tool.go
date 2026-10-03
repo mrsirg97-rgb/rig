@@ -22,6 +22,18 @@ func New(db store.DB, g *graph.Queue) core.Tool {
 	return adapter{Definition: tool.Def("rem"), db: db, graph: g}
 }
 
+func Guide() core.ToolMiddleware {
+	return guideLink{}
+}
+
+type guideLink struct{}
+
+func (guideLink) Wrap(next core.ToolExec) core.ToolExec { return next }
+
+func (guideLink) Guidelines() string {
+	return "in a mapped project, pack the task before reading files for it."
+}
+
 type given struct {
 	Action            string   `json:"action"`
 	Content           *string  `json:"content"`

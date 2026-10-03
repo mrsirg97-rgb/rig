@@ -64,7 +64,10 @@ type Edge struct {
 }
 
 // extra.sql — what the DDL camera cannot emit: the seek indexes pack
-// and the queue's replaces ride.
+// and the queue's replaces ride, and the two lexical containers the
+// task pack's candidate arms read — the FTS5 virtual table over name,
+// kind, package and file (line and end_line unindexed), the trigram
+// shadow keyed by the symbol's natural key plus its gram.
 //
 //go:embed extra.sql
 var extraSQL []byte
