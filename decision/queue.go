@@ -27,14 +27,16 @@ type Queue struct {
 	ch   chan Pending
 	dec  Decider
 	sink Sink
+	land func()
 	loud func(string)
 }
 
-func NewQueue(dec Decider, sink Sink, loud func(string)) *Queue {
+func NewQueue(dec Decider, sink Sink, land func(), loud func(string)) *Queue {
 	return &Queue{
 		ch:   make(chan Pending, QueueCap),
 		dec:  dec,
 		sink: sink,
+		land: land,
 		loud: loud,
 	}
 }
@@ -74,6 +76,10 @@ func (q *Queue) decide(ctx context.Context, p Pending) {
 		}
 		if err := q.sink.ProposePending(ctx, p, a); err != nil {
 			q.say("decision: propose %s: %v", p.Site, err)
+			continue
+		}
+		if q.land != nil {
+			q.land()
 		}
 	}
 }

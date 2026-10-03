@@ -15,11 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 
 	"github.com/mrsirg97-rgb/rig/v2/store"
-	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
@@ -383,118 +381,5 @@ func TestAWorkerWhoseStderrReaderClosesStillAnswers(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "the answer") {
 		t.Fatalf("the answer must land on stdout: %q", stdout.String())
-	}
-}
-
-func TestAReviewJobRunDrainsTheStoreAndRecordsARunRow(t *testing.T) {
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	scratch := t.TempDir()
-	binDir := t.TempDir()
-	workDir := t.TempDir()
-	spool := filepath.Join(scratch, "spool")
-
-	bin := filepath.Join(binDir, "rig")
-	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
-	}
-	writeFakeCrontab(t, binDir, spool)
-
-	decDir := cfgDir(t, scratch)
-	if err := os.MkdirAll(filepath.Dir(decisionstore.FilePath(decDir)), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	decDB, _, _, err := store.Open(decisionstore.FilePath(decDir), decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 2; i++ {
-		if _, err := decisionstore.Propose(context.Background(), decDB, decisionstore.ProposeInput{
-			Scope: "proj", Site: decision.SiteBash, State: `{"command":"ls"}`,
-			Question:   decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"),
-			Answer:     "safe",
-			Confidence: 0.71,
-			Decider:    "laya",
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	decDB.Close()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case strings.HasSuffix(r.URL.Path, "/v1/models"):
-			w.Write([]byte(`{"data":[{"id":"local","status":{"value":"unloaded"}}]}`))
-		case strings.HasSuffix(r.URL.Path, "/running"):
-			w.Write([]byte(`{"running":[]}`))
-		case strings.HasSuffix(r.URL.Path, "/chat/completions"):
-			io.WriteString(w, `data: {"choices":[{"delta":{"content":"verdict: 1 approve\nverdict: 2 approve"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`+"\n")
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	home := filepath.Join(scratch, ".rig", "scheduler")
-	fake := newFakeCrontab()
-	st := scratchStores(t, home, "/ws/e2e")
-	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-		Name: "review", Prompt: "review", Cron: "0 5 * * *",
-		Cwd: workDir, Model: "local", Busy: "skip",
-	}, "/ws/e2e", "sess-e2e", bin+" run-job", cfgDir(t, scratch), fixedNow); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(spool, []byte(fake.text_()), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sandboxOff(t, scratch)
-
-	cmd := exec.Command(bin, "run-job", "j1")
-	cmd.Dir = workDir
-	cmd.Env = append(os.Environ(),
-		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"HOME="+scratch,
-		"XDG_CONFIG_HOME="+scratch,
-		"RIG_SWAP_URL="+srv.URL,
-		"RIG_MODEL=local",
-		"RIG_MODEL_WINDOW=4000",
-		"RIG_MODEL_RESERVE=100",
-		"RIG_MODEL_KEEP_RECENT=1000",
-	)
-	out, runErr := cmd.CombinedOutput()
-	if runErr != nil {
-		t.Fatalf("run-job must drain and record: %v\n%s", runErr, out)
-	}
-	var status string
-	if err := st.DB.QueryRow(`SELECT last_status FROM jobs WHERE id = 'j1'`).Scan(&status); err != nil {
-		t.Fatal(err)
-	}
-	if status != "ok" {
-		t.Fatalf("last_status %q, want ok\n%s", status, out)
-	}
-	decDB, _, _, err = store.Open(decisionstore.FilePath(decDir), decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer decDB.Close()
-	var approved int
-	if err := decDB.QueryRow(`SELECT count(*) FROM decisions WHERE status = 'approved'`).Scan(&approved); err != nil {
-		t.Fatal(err)
-	}
-	if approved != 2 {
-		t.Fatalf("the fire's verdicts settled both rows, got %d\n%s", approved, out)
-	}
-	entries, err := filepath.Glob(filepath.Join(home, "runs", "j1", "*.log"))
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("run log entries = %v (%v)", entries, err)
-	}
-	log, err := os.ReadFile(entries[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{"== stdout ==", "verdict: 1 approve"} {
-		if !containsStr(string(log), want) {
-			t.Fatalf("run log missing %q:\n%s", want, log)
-		}
 	}
 }

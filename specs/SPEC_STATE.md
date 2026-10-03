@@ -523,10 +523,7 @@ post-merge corrections)
   defaults to the creating session's cwd), model, busy (skip|force),
   timeout (nullable minutes, 1..1440), state
   (active|paused|done|removed), last_status (ok|fail|skip, nullable),
-  last_ts, last_exit, created_seq, updated_seq. One prompt is not a
-  task: a job whose prompt is `review` is the reviewer's standing chore
-  (SPEC_SCHEDULER) — its fire drains the decision store instead of
-  running a prompt.
+  last_ts, last_exit, created_seq, updated_seq.
 - `runs`: seq (primary), job_id (link jobs), started_at, ended_at, status,
   exit, log_path, model (nullable; the resolved id the fire ran on).
   Pane records these as run events; a container makes

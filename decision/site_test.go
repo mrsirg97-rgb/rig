@@ -16,7 +16,7 @@ func TestABashCallProposesPendingAndTheReplyIsUnchanged(t *testing.T) {
 	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
 	var dec fakeDecider
 	dec.answers = []decision.Answer{{Question: "risk", Value: "dangerous", Confidence: 0.33, Decider: "laya"}}
-	q := decision.NewQueue(&dec, sink, func(string) {})
+	q := decision.NewQueue(&dec, sink, func() {}, func(string) {})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go q.Run(ctx)
@@ -60,7 +60,7 @@ func TestABashCallProposesPendingAndTheReplyIsUnchanged(t *testing.T) {
 func TestOnlyBashProposes(t *testing.T) {
 	db := openDecisionStore(t)
 	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
-	q := decision.NewQueue(&fakeDecider{}, sink, func(string) {})
+	q := decision.NewQueue(&fakeDecider{}, sink, func() {}, func(string) {})
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "read", nil
 	}
@@ -78,7 +78,7 @@ func TestOnlyBashProposes(t *testing.T) {
 func TestTheProposerNeverBlocksTheCall(t *testing.T) {
 	block := make(chan struct{})
 	defer close(block)
-	q := decision.NewQueue(&fakeDecider{}, blockingSink{block: block}, func(string) {})
+	q := decision.NewQueue(&fakeDecider{}, blockingSink{block: block}, func() {}, func(string) {})
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}

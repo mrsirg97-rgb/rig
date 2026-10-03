@@ -71,6 +71,16 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	} else if ok && v != "" {
 		s.DecisionURL = v
 	}
+	if raw, ok := keys["reviewBatch"]; ok {
+		v, err := jsonInt(raw)
+		if err != nil {
+			return Settings{}, fmt.Errorf("config: %s: reviewBatch: %v", path, err)
+		}
+		if v < 0 {
+			return Settings{}, fmt.Errorf("config: %s: reviewBatch: expected a non-negative number, got %d", path, v)
+		}
+		s.ReviewBatch = &v
+	}
 	if v, ok, err := str("defaultJobModel"); err != nil {
 		return Settings{}, err
 	} else if ok {

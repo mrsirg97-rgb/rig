@@ -5,7 +5,6 @@ import "github.com/mrsirg97-rgb/rig/v2/core"
 func All() []core.Command {
 	return []core.Command{
 		compactCmd{},
-		decideCmd{},
 		newCmd{},
 		sessionsCmd{},
 		&modelsCmd{},

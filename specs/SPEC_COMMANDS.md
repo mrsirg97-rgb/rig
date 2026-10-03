@@ -856,29 +856,6 @@ block): the opening line, then the reply, with a one-line ack read dim
 without its `name: ` prefix. The prefix stays in the text itself: the
 piped frontends and the tests read the command's voice unchanged.
 
-### 14. `decide`: the review door, the operator's hand (2.9.4)
-
-The decision reviewer has no wake of its own (SPEC_DECISION, the
-reviewer): the turn-end door left, so the operator needs a hand to fire
-the chore. `/decide` is that hand, with one sub today:
-
-- bare, it shows the pending count and names the door: `decide: 3
-  pending rows; /decide review drains them now`, `decide: no pending
-  rows` when the store is clean.
-- `/decide review` fires the reviewer's drain now, in the session that
-  owns the rows: the command answers one ack line ("the review fire is
-  running; the outcome arrives as a notice") and the drain runs beside
-  the turn, never blocking the input for the fire's minutes; the
-  summary, or the fire error with the run log path, arrives as a
-  `decision` notice.
-
-The command holds two Env seams the root wires beside the reviewer:
-`Review(ctx)` (the fire) and `PendingReviews(ctx)` (the count). Without
-the decision server wired both refuse by name (`decide: no reviewer
-(headless workers and jobs never review)`), and any other sub refuses
-with the usage. The command is operator-facing only: the standard set
-gains it, the tool menu and the wire sha do not move.
-
 ## testing
 
 Named cases, failing first (the standing rule). Fakes at the DI seam: a

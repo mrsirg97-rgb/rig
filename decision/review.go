@@ -7,6 +7,10 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
+
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
 const maxCorrection = 1024
@@ -29,24 +33,77 @@ type Reviews interface {
 type Fire func(ctx context.Context, prompt string) (reply, model string, err error)
 
 type Reviewer struct {
+	wake    chan struct{}
+	dirty   atomic.Bool
 	reviews Reviews
 	fire    Fire
-	budget  int
-	maxOut  int
+	batch   int
+	row     models.Model
 	loud    func(string)
 }
 
-func NewReviewer(reviews Reviews, fire Fire, budget, maxOut int, loud func(string)) *Reviewer {
+func NewReviewer(reviews Reviews, fire Fire, batch int, row models.Model, loud func(string)) *Reviewer {
 	return &Reviewer{
+		wake:    make(chan struct{}, 1),
 		reviews: reviews,
 		fire:    fire,
-		budget:  budget,
-		maxOut:  maxOut,
+		batch:   batch,
+		row:     row,
 		loud:    loud,
 	}
 }
 
+func (r *Reviewer) Land() { r.dirty.Store(true) }
+
+func (r *Reviewer) Wake() {
+	if !r.dirty.Load() {
+		return
+	}
+	select {
+	case r.wake <- struct{}{}:
+	default:
+	}
+}
+
+func TurnEnds(fe core.Frontend, r *Reviewer) core.Frontend {
+	return turnEndWake{inner: fe, rev: r}
+}
+
+type turnEndWake struct {
+	inner core.Frontend
+	rev   *Reviewer
+}
+
+func (w turnEndWake) Input(ctx context.Context) (string, error) { return w.inner.Input(ctx) }
+
+func (w turnEndWake) Notify(ev core.Event) {
+	w.inner.Notify(ev)
+	if _, ok := ev.(core.TurnEnd); ok {
+		w.rev.Wake()
+	}
+}
+
+func (r *Reviewer) Run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-r.wake:
+			r.dirty.Store(false)
+			if _, err := r.Drain(ctx); err != nil {
+				r.say("decision: review: %v", err)
+			}
+		}
+	}
+}
+
 func (r *Reviewer) Drain(ctx context.Context) (string, error) {
+	if r.batch < 0 {
+		return "", fmt.Errorf("reviewBatch %d: a negative batch is refused", r.batch)
+	}
+	if r.batch == 0 {
+		return "reviewBatch is 0: the reviewer stays off", nil
+	}
 	all, err := r.reviews.Pending(ctx)
 	if err != nil {
 		return "", fmt.Errorf("pending: %w", err)
@@ -58,26 +115,27 @@ func (r *Reviewer) Drain(ctx context.Context) (string, error) {
 	if cost <= 0 {
 		return "", errors.New("the contract lost its verdict lines; the reply bound cannot be derived")
 	}
-	rows := fitRows(all, reviewContract, r.budget)
-	if reply := r.maxOut / cost; reply < 1 {
+	rows := fitRows(all, reviewContract, r.row.Window-r.row.Reserve)
+	if reply := r.row.MaxTokens / cost; reply < 1 {
 		rows = rows[:1]
 	} else if reply < len(rows) {
 		rows = rows[:reply]
+	}
+	if len(rows) > r.batch {
+		rows = rows[:r.batch]
 	}
 	out, reviewer, err := r.fire(ctx, reviewPrompt(rows))
 	if err != nil {
 		return "", fmt.Errorf("fire: %w", err)
 	}
 	verdicts := parseVerdicts(out)
+	answered := answeredRows(rows, verdicts)
+	if len(answered) > 0 && len(rows) < len(all) {
+		r.dirty.Store(true)
+	}
 	settled := 0
-	for _, row := range rows {
-		v, ok := verdicts[row.ID]
-		if !ok {
-			continue
-		}
-		if !v.approved && v.answer == "" {
-			continue
-		}
+	for _, row := range answered {
+		v := verdicts[row.ID]
 		if err := r.reviews.Settle(ctx, row.ID, v.approved, reviewer, v.answer); err != nil {
 			r.say("settle %d: %v", row.ID, err)
 			continue
@@ -136,6 +194,21 @@ func rowBlock(row ReviewRow) string {
 		b.WriteString("state: " + row.State + "\n")
 	}
 	return b.String()
+}
+
+func answeredRows(rows []ReviewRow, verdicts map[int64]verdict) []ReviewRow {
+	var out []ReviewRow
+	for _, row := range rows {
+		v, ok := verdicts[row.ID]
+		if !ok {
+			continue
+		}
+		if !v.approved && v.answer == "" {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 func fitRows(rows []ReviewRow, header string, budget int) []ReviewRow {

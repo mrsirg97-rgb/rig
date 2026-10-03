@@ -569,14 +569,13 @@ func main() {
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		if headless {
-			r.decQ = decision.NewQueue(dec, sink, loud)
+			r.decQ = decision.NewQueue(dec, sink, nil, loud)
 		} else {
-			r.decReviews = decisionstore.Reviews{DB: decdb}
-			rev := decision.NewReviewer(r.decReviews,
+			rev := decision.NewReviewer(&dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				row.Window-row.Reserve, row.MaxTokens, loud)
+				cfg.Settings.ReviewBatchOrDefault(), row, loud)
 			r.decRev = rev
-			r.decQ = decision.NewQueue(dec, sink, loud)
+			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
 		}
 		r.proposals = r.decQ
 	}
@@ -620,6 +619,9 @@ func main() {
 	go gq.Run(ctx)
 	if r.decQ != nil {
 		go r.decQ.Run(ctx)
+	}
+	if r.decRev != nil {
+		go r.decRev.Run(ctx)
 	}
 
 	if webSrv != nil {
@@ -713,7 +715,6 @@ func runJob(args []string) int {
 	}
 	decPath := decisionstore.FilePath(cfgDir)
 	var jobDecisions decision.Recorder
-	var jobReviews decision.Reviews
 	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
 	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
@@ -721,7 +722,6 @@ func runJob(args []string) int {
 	} else {
 		defer jdb.DB.Close()
 		jobDecisions = decisionstore.Recorder{DB: jdb, Log: func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }}
-		jobReviews = decisionstore.Reviews{DB: jdb}
 	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
 		Home:      home,
@@ -738,7 +738,6 @@ func runJob(args []string) int {
 		Models:       func() models.Table { return cfg.Models },
 		DefaultModel: model,
 		Decisions:    jobDecisions,
-		Reviews:      jobReviews,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
