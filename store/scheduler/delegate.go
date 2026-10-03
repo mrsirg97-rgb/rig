@@ -45,6 +45,7 @@ type DelegateInput struct {
 const NoToolsAllow = "none"
 
 type DelegateResult struct {
+	Model     string
 	Exit      int
 	Stdout    string
 	Stderr    string
@@ -249,7 +250,8 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	}
 
 	return DelegateResult{
-		Exit: res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
+		Model: model,
+		Exit:  res.Exit, Stdout: res.Stdout, Stderr: res.Stderr,
 		TimedOut: res.TimedOut, Duration: ended.Sub(started),
 		ID: id, LogRel: logRel, Started: startedStr, SessionID: in.WorkerSession, Note: note,
 		Cost: cost,

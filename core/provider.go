@@ -22,6 +22,7 @@ var (
 	_ Event = Compacted{}
 	_ Event = SwarmStatus{}
 	_ Event = SwarmNotice{}
+	_ Event = Notice{}
 )
 
 type TextDelta struct{ Text string }
@@ -132,6 +133,13 @@ func (SwarmStatus) event() {}
 type SwarmNotice struct{ Text string }
 
 func (SwarmNotice) event() {}
+
+type Notice struct {
+	Source string
+	Text   string
+}
+
+func (Notice) event() {}
 
 type Provider interface {
 	Stream(ctx context.Context, req Request) (<-chan Event, error)

@@ -44,16 +44,16 @@ type fakeFire struct {
 	fired   chan struct{}
 }
 
-func (f *fakeFire) fire(ctx context.Context, prompt string) (string, error) {
+func (f *fakeFire) fire(ctx context.Context, prompt string) (string, string, error) {
 	f.calls++
 	f.prompts = append(f.prompts, prompt)
 	if f.fired != nil {
 		f.fired <- struct{}{}
 	}
 	if f.calls > len(f.stdouts) {
-		return "", nil
+		return "", "dsv4", nil
 	}
-	return f.stdouts[f.calls-1], nil
+	return f.stdouts[f.calls-1], "dsv4", nil
 }
 
 func openReviewedStore(t *testing.T, n int) store.DB {
@@ -83,7 +83,7 @@ func reviewer(db store.DB, f *fakeFire) *decision.Reviewer {
 }
 
 func reviewerWithBudget(db store.DB, f *fakeFire, budget int) *decision.Reviewer {
-	return decision.NewReviewer(storeReviews{db: db}, f.fire, "dsv4", budget, func(string) {})
+	return decision.NewReviewer(storeReviews{db: db}, f.fire, budget, func(string) {})
 }
 
 func TestThreePendingRowsAreReviewedInOneFire(t *testing.T) {

@@ -268,3 +268,25 @@ func TestSwarmNoticeCommitsOneLine(t *testing.T) {
 		t.Fatalf("the notice painted %d times, want one line:\n%q", count, rows)
 	}
 }
+
+func TestNoticeCommitsOneDimLine(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.Notice{Source: "decision", Text: "review: fire: refused"})
+	s.await("decision: review: fire: refused")
+	rows := screenLines(t, s, 60)
+	count := 0
+	for _, r := range rows {
+		if strings.Contains(paintFree(r), "decision: review: fire: refused") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("the notice must commit exactly one line, got %d in:\n%s", count, strings.Join(rows, "\n"))
+	}
+}

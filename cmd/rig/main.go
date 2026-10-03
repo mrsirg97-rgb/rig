@@ -44,7 +44,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.8.2"
+const Version = "2.8.3"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -387,7 +387,6 @@ func main() {
 	}
 
 	r := &root{
-		drec:       decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Log: func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }},
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
 		system:     systemPrompt,
@@ -478,6 +477,7 @@ func main() {
 	}
 
 	r.natives = native
+	r.drec = decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Log: func(m string) { r.notice("decision", m) }}
 	r.eco = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
@@ -527,7 +527,7 @@ func main() {
 	}
 
 	if decisionURL != "" {
-		loud := func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }
+		loud := func(m string) { r.notice("decision", m) }
 		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
@@ -549,8 +549,8 @@ func main() {
 			r.decQ = decision.NewQueue(dec, sink, nil, loud)
 		} else {
 			rev := decision.NewReviewer(&dbReviews{db: decdb},
-				r.reviewFire(schedHome, scdb, swapURL, self, modelID, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				modelID, row.Window-row.Reserve, loud)
+				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
+				row.Window-row.Reserve, loud)
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
 		}

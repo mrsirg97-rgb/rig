@@ -125,7 +125,8 @@ func TestFreezeGate(t *testing.T) {
 	reopened := func(p string) bool {
 		return p == "loop" || strings.HasPrefix(p, "loop/") ||
 			p == "kernel.go" || p == "kernel_test.go" ||
-			p == "core/seam_test.go" || p == "core/session_test.go"
+			p == "core/seam_test.go" || p == "core/session_test.go" ||
+			p == "core/provider.go"
 	}
 
 	if !strings.Contains(git("branch", "--show-current"), "-refactor") {

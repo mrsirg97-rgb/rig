@@ -12,6 +12,10 @@ func RenderSwarmNotice(t Theme, text string) string {
 	return t.Paint(SlotDim, text)
 }
 
+func RenderNotice(t Theme, n core.Notice) string {
+	return t.Paint(SlotDim, n.Source+": "+n.Text)
+}
+
 func RenderSwarmBand(t Theme, st core.SwarmStatus) string {
 	if !swarmAnyRunning(st.Workers) {
 		return ""

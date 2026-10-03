@@ -83,6 +83,10 @@ func (o *OneShot) Notify(ev core.Event) {
 		if o.Err != nil {
 			io.WriteString(o.Err, e.Text)
 		}
+	case core.Notice:
+		if o.Err != nil {
+			io.WriteString(o.Err, "\nrig: "+e.Source+": "+e.Text+"\n")
+		}
 	case core.ToolStart:
 		if o.Err != nil {
 			o.mu.Lock()
