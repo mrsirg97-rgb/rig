@@ -851,6 +851,11 @@ scroll for whatever was committed. Rejected: a cursor inside the list
 Helpers live in `command/list.go` (`row`, `plural`, `listLimit`, `fit`,
 `moreFooter`, the markers).
 
+Since 2.9.1 the TUI frames every reply the same way (SPEC_TUI, the reply
+block): the opening line, then the reply, with a one-line ack read dim
+without its `name: ` prefix. The prefix stays in the text itself: the
+piped frontends and the tests read the command's voice unchanged.
+
 ## testing
 
 Named cases, failing first (the standing rule). Fakes at the DI seam: a

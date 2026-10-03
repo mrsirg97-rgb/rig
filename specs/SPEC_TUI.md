@@ -992,6 +992,10 @@ where the CI box allows and skip cleanly where not.
   points only.
 - both doors: the todo and scheduler blocks byte-equal between the
   tool-result path and the command path, minus the opening line.
+- the reply block (2.9.1): every command reply and refusal commits
+  under the `/name · args` opening; a first line that begins with the
+  command's own `name: ` is an ack and reads dim without the prefix,
+  every other line is text, a refusal is the error slot.
 - the list block: a sessions-shaped reply paints the head dim, the
   markers as the todo glyphs in their slots, the ids dim, the first
   segment in text and the details dim, the footer dim and indented; a

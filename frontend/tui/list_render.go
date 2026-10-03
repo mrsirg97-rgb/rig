@@ -77,3 +77,20 @@ func (t Theme) listMarkGlyph(mark string) (string, string) {
 		return t.Glyph(GlyphPending), SlotDim
 	}
 }
+
+func RenderReplyBlock(t Theme, opening, name, reply string) string {
+	lines := strings.Split(strings.TrimRight(reply, "\n"), "\n")
+	var b strings.Builder
+	b.WriteString(opening)
+	for i, line := range lines {
+		b.WriteString("\n")
+		if i == 0 {
+			if ack, ok := strings.CutPrefix(line, name+": "); ok {
+				b.WriteString(t.Paint(SlotDim, ack))
+				continue
+			}
+		}
+		b.WriteString(t.Paint(SlotText, line))
+	}
+	return b.String()
+}
