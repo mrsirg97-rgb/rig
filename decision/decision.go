@@ -22,6 +22,7 @@ const (
 	SiteGuard     = "guard"
 	SiteScheduler = "scheduler"
 	SiteBash      = "bash"
+	SitePack      = "pack"
 )
 
 type Question struct {

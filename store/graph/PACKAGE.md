@@ -56,6 +56,19 @@ project-relative; each worktree's store maps its own tree.
   unchanged sha answers `written=false` and writes nothing. `Result.Eager`
   says the edges arrived with the extraction (Go); a lazy extractor's
   replace clears the file's outgoing edges and leaves `edges_sha` null.
+  The same transaction maintains the two lexical containers (the fts row
+  and the trigram shadow per symbol), so the task pack's candidates are
+  never staler than the map.
+- `task.go`: the pack by task (2.10.0): the two lexical arms recall uses
+  (FTS and trigram, fused as recall fuses them, reciprocal rank k=60)
+  over `symbol_fts`/`symbol_grams`, the candidate items (the live
+  signature at file:line) cut at the item ceiling before any request,
+  the scorer seam (`Scorer`, implemented by `decision.PackScorer`) —
+  the yes set loads live, highest probability first, until the load
+  ceiling is spent, the declines list by name, the never-answered show
+  nowhere; without a scorer the lexical candidates load in rank order
+  and nothing is recorded. The queue carries the two ceilings
+  (`SetPackCaps`), the read ceiling by default.
 
 ## How it is consumed
 
@@ -65,7 +78,10 @@ project-relative; each worktree's store maps its own tree.
   source `graph`; the queue shape (bounded channel, one
   goroutine, the call never waits) lives with the wiring, and `index`
   is the deliberate exception — it extracts on the call's own thread
-  and replies with the count mapped (SPEC_GRAPH).
+  and replies with the count mapped (SPEC_GRAPH). The root sets the
+  task pack's scorer (`SetScorer`) when `decisionUrl` stands; a task
+  target with no scorer packs the lexical candidates and records
+  nothing.
 - The generated files are pinned by the drift test
   (`cd <lift>/cmd && go run main.go -config=$RIG/store/graph/gen.json
   -source=$RIG/store/graph/source.json` regenerates).

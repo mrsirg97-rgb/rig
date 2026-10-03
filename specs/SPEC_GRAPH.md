@@ -110,6 +110,35 @@ source text in the store (a second copy of the tree to invalidate);
 waiting on the queue (the loop's thread is the one resource the harness
 rations).
 
+## the 2.10.0 task pack
+
+`pack` also takes a task: a target with a space that names no file is a
+sentence. The candidates are the symbols whose name, kind, package or
+file match the task through the two lexical arms recall uses — an FTS5
+virtual table (`symbol_fts`) and a trigram shadow (`symbol_grams`) over
+the same four fields, in extra.sql, the generated ddl and domain
+untouched — fused as recall fuses them (reciprocal rank, k=60; the
+trigram arm keeps recall's containment floor). The arms are bounded by
+the read ceiling of candidate lines: the candidate list is cut so the
+items — each candidate's live signature to the opening brace at
+file:line — stay under the ceiling before any request goes out.
+
+With the decision server wired, the candidates ride the exported
+fan-out (one yes/no per candidate, "Does this symbol matter for the
+task?", the kernel's Parallel the bound), the state on the wire the
+task and the item. The yes set loads live, highest probability first,
+until the pack budget (the read ceiling) is spent; the declines are
+listed by name at the end so the model can pack one by hand; the
+candidates the server never answered are not shown. Every answered
+candidate is one pending row (site `pack`, the server as decider, the
+task and the item as state) the 2.7.0 reviewer settles as it settles
+bash rows, a deny naming the right answer. Without a server the lexical
+candidates load alone, in rank order, and nothing is recorded. No
+automatic pack: the model asks; one guideline joins the system prompt
+only when `decisionUrl` is set. The map's extra writes per symbol (the
+fts row, the gram rows) ride the same replace transaction; a stale
+candidate whose live read fails is skipped loudly.
+
 ## placement
 
 ```
@@ -146,3 +175,12 @@ busy.go and contains in core_test.go are two symbols, and pack of
 gateOnce shows exactly its 17 lines — its callee's signature stopping at
 the opening brace. The store sits per worktree under the repo scope.
 The generated files are pinned by the drift test (todo's pattern).
+
+The task pack (2.10.0): a task matching three symbols packs the two the
+server says yes to and lists the third as unsure; the pack stops at the
+budget with the highest probability first; a candidate list past the
+read ceiling is cut before any request; unset decisionUrl packs the
+lexical candidates in rank order and writes no row; each scored
+candidate writes one pending row and the reviewer's deny stores the
+corrected answer; the lexical tables hold a row per symbol and follow a
+replace (a gone symbol's rows leave with it).

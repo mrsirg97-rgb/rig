@@ -74,20 +74,25 @@ func (t *Decide) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		}
 		states[i] = string(b)
 	}
-	answers, errs := t.ask(ctx, q, a.Items)
+	answers, errs := FanOut(ctx, t.dec, t.parallel, q, a.Items)
 	for i, err := range errs {
 		if err != nil {
 			return "", fmt.Errorf("decide: item %d: %w; nothing was sorted and no row was written", i+1, err)
+		}
+	}
+	for i, a := range answers {
+		if a.Question != q.ID {
+			return "", fmt.Errorf("decide: item %d: the server replied no answer; nothing was sorted and no row was written", i+1)
 		}
 	}
 	t.record(ctx, a.Kind, q, states, answers)
 	return decideReply(a.Kind, labelNames(a.Labels), a.Items, answers), nil
 }
 
-func (t *Decide) ask(ctx context.Context, q Question, states []string) ([]Answer, []error) {
+func FanOut(ctx context.Context, dec Decider, parallel int, q Question, states []string) ([]Answer, []error) {
 	answers := make([]Answer, len(states))
 	errs := make([]error, len(states))
-	sem := make(chan struct{}, t.parallel)
+	sem := make(chan struct{}, parallel)
 	var wg sync.WaitGroup
 	for i, state := range states {
 		sem <- struct{}{}
@@ -95,7 +100,7 @@ func (t *Decide) ask(ctx context.Context, q Question, states []string) ([]Answer
 		go func(i int, state string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			out, err := t.dec.Decide(ctx, state, []Question{q})
+			out, err := dec.Decide(ctx, state, []Question{q})
 			if err != nil {
 				errs[i] = err
 				return
@@ -106,7 +111,6 @@ func (t *Decide) ask(ctx context.Context, q Question, states []string) ([]Answer
 					return
 				}
 			}
-			errs[i] = errors.New("the server replied no answer")
 		}(i, state)
 	}
 	wg.Wait()
