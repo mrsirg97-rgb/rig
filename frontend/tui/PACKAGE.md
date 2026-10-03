@@ -52,6 +52,11 @@ width); no core or loop line (decision 10).
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,
   both doors; the tool-result path and the command path commit
   byte-equal blocks minus the opening line (decision 6).
+- **The reply renderer** (`list_render.go`): `RenderReplyBlock` is the
+  frame every other command reply gets since 2.9.1: the opening, then
+  the lines; an ack's `name: ` prefix is dropped and the ack reads dim,
+  the rest is text. Refusals paint in the error slot under the same
+  opening.
 - **The list renderer** (`list_render.go`): `RenderListBlock` paints
   every other command reply in the list shape (SPEC_COMMANDS 13): the
   opening, the head dim, each row's marker as the todo glyph, the id

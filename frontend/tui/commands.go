@@ -20,7 +20,7 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 	defer t.mu.Unlock()
 	switch {
 	case err != nil:
-		t.live.draw(t.theme.Paint(SlotError, err.Error()), t.liveLinesLocked(), t.statusLineLocked())
+		t.live.draw(t.commandOpeningLocked(name, args)+"\n"+t.theme.Paint(SlotError, err.Error()), t.liveLinesLocked(), t.statusLineLocked())
 		return
 	case name == "todo" || name == "scheduler":
 		if out != "" {
@@ -35,11 +35,12 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		if out == "" {
 			break
 		}
-		if block, ok := RenderListBlock(t.theme, t.commandOpeningLocked(name, args), out); ok {
+		opening := t.commandOpeningLocked(name, args)
+		if block, ok := RenderListBlock(t.theme, opening, out); ok {
 			t.live.draw(block, t.liveLinesLocked(), t.statusLineLocked())
 			break
 		}
-		t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
+		t.live.draw(RenderReplyBlock(t.theme, opening, name, out), t.liveLinesLocked(), t.statusLineLocked())
 	}
 	fresh := name == "new" || (name == "sessions" && strings.HasPrefix(args, "resume"))
 	if t.statusIn != nil {

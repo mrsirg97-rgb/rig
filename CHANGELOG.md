@@ -1,4 +1,17 @@
 # Changelog
+## [2.9.1]: every command speaks under its opening line
+
+2.8.3 gave the listing commands the todo block's shape; the one-line
+commands still printed bare text. Now every slash command in the TUI
+commits the same frame: the ember `/name · args` opening, then its
+reply. A one-line ack (`/theme cool`, `/role architect`, `/effort high`,
+`/approve manual`, `/new`, `/steer`, `/rem forget`, a `/models` switch,
+the plugin verbs, `/swarm start` and `stop`) drops its own `name: `
+prefix and reads dim under the opening; a note that rides an ack stays
+text; a transcript or the summary vitals keep every line in text; a
+refusal paints in the error slot under the same opening. The piped
+frontends print the reply as before.
+
 ## [2.9.0]: the code map — pack before grepping
 
 The evidence sat in the transcript: to answer "who calls gateOnce" a

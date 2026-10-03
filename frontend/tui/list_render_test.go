@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -123,5 +124,56 @@ func TestTheEnvLearnsTheScreenRows(t *testing.T) {
 	}
 	if got := env.Lines(); got != 30-status-openingRows-inputRows {
 		t.Fatalf("Lines() = %d, want the height minus the status rows, the opening and the input (%d)", got, 30-status-openingRows-inputRows)
+	}
+}
+
+func TestReplyBlockDimsTheAckUnderTheOpening(t *testing.T) {
+	th := oledTheme(t)
+	got := RenderReplyBlock(th, "OPEN", "theme", "theme: cool")
+	if got != "OPEN\n"+th.Paint(SlotDim, "cool") {
+		t.Fatalf("a one-line ack drops the command's own name and reads dim under the opening:\n%s", got)
+	}
+	got = RenderReplyBlock(th, "OPEN", "models", "models: active is now local\neffort: \"xhigh\" is not a level for local")
+	want := "OPEN\n" + th.Paint(SlotDim, "active is now local") + "\n" + th.Paint(SlotText, "effort: \"xhigh\" is not a level for local")
+	if got != want {
+		t.Fatalf("the ack is dim, the note that rides it stays text:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+	got = RenderReplyBlock(th, "OPEN", "sessions", "[1] user: fix the flaky test\n[2] assistant: let me look")
+	want = "OPEN\n" + th.Paint(SlotText, "[1] user: fix the flaky test") + "\n" + th.Paint(SlotText, "[2] assistant: let me look")
+	if got != want {
+		t.Fatalf("a reply that is not an ack keeps every line in text:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestEveryCommandReplyAndRefusalCarriesTheOpening(t *testing.T) {
+	th := oledTheme(t)
+	role := &fakeCmd{name: "role", out: "role: architect (next turn)"}
+	theme := &fakeCmd{name: "theme", err: errors.New("theme: \"neon\" is not a preset (warm, cool, custom)")}
+	s := newScriptedSession(t, th, WithWidth(80),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{role, theme}, nil),
+	)
+	in := make(chan string, 1)
+	go func() {
+		l, _ := s.input()
+		in <- l
+	}()
+	s.await(promptMark(th))
+	s.si.feed("/role architect\n")
+	s.await(th.Paint(SlotDim, "architect (next turn)"))
+	s.si.feed("/theme neon\n")
+	s.await(th.Paint(SlotError, "theme: \"neon\" is not a preset (warm, cool, custom)"))
+	s.si.feed("bye\n")
+	if l := <-in; l != "bye" {
+		t.Fatalf("input after the commands = %q", l)
+	}
+	joined := ""
+	for _, r := range screenLines(t, s, 80) {
+		joined += paintFree(r) + "\n"
+	}
+	for _, want := range []string{"/role · architect\narchitect (next turn)\n", "/theme · neon\ntheme: \"neon\" is not a preset (warm, cool, custom)\n"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("the screen must carry %q:\n%s", want, joined)
+		}
 	}
 }
