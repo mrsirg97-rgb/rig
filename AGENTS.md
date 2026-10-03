@@ -135,6 +135,12 @@ plus one registration line, and the loop never names a concrete type.
   with the pair, a worker submits for review); and the 2→3 migration
   pairs historical completes with accepts so a pre-review log replays
   exactly.
+- `store/graph`: the code map (SPEC_GRAPH): one sqlite file per project
+  under the rig home, scoped like todo, generated through lift; symbols,
+  edges, files — addresses, never source text; the Extract seam with the
+  Go extractor in-process and every other language behind a
+  language-server client; the 2.7.0 queue shape maps a file after every
+  read, write or edit, and rem's `index` and `pack` walk the map.
 - `store/rem`: the memory store: recall (FTS plus trigram, rank-fused),
   consolidation arithmetic, supersession; scope is a repo identity
   (worktrees share), a one-time migration on the schema bump, and every

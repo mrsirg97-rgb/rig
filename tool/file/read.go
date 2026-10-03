@@ -82,6 +82,7 @@ func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 		}
 		content = content + "\n\n" + d
 	}
+	touchIndex(a.Path)
 	return content, nil
 }
 

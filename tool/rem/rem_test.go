@@ -12,11 +12,16 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	remdd "github.com/mrsirg97-rgb/rig/v2/store/rem/ddl"
 	remmeta "github.com/mrsirg97-rgb/rig/v2/store/rem/metadata"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
 )
+
+func remTool(t *testing.T, db store.DB) core.Tool {
+	return remapi.New(db, graph.NewQueue(t.TempDir(), nil))
+}
 
 func newDB(t *testing.T) store.DB {
 	t.Helper()
@@ -50,7 +55,7 @@ func sourceOf(t *testing.T, db store.DB, content string) *string {
 }
 
 func TestBareRemIsLoudAtExecute(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if _, err := exec(t, tool, context.Background(), map[string]any{}); err == nil {
 		t.Fatal("bare execute succeeded")
 	} else if want := "rem: action required"; err.Error() != want {
@@ -59,7 +64,7 @@ func TestBareRemIsLoudAtExecute(t *testing.T) {
 }
 
 func TestUnknownActionRefusesLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "sync"}); err == nil {
 		t.Fatal("unknown action succeeded")
 	} else if want := "rem: action 'sync' not implemented"; err.Error() != want {
@@ -68,7 +73,7 @@ func TestUnknownActionRefusesLoudly(t *testing.T) {
 }
 
 func TestLearnMissingContentFailsLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "learn"}); err == nil {
 		t.Fatal("learn without content succeeded")
 	} else if want := "rem: action 'learn' requires content"; err.Error() != want {
@@ -77,7 +82,7 @@ func TestLearnMissingContentFailsLoudly(t *testing.T) {
 }
 
 func TestReflectMissingContentFailsLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "reflect"}); err == nil {
 		t.Fatal("reflect without content succeeded")
 	} else if want := "rem: action 'reflect' requires content"; err.Error() != want {
@@ -86,7 +91,7 @@ func TestReflectMissingContentFailsLoudly(t *testing.T) {
 }
 
 func TestImportanceShapeRefusesLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	for _, bad := range []any{1.5, -0.1} {
 		if _, err := exec(t, tool, context.Background(),
 			map[string]any{"action": "learn", "content": "x", "importance": bad}); err == nil {
@@ -98,7 +103,7 @@ func TestImportanceShapeRefusesLoudly(t *testing.T) {
 }
 
 func TestKShapeRefusesLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	for _, bad := range []any{0, 51} {
 		if _, err := exec(t, tool, context.Background(),
 			map[string]any{"action": "recall", "query": "x", "k": bad}); err == nil {
@@ -110,7 +115,7 @@ func TestKShapeRefusesLoudly(t *testing.T) {
 }
 
 func TestScopeBogusRefusesLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	for _, action := range []map[string]any{
 		{"action": "recall", "query": "x", "scope": "bogus"},
 		{"action": "learn", "content": "x", "scope": "bogus"},
@@ -126,7 +131,7 @@ func TestScopeBogusRefusesLoudly(t *testing.T) {
 }
 
 func TestScopeAllAtWriteRefusesLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if _, err := exec(t, tool, context.Background(),
 		map[string]any{"action": "learn", "content": "x", "scope": "all"}); err == nil {
 		t.Fatal("scope=all learn succeeded")
@@ -136,7 +141,7 @@ func TestScopeAllAtWriteRefusesLoudly(t *testing.T) {
 }
 
 func TestSupersedesDecodeRefusesLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	for _, bad := range []any{"notanid", 0.5, []any{1, "x"}} {
 		if _, err := exec(t, tool, context.Background(),
 			map[string]any{"action": "learn", "content": "x", "supersedes": bad}); err == nil {
@@ -148,7 +153,7 @@ func TestSupersedesDecodeRefusesLoudly(t *testing.T) {
 }
 
 func TestIdsDecodeRefusesLoudly(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if _, err := exec(t, tool, context.Background(),
 		map[string]any{"action": "prune", "verb": "remove", "ids": []any{"x"}}); err == nil {
 		t.Fatal("malformed ids succeeded")
@@ -158,7 +163,7 @@ func TestIdsDecodeRefusesLoudly(t *testing.T) {
 }
 
 func TestPruneVerbVoices(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "prune"}); err == nil {
 		t.Fatal("prune without verb succeeded")
 	} else if !strings.Contains(err.Error(), "prune requires verb remove|reduce|consolidate") {
@@ -174,7 +179,7 @@ func TestPruneVerbVoices(t *testing.T) {
 
 func TestSourceAttributionThreadedSession(t *testing.T) {
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "learn", "content": "attributed"}); err != nil {
@@ -187,7 +192,7 @@ func TestSourceAttributionThreadedSession(t *testing.T) {
 
 func TestSourceAttributionAnonymousWhenUnthreaded(t *testing.T) {
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "reflect", "content": "anon attributed"}); err != nil {
 		t.Fatalf("reflect: %v", err)
 	}
@@ -198,7 +203,7 @@ func TestSourceAttributionAnonymousWhenUnthreaded(t *testing.T) {
 
 func TestSourceExplicitRidesVerbatim(t *testing.T) {
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
 	if _, err := exec(t, tool, ctx, map[string]any{
@@ -213,7 +218,7 @@ func TestSourceExplicitRidesVerbatim(t *testing.T) {
 
 func TestReplyVoicesPassThrough(t *testing.T) {
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	reply, err := exec(t, tool, context.Background(), map[string]any{
 		"action": "learn", "content": "voice probe", "kind": "constraint", "importance": 0.8,
 	})
@@ -247,12 +252,12 @@ func TestReplyVoicesPassThrough(t *testing.T) {
 }
 
 func TestNameDescriptionSchemaShape(t *testing.T) {
-	tool := remapi.New(newDB(t))
+	tool := remTool(t, newDB(t))
 	if tool.Name() != "rem" {
 		t.Fatalf("name %q", tool.Name())
 	}
 	d := tool.Description()
-	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "ids (mN)", "this workspace first, then global", "name project when the fact belongs to a different workspace than the one you started in"} {
+	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "Ids (mN) come from replies", "this workspace first, then global", "name project for a different workspace", "pack loads the live code around a symbol or file", "index maps the whole project"} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing %q:\n%s", want, d)
 		}
@@ -271,7 +276,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 	if schema.Type != "object" || len(schema.Required) != 1 || schema.Required[0] != "action" {
 		t.Fatalf("schema %+v", schema)
 	}
-	if got := schema.Props["action"].Enum; len(got) != 4 || got[0] != "learn" || got[3] != "prune" {
+	if got := schema.Props["action"].Enum; len(got) != 6 || got[0] != "learn" || got[4] != "index" || got[5] != "pack" {
 		t.Fatalf("action enum %v", got)
 	}
 	if got := schema.Props["scope"].Enum; len(got) != 3 || got[2] != "all" {
@@ -283,7 +288,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 	if _, ok := schema.Props["project"]; !ok {
 		t.Fatal("the schema must carry a project field (the deliberate project)")
 	}
-	if got := schema.Props["project"].Description; got != "another workspace, as a path; later calls act there until you name a different one. ~ expands." {
+	if got := schema.Props["project"].Description; got != "another workspace, as a path; later calls act there until you name another. ~ expands." {
 		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
 }
@@ -316,7 +321,7 @@ func TestLearnWithProjectFromNonRepoCwdRecallsFromRepoAndWorktree(t *testing.T) 
 	}
 	t.Chdir(t.TempDir())
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	if _, err := exec(t, tool, context.Background(), map[string]any{
 		"action": "learn", "content": "a fact about the repo", "project": repo,
 	}); err != nil {
@@ -343,7 +348,7 @@ func TestRecallWithProjectFillsFromGlobalAfter(t *testing.T) {
 	gitInit(t, repo)
 	t.Chdir(t.TempDir())
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	if _, err := exec(t, tool, context.Background(), map[string]any{
 		"action": "learn", "content": "widget local lore", "project": repo,
 	}); err != nil {
@@ -383,7 +388,7 @@ func TestProjectPlusGlobalRefuses(t *testing.T) {
 	repo := t.TempDir()
 	gitInit(t, repo)
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	for _, action := range []map[string]any{
 		{"action": "learn", "content": "x", "project": repo, "scope": "global"},
 		{"action": "reflect", "content": "x", "project": repo, "scope": "global"},
@@ -407,7 +412,7 @@ func TestRelativeAndTildeProjectResolveIdentically(t *testing.T) {
 	gitInit(t, repo)
 	t.Setenv("HOME", home)
 	db := newDB(t)
-	tool := remapi.New(db)
+	tool := remTool(t, db)
 	mwExec := paths.Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return tool.Exec(ctx, call.Args)
 	})

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"os"
@@ -13,10 +14,13 @@ import (
 
 type adapter struct {
 	tool.Definition
-	db store.DB
+	db    store.DB
+	graph *graph.Queue
 }
 
-func New(db store.DB) core.Tool { return adapter{Definition: tool.Def("rem"), db: db} }
+func New(db store.DB, g *graph.Queue) core.Tool {
+	return adapter{Definition: tool.Def("rem"), db: db, graph: g}
+}
 
 type given struct {
 	Action            string   `json:"action"`
@@ -33,6 +37,7 @@ type given struct {
 	OlderThanDays     *int     `json:"older_than_days"`
 	Supersedes        any      `json:"supersedes"`
 	IncludeSuperseded *bool    `json:"include_superseded"`
+	Target            *string  `json:"target"`
 }
 
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
@@ -56,6 +61,13 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	switch g.Action {
 	case "":
 		return "", fmt.Errorf("rem: action required")
+	case "index":
+		return a.graph.IndexProject(ctx, cwd)
+	case "pack":
+		if g.Target == nil || *g.Target == "" {
+			return "", fmt.Errorf("rem: action 'pack' requires target")
+		}
+		return a.graph.Pack(ctx, cwd, *g.Target)
 	case "learn":
 		if err := scopeCheck(g.Scope); err != nil {
 			return "", err

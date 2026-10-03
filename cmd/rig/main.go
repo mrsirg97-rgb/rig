@@ -27,6 +27,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/plugins"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
+	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
@@ -44,7 +45,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.8.3"
+const Version = "2.9.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -340,6 +341,9 @@ func main() {
 	}
 	defer decdb.DB.Close()
 
+	gq := graph.NewQueue(cfgDir, func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) })
+	file.SetIndexer(gq)
+
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
@@ -412,7 +416,7 @@ func main() {
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-			"rem":    remapi.New(rdb),
+			"rem":    remapi.New(rdb, gq),
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
@@ -593,6 +597,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	go gq.Run(ctx)
 	if r.decQ != nil {
 		go r.decQ.Run(ctx)
 	}

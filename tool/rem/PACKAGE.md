@@ -2,25 +2,33 @@
 
 ## What it is
 
-Adapts `store/rem` to the loop's tool surface: runtime shape checks loud
-at execute; session attribution from the threaded ctx (`memories.source`
-defaults to the calling session id, `anon` when unthreaded, and accepts
-free text when the caller passes one); replies exactly as the store shapes
-them. The description carries the contract sentence (SPEC_STATE: rem is
-deliberate); every rem operation is a choice, nothing is written by a
-compaction, nothing is read into the prompt by a session start.
+Adapts `store/rem` and `store/graph` to the loop's tool surface: runtime
+shape checks loud at execute; session attribution from the threaded ctx
+(`memories.source` defaults to the calling session id, `anon` when
+unthreaded, and accepts free text when the caller passes one); replies
+exactly as the stores shape them. The description carries the contract
+sentences (SPEC_STATE: rem is deliberate — every rem operation is a
+choice, nothing is written by a compaction, nothing is read into the
+prompt by a session start; SPEC_GRAPH: pack before grepping for who
+calls what).
 
 ## What it includes
 
 - `Tool`: a `core.Tool` over the rem store's read/write operations
-  (`learn`, `recall`, `reflect`, `prune`), each with an optional
-  `project` (a path, resolved through `store/scope`, worktree-safe).
+  (`learn`, `recall`, `reflect`, `prune`) and the graph store's map
+  operations (`index`, `pack`), each with an optional `project` (a path,
+  resolved through `store/scope`, worktree-safe). `pack` takes a
+  `target`: a symbol (package-qualified or bare) or a file path, and
+  replies from the live files — the definition, callers with their call
+  lines, the signatures of what it calls, one coverage line. `index`
+  maps the whole project through the queue.
 
 ## How it is consumed
 
-- Registered at the root as a native tool. The `/rem` command
-  (SPEC_COMMANDS 11) is the operator's verb surface over the same store;
-  the tool stays the model's multi-line surface.
+- Registered at the root as a native tool, with the rem store's db and
+  the graph queue. The `/rem` command (SPEC_COMMANDS 11) is the
+  operator's verb surface over the memory store; the tool stays the
+  model's multi-line surface over both stores.
 - The compaction `AutoReflect` seam is cut: compaction writes nothing to
   rem (SPEC_COMPACT 6).
 
@@ -28,10 +36,8 @@ compaction, nothing is read into the prompt by a session start.
 
 - Session attribution comes from the threaded `core.SessionFrom`: an
   unthreaded call attributes `anon`.
-- Replies are the store's shapes, verbatim: the adapter does not
-  re-voice.
-- The deliberate project (SPEC_STATE): when `project` is set, its path
-  replaces the session cwd as the `cwd` handed to the store; the scope
-  is the workspace the fact belongs to, not the one the session started
-  in. `~` expands at the `middleware/paths` boundary (the `project` field
-  is in its `Fields`); `project` + `scope: global` refuses by name.
+- `pack` registers no observation: it writes no file state into the
+  session, so an edit's drift check still demands a real read after a
+  pack.
+- `index` never waits: the reply names the queued count and the map
+  fills as the queue drains; a pack on a not-yet-mapped symbol says so.

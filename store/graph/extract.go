@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -69,17 +70,34 @@ func Skip(abs string) bool {
 }
 
 func ProjectOf(abs string) (root, module string, err error) {
-	fileDir := filepath.Dir(abs)
-	for dir := fileDir; ; dir = filepath.Dir(dir) {
+	return RootOf(filepath.Dir(abs))
+}
+
+func RootOf(dir string) (root, module string, err error) {
+	start := dir
+	for ; ; dir = filepath.Dir(dir) {
 		b, rerr := os.ReadFile(filepath.Join(dir, "go.mod"))
 		if rerr == nil {
 			return dir, moduleLine(b), nil
 		}
 		up := filepath.Dir(dir)
 		if up == dir {
-			return fileDir, "", nil
+			break
 		}
 	}
+	if out, gerr := exec.Command("git", "-C", start, "rev-parse", "--show-toplevel").Output(); gerr == nil {
+		p := strings.TrimSpace(string(out))
+		if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(start, p)
+			}
+			if real, err := filepath.EvalSymlinks(p); err == nil {
+				p = real
+			}
+			return p, "", nil
+		}
+	}
+	return start, "", nil
 }
 
 func moduleLine(b []byte) string {

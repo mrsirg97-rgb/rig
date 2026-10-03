@@ -467,6 +467,19 @@ decision).
   cannot be walked back to its cwd). Two processes opening the same file
   at once both succeed (the marker insert is `OR IGNORE`; the transaction
   serialises them). Rejected: reading both scopes forever.
+- **The map rides rem's tool (2.9.0, SPEC_GRAPH).** The tool's actions
+  grow `index` and `pack` over `store/graph`, one sqlite file per
+  project under the rig home, scoped like todo's rows are (worktrees
+  share): symbols, edges, files — addresses, never source text.
+  `index` maps the whole project through the bounded queue; a read,
+  write or edit of a mapped file maps as it goes (the same queue, the
+  call never waits). `pack` quotes the live files: the definition, each
+  caller with its call line, the signatures of what it calls, one
+  coverage line; a cited file whose sha moved is re-extracted first; an
+  ambiguous bare name refuses naming both places; the pack is bounded by
+  the read ceiling and registers no observation, so an edit's drift
+  check still demands a real read. The description carries the contract
+  sentence: pack before grepping for who calls what.
 - The `/rem` command (SPEC_COMMANDS 11): `rem [list|show|forget]` over
   the same store; list the live memories (project then global, one line
   each), show by id, forget by id (this project's or global only; ids
