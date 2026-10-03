@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.9.4" {
-		t.Fatalf("Version = %q, want 2.9.4", Version)
+	if Version != "2.9.5" {
+		t.Fatalf("Version = %q, want 2.9.5", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {

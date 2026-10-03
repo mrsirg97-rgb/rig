@@ -45,6 +45,115 @@ plus one registration line, and the loop never names a concrete type.
   anything added here should be a feature you will want to reach for,
   and it should remove friction, not add ceremony.
 
+## how the code looks
+
+The reference is `~/Projects/lift/engine` (read `core/path.go`,
+`core/scribe.go`, and `visit` in `core/agent.go`) and, in this tree,
+`core/`, `evt/`, `loop/` and `tool/registry.go`. Pack them with `rem`
+before opening a new package. The aim is to express a lot in a little;
+that is harder than writing a lot, and it is the bar.
+
+- **Interface first.** Every type reads as its interface. The struct is
+  unexported, the constructor returns it, every signature takes the
+  interface, and nothing outside the package names the struct. Nothing
+  calls a concrete method, so the concrete can change under everyone.
+
+  ```go
+  type Definition interface {
+  	Name() string
+  	Enabled() bool
+  	Description() string
+  	Schema() json.RawMessage
+  }
+
+  type entry struct {
+  	N string          `json:"name"`
+  	E bool            `json:"enabled"`
+  	W string          `json:"what"`
+  	G string          `json:"guidelines"`
+  	R string          `json:"reply"`
+  	S json.RawMessage `json:"schema"`
+  }
+
+  func Def(name string) Definition
+  ```
+
+  Not this: `type Definition struct { name, what string; ... }` with
+  methods. It worked until the first caller needed it comparable and
+  the second shadowed a method on it.
+
+- **One-method seams.** A seam is an interface with one method and a
+  name that says what crosses it: `Scribe.Record(symbol)`,
+  `ToolMiddleware.Wrap(next)`, `Extractor.Extract(ctx, file)`,
+  `Decider.Decide(ctx, state, questions)`. A new behavior is a new
+  implementer registered at the root, never a new branch in the caller.
+  The loop never names a concrete type; that is the structural test.
+
+- **Delegation by embedding.** Where a type is the other thing plus
+  one difference, embed the interface and implement the difference.
+
+  ```go
+  type filled struct {
+  	Definition
+  	slot  string
+  	value string
+  }
+
+  func Fill(d Definition, slot, value string) Definition {
+  	return &filled{d, slot, value}
+  }
+
+  func (f *filled) Description() string {
+  	return strings.ReplaceAll(f.Definition.Description(), f.slot, f.value)
+  }
+  ```
+
+  The plugin door embeds `tool.Definition` and implements `Schema()`
+  because that is its contract; lift's context scribe embeds
+  `core.Agent` and simply has `Registry()`.
+
+- **A thing is whole when it is constructed.** Its seams are
+  constructor arguments. No `SetX` after `NewX`, no package-level
+  variable a caller installs, no `init` that wires behavior. If a value
+  is optional, take it as a variadic so the common call stays short:
+  `NewContainer(name, props, table ...string)`,
+  `Discover(scribes ...Scribe)`, `NewSymbol(source, parent, cardinality ...int)`.
+
+  Not this: `file.SetIndexer(q)` (a global the tools read),
+  `q.SetScorer(s)`, `q.SetPackCaps(a, b)`, `t.SetParallel(n)` (seams
+  bolted on after the constructor). Each of those is a constructor
+  argument that was not given one.
+
+- **State you carry, not state you store.** lift's `Path` is one
+  `[]string`: `Push`, `Pop`, `Seen`, `Current`, and `Symbol()` minting
+  the node from the top. Cycle detection, identity and position fall
+  out of it. Reach for data on the walk before a flag on the struct,
+  and for a visited slice before a visited map with a mutex.
+
+- **Sorted output everywhere.** Every slice a method returns leaves
+  sorted (`Registry.Containers()`, `Dimension.Symbols()`, the todo
+  queue, the model table). It costs five lines a type and buys
+  determinism, which is what makes the goldens and the drift tests
+  possible.
+
+- **One shape per concept.** One list shape for every slash command,
+  one `Definition` for every tool, one fan-out for every decision
+  question. When a second type appears for the same concept, collapse
+  it; three wrappers around one call is the signature of agent code.
+
+- **Bounds are economics, never numbers.** A cap derives from a row the
+  operator already owns (the window, the reserve, the max output
+  tokens, the result cap) or it is a setting in `settings.json` with a
+  default. A bare constant needs a sentence naming what it buys. No
+  clocks: when a poll, a timeout or a threshold suggests itself, ask
+  which event already carries the fact (the process exit, the
+  connection drop, the turn end, the sha that moved).
+
+- **Say a lot in a little.** The refactor pass every few versions
+  collapses what grew. A package is not done while it has a setter, a
+  global, a duplicated query string, or a second type for one idea.
+  Fewer lines that read as the design beat more lines that work.
+
 ## packages
 
 - `core`: the kernel's contract surface: the seams (Provider,
@@ -160,9 +269,10 @@ plus one registration line, and the loop never names a concrete type.
   and regenerate; never hand-edit the generated projections.
 - `tool`: the registry of the model's words: `registry.json`, embedded,
   one entry per native tool (`name`, `enabled`, `what`, `guidelines`,
-  `reply`, `schema`); `Definition` is the value a tool embeds for
-  `Name()`, `Description()` and `Schema()`; `Fill` for the two tools
-  whose text names the default model; `Names()` is the root's native
+  `reply`, `schema`); `Definition` is the interface a tool embeds for
+  `Name()`, `Description()` and `Schema()`, the registry's entry its one
+  concrete; `Fill` wraps one for the two tools whose text names the
+  default model; `Names()` is the root's native
   list, in file order, enabled only.
 - `tool/bash`: bash(1) execution: real subprocesses, output surfaced
   and bounded.

@@ -263,7 +263,10 @@ drift from intent and add deps.
 and schema live in one embedded file, `tool/registry.json`, as `what`,
 `guidelines`, `reply` and the schema object, all lowercase in the operator's voice (the labels too: `guidelines:`, `reply:`). A tool embeds its
 `tool.Definition` and writes only `Exec`; the description is composed
-from the three parts, so the shape below is the type. A tool whose text
+from the three parts, so the shape below is the type. `Definition` is an
+interface (2.9.5): the registry's entry is its one concrete, unexported;
+`Fill` wraps a Definition for a tool whose words carry a runtime value;
+nothing outside `tool/` names the struct. A tool whose text
 carries a runtime value (`scheduler`, `delegate`) fills a named slot at
 construction; `plugin` adds the live names to its schema. An entry's
 `enabled` flag decides whether the root wires the tool, so a tool can
