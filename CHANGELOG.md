@@ -1,4 +1,15 @@
 # Changelog
+## [2.9.6]: one word for an edit's piece
+
+The registry calls the unit of an `edit` a chunk ("one line per chunk";
+"as the earlier chunks leave it"); the tool's own replies and refusals
+still said hunk (`hunk 1: replaced 3 byte(s)`, `hunk 2 of 2: old matched
+0 times`), so the model read one word in the menu and another in the
+result. The edit tool says chunk everywhere now, in its replies, its
+refusals and its names (`editChunk`, `applyChunks`), and the docs that
+describe it follow. The diff engine keeps its hunks: a unified diff's
+`@@` hunk is a different thing with its own name.
+
 ## [2.9.5]: the definition is an interface
 
 2.8.1 lifted the model's words into `tool/registry.json` and gave every
