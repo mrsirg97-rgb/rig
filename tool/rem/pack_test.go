@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/index"
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
@@ -84,11 +85,12 @@ func graphModule(t *testing.T) (string, *graph.Queue, core.Tool) {
 
 func mapWithReads(t *testing.T, root string, q *graph.Queue, paths ...string) {
 	t.Helper()
-	file.SetIndexer(q)
-	t.Cleanup(func() { file.SetIndexer(nil) })
+	read := index.Middleware(q).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+		return file.Read().Exec(ctx, call.Args)
+	})
 	ctx := context.Background()
 	for _, p := range paths {
-		if _, err := file.Read().Exec(ctx, packJSON(t, map[string]any{"path": p})); err != nil {
+		if _, err := read(ctx, core.ToolCall{Name: "read", Args: packJSON(t, map[string]any{"path": p})}); err != nil {
 			t.Fatalf("read %s: %v", p, err)
 		}
 	}

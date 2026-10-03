@@ -341,8 +341,8 @@ func main() {
 	}
 	defer decdb.DB.Close()
 
-	gq := graph.NewQueue(cfgDir, func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) })
-	file.SetIndexer(gq)
+	var r *root
+	gq := graph.NewQueue(cfgDir, func(m string) { r.notice("graph", m) })
 
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
@@ -390,7 +390,7 @@ func main() {
 		swapURL = v
 	}
 
-	r := &root{
+	r = &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
 		system:     systemPrompt,
@@ -423,6 +423,7 @@ func main() {
 		pluginTools: pluginTools,
 		py:          py,
 		pluginsHome: cfgDir,
+		graph:       gq,
 		pluginInfos: pluginInfos,
 	}
 

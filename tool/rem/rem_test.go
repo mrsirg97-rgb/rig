@@ -257,7 +257,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 		t.Fatalf("name %q", tool.Name())
 	}
 	d := tool.Description()
-	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "Ids (mN) come from replies", "this workspace first, then global", "name project for a different workspace", "pack loads the live code around a symbol or file", "index maps the whole project"} {
+	for _, want := range []string{"learn commits a fact", "prune removes, reduces, or consolidates", "memory ids (mN) come from the replies", "this workspace first, then global", "name project when the fact belongs to a different workspace", "pack loads the live code around a symbol or file", "index maps the whole project"} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing %q:\n%s", want, d)
 		}
@@ -291,7 +291,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 	if got := schema.Props["project"].Description; got != "another workspace, as a path; later calls act there until you name another. ~ expands." {
 		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
-	if got := schema.Props["importance"].Description; got != "Strength starts here and decays" {
+	if got := schema.Props["importance"].Description; got != "0..1; strength starts here and decays" {
 		t.Fatalf("the importance field must say what strength does, got %q", got)
 	}
 }

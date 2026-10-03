@@ -40,9 +40,13 @@ and edges are resolved when pack asks, through references, cached by
 file sha.
 
 Indexing is the 2.7.0 queue shape: after a read, write or edit of a
-mapped file, a bounded channel and one goroutine extract that file (its
-package for Go) and replace its symbols and outgoing edges in place; an
-unchanged sha is a no-op; the call never waits. Edges are natural keys,
+mapped file (the `index` middleware, innermost in the canonical chain,
+hands the path over once the call has returned without error), a bounded
+channel and one goroutine extract that file (its package for Go) and
+replace its symbols and outgoing edges in place; an unchanged sha is a
+no-op; the call never waits. The queue's drops and errors are
+`core.Notice` lines with the source `graph` (2.8.3), never stderr over
+the frame. Edges are natural keys,
 never synthetic ids, so one file's replace never orphans the edges
 another file's extraction wrote, and a dangling edge is a row whose join
 finds nothing until the file that owns it is touched again.

@@ -114,9 +114,13 @@ store/graph/           metadata + gen.json/source.json, generated
                        the in-place replace), extract.go (the seam),
                        extract_go.go (Go), lsp.go + extract_lsp.go (the
                        client and the language-server implementation)
-tool/file/             the hook: SetIndexer, called by read/write/edit
-tool/rem/              index and pack actions, the description
-cmd/rig/main.go        the store created and Run, the hook registered
+middleware/index/      the hook: a link in the canonical chain, innermost,
+                       that touches the path of a read, write or edit
+                       that returned without error
+tool/rem/              index and pack actions; the words in tool/registry.json
+cmd/rig/main.go        the queue created and Run, its notices through the
+                       frontend (core.Notice, source graph), the link added
+                       to canonicalMiddleware
 ```
 
 `core/` and `loop/` are untouched; `go.mod` is unchanged (stdlib only:

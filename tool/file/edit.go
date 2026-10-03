@@ -89,7 +89,6 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	recordState(ctx, a.Path, []byte(updated))
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, a.Path, updated)
-	touchIndex(a.Path)
 
 	var b strings.Builder
 	replaced := 0

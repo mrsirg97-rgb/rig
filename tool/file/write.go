@@ -31,6 +31,5 @@ func (writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	recordState(ctx, a.Path, []byte(a.Content))
 	s, _ := core.SessionFrom(ctx)
 	rememberContent(s, a.Path, a.Content)
-	touchIndex(a.Path)
 	return fmt.Sprintf("wrote %d bytes to %s", len(a.Content), a.Path), nil
 }

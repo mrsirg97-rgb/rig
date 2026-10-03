@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"io"
 	"os"
 	"strings"
@@ -41,6 +42,7 @@ type root struct {
 	resultCap int
 
 	middleware []core.ToolMiddleware
+	graph      *graph.Queue
 
 	fe     core.Frontend
 	errOut io.Writer

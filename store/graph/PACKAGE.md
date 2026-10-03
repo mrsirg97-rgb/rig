@@ -59,8 +59,10 @@ project-relative; each worktree's store maps its own tree.
 
 ## How it is consumed
 
-- `tool/rem` (the `index` and `pack` actions) and the `tool/file`
-  read/write/edit hook call it; the queue shape (bounded channel, one
+- `tool/rem` (the `index` and `pack` actions) and the `middleware/index`
+  link (the read/write/edit hook in the canonical chain) call it; its
+  drops and errors reach the frontend as `core.Notice` lines with the
+  source `graph`; the queue shape (bounded channel, one
   goroutine, the call never waits) lives with the wiring, and `index`
   is the deliberate exception — it extracts on the call's own thread
   and replies with the count mapped (SPEC_GRAPH).
