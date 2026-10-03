@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
@@ -21,6 +24,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
 	viewtool "github.com/mrsirg97-rgb/rig/v2/tool/view"
@@ -38,11 +42,12 @@ type root struct {
 
 	middleware []core.ToolMiddleware
 
-	fe    core.Frontend
-	sdb   store.DB
-	remDB store.DB
-	cwd   string
-	home  string
+	fe     core.Frontend
+	errOut io.Writer
+	sdb    store.DB
+	remDB  store.DB
+	cwd    string
+	home   string
 
 	drec decision.Recorder
 
@@ -50,6 +55,7 @@ type root struct {
 	decQ      *decision.Queue
 	decRev    *decision.Reviewer
 	decide    *decision.Decide
+	delegate  func(sched.DelegateInput) (sched.DelegateResult, error)
 	eco       *plugins.Ecosystem
 
 	pluginsDir string
@@ -303,4 +309,18 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	provider, pol := r.buildPair()
 	r.k.Provider = provider
 	r.k.Policy = pol
+}
+
+func (r *root) notice(source, text string) {
+	if fe := r.fe; fe != nil {
+		if _, headless := fe.(*oneshot.OneShot); !headless {
+			fe.Notify(core.Notice{Source: source, Text: text})
+			return
+		}
+	}
+	out := r.errOut
+	if out == nil {
+		out = os.Stderr
+	}
+	fmt.Fprintln(out, "rig: "+source+": "+text)
 }

@@ -52,6 +52,14 @@ width); no core or loop line (decision 10).
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,
   both doors; the tool-result path and the command path commit
   byte-equal blocks minus the opening line (decision 6).
+- **The list renderer** (`list_render.go`): `RenderListBlock` paints
+  every other command reply in the list shape (SPEC_COMMANDS 13): the
+  opening, the head dim, each row's marker as the todo glyph, the id
+  dim, the first segment in text and the ` · ` details dim, the `· n
+  more` footer dim; a reply with no id rows is left to the plain text
+  path. `WithCommands` also hands the Env its row budget
+  (`Env.Lines`: the height minus the status rows, the opening and the
+  input row).
 - **Input** (`input.go`): raw mode, the key parser (Tab, Shift-Tab as
   CSI Z, arrows), single-line editing with history, bracketed paste, and
   the completion menu's state.

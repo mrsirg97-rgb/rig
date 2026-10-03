@@ -24,7 +24,12 @@ the leaf.
 - `Steerer`: the frontend-owned seam (the slot, the interrupt handle,
   the liveness fact).
 - `SessionRow`, `PluginInfo`: the sessions and plugins rows.
-- Renderers: `renderTable`, `renderList`, `RenderShow`, `RenderPlugins`.
+- Renderers: `renderTable`, `renderList`, `RenderShow`, `RenderPlugins`,
+  `renderRemList`, `swarmList`, all in the list shape of `list.go`
+  (`row`, `plural`, the markers, `listLimit`/`fit`/`moreFooter` for
+  the screen cap; SPEC_COMMANDS 13).
+- `Env.Lines`: the frontend's row budget for a listing (the TUI sets it;
+  nil means no cap).
 
 ## How it is consumed
 
@@ -113,7 +118,8 @@ the leaf.
   current-id refusals come before the current row is touched.
 - `renderTable`/`renderList`/`RenderShow`/`RenderPlugins` keep stable
   order (sorted by id / store order), so golden lines do not depend on
-  merge order.
+  merge order; the lists share one head/row/footer shape and cap at the
+  screen (`Env.Lines`) with a `· n more · <verb>` footer.
 - `/effort`'s hints are positional: the words are the model's (the
   row's `efforts`, in its order), the one-liners are generic, so the
   descriptions describe position, never semantics. A row without

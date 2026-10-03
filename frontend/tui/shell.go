@@ -175,6 +175,7 @@ func WithCommands(cmds []core.Command, env any) Option {
 		t.env = env
 		if e, ok := env.(*command.Env); ok {
 			e.Steer = t
+			e.Lines = t.lines
 			command.ModelHints(cmds, e)
 			command.EffortHints(cmds, e)
 		}

@@ -441,9 +441,13 @@ it (0.2.0's synthesized-row behavior, generalized). `renderTable`
 gains the **role column** after the id:
 
 ```
-local            interactive  window 65536  max 8192  reserve 8192  keep 16384  trigger 57344  *
-qwen3.8-workers  worker       window 65536  max 8192  reserve 8192  keep 16384  trigger 57344
+2 models · active local
+  local           [~] interactive · window 65536 · max 8192 · reserve 8192 · keep 16384 · trigger 57344
+  qwen3.8-workers [ ] worker · window 65536 · max 8192 · reserve 8192 · keep 16384 · trigger 57344
 ```
+
+(the list shape of SPEC_COMMANDS 13 since 2.8.3; the role is the row's
+text, the active row is `[~]`)
 
 File rows list like any others; same columns, same switch, same
 refusal voice for unknown ids. The listing order is stable: sorted by

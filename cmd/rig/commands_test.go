@@ -601,7 +601,7 @@ func TestModelsRuntimeTableIncludesSynthesizedRow(t *testing.T) {
 	h.finish(done)
 
 	out := h.out.String()
-	if !strings.Contains(out, "e2e") || !strings.Contains(out, "window 4000  max 500") {
+	if !strings.Contains(out, "e2e") || !strings.Contains(out, "e2e   [~] interactive · window 4000 · max 500") {
 		t.Fatalf("the synthesized row must list: %q", out)
 	}
 	if !strings.Contains(out, "local") {
@@ -783,7 +783,7 @@ func TestREPLCommands(t *testing.T) {
 		t.Fatalf("the new line must print the fresh id: %q", outStr)
 	}
 
-	if !strings.Contains(outStr, "exit ok") || !strings.Contains(outStr, "exit open") || !strings.Contains(outStr, "*") {
+	if !strings.Contains(outStr, "[x] 0 turns") || !strings.Contains(outStr, "exit ok") || !strings.Contains(outStr, "[~] 0 turns") || !strings.Contains(outStr, "exit open") {
 		t.Fatalf("the session list must show both rows, the old closed ok, the current open: %q", outStr)
 	}
 

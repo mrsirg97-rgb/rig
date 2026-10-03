@@ -44,6 +44,8 @@ func (c *cli) Notify(ev core.Event) {
 			formatTokens(e.Usage.Prompt), formatTokens(e.Usage.Completion))
 	case core.Fault:
 		fmt.Fprintf(c.out, "\n[fault] %v\n", e.Err)
+	case core.Notice:
+		fmt.Fprintf(c.out, "rig: %s: %s\n", e.Source, e.Text)
 	case core.TurnEnd:
 
 		hit := 0

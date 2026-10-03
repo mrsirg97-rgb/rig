@@ -27,26 +27,24 @@ type Reviews interface {
 	Settle(ctx context.Context, id int64, approved bool, reviewer, answer string) error
 }
 
-type Fire func(ctx context.Context, prompt string) (string, error)
+type Fire func(ctx context.Context, prompt string) (reply, model string, err error)
 
 type Reviewer struct {
-	wake     chan struct{}
-	dirty    atomic.Bool
-	reviews  Reviews
-	fire     Fire
-	reviewer string
-	budget   int
-	loud     func(string)
+	wake    chan struct{}
+	dirty   atomic.Bool
+	reviews Reviews
+	fire    Fire
+	budget  int
+	loud    func(string)
 }
 
-func NewReviewer(reviews Reviews, fire Fire, reviewer string, budget int, loud func(string)) *Reviewer {
+func NewReviewer(reviews Reviews, fire Fire, budget int, loud func(string)) *Reviewer {
 	return &Reviewer{
-		wake:     make(chan struct{}, 1),
-		reviews:  reviews,
-		fire:     fire,
-		reviewer: reviewer,
-		budget:   budget,
-		loud:     loud,
+		wake:    make(chan struct{}, 1),
+		reviews: reviews,
+		fire:    fire,
+		budget:  budget,
+		loud:    loud,
 	}
 }
 
@@ -86,7 +84,7 @@ func (r *Reviewer) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-r.wake:
-			r.dirty.Store(false) // the pass takes everything pending at its read
+			r.dirty.Store(false)
 			if err := r.Drain(ctx); err != nil {
 				r.say("decision: review: %v", err)
 			}
@@ -104,9 +102,9 @@ func (r *Reviewer) Drain(ctx context.Context) error {
 	}
 	rows := fitRows(all, reviewContract, r.budget)
 	if len(rows) < len(all) {
-		r.dirty.Store(true) // the rest stay pending for the next turn end
+		r.dirty.Store(true)
 	}
-	out, err := r.fire(ctx, reviewPrompt(rows))
+	out, reviewer, err := r.fire(ctx, reviewPrompt(rows))
 	if err != nil {
 		return fmt.Errorf("fire: %w", err)
 	}
@@ -120,7 +118,7 @@ func (r *Reviewer) Drain(ctx context.Context) error {
 		if !v.approved && v.answer == "" {
 			continue
 		}
-		if err := r.reviews.Settle(ctx, row.ID, v.approved, r.reviewer, v.answer); err != nil {
+		if err := r.reviews.Settle(ctx, row.ID, v.approved, reviewer, v.answer); err != nil {
 			r.say("decision: settle %d: %v", row.ID, err)
 			continue
 		}
@@ -128,7 +126,7 @@ func (r *Reviewer) Drain(ctx context.Context) error {
 	}
 	if settled > 0 {
 		if left, err := r.reviews.Pending(ctx); err == nil && len(left) > 0 {
-			r.dirty.Store(true) // the rest stay pending for the next turn end
+			r.dirty.Store(true)
 		}
 	}
 	return nil

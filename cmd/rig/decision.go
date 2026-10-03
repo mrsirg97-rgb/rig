@@ -56,17 +56,21 @@ func (r *dbReviews) Settle(ctx context.Context, id int64, approved bool, reviewe
 	})
 }
 
-func (r *root) reviewFire(home string, db store.DB, swapURL, self, model, cfgDir, sandbox string, sandboxBinds []string) decision.Fire {
-	return func(ctx context.Context, prompt string) (string, error) {
-		res, err := sched.Delegate(sched.DelegateInput{
+func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string) decision.Fire {
+	return func(ctx context.Context, prompt string) (string, string, error) {
+		delegate := r.delegate
+		if delegate == nil {
+			delegate = sched.Delegate
+		}
+		res, err := delegate(sched.DelegateInput{
 			DB:            db,
 			Home:          home,
 			Session:       core.NewSession().ID,
 			Cwd:           r.cwd,
 			Task:          prompt,
-			Model:         model,
+			Model:         "",
 			WorkerSession: core.NewSession().ID,
-			DefaultModel:  model,
+			DefaultModel:  r.activeID,
 			Models:        func() models.Table { return r.runtime },
 			Fetch:         sched.RealFetch(0),
 			Spawn:         sched.RealSpawn,
@@ -81,11 +85,11 @@ func (r *root) reviewFire(home string, db store.DB, swapURL, self, model, cfgDir
 			SpawnCtx:      ctx,
 		})
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if res.Exit != 0 || res.TimedOut {
-			return "", fmt.Errorf("the review fire ended exit %d (timed out %v)", res.Exit, res.TimedOut)
+			return "", res.Model, fmt.Errorf("the review fire ended exit %d (timed out %v)", res.Exit, res.TimedOut)
 		}
-		return res.Stdout, nil
+		return res.Stdout, res.Model, nil
 	}
 }

@@ -202,14 +202,14 @@ def run(args):
 		"/plugins pending",
 	)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 7 {
+	if len(lines) != 6 {
 		t.Fatalf("the dispatch prints the commands' lines (post-8: the approve's tail is the reload's), got %q", out)
 	}
 
-	if !strings.Contains(lines[0], "pending") {
-		t.Fatalf("the listing's header must name the pending count, got %q", lines[0])
+	if lines[0] != "1 pending plugin" {
+		t.Fatalf("the listing's head must name the pending count, got %q", lines[0])
 	}
-	if !strings.Contains(lines[1], "forge: the fixture forge plugin") {
+	if !strings.Contains(lines[1], "forge [ ] the fixture forge plugin") {
 		t.Fatalf("the pending listing must carry the DESCRIPTION, got %q", lines[1])
 	}
 
@@ -217,15 +217,15 @@ def run(args):
 		t.Fatalf("the approve line must name the move, got %q", lines[2])
 	}
 
-	if !strings.Contains(lines[3], "reload: 1 loaded, 0 skipped") {
+	if lines[3] != "1 plugin · reload · 1 loaded · 0 skipped" {
 		t.Fatalf("the approve's tail must be the reload's (SPEC_SANDBOX, post-8), got %q", lines[3])
 	}
-	if lines[4] != "loaded:" || !strings.Contains(lines[5], "forge: the fixture forge plugin") || strings.Contains(lines[5], "pending") {
-		t.Fatalf("the reload's listing must carry the loaded plugin at its top-level home, got %q", lines[5])
+	if !strings.Contains(lines[4], "forge [x] the fixture forge plugin") || strings.Contains(lines[4], "pending") {
+		t.Fatalf("the reload's listing must carry the loaded plugin at its top-level home, got %q", lines[4])
 	}
 
-	if lines[6] != "plugins: no pending plugins" {
-		t.Fatalf("the zone must be empty after the approve, got %q", lines[6])
+	if lines[5] != "plugins: no pending plugins" {
+		t.Fatalf("the zone must be empty after the approve, got %q", lines[5])
 	}
 
 	if _, err := os.Stat(filepath.Join(home, "plugins", "forge.py")); err != nil {

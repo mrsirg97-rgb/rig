@@ -140,7 +140,9 @@ func TestSwarmBareListsTheWorkers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	want := "w1 worker qwen3.8-workers · task t3 · heartbeat 2s ago · done 1 failed 0\nw2 reviewer qwen3.8-review · exited · done 2 failed 1"
+	want := "2 workers · 1 running\n" +
+		"  w1 [~] worker qwen3.8-workers · task t3 · heartbeat 2s ago · done 1 failed 0\n" +
+		"  w2 [x] reviewer qwen3.8-review · exited · done 2 failed 1"
 	if got != want {
 		t.Errorf("list =\n%q\nwant\n%q", got, want)
 	}

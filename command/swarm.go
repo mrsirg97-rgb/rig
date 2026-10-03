@@ -119,20 +119,29 @@ func swarmList(e *Env) string {
 	if len(rows) == 0 {
 		return "swarm: no workers"
 	}
-	lines := make([]string, len(rows))
-	for i, r := range rows {
-		activity := "exited"
+	running := 0
+	for _, r := range rows {
 		if r.State == "running" {
-			activity = "task none · heartbeat —"
+			running++
+		}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s \u00b7 %d running", plural(len(rows), "worker"), running)
+	for _, r := range rows {
+		mark, activity := markDone, "exited"
+		if r.State == "running" {
+			mark = markActive
+			activity = "task none \u00b7 heartbeat \u2014"
 			if r.Task != "" {
-				activity = "task " + r.Task + " · heartbeat " + heartbeatAge(r.Heartbeat)
+				activity = "task " + r.Task + " \u00b7 heartbeat " + heartbeatAge(r.Heartbeat)
 			} else if !r.Heartbeat.IsZero() {
-				activity = "task none · heartbeat " + heartbeatAge(r.Heartbeat)
+				activity = "task none \u00b7 heartbeat " + heartbeatAge(r.Heartbeat)
 			}
 		}
-		lines[i] = fmt.Sprintf("w%d %s %s · %s · done %d failed %d", r.ID, r.Role, r.Model, activity, r.Done, r.Failed)
+		b.WriteString("\n" + row(fmt.Sprintf("w%d", r.ID), 0, mark, r.Role+" "+r.Model, activity,
+			fmt.Sprintf("done %d failed %d", r.Done, r.Failed)))
 	}
-	return strings.Join(lines, "\n")
+	return b.String()
 }
 
 func heartbeatAge(t time.Time) string {

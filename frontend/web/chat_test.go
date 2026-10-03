@@ -274,3 +274,16 @@ func TestStatusAndSwarmRoutes(t *testing.T) {
 		t.Fatalf("swarm: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestANoticePublishesOneFrameWithItsSource(t *testing.T) {
+	srv, tok := newChatServer(t)
+	ts := testenv.Server(t, srv.Handler())
+	srv.Notify(core.Notice{Source: "decision", Text: "queue full, dropping the bash proposal"})
+	got := frames(t, ts.URL, tok, "0", 2, 3*time.Second)
+	if k := kinds(got); k != "hello,notice" {
+		t.Fatalf("kinds %s", k)
+	}
+	if got[1]["source"] != "decision" || got[1]["text"] != "queue full, dropping the bash proposal" {
+		t.Fatalf("notice frame = %v", got[1])
+	}
+}

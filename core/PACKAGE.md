@@ -14,7 +14,10 @@ type, an interface, or a context helper.
 - **Wire types**: `Message`, `ToolCall`, `ToolSpec`, `Request`, `Usage`,
   and the `Event` vocabulary (`TextDelta`, `ReasoningDelta`,
   `ToolCallEvent`, `Done`, `Fault`, `ToolStart`, `ToolResult`, `TurnEnd`,
-  `TestEvent`, `Compacted`, `Compacting`). The 1.5.0 hosted-mode extension
+  `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, `SwarmNotice`, and
+  `Notice` — the 2.8.3 reopening: one event for a background notice, `Source`
+  and `Text`, so a queue or a reviewer reaches the operator through the
+  frontend and never through stderr while a frontend owns the screen). The 1.5.0 hosted-mode extension
   (SPEC_HOSTED, the named reopening, closed when the gate re-froze core at
   1.5.0's bytes): `Usage.Cost` (dollars, 0 when the endpoint reports none),
   `ReasoningDelta.Details` (the raw `reasoning_details` array chunk), and

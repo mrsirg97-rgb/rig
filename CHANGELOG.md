@@ -1,4 +1,38 @@
 # Changelog
+## [2.8.3]: the reviewer fires on the resident model, and notices stay off stderr
+
+Two bugs that showed as one symptom: a torn TUI frame at every turn end,
+worse on the phone, and again on ESC mid-turn.
+
+The decision reviewer fired on the settings default model (`dsv4`) while
+the session ran on `ox-alpha` and GLM was resident, so every fire was
+refused with `a different model is resident`. The fire now names no
+model: it resolves to the resident model's row as a scheduled fire does
+(2.5.3), with the session's active model as the fallback, and the
+delegate's result carries the model it ran on, so the reviewer's name on
+the row is the model that actually reviewed.
+
+The refusal was printed with `Fprintln(os.Stderr)` straight over the
+TUI's frame, as were the decision queue's drops and errors and the
+recorder's store errors. Core gains one event, `Notice{Source, Text}`
+(a named reopening of `core/provider.go`, the same door `SwarmNotice`
+came through), and every frontend renders it: one dim line in the TUI, a
+`notice` frame on the dashboard, a `rig:` line on stderr in the piped CLI
+and in a headless run. The root's background writers go through
+`notice(source, text)`; stderr only when the session is headless.
+
+The slash commands share one design language in the TUI. `/sessions`,
+`/models`, `/plugins` (and its zones), `/rem` and `/swarm` render the
+shape `todo read` taught: a head with the count and the one fact that
+matters, one row per item with its id, a marker (`[ ]` `[~]` `[x]`
+`[!]`), the text and ` · ` details, and a `· n more · <verb>` footer;
+the TUI paints the marker as the todo glyph under the command's
+opening line, the piped frontends print the text. Long lists fit the
+screen instead of scrolling it: the TUI hands the commands its row
+budget, and `sessions list all|<n>`, `rem list all|<n>`, `rem project
+<path> all|<n>` show the rest. The `plugin` tool's `list` and `reload`
+replies carry the same shape.
+
 ## [2.8.2]: plugin and plugins are one tool
 
 Two tools covered one concept: `plugin` was the door to a live plugin

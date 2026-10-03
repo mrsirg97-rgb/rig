@@ -32,15 +32,32 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 			}
 		}
 	default:
-		if out != "" {
-			t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
+		if out == "" {
+			break
 		}
+		if block, ok := RenderListBlock(t.theme, t.commandOpeningLocked(name, args), out); ok {
+			t.live.draw(block, t.liveLinesLocked(), t.statusLineLocked())
+			break
+		}
+		t.live.draw(t.theme.Paint(SlotText, out), t.liveLinesLocked(), t.statusLineLocked())
 	}
 	fresh := name == "new" || (name == "sessions" && strings.HasPrefix(args, "resume"))
 	if t.statusIn != nil {
 		t.recaptureStatusLocked(t.statusIn(context.Background()), fresh)
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
+}
+
+const (
+	openingRows = 1
+	inputRows   = 1
+)
+
+func (t *tui) lines() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	status := strings.Count(t.statusLineLocked(), "\n")
+	return t.height - status - openingRows - inputRows
 }
 
 func (t *tui) commandOpeningLocked(name, args string) string {

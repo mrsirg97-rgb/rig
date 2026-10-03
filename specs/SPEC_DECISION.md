@@ -114,7 +114,10 @@ the wake — a size-one channel, no timer, no poll, and a turn end with
 nothing landed costs nothing. The fire is a headless worker the root wires
 through the scheduler's `Delegate` (which waits on the free-slot gate) with
 no tools — it reads the rows and replies on stdout — jailed like a swarm
-worker. One fire takes the pending rows oldest first up to what the
+worker. The fire names no model: it resolves to the resident model's row
+as a scheduled fire does (2.5.3), with the session's active model as the
+fallback when nothing is resident; it never fires on the settings default
+while another model is resident (2.8.3). One fire takes the pending rows oldest first up to what the
 reviewer's model row leaves for a prompt (the window minus its reserve, at
 four bytes to the token); the rest stay pending for the next turn end, and
 a row that cannot fit alone still goes, so one huge row cannot wedge the
@@ -129,7 +132,17 @@ stays pending, a deny without a correction is not a verdict. A fire that
 settled something and left pending rows leaves the reviewer dirty, so the
 next turn end takes the rest and a partial converges; a fire that settles
 nothing waits for the next landing, so a garbage fire cannot spin. The
-reviewer's name on the row is the model that reviewed.
+reviewer's name on the row is the model that reviewed: the one the fire
+resolved to, carried back on the delegate's result.
+
+Nothing the queue or the reviewer has to say reaches stderr while a
+frontend owns the screen: a dropped proposal, a decide error, a store
+error, a fire that was refused all travel as a `core.Notice` (source
+`decision`) through the frontend's `Notify`, rendered as one dim line by
+the TUI, a `notice` frame by the dashboard, a `rig:` line on stderr by a
+headless run. Before 2.8.3 these were `Fprintln(os.Stderr)` over the
+TUI's frame; the torn footer the operator saw at every turn end was the
+reviewer being refused and printing it.
 
 ## testing
 

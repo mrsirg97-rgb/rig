@@ -368,17 +368,19 @@ discovery rows, mapped to `command.PluginInfo`; `command/` stays a
 leaf). The listing is the discovery's, in file order:
 
 ```
-plugins: 1 loaded, 2 skipped
-loaded:
-  echo: the fixture echo plugin (/home/u/.rig/plugins/echo.py)
-skipped:
-  broken.py: NameError: name 'x' is not defined
-  missing.py: TypeError: missing SCHEMA
+3 plugins · 1 loaded · 2 skipped
+  echo    [x] the fixture echo plugin · /home/u/.rig/plugins/echo.py
+  broken  [!] NameError: name 'x' is not defined · /home/u/.rig/plugins/broken.py
+  missing [!] TypeError: missing SCHEMA · /home/u/.rig/plugins/missing.py
 ```
 
+(the list shape of SPEC_COMMANDS 13 since 2.8.3; the same text answers
+the `plugin` tool's `list` and `reload`, the head then naming the verb:
+`1 plugin · reload · 1 loaded · 0 skipped`, or `plugins: reload · none`.)
 Loaded rows carry **name, description, file** (the spec's listing
-contract); skipped rows carry **file and reason** (the startup voice,
-the same text). Voices:
+contract) behind `[x]`; skipped rows carry **reason and file** (the
+startup voice, the same text) behind `[!]`; the pending and disabled
+zones list the same way (`1 pending plugin`, rows `[ ]`). Voices:
 
 ```
 plugins: usage: plugins                                    (args given)
@@ -606,9 +608,9 @@ a good plugin, a broken-import one, a missing-SCHEMA one):**
 **command (the leaf, fakes at the Env seam):**
 
 - `TestPluginsListRendersLoadedAndSkipped`: Env with loaded and
-  skipped rows: the exact rendering (the header's counts, the loaded
-  rows' name/description/file, the skipped rows' file/reason, the
-  order).
+  skipped rows: the exact rendering in the list shape (the head's
+  counts, the loaded rows' `[x]` name/description/file, the skipped
+  rows' `[!]` name/reason/file, the padded ids, the order).
 - `TestPluginsNoArgsRefusal`: args given: the usage voice.
 - `TestPluginsNilSeamRefusal`: `Env.Plugins` nil: the no-seam voice.
 - `TestPluginsNone`: an empty (non-nil) slice: `plugins: none`.
