@@ -33,7 +33,6 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	type candidate struct {
 		sym  symRow
 		item string
-		prob float64
 	}
 	var items []candidate
 	total := 0
@@ -59,8 +58,17 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	if q.scorer == nil {
 		yes = items
 	} else {
-		texts := make([]string, len(items))
+		ask := items
+		held := 0
 		for i, c := range items {
+			if i > 0 && held+len(c.item) >= q.loadCap {
+				ask = items[:i]
+				break
+			}
+			held += len(c.item)
+		}
+		texts := make([]string, len(ask))
+		for i, c := range ask {
 			texts[i] = c.item
 		}
 		verdicts, err := q.scorer.Score(ctx, task, texts)
@@ -69,18 +77,17 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 		}
 		for i, v := range verdicts {
 			if v.Yes {
-				items[i].prob = v.Probability
-				yes = append(yes, items[i])
+				yes = append(yes, ask[i])
 			}
 			if v.Answered {
 				scored++
 			}
 			if v.Unsure {
-				wobbly[items[i].sym.Package+"\x00"+items[i].sym.Name] = true
-				unsure = append(unsure, baseName(items[i].sym.Package)+"."+items[i].sym.Name)
+				key := ask[i].sym.Package + "\x00" + ask[i].sym.Name
+				wobbly[key] = true
+				unsure = append(unsure, baseName(ask[i].sym.Package)+"."+ask[i].sym.Name)
 			}
 		}
-		sort.SliceStable(yes, func(i, j int) bool { return yes[i].prob > yes[j].prob })
 	}
 	var b strings.Builder
 	loaded := 0

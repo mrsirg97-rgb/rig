@@ -126,16 +126,20 @@ file:line — stay under the ceiling before any request goes out.
 With the decision server wired, the candidates ride the exported
 fan-out (one yes/no per candidate, "Does this symbol matter for the
 task?", the kernel's Parallel the bound), the state on the wire the
-task and the item. The yes set loads live, highest probability first;
-the unsure rule is decide's — an answer whose confidence is under one
-half is unsure, and the unsure are listed by name at the end so the
-model can pack one by hand instead of being loaded; a confident no and
-a candidate the server never answered are not listed. The load cap is
-the result cap the root passes in (the kernel cuts tool results at the
-same cap), not the read ceiling: the affirmations spend it first, then
-the lexical top of the rank fills the rest — the server's judgment
-re-ranks, never censors, so a scored pack is never worse than an
-unscored one. Every answered candidate is one pending row (site `pack`,
+task and the item. No more candidates are scored than the pack could
+load: the scored set is the rank prefix whose items fit the load cap,
+the candidates' own sizes the measure, and the tail rides the lexical
+fill unscored. The yes set loads live in rank order: the lexical rank
+is the spine and the server's yes promotes within it, never re-orders
+it. The unsure rule is decide's — an answer whose confidence is under
+one half is unsure, and the unsure are listed by name at the end so
+the model can pack one by hand instead of being loaded; a confident no
+and a candidate the server never answered are not listed. The load cap
+is the result cap the root passes in (the kernel cuts tool results at
+the same cap), not the read ceiling: the affirmations spend it first,
+then the lexical top of the rank fills the rest — the server's
+judgment promotes within the rank, never censors, so a scored pack is
+never worse than an unscored one. Every answered candidate is one pending row (site `pack`,
 the server as decider, the task and the item as state) the 2.7.0
 reviewer settles as it settles bash rows, a deny naming the right
 answer. Without a server the lexical candidates load alone, in rank
@@ -189,9 +193,10 @@ The generated files are pinned by the drift test (todo's pattern).
 
 The task pack (2.10.0): a task matching three symbols packs the two the
 server says yes to and lists the wobbly third as unsure; a confident no
-is hidden and the lexical top fills the rest of the budget; the pack
-stops at the result cap with the highest probability first; a candidate
-list past the read ceiling is cut before any request; unset decisionUrl
+is hidden and the lexical top fills the rest of the budget; the scored
+set is the rank prefix the load could hold and the pack rides the
+lexical spine; a candidate list past the read ceiling is cut before any
+request; unset decisionUrl
 packs the lexical candidates in rank order and writes no row; each
 scored candidate writes one pending row and the reviewer's deny stores
 the corrected answer; the lexical tables hold a row per symbol, follow

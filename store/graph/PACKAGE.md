@@ -68,14 +68,16 @@ project-relative; each worktree's store maps its own tree.
   over `symbol_fts`/`symbol_grams`, the candidate items (the live
   signature at file:line) cut at the item ceiling before any request,
   the scorer seam (`Scorer`, implemented by `decision.PackScorer`) —
-  the yes set loads live, highest probability first, until the load
-  ceiling is spent, the wobbly answers list by name, the confident nos
-  and the never-answered show nowhere and the lexical top of the rank
-  fills the rest of the budget (the server's judgment re-ranks, never
-  censors); without a scorer the lexical candidates load in rank order
-  and nothing is recorded. The queue carries the two ceilings
-  (`SetPackCaps`, `PackCaps`): the candidate items keep the read
-  ceiling and the root stamps the load cap with the result cap.
+  the scored set is the rank prefix the load could hold, the items'
+  own sizes against the load cap, and the lexical rank is the pack's
+  spine: the yes set loads live in rank order, the wobbly answers list
+  by name, the confident nos and the never-answered show nowhere and
+  the lexical top fills the rest of the budget (the server's judgment
+  promotes within the rank, never re-orders it); without a scorer the
+  lexical candidates load in rank order and nothing is recorded. The
+  queue carries the two ceilings (`SetPackCaps`, `PackCaps`): the
+  candidate items keep the read ceiling and the root stamps the load
+  cap with the result cap.
 
 ## How it is consumed
 

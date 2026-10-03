@@ -10,16 +10,20 @@ trigram shadow over each symbol's name, kind, package and file, fused
 as recall fuses them (reciprocal rank) — and the tables land in the
 graph store's extra.sql, the generated ddl and domain untouched.
 
-With `decisionUrl` set, every candidate is scored with one yes/no —
+With `decisionUrl` set, candidates are scored with one yes/no —
 "Does this symbol matter for the task?" — through the fan-out decide
 uses (now exported as `decision.FanOut`), bounded by the kernel's
-Parallel; the candidate's item is its live signature and file. The yes
-set loads live, highest probability first, into a budget of the result
-cap the root passes in; an answer whose confidence is under one half is
-unsure and the unsure are listed by name at the end so the model can
-pack one by hand, a confident no is not listed, and the lexical top of
-the rank fills the rest of the budget — the server's judgment re-ranks,
-never censors, so a scored pack is never worse than an unscored one.
+Parallel; the candidate's item is its live signature and file. No more
+candidates go out than the pack could load: the scored set is the rank
+prefix whose items fit the result cap the root passes in, the
+candidates' own sizes the measure — the menu task's minute of fan-out
+becomes about ten seconds. The lexical rank is the pack's spine: the
+yes set loads live in rank order, the server's judgment promotes
+within the rank and never re-orders it; an answer whose confidence is
+under one half is unsure and the unsure are listed by name at the end
+so the model can pack one by hand, a confident no is not listed, and
+the lexical top fills the rest of the budget, so a scored pack is
+never worse than an unscored one.
 Every answered candidate is one pending row in the decision store (the
 new site `pack`, the server as decider, the task and the item as state)
 and the reviewer settles them at turn end as it settles bash rows, a

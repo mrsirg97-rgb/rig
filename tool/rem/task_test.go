@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -201,7 +202,7 @@ func TestPackByTaskLoadsTheYesSetAndListsTheUnsure(t *testing.T) {
 		t.Fatalf("the declined candidate must not load:\n%s", reply)
 	}
 	if strings.Index(reply, "Target — func") > strings.Index(reply, "Helper — func") {
-		t.Fatalf("the yes set loads highest probability first:\n%s", reply)
+		t.Fatalf("the yes set rides the lexical rank:\n%s", reply)
 	}
 	if !strings.Contains(reply, "unsure (1) — the server did not say yes; pack one by hand") {
 		t.Fatalf("the declined candidate is the unsure list:\n%s", reply)
@@ -223,7 +224,7 @@ func TestPackByTaskLoadsTheYesSetAndListsTheUnsure(t *testing.T) {
 	}
 }
 
-func TestPackByTaskStopsAtTheBudgetWithTheHighestProbabilityFirst(t *testing.T) {
+func TestPackByTaskStopsAtTheBudgetOnTheLexicalTop(t *testing.T) {
 	root, q, tool, _, _ := taskModule(t, func(item string) (map[string]any, bool) {
 		switch {
 		case strings.Contains(item, "func Target()"):
@@ -242,7 +243,7 @@ func TestPackByTaskStopsAtTheBudgetWithTheHighestProbabilityFirst(t *testing.T) 
 		t.Fatalf("pack: %v", err)
 	}
 	if !strings.Contains(reply, "Target — func — alpha/a.go:") {
-		t.Fatalf("the highest probability candidate loads first:\n%s", reply)
+		t.Fatalf("the lexical top loads first:\n%s", reply)
 	}
 	if strings.Contains(reply, "\nHelper — func") || strings.Contains(reply, "\nCall — func") {
 		t.Fatalf("the pack stops at the budget:\n%s", reply)
@@ -286,6 +287,65 @@ func TestPackByTaskWithoutAServerPacksTheLexicalCandidatesAndWritesNoRows(t *tes
 	}
 	if !strings.Contains(reply, "coverage:") {
 		t.Fatalf("the unset pack keeps the coverage line:\n%s", reply)
+	}
+}
+
+func TestPackByTaskScoresNoMoreThanTheLoadCouldHold(t *testing.T) {
+	root, q, tool, probe, _ := taskModule(t, allYes)
+	mapThePackFixture(t, root, q)
+	if _, err := packExec(t, tool, root, packTask, nil); err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	_, asks := probe.snapshot()
+	if len(asks) != 3 {
+		t.Fatalf("the unbounded pack asks about every candidate: %v", asks)
+	}
+	lens := []int{len(asks[0]), len(asks[1]), len(asks[2])}
+	sort.Ints(lens)
+	root2, q2, tool2, probe2, _ := taskModule(t, allYes)
+	mapThePackFixture(t, root2, q2)
+	q2.SetPackCaps(1<<20, lens[0]+lens[1]+1)
+	reply, err := packExec(t, tool2, root2, packTask, nil)
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	_, asks2 := probe2.snapshot()
+	if len(asks2) != 2 {
+		t.Fatalf("the load budget bounds the scored set, got %d asks: %v", len(asks2), asks2)
+	}
+	for _, a := range asks2 {
+		if strings.Contains(a, "func Call()") {
+			t.Fatalf("the rank prefix is what the load could hold, the tail is not scored: %v", asks2)
+		}
+	}
+	if !strings.Contains(reply, "scored 2 candidates") {
+		t.Fatalf("the reply names the count scored:\n%s", reply)
+	}
+}
+
+func TestPackByTaskOrdersTheYesSetByTheLexicalRankNotTheServer(t *testing.T) {
+	root, q, tool, _, _ := taskModule(t, func(item string) (map[string]any, bool) {
+		switch {
+		case strings.Contains(item, "func Target()"):
+			return noulAnswer(0.7), true
+		case strings.Contains(item, "func Helper()"):
+			return noulAnswer(0.8), true
+		case strings.Contains(item, "func Call()"):
+			return noulAnswer(0.9), true
+		}
+		return nil, false
+	})
+	mapThePackFixture(t, root, q)
+	reply, err := packExec(t, tool, root, packTask, nil)
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	target, helper, call := strings.Index(reply, "Target — func"), strings.Index(reply, "Helper — func"), strings.Index(reply, "Call — func")
+	if target < 0 || helper < 0 || call < 0 {
+		t.Fatalf("every affirmed candidate loads:\n%s", reply)
+	}
+	if target > helper || helper > call {
+		t.Fatalf("the yes set rides the lexical rank, not the server's probabilities:\n%s", reply)
 	}
 }
 
