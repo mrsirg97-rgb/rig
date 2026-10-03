@@ -1,4 +1,19 @@
 # Changelog
+## [2.9.2]: the menu in the command's own color, and its words for the operator
+
+The completion menu painted command and verb names in the accent while
+the committed `/name` opening paints them in the ember; on `warm` that
+was blue beside orange. The names are the ember now, in every theme.
+
+The descriptions the menu shows are the operator's, not the spec's: a
+readability pass over every `/command` and verb hint, the way 2.8.1
+rewrote the tool words for the model. Each says what the verb does in
+plain words first and the shape of the line last (`approve <name>`),
+and the house terms that only the specs know (the drain pair, the
+soak's vitals, zones, re-deriving a crontab line) are gone from the
+menu. The piped frontends and the model see none of this: the
+registry, the goldens and the tools' replies are untouched.
+
 ## [2.9.1]: every command speaks under its opening line
 
 2.8.3 gave the listing commands the todo block's shape; the one-line

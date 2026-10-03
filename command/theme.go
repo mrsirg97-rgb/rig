@@ -12,14 +12,14 @@ type themeCmd struct{}
 func (themeCmd) Name() string { return "theme" }
 
 func (themeCmd) Description() string {
-	return "the interface theme: show or set the preset (warm, cool, custom)"
+	return "the colors: bare shows the preset, /theme <warm|cool|custom> sets it"
 }
 
 func (themeCmd) Sub() []Sub {
 	return []Sub{
 		{Name: "warm", Desc: "the default palette"},
 		{Name: "cool", Desc: "the cool palette"},
-		{Name: "custom", Desc: "theme.json in the rig home"},
+		{Name: "custom", Desc: "your own theme.json in the rig home"},
 	}
 }
 

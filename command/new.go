@@ -10,7 +10,7 @@ type newCmd struct{}
 func (newCmd) Name() string { return "new" }
 
 func (newCmd) Description() string {
-	return "close the current session ok and start a fresh one (same process)"
+	return "close this session and start a fresh one, same process"
 }
 
 func (newCmd) Run(ctx context.Context, args string, env any) (string, error) {

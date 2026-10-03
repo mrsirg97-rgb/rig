@@ -10,7 +10,7 @@ type steerCmd struct{}
 func (steerCmd) Name() string { return "steer" }
 
 func (steerCmd) Description() string {
-	return "queue a steering line (latest wins), or interrupt a live turn"
+	return "a line for the model at the next turn boundary, latest wins; bare /steer interrupts a live turn"
 }
 
 func (steerCmd) Run(ctx context.Context, args string, env any) (string, error) {

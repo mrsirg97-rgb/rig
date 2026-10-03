@@ -483,9 +483,9 @@ func TestLiveRegionMenuRows(t *testing.T) {
 	prompt := th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
 	inEmpty := prompt + th.Paint(SlotText, " ")
 	inCmd := prompt + th.Paint(SlotText, " /s")
-	menuA := th.Paint(SlotAccent, "scheduler") + th.Paint(SlotText, "  the scheduler's jobs")
-	menuB := th.Paint(SlotAccent, "sessions") + th.Paint(SlotText, "  the session's store")
-	menuC := th.Paint(SlotAccent, "steer") + th.Paint(SlotText, "  a note into the queue")
+	menuA := th.Paint(SlotEmber, "scheduler") + th.Paint(SlotText, "  the scheduler's jobs")
+	menuB := th.Paint(SlotEmber, "sessions") + th.Paint(SlotText, "  the session's store")
+	menuC := th.Paint(SlotEmber, "steer") + th.Paint(SlotText, "  a note into the queue")
 	status := th.Paint(SlotDim, "huihui3.8")
 
 	var out strings.Builder

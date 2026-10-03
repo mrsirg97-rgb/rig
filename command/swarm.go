@@ -18,13 +18,13 @@ type swarmCmd struct{}
 func (swarmCmd) Name() string { return "swarm" }
 
 func (swarmCmd) Description() string {
-	return "the drain pair: one router on the session's queue hands each ready task to an idle worker (swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>], bare swarm lists, swarm stop ends)"
+	return "the workers that drain the task queue: bare lists them, start <count> adds workers, stop ends them"
 }
 
 func (swarmCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "start", Desc: "start N workers (swarm start 3)"},
-		{Name: "stop", Desc: "end the swarm"},
+		{Name: "start", Desc: "start workers on the queue: start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>]"},
+		{Name: "stop", Desc: "stop every worker"},
 	}
 }
 

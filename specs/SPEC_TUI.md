@@ -862,8 +862,8 @@ does not move, and the CLI never sees the menu.
 
 - two or more candidates: the menu, above the input, inside the live
   region (decision 2's cap): one row per candidate, `name  desc`, the
-  name in the accent, the description in text, the selected row
-  inverted. A menu row is one terminal row (decision 10: the live
+  name in the ember (the slot of the `/name` opening line, 2.9.2), the
+  description in text, the selected row inverted. A menu row is one terminal row (decision 10: the live
   region is measured): the description takes what the width leaves
   after the name and is dotted when it overflows, never wrapped. At
   most six rows show; the window follows the selection like the
@@ -1062,7 +1062,7 @@ where the CI box allows and skip cleanly where not.
   history up/down; paste of three lines becomes three prompts in
   order (the burst rule, through the TUI's reader); Ctrl-T toggles
   subsequent reasoning only; the completion menu (the rows' exact
-  bytes; the name in the accent, the selected row inverted; the
+  bytes; the name in the ember, the selected row inverted; the
   six-row cap with the `… N more` tail, the window following the
   selection, Tab down and Shift-Tab up cycling, Enter accepting the
   selection without dispatching, Esc closing the menu and the

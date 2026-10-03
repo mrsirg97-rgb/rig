@@ -21,9 +21,9 @@ func (t toolCmd) Name() string { return t.name }
 func (t toolCmd) Description() string {
 	switch t.name {
 	case "todo":
-		return "the task queue: read it, add a task, claim work, review, or move one (claim, start, done, fail, retry, accept, reject)"
+		return "the task queue: read it, add tasks, claim and start them, mark them done or failed, accept or reject reviews"
 	case "scheduler":
-		return "the cron jobs: list, create, update, pause, resume, remove, repair, or show a job's runs"
+		return "the scheduled jobs: list, create, update, pause, resume, remove, repair, or see a job's runs"
 	}
 	return "over the same " + t.name + " tool the model gets: the line is parsed into the tool's args, the reply printed verbatim"
 }
@@ -34,27 +34,27 @@ func (t toolCmd) Sub() []Sub {
 		return []Sub{
 			{Name: "read", Desc: "show the queue"},
 			{Name: "create", Desc: "add a task: create <text>"},
-			{Name: "claim", Desc: "take the next task: claim, or claim review"},
+			{Name: "claim", Desc: "take the next ready task; claim review takes the next one waiting for review"},
 			{Name: "start", Desc: "mark a task in progress: start <id>"},
 			{Name: "done", Desc: "submit a task for review: done <id>"},
-			{Name: "note", Desc: "attach a message to a task: note <id> <text…>"},
+			{Name: "note", Desc: "attach a note to a task: note <id> <text>"},
 			{Name: "accept", Desc: "accept a reviewed task: accept <id>"},
-			{Name: "reject", Desc: "send a reviewed task back with a reason: reject <id> <reason…>"},
+			{Name: "reject", Desc: "send a reviewed task back with a reason: reject <id> <reason>"},
 			{Name: "fail", Desc: "mark a task failed: fail <id>"},
-			{Name: "retry", Desc: "put a failed task back: retry <id>"},
-			{Name: "prune", Desc: "drop the done rows from the queue"},
-			{Name: "project", Desc: "whose queue this is (bare), or bind another and read it: project <path>"},
+			{Name: "retry", Desc: "put a failed task back in the queue: retry <id>"},
+			{Name: "prune", Desc: "drop the finished tasks from the queue"},
+			{Name: "project", Desc: "which queue this is; project <path> binds another and reads it"},
 		}
 	case "scheduler":
 		return []Sub{
 			{Name: "list", Desc: "show the jobs"},
-			{Name: "create", Desc: "add a job: create <name> <prompt…> <cron>"},
+			{Name: "create", Desc: "add a job: create <name> <prompt> <cron>"},
 			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"},
-			{Name: "runs", Desc: "show a job's runs: runs <id> [n]"},
+			{Name: "runs", Desc: "a job's recent runs: runs <id> [n]"},
 			{Name: "pause", Desc: "pause a job: pause <id>"},
 			{Name: "resume", Desc: "resume a paused job: resume <id>"},
 			{Name: "remove", Desc: "remove a job: remove <id>"},
-			{Name: "repair", Desc: "re-derive a drifting job's crontab line: repair [id]"},
+			{Name: "repair", Desc: "rewrite a job's crontab line when it drifted: repair [id]"},
 		}
 	}
 	return nil

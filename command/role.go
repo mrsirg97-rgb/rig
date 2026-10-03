@@ -14,7 +14,7 @@ func (roleCmd) Sub() []Sub { return RoleHints() }
 func (roleCmd) Name() string { return "role" }
 
 func (roleCmd) Description() string {
-	return "the session's stance: default, architect, or reviewer (effective next turn)"
+	return "the session's stance from the next turn: default, architect, or reviewer"
 }
 
 func (roleCmd) Run(ctx context.Context, args string, env any) (string, error) {
