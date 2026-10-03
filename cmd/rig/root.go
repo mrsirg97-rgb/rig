@@ -154,6 +154,9 @@ func wire(r *root) *rig.Kernel {
 		rig.WithConcurrent(func(c core.ToolCall) bool { return concurrentNatives[c.Name] }),
 	)
 	k.Session = r.session
+	if r.graph != nil {
+		r.graph.SetPackCaps(graph.ReadCap, r.resultCap)
+	}
 	if r.decide != nil {
 		r.decide.SetParallel(k.EffectiveParallel())
 	}

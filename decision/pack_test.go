@@ -50,8 +50,16 @@ func (p *packProbe) snapshot() ([]string, []string, []string, []string, int) {
 		append([]string(nil), p.kinds...), append([]string(nil), p.instructions...), p.requests
 }
 
+func noulAnswer(p float64) map[string]any {
+	return map[string]any{"type": "noul", "noul": p}
+}
+
+func wobblyAnswer(p float64) map[string]any {
+	return map[string]any{"type": "choice", "choice": "yes", "probabilities": map[string]any{"yes": p, "no": 1 - p}}
+}
+
 type packFake struct {
-	noul    func(item string) (float64, bool)
+	answer  func(item string) (map[string]any, bool)
 	omit    map[string]bool
 	status5 map[string]bool
 }
@@ -105,13 +113,13 @@ func packServer(t *testing.T, probe *packProbe, fake packFake) *httptest.Server 
 			_, _ = w.Write([]byte(wireReply(map[string]any{})))
 			return
 		}
-		v, ok := fake.noul(s.Item)
+		a, ok := fake.answer(s.Item)
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(wireReply(map[string]any{id: map[string]any{"type": "noul", "noul": v}})))
+		_, _ = w.Write([]byte(wireReply(map[string]any{id: a})))
 	}))
 	return srv
 }
@@ -138,18 +146,19 @@ var packItems = []string{
 	"func Target() int { return Helper() } — alpha/a.go:5",
 	"func Helper() int { return 1 } — alpha/a.go:7",
 	"func Call() int { return alpha.Target() } — beta/b.go:5",
+	"func Same() int { return 1 } — gamma/g.go:5",
 }
 
 func TestThePackScorerAsksOneYesNoPerCandidate(t *testing.T) {
 	probe := &packProbe{}
-	srv := packServer(t, probe, packFake{noul: func(string) (float64, bool) { return 0.9, true }})
+	srv := packServer(t, probe, packFake{answer: func(string) (map[string]any, bool) { return noulAnswer(0.9), true }})
 	s := packScorer(t, srv, nil, nil, nil, 2)
 	verdicts, err := s.Score(context.Background(), "the target the helper and the call", packItems)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tasks, items, kinds, instructions, requests := probe.snapshot()
-	if requests != 3 {
+	if requests != 4 {
 		t.Fatalf("one request per candidate: %d", requests)
 	}
 	seen := map[string]bool{}
@@ -170,7 +179,7 @@ func TestThePackScorerAsksOneYesNoPerCandidate(t *testing.T) {
 			t.Fatalf("the item %q went out as a state", item)
 		}
 	}
-	if len(verdicts) != 3 {
+	if len(verdicts) != 4 {
 		t.Fatalf("one verdict per candidate: %d", len(verdicts))
 	}
 	for i, v := range verdicts {
@@ -182,8 +191,8 @@ func TestThePackScorerAsksOneYesNoPerCandidate(t *testing.T) {
 
 func TestEveryScoredCandidateWritesOnePendingRow(t *testing.T) {
 	probe := &packProbe{}
-	nouls := map[string]float64{packItems[0]: 0.9, packItems[1]: 0.8, packItems[2]: 0.4}
-	srv := packServer(t, probe, packFake{noul: func(item string) (float64, bool) { return nouls[item], true }})
+	answers := map[string]map[string]any{packItems[0]: noulAnswer(0.9), packItems[1]: noulAnswer(0.8), packItems[2]: noulAnswer(0.4)}
+	srv := packServer(t, probe, packFake{answer: func(item string) (map[string]any, bool) { return answers[item], true }})
 	db := openStore(t)
 	land := 0
 	s := packScorer(t, srv, &storeSink{db: db, written: make(chan decision.Answer, 8)}, func() { land++ }, nil, 2)
@@ -236,12 +245,12 @@ func TestEveryScoredCandidateWritesOnePendingRow(t *testing.T) {
 	}
 }
 
-func TestADeclinedCandidateIsUnsureAndAnUnansweredOneIsHidden(t *testing.T) {
+func TestAWobblyAnswerIsUnsureAndAConfidentNoIsHidden(t *testing.T) {
 	probe := &packProbe{}
-	nouls := map[string]float64{packItems[0]: 0.9, packItems[1]: 0.4}
+	answers := map[string]map[string]any{packItems[0]: noulAnswer(0.9), packItems[1]: wobblyAnswer(0.4), packItems[2]: noulAnswer(0.4)}
 	srv := packServer(t, probe, packFake{
-		noul: func(item string) (float64, bool) { return nouls[item], true },
-		omit: map[string]bool{packItems[2]: true},
+		answer: func(item string) (map[string]any, bool) { return answers[item], true },
+		omit:   map[string]bool{packItems[3]: true},
 	})
 	db := openStore(t)
 	s := packScorer(t, srv, &storeSink{db: db, written: make(chan decision.Answer, 8)}, nil, nil, 2)
@@ -253,23 +262,26 @@ func TestADeclinedCandidateIsUnsureAndAnUnansweredOneIsHidden(t *testing.T) {
 		t.Fatalf("the affirmed candidate is the yes set: %+v", verdicts[0])
 	}
 	if verdicts[1].Yes || !verdicts[1].Unsure {
-		t.Fatalf("the declined candidate is the unsure list: %+v", verdicts[1])
+		t.Fatalf("the wobbly answer is the unsure list: %+v", verdicts[1])
 	}
 	if verdicts[2].Yes || verdicts[2].Unsure {
-		t.Fatalf("the unanswered candidate is neither set: %+v", verdicts[2])
+		t.Fatalf("the confident no is hidden: %+v", verdicts[2])
+	}
+	if verdicts[3].Yes || verdicts[3].Unsure {
+		t.Fatalf("the unanswered candidate is neither set: %+v", verdicts[3])
 	}
 	var count int
 	if err := db.QueryRow(`SELECT count(*) FROM decisions`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Fatalf("the unanswered candidate writes no row, got %d", count)
+	if count != 3 {
+		t.Fatalf("every scored candidate one pending row, the unanswered none, got %d", count)
 	}
 }
 
 func TestASinkErrorIsLoudAndNeverFailsTheScore(t *testing.T) {
 	probe := &packProbe{}
-	srv := packServer(t, probe, packFake{noul: func(string) (float64, bool) { return 0.9, true }})
+	srv := packServer(t, probe, packFake{answer: func(string) (map[string]any, bool) { return noulAnswer(0.9), true }})
 	loud := 0
 	s := packScorer(t, srv, packBrokenSink{}, nil, func(string) { loud++ }, 2)
 	verdicts, err := s.Score(context.Background(), "the task", packItems[:1])
@@ -287,12 +299,12 @@ func TestASinkErrorIsLoudAndNeverFailsTheScore(t *testing.T) {
 func TestAServerErrorRefusesThePackAndWritesNoRows(t *testing.T) {
 	probe := &packProbe{}
 	srv := packServer(t, probe, packFake{
-		noul:    func(string) (float64, bool) { return 0.9, true },
+		answer:  func(string) (map[string]any, bool) { return noulAnswer(0.9), true },
 		status5: map[string]bool{packItems[1]: true},
 	})
 	db := openStore(t)
 	s := packScorer(t, srv, &storeSink{db: db, written: make(chan decision.Answer, 8)}, nil, nil, 1)
-	if _, err := s.Score(context.Background(), "the task", packItems[:2]); err == nil {
+	if _, err := s.Score(context.Background(), "the task", packItems[:4]); err == nil {
 		t.Fatal("a server error is a refusal")
 	}
 	var count int

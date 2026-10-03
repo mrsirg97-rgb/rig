@@ -60,9 +60,11 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   is scored with one yes/no through the fan-out, the task and the item
   as the state on the wire, every answered candidate one pending row
   (site `pack`, the sink it holds) with the reviewer marked dirty per
-  row. The verdict says yes, unsure (the server declined to affirm) or
-  neither (the server never answered). A transport error refuses and
-  writes no rows; a sink error is loud and never fails the score.
+  row. The verdict says yes (a confident affirmation), unsure (decide's
+  rule: an answer whose confidence is under one half — the model judges
+  it) or neither (a confident no or no answer; hidden). A transport
+  error refuses and writes no rows; a sink error is loud and never
+  fails the score.
 - `decide.go`: the decide tool, the model's delegate door (SPEC_DECISION,
   the delegate section): one typed question — a choice with a
   description per label, a yes/no, or a score — and a list of items; one
