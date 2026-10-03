@@ -1,0 +1,9 @@
+{
+  "name": "../../rig/store/graph",
+  "module": "github.com/mrsirg97-rgb/rig/v2",
+  "runtime": "github.com/mrsirg97-rgb/rig/v2/store",
+  "packages": [
+    { "name": "domain", "template": "templates/domain.template", "packageType": "flat", "fileType": "go" },
+    { "name": "ddl", "template": "templates/ddl.template", "packageType": "graph", "fileType": "go" }
+  ]
+}

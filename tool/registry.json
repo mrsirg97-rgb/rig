@@ -172,7 +172,7 @@
         },
         "tasks": {
           "type": "array",
-          "description": "the tasks to add, in order. required for create. an empty list clears the queue.",
+          "description": "tasks to add, in order. required for create; an empty list clears the queue.",
           "items": {
             "type": "object",
             "required": [
@@ -202,23 +202,23 @@
         },
         "id": {
           "type": "string",
-          "description": "the task, as tN from a reply. required for every action but create and read."
+          "description": "the task, as tN from a reply."
         },
         "note": {
           "type": "string",
-          "description": "the note text, or the reason when rejecting."
+          "description": "the note text, or the reject reason."
         },
         "status": {
           "type": "string",
           "enum": [
             "review"
           ],
-          "description": "for claim: review takes the next task awaiting review."
+          "description": "for claim: review takes the next task in review."
         },
         "pos": {
           "type": "integer",
           "minimum": 1,
-          "description": "for move: the new position, where 1 is first."
+          "description": "for move: the new position, 1 is first."
         },
         "all": {
           "type": "boolean",
@@ -228,11 +228,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "for finished: how many to list. 10 by default, 100 at most."
+          "description": "for finished: how many to list; 10 default, 100 max."
         },
         "project": {
           "type": "string",
-          "description": "another workspace, as a path. later calls act there until you name a different one. ~ expands."
+          "description": "another workspace, as a path; later calls act there until you name another. ~ expands."
         }
       }
     }
@@ -240,9 +240,9 @@
   {
     "name": "rem",
     "enabled": true,
-    "what": "memory across sessions. learn commits a fact or constraint, once. recall finds past solutions by intent, this workspace first, then global; recall without a query browses. reflect stores a distilled memory with its source. prune removes, reduces, or consolidates.",
-    "guidelines": "recall before re-deriving a project fact; learn what the next session should not have to re-derive; supersede by id when the code disagrees; name project when the fact belongs to a different workspace than the one you started in. memory ids (mN) come from the replies: copy them, never invent them.",
-    "reply": "the hits with their ids, strength and arm, or the written row.",
+    "what": "memory across sessions and this project's code map. learn commits a fact or constraint, once. recall finds past solutions by intent, this workspace first, then global; recall without a query browses. reflect stores a distilled memory with its source. prune removes, reduces, or consolidates. pack loads the live code around a symbol or file: definition, callers and callees, from disk now. index maps the whole project.",
+    "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session should not have to re-derive; supersede by id when the code disagrees; name project when the fact belongs to a different workspace than the one you started in. memory ids (mN) come from the replies: copy them, never invent them.",
+    "reply": "the hits with their ids, strength and arm, the written row, or the pack with its coverage.",
     "schema": {
       "type": "object",
       "required": [
@@ -254,7 +254,9 @@
             "learn",
             "recall",
             "reflect",
-            "prune"
+            "prune",
+            "index",
+            "pack"
           ]
         },
         "content": {
@@ -267,7 +269,7 @@
         },
         "source": {
           "type": "string",
-          "description": "raw source log for provenance (reflect)"
+          "description": "raw source log (reflect)"
         },
         "kind": {
           "type": "string",
@@ -288,7 +290,7 @@
         },
         "project": {
           "type": "string",
-          "description": "another workspace, as a path; later calls act there until you name a different one. ~ expands."
+          "description": "another workspace, as a path; later calls act there until you name another. ~ expands."
         },
         "k": {
           "type": "integer",
@@ -314,6 +316,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "selection criterion for prune"
+        },
+        "target": {
+          "type": "string",
+          "description": "pack: the symbol or file"
         },
         "supersedes": {
           "anyOf": [

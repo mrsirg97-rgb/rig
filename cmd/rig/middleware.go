@@ -8,6 +8,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/index"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
@@ -22,7 +23,11 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	if r.allow == nil {
 		door = nil // no tools: the fire's worker executes nothing, plugins included
 	}
-	mw := []core.ToolMiddleware{
+	var mw []core.ToolMiddleware
+	if r.graph != nil {
+		mw = append(mw, index.Middleware(r.graph))
+	}
+	mw = append(mw,
 		toolset.Resolve(r.live),
 		approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating, r.drec),
 		cutoff.Middleware(),
@@ -32,7 +37,7 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		guard.Rounds(r.rounds, r.drec),
 		guard.Cap(resultCap),
 		paths.Middleware(r.drec),
-	}
+	)
 	if r.proposals != nil {
 		mw = append(mw, decision.Site(r.proposals))
 	}
