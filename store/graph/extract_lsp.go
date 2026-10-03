@@ -84,6 +84,10 @@ type lspRange struct {
 		Line      int `json:"line"`
 		Character int `json:"character"`
 	} `json:"start"`
+	End struct {
+		Line      int `json:"line"`
+		Character int `json:"character"`
+	} `json:"end"`
 }
 
 type lspLocWrap struct {
@@ -136,11 +140,17 @@ func (e *lspExtract) Extract(ctx context.Context, abs string) (Result, error) {
 	walk = func(list []*lspSymbol) {
 		for _, s := range list {
 			if kind := lspKind(s.Kind); kind != "" {
-				line := int64(1)
-				if s.Range != nil {
+				line, end := int64(1), int64(1)
+				switch {
+				case s.Range != nil:
 					line = int64(s.Range.Start.Line + 1)
-				} else if s.Location != nil && s.Location.Range != nil {
+					end = int64(s.Range.End.Line + 1)
+				case s.Location != nil && s.Location.Range != nil:
 					line = int64(s.Location.Range.Start.Line + 1)
+					end = int64(s.Location.Range.End.Line + 1)
+				}
+				if end < line {
+					end = line
 				}
 				res.Symbols = append(res.Symbols, Symbol{
 					Package: pkg,
@@ -148,6 +158,7 @@ func (e *lspExtract) Extract(ctx context.Context, abs string) (Result, error) {
 					Kind:    kind,
 					File:    fileRel,
 					Line:    line,
+					EndLine: end,
 				})
 			}
 			walk(s.Children)

@@ -37,14 +37,16 @@ type File struct {
 //
 // Package is the import path for Go, the project-relative directory for
 // every other language. A method's Name carries its receiver (T.M). Line
-// is the declaration line, the address the live read shows from; no
-// source text is stored anywhere.
+// is the declaration line, the address the live read shows from, and
+// EndLine is the declaration's last line — together the definition
+// window pack reads; no source text is stored anywhere.
 type Symbol struct {
 	Package string `primary:"true" alias:"name=package,nullable=false"`
 	Name    string `primary:"true" alias:"name=name,nullable=false"`
 	Kind    string `alias:"name=kind,nullable=false"`
 	File    string `alias:"name=file,nullable=false"`
 	Line    int64  `alias:"name=line,nullable=false"`
+	EndLine int64  `alias:"name=end_line,nullable=false"`
 }
 
 // table:"edges"

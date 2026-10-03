@@ -291,6 +291,9 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 	if got := schema.Props["project"].Description; got != "another workspace, as a path; later calls act there until you name another. ~ expands." {
 		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
+	if got := schema.Props["importance"].Description; got != "Strength starts here and decays" {
+		t.Fatalf("the importance field must say what strength does, got %q", got)
+	}
 }
 
 func gitInit(t *testing.T, dir string) {

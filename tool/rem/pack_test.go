@@ -58,6 +58,30 @@ func packModule(t *testing.T) (string, *graph.Queue, core.Tool) {
 	return root, q, remapi.New(newDB(t), q)
 }
 
+func graphModule(t *testing.T) (string, *graph.Queue, core.Tool) {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "core"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	busy := "package core\n\nfunc gateOnce(todo string) bool {\n\tif todo == \"\" {\n\t\treturn false\n\t}\n\tfor i := 0; i < 3; i++ {\n\t\tif !contains(todo) {\n\t\t\treturn false\n\t\t}\n\t}\n\tif todo == \"x\" {\n\t\treturn todo + \"!\"\n\t}\n\tif todo == \"y\" {\n\t\treturn todo\n\t}\n\treturn true\n}\n\nfunc contains(s string) bool {\n\treturn s != \"\"\n}\n\nfunc Gate(todo string) bool { return gateOnce(todo) }\n"
+	testFile := "package core_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/core\"\n)\n\nfunc contains(a, b string) bool { return a == b }\n\nfunc TestGate(t *testing.T) {\n\tif !contains(\"a\", \"a\") {\n\t\tt.Fatal(\"no\")\n\t}\n\tif !core.Gate(\"a\") {\n\t\tt.Fatal(\"gate\")\n\t}\n}\n"
+	files := map[string]string{
+		filepath.Join(root, "core", "busy.go"):      busy,
+		filepath.Join(root, "core", "core_test.go"): testFile,
+	}
+	for p, src := range files {
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	q := graph.NewQueue(t.TempDir(), nil)
+	return root, q, remapi.New(newDB(t), q)
+}
+
 func mapWithReads(t *testing.T, root string, q *graph.Queue, paths ...string) {
 	t.Helper()
 	file.SetIndexer(q)
@@ -164,10 +188,10 @@ func TestIndexMapsTheWholeProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("index: %v", err)
 	}
-	if !strings.Contains(reply, "indexing") {
+	if !strings.Contains(reply, "mapped 4") {
 		t.Fatalf("index reply: %s", reply)
 	}
-	q.Drain(ctx)
+	q.Close()
 	packed, err := packExec(t, tool, root, "alpha.Helper", nil)
 	if err != nil {
 		t.Fatalf("pack: %v", err)
@@ -177,6 +201,62 @@ func TestIndexMapsTheWholeProject(t *testing.T) {
 	}
 	if _, err := packExec(t, tool, root, "Nope", nil); err == nil {
 		t.Fatal("a symbol off the map packed")
+	}
+}
+
+func TestPackRefusesAnAmbiguousNameAcrossTestPackages(t *testing.T) {
+	root, q, tool := graphModule(t)
+	ctx := context.Background()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root}); err != nil {
+		t.Fatalf("index: %v", err)
+	}
+	q.Close()
+	_, err := packExec(t, tool, root, "contains", nil)
+	if err == nil {
+		t.Fatal("the bare name spanning both packages packed")
+	}
+	if !strings.Contains(err.Error(), "example.com/m/core") || !strings.Contains(err.Error(), "example.com/m/core_test") {
+		t.Fatalf("the refusal does not name both packages: %v", err)
+	}
+	packed, err := packExec(t, tool, root, "core.contains", nil)
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	if !strings.Contains(packed, "contains — func — core/busy.go:21") {
+		t.Fatalf("the package-qualified name must resolve to busy.go's contains:\n%s", packed)
+	}
+}
+
+func TestPackGateOnceShowsExactlyItsSeventeenLines(t *testing.T) {
+	root, q, tool := graphModule(t)
+	ctx := context.Background()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root}); err != nil {
+		t.Fatalf("index: %v", err)
+	}
+	q.Close()
+	reply, err := packExec(t, tool, root, "core.gateOnce", nil)
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	cut := strings.Index(reply, "\ncallers")
+	if cut < 0 {
+		t.Fatalf("no callers section:\n%s", reply)
+	}
+	def := strings.Split(reply[:cut], "\n")[1:]
+	if len(def) != 17 {
+		t.Fatalf("the definition window holds %d lines, want exactly 17:\n%s", len(def), reply)
+	}
+	if !strings.Contains(def[0], "3 func gateOnce(todo string) bool {") || !strings.Contains(def[16], "19 }") {
+		t.Fatalf("the window is not gateOnce's lines 3..19:\n%s", reply)
+	}
+	if !strings.Contains(reply, "callees (1):") || !strings.Contains(reply, "core.contains — func — core/busy.go:21") {
+		t.Fatalf("the callee is not busy.go's contains:\n%s", reply)
+	}
+	if !strings.Contains(reply, "    21 func contains(s string) bool {") {
+		t.Fatalf("the callee's signature line is missing:\n%s", reply)
+	}
+	if strings.Contains(reply, "    22 ") {
+		t.Fatalf("the callee shows past the opening brace:\n%s", reply)
 	}
 }
 

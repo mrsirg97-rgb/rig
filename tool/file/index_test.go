@@ -33,7 +33,7 @@ func indexModule(t *testing.T) (string, *graph.Queue) {
 
 func mapRows(t *testing.T, home, root, rel string) map[string]string {
 	t.Helper()
-	db, err := graph.Open(home, scope.Key(root))
+	db, err := graph.Open(home, scope.Key(root), scope.Worktree(root))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

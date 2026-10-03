@@ -59,15 +59,20 @@ func writeModule(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(root, "gamma"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "core"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(root, "vendor"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	files := map[string]string{
-		filepath.Join(root, "alpha", "a.go"):  alphaSrc,
-		filepath.Join(root, "beta", "b.go"):   betaSrc,
-		filepath.Join(root, "gamma", "g.go"):  brokenSrc,
-		filepath.Join(root, "alpha", "x.go"):  "package alpha\n\nfunc other() int { return 2 }\n",
-		filepath.Join(root, "vendor", "v.go"): "package vendor\n",
+		filepath.Join(root, "alpha", "a.go"):        alphaSrc,
+		filepath.Join(root, "beta", "b.go"):         betaSrc,
+		filepath.Join(root, "gamma", "g.go"):        brokenSrc,
+		filepath.Join(root, "alpha", "x.go"):        "package alpha\n\nfunc other() int {\n\treturn 2\n}\n",
+		filepath.Join(root, "vendor", "v.go"):       "package vendor\n",
+		filepath.Join(root, "core", "busy.go"):      busySrc,
+		filepath.Join(root, "core", "core_test.go"): coreTestSrc,
 	}
 	for p, src := range files {
 		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
@@ -122,6 +127,9 @@ func TestGoExtractMapsThePackageSymbols(t *testing.T) {
 		if s.Line <= 0 {
 			t.Fatalf("symbol %s carries line %d", s.Name, s.Line)
 		}
+		if s.EndLine != s.Line {
+			t.Fatalf("symbol %s spans %d..%d, want a one-line declaration", s.Name, s.Line, s.EndLine)
+		}
 		delete(want, s.Name)
 	}
 	if len(want) != 0 {
@@ -142,6 +150,17 @@ func TestGoExtractMapsThePackageSymbols(t *testing.T) {
 		if e != wantEdges[i] {
 			t.Fatalf("edge %d = %v, want %v", i, e, wantEdges[i])
 		}
+	}
+}
+
+func TestGoExtractEndsAtTheDeclaration(t *testing.T) {
+	root := writeModule(t)
+	res := extract(t, filepath.Join(root, "alpha", "x.go"))
+	if len(res.Symbols) != 1 || res.Symbols[0].Name != "other" {
+		t.Fatalf("symbols = %v, want other", res.Symbols)
+	}
+	if res.Symbols[0].Line != 3 || res.Symbols[0].EndLine != 5 {
+		t.Fatalf("other spans %d..%d, want 3..5", res.Symbols[0].Line, res.Symbols[0].EndLine)
 	}
 }
 
@@ -320,6 +339,105 @@ func Shared() int { return 9 }
 	}
 }
 
+const busySrc = `package core
+
+func gateOnce() bool { return contains("") }
+
+func contains(s string) bool { return s != "" }
+
+func Gate() bool { return gateOnce() }
+`
+
+const coreTestSrc = `package core_test
+
+import (
+	"testing"
+
+	"example.com/m/core"
+)
+
+func contains(a, b string) bool { return a == b }
+
+func TestGate(t *testing.T) {
+	_ = contains("a", "b")
+	_ = core.Gate()
+}
+`
+
+func TestAnExternalTestPackageKeysApart(t *testing.T) {
+	root := writeModule(t)
+	busy := filepath.Join(root, "core", "busy.go")
+	res := extract(t, busy)
+	for _, s := range res.Symbols {
+		if s.Package != "example.com/m/core" {
+			t.Fatalf("symbol %s carries package %q, want example.com/m/core", s.Name, s.Package)
+		}
+	}
+	var gateToContains bool
+	for _, e := range res.Edges {
+		if e.FromName == "gateOnce" && e.ToName == "contains" {
+			gateToContains = true
+			if e.ToPackage != "example.com/m/core" {
+				t.Fatalf("gateOnce's callee sits in %q, want example.com/m/core", e.ToPackage)
+			}
+		}
+	}
+	if !gateToContains {
+		t.Fatalf("gateOnce's edge to contains is missing: %v", res.Edges)
+	}
+
+	testFile := filepath.Join(root, "core", "core_test.go")
+	res = extract(t, testFile)
+	for _, s := range res.Symbols {
+		if s.Package != "example.com/m/core_test" {
+			t.Fatalf("symbol %s carries package %q, want example.com/m/core_test", s.Name, s.Package)
+		}
+	}
+	var own bool
+	for _, e := range res.Edges {
+		if e.FromPackage != "example.com/m/core_test" {
+			t.Fatalf("edge %+v names %q as the caller, want example.com/m/core_test", e, e.FromPackage)
+		}
+		if e.ToName == "contains" {
+			own = true
+			if e.ToPackage != "example.com/m/core_test" {
+				t.Fatalf("the test's contains sits in %q, want example.com/m/core_test", e.ToPackage)
+			}
+		}
+	}
+	if !own {
+		t.Fatalf("TestGate's edge to its own contains is missing: %v", res.Edges)
+	}
+
+	db := openTestStore(t)
+	ctx := context.Background()
+	if _, err := graph.Apply(ctx, db, "core/busy.go", shaFile(t, busy), "go", extract(t, busy)); err != nil {
+		t.Fatalf("apply busy.go: %v", err)
+	}
+	if _, err := graph.Apply(ctx, db, "core/core_test.go", shaFile(t, testFile), "go", res); err != nil {
+		t.Fatalf("apply core_test.go: %v", err)
+	}
+	rows, err := db.Query("SELECT package, file FROM symbols WHERE name = 'contains'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	places := map[string]string{}
+	for rows.Next() {
+		var p, f string
+		if err := rows.Scan(&p, &f); err != nil {
+			t.Fatal(err)
+		}
+		places[p] = f
+	}
+	if len(places) != 2 {
+		t.Fatalf("contains = %v, want one symbol per package", places)
+	}
+	if places["example.com/m/core"] != "core/busy.go" || places["example.com/m/core_test"] != "core/core_test.go" {
+		t.Fatalf("contains = %v, want busy.go and core_test.go in their own packages", places)
+	}
+}
+
 func TestVendorAndTestdataAreSkipped(t *testing.T) {
 	root := writeModule(t)
 	for _, p := range []string{"vendor/v.go", "testdata/x.go", "alpha/testdata/y.go"} {
@@ -396,7 +514,7 @@ func TestEdgesSurviveAnotherFilesExtraction(t *testing.T) {
 
 func openTestStore(t *testing.T) store.DB {
 	t.Helper()
-	db, err := graph.Open(t.TempDir(), "testscope")
+	db, err := graph.Open(t.TempDir(), "testscope", "main")
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

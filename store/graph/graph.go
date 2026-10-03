@@ -20,12 +20,12 @@ func Statements() []string {
 	return append(ddl.Statements(), metadata.ExtraStatements()...)
 }
 
-func FilePath(home, key string) string {
-	return filepath.Join(home, "graph", key+".sqlite")
+func FilePath(home, key, worktree string) string {
+	return filepath.Join(home, "graph", key, worktree+".sqlite")
 }
 
-func Open(home, key string) (store.DB, error) {
-	path := FilePath(home, key)
+func Open(home, key, worktree string) (store.DB, error) {
+	path := FilePath(home, key, worktree)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return store.DB{}, fmt.Errorf("graph: mkdir: %w", err)
 	}
@@ -91,9 +91,9 @@ ON CONFLICT(path) DO UPDATE SET sha256 = excluded.sha256, language = excluded.la
 		}
 	}
 	for _, s := range r.Symbols {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO symbols (package, name, kind, file, line) VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(package, name) DO UPDATE SET kind = excluded.kind, file = excluded.file, line = excluded.line`,
-			s.Package, s.Name, s.Kind, s.File, s.Line); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO symbols (package, name, kind, file, line, end_line) VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(package, name) DO UPDATE SET kind = excluded.kind, file = excluded.file, line = excluded.line, end_line = excluded.end_line`,
+			s.Package, s.Name, s.Kind, s.File, s.Line, s.EndLine); err != nil {
 			return false, fmt.Errorf("graph: symbol upsert %s: %w", rel, err)
 		}
 	}

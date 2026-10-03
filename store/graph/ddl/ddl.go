@@ -34,6 +34,7 @@ func Statements() []string {
 		`CREATE TABLE IF NOT EXISTS "symbols" (
   "package" TEXT NOT NULL,
   "name" TEXT NOT NULL,
+  "end_line" INTEGER NOT NULL,
   "file" TEXT NOT NULL,
   "kind" TEXT NOT NULL,
   "line" INTEGER NOT NULL,

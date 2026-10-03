@@ -3,16 +3,19 @@
 
 The evidence sat in the transcript: to answer "who calls gateOnce" a
 session greps, then reads two or three files into context. This release
-gives rig a map: `store/graph`, one sqlite file per project under the rig
-home (scope minted like todo's — the repo's identity, worktrees share),
-generated through lift, metadata first. The containers are `symbols`
-(package or module, name, kind: func, method, type, var, const; file
-relative to the project root, line), `edges` (from symbol, to symbol,
-file, line of the use), and `files` (path, sha256, language, the sha the
-file's outgoing edge rows were last rebuilt at). No source text is
-stored anywhere: the map holds addresses, and every quote in a reply is
-read from disk at reply time. Paths are project-relative, so every
-worktree of one repo shares the file.
+gives rig a map: `store/graph`, one sqlite file per worktree under the
+rig home (`<home>/graph/<repo scope>/<worktree>.sqlite`; the repo scope
+minted like todo's — the repo's identity — and the worktree from
+`git rev-parse --git-dir`, the `worktrees/<name>` leaf for a linked
+worktree, the checkout directory's name otherwise; branches never share
+a map), generated through lift, metadata first. The containers are
+`symbols` (package or module, name, kind: func, method, type, var,
+const; file relative to the project root, line, end_line), `edges`
+(from symbol, to symbol, file, line of the use), and `files` (path,
+sha256, language, the sha the file's outgoing edge rows were last
+rebuilt at). No source text is stored anywhere: the map holds
+addresses, and every quote in a reply is read from disk at reply time.
+Paths are project-relative; each worktree's store maps its own tree.
 
 Extraction is a seam — `Extract(file) -> symbols, edges` — with two
 implementations behind it. Go runs in-process: `go/parser` plus
@@ -22,9 +25,11 @@ everything else to `importer.Default()`. Symbols always come from the
 package-scope AST; edges come from `Uses` (package-scope references,
 in-module only), `Selections` (method calls), and the name fallback when
 the type-check fails — a selector resolved through the file's own
-imports, a plain identifier that names a package-scope symbol. A
-type-check failure keeps what resolved and falls back to names. `vendor`
-and `testdata` are skipped. Every other language runs through a
+imports, a plain identifier that names a package-scope symbol. A file
+declared `package x_test` is checked and keyed as `<importpath>_test`,
+so its symbols never overwrite the package's while its edges still name
+it as the caller. A type-check failure keeps what resolved and falls
+back to names. `vendor` and `testdata` are skipped. Every other language runs through a
 language-server client: a child process over stdio speaking JSON-RPC
 (`initialize`, `documentSymbol`, `references`), started on the first
 read of a file in that language, one server at a time — touching another
@@ -42,20 +47,24 @@ never synthetic ids, so one file's replace never orphans the edges
 another file's extraction wrote, and a dangling edge is a row whose join
 finds nothing until the file that owns it is touched again.
 
-rem gains two actions. `index` maps the whole project the same way: a
-walk of the project root, every mapped file enqueued. `pack` takes a
-symbol (package-qualified or bare) or a file path and replies from the
-live files: the definition, each caller with its call line, the
-signatures of what it calls, then one coverage line (packages or modules
-mapped of those present). A cited file whose sha moved is re-extracted
-first; a bare name defined in two places refuses, naming both; the pack
-is bounded by the read ceiling and registers no observation, so an
-edit's drift check still demands a real read. The description carries
-the contract sentence: pack before grepping for who calls what.
+rem gains two actions. `index` does not ride the hook's channel: it
+walks the project root and extracts every mapped file on the call's own
+thread, nothing dropped, and replies with the count mapped when done.
+`pack` takes a symbol (package-qualified or bare) or a file path and
+replies from the live files: the definition (the lines line..end_line,
+bounded by the read ceiling), each caller with its call line, the
+callees' live signature lines to the opening brace, then one coverage
+line (packages or modules mapped of those present). A cited file whose
+sha moved is re-extracted first; a bare name defined in two places
+refuses, naming both; the pack is bounded by the read ceiling and
+registers no observation, so an edit's drift check still demands a real
+read. The description carries the contract sentence: pack before
+grepping for who calls what.
 
-The menu stays at 14,000: the description grew by the map's sentences
-and the room came from a words pass over todo's and rem's parameter
-descriptions; no tool lost a field. The golden_020 request fixtures move
+The menu stays at 14,000: the description grew by the map's sentences,
+the room came from a words pass over todo's and rem's parameter
+descriptions, and rem's importance field now says in one line that
+strength starts at it and decays. The golden_020 request fixtures move
 with the description; the wire sha moves deliberately.
 ## [2.8.3]: the reviewer fires on the resident model, and notices stay off stderr
 

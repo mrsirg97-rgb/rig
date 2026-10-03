@@ -23,6 +23,7 @@ type Symbol struct {
 	Kind    string
 	File    string
 	Line    int64
+	EndLine int64
 }
 
 type Edge struct {

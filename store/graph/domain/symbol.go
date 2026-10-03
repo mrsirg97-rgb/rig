@@ -13,6 +13,7 @@ import (
 type Symbol struct {
 	Package string `db:"package"`
 	Name    string `db:"name"`
+	EndLine int64  `db:"end_line"`
 	File    string `db:"file"`
 	Kind    string `db:"kind"`
 	Line    int64  `db:"line"`
@@ -38,6 +39,7 @@ func ScanSymbol(row lazy.ScanRow) (Symbol, error) {
 	err := row.Scan(
 		&out.Package,
 		&out.Name,
+		&out.EndLine,
 		&out.File,
 		&out.Kind,
 		&out.Line,
@@ -65,7 +67,7 @@ func (d *symbolDomain) GetSymbol(ctx context.Context, package_ string, name stri
 		return l
 	}
 	row := tx.QueryRowContext(ctx,
-		`SELECT "package", "name", "file", "kind", "line" FROM "symbols" WHERE "package" = $1 AND "name" = $2`,
+		`SELECT "package", "name", "end_line", "file", "kind", "line" FROM "symbols" WHERE "package" = $1 AND "name" = $2`,
 		package_,
 		name,
 	)
@@ -90,7 +92,7 @@ func (d *symbolDomain) WindowSymbolByPackage(ctx context.Context, package_ strin
 		return l
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "package", "name", "file", "kind", "line" FROM "symbols" WHERE "package" = $1 AND "name" >= $2 AND "name" < $3 ORDER BY "package", "name" LIMIT $4`,
+		`SELECT "package", "name", "end_line", "file", "kind", "line" FROM "symbols" WHERE "package" = $1 AND "name" >= $2 AND "name" < $3 ORDER BY "package", "name" LIMIT $4`,
 		package_,
 		from, to, limit,
 	)
@@ -124,7 +126,7 @@ func (d *symbolDomain) PageSymbolByPackage(ctx context.Context, package_ string,
 		return l
 	}
 	rows, err := tx.QueryContext(ctx,
-		`SELECT "package", "name", "file", "kind", "line" FROM "symbols" WHERE "package" = $1 AND "name" > $2 ORDER BY "package", "name" LIMIT $3`,
+		`SELECT "package", "name", "end_line", "file", "kind", "line" FROM "symbols" WHERE "package" = $1 AND "name" > $2 ORDER BY "package", "name" LIMIT $3`,
 		package_,
 		after, limit,
 	)
@@ -155,9 +157,10 @@ func (d *symbolDomain) InsertSymbol(ctx context.Context, row Symbol) (*Symbol, e
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `INSERT INTO "symbols" ("package", "name", "file", "kind", "line") VALUES ($1, $2, $3, $4, $5) RETURNING "package", "name", "file", "kind", "line"`,
+	rows, err := tx.QueryContext(ctx, `INSERT INTO "symbols" ("package", "name", "end_line", "file", "kind", "line") VALUES ($1, $2, $3, $4, $5, $6) RETURNING "package", "name", "end_line", "file", "kind", "line"`,
 		row.Package,
 		row.Name,
+		row.EndLine,
 		row.File,
 		row.Kind,
 		row.Line,
@@ -173,7 +176,7 @@ func (d *symbolDomain) DeleteSymbol(ctx context.Context, package_ string, name s
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `DELETE FROM "symbols" WHERE "package" = $1 AND "name" = $2 RETURNING "package", "name", "file", "kind", "line"`,
+	rows, err := tx.QueryContext(ctx, `DELETE FROM "symbols" WHERE "package" = $1 AND "name" = $2 RETURNING "package", "name", "end_line", "file", "kind", "line"`,
 		package_,
 		name,
 	)
@@ -188,7 +191,8 @@ func (d *symbolDomain) UpdateSymbol(ctx context.Context, row Symbol) (*Symbol, e
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE "symbols" SET "file" = $1, "kind" = $2, "line" = $3 WHERE "package" = $4 AND "name" = $5 RETURNING "package", "name", "file", "kind", "line"`,
+	rows, err := tx.QueryContext(ctx, `UPDATE "symbols" SET "end_line" = $1, "file" = $2, "kind" = $3, "line" = $4 WHERE "package" = $5 AND "name" = $6 RETURNING "package", "name", "end_line", "file", "kind", "line"`,
+		row.EndLine,
 		row.File,
 		row.Kind,
 		row.Line,

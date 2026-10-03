@@ -42,6 +42,9 @@ func (e *GoExtract) Extract(ctx context.Context, abs string) (Result, error) {
 		return Result{}, fmt.Errorf("graph: %s is package %s, absent from %s", abs, src.Name.Name, dir)
 	}
 	pkgPath := PackagePath(root, module, dir)
+	if strings.HasSuffix(src.Name.Name, "_test") {
+		pkgPath += "_test"
+	}
 	rel, err := filepath.Rel(root, abs)
 	if err != nil {
 		return Result{}, fmt.Errorf("graph: rel of %s: %w", abs, err)
@@ -197,20 +200,21 @@ func declNames(file *ast.File) []string {
 
 func symbolsOf(fset *token.FileSet, file *ast.File, pkgPath, fileRel string, info *types.Info) []Symbol {
 	var out []Symbol
-	add := func(name *ast.Ident, kind string) {
+	add := func(name *ast.Ident, kind string, end token.Pos) {
 		out = append(out, Symbol{
 			Package: pkgPath,
 			Name:    name.Name,
 			Kind:    kind,
 			File:    fileRel,
 			Line:    int64(fset.Position(name.Pos()).Line),
+			EndLine: int64(fset.Position(end).Line),
 		})
 	}
 	for _, d := range file.Decls {
 		switch d := d.(type) {
 		case *ast.FuncDecl:
 			if d.Recv == nil {
-				add(d.Name, KindFunc)
+				add(d.Name, KindFunc, d.End())
 				continue
 			}
 			base := astRecvBase(d.Recv)
@@ -232,6 +236,7 @@ func symbolsOf(fset *token.FileSet, file *ast.File, pkgPath, fileRel string, inf
 				Kind:    KindMethod,
 				File:    fileRel,
 				Line:    int64(fset.Position(d.Name.Pos()).Line),
+				EndLine: int64(fset.Position(d.End()).Line),
 			})
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
@@ -242,10 +247,10 @@ func symbolsOf(fset *token.FileSet, file *ast.File, pkgPath, fileRel string, inf
 						kind = KindConst
 					}
 					for _, n := range spec.Names {
-						add(n, kind)
+						add(n, kind, spec.End())
 					}
 				case *ast.TypeSpec:
-					add(spec.Name, KindType)
+					add(spec.Name, KindType, spec.End())
 				}
 			}
 		}

@@ -24,8 +24,6 @@ const QueueCap = 256
 const ReadCap = 1 << 20
 
 const (
-	packWindow = 60
-	sigLines   = 8
 	packRowCap = 200
 )
 
@@ -111,7 +109,7 @@ func (q *Queue) process(ctx context.Context, path string) {
 		q.say("graph: project of %s: %v", path, err)
 		return
 	}
-	db, err := q.open(scope.Key(root))
+	db, err := q.open(root)
 	if err != nil {
 		q.say("graph: %v", err)
 		return
@@ -131,17 +129,18 @@ func (q *Queue) extractor(lang string) Extractor {
 	return nil
 }
 
-func (q *Queue) open(key string) (store.DB, error) {
+func (q *Queue) open(root string) (store.DB, error) {
+	path := FilePath(q.home, scope.Key(root), scope.Worktree(root))
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if db, ok := q.dbs[key]; ok {
+	if db, ok := q.dbs[path]; ok {
 		return db, nil
 	}
-	db, err := Open(q.home, key)
+	db, err := Open(q.home, scope.Key(root), scope.Worktree(root))
 	if err != nil {
 		return store.DB{}, err
 	}
-	q.dbs[key] = db
+	q.dbs[path] = db
 	return db, nil
 }
 
@@ -213,11 +212,11 @@ func (q *Queue) IndexProject(ctx context.Context, cwd string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("graph: project of %s: %w", cwd, err)
 	}
-	db, err := q.open(scope.Key(root))
+	db, err := q.open(root)
 	if err != nil {
 		return "", err
 	}
-	n := 0
+	var mapped int
 	err = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -228,21 +227,24 @@ func (q *Queue) IndexProject(ctx context.Context, cwd string) (string, error) {
 			}
 			return nil
 		}
-		if LanguageOf(p) == "" || q.extractor(LanguageOf(p)) == nil {
+		lang := LanguageOf(p)
+		if lang == "" || q.extractor(lang) == nil {
 			return nil
 		}
-		n++
-		q.Touch(p)
+		if err := q.index(ctx, db, root, p); err != nil {
+			q.say("graph: %s: %v", p, err)
+			return nil
+		}
+		mapped++
+		if ctx.Err() != nil {
+			return filepath.SkipAll
+		}
 		return nil
 	})
 	if err != nil {
 		return "", fmt.Errorf("graph: walk %s: %w", root, err)
 	}
-	var mapped int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM files`).Scan(&mapped); err != nil {
-		return "", fmt.Errorf("graph: mapped count: %w", err)
-	}
-	return fmt.Sprintf("indexing %d files (%d already mapped; the map fills as the queue drains)", n, mapped), nil
+	return fmt.Sprintf("mapped %d files", mapped), nil
 }
 
 func qualMatches(pkg, qual, module string) bool {
@@ -265,7 +267,7 @@ func (q *Queue) Pack(ctx context.Context, cwd, target string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("graph: project of %s: %w", cwd, err)
 	}
-	db, err := q.open(scope.Key(root))
+	db, err := q.open(root)
 	if err != nil {
 		return "", err
 	}
@@ -299,7 +301,7 @@ func (q *Queue) packFile(ctx context.Context, db store.DB, root, cwd, target str
 	if _, err := q.refresh(ctx, db, root, rel); err != nil {
 		return "", err
 	}
-	rows, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE file = ? ORDER BY line`, rel)
+	rows, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE file = ? ORDER BY line`, rel)
 	if err != nil {
 		return "", err
 	}
@@ -321,6 +323,7 @@ type symRow struct {
 	Kind    string
 	File    string
 	Line    int64
+	EndLine int64
 }
 
 func querySymbols(ctx context.Context, db store.DB, q string, args ...any) ([]symRow, error) {
@@ -332,7 +335,7 @@ func querySymbols(ctx context.Context, db store.DB, q string, args ...any) ([]sy
 	var out []symRow
 	for rows.Next() {
 		var s symRow
-		if err := rows.Scan(&s.Package, &s.Name, &s.Kind, &s.File, &s.Line); err != nil {
+		if err := rows.Scan(&s.Package, &s.Name, &s.Kind, &s.File, &s.Line, &s.EndLine); err != nil {
 			return nil, fmt.Errorf("graph: symbols: %w", err)
 		}
 		out = append(out, s)
@@ -343,7 +346,7 @@ func querySymbols(ctx context.Context, db store.DB, q string, args ...any) ([]sy
 func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, target string) (string, error) {
 	var rows []symRow
 	if qual, name, ok := strings.Cut(target, "."); ok && qual != "" && name != "" {
-		all, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE name = ?`, name)
+		all, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ?`, name)
 		if err != nil {
 			return "", err
 		}
@@ -353,14 +356,14 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 			}
 		}
 		if len(rows) == 0 {
-			rows, err = querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE name = ?`, target)
+			rows, err = querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ?`, target)
 			if err != nil {
 				return "", err
 			}
 		}
 	} else {
 		var err error
-		rows, err = querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE name = ?`, target)
+		rows, err = querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ?`, target)
 		if err != nil {
 			return "", err
 		}
@@ -385,7 +388,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 	if moved, err := q.refresh(ctx, db, root, sym.File); err != nil {
 		return "", err
 	} else if moved {
-		sel, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE package = ? AND name = ?`, sym.Package, sym.Name)
+		sel, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE package = ? AND name = ?`, sym.Package, sym.Name)
 		if err != nil {
 			return "", err
 		}
@@ -431,7 +434,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 		}
 		movedAny = movedAny || moved
 	}
-	sel, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE package = ? AND name = ?`, sym.Package, sym.Name)
+	sel, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE package = ? AND name = ?`, sym.Package, sym.Name)
 	if err != nil {
 		return "", err
 	}
@@ -455,7 +458,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s — %s — %s:%d\n", sym.Name, sym.Kind, sym.File, sym.Line)
-	live, err := liveLines(root, sym.File, sym.Line, packWindow)
+	live, err := liveLines(root, sym.File, sym.Line, sym.EndLine)
 	if err != nil {
 		return "", err
 	}
@@ -471,7 +474,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 	if len(callees) > 0 {
 		fmt.Fprintf(&b, "callees (%d):\n", len(callees))
 		for _, e := range callees {
-			defs, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE package = ? AND name = ?`, e.Package, e.Name)
+			defs, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE package = ? AND name = ?`, e.Package, e.Name)
 			if err != nil {
 				return "", err
 			}
@@ -481,7 +484,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 			}
 			d := defs[0]
 			fmt.Fprintf(&b, "  %s.%s — %s — %s:%d\n", baseName(e.Package), e.Name, d.Kind, d.File, d.Line)
-			sig, err := liveLines(root, d.File, d.Line, sigLines)
+			sig, err := sigLines(root, d.File, d.Line, d.EndLine)
 			if err != nil {
 				return "", err
 			}
@@ -554,13 +557,17 @@ type liveLine struct {
 	text string
 }
 
-func liveLines(root, rel string, start, cap int64) ([]liveLine, error) {
+func liveLines(root, rel string, start, end int64) ([]liveLine, error) {
+	if end < start {
+		end = start
+	}
 	f, err := os.Open(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {
 		return nil, fmt.Errorf("graph: %s: %w", rel, err)
 	}
 	defer f.Close()
 	var out []liveLine
+	var size int64
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), ReadCap)
 	var n int64
@@ -569,12 +576,27 @@ func liveLines(root, rel string, start, cap int64) ([]liveLine, error) {
 		if n < start {
 			continue
 		}
-		out = append(out, liveLine{n, sc.Text()})
-		if int64(len(out)) >= cap {
+		text := sc.Text()
+		out = append(out, liveLine{n, text})
+		size += int64(len(text))
+		if n >= end || size >= ReadCap {
 			break
 		}
 	}
 	return out, sc.Err()
+}
+
+func sigLines(root, rel string, start, end int64) ([]liveLine, error) {
+	lines, err := liveLines(root, rel, start, end)
+	if err != nil {
+		return nil, err
+	}
+	for i, l := range lines {
+		if strings.Count(l.text, "{") > strings.Count(l.text, "}") {
+			return lines[:i+1], nil
+		}
+	}
+	return lines, nil
 }
 
 func coverage(ctx context.Context, db store.DB, root string, b *strings.Builder) {

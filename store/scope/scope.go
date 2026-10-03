@@ -18,9 +18,10 @@ type cacheT struct {
 	mu   sync.Mutex
 	vals map[string]string
 	bare map[string]bool
+	wt   map[string]string
 }
 
-var cache = cacheT{vals: map[string]string{}, bare: map[string]bool{}}
+var cache = cacheT{vals: map[string]string{}, bare: map[string]bool{}, wt: map[string]string{}}
 
 func Path(cwd string) string {
 	if cwd == "" {
@@ -50,6 +51,38 @@ func Path(cwd string) string {
 
 func Key(cwd string) string {
 	return ShortHash(Path(cwd))
+}
+
+func Worktree(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	common := Path(cwd)
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if v, ok := cache.wt[cwd]; ok {
+		return v
+	}
+	v := Label(cwd)
+	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-dir").Output(); err == nil {
+		p := strings.TrimSpace(string(out))
+		if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(cwd, p)
+			}
+			if real, err := filepath.EvalSymlinks(p); err == nil {
+				p = real
+			}
+			if rel, err := filepath.Rel(common, p); err == nil {
+				parts := strings.Split(rel, string(filepath.Separator))
+				if len(parts) == 2 && parts[0] == "worktrees" {
+					v = parts[1]
+				}
+			}
+		}
+	}
+	cache.wt[cwd] = v
+	return v
 }
 
 func Label(cwd string) string {

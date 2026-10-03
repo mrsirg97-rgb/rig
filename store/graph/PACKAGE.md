@@ -2,14 +2,17 @@
 
 ## What it is
 
-The code map: one sqlite file per project under the rig home
-(`<home>/graph/<scope>.sqlite`, scope minted like todo's — `store/scope`,
-worktrees share), Go over the generated substrate (SPEC_GRAPH). The map
-holds addresses, never source text: `files` (path, sha256, language, the
-sha the file's outgoing edge rows were last rebuilt at), `symbols`
-(package, name, kind, file, line), `edges` (from symbol, to symbol, file,
+The code map: one sqlite file per worktree under the rig home
+(`<home>/graph/<repo scope>/<worktree>.sqlite`, the repo scope minted
+like todo's — `store/scope` — and the worktree from `git rev-parse
+--git-dir`: the `worktrees/<name>` leaf for a linked worktree, the
+checkout directory's name otherwise; branches never share a map), Go
+over the generated substrate (SPEC_GRAPH). The map holds addresses,
+never source text: `files` (path, sha256, language, the sha the file's
+outgoing edge rows were last rebuilt at), `symbols` (package, name,
+kind, file, line, end_line), `edges` (from symbol, to symbol, file,
 line of the use), and `meta` (versions, the reference cache). Paths are
-project-relative, so every worktree of one repo shares the file.
+project-relative; each worktree's store maps its own tree.
 
 ## What it includes
 
@@ -58,7 +61,9 @@ project-relative, so every worktree of one repo shares the file.
 
 - `tool/rem` (the `index` and `pack` actions) and the `tool/file`
   read/write/edit hook call it; the queue shape (bounded channel, one
-  goroutine, the call never waits) lives with the wiring (SPEC_GRAPH).
+  goroutine, the call never waits) lives with the wiring, and `index`
+  is the deliberate exception — it extracts on the call's own thread
+  and replies with the count mapped (SPEC_GRAPH).
 - The generated files are pinned by the drift test
   (`cd <lift>/cmd && go run main.go -config=$RIG/store/graph/gen.json
   -source=$RIG/store/graph/source.json` regenerates).
@@ -77,7 +82,7 @@ project-relative, so every worktree of one repo shares the file.
   rather than guessing.
 - `Skip` refuses `vendor`, `testdata`, and dot/underscore paths by path
   component; the extractor refuses before parsing, the walk before
-  enqueueing.
+  extracting.
 - Extraction parses the file's whole directory: a broken sibling costs a
   parse error the camera swallows, and a broken touched file fails the
   extraction (the store is left untouched — fail closed).

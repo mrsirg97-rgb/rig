@@ -2,9 +2,55 @@ package scope
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
+
+func gitRepo(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) {
+		out, err := exec.Command("git", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v (%s)", args, err, out)
+		}
+	}
+	run("-C", dir, "init", "-q")
+	run("-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "add", "-A")
+	run("-C", dir, "-c", "user.email=test@rig", "-c", "user.name=rig", "commit", "-q", "-m", "seed")
+}
+
+func TestWorktreeNamesTheCheckout(t *testing.T) {
+	base := t.TempDir()
+	main := filepath.Join(base, "wt-main")
+	linked := filepath.Join(base, "wt-side")
+	if err := os.MkdirAll(main, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitRepo(t, main)
+	if out, err := exec.Command("git", "-C", main, "worktree", "add", "-q", linked, "-b", "side").CombinedOutput(); err != nil {
+		t.Fatalf("worktree add: %v (%s)", err, out)
+	}
+	if got := Worktree(main); got != "wt-main" {
+		t.Fatalf("the main checkout keys %q, want wt-main", got)
+	}
+	if got := Worktree(linked); got != "wt-side" {
+		t.Fatalf("the linked worktree keys %q, want wt-side (the worktrees leaf)", got)
+	}
+	if Key(main) != Key(linked) {
+		t.Fatalf("the two worktrees must share the repo scope: %q != %q", Key(main), Key(linked))
+	}
+	plain := filepath.Join(base, "plain")
+	if err := os.MkdirAll(plain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := Worktree(plain); got != "plain" {
+		t.Fatalf("outside a repo the worktree is the directory: %q, want plain", got)
+	}
+}
 
 func TestShortHashIsTheCwdFallback(t *testing.T) {
 	if Key("/some/non-repo/dir") != ShortHash("/some/non-repo/dir") {

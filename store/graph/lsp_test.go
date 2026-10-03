@@ -57,12 +57,12 @@ var widgetSymbols = []any{
 	map[string]any{
 		"name":  "Widget",
 		"kind":  5,
-		"range": map[string]any{"start": map[string]any{"line": 2, "character": 6}},
+		"range": map[string]any{"start": map[string]any{"line": 2, "character": 6}, "end": map[string]any{"line": 6, "character": 1}},
 	},
 	map[string]any{
 		"name":  "draw",
 		"kind":  6,
-		"range": map[string]any{"start": map[string]any{"line": 5, "character": 2}},
+		"range": map[string]any{"start": map[string]any{"line": 5, "character": 2}, "end": map[string]any{"line": 5, "character": 11}},
 	},
 }
 
@@ -109,7 +109,7 @@ func TestReadOfNonGoFileStartsTheServerOnce(t *testing.T) {
 	if got := logCount(log, "textDocument/documentSymbol"); got != 2 {
 		t.Fatalf("documentSymbol count = %d, want 2", got)
 	}
-	db, err := graph.Open(q.Home(), scope.Key(root))
+	db, err := graph.Open(q.Home(), scope.Key(root), scope.Worktree(root))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -117,6 +117,13 @@ func TestReadOfNonGoFileStartsTheServerOnce(t *testing.T) {
 	var kinds int
 	if err := db.QueryRow("SELECT count(*) FROM symbols WHERE name = 'Widget' AND kind = 'type'").Scan(&kinds); err != nil {
 		t.Fatal(err)
+	}
+	var endLine int64
+	if err := db.QueryRow("SELECT end_line FROM symbols WHERE name = 'Widget' AND kind = 'type'").Scan(&endLine); err != nil {
+		t.Fatal(err)
+	}
+	if endLine != 7 {
+		t.Fatalf("Widget ends on line %d, want 7 (the range's end line)", endLine)
 	}
 	if kinds != 2 {
 		t.Fatalf("Widget type rows = %d, want 2 (one per file)", kinds)
