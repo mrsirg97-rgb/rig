@@ -105,7 +105,7 @@ func TestViewSpecIsPinned(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(b)
-	const golden = "37868ca6af1fdc73dfd76ca9cd1a80a8b812276472434876a1bd76f1a1334ae5"
+	const golden = "68ea9d221c331547e93921ad559b3bf55c637d4d70d8c3a912a0094409a3eb98"
 	if got := hex.EncodeToString(sum[:]); got != golden {
 		t.Fatalf("the view spec changed: sha256 %s (want %s) — its description and schema are wire bytes; update the golden deliberately", got, golden)
 	}

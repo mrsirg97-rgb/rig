@@ -231,9 +231,9 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	d := tool.Description()
 	for _, want := range []string{
-		"The task queue for this workspace.",
+		"the task queue for the current workspace.",
 		"different workspace than the one you started in.",
-		"named by its workspace ([rig]).",
+		"scoped by its workspace ([rig]).",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("the description misses %q:\n%s", want, d)
@@ -252,14 +252,14 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &s); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if got := s.Properties["project"].Description; got != "Another workspace, as a path. Later calls act there until you name a different one. ~ expands." {
+	if got := s.Properties["project"].Description; got != "another workspace, as a path. later calls act there until you name a different one. ~ expands." {
 		t.Fatalf("the project field must read the one sentence, got %q", got)
 	}
 }
 
 func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	if d := tool.Description(); !strings.Contains(d, "A task can wait for another: set requires on the one that waits.") {
+	if d := tool.Description(); !strings.Contains(d, "a task can wait for another: set requires on the one that waits.") {
 		t.Fatalf("the description misses the one-line link sentence: %q", d)
 	}
 	var s struct {
@@ -275,8 +275,8 @@ func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 		t.Fatalf("schema: %v", err)
 	}
 	want := map[string]string{
-		"requires": "The task this one waits for: its id (tN), its exact text, or its number in this list, where 1 is the first. Omit when none; null removes a link.",
-		"blocks":   "The task that waits for this one, named the same way. Omit when none; null removes a link.",
+		"requires": "the task this one waits for: its id (tN), its exact text, or its number in this list, where 1 is the first. omit when none; null removes a link.",
+		"blocks":   "the task that waits for this one, named the same way. omit when none; null removes a link.",
 	}
 	for key, wantDesc := range want {
 		if desc := s.Properties["tasks"].Items.Properties[key].Description; desc != wantDesc {

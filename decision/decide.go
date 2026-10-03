@@ -21,7 +21,7 @@ const decideQuestionID = "item"
 
 const unsureUnder = 0.5
 
-const decideGuideline = "When a step is sorting or filtering many items against a question you can state, hand the items to decide instead of reading them."
+const decideGuideline = "when a step is sorting or filtering many items against a question you can state, hand the items to decide instead of reading them."
 
 type DecideOptions struct {
 	Decider  Decider

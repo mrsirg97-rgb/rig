@@ -24,9 +24,9 @@ func TestEveryEntryHasTheShapeAndAParsingSchema(t *testing.T) {
 			t.Fatalf("Def(%q).Name() = %q", n, d.Name())
 		}
 		desc := d.Description()
-		i, j := strings.Index(desc, " Guidelines: "), strings.LastIndex(desc, " Reply: ")
+		i, j := strings.Index(desc, " guidelines: "), strings.LastIndex(desc, " reply: ")
 		if i <= 0 || j <= i {
-			t.Fatalf("%q: the description is not what, Guidelines, Reply: %q", n, desc)
+			t.Fatalf("%q: the description is not what, guidelines, reply: %q", n, desc)
 		}
 		var schema map[string]any
 		if err := json.Unmarshal(d.Schema(), &schema); err != nil {

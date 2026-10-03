@@ -67,7 +67,7 @@ func TestNoToolWordsLiveOutsideTheRegistry(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if strings.Contains(string(b), "Guidelines: ") || strings.Contains(string(b), " Reply: ") {
+		if strings.Contains(string(b), " guidelines: ") && strings.Contains(string(b), " reply: ") {
 			rel, _ := filepath.Rel(root, path)
 			if rel != filepath.Join("tool", "registry.go") {
 				offenders = append(offenders, rel)

@@ -261,7 +261,7 @@ drift from intent and add deps.
 
 **The words are data** (amended 2.8.1): every native tool's description
 and schema live in one embedded file, `tool/registry.json`, as `what`,
-`guidelines`, `reply` and the schema object. A tool embeds its
+`guidelines`, `reply` and the schema object, all lowercase in the operator's voice (the labels too: `guidelines:`, `reply:`). A tool embeds its
 `tool.Definition` and writes only `Exec`; the description is composed
 from the three parts, so the shape below is the type. A tool whose text
 carries a runtime value (`scheduler`, `delegate`) fills a named slot at

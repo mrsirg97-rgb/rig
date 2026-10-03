@@ -2,16 +2,24 @@
   {
     "name": "bash",
     "enabled": true,
-    "what": "excutes a bash command in the session's workspace.",
+    "what": "executes a bash command in the session's workspace.",
     "guidelines": "use for shell work, builds, git, and any CLI. to read a file, use the dedicated read tool; for a computation, use python.",
     "reply": "stdout and stderr together, in order; when capped, shows a [TRUNCATED] line with the total size.",
     "schema": {
       "type": "object",
       "properties": {
-        "command":   {"type": "string", "description": "the command line to run under bash(1)"},
-        "workspace": {"type": "string", "description": "the workspace the job runs in"}
+        "command": {
+          "type": "string",
+          "description": "the command line to run under bash(1)"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "the workspace to run in"
+        }
       },
-      "required": ["command"]
+      "required": [
+        "command"
+      ]
     }
   },
   {
@@ -23,12 +31,26 @@
     "schema": {
       "type": "object",
       "properties": {
-        "path":   {"type": "string", "description": "the file to read"},
-        "offset": {"type": "integer", "description": "the 0-based line to start at (default 0); past the end refuses"},
-        "limit":  {"type": "integer", "description": "the number of lines to read (default the rest of the file); negative refuses"},
-        "diff":   {"type": "boolean", "description": "append the file's git diff against HEAD, or 'no changes' when clean (a non-git workspace refuses)"}
+        "path": {
+          "type": "string",
+          "description": "the file to read"
+        },
+        "offset": {
+          "type": "integer",
+          "description": "the 0-based line to start at (default 0); past the end refuses"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "the number of lines to read (default the rest of the file); negative refuses"
+        },
+        "diff": {
+          "type": "boolean",
+          "description": "true appends its git diff against HEAD, or 'no changes' when clean (a non-git workspace refuses)"
+        }
       },
-      "required": ["path"]
+      "required": [
+        "path"
+      ]
     }
   },
   {
@@ -40,10 +62,19 @@
     "schema": {
       "type": "object",
       "properties": {
-        "path":    {"type": "string", "description": "the file to write"},
-        "content": {"type": "string", "description": "the full new content"}
+        "path": {
+          "type": "string",
+          "description": "the file to write"
+        },
+        "content": {
+          "type": "string",
+          "description": "the full new content"
+        }
       },
-      "required": ["path", "content"]
+      "required": [
+        "path",
+        "content"
+      ]
     }
   },
   {
@@ -55,30 +86,56 @@
     "schema": {
       "type": "object",
       "properties": {
-        "path":  {"type": "string", "description": "the file to edit"},
+        "path": {
+          "type": "string",
+          "description": "the file to edit"
+        },
         "edits": {
           "type": "array",
           "description": "the changes, applied in order; a single change is a list of one",
           "items": {
             "type": "object",
             "properties": {
-              "old": {"type": "string", "description": "the exact text to replace; must occur exactly once as the earlier hunks leave it"},
-              "new": {"type": "string", "description": "the replacement text"}
+              "old": {
+                "type": "string",
+                "description": "enough of the file to match exactly once, as the earlier chunks leave it"
+              },
+              "new": {
+                "type": "string",
+                "description": "the replacement text"
+              }
             },
-            "required": ["old", "new"]
+            "required": [
+              "old",
+              "new"
+            ]
           }
         }
       },
-      "required": ["path", "edits"]
+      "required": [
+        "path",
+        "edits"
+      ]
     }
   },
   {
     "name": "view",
     "enabled": true,
     "what": "handles image files: png, jpeg, webp, or the first frame of a gif.",
-    "guidelines": "for pixels only; for text, code or a log use read; for a crop or a resize use bash. Anything over 20 MiB, over 16 megapixels, or not an image refuses.",
+    "guidelines": "for pixels only; for text, code or a log use read; for a crop or a resize use bash. anything over 20 MiB, over 16 megapixels, or not an image refuses.",
     "reply": "one line naming the stored image's mime, dimensions, size and source.",
-    "schema": {"type":"object","properties":{"path":{"type":"string","description":"the image file to look at (png, jpeg, webp, gif; a leading ~ expands)"}},"required":["path"]}
+    "schema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "the image file to look at (png, jpeg, webp, gif; a leading ~ expands)"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
   },
   {
     "name": "todo",
@@ -88,29 +145,56 @@
     "reply": "the affected row and the queue's summary, scoped by its workspace ([rig]).",
     "schema": {
       "type": "object",
-      "required": ["action"],
+      "required": [
+        "action"
+      ],
       "properties": {
         "action": {
-          "enum": ["create", "claim", "start", "complete", "fail", "release", "retry", "move", "prune", "bind", "read", "note", "notes", "accept", "reject", "finished"],
-          "description": "What to do."
+          "enum": [
+            "create",
+            "claim",
+            "start",
+            "complete",
+            "fail",
+            "release",
+            "retry",
+            "move",
+            "prune",
+            "bind",
+            "read",
+            "note",
+            "notes",
+            "accept",
+            "reject",
+            "finished"
+          ],
+          "description": "what to do."
         },
         "tasks": {
           "type": "array",
           "description": "the tasks to add, in order. required for create. an empty list clears the queue.",
           "items": {
             "type": "object",
-            "required": ["text"],
+            "required": [
+              "text"
+            ],
             "properties": {
               "text": {
                 "type": "string",
                 "description": "what needs doing."
               },
               "requires": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "the task this one waits for: its id (tN), its exact text, or its number in this list, where 1 is the first. omit when none; null removes a link."
               },
               "blocks": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "the task that waits for this one, named the same way. omit when none; null removes a link."
               }
             }
@@ -126,7 +210,9 @@
         },
         "status": {
           "type": "string",
-          "enum": ["review"],
+          "enum": [
+            "review"
+          ],
           "description": "for claim: review takes the next task awaiting review."
         },
         "pos": {
@@ -155,22 +241,29 @@
     "name": "rem",
     "enabled": true,
     "what": "memory across sessions. learn commits a fact or constraint, once. recall finds past solutions by intent, this workspace first, then global; recall without a query browses. reflect stores a distilled memory with its source. prune removes, reduces, or consolidates.",
-    "guidelines": "recall before re-deriving a project fact; learn what the next session should not have to re-derive; supersede by id when the code disagrees; name project when the fact belongs to a different workspace than the one you started in. Memory ids (mN) come from the replies: copy them, never invent them.",
+    "guidelines": "recall before re-deriving a project fact; learn what the next session should not have to re-derive; supersede by id when the code disagrees; name project when the fact belongs to a different workspace than the one you started in. memory ids (mN) come from the replies: copy them, never invent them.",
     "reply": "the hits with their ids, strength and arm, or the written row.",
     "schema": {
       "type": "object",
-      "required": ["action"],
+      "required": [
+        "action"
+      ],
       "properties": {
         "action": {
-          "enum": ["learn", "recall", "reflect", "prune"]
+          "enum": [
+            "learn",
+            "recall",
+            "reflect",
+            "prune"
+          ]
         },
         "content": {
           "type": "string",
-          "description": "Memory content (learn/reflect)"
+          "description": "memory content (learn/reflect)"
         },
         "query": {
           "type": "string",
-          "description": "recall intent; omit to browse"
+          "description": "the intent; recall without a query browses"
         },
         "source": {
           "type": "string",
@@ -187,7 +280,11 @@
           "description": "0..1; strength starts here and decays"
         },
         "scope": {
-          "enum": ["project", "global", "all"]
+          "enum": [
+            "project",
+            "global",
+            "all"
+          ]
         },
         "project": {
           "type": "string",
@@ -200,12 +297,18 @@
           "description": "live-hit budget (recall)"
         },
         "verb": {
-          "enum": ["remove", "reduce", "consolidate"]
+          "enum": [
+            "remove",
+            "reduce",
+            "consolidate"
+          ]
         },
         "ids": {
           "type": "array",
-          "items": { "type": "integer" },
-          "description": "Memory ids to prune"
+          "items": {
+            "type": "integer"
+          },
+          "description": "memory ids to prune"
         },
         "older_than_days": {
           "type": "integer",
@@ -214,8 +317,15 @@
         },
         "supersedes": {
           "anyOf": [
-            { "type": "integer" },
-            { "type": "array", "items": { "type": "integer" } }
+            {
+              "type": "integer"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
           ]
         },
         "include_superseded": {
@@ -228,27 +338,36 @@
   {
     "name": "scheduler",
     "enabled": true,
-    "what": "persistent background jobs, using the operator's crontab: each is a headless worker session, with optionally pinned model: omit it and it runs its own workspace on whatever is resident (default {default_model} when nothing is); a command job runs a shell line with no model.",
-    "guidelines": "create for work that recurs (cron 'M H D Mo DOW') or once (at, self-deletes after one fire); command jobs are for deterministic scripts, never judgment calls. list shows every job with any store-vs-crontab drift. drifting jobs are untrustworthy until their notes clear; repair re-derives a crontab, targetting a single job id or every drifting one. runs is the audit trail; job ids (jN) come from list: copy them, never invent them. sending waits on the queue; if a different model is resident it skips and names it; eviction policy falls on the operator. a failed once job is done; re-create it to retry. timeout and budget bound each fire.",
+    "what": "persistent background jobs on the operator's crontab: each is a headless worker session with an optional pinned model: omit it and the job runs on whatever is resident (default {default_model} when nothing is); each job runs in its own workspace; a command job runs a shell line with no model.",
+    "guidelines": "create for work that recurs (cron 'M H D Mo DOW') or once (at, self-deletes after one fire); command jobs are for deterministic scripts, never judgment calls. list shows every job with any store-vs-crontab drift. drifting jobs are untrustworthy until their notes clear; repair re-derives a crontab, targeting a single job id or every drifting one. runs is the audit trail; job ids (jN) come from list: copy them, never invent them. sending waits on the queue; if a different model is resident it skips and names it; eviction policy falls on the operator. a failed once job is done; re-create it to retry. timeout and budget bound each fire.",
     "reply": "the job row or the list.",
     "schema": {
       "type": "object",
       "properties": {
         "action": {
           "type": "string",
-          "enum": ["create", "update", "list", "pause", "resume", "remove", "runs", "repair"]
+          "enum": [
+            "create",
+            "update",
+            "list",
+            "pause",
+            "resume",
+            "remove",
+            "runs",
+            "repair"
+          ]
         },
         "name": {
           "type": "string",
-          "description": "Unique job name; required."
+          "description": "unique job name; required."
         },
         "prompt": {
           "type": "string",
-          "description": "The prompt the worker session runs; required unless command is set."
+          "description": "the prompt the worker session runs; required unless command is set."
         },
         "command": {
           "type": "string",
-          "description": "Shell line for sh -c in the job's workspace; refuses prompt/model."
+          "description": "a shell line with no model, run by sh -c; refuses prompt/model"
         },
         "cron": {
           "type": "string",
@@ -260,42 +379,59 @@
         },
         "model": {
           "type": "string",
-          "description": "model: the worker model id; omit to run on whatever is resident (default {default_model} when nothing is)."
+          "description": "the worker model id; omit it and the job runs on whatever is resident (default {default_model} when nothing is)"
         },
         "timeout": {
           "type": "integer",
           "minimum": -1,
           "maximum": 1440,
-          "description": "Wall-clock cap per fire, minutes (default 30, ceiling 1440); -1 resets."
+          "description": "wall-clock cap per fire, minutes (default 30, ceiling 1440); -1 resets."
         },
         "budget": {
           "type": "number",
           "minimum": -1,
-          "description": "Dollar cap on the job's model fires, from the run costs; -1 resets; command jobs take none."
+          "description": "dollar cap on the job's model fires, from the run costs; -1 resets; command jobs take none."
         },
         "id": {
           "type": "string",
-          "description": "Job id jN from list; required for pause/resume/remove/runs; repair takes it or none."
+          "description": "job id jN from list; required for pause/resume/remove/runs; repair takes it or none."
         }
       },
-      "required": ["action"]
+      "required": [
+        "action"
+      ]
     }
   },
   {
     "name": "delegate",
     "enabled": true,
     "what": "spawns a headless worker to execute a task now; waits until the worker completes.",
-    "guidelines": "give it a bounded sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. Fan out with several delegate calls in one turn; each sends and waits on the server's queue; the worker model defaults to the resident one ({default_model} when nothing is resident), and a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home.",
+    "guidelines": "give it a bounded sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. fan out with several delegate calls in one turn; each sends and waits on the server's queue; the worker model defaults to the resident one ({default_model} when nothing is resident), and a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home.",
     "reply": "the worker's message plus a trailer with exit, duration, session id and log.",
     "schema": {
       "type": "object",
       "properties": {
-        "task":      {"type": "string", "description": "the prompt the worker runs (required)"},
-        "workspace": {"type": "string", "description": "where the job runs (default the session's)"},
-        "model":     {"type": "string", "description": "worker model id"},
-        "timeoutMs": {"type": "integer", "minimum": 1, "description": "timeout in ms (default 600000, ceiling 1800000)"}
+        "task": {
+          "type": "string",
+          "description": "the prompt the worker runs (required)"
+        },
+        "workspace": {
+          "type": "string",
+          "description": "where the worker runs; must be under the session's workspace or the rig home"
+        },
+        "model": {
+          "type": "string",
+          "description": "worker model id"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "timeout in ms (default 600000, ceiling 1800000)"
+        }
       },
-      "required": ["task"]
+      "required": [
+        "task"
+      ]
     }
   },
   {
@@ -307,9 +443,25 @@
     "schema": {
       "type": "object",
       "properties": {
-        "code": {"type": "string", "description": "Python source to execute"},
-        "action": {"type": "string", "enum": ["code", "vars", "reset"], "description": "'code' (or omitted) runs code; 'vars' summarises the namespace; 'reset' clears it."},
-        "timeoutMs": {"type": "integer", "description": "Timeout in ms (default 120000)", "minimum": 1000, "maximum": 600000}
+        "code": {
+          "type": "string",
+          "description": "python source to execute"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "code",
+            "vars",
+            "reset"
+          ],
+          "description": "code (or omitted) runs code; vars lists the namespace; reset clears it"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "description": "timeout in ms (default 120000)",
+          "minimum": 1000,
+          "maximum": 600000
+        }
       }
     }
   },
@@ -317,18 +469,45 @@
     "name": "web",
     "enabled": true,
     "what": "searches the web or fetches a page. search takes a query; fetch takes a public http(s) URL.",
-    "guidelines": "write multi-word natural queries and reword once on junk; never search for code already in the workspace. fetch reads the page as text; refetch a larger size if you genuinely need more scope; an API reply comes back as its shape and a head; parse the rest in python or bash. Local files belong to read, local services to bash; private addresses refuse.",
-    "reply": "compact JSON title/url/snippet; fetch returns text; when capped, shows a [TRUNCATED] line with the total size.",
+    "guidelines": "write multi-word natural queries and reword once on junk; never search for code already in the workspace. fetch reads the page as text; refetch a larger size if you genuinely need more scope; an API reply comes back as its shape and a head; parse the rest in python or bash. local files belong to read, local services to bash; private addresses refuse.",
+    "reply": "search gives compact JSON title/url/snippet; fetch returns text; when capped, shows a [TRUNCATED] line with the total size.",
     "schema": {
       "type": "object",
       "properties": {
-        "action": {"type": "string", "enum": ["search", "fetch"], "description": "search <target> or fetch <target>"},
-        "target": {"type": "string", "description": "Search query, or the absolute http(s) URL to fetch"},
-        "maxResults": {"type": "integer", "description": "Max results (default 5)", "minimum": 1, "maximum": 20},
-        "maxChars": {"type": "integer", "description": "Max chars returned (default 20000)", "minimum": 100},
-        "timeoutMs": {"type": "integer", "description": "Total timeout in ms (default 30000)", "minimum": 1000, "maximum": 300000}
+        "action": {
+          "type": "string",
+          "enum": [
+            "search",
+            "fetch"
+          ],
+          "description": "search <target> or fetch <target>"
+        },
+        "target": {
+          "type": "string",
+          "description": "the query for search, or the public http(s) URL for fetch"
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "max results (default 5)",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "maxChars": {
+          "type": "integer",
+          "description": "max chars returned (default 20000)",
+          "minimum": 100
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "description": "total timeout in ms (default 30000)",
+          "minimum": 1000,
+          "maximum": 300000
+        }
       },
-      "required": ["action", "target"]
+      "required": [
+        "action",
+        "target"
+      ]
     }
   },
   {
@@ -337,7 +516,30 @@
     "what": "runs a live plugin by name with its args, or fetch its contract: {\"action\": \"run\"|\"schema\", \"name\": ..., \"args\": ...}.",
     "guidelines": "the name enum is the live set. call the schema first when you do not know a plugin's args. an unknown plugin name will be looked up once, then refused. plugins are also importable from python by name.",
     "reply": "the plugin's text, or its description and schema.",
-    "schema": {"type":"object","properties":{"action":{"enum":["run","schema"],"description":"run the plugin, or fetch its contract"},"name":{"type":"string","description":"the live plugin"},"args":{"type":"object","description":"the plugin's args, pass-through (run)"}},"required":["action","name"]}
+    "schema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "enum": [
+            "run",
+            "schema"
+          ],
+          "description": "run a live plugin by name with its args, or fetch its contract"
+        },
+        "name": {
+          "type": "string",
+          "description": "the live plugin"
+        },
+        "args": {
+          "type": "object",
+          "description": "the plugin's args, pass-through (run)"
+        }
+      },
+      "required": [
+        "action",
+        "name"
+      ]
+    }
   },
   {
     "name": "plugins",
@@ -345,7 +547,31 @@
     "what": "the plugin ecosystem: {\"action\": \"list\"|\"create\"|\"delete\"|\"reload\", ...}. list shows the loaded and the skipped; create writes a new plugin from name and source into plugins/pending/; delete moves a loaded plugin into plugins/disabled/; reload re-runs discovery over plugins/.",
     "guidelines": "a created plugin lands in plugins/pending/ untrusted, and the operator installs it with /plugins approve.",
     "reply": "the listing, the write or the disable, or the discovery's list: loaded, and skipped with reasons.",
-    "schema": {"type":"object","properties":{"action":{"enum":["list","create","delete","reload"],"description":"the ecosystem verb"},"name":{"type":"string","description":"the plugin name (create/delete)"},"source":{"type":"string","description":"the plugin source (create)"}},"required":["action"]}
+    "schema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "enum": [
+            "list",
+            "create",
+            "delete",
+            "reload"
+          ],
+          "description": "the ecosystem verb"
+        },
+        "name": {
+          "type": "string",
+          "description": "the plugin name (create/delete)"
+        },
+        "source": {
+          "type": "string",
+          "description": "the plugin source (create)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
   },
   {
     "name": "sessions",
@@ -355,10 +581,15 @@
     "reply": "a line per session, or the summary.",
     "schema": {
       "type": "object",
-      "required": ["action"],
+      "required": [
+        "action"
+      ],
       "properties": {
         "action": {
-          "enum": ["list", "summary"]
+          "enum": [
+            "list",
+            "summary"
+          ]
         },
         "project": {
           "type": "string"
@@ -372,19 +603,63 @@
   {
     "name": "decide",
     "enabled": true,
-    "what": "ask one typed question for a decision(s).",
+    "what": "asks the decision server one typed question over many items.",
     "guidelines": "make a choice (each label described), pick yes/no, or apply a score over the list; the items never enter your context. server errors refuse: nothing was sorted.",
     "reply": "the items grouped by the label, numbered from 1 with the first line; unsure choices return in full for you to judge.",
     "schema": {
       "type": "object",
       "properties": {
-        "kind":     {"type": "string", "enum": ["choice", "yesno", "score"], "description": "the question's kind"},
-        "prompt":   {"type": "string", "description": "the question, stated so one item is answered by one label or value"},
-        "labels":   {"type": "array", "description": "choice: two or more labels, each with what it means", "items": {"type": "object", "properties": {"label": {"type": "string"}, "description": {"type": "string"}}, "required": ["label"]}},
-        "criteria": {"type": "array", "description": "score: the ordered criteria, worst first", "items": {"type": "string"}},
-        "items":    {"type": "array", "description": "the items to sort, in order; the reply numbers them from 1", "items": {"type": "string"}}
+        "kind": {
+          "type": "string",
+          "enum": [
+            "choice",
+            "yesno",
+            "score"
+          ],
+          "description": "the question's kind"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "the question, stated so one item is answered by one label or value"
+        },
+        "labels": {
+          "type": "array",
+          "description": "choice: two or more labels, each label described",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label"
+            ]
+          }
+        },
+        "criteria": {
+          "type": "array",
+          "description": "score: the ordered criteria, worst first",
+          "items": {
+            "type": "string"
+          }
+        },
+        "items": {
+          "type": "array",
+          "description": "the items to sort, in order; the reply numbers them from 1",
+          "items": {
+            "type": "string"
+          }
+        }
       },
-      "required": ["kind", "prompt", "items"]
+      "required": [
+        "kind",
+        "prompt",
+        "items"
+      ]
     }
   }
 ]

@@ -250,7 +250,7 @@ func TestSessionsShape(t *testing.T) {
 		t.Fatalf("name = %q", tool.Name())
 	}
 	desc := tool.Description()
-	for _, part := range []string{"Guidelines:", "Reply:"} {
+	for _, part := range []string{"guidelines:", "reply:"} {
 		if !strings.Contains(desc, part) {
 			t.Fatalf("the description must carry the four-part shape, missing %s:\n%s", part, desc)
 		}

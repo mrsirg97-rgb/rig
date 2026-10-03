@@ -72,14 +72,14 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	d := h.tool.Description()
 	for _, want := range []string{
 		"come from list: copy them, never invent them",
-		"the fire sends and waits on the queue; a different resident model skips, naming the holder",
-		"eviction is the operator's act (the fleet is the resident model)",
-		"omit it and the fire runs on whatever is resident (default qwen3.8-workers when nothing is)",
-		"until the note clears",
+		"sending waits on the queue; if a different model is resident it skips and names it",
+		"eviction policy falls on the operator",
+		"omit it and the job runs on whatever is resident (default qwen3.8-workers when nothing is)",
+		"until their notes clear",
 		"re-create it to retry",
 		"self-deletes after one fire",
-		"running in its own workspace",
-		"repair re-derives its crontab line",
+		"each job runs in its own workspace",
+		"repair re-derives a crontab",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing voice fragment: %q", want)
@@ -114,7 +114,7 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("the scope arg must be gone from the schema")
 	}
 	id, _ := schema.Properties["id"].(map[string]any)
-	if got, _ := id["description"].(string); got != "Job id jN from list; required for pause/resume/remove/runs; repair takes it or none." {
+	if got, _ := id["description"].(string); got != "job id jN from list; required for pause/resume/remove/runs; repair takes it or none." {
 		t.Fatalf("id description %q", got)
 	}
 	if _, ok := schema.Properties["workspace"]; ok {
@@ -282,7 +282,7 @@ func TestExecRepairAllWalksEveryDriftingJob(t *testing.T) {
 func TestModelSurfaceCarriesTheResidentRule(t *testing.T) {
 	h := newHarnessModel(t, "/ws/sa-model", "brain")
 	d := h.tool.Description()
-	if !strings.Contains(d, "omit it and the fire runs on whatever is resident (default brain when nothing is)") {
+	if !strings.Contains(d, "omit it and the job runs on whatever is resident (default brain when nothing is)") {
 		t.Fatalf("description = %q, want the resident rule with the default named", d)
 	}
 	var schema struct {
@@ -292,7 +292,7 @@ func TestModelSurfaceCarriesTheResidentRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	model, _ := schema.Properties["model"].(map[string]any)
-	want := "model: the worker model id; omit to run on whatever is resident (default brain when nothing is)."
+	want := "the worker model id; omit it and the job runs on whatever is resident (default brain when nothing is)"
 	if got, _ := model["description"].(string); got != want {
 		t.Fatalf("schema model description %q, want %q", got, want)
 	}

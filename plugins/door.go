@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -28,17 +29,29 @@ func NewDoor(live Live, redo func(ctx context.Context) error) *Door {
 }
 
 func (d *Door) Schema() json.RawMessage {
-	schema := string(d.Definition.Schema())
+	schema := d.Definition.Schema()
 	names := d.Live.PluginNames()
 	if len(names) == 0 {
-		return json.RawMessage(schema)
+		return schema
 	}
 	enum, err := json.Marshal(names)
 	if err != nil {
-		return json.RawMessage(schema)
+		return schema
 	}
-	return json.RawMessage(strings.Replace(schema, `"name":{"type":"string",`, `"name":{"type":"string","enum":`+string(enum)+`,`, 1))
+	loc := liveName.FindIndex(schema)
+	if loc == nil {
+		return schema
+	}
+	out := make([]byte, 0, len(schema)+len(enum)+8)
+	out = append(out, schema[:loc[1]]...)
+	out = append(out, ` "enum": `...)
+	out = append(out, enum...)
+	out = append(out, ',')
+	out = append(out, schema[loc[1]:]...)
+	return out
 }
+
+var liveName = regexp.MustCompile(`"name"\s*:\s*\{\s*"type"\s*:\s*"string"\s*,`)
 
 func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var in struct {

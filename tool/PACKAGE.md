@@ -14,7 +14,7 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
   `guidelines`, `reply`, `schema`. File order is menu order for the root.
 - `Definition`: the value a tool embeds to satisfy three of `core.Tool`'s
   four methods: `Name()`, `Description()` (composed as
-  `<what> Guidelines: <guidelines> Reply: <reply>`), `Schema()` (a copy of
+  `<what> guidelines: <guidelines> reply: <reply>`), `Schema()` (a copy of
   the raw object, key order preserved). `Enabled()` reads the flag.
 - `Def(name)`: the entry by name; an unknown name panics, since a tool
   asking for words it does not have is a programmer error caught at

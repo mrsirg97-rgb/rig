@@ -88,7 +88,7 @@ func (d Definition) Name() string { return d.name }
 func (d Definition) Enabled() bool { return d.enabled }
 
 func (d Definition) Description() string {
-	return d.what + " Guidelines: " + d.guidelines + " Reply: " + d.reply
+	return d.what + " guidelines: " + d.guidelines + " reply: " + d.reply
 }
 
 func (d Definition) Schema() json.RawMessage {

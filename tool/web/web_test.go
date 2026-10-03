@@ -452,7 +452,7 @@ func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
 	has(t, w.Description(), "multi-word natural queries")
 	has(t, w.Description(), "never search for code already in the workspace")
 	has(t, w.Description(), "compact JSON title/url/snippet")
-	has(t, w.Description(), "[TRUNCATED] marker that names the full size")
+	has(t, w.Description(), "when capped, shows a [TRUNCATED] line with the total size")
 	has(t, w.Description(), "an API reply comes back as its shape and a head; parse the rest in python or bash")
 	has(t, w.Description(), "private addresses refuse")
 	has(t, w.Description(), "local services to bash")

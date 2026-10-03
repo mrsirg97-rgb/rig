@@ -20,12 +20,21 @@ live names to the registry's schema. The root derives its native tool
 list from the registry's enabled entries, so flipping `enabled` to
 false removes a tool from the build's menu without deleting its words.
 
-Two descriptions did not fit the shape: `python` and `scheduler` put a
-blank line before `Guidelines:` where every other tool put a space.
-They now put a space, and the three golden_020 fixtures move by those
-two bytes; the tools-prefix sha does not move. `decide`'s description,
-which carried no `Guidelines:` or `Reply:` clause, is rewritten into
-the shape with the same facts.
+With the words in one file, the operator took a pass over all of them
+in one voice: every word lowercase, the labels (`guidelines:`, `reply:`)
+and the system prompt with them, the house shape kept, the facts kept.
+Formal names and symbols keep their case: `JSON`, `API`, `URL`, `CLI`,
+`HEAD`, `[TRUNCATED]`, the id patterns `tN`/`jN`/`mN`, the cron fields. `python` and `scheduler` had put a blank line before
+`Guidelines:` where every other tool put a space; `decide` carried no
+`Guidelines:` or `Reply:` clause; `bash` and `web` described their cap
+as "a [TRUNCATED] marker that names the full size", now "when capped,
+shows a [TRUNCATED] line with the total size". A schema field that
+restates a rule from its tool's description now uses the description's
+own words (scheduler's `model`, delegate's `workspace`, rem's `query`,
+python's `action`, edit's `old`, read's `diff`, web's `target`,
+plugin's `action`, decide's `labels`). The three golden_020 fixtures
+and the tools-prefix sha move with the words; the menu is 13,973 of
+the 14,000 budget.
 
 Tests: every entry composes into the shape and carries an object
 schema; every wired tool has an entry and every entry is wired; the
