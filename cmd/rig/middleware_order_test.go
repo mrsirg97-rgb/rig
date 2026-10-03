@@ -87,7 +87,7 @@ func TestCanonicalMiddlewareAsksOnlyForAllowListedCalls(t *testing.T) {
 func TestCanonicalMiddlewareAsksForThePluginDoor(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.live = toolset.New()
-	r.natives = map[string]bool{"plugin": true, "plugins": true}
+	r.natives = map[string]bool{"plugin": true}
 	r.allow = []string{"plugin"}
 	r.approve = approve.Manual
 	asked := ""

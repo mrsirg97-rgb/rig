@@ -261,7 +261,8 @@ existing leaves.
 **cmd/rig (root + e2e):**
 
 - `TestDoorWireStampsNativesPlusTheDoor`: the request's tools array is
-  the natives plus `plugin` and `plugins` (no per-plugin schemas);
+  the natives plus `plugin` (no per-plugin schemas; `plugins` folded
+  into the door in 2.8.2);
   the door's `name` enum carries the live plugin names.
 - `TestEnablementHidesAndCaps`: `settings.json` `plugins.enabled` drops
   a plugin from the door's enum (not callable, loud unknown); `max` caps

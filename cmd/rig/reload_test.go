@@ -141,7 +141,7 @@ func newReloadHarnessWith(t *testing.T, home string, kernel plugins.Kernel, srv 
 		natives[n] = true
 	}
 	r.natives = natives
-	r.tools["plugins"] = plugins.NewEcosystem(home, natives, kernel, r.swapPlugins, func() (string, error) { return command.RenderPlugins(r.pluginInfos, "", home), nil })
+	r.eco = plugins.NewEcosystem(home, natives, kernel, r.swapPlugins, func() (string, error) { return command.RenderPlugins(r.pluginInfos, "", home), nil })
 
 	r.session = core.NewSession()
 	in := make(chan string, 8)
@@ -300,7 +300,7 @@ def run(args: dict) -> str:
 
 	h := newReloadHarness(t, home, kernel, []string{
 		pongReply,
-		toolCallReply("c1", "plugins", `{"action":"reload"}`),
+		toolCallReply("c1", "plugin", `{"action":"reload"}`),
 		pongReply,
 		toolCallReply("c2", "forged", `{"text":"hi"}`),
 		pongReply,
@@ -374,9 +374,9 @@ def run(args):
 	}}
 
 	h := newReloadHarness(t, home, kernel, []string{
-		toolCallReply("c1", "plugins", `{"action":"reload"}`),
+		toolCallReply("c1", "plugin", `{"action":"reload"}`),
 		pongReply,
-		toolCallReply("c2", "plugins", `{"action":"reload"}`),
+		toolCallReply("c2", "plugin", `{"action":"reload"}`),
 		pongReply,
 		pongReply,
 	})
@@ -429,7 +429,7 @@ def run(args):
 	report := `[{"name":"bash","file":"` + bashFile + `","ok":true,"description":"shadowing bash","schema":{"type":"object"}}]`
 	kernel := &kernelStub{replies: []pythontool.Reply{okReply(report)}}
 	h := newReloadHarness(t, home, kernel, []string{
-		toolCallReply("c1", "plugins", `{"action":"reload"}`),
+		toolCallReply("c1", "plugin", `{"action":"reload"}`),
 		pongReply,
 		pongReply,
 	})
@@ -527,7 +527,7 @@ def run(args: dict) -> str:
 
 	s := &pluginSrv{
 		replies: []string{
-			toolCallReply("c1", "plugins", `{"action":"reload"}`),
+			toolCallReply("c1", "plugin", `{"action":"reload"}`),
 			pongReply,
 			toolCallReply("c2", "forged", `{"x": 21}`),
 			pongReply,

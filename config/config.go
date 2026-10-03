@@ -22,6 +22,15 @@ func Load(dir, cwd string) (*Config, error) {
 	if concurrencyRetired {
 		notices = append(notices, fmt.Sprintf("config: %s: concurrency retired: the fleet is the resident model", filepath.Join(dir, "models.json")))
 	}
+	kept := make([]string, 0, len(s.Allow))
+	for _, name := range s.Allow {
+		if name == "plugins" {
+			notices = append(notices, fmt.Sprintf("config: %s: allow names plugins, which folded into plugin in 2.8.2; the name is dropped", filepath.Join(dir, "settings.json")))
+			continue
+		}
+		kept = append(kept, name)
+	}
+	s.Allow = kept
 	workersRetired, err := workersRetired(dir)
 	if err != nil {
 		return nil, err

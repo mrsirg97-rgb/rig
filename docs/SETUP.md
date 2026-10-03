@@ -210,7 +210,7 @@ refused at the boundary and the refusal is fed back to the model. The default
 permits the built-in set because a default-deny CLI would ship a
 dead agent; narrow with `--allow read` or similar. A `settings.json` that
 writes its own `allow` key replaces that default whole, so it must carry
-`plugin` and `plugins` or every door call is refused. Python plugins
+`plugin` or every door call is refused. Python plugins
 (`~/.rig/plugins/`) are **not** in the default, but a plugin sitting in
 `plugins/` root is itself an allow-list entry (SPEC_PLUGINS 7): the
 provenance rule forces a model's writes into `plugins/pending/`, so an
@@ -250,7 +250,7 @@ embedded defaults written out. `workers` is the fleet's switch
 them on where the slots are not (SPEC_WORKERS 5). `allow` is the one
 to be careful with:
 an `allow` you write replaces the default whole (default-deny below
-it), so it must carry `plugin` and `plugins` or every door call is
+it), so it must carry `plugin` or every door call is
 refused, and it must carry `scheduler` and `delegate` when you also
 configure a fleet. `retries` bounds the model's re-issuance of a
 failing tool call; it is not a retry allowance. `approve: "manual"`
@@ -363,8 +363,8 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   `disable <name>` moves a loaded plugin into `plugins/disabled/`
   (hidden, not callable, the next turn); `enable <name>` brings it
   back.
-- **`plugins`**: the ecosystem native tool
-  (`specs/SPEC_PLUGINS.md` 8): `list` (the loaded and the skipped),
+- **`plugin`**, the ecosystem arms (`specs/SPEC_PLUGINS.md` 8, folded
+  into the door in 2.8.2): `list` (the loaded and the skipped),
   `create` (name plus source into `plugins/pending/`, the same checks
   as the command door's forge), `delete` (a move into
   `plugins/disabled/`, reversible with `/plugins enable`), and
@@ -377,7 +377,9 @@ Python plugins as tools (`specs/SPEC_PLUGINS.md`): one file, one tool.
   in `plugins/pending/`, and `approve` installs it. The `plugin` door
   self-heals (SPEC_STREAMLINE 4): an unknown name re-discovers once
   before refusing, so an out-of-band install is callable without a
-  reload call; `plugins` stays the operator's explicit verb.
+  reload call; `/plugins` stays the operator's explicit verb. A
+  `settings.json` whose `allow` still names `plugins` starts with one
+  notice and the name is dropped.
 - **The sandbox**: the provenance rule is the workflow (SPEC_SANDBOX
   2); the worker jail is the boundary (SPEC_SANDBOX 1, 3, 5): a scheduled
   worker's plugins run jailed under bwrap. In the interactive REPL the

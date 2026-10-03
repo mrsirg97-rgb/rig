@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.8.1" {
-		t.Fatalf("Version = %q, want 2.8.1", Version)
+	if Version != "2.8.2" {
+		t.Fatalf("Version = %q, want 2.8.2", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -153,18 +153,7 @@ func testTools() map[string]core.Tool {
 		"web": fakeWeb{},
 
 		"sessions": sessionstool.New("", ""),
-
-		"plugins": fakePlugins{},
 	}
-}
-
-type fakePlugins struct{}
-
-func (fakePlugins) Name() string            { return "plugins" }
-func (fakePlugins) Description() string     { return "the fixture plugins surface" }
-func (fakePlugins) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
-func (fakePlugins) Exec(ctx context.Context, args json.RawMessage) (string, error) {
-	return "plugins: reload: 0 loaded, 0 skipped", nil
 }
 
 func testRoot(fe core.Frontend) *root {
@@ -196,7 +185,7 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
 		t.Fatal("every required seam must be registered")
 	}
-	want := []string{"bash", "delegate", "edit", "plugin", "plugins", "python", "read", "rem", "scheduler", "sessions", "todo", "web", "write"}
+	want := []string{"bash", "delegate", "edit", "plugin", "python", "read", "rem", "scheduler", "sessions", "todo", "web", "write"}
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("the worker tools always register (the fleet is the resident model): %v, want %v", got, want)
 	}
@@ -606,7 +595,7 @@ func TestIsMutatingPredicate(t *testing.T) {
 	for _, n := range nativeToolNames {
 		r.natives[n] = true
 	}
-	for _, n := range []string{"bash", "write", "edit", "python", "scheduler", "plugin", "plugins", "delegate", "gpu_stats"} {
+	for _, n := range []string{"bash", "write", "edit", "python", "scheduler", "plugin", "delegate", "gpu_stats"} {
 		if !r.isMutating(n) {
 			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
 		}

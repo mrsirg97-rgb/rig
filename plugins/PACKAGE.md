@@ -20,8 +20,9 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   native collisions before any top-level plugin code executes.
 - `Report`: one plugin file's discovery outcome.
 - `Tool`: one loaded plugin on the Tool seam.
-- `Ecosystem` + `NewEcosystem`: the `plugins` native (SPEC_PLUGINS 8,
-  amended): one mutating tool over the ecosystem, an `action` enum:
+- `Ecosystem` + `NewEcosystem`: the ecosystem arms of the `plugin` door
+  (SPEC_PLUGINS 8, amended 2.8.2: the `plugins` native folded into the
+  door): one dispatcher over the ecosystem, by `action`:
   `list` (the loaded and the skipped, through a root-wired listing seam),
   `create` (writes a pending plugin, untrusted, through `WritePending`),
   `delete` (moves a loaded plugin into `plugins/disabled/`; disable, not
@@ -38,7 +39,8 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 - `PluginNameRe`: the filename-stem rule (`^[a-z][a-z0-9_]{0,63}$`).
 - `List`: the home's plugin listing (top-level `*.py`).
 - `Check`: the collision refusal (a loaded plugin named like a native;
-  `plugin` and `plugins` are natives, so both are reserved).
+  `plugin` is a native, so it is reserved; `plugins` stays reserved as
+  the operator command's name).
 - `Kernel`: the shared-kernel seam (one code cell, the host's raw reply).
 - `Live`: the live plugin table's seam (SPEC_GROWTH 9): `PluginNames`
   and `Plugin(name)`, implemented by `middleware/toolset`'s Table. The

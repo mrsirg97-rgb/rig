@@ -44,7 +44,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.8.1"
+const Version = "2.8.2"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -183,7 +183,7 @@ func main() {
 	}
 	if passed["allow"] {
 		if *allow == sched.NoToolsAllow {
-			allowList = nil // no tools: the fire reads the task and replies
+			allowList = nil
 		} else {
 			allowList = splitCSV(*allow)
 		}
@@ -478,7 +478,7 @@ func main() {
 	}
 
 	r.natives = native
-	r.tools["plugins"] = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
+	r.eco = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
 

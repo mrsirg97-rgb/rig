@@ -10,9 +10,6 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
-
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -159,7 +156,6 @@ func WritePending(home string, natives map[string]bool, name, source string) (pa
 }
 
 type Ecosystem struct {
-	tool.Definition
 	home    string
 	Kernel  Kernel
 	natives map[string]bool
@@ -167,10 +163,8 @@ type Ecosystem struct {
 	list    func() (string, error)
 }
 
-var _ core.Tool = (*Ecosystem)(nil)
-
 func NewEcosystem(home string, natives map[string]bool, k Kernel, swap func(ctx context.Context, reports []Report) (string, error), list func() (string, error)) *Ecosystem {
-	return &Ecosystem{Definition: tool.Def("plugins"), home: home, natives: natives, Kernel: k, swap: swap, list: list}
+	return &Ecosystem{home: home, natives: natives, Kernel: k, swap: swap, list: list}
 }
 
 func (e *Ecosystem) Exec(ctx context.Context, args json.RawMessage) (string, error) {
@@ -180,10 +174,10 @@ func (e *Ecosystem) Exec(ctx context.Context, args json.RawMessage) (string, err
 		Source string `json:"source"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
-		return "", fmt.Errorf("plugins: bad call (want {action, name, source}): %v", err)
+		return "", fmt.Errorf("plugin: bad call (want {action, name, source}): %v", err)
 	}
 	if in.Action == "" {
-		return "", fmt.Errorf("plugins: no action (want {action, name, source})")
+		return "", fmt.Errorf("plugin: no action (want {action, name, source})")
 	}
 	switch in.Action {
 	case "list":
@@ -195,13 +189,13 @@ func (e *Ecosystem) Exec(ctx context.Context, args json.RawMessage) (string, err
 	case "reload":
 		return e.reload(ctx)
 	default:
-		return "", fmt.Errorf("plugins: unknown action %q (want list, create, delete, or reload)", in.Action)
+		return "", fmt.Errorf("plugin: unknown action %q (want run, schema, list, create, delete or reload)", in.Action)
 	}
 }
 
 func (e *Ecosystem) listEcosystem(ctx context.Context) (string, error) {
 	if e.list == nil {
-		return "", fmt.Errorf("plugins: list: no listing seam (the root did not wire one)")
+		return "", fmt.Errorf("plugin: list: no listing seam (the root did not wire one)")
 	}
 	return e.list()
 }
@@ -209,27 +203,27 @@ func (e *Ecosystem) listEcosystem(ctx context.Context) (string, error) {
 func (e *Ecosystem) create(ctx context.Context, name, source string) (string, error) {
 	path, created, err := WritePending(e.home, e.natives, name, source)
 	if err != nil {
-		return "", fmt.Errorf("plugins: create: %v", err)
+		return "", fmt.Errorf("plugin: create: %v", err)
 	}
 	verb := "updated"
 	if created {
 		verb = "created"
 	}
-	return "plugins: create: " + verb + " " + name + " (" + path + "; the operator installs it with /plugins approve)", nil
+	return "plugin: create: " + verb + " " + name + " (" + path + "; the operator installs it with /plugins approve)", nil
 }
 
 func (e *Ecosystem) delete(ctx context.Context, name string) (string, error) {
 	src, dst, err := Move(filepath.Join(e.home, "plugins"), name, "", "disabled")
 	if err != nil {
-		return "", fmt.Errorf("plugins: delete: %v", err)
+		return "", fmt.Errorf("plugin: delete: %v", err)
 	}
-	return "plugins: delete: " + name + " (" + src + " -> " + dst + "; a reload re-registers without it; /plugins enable brings it back)", nil
+	return "plugin: delete: " + name + " (" + src + " -> " + dst + "; a reload re-registers without it; /plugins enable brings it back)", nil
 }
 
 func (e *Ecosystem) reload(ctx context.Context) (string, error) {
 	files, err := List(e.home)
 	if err != nil {
-		return "", fmt.Errorf("plugins: reload: %v", err)
+		return "", fmt.Errorf("plugin: reload: %v", err)
 	}
 	reports := make([]Report, 0)
 	if len(files) > 0 {
@@ -238,7 +232,7 @@ func (e *Ecosystem) reload(ctx context.Context) (string, error) {
 			if IsNameCollision(err) {
 				return "", err
 			}
-			return "", fmt.Errorf("plugins: reload: %v", err)
+			return "", fmt.Errorf("plugin: reload: %v", err)
 		}
 	}
 	if err := Check(reports, e.natives); err != nil {

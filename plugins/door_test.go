@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -34,7 +36,7 @@ func (s *stubTool) Exec(ctx context.Context, args json.RawMessage) (string, erro
 
 func TestDoorSurfacesAreTheNativeContract(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
-	door := NewDoor(live, nil)
+	door := NewDoor(live, nil, nil)
 	if door.Name() != "plugin" {
 		t.Fatalf("door name = %q, want plugin (a native tool)", door.Name())
 	}
@@ -54,8 +56,8 @@ func TestDoorSurfacesAreTheNativeContract(t *testing.T) {
 	if len(params.Properties.Name.Enum) != 1 || params.Properties.Name.Enum[0] != "networth" {
 		t.Fatalf("the door's enum = %v, want the live names", params.Properties.Name.Enum)
 	}
-	if len(params.Properties.Action.Enum) != 2 || params.Properties.Action.Enum[0] != "run" || params.Properties.Action.Enum[1] != "schema" {
-		t.Fatalf("the door's action enum = %v, want run and schema", params.Properties.Action.Enum)
+	if strings.Join(params.Properties.Action.Enum, ",") != "run,schema,list,create,delete,reload" {
+		t.Fatalf("the door's action enum = %v, want run, schema, list, create, delete, reload", params.Properties.Action.Enum)
 	}
 
 	live.names = []string{"networth", "flip_calc"}
@@ -68,7 +70,7 @@ func TestDoorSurfacesAreTheNativeContract(t *testing.T) {
 }
 
 func TestDoorSchemaOmitsTheNameEnumWhenThereAreNoLivePlugins(t *testing.T) {
-	door := NewDoor(&stubLive{names: []string{}}, nil)
+	door := NewDoor(&stubLive{names: []string{}}, nil, nil)
 	var schema struct {
 		Properties struct {
 			Name struct {
@@ -89,14 +91,14 @@ func TestDoorSchemaOmitsTheNameEnumWhenThereAreNoLivePlugins(t *testing.T) {
 	if schema.Properties.Name.Enum != nil {
 		t.Fatalf("an empty enum must be omitted: llama-server rejects it, got %v", schema.Properties.Name.Enum)
 	}
-	if len(schema.Properties.Action.Enum) != 2 {
+	if len(schema.Properties.Action.Enum) != 6 {
 		t.Fatalf("the action enum must stay: %v", schema.Properties.Action.Enum)
 	}
 }
 
 func TestDoorExecResolvesAndCalls(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
-	door := NewDoor(live, nil)
+	door := NewDoor(live, nil, nil)
 	ctx := context.Background()
 
 	out, err := door.Exec(ctx, json.RawMessage(`{"action":"run","name":"networth","args":{"a":1}}`))
@@ -118,7 +120,7 @@ func TestDoorExecResolvesAndCalls(t *testing.T) {
 
 func TestDoorUnknownActionRefuses(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
-	door := NewDoor(live, nil)
+	door := NewDoor(live, nil, nil)
 	_, err := door.Exec(context.Background(), json.RawMessage(`{"action":"sideways","name":"networth"}`))
 	if err == nil || !strings.Contains(err.Error(), `unknown action "sideways"`) {
 		t.Fatalf("an unknown action must refuse by name, got %v", err)
@@ -162,7 +164,7 @@ func (d *deferredLive) redo(ctx context.Context) error {
 
 func TestDoorRedisoversOnceOnUnknownName(t *testing.T) {
 	live := &deferredLive{name: "forged", tool: &stubTool{name: "forged"}}
-	door := NewDoor(live, live.redo)
+	door := NewDoor(live, live.redo, nil)
 	out, err := door.Exec(context.Background(), json.RawMessage(`{"action":"run","name":"forged","args":{"text":"hi"}}`))
 	if err != nil || out != "ran forged: {\"text\":\"hi\"}" {
 		t.Fatalf("the self-healed call = (%q, %v), want the plugin's run verbatim", out, err)
@@ -174,7 +176,7 @@ func TestDoorRedisoversOnceOnUnknownName(t *testing.T) {
 
 func TestDoorSkipsRedoOnKnownName(t *testing.T) {
 	live := &deferredLive{name: "forged", tool: &stubTool{name: "forged"}, ready: true}
-	door := NewDoor(live, live.redo)
+	door := NewDoor(live, live.redo, nil)
 	if _, err := door.Exec(context.Background(), json.RawMessage(`{"action":"run","name":"forged"}`)); err != nil {
 		t.Fatalf("the known name's call: %v", err)
 	}
@@ -186,7 +188,7 @@ func TestDoorSkipsRedoOnKnownName(t *testing.T) {
 func TestDoorNamesRedoFailure(t *testing.T) {
 	live := &deferredLive{name: "forged", tool: &stubTool{name: "forged"}}
 	live.redoErr = errors.New("the kernel said no")
-	door := NewDoor(live, live.redo)
+	door := NewDoor(live, live.redo, nil)
 	_, err := door.Exec(context.Background(), json.RawMessage(`{"action":"run","name":"forged"}`))
 	if err == nil || !strings.Contains(err.Error(), "re-discovery failed") || !strings.Contains(err.Error(), "the kernel said no") {
 		t.Fatalf("the failing redo must be named in the refusal: %v", err)
@@ -195,7 +197,7 @@ func TestDoorNamesRedoFailure(t *testing.T) {
 
 func TestDoorNilRedoKeepsTheRefusal(t *testing.T) {
 	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
-	door := NewDoor(live, nil)
+	door := NewDoor(live, nil, nil)
 	_, err := door.Exec(context.Background(), json.RawMessage(`{"action":"run","name":"ghost"}`))
 	if err == nil || !strings.Contains(err.Error(), `unknown plugin "ghost"`) || !strings.Contains(err.Error(), "networth") {
 		t.Fatalf("the nil-redo refusal must name the live plugins: %v", err)
@@ -206,7 +208,7 @@ func TestDoorSchemaCarriesTheSameSelfHeal(t *testing.T) {
 	ctx := context.Background()
 
 	live := &deferredLive{name: "forged", tool: &stubTool{name: "forged"}}
-	door := NewDoor(live, live.redo)
+	door := NewDoor(live, live.redo, nil)
 	out, err := door.Exec(ctx, json.RawMessage(`{"action":"schema","name":"forged"}`))
 	if err != nil || out != "stub forged\nschema: {\"type\":\"object\"}" {
 		t.Fatalf("the self-healed contract = (%q, %v), want the plugin's contract", out, err)
@@ -216,7 +218,7 @@ func TestDoorSchemaCarriesTheSameSelfHeal(t *testing.T) {
 	}
 
 	steady := &deferredLive{name: "alpha", tool: &stubTool{name: "alpha"}, ready: true}
-	if _, err := NewDoor(steady, steady.redo).Exec(ctx, json.RawMessage(`{"action":"schema","name":"alpha"}`)); err != nil {
+	if _, err := NewDoor(steady, steady.redo, nil).Exec(ctx, json.RawMessage(`{"action":"schema","name":"alpha"}`)); err != nil {
 		t.Fatalf("the known name's contract: %v", err)
 	}
 	if steady.calls != 0 {
@@ -225,14 +227,61 @@ func TestDoorSchemaCarriesTheSameSelfHeal(t *testing.T) {
 
 	broken := &deferredLive{name: "beta", tool: &stubTool{name: "beta"}}
 	broken.redoErr = errors.New("the kernel said no")
-	_, err = NewDoor(broken, broken.redo).Exec(ctx, json.RawMessage(`{"action":"schema","name":"beta"}`))
+	_, err = NewDoor(broken, broken.redo, nil).Exec(ctx, json.RawMessage(`{"action":"schema","name":"beta"}`))
 	if err == nil || !strings.Contains(err.Error(), "re-discovery failed") || !strings.Contains(err.Error(), "the kernel said no") {
 		t.Fatalf("the failing redo must be named: %v", err)
 	}
 
 	plain := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
-	_, err = NewDoor(plain, nil).Exec(ctx, json.RawMessage(`{"action":"schema","name":"ghost"}`))
+	_, err = NewDoor(plain, nil, nil).Exec(ctx, json.RawMessage(`{"action":"schema","name":"ghost"}`))
 	if err == nil || !strings.Contains(err.Error(), `unknown plugin "ghost"`) || !strings.Contains(err.Error(), "networth") {
 		t.Fatalf("the nil-redo refusal must name the live plugins: %v", err)
+	}
+}
+
+func TestDoorCarriesTheEcosystemActions(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	swapped := 0
+	eco := NewEcosystem(home, map[string]bool{"bash": true, "plugin": true}, &fakeKernel{}, func(ctx context.Context, reports []Report) (string, error) {
+		swapped++
+		return "plugins: reload: 0 loaded, 0 skipped", nil
+	}, func() (string, error) { return "plugins: none", nil })
+	door := NewDoor(&stubLive{}, nil, eco)
+	out, err := door.Exec(context.Background(), json.RawMessage(`{"action":"list"}`))
+	if err != nil || out != "plugins: none" {
+		t.Fatalf("list through the door = %q, %v", out, err)
+	}
+	out, err = door.Exec(context.Background(), json.RawMessage(`{"action":"create","name":"echo","source":"DESCRIPTION = 'x'\nSCHEMA = {}\ndef run(args):\n    return 'x'\n"}`))
+	if err != nil || !strings.Contains(out, "plugin: create: created echo") {
+		t.Fatalf("create through the door = %q, %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "plugins", "pending", "echo.py")); err != nil {
+		t.Fatalf("create must land in pending: %v", err)
+	}
+	if _, err := door.Exec(context.Background(), json.RawMessage(`{"action":"reload"}`)); err != nil || swapped != 1 {
+		t.Fatalf("reload through the door: swapped=%d err=%v", swapped, err)
+	}
+}
+
+func TestDoorWithoutAnEcosystemNamesTheMissingSeam(t *testing.T) {
+	door := NewDoor(&stubLive{}, nil, nil)
+	_, err := door.Exec(context.Background(), json.RawMessage(`{"action":"list"}`))
+	if err == nil || !strings.Contains(err.Error(), "no ecosystem seam") {
+		t.Fatalf("err = %v, want the missing seam named", err)
+	}
+}
+
+func TestDoorRunNeedsANameAndTheEcosystemVerbsDoNot(t *testing.T) {
+	door := NewDoor(&stubLive{}, nil, nil)
+	_, err := door.Exec(context.Background(), json.RawMessage(`{"action":"run"}`))
+	if err == nil || !strings.Contains(err.Error(), "run needs a name") {
+		t.Fatalf("run without a name: %v", err)
+	}
+	_, err = door.Exec(context.Background(), json.RawMessage(`{"action":"paint"}`))
+	if err == nil || !strings.Contains(err.Error(), `unknown action "paint" (want run, schema, list, create, delete or reload)`) {
+		t.Fatalf("unknown action: %v", err)
 	}
 }

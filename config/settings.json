@@ -13,7 +13,6 @@
     "web",
     "decide",
     "plugin",
-    "plugins",
     "sessions"
   ],
   "retries": 3,

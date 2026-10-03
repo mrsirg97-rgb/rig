@@ -11,34 +11,6 @@ import (
 	pythontool "github.com/mrsirg97-rgb/rig/v2/tool/python"
 )
 
-func TestEcosystemSurfacesAreTheNativeContract(t *testing.T) {
-	tool := NewEcosystem("/h", map[string]bool{"bash": true, "plugins": true}, &fakeKernel{}, func(ctx context.Context, reports []Report) (string, error) {
-		return "plugins: reload: 0 loaded, 0 skipped", nil
-	}, func() (string, error) {
-		return "plugins: none", nil
-	})
-	if tool.Name() != "plugins" {
-		t.Fatalf("Name = %q, want plugins (a native tool)", tool.Name())
-	}
-	var params struct {
-		Properties struct {
-			Action struct {
-				Enum []string `json:"enum"`
-			} `json:"action"`
-		} `json:"properties"`
-	}
-	if err := json.Unmarshal(tool.Schema(), &params); err != nil {
-		t.Fatalf("the schema is not JSON: %v", err)
-	}
-	if len(params.Properties.Action.Enum) != 4 || params.Properties.Action.Enum[0] != "list" || params.Properties.Action.Enum[1] != "create" || params.Properties.Action.Enum[2] != "delete" || params.Properties.Action.Enum[3] != "reload" {
-		t.Fatalf("the action enum = %v, want list, create, delete, reload", params.Properties.Action.Enum)
-	}
-	desc := tool.Description()
-	if !strings.Contains(desc, "list") || !strings.Contains(desc, "create") || !strings.Contains(desc, "delete") || !strings.Contains(desc, "reload") {
-		t.Fatalf("the description must name the four ecosystem verbs, got %q", desc)
-	}
-}
-
 func TestEcosystemExecReloadRediscoversAndHandsOff(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "plugins"), 0o755); err != nil {
@@ -102,7 +74,7 @@ func TestEcosystemExecCreateWritesPending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(out, "plugins: create: created echo") {
+	if !strings.Contains(out, "plugin: create: created echo") {
 		t.Fatalf("the create reply = %q, want the created voice", out)
 	}
 	path := filepath.Join(home, "plugins", "pending", "echo.py")
@@ -113,7 +85,7 @@ func TestEcosystemExecCreateWritesPending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-create: %v", err)
 	}
-	if !strings.Contains(out, "plugins: create: updated echo") {
+	if !strings.Contains(out, "plugin: create: updated echo") {
 		t.Fatalf("a second write must report updated, got %q", out)
 	}
 	for _, bad := range []string{`{"action":"create","name":"","source":"x"}`, `{"action":"create","name":"a/b","source":"x"}`, `{"action":"create","name":"My Plugin","source":"x"}`, `{"action":"create","name":"bash","source":"x"}`, `{"action":"create","name":"plugins","source":"x"}`, `{"action":"create","name":"echo","source":"x = 1\n"}`} {
@@ -139,7 +111,7 @@ func TestEcosystemExecDeleteMovesToDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if !strings.Contains(out, "plugins: delete: echo") {
+	if !strings.Contains(out, "plugin: delete: echo") {
 		t.Fatalf("the delete reply = %q", out)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -327,7 +299,7 @@ func TestEcosystemKernelFailureIsTheError(t *testing.T) {
 	if !strings.Contains(err.Error(), "kernel exited (code 1)") {
 		t.Fatalf("the error must carry the kernel's reason, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "plugins: reload:") {
+	if !strings.Contains(err.Error(), "plugin: reload:") {
 		t.Fatalf("the reason rides under the reload's prefix, got %v", err)
 	}
 	if called {
