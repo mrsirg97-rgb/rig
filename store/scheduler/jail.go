@@ -12,7 +12,6 @@ import (
 type JailProfile struct {
 	Bwrap     string
 	Binary    string
-	Prompt    string
 	BaseURL   string
 	Model     string
 	SessionID string
@@ -71,7 +70,7 @@ func JailArgv(p JailProfile) ([]string, error) {
 	argv = append(argv,
 		"--chdir", p.Cwd,
 		"--",
-		p.Binary, "-p", p.Prompt,
+		p.Binary, "-p", PromptStdin,
 		"-base-url", p.BaseURL,
 		"-model", p.Model,
 	)
@@ -170,7 +169,6 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allo
 	argv, err := JailArgv(JailProfile{
 		Bwrap:     bwrap,
 		Binary:    workerCmd[0],
-		Prompt:    prompt,
 		BaseURL:   "unix:" + sock,
 		Model:     model,
 		SessionID: sessionID,

@@ -331,3 +331,22 @@ func schemaFourStatements() []string {
 )`,
 	}
 }
+
+func TestRealSpawnPipesThePromptToStdin(t *testing.T) {
+	prompt := strings.Repeat("p", 300*1024)
+	ctx := sched.WithPrompt(context.Background(), prompt)
+	res, err := sched.RealSpawn(ctx, []string{"sh", "-c", "wc -c"}, t.TempDir(), os.Environ(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Exit != 0 || strings.TrimSpace(res.Stdout) != "307200" {
+		t.Fatalf("the child must read the whole prompt on stdin, got exit %d stdout %q", res.Exit, res.Stdout)
+	}
+	res, err = sched.RealSpawn(context.Background(), []string{"sh", "-c", "wc -c"}, t.TempDir(), os.Environ(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(res.Stdout) != "0" {
+		t.Fatalf("no prompt in the context means an empty stdin, got %q", res.Stdout)
+	}
+}

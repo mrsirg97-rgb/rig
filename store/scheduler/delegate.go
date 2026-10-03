@@ -176,7 +176,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	if profile == "off" {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = append(append([]string{}, workerCmd...),
-			"-p", prompt,
+			"-p", PromptStdin,
 			"-session-id", in.WorkerSession,
 			"-base-url", in.SwapURL+"/v1",
 			"-model", in.Model)
@@ -207,7 +207,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 
-	res, err := in.Spawn(ctx, argv, in.Cwd, spawnEnv, in.Observe)
+	res, err := in.Spawn(WithPrompt(ctx, prompt), argv, in.Cwd, spawnEnv, in.Observe)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
 	}

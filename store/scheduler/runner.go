@@ -200,6 +200,7 @@ func RunJob(key string, opts RunOpts) error {
 	}
 	var (
 		argv          []string
+		prompt        string
 		proxy         *SocketProxy
 		spawnEnv      []string
 		workerSession string
@@ -245,7 +246,7 @@ func RunJob(key string, opts RunOpts) error {
 			}
 			workerCmd = []string{exe}
 		}
-		prompt := job.Prompt + ReportBack
+		prompt = job.Prompt + ReportBack
 		workerSession = core.NewSession().ID
 
 		profile, err := SandboxProfile(opts.Sandbox)
@@ -257,7 +258,7 @@ func RunJob(key string, opts RunOpts) error {
 			fmt.Fprintln(os.Stderr, "run-job: sandbox off: the worker runs unjailed (the operator's choice)")
 
 			argv = append(append([]string{}, workerCmd...),
-				"-p", prompt,
+				"-p", PromptStdin,
 				"-session-id", workerSession,
 				"-base-url", opts.SwapURL+"/v1",
 				"-model", model)
@@ -313,7 +314,7 @@ func RunJob(key string, opts RunOpts) error {
 		}
 		stream.Write(p)
 	}
-	res, err := opts.Spawn(ctx, argv, job.Cwd, spawnEnv, observe)
+	res, err := opts.Spawn(WithPrompt(ctx, prompt), argv, job.Cwd, spawnEnv, observe)
 	stream.Close()
 	os.Remove(streamPath)
 	if watch != nil {

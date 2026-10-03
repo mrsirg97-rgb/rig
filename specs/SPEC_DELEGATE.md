@@ -148,8 +148,10 @@ seam, reusing the exact pieces `run-job` uses:
 
 The worker prompt is `task + ReportBack` (`ReportBack`, the runner's
 standing directive), exactly the prompt `run-job` builds. The worker
-runs `rig -p <prompt> -base-url <swap>/v1 -model <model>`, with the
-jail argv carrying `-base-url unix:<sock>`.
+runs `rig -p - -base-url <swap>/v1 -model <model>` with the prompt on
+its stdin (2.9.3: a prompt never rides argv; the spawn context carries
+it, `WithPrompt`/`PromptFrom`, and `RealSpawn` pipes it), with the jail
+argv carrying `-base-url unix:<sock>`.
 
 ### 3. The transcript is resumable (the one named deviation)
 

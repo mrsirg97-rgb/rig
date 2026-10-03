@@ -861,7 +861,8 @@ type routerSpawn struct {
 
 func (r *routerSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	r.mu.Lock()
-	r.calls = append(r.calls, strings.Join(argv, " "))
+	prompt, _ := sched.PromptFrom(ctx)
+	r.calls = append(r.calls, strings.Join(argv, " ")+" "+prompt)
 	r.mu.Unlock()
 	return sched.SpawnResult{Exit: 0, Stdout: "done\n"}, nil
 }

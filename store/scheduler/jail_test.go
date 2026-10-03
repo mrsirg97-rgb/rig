@@ -11,7 +11,6 @@ func TestJailArgvIsTheSpecProfileVerbatim(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:     "/usr/bin/bwrap",
 		Binary:    "/opt/rig/bin/rig",
-		Prompt:    "do the thing\n\nReport back: ...",
 		BaseURL:   "unix:/ws/j/.rig-job.sock",
 		Model:     "qwen3.8-workers",
 		Cwd:       "/ws/j",
@@ -40,7 +39,7 @@ func TestJailArgvIsTheSpecProfileVerbatim(t *testing.T) {
 		"--bind", "/ws/j/.rig-job.sock", "/ws/j/.rig-job.sock",
 		"--chdir", "/ws/j",
 		"--",
-		"/opt/rig/bin/rig", "-p", "do the thing\n\nReport back: ...",
+		"/opt/rig/bin/rig", "-p", "-",
 		"-base-url", "unix:/ws/j/.rig-job.sock",
 		"-model", "qwen3.8-workers",
 	}
@@ -58,7 +57,6 @@ func TestJailArgvNoKernelLineWhenTheKernelDirIsAbsent(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",
 		Binary:   "/opt/rig/bin/rig",
-		Prompt:   "p",
 		BaseURL:  "unix:/ws/j/.rig-job.sock",
 		Model:    "m",
 		Cwd:      "/ws/j",
@@ -79,7 +77,6 @@ func TestJailArgvBindsFollowTheRwSuffix(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:     "/usr/bin/bwrap",
 		Binary:    "/opt/rig/bin/rig",
-		Prompt:    "p",
 		BaseURL:   "unix:/ws/j/.rig-job.sock",
 		Model:     "m",
 		Cwd:       "/ws/j",
@@ -110,7 +107,6 @@ func TestJailArgvRefusesRelativeBinds(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",
 		Binary:   "/opt/rig/bin/rig",
-		Prompt:   "p",
 		BaseURL:  "unix:/ws/j/.rig-job.sock",
 		Model:    "m",
 		Cwd:      "/ws/j",
@@ -157,7 +153,6 @@ func TestJailArgvRefusesAnEnvEntryWithoutAnEquals(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",
 		Binary:   "/opt/rig/bin/rig",
-		Prompt:   "do the thing",
 		BaseURL:  "unix:/ws/j/.rig-job.sock",
 		Model:    "qwen3.8-workers",
 		Cwd:      "/ws/j",
@@ -174,7 +169,6 @@ func TestJailArgvCarriesTheWorkerEnv(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",
 		Binary:   "/opt/rig/bin/rig",
-		Prompt:   "do the thing",
 		BaseURL:  "unix:/ws/j/.rig-job.sock",
 		Model:    "qwen3.8-workers",
 		Cwd:      "/ws/j",
