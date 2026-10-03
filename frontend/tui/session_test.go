@@ -965,7 +965,7 @@ func TestCompletionMenu(t *testing.T) {
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	row := func(name, desc string) string {
-		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
+		return th.Paint(SlotEmber, name) + th.Paint(SlotText, "  "+desc)
 	}
 	status := "huihui3.8"
 	stance := "xhigh · default · auto"
@@ -1763,7 +1763,7 @@ func TestArrowsNavigateTheMenu(t *testing.T) {
 	go func() { _, _ = s.input() }()
 	s.await(promptMark(th))
 	row := func(name, desc string) string {
-		return th.Paint(SlotAccent, name) + th.Paint(SlotText, "  "+desc)
+		return th.Paint(SlotEmber, name) + th.Paint(SlotText, "  "+desc)
 	}
 
 	s.si.feed("/todo")

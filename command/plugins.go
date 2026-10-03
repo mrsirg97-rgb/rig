@@ -24,18 +24,18 @@ type pluginsCmd struct{}
 func (pluginsCmd) Name() string { return "plugins" }
 
 func (pluginsCmd) Description() string {
-	return "list the python plugins: the loaded and the skipped ones, the pending zone, and the disabled zone; approve <name> installs a pending plugin; disable <name> / enable <name> move a plugin between plugins/ and plugins/disabled/; reload re-registers from disk (the next turn); create <text> queues the authoring prompt"
+	return "the python plugins: loaded and skipped, the pending and disabled ones; approve, enable, disable, reload, or ask the model to write one"
 }
 
 func (pluginsCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "pending", Desc: "list the pending zone (the model's authoring), with each file's DESCRIPTION"},
-		{Name: "approve", Desc: "approve <name>: move the pending plugin to the top level (the operator's verb)"},
-		{Name: "reload", Desc: "re-run the discovery; the new list is registered on the next turn"},
-		{Name: "create", Desc: "create <text>: queue the authoring prompt (the plugin lands in the pending zone)"},
-		{Name: "disabled", Desc: "list the disabled zone (plugins/disabled/), with each file's DESCRIPTION"},
-		{Name: "enable", Desc: "enable <name>: move a plugin from plugins/disabled/ back to plugins/ (live next turn)"},
-		{Name: "disable", Desc: "disable <name>: move a plugin into plugins/disabled/ (hidden, not callable, next turn)"},
+		{Name: "pending", Desc: "plugins the model wrote that wait for your approval, with what each does"},
+		{Name: "approve", Desc: "install a pending plugin: approve <name>"},
+		{Name: "reload", Desc: "reread the plugins directory; the new list is live next turn"},
+		{Name: "create", Desc: "ask the model to write a plugin: create <what it should do>"},
+		{Name: "disabled", Desc: "the disabled plugins, with what each does"},
+		{Name: "enable", Desc: "bring a disabled plugin back, live next turn: enable <name>"},
+		{Name: "disable", Desc: "hide a plugin from the model, from the next turn: disable <name>"},
 	}
 }
 

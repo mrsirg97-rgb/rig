@@ -15,17 +15,17 @@ type sessionsCmd struct{}
 
 func (sessionsCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "list", Desc: "show the sessions: list [all|<n>]"},
-		{Name: "summary", Desc: "show the soak's vitals over the recent sessions"},
-		{Name: "show", Desc: "show a session's transcript: show <id>"},
-		{Name: "resume", Desc: "resume a session: resume <id>"},
+		{Name: "list", Desc: "show the sessions that fit the screen: list [all|<n>]"},
+		{Name: "summary", Desc: "the recent sessions in numbers: turns, models, faults, cache ratio"},
+		{Name: "show", Desc: "print a session's transcript: show <id>"},
+		{Name: "resume", Desc: "continue a past session here: resume <id>"},
 	}
 }
 
 func (sessionsCmd) Name() string { return "sessions" }
 
 func (sessionsCmd) Description() string {
-	return "list, summarize, show, or resume the workspace sessions"
+	return "this workspace's sessions: list them, see their numbers, print one, or resume one"
 }
 
 func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error) {

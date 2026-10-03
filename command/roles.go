@@ -16,9 +16,9 @@ for something specific.`,
 }
 
 var roleHints = []Sub{
-	{Name: "default", Desc: "no stance — today's prompt exactly"},
-	{Name: "architect", Desc: "design before implementation"},
-	{Name: "reviewer", Desc: "review, don't build — hunt defects"},
+	{Name: "default", Desc: "no stance: the plain prompt"},
+	{Name: "architect", Desc: "design first, build second"},
+	{Name: "reviewer", Desc: "review only: hunt defects, build nothing"},
 }
 
 func RoleProse(name string) string {

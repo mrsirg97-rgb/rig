@@ -50,7 +50,7 @@ func effortDesc(i int) string {
 func (effortCmd) Name() string { return "effort" }
 
 func (effortCmd) Description() string {
-	return "the model's reasoning budget: show or set the active effort (effective next turn)"
+	return "the reasoning budget: bare shows the level and the choices, /effort <level> sets it for the next turn"
 }
 
 func (effortCmd) Run(ctx context.Context, args string, env any) (string, error) {

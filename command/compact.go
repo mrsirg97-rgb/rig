@@ -10,7 +10,7 @@ type compactCmd struct{}
 func (compactCmd) Name() string { return "compact" }
 
 func (compactCmd) Description() string {
-	return "force a compaction of the current transcript (the Compacted line, or 'nothing to drop')"
+	return "compact the transcript now: reports what was dropped and kept, or that there was nothing to drop"
 }
 
 func (compactCmd) Run(ctx context.Context, args string, env any) (string, error) {

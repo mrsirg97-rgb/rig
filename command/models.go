@@ -45,7 +45,7 @@ func ModelHints(cmds []core.Command, e *Env) {
 func (modelsCmd) Name() string { return "models" }
 
 func (modelsCmd) Description() string {
-	return "list the model table, or switch the active model (effective next turn)"
+	return "the model table: bare lists it, /models <id> switches for the next turn"
 }
 
 func (modelsCmd) Run(ctx context.Context, args string, env any) (string, error) {

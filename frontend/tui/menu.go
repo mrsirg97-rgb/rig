@@ -95,7 +95,7 @@ func (t *tui) menuLinesLocked(maxRows int) []string {
 	var rows []string
 	for i := start; i < end; i++ {
 		c := t.menuCands[i]
-		row := t.theme.Paint(SlotAccent, c.name)
+		row := t.theme.Paint(SlotEmber, c.name)
 		if c.desc != "" {
 
 			room := t.width - displayWidth(c.name) - 3

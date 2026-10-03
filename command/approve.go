@@ -10,15 +10,15 @@ type approveCmd struct{}
 
 func (approveCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "auto", Desc: "tools run unasked — today's behavior"},
-		{Name: "manual", Desc: "every mutating tool call pauses for y/n (esc declines and interrupts)"},
+		{Name: "auto", Desc: "tools run without asking (the default)"},
+		{Name: "manual", Desc: "every call that changes something waits for your y/n; esc declines and interrupts"},
 	}
 }
 
 func (approveCmd) Name() string { return "approve" }
 
 func (approveCmd) Description() string {
-	return "the tool-approval dial: auto or manual (manual pauses every mutating call for y/n)"
+	return "tool approval: auto runs tools without asking, manual waits for your y/n before every call that changes something"
 }
 
 func (approveCmd) Run(ctx context.Context, args string, env any) (string, error) {

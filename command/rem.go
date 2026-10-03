@@ -12,9 +12,9 @@ type remCmd struct{}
 
 func (remCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "list", Desc: "show the live memories: list [all|<n>]"},
-		{Name: "show", Desc: "show a memory: show <id>"},
-		{Name: "forget", Desc: "forget a memory: forget <id>"},
+		{Name: "list", Desc: "show the memories that fit the screen: list [all|<n>]"},
+		{Name: "show", Desc: "print one memory in full: show <id>"},
+		{Name: "forget", Desc: "delete a memory: forget <id>"},
 		{Name: "project", Desc: "show another project's memories: project <path> [all|<n>]"},
 	}
 }
@@ -22,7 +22,7 @@ func (remCmd) Sub() []Sub {
 func (remCmd) Name() string { return "rem" }
 
 func (remCmd) Description() string {
-	return "list, show, or forget the live memories"
+	return "the memories: list them, print one, forget one, or read another project's"
 }
 
 func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
