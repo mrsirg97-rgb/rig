@@ -69,6 +69,20 @@ call never waits on it: the site enqueues on a bounded channel and one
 goroutine decides and writes. A full queue drops the proposal (a proposal
 is not a decision), and a decider error drops it loudly.
 
+### the pack site (2.10.0)
+
+The code map's task pack scores each candidate with one yes/no — "Does
+this symbol matter for the task?" — one request per candidate through
+the exported fan-out (`FanOut`, the seam decide's per-item fan-out
+already is), the kernel's Parallel the bound, the state on the wire the
+task and the item (the symbol's live signature and file). The pack
+scorer holds the sink: every answered candidate is one pending row
+(site `pack`, the server as decider), the reviewer settles them at turn
+end as it settles bash rows, and a deny names the right answer. A
+transport error refuses the score and writes no rows; a reply that
+skips a candidate hides it — the pack lists the server's declines by
+name for the model to judge and shows the never-answered nowhere.
+
 ## the decide tool (the delegate)
 
 The model reads what it must, but a step that is "which of these items

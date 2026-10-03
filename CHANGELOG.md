@@ -1,4 +1,38 @@
 # Changelog
+## [2.10.0]: the pack takes a task
+
+`rem pack` needed a symbol or a file, and the question a model arrives
+with is about a task: "who builds the decision queue", "where does the
+pack budget live". The target now also takes a sentence: a target with
+a space that names no file is a task. The candidates come from the map
+through the two lexical arms recall uses — an FTS5 virtual table and a
+trigram shadow over each symbol's name, kind, package and file, fused
+as recall fuses them (reciprocal rank) — and the tables land in the
+graph store's extra.sql, the generated ddl and domain untouched.
+
+With `decisionUrl` set, every candidate is scored with one yes/no —
+"Does this symbol matter for the task?" — through the fan-out decide
+uses (now exported as `decision.FanOut`), bounded by the kernel's
+Parallel; the candidate's item is its live signature and file. The yes
+set loads live, highest probability first, into a budget of the result
+cap the root passes in; an answer whose confidence is under one half is
+unsure and the unsure are listed by name at the end so the model can
+pack one by hand, a confident no is not listed, and the lexical top of
+the rank fills the rest of the budget — the server's judgment re-ranks,
+never censors, so a scored pack is never worse than an unscored one.
+Every answered candidate is one pending row in the decision store (the
+new site `pack`, the server as decider, the task and the item as state)
+and the reviewer settles them at turn end as it settles bash rows, a
+deny naming the right answer. Unset, pack by task uses the lexical
+candidates alone, in rank order, and records nothing. No automatic
+pack: the model asks, and one guideline joins the system prompt only
+when decisionUrl is set. The lexical containers are schema version 2:
+the migration rebuilds them from `symbols` on open, so a store mapped
+before this release searches without a re-index.
+
+The target description grows by the clause "the symbol, the file, or
+the task as a sentence"; the menu budget holds.
+
 ## [2.9.3]: the prompt rides stdin
 
 `decision: review: fire: delegate: spawn: fork/exec rig: argument list

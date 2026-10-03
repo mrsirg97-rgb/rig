@@ -87,7 +87,8 @@ plus one registration line, and the loop never names a concrete type.
   (choice, score, yes/no), the answer with its confidence and its
   decider, the `Decider` a decision server implements, the `Recorder`
   the gates hold; beside them the HTTP proposer, the bounded proposal
-  queue, the bash site, the reviewer, and the decide tool the model
+  queue, the bash site, the pack scorer the map's task pack scores its
+  candidates through, the reviewer, and the decide tool the model
   hands its sorting to (a built-in entry of the live table when
   `decisionUrl` is set). An answer is a proposal an LLM reviews, never
   an action.

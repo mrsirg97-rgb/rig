@@ -55,6 +55,16 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   changes, dangerous, each label described) over the command, the
   workspace, and how the call ended. The call never waits: the proposal
   rides the queue's channel and returns at once.
+- `pack.go`: the pack scorer (2.10.0, SPEC_DECISION's pack site): the
+  code map's task pack holds one and hands it the candidate items; each
+  is scored with one yes/no through the fan-out, the task and the item
+  as the state on the wire, every answered candidate one pending row
+  (site `pack`, the sink it holds) with the reviewer marked dirty per
+  row. The verdict says yes (a confident affirmation), unsure (decide's
+  rule: an answer whose confidence is under one half — the model judges
+  it) or neither (a confident no or no answer; hidden). A transport
+  error refuses and writes no rows; a sink error is loud and never
+  fails the score.
 - `decide.go`: the decide tool, the model's delegate door (SPEC_DECISION,
   the delegate section): one typed question — a choice with a
   description per label, a yes/no, or a score — and a list of items; one
@@ -69,8 +79,11 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   nothing was sorted and no row was written. Every answered item is
   recorded through the `Recorder` (site `decide`, final, the server as
   decider, its confidence, unsure marked); a nil recorder records
-  nothing. `Guide` is the one-link `ToolMiddleware` whose
-  `Guidelines()` joins the system prompt when the tool is wired.
+  nothing. The per-item fan-out is exported as `FanOut` — one request
+  per state, bounded by its parallel, a reply that skips an item left
+  silent for the caller to judge. `Guide` is the one-link
+  `ToolMiddleware` whose `Guidelines()` joins the system prompt when the
+  tool is wired.
 
 ## How it is consumed
 

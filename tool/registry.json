@@ -240,8 +240,8 @@
   {
     "name": "rem",
     "enabled": true,
-    "what": "memory across sessions and this project's code map. learn commits a fact or constraint, once. recall finds past solutions by intent, this workspace first, then global; recall without a query browses. reflect stores a distilled memory with its source. prune removes, reduces, or consolidates. pack loads the live code around a symbol or file: definition, callers and callees, from disk now. index maps the whole project.",
-    "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session should not have to re-derive; supersede by id when the code disagrees; name project when the fact belongs to a different workspace than the one you started in. memory ids (mN) come from the replies: copy them, never invent them.",
+    "what": "memory across sessions and this project's code map. learn commits a fact or constraint, once. recall finds past solutions by intent, this workspace first, then global; without a query it browses. reflect stores a distilled memory with its source. prune removes, reduces, or consolidates. pack loads the live code around a symbol or file: definition, callers and callees, from disk now. index maps the whole project.",
+    "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session need not re-derive; supersede by id when the code disagrees; name project when the fact belongs to another workspace than the one you started in. memory ids (mN) come from the replies: copy them, never invent them.",
     "reply": "the hits with their ids, strength and arm, the written row, or the pack with its coverage.",
     "schema": {
       "type": "object",
@@ -265,7 +265,7 @@
         },
         "query": {
           "type": "string",
-          "description": "the intent; recall without a query browses"
+          "description": "the intent; empty browses"
         },
         "source": {
           "type": "string",
@@ -319,7 +319,7 @@
         },
         "target": {
           "type": "string",
-          "description": "pack: the symbol or file"
+          "description": "pack: the symbol, the file, or the task as a sentence"
         },
         "supersedes": {
           "anyOf": [
