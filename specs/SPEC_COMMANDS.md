@@ -394,14 +394,20 @@ file is already workspace-keyed by cwd, SPEC_STATE's paths; no cwd filter
 needed); `summary` reads it through the `sessions` tool (SPEC_STATE).
 
 **`sessions`**; the list, newest first, capped at 50 (a glance, not an
-archive; `show` is the deep read). One plain line per row, the current
-session marked:
+archive; `show` is the deep read), in the list shape (13): a head with
+the count and the current id, one row per session with its marker
+(`[~]` the current, `[ ]` open elsewhere, `[x]` exit ok, `[!]` any other
+exit), the turns, the tokens, the age, the exit word, the label:
 
 ```
-01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3  *
-01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12
-01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1
+3 sessions · current 01j3c4x9ab12
+  01j3c4x9ab12 [~] 3 turns · 0 tokens · started 2h ago · exit open
+  01j3c2f7cd01 [x] 12 turns · 0 tokens · started 5h ago · exit ok
+  01j3b19eaa55 [!] 1 turn · 0 tokens · started 1d ago · exit fault
 ```
+
+`sessions list [all|<n>]` names how many rows to show; bare, the list
+fits the screen (13).
 
 `exit open` is the render of a row not yet closed (`ended_at` NULL):
 the one place the word appears; the store's exit vocabulary stays
@@ -744,16 +750,17 @@ roadmap line, not a deliverable-9 side quest.
 ### 11. `rem`: list, show, forget: the operator's verb
 
 **`rem`**; the bare command reads the live memories, project scope then
-global, one plain line each (`m<id> · <kind> · <age> · <strength> · <first
-80 chars>`; a glance, not a browse; the store caps it). **`rem show
+global, in the list shape (13): a head (`12 memories`), one row each
+(`  m<id> <kind> · <age> · <strength> · <first 80 chars>`; a glance, not
+a browse; the store caps it, and `rem list [all|<n>]` names how many
+rows to show, the screen otherwise). **`rem show
 <id>`**; the full memory row (all fields, the source, supersession).
 **`rem forget <id>`**; prune-remove that id (the operator's prune, a
 verb); only this project's or a global memory; ids are file-wide, and a
 typo must not reach another repo's row: `rem: another project's memory:
-m<id> is <label>'s; forget it from there`. **`rem project <path>`**; that
-project's live memories, `rem list`'s shape (project then global, one
-plain line each); the empty reply names the project (`rem: no memories in
-<label>`). Show and forget stay id-addressed and file-wide; the 0.13.0
+m<id> is <label>'s; forget it from there`. **`rem project <path> [all|<n>]`**; that
+project's live memories, `rem list`'s shape (project then global); the
+empty reply names the project (`rem: no memories in <label>`). Show and forget stay id-addressed and file-wide; the 0.13.0
 forget wall stands, so `rem project` is a read only.
 
 Rejected, named: `rem pin <id>`. Importance is only the per-access
@@ -784,10 +791,11 @@ a store.
 
 ### 12. `swarm`: the drain workers
 
-**`swarm`**; the bare command lists the supervisor's workers, one line
-each: `w1 worker qwen3.8-workers · task t3 · heartbeat 2s ago · done 1
-failed 0`; an idle worker says `task none · heartbeat —`; a finished one
-says `exited`. **`swarm <n> [role=worker|reviewer] [model=<id>]`**;
+**`swarm`**; the bare command lists the supervisor's workers in the list
+shape (13): `2 workers · 1 running`, then one row each: `  w1 [~] worker
+qwen3.8-workers · task t3 · heartbeat 2s ago · done 1 failed 0`; an idle
+worker says `task none · heartbeat —`; a finished one is `[x]` and says
+`exited`. **`swarm <n> [role=worker|reviewer] [model=<id>]`**;
 starts n drain workers on the session's bound queue, each spawning one
 `rig -p` per task through the delegate path; against a running swarm it
 adds (the roles mix — a worker swarm gains a reviewer mid-drain), and a
@@ -813,6 +821,35 @@ Why the seam and not a store handle in `command/`: the command owns the
 vocabulary, the root owns the goroutines (the leaf rule, SPEC_COMMANDS
 2), and the drain loop's truth is in memory — a store row would be a
 second truth. `Sub()` hints are `stop` and `<n>` (SPEC_TUI 9).
+
+### 13. The list shape: one design language for every listing (2.8.3)
+
+Every command that lists rows renders the same plain-text shape, the
+one `todo read` taught: a **head** line with the count and the one fact
+that matters (`3 sessions · current <id>`, `2 models · active <id>`,
+`3 plugins · 1 loaded · 2 skipped`, `2 workers · 1 running`, `12
+memories`); one **row** per item, two spaces in, the id (padded to the
+widest when ids vary, so the markers line up), an optional **marker**
+in todo's vocabulary (`[ ]` idle, `[~]` active or current, `[x]` done,
+ok or loaded, `[!]` failed or skipped, `[r]` in review), the text, then
+` · ` details; and a **footer** `· <n> more · <verb>` when rows were
+held back, naming the verb that shows them. The TUI paints the shape
+(SPEC_TUI: the glyph for the marker, the id dim, the first segment in
+text, the details dim) under the command's opening line, like the
+todo block; the piped frontends print it as is.
+
+Long lists fit the screen rather than scroll it: the frontend hands the
+Env a row budget (`Env.Lines`, the TUI's height minus its status rows,
+the opening and the input row; nil in the piped frontends, which never
+cap), the list keeps that many rows under its head and names the rest
+in the footer. `sessions list all`, `sessions list <n>`, `rem list
+all|<n>` and `rem project <path> all|<n>` are the operator's override;
+a bad count refuses by name (`sessions: list: "x" is not a count (all,
+or a positive number)`). The TUI's history pager (SPEC_TUI) remains the
+scroll for whatever was committed. Rejected: a cursor inside the list
+(a second modal), and a fixed row count (the screen is the budget).
+Helpers live in `command/list.go` (`row`, `plural`, `listLimit`, `fit`,
+`moreFooter`, the markers).
 
 ## testing
 
@@ -889,9 +926,14 @@ crontab spool for the scheduler (the e2e's existing pattern).
 
 - `TestSessionsList`: three seeded rows (an open current, an ok, a
   fault) with message rows including a `[compaction] ` user row: the
-  exact lines, newest first, the current marked, the summary row
-  excluded from the turns count; an empty store prints `sessions:
-  none`.
+  exact lines in the list shape (13), newest first, the current `[~]`,
+  the summary row excluded from the turns count; an empty store prints
+  `sessions: none`.
+- `TestSessionsListFitsTheScreenAndNamesTheRest`: twelve rows and an
+  Env with six screen lines: the head, four rows, `· 8 more · sessions
+  list all`; `list all` and `list 12` show every row with no footer;
+  `list 3` shows three and names nine; `list x` refuses by name; a nil
+  `Lines` (the piped frontends) never caps.
 - `TestSessionsShow`: a seeded transcript with multi-line content,
   assistant thinking, a tool call and its result, and a compaction
   row: the exact render (the shape in 5); no id → the usage line;
@@ -911,9 +953,14 @@ crontab spool for the scheduler (the e2e's existing pattern).
 **rem:**
 
 - `TestRemListProjectThenGlobal`: seeded project and global live
-  memories: the bare `rem` renders one line each, project rows before
-  global rows, the exact `m<id> · <kind> · <age> · <strength> · <first
-  80 chars>` shape; a superseded memory is not listed.
+  memories: the bare `rem` heads the count and renders one row each,
+  project rows before global rows, the exact `  m<id> <kind> · <age> ·
+  <strength> · <first 80 chars>` shape; a superseded memory is not
+  listed.
+- `TestRemListFitsTheScreenAndNamesTheRest`: nine rows and five screen
+  lines: three rows and `· 6 more · rem list all`; `project <path> 2`
+  caps the same way and names its own verb; `list all` shows every
+  row; `list 0` refuses by name.
 - `TestRemShowAndForget`: `rem show <id>` renders the full row;
   `rem forget <id>` removes it (the row is gone, not superseded).
 - `TestRemRefusalsByName`: `rem show`/`rem forget` (no id),
@@ -928,8 +975,9 @@ crontab spool for the scheduler (the e2e's existing pattern).
 
 **models:**
 
-- `TestModelsListMarksActive`: two rows, the exact lines (window,
-  max, reserve, keep, trigger), the active one carrying the marker.
+- `TestModelsListMarksActive`: two rows, the exact lines in the list
+  shape (the head's active id, the padded ids, window, max, reserve,
+  keep, trigger), the active one `[~]`, the other `[ ]`.
 - `TestModelsSwitchUnknownNamesKnown`: `models: no row for "nope"
   (known: local, qwen3.8-workers)`.
 - `TestModelsSwitchTakesEffectNextTurn`: two scripted providers:

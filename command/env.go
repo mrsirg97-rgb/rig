@@ -68,6 +68,7 @@ type Env struct {
 	Session func() *core.Session
 
 	Steer Steerer
+	Lines func() int
 
 	Compact       func(ctx context.Context) (core.Compacted, bool, error)
 	NewSession    func(ctx context.Context) (string, error)

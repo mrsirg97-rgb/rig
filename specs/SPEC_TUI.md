@@ -77,6 +77,8 @@ frontend/tui/         NEW package, main module (decision 10 names the
                       snapshot's refresh points
   tools_render.go     the todo and scheduler block renderers (one
                       renderer, both doors)
+  list_render.go      the list shape painter for every other command
+                      reply (SPEC_COMMANDS 13), and the Env's row budget
   input.go            raw mode, the key parser (Tab and Shift-Tab),
                       single-line editing, history, the completion
                       menu's state
@@ -990,6 +992,13 @@ where the CI box allows and skip cleanly where not.
   points only.
 - both doors: the todo and scheduler blocks byte-equal between the
   tool-result path and the command path, minus the opening line.
+- the list block: a sessions-shaped reply paints the head dim, the
+  markers as the todo glyphs in their slots, the ids dim, the first
+  segment in text and the details dim, the footer dim and indented; a
+  marker-less row (rem) keeps the glyph column blank; id padding
+  survives the paint; prose and transcripts are not lists; the command
+  path commits the opening then the shape; `Env.Lines` is the height
+  minus the status rows, the opening and the input row.
 - the scheduler renderer golden over the new list shape: directory
   sections (this cwd first), the state glyphs, the drift, the empty
   store's `scheduler: no jobs` line.

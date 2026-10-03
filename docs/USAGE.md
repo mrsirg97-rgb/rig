@@ -31,7 +31,8 @@ is a loud line naming the known set, never silently a prompt.
 - `/compact`: force a compaction now (the `⧉` line reports dropped/kept),
   or `compact: nothing to drop`.
 - `/new`: close the session row ok, mint a fresh session, same process.
-- `/sessions`: list; `summary` shows the vitals over the recent
+- `/sessions`: list (as many rows as fit the screen; `list all` or
+  `list <n>` for more); `summary` shows the vitals over the recent
   sessions (models, faults, the cache ratio); `show <id>` renders a
   transcript; `resume <id>` swaps to it in-process.
 - `/models`: the per-model table with the active row marked; `/models <id>`
@@ -50,8 +51,9 @@ is a loud line naming the known set, never silently a prompt.
   manual pauses every mutating tool call for the operator's y/n at the
   TUI ask row; a denial is a model-visible teaching refusal.
 - `/rem`: the memory store's operator verbs: bare lists the live
-  memories, `show <id>` renders one, `forget <id>` drops it, `project
-  <path>` shows another project's memories.
+  memories (as many as fit the screen; `list all` or `list <n>` for
+  more), `show <id>` renders one, `forget <id>` drops it, `project
+  <path> [all|<n>]` shows another project's memories.
 - `/plugins`: the python plugins: the loaded ones (name, description,
   file), the skipped ones with their reasons, and the pending zone:
   `pending` lists the model's authoring with each file's DESCRIPTION,
@@ -78,8 +80,8 @@ is a loud line naming the known set, never silently a prompt.
 - `/rem project <path>`: a one-off read or write of another project's
   memories: the path resolves to a repo identity (worktrees share).
 - `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's
-  workers (`w1 worker resident · task t3 · heartbeat 2s ago ·
-  done 1 failed 0`); `swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
+  workers (`2 workers · 1 running`, then `w1 [~] worker resident · task t3 ·
+  heartbeat 2s ago · done 1 failed 0`); `swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
   starts that many workers (a budget stops the
   controller's claims at the cap with a notice, the spend summed from
   the recorded run costs); the reply is `swarm: added N agents (role X ·

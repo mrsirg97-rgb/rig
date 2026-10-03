@@ -34,13 +34,10 @@ func TestPluginsListRendersLoadedAndSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	want := `plugins: 1 loaded, 2 skipped
-loaded:
-  echo: the fixture echo plugin (/home/u/.rig/plugins/echo.py)
-skipped:
-  broken.py: NameError: name 'x' is not defined
-  missing.py: missing SCHEMA
-`
+	want := `3 plugins · 1 loaded · 2 skipped
+  echo    [x] the fixture echo plugin · /home/u/.rig/plugins/echo.py
+  broken  [!] NameError: name 'x' is not defined · /home/u/.rig/plugins/broken.py
+  missing [!] missing SCHEMA · /home/u/.rig/plugins/missing.py`
 	if out != want {
 		t.Fatalf("the rendering = %q, want %q", out, want)
 	}
@@ -88,7 +85,7 @@ func TestPluginsDisableAndEnableMoveTheFileAndReload(t *testing.T) {
 		t.Fatal("the file must be gone from plugins/")
 	}
 	out, err = pluginsCmd(t).Run(context.Background(), "disabled", env)
-	if err != nil || !strings.Contains(out, "1 disabled") || !strings.Contains(out, "echo: echo") {
+	if err != nil || out == "" || !strings.HasPrefix(out, "1 disabled plugin\n  echo [ ] echo · ") {
 		t.Fatalf("the disabled zone listing: %q %v", out, err)
 	}
 	if _, err := pluginsCmd(t).Run(context.Background(), "disable echo", env); err == nil || !strings.Contains(err.Error(), "no plugin") {

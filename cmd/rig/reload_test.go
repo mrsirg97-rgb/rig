@@ -324,7 +324,7 @@ def run(args: dict) -> str:
 		t.Fatalf("the reload's own request carries forged (the stamp predates the swap)")
 	}
 
-	want := "plugins: reload: 1 loaded, 0 skipped\nloaded:\n  forged: the fixture forged plugin (" + forgedFile + ")\n"
+	want := "1 plugin · reload · 1 loaded · 0 skipped\n  forged [x] the fixture forged plugin · " + forgedFile
 	if got := toolMessageOf(t, bodies[2]); got != want {
 		t.Fatalf("the reload's reply = %q, want the reload's (the listing with its action named):\n%q", got, want)
 	}
@@ -398,7 +398,7 @@ def run(args):
 		t.Fatalf("requests = %d, want 5 (two reload turns, each call + answer, plus the wire's turn)", len(bodies))
 	}
 
-	if got := toolMessageOf(t, bodies[1]); !strings.Contains(got, "plugins: reload: 1 loaded, 1 skipped") || !strings.Contains(got, "broken.py: NameError: name 'x' is not defined") {
+	if got := toolMessageOf(t, bodies[1]); !strings.Contains(got, "2 plugins · reload · 1 loaded · 1 skipped") || !strings.Contains(got, "broken [!] NameError: name 'x' is not defined") {
 		t.Fatalf("the up reload's reply = %q, want the loud skips in it", got)
 	}
 
@@ -409,7 +409,7 @@ def run(args):
 		t.Fatal("the skipped plugin must not be in the plugin door's enum")
 	}
 
-	if got := toolMessageOf(t, bodies[3]); got != "plugins: reload: 0 loaded, 0 skipped" {
+	if got := toolMessageOf(t, bodies[3]); got != "plugins: reload · none" {
 		t.Fatalf("the down reload's reply = %q, want the empty list (removal free)", got)
 	}
 	if got := toolNames(bodies[4]); !sameOrder(got, registeredNativeNames(false)) {
@@ -485,9 +485,8 @@ def run(args: dict) -> str:
 
 	for _, want := range []string{
 		"plugins: approved forge",
-		"plugins: reload: 1 loaded, 0 skipped",
-		"loaded:",
-		"forge: the fixture forge plugin (" + filepath.Join(home, "plugins", "forge.py") + ")",
+		"1 plugin · reload · 1 loaded · 0 skipped",
+		"forge [x] the fixture forge plugin · " + filepath.Join(home, "plugins", "forge.py"),
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Fatalf("the approve's reply must carry %q:\n%s", want, out)
@@ -495,11 +494,11 @@ def run(args: dict) -> str:
 	}
 
 	tail := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-	if tail[len(tail)-1] != "  forge: the fixture forge plugin ("+filepath.Join(home, "plugins", "forge.py")+")" {
+	if tail[len(tail)-1] != "  forge [x] the fixture forge plugin · "+filepath.Join(home, "plugins", "forge.py") {
 		t.Fatalf("the post-approve listing's row = %q, want the loaded plugin at its top-level home", tail[len(tail)-1])
 	}
-	if tail[len(tail)-2] != "loaded:" || tail[len(tail)-3] != "plugins: 1 loaded, 0 skipped" {
-		t.Fatalf("the post-approve listing = %q, want the loaded listing (the listing follows the swap)", tail[len(tail)-3:])
+	if tail[len(tail)-2] != "1 plugin · 1 loaded · 0 skipped" {
+		t.Fatalf("the post-approve listing = %q, want the loaded listing (the listing follows the swap)", tail[len(tail)-2:])
 	}
 
 	if _, err := os.Stat(filepath.Join(home, "plugins", "forge.py")); err != nil {
@@ -586,7 +585,7 @@ def run(args: dict) -> str:
 		t.Fatal("the first request carries forged (the file lands on this request, after the stamp)")
 	}
 
-	if got := toolMessageOf(t, bodies[1]); got != "plugins: reload: 1 loaded, 0 skipped\nloaded:\n  forged: the fixture forged plugin (the real kernel) ("+forgedFile+")\n" {
+	if got := toolMessageOf(t, bodies[1]); got != "1 plugin · reload · 1 loaded · 0 skipped\n  forged [x] the fixture forged plugin (the real kernel) · "+forgedFile {
 		t.Fatalf("the reload's reply = %q, want the loaded line (the real kernel's discovery)", got)
 	}
 

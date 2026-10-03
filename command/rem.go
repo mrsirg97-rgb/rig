@@ -12,10 +12,10 @@ type remCmd struct{}
 
 func (remCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "list", Desc: "show the live memories"},
+		{Name: "list", Desc: "show the live memories: list [all|<n>]"},
 		{Name: "show", Desc: "show a memory: show <id>"},
 		{Name: "forget", Desc: "forget a memory: forget <id>"},
-		{Name: "project", Desc: "show another project's memories: project <path>"},
+		{Name: "project", Desc: "show another project's memories: project <path> [all|<n>]"},
 	}
 }
 
@@ -32,18 +32,30 @@ func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	}
 	fields := strings.Fields(args)
 	switch {
-	case len(fields) == 0 || (len(fields) == 1 && fields[0] == "list"):
+	case len(fields) == 0 || (fields[0] == "list" && len(fields) <= 2):
 		if e.RemList == nil {
 			return "", errors.New("rem: no rem seam (the root did not wire one)")
+		}
+		var tail []string
+		if len(fields) == 2 {
+			tail = fields[1:]
+		}
+		limit, err := listLimit(e, tail)
+		if err != nil {
+			return "", fmt.Errorf("rem: list: %v", err)
 		}
 		rows, err := e.RemList(ctx, "")
 		if err != nil {
 			return "", err
 		}
-		return renderRemList(rows), nil
-	case fields[0] == "project" && len(fields) == 2:
+		return renderRemList(rows, limit, "rem list all"), nil
+	case fields[0] == "project" && (len(fields) == 2 || len(fields) == 3):
 		if e.RemList == nil {
 			return "", errors.New("rem: no rem seam (the root did not wire one)")
+		}
+		limit, err := listLimit(e, fields[2:])
+		if err != nil {
+			return "", fmt.Errorf("rem: project: %v", err)
 		}
 		rows, err := e.RemList(ctx, fields[1])
 		if err != nil {
@@ -59,7 +71,7 @@ func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
 			}
 			return "rem: no memories in " + label, nil
 		}
-		return renderRemList(rows), nil
+		return renderRemList(rows, limit, "rem project "+fields[1]+" all"), nil
 	case fields[0] == "show" && len(fields) == 2:
 		id, err := remID(fields[1])
 		if err != nil {
@@ -99,11 +111,13 @@ func (remCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		return "", errors.New("rem: forget takes one id")
 	case len(fields) > 0 && fields[0] == "project":
 		if len(fields) == 1 {
-			return "", errors.New("rem: project takes a path (rem project <path>)")
+			return "", errors.New("rem: project takes a path (rem project <path> [all|<n>])")
 		}
-		return "", errors.New("rem: project takes one path")
+		return "", errors.New("rem: project takes one path and at most a count (rem project <path> [all|<n>])")
+	case len(fields) > 0 && fields[0] == "list":
+		return "", errors.New("rem: list takes at most a count (rem list [all|<n>])")
 	default:
-		return "", errors.New("rem: usage: rem [list|show|forget <id>|project <path>]")
+		return "", errors.New("rem: usage: rem [list [all|<n>]|show <id>|forget <id>|project <path> [all|<n>]]")
 	}
 }
 
@@ -124,15 +138,18 @@ func remID(s string) (int64, error) {
 	return id, nil
 }
 
-func renderRemList(rows []RemRow) string {
+func renderRemList(rows []RemRow, limit int, verb string) string {
 	if len(rows) == 0 {
 		return "rem: no memories"
 	}
+	shown, hidden := fit(len(rows), limit)
 	var b strings.Builder
-	for _, r := range rows {
-		fmt.Fprintf(&b, "m%d · %s · %s · %.2f · %s\n",
-			r.ID, r.Kind, ageOf(r.CreatedAt), r.Strength, firstRunes(r.Content, 80))
+	b.WriteString(plural(len(rows), "memory"))
+	for _, r := range rows[:shown] {
+		b.WriteString("\n" + row(fmt.Sprintf("m%d", r.ID), 0, "", r.Kind,
+			ageOf(r.CreatedAt), fmt.Sprintf("%.2f", r.Strength), firstRunes(r.Content, 80)))
 	}
+	b.WriteString(moreFooter(hidden, verb))
 	return b.String()
 }
 

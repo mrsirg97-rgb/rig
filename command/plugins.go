@@ -104,46 +104,48 @@ func listPlugins(env any) (string, error) {
 }
 
 func RenderPlugins(infos []PluginInfo, verb, dir string) string {
-	if len(infos) == 0 && verb == "" {
-		if dir == "" {
+	if len(infos) == 0 {
+		switch {
+		case verb != "":
+			return "plugins: " + verb + " \u00b7 none"
+		case dir == "":
 			return "plugins: none"
+		default:
+			return "plugins: none in " + dir
 		}
-		return "plugins: none in " + dir
 	}
-	loaded, skipped := 0, 0
+	loaded, skipped, wID := 0, 0, 0
 	for _, p := range infos {
 		if p.Skipped {
 			skipped++
 		} else {
 			loaded++
 		}
-	}
-	var b []byte
-	if verb == "" {
-		b = fmt.Appendf(b, "plugins: %d loaded, %d skipped\n", loaded, skipped)
-	} else {
-		b = fmt.Appendf(b, "plugins: %s: %d loaded, %d skipped\n", verb, loaded, skipped)
-	}
-	if loaded > 0 {
-		b = append(b, "loaded:\n"...)
-		for _, p := range infos {
-			if !p.Skipped {
-				b = fmt.Appendf(b, "  %s: %s (%s)\n", p.Name, p.Description, p.File)
-			}
+		if n := len(pluginID(p)); n > wID {
+			wID = n
 		}
 	}
-	if skipped > 0 {
-		b = append(b, "skipped:\n"...)
-		for _, p := range infos {
-			if p.Skipped {
-				b = fmt.Appendf(b, "  %s: %s\n", filepath.Base(p.File), p.Reason)
-			}
+	var b strings.Builder
+	b.WriteString(plural(len(infos), "plugin"))
+	if verb != "" {
+		b.WriteString(" \u00b7 " + verb)
+	}
+	fmt.Fprintf(&b, " \u00b7 %d loaded \u00b7 %d skipped", loaded, skipped)
+	for _, p := range infos {
+		if p.Skipped {
+			b.WriteString("\n" + row(pluginID(p), wID, markFailed, p.Reason, p.File))
+		} else {
+			b.WriteString("\n" + row(pluginID(p), wID, markDone, p.Description, p.File))
 		}
 	}
-	if len(infos) == 0 {
-		return strings.TrimSuffix(string(b), "\n")
+	return b.String()
+}
+
+func pluginID(p PluginInfo) string {
+	if p.Name != "" {
+		return p.Name
 	}
-	return string(b)
+	return strings.TrimSuffix(filepath.Base(p.File), filepath.Ext(p.File))
 }
 
 func reload(env any, ctx context.Context) (string, error) {
@@ -191,19 +193,28 @@ func zoneList(env any, zone string) (string, error) {
 		}
 		return "", fmt.Errorf("plugins: %s: %v", zone, err)
 	}
-	var rows []string
+	var names, paths []string
+	wID := 0
 	for _, en := range entries {
 		if en.IsDir() || !strings.HasSuffix(en.Name(), ".py") {
 			continue
 		}
 		name := strings.TrimSuffix(en.Name(), ".py")
-		path := filepath.Join(dir, en.Name())
-		rows = append(rows, fmt.Sprintf("  %s: %s (%s)", name, descriptionOf(path), path))
+		names = append(names, name)
+		paths = append(paths, filepath.Join(dir, en.Name()))
+		if len(name) > wID {
+			wID = len(name)
+		}
 	}
-	if len(rows) == 0 {
+	if len(names) == 0 {
 		return "plugins: no " + zone + " plugins", nil
 	}
-	return fmt.Sprintf("plugins: %d %s\n%s\n", len(rows), zone, strings.Join(rows, "\n")), nil
+	var b strings.Builder
+	b.WriteString(plural(len(names), zone+" plugin"))
+	for i, name := range names {
+		b.WriteString("\n" + row(name, wID, markIdle, descriptionOf(paths[i]), paths[i]))
+	}
+	return b.String(), nil
 }
 
 func descriptionOf(path string) string {

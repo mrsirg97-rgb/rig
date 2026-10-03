@@ -30,8 +30,9 @@ func TestModelsListMarksActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "local            interactive  window 65536  max 8192  reserve 8192  keep 16384  trigger 57344  *\n" +
-		"qwen3.8-workers  worker       window 65536  max 8192  reserve 8192  keep 16384  trigger 57344\n"
+	want := "2 models · active local\n" +
+		"  local           [~] interactive · window 65536 · max 8192 · reserve 8192 · keep 16384 · trigger 57344\n" +
+		"  qwen3.8-workers [ ] worker · window 65536 · max 8192 · reserve 8192 · keep 16384 · trigger 57344"
 	if out != want {
 		t.Fatalf("the table lines must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}
@@ -48,8 +49,9 @@ func TestModelsListShowsRoleColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := "local            interactive  window 65536  max 8192  reserve 8192  keep 16384  trigger 57344\n" +
-		"qwen3.8-workers  worker       window 65536  max 8192  reserve 8192  keep 16384  trigger 57344  *\n"
+	want := "2 models · active qwen3.8-workers\n" +
+		"  local           [ ] interactive · window 65536 · max 8192 · reserve 8192 · keep 16384 · trigger 57344\n" +
+		"  qwen3.8-workers [~] worker · window 65536 · max 8192 · reserve 8192 · keep 16384 · trigger 57344"
 	if out != want {
 		t.Fatalf("the table lines must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}

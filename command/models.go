@@ -79,26 +79,26 @@ func (modelsCmd) Run(ctx context.Context, args string, env any) (string, error) 
 
 func renderTable(t models.Table, active string) string {
 	ids := t.Known()
-	wID, wRole := 0, 0
+	wID := 0
 	for _, id := range ids {
-		m, _ := t.Get(id)
 		if len(id) > wID {
 			wID = len(id)
 		}
-		if len(m.Role) > wRole {
-			wRole = len(m.Role)
-		}
 	}
 	var b strings.Builder
+	b.WriteString(plural(len(ids), "model"))
+	if active != "" {
+		b.WriteString(" \u00b7 active " + active)
+	}
 	for _, id := range ids {
 		m, _ := t.Get(id)
-		mark := ""
+		mark := markIdle
 		if id == active {
-			mark = "  *"
+			mark = markActive
 		}
 		where := ""
 		if m.Remote {
-			where = "  remote"
+			where = "remote"
 			if m.Provider != "" {
 				where += " " + m.Provider
 			}
@@ -106,8 +106,9 @@ func renderTable(t models.Table, active string) string {
 				where += " " + m.BaseURL
 			}
 		}
-		fmt.Fprintf(&b, "%-*s%-*swindow %d  max %d  reserve %d  keep %d  trigger %d%s%s\n",
-			wID+2, id, wRole+2, m.Role, m.Window, m.MaxTokens, m.Reserve, m.KeepRecent, m.Window-m.Reserve, where, mark)
+		b.WriteString("\n" + row(id, wID, mark, m.Role,
+			fmt.Sprintf("window %d", m.Window), fmt.Sprintf("max %d", m.MaxTokens), fmt.Sprintf("reserve %d", m.Reserve),
+			fmt.Sprintf("keep %d", m.KeepRecent), fmt.Sprintf("trigger %d", m.Window-m.Reserve), where))
 	}
 	return b.String()
 }

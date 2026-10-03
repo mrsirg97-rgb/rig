@@ -209,9 +209,11 @@ owns every concrete type; the command owns only the vocabulary.
   M)` (`agent` for one, `agents` for more; never `started`). The
   controller's context derives from the start command's session context,
   so a session teardown cancels the in-flight spawns with it.
-- **List** renders the workers in start order: `w1 worker qwen3.8-workers ·
-  task t3 · heartbeat 2s ago · done 1 failed 0`; an idle worker says
-  `task none · heartbeat —`; a finished one says `exited`. Exited workers
+- **List** renders the workers in start order in the list shape
+  (SPEC_COMMANDS 13): `2 workers · 1 running`, then `  w1 [~] worker
+  qwen3.8-workers · task t3 · heartbeat 2s ago · done 1 failed 0`; an
+  idle worker says `task none · heartbeat —`; a finished one is `[x]`
+  and says `exited`. Exited workers
   stay listed with their counters until the next Start or Stop, so the
   architect can read the swarm's summary after the drain. A worker's
   heartbeat resets on each spawn, so a restarted task shows a fresh age

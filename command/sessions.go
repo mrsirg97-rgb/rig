@@ -15,7 +15,7 @@ type sessionsCmd struct{}
 
 func (sessionsCmd) Sub() []Sub {
 	return []Sub{
-		{Name: "list", Desc: "show the sessions"},
+		{Name: "list", Desc: "show the sessions: list [all|<n>]"},
 		{Name: "summary", Desc: "show the soak's vitals over the recent sessions"},
 		{Name: "show", Desc: "show a session's transcript: show <id>"},
 		{Name: "resume", Desc: "resume a session: resume <id>"},
@@ -35,9 +35,17 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 	}
 	fields := strings.Fields(args)
 	switch {
-	case len(fields) == 0 || (len(fields) == 1 && fields[0] == "list"):
+	case len(fields) == 0 || (fields[0] == "list" && len(fields) <= 2):
 		if e.SessionList == nil {
 			return "", errors.New("sessions: no sessions seam (the root did not wire one)")
+		}
+		var tail []string
+		if len(fields) == 2 {
+			tail = fields[1:]
+		}
+		limit, err := listLimit(e, tail)
+		if err != nil {
+			return "", fmt.Errorf("sessions: list: %v", err)
 		}
 		rows, err := e.SessionList(ctx)
 		if err != nil {
@@ -46,7 +54,7 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 		if len(rows) == 0 {
 			return "sessions: none", nil
 		}
-		return renderList(rows), nil
+		return renderList(rows, limit), nil
 	case len(fields) == 1 && fields[0] == "summary":
 		if e.Tools == nil {
 			return "", errors.New("sessions: no tools seam (the root did not wire one)")
@@ -105,32 +113,42 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 			return "", errors.New("sessions: resume needs an id (sessions resume <id>)")
 		}
 		return "", errors.New("sessions: resume takes one id")
+	case len(fields) > 0 && fields[0] == "list":
+		return "", errors.New("sessions: list takes at most a count (sessions list [all|<n>])")
 	default:
-		return "", errors.New("sessions: usage: sessions [list|summary|show|resume <id>]")
+		return "", errors.New("sessions: usage: sessions [list [all|<n>]|summary|show|resume <id>]")
 	}
 }
 
-func renderList(rows []SessionRow) string {
-	w := 0
-	for _, r := range rows {
-		if len(r.ID) > w {
-			w = len(r.ID)
-		}
-	}
+func renderList(rows []SessionRow, limit int) string {
+	shown, hidden := fit(len(rows), limit)
 	var b strings.Builder
+	b.WriteString(plural(len(rows), "session"))
 	for _, r := range rows {
-		mark := ""
 		if r.Current {
-			mark = "  *"
+			b.WriteString(" \u00b7 current " + r.ID)
+			break
 		}
-		tail := ""
-		if r.Label != "" {
-			tail = "  " + r.Label
-		}
-		fmt.Fprintf(&b, "%-*s  started %s  exit %-6s turns %d tokens %d%s%s\n",
-			w, r.ID, r.Started.Format(time.RFC3339), r.Exit, r.Turns, r.Tokens, tail, mark)
 	}
+	for _, r := range rows[:shown] {
+		b.WriteString("\n" + row(r.ID, 0, sessionMark(r), plural(r.Turns, "turn"),
+			fmt.Sprintf("%d tokens", r.Tokens), "started "+ageOf(r.Started.UTC().Format(time.RFC3339))+" ago", "exit "+r.Exit, r.Label))
+	}
+	b.WriteString(moreFooter(hidden, "sessions list all"))
 	return b.String()
+}
+
+func sessionMark(r SessionRow) string {
+	switch {
+	case r.Current:
+		return markActive
+	case r.Exit == "open":
+		return markIdle
+	case r.Exit == "ok":
+		return markDone
+	default:
+		return markFailed
+	}
 }
 
 func RenderShow(s *core.Session) string {

@@ -56,9 +56,9 @@ func TestPluginsPendingListsTheZoneWithDescriptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	want := "plugins: 2 pending\n" +
-		"  echo: the fixture forge plugin (" + zone + "/echo.py)\n" +
-		"  nodesc: (no DESCRIPTION) (" + zone + "/nodesc.py)\n"
+	want := "2 pending plugins\n" +
+		"  echo   [ ] the fixture forge plugin · " + zone + "/echo.py\n" +
+		"  nodesc [ ] (no DESCRIPTION) · " + zone + "/nodesc.py"
 	if out != want {
 		t.Fatalf("the rendering = %q, want %q", out, want)
 	}

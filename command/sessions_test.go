@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -13,9 +14,9 @@ import (
 )
 
 var (
-	t1 = time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
-	t2 = time.Date(2026, 7, 9, 9, 14, 11, 0, time.UTC)
-	t3 = time.Date(2026, 7, 8, 16, 2, 47, 0, time.UTC)
+	t1 = time.Now().Add(-2 * time.Hour)
+	t2 = time.Now().Add(-5 * time.Hour)
+	t3 = time.Now().Add(-26 * time.Hour)
 )
 
 var listRows = []command.SessionRow{
@@ -33,9 +34,10 @@ func TestSessionsList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3 tokens 0  *\n" +
-		"01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12 tokens 0\n" +
-		"01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1 tokens 0\n"
+	want := "3 sessions · current 01j3c4x9ab12\n" +
+		"  01j3c4x9ab12 [~] 3 turns · 0 tokens · started 2h ago · exit open\n" +
+		"  01j3c2f7cd01 [x] 12 turns · 0 tokens · started 5h ago · exit ok\n" +
+		"  01j3b19eaa55 [!] 1 turn · 0 tokens · started 1d ago · exit fault"
 	if out != want {
 		t.Fatalf("the list lines must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}
@@ -71,11 +73,51 @@ func TestSessionsListVerb(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "01j3c4x9ab12  started 2026-07-09T12:00:00Z  exit open   turns 3 tokens 0  *\n" +
-		"01j3c2f7cd01  started 2026-07-09T09:14:11Z  exit ok     turns 12 tokens 0\n" +
-		"01j3b19eaa55  started 2026-07-08T16:02:47Z  exit fault  turns 1 tokens 0\n"
+	want := "3 sessions · current 01j3c4x9ab12\n" +
+		"  01j3c4x9ab12 [~] 3 turns · 0 tokens · started 2h ago · exit open\n" +
+		"  01j3c2f7cd01 [x] 12 turns · 0 tokens · started 5h ago · exit ok\n" +
+		"  01j3b19eaa55 [!] 1 turn · 0 tokens · started 1d ago · exit fault"
 	if out != want {
 		t.Fatalf("the list verb must match the bare list:\ngot:\n%s\nwant:\n%s", out, want)
+	}
+}
+
+func TestSessionsListFitsTheScreenAndNamesTheRest(t *testing.T) {
+	byName := allByName(t)
+	rows := make([]command.SessionRow, 12)
+	for i := range rows {
+		rows[i] = command.SessionRow{ID: fmt.Sprintf("s%02d", i), Started: t1, Exit: "ok", Turns: 1}
+	}
+	env := &command.Env{
+		SessionList: func(ctx context.Context) ([]command.SessionRow, error) { return rows, nil },
+		Lines:       func() int { return 6 },
+	}
+	out, err := byName["sessions"].Run(context.Background(), "", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(out, "\n")
+	if len(lines) != 6 || lines[0] != "12 sessions" || lines[5] != "· 8 more · sessions list all" {
+		t.Fatalf("six screen lines leave four rows under the head and the footer names the rest:\n%s", out)
+	}
+	for _, args := range []string{"list all", "list 12"} {
+		out, err = byName["sessions"].Run(context.Background(), args, env)
+		if err != nil || strings.Count(out, "\n") != 12 || strings.Contains(out, "more") {
+			t.Fatalf("%q must list every row with no footer, got (%d lines, %v)", args, strings.Count(out, "\n")+1, err)
+		}
+	}
+	out, err = byName["sessions"].Run(context.Background(), "list 3", env)
+	if err != nil || !strings.HasSuffix(out, "· 9 more · sessions list all") || strings.Count(out, "\n") != 4 {
+		t.Fatalf("list 3 shows three rows and names the nine hidden, got (%q, %v)", out, err)
+	}
+	if _, err = byName["sessions"].Run(context.Background(), "list x", env); err == nil ||
+		err.Error() != `sessions: list: "x" is not a count (all, or a positive number)` {
+		t.Fatalf("a bad count must refuse by name, got %v", err)
+	}
+	env.Lines = nil
+	out, _ = byName["sessions"].Run(context.Background(), "", env)
+	if strings.Contains(out, "more") {
+		t.Fatalf("no screen (the piped frontends) means no cap:\n%s", out)
 	}
 }
 
@@ -187,7 +229,7 @@ func TestSessionsShowRefusals(t *testing.T) {
 func TestSessionsUsage(t *testing.T) {
 	byName := allByName(t)
 	_, err := byName["sessions"].Run(context.Background(), "frob", &command.Env{})
-	if err == nil || err.Error() != "sessions: usage: sessions [list|summary|show|resume <id>]" {
+	if err == nil || err.Error() != "sessions: usage: sessions [list [all|<n>]|summary|show|resume <id>]" {
 		t.Fatalf("a foreign sub-verb must be the usage line, got %v", err)
 	}
 }

@@ -36,14 +36,40 @@ func TestRemListProjectThenGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("the bare rem lists one line per live memory, got %d:\n%s", len(lines), out)
+	if len(lines) != 4 || lines[0] != "3 memories" {
+		t.Fatalf("the bare rem heads the count and lists one row per live memory, got %d:\n%s", len(lines), out)
 	}
-	if !strings.Contains(lines[0], "m1 · fact ·") || !strings.Contains(lines[0], "· 0.50 · project note one") {
-		t.Fatalf("line 1 must be id · kind · age · strength · first 80 chars:\n%s", lines[0])
+	if lines[1] != "  m1 fact · 2h · 0.50 · project note one" {
+		t.Fatalf("row 1 must be id kind · age · strength · first 80 chars:\n%s", lines[1])
 	}
-	if !strings.Contains(lines[2], "m3") || !strings.Contains(lines[2], "global note") {
-		t.Fatalf("the global rows ride last (project then global):\n%s", lines[2])
+	if !strings.Contains(lines[3], "m3") || !strings.Contains(lines[3], "global note") {
+		t.Fatalf("the global rows ride last (project then global):\n%s", lines[3])
+	}
+}
+
+func TestRemListFitsTheScreenAndNamesTheRest(t *testing.T) {
+	byName := allByName(t)
+	rows := make([]command.RemRow, 9)
+	for i := range rows {
+		rows[i] = command.RemRow{ID: int64(i + 1), Kind: "fact", CreatedAt: recentISO(), Strength: 0.5, Content: "note"}
+	}
+	env := remListEnv(rows)
+	env.Lines = func() int { return 5 }
+	out, err := byName["rem"].Run(context.Background(), "", env)
+	if err != nil || strings.Count(out, "\n") != 4 || !strings.HasSuffix(out, "· 6 more · rem list all") {
+		t.Fatalf("five screen lines leave three rows and the footer names the rest, got (%q, %v)", out, err)
+	}
+	out, err = byName["rem"].Run(context.Background(), "project /a/b/rig 2", env)
+	if err != nil || strings.Count(out, "\n") != 3 || !strings.HasSuffix(out, "· 7 more · rem project /a/b/rig all") {
+		t.Fatalf("project <path> <n> caps the same way and names its own verb, got (%q, %v)", out, err)
+	}
+	out, err = byName["rem"].Run(context.Background(), "list all", env)
+	if err != nil || strings.Count(out, "\n") != 9 || strings.Contains(out, "more") {
+		t.Fatalf("list all shows every row, got (%q, %v)", out, err)
+	}
+	if _, err = byName["rem"].Run(context.Background(), "list 0", env); err == nil ||
+		err.Error() != `rem: list: "0" is not a count (all, or a positive number)` {
+		t.Fatalf("a bad count must refuse by name, got %v", err)
 	}
 }
 
@@ -108,8 +134,8 @@ func TestRemRefusalsByName(t *testing.T) {
 		{"forget", "rem: forget needs an id (rem forget <id>)"},
 		{"forget 99", "rem: no such memory: 99"},
 		{"show abc", "rem: the id must be a memory id (m<N> or <N>)"},
-		{"project", "rem: project takes a path (rem project <path>)"},
-		{"frob", "rem: usage: rem [list|show|forget <id>|project <path>]"},
+		{"project", "rem: project takes a path (rem project <path> [all|<n>])"},
+		{"frob", "rem: usage: rem [list [all|<n>]|show <id>|forget <id>|project <path> [all|<n>]]"},
 	}
 	for _, c := range cases {
 		_, err := byName["rem"].Run(context.Background(), c.args, env)
@@ -162,8 +188,8 @@ func TestRemProjectRendersAndNames(t *testing.T) {
 	if !strings.Contains(out, "project note") || !strings.Contains(out, "global note") {
 		t.Fatalf("rem project must render that project's memories in list shape:\n%s", out)
 	}
-	if strings.Contains(out, "m1") && !strings.Contains(out, "m1 · fact") {
-		t.Fatalf("the shape is rem list's (m<id> · kind · age · strength):\n%s", out)
+	if strings.Contains(out, "m1") && !strings.Contains(out, "  m1 fact · ") {
+		t.Fatalf("the shape is rem list's (m<id> kind · age · strength):\n%s", out)
 	}
 	empty := remListEnv(nil)
 	out, err = byName["rem"].Run(context.Background(), "project /a/b/rig", empty)
