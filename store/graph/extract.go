@@ -54,6 +54,7 @@ var languages = map[string]string{
 	".jsx": "typescript",
 	".mjs": "typescript",
 	".cjs": "typescript",
+	".py":  "python",
 }
 
 func LanguageOf(abs string) string {

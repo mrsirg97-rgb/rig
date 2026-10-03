@@ -29,6 +29,23 @@ project-relative, so every worktree of one repo shares the file.
   module-internal imports from source, one cache per project, and
   delegates everything else to `importer.Default()` — no subprocess, no
   cwd dependence.
+- `extract_lsp.go` + `lsp.go`: every other language through a
+  language server. `lsp.go` is the stdio JSON-RPC client
+  (Content-Length framing, numbered requests, server notifications
+  ignored, a 30s cap per request) and the one-at-a-time child: a server
+  starts on the first read of a file in its language, touching another
+  language replaces it (the old child's stdin closes, it is joined,
+  killed after 2s), and the queue's context close stops it. The default
+  command is `typescript-language-server --stdio` — TypeScript is the
+  first real target; the operator installs the servers, rig spawns them,
+  and `SetServer` remaps a language (the tests use it to point at a fake
+  speaking the protocol over stdio). Symbols come from
+  `textDocument/documentSymbol` at extraction; edges stay lazy:
+  `pack` resolves them through `textDocument/references` at the symbol's
+  position in the live file, writes the edge rows (each citation's
+  enclosing symbol comes from the map), and marks the meta key with the
+  symbol file's sha — a hit gathers the stored rows, a moved sha asks
+  the server again.
 - `graph.go`: the store (`Statements`, `FilePath`, `Open`) and `Apply`,
   the in-place replace by file sha: the files row upserted, symbols
   upserted by natural key (a symbol that moved files moves its row), the

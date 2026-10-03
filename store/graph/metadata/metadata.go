@@ -23,9 +23,9 @@ type Meta struct {
 //
 // Path is project-relative so every worktree of one repo shares the
 // file. Edges_sha is the sha the file's outgoing edge rows were last
-// rebuilt at: Go at extraction, other languages when pack resolved
-// through references — the cache check is this column against the live
-// sha.
+// rebuilt at: Go at extraction; a lazy extractor leaves it null — the
+// language-server reference cache lives in meta (refs:<package>:<name>),
+// marked with the sha of the symbol's own file at resolution time.
 type File struct {
 	Path     string  `primary:"true" alias:"name=path,nullable=false"`
 	Sha256   string  `alias:"name=sha256,nullable=false"`

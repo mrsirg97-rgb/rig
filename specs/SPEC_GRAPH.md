@@ -14,8 +14,10 @@ never typed by hand). Containers:
 
 - `files`: path (project-relative — every worktree shares the file),
   sha256, language, edges_sha (the sha the file's outgoing edge rows
-  were last rebuilt at: at Go extraction, or when pack resolved through
-  references; the cache check is this column against the live sha).
+  were last rebuilt at: Go at extraction; a lazy extractor leaves it
+  null — the language-server reference cache is the meta key
+  `refs:<package>:<name>`, marked with the sha of the symbol's own file
+  at resolution time).
 - `symbols`: package (the import path for Go, the project-relative
   directory otherwise), name (a method carries its receiver, `T.M`),
   kind (`func`, `method`, `type`, `var`, `const`), file, line — the

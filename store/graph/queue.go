@@ -36,6 +36,9 @@ type Queue struct {
 	extract *GoExtract
 	mu      sync.Mutex
 	dbs     map[string]store.DB
+	lspMu   sync.Mutex
+	lsp     *lspClient
+	lspLang string
 }
 
 func NewQueue(home string, loud func(string)) *Queue {
@@ -59,6 +62,7 @@ func (q *Queue) Touch(path string) {
 }
 
 func (q *Queue) Run(ctx context.Context) {
+	defer q.stopLSP()
 	for {
 		select {
 		case <-ctx.Done():
@@ -67,6 +71,10 @@ func (q *Queue) Run(ctx context.Context) {
 			q.process(ctx, p)
 		}
 	}
+}
+
+func (q *Queue) Close() {
+	q.stopLSP()
 }
 
 func (q *Queue) Drain(ctx context.Context) {
@@ -116,6 +124,9 @@ func (q *Queue) process(ctx context.Context, path string) {
 func (q *Queue) extractor(lang string) Extractor {
 	if lang == "go" {
 		return q.extract
+	}
+	if ServerOf(lang) != nil {
+		return &lspExtract{q: q, lang: lang}
 	}
 	return nil
 }
@@ -285,7 +296,7 @@ func (q *Queue) packFile(ctx context.Context, db store.DB, root, cwd, target str
 		return "", fmt.Errorf("graph: %s is outside the project", target)
 	}
 	rel = filepath.ToSlash(rel)
-	if err := q.refresh(ctx, db, root, rel); err != nil {
+	if _, err := q.refresh(ctx, db, root, rel); err != nil {
 		return "", err
 	}
 	rows, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE file = ? ORDER BY line`, rel)
@@ -371,8 +382,31 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 	}
 	sym := rows[0]
 
-	if err := q.refresh(ctx, db, root, sym.File); err != nil {
+	if moved, err := q.refresh(ctx, db, root, sym.File); err != nil {
 		return "", err
+	} else if moved {
+		sel, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE package = ? AND name = ?`, sym.Package, sym.Name)
+		if err != nil {
+			return "", err
+		}
+		if len(sel) == 0 {
+			return "", fmt.Errorf("graph: %s left the map at the re-extraction", target)
+		}
+		sym = sel[0]
+	}
+	symLang := LanguageOf(filepath.Join(root, filepath.FromSlash(sym.File)))
+	var client *lspClient
+	if symLang != "go" {
+		c, err := q.lspFor(ctx, symLang)
+		if err != nil {
+			return "", err
+		}
+		if c != nil {
+			if err := q.resolveRefs(ctx, c, db, root, sym, false); err != nil {
+				return "", err
+			}
+		}
+		client = c
 	}
 	callers, err := queryEdges(ctx, db, `SELECT from_package, from_name, file, line FROM edges WHERE to_package = ? AND to_name = ? ORDER BY file, line`, sym.Package, sym.Name)
 	if err != nil {
@@ -389,10 +423,13 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 	for _, e := range callees {
 		cited[e.File] = true
 	}
+	movedAny := false
 	for _, rel := range sortedKeys(cited) {
-		if err := q.refresh(ctx, db, root, rel); err != nil {
+		moved, err := q.refresh(ctx, db, root, rel)
+		if err != nil {
 			return "", err
 		}
+		movedAny = movedAny || moved
 	}
 	sel, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line FROM symbols WHERE package = ? AND name = ?`, sym.Package, sym.Name)
 	if err != nil {
@@ -402,6 +439,11 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 		return "", fmt.Errorf("graph: %s left the map at the re-extraction", target)
 	}
 	sym = sel[0]
+	if movedAny && symLang != "go" && client != nil {
+		if err := q.resolveRefs(ctx, client, db, root, sym, true); err != nil {
+			return "", err
+		}
+	}
 	callers, err = queryEdges(ctx, db, `SELECT from_package, from_name, file, line FROM edges WHERE to_package = ? AND to_name = ? ORDER BY file, line`, sym.Package, sym.Name)
 	if err != nil {
 		return "", err
@@ -489,22 +531,22 @@ func sortedKeys(m map[string]bool) []string {
 	return out
 }
 
-func (q *Queue) refresh(ctx context.Context, db store.DB, root, rel string) error {
+func (q *Queue) refresh(ctx context.Context, db store.DB, root, rel string) (bool, error) {
 	abs := filepath.Join(root, filepath.FromSlash(rel))
 	live, err := sha256File(abs)
 	if err != nil {
-		return fmt.Errorf("graph: %s: %w", rel, err)
+		return false, fmt.Errorf("graph: %s: %w", rel, err)
 	}
 	var stored string
 	if err := db.QueryRowContext(ctx, `SELECT sha256 FROM files WHERE path = ?`, rel).Scan(&stored); err != nil {
 		if err != sql.ErrNoRows {
-			return fmt.Errorf("graph: sha of %s: %w", rel, err)
+			return false, fmt.Errorf("graph: sha of %s: %w", rel, err)
 		}
 	}
 	if stored == live {
-		return nil
+		return false, nil
 	}
-	return q.index(ctx, db, root, abs)
+	return true, q.index(ctx, db, root, abs)
 }
 
 type liveLine struct {
