@@ -14,16 +14,21 @@ With `decisionUrl` set, every candidate is scored with one yes/no —
 "Does this symbol matter for the task?" — through the fan-out decide
 uses (now exported as `decision.FanOut`), bounded by the kernel's
 Parallel; the candidate's item is its live signature and file. The yes
-set loads live, highest probability first, until the pack budget (the
-read ceiling) is spent; the server's declines are listed by name at the
-end so the model can pack one by hand; the candidates the server never
-answered are not shown. Every answered candidate is one pending row in
-the decision store (the new site `pack`, the server as decider, the
-task and the item as state) and the reviewer settles them at turn end
-as it settles bash rows, a deny naming the right answer. Unset, pack by
-task uses the lexical candidates alone, in rank order, and records
-nothing. No automatic pack: the model asks, and one guideline joins the
-system prompt only when decisionUrl is set.
+set loads live, highest probability first, into a budget of the result
+cap the root passes in; an answer whose confidence is under one half is
+unsure and the unsure are listed by name at the end so the model can
+pack one by hand, a confident no is not listed, and the lexical top of
+the rank fills the rest of the budget — the server's judgment re-ranks,
+never censors, so a scored pack is never worse than an unscored one.
+Every answered candidate is one pending row in the decision store (the
+new site `pack`, the server as decider, the task and the item as state)
+and the reviewer settles them at turn end as it settles bash rows, a
+deny naming the right answer. Unset, pack by task uses the lexical
+candidates alone, in rank order, and records nothing. No automatic
+pack: the model asks, and one guideline joins the system prompt only
+when decisionUrl is set. The lexical containers are schema version 2:
+the migration rebuilds them from `symbols` on open, so a store mapped
+before this release searches without a re-index.
 
 The target description grows by the clause "the symbol, the file, or
 the task as a sentence"; the menu budget holds.

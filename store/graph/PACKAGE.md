@@ -58,17 +58,24 @@ project-relative; each worktree's store maps its own tree.
   replace clears the file's outgoing edges and leaves `edges_sha` null.
   The same transaction maintains the two lexical containers (the fts row
   and the trigram shadow per symbol), so the task pack's candidates are
-  never staler than the map.
+  never staler than the map. Schema version 2: `Migration` rebuilds the
+  containers from `symbols` on open, because an unchanged sha is a no-op
+  and a store written by version 1 would leave its symbols unsearchable.
+- `migrate.go`: the schema version 2 migration, the lexical containers
+  rebuilt from `symbols` on open.
 - `task.go`: the pack by task (2.10.0): the two lexical arms recall uses
   (FTS and trigram, fused as recall fuses them, reciprocal rank k=60)
   over `symbol_fts`/`symbol_grams`, the candidate items (the live
   signature at file:line) cut at the item ceiling before any request,
   the scorer seam (`Scorer`, implemented by `decision.PackScorer`) —
   the yes set loads live, highest probability first, until the load
-  ceiling is spent, the declines list by name, the never-answered show
-  nowhere; without a scorer the lexical candidates load in rank order
+  ceiling is spent, the wobbly answers list by name, the confident nos
+  and the never-answered show nowhere and the lexical top of the rank
+  fills the rest of the budget (the server's judgment re-ranks, never
+  censors); without a scorer the lexical candidates load in rank order
   and nothing is recorded. The queue carries the two ceilings
-  (`SetPackCaps`), the read ceiling by default.
+  (`SetPackCaps`, `PackCaps`): the candidate items keep the read
+  ceiling and the root stamps the load cap with the result cap.
 
 ## How it is consumed
 

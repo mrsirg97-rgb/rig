@@ -80,7 +80,15 @@ func (p *taskProbe) snapshot() ([]string, []string) {
 	return append([]string(nil), p.tasks...), append([]string(nil), p.asks...)
 }
 
-func taskServer(t *testing.T, probe *taskProbe, noul func(item string) (float64, bool)) *httptest.Server {
+func noulAnswer(p float64) map[string]any {
+	return map[string]any{"type": "noul", "noul": p}
+}
+
+func wobblyAnswer(p float64) map[string]any {
+	return map[string]any{"type": "choice", "choice": "yes", "probabilities": map[string]any{"yes": p, "no": 1 - p}}
+}
+
+func taskServer(t *testing.T, probe *taskProbe, answer func(item string) (map[string]any, bool)) *httptest.Server {
 	t.Helper()
 	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -106,12 +114,12 @@ func taskServer(t *testing.T, probe *taskProbe, noul func(item string) (float64,
 		for k := range req.Questions {
 			id = k
 		}
-		v, ok := noul(s.Item)
+		a, ok := answer(s.Item)
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		body, err := json.Marshal(map[string]any{"answers": map[string]any{id: map[string]any{"type": "noul", "noul": v}}})
+		body, err := json.Marshal(map[string]any{"answers": map[string]any{id: a}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -121,16 +129,26 @@ func taskServer(t *testing.T, probe *taskProbe, noul func(item string) (float64,
 	return srv
 }
 
-func symbolNoul(item string) (float64, bool) {
-	switch {
-	case strings.Contains(item, "func Target()"):
-		return 0.9, true
-	case strings.Contains(item, "func Helper()"):
-		return 0.8, true
-	case strings.Contains(item, "func Call()"):
-		return 0.4, true
+func symbolAnswers(call map[string]any) func(string) (map[string]any, bool) {
+	return func(item string) (map[string]any, bool) {
+		switch {
+		case strings.Contains(item, "func Target()"):
+			return noulAnswer(0.9), true
+		case strings.Contains(item, "func Helper()"):
+			return noulAnswer(0.8), true
+		case strings.Contains(item, "func Call()"):
+			return call, true
+		}
+		return nil, false
 	}
-	return 0, false
+}
+
+func allYes(string) (map[string]any, bool) {
+	return noulAnswer(0.9), true
+}
+
+func allNo(string) (map[string]any, bool) {
+	return noulAnswer(0.4), true
 }
 
 func openDecisionStore(t *testing.T) store.DB {
@@ -143,12 +161,12 @@ func openDecisionStore(t *testing.T) store.DB {
 	return db
 }
 
-func taskModule(t *testing.T, noul func(item string) (float64, bool)) (string, *graph.Queue, core.Tool, *taskProbe, store.DB) {
+func taskModule(t *testing.T, answer func(item string) (map[string]any, bool)) (string, *graph.Queue, core.Tool, *taskProbe, store.DB) {
 	t.Helper()
 	root, q, tool := packModule(t)
 	probe := &taskProbe{}
 	db := openDecisionStore(t)
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: taskServer(t, probe, noul).URL, Client: &http.Client{Transport: testenv.Transport()}})
+	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: taskServer(t, probe, answer).URL, Client: &http.Client{Transport: testenv.Transport()}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +184,7 @@ func mapThePackFixture(t *testing.T, root string, q *graph.Queue) {
 }
 
 func TestPackByTaskLoadsTheYesSetAndListsTheUnsure(t *testing.T) {
-	root, q, tool, probe, _ := taskModule(t, symbolNoul)
+	root, q, tool, probe, _ := taskModule(t, symbolAnswers(wobblyAnswer(0.4)))
 	mapThePackFixture(t, root, q)
 	reply, err := packExec(t, tool, root, packTask, nil)
 	if err != nil {
@@ -205,16 +223,16 @@ func TestPackByTaskLoadsTheYesSetAndListsTheUnsure(t *testing.T) {
 }
 
 func TestPackByTaskStopsAtTheBudgetWithTheHighestProbabilityFirst(t *testing.T) {
-	root, q, tool, _, _ := taskModule(t, func(item string) (float64, bool) {
+	root, q, tool, _, _ := taskModule(t, func(item string) (map[string]any, bool) {
 		switch {
 		case strings.Contains(item, "func Target()"):
-			return 0.9, true
+			return noulAnswer(0.9), true
 		case strings.Contains(item, "func Helper()"):
-			return 0.8, true
+			return noulAnswer(0.8), true
 		case strings.Contains(item, "func Call()"):
-			return 0.7, true
+			return noulAnswer(0.7), true
 		}
-		return 0, false
+		return nil, false
 	})
 	mapThePackFixture(t, root, q)
 	q.SetPackCaps(1<<20, 1)
@@ -234,7 +252,7 @@ func TestPackByTaskStopsAtTheBudgetWithTheHighestProbabilityFirst(t *testing.T) 
 }
 
 func TestPackByTaskCutsTheCandidatesPastTheCeilingBeforeAnyRequest(t *testing.T) {
-	root, q, tool, probe, _ := taskModule(t, symbolNoul)
+	root, q, tool, probe, _ := taskModule(t, allYes)
 	mapThePackFixture(t, root, q)
 	q.SetPackCaps(60, 1<<20)
 	reply, err := packExec(t, tool, root, packTask, nil)
@@ -271,7 +289,7 @@ func TestPackByTaskWithoutAServerPacksTheLexicalCandidatesAndWritesNoRows(t *tes
 }
 
 func TestTheReviewerDeniesAPackRowWithTheCorrectedAnswer(t *testing.T) {
-	root, q, tool, _, db := taskModule(t, symbolNoul)
+	root, q, tool, _, db := taskModule(t, symbolAnswers(noulAnswer(0.4)))
 	mapThePackFixture(t, root, q)
 	if _, err := packExec(t, tool, root, packTask, nil); err != nil {
 		t.Fatalf("pack: %v", err)
@@ -317,5 +335,64 @@ func TestTheReviewerDeniesAPackRowWithTheCorrectedAnswer(t *testing.T) {
 	}
 	if denied != 1 {
 		t.Fatalf("one row denied, got %d", denied)
+	}
+}
+
+func TestPackByTaskFillsTheLexicalRankWhenTheServerAffirmsNothing(t *testing.T) {
+	root, q, tool, probe, _ := taskModule(t, allNo)
+	mapThePackFixture(t, root, q)
+	reply, err := packExec(t, tool, root, packTask, nil)
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	_, asks := probe.snapshot()
+	if len(asks) != 3 {
+		t.Fatalf("every candidate scored: %d", len(asks))
+	}
+	for _, want := range []string{"Target — func — alpha/a.go:", "Helper — func — alpha/a.go:", "Call — func — beta/b.go:"} {
+		if !strings.Contains(reply, want) {
+			t.Fatalf("the lexical top fills the pack:\n%s", reply)
+		}
+	}
+	if strings.Contains(reply, "unsure") {
+		t.Fatalf("a confident no is not listed:\n%s", reply)
+	}
+	if strings.Index(reply, "Target — func") > strings.Index(reply, "Call — func") {
+		t.Fatalf("the fill rides the lexical rank:\n%s", reply)
+	}
+	if !strings.Contains(reply, "scored 3 candidates") {
+		t.Fatalf("the reply names the count scored:\n%s", reply)
+	}
+}
+
+func TestPackByTaskLoadsTheYesSetThenTheLexicalFill(t *testing.T) {
+	root, q, tool, _, _ := taskModule(t, func(item string) (map[string]any, bool) {
+		switch {
+		case strings.Contains(item, "func Target()"):
+			return noulAnswer(0.9), true
+		case strings.Contains(item, "func Helper()"):
+			return noulAnswer(0.3), true
+		case strings.Contains(item, "func Call()"):
+			return noulAnswer(0.4), true
+		}
+		return nil, false
+	})
+	mapThePackFixture(t, root, q)
+	reply, err := packExec(t, tool, root, packTask, nil)
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	if strings.Contains(reply, "unsure") {
+		t.Fatalf("a confident no is not listed:\n%s", reply)
+	}
+	target, helper, call := strings.Index(reply, "Target — func"), strings.Index(reply, "Helper — func"), strings.Index(reply, "Call — func")
+	if target < 0 || helper < 0 || call < 0 {
+		t.Fatalf("the yes set loads first and the lexical top fills the rest:\n%s", reply)
+	}
+	if target > helper || helper > call {
+		t.Fatalf("the affirmations lead and the fill rides the rank:\n%s", reply)
+	}
+	if !strings.Contains(reply, "scored 3 candidates") {
+		t.Fatalf("the reply names the count scored:\n%s", reply)
 	}
 }

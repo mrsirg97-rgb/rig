@@ -52,6 +52,8 @@ func NewQueue(home string, loud func(string)) *Queue {
 
 func (q *Queue) SetScorer(s Scorer) { q.scorer = s }
 
+func (q *Queue) PackCaps() (item, load int) { return q.itemCap, q.loadCap }
+
 func (q *Queue) SetPackCaps(items, load int) {
 	if items <= 0 || load <= 0 {
 		panic(fmt.Sprintf("graph: pack caps %d/%d: the ceiling needs a bound", items, load))

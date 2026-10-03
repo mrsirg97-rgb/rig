@@ -54,6 +54,7 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	}
 	var yes []candidate
 	var unsure []string
+	wobbly := map[string]bool{}
 	scored := 0
 	if q.scorer == nil {
 		yes = items
@@ -71,10 +72,11 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 				items[i].prob = v.Probability
 				yes = append(yes, items[i])
 			}
-			if v.Yes || v.Unsure {
+			if v.Answered {
 				scored++
 			}
 			if v.Unsure {
+				wobbly[items[i].sym.Package+"\x00"+items[i].sym.Name] = true
 				unsure = append(unsure, baseName(items[i].sym.Package)+"."+items[i].sym.Name)
 			}
 		}
@@ -82,16 +84,38 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	}
 	var b strings.Builder
 	loaded := 0
+	spent := false
+	done := map[string]bool{}
 	for _, c := range yes {
 		block, err := q.packOne(ctx, db, root, c.sym)
 		if err != nil {
 			return "", err
 		}
 		if loaded > 0 && loaded+len(block) > q.loadCap {
+			spent = true
 			break
 		}
 		b.WriteString(block)
 		loaded += len(block)
+		done[c.sym.Package+"\x00"+c.sym.Name] = true
+	}
+	if q.scorer != nil && !spent {
+		for _, c := range items {
+			key := c.sym.Package + "\x00" + c.sym.Name
+			if done[key] || wobbly[key] {
+				continue
+			}
+			block, err := q.packOne(ctx, db, root, c.sym)
+			if err != nil {
+				return "", err
+			}
+			if loaded > 0 && loaded+len(block) > q.loadCap {
+				break
+			}
+			b.WriteString(block)
+			loaded += len(block)
+			done[key] = true
+		}
 	}
 	if len(unsure) > 0 {
 		fmt.Fprintf(&b, "unsure (%d) — the server did not say yes; pack one by hand\n", len(unsure))

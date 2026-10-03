@@ -126,18 +126,29 @@ file:line — stay under the ceiling before any request goes out.
 With the decision server wired, the candidates ride the exported
 fan-out (one yes/no per candidate, "Does this symbol matter for the
 task?", the kernel's Parallel the bound), the state on the wire the
-task and the item. The yes set loads live, highest probability first,
-until the pack budget (the read ceiling) is spent; the declines are
-listed by name at the end so the model can pack one by hand; the
-candidates the server never answered are not shown. Every answered
-candidate is one pending row (site `pack`, the server as decider, the
-task and the item as state) the 2.7.0 reviewer settles as it settles
-bash rows, a deny naming the right answer. Without a server the lexical
-candidates load alone, in rank order, and nothing is recorded. No
-automatic pack: the model asks; one guideline joins the system prompt
-only when `decisionUrl` is set. The map's extra writes per symbol (the
-fts row, the gram rows) ride the same replace transaction; a stale
-candidate whose live read fails is skipped loudly.
+task and the item. The yes set loads live, highest probability first;
+the unsure rule is decide's — an answer whose confidence is under one
+half is unsure, and the unsure are listed by name at the end so the
+model can pack one by hand instead of being loaded; a confident no and
+a candidate the server never answered are not listed. The load cap is
+the result cap the root passes in (the kernel cuts tool results at the
+same cap), not the read ceiling: the affirmations spend it first, then
+the lexical top of the rank fills the rest — the server's judgment
+re-ranks, never censors, so a scored pack is never worse than an
+unscored one. Every answered candidate is one pending row (site `pack`,
+the server as decider, the task and the item as state) the 2.7.0
+reviewer settles as it settles bash rows, a deny naming the right
+answer. Without a server the lexical candidates load alone, in rank
+order, and nothing is recorded. No automatic pack: the model asks; one
+guideline joins the system prompt only when `decisionUrl` is set.
+
+The lexical containers are schema version 2: the migration rebuilds
+`symbol_fts` and `symbol_grams` from `symbols` on open, because a
+replace whose sha is unchanged is a no-op and a store written by
+version 1 would leave its symbols unsearchable. The map's extra writes
+per symbol (the fts row, the gram rows) ride the same replace
+transaction; a stale candidate whose live read fails is skipped
+loudly.
 
 ## placement
 
@@ -177,10 +188,12 @@ the opening brace. The store sits per worktree under the repo scope.
 The generated files are pinned by the drift test (todo's pattern).
 
 The task pack (2.10.0): a task matching three symbols packs the two the
-server says yes to and lists the third as unsure; the pack stops at the
-budget with the highest probability first; a candidate list past the
-read ceiling is cut before any request; unset decisionUrl packs the
-lexical candidates in rank order and writes no row; each scored
-candidate writes one pending row and the reviewer's deny stores the
-corrected answer; the lexical tables hold a row per symbol and follow a
-replace (a gone symbol's rows leave with it).
+server says yes to and lists the wobbly third as unsure; a confident no
+is hidden and the lexical top fills the rest of the budget; the pack
+stops at the result cap with the highest probability first; a candidate
+list past the read ceiling is cut before any request; unset decisionUrl
+packs the lexical candidates in rank order and writes no row; each
+scored candidate writes one pending row and the reviewer's deny stores
+the corrected answer; the lexical tables hold a row per symbol, follow
+a replace (a gone symbol's rows leave with it) and the version 2
+migration rebuilds them from a version 1 store's symbols on open.

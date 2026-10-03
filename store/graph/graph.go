@@ -13,7 +13,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store/graph/metadata"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 func DDL() []string { return ddl.Statements() }
 
@@ -30,7 +30,7 @@ func Open(home, key, worktree string) (store.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return store.DB{}, fmt.Errorf("graph: mkdir: %w", err)
 	}
-	db, _, _, err := store.Open(path, Statements(), SchemaVersion)
+	db, _, _, err := store.Open(path, Statements(), SchemaVersion, Migration())
 	if err != nil {
 		return store.DB{}, fmt.Errorf("graph: open %s: %w", path, err)
 	}
@@ -90,11 +90,8 @@ ON CONFLICT(path) DO UPDATE SET sha256 = excluded.sha256, language = excluded.la
 		if _, err := tx.ExecContext(ctx, `DELETE FROM symbols WHERE package = ? AND name = ?`, g[0], g[1]); err != nil {
 			return false, fmt.Errorf("graph: symbol delete %s: %w", rel, err)
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM symbol_fts WHERE package = ? AND name = ?`, g[0], g[1]); err != nil {
-			return false, fmt.Errorf("graph: symbol fts delete %s: %w", rel, err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM symbol_grams WHERE package = ? AND name = ?`, g[0], g[1]); err != nil {
-			return false, fmt.Errorf("graph: symbol grams delete %s: %w", rel, err)
+		if err := deleteLexical(ctx, tx, g[0], g[1]); err != nil {
+			return false, fmt.Errorf("graph: symbol lexical delete %s: %w", rel, err)
 		}
 	}
 	for _, s := range r.Symbols {
@@ -103,28 +100,8 @@ ON CONFLICT(package, name) DO UPDATE SET kind = excluded.kind, file = excluded.f
 			s.Package, s.Name, s.Kind, s.File, s.Line, s.EndLine); err != nil {
 			return false, fmt.Errorf("graph: symbol upsert %s: %w", rel, err)
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM symbol_fts WHERE package = ? AND name = ?`, s.Package, s.Name); err != nil {
-			return false, fmt.Errorf("graph: symbol fts delete %s: %w", rel, err)
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO symbol_fts (package, name, kind, file, line, end_line) VALUES (?, ?, ?, ?, ?, ?)`,
-			s.Package, s.Name, s.Kind, s.File, s.Line, s.EndLine); err != nil {
-			return false, fmt.Errorf("graph: symbol fts insert %s: %w", rel, err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM symbol_grams WHERE package = ? AND name = ?`, s.Package, s.Name); err != nil {
-			return false, fmt.Errorf("graph: symbol grams delete %s: %w", rel, err)
-		}
-		grams := symbolGrams(s)
-		places := make([]string, len(grams))
-		args := make([]any, 0, len(grams)*7)
-		for i, gram := range grams {
-			places[i] = fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d)", i*7+1, i*7+2, i*7+3, i*7+4, i*7+5, i*7+6, i*7+7)
-			args = append(args, s.Package, s.Name, s.Kind, s.File, s.Line, s.EndLine, gram)
-		}
-		if len(places) > 0 {
-			gramSQL := fmt.Sprintf(`INSERT OR IGNORE INTO symbol_grams (package, name, kind, file, line, end_line, gram) VALUES %s`, strings.Join(places, ", "))
-			if _, err := tx.ExecContext(ctx, gramSQL, args...); err != nil {
-				return false, fmt.Errorf("graph: symbol grams insert %s: %w", rel, err)
-			}
+		if err := insertLexical(ctx, tx, s); err != nil {
+			return false, fmt.Errorf("graph: symbol lexical insert %s: %w", rel, err)
 		}
 	}
 
@@ -142,4 +119,38 @@ ON CONFLICT(package, name) DO UPDATE SET kind = excluded.kind, file = excluded.f
 		return false, fmt.Errorf("graph: commit %s: %w", rel, err)
 	}
 	return true, nil
+}
+
+func deleteLexical(ctx context.Context, tx *sql.Tx, pkg, name string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM symbol_fts WHERE package = ? AND name = ?`, pkg, name); err != nil {
+		return fmt.Errorf("graph: symbol fts delete: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM symbol_grams WHERE package = ? AND name = ?`, pkg, name); err != nil {
+		return fmt.Errorf("graph: symbol grams delete: %w", err)
+	}
+	return nil
+}
+
+func insertLexical(ctx context.Context, tx *sql.Tx, s Symbol) error {
+	if err := deleteLexical(ctx, tx, s.Package, s.Name); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO symbol_fts (package, name, kind, file, line, end_line) VALUES (?, ?, ?, ?, ?, ?)`,
+		s.Package, s.Name, s.Kind, s.File, s.Line, s.EndLine); err != nil {
+		return fmt.Errorf("graph: symbol fts insert: %w", err)
+	}
+	grams := symbolGrams(s)
+	places := make([]string, len(grams))
+	args := make([]any, 0, len(grams)*7)
+	for i, gram := range grams {
+		places[i] = fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d)", i*7+1, i*7+2, i*7+3, i*7+4, i*7+5, i*7+6, i*7+7)
+		args = append(args, s.Package, s.Name, s.Kind, s.File, s.Line, s.EndLine, gram)
+	}
+	if len(places) > 0 {
+		gramSQL := fmt.Sprintf(`INSERT OR IGNORE INTO symbol_grams (package, name, kind, file, line, end_line, gram) VALUES %s`, strings.Join(places, ", "))
+		if _, err := tx.ExecContext(ctx, gramSQL, args...); err != nil {
+			return fmt.Errorf("graph: symbol grams insert: %w", err)
+		}
+	}
+	return nil
 }

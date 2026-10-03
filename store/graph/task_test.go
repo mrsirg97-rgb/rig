@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/mrsirg97-rgb/rig/v2/store"
 
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 )
@@ -87,5 +90,55 @@ func TestApplyMaintainsTheLexicalTables(t *testing.T) {
 	}
 	if grams != 0 {
 		t.Fatalf("the gone symbol's grams leave the shadow, got %d", grams)
+	}
+}
+
+func TestTheMigrationRebuildsTheLexicalTables(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "g.sqlite")
+	db, _, _, err := store.Open(path, graph.Statements(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []struct {
+		pkg, name, file string
+		line            int64
+	}{
+		{"example.com/m/alpha", "Target", "a.go", 3},
+		{"example.com/m/alpha", "Helper", "a.go", 5},
+	} {
+		if _, err := db.Exec(`INSERT INTO symbols (package, name, kind, file, line, end_line) VALUES (?, ?, 'func', ?, ?, ?)`,
+			s.pkg, s.name, s.file, s.line, s.line); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	db2, _, report, err := store.Open(path, graph.Statements(), 2, graph.Migration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db2.Close()
+	if !strings.Contains(report, "lexical") {
+		t.Fatalf("the migration names the rebuild: %q", report)
+	}
+	var fts int
+	if err := db2.QueryRow(`SELECT count(*) FROM symbol_fts`).Scan(&fts); err != nil {
+		t.Fatal(err)
+	}
+	if fts != 2 {
+		t.Fatalf("the migration rebuilt the fts rows, got %d", fts)
+	}
+	var grams int
+	if err := db2.QueryRow(`SELECT count(*) FROM symbol_grams`).Scan(&grams); err != nil {
+		t.Fatal(err)
+	}
+	if grams == 0 {
+		t.Fatal("the migration rebuilt the trigram shadow")
+	}
+	var name string
+	if err := db2.QueryRow(`SELECT name FROM symbol_fts WHERE symbol_fts MATCH 'target'`).Scan(&name); err != nil {
+		t.Fatalf("the rebuilt tables answer the task tokens: %v", err)
+	}
+	if name != "Target" {
+		t.Fatalf("the rebuilt tables found %q", name)
 	}
 }

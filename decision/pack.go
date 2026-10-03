@@ -23,6 +23,7 @@ type packState struct {
 }
 
 type PackVerdict struct {
+	Answered    bool
 	Yes         bool
 	Unsure      bool
 	Probability float64
@@ -73,7 +74,12 @@ func (s *PackScorer) Score(ctx context.Context, task string, items []string) ([]
 		if a.Question != packQuestion.ID {
 			continue
 		}
-		out[i] = PackVerdict{Yes: a.Value == "yes", Unsure: a.Value != "yes", Probability: a.Confidence}
+		out[i] = PackVerdict{
+			Answered:    true,
+			Yes:         a.Value == "yes" && a.Confidence >= unsureUnder,
+			Unsure:      a.Confidence < unsureUnder,
+			Probability: a.Confidence,
+		}
 		s.record(ctx, states[i], a)
 	}
 	return out, nil
