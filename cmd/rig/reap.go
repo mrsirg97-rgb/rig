@@ -17,7 +17,7 @@ var concurrentNatives = map[string]bool{
 
 var mutatingNatives = map[string]bool{
 	"bash": true, "write": true, "edit": true, "python": true,
-	"scheduler": true, "plugin": true, "plugins": true, "delegate": true,
+	"scheduler": true, "plugin": true, "delegate": true,
 }
 
 func sessionQueue(ctx context.Context, tdb store.DB, cwd, session string) (todostore.Project, error) {

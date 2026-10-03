@@ -1,4 +1,25 @@
 # Changelog
+## [2.8.2]: plugin and plugins are one tool
+
+Two tools covered one concept: `plugin` was the door to a live plugin
+(run it, fetch its contract) and `plugins` was the ecosystem (list,
+create, delete, reload). Together they cost 1,445 characters of the
+14,000 menu, and the second tool's description repeated the first's
+vocabulary.
+
+They are one tool now, `plugin`, with six actions: `run` and `schema`
+as before, and `list`, `create`, `delete`, `reload` as the ecosystem
+had them. The `Ecosystem` stays as the dispatcher behind the door; it
+is no longer a tool of its own. Approval stays the operator's act
+through `/plugins approve`; the model has no arm for it. `decide` is
+unchanged. The embedded allow default, the README tool table, SETUP.md
+and the plugins notes lose the second name; the `/plugins` command
+keeps its verbs. A `settings.json` whose `allow` still names `plugins`
+starts with one notice and the name is dropped, never a refusal.
+
+The menu loses one tool; the goldens and the tools-prefix sha move
+deliberately and only there.
+
 ## [2.8.1]: the words are data
 
 The text the model reads was scattered: `read` and `edit` returned their

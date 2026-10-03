@@ -50,6 +50,7 @@ type root struct {
 	decQ      *decision.Queue
 	decRev    *decision.Reviewer
 	decide    *decision.Decide
+	eco       *plugins.Ecosystem
 
 	pluginsDir string
 	rigHome    string
@@ -110,7 +111,7 @@ func wire(r *root) *rig.Kernel {
 			if r.pluginsHome != "" {
 				redo = r.redoPlugins
 			}
-			r.tools["plugin"] = plugins.NewDoor(r.live, redo)
+			r.tools["plugin"] = plugins.NewDoor(r.live, redo, r.eco)
 		}
 		r.live.Set(append(r.tableTools(), r.pluginTools...))
 	}

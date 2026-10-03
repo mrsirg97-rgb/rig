@@ -20,12 +20,13 @@ type Door struct {
 	tool.Definition
 	Live Live
 	redo func(ctx context.Context) error
+	eco  *Ecosystem
 }
 
 var _ core.Tool = (*Door)(nil)
 
-func NewDoor(live Live, redo func(ctx context.Context) error) *Door {
-	return &Door{Definition: tool.Def("plugin"), Live: live, redo: redo}
+func NewDoor(live Live, redo func(ctx context.Context) error, eco *Ecosystem) *Door {
+	return &Door{Definition: tool.Def("plugin"), Live: live, redo: redo, eco: eco}
 }
 
 func (d *Door) Schema() json.RawMessage {
@@ -60,16 +61,22 @@ func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 		Args   json.RawMessage `json:"args"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
-		return "", fmt.Errorf("plugin: bad call (want {action, name, args}): %v", err)
+		return "", fmt.Errorf("plugin: bad call (want {action, name, args, source}): %v", err)
 	}
-	if in.Action == "" {
-		return "", fmt.Errorf("plugin: no action (want {action, name, args})")
+	switch in.Action {
+	case "":
+		return "", fmt.Errorf("plugin: no action (want run, schema, list, create, delete or reload)")
+	case "list", "create", "delete", "reload":
+		if d.eco == nil {
+			return "", fmt.Errorf("plugin: %s: no ecosystem seam (the root did not wire one)", in.Action)
+		}
+		return d.eco.Exec(ctx, args)
+	case "run", "schema":
+	default:
+		return "", fmt.Errorf("plugin: unknown action %q (want run, schema, list, create, delete or reload)", in.Action)
 	}
 	if in.Name == "" {
-		return "", fmt.Errorf("plugin: no name (want {action, name, args})")
-	}
-	if in.Action != "run" && in.Action != "schema" {
-		return "", fmt.Errorf("plugin: unknown action %q (want run or schema)", in.Action)
+		return "", fmt.Errorf("plugin: %s needs a name (the live plugin)", in.Action)
 	}
 	tool, ok := d.Live.Plugin(in.Name)
 	if !ok && d.redo != nil {
@@ -81,14 +88,12 @@ func (d *Door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("plugin: unknown plugin %q (live: %s)", in.Name, strings.Join(d.Live.PluginNames(), ", "))
 	}
-	switch in.Action {
-	case "schema":
+	if in.Action == "schema" {
 		return fmt.Sprintf("%s\nschema: %s", tool.Description(), tool.Schema()), nil
-	default:
-		body := in.Args
-		if body == nil {
-			body = json.RawMessage("{}")
-		}
-		return tool.Exec(ctx, body)
 	}
+	body := in.Args
+	if body == nil {
+		body = json.RawMessage("{}")
+	}
+	return tool.Exec(ctx, body)
 }

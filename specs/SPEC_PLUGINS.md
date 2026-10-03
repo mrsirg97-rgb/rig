@@ -456,8 +456,11 @@ is the point of writing both specs together.
 
 The pieces:
 
-- **`plugins`, a native tool** (the one new primitive, amended: the
-  `plugins_reload` one is folded into an action-enum ecosystem): re-runs
+- **the ecosystem arms of the `plugin` door** (the one new primitive,
+  amended twice: `plugins_reload` folded into an action-enum `plugins`
+  tool, and in 2.8.2 that tool folded into the `plugin` door as the
+  actions `list`, `create`, `delete`, `reload`, beside `run` and
+  `schema`; one tool, one menu entry): re-runs
   the discovery over `~/.rig/plugins/`; the same loud skips, the same
   collision refusal, removal free (the list rebuilds from disk), and
   swaps the kernel's tool list at the root, the models-switch

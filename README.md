@@ -85,7 +85,7 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
   `RIG_BASE_URL` and `RIG_MODEL`; `settings.json` is the fallback.
 - **tools.** `bash`, `read`/`write`/`edit`, `python`, `web` (search and
   fetch), `todo`, `rem`, `scheduler`, `delegate`, `sessions`,
-  `plugin`/`plugins`. Results are capped, refusals are named.
+  `plugin`. Results are capped, refusals are named.
 - **the queue.** `todo` reads the project's present (worktrees share one
   board): open work first, then the related and recent finished, ten
   rows total, the hint naming what is hidden; `todo finished` lists the
@@ -126,7 +126,7 @@ where no worker fleet stands. Restrict them with `--allow`:
 | `delegate` | a headless worker for a bounded subtask; wired where a second request can run (a remote row, or more than one slot on the resident server) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |
 | `decide` | hand many items to a decision server against one typed question instead of reading them (on the menu only when `decisionUrl` is set) |
-| `plugin` / `plugins` | the door into your python plugins, and their ecosystem |
+| `plugin` | the door into your python plugins: run one, read its contract, or tend the ecosystem (list, create, delete, reload) |
 
 Every tool result is capped. Repeated identical failures are bounded. An
 optional round cap limits calls per turn. A failed call executes once.
@@ -237,7 +237,7 @@ middleware/     ToolMiddleware: toolset (the live table), approve (the gate),
                 provenance), guard (the bound, the round cap, the result cap)
 provider/       Provider implementations (the openai-compatible SSE adapter)
 plugins/        python plugin discovery (one file, one tool) and the plugin
-                door (run/schema) and the ecosystem (list/create/delete/reload)
+                door: run/schema a live plugin, list/create/delete/reload the ecosystem
 store/          the SQLite stores (state, todo, rem, scheduler), the sqlx
                 transaction seam, the project scope identity (store/scope);
                 -resume projects a session back from the state rows

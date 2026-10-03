@@ -8,7 +8,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/config"
 )
 
-var fleetAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "decide", "plugin", "plugins", "sessions", "scheduler", "delegate"}
+var fleetAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "decide", "plugin", "sessions", "scheduler", "delegate"}
 
 func TestWorkersFileIsReadIgnoredAndNamedOnce(t *testing.T) {
 	dir := t.TempDir()
@@ -129,3 +129,16 @@ func hasAllow(got, want []string) bool {
 }
 
 var _ = config.Load
+
+func TestAllowNamingPluginsIsDroppedAndNamedOnce(t *testing.T) {
+	dir := t.TempDir()
+	sp := write(t, dir, "settings.json", `{"allow": ["bash", "plugins", "plugin"]}`)
+	cfg := load(t, dir, t.TempDir())
+	want := "config: " + sp + ": allow names plugins, which folded into plugin in 2.8.2; the name is dropped"
+	if len(cfg.Notices) != 1 || cfg.Notices[0] != want {
+		t.Fatalf("notices = %v, want [%q]", cfg.Notices, want)
+	}
+	if strings.Join(cfg.Settings.Allow, ",") != "bash,plugin" {
+		t.Fatalf("allow = %v, want plugins dropped and plugin kept", cfg.Settings.Allow)
+	}
+}

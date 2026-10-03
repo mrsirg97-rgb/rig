@@ -513,55 +513,30 @@
   {
     "name": "plugin",
     "enabled": true,
-    "what": "runs a live plugin by name with its args, or fetch its contract: {\"action\": \"run\"|\"schema\", \"name\": ..., \"args\": ...}.",
-    "guidelines": "the name enum is the live set. call the schema first when you do not know a plugin's args. an unknown plugin name will be looked up once, then refused. plugins are also importable from python by name.",
-    "reply": "the plugin's text, or its description and schema.",
+    "what": "the door to your python plugins: runs a live plugin by name with its args, fetches its contract, or tends the ecosystem: list shows the loaded and the skipped; create writes a new plugin from name and source into plugins/pending/; delete moves a loaded plugin into plugins/disabled/; reload re-runs discovery over plugins/.",
+    "guidelines": "the name enum is the live set. call schema first when you do not know a plugin's args. an unknown name is looked up once, then refused. plugins are also importable from python by name. a created plugin lands in plugins/pending/ untrusted, and the operator installs it with /plugins approve.",
+    "reply": "the plugin's text; its description and schema; the listing, the write or the disable; or the discovery's list: loaded, and skipped with reasons.",
     "schema": {
       "type": "object",
       "properties": {
         "action": {
           "enum": [
             "run",
-            "schema"
-          ],
-          "description": "run a live plugin by name with its args, or fetch its contract"
-        },
-        "name": {
-          "type": "string",
-          "description": "the live plugin"
-        },
-        "args": {
-          "type": "object",
-          "description": "the plugin's args, pass-through (run)"
-        }
-      },
-      "required": [
-        "action",
-        "name"
-      ]
-    }
-  },
-  {
-    "name": "plugins",
-    "enabled": true,
-    "what": "the plugin ecosystem: {\"action\": \"list\"|\"create\"|\"delete\"|\"reload\", ...}. list shows the loaded and the skipped; create writes a new plugin from name and source into plugins/pending/; delete moves a loaded plugin into plugins/disabled/; reload re-runs discovery over plugins/.",
-    "guidelines": "a created plugin lands in plugins/pending/ untrusted, and the operator installs it with /plugins approve.",
-    "reply": "the listing, the write or the disable, or the discovery's list: loaded, and skipped with reasons.",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "enum": [
+            "schema",
             "list",
             "create",
             "delete",
             "reload"
           ],
-          "description": "the ecosystem verb"
+          "description": "run a live plugin by name with its args, fetch its contract, or list, create, delete and reload the ecosystem"
         },
         "name": {
           "type": "string",
-          "description": "the plugin name (create/delete)"
+          "description": "the live plugin (run, schema, delete), or the new plugin's name (create)"
+        },
+        "args": {
+          "type": "object",
+          "description": "the plugin's args, pass-through (run)"
         },
         "source": {
           "type": "string",
