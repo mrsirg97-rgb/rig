@@ -10,6 +10,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
 )
@@ -891,5 +892,36 @@ func TestLoopAccumulatesReasoningDetailsIntoTheMessage(t *testing.T) {
 	}
 	if string(last.ReasoningDetails) != `[{"id":"r1"},{"id":"r2"}]` {
 		t.Fatalf("reasoning details = %s, want both chunks in order", last.ReasoningDetails)
+	}
+}
+
+func TestTheKernelsEngineIsTheLoopsAndTheFleetRunsBelowTheTurn(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{{
+		events: []core.Event{textEv("hello"), doneEv()},
+	}}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	engine := evt.NewEngine()
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{system: "be terse"}),
+		rig.WithEngine(engine),
+	)
+	k.Session = core.NewSession()
+	var order []string
+	engine.Add(evt.Func(func(context.Context) { order = append(order, "fleet") }), rig.PriorityFleet)
+	f.inputs <- "hi"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(order) != 1 {
+		t.Fatalf("a closure posted on the kernel's engine before the run must run on the loop, got %v", order)
+	}
+	if len(f.events) == 0 {
+		t.Fatal("the turn ran on the same engine")
+	}
+	if engine.Add(evt.Func(func(context.Context) {}), rig.PriorityFleet) != 0 {
+		t.Fatal("after the run the engine is stopped: a late post refuses")
 	}
 }

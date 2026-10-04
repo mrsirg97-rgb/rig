@@ -13,12 +13,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
-const (
-	prioInput  = 90
-	prioStream = 50
-	prioTool   = 50
-)
-
 type turn struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
@@ -72,8 +66,12 @@ func Run(ctx context.Context, k *rig.Kernel) error {
 		exec = mw.Wrap(exec)
 	}
 
-	r := &run{ctx: ctx, k: k, engine: evt.NewEngine(), exec: exec, specs: specs}
-	r.post(prioInput, r.prompt)
+	engine := k.Engine
+	if engine == nil {
+		engine = evt.NewEngine()
+	}
+	r := &run{ctx: ctx, k: k, engine: engine, exec: exec, specs: specs}
+	r.post(rig.PriorityInput, r.prompt)
 	r.engine.Start(context.Background())
 	return r.err
 }
@@ -97,7 +95,7 @@ func (r *run) prompt() {
 	r.turn = t
 	go func() {
 		msg, err := r.k.Frontend.Input(core.WithInterrupt(turnCtx, turnCancel))
-		r.post(prioInput, func() { r.input(t, msg, err) })
+		r.post(rig.PriorityInput, func() { r.input(t, msg, err) })
 	}()
 }
 
@@ -171,9 +169,9 @@ func (r *run) model(t *turn) {
 	go func() {
 		for ev := range events {
 			ev := ev
-			r.post(prioStream, func() { r.streamEvent(t, ev) })
+			r.post(rig.PriorityStream, func() { r.streamEvent(t, ev) })
 		}
-		r.post(prioStream, func() { r.streamEnd(t) })
+		r.post(rig.PriorityStream, func() { r.streamEnd(t) })
 	}()
 }
 
@@ -253,7 +251,7 @@ func (r *run) streamEnd(t *turn) {
 			ContextTokens:    t.usage.Prompt + t.usage.Completion,
 		})
 		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Concurrent, r.k.Parallel, func(x int, out outcome) {
-			r.post(prioTool, func() { r.toolDone(t, x, out) })
+			r.post(rig.PriorityTool, func() { r.toolDone(t, x, out) })
 		})
 		t.results = make([]*outcome, len(t.calls))
 		t.cursor, t.started = 0, 0

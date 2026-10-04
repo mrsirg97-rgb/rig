@@ -25,10 +25,17 @@ names the members that missed it. Members thread the caller's context;
 the room takes its transport in the constructor; `lo` goes, the package
 is stdlib over `core` and `evt`.
 
-This commit is the package and its tests, nothing wired. The commits
-that follow in this release: the kernel owns the engine and hands it to
-the loop and the room (SPEC_EVT's named reopening, fleet below input
-and the turn's own events in priority); the swarm moves onto the room
+The kernel owns the engine (SPEC_EVT 8, the named reopening of
+`loop/`): `rig.WithEngine`, the loop running on the kernel's engine
+when it has one and minting its own otherwise, and the priorities named
+in the kernel: `PriorityInput` 90, `PriorityStream` 50, `PriorityTool`
+50, `PriorityFleet` 30 for the room, `PriorityReview` 10 for the
+decision review, so a worker's message runs in the gaps of a turn and a
+review bite starts only when nothing else is queued. The root assigns,
+the loop reads.
+
+The first commit is the package and its tests; the second the engine.
+The commits that follow in this release: the swarm moves onto the room
 and its roster, heartbeat field, emitter and goroutines leave; the
 frontends subscribe and the two notice events become one message; the
 delegate and the review fire cross a pipe transport through the
