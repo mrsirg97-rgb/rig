@@ -1,4 +1,39 @@
 # Changelog
+## [2.11.0]: the fleet posts
+
+SPEC_EVT opened with "an operator on the phone steering while a
+delegated worker reports back" and its rule is that everything that
+waits on the world posts. The fleet did not: the swarm kept a roster,
+a heartbeat field, a throttled status emitter and its own goroutines;
+the delegate streamed bytes to a file; the reviewer scraped verdict
+lines from stdout; `Notice` and `SwarmNotice` were two events to the
+frontend. Five dialects for one sentence: a member tells the room
+something and whoever cares subscribes.
+
+The operator's `broadcast` module is lifted in as `broadcast/`, its
+comments with it, and placed on the event loop. `Room`, `Member`,
+`Transport`, `Message`, `Encoder`; the transaction, the state machine,
+the WAL, the queue, the clock and the client stay behind, because rig's
+durable truth is the todo log and the decision store and one slot needs
+no quorum. A message carries a `core.Event`, so the kinds are the types
+rig already has; a message with none is a heartbeat. The loop transport
+posts a send as one closure at the room's priority and acks on the
+post: the queue is the durability, an event stays until the consumer
+runs it, no buffer is sized, and a second heartbeat before the first
+ran is not posted. `Broadcast` fans out with one ack per member and
+names the members that missed it. Members thread the caller's context;
+the room takes its transport in the constructor; `lo` goes, the package
+is stdlib over `core` and `evt`.
+
+This commit is the package and its tests, nothing wired. The commits
+that follow in this release: the kernel owns the engine and hands it to
+the loop and the room (SPEC_EVT's named reopening, fleet below input
+and the turn's own events in priority); the swarm moves onto the room
+and its roster, heartbeat field, emitter and goroutines leave; the
+frontends subscribe and the two notice events become one message; the
+delegate and the review fire cross a pipe transport through the
+encoder, and the stdout scrape leaves.
+
 ## [2.10.2]: claim says what claim does
 
 The todo description's claim clause read "the next available task" — a

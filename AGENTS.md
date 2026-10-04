@@ -268,6 +268,11 @@ that is harder than writing a lot, and it is the bar.
 - `store/{rem,scheduler,state,todo}/metadata`: hand-written container
   metadata: the source for the generated `ddl`/`domain` accessors. Edit
   and regenerate; never hand-edit the generated projections.
+- `broadcast`: the fleet's message seams (2.11.0), lifted from the
+  operator's module onto the event loop: a `Room` of `Member`s over a
+  `Transport`, a `Message` with origin, health and a `core.Event`, none
+  being a heartbeat; a send is a post at the room's priority and the
+  queue is the durability.
 - `tool`: the registry of the model's words: `registry.json`, embedded,
   one entry per native tool (`name`, `enabled`, `what`, `guidelines`,
   `reply`, `schema`); `Definition` is the interface a tool embeds for

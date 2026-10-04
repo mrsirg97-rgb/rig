@@ -1,0 +1,96 @@
+package broadcast
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/mrsirg97-rgb/rig/v2/core"
+)
+
+/*
+Encoder
+
+	Encoder provides the means for a Transport that crosses a process boundary to serialize and deserialize the Room Messages.
+	the kind names the core event the payload is; a frame with no kind is a heartbeat.
+*/
+type Encoder interface {
+	Encode(message Message) ([]byte, error)
+	Decode(encoded []byte) (Message, error)
+}
+
+type encoder struct{}
+
+type JSONMessage struct {
+	Origin  int64           `json:"origin"`
+	Ok      bool            `json:"ok"`
+	Kind    string          `json:"kind,omitempty"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+func NewJSONEncoder() Encoder {
+	return &encoder{}
+}
+
+func (e *encoder) Encode(message Message) ([]byte, error) {
+	frame := JSONMessage{Origin: message.Origin(), Ok: message.Ok()}
+	if ev := message.Event(); ev != nil {
+		kind, ok := kindOf(ev)
+		if !ok {
+			return nil, fmt.Errorf("broadcast: %T does not cross a transport", ev)
+		}
+		payload, err := json.Marshal(ev)
+		if err != nil {
+			return nil, err
+		}
+		frame.Kind, frame.Payload = kind, payload
+	}
+	return json.Marshal(frame)
+}
+
+func (e *encoder) Decode(encoded []byte) (Message, error) {
+	var frame JSONMessage
+	if err := json.Unmarshal(encoded, &frame); err != nil {
+		return nil, err
+	}
+	if frame.Kind == "" {
+		return NewMessage(frame.Origin, frame.Ok), nil
+	}
+	ev, err := eventOf(frame.Kind, frame.Payload)
+	if err != nil {
+		return nil, err
+	}
+	return NewMessage(frame.Origin, frame.Ok, ev), nil
+}
+
+const (
+	kindNotice      = "notice"
+	kindSwarmNotice = "swarm_notice"
+	kindSwarmStatus = "swarm_status"
+)
+
+func kindOf(ev core.Event) (string, bool) {
+	switch ev.(type) {
+	case core.Notice:
+		return kindNotice, true
+	case core.SwarmNotice:
+		return kindSwarmNotice, true
+	case core.SwarmStatus:
+		return kindSwarmStatus, true
+	}
+	return "", false
+}
+
+func eventOf(kind string, payload json.RawMessage) (core.Event, error) {
+	switch kind {
+	case kindNotice:
+		var ev core.Notice
+		return ev, json.Unmarshal(payload, &ev)
+	case kindSwarmNotice:
+		var ev core.SwarmNotice
+		return ev, json.Unmarshal(payload, &ev)
+	case kindSwarmStatus:
+		var ev core.SwarmStatus
+		return ev, json.Unmarshal(payload, &ev)
+	}
+	return nil, fmt.Errorf("broadcast: unknown kind %q", kind)
+}
