@@ -43,7 +43,6 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		mw = append(mw, decision.Site(r.proposals))
 	}
 	if r.decide != nil {
-		mw = append(mw, decision.Guide())
 		mw = append(mw, remapi.Guide())
 	}
 	return mw

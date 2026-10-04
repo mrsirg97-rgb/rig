@@ -119,7 +119,7 @@ func TestReadDescriptionNamesWhatEditChecksAgainst(t *testing.T) {
 	desc := file.Read().Description()
 	for _, want := range []string{
 		"the native way to look at a file",
-		"the edit tool checks against the output of read",
+		"edit checks against its content",
 		"exactly as edit will match it",
 	} {
 		if !strings.Contains(desc, want) {

@@ -71,15 +71,15 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	d := h.tool.Description()
 	for _, want := range []string{
-		"come from list: copy them, never invent them",
-		"sending waits on the queue; if a different model is resident it skips and names it",
+		"come from `list` — copy them, never invent them",
+		"if a different model is resident at fire time the send skips and names it",
 		"eviction policy falls on the operator",
-		"omit it and the job runs on whatever is resident (default qwen3.8-workers when nothing is)",
+		"omit it and the job runs on what is resident",
 		"until their notes clear",
 		"re-create it to retry",
-		"self-deletes after one fire",
+		"self-deletes after firing",
 		"each job runs in its own workspace",
-		"repair re-derives a crontab",
+		"`repair` re-derives a crontab",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing voice fragment: %q", want)
@@ -282,8 +282,8 @@ func TestExecRepairAllWalksEveryDriftingJob(t *testing.T) {
 func TestModelSurfaceCarriesTheResidentRule(t *testing.T) {
 	h := newHarnessModel(t, "/ws/sa-model", "brain")
 	d := h.tool.Description()
-	if !strings.Contains(d, "omit it and the job runs on whatever is resident (default brain when nothing is)") {
-		t.Fatalf("description = %q, want the resident rule with the default named", d)
+	if !strings.Contains(d, "omit it and the job runs on what is resident") {
+		t.Fatalf("description = %q, want the resident rule in words; the schema names the default", d)
 	}
 	var schema struct {
 		Properties map[string]any `json:"properties"`

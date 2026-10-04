@@ -231,7 +231,7 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	d := tool.Description()
 	for _, want := range []string{
-		"the task queue for the current workspace.",
+		"the task queue for the current workspace",
 		"different workspace than the one you started in.",
 		"scoped by its workspace ([rig]).",
 	} {
@@ -259,7 +259,7 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 
 func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	if d := tool.Description(); !strings.Contains(d, "a task can wait for another: set requires on the one that waits.") {
+	if d := tool.Description(); !strings.Contains(d, "`requires` makes a task wait on another") {
 		t.Fatalf("the description misses the one-line link sentence: %q", d)
 	}
 	var s struct {

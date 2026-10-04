@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
@@ -20,8 +19,6 @@ const SiteDecide = "decide"
 const decideQuestionID = "item"
 
 const unsureUnder = 0.5
-
-const decideGuideline = "when a step is sorting or filtering many items against a question you can state, hand the items to decide instead of reading them."
 
 type DecideOptions struct {
 	Decider  Decider
@@ -299,13 +296,3 @@ func firstLine(s string) string {
 	}
 	return s
 }
-
-func Guide() core.ToolMiddleware {
-	return guideLink{}
-}
-
-type guideLink struct{}
-
-func (guideLink) Wrap(next core.ToolExec) core.ToolExec { return next }
-
-func (guideLink) Guidelines() string { return decideGuideline }

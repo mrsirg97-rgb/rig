@@ -93,18 +93,18 @@ func TestADecideToolJoinsTheTable(t *testing.T) {
 	}
 }
 
-func TestADecideToolJoinsTheGuideline(t *testing.T) {
+func TestAWiredDecideBringsThePackGuideline(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.decide = wiredDecide(t, nil, nil)
 	k := wire(r)
-	if !strings.Contains(r.fullSystem, "hand the items to decide") {
-		t.Fatalf("the guideline joins the system prompt:\n%s", r.fullSystem)
+	if strings.Contains(r.fullSystem, "hand the items to decide") {
+		t.Fatalf("the decide trigger lives in the tool, not the system prompt:\n%s", r.fullSystem)
 	}
 	if !strings.Contains(r.fullSystem, "pack the task before reading files for it") {
 		t.Fatalf("the pack guideline joins the system prompt:\n%s", r.fullSystem)
 	}
-	if len(k.Middleware) != 11 {
-		t.Fatalf("the guidelines are two links: %d", len(k.Middleware))
+	if len(k.Middleware) != 10 {
+		t.Fatalf("the guideline is one link: %d", len(k.Middleware))
 	}
 }
 

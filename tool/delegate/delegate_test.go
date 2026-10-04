@@ -308,7 +308,7 @@ func TestDelegateDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	d := tool.Description()
 	for _, want := range []string{
 		"the workspace must be under the session's workspace or the rig home",
-		"the worker model defaults to",
+		"a model that is not resident refuses, naming the holder",
 	} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing %q:\n%s", want, d)
