@@ -2,8 +2,10 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 
@@ -39,6 +41,12 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	total := 0
 	for _, c := range cands {
 		item, err := candidateItem(root, c)
+		if errors.Is(err, os.ErrNotExist) {
+			if derr := dropFile(ctx, db, c.File); derr != nil {
+				q.say("%v", derr)
+			}
+			continue
+		}
 		if err != nil {
 			q.say("%v", err)
 			continue

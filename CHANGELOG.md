@@ -1,4 +1,18 @@
 # Changelog
+## [2.11.5]: the map forgets a vanished file, and says a sentence once
+
+The 2.11.4 walk left a 1.3 GB graph store behind for the home directory
+as a project, with eighteen thousand symbol rows whose files lived
+under some other root. Every pack-by-task walked those rows, failed to
+open each file, and said each one, on every call. Two rules close it. A
+symbol whose file is gone is a stale row, not news: the live refresh
+and the task pack drop the file's rows the moment they find it missing,
+and say nothing, since the write path already did that for an index of
+a deleted file. And the queue says any one sentence once for its life,
+so a fact that holds for a thousand rows is one line in the transcript.
+The home store itself was removed by hand; nothing recreates it, since
+`index` refuses a directory that is not a project.
+
 ## [2.11.4]: the map stays inside the project and says a thing once
 
 Two walks of the wrong size, found the same evening. `rem index` from a
