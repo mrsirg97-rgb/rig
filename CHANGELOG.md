@@ -1,4 +1,57 @@
 # Changelog
+## [2.11.2]: the setters leave
+
+The quality pass every few versions, this one on what 2.11.0 and
+2.11.1 grew. Nothing changed behavior; the suite is the receipt, 54
+packages with the race on.
+
+The setters died. AGENTS.md has said from the start that a value is
+whole when it is constructed, and five survivors disagreed:
+`graph.Queue.SetScorer` and `SetPackCaps`, `decision.Decide.SetParallel`
+and `PackScorer.SetParallel`, `tool/python`'s `SetCwd`. Each was called
+exactly once, at wiring; each was a constructor argument that was never
+given one. The queue takes its pack caps and its scorer as options now,
+and the decision stack stands beside the frontend it reads: the
+decider, the decide tool, both queues, the reviewer and the pack scorer
+are built together, and the queue and the rem tool are constructed
+after them, so the scorer exists at the queue's construction site and
+the reviewer's land is the reviewer's own method, not a closure over a
+variable that filled in later. The kernel's `WithParallel` still bounds the tool batch; it no
+longer restamps the decision fan-out on the way through, because
+nothing in the tree ever set it and the stamp was always the default.
+An embedder who set it saw the decision tools follow; in-tree nobody
+could. Named, not changed.
+
+`middleware/toolset`'s table had two doors where its contract is one:
+`Set` for the tools and `SetPlugins` for the provenance, called as a
+pair by the wire and the plugin reload, so a reader between them saw
+new tools with stale names. `Swap(tools, names...)` is the one atomic
+door; the wire, the reload and the model switch state the whole truth
+in one lock. `store/graph`'s 692-line queue.go split by responsibility:
+the pipeline stays in queue.go, the pack reads are pack.go, the live
+refresh is live.go.
+
+And the one duplication worth a package: `store/rem` and `store/graph`
+carried byte-identical `tokenize`, `gramsOf` and `ftsQuery` — the two
+stores' fuzzy arms spoke two copies of one contract. `store/fts` is the
+leaf now; a token, a gram or a reserved operator means the same thing
+in both stores, and the tests that pinned the shape moved with it.
+
+The tests got the same pass where the code was touched. The reviewer's
+bite tests waited on 200 ms sleeps for fires the fake had already
+signaled; `waitFires` receives the signal instead. The queue's
+unbounded-caps refusal is pinned at construction. The stamped-parallel,
+born-cwd and swap-atomic invariants carry their names. One e2e builds
+the binary, points `RIG_DECISION_URL` at a stub and asserts the run
+reaches the model server — the first cut of this pass shadowed the
+decider above the root and refused every start with a decision URL,
+and no test wired main, so the review caught what the suite could not.
+
+Named, not changed: `r.pluginTools` still holds the discovery-time
+plugins after a reload, so a model switch after a reload rebuilds the
+table from the stale slice. One field away from a fix, and a behavior
+change — the operator's call.
+
 ## [2.11.1]: three rows a bite
 
 Three things after the 2.11.0 tag. `reviewBatch` defaults to 3, down

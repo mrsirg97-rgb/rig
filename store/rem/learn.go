@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/fts"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
 	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
 )
@@ -205,7 +206,7 @@ func storeOrTouch(bound context.Context, sh writeShape, cwd string) (*remdom.Mem
 	if err != nil {
 		return nil, false, fmt.Errorf("rem: insert: %w", err)
 	}
-	if err := insertGrams(bound, id, gramsOf(sh.content)); err != nil {
+	if err := insertGrams(bound, id, fts.GramsOf(sh.content)); err != nil {
 		return nil, false, err
 	}
 	if ftsEnabled() {

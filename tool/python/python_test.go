@@ -567,8 +567,7 @@ func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) 
 func TestKernelIsBornInTheConfiguredCwd(t *testing.T) {
 	requireKernel(t)
 	dir := t.TempDir()
-	tool := New()
-	tool.SetCwd(dir)
+	tool := New(dir)
 	defer tool.Close()
 	payload, _ := json.Marshal(map[string]any{"code": "import os; os.getcwd()"})
 	text, err := tool.Exec(context.Background(), payload)
@@ -580,11 +579,10 @@ func TestKernelIsBornInTheConfiguredCwd(t *testing.T) {
 	}
 }
 
-func TestSetCwdSeam(t *testing.T) {
+func TestNoCwdInheritsTheProcessDirectory(t *testing.T) {
 	seam := New()
-	seam.SetCwd("/x/y")
-	if seam.k.cwd != "/x/y" {
-		t.Fatalf("cwd = %q", seam.k.cwd)
+	if seam.k.cwd != "" {
+		t.Fatalf("cwd = %q, want the process directory", seam.k.cwd)
 	}
 }
 

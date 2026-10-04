@@ -364,13 +364,12 @@ func TestThePackScorerNeedsADeciderAndABound(t *testing.T) {
 	}
 }
 
-func TestThePackScorerTakesTheKernelParallel(t *testing.T) {
+func TestTheStampedParallelBoundsTheFanOut(t *testing.T) {
 	o := &packOverlap{}
-	s, err := decision.NewPackScorer(o, nil, nil, nil, 8)
+	s, err := decision.NewPackScorer(o, nil, nil, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.SetParallel(1)
 	if _, err := s.Score(context.Background(), "the task", []string{"one", "two"}); err != nil {
 		t.Fatal(err)
 	}

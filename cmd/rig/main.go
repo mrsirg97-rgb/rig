@@ -50,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.11.1"
+const Version = "2.11.2"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -235,11 +235,10 @@ func main() {
 
 	row := resolveModel(modelID, cfg.Models)
 
-	py := pythontool.New()
+	py := pythontool.New(cwd)
 	if python := envOr("RIG_PYTHON", cfg.Settings.Python); python != "" {
-		py = pythontool.NewWith(python, pythontool.DefaultHost())
+		py = pythontool.NewWith(python, pythontool.DefaultHost(), cwd)
 	}
-	py.SetCwd(cwd)
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
 
@@ -374,7 +373,6 @@ func main() {
 	defer decdb.DB.Close()
 
 	engine, room := newFleet()
-	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph))
 	voice := room.Add(rig.MemberDecision)
 
 	remPath := remstore.FilePath(cfgDir)
@@ -423,6 +421,10 @@ func main() {
 		swapURL = v
 	}
 
+	drec := decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	r := &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
@@ -433,6 +435,7 @@ func main() {
 		rounds:     roundsN,
 		resultCap:  resultCapN,
 		sdb:        sdb,
+		drec:       drec,
 		remDB:      rdb,
 		cwd:        cwd,
 		home:       userHome(),
@@ -449,14 +452,12 @@ func main() {
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-			"rem":    remapi.New(rdb, gq),
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
 		pluginTools: pluginTools,
 		py:          py,
 		pluginsHome: cfgDir,
-		graph:       gq,
 		pluginInfos: pluginInfos,
 		engine:      engine,
 		room:        room,
@@ -467,8 +468,6 @@ func main() {
 		r.tools["verdict"] = verdicttool.New(fleet)
 	}
 	r.listen()
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
 	if delegateOn {
 		r.tools["delegate"] = delegate.New(delegate.Opts{
@@ -524,7 +523,6 @@ func main() {
 	}
 
 	r.natives = native
-	r.drec = decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
 	r.eco = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
@@ -573,6 +571,7 @@ func main() {
 		fe = cli.New(os.Stdin, os.Stdout, cli.WithCommands(command.All(), env))
 	}
 
+	var packScorer graph.Scorer
 	if decisionURL != "" {
 		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
 		if derr != nil {
@@ -591,6 +590,7 @@ func main() {
 		r.decide = dtool
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
+		var land func()
 		if headless {
 			r.decQ = decision.NewQueue(dec, sink, nil, voice)
 		} else {
@@ -599,10 +599,7 @@ func main() {
 				cfg.Settings.ReviewBatchOrDefault(), row, room)
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, rev.Land, voice)
-		}
-		var land func()
-		if r.decRev != nil {
-			land = r.decRev.Land
+			land = rev.Land
 		}
 		psc, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
 		if perr != nil {
@@ -610,9 +607,16 @@ func main() {
 			os.Exit(1)
 		}
 		r.packScorer = psc
-		gq.SetScorer(psc)
+		packScorer = psc
 		r.proposals = r.decQ
 	}
+	opts := []graph.Option{graph.WithPackCaps(graph.ReadCap, resultCapN)}
+	if packScorer != nil {
+		opts = append(opts, graph.WithScorer(packScorer))
+	}
+	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph), opts...)
+	r.graph = gq
+	r.tools["rem"] = remapi.New(rdb, gq)
 
 	session, err := sessionFor(*resumeID, func(id string) (*core.Session, error) {
 		return state.Resume(context.Background(), sdb, id)

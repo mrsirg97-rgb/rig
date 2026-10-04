@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/fts"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
 	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
 )
@@ -131,7 +132,7 @@ func recallScoped(bound context.Context, scopes []string, in RecallInput, k int)
 	cap := k * armCapFactor
 	var arms [][]armHit
 	if ftsEnabled() {
-		if tokens := tokenize(in.Query); len(tokens) > 0 {
+		if tokens := fts.Tokenize(in.Query); len(tokens) > 0 {
 			hits, err := semanticArm(bound, tokens, scopes, in.Kind, cap)
 			if err != nil {
 				return nil, err
@@ -139,7 +140,7 @@ func recallScoped(bound context.Context, scopes []string, in RecallInput, k int)
 			arms = append(arms, hits)
 		}
 	}
-	if grams := gramsOf(in.Query); len(grams) > 0 {
+	if grams := fts.GramsOf(in.Query); len(grams) > 0 {
 		hits, err := fuzzyArm(bound, grams, scopes, in.Kind, cap)
 		if err != nil {
 			return nil, err
@@ -268,7 +269,7 @@ func semanticArm(bound context.Context, tokens []string, scopes []string, kind s
 		  AND (%s IS NULL OR m.kind = %s)
 		ORDER BY rank ASC LIMIT %s`, matchPh, scopePh, kind1, kind2, limitPh)
 	args := make([]any, 0, len(scopes)+4)
-	args = append(args, ftsQuery(tokens))
+	args = append(args, fts.Query(tokens))
 	for _, s := range scopes {
 		args = append(args, s)
 	}

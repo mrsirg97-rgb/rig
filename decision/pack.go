@@ -48,13 +48,6 @@ func NewPackScorer(dec Decider, sink Sink, land func(), voice broadcast.Member, 
 	return &PackScorer{dec: dec, sink: sink, land: land, voice: voice, parallel: parallel}, nil
 }
 
-func (s *PackScorer) SetParallel(n int) {
-	if n <= 0 {
-		panic(fmt.Sprintf("decision: parallel %d: the fan-out needs a bound", n))
-	}
-	s.parallel = n
-}
-
 func (s *PackScorer) Score(ctx context.Context, task string, items []string) ([]PackVerdict, error) {
 	states := make([]string, len(items))
 	for i, item := range items {

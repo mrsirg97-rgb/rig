@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/fts"
 )
 
 var noiseTokens = []string{
@@ -19,7 +20,7 @@ func TestFtsArmOrsTokensThroughQueryLength(t *testing.T) {
 	db := newDB(t)
 	content := "the scheduler folds drift by rereading the crontab every hour"
 	learn(t, db, "/ws1", content, nil)
-	tokens := tokenize(content)
+	tokens := fts.Tokenize(content)
 	for n := 1; n <= 20; n++ {
 		parts := make([]string, 0, n)
 		for i := 0; i < n; i++ {

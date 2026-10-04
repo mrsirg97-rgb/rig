@@ -110,3 +110,29 @@ Findings (green unless noted):
   risk.
 
 No runtime defect was found worth patching in this pass.
+
+## the 2.11.2 pass
+
+The per-version quality pass, recorded in the same spirit: what
+collapsed, what stays.
+
+- The five setters that survived the earlier passes died: the graph
+  queue's caps and scorer, the decision fan-out pair, the python cwd.
+  Each had exactly one call site, at wiring; each is a constructor
+  argument now. `WithParallel`'s restamp of the decision fan-out went
+  with them — nothing in the tree ever set it, so the stamp was always
+  the default.
+- `middleware/toolset`'s two swap doors are one atomic `Swap`; the
+  wire, the plugin reload and the model switch state tools and
+  provenance together.
+- `store/graph/queue.go` (692 lines) split by responsibility: the
+  pipeline in `queue.go`, the pack reads in `pack.go`, the live
+  refresh in `live.go`.
+- The byte-identical `tokenize`/`gramsOf`/`ftsQuery` pair in
+  `store/rem` and `store/graph` became `store/fts`, the one stdlib
+  leaf both fuzzy arms speak.
+- Remaining, named: `r.pluginTools` goes stale across a plugin reload
+  (a model switch then rebuilds the live table from the stale slice).
+  One field from a fix that changes behavior, so the operator's call;
+  the `normalizePath` mirror named here earlier is gone — perm no
+  longer carries the copy.

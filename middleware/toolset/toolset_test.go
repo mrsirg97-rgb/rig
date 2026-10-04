@@ -67,7 +67,7 @@ func TestResolveSeesASwapOnTheNextCall(t *testing.T) {
 	}
 
 	forged := &stubTool{name: "forged", result: "forged ran"}
-	tbl.Set(append(tbl.List(), forged))
+	tbl.Swap(append(tbl.List(), forged))
 	out, err := exec(ctx, core.ToolCall{Name: "forged"})
 	if err != nil || out != "forged ran" {
 		t.Fatalf("the swapped-in tool must execute on the next call: (%q, %v)", out, err)
@@ -76,7 +76,7 @@ func TestResolveSeesASwapOnTheNextCall(t *testing.T) {
 		t.Fatalf("the surviving tool must keep executing: (%q, %v)", out, err)
 	}
 
-	tbl.Set([]core.Tool{bash})
+	tbl.Swap([]core.Tool{bash})
 	if _, err := exec(ctx, core.ToolCall{Name: "forged"}); err == nil {
 		t.Fatal("a dropped tool must not execute after the swap")
 	}
@@ -124,7 +124,7 @@ func TestCarryStampsTheRequestPerCall(t *testing.T) {
 		t.Fatalf("the first call's array = %v, want the table's (bash)", got)
 	}
 
-	tbl.Set(append(tbl.List(), forged))
+	tbl.Swap(append(tbl.List(), forged))
 	if ch, err := prov.Stream(ctx, core.Request{Tools: stale}); err != nil {
 		t.Fatal(err)
 	} else {
@@ -140,17 +140,17 @@ func TestCarryStampsTheRequestPerCall(t *testing.T) {
 	}
 
 	if got := names(inner.stamped[0]); len(got) != 1 || got[0] != "bash" {
-		t.Fatalf("the earlier call's array changed after the Set: %v", got)
+		t.Fatalf("the earlier call's array changed after the swap: %v", got)
 	}
 }
 
-func TestSetIsAtomic(t *testing.T) {
+func TestSwapIsAtomic(t *testing.T) {
 	a := &stubTool{name: "a"}
 	b := &stubTool{name: "b"}
 	tbl := New(a)
 	for i := 0; i < 1000; i++ {
-		tbl.Set([]core.Tool{a, b})
-		tbl.Set([]core.Tool{a})
+		tbl.Swap([]core.Tool{a, b})
+		tbl.Swap([]core.Tool{a})
 		list := tbl.List()
 		if len(list) == 0 || len(list) > 2 {
 			t.Fatalf("a partial list crossed: %d entries", len(list))
@@ -162,13 +162,13 @@ func TestIsPluginTracksTheSwap(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	tbl := New(bash)
 	if tbl.IsPlugin("forged") {
-		t.Fatal("no plugin is live before SetPlugins")
+		t.Fatal("no plugin is live before the swap")
 	}
 	if tbl.IsPlugin("bash") {
 		t.Fatal("a native must never answer as a plugin")
 	}
 
-	tbl.SetPlugins("forged")
+	tbl.Swap(tbl.List(), "forged")
 	if !tbl.IsPlugin("forged") {
 		t.Fatal("an approved plugin must answer live")
 	}
@@ -176,7 +176,7 @@ func TestIsPluginTracksTheSwap(t *testing.T) {
 		t.Fatal("the door must not admit a native")
 	}
 
-	tbl.SetPlugins()
+	tbl.Swap(tbl.List())
 	if tbl.IsPlugin("forged") {
 		t.Fatal("a dropped plugin must stop being admitted")
 	}
@@ -186,7 +186,7 @@ func TestNativeSpecsExcludesPlugins(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	networth := &stubTool{name: "networth"}
 	tbl := New(bash, networth)
-	tbl.SetPlugins("networth")
+	tbl.Swap(tbl.List(), "networth")
 
 	if got := names(tbl.NativeSpecs()); len(got) != 1 || got[0] != "bash" {
 		t.Fatalf("NativeSpecs = %v, want the natives only (bash)", got)
@@ -196,8 +196,7 @@ func TestNativeSpecsExcludesPlugins(t *testing.T) {
 	}
 
 	flip := &stubTool{name: "flip_calc"}
-	tbl.Set([]core.Tool{bash, networth, flip})
-	tbl.SetPlugins("networth", "flip_calc")
+	tbl.Swap([]core.Tool{bash, networth, flip}, "networth", "flip_calc")
 	if got := tbl.PluginNames(); len(got) != 2 || got[0] != "flip_calc" || got[1] != "networth" {
 		t.Fatalf("PluginNames after the swap = %v, want the sorted live set", got)
 	}
@@ -218,7 +217,7 @@ func TestPluginLookupRefusesNatives(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	forged := &stubTool{name: "forged"}
 	tbl := New(bash, forged)
-	tbl.SetPlugins("forged")
+	tbl.Swap(tbl.List(), "forged")
 	if _, ok := tbl.Plugin("bash"); ok {
 		t.Fatal("a native must not resolve through the plugin lookup")
 	}
@@ -228,7 +227,7 @@ func TestPluginLookupRefusesNatives(t *testing.T) {
 	if _, ok := tbl.Tool("bash"); !ok {
 		t.Fatal("the full lookup still serves natives")
 	}
-	tbl.SetPlugins()
+	tbl.Swap(tbl.List())
 	if _, ok := tbl.Plugin("forged"); ok {
 		t.Fatal("a dropped plugin must stop resolving")
 	}

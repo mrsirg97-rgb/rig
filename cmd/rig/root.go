@@ -125,9 +125,8 @@ func wire(r *root) *rig.Kernel {
 			}
 			r.tools["plugin"] = plugins.NewDoor(r.live, redo, r.eco)
 		}
-		r.live.Set(append(r.tableTools(), r.pluginTools...))
+		r.live.Swap(append(r.tableTools(), r.pluginTools...), r.pluginNames()...)
 	}
-	r.live.SetPlugins(r.pluginNames()...)
 	if r.natives == nil {
 		r.natives = make(map[string]bool)
 		for _, name := range effectiveNativeNames() {
@@ -158,15 +157,6 @@ func wire(r *root) *rig.Kernel {
 		rig.WithEngine(r.engine),
 	)
 	k.Session = r.session
-	if r.graph != nil {
-		r.graph.SetPackCaps(graph.ReadCap, r.resultCap)
-	}
-	if r.decide != nil {
-		r.decide.SetParallel(k.EffectiveParallel())
-	}
-	if r.packScorer != nil {
-		r.packScorer.SetParallel(k.EffectiveParallel())
-	}
 	r.k = k
 	return k
 }
