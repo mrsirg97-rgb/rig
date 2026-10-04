@@ -101,6 +101,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.commit(fault)
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
+		t.kickNoticesLocked()
 		t.mu.Unlock()
 	case core.Compacting:
 
@@ -132,6 +133,7 @@ func (t *tui) Notify(ev core.Event) {
 		t.commit(chunk)
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
+		t.kickNoticesLocked()
 		t.mu.Unlock()
 	case core.TurnEnd:
 
@@ -166,9 +168,12 @@ func (t *tui) Notify(ev core.Event) {
 		}
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
+		t.kickNoticesLocked()
 		t.mu.Unlock()
 	case core.Notice:
-		t.commit(RenderNotice(t.theme, e) + "\n")
+		t.mu.Lock()
+		t.enqueueNoticeLocked(e)
+		t.mu.Unlock()
 	case core.SwarmStatus:
 		t.mu.Lock()
 		t.swarm = e
@@ -253,7 +258,7 @@ type liveBlocks struct {
 func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap int) ([]string, string, int, liveBlocks) {
 	var blocks liveBlocks
 	var lines []string
-	if t.turnLive || t.compacting {
+	if t.turnLive || t.compacting || t.noticing {
 
 		if pl, rows := t.pendingBlockLocked(pendCap); rows > 0 {
 			blocks.pendRows = rows

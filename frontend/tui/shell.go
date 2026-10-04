@@ -37,6 +37,9 @@ type tui struct {
 	showReasoning bool
 	turnLive      bool
 	compacting    bool
+	notices       []core.Notice
+	noticing      bool
+	noticeFrame   int
 
 	turnEstablished bool
 	reading         bool

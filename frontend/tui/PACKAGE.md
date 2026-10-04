@@ -41,14 +41,24 @@ width); no core or loop line (decision 10).
   `WithStatusTick` the Input loop re-reads it every d while idle, and
   the region redraws only when the rows changed (zero is off, and
   rig's own main never sets it)).
-- **The swarm band and the notice line** (`swarm.go`): `RenderSwarmBand`
+- **Notices breathe in the indicator's row** (`frame.go`, 2.11.7): a
+  `core.Notice` never commits to the transcript. It joins a queue
+  (identical notices collapse, no size); when the row is idle, no turn
+  live and no compaction, the oldest takes the action indicator's exact
+  row and shape, breathes in once on the ember's curve in its level's
+  slot (`error` red, `success` green, `text` white) and is gone; the
+  next follows. While the model works the indicator owns the row and
+  notices wait. The breath rides the one frame ticker; a notice on an
+  idle row starts it for its own breath and the last breath stops it.
+- **The swarm band** (`swarm.go`): `RenderSwarmBand`
   folds the latest `SwarmStatus` into one row per role below the status
   rows, behind a short dim rule (four cells), while a swarm runs — the
   densified counts (`+pending ✓done ✕failed`, the review clock for the
   reviewer row) ride the theme's glyph switch, zero rows and no rule
   when nothing runs, one row for a delegate; the swarm's decision lines
-  are `Notice`s with source `swarm` and go through `RenderNotice` like
-  every other (SPEC_SWARM 7; `RenderSwarmNotice` left in 2.11.0).
+  are `Notice`s with source `swarm` and breathe like every other
+  (SPEC_SWARM 7; `RenderSwarmNotice` left in 2.11.0, `RenderNotice` in
+  2.11.7).
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,
   both doors; the tool-result path and the command path commit
   byte-equal blocks minus the opening line (decision 6).

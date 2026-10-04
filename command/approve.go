@@ -46,5 +46,8 @@ func (approveCmd) Run(ctx context.Context, args string, env any) (string, error)
 	if label == "" {
 		label = "auto"
 	}
-	return "approve: " + label, nil
+	return choices("2 modes", label, []string{"auto", "manual"}, map[string]string{
+		"auto":   "runs tools without asking",
+		"manual": "waits for your y/n before every call that changes something",
+	}), nil
 }

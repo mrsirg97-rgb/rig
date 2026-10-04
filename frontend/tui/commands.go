@@ -143,6 +143,10 @@ func (t *tui) LiveTurn() bool {
 }
 
 func (t *tui) activityLineLocked() string {
+	if !(t.turnLive || t.compacting) && t.noticing && len(t.notices) > 0 {
+		n := t.notices[0]
+		return t.theme.BreathPaint(noticeSlot(n.Level), t.noticeFrame, n.Source+": "+n.Text)
+	}
 	label := t.phase
 	if label == "" {
 		label = "thinking"

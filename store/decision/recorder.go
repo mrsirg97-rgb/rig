@@ -37,6 +37,6 @@ func (r Recorder) Record(ctx context.Context, f decision.Final) {
 		Decider:    f.Decider,
 	})
 	if err != nil && r.Voice != nil {
-		broadcast.Say(r.Voice, "decision", fmt.Sprintf("record %s: %v", f.Site, err))
+		broadcast.Say(r.Voice, "decision", fmt.Sprintf("record %s: %v", f.Site, err), core.LevelError)
 	}
 }

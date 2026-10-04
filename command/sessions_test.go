@@ -192,14 +192,15 @@ func TestSessionsShow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "[1] user: fix the flaky test\n" +
-		"[2] assistant: let me look\n" +
+	want := "session s1 · 5 messages\n" +
+		"  1 user: fix the flaky test\n" +
+		"  2 assistant: let me look\n" +
 		"    thinking: the guard test is the flaky one…\n" +
 		"    call c7 bash go test ./middleware/\n" +
-		"[3] tool (c7): ok  middleware/guard 0.4s\n" +
-		"[4] assistant: fixed the race in the budget map\n" +
-		"[5] user: [compaction] the older transcript, summarized\n" +
-		"line two of the summary\n"
+		"  3 tool c7: ok  middleware/guard 0.4s\n" +
+		"  4 assistant: fixed the race in the budget map\n" +
+		"  5 user: [compaction] the older transcript, summarized\n" +
+		"    line two of the summary"
 	if out != want {
 		t.Fatalf("the show render must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}

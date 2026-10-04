@@ -154,18 +154,15 @@ func renderRemList(rows []RemRow, limit int, verb string) string {
 }
 
 func renderRemShow(r RemRow) string {
-	head := fmt.Sprintf("m%d [%.2f] %s · %s", r.ID, r.Strength, r.ScopeLabel, r.Kind)
+	head := fmt.Sprintf("m%d · %s · %s", r.ID, r.Kind, r.ScopeLabel)
 	if r.Superseded != nil {
 		head += fmt.Sprintf(" · superseded by m%d", *r.Superseded)
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n", head)
-	fmt.Fprintf(&b, "created %s · strength %.2f · importance %.2f\n", ageOf(r.CreatedAt), r.Strength, r.Importance)
+	facts := [][2]string{{"created", fmt.Sprintf("%s · strength %.2f · importance %.2f", ageOf(r.CreatedAt), r.Strength, r.Importance)}}
 	if r.Source != "" {
-		fmt.Fprintf(&b, "source: %s\n", r.Source)
+		facts = append(facts, [2]string{"source", r.Source})
 	}
-	fmt.Fprintf(&b, "content:\n%s", indent(r.Content))
-	return b.String()
+	return detail(head, facts) + "\n" + strings.TrimRight(r.Content, "\n")
 }
 
 func ageOf(iso string) string {
@@ -192,12 +189,4 @@ func firstRunes(s string, n int) string {
 		return s
 	}
 	return string(rs[:n]) + "…"
-}
-
-func indent(s string) string {
-	var b strings.Builder
-	for _, line := range strings.Split(s, "\n") {
-		fmt.Fprintf(&b, "  %s\n", line)
-	}
-	return b.String()
 }

@@ -110,7 +110,7 @@ func TestRemShowAndForget(t *testing.T) {
 	if !strings.Contains(out, "the full memory content") || !strings.Contains(out, "m3") {
 		t.Fatalf("show must render the full row:\n%s", out)
 	}
-	if !strings.Contains(out, "source: s1") || !strings.Contains(out, "importance 0.50") {
+	if !strings.Contains(out, "  source  s1") || !strings.Contains(out, "importance 0.50") || !strings.HasPrefix(out, "m3 · ") {
 		t.Fatalf("show must carry the source and importance:\n%s", out)
 	}
 	out, err = byName["rem"].Run(context.Background(), "forget 3", env)

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const (
@@ -10,7 +12,7 @@ const (
 )
 
 func (t *tui) startFrameTickerLocked() {
-	if !(t.turnLive || t.compacting) || t.tickStop != nil {
+	if !(t.turnLive || t.compacting || t.noticing) || t.tickStop != nil {
 		return
 	}
 	if t.ticker == nil && t.ticks == nil {
@@ -22,7 +24,7 @@ func (t *tui) startFrameTickerLocked() {
 }
 
 func (t *tui) stopFrameTickerLocked() {
-	if t.turnLive || t.compacting || t.tickStop == nil {
+	if t.turnLive || t.compacting || t.noticing || t.tickStop == nil {
 		return
 	}
 	close(t.tickStop)
@@ -53,10 +55,11 @@ func (t *tui) tickLoop() {
 			t.mu.Lock()
 			dirty := t.dirty
 			t.dirty = false
-			live := (t.turnLive || t.compacting) && len(t.live.lines) > 0
+			live := (t.turnLive || t.compacting || t.noticing) && len(t.live.lines) > 0
 			if live && now.Sub(lastAnim) >= animPeriod {
 				lastAnim = now
 				t.frame++
+				t.breatheNoticeLocked()
 				dirty = true
 			}
 			if live && dirty {
@@ -85,4 +88,52 @@ func (t *tui) winchLoop() {
 			t.mu.Unlock()
 		}
 	}
+}
+
+func (t *tui) breatheNoticeLocked() {
+	if !t.noticing || t.turnLive || t.compacting {
+		return
+	}
+	t.noticeFrame++
+	if t.noticeFrame < emberBreathStops {
+		return
+	}
+	t.notices = t.notices[1:]
+	t.noticeFrame = 0
+	if len(t.notices) == 0 {
+		t.noticing = false
+		t.stopFrameTickerLocked()
+	}
+}
+
+func (t *tui) enqueueNoticeLocked(n core.Notice) {
+	for _, q := range t.notices {
+		if q == n {
+			return
+		}
+	}
+	t.notices = append(t.notices, n)
+	t.kickNoticesLocked()
+}
+
+func (t *tui) kickNoticesLocked() {
+	if t.noticing || len(t.notices) == 0 || t.turnLive || t.compacting {
+		return
+	}
+	t.noticing = true
+	t.noticeFrame = 0
+	t.startFrameTickerLocked()
+	if len(t.live.lines) > 0 {
+		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+	}
+}
+
+func noticeSlot(l core.Level) string {
+	switch l {
+	case core.LevelError:
+		return SlotError
+	case core.LevelSuccess:
+		return SlotSuccess
+	}
+	return SlotText
 }

@@ -27,9 +27,12 @@ no quorum. Imports `core` and `evt` only.
 - `member.go`: `Member`, a `Transport` placed in a `Room`: `Forward` to
   itself, `Publish` to the room, `Subscribe` to what arrives, `Leave`
   (closes the transport, leaves the room). Every call threads the
-  caller's context. `Say(member, source, text)` publishes one
+  caller's context. `Say(member, source, text, level...)` publishes one
   `core.Notice`: the one voice every background subsystem speaks with
-  (2.11.0; it replaced the `loud func(string)` closures).
+  (2.11.0; it replaced the `loud func(string)` closures); the level is
+  chosen where the text is made (2.11.7): error when something failed
+  or was refused, success when something the operator asked for
+  completed, info otherwise.
 - `room.go`: `Room`, built with the transport its members speak
   through (`NewRoom(id, func(origin) Transport)`): `Add`, `Remove`,
   sorted `Members`, and `Broadcast`, a fan-out to every other member

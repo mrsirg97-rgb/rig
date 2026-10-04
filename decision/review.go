@@ -219,7 +219,7 @@ func (r *Reviewer) settle(ctx context.Context, rows, all []ReviewRow, reviewer s
 }
 
 func (r *Reviewer) say(format string, args ...any) {
-	broadcast.Say(r.self, "decision", fmt.Sprintf(format, args...))
+	broadcast.Say(r.self, "decision", fmt.Sprintf(format, args...), core.LevelError)
 }
 
 const reviewContract = "Review these recorded decisions. For each row, judge the answer against the question and the state, then call the verdict tool naming the row: accept when the answer is right, reject with the corrected answer as the reason when it is wrong. Name every row; a row you do not name stays pending.\n"
