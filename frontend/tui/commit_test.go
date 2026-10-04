@@ -89,7 +89,7 @@ func TestToolBlockHeadTailElided(t *testing.T) {
 		}
 		body.WriteString("line" + itoa(i))
 	}
-	got := tui.RenderToolBlock(th, "bash", bashArgs(), body.String()+"\n", false, 400*time.Millisecond)
+	got := tui.RenderToolBlock(th, 0, "bash", bashArgs(), body.String()+"\n", false, 400*time.Millisecond)
 	lines := strings.Split(got, "\n")
 
 	want := []string{
@@ -127,7 +127,7 @@ func TestToolBlockFailureKeepsTheContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderToolBlock(th, "bash", bashArgs(), "command not found: flarn", true, 1*time.Second)
+	got := tui.RenderToolBlock(th, 0, "bash", bashArgs(), "command not found: flarn", true, 1*time.Second)
 	if !strings.Contains(got, th.Paint("error", "✕")) {
 		t.Fatalf("a fed-back failure renders the fail glyph:\n%s", got)
 	}
@@ -141,7 +141,7 @@ func TestToolBlockShortBodyUnhidden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderToolBlock(th, "bash", bashArgs(), "a\nb\nc", false, 100*time.Millisecond)
+	got := tui.RenderToolBlock(th, 0, "bash", bashArgs(), "a\nb\nc", false, 100*time.Millisecond)
 	if strings.Contains(got, "hidden") {
 		t.Fatalf("eight lines or fewer are not hidden:\n%s", got)
 	}
@@ -170,7 +170,7 @@ func TestToolDetailTable(t *testing.T) {
 		{"rem", `{"action":"recall","query":"pty"}`, ""},
 	}
 	for _, c := range cases {
-		got := tui.RenderToolBlock(th, c.name, json.RawMessage(c.args), "body", false, time.Second)
+		got := tui.RenderToolBlock(th, 0, c.name, json.RawMessage(c.args), "body", false, time.Second)
 		open := th.Paint("ember", "●") + " " + th.Paint("ember", c.name)
 		if c.want != "" {
 			open += th.Paint("dim", " · ") + th.Paint("text", c.want)
@@ -195,7 +195,7 @@ func TestWriteBlockPreviewsTheContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := json.RawMessage(`{"path":"a.go","content":"package a\n\nfunc A() {}\n"}`)
-	got := tui.RenderToolBlock(th, "write", args, "wrote 24 bytes to a.go", false, 50*time.Millisecond)
+	got := tui.RenderToolBlock(th, 0, "write", args, "wrote 24 bytes to a.go", false, 50*time.Millisecond)
 	want := []string{
 		th.Paint("ember", "●") + " " + th.Paint("ember", "write") + th.Paint("dim", " · ") + th.Paint("text", "a.go"),
 		th.Paint("dim", "  package a"), th.Paint("dim", "  "), th.Paint("dim", "  func A() {}"),
@@ -226,7 +226,7 @@ func TestEditBlockPreviewsOldAndNewElided(t *testing.T) {
 		old.WriteString("o" + itoa(i))
 	}
 	raw, _ := json.Marshal(map[string]any{"path": "b.go", "edits": []map[string]string{{"old": old.String(), "new": "n1\nn2"}}})
-	got := tui.RenderToolBlock(th, "edit", raw, "edited b.go", false, 50*time.Millisecond)
+	got := tui.RenderToolBlock(th, 0, "edit", raw, "edited b.go", false, 50*time.Millisecond)
 	want := []string{
 		th.Paint("ember", "●") + " " + th.Paint("ember", "edit") + th.Paint("dim", " · ") + th.Paint("text", "b.go"),
 		th.Paint("error", "- o1"), th.Paint("error", "- o2"), th.Paint("error", "- o3"),
@@ -253,11 +253,11 @@ func TestArgsPreviewOnlyForWriteAndEdit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderToolBlock(th, "read", json.RawMessage(`{"path":"a.go","content":"never shown"}`), "body", false, time.Second)
+	got := tui.RenderToolBlock(th, 0, "read", json.RawMessage(`{"path":"a.go","content":"never shown"}`), "body", false, time.Second)
 	if strings.Contains(got, "never shown") {
 		t.Fatalf("read must not preview its args:\n%s", got)
 	}
-	got = tui.RenderToolBlock(th, "edit", json.RawMessage(`{"path":"a.go","edits":[{"old":"","new":""}]}`), "edited", false, time.Second)
+	got = tui.RenderToolBlock(th, 0, "edit", json.RawMessage(`{"path":"a.go","edits":[{"old":"","new":""}]}`), "edited", false, time.Second)
 	if lines := strings.Split(got, "\n"); len(lines) != 3 {
 		t.Fatalf("empty sides must add no rows, got %d:\n%s", len(lines), got)
 	}
@@ -270,7 +270,7 @@ func TestEditBlockPreviewsEveryChunkRedThenGreen(t *testing.T) {
 	}
 	args := json.RawMessage(`{"path":"a.go","edits":[{"old":"x := 1\n","new":"x := 2\n"},{"old":"return x","new":"return x + 1\n"}]}`)
 	content := "chunk 1: replaced 7 byte(s)\nchunk 2: replaced 8 byte(s)\nedited a.go: replaced 15 byte(s)"
-	got := tui.RenderToolBlock(th, "edit", args, content, false, 10*time.Millisecond)
+	got := tui.RenderToolBlock(th, 0, "edit", args, content, false, 10*time.Millisecond)
 	want := []string{
 		th.Paint("ember", "●") + " " + th.Paint("ember", "edit") + th.Paint("dim", " · ") + th.Paint("text", "a.go"),
 		th.Paint("error", "- x := 1"),
@@ -299,8 +299,34 @@ func TestEditBlockWithUnreadFileShowsOnlyTheRedSide(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := json.RawMessage(`{"path":"a.go","edits":[{"old":"gone","new":""}]}`)
-	got := tui.RenderToolBlock(th, "edit", args, "the file", false, 10*time.Millisecond)
+	got := tui.RenderToolBlock(th, 0, "edit", args, "the file", false, 10*time.Millisecond)
 	if !strings.Contains(got, th.Paint("error", "- gone")) || strings.Contains(got, th.Paint("success", "+ ")) {
 		t.Fatalf("an empty new side adds no green row:\n%s", got)
+	}
+}
+
+func TestAOneLineBlobElidesByScreenRows(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob := strings.Repeat("x", 58*20)
+	got := tui.RenderToolBlock(th, 60, "bash", bashArgs(), blob, false, time.Second)
+	rows := strings.Split(got, "\n")
+	body := 0
+	for _, r := range rows {
+		if strings.Contains(r, "xxxx") {
+			body++
+		}
+	}
+	if body != 8 {
+		t.Fatalf("one long line is eight screen rows at width 60, got %d:\n%s", body, got)
+	}
+	if !strings.Contains(got, th.Paint("dim", "  · 12 lines hidden ·")) {
+		t.Fatalf("the marker counts the hidden rows (20 rows, 8 kept):\n%s", got)
+	}
+	short := tui.RenderToolBlock(th, 60, "bash", bashArgs(), "a\nb\nc", false, time.Second)
+	if strings.Contains(short, "hidden") {
+		t.Fatalf("three short lines stay whole:\n%s", short)
 	}
 }

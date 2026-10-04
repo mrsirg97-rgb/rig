@@ -1,4 +1,16 @@
 # Changelog
+## [2.11.11]: a tool body hides rows, not lines
+
+The committed tool block kept the first six and the last two lines of a
+result and hid the rest under `· k lines hidden ·`. The unit was the
+logical line, so a bash result of a thousand short lines was eight rows
+and a marker while a result of one three-thousand-character line, a
+minified blob or a `go test` failure on one line, was a wall of wrapped
+text with nothing hidden; read looked tidy and bash did not. The unit is
+the screen row at the terminal's width now, for the body and for an
+edit's two sides alike, so every result has the same height. The piped
+frontends have no width and print the whole body as before.
+
 ## [2.11.10]: the refusal shows the queue that exists
 
 2.11.9 made a refused create show the queue, and showed the wrong one:
