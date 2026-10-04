@@ -6,7 +6,7 @@ The decision seam (SPEC_DECISION): the typed vocabulary of a rig decision
 and the two interfaces a decision consumer holds — `Decider`, the seam a
 decision server implements (`Decide(ctx, state, questions) -> answers`), and
 `Recorder`, the seam the gates hold to record a final row. A question is
-typed (`choice` with its choices, `score`, `yesno`); an answer carries a
+typed (`choice` with its choices, `score`, `binary`); an answer carries a
 value, a confidence (the probability, 0..1), and its decider (who produced
 it). Stdlib-only leaf; no imports of the stores; its one leaf import is
 `pathguard`, whose containment answer the bash site's strip borrows.
@@ -15,7 +15,7 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
 
 - `decision.go`: the types (Question, Answer, Final), the two interfaces,
   the kind/status/site vocabulary as constants, and the question
-  constructors (`Choice`, `Score`, `YesNo`). A choice carries a
+  constructors (`Choice`, `Score`, `Binary`). A choice carries a
   description per label (`Description`), a score carries its ordered
   criteria list (`Criteria`).
 - `http.go`: the HTTP `Decider` (settings `decisionUrl`), speaking

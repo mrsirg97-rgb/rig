@@ -45,7 +45,7 @@ func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool,
 				record.Record(ctx, decision.Final{
 					Site:     decision.SiteApprove,
 					State:    Prompt(call),
-					Question: decision.YesNo("run", "run this call?"),
+					Question: decision.Binary("run", "run this call?"),
 					Answer:   verdict,
 					Decider:  decision.SiteApprove,
 				})

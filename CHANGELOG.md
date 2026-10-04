@@ -1,4 +1,14 @@
 # Changelog
+## [2.11.12]: a yes/no question is a binary
+
+The question kind `yesno` is `binary`: the constant, the constructor,
+the decide tool's enum and the docs say one word for one shape. The
+answer values stay `yes` and `no`, and the decision server's wire never
+carried the kind (a binary rides as `noul`), so nothing changes between
+rig and Laya. The store holds nine hundred rows written as `yesno`; the
+two reads that decode a stored question fold the old word to the new,
+so a settled binary still answers its twin.
+
 ## [2.11.11]: a tool body hides rows, not lines
 
 The committed tool block kept the first six and the last two lines of a

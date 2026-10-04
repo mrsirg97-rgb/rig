@@ -11,7 +11,7 @@ fails a call.
 
 Stdlib-only leaf beside `pathguard`, imported by the gate packages.
 
-- `Question` is typed: `choice` (with `Choices`), `score`, `yesno`.
+- `Question` is typed: `choice` (with `Choices`), `score`, `binary`.
 - `Answer` carries `Value`, `Confidence` (the probability, 0..1) and
   `Decider` (who produced it).
 - `Decider` is the seam a decision server implements:

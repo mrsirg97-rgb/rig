@@ -14,7 +14,7 @@ const packQuestionID = "matter"
 
 var packQuestion = Question{
 	ID:     packQuestionID,
-	Kind:   KindYesNo,
+	Kind:   KindBinary,
 	Prompt: "Does this symbol matter for the task?",
 }
 

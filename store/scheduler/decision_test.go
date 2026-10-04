@@ -36,7 +36,7 @@ func TestASkipRecordsADecisionRow(t *testing.T) {
 	if row.Site != decision.SiteScheduler || row.Answer != "no" || row.Decider != decision.SiteScheduler {
 		t.Fatalf("the row must name the site, the answer, and the decider: %+v", row)
 	}
-	if row.Question.Kind != decision.KindYesNo {
+	if row.Question.Kind != decision.KindBinary {
 		t.Fatalf("the fire question is yes/no: %+v", row.Question)
 	}
 	if row.Scope != scope.Key(cwd) {

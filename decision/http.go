@@ -141,7 +141,7 @@ func marshalQuestion(q Question) (json.RawMessage, error) {
 		return json.Marshal(wireChoiceQuestion{KindChoice, q.Prompt, described(q)})
 	case KindScore:
 		return json.Marshal(wireScoreQuestion{KindScore, q.Prompt, q.Criteria})
-	case KindYesNo:
+	case KindBinary:
 		return json.Marshal(wireNoulQuestion{wireNoul, q.Prompt})
 	}
 	return nil, fmt.Errorf("question %q: kind %q has no wire shape", q.ID, q.Kind)

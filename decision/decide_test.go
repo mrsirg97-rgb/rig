@@ -426,13 +426,13 @@ func TestArgsRefuseBeforeAnyRequest(t *testing.T) {
 		args string
 	}{
 		{"an unknown kind", `{"kind":"vibe","prompt":"p","items":["a"]}`},
-		{"no prompt", `{"kind":"yesno","items":["a"]}`},
+		{"no prompt", `{"kind":"binary","items":["a"]}`},
 		{"one label", `{"kind":"choice","prompt":"p","labels":[{"label":"a"}],"items":["a"]}`},
 		{"duplicate labels", `{"kind":"choice","prompt":"p","labels":[{"label":"a"},{"label":"a"}],"items":["a"]}`},
-		{"no items", `{"kind":"yesno","prompt":"p","items":[]}`},
-		{"an empty item", `{"kind":"yesno","prompt":"p","items":[""]}`},
+		{"no items", `{"kind":"binary","prompt":"p","items":[]}`},
+		{"an empty item", `{"kind":"binary","prompt":"p","items":[""]}`},
 		{"score without criteria", `{"kind":"score","prompt":"p","items":["a"]}`},
-		{"an unknown field", `{"kind":"yesno","prompt":"p","items":["a"],"mood":"up"}`},
+		{"an unknown field", `{"kind":"binary","prompt":"p","items":["a"],"mood":"up"}`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -520,7 +520,7 @@ func TestYesNoGroupsAndIsNeverUnsure(t *testing.T) {
 	srv := decideServer(t, p, byState(replies))
 	d := testDecide(t, httpDecider(t, srv.URL), nil, 2)
 	out, err := d.Exec(context.Background(), jsonArgs(map[string]any{
-		"kind":   "yesno",
+		"kind":   "binary",
 		"prompt": "Is this a read?",
 		"items":  []string{"ls", "rm -rf"},
 	}))

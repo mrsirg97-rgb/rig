@@ -195,7 +195,7 @@ func TestADeciderErrorDropsLoudlyAndLandsNothing(t *testing.T) {
 	defer cancel()
 	go q.Run(ctx)
 
-	q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.YesNo("ok", "ok?")})
+	q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.Binary("ok", "ok?")})
 	select {
 	case m := <-loud:
 		if !strings.Contains(m, "decide") {
@@ -227,7 +227,7 @@ func TestAProposerErrorDropsLoudly(t *testing.T) {
 	defer cancel()
 	go q.Run(ctx)
 
-	q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.YesNo("ok", "ok?")})
+	q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.Binary("ok", "ok?")})
 	select {
 	case m := <-loud:
 		if !strings.Contains(m, "propose") {
@@ -244,9 +244,9 @@ func TestAFullQueueDropsLoudlyWithoutBlocking(t *testing.T) {
 	db := openDecisionStore(t)
 	q := decision.NewQueue(&fakeDecider{}, blockingSink{block: blocking}, storeSettled{db: db}, decisionstore.Recorder{DB: db, Scope: "proj"}, func() {}, v)
 	for i := 0; i < decision.QueueCap; i++ {
-		q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.YesNo("ok", "ok?")})
+		q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.Binary("ok", "ok?")})
 	}
-	q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.YesNo("ok", "ok?")})
+	q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.Binary("ok", "ok?")})
 	select {
 	case m := <-loud:
 		if !strings.Contains(m, "queue full") {

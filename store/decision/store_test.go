@@ -34,7 +34,7 @@ func TestAFinalRowRoundTrips(t *testing.T) {
 		Scope:    "proj",
 		Site:     decision.SiteApprove,
 		State:    `{"call":"bash"}`,
-		Question: decision.YesNo("run", "run this call?"),
+		Question: decision.Binary("run", "run this call?"),
 		Answer:   "no",
 		Decider:  decision.SiteApprove,
 	})
@@ -281,7 +281,7 @@ func TestTheRecorderLandsTheRowAndSwallowsAStoreError(t *testing.T) {
 	rec.Record(context.Background(), decision.Final{
 		Site:     decision.SiteGuard,
 		State:    `{"tool":"edit"}`,
-		Question: decision.YesNo("retry", "issue the identical failing call again?"),
+		Question: decision.Binary("retry", "issue the identical failing call again?"),
 		Answer:   "no",
 		Decider:  decision.SiteGuard,
 	})
@@ -293,7 +293,7 @@ func TestTheRecorderLandsTheRowAndSwallowsAStoreError(t *testing.T) {
 		t.Fatalf("the recorder lands the row, got %d", count)
 	}
 	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
-	rec.Record(ctx, decision.Final{Site: decision.SiteGuard, Question: decision.YesNo("retry", "again?"), Answer: "no", Decider: decision.SiteGuard})
+	rec.Record(ctx, decision.Final{Site: decision.SiteGuard, Question: decision.Binary("retry", "again?"), Answer: "no", Decider: decision.SiteGuard})
 	var session *string
 	if err := db.QueryRow(`SELECT session FROM decisions WHERE id = 2`).Scan(&session); err != nil {
 		t.Fatal(err)
@@ -311,7 +311,7 @@ func TestTheRecorderLandsTheRowAndSwallowsAStoreError(t *testing.T) {
 	}
 	v, said := voice(t)
 	dead := decisionstore.Recorder{DB: closed, Voice: v}
-	dead.Record(context.Background(), decision.Final{Site: decision.SiteGuard, Question: decision.YesNo("retry", "again?"), Answer: "no", Decider: decision.SiteGuard})
+	dead.Record(context.Background(), decision.Final{Site: decision.SiteGuard, Question: decision.Binary("retry", "again?"), Answer: "no", Decider: decision.SiteGuard})
 	select {
 	case m := <-said:
 		if !strings.HasPrefix(m, "decision: record") {
@@ -350,7 +350,7 @@ func TestAFinalRuleKeepsNullConfidenceAndZeroUnsure(t *testing.T) {
 	db := open(t)
 	_, err := decisionstore.RecordFinal(context.Background(), db, decisionstore.FinalInput{
 		Scope: "proj", Site: decision.SitePerm, State: "{}",
-		Question: decision.YesNo("allow", "allow bash?"), Answer: "no", Decider: decision.SitePerm,
+		Question: decision.Binary("allow", "allow bash?"), Answer: "no", Decider: decision.SitePerm,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -448,4 +448,19 @@ func voice(t *testing.T) (broadcast.Member, <-chan string) {
 		}
 	})
 	return room.Add(0), said
+}
+
+func TestAStoredYesnoRowReadsAsABinary(t *testing.T) {
+	db := open(t)
+	if _, err := db.Exec(`INSERT INTO decisions (scope, site, state, question, answer, status, decider, ts, unsure) VALUES (?, ?, ?, ?, ?, 'pending', 'laya', '2026-10-04T00:00:00Z', 0)`,
+		"proj", decision.SiteBash, `{"command":"ls"}`, `{"id":"ok","kind":"yesno","prompt":"ok?"}`, "yes"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := decisionstore.Pending(context.Background(), db)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("one pending row: %d %v", len(rows), err)
+	}
+	if rows[0].Question.Kind != decision.KindBinary {
+		t.Fatalf("a row written as yesno reads as %q, want binary", rows[0].Question.Kind)
+	}
 }

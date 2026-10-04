@@ -154,7 +154,7 @@ func TestAYesNoQuestionIsNoul(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	answers, err := dec.Decide(context.Background(), "s", []decision.Question{decision.YesNo("ok", "ok?")})
+	answers, err := dec.Decide(context.Background(), "s", []decision.Question{decision.Binary("ok", "ok?")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestANoulBelowHalfIsNo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	answers, err := dec.Decide(context.Background(), "s", []decision.Question{decision.YesNo("ok", "ok?")})
+	answers, err := dec.Decide(context.Background(), "s", []decision.Question{decision.Binary("ok", "ok?")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestTheDeciderDefaultsToTheHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	answers, err := dec.Decide(context.Background(), "s", []decision.Question{decision.YesNo("ok", "ok?")})
+	answers, err := dec.Decide(context.Background(), "s", []decision.Question{decision.Binary("ok", "ok?")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestAnUnreachableServerIsAnError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := dec.Decide(context.Background(), "s", []decision.Question{decision.YesNo("ok", "ok?")}); err == nil {
+	if _, err := dec.Decide(context.Background(), "s", []decision.Question{decision.Binary("ok", "ok?")}); err == nil {
 		t.Fatal("an unreachable decider is an error, never a silent answer")
 	}
 }
