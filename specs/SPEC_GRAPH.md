@@ -127,9 +127,11 @@ With the decision server wired, the candidates ride the exported
 fan-out (one yes/no per candidate, "Does this symbol matter for the
 task?", the kernel's Parallel the bound), the state on the wire the
 task and the item. No more candidates are scored than the pack could
-load: the scored set is the rank prefix whose items fit the load cap,
-the candidates' own sizes the measure, and the tail rides the lexical
-fill unscored. The yes set loads live in rank order: the lexical rank
+load: the blocks (definition, callers, callees — what actually spends
+the cap) are built down the rank until the load cap is spent, the
+scored set is that prefix, the pack loads the blocks it built, and the
+tail rides the lexical fill unscored. The yes set loads live in rank
+order: the lexical rank
 is the spine and the server's yes promotes within it, never re-orders
 it. The unsure rule is decide's — an answer whose confidence is under
 one half is unsure, and the unsure are listed by name at the end so

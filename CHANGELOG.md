@@ -14,10 +14,12 @@ With `decisionUrl` set, candidates are scored with one yes/no —
 "Does this symbol matter for the task?" — through the fan-out decide
 uses (now exported as `decision.FanOut`), bounded by the kernel's
 Parallel; the candidate's item is its live signature and file. No more
-candidates go out than the pack could load: the scored set is the rank
-prefix whose items fit the result cap the root passes in, the
-candidates' own sizes the measure — the menu task's minute of fan-out
-becomes about ten seconds. The lexical rank is the pack's spine: the
+candidates go out than the pack could load: the blocks (definition,
+callers, callees — what actually spends the cap) are built down the
+rank until the result cap the root passes in is spent, and only that
+prefix is scored — the pack loads the blocks it built, so the menu
+task's minute of fan-out becomes about ten seconds. The lexical rank
+is the pack's spine: the
 yes set loads live in rank order, the server's judgment promotes
 within the rank and never re-orders it; an answer whose confidence is
 under one half is unsure and the unsure are listed by name at the end

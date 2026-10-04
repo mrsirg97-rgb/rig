@@ -31,8 +31,9 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 		return "", fmt.Errorf("graph: no symbol in the map matches %q; run index first", task)
 	}
 	type candidate struct {
-		sym  symRow
-		item string
+		sym   symRow
+		item  string
+		block string
 	}
 	var items []candidate
 	total := 0
@@ -51,22 +52,27 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	if len(items) == 0 {
 		return "", fmt.Errorf("graph: no symbol in the map matches %q; run index first", task)
 	}
+	fit, held := 0, 0
+	for i, c := range items {
+		block, err := q.packOne(ctx, db, root, c.sym)
+		if err != nil {
+			return "", err
+		}
+		items[i].block = block
+		if held > 0 && held+len(block) > q.loadCap {
+			break
+		}
+		held += len(block)
+		fit = i + 1
+	}
+	ask := items[:fit]
 	var yes []candidate
 	var unsure []string
 	wobbly := map[string]bool{}
 	scored := 0
 	if q.scorer == nil {
-		yes = items
+		yes = ask
 	} else {
-		ask := items
-		held := 0
-		for i, c := range items {
-			if i > 0 && held+len(c.item) >= q.loadCap {
-				ask = items[:i]
-				break
-			}
-			held += len(c.item)
-		}
 		texts := make([]string, len(ask))
 		for i, c := range ask {
 			texts[i] = c.item
@@ -91,30 +97,23 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	}
 	var b strings.Builder
 	loaded := 0
-	spent := false
 	done := map[string]bool{}
 	for _, c := range yes {
-		block, err := q.packOne(ctx, db, root, c.sym)
-		if err != nil {
-			return "", err
-		}
-		if loaded > 0 && loaded+len(block) > q.loadCap {
-			spent = true
-			break
-		}
-		b.WriteString(block)
-		loaded += len(block)
+		b.WriteString(c.block)
+		loaded += len(c.block)
 		done[c.sym.Package+"\x00"+c.sym.Name] = true
 	}
-	if q.scorer != nil && !spent {
-		for _, c := range items {
+	if q.scorer != nil {
+		for i, c := range items {
 			key := c.sym.Package + "\x00" + c.sym.Name
 			if done[key] || wobbly[key] {
 				continue
 			}
-			block, err := q.packOne(ctx, db, root, c.sym)
-			if err != nil {
-				return "", err
+			block := c.block
+			if i > fit {
+				if block, err = q.packOne(ctx, db, root, c.sym); err != nil {
+					return "", err
+				}
 			}
 			if loaded > 0 && loaded+len(block) > q.loadCap {
 				break

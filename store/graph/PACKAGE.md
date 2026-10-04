@@ -68,9 +68,10 @@ project-relative; each worktree's store maps its own tree.
   over `symbol_fts`/`symbol_grams`, the candidate items (the live
   signature at file:line) cut at the item ceiling before any request,
   the scorer seam (`Scorer`, implemented by `decision.PackScorer`) —
-  the scored set is the rank prefix the load could hold, the items'
-  own sizes against the load cap, and the lexical rank is the pack's
-  spine: the yes set loads live in rank order, the wobbly answers list
+  the blocks (definition, callers, callees — what spends the load cap)
+  are built down the rank until the cap is spent and only that prefix
+  is scored, the pack loads the blocks it built, and the lexical rank
+  is the pack's spine: the yes set loads live in rank order, the wobbly answers list
   by name, the confident nos and the never-answered show nowhere and
   the lexical top fills the rest of the budget (the server's judgment
   promotes within the rank, never re-orders it); without a scorer the

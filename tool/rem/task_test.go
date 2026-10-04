@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -290,36 +289,35 @@ func TestPackByTaskWithoutAServerPacksTheLexicalCandidatesAndWritesNoRows(t *tes
 	}
 }
 
-func TestPackByTaskScoresNoMoreThanTheLoadCouldHold(t *testing.T) {
-	root, q, tool, probe, _ := taskModule(t, allYes)
+func TestPackByTaskScoresOnlyThePrefixTheLoadCouldHold(t *testing.T) {
+	root, q, tool := packModule(t)
 	mapThePackFixture(t, root, q)
-	if _, err := packExec(t, tool, root, packTask, nil); err != nil {
-		t.Fatalf("pack: %v", err)
-	}
-	_, asks := probe.snapshot()
-	if len(asks) != 3 {
-		t.Fatalf("the unbounded pack asks about every candidate: %v", asks)
-	}
-	lens := []int{len(asks[0]), len(asks[1]), len(asks[2])}
-	sort.Ints(lens)
-	root2, q2, tool2, probe2, _ := taskModule(t, allYes)
-	mapThePackFixture(t, root2, q2)
-	q2.SetPackCaps(1<<20, lens[0]+lens[1]+1)
-	reply, err := packExec(t, tool2, root2, packTask, nil)
+	reply, err := packExec(t, tool, root, packTask, nil)
 	if err != nil {
 		t.Fatalf("pack: %v", err)
 	}
-	_, asks2 := probe2.snapshot()
-	if len(asks2) != 2 {
-		t.Fatalf("the load budget bounds the scored set, got %d asks: %v", len(asks2), asks2)
+	blocks := strings.Index(reply, "coverage:")
+	if blocks < 0 {
+		t.Fatalf("the unset pack keeps the coverage line:\n%s", reply)
 	}
-	for _, a := range asks2 {
+	root2, q2, tool2, probe2, _ := taskModule(t, allYes)
+	mapThePackFixture(t, root2, q2)
+	q2.SetPackCaps(1<<20, blocks-1)
+	reply2, err := packExec(t, tool2, root2, packTask, nil)
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	_, asks := probe2.snapshot()
+	if len(asks) != 2 {
+		t.Fatalf("the cap holds two blocks, the server sees the prefix that fits: %v", asks)
+	}
+	for _, a := range asks {
 		if strings.Contains(a, "func Call()") {
-			t.Fatalf("the rank prefix is what the load could hold, the tail is not scored: %v", asks2)
+			t.Fatalf("the rank prefix is what the load could hold, the tail is not scored: %v", asks)
 		}
 	}
-	if !strings.Contains(reply, "scored 2 candidates") {
-		t.Fatalf("the reply names the count scored:\n%s", reply)
+	if !strings.Contains(reply2, "scored 2 candidates") {
+		t.Fatalf("the reply names the count scored:\n%s", reply2)
 	}
 }
 
