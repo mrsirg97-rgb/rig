@@ -235,11 +235,10 @@ func main() {
 
 	row := resolveModel(modelID, cfg.Models)
 
-	py := pythontool.New()
+	py := pythontool.New(cwd)
 	if python := envOr("RIG_PYTHON", cfg.Settings.Python); python != "" {
-		py = pythontool.NewWith(python, pythontool.DefaultHost())
+		py = pythontool.NewWith(python, pythontool.DefaultHost(), cwd)
 	}
-	py.SetCwd(cwd)
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
 
@@ -374,7 +373,6 @@ func main() {
 	defer decdb.DB.Close()
 
 	engine, room := newFleet()
-	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph))
 	voice := room.Add(rig.MemberDecision)
 
 	remPath := remstore.FilePath(cfgDir)
@@ -423,6 +421,36 @@ func main() {
 		swapURL = v
 	}
 
+	drec := decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	var decRev *decision.Reviewer
+	land := func() {
+		if decRev != nil {
+			decRev.Land()
+		}
+	}
+	var dec decision.Decider
+	var sink *dbSink
+	var psc *decision.PackScorer
+	if decisionURL != "" {
+		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
+		if derr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
+			os.Exit(1)
+		}
+		sink = &dbSink{db: decdb, scope: scope.Key(cwd)}
+		p, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
+		if perr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
+			os.Exit(1)
+		}
+		psc = p
+	}
+	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph),
+		graph.WithPackCaps(graph.ReadCap, resultCapN),
+		graph.WithScorer(psc))
+
 	r := &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
@@ -433,6 +461,8 @@ func main() {
 		rounds:     roundsN,
 		resultCap:  resultCapN,
 		sdb:        sdb,
+		drec:       drec,
+		packScorer: psc,
 		remDB:      rdb,
 		cwd:        cwd,
 		home:       userHome(),
@@ -467,8 +497,6 @@ func main() {
 		r.tools["verdict"] = verdicttool.New(fleet)
 	}
 	r.listen()
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
 	if delegateOn {
 		r.tools["delegate"] = delegate.New(delegate.Opts{
@@ -524,7 +552,6 @@ func main() {
 	}
 
 	r.natives = native
-	r.drec = decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
 	r.eco = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
@@ -574,11 +601,6 @@ func main() {
 	}
 
 	if decisionURL != "" {
-		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
-		if derr != nil {
-			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
-			os.Exit(1)
-		}
 		dtool, derr := decision.NewDecide(decision.DecideOptions{
 			Decider:  dec,
 			Recorder: r.drec,
@@ -589,7 +611,6 @@ func main() {
 			os.Exit(1)
 		}
 		r.decide = dtool
-		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		if headless {
 			r.decQ = decision.NewQueue(dec, sink, nil, voice)
@@ -597,20 +618,10 @@ func main() {
 			rev := decision.NewReviewer(ctx, r.engine, &dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
 				cfg.Settings.ReviewBatchOrDefault(), row, room)
+			decRev = rev
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, rev.Land, voice)
 		}
-		var land func()
-		if r.decRev != nil {
-			land = r.decRev.Land
-		}
-		psc, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
-		if perr != nil {
-			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
-			os.Exit(1)
-		}
-		r.packScorer = psc
-		gq.SetScorer(psc)
 		r.proposals = r.decQ
 	}
 

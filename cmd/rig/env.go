@@ -106,7 +106,7 @@ func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	r.row = row
 	r.activeID = id
 	r.applyVision()
-	r.live.Set(append(r.nativeTools(), r.pluginTools...))
+	r.live.Swap(append(r.nativeTools(), r.pluginTools...), r.pluginNames()...)
 	provider, pol := r.buildPair()
 	r.k.Provider = provider
 	r.k.Policy = pol

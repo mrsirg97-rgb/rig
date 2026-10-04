@@ -104,3 +104,12 @@ func TestStoreSitsPerWorktree(t *testing.T) {
 		t.Fatalf("the linked worktree's store is missing (%s): %v", linkedPath, err)
 	}
 }
+
+func TestUnboundedPackCapsRefuseAtConstruction(t *testing.T) {
+	defer func() {
+		if rec := recover(); rec == nil {
+			t.Fatal("zero caps need the bound named")
+		}
+	}()
+	graph.NewQueue(t.TempDir(), nil, graph.WithPackCaps(0, 1))
+}

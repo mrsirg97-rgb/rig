@@ -29,7 +29,7 @@ import "example.com/m/alpha"
 func Call() int { return alpha.Target() }
 `
 
-func packModule(t *testing.T) (string, *graph.Queue, core.Tool) {
+func packModule(t *testing.T, opts ...graph.Option) (string, *graph.Queue, core.Tool) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
@@ -55,7 +55,7 @@ func packModule(t *testing.T) (string, *graph.Queue, core.Tool) {
 			t.Fatal(err)
 		}
 	}
-	q := graph.NewQueue(t.TempDir(), nil)
+	q := graph.NewQueue(t.TempDir(), nil, opts...)
 	return root, q, remapi.New(newDB(t), q)
 }
 

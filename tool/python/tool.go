@@ -53,17 +53,22 @@ type Tool struct {
 
 var _ core.Tool = (*Tool)(nil)
 
-func New() *Tool {
-	return &Tool{Definition: tool.Def("python"), k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1)}}
+func New(cwd ...string) *Tool {
+	return &Tool{Definition: tool.Def("python"), k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1), cwd: firstCwd(cwd)}}
 }
 
-func NewWith(python, host string) *Tool {
-	return &Tool{Definition: tool.Def("python"), k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true}}
+func NewWith(python, host string, cwd ...string) *Tool {
+	return &Tool{Definition: tool.Def("python"), k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true, cwd: firstCwd(cwd)}}
+}
+
+func firstCwd(cwd []string) string {
+	if len(cwd) > 0 {
+		return cwd[0]
+	}
+	return ""
 }
 
 func (t *Tool) Host() string { return t.k.host }
-
-func (t *Tool) SetCwd(cwd string) { t.k.cwd = cwd }
 
 func (t *Tool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a given

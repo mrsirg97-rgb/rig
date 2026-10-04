@@ -15,9 +15,9 @@ new tools execute, by construction; the models-switch's semantics
 - `Table`: the live list: ordered (the wire's order), swapped
   atomically under a `sync.RWMutex`, plus the plugin subset.
 - `New(tools...)`: builds the table, copying the caller's slice.
-- `Set(tools)`: swaps the list (the reload's rebuild), copy-in.
-- `SetPlugins(names...)`: marks the currently-live plugin names (the
-  reload carries its own plugin subset); `IsPlugin` answers the table's
+- `Swap(tools, names...)`: the one swap: the list and the live plugin
+  names go in atomically, copy-in (the wire's build and the reload's
+  rebuild state the whole truth); `IsPlugin` answers the table's
   plugin membership.
 - `List()`: the table's tools as a snapshot.
 - `Specs()`: the wire's projection: name, description, schema per

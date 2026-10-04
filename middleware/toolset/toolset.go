@@ -20,20 +20,15 @@ func New(tools ...core.Tool) *Table {
 	return &Table{tools: cp, plugins: make(map[string]bool)}
 }
 
-func (t *Table) Set(tools []core.Tool) {
+func (t *Table) Swap(tools []core.Tool, plugins ...string) {
 	cp := make([]core.Tool, len(tools))
 	copy(cp, tools)
-	t.mu.Lock()
-	t.tools = cp
-	t.mu.Unlock()
-}
-
-func (t *Table) SetPlugins(names ...string) {
-	set := make(map[string]bool, len(names))
-	for _, n := range names {
+	set := make(map[string]bool, len(plugins))
+	for _, n := range plugins {
 		set[n] = true
 	}
 	t.mu.Lock()
+	t.tools = cp
 	t.plugins = set
 	t.mu.Unlock()
 }

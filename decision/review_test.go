@@ -162,6 +162,17 @@ func reviewerRow(db store.DB, fire decision.Fire, batch int, row models.Model) *
 	return decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch, row, room)
 }
 
+func waitFires(t *testing.T, fired <-chan struct{}, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		select {
+		case <-fired:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the bite fired %d of %d", i, n)
+		}
+	}
+}
+
 func waitSettled(t *testing.T, db store.DB, want int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -300,7 +311,7 @@ func TestTwoHundredSixtyFourRowsBiteTenAtATimeAcrossTwentySevenWakes(t *testing.
 		}
 		waitSettled(t, db, remaining)
 	}
-	time.Sleep(200 * time.Millisecond)
+	waitFires(t, f.fired, 27)
 	if f.calls() != 27 {
 		t.Fatalf("264 rows bite across 27 wakes, got %d fires", f.calls())
 	}
@@ -334,7 +345,7 @@ func TestAQuietTurnEndWithABacklogStillTakesABite(t *testing.T) {
 	waitSettled(t, db, 2)
 	r.Wake()
 	waitSettled(t, db, 0)
-	time.Sleep(200 * time.Millisecond)
+	waitFires(t, f.fired, 2)
 	if f.calls() != 2 {
 		t.Fatalf("the backlog left dirty by a bite takes the next turn end, got %d fires", f.calls())
 	}
@@ -468,7 +479,7 @@ func TestTheRowsPastTheBudgetStayDirtyForTheNextTurnEnd(t *testing.T) {
 	waitSettled(t, db, 1)
 	r.Wake()
 	waitSettled(t, db, 0)
-	time.Sleep(200 * time.Millisecond)
+	waitFires(t, f.fired, 2)
 	if f.calls != 2 {
 		t.Fatalf("the overflow converged over the turn ends, got %d fires", f.calls)
 	}

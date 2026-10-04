@@ -47,8 +47,7 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 			names = append(names, rep.Name)
 		}
 	}
-	r.live.Set(tools)
-	r.live.SetPlugins(names...)
+	r.live.Swap(tools, names...)
 	r.pluginInfos = infos
 	return command.RenderPlugins(infos, "reload", r.pluginsHome), nil
 }

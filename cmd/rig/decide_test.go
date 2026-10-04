@@ -14,7 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/plugins"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 )
 
 type fakeDecider struct {
@@ -186,23 +185,6 @@ func (o *overlapDecider) Decide(ctx context.Context, state string, questions []d
 	return []decision.Answer{{Question: "item", Value: "safe", Confidence: 0.9, Decider: "fake"}}, nil
 }
 
-func TestTheKernelParallelStampsTheFanOut(t *testing.T) {
-	o := &overlapDecider{}
-	r := testRoot(nullFrontend{})
-	d, err := decision.NewDecide(decision.DecideOptions{Decider: o, Parallel: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.decide = d
-	wire(r)
-	if _, err := d.Exec(context.Background(), decideArgs("alpha", "beta")); err != nil {
-		t.Fatal(err)
-	}
-	if o.max < 2 {
-		t.Fatalf("the kernel's parallel stamps the fan-out: constructed 1, got %d in flight", o.max)
-	}
-}
-
 func TestTheFanOutStaysBoundedAtOne(t *testing.T) {
 	o := &overlapDecider{}
 	d, err := decision.NewDecide(decision.DecideOptions{Decider: o, Parallel: 1})
@@ -214,19 +196,5 @@ func TestTheFanOutStaysBoundedAtOne(t *testing.T) {
 	}
 	if o.max != 1 {
 		t.Fatalf("parallel one bounds the fan-out, got %d in flight", o.max)
-	}
-}
-
-func TestTheRootResultCapBoundsThePack(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	r.graph = graph.NewQueue(t.TempDir(), nil)
-	r.resultCap = 1234
-	wire(r)
-	item, load := r.graph.PackCaps()
-	if item != graph.ReadCap {
-		t.Fatalf("the candidate items keep the read ceiling: %d", item)
-	}
-	if load != 1234 {
-		t.Fatalf("the pack loads by the result cap the root passes in: %d", load)
 	}
 }

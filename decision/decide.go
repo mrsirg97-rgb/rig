@@ -43,13 +43,6 @@ func NewDecide(o DecideOptions) (*Decide, error) {
 	return &Decide{Definition: tool.Def("decide"), dec: o.Decider, rec: o.Recorder, parallel: o.Parallel}, nil
 }
 
-func (t *Decide) SetParallel(n int) {
-	if n <= 0 {
-		panic(fmt.Sprintf("decision: parallel %d: the fan-out needs a bound", n))
-	}
-	t.parallel = n
-}
-
 func (t *Decide) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	a, err := parseDecideArgs(data)
 	if err != nil {

@@ -58,7 +58,8 @@ project-relative; each worktree's store maps its own tree.
   replace clears the file's outgoing edges and leaves `edges_sha` null.
   The same transaction maintains the two lexical containers (the fts row
   and the trigram shadow per symbol), so the task pack's candidates are
-  never staler than the map. Schema version 2: `Migration` rebuilds the
+  never staler than the map. The tokenizing, the grams and the OR-query
+  are `store/fts`'s — the one contract `store/rem` shares. Schema version 2: `Migration` rebuilds the
   containers from `symbols` on open, because an unchanged sha is a no-op
   and a store written by version 1 would leave its symbols unsearchable.
 - `migrate.go`: the schema version 2 migration, the lexical containers
@@ -76,9 +77,9 @@ project-relative; each worktree's store maps its own tree.
   the lexical top fills the rest of the budget (the server's judgment
   promotes within the rank, never re-orders it); without a scorer the
   lexical candidates load in rank order and nothing is recorded. The
-  queue carries the two ceilings (`SetPackCaps`, `PackCaps`): the
-  candidate items keep the read ceiling and the root stamps the load
-  cap with the result cap.
+  queue carries the two ceilings (`WithPackCaps`, `PackCaps`): the
+  candidate items keep the read ceiling and the composition root
+  stamps the load cap with the result cap at construction.
 
 ## How it is consumed
 
@@ -88,10 +89,10 @@ project-relative; each worktree's store maps its own tree.
   source `graph`; the queue shape (bounded channel, one
   goroutine, the call never waits) lives with the wiring, and `index`
   is the deliberate exception — it extracts on the call's own thread
-  and replies with the count mapped (SPEC_GRAPH). The root sets the
-  task pack's scorer (`SetScorer`) when `decisionUrl` stands; a task
-  target with no scorer packs the lexical candidates and records
-  nothing.
+  and replies with the count mapped (SPEC_GRAPH). The root hands the
+  task pack's scorer in at construction (`WithScorer`) when
+  `decisionUrl` stands; a task target with no scorer packs the
+  lexical candidates and records nothing.
 - The generated files are pinned by the drift test
   (`cd <lift>/cmd && go run main.go -config=$RIG/store/graph/gen.json
   -source=$RIG/store/graph/source.json` regenerates).

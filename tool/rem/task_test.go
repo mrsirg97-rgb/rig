@@ -166,9 +166,8 @@ func openDecisionStore(t *testing.T) store.DB {
 	return db
 }
 
-func taskModule(t *testing.T, answer func(item string) (map[string]any, bool)) (string, *graph.Queue, core.Tool, *taskProbe, store.DB) {
+func taskModule(t *testing.T, answer func(item string) (map[string]any, bool), opts ...graph.Option) (string, *graph.Queue, core.Tool, *taskProbe, store.DB) {
 	t.Helper()
-	root, q, tool := packModule(t)
 	probe := &taskProbe{}
 	db := openDecisionStore(t)
 	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: taskServer(t, probe, answer).URL, Client: &http.Client{Transport: testenv.Transport()}})
@@ -179,7 +178,7 @@ func taskModule(t *testing.T, answer func(item string) (map[string]any, bool)) (
 	if err != nil {
 		t.Fatal(err)
 	}
-	q.SetScorer(scorer)
+	root, q, tool := packModule(t, append(opts, graph.WithScorer(scorer))...)
 	return root, q, tool, probe, db
 }
 
@@ -238,9 +237,8 @@ func TestPackByTaskStopsAtTheBudgetOnTheLexicalTop(t *testing.T) {
 			return noulAnswer(0.7), true
 		}
 		return nil, false
-	})
+	}, graph.WithPackCaps(1<<20, 1))
 	mapThePackFixture(t, root, q)
-	q.SetPackCaps(1<<20, 1)
 	reply, err := packExec(t, tool, root, packTask, nil)
 	if err != nil {
 		t.Fatalf("pack: %v", err)
@@ -257,9 +255,8 @@ func TestPackByTaskStopsAtTheBudgetOnTheLexicalTop(t *testing.T) {
 }
 
 func TestPackByTaskCutsTheCandidatesPastTheCeilingBeforeAnyRequest(t *testing.T) {
-	root, q, tool, probe, _ := taskModule(t, allYes)
+	root, q, tool, probe, _ := taskModule(t, allYes, graph.WithPackCaps(60, 1<<20))
 	mapThePackFixture(t, root, q)
-	q.SetPackCaps(60, 1<<20)
 	reply, err := packExec(t, tool, root, packTask, nil)
 	if err != nil {
 		t.Fatalf("pack: %v", err)
@@ -304,9 +301,8 @@ func TestPackByTaskScoresOnlyThePrefixTheLoadCouldHold(t *testing.T) {
 	if blocks < 0 {
 		t.Fatalf("the unset pack keeps the coverage line:\n%s", reply)
 	}
-	root2, q2, tool2, probe2, _ := taskModule(t, allYes)
+	root2, q2, tool2, probe2, _ := taskModule(t, allYes, graph.WithPackCaps(1<<20, blocks-1))
 	mapThePackFixture(t, root2, q2)
-	q2.SetPackCaps(1<<20, blocks-1)
 	reply2, err := packExec(t, tool2, root2, packTask, nil)
 	if err != nil {
 		t.Fatalf("pack: %v", err)
