@@ -272,7 +272,8 @@ that is harder than writing a lot, and it is the bar.
   operator's module onto the event loop: a `Room` of `Member`s over a
   `Transport`, a `Message` with origin, health and a `core.Event`, none
   being a heartbeat; a send is a post at the room's priority and the
-  queue is the durability.
+  queue is the durability; `Say` is the one voice a background
+  subsystem notices with, and the member ids are named in the kernel.
 - `tool`: the registry of the model's words: `registry.json`, embedded,
   one entry per native tool (`name`, `enabled`, `what`, `guidelines`,
   `reply`, `schema`); `Definition` is the interface a tool embeds for
@@ -315,9 +316,8 @@ that is harder than writing a lot, and it is the bar.
   settle as closures on the loop at the fleet's priority, the worker
   goroutines waiting on the world, the reviewer verdict protocol; the
   supervisor is a member of the session's `broadcast` room and says
-  everything there (the four decision-worthy notices, the `SwarmStatus`
-  snapshots, the loud lines as `Notice`); the dead claim is released via
-  the todo store's Reap door.
+  everything there as `Notice` with source `swarm` and `SwarmStatus`
+  snapshots; the dead claim is released via the todo store's Reap door.
 - `tool/sessions`: the session-store introspection tool: `list` and
   `summary`, the vitals (which models ran, what failed, the cache
   ratio), and the store's schema migration on open.

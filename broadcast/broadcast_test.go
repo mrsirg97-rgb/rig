@@ -105,7 +105,7 @@ func TestTheQueueIsTheDurabilityAndTheAckIsThePost(t *testing.T) {
 			if e != nil {
 				t.Fatalf("publish %d acked %v with no consumer running", i, e)
 			}
-		}, broadcast.NewMessage(1, true, core.SwarmNotice{Text: "n"}))
+		}, broadcast.NewMessage(1, true, core.Notice{Source: "swarm", Text: "n"}))
 	}
 	if n := len(engine.Pending()); n != 3 {
 		t.Fatalf("three events held for the consumer, got %d", n)
@@ -131,7 +131,7 @@ func TestOnePendingHeartbeatPerMember(t *testing.T) {
 	if n := len(engine.Pending()); n != 1 {
 		t.Fatalf("five heartbeats before the consumer runs are one event, got %d", n)
 	}
-	a.Publish(ctx, func(error) {}, broadcast.NewMessage(1, true, core.SwarmNotice{Text: "real"}))
+	a.Publish(ctx, func(error) {}, broadcast.NewMessage(1, true, core.Notice{Source: "swarm", Text: "real"}))
 	if n := len(engine.Pending()); n != 2 {
 		t.Fatalf("a real message is never coalesced, got %d", n)
 	}
@@ -215,7 +215,7 @@ func TestASubscriberCancelHearsItAndStopsReceiving(t *testing.T) {
 	}
 	go engine.Start(context.Background())
 	defer engine.Stop()
-	a.Publish(context.Background(), func(error) {}, broadcast.NewMessage(1, true, core.SwarmNotice{Text: "late"}))
+	a.Publish(context.Background(), func(error) {}, broadcast.NewMessage(1, true, core.Notice{Source: "swarm", Text: "late"}))
 	time.Sleep(50 * time.Millisecond)
 	if in.batches() != 0 {
 		t.Fatal("a canceled subscriber receives nothing more")
@@ -226,7 +226,7 @@ func TestTheEncoderRoundTripsTheCrossingKinds(t *testing.T) {
 	enc := broadcast.NewJSONEncoder()
 	for _, m := range []broadcast.Message{
 		broadcast.NewMessage(4, true, core.Notice{Source: "decision", Text: "review: settled 10"}),
-		broadcast.NewMessage(4, true, core.SwarmNotice{Text: "w1 died"}),
+		broadcast.NewMessage(4, true, core.Notice{Source: "swarm", Text: "w1 died"}),
 		broadcast.NewMessage(4, true, core.SwarmStatus{Pending: 7, Workers: []core.SwarmWorker{{ID: 2, Role: "worker", Task: "t3", Done: 1}}}),
 		broadcast.Heartbeat(4, false),
 	} {
@@ -287,7 +287,7 @@ func TestASnapshotKeepsOnePendingPerSenderWithTheLatestValue(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		a.Publish(ctx, func(error) {}, broadcast.NewMessage(1, true, core.SwarmStatus{Pending: i}))
 	}
-	a.Publish(ctx, func(error) {}, broadcast.NewMessage(1, true, core.SwarmNotice{Text: "a story, not a state"}))
+	a.Publish(ctx, func(error) {}, broadcast.NewMessage(1, true, core.Notice{Source: "swarm", Text: "a story, not a state"}))
 	room.Add(3).Publish(ctx, func(error) {}, broadcast.NewMessage(3, true, core.SwarmStatus{Pending: 9}))
 	if n := len(engine.Pending()); n != 4 {
 		t.Fatalf("four snapshots from one sender are one event to b, the notice is its own, the third member's snapshot is one each to a and b: got %d", n)

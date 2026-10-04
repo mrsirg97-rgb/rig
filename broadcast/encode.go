@@ -64,7 +64,6 @@ func (e *encoder) Decode(encoded []byte) (Message, error) {
 
 const (
 	kindNotice      = "notice"
-	kindSwarmNotice = "swarm_notice"
 	kindSwarmStatus = "swarm_status"
 )
 
@@ -72,8 +71,6 @@ func kindOf(ev core.Event) (string, bool) {
 	switch ev.(type) {
 	case core.Notice:
 		return kindNotice, true
-	case core.SwarmNotice:
-		return kindSwarmNotice, true
 	case core.SwarmStatus:
 		return kindSwarmStatus, true
 	}
@@ -84,9 +81,6 @@ func eventOf(kind string, payload json.RawMessage) (core.Event, error) {
 	switch kind {
 	case kindNotice:
 		var ev core.Notice
-		return ev, json.Unmarshal(payload, &ev)
-	case kindSwarmNotice:
-		var ev core.SwarmNotice
 		return ev, json.Unmarshal(payload, &ev)
 	case kindSwarmStatus:
 		var ev core.SwarmStatus

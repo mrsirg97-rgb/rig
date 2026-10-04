@@ -175,7 +175,7 @@ swarm runs (`workers <n> · +<pending> ✓<done> ✕<failed> · w<id> <task>
 delegate. No new colors: labels and markers dim, counts text, the
 check the success slot, the cross the fault slot; the glyph switch
 carries the ascii fallback (`....`, `~` for the review clock).
-The notices (`core.SwarmNotice`) commit one dim line per decision in the
+The notices (`core.Notice`, source `swarm`) commit one dim line per decision in the
 transcript (SPEC_SWARM 7). Both are status-string extensions: the
 region's height-changing machinery covers them with no `live.go` line.
 News is the latest run since the previous session in this cwd that failed

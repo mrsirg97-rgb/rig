@@ -56,12 +56,13 @@ everything the supervisor says is a `broadcast` message.
   returning it to the workers. A dispatch refused because the worker's
   model is not resident (`sched.ErrNotResident`) releases the claim,
   stops that worker with a notice naming the holder, and fails nothing.
-- What the supervisor says, it publishes to the room: the four
-  decision-worthy `SwarmNotice`s (a task failed with its note, a
-  reviewer rejected with the reason, a worker died and was restarted or
-  exited, the swarm exited), `SwarmStatus` snapshots on claim, heartbeat,
-  finish and stop, and the loud lines that were stderr as `Notice`
-  (source `swarm`). A status is a `core.Snapshot`, so the loop transport
+- What the supervisor says, it publishes to the room as `Notice` with
+  source `swarm`, through one `say`: the four decision-worthy lines (a
+  task failed with its note, a reviewer rejected with the reason, a
+  worker died and was restarted or exited, the swarm exited) and the
+  error lines that were stderr (`loud`, skipped once the worker's
+  context is gone); beside them `SwarmStatus` snapshots on claim,
+  heartbeat, finish and stop. A status is a `core.Snapshot`, so the loop transport
   keeps one pending per sender with the latest value: a streaming
   worker's forty heartbeats are a handful of frames, no clock. The root
   is a member too: it subscribes once and hands each event to the

@@ -25,12 +25,12 @@ func (r *recordFrontend) Notify(ev core.Event) {
 	r.mu.Unlock()
 }
 
-func (r *recordFrontend) notices() []core.SwarmNotice {
+func (r *recordFrontend) notices() []core.Notice {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var out []core.SwarmNotice
+	var out []core.Notice
 	for _, ev := range r.events {
-		if n, ok := ev.(core.SwarmNotice); ok {
+		if n, ok := ev.(core.Notice); ok && n.Source == "swarm" {
 			out = append(out, n)
 		}
 	}
@@ -81,9 +81,9 @@ func TestSwarmNoticesTaskFailed(t *testing.T) {
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	got := waitForNotices(t, h.fe, 3)
 	want := []string{
-		"swarm: w1 died — t1 restarted",
-		"swarm: w1 died — t1 exited",
-		"swarm: t1 failed — the worker died twice",
+		"w1 died — t1 restarted",
+		"w1 died — t1 exited",
+		"t1 failed — the worker died twice",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("notices = %d, want %d:\n%v", len(got), len(want), got)
@@ -107,7 +107,7 @@ func TestSwarmNoticesReviewerRejected(t *testing.T) {
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	got := waitForNotices(t, h.fe, 1)
-	if got[0] != "swarm: t1 rejected — tests are missing" {
+	if got[0] != "t1 rejected — tests are missing" {
 		t.Fatalf("reject notice = %q", got[0])
 	}
 	h.waitFor(t, "the rejection picked up and accepted", func() bool {
@@ -122,7 +122,7 @@ func TestSwarmNoticesStop(t *testing.T) {
 		t.Fatalf("stop: %v", err)
 	}
 	got := waitForNotices(t, h.fe, 1)
-	if got[0] != "swarm: /swarm exited — 2 workers stopped" {
+	if got[0] != "/swarm exited — 2 workers stopped" {
 		t.Fatalf("stop notice = %q", got[0])
 	}
 }

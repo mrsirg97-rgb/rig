@@ -911,9 +911,12 @@ func TestHolderRefusalReleasesAndStopsTheWorker(t *testing.T) {
 	h.create(t, "held out")
 	h.fetch.resident = []string{"glm5.3-flash"}
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "dsv4"})
-	got := waitForNotices(t, h.fe, 1)
-	if !strings.Contains(got[0], "w1 stopped") || !strings.Contains(got[0], "held by glm5.3-flash") {
-		t.Fatalf("the stop notice must name the holder: %q", got[0])
+	got := waitForNotices(t, h.fe, 2)
+	if !strings.Contains(got[0], "held by glm5.3-flash") {
+		t.Fatalf("the refusal must name the holder: %q", got[0])
+	}
+	if !strings.Contains(got[1], "w1 stopped") || !strings.Contains(got[1], "held by glm5.3-flash") {
+		t.Fatalf("the stop notice must name the holder: %q", got[1])
 	}
 	h.waitFor(t, "the release", func() bool { return h.status(t, "t1") == "pending" })
 	rows := h.ctl.List()

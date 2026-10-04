@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -43,10 +44,10 @@ type Reviewer struct {
 	fire    Fire
 	batch   int
 	row     models.Model
-	loud    func(string)
+	voice   broadcast.Member
 }
 
-func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, loud func(string)) *Reviewer {
+func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, voice broadcast.Member) *Reviewer {
 	if engine == nil {
 		panic("decision: the reviewer bites on the loop; the engine is a constructor argument")
 	}
@@ -57,7 +58,7 @@ func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire F
 		fire:    fire,
 		batch:   batch,
 		row:     row,
-		loud:    loud,
+		voice:   voice,
 	}
 }
 
@@ -80,7 +81,7 @@ func (r *Reviewer) Wake() {
 func (r *Reviewer) bite() {
 	rows, all, err := r.take(r.ctx)
 	if err != nil {
-		r.say("decision: review: %v", err)
+		r.say("review: %v", err)
 		return
 	}
 	if len(rows) == 0 {
@@ -90,7 +91,7 @@ func (r *Reviewer) bite() {
 		out, reviewer, err := r.fire(r.ctx, reviewPrompt(rows))
 		r.engine.Add(evt.Func(func(context.Context) {
 			if err != nil {
-				r.say("decision: review: fire: %v", err)
+				r.say("review: fire: %v", err)
 				return
 			}
 			r.settle(r.ctx, rows, all, out, reviewer)
@@ -184,8 +185,8 @@ func (r *Reviewer) settle(ctx context.Context, rows, all []ReviewRow, out, revie
 }
 
 func (r *Reviewer) say(format string, args ...any) {
-	if r.loud != nil {
-		r.loud(fmt.Sprintf(format, args...))
+	if r.voice != nil {
+		broadcast.Say(r.voice, "decision", fmt.Sprintf(format, args...))
 	}
 }
 

@@ -113,7 +113,8 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
 ## Gotchas
 
 - `Recorder.Record` returns nothing on purpose: a store error never fails
-  a call, and the swallow is loud only where the root wired a log.
+  a call, and the swallow is loud only where the root wired a voice (a
+  `broadcast.Member`; the notice carries source `decision`).
 - The confidence is a probability; the store refuses anything outside
   0..1, and the HTTP client drops such answers before they reach it.
   The confidence a row keeps is the mass on the value the answer

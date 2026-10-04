@@ -73,22 +73,22 @@ func recorderFor(r *root, fe core.Frontend) *state.Recorder {
 func TestARoomMessageReachesTheRecorderThatExistsAtDelivery(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	storeRoot(t, r)
-	r.fleet()
+	fleet(r)
 	go r.engine.Start(context.Background())
 	defer r.engine.Stop()
 	first := &recordingFrontend{}
 	r.rec = recorderFor(r, first)
 	member := r.room.Add(swarm.SupervisorID)
-	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.SwarmNotice{Text: "w1 died"}))
+	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.Notice{Source: "swarm", Text: "w1 died"}))
 	awaitCount(t, first, 1)
 	second := &recordingFrontend{}
 	r.rec = recorderFor(r, second)
-	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.SwarmNotice{Text: "after the swap"}))
+	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.Notice{Source: "swarm", Text: "after the swap"}))
 	awaitCount(t, second, 1)
 	if first.count() != 1 {
 		t.Fatalf("the old recorder must not get the post-swap frames, got %d", first.count())
 	}
-	if n, ok := second.events[0].(core.SwarmNotice); !ok || n.Text != "after the swap" {
+	if n, ok := second.events[0].(core.Notice); !ok || n.Text != "after the swap" {
 		t.Fatalf("the new recorder got %+v", second.events[0])
 	}
 }
@@ -96,14 +96,14 @@ func TestARoomMessageReachesTheRecorderThatExistsAtDelivery(t *testing.T) {
 func TestAPanickingFrontendIsRecoveredLoudAndTheRoomKeepsDelivering(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	storeRoot(t, r)
-	r.fleet()
+	fleet(r)
 	errOut := &lockedBuffer{}
 	r.errOut = errOut
 	go r.engine.Start(context.Background())
 	defer r.engine.Stop()
 	r.rec = recorderFor(r, explodingFrontend{})
 	member := r.room.Add(swarm.SupervisorID)
-	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.SwarmNotice{Text: "boom"}))
+	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.Notice{Source: "swarm", Text: "boom"}))
 	deadline := time.Now().Add(2 * time.Second)
 	for !strings.Contains(errOut.String(), "frontend exploded") {
 		if time.Now().After(deadline) {
@@ -113,14 +113,14 @@ func TestAPanickingFrontendIsRecoveredLoudAndTheRoomKeepsDelivering(t *testing.T
 	}
 	calm := &recordingFrontend{}
 	r.rec = recorderFor(r, calm)
-	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.SwarmNotice{Text: "still here"}))
+	member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(swarm.SupervisorID, true, core.Notice{Source: "swarm", Text: "still here"}))
 	awaitCount(t, calm, 1)
 }
 
 func TestHeartbeatsAreOneFrameUntilTheLoopRuns(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	storeRoot(t, r)
-	r.fleet()
+	fleet(r)
 	fe := &recordingFrontend{}
 	r.rec = recorderFor(r, fe)
 	member := r.room.Add(swarm.SupervisorID)

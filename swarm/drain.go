@@ -2,7 +2,6 @@ package swarm
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -123,7 +122,7 @@ func (c *Controller) delegate(in sched.DelegateInput) (sched.DelegateResult, err
 
 func (c *Controller) settle(w *worker, id string, res workResult) {
 	if res.holder != nil {
-		c.notice(fmt.Sprintf("swarm: w%d stopped — %v", w.id, res.holder))
+		c.say("w%d stopped — %v", w.id, res.holder)
 		c.release(w, id)
 		return
 	}
@@ -134,12 +133,12 @@ func (c *Controller) settle(w *worker, id string, res workResult) {
 	}
 	c.retries[id]++
 	if c.retries[id] == 1 {
-		c.notice(fmt.Sprintf("swarm: w%d died — %s restarted", w.id, id))
+		c.say("w%d died — %s restarted", w.id, id)
 		c.release(w, id)
 		w.task = ""
 		return
 	}
-	c.notice(fmt.Sprintf("swarm: w%d died — %s exited", w.id, id))
+	c.say("w%d died — %s exited", w.id, id)
 	c.failTask(w, id, res.noVerdict)
 	w.failed++
 	w.task = ""
@@ -165,7 +164,7 @@ func (c *Controller) failTask(w *worker, id string, noVerdict bool) {
 		c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 		return
 	}
-	c.notice(fmt.Sprintf("swarm: %s failed — the worker died twice", id))
+	c.say("%s failed — the worker died twice", id)
 }
 
 func (c *Controller) rejectTask(w *worker, id, reason string) error {
@@ -176,14 +175,14 @@ func (c *Controller) rejectTask(w *worker, id, reason string) error {
 			c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 			return err
 		}
-		c.notice(fmt.Sprintf("swarm: %s failed — the reviewer rejected this twice; the swarm failed it", id))
+		c.say("%s failed — the reviewer rejected this twice; the swarm failed it", id)
 		return nil
 	}
 	if _, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, reason, w.identity); err != nil {
 		c.loud(w, "w%d: reject %s: %v", w.id, id, err)
 		return err
 	}
-	c.notice(fmt.Sprintf("swarm: %s rejected — %s", id, reason))
+	c.say("%s rejected — %s", id, reason)
 	return nil
 }
 

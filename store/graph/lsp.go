@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 )
 
 const lspRequestTimeout = 30 * time.Second
@@ -43,7 +45,7 @@ type lspClient struct {
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
 	lang    string
-	loud    func(string)
+	voice   broadcast.Member
 	mu      sync.Mutex
 	nextID  int64
 	pending map[int64]chan json.RawMessage
@@ -64,7 +66,7 @@ func (q *Queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
 	if argv == nil {
 		return nil, nil
 	}
-	c, err := startServer(ctx, lang, argv, q.loud)
+	c, err := startServer(ctx, lang, argv, q.voice)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +84,7 @@ func (q *Queue) stopLSP() {
 	q.lspMu.Unlock()
 }
 
-func startServer(ctx context.Context, lang string, argv []string, loud func(string)) (*lspClient, error) {
+func startServer(ctx context.Context, lang string, argv []string, voice broadcast.Member) (*lspClient, error) {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -100,7 +102,7 @@ func startServer(ctx context.Context, lang string, argv []string, loud func(stri
 		cmd:     cmd,
 		stdin:   stdin,
 		lang:    lang,
-		loud:    loud,
+		voice:   voice,
 		pending: map[int64]chan json.RawMessage{},
 	}
 	c.mu.Lock()
@@ -159,8 +161,8 @@ func (c *lspClient) stop() {
 }
 
 func (c *lspClient) say(format string, args ...any) {
-	if c.loud != nil {
-		c.loud(fmt.Sprintf(format, args...))
+	if c.voice != nil {
+		broadcast.Say(c.voice, "graph", fmt.Sprintf(format, args...))
 	}
 }
 
@@ -236,7 +238,7 @@ func (c *lspClient) die(err error) {
 	pending := c.pending
 	c.pending = map[int64]chan json.RawMessage{}
 	c.mu.Unlock()
-	c.say("graph: the %s language server stopped: %v", c.lang, err)
+	c.say("the %s language server stopped: %v", c.lang, err)
 	for _, ch := range pending {
 		close(ch)
 	}

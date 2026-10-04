@@ -280,7 +280,7 @@ func (c *Controller) Stop() (string, error) {
 	}
 	c.call(func() {
 		c.emit()
-		c.notice(fmt.Sprintf("swarm: /swarm exited — %d %s stopped", count, plural(count, "worker")))
+		c.say("/swarm exited — %d %s stopped", count, plural(count, "worker"))
 	})
 	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "agent")), nil
 }
@@ -305,16 +305,15 @@ func (c *Controller) status() core.SwarmStatus {
 	return core.SwarmStatus{Workers: workers, Pending: counts.Pending, Review: counts.Review}
 }
 
-func (c *Controller) notice(text string) {
-	c.self.Publish(context.Background(), func(error) {}, broadcast.NewMessage(SupervisorID, true, core.SwarmNotice{Text: text}))
+func (c *Controller) say(format string, args ...any) {
+	broadcast.Say(c.self, "swarm", strings.TrimRight(fmt.Sprintf(format, args...), "\n"))
 }
 
 func (c *Controller) loud(w *worker, format string, args ...any) {
 	if w.ctx.Err() != nil {
 		return
 	}
-	text := fmt.Sprintf(format, args...)
-	c.self.Publish(context.Background(), func(error) {}, broadcast.NewMessage(SupervisorID, true, core.Notice{Source: "swarm", Text: strings.TrimRight(text, "\n")}))
+	c.say(format, args...)
 }
 
 func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {

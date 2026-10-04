@@ -1,8 +1,6 @@
 package swarm
 
 import (
-	"fmt"
-
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
@@ -26,7 +24,7 @@ func (c *Controller) dispatch() {
 		if c.budget > 0 && c.spent >= c.budget {
 			if !c.budgetSaid {
 				c.budgetSaid = true
-				c.notice(fmt.Sprintf("swarm: budget reached — $%.2f / $%.2f — the swarm stops claiming", c.spent, c.budget))
+				c.say("budget reached — $%.2f / $%.2f — the swarm stops claiming", c.spent, c.budget)
 			}
 			return
 		}

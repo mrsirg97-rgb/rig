@@ -46,9 +46,9 @@ width); no core or loop line (decision 10).
   rows, behind a short dim rule (four cells), while a swarm runs — the
   densified counts (`+pending ✓done ✕failed`, the review clock for the
   reviewer row) ride the theme's glyph switch, zero rows and no rule
-  when nothing runs, one row for a delegate — and `RenderSwarmNotice`
-  commits the one-line `SwarmNotice` transcript line at the decision
-  points (SPEC_SWARM 7).
+  when nothing runs, one row for a delegate; the swarm's decision lines
+  are `Notice`s with source `swarm` and go through `RenderNotice` like
+  every other (SPEC_SWARM 7; `RenderSwarmNotice` left in 2.11.0).
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,
   both doors; the tool-result path and the command path commit
   byte-equal blocks minus the opening line (decision 6).

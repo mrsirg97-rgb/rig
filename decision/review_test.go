@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -150,7 +152,7 @@ func reviewerBatch(db store.DB, fire decision.Fire, batch int) *decision.Reviewe
 func reviewerRow(db store.DB, fire decision.Fire, batch int, row models.Model) *decision.Reviewer {
 	engine := evt.NewEngine()
 	go engine.Start(context.Background())
-	return decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch, row, func(string) {})
+	return decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch, row, nil)
 }
 
 func waitSettled(t *testing.T, db store.DB, want int) {
@@ -563,4 +565,23 @@ func TestADrainWithNothingPendingCostsNoFire(t *testing.T) {
 	if summary == "" {
 		t.Fatal("the drain still gets a summary")
 	}
+}
+
+func voice(t *testing.T) (broadcast.Member, <-chan string) {
+	t.Helper()
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	t.Cleanup(engine.Stop)
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	said := make(chan string, 8)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				said <- n.Source + ": " + n.Text
+			}
+		}
+	})
+	return room.Add(0), said
 }

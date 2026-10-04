@@ -156,6 +156,11 @@ func testTools() map[string]core.Tool {
 	}
 }
 
+func fleet(r *root) {
+	r.engine, r.room = newFleet()
+	r.listen()
+}
+
 func testRoot(fe core.Frontend) *root {
 	sess := core.NewSession()
 	r := &root{

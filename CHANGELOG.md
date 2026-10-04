@@ -80,11 +80,30 @@ holds the pipe open. Gone: the `rig: heartbeat` stderr line, the
 line. The stall watch still reads stdout bytes too: a worker's text is
 still progress.
 
+One notice, one voice (the sixth commit). `core.SwarmNotice` was a
+second type for the idea `Notice` already is, so it folds in: the
+swarm says everything as `Notice` with source `swarm`, through one
+`say`, and the TUI, the web and the CLI render it as they render every
+notice, `source: text`, which is the same line the swarm's texts
+already began with. The `loud func(string)` closures the root built for
+the graph queue, the decision queue, the reviewer, the pack scorer and
+the decision recorder, and `root.notice` behind them with its three
+branches, go: each holds a `broadcast.Member` from the kernel's named
+ids (`rig.MemberGraph`, `rig.MemberDecision`; the frontend, the
+delegate tool and the minted worker range beside them) and
+`broadcast.Say`s, which is one `Notice` published to the room. The
+frontend member hands it to the current recorder, or prints it to
+stderr while there is none yet, and a headless worker's stderr line is
+what it was. The doubled `decision: decision:` and `graph: graph:`
+prefixes in the operator's notices go with the closures, since the
+source is on the event now. The run-job process opens the same room
+for its recorder's one rare line. The web client renders every
+`notice` in its feed, where before it showed only the swarm's.
+
 The first commit is the package and its tests; the second the engine;
 the third the swarm; the fourth the reviewer and the delegate tool; the
-fifth the pipe. The commits that follow in this release: the verdict
-crosses the pipe as a message and the stdout scrape leaves; the two
-notice events become one message and the `loud` closures go.
+fifth the pipe; the sixth the one notice. What remains in this release:
+the verdict crosses the pipe as a message and the stdout scrape leaves.
 
 ## [2.10.2]: claim says what claim does
 

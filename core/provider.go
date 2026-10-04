@@ -26,7 +26,6 @@ var (
 	_ Event = TestEvent{}
 	_ Event = Compacted{}
 	_ Event = SwarmStatus{}
-	_ Event = SwarmNotice{}
 	_ Event = Notice{}
 )
 
@@ -136,10 +135,6 @@ type SwarmStatus struct {
 func (SwarmStatus) event() {}
 
 func (SwarmStatus) Snapshot() {}
-
-type SwarmNotice struct{ Text string }
-
-func (SwarmNotice) event() {}
 
 type Notice struct {
 	Source string

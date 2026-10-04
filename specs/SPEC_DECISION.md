@@ -19,7 +19,8 @@ Stdlib-only leaf beside `pathguard`, imported by the gate packages.
 - `Final` is the gate's recording (site, state, question, answer, decider,
   scope, session) and `Recorder` is the seam the gates hold: `Record(ctx, Final)`,
   returns nothing. A nil recorder records nothing; the wired one swallows
-  store errors (loud when the root gives it a log), because the call's
+  store errors (said in the room when the root gives it a voice, 2.11.0),
+  because the call's
   result must be untouched by the store.
 
 ## the store (`store/decision/`)

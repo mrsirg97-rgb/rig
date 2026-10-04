@@ -553,9 +553,10 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
 - A delegate shows the worker row only: its snapshot carries the one
   in-flight worker and zero queue counts, and the band is the rule plus
   one row.
-- `core.SwarmNotice` commits one dim line in the transcript at the
-  decision points, exactly the events SPEC_SWARM 7 names; nothing else is
-  a notice. The CLI and the oneshot ignore both events (the compat rule:
+- `core.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) commits
+  one dim line in the transcript at the decision points, exactly the
+  events SPEC_SWARM 7 names, rendered as every other notice is:
+  `source: text`. The CLI and the oneshot ignore both events (the compat rule:
   unknown events are ignored, never misread).
 
 ### 4. Tool rows

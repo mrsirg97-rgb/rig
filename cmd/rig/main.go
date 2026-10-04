@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -359,8 +360,9 @@ func main() {
 	}
 	defer decdb.DB.Close()
 
-	var r *root
-	gq := graph.NewQueue(cfgDir, func(m string) { r.notice("graph", m) })
+	engine, room := newFleet()
+	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph))
+	voice := room.Add(rig.MemberDecision)
 
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
@@ -408,7 +410,7 @@ func main() {
 		swapURL = v
 	}
 
-	r = &root{
+	r := &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
 		system:     systemPrompt,
@@ -443,10 +445,12 @@ func main() {
 		pluginsHome: cfgDir,
 		graph:       gq,
 		pluginInfos: pluginInfos,
+		engine:      engine,
+		room:        room,
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
-	r.fleet()
+	r.listen()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
@@ -504,7 +508,7 @@ func main() {
 	}
 
 	r.natives = native
-	r.drec = decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Log: func(m string) { r.notice("decision", m) }}
+	r.drec = decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
 	r.eco = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
@@ -559,7 +563,6 @@ func main() {
 	}
 
 	if decisionURL != "" {
-		loud := func(m string) { r.notice("decision", m) }
 		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
@@ -578,19 +581,19 @@ func main() {
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		if headless {
-			r.decQ = decision.NewQueue(dec, sink, nil, loud)
+			r.decQ = decision.NewQueue(dec, sink, nil, voice)
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, &dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				cfg.Settings.ReviewBatchOrDefault(), row, loud)
+				cfg.Settings.ReviewBatchOrDefault(), row, voice)
 			r.decRev = rev
-			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
+			r.decQ = decision.NewQueue(dec, sink, rev.Land, voice)
 		}
 		var land func()
 		if r.decRev != nil {
 			land = r.decRev.Land
 		}
-		psc, perr := decision.NewPackScorer(dec, sink, land, loud, rig.DefaultParallel)
+		psc, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
 		if perr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
 			os.Exit(1)
@@ -735,7 +738,17 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
 	} else {
 		defer jdb.DB.Close()
-		jobDecisions = decisionstore.Recorder{DB: jdb, Log: func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }}
+		engine, room := newFleet()
+		go engine.Start(context.Background())
+		defer engine.Stop()
+		room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+			for _, m := range messages {
+				if n, ok := m.Event().(core.Notice); err == nil && ok {
+					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
+				}
+			}
+		})
+		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: room.Add(rig.MemberDecision)}
 	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
 		Home:      home,

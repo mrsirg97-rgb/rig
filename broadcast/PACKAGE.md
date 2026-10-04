@@ -27,7 +27,9 @@ no quorum. Imports `core` and `evt` only.
 - `member.go`: `Member`, a `Transport` placed in a `Room`: `Forward` to
   itself, `Publish` to the room, `Subscribe` to what arrives, `Leave`
   (closes the transport, leaves the room). Every call threads the
-  caller's context.
+  caller's context. `Say(member, source, text)` publishes one
+  `core.Notice`: the one voice every background subsystem speaks with
+  (2.11.0; it replaced the `loud func(string)` closures).
 - `room.go`: `Room`, built with the transport its members speak
   through (`NewRoom(id, func(origin) Transport)`): `Add`, `Remove`,
   sorted `Members`, and `Broadcast`, a fan-out to every other member
@@ -45,14 +47,20 @@ no quorum. Imports `core` and `evt` only.
   rule is to fail closed.
 - `encode.go`: the JSON `Encoder` for a transport that crosses a
   process: the frame is origin, ok, kind, payload, and the kind names
-  the `core` event (`notice`, `swarm_notice`, `swarm_status`); an event
-  with no kind refuses to cross, an unknown kind refuses to land.
+  the `core` event (`notice`, `swarm_status`); an event with no kind
+  refuses to cross, an unknown kind refuses to land.
 
 ## How it is consumed
 
 The root builds the session's room over the loop transport at
-`rig.PriorityFleet` and is its frontend member; the swarm supervisor and
-its workers, and the delegate tool and its workers, are members by id.
+`rig.PriorityFleet` and is its frontend member; the member ids are
+named in the kernel (`rig.MemberFrontend`, `MemberDelegate`,
+`MemberGraph`, `MemberDecision`; below `MemberMinted` the delegate
+tool mints its workers'; the swarm's supervisor is 0 and its workers
+count up from 1). The graph queue, the decision queue, the reviewer,
+the pack scorer and the decision recorder hold a member and `Say`
+their notices; the frontend member hands every event to the current
+recorder, or prints a notice to stderr while there is none yet.
 A spawned worker (`rig -p -`) gets the write end of a pipe as fd 3 and
 its member id in `RIG_FLEET` (`store/scheduler`'s `Fleet` door); the
 one-shot frontend heartbeats through a pipe transport on it, and the

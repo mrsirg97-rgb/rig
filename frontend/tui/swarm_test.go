@@ -255,7 +255,7 @@ func TestSwarmNoticeCommitsOneLine(t *testing.T) {
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
-	s.fe.Notify(core.SwarmNotice{Text: "swarm: t1 failed — the worker died twice"})
+	s.fe.Notify(core.Notice{Source: "swarm", Text: "t1 failed — the worker died twice"})
 	s.await("swarm: t1 failed — the worker died twice")
 	rows := screenLines(t, s, 60)
 	count := 0

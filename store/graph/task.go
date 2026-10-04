@@ -40,7 +40,7 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 	for _, c := range cands {
 		item, err := candidateItem(root, c)
 		if err != nil {
-			q.say("graph: %v", err)
+			q.say("%v", err)
 			continue
 		}
 		if len(items) > 0 && total+len(item) >= q.itemCap {

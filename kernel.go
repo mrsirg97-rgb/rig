@@ -36,6 +36,14 @@ const (
 	PriorityReview = 10
 )
 
+const (
+	MemberFrontend int64 = -1
+	MemberDelegate int64 = -2
+	MemberGraph    int64 = -3
+	MemberDecision int64 = -4
+	MemberMinted   int64 = -5
+)
+
 type Option func(*Kernel)
 
 func New(opts ...Option) *Kernel {

@@ -366,7 +366,7 @@ func TestTheReviewerDeniesAPackRowWithTheCorrectedAnswer(t *testing.T) {
 		}
 		return strings.Join(lines, "\n"), "rev", nil
 	}
-	rev := decision.NewReviewer(context.Background(), evt.NewEngine(), packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, func(string) {})
+	rev := decision.NewReviewer(context.Background(), evt.NewEngine(), packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, nil)
 	if _, err := rev.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}

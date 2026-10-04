@@ -27,8 +27,9 @@ itself, and `Outcome` writes the one fact that arrives later.
   state column is bounded at 4096 bytes at the boundary.
 - `recorder.go`: the `decision.Recorder` adapter — the gates' seam. It
   fills the scope from the root when the row carries none, names the
-  ctx session, bounds nothing else, and swallows store errors (loud on
-  the wired log): recording never changes a decision.
+  ctx session, bounds nothing else, and swallows store errors (said in
+  the room through the wired `Voice`, a `broadcast.Member`): recording
+  never changes a decision.
 - `migrate.go`: the schema migration. `unsure` is schema version 2; the
   migration adds the column to a version 1 file (old rows read 0) and
   `store.Open` runs it at both open sites.

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -43,8 +44,6 @@ type Opts struct {
 	Room         broadcast.Room
 }
 
-const MemberID int64 = -2
-
 type workerState struct {
 	task      string
 	heartbeat time.Time
@@ -54,7 +53,7 @@ type workerState struct {
 func New(o Opts) core.Tool {
 	a := &adapter{Definition: tool.Fill(tool.Def("delegate"), "{default_model}", o.DefaultModel), Opts: o, workers: map[int64]workerState{}}
 	if o.Room != nil {
-		a.member = o.Room.Add(MemberID)
+		a.member = o.Room.Add(rig.MemberDelegate)
 		a.member.Subscribe(context.Background(), a.receive)
 	}
 	return a
@@ -174,7 +173,7 @@ func (a *adapter) begin(task string) broadcast.Member {
 	}
 	a.mu.Lock()
 	a.seq++
-	id := MemberID - a.seq
+	id := rig.MemberMinted - a.seq
 	a.workers[id] = workerState{task: firstLine(task), heartbeat: time.Now(), state: "running"}
 	a.mu.Unlock()
 	a.emit()
@@ -211,14 +210,14 @@ func (a *adapter) receive(err error, messages ...broadcast.Message) {
 }
 
 func (a *adapter) emit() {
-	a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(MemberID, true, a.snapshot()))
+	a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, a.snapshot()))
 }
 
 func (a *adapter) snapshot() core.SwarmStatus {
 	a.mu.Lock()
 	ws := make([]core.SwarmWorker, 0, len(a.workers))
 	for id, w := range a.workers {
-		ws = append(ws, core.SwarmWorker{ID: int(MemberID - id), Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
+		ws = append(ws, core.SwarmWorker{ID: int(rig.MemberMinted - id), Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
 	}
 	a.mu.Unlock()
 	sort.Slice(ws, func(i, j int) bool { return ws[i].ID < ws[j].ID })

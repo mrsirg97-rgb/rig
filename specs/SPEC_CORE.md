@@ -198,11 +198,13 @@ is a partial and is discarded.
 fails loudly (a cancelled turn reads the same and breaks the turn instead, per
 the loop section).
 
-Swarm events (SPEC_SWARM 7) are a fourth emitter category: the swarm
-controller and the delegate tool's Observe emit `SwarmNotice` (one
-transcript line per decision) and `SwarmStatus` (the band snapshot,
-throttled) through the frontend seam; the loop never emits or forwards
-them, and the compat rule keeps them additive.
+Fleet events (SPEC_SWARM 7) are a fourth emitter category: the swarm
+controller and the delegate tool publish `Notice` (source `swarm`, one
+transcript line per decision) and `SwarmStatus` (the band snapshot) to
+the session's `broadcast` room, and the root's frontend member hands
+them to the frontend; the loop never emits or forwards them, and the
+compat rule keeps them additive. `SwarmNotice` was a second type for
+the same idea and folded into `Notice` in 2.11.0.
 
 A `ToolCallEvent` is emitted for every accumulated call. A call whose args
 are invalid when the stream ends carries `Cut` set to the finish reason

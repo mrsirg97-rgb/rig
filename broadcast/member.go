@@ -2,6 +2,8 @@ package broadcast
 
 import (
 	"context"
+
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 /*
@@ -53,4 +55,8 @@ func (m *member) Publish(ctx context.Context, callback func(ack error), messages
 
 func (m *member) Subscribe(ctx context.Context, callback func(err error, messages ...Message)) {
 	m.transport.Recv(ctx, callback)
+}
+
+func Say(m Member, source, text string) {
+	m.Publish(context.Background(), func(error) {}, NewMessage(m.Id(), true, core.Notice{Source: source, Text: text}))
 }

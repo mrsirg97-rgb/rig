@@ -276,7 +276,8 @@ stream file is written. The text that follows describes the events,
 which did not change.
 
 The four decision-worthy events emit one-line
-`core.SwarmNotice` transcript notices, and nothing else does — the drain
+`core.Notice` transcript notices with source `swarm` (`SwarmNotice`
+until 2.11.0), and nothing else does — the drain
 loop's ordinary claim/complete/bytes stay out of the transcript (the run
 log and the bare `/swarm` are their audit).
 
@@ -412,6 +413,8 @@ spawn, a scripted busy fixture, or a real store in a temp dir.
 
 - `core/`: the event vocabulary gains two types (`SwarmNotice`,
   `SwarmStatus`) as pure additions — nothing else; `loop/`: zero diff.
+  2.11.0 folded `SwarmNotice` into `Notice` (source `swarm`), one event
+  for one idea.
   The loop never learns the swarm.
 - The todo store gains the two structured reads (`Task`, `Counts`) and
   nothing else: the claim filter, the review gate, and the release doors
