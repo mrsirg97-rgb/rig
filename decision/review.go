@@ -29,6 +29,7 @@ type ReviewRow struct {
 }
 
 type Reviews interface {
+	Settled
 	Pending(ctx context.Context) ([]ReviewRow, error)
 	Settle(ctx context.Context, id int64, approved bool, reviewer, answer string) error
 }

@@ -66,6 +66,10 @@ func (r packReviews) Settle(ctx context.Context, id int64, approved bool, review
 	})
 }
 
+func (r packReviews) Settled(ctx context.Context, site string, q decision.Question, state string) (string, bool, error) {
+	return decisionstore.Settled(ctx, r.db, site, q, state)
+}
+
 type taskProbe struct {
 	mu    sync.Mutex
 	asks  []string

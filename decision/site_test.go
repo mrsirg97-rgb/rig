@@ -16,7 +16,7 @@ func TestABashCallProposesPendingAndTheReplyIsUnchanged(t *testing.T) {
 	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
 	var dec fakeDecider
 	dec.answers = []decision.Answer{{Question: "risk", Value: "dangerous", Confidence: 0.33, Decider: "laya"}}
-	q := decision.NewQueue(&dec, sink, func() {}, nil)
+	q := decision.NewQueue(&dec, sink, storeSettled{db: db}, decisionstore.Recorder{DB: db, Scope: "proj"}, func() {}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go q.Run(ctx)
@@ -60,7 +60,7 @@ func TestABashCallProposesPendingAndTheReplyIsUnchanged(t *testing.T) {
 func TestOnlyBashProposes(t *testing.T) {
 	db := openDecisionStore(t)
 	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
-	q := decision.NewQueue(&fakeDecider{}, sink, func() {}, nil)
+	q := decision.NewQueue(&fakeDecider{}, sink, storeSettled{db: db}, decisionstore.Recorder{DB: db, Scope: "proj"}, func() {}, nil)
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "read", nil
 	}
@@ -75,10 +75,51 @@ func TestOnlyBashProposes(t *testing.T) {
 	}
 }
 
+func TestAProposalCarriesTheNormalizedCommand(t *testing.T) {
+	db := openDecisionStore(t)
+	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
+	var dec fakeDecider
+	dec.answers = []decision.Answer{{Question: "risk", Value: "safe", Confidence: 0.5, Decider: "laya"}}
+	q := decision.NewQueue(&dec, sink, storeSettled{db: db}, decisionstore.Recorder{DB: db, Scope: "proj"}, func() {}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go q.Run(ctx)
+
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return "total 0\n", nil
+	}
+	site := decision.Site(q).Wrap(exec)
+	if _, err := site(context.Background(), core.ToolCall{
+		ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"cd  /tmp  &&  rm  -rf  x"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	<-sink.written
+
+	rows, err := decisionstore.Pending(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("one pending proposal, got %d", len(rows))
+	}
+	var state struct {
+		Command   string `json:"command"`
+		Workspace string `json:"workspace"`
+	}
+	if err := json.Unmarshal([]byte(rows[0].State), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.Command != "rm -rf x" {
+		t.Fatalf("the state carries the normalized command: %q", state.Command)
+	}
+}
+
 func TestTheProposerNeverBlocksTheCall(t *testing.T) {
 	block := make(chan struct{})
 	defer close(block)
-	q := decision.NewQueue(&fakeDecider{}, blockingSink{block: block}, func() {}, nil)
+	db := openDecisionStore(t)
+	q := decision.NewQueue(&fakeDecider{}, blockingSink{block: block}, storeSettled{db: db}, decisionstore.Recorder{DB: db, Scope: "proj"}, func() {}, nil)
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}

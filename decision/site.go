@@ -3,6 +3,7 @@ package decision
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -47,7 +48,7 @@ func (s *siteLink) propose(ctx context.Context, call core.ToolCall, err error) {
 	}
 	_ = json.Unmarshal(call.Args, &a)
 	state := map[string]string{
-		"command": a.Command,
+		"command": normalize(a.Command),
 	}
 	if a.Workspace != "" {
 		state["workspace"] = a.Workspace
@@ -69,6 +70,32 @@ func (s *siteLink) propose(ctx context.Context, call core.ToolCall, err error) {
 		State:    truncate(string(b), siteStateCap),
 		Question: riskQuestion,
 	})
+}
+
+func normalize(command string) string {
+	s := strings.Join(strings.Fields(command), " ")
+	rest, ok := strings.CutPrefix(s, "cd ")
+	if !ok {
+		return s
+	}
+	path, sep, after := cutSeparator(rest)
+	if sep == "" || strings.TrimSpace(path) == "" {
+		return s
+	}
+	return strings.TrimSpace(after)
+}
+
+func cutSeparator(s string) (before, sep, after string) {
+	if i := strings.Index(s, "&&"); i >= 0 {
+		if j := strings.IndexByte(s, ';'); j >= 0 && j < i {
+			return s[:j], ";", s[j+1:]
+		}
+		return s[:i], "&&", s[i+2:]
+	}
+	if j := strings.IndexByte(s, ';'); j >= 0 {
+		return s[:j], ";", s[j+1:]
+	}
+	return s, "", ""
 }
 
 func truncate(s string, cap int) string {

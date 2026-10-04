@@ -56,6 +56,10 @@ func (r *dbReviews) Settle(ctx context.Context, id int64, approved bool, reviewe
 	})
 }
 
+func (r *dbReviews) Settled(ctx context.Context, site string, q decision.Question, state string) (string, bool, error) {
+	return decisionstore.Settled(ctx, r.db, site, q, state)
+}
+
 func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string) decision.Fire {
 	return func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
 		delegate := r.delegate

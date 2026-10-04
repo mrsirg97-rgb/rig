@@ -70,6 +70,18 @@ call never waits on it: the site enqueues on a bounded channel and one
 goroutine decides and writes. A full queue drops the proposal (a proposal
 is not a decision), and a decider error drops it loudly.
 
+The store answers before the model. The proposed state carries the
+normalized command — one leading `cd <path> &&` (or `;`) stripped, once,
+only when a path precedes it, runs of whitespace collapsed, ends trimmed —
+so twins of one command share a state. Before the decider is called, the
+queue asks the store what is settled: the most recent approved or denied
+row for the same site, question id and state answers a twin, which lands a
+final row (the store's answer, confidence 1, decider `reviewed`) and
+proposes nothing — a question whose answer is already settled is never
+asked again, and a denied row's answer is its correction. A store error on
+the read falls through to the proposer: the read fails open, the queue
+never blocks.
+
 ### the pack site (2.10.0)
 
 The code map's task pack scores each candidate with one yes/no — "Does

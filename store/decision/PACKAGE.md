@@ -22,7 +22,11 @@ itself, and `Outcome` writes the one fact that arrives later.
   0..1), `Pending` (the pending rows in id order; a row whose question
   JSON does not parse is skipped, never thrown), `Settle` (keys on
   `status='pending'`, so two reviewers racing settle once and the
-  loser's write is a no-op), `Outcome` (refuses by name when the id is
+  loser's write is a no-op), `Settled` (the most recent approved row,
+  or denied row that carries a correction, for a site, question id and
+  state — newest id first; a row whose question JSON does not parse or
+  whose question id differs is skipped, never thrown; the denied
+  answer is its correction), `Outcome` (refuses by name when the id is
   unknown). Ids are minted max+1 inside the caller's transaction; the
   state column is bounded at 4096 bytes at the boundary.
 - `recorder.go`: the `decision.Recorder` adapter — the gates' seam. It

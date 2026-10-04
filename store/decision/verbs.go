@@ -193,6 +193,42 @@ func Pending(ctx context.Context, db store.DB) ([]PendingRow, error) {
 	return out, nil
 }
 
+func Settled(ctx context.Context, db store.DB, site string, q decision.Question, state string) (string, bool, error) {
+	_, tx, err := db.TxReadOnly(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx,
+		`SELECT "status", "answer", "reviewer_answer", "question" FROM "decisions"
+		 WHERE "site" = ? AND "state" = ? AND ("status" = 'approved' OR ("status" = 'denied' AND "reviewer_answer" IS NOT NULL))
+		 ORDER BY "id" DESC`, site, state)
+	if err != nil {
+		return "", false, fmt.Errorf("decision: settled: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status string
+		var answer, reviewer *string
+		var qjson string
+		if err := rows.Scan(&status, &answer, &reviewer, &qjson); err != nil {
+			return "", false, fmt.Errorf("decision: settled scan: %w", err)
+		}
+		var row decision.Question
+		if json.Unmarshal([]byte(qjson), &row) != nil || row.ID != q.ID {
+			continue
+		}
+		if status == decision.StatusDenied {
+			return *reviewer, true, nil
+		}
+		return *answer, true, nil
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, fmt.Errorf("decision: settled: %w", err)
+	}
+	return "", false, nil
+}
+
 func Settle(ctx context.Context, db store.DB, in SettleInput) error {
 	_, tx, err := db.Tx(ctx)
 	if err != nil {

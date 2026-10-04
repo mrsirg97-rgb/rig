@@ -50,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.11.5"
+const Version = "2.11.6"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -588,17 +588,18 @@ func main() {
 			os.Exit(1)
 		}
 		r.decide = dtool
+		reviews := &dbReviews{db: decdb}
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		var land func()
 		if headless {
-			r.decQ = decision.NewQueue(dec, sink, nil, voice)
+			r.decQ = decision.NewQueue(dec, sink, reviews, drec, nil, voice)
 		} else {
-			rev := decision.NewReviewer(ctx, r.engine, &dbReviews{db: decdb},
+			rev := decision.NewReviewer(ctx, r.engine, reviews,
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
 				cfg.Settings.ReviewBatchOrDefault(), row, room)
 			r.decRev = rev
-			r.decQ = decision.NewQueue(dec, sink, rev.Land, voice)
+			r.decQ = decision.NewQueue(dec, sink, reviews, drec, rev.Land, voice)
 			land = rev.Land
 		}
 		psc, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
