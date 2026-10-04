@@ -65,7 +65,7 @@ func TestAProposalLandsPendingAndMarksTheReviewerDirty(t *testing.T) {
 	woken := make(chan struct{}, 1)
 	var dec fakeDecider
 	dec.answers = []decision.Answer{{Question: "risk", Value: "safe", Confidence: 0.71, Decider: "laya"}}
-	q := decision.NewQueue(&dec, sink, func() { woken <- struct{}{} }, func(string) {})
+	q := decision.NewQueue(&dec, sink, func() { woken <- struct{}{} }, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go q.Run(ctx)
@@ -106,7 +106,7 @@ func TestAReplyWithProbabilitiesStoresTheMassOnTheRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := decision.NewQueue(dec, sink, nil, func(string) {})
+	q := decision.NewQueue(dec, sink, nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go q.Run(ctx)
@@ -134,9 +134,9 @@ func TestAReplyWithProbabilitiesStoresTheMassOnTheRow(t *testing.T) {
 func TestADeciderErrorDropsLoudlyAndLandsNothing(t *testing.T) {
 	db := openDecisionStore(t)
 	sink := &storeSink{db: db, written: make(chan decision.Answer, 1)}
-	loud := make(chan string, 1)
+	v, loud := voice(t)
 	dec := &fakeDecider{err: pastDeadline()}
-	q := decision.NewQueue(dec, sink, func() {}, func(m string) { loud <- m })
+	q := decision.NewQueue(dec, sink, func() {}, v)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go q.Run(ctx)
@@ -164,10 +164,10 @@ func TestAProposerErrorDropsLoudly(t *testing.T) {
 	if err := closed.Close(); err != nil {
 		t.Fatal(err)
 	}
-	loud := make(chan string, 1)
+	v, loud := voice(t)
 	var dec fakeDecider
 	dec.answers = []decision.Answer{{Question: "ok", Value: "yes", Confidence: 0.5, Decider: "laya"}}
-	q := decision.NewQueue(&dec, brokenSink{}, func() {}, func(m string) { loud <- m })
+	q := decision.NewQueue(&dec, brokenSink{}, func() {}, v)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go q.Run(ctx)
@@ -184,9 +184,9 @@ func TestAProposerErrorDropsLoudly(t *testing.T) {
 }
 
 func TestAFullQueueDropsLoudlyWithoutBlocking(t *testing.T) {
-	loud := make(chan string, 1)
+	v, loud := voice(t)
 	blocking := make(chan struct{})
-	q := decision.NewQueue(&fakeDecider{}, blockingSink{block: blocking}, func() {}, func(m string) { loud <- m })
+	q := decision.NewQueue(&fakeDecider{}, blockingSink{block: blocking}, func() {}, v)
 	for i := 0; i < decision.QueueCap; i++ {
 		q.Propose(decision.Pending{Site: decision.SiteBash, Scope: "proj", Question: decision.YesNo("ok", "ok?")})
 	}
@@ -196,7 +196,7 @@ func TestAFullQueueDropsLoudlyWithoutBlocking(t *testing.T) {
 		if !strings.Contains(m, "queue full") {
 			t.Fatalf("the drop names the queue: %q", m)
 		}
-	default:
+	case <-time.After(5 * time.Second):
 		t.Fatal("a full queue drops loudly")
 	}
 }

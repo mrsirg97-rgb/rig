@@ -167,8 +167,6 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
 		t.mu.Unlock()
-	case core.SwarmNotice:
-		t.commit(RenderSwarmNotice(t.theme, e.Text) + "\n")
 	case core.Notice:
 		t.commit(RenderNotice(t.theme, e) + "\n")
 	case core.SwarmStatus:

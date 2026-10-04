@@ -4,12 +4,17 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
@@ -47,16 +52,16 @@ type fakeFire struct {
 	fired   chan struct{}
 }
 
-func (f *fakeFire) fire(ctx context.Context, prompt string) (string, string, error) {
+func (f *fakeFire) fire(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
 	f.calls++
 	f.prompts = append(f.prompts, prompt)
 	if f.fired != nil {
 		f.fired <- struct{}{}
 	}
-	if f.calls > len(f.stdouts) {
-		return "", "dsv4", nil
+	if f.calls <= len(f.stdouts) {
+		speak(voice, f.stdouts[f.calls-1])
 	}
-	return f.stdouts[f.calls-1], "dsv4", nil
+	return "dsv4", nil
 }
 
 type verdictFire struct {
@@ -66,7 +71,7 @@ type verdictFire struct {
 	reply   string
 }
 
-func (f *verdictFire) fire(ctx context.Context, prompt string) (string, string, error) {
+func (f *verdictFire) fire(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
 	f.mu.Lock()
 	f.prompts = append(f.prompts, prompt)
 	f.mu.Unlock()
@@ -74,13 +79,15 @@ func (f *verdictFire) fire(ctx context.Context, prompt string) (string, string, 
 		f.fired <- struct{}{}
 	}
 	if f.reply != "" {
-		return f.reply, "dsv4", nil
+		speak(voice, f.reply)
+		return "dsv4", nil
 	}
 	var b strings.Builder
 	for _, id := range promptIds(prompt) {
 		fmt.Fprintf(&b, "verdict: %s approve\n", id)
 	}
-	return b.String(), "dsv4", nil
+	speak(voice, b.String())
+	return "dsv4", nil
 }
 
 func (f *verdictFire) calls() int {
@@ -147,7 +154,12 @@ func reviewerBatch(db store.DB, fire decision.Fire, batch int) *decision.Reviewe
 }
 
 func reviewerRow(db store.DB, fire decision.Fire, batch int, row models.Model) *decision.Reviewer {
-	return decision.NewReviewer(storeReviews{db: db}, fire, batch, row, func(string) {})
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
+	})
+	return decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch, row, room)
 }
 
 func waitSettled(t *testing.T, db store.DB, want int) {
@@ -176,7 +188,7 @@ func TestThreePendingRowsAreReviewedInOneFire(t *testing.T) {
 	if f.calls != 1 {
 		t.Fatalf("every pending row is one fire, got %d fires", f.calls)
 	}
-	if !strings.Contains(f.prompts[0], "verdict:") || !strings.Contains(f.prompts[0], "What risk does this bash call carry?") {
+	if !strings.Contains(f.prompts[0], "call the verdict tool") || !strings.Contains(f.prompts[0], "What risk does this bash call carry?") {
 		t.Fatalf("the prompt carries the rows and the contract: %q", f.prompts[0])
 	}
 	rows, _ := decisionstore.Pending(context.Background(), db)
@@ -278,9 +290,6 @@ func TestTwoHundredSixtyFourRowsBiteTenAtATimeAcrossTwentySevenWakes(t *testing.
 	db := openReviewedStore(t, 264)
 	f := &verdictFire{fired: make(chan struct{}, 64)}
 	r := reviewerBatch(db, f.fire, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	for i := 0; i < 27; i++ {
 		r.Land()
@@ -319,9 +328,6 @@ func TestAQuietTurnEndWithABacklogStillTakesABite(t *testing.T) {
 	db := openReviewedStore(t, 12)
 	f := &verdictFire{fired: make(chan struct{}, 64)}
 	r := reviewerBatch(db, f.fire, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -338,9 +344,6 @@ func TestReviewBatchZeroWakesAndFiresNothing(t *testing.T) {
 	db := openReviewedStore(t, 3)
 	f := &verdictFire{fired: make(chan struct{}, 64)}
 	r := reviewerBatch(db, f.fire, 0)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -382,9 +385,6 @@ func TestAGarbageBiteWaitsForTheNextLanding(t *testing.T) {
 	db := openReviewedStore(t, 12)
 	f := &verdictFire{fired: make(chan struct{}, 64), reply: "I have no idea"}
 	r := reviewerBatch(db, f.fire, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -411,9 +411,6 @@ func TestAFireThatSettlesNothingWithNoCutWaitsForTheNextLanding(t *testing.T) {
 	db := openReviewedStore(t, 2)
 	f := &fakeFire{stdouts: []string{"I have no idea"}, fired: make(chan struct{}, 4)}
 	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -434,9 +431,6 @@ func TestALandingMarksDirtyAndTheTurnEndWakes(t *testing.T) {
 	db := openReviewedStore(t, 1)
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
 	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -451,9 +445,6 @@ func TestATurnEndWithNoLandingCostsNothing(t *testing.T) {
 	db := openReviewedStore(t, 1)
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
 	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Wake()
 	select {
@@ -471,9 +462,6 @@ func TestTheRowsPastTheBudgetStayDirtyForTheNextTurnEnd(t *testing.T) {
 	}
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve", "verdict: 2 approve"}, fired: make(chan struct{}, 4)}
 	r := reviewerRow(db, f.fire, 10, models.Model{Window: 1500, Reserve: 500, MaxTokens: 1 << 30})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -509,7 +497,7 @@ func TestAFireTakesTheOldestRowsThatFitTheWindow(t *testing.T) {
 func TestABatchAboveTheReplyCeilingIsCutToIt(t *testing.T) {
 	db := openReviewedStore(t, 264)
 	f := &fakeFire{stdouts: []string{verdicts(1, 40)}}
-	r := reviewerRow(db, f.fire, 100, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 40 * decision.VerdictLineCost()})
+	r := reviewerRow(db, f.fire, 100, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 40 * decision.VerdictCost()})
 	summary, err := r.Drain(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -551,7 +539,7 @@ func TestTheWindowBoundHoldsUnderAReplyBudgetThatFitsEverything(t *testing.T) {
 func TestAMaxOutputUnderOneVerdictLineStillFiresOneRow(t *testing.T) {
 	db := openReviewedStore(t, 3)
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve\nverdict: 2 approve\nverdict: 3 approve"}}
-	r := reviewerRow(db, f.fire, 10, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: decision.VerdictLineCost() - 1})
+	r := reviewerRow(db, f.fire, 10, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: decision.VerdictCost() - 1})
 	if _, err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -560,12 +548,12 @@ func TestAMaxOutputUnderOneVerdictLineStillFiresOneRow(t *testing.T) {
 	}
 }
 
-func TestTheVerdictLineCostIsDerivedFromTheContract(t *testing.T) {
-	cost := decision.VerdictLineCost()
+func TestTheVerdictCostIsDerivedFromTheToolCall(t *testing.T) {
+	cost := decision.VerdictCost()
 	if cost <= 0 {
-		t.Fatal("the contract lost its verdict lines; the reply bound cannot be derived")
+		t.Fatal("a verdict call costs tokens; the reply bound cannot be derived from zero")
 	}
-	if again := decision.VerdictLineCost(); again != cost {
+	if again := decision.VerdictCost(); again != cost {
 		t.Fatalf("the derivation is not deterministic: %d then %d", cost, again)
 	}
 }
@@ -583,5 +571,43 @@ func TestADrainWithNothingPendingCostsNoFire(t *testing.T) {
 	}
 	if summary == "" {
 		t.Fatal("the drain still gets a summary")
+	}
+}
+
+func voice(t *testing.T) (broadcast.Member, <-chan string) {
+	t.Helper()
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	t.Cleanup(engine.Stop)
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	said := make(chan string, 8)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				said <- n.Source + ": " + n.Text
+			}
+		}
+	})
+	return room.Add(0), said
+}
+
+func speak(voice broadcast.Member, script string) {
+	for _, line := range strings.Split(script, "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "verdict:")
+		if !ok {
+			continue
+		}
+		fields := strings.SplitN(strings.TrimSpace(rest), " ", 3)
+		if len(fields) < 2 {
+			continue
+		}
+		id, _ := strconv.ParseInt(fields[0], 10, 64)
+		v := core.Verdict{Row: id, Accept: fields[1] == "approve"}
+		if len(fields) == 3 {
+			v.Reason = fields[2]
+		}
+		voice.Publish(context.Background(), func(error) {}, broadcast.NewMessage(voice.Id(), true, v))
 	}
 }

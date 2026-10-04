@@ -6,11 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
@@ -133,9 +135,9 @@ func httpDeciderAt(t *testing.T, srv *httptest.Server) decision.Decider {
 	return dec
 }
 
-func packScorer(t *testing.T, srv *httptest.Server, sink decision.Sink, land func(), loud func(string), parallel int) *decision.PackScorer {
+func packScorer(t *testing.T, srv *httptest.Server, sink decision.Sink, land func(), voice broadcast.Member, parallel int) *decision.PackScorer {
 	t.Helper()
-	s, err := decision.NewPackScorer(httpDeciderAt(t, srv), sink, land, loud, parallel)
+	s, err := decision.NewPackScorer(httpDeciderAt(t, srv), sink, land, voice, parallel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,8 +284,8 @@ func TestAWobblyAnswerIsUnsureAndAConfidentNoIsHidden(t *testing.T) {
 func TestASinkErrorIsLoudAndNeverFailsTheScore(t *testing.T) {
 	probe := &packProbe{}
 	srv := packServer(t, probe, packFake{answer: func(string) (map[string]any, bool) { return noulAnswer(0.9), true }})
-	loud := 0
-	s := packScorer(t, srv, packBrokenSink{}, nil, func(string) { loud++ }, 2)
+	v, loud := voice(t)
+	s := packScorer(t, srv, packBrokenSink{}, nil, v, 2)
 	verdicts, err := s.Score(context.Background(), "the task", packItems[:1])
 	if err != nil {
 		t.Fatalf("a store error never fails a call: %v", err)
@@ -291,8 +293,13 @@ func TestASinkErrorIsLoudAndNeverFailsTheScore(t *testing.T) {
 	if !verdicts[0].Yes {
 		t.Fatalf("the verdict stands beside the store error: %+v", verdicts[0])
 	}
-	if loud != 1 {
-		t.Fatalf("the swallow is loud: %d", loud)
+	select {
+	case m := <-loud:
+		if !strings.Contains(m, "decision: pack") {
+			t.Fatalf("the swallow is loud and named: %q", m)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the swallow is loud")
 	}
 }
 

@@ -39,14 +39,24 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   decision); a decider or sink error drops loudly and lands nothing.
 - `review.go`: the reviewer: a landing (`Land`) marks it dirty, the
   session's turn end (`Wake`, through `TurnEnds`' frontend wrap) is the
-  wake, and a turn end with nothing landed costs nothing. `Run` is the
+  wake, and a turn end with nothing landed costs nothing. Since 2.11.0
+  the wake posts the bite on the kernel's engine at `rig.PriorityReview`,
+  below the turn and the fleet, so it starts only when nothing else is
+  queued; the bite takes its rows on the loop, fires in a goroutine (the
+  loop never waits on the world), and the completion posts the settle
+  at the same priority. One bite is posted at a time. There is no `Run`
+  goroutine; the engine and the context are constructor arguments. `Drain`
+  is the same take-fire-settle done synchronously, for a caller that
+  wants the result. The old sentence: `Run` is the
   loop, `Drain` the pass — the pending rows oldest first, up to what the
   reviewer's model row leaves for a prompt (the window minus its
   reserve, at four bytes to the token; a row that cannot fit alone
-  still goes), one fire through the `Fire` seam, one verdict line per
-  row parsed like the swarm reviewer's (`verdict: <id> approve` or
-  `verdict: <id> deny <corrected answer>`), last naming wins, a deny
-  without a correction is not a verdict, unnamed rows stay pending. A
+  still goes), one fire through the `Fire` seam, which takes the minted
+  member the fire's worker speaks as; the worker's `verdict` tool calls
+  arrive as `core.Verdict` messages on the reviewer's member and settle
+  on the loop after the fire ends, last naming wins, a reject without a
+  correction is not a verdict, unnamed rows stay pending. The reviewer
+  takes the room in its constructor (2.11.0); nothing parses stdout. A
   fire that settled something and left pending rows leaves the reviewer
   dirty, so the next turn end takes the rest; a fire that settled
   nothing waits for the next landing.
@@ -105,7 +115,8 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
 ## Gotchas
 
 - `Recorder.Record` returns nothing on purpose: a store error never fails
-  a call, and the swallow is loud only where the root wired a log.
+  a call, and the swallow is loud only where the root wired a voice (a
+  `broadcast.Member`; the notice carries source `decision`).
 - The confidence is a probability; the store refuses anything outside
   0..1, and the HTTP client drops such answers before they reach it.
   The confidence a row keeps is the mass on the value the answer

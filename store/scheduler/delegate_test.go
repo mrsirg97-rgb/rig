@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -128,20 +132,50 @@ func TestDelegateCheckFailureFailsClosed(t *testing.T) {
 	}
 }
 
-func TestDelegateObserveStreamsTheWorkerBytes(t *testing.T) {
+func TestDelegateWorkerHeartbeatIsPublishedAsItsMember(t *testing.T) {
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
+	})
+	heard := make(chan int64, 8)
+	room.Add(0).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err == nil && m.Event() == nil {
+				heard <- m.Origin()
+			}
+		}
+	})
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	var observed []byte
+	var env []string
 	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
-		observe([]byte("rig: heartbeat\n"))
+		id, w, ok := sched.FleetFrom(ctx)
+		if !ok {
+			t.Error("the spawn context carries no fleet pipe")
+			return
+		}
+		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder()).Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
 	}
-	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
-		in.Observe = func(p []byte) { observed = append(observed, p...) }
+	in := delegateInput(t, delegateFetch(t, false, ""), func(ctx context.Context, argv []string, cwd string, e []string, observe func([]byte)) (sched.SpawnResult, error) {
+		env = e
+		return spawn.spawn(ctx, argv, cwd, e, observe)
+	}, func(in *sched.DelegateInput) {
+		in.Member = room.Add(7)
 	})
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
-	if !strings.Contains(string(observed), "rig: heartbeat") {
-		t.Errorf("the observer must see the worker's bytes, got %q", observed)
+	select {
+	case origin := <-heard:
+		if origin != 7 {
+			t.Fatalf("heartbeat origin = %d, want the worker's member 7", origin)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the worker's heartbeat never reached the room")
+	}
+	if !slices.Contains(env, sched.FleetEnv+"=7") {
+		t.Fatalf("the child must learn its member id from the env, got %v", env)
 	}
 }
 
@@ -184,18 +218,18 @@ func TestDelegateDefaultsAreUnchanged(t *testing.T) {
 	if spawn.calls[0].Ctx == nil {
 		t.Fatal("the default spawn context must not be nil")
 	}
-	if in.Observe != nil {
-		t.Fatal("the default observer must be nil")
+	if in.Member != nil {
+		t.Fatal("the default input names no member; a worker nobody listens to gets no pipe")
 	}
 	if _, err := os.Stat(filepath.Join(in.Home, "runs")); err != nil {
 		t.Fatalf("the run record must still land: %v", err)
 	}
 }
 
-func TestANoToolsFireRunsAllowNoneAndNoReportBack(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "verdict: 1 approve\n"}}
+func TestABareFireWithNoAllowRunsAllowNoneAndNoReportBack(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
-	in.NoTools = true
+	in.Bare = true
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
@@ -320,7 +354,7 @@ func TestADelegateFireNamesItsDeathAndItsLog(t *testing.T) {
 		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
 		SwapURL: "http://127.0.0.1:8090",
 		RigHome: h.rigHome, StateDir: filepath.Join(h.rigHome, "sessions"),
-		NoTools: true, Sandbox: "off",
+		Bare: true, Sandbox: "off",
 		Models: modelTable(t, "qwen3.8-27b-workers"),
 	})
 	if err != nil {

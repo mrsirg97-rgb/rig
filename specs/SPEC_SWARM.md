@@ -141,10 +141,11 @@ today's behavior:
   refused — the busy check polls `busyState` on a short interval until the
   model runs or the context ends. This is the swarm's parallelism: the GPU
   slots, not the worker count. A busy-check failure still fails closed.
-- `Observe` (default nil): the spawn's byte observer, so the swarm streams
-  the worker's stderr (the oneshot liveness stream: `rig: heartbeat`, tool
-  start/end) into the worker's run stream and reads the heartbeat from it.
-  The delegate's interactive calls stay unobserved.
+- `Member` (default nil): the worker's member in the session's room
+  (2.11.0, replacing the `Observe` byte observer): the child heartbeats
+  on the fleet pipe (fd 3, `RIG_FLEET`) and `Delegate` publishes each
+  frame as that member, so the supervisor reads the heartbeat from the
+  room and never from the worker's bytes.
 - `SpawnCtx` (default Background): the base context the spawn timeout
   wraps, so `/swarm stop` kills the in-flight task worker's process tree
   instead of leaving it to its timeout.
@@ -169,17 +170,22 @@ send — the exit code alone cannot name it). A spawned worker's process
 group also carries `Pdeathsig`, so a runner that dies hard does not
 leave the worker running orphaned.
 
-### 3. The reviewer verdict is a protocol line
+### 3. The reviewer verdict is a message
 
-A reviewer drain worker's brief ends with a directive naming the verdict
-shape: the worker's last line must be `verdict: accept`, or
-`verdict: reject <reason>` (the reason rides the reject note, bounded by
-`MaxNoteLen`). The drain worker takes the last line with the `verdict:`
-prefix; a worker that returns no verdict is treated as a dead worker
-(release, retry once; a second no-verdict rejects with
-`reviewer gave no verdict`). The verdict line is the one contract between
-the swarm and its reviewer worker, and the task text and notes are in the
-brief so the reviewer needs no queue parse. The rejections are capped per
+Through 2.10.x the verdict was a protocol line, `verdict: accept` or
+`verdict: reject <reason>`, the last line of the worker's stdout, parsed
+by the drain worker. Since 2.11.0 it is a message: the reviewer worker
+runs with the `verdict` tool (the one tool added to its allow list), its
+call crosses the fleet pipe as `core.Verdict` published as the worker's
+member, and the supervisor stamps it on the worker on the loop; the drain
+worker reads it after the spawn ends. A reject's reason rides the reject
+note, bounded by `MaxNoteLen`; a reject without a reason is refused by
+the tool before it crosses, so the model fixes it instead of dying. A
+worker that ends without a verdict is treated as a dead worker (release,
+retry once; a second no-verdict rejects with `reviewer gave no verdict`).
+The verdict message is the one contract between the swarm and its
+reviewer worker, and the task text and notes are in the brief so the
+reviewer needs no queue parse. The rejections are capped per
 task: the controller counts every reject door (the verdict reject, the
 no-verdict fallback, the died fallback) and a third rejection fails the
 task with a note (`rejected twice — the swarm failed it`) instead of
@@ -224,10 +230,11 @@ owns every concrete type; the command owns only the vocabulary.
   agents`; a stop with no swarm refuses by name. Session teardown stops
   the swarm the same way (`cmd/rig`'s exit path), so the in-flight
   spawns' deaths are recorded before the process ends.
-- **The run stream**: `<scheduler home>/swarm/wN.stream`, one file per
-  drain worker, appended across its life with task markers; the heartbeat
-  the list shows is the supervisor's in-memory read of that stream. The
-  stream file is the audit; the heartbeat is the liveness.
+- **The run stream** (through 2.10.x): `<scheduler home>/swarm/wN.stream`,
+  one file per drain worker, appended across its life with task markers;
+  the heartbeat the list shows was the supervisor's read of that stream.
+  Since 2.11.0 no stream file is written: the run log is the audit and
+  the heartbeat is a message on the fleet pipe.
 
 ### 5. The dead claim: release via Reap
 
@@ -260,11 +267,24 @@ test.
 
 ### 7. The transcript notices and the status band
 
-The controller gains an optional `Frontend` seam (wired once at the root,
-like `Steer`): the four decision-worthy events emit one-line
-`core.SwarmNotice` transcript notices, and nothing else does — the drain
+AMENDED 2.11.0 (SPEC_EVT 8): the `Frontend` seam, the status emitter and
+its 250 ms throttle, the controller's mutex and the per-worker stream
+files are gone. The controller is a member of the session's `broadcast`
+room (`SupervisorID` 0, each worker a member by its id); it publishes
+the notices and the status snapshots below, the root's frontend member
+subscribes once and hands each event to the current recorder, and the
+loop transport keeps one pending status per sender with the latest
+value, which is the throttle without a clock. Every state change is a
+closure posted at `rig.PriorityFleet`; the worker goroutines wait on the
+world and post their settle. The run log is the worker's bytes; no
+stream file is written. The text that follows describes the events,
+which did not change.
+
+The four decision-worthy events emit one-line
+`core.Notice` transcript notices with source `swarm` (`SwarmNotice`
+until 2.11.0), and nothing else does — the drain
 loop's ordinary claim/complete/bytes stay out of the transcript (the run
-stream and the bare `/swarm` are their audit).
+log and the bare `/swarm` are their audit).
 
 - **A task failed (with its note)**: `swarm: t1 failed — the worker died
   twice` (the worker's second death; the reason is noted on the task),
@@ -398,6 +418,8 @@ spawn, a scripted busy fixture, or a real store in a temp dir.
 
 - `core/`: the event vocabulary gains two types (`SwarmNotice`,
   `SwarmStatus`) as pure additions — nothing else; `loop/`: zero diff.
+  2.11.0 folded `SwarmNotice` into `Notice` (source `swarm`), one event
+  for one idea.
   The loop never learns the swarm.
 - The todo store gains the two structured reads (`Task`, `Counts`) and
   nothing else: the claim filter, the review gate, and the release doors

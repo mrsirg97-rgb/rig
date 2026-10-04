@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -18,6 +19,7 @@ type OneShot struct {
 	Out       io.Writer
 	Err       io.Writer
 	Heartbeat time.Duration
+	Fleet     broadcast.Transport
 	faulted   bool
 	mu        sync.Mutex
 	inflight  int
@@ -45,6 +47,9 @@ func (o *OneShot) heartbeatInterval() time.Duration {
 }
 
 func (o *OneShot) startHeartbeat() {
+	if o.Fleet == nil {
+		return
+	}
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	o.hbStop = stop
@@ -58,7 +63,7 @@ func (o *OneShot) startHeartbeat() {
 			case <-stop:
 				return
 			case <-t.C:
-				io.WriteString(o.Err, "rig: heartbeat\n")
+				o.Fleet.Send(context.Background(), func(error) {}, broadcast.Heartbeat(o.Fleet.Id(), true))
 			}
 		}
 	}()

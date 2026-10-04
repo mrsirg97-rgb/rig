@@ -270,6 +270,31 @@ merge deleted it. `loop/` is frozen at 0.12.0's bytes: the event loop
 work is closed end to end; phase 1 the engine, 2a the batch, 2b the
 consumer, and the next change to the loop opens it by name again.
 
+### 8. Phase 3, the fleet posts: the kernel owns the engine (2.11.0)
+
+The opening paragraph's third case, the delegated worker reporting back
+while the operator steers, needed the fleet on the same loop. The
+kernel gains `Engine` and `WithEngine`; `loop.Run` uses the kernel's
+engine when it has one and mints its own otherwise, so every existing
+run is byte-identical. The priorities move up to the kernel with names
+(`PriorityInput` 90, `PriorityStream` 50, `PriorityTool` 50,
+`PriorityFleet` 30, `PriorityReview` 10): the root assigns them, the
+loop only reads, and the fleet's room (`broadcast/`) posts below the
+turn's own events, so a worker's message runs in the gaps of a turn and
+never ahead of it. The decision review sits below the fleet: its bite
+posts at turn end and starts only when nothing else is queued, so the
+labels get the idle time and nothing waits on them. The closure that
+starts a fire never blocks the consumer: it spawns and the completion
+posts back at the same priority, as every step that waits on the world
+does. The
+room's transport acks on the post: the queue is the durability, and a
+second heartbeat before the first ran is not posted. Starvation stays
+the documented property: a busy session delays the fleet's chatter and
+loses nothing, since the stores hold the facts.
+
+The gate: `loop/` opened by name in the 2.11.0 PR (one block in `Run`,
+the constants moving up); the re-freeze after the merge closes it.
+
 ## testing
 
 Phase 2b (`loop/consumer_test.go`): a concurrent run completing out of

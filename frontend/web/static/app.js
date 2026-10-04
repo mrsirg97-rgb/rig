@@ -801,8 +801,8 @@ function onFrame(f) {
         paintSwarmBand(f);
         if (state.view === 'swarm') renderSwarmBody(f);
         break;
-      case 'swarm_notice':
-        feedLine('sys', G.active + ' ' + f.text);
+      case 'notice':
+        feedLine('sys', G.active + ' ' + f.source + ': ' + f.text);
         break;
     }
   });

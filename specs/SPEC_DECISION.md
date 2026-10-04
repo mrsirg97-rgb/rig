@@ -19,7 +19,8 @@ Stdlib-only leaf beside `pathguard`, imported by the gate packages.
 - `Final` is the gate's recording (site, state, question, answer, decider,
   scope, session) and `Recorder` is the seam the gates hold: `Record(ctx, Final)`,
   returns nothing. A nil recorder records nothing; the wired one swallows
-  store errors (loud when the root gives it a log), because the call's
+  store errors (said in the room when the root gives it a voice, 2.11.0),
+  because the call's
   result must be untouched by the store.
 
 ## the store (`store/decision/`)
@@ -123,7 +124,12 @@ byte-identical with or without it.
 
 Only an interactive session reviews: headless workers and fires propose and
 never review. A landing marks the reviewer dirty; the session's turn end is
-the wake — a size-one channel, no timer, no poll — and a turn end with
+the wake — since 2.11.0 a closure posted on the kernel's engine at
+`rig.PriorityReview`, the lowest rung, so a bite starts only when the
+operator's input, the turn's events and the fleet's messages have all
+run (SPEC_EVT 8); the bite takes its rows on the loop, fires in a
+goroutine and posts the settle back at the same priority; before that a
+size-one channel on a goroutine of its own — no timer, no poll — and a turn end with
 nothing landed costs nothing.
 
 The wake is the metronome, not the work. Run j31 woke at a turn end with
@@ -141,10 +147,10 @@ start, naming the key.
 
 Two ceilings stay underneath the batch, never above it:
 
-- The reply. The fire answers with one verdict line per row, so the rows
-per fire are bounded by the reviewer row's max output tokens over a
-verdict line's token cost — the cost derived from the contract's own
-verdict templates at their worst (a full-width id, a correction at the
+- The reply. The fire answers with one `verdict` tool call per row, so
+the rows per fire are bounded by the reviewer row's max output tokens
+over a verdict call's token cost — the cost derived from the call's own
+arguments at their worst (a full-width id, a correction at the
 1,024-byte cap), never a constant.
 - The window minus its reserve, at four bytes to the token. A row that
 cannot fit alone still goes, so one huge row cannot wedge the queue.
@@ -173,17 +179,17 @@ operator's box 262 pending bash rows made a 176 KB prompt, over Linux's
 128 KiB cap on one argument, and every fire died with `argument list
 too long` until the carrier moved.
 
-It replies with one verdict line per row, parsed like the swarm
-reviewer's:
-
-    verdict: <id> approve
-    verdict: <id> deny <corrected answer>
-
-Lines scan in reply order, last naming wins, an unnamed or malformed row
-stays pending, a deny without a correction is not a verdict. A drain
-reports what it fired, what settled, and what stays pending; the row's
-reviewer name is the model that reviewed: the one the fire resolved to,
-carried back on the delegate's result.
+It answers with the `verdict` tool, one call per row naming the row
+(2.11.0; through 2.10.x it was one `verdict: <id> approve|deny <answer>`
+line per row scraped from stdout). Each call crosses the fleet pipe as
+`core.Verdict` published as the fire's minted member; the reviewer hears
+them on its `rig.MemberDecision` member on the loop and settles after the
+fire ends. Last naming wins, an unnamed row stays pending, a reject
+without a correction is not a verdict (the tool refuses it before it
+crosses). A drain reports what it fired, what settled, and what stays
+pending; the row's reviewer name is the model that reviewed: the one the
+fire resolved to, carried back on the delegate's result. The fire runs
+bare: no report-back brief, and the verdict tool as its only tool.
 
 Nothing the queue or the reviewer has to say reaches stderr while a
 frontend owns the screen: a dropped proposal, a decide error, a store

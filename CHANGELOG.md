@@ -1,4 +1,129 @@
 # Changelog
+## [2.11.0]: the fleet posts
+
+SPEC_EVT opened with "an operator on the phone steering while a
+delegated worker reports back" and its rule is that everything that
+waits on the world posts. The fleet did not: the swarm kept a roster,
+a heartbeat field, a throttled status emitter and its own goroutines;
+the delegate streamed bytes to a file; the reviewer scraped verdict
+lines from stdout; `Notice` and `SwarmNotice` were two events to the
+frontend. Five dialects for one sentence: a member tells the room
+something and whoever cares subscribes.
+
+The operator's `broadcast` module is lifted in as `broadcast/`, its
+comments with it, and placed on the event loop. `Room`, `Member`,
+`Transport`, `Message`, `Encoder`; the transaction, the state machine,
+the WAL, the queue, the clock and the client stay behind, because rig's
+durable truth is the todo log and the decision store and one slot needs
+no quorum. A message carries a `core.Event`, so the kinds are the types
+rig already has; a message with none is a heartbeat. The loop transport
+posts a send as one closure at the room's priority and acks on the
+post: the queue is the durability, an event stays until the consumer
+runs it, no buffer is sized, and a second heartbeat before the first
+ran is not posted. `Broadcast` fans out with one ack per member and
+names the members that missed it. Members thread the caller's context;
+the room takes its transport in the constructor; `lo` goes, the package
+is stdlib over `core` and `evt`.
+
+The kernel owns the engine (SPEC_EVT 8, the named reopening of
+`loop/`): `rig.WithEngine`, the loop running on the kernel's engine
+when it has one and minting its own otherwise, and the priorities named
+in the kernel: `PriorityInput` 90, `PriorityStream` 50, `PriorityTool`
+50, `PriorityFleet` 30 for the room, `PriorityReview` 10 for the
+decision review, so a worker's message runs in the gaps of a turn and a
+review bite starts only when nothing else is queued. The root assigns,
+the loop reads.
+
+The swarm moves onto the room (the third commit). The controller is
+the supervisor member, each worker a member by its id; every state
+change is a closure posted at the fleet's priority, so the mutex is
+gone; the router is a posted dispatch, deduplicated while one waits;
+the worker's heartbeat line becomes a heartbeat message to the
+supervisor; what the supervisor said to the frontend it now publishes
+(the notices, the status snapshots, and the stderr lines as `Notice`
+with source `swarm`). `core` gains `Snapshot` (the same reopening as
+`Notice`): an event whose latest value is the whole truth, and the loop
+transport keeps one pending per sender for a heartbeat or a snapshot,
+which is the status throttle without its 250 ms clock. The root is the
+frontend member: it subscribes once and hands each event to the current
+recorder, with the panic recovery that lived in the swarm. Gone: the
+`Frontend` seam and its resolver, the `status` emitter and its clock in
+the swarm, the stream files under the scheduler home, the controller's
+mutex and `set`/`bump`/`countOf`. The delegate tool still carries the
+emitter until it moves onto the room.
+
+The reviewer bites on the loop and the delegate tool speaks in the room
+(the fourth commit). A turn end posts the bite at `PriorityReview`, the
+lowest rung, so it starts only when nothing else is queued; the bite
+takes its rows on the loop, fires in a goroutine, and posts the settle
+back, so a four-minute review never holds the operator's input; one
+bite is posted at a time; the reviewer's `Run` goroutine and its wake
+channel are gone, the engine and the context are constructor
+arguments. The delegate tool is a room member and publishes its status
+snapshots there; the `Notify` closure, the `swarm/status` emitter and
+the last 250 ms clock in the tree are gone.
+
+The heartbeat crosses a pipe (the fifth commit). A spawned worker gets
+the write end of a pipe as fd 3 and its member id in `RIG_FLEET`; the
+one-shot frontend heartbeats through a `broadcast` pipe transport on
+it, one JSON frame per line through the encoder, and without a fleet
+it has no heartbeat and no ticker. The parent reads the frames through
+the same transport: `Delegate` publishes each as the worker's member
+(`DelegateInput.Member`, the swarm's worker and the delegate tool's
+worker rows are members now), so the supervisor and the delegate tool
+stamp the heartbeat from the room; the run-job runner touches its
+stall watch per frame. The parent closes its end after the spawn and
+waits for the reader's end-of-file, so no frame is lost behind the
+result; the child marks the fd close-on-exec, so no tool's subprocess
+holds the pipe open. Gone: the `rig: heartbeat` stderr line, the
+`Observe` byte observer on `DelegateInput`, and both greps for the
+line. The stall watch still reads stdout bytes too: a worker's text is
+still progress.
+
+One notice, one voice (the sixth commit). `core.SwarmNotice` was a
+second type for the idea `Notice` already is, so it folds in: the
+swarm says everything as `Notice` with source `swarm`, through one
+`say`, and the TUI, the web and the CLI render it as they render every
+notice, `source: text`, which is the same line the swarm's texts
+already began with. The `loud func(string)` closures the root built for
+the graph queue, the decision queue, the reviewer, the pack scorer and
+the decision recorder, and `root.notice` behind them with its three
+branches, go: each holds a `broadcast.Member` from the kernel's named
+ids (`rig.MemberGraph`, `rig.MemberDecision`; the frontend, the
+delegate tool and the minted worker range beside them) and
+`broadcast.Say`s, which is one `Notice` published to the room. The
+frontend member hands it to the current recorder, or prints it to
+stderr while there is none yet, and a headless worker's stderr line is
+what it was. The doubled `decision: decision:` and `graph: graph:`
+prefixes in the operator's notices go with the closures, since the
+source is on the event now. The run-job process opens the same room
+for its recorder's one rare line. The web client renders every
+`notice` in its feed, where before it showed only the swarm's.
+
+The verdict is a message (the seventh commit). A reviewer used to end
+its reply with a line the parent scraped, `verdict: accept` for the
+swarm, `verdict: <id> approve|deny` for the decision bite: two parsers,
+two vocabularies, and a line written slightly wrong counted as a dead
+worker. Now the worker calls a tool. `tool/verdict` is registered only
+in a process that holds a fleet pipe; its call crosses as `core.Verdict`
+published as the worker's member, the swarm supervisor stamps it on the
+worker and the decision reviewer keys it by row, both on the loop, and
+a reject without a reason is refused before it crosses, so the model
+fixes it instead of dying. The decision bite still runs bare (no
+report-back) with `verdict` as its only tool, and its reply ceiling is
+derived from the call's arguments at their worst instead of the old
+contract's lines. The room mints an id for a member that needs no name
+(`Room.Mint`, below every id it has seen), which the delegate tool's
+workers and the bite's fire use, so `MemberMinted` goes. Gone: both
+parsers, the `verdict:` sentences in the briefs, `DelegateInput.NoTools`
+(now `Bare`: no brief, and only the named tools), and the reviewer's
+`Fire` returning stdout.
+
+The first commit is the package and its tests; the second the engine;
+the third the swarm; the fourth the reviewer and the delegate tool; the
+fifth the pipe; the sixth the one notice; the seventh the verdict. The
+stdout scrape is gone from the tree.
+
 ## [2.10.2]: claim says what claim does
 
 The todo description's claim clause read "the next available task" — a

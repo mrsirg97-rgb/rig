@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -44,10 +45,11 @@ import (
 	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
 	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
 	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
+	verdicttool "github.com/mrsirg97-rgb/rig/v2/tool/verdict"
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.10.2"
+const Version = "2.11.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -276,6 +278,14 @@ func main() {
 	if decisionURL != "" {
 		native["decide"] = true
 	}
+	fleet, err := sched.Fleet()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	if fleet != nil {
+		native["verdict"] = true
+	}
 	pluginReports := make([]plugins.Report, 0)
 	if len(pluginFiles) > 0 {
 		pluginReports, err = plugins.DiscoverChecked(context.Background(), py, pluginFiles, native)
@@ -359,8 +369,9 @@ func main() {
 	}
 	defer decdb.DB.Close()
 
-	var r *root
-	gq := graph.NewQueue(cfgDir, func(m string) { r.notice("graph", m) })
+	engine, room := newFleet()
+	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph))
+	voice := room.Add(rig.MemberDecision)
 
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
@@ -408,7 +419,7 @@ func main() {
 		swapURL = v
 	}
 
-	r = &root{
+	r := &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
 		system:     systemPrompt,
@@ -443,9 +454,17 @@ func main() {
 		pluginsHome: cfgDir,
 		graph:       gq,
 		pluginInfos: pluginInfos,
+		engine:      engine,
+		room:        room,
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
+	if fleet != nil {
+		r.tools["verdict"] = verdicttool.New(fleet)
+	}
+	r.listen()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
 	if delegateOn {
 		r.tools["delegate"] = delegate.New(delegate.Opts{
@@ -462,7 +481,7 @@ func main() {
 			Fetch:        sched.RealFetch(0),
 			Spawn:        sched.RealSpawn,
 			Models:       func() models.Table { return r.runtime },
-			Notify:       func(ev core.Event) { r.rec.Notify(ev) },
+			Room:         r.room,
 		})
 	}
 	if delegateOn {
@@ -485,7 +504,8 @@ func main() {
 			Allow:        allowList,
 			DefaultModel: modelID,
 			Models:       func() models.Table { return r.runtime },
-			Frontend:     func() core.Frontend { return r.rec },
+			Engine:       r.engine,
+			Room:         r.room,
 		})
 	}
 	r.swarmWhy = swarmWhy
@@ -500,7 +520,7 @@ func main() {
 	}
 
 	r.natives = native
-	r.drec = decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Log: func(m string) { r.notice("decision", m) }}
+	r.drec = decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
 	r.eco = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
@@ -529,7 +549,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
 		}
-		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout, Err: os.Stderr}
+		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout, Err: os.Stderr, Fleet: fleet}
 	} else if *tuiMode == "true" || (*tuiMode == "auto" && tui.IsTerminal(os.Stdout.Fd())) {
 		th, terr := tui.ResolveTheme(cfg.Settings.Theme, cfg.Theme, tuiTrueColor())
 		if terr != nil {
@@ -550,7 +570,6 @@ func main() {
 	}
 
 	if decisionURL != "" {
-		loud := func(m string) { r.notice("decision", m) }
 		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
@@ -569,19 +588,19 @@ func main() {
 		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
 		if headless {
-			r.decQ = decision.NewQueue(dec, sink, nil, loud)
+			r.decQ = decision.NewQueue(dec, sink, nil, voice)
 		} else {
-			rev := decision.NewReviewer(&dbReviews{db: decdb},
+			rev := decision.NewReviewer(ctx, r.engine, &dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				cfg.Settings.ReviewBatchOrDefault(), row, loud)
+				cfg.Settings.ReviewBatchOrDefault(), row, room)
 			r.decRev = rev
-			r.decQ = decision.NewQueue(dec, sink, rev.Land, loud)
+			r.decQ = decision.NewQueue(dec, sink, rev.Land, voice)
 		}
 		var land func()
 		if r.decRev != nil {
 			land = r.decRev.Land
 		}
-		psc, perr := decision.NewPackScorer(dec, sink, land, loud, rig.DefaultParallel)
+		psc, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
 		if perr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
 			os.Exit(1)
@@ -624,15 +643,9 @@ func main() {
 
 	k := wire(r)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	go gq.Run(ctx)
 	if r.decQ != nil {
 		go r.decQ.Run(ctx)
-	}
-	if r.decRev != nil {
-		go r.decRev.Run(ctx)
 	}
 
 	if webSrv != nil {
@@ -732,7 +745,17 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
 	} else {
 		defer jdb.DB.Close()
-		jobDecisions = decisionstore.Recorder{DB: jdb, Log: func(m string) { fmt.Fprintln(os.Stderr, "rig:", m) }}
+		engine, room := newFleet()
+		go engine.Start(context.Background())
+		defer engine.Stop()
+		room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+			for _, m := range messages {
+				if n, ok := m.Event().(core.Notice); err == nil && ok {
+					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
+				}
+			}
+		})
+		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: room.Add(rig.MemberDecision)}
 	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
 		Home:      home,

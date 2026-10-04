@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"io"
 	"os"
@@ -13,7 +15,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
@@ -85,6 +86,8 @@ type root struct {
 
 	swarm    *swarm.Controller
 	swarmWhy string
+	engine   evt.Engine
+	room     broadcast.Room
 
 	pluginTools []core.Tool
 
@@ -152,6 +155,7 @@ func wire(r *root) *rig.Kernel {
 		)...),
 		rig.WithMiddleware(mw...),
 		rig.WithConcurrent(func(c core.ToolCall) bool { return concurrentNatives[c.Name] }),
+		rig.WithEngine(r.engine),
 	)
 	k.Session = r.session
 	if r.graph != nil {
@@ -320,16 +324,46 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	r.k.Policy = pol
 }
 
-func (r *root) notice(source, text string) {
-	if fe := r.fe; fe != nil {
-		if _, headless := fe.(*oneshot.OneShot); !headless {
-			fe.Notify(core.Notice{Source: source, Text: text})
+func newFleet() (evt.Engine, broadcast.Room) {
+	engine := evt.NewEngine()
+	return engine, broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
+	})
+}
+
+func (r *root) listen() {
+	r.room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		if err != nil {
 			return
 		}
+		for _, m := range messages {
+			if m.Event() == nil {
+				continue
+			}
+			r.deliver(m.Event())
+		}
+	})
+}
+
+func (r *root) deliver(ev core.Event) {
+	defer func() {
+		if p := recover(); p != nil {
+			out := r.errOut
+			if out == nil {
+				out = os.Stderr
+			}
+			fmt.Fprintf(out, "rig: fleet: frontend: recovered from panic: %v\n", p)
+		}
+	}()
+	if fe := r.rec; fe != nil {
+		fe.Notify(ev)
+		return
 	}
-	out := r.errOut
-	if out == nil {
-		out = os.Stderr
+	if n, ok := ev.(core.Notice); ok {
+		out := r.errOut
+		if out == nil {
+			out = os.Stderr
+		}
+		fmt.Fprintln(out, "rig: "+n.Source+": "+n.Text)
 	}
-	fmt.Fprintln(out, "rig: "+source+": "+text)
 }

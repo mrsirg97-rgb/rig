@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -33,18 +34,18 @@ type PackScorer struct {
 	dec      Decider
 	sink     Sink
 	land     func()
-	loud     func(string)
+	voice    broadcast.Member
 	parallel int
 }
 
-func NewPackScorer(dec Decider, sink Sink, land func(), loud func(string), parallel int) (*PackScorer, error) {
+func NewPackScorer(dec Decider, sink Sink, land func(), voice broadcast.Member, parallel int) (*PackScorer, error) {
 	if dec == nil {
 		return nil, errors.New("decision: no decider")
 	}
 	if parallel <= 0 {
 		return nil, fmt.Errorf("decision: parallel %d: the fan-out needs a bound", parallel)
 	}
-	return &PackScorer{dec: dec, sink: sink, land: land, loud: loud, parallel: parallel}, nil
+	return &PackScorer{dec: dec, sink: sink, land: land, voice: voice, parallel: parallel}, nil
 }
 
 func (s *PackScorer) SetParallel(n int) {
@@ -99,7 +100,7 @@ func (s *PackScorer) record(ctx context.Context, state string, a Answer) {
 		State:    state,
 		Question: packQuestion,
 	}, a); err != nil {
-		s.say("decision: pack: %v", err)
+		s.say("pack: %v", err)
 		return
 	}
 	if s.land != nil {
@@ -108,7 +109,7 @@ func (s *PackScorer) record(ctx context.Context, state string, a Answer) {
 }
 
 func (s *PackScorer) say(format string, args ...any) {
-	if s.loud != nil {
-		s.loud(fmt.Sprintf(format, args...))
+	if s.voice != nil {
+		broadcast.Say(s.voice, "decision", fmt.Sprintf(format, args...))
 	}
 }

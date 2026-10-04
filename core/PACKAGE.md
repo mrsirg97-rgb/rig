@@ -14,8 +14,12 @@ type, an interface, or a context helper.
 - **Wire types**: `Message`, `ToolCall`, `ToolSpec`, `Request`, `Usage`,
   and the `Event` vocabulary (`TextDelta`, `ReasoningDelta`,
   `ToolCallEvent`, `Done`, `Fault`, `ToolStart`, `ToolResult`, `TurnEnd`,
-  `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, `SwarmNotice`, and
+  `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, and
   `Notice` — the 2.8.3 reopening: one event for a background notice, `Source`
+  (2.11.0 folded `SwarmNotice` into it: the swarm is a source like any other)
+  — and `Snapshot` (2.11.0, the same reopening): an `Event` whose latest
+  value is the whole truth (`SwarmStatus` is one), so a transport may keep
+  one pending per sender; `Source`
   and `Text`, so a queue or a reviewer reaches the operator through the
   frontend and never through stderr while a frontend owns the screen). The 1.5.0 hosted-mode extension
   (SPEC_HOSTED, the named reopening, closed when the gate re-froze core at

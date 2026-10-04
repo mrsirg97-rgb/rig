@@ -8,10 +8,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-func RenderSwarmNotice(t Theme, text string) string {
-	return t.Paint(SlotDim, text)
-}
-
 func RenderNotice(t Theme, n core.Notice) string {
 	return t.Paint(SlotDim, n.Source+": "+n.Text)
 }

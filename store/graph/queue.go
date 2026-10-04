@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
@@ -26,7 +27,7 @@ const ReadCap = 1 << 20
 type Queue struct {
 	ch      chan string
 	home    string
-	loud    func(string)
+	voice   broadcast.Member
 	extract *GoExtract
 	mu      sync.Mutex
 	dbs     map[string]store.DB
@@ -38,11 +39,11 @@ type Queue struct {
 	loadCap int
 }
 
-func NewQueue(home string, loud func(string)) *Queue {
+func NewQueue(home string, voice broadcast.Member) *Queue {
 	return &Queue{
 		ch:      make(chan string, QueueCap),
 		home:    home,
-		loud:    loud,
+		voice:   voice,
 		extract: &GoExtract{},
 		dbs:     map[string]store.DB{},
 		itemCap: ReadCap,
@@ -68,7 +69,7 @@ func (q *Queue) Touch(path string) {
 	select {
 	case q.ch <- path:
 	default:
-		q.say("graph: queue full, dropping %s", path)
+		q.say("queue full, dropping %s", path)
 	}
 }
 
@@ -100,8 +101,8 @@ func (q *Queue) Drain(ctx context.Context) {
 }
 
 func (q *Queue) say(format string, args ...any) {
-	if q.loud != nil {
-		q.loud(fmt.Sprintf(format, args...))
+	if q.voice != nil {
+		broadcast.Say(q.voice, "graph", fmt.Sprintf(format, args...))
 	}
 }
 
@@ -119,16 +120,16 @@ func (q *Queue) process(ctx context.Context, path string) {
 	}
 	root, _, err := RootOf(filepath.Dir(path))
 	if err != nil {
-		q.say("graph: project of %s: %v", path, err)
+		q.say("project of %s: %v", path, err)
 		return
 	}
 	db, err := q.open(root)
 	if err != nil {
-		q.say("graph: %v", err)
+		q.say("%v", err)
 		return
 	}
 	if err := q.index(ctx, db, root, path); err != nil {
-		q.say("graph: %v", err)
+		q.say("%v", err)
 	}
 }
 
@@ -245,7 +246,7 @@ func (q *Queue) IndexProject(ctx context.Context, cwd string) (string, error) {
 			return nil
 		}
 		if err := q.index(ctx, db, root, p); err != nil {
-			q.say("graph: %s: %v", p, err)
+			q.say("%s: %v", p, err)
 			return nil
 		}
 		mapped++

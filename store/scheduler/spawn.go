@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -57,6 +58,9 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, obs
 	}
 	if p, ok := PromptFrom(ctx); ok {
 		cmd.Stdin = strings.NewReader(p)
+	}
+	if _, w, ok := FleetFrom(ctx); ok {
+		cmd.ExtraFiles = []*os.File{w}
 	}
 	cmd.Env = env
 	cmd.SysProcAttr = spawnSysProcAttr()

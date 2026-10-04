@@ -116,7 +116,7 @@ func TestADecideCallSortsAndRecords(t *testing.T) {
 	}
 	defer db.Close()
 	r := testRoot(nullFrontend{})
-	r.drec = decisionstore.Recorder{DB: db, Scope: "proj", Log: func(string) {}}
+	r.drec = decisionstore.Recorder{DB: db, Scope: "proj"}
 	r.decide = wiredDecide(t, r.drec, nil)
 	r.allow = []string{"bash", "decide"}
 	k := wire(r)

@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
 type Kernel struct {
@@ -21,9 +22,26 @@ type Kernel struct {
 	Concurrent func(call core.ToolCall) bool
 
 	Parallel int
+
+	Engine evt.Engine
 }
 
 const DefaultParallel = 8
+
+const (
+	PriorityInput  = 90
+	PriorityStream = 50
+	PriorityTool   = 50
+	PriorityFleet  = 30
+	PriorityReview = 10
+)
+
+const (
+	MemberFrontend int64 = -1
+	MemberDelegate int64 = -2
+	MemberGraph    int64 = -3
+	MemberDecision int64 = -4
+)
 
 type Option func(*Kernel)
 
@@ -79,6 +97,10 @@ func WithConcurrent(pred func(call core.ToolCall) bool) Option {
 
 func WithParallel(n int) Option {
 	return func(k *Kernel) { k.Parallel = n }
+}
+
+func WithEngine(e evt.Engine) Option {
+	return func(k *Kernel) { k.Engine = e }
 }
 
 func (k *Kernel) EffectiveParallel() int {

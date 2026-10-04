@@ -40,6 +40,7 @@ func TestFreezeGate(t *testing.T) {
 			p == "frontend/oneshot" || strings.HasPrefix(p, "frontend/oneshot/") ||
 			p == "cmd/rig" || strings.HasPrefix(p, "cmd/rig/") ||
 			p == "command" || strings.HasPrefix(p, "command/") ||
+			p == "broadcast" || strings.HasPrefix(p, "broadcast/") ||
 			p == "store/state" || strings.HasPrefix(p, "store/state/") ||
 			p == "tool/diff" || strings.HasPrefix(p, "tool/diff/") ||
 			p == "tool/python" || strings.HasPrefix(p, "tool/python/") ||
@@ -60,6 +61,7 @@ func TestFreezeGate(t *testing.T) {
 			p == "tool/scheduler" || strings.HasPrefix(p, "tool/scheduler/") ||
 
 			p == "tool/delegate" || strings.HasPrefix(p, "tool/delegate/") ||
+			p == "tool/verdict" || strings.HasPrefix(p, "tool/verdict/") ||
 			p == "swarm" || strings.HasPrefix(p, "swarm/") ||
 
 			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||

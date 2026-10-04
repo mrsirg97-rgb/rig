@@ -12,7 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -890,6 +893,12 @@ func TestTodoCreateWakesTheRouterToClaimIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("models: %v", err)
 	}
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
+	})
 	ctl := swarm.New(swarm.Opts{
 		TodoDB:  db,
 		SchedDB: schedDB,
@@ -898,6 +907,7 @@ func TestTodoCreateWakesTheRouterToClaimIt(t *testing.T) {
 		Cwd:     dir, WorkerCmd: []string{"/x/rig"}, Fetch: fetch, Spawn: spawn.spawn,
 		SwapURL: "http://127.0.0.1:8090", Sandbox: "off", RigHome: t.TempDir(), StateDir: t.TempDir(),
 		DefaultModel: "qwen3.8-workers", Models: func() models.Table { return tbl },
+		Engine: engine, Room: room,
 	})
 	defer ctl.Stop()
 	sess := core.NewSession()

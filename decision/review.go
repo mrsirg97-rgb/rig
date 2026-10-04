@@ -2,14 +2,17 @@ package decision
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
@@ -30,27 +33,59 @@ type Reviews interface {
 	Settle(ctx context.Context, id int64, approved bool, reviewer, answer string) error
 }
 
-type Fire func(ctx context.Context, prompt string) (reply, model string, err error)
+type Fire func(ctx context.Context, prompt string, voice broadcast.Member) (model string, err error)
 
 type Reviewer struct {
-	wake    chan struct{}
-	dirty   atomic.Bool
-	reviews Reviews
-	fire    Fire
-	batch   int
-	row     models.Model
-	loud    func(string)
+	ctx      context.Context
+	engine   evt.Engine
+	dirty    atomic.Bool
+	posted   atomic.Bool
+	reviews  Reviews
+	fire     Fire
+	batch    int
+	row      models.Model
+	room     broadcast.Room
+	self     broadcast.Member
+	verdicts map[int64]core.Verdict
 }
 
-func NewReviewer(reviews Reviews, fire Fire, batch int, row models.Model, loud func(string)) *Reviewer {
-	return &Reviewer{
-		wake:    make(chan struct{}, 1),
-		reviews: reviews,
-		fire:    fire,
-		batch:   batch,
-		row:     row,
-		loud:    loud,
+func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, room broadcast.Room) *Reviewer {
+	if engine == nil || room == nil {
+		panic("decision: the reviewer bites on the loop and hears verdicts in a room; both are constructor arguments")
 	}
+	r := &Reviewer{
+		ctx:      ctx,
+		engine:   engine,
+		reviews:  reviews,
+		fire:     fire,
+		batch:    batch,
+		row:      row,
+		room:     room,
+		self:     room.Add(rig.MemberDecision),
+		verdicts: map[int64]core.Verdict{},
+	}
+	r.self.Subscribe(ctx, r.receive)
+	return r
+}
+
+func (r *Reviewer) receive(err error, messages ...broadcast.Message) {
+	if err != nil {
+		return
+	}
+	for _, m := range messages {
+		if v, ok := m.Event().(core.Verdict); ok {
+			r.verdicts[v.Row] = v
+		}
+	}
+}
+
+func (r *Reviewer) call(fn func()) {
+	done := make(chan struct{})
+	if r.engine.Add(evt.Func(func(context.Context) { fn(); close(done) }), rig.PriorityReview) == 0 {
+		fn()
+		return
+	}
+	<-done
 }
 
 func (r *Reviewer) Land() { r.dirty.Store(true) }
@@ -59,10 +94,37 @@ func (r *Reviewer) Wake() {
 	if !r.dirty.Load() {
 		return
 	}
-	select {
-	case r.wake <- struct{}{}:
-	default:
+	if r.posted.Swap(true) {
+		return
 	}
+	r.engine.Add(evt.Func(func(context.Context) {
+		r.posted.Store(false)
+		r.dirty.Store(false)
+		r.bite()
+	}), rig.PriorityReview)
+}
+
+func (r *Reviewer) bite() {
+	rows, all, err := r.take(r.ctx)
+	if err != nil {
+		r.say("review: %v", err)
+		return
+	}
+	if len(rows) == 0 {
+		return
+	}
+	go func() {
+		voice := r.room.Mint()
+		reviewer, err := r.fire(r.ctx, reviewPrompt(rows), voice)
+		voice.Leave()
+		r.engine.Add(evt.Func(func(context.Context) {
+			if err != nil {
+				r.say("review: fire: %v", err)
+				return
+			}
+			r.settle(r.ctx, rows, all, reviewer)
+		}), rig.PriorityReview)
+	}()
 }
 
 func TurnEnds(fe core.Frontend, r *Reviewer) core.Frontend {
@@ -83,39 +145,44 @@ func (w turnEndWake) Notify(ev core.Event) {
 	}
 }
 
-func (r *Reviewer) Run(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-r.wake:
-			r.dirty.Store(false)
-			if _, err := r.Drain(ctx); err != nil {
-				r.say("decision: review: %v", err)
-			}
-		}
-	}
-}
-
 func (r *Reviewer) Drain(ctx context.Context) (string, error) {
-	if r.batch < 0 {
-		return "", fmt.Errorf("reviewBatch %d: a negative batch is refused", r.batch)
-	}
-	if r.batch == 0 {
-		return "reviewBatch is 0: the reviewer stays off", nil
-	}
-	all, err := r.reviews.Pending(ctx)
+	rows, all, err := r.take(ctx)
 	if err != nil {
-		return "", fmt.Errorf("pending: %w", err)
+		return "", err
 	}
-	if len(all) == 0 {
+	if len(rows) == 0 {
+		if r.batch == 0 {
+			return "reviewBatch is 0: the reviewer stays off", nil
+		}
 		return "nothing pending", nil
 	}
-	cost := VerdictLineCost()
-	if cost <= 0 {
-		return "", errors.New("the contract lost its verdict lines; the reply bound cannot be derived")
+	voice := r.room.Mint()
+	reviewer, err := r.fire(ctx, reviewPrompt(rows), voice)
+	voice.Leave()
+	if err != nil {
+		return "", fmt.Errorf("fire: %w", err)
 	}
-	rows := fitRows(all, reviewContract, r.row.Window-r.row.Reserve)
+	settled := 0
+	r.call(func() { settled = r.settle(ctx, rows, all, reviewer) })
+	return fmt.Sprintf("fired %d rows, settled %d, %d stay pending", len(rows), settled, len(all)-len(rows)), nil
+}
+
+func (r *Reviewer) take(ctx context.Context) (rows, all []ReviewRow, err error) {
+	if r.batch < 0 {
+		return nil, nil, fmt.Errorf("reviewBatch %d: a negative batch is refused", r.batch)
+	}
+	if r.batch == 0 {
+		return nil, nil, nil
+	}
+	all, err = r.reviews.Pending(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pending: %w", err)
+	}
+	if len(all) == 0 {
+		return nil, nil, nil
+	}
+	cost := VerdictCost()
+	rows = fitRows(all, reviewContract, r.row.Window-r.row.Reserve)
 	if reply := r.row.MaxTokens / cost; reply < 1 {
 		rows = rows[:1]
 	} else if reply < len(rows) {
@@ -124,11 +191,12 @@ func (r *Reviewer) Drain(ctx context.Context) (string, error) {
 	if len(rows) > r.batch {
 		rows = rows[:r.batch]
 	}
-	out, reviewer, err := r.fire(ctx, reviewPrompt(rows))
-	if err != nil {
-		return "", fmt.Errorf("fire: %w", err)
-	}
-	verdicts := parseVerdicts(out)
+	return rows, all, nil
+}
+
+func (r *Reviewer) settle(ctx context.Context, rows, all []ReviewRow, reviewer string) int {
+	verdicts := r.verdicts
+	r.verdicts = map[int64]core.Verdict{}
 	answered := answeredRows(rows, verdicts)
 	if len(answered) > 0 && len(rows) < len(all) {
 		r.dirty.Store(true)
@@ -136,36 +204,28 @@ func (r *Reviewer) Drain(ctx context.Context) (string, error) {
 	settled := 0
 	for _, row := range answered {
 		v := verdicts[row.ID]
-		if err := r.reviews.Settle(ctx, row.ID, v.approved, reviewer, v.answer); err != nil {
+		answer := v.Reason
+		if len(answer) > maxCorrection {
+			answer = answer[:maxCorrection]
+		}
+		if err := r.reviews.Settle(ctx, row.ID, v.Accept, reviewer, answer); err != nil {
 			r.say("settle %d: %v", row.ID, err)
 			continue
 		}
 		settled++
 	}
-	return fmt.Sprintf("fired %d rows, settled %d, %d stay pending", len(rows), settled, len(all)-len(rows)), nil
+	return settled
 }
 
 func (r *Reviewer) say(format string, args ...any) {
-	if r.loud != nil {
-		r.loud(fmt.Sprintf(format, args...))
-	}
+	broadcast.Say(r.self, "decision", fmt.Sprintf(format, args...))
 }
 
-const reviewContract = "Review these recorded decisions. For each row, judge the answer against the question and the state. Reply with one verdict line per row, as the last lines of your reply: `verdict: <id> approve` when the answer is right, or `verdict: <id> deny <corrected answer>` when it is wrong (a deny needs the corrected answer). Name every row; a row you do not name stays pending.\n"
+const reviewContract = "Review these recorded decisions. For each row, judge the answer against the question and the state, then call the verdict tool naming the row: accept when the answer is right, reject with the corrected answer as the reason when it is wrong. Name every row; a row you do not name stays pending.\n"
 
-func VerdictLineCost() int {
-	cost := 0
-	for _, seg := range strings.Split(reviewContract, "`") {
-		if !strings.HasPrefix(seg, "verdict: ") {
-			continue
-		}
-		line := strings.ReplaceAll(seg, "<id>", strconv.FormatInt(math.MaxInt64, 10))
-		line = strings.ReplaceAll(line, "<corrected answer>", strings.Repeat("v", maxCorrection))
-		if c := tokens(line); c > cost {
-			cost = c
-		}
-	}
-	return cost
+func VerdictCost() int {
+	call, _ := json.Marshal(map[string]any{"row": int64(math.MaxInt64), "accept": false, "reason": strings.Repeat("v", maxCorrection)})
+	return tokens("verdict" + string(call))
 }
 
 func reviewPrompt(rows []ReviewRow) string {
@@ -196,14 +256,11 @@ func rowBlock(row ReviewRow) string {
 	return b.String()
 }
 
-func answeredRows(rows []ReviewRow, verdicts map[int64]verdict) []ReviewRow {
+func answeredRows(rows []ReviewRow, verdicts map[int64]core.Verdict) []ReviewRow {
 	var out []ReviewRow
 	for _, row := range rows {
 		v, ok := verdicts[row.ID]
-		if !ok {
-			continue
-		}
-		if !v.approved && v.answer == "" {
+		if !ok || (!v.Accept && v.Reason == "") {
 			continue
 		}
 		out = append(out, row)
@@ -225,41 +282,3 @@ func fitRows(rows []ReviewRow, header string, budget int) []ReviewRow {
 }
 
 func tokens(s string) int { return (len(s) + 3) / 4 }
-
-type verdict struct {
-	approved bool
-	answer   string
-}
-
-func parseVerdicts(out string) map[int64]verdict {
-	verdicts := map[int64]verdict{}
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		rest, ok := strings.CutPrefix(line, "verdict:")
-		if !ok {
-			continue
-		}
-		fields := strings.SplitN(strings.TrimSpace(rest), " ", 3)
-		if len(fields) < 2 {
-			continue
-		}
-		id, err := strconv.ParseInt(fields[0], 10, 64)
-		if err != nil {
-			continue
-		}
-		switch fields[1] {
-		case "approve":
-			verdicts[id] = verdict{approved: true}
-		case "deny":
-			answer := ""
-			if len(fields) == 3 {
-				answer = strings.TrimSpace(fields[2])
-			}
-			if len(answer) > maxCorrection {
-				answer = answer[:maxCorrection]
-			}
-			verdicts[id] = verdict{approved: false, answer: answer}
-		}
-	}
-	return verdicts
-}

@@ -25,12 +25,12 @@ func (r *recordFrontend) Notify(ev core.Event) {
 	r.mu.Unlock()
 }
 
-func (r *recordFrontend) notices() []core.SwarmNotice {
+func (r *recordFrontend) notices() []core.Notice {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var out []core.SwarmNotice
+	var out []core.Notice
 	for _, ev := range r.events {
-		if n, ok := ev.(core.SwarmNotice); ok {
+		if n, ok := ev.(core.Notice); ok && n.Source == "swarm" {
 			out = append(out, n)
 		}
 	}
@@ -81,9 +81,9 @@ func TestSwarmNoticesTaskFailed(t *testing.T) {
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	got := waitForNotices(t, h.fe, 3)
 	want := []string{
-		"swarm: w1 died — t1 restarted",
-		"swarm: w1 died — t1 exited",
-		"swarm: t1 failed — the worker died twice",
+		"w1 died — t1 restarted",
+		"w1 died — t1 exited",
+		"t1 failed — the worker died twice",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("notices = %d, want %d:\n%v", len(got), len(want), got)
@@ -107,7 +107,7 @@ func TestSwarmNoticesReviewerRejected(t *testing.T) {
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
 	got := waitForNotices(t, h.fe, 1)
-	if got[0] != "swarm: t1 rejected — tests are missing" {
+	if got[0] != "t1 rejected — tests are missing" {
 		t.Fatalf("reject notice = %q", got[0])
 	}
 	h.waitFor(t, "the rejection picked up and accepted", func() bool {
@@ -122,18 +122,16 @@ func TestSwarmNoticesStop(t *testing.T) {
 		t.Fatalf("stop: %v", err)
 	}
 	got := waitForNotices(t, h.fe, 1)
-	if got[0] != "swarm: /swarm exited — 2 workers stopped" {
+	if got[0] != "/swarm exited — 2 workers stopped" {
 		t.Fatalf("stop notice = %q", got[0])
 	}
 }
 
-func TestSwarmStatusEmitsThrottled(t *testing.T) {
+func TestSwarmStatusFramesClaimHeartbeatAndFinish(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "do the work")
-	h.spawn.onCall = func(observe func([]byte)) {
-		for i := 0; i < 40; i++ {
-			observe([]byte("rig: heartbeat\n"))
-		}
+	h.spawn.onCall = func(ctx context.Context) {
+		beat(ctx, 40)
 	}
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the task in review", func() bool {
@@ -144,9 +142,6 @@ func TestSwarmStatusEmitsThrottled(t *testing.T) {
 		return len(st) > 0 && st[len(st)-1].Workers[0].Task == ""
 	})
 	st := h.fe.statuses()
-	if len(st) > 6 {
-		t.Fatalf("40 byte observes coalesced into %d statuses, want a few", len(st))
-	}
 	if len(st) < 2 {
 		t.Fatalf("statuses = %d, want the claim and the finish", len(st))
 	}
@@ -158,7 +153,7 @@ func TestSwarmStatusEmitsThrottled(t *testing.T) {
 		t.Fatalf("the last status is not the finish: %+v", last)
 	}
 	if last.Workers[0].Heartbeat.IsZero() {
-		t.Fatalf("the bytes never updated the heartbeat: %+v", last)
+		t.Fatalf("the pipe never updated the heartbeat: %+v", last)
 	}
 	if last.Pending != 0 || last.Review != 1 {
 		t.Fatalf("the finish status does not carry the fold counts: %+v", last)

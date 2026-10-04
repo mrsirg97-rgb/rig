@@ -24,8 +24,12 @@ the session at the boundary, clean.
 - `run` / `turn`: the consumer's state: the engine, the chain, the
   specs, the live turn (its context, accumulators, batch, cursor); the
   handlers `prompt`, `input`, `model`, `streamEvent`, `streamEnd`,
-  `toolDone`, `advance`, `end`, `stop`. Priorities: input 90, stream
-  50, tool completion 50.
+  `toolDone`, `advance`, `end`, `stop`. Priorities are the kernel's
+  (`rig.PriorityInput`, `PriorityStream`, `PriorityTool`, and
+  `PriorityFleet` below them for the room and `PriorityReview` below
+  that for the decision review, SPEC_EVT 8); the engine is
+  the kernel's when it has one (`rig.WithEngine`), minted here
+  otherwise.
 - `directExec(tools)`: the innermost exec: lookup and run.
 - `batch` (`batch.go`, SPEC_EVT 2a): the tool-call batch: runs of
   calls the kernel's `Concurrent` predicate admits are dispatched as

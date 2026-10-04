@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -56,7 +55,7 @@ func recordWorkerCost(t *testing.T, rigHome, cwd, session string, cost float64) 
 func TestSwarmBudgetStopsClaimsWithANotice(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "first", "second")
-	h.spawn.onCall = func(observe func([]byte)) {
+	h.spawn.onCall = func(context.Context) {
 		session := workerSessionFromArgv(h.spawn.argv(h.spawn.count() - 1))
 		if session == "" {
 			t.Fatalf("the spawn argv must carry the worker session id: %s", h.spawn.argv(h.spawn.count()-1))
@@ -132,7 +131,8 @@ func TestSwarmRemoteRowNeverConsultsTheSwap(t *testing.T) {
 		StateDir:     t.TempDir(),
 		DefaultModel: "qwen3.8-workers",
 		Models:       func() models.Table { return tbl },
-		Frontend:     func() core.Frontend { return h.fe },
+		Engine:       h.engine,
+		Room:         h.newRoom(),
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})

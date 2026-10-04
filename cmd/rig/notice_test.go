@@ -1,53 +1,78 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
-type captureFrontend struct{ events []core.Event }
-
-func (c *captureFrontend) Input(ctx context.Context) (string, error) { return "", context.Canceled }
-func (c *captureFrontend) Notify(ev core.Event)                      { c.events = append(c.events, ev) }
+func awaitText(t *testing.T, buf *lockedBuffer, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(buf.String(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("stderr = %q, want %q", buf.String(), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
 
 func TestANoticeReachesTheFrontendAndNeverStderrWhileItOwnsTheScreen(t *testing.T) {
-	fe := &captureFrontend{}
-	var stderr bytes.Buffer
-	r := &root{fe: fe, errOut: &stderr}
-	r.notice("decision", "review: fire: refused")
-	if len(fe.events) != 1 {
-		t.Fatalf("events = %v, want one notice", fe.events)
-	}
+	stderr := &lockedBuffer{}
+	fe := &recordingFrontend{}
+	r := testRoot(fe)
+	r.errOut = stderr
+	storeRoot(t, r)
+	fleet(r)
+	go r.engine.Start(context.Background())
+	defer r.engine.Stop()
+	r.rec = recorderFor(r, fe)
+	broadcast.Say(r.room.Add(rig.MemberDecision), "decision", "review: fire: refused")
+	awaitCount(t, fe, 1)
 	n, ok := fe.events[0].(core.Notice)
 	if !ok || n.Source != "decision" || n.Text != "review: fire: refused" {
 		t.Fatalf("event = %#v, want the notice with its source and text", fe.events[0])
 	}
-	if stderr.Len() != 0 {
+	if stderr.String() != "" {
 		t.Fatalf("stderr got %q, want nothing while a frontend owns the screen", stderr.String())
 	}
 }
 
 func TestANoticeInAHeadlessRunIsOneStderrLine(t *testing.T) {
-	var errOut bytes.Buffer
-	r := &root{fe: &oneshot.OneShot{Err: &errOut}, errOut: &errOut}
-	r.notice("decision", "queue full, dropping the bash proposal")
-	if got := errOut.String(); !strings.Contains(got, "rig: decision: queue full, dropping the bash proposal") || strings.Count(got, "rig:") != 1 {
+	errOut := &lockedBuffer{}
+	r := testRoot(&oneshot.OneShot{Err: errOut})
+	r.errOut = errOut
+	storeRoot(t, r)
+	fleet(r)
+	go r.engine.Start(context.Background())
+	defer r.engine.Stop()
+	r.rec = recorderFor(r, &oneshot.OneShot{Err: errOut})
+	broadcast.Say(r.room.Add(rig.MemberDecision), "decision", "queue full, dropping the bash proposal")
+	awaitText(t, errOut, "rig: decision: queue full, dropping the bash proposal")
+	if got := errOut.String(); strings.Count(got, "rig:") != 1 {
 		t.Fatalf("headless notice = %q, want exactly one rig: line", got)
 	}
 }
 
-func TestANoticeWithNoFrontendYetGoesToStderr(t *testing.T) {
-	var errOut bytes.Buffer
-	r := &root{errOut: &errOut}
-	r.notice("decision", "early")
-	if got := errOut.String(); got != "rig: decision: early\n" {
+func TestANoticeWithNoRecorderYetGoesToStderr(t *testing.T) {
+	errOut := &lockedBuffer{}
+	r := testRoot(nullFrontend{})
+	r.rec = nil
+	r.errOut = errOut
+	fleet(r)
+	go r.engine.Start(context.Background())
+	defer r.engine.Stop()
+	broadcast.Say(r.room.Add(rig.MemberGraph), "graph", "early")
+	awaitText(t, errOut, "rig: graph: early\n")
+	if got := errOut.String(); got != "rig: graph: early\n" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -57,10 +82,12 @@ func TestTheReviewFireNamesNoModelAndFallsBackToTheSessionsOwn(t *testing.T) {
 	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
 	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
 		seen = in
-		return sched.DelegateResult{Model: "ox-alpha", Exit: 0, Stdout: "verdict: 1 approve\n"}, nil
+		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
 	}
+	fleet(r)
+	voice := r.room.Mint()
 	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
-	reply, model, err := fire(context.Background(), "review these")
+	model, err := fire(context.Background(), "review these", voice)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,14 +97,17 @@ func TestTheReviewFireNamesNoModelAndFallsBackToTheSessionsOwn(t *testing.T) {
 	if seen.DefaultModel != "ox-alpha" {
 		t.Fatalf("the fallback = %q, want the session's active model", seen.DefaultModel)
 	}
-	if !seen.NoTools {
-		t.Fatal("the review fire runs with no tools")
+	if !seen.Bare || len(seen.Allow) != 1 || seen.Allow[0] != "verdict" {
+		t.Fatalf("the review fire is bare with the verdict tool alone, got bare=%v allow=%v", seen.Bare, seen.Allow)
 	}
-	if model != "ox-alpha" || reply != "verdict: 1 approve\n" {
-		t.Fatalf("fire returned %q %q, want the delegate's model and stdout", model, reply)
+	if seen.Member != voice {
+		t.Fatal("the fire's worker speaks as the voice the reviewer minted")
+	}
+	if model != "ox-alpha" {
+		t.Fatalf("fire returned %q, want the delegate's model", model)
 	}
 	r.activeID = "dsv4"
-	fire(context.Background(), "again")
+	fire(context.Background(), "again", voice)
 	if seen.DefaultModel != "dsv4" {
 		t.Fatalf("the fallback must follow the session's model at fire time, got %q", seen.DefaultModel)
 	}

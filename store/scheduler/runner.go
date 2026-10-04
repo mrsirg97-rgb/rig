@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -314,7 +315,21 @@ func RunJob(key string, opts RunOpts) error {
 		}
 		stream.Write(p)
 	}
-	res, err := opts.Spawn(WithPrompt(ctx, prompt), argv, job.Cwd, spawnEnv, observe)
+	pipe, err := openFleet(ctx, runnerOrigin, func(...broadcast.Message) {
+		if watch != nil {
+			watch.touch()
+		}
+	})
+	if err != nil {
+		stream.Close()
+		os.Remove(streamPath)
+		if watch != nil {
+			watch.stop()
+		}
+		return fmt.Errorf("run-job: fleet: %w", err)
+	}
+	res, err := opts.Spawn(WithPrompt(pipe.spawnCtx(), prompt), argv, job.Cwd, append(spawnEnv, pipe.env()), observe)
+	pipe.close()
 	stream.Close()
 	os.Remove(streamPath)
 	if watch != nil {

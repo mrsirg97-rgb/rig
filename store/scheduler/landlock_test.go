@@ -77,8 +77,11 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 		t.Fatalf("the worker must dial the one socket, got %v", argv)
 	}
 	env := spawn.env
-	if len(env) != 6 {
-		t.Fatalf("the env is the named list only (len %d: %v)", len(env), env)
+	if len(env) != 7 {
+		t.Fatalf("the env is the named list plus the fleet door (len %d: %v)", len(env), env)
+	}
+	if got := envAt(env, sched.FleetEnv); got != "0" {
+		t.Fatalf("%s = %q, want the runner's origin", sched.FleetEnv, got)
 	}
 	for k, v := range map[string]string{
 		"RIG_HOME": scratch,

@@ -1,64 +1,45 @@
 package swarm
 
 import (
-	"context"
-	"fmt"
-
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 func (c *Controller) Wake() {
-	select {
-	case c.wake <- struct{}{}:
-	default:
+	if c.dispatching.Swap(true) {
+		return
 	}
+	c.post(func() {
+		c.dispatching.Store(false)
+		c.dispatch()
+	})
 }
 
-func (c *Controller) route(ctx context.Context) {
-	defer c.wg.Done()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-c.wake:
-			c.dispatch(ctx)
-		}
+func (c *Controller) dispatch() {
+	if c.ctx == nil || len(c.workers) == 0 {
+		return
 	}
-}
-
-func (c *Controller) dispatch(ctx context.Context) {
+	ctx := c.ctx
 	tried := map[int]bool{}
 	for {
-		c.mu.Lock()
-		if c.ctx == nil || len(c.workers) == 0 {
-			c.mu.Unlock()
-			return
-		}
-		proj := c.proj
 		if c.budget > 0 && c.spent >= c.budget {
-			said := c.budgetSaid
-			c.budgetSaid = true
-			spent, budget := c.spent, c.budget
-			c.mu.Unlock()
-			if !said {
-				c.notice(fmt.Sprintf("swarm: budget reached — $%.2f / $%.2f — the swarm stops claiming", spent, budget))
+			if !c.budgetSaid {
+				c.budgetSaid = true
+				c.say("budget reached — $%.2f / $%.2f — the swarm stops claiming", c.spent, c.budget)
 			}
 			return
 		}
 		w := c.idleWorker(tried)
 		if w == nil {
-			c.mu.Unlock()
 			return
 		}
 		tried[w.id] = true
-		c.mu.Unlock()
 		claimStatus := ""
 		if w.role == RoleReviewer {
 			claimStatus = "review"
 		}
-		reply, err := todostore.Claim(ctx, c.opts.TodoDB, proj, w.identity, claimStatus)
+		reply, err := todostore.Claim(ctx, c.opts.TodoDB, c.proj, w.identity, claimStatus)
 		if err != nil {
-			c.loud(w, "w%d: claim: %v\n", w.id, err)
+			c.loud(w, "w%d: claim: %v", w.id, err)
 			return
 		}
 		if reply == "nothing to do" {
@@ -66,15 +47,16 @@ func (c *Controller) dispatch(ctx context.Context) {
 		}
 		id := claimID(reply)
 		if id == "" {
-			c.loud(w, "w%d: claim reply unreadable: %q\n", w.id, reply)
+			c.loud(w, "w%d: claim reply unreadable: %q", w.id, reply)
 			return
 		}
-		c.set(w, func() { w.task = id })
+		w.task = id
 		select {
 		case w.tasks <- id:
 		case <-w.ctx.Done():
 		}
-		c.emit(false)
+		c.refresh()
+		c.emit()
 	}
 }
 

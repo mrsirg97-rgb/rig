@@ -642,5 +642,33 @@
         "items"
       ]
     }
+  },
+  {
+    "name": "verdict",
+    "enabled": true,
+    "what": "delivers your verdict on the work you were asked to review.",
+    "guidelines": "call it once you have decided: accept, or reject with the reason the author needs to fix it. reviewing recorded decisions, call it once per row, naming the row; a row you do not name stays pending; a reject's reason is the corrected answer.",
+    "reply": "recorded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "row": {
+          "type": "integer",
+          "description": "the recorded decision's id, when reviewing a batch of them"
+        },
+        "accept": {
+          "type": "boolean",
+          "description": "true when the work stands"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why it does not, or the corrected answer; required on a reject"
+        }
+      },
+      "required": [
+        "accept"
+      ],
+      "additionalProperties": false
+    }
   }
 ]

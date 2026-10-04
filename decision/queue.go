@@ -3,6 +3,8 @@ package decision
 import (
 	"context"
 	"fmt"
+
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 )
 
 const QueueCap = 256
@@ -24,20 +26,20 @@ type Sink interface {
 }
 
 type Queue struct {
-	ch   chan Pending
-	dec  Decider
-	sink Sink
-	land func()
-	loud func(string)
+	ch    chan Pending
+	dec   Decider
+	sink  Sink
+	land  func()
+	voice broadcast.Member
 }
 
-func NewQueue(dec Decider, sink Sink, land func(), loud func(string)) *Queue {
+func NewQueue(dec Decider, sink Sink, land func(), voice broadcast.Member) *Queue {
 	return &Queue{
-		ch:   make(chan Pending, QueueCap),
-		dec:  dec,
-		sink: sink,
-		land: land,
-		loud: loud,
+		ch:    make(chan Pending, QueueCap),
+		dec:   dec,
+		sink:  sink,
+		land:  land,
+		voice: voice,
 	}
 }
 
@@ -45,7 +47,7 @@ func (q *Queue) Propose(p Pending) {
 	select {
 	case q.ch <- p:
 	default:
-		q.say("decision: queue full, dropping the %s proposal", p.Site)
+		q.say("queue full, dropping the %s proposal", p.Site)
 	}
 }
 
@@ -63,7 +65,7 @@ func (q *Queue) Run(ctx context.Context) {
 func (q *Queue) decide(ctx context.Context, p Pending) {
 	answers, err := q.dec.Decide(ctx, p.State, []Question{p.Question})
 	if err != nil {
-		q.say("decision: decide %s: %v", p.Site, err)
+		q.say("decide %s: %v", p.Site, err)
 		return
 	}
 	for _, a := range answers {
@@ -71,11 +73,11 @@ func (q *Queue) decide(ctx context.Context, p Pending) {
 			continue
 		}
 		if a.Confidence < 0 || a.Confidence > 1 {
-			q.say("decision: %s answered %q with confidence %g, not a probability", p.Site, a.Value, a.Confidence)
+			q.say("%s answered %q with confidence %g, not a probability", p.Site, a.Value, a.Confidence)
 			continue
 		}
 		if err := q.sink.ProposePending(ctx, p, a); err != nil {
-			q.say("decision: propose %s: %v", p.Site, err)
+			q.say("propose %s: %v", p.Site, err)
 			continue
 		}
 		if q.land != nil {
@@ -85,7 +87,7 @@ func (q *Queue) decide(ctx context.Context, p Pending) {
 }
 
 func (q *Queue) say(format string, args ...any) {
-	if q.loud != nil {
-		q.loud(fmt.Sprintf(format, args...))
+	if q.voice != nil {
+		broadcast.Say(q.voice, "decision", fmt.Sprintf(format, args...))
 	}
 }

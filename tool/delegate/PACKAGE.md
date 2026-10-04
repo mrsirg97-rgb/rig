@@ -27,8 +27,14 @@ nothing scheduled) and a resumable transcript in the state store.
 - `delegate.go`: `stallMs` rides the schema beside `timeoutMs`
   (0 = off, today's plain timeout; the tool keeps its own 30-minute
   `timeoutMs` ceiling), and `Stall` rides `DelegateInput`.
-- `delegate.go`: `Notify` (optional, nil = silent): the status door
-  (SPEC_SWARM 7) — an interactive delegate emits `SwarmStatus`
+- `delegate.go`: `Room` (optional, nil = silent): the tool is a member
+  of the session's `broadcast` room (`MemberID`) and publishes
+  `SwarmStatus` snapshots there (SPEC_SWARM 7, 2.11.0); each running
+  worker is a member below it (`MemberID - n`, the row shows `n`) that
+  the spawn publishes the child's heartbeats as, and the tool's
+  subscription stamps the row from the room; the loop transport keeps
+  one pending per sender, so a heartbeat storm is one frame. Before 2.11.0 this was a `Notify` closure and the `status`
+  emitter's clock — an interactive delegate emits `SwarmStatus`
   snapshots on start, on the spawn's stream bytes (the same Observe),
   and on exit, one worker row, zero queue counts, throttled to a few
   per second with the exit's last frame always landing.

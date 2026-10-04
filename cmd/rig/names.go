@@ -36,7 +36,7 @@ func userHome() string {
 	return os.Getenv("HOME")
 }
 
-var conditionalNatives = map[string]bool{"decide": true}
+var conditionalNatives = map[string]bool{"decide": true, "verdict": true}
 
 var nativeToolNames = func() []string {
 	var out []string

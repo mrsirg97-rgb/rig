@@ -3,6 +3,7 @@ package rig
 import (
 	"context"
 	"encoding/json"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"strings"
 	"testing"
 
@@ -63,5 +64,19 @@ func TestCommandSeamShape(t *testing.T) {
 	}
 	if _, err := c.Run(context.Background(), "args", json.RawMessage(`{}`)); err != nil {
 		t.Fatalf("the env stays untyped at the seam: %v", err)
+	}
+}
+
+func TestWithEngineHandsTheLoopItsEngine(t *testing.T) {
+	e := evt.NewEngine()
+	k := New(WithEngine(e))
+	if k.Engine != e {
+		t.Fatal("the kernel must carry the engine it was given")
+	}
+	if New().Engine != nil {
+		t.Fatal("a kernel built without one has none; the loop mints its own")
+	}
+	if !(PriorityInput > PriorityStream && PriorityStream >= PriorityTool && PriorityTool > PriorityFleet && PriorityFleet > PriorityReview) {
+		t.Fatalf("the review runs below the fleet, the fleet below the turn, the turn below the operator: %d %d %d %d %d", PriorityInput, PriorityStream, PriorityTool, PriorityFleet, PriorityReview)
 	}
 }

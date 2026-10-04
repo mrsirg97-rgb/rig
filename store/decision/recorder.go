@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -12,7 +13,7 @@ import (
 type Recorder struct {
 	DB    store.DB
 	Scope string
-	Log   func(string)
+	Voice broadcast.Member
 }
 
 func (r Recorder) Record(ctx context.Context, f decision.Final) {
@@ -35,7 +36,7 @@ func (r Recorder) Record(ctx context.Context, f decision.Final) {
 		Unsure:     f.Unsure,
 		Decider:    f.Decider,
 	})
-	if err != nil && r.Log != nil {
-		r.Log(fmt.Sprintf("decision: record %s: %v", f.Site, err))
+	if err != nil && r.Voice != nil {
+		broadcast.Say(r.Voice, "decision", fmt.Sprintf("record %s: %v", f.Site, err))
 	}
 }

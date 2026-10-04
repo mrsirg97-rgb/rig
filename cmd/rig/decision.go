@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -56,7 +57,7 @@ func (r *dbReviews) Settle(ctx context.Context, id int64, approved bool, reviewe
 }
 
 func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string) decision.Fire {
-	return func(ctx context.Context, prompt string) (string, string, error) {
+	return func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
 		delegate := r.delegate
 		if delegate == nil {
 			delegate = sched.Delegate
@@ -80,15 +81,14 @@ func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandb
 			StateDir:      filepath.Join(cfgDir, "sessions"),
 			Sandbox:       sandbox,
 			SandboxBinds:  sandboxBinds,
-			NoTools:       true,
+			Bare:          true,
+			Allow:         []string{"verdict"},
+			Member:        voice,
 			SpawnCtx:      ctx,
 		})
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
-		if ferr := res.FireError(home); ferr != nil {
-			return "", res.Model, ferr
-		}
-		return res.Stdout, res.Model, nil
+		return res.Model, res.FireError(home)
 	}
 }

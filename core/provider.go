@@ -8,6 +8,11 @@ import (
 
 type Event interface{ event() }
 
+type Snapshot interface {
+	Event
+	Snapshot()
+}
+
 var (
 	_ Event = TextDelta{}
 	_ Event = ReasoningDelta{}
@@ -21,8 +26,8 @@ var (
 	_ Event = TestEvent{}
 	_ Event = Compacted{}
 	_ Event = SwarmStatus{}
-	_ Event = SwarmNotice{}
 	_ Event = Notice{}
+	_ Event = Verdict{}
 )
 
 type TextDelta struct{ Text string }
@@ -130,9 +135,7 @@ type SwarmStatus struct {
 
 func (SwarmStatus) event() {}
 
-type SwarmNotice struct{ Text string }
-
-func (SwarmNotice) event() {}
+func (SwarmStatus) Snapshot() {}
 
 type Notice struct {
 	Source string
@@ -140,6 +143,14 @@ type Notice struct {
 }
 
 func (Notice) event() {}
+
+type Verdict struct {
+	Row    int64
+	Accept bool
+	Reason string
+}
+
+func (Verdict) event() {}
 
 type Provider interface {
 	Stream(ctx context.Context, req Request) (<-chan Event, error)

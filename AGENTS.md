@@ -268,6 +268,12 @@ that is harder than writing a lot, and it is the bar.
 - `store/{rem,scheduler,state,todo}/metadata`: hand-written container
   metadata: the source for the generated `ddl`/`domain` accessors. Edit
   and regenerate; never hand-edit the generated projections.
+- `broadcast`: the fleet's message seams (2.11.0), lifted from the
+  operator's module onto the event loop: a `Room` of `Member`s over a
+  `Transport`, a `Message` with origin, health and a `core.Event`, none
+  being a heartbeat; a send is a post at the room's priority and the
+  queue is the durability; `Say` is the one voice a background
+  subsystem notices with, and the member ids are named in the kernel.
 - `tool`: the registry of the model's words: `registry.json`, embedded,
   one entry per native tool (`name`, `enabled`, `what`, `guidelines`,
   `reply`, `schema`); `Definition` is the interface a tool embeds for
@@ -301,18 +307,21 @@ that is harder than writing a lot, and it is the bar.
 - `tool/todo`, `tool/rem`, `tool/scheduler`: thin adapters over their
   stores: session attribution and the store's shapes, verbatim. The rem
   tool's description carries the contract sentence (rem is deliberate).
+- `tool/verdict`: the reviewer's one word (2.11.0): registered only in a
+  worker that holds a fleet pipe, its call crosses as `core.Verdict`
+  published as the worker's member; the swarm reviewer and the decision
+  bite read it from the room, and nothing scrapes stdout for it.
 - `tool/delegate`: the one-shot worker tool (SPEC_DELEGATE): spawn a
   headless worker on a task now, wait, and feed back its last message;
   a recorded run in the cwd-scope scheduler store, a resumable
   transcript; the optional `Notify` seam (SPEC_SWARM 7) emits the
   status snapshot for an interactive delegate.
-- `swarm`: the drain-worker controller (SPEC_SWARM): supervisor-side
-  claim/spawn/complete loops over the session's bound queue, the
-  reviewer verdict protocol, the run streams and the in-memory roster;
-  the GPU slots are the parallelism, the dead claim is released via the
-  todo store's Reap door; the optional `Frontend` seam is the
-  transcript door (the four decision-worthy notices and the throttled
-  `SwarmStatus` band, SPEC_SWARM 7).
+- `swarm`: the drain-worker controller (SPEC_SWARM): the router and the
+  settle as closures on the loop at the fleet's priority, the worker
+  goroutines waiting on the world, the reviewer's verdict as a message; the
+  supervisor is a member of the session's `broadcast` room and says
+  everything there as `Notice` with source `swarm` and `SwarmStatus`
+  snapshots; the dead claim is released via the todo store's Reap door.
 - `tool/sessions`: the session-store introspection tool: `list` and
   `summary`, the vitals (which models ran, what failed, the cache
   ratio), and the store's schema migration on open.

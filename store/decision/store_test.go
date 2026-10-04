@@ -7,9 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
 )
@@ -192,7 +195,7 @@ func TestOutcomeWritesOnceKnown(t *testing.T) {
 
 func TestTheRecorderLandsTheRowAndSwallowsAStoreError(t *testing.T) {
 	db := open(t)
-	rec := decisionstore.Recorder{DB: db, Scope: "proj", Log: func(string) {}}
+	rec := decisionstore.Recorder{DB: db, Scope: "proj"}
 	rec.Record(context.Background(), decision.Final{
 		Site:     decision.SiteGuard,
 		State:    `{"tool":"edit"}`,
@@ -224,11 +227,16 @@ func TestTheRecorderLandsTheRowAndSwallowsAStoreError(t *testing.T) {
 	if err := closed.Close(); err != nil {
 		t.Fatal(err)
 	}
-	said := ""
-	dead := decisionstore.Recorder{DB: closed, Log: func(m string) { said = m }}
+	v, said := voice(t)
+	dead := decisionstore.Recorder{DB: closed, Voice: v}
 	dead.Record(context.Background(), decision.Final{Site: decision.SiteGuard, Question: decision.YesNo("retry", "again?"), Answer: "no", Decider: decision.SiteGuard})
-	if !strings.Contains(said, "decision") {
-		t.Fatalf("the swallow is loud when a log is wired: %q", said)
+	select {
+	case m := <-said:
+		if !strings.HasPrefix(m, "decision: record") {
+			t.Fatalf("the swallow is loud in the room when a voice is wired: %q", m)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the swallow is loud in the room when a voice is wired")
 	}
 }
 
@@ -339,4 +347,23 @@ func TestTheMigrationAddsUnsureToAVersionOneFile(t *testing.T) {
 	if unsure || confidence != nil {
 		t.Fatalf("the pre-migration row is a rule: unsure %v confidence %v", unsure, confidence)
 	}
+}
+
+func voice(t *testing.T) (broadcast.Member, <-chan string) {
+	t.Helper()
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	t.Cleanup(engine.Stop)
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	said := make(chan string, 8)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				said <- n.Source + ": " + n.Text
+			}
+		}
+	})
+	return room.Add(0), said
 }
