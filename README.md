@@ -20,7 +20,7 @@ Each number names its mechanism.
 The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery; the kink is visible. One SQL read of the state store: the store is the receipt.
 - **7k byte-stable preamble.** The system prompt, the tool schemas, and the append-only transcript are a few thousand bytes, pinned by `TestWireToolsPrefixGolden` (a sha256 over the fleet's wire shape), `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`, and `TestSystemPromptIsByteStableAcrossBuilds`, so a stray timestamp cannot silently kill the cache.
 - **720 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
-- **34,336 lines of Go, 53,815 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
+- **42,118 lines of Go, 66,493 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
 
 ## what's different
 

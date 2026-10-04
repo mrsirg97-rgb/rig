@@ -232,6 +232,9 @@ that is harder than writing a lot, and it is the bar.
 - `store/scope`: the project identity: the repo (the short sha1 of the
   git common dir, worktrees share) with a cwd-hash fallback; the
   partition key of the todo and rem stores.
+- `store/fts`: the one FTS tokenization contract — the tokenize, the
+  padded trigrams, the OR-query with the reserved operators quoted;
+  the stdlib leaf `store/rem` and `store/graph`'s fuzzy arms share.
 - `store/sqlx`: the `database/sql` seam: serializable transactions that
   ride the context; fails closed on an unbound read.
 - `store/lazy`: the deferred results the generated accessors hand back.
