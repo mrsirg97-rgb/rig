@@ -502,8 +502,18 @@ defaults become unset (empty / zero), and the chain (2) resolves. The
 ### 6. AGENTS.md: global then project, into the system prompt
 
 **The files and the order.** `<configdir>/rig/AGENTS.md` (global) then
-`<cwd>/AGENTS.md` (project), **concatenated global-first** with a blank
-line between them (empty segments skipped):
+the project's `AGENTS.md`, **concatenated global-first** with a blank
+line between them (empty segments skipped). Since 2.11.8 the project's
+file is the nearest `AGENTS.md` walking up from the workspace to the
+repository root (the directory holding `.git`, a file for a worktree)
+and no further, so a session opened in `store/graph` reads the repo's
+contract and a file above the repo is never the project's; a workspace
+that is no repository reads its own file only; the operator's file is
+never read twice when the workspace is the rig home. The project's file
+is read at wire time from the session's workspace, not once at start, so
+a session that opens in another workspace carries that workspace's
+contract; `Config.Agents` is the operator's file alone and `Load` still
+refuses loud at start when the project's file is unreadable.
 
 ```
 <global AGENTS.md>

@@ -11,8 +11,9 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 ## What it includes
 
 - `Load(dir, cwd)`: reads the user files under `dir` (the rig home)
-  and the AGENTS.md pair (`dir` + `cwd`), each merged over its embedded
-  default; returns `*Config`.
+  and the operator's `AGENTS.md`, each merged over its embedded default,
+  and refuses loud when the workspace's project `AGENTS.md` is
+  unreadable; returns `*Config`.
 - `Config`: `Settings` (`Workers *bool` is the drain pair's tri-state:
   nil = the capability decides, false = off even on a capable machine,
   true = still capability-gated), `Models` (`models.Table`), `Agents`,
@@ -33,7 +34,12 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `loadModels` / `parseRows` / `mergeRows`: the model table out of code;
   `concurrency` stays a known row key whose value is read and dropped
   (the retired count), reported up as the notice.
-- `readAgents`: the AGENTS.md pair.
+- `readAgents`: the operator's AGENTS.md. `ProjectAgents(dir, cwd)`:
+  the project's, the nearest file walking up from the workspace to the
+  repository root and no further (a non-repo workspace reads its own
+  only; the operator's file is skipped when the workspace is the rig
+  home); the root reads it at wire so it follows the session's
+  workspace (2.11.8).
 - `ReadTheme`: the theme.json read (the `/theme custom` load reads it fresh).
 - `SetTheme`: the `theme` key's one writer (2.3.2): the file's other
   keys preserved, the write atomic (temp then rename), the value
@@ -50,7 +56,8 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   the active row; `Config.Settings` feeds the flags/env chain.
 - `Config.Theme` is the raw `theme.json` document: SPEC_TUI (10) owns the
   palette schema and decodes the raw value.
-- `Config.Agents` is the assembled global-then-project AGENTS.md.
+- `Config.Agents` is the operator's AGENTS.md alone; the project's is a
+  wire-time read (`ProjectAgents`).
 
 ## Gotchas
 

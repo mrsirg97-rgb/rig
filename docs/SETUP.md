@@ -109,12 +109,16 @@ the file is a contract, not a filter.
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is retired (2.4.0): a present one is named once at start and ignored — move it to `model` by hand, then delete the key |
 | `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row), and the hosted run site: `remote` (bool), `provider` (a name like `openrouter` implies remote), `baseUrl` (required for a remote row), `apiKey` (sent as `Authorization: Bearer <key>`; never logged or rendered), `reasoning` (`reasoning_content` default, `reasoning` for OpenRouter), `providerPin` and `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for remote rows) |
 | `workers.json`    | **retired (2.4.0)**: the fleet is the resident model. A present file is read, ignored, and named once at start (`workers.json retired: the fleet is the resident model`); deleting it silences the line. Its content is never interpreted |
-| `AGENTS.md`       | global instructions; read before `<cwd>/AGENTS.md` (project) and placed between the system prompt and the participants' guidelines |
+| `AGENTS.md`       | global instructions; read before the project's `AGENTS.md` (the nearest one from the workspace up to the repo root) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's custom theme (`specs/SPEC_TUI.md` 7), the `/theme custom` preset: `base` (one of `warm`, `cool`, `paper`, `p1`, `p3`, or the legacy `oled`; required), optional `slots` (the slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema. The preset dial itself is settings.json's `theme` key (`/theme warm|cool|custom`) |
 
-`<cwd>/AGENTS.md` is read from the working directory: the REPL's cwd, or,
-for a scheduled worker, the job's cwd; the job inherits its own working
-directory's project file, not the creating session's.
+The project's `AGENTS.md` is the nearest one walking up from the
+workspace to the repository root (the directory holding `.git`) and no
+further, so a session opened in a subdirectory reads the repo's contract
+and a workspace that is no repository reads only its own file. It is read
+when the session wires, so a session that opens in another workspace
+carries that workspace's contract; a scheduled worker inherits its job's
+cwd's file, not the creating session's.
 
 | knob          | flag           | env                    | file key        | embedded default |
 |---------------|----------------|------------------------|-----------------|------------------|

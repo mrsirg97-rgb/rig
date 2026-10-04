@@ -49,8 +49,11 @@ func Load(dir, cwd string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	ag, err := readAgents(dir, cwd)
+	ag, err := readAgents(dir)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := ProjectAgents(dir, cwd); err != nil {
 		return nil, err
 	}
 	return &Config{Settings: s, Models: t, Agents: ag, Theme: th, Notices: notices}, nil

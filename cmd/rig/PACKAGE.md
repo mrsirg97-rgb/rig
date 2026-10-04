@@ -108,6 +108,15 @@ sees core and models and nothing else.
   its next boundary. The session row closes with what the run was
   (ok / fault / cancelled).
 
+## The project contract
+
+The system prompt is `system`, the session section, the role's stance,
+the operator's `AGENTS.md`, the project's `AGENTS.md`, then the
+participants' guidelines. The project's is read at wire from the
+session's workspace (`config.ProjectAgents`, the nearest file up to the
+repo root), so it follows the session wherever it opens; an unreadable
+file is a wire refusal, loud, the same as every other wiring fault.
+
 ## The frontend member
 
 The root is the room's frontend member (`rig.MemberFrontend`): it

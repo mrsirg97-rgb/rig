@@ -1381,3 +1381,25 @@ func TestRigEnvPinsTheSwapUnlessTheTestNamesOne(t *testing.T) {
 func otherVoice(text, word string) bool {
 	return regexp.MustCompile(`\b` + word + `\b`).MatchString(text)
 }
+
+func TestTheProjectContractFollowsTheWorkspaceAtWire(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(a, "AGENTS.md"), []byte("CONTRACT-A"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(b, "AGENTS.md"), []byte("CONTRACT-B"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := testRoot(nullFrontend{})
+	r.agents = "G"
+	r.cwd = a
+	wire(r)
+	if !strings.Contains(r.fullSystem, "G\n\nCONTRACT-A") || strings.Contains(r.fullSystem, "CONTRACT-B") {
+		t.Fatalf("the workspace's contract follows the operator's: %q", r.fullSystem)
+	}
+	r.cwd = b
+	wire(r)
+	if !strings.Contains(r.fullSystem, "CONTRACT-B") || strings.Contains(r.fullSystem, "CONTRACT-A") {
+		t.Fatalf("a wire in another workspace reads that workspace's contract: %q", r.fullSystem)
+	}
+}
