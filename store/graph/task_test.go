@@ -8,10 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/store"
-
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
 
 func TestApplyMaintainsTheLexicalTables(t *testing.T) {
@@ -140,5 +144,90 @@ func TestTheMigrationRebuildsTheLexicalTables(t *testing.T) {
 	}
 	if name != "Target" {
 		t.Fatalf("the rebuilt tables found %q", name)
+	}
+}
+
+func TestAStaleSymbolRowIsDroppedNotSaid(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package alpha\n\nfunc Target() int { return 1 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	said := make(chan string, 64)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				said <- n.Text
+			}
+		}
+	})
+	q := graph.NewQueue(t.TempDir(), room.Add(0))
+	defer q.Close()
+	ctx := context.Background()
+	if _, err := q.IndexProject(ctx, root); err != nil {
+		t.Fatal(err)
+	}
+	db, err := graph.Open(q.Home(), scope.Key(root), scope.Worktree(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := graph.Apply(ctx, db, "gone/g.go", "deadbeef", "go", graph.Result{
+		Eager:   true,
+		Symbols: []graph.Symbol{{Package: "example.com/m/gone", Name: "TargetGone", Kind: "func", File: "gone/g.go", Line: 1, EndLine: 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := q.Pack(ctx, root, "find the target gone function"); err != nil {
+			t.Fatalf("pack %d: %v", i, err)
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := len(said); n != 0 {
+		t.Fatalf("a vanished file is dropped, never said; got %d lines: %q", n, <-said)
+	}
+	var left int
+	if err := db.QueryRow(`SELECT count(*) FROM symbols WHERE file = 'gone/g.go'`).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Fatalf("the stale file's rows must be dropped, %d remain", left)
+	}
+}
+
+func TestTheQueueSaysASentenceOnce(t *testing.T) {
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	said := make(chan string, 64)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				said <- n.Text
+			}
+		}
+	})
+	q := graph.NewQueue(t.TempDir(), room.Add(0))
+	defer q.Close()
+	plain := t.TempDir()
+	for i := 0; i < 3; i++ {
+		q.Touch(filepath.Join(plain, "x.go"))
+	}
+	q.Drain(context.Background())
+	time.Sleep(50 * time.Millisecond)
+	if n := len(said); n > 1 {
+		t.Fatalf("one sentence is one line, got %d", n)
 	}
 }

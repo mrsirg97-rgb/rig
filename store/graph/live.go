@@ -15,6 +15,9 @@ import (
 
 func (q *Queue) refresh(ctx context.Context, db store.DB, root, rel string) (bool, error) {
 	abs := filepath.Join(root, filepath.FromSlash(rel))
+	if _, err := os.Stat(abs); os.IsNotExist(err) {
+		return true, dropFile(ctx, db, rel)
+	}
 	live, err := sha256File(abs)
 	if err != nil {
 		return false, fmt.Errorf("graph: %s: %w", rel, err)

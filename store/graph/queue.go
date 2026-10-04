@@ -27,6 +27,7 @@ type Queue struct {
 	extract *GoExtract
 	mu      sync.Mutex
 	dbs     map[string]store.DB
+	said    map[string]bool
 	lspMu   sync.Mutex
 	lsp     *lspClient
 	lspLang string
@@ -56,6 +57,7 @@ func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 		voice:   voice,
 		extract: &GoExtract{},
 		dbs:     map[string]store.DB{},
+		said:    map[string]bool{},
 		lspGone: map[string]bool{},
 		itemCap: ReadCap,
 		loadCap: ReadCap,
@@ -106,8 +108,16 @@ func (q *Queue) Drain(ctx context.Context) {
 }
 
 func (q *Queue) say(format string, args ...any) {
-	if q.voice != nil {
-		broadcast.Say(q.voice, "graph", strings.TrimPrefix(fmt.Sprintf(format, args...), "graph: "))
+	if q.voice == nil {
+		return
+	}
+	text := strings.TrimPrefix(fmt.Sprintf(format, args...), "graph: ")
+	q.mu.Lock()
+	seen := q.said[text]
+	q.said[text] = true
+	q.mu.Unlock()
+	if !seen {
+		broadcast.Say(q.voice, "graph", text)
 	}
 }
 

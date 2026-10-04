@@ -39,6 +39,11 @@ project-relative; each worktree's store maps its own tree.
   for the per-file touch, which is bounded by the file it was given. The
   index walk returns the context's error at the first cancelled file, so
   a quit mid-index is one line, never one per remaining file.
+- `live.go` + `task.go`: a symbol whose file is gone is a stale row,
+  not news. The live refresh and the task pack drop the file's rows the
+  moment they find it missing and say nothing (2.11.5), the same as the
+  write path does for an index of a deleted file. The queue's `say`
+  speaks any one sentence once for its life.
 - `extract_lsp.go` + `lsp.go`: every other language through a
   language server. A server that will not start (not on `PATH`, dies at
   initialize) is said once, naming the language and that its files
