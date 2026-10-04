@@ -26,7 +26,7 @@ func TestViewRowShowsPathBothDimensionsAndSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := viewMarker(t, "/home/ng/shot.png", 1568, 882, 2560, 1440, 421888)
-	got := tui.RenderToolBlock(th, "view", json.RawMessage(`{"path":"shot.png"}`), content, false, 120*time.Millisecond)
+	got := tui.RenderToolBlock(th, 0, "view", json.RawMessage(`{"path":"shot.png"}`), content, false, 120*time.Millisecond)
 
 	for _, want := range []string{"view", "shot.png", "2560x1440 -> 1568x882", "412 KB"} {
 		if !strings.Contains(got, want) {
@@ -46,7 +46,7 @@ func TestViewRowNeverPrintsTheMarkerOrAPicture(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := viewMarker(t, "/home/ng/shot.png", 1568, 882, 2560, 1440, 421888)
-	got := tui.RenderToolBlock(th, "view", json.RawMessage(`{"path":"/home/ng/shot.png"}`), content, false, time.Second)
+	got := tui.RenderToolBlock(th, 0, "view", json.RawMessage(`{"path":"/home/ng/shot.png"}`), content, false, time.Second)
 	for _, banned := range []string{"[[rig:image", "sha256=", "data:image", "image/png"} {
 		if strings.Contains(got, banned) {
 			t.Fatalf("no inline rendering and no raw marker on the row (%q):\n%s", banned, got)
@@ -63,7 +63,7 @@ func TestViewRowDropsTheArrowWhenNothingWasRescaled(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := viewMarker(t, "/home/ng/shot.png", 800, 600, 800, 600, 1024)
-	got := tui.RenderToolBlock(th, "view", json.RawMessage(`{"path":"shot.png"}`), content, false, time.Second)
+	got := tui.RenderToolBlock(th, 0, "view", json.RawMessage(`{"path":"shot.png"}`), content, false, time.Second)
 	if strings.Contains(got, "->") {
 		t.Fatalf("an image sent at its own size needs no arrow:\n%s", got)
 	}
@@ -77,7 +77,7 @@ func TestViewRowSurvivesAReplyThatIsNotAMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tui.RenderToolBlock(th, "view", json.RawMessage(`{"path":"shot.png"}`), "view: not an image", true, time.Second)
+	got := tui.RenderToolBlock(th, 0, "view", json.RawMessage(`{"path":"shot.png"}`), "view: not an image", true, time.Second)
 	if !strings.Contains(got, "view") || !strings.Contains(got, "shot.png") {
 		t.Fatalf("a refusal still prints its row: %q", got)
 	}
@@ -100,7 +100,7 @@ func TestViewRowSizesAreHumanReadable(t *testing.T) {
 		{3145728, "3.0 MB"},
 	} {
 		content := viewMarker(t, "/home/ng/shot.png", 1568, 784, 2000, 1000, c.bytes)
-		got := tui.RenderToolBlock(th, "view", json.RawMessage(`{"path":"shot.png"}`), content, false, time.Second)
+		got := tui.RenderToolBlock(th, 0, "view", json.RawMessage(`{"path":"shot.png"}`), content, false, time.Second)
 		if !strings.Contains(got, c.want) {
 			t.Fatalf("%d bytes must read as %s:\n%s", c.bytes, c.want, got)
 		}

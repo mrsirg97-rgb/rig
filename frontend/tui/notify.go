@@ -57,7 +57,7 @@ func (t *tui) Notify(ev core.Event) {
 			delete(t.toolStarts, e.ID)
 		}
 		gap := t.lastSlot == slotAfterTool
-		block := RenderToolBlock(t.theme, name, args, e.Content, e.Err != nil, e.Duration)
+		block := RenderToolBlock(t.theme, t.width, name, args, e.Content, e.Err != nil, e.Duration)
 		t.phase = "thinking"
 		t.toolName = ""
 		t.toolArgs = nil

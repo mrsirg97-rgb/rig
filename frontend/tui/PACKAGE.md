@@ -24,7 +24,9 @@ width); no core or loop line (decision 10).
   and status rows; cursor-up redraw, width handling, the one-op-one-write
   frame (the write gate, decision 2).
 - **Committed blocks** (`commit.go`): turn text, reasoning, tool rows
-  (the result body head/tail; write and edit preview their arguments
+  (the result body head/tail in screen rows at the terminal's width,
+  2.11.11, so a one-line blob elides like a thousand short lines; write
+  and edit preview their arguments
   first; the content, the `-`/`+` sides; decision 4 amended), command
   output, the usage, the compact line, the fault line.
 - **The status line and startup block** (`status.go`): the live row

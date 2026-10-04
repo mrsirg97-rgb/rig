@@ -589,9 +589,14 @@ bash ✓ 0.4s
 ```
 
 - `ToolStart` opens the row: ember glyph, tool name, the detail;
-- the result body renders head/tail: first N and last M lines with a
-  dim `· k lines hidden ·` between (N=6, M=2 at v1; the caps are the
-  TUI's, the runtime's own output caps still apply first);
+- the result body renders head/tail: the first N and the last M
+  **screen rows** with a dim `· k lines hidden ·` between (N=6, M=2 at
+  v1; the caps are the TUI's, the runtime's own output caps still apply
+  first). Since 2.11.11 the unit is the row at the terminal's width, not
+  the logical line: a bash result that is one 3,000-character line, a
+  minified blob or a long `go test` line, is eight rows and a marker,
+  the same shape a read of a thousand short lines gets; the piped
+  frontends, which have no width, still see the whole body;
 - `ToolResult` closes it: name, `✓`/`✕`, duration: a fed-back failure
   (`Err` non-nil) renders `✕` and the content stays visible: the
   refusal is the interesting part. `view` is the one tool whose body

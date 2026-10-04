@@ -67,7 +67,7 @@ const (
 
 const elideSentinel = "\x00hidden\x00"
 
-func RenderToolBlock(t Theme, name string, args json.RawMessage, content string, failed bool, dur time.Duration) string {
+func RenderToolBlock(t Theme, width int, name string, args json.RawMessage, content string, failed bool, dur time.Duration) string {
 	if name == "todo" || name == "scheduler" {
 		open := t.Paint(SlotEmber, t.Glyph(GlyphDone)) + " " + t.Paint(SlotEmber, name)
 		if d := verbDetail(args); d != "" {
@@ -87,12 +87,12 @@ func RenderToolBlock(t Theme, name string, args json.RawMessage, content string,
 		b.WriteString(t.Paint(SlotText, d))
 	}
 	b.WriteString("\n")
-	if ap := argsPreview(t, name, args); ap != "" {
+	if ap := argsPreview(t, width, name, args); ap != "" {
 		b.WriteString(ap)
 		b.WriteString("\n")
 	}
 	if name != "view" {
-		if p := preview(t, content); p != "" {
+		if p := preview(t, width, content); p != "" {
 			b.WriteString(p)
 			b.WriteString("\n")
 		}
@@ -202,7 +202,7 @@ func verbDetail(args json.RawMessage) string {
 	return act
 }
 
-func argsPreview(t Theme, name string, args json.RawMessage) string {
+func argsPreview(t Theme, width int, name string, args json.RawMessage) string {
 	if name != "write" && name != "edit" {
 		return ""
 	}
@@ -216,7 +216,7 @@ func argsPreview(t Theme, name string, args json.RawMessage) string {
 	}
 	side := func(k, prefix, slot string) string {
 		if v := s(k); v != "" {
-			return previewWith(t, v, prefix, slot)
+			return previewWith(t, width, v, prefix, slot)
 		}
 		return ""
 	}
@@ -229,22 +229,23 @@ func argsPreview(t Theme, name string, args json.RawMessage) string {
 		m, _ := c.(map[string]any)
 		for _, side := range [][3]string{{"old", "- ", SlotError}, {"new", "+ ", SlotSuccess}} {
 			if text, _ := m[side[0]].(string); text != "" {
-				rows = append(rows, previewWith(t, text, side[1], side[2]))
+				rows = append(rows, previewWith(t, width, text, side[1], side[2]))
 			}
 		}
 	}
 	return strings.Join(rows, "\n")
 }
 
-func preview(t Theme, content string) string {
-	return previewWith(t, content, "  ", SlotDim)
+func preview(t Theme, width int, content string) string {
+	return previewWith(t, width, content, "  ", SlotDim)
 }
 
-func previewWith(t Theme, content, prefix, slot string) string {
+func previewWith(t Theme, width int, content, prefix, slot string) string {
 	lines := strings.Split(content, "\n")
 	if n := len(lines) - 1; n > 0 && lines[n] == "" {
 		lines = lines[:n]
 	}
+	lines = screenRows(lines, width-WidthOf(prefix))
 	if len(lines) == 0 {
 		return ""
 	}
@@ -269,4 +270,26 @@ func previewWith(t Theme, content, prefix, slot string) string {
 		b.WriteString(t.Paint(slot, prefix+l))
 	}
 	return b.String()
+}
+
+func screenRows(lines []string, width int) []string {
+	if width <= 0 {
+		return lines
+	}
+	var rows []string
+	for _, line := range lines {
+		row := make([]rune, 0, width)
+		used := 0
+		for _, r := range line {
+			w := runeWidth(r)
+			if used+w > width && used > 0 {
+				rows = append(rows, string(row))
+				row, used = row[:0], 0
+			}
+			row = append(row, r)
+			used += w
+		}
+		rows = append(rows, string(row))
+	}
+	return rows
 }
