@@ -582,12 +582,28 @@ func TestProjectMovesTheSessionToTheNamedWorkspace(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(other, "AGENTS.md"), []byte(jobAgents), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	launched, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(launched) })
+	marker := "the file only the moved process sees"
+	if err := os.WriteFile(filepath.Join(other, "workspace-marker"), []byte(marker), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	before := h.r.cwd
 	if _, err := h.r.newSession(context.Background(), other); err != nil {
 		t.Fatalf("project: %v", err)
 	}
 	if h.r.cwd != other {
 		t.Fatalf("the session's workspace must move, got %q want %q", h.r.cwd, other)
+	}
+	if got, err := os.Getwd(); err != nil || got != other {
+		t.Fatalf("the move must move the process, Getwd = %q, %v", got, err)
+	}
+	out, err := h.r.tools["bash"].Exec(context.Background(), json.RawMessage(`{"command":"cat workspace-marker"}`))
+	if err != nil || !strings.Contains(out, marker) {
+		t.Fatalf("a tool exec must run in the moved workspace, out = %q, %v", out, err)
 	}
 	if !strings.Contains(h.r.fullSystem, "The session's workspace is "+other) {
 		t.Fatalf("the system prompt must carry the moved workspace:\n%s", h.r.fullSystem)
@@ -600,6 +616,9 @@ func TestProjectMovesTheSessionToTheNamedWorkspace(t *testing.T) {
 	}
 	if h.r.cwd != other {
 		t.Fatalf("new must keep the workspace, got %q", h.r.cwd)
+	}
+	if got, err := os.Getwd(); err != nil || got != other {
+		t.Fatalf("new must keep the process, Getwd = %q, %v", got, err)
 	}
 	if h.r.cwd == before {
 		t.Fatalf("the workspace must have moved away from the launch dir %q", before)

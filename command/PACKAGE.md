@@ -61,10 +61,14 @@ depends on core and models; the root depends on the leaf.
   `/project <path>` closes the current session through the same seam
   `new` uses and opens a fresh one whose workspace is that path —
   `~` expands, the path canonicalizes, a non-directory refuses by name,
-  and the reply is the new session id and the workspace line. The moved
-  session reads that workspace's AGENTS.md at wire (2.11.8's
-  `config.ProjectAgents`); bare, it refuses with the usage. `new` passes
-  the empty path and keeps the workspace.
+  and the reply is the new session id and the workspace line. The move
+  is the process's own: `os.Chdir` runs before the recorder opens, and
+  a failure there refuses with the old session still whole — the tools
+  read the process cwd at exec time, and one session per process makes
+  that one truth rather than two. The moved session reads that
+  workspace's AGENTS.md at wire (2.11.8's `config.ProjectAgents`);
+  bare, it refuses with the usage. `new` passes the empty path and
+  keeps the workspace.
 - **sessions**: lists, shows, resumes over the rows that exist; its
   `Sub()` hints are `list`, `show`, `resume` (the TUI's verb menu), and
   `list` is the bare command's read under a name.

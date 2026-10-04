@@ -21,7 +21,9 @@ operator moves the session, never a tool: `/project <path>` closes the
 current session and opens a fresh one in that workspace through the same
 seam `/new` uses, with the path canonicalized, a non-directory refused
 by name, and the workspace's AGENTS.md riding the new session's system
-prompt. On the wire the menu moved within budget: 13,998 chars before,
+prompt. The move is the process's own: `os.Chdir` runs before the
+recorder opens, so every tool's exec-time cwd is the workspace too —
+one truth rather than two. On the wire the menu moved within budget: 13,998 chars before,
 13,846 after, of 15,000.
 
 ## [2.11.12]: a yes/no question is a binary

@@ -39,6 +39,9 @@ func (r *root) newSession(ctx context.Context, dir string) (string, error) {
 			return "", fmt.Errorf("project: not a directory: %s", dir)
 		}
 		workspace = dir
+		if err := os.Chdir(dir); err != nil {
+			return "", fmt.Errorf("project: chdir %s: %v", dir, err)
+		}
 	}
 	if err := r.rec.Close("ok"); err != nil {
 		return "", fmt.Errorf("new: %v", err)
