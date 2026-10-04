@@ -101,7 +101,7 @@ func TestATurnEndFiresOneBiteAndTheNextTakesTheRest(t *testing.T) {
 		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, r.room)
 	r.decQ = decision.NewQueue(&countingDecider{answers: []decision.Answer{{
 		Question: "risk", Value: "safe", Confidence: 0.71, Decider: "laya",
-	}}}, &dbSink{db: decDB}, r.decRev.Land, nil)
+	}}}, &dbSink{db: decDB}, &dbReviews{db: decDB}, decisionstore.Recorder{DB: decDB, Scope: "proj"}, r.decRev.Land, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go r.decQ.Run(ctx)

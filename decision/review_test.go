@@ -45,6 +45,10 @@ func (r storeReviews) Settle(ctx context.Context, id int64, approved bool, revie
 	})
 }
 
+func (r storeReviews) Settled(ctx context.Context, site string, q decision.Question, state string) (string, bool, error) {
+	return decisionstore.Settled(ctx, r.db, site, q, state)
+}
+
 type fakeFire struct {
 	stdouts []string
 	calls   int

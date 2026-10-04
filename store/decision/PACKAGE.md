@@ -22,7 +22,11 @@ itself, and `Outcome` writes the one fact that arrives later.
   0..1), `Pending` (the pending rows in id order; a row whose question
   JSON does not parse is skipped, never thrown), `Settle` (keys on
   `status='pending'`, so two reviewers racing settle once and the
-  loser's write is a no-op), `Outcome` (refuses by name when the id is
+  loser's write is a no-op), `Settled` (the most recent approved row,
+  or denied row that carries a correction, for a site, question id and
+  state — newest id first; a row whose question JSON does not parse or
+  whose question id differs is skipped, never thrown; the denied
+  answer is its correction), `Outcome` (refuses by name when the id is
   unknown). Ids are minted max+1 inside the caller's transaction; the
   state column is bounded at 4096 bytes at the boundary.
 - `recorder.go`: the `decision.Recorder` adapter — the gates' seam. It
@@ -49,3 +53,8 @@ itself, and `Outcome` writes the one fact that arrives later.
   held, no crontab line, no job row) have no project and record nothing.
 - `Pending` skips an unparseable question rather than failing the drain:
   one corrupt row must not block the review of the rest.
+- `Settled` walks the settled rows of the site, comparing the state text
+  in SQL and the question id in Go, once per bash call — fine while the
+  store is small, and it grows, since every call now lands a final row.
+  An index on (site, state) is the one-line schema bump when it starts
+  to show; the migration door is `migrate.go`.

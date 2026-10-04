@@ -1,4 +1,31 @@
 # Changelog
+## [2.11.6]: the store answers before the model
+
+The decision store had become the busiest reader in the tree: 1,110
+pending bash rows waiting on a model whose confidence carries no signal
+(0.48 average on the rows the reviewer approved, 0.56 on the ones it
+denied), 132 of them pending beside an identical settled twin, and 998
+of 1,151 commands beginning `cd <path> &&`, so one command arrived at a
+hundred spellings and matched nothing. A question whose answer was
+already on file was asked again, because nothing looked before the
+model did.
+
+Two rules close it. The proposed state carries the normalized command —
+one leading `cd <path> &&` (or `;`) stripped, once, and only when the
+path it names is the workspace the call named or under it, runs of
+whitespace collapsed, ends trimmed — so twins of one command share a
+state while a `cd` that leaves the workspace stays in the state: the
+risk answer is workspace-relative by its own words, and `cd
+~/Projects/rig && rm -rf build` must not twin with `cd /etc && rm -rf
+build`. And before the decider is called, the queue asks the store what
+is settled: the most recent approved or denied row for the same site,
+question id and state answers a twin, which lands a final row (the
+store's answer, confidence 1, decider `reviewed`) and proposes nothing
+— the model is never asked a question the store has already answered,
+and a denied row's answer is its correction. A store error on the read
+falls through to the proposer: the read fails open and the queue never
+blocks.
+
 ## [2.11.5]: the map forgets a vanished file, and says a sentence once
 
 The 2.11.4 walk left a 1.3 GB graph store behind for the home directory

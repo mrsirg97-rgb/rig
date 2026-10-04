@@ -3,9 +3,13 @@ package decision
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 )
 
 const siteStateCap = 4096
@@ -24,10 +28,11 @@ var riskQuestion = Question{
 
 type siteLink struct {
 	proposer Proposer
+	cwd      string
 }
 
-func Site(p Proposer) core.ToolMiddleware {
-	return &siteLink{proposer: p}
+func Site(p Proposer, cwd string) core.ToolMiddleware {
+	return &siteLink{proposer: p, cwd: cwd}
 }
 
 func (s *siteLink) Wrap(next core.ToolExec) core.ToolExec {
@@ -46,8 +51,12 @@ func (s *siteLink) propose(ctx context.Context, call core.ToolCall, err error) {
 		Workspace string `json:"workspace"`
 	}
 	_ = json.Unmarshal(call.Args, &a)
+	workspace := a.Workspace
+	if workspace != "" && !filepath.IsAbs(workspace) {
+		workspace = filepath.Join(s.cwd, workspace)
+	}
 	state := map[string]string{
-		"command": a.Command,
+		"command": normalize(a.Command, workspace, s.cwd),
 	}
 	if a.Workspace != "" {
 		state["workspace"] = a.Workspace
@@ -69,6 +78,58 @@ func (s *siteLink) propose(ctx context.Context, call core.ToolCall, err error) {
 		State:    truncate(string(b), siteStateCap),
 		Question: riskQuestion,
 	})
+}
+
+func normalize(command, workspace, cwd string) string {
+	s := strings.Join(strings.Fields(command), " ")
+	rest, ok := strings.CutPrefix(s, "cd ")
+	if !ok {
+		return s
+	}
+	path, sep, after := cutSeparator(rest)
+	if sep == "" || strings.TrimSpace(path) == "" {
+		return s
+	}
+	base := workspace
+	if base == "" {
+		base = cwd
+	}
+	if !underWorkspace(path, base) {
+		return s
+	}
+	return strings.TrimSpace(after)
+}
+
+func underWorkspace(path, base string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	abs := path
+	switch {
+	case path == "~" || strings.HasPrefix(path, "~/"):
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		abs = filepath.Join(home, strings.TrimPrefix(path, "~"))
+	case !filepath.IsAbs(path):
+		abs = filepath.Join(base, path)
+	}
+	return pathguard.Under(base, abs)
+}
+
+func cutSeparator(s string) (before, sep, after string) {
+	if i := strings.Index(s, "&&"); i >= 0 {
+		if j := strings.IndexByte(s, ';'); j >= 0 && j < i {
+			return s[:j], ";", s[j+1:]
+		}
+		return s[:i], "&&", s[i+2:]
+	}
+	if j := strings.IndexByte(s, ';'); j >= 0 {
+		return s[:j], ";", s[j+1:]
+	}
+	return s, "", ""
 }
 
 func truncate(s string, cap int) string {

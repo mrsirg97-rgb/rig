@@ -65,6 +65,88 @@ func TestAFinalRowRoundTrips(t *testing.T) {
 	}
 }
 
+func settleTwin(t *testing.T, db store.DB, state, answer string, approved bool, correction string) {
+	t.Helper()
+	id, err := decisionstore.Propose(context.Background(), db, decisionstore.ProposeInput{
+		Scope: "proj", Site: decision.SiteBash, State: state,
+		Question:   decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"),
+		Answer:     answer,
+		Confidence: 0.5,
+		Decider:    "laya",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := decisionstore.Settle(context.Background(), db, decisionstore.SettleInput{
+		ID: id, Approved: approved, Reviewer: "reviewer", ReviewerAnswer: correction,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSettledAnswersNoneWhenNothingSettledFits(t *testing.T) {
+	db := open(t)
+	settleTwin(t, db, `{"command":"ls"}`, "changes", true, "")
+	q := decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous")
+	for _, c := range []struct {
+		name  string
+		site  string
+		state string
+		q     decision.Question
+	}{
+		{"no row at all", decision.SiteBash, `{"command":"rm -rf x"}`, q},
+		{"another site", decision.SitePack, `{"command":"ls"}`, q},
+		{"another question", decision.SiteBash, `{"command":"ls"}`, decision.Choice("other", "What risk does this bash call carry?", "safe", "changes", "dangerous")},
+	} {
+		got, ok, err := decisionstore.Settled(context.Background(), db, c.site, c.q, c.state)
+		if err != nil || ok || got != "" {
+			t.Fatalf("%s: the read answers none, got %q ok=%v err=%v", c.name, got, ok, err)
+		}
+	}
+}
+
+func TestSettledAnswersAnApprovedRow(t *testing.T) {
+	db := open(t)
+	settleTwin(t, db, `{"command":"ls"}`, "changes", true, "")
+	got, ok, err := decisionstore.Settled(context.Background(), db, decision.SiteBash,
+		decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"), `{"command":"ls"}`)
+	if err != nil || !ok {
+		t.Fatalf("the approved twin answers: ok=%v err=%v", ok, err)
+	}
+	if got != "changes" {
+		t.Fatalf("the approved twin answers its row: %q", got)
+	}
+}
+
+func TestSettledAnswersADeniedRowWithItsCorrection(t *testing.T) {
+	db := open(t)
+	settleTwin(t, db, `{"command":"ls"}`, "safe", false, "dangerous")
+	got, ok, err := decisionstore.Settled(context.Background(), db, decision.SiteBash,
+		decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"), `{"command":"ls"}`)
+	if err != nil || !ok {
+		t.Fatalf("the denied twin answers: ok=%v err=%v", ok, err)
+	}
+	if got != "dangerous" {
+		t.Fatalf("the denied twin answers its correction: %q", got)
+	}
+}
+
+func TestSettledAnswersTheMostRecentTwin(t *testing.T) {
+	db := open(t)
+	q := decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous")
+	settleTwin(t, db, `{"command":"ls"}`, "changes", true, "")
+	settleTwin(t, db, `{"command":"ls"}`, "safe", false, "dangerous")
+	got, ok, err := decisionstore.Settled(context.Background(), db, decision.SiteBash, q, `{"command":"ls"}`)
+	if err != nil || !ok || got != "dangerous" {
+		t.Fatalf("the newest twin answers: %q ok=%v err=%v", got, ok, err)
+	}
+	settleTwin(t, db, `{"command":"ls"}`, "safe", true, "")
+	got, ok, err = decisionstore.Settled(context.Background(), db, decision.SiteBash, q, `{"command":"ls"}`)
+	if err != nil || !ok || got != "safe" {
+		t.Fatalf("a newer twin still answers: %q ok=%v err=%v", got, ok, err)
+	}
+}
+
 func TestAProposalIsPending(t *testing.T) {
 	db := open(t)
 	id, err := decisionstore.Propose(context.Background(), db, decisionstore.ProposeInput{

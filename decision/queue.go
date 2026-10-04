@@ -9,6 +9,10 @@ import (
 
 const QueueCap = 256
 
+const reviewedDecider = "reviewed"
+
+const settledConfidence = 1.0
+
 type Pending struct {
 	Site     string
 	Scope    string
@@ -25,21 +29,32 @@ type Sink interface {
 	ProposePending(ctx context.Context, p Pending, a Answer) error
 }
 
-type Queue struct {
-	ch    chan Pending
-	dec   Decider
-	sink  Sink
-	land  func()
-	voice broadcast.Member
+type Settled interface {
+	Settled(ctx context.Context, site string, q Question, state string) (answer string, ok bool, err error)
 }
 
-func NewQueue(dec Decider, sink Sink, land func(), voice broadcast.Member) *Queue {
+type Queue struct {
+	ch      chan Pending
+	dec     Decider
+	sink    Sink
+	settled Settled
+	rec     Recorder
+	land    func()
+	voice   broadcast.Member
+}
+
+func NewQueue(dec Decider, sink Sink, settled Settled, rec Recorder, land func(), voice broadcast.Member) *Queue {
+	if settled == nil || rec == nil {
+		panic("decision: the queue asks the store what is settled and lands its answer; both are constructor arguments")
+	}
 	return &Queue{
-		ch:    make(chan Pending, QueueCap),
-		dec:   dec,
-		sink:  sink,
-		land:  land,
-		voice: voice,
+		ch:      make(chan Pending, QueueCap),
+		dec:     dec,
+		sink:    sink,
+		settled: settled,
+		rec:     rec,
+		land:    land,
+		voice:   voice,
 	}
 }
 
@@ -63,6 +78,17 @@ func (q *Queue) Run(ctx context.Context) {
 }
 
 func (q *Queue) decide(ctx context.Context, p Pending) {
+	answer, ok, err := q.settled.Settled(ctx, p.Site, p.Question, p.State)
+	if err != nil {
+		q.say("settled %s: %v", p.Site, err)
+	} else if ok {
+		conf := settledConfidence
+		q.rec.Record(ctx, Final{
+			Scope: p.Scope, Site: p.Site, State: p.State, Question: p.Question,
+			Answer: answer, Confidence: &conf, Decider: reviewedDecider,
+		})
+		return
+	}
 	answers, err := q.dec.Decide(ctx, p.State, []Question{p.Question})
 	if err != nil {
 		q.say("decide %s: %v", p.Site, err)
