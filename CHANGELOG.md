@@ -1,4 +1,20 @@
 # Changelog
+## [2.11.8]: the project's contract follows the session
+
+A project's `AGENTS.md` loaded only when it sat exactly in the process's
+working directory, read once at start. Open rig from home and work in
+`~/Projects/rig`, or open it in `store/graph`, and the repo's contract
+never reached the model. Now the project's file is the nearest
+`AGENTS.md` walking up from the workspace to the repository root, the
+directory holding `.git`, and no further: a subdirectory reads the
+repo's contract, a file above the repo is nobody's, a workspace that is
+no repository reads only its own, and the operator's file is never read
+twice when the workspace is the rig home. It is read when the session
+wires rather than once at start, so a session that opens in another
+workspace carries that workspace's contract; `Config.Agents` is the
+operator's file alone. A scheduled worker still inherits its job's cwd's
+file. `Load` still refuses loud at start when the file cannot be read.
+
 ## [2.11.7]: notices breathe once
 
 A notice was a dim line committed to the transcript, and the transcript

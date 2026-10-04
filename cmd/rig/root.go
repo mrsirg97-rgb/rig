@@ -13,6 +13,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
@@ -37,6 +38,7 @@ type root struct {
 	baseURL   string
 	system    string
 	agents    string
+	project   string
 	allow     []string
 	retries   int
 	rounds    int
@@ -141,6 +143,11 @@ func wire(r *root) *rig.Kernel {
 		mw = r.canonicalMiddleware()
 	}
 
+	project, err := config.ProjectAgents(r.rigHome, r.cwd)
+	if err != nil {
+		panic("rig: wire: " + err.Error())
+	}
+	r.project = project
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
 	fe := r.frontend()
@@ -178,6 +185,9 @@ func (r *root) buildSystem() string {
 	}
 	if r.agents != "" {
 		parts = append(parts, r.agents)
+	}
+	if r.project != "" {
+		parts = append(parts, r.project)
 	}
 	if g := guidelinesOf(mw); g != "" {
 		parts = append(parts, g)
@@ -311,6 +321,11 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	r.k.Frontend = r.frontend()
 	r.k.Session = s
 
+	project, err := config.ProjectAgents(r.rigHome, r.cwd)
+	if err != nil {
+		panic("rig: wire: " + err.Error())
+	}
+	r.project = project
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
 	r.k.Provider = provider
