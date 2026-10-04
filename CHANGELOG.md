@@ -1,4 +1,20 @@
 # Changelog
+## [2.10.2]: claim says what claim does
+
+The todo description's claim clause read "the next available task" — a
+word the store never implemented. Claim walks the board in order and
+takes the first pending task with no unfinished blocker, where the
+blockers are the unfinished tasks on either end of its
+`requires`/`blocks` links; a done peer never blocks. The description
+carries that rule now, and the drift that let it wander from the
+source is named where the words live: `tool`'s PACKAGE.md gotcha says
+a behavior change to a wired tool diffs its registry entry in the
+same change.
+
+- **tool**: the todo entry's claim clause is the store's rule; the
+  PACKAGE.md gains the drift gotcha.
+- **cmd/rig**: the golden_020 request bodies regoldened.
+
 ## [2.10.1]: the words the model reads
 
 The seven wordiest tool descriptions were rewritten trigger-first: the

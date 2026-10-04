@@ -46,3 +46,7 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
   wire compacts it, so whitespace in the file is free.
 - A new tool is a registry entry first; `cmd/rig`'s registry test fails
   when a wired tool has no entry or an entry has no wiring.
+- A tool's description drifts with its state: the more verbs a tool
+  carries, the further its entry lags the behavior. A behavior change to
+  a wired tool diffs its registry entry in the same change; the wire
+  prefix golden moves with it, deliberately.

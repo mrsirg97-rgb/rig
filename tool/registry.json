@@ -141,7 +141,7 @@
     "name": "todo",
     "enabled": true,
     "what": "the task queue for the current workspace — for any job of three or more steps: create the tasks before the first edit, start one before working on it, complete or fail it when done, and leave the queue empty at the end.",
-    "guidelines": "`requires` makes a task wait on another; `claim` assigns the next available task to you; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them. set `project` only when the work is in a different workspace than the one you started in.",
+    "guidelines": "`requires` makes a task wait on another; `claim` takes the next pending task with no unfinished `requires` or `blocks` link; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them. set `project` only when the work is in a different workspace than the one you started in.",
     "reply": "the affected row and the queue's summary, scoped by its workspace ([rig]).",
     "schema": {
       "type": "object",
