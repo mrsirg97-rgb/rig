@@ -219,6 +219,9 @@ func (r *root) tableTools() []core.Tool {
 	if r.decide != nil {
 		out = append(out, r.decide)
 	}
+	if verdict, ok := r.tools["verdict"]; ok {
+		out = append(out, verdict)
+	}
 	return out
 }
 

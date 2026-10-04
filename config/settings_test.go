@@ -354,10 +354,10 @@ func TestPluginsEnabledKeyIsRetired(t *testing.T) {
 	}
 }
 
-func TestReviewBatchDefaultsToTen(t *testing.T) {
+func TestReviewBatchDefaultsToThree(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
-	if got := cfg.Settings.ReviewBatchOrDefault(); got != 10 {
-		t.Fatalf("absent reviewBatch = %d, want the default 10", got)
+	if got := cfg.Settings.ReviewBatchOrDefault(); got != 3 {
+		t.Fatalf("absent reviewBatch = %d, want the default 3 (a glance at the queue mid-work)", got)
 	}
 	if cfg.Settings.ReviewBatch != nil {
 		t.Fatalf("absent reviewBatch = %v, want nil (no embedded default writes over the read)", cfg.Settings.ReviewBatch)

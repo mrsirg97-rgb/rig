@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -282,6 +283,9 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
+	}
+	if fleet != nil && !slices.Contains(allowList, "verdict") {
+		fleet = nil
 	}
 	if fleet != nil {
 		native["verdict"] = true

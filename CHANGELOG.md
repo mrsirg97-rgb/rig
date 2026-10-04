@@ -119,10 +119,25 @@ parsers, the `verdict:` sentences in the briefs, `DelegateInput.NoTools`
 (now `Bare`: no brief, and only the named tools), and the reviewer's
 `Fire` returning stdout.
 
+Two small things ride the eighth commit. `reviewBatch` defaults to 3,
+down from 10: a bite is a glance at the queue mid-work, three rows at
+most, and the backlog converges across turn ends instead of in one
+sitting; the setting is unchanged for an operator who names it. The
+delegate tool's `Fill` goes: 2.10.1 reworded its text without the
+`{default_model}` slot, so the wrap replaced nothing; `scheduler` is the
+one tool whose schema still names the default, and the docs say so.
+And a fix the first live bite found: `verdict` was registered but never
+offered, since the table walks the native names and a conditional
+native is appended by hand the way `decide` is; GLM saw thirteen tools
+it could not call and went looking for the fourteenth. The table
+carries it now, with a test that wires a fleet and reads the menu; and
+it is offered only to a worker whose allow list names it (a reviewer, a
+bite), so a run-job worker on the same pipe sees the menu it always did.
+
 The first commit is the package and its tests; the second the engine;
 the third the swarm; the fourth the reviewer and the delegate tool; the
-fifth the pipe; the sixth the one notice; the seventh the verdict. The
-stdout scrape is gone from the tree.
+fifth the pipe; the sixth the one notice; the seventh the verdict; the
+eighth the two trims. The stdout scrape is gone from the tree.
 
 ## [2.10.2]: claim says what claim does
 

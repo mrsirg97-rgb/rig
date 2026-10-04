@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-const DefaultReviewBatch = 10
+const DefaultReviewBatch = 3
 
 type Settings struct {
 	BaseURL       string
