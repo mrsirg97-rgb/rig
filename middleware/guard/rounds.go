@@ -38,7 +38,7 @@ func (r *rounds) Wrap(next core.ToolExec) core.ToolExec {
 				r.record.Record(ctx, decision.Final{
 					Site:     decision.SiteGuard,
 					State:    call.Name,
-					Question: decision.YesNo("call", "make another tool call this turn?"),
+					Question: decision.Binary("call", "make another tool call this turn?"),
 					Answer:   "no",
 					Decider:  decision.SiteGuard,
 				})

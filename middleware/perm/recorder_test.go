@@ -39,7 +39,7 @@ func TestADenialRecordsAFinalRow(t *testing.T) {
 	if rows[0].Site != decision.SitePerm || rows[0].Answer != "no" || rows[0].Decider != decision.SitePerm {
 		t.Fatalf("the row must name the site, the answer, and the decider: %+v", rows[0])
 	}
-	if rows[0].Question.Kind != decision.KindYesNo {
+	if rows[0].Question.Kind != decision.KindBinary {
 		t.Fatalf("the denial is a yes/no question: %+v", rows[0].Question)
 	}
 }

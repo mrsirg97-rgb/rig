@@ -43,7 +43,7 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 				g.record.Record(ctx, decision.Final{
 					Site:     decision.SiteGuard,
 					State:    args,
-					Question: decision.YesNo("retry", "issue the identical failing call again?"),
+					Question: decision.Binary("retry", "issue the identical failing call again?"),
 					Answer:   "no",
 					Decider:  decision.SiteGuard,
 				})

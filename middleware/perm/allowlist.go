@@ -38,7 +38,7 @@ func allowlist(names []string, door func(string) bool, record decision.Recorder)
 				record.Record(ctx, decision.Final{
 					Site:     decision.SitePerm,
 					State:    string(call.Args),
-					Question: decision.YesNo("allow", "allow "+call.Name+"?"),
+					Question: decision.Binary("allow", "allow "+call.Name+"?"),
 					Answer:   "no",
 					Decider:  decision.SitePerm,
 				})

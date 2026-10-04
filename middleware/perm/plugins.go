@@ -21,7 +21,7 @@ func recordPerm(r decision.Recorder, ctx context.Context, call core.ToolCall, ta
 	r.Record(ctx, decision.Final{
 		Site:     decision.SitePerm,
 		State:    target,
-		Question: decision.YesNo("allow", "allow "+call.Name+"?"),
+		Question: decision.Binary("allow", "allow "+call.Name+"?"),
 		Answer:   "no",
 		Decider:  decision.SitePerm,
 	})

@@ -150,9 +150,9 @@ func parseDecideArgs(data json.RawMessage) (decideArgs, error) {
 		return a, fmt.Errorf("decide: args: %w", err)
 	}
 	switch a.Kind {
-	case KindChoice, KindScore, KindYesNo:
+	case KindChoice, KindScore, KindBinary:
 	default:
-		return a, fmt.Errorf("decide: kind %q: want choice, yesno or score", a.Kind)
+		return a, fmt.Errorf("decide: kind %q: want choice, binary or score", a.Kind)
 	}
 	if strings.TrimSpace(a.Prompt) == "" {
 		return a, errors.New("decide: an empty prompt")

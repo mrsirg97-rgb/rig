@@ -47,7 +47,7 @@ func TestTheAskRecordsItsVerdict(t *testing.T) {
 	if rows[0].Site != decision.SiteApprove || rows[0].Answer != "yes" || rows[0].Decider != decision.SiteApprove {
 		t.Fatalf("the row must name the site, the answer, and the decider: %+v", rows[0])
 	}
-	if rows[0].Question.Kind != decision.KindYesNo {
+	if rows[0].Question.Kind != decision.KindBinary {
 		t.Fatalf("the ask is a yes/no question: %+v", rows[0].Question)
 	}
 }

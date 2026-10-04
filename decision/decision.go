@@ -5,7 +5,7 @@ import "context"
 const (
 	KindChoice = "choice"
 	KindScore  = "score"
-	KindYesNo  = "yesno"
+	KindBinary = "binary"
 )
 
 const (
@@ -68,6 +68,6 @@ func Score(id, prompt string, criteria ...string) Question {
 	return Question{ID: id, Kind: KindScore, Prompt: prompt, Criteria: criteria}
 }
 
-func YesNo(id, prompt string) Question {
-	return Question{ID: id, Kind: KindYesNo, Prompt: prompt}
+func Binary(id, prompt string) Question {
+	return Question{ID: id, Kind: KindBinary, Prompt: prompt}
 }

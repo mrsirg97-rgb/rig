@@ -185,6 +185,7 @@ func Pending(ctx context.Context, db store.DB) ([]PendingRow, error) {
 		if err := json.Unmarshal([]byte(qjson), &r.Question); err != nil {
 			continue
 		}
+		r.Question.Kind = kindOf(r.Question.Kind)
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -218,6 +219,7 @@ func Settled(ctx context.Context, db store.DB, site string, q decision.Question,
 		if json.Unmarshal([]byte(qjson), &row) != nil || row.ID != q.ID {
 			continue
 		}
+		row.Kind = kindOf(row.Kind)
 		if status == decision.StatusDenied {
 			return *reviewer, true, nil
 		}
@@ -273,4 +275,13 @@ func Outcome(ctx context.Context, db store.DB, id int64, outcome string) error {
 		return fmt.Errorf("decision: outcome commit: %w", err)
 	}
 	return nil
+}
+
+const legacyBinary = "yesno"
+
+func kindOf(kind string) string {
+	if kind == legacyBinary {
+		return decision.KindBinary
+	}
+	return kind
 }

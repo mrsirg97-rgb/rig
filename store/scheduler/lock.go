@@ -22,7 +22,7 @@ func recordSkip(db DB, opts RunOpts, id, reason, cwd string) error {
 			Scope:    scope.Key(cwd),
 			Site:     decision.SiteScheduler,
 			State:    string(state),
-			Question: decision.YesNo("fire", "run job "+id+" now?"),
+			Question: decision.Binary("fire", "run job "+id+" now?"),
 			Answer:   "no",
 			Decider:  decision.SiteScheduler,
 		})

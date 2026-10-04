@@ -208,7 +208,7 @@
         },
         "note": {
           "type": "string",
-          "description": "the note text, or the reject reason."
+          "description": "the note or reject reason; 1000 chars at most."
         },
         "status": {
           "type": "string",
@@ -586,7 +586,7 @@
   {
     "name": "decide",
     "enabled": true,
-    "what": "ask one, typed question (covering many items) to the decision server instead of finding it out yourself. answered as a choice (each label described), a yes/no, or a score.",
+    "what": "ask one, typed question (covering many items) to the decision server instead of finding it out yourself. answered as a choice (each label described), a binary (yes or no), or a score.",
     "guidelines": "the items never enter your context; state the prompt so one item is answered by one label or value. a server error refuses and nothing was sorted.",
     "reply": "the items grouped by the label, numbered from 1 with the first line; unsure choices return in full for you to judge.",
     "schema": {
@@ -596,7 +596,7 @@
           "type": "string",
           "enum": [
             "choice",
-            "yesno",
+            "binary",
             "score"
           ],
           "description": "the question's kind"

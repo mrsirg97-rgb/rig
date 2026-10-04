@@ -48,7 +48,7 @@ func Middleware(rec ...decision.Recorder) core.ToolMiddleware {
 				record.Record(ctx, decision.Final{
 					Site:     decision.SitePaths,
 					State:    raw,
-					Question: decision.YesNo("expand", "expand ~ in "+field+"?"),
+					Question: decision.Binary("expand", "expand ~ in "+field+"?"),
 					Answer:   expanded,
 					Decider:  decision.SitePaths,
 				})
