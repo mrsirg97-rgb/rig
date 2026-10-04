@@ -211,14 +211,17 @@ func argsPreview(t Theme, name string, args json.RawMessage) string {
 	if name == "write" {
 		return side("content", "  ", SlotDim)
 	}
-	old, new := side("old", "- ", SlotError), side("new", "+ ", SlotSuccess)
-	switch {
-	case old == "":
-		return new
-	case new == "":
-		return old
+	chunks, _ := v["edits"].([]any)
+	var rows []string
+	for _, c := range chunks {
+		m, _ := c.(map[string]any)
+		for _, side := range [][3]string{{"old", "- ", SlotError}, {"new", "+ ", SlotSuccess}} {
+			if text, _ := m[side[0]].(string); text != "" {
+				rows = append(rows, previewWith(t, text, side[1], side[2]))
+			}
+		}
 	}
-	return old + "\n" + new
+	return strings.Join(rows, "\n")
 }
 
 func preview(t Theme, content string) string {

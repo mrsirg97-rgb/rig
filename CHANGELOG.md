@@ -1,4 +1,15 @@
 # Changelog
+## [2.11.3]: the edit shows its diff again
+
+The TUI's edit block previews the arguments as a diff: the old side as
+`- ` lines in the error color, the new side as `+ ` lines in the success
+color, each side eliding by the head/tail rule. When the edit tool
+became a batch of chunks (`edits`, 2.9.x) the preview kept reading the
+top-level `old` and `new` that no longer existed and quietly showed
+nothing, so an edit landed as a receipt with no red or green. The
+preview walks the chunks now, in order, each one its red then its green,
+and a four-chunk edit reads as four small diffs above the receipt. The
+operator asked for it back after watching GLM land them all day.
 ## [2.11.2]: the setters leave
 
 The quality pass every few versions, this one on what 2.11.0 and
