@@ -23,10 +23,6 @@ const QueueCap = 256
 
 const ReadCap = 1 << 20
 
-const (
-	packRowCap = 200
-)
-
 type Queue struct {
 	ch      chan string
 	home    string
@@ -37,6 +33,9 @@ type Queue struct {
 	lspMu   sync.Mutex
 	lsp     *lspClient
 	lspLang string
+	scorer  Scorer
+	itemCap int
+	loadCap int
 }
 
 func NewQueue(home string, loud func(string)) *Queue {
@@ -46,7 +45,21 @@ func NewQueue(home string, loud func(string)) *Queue {
 		loud:    loud,
 		extract: &GoExtract{},
 		dbs:     map[string]store.DB{},
+		itemCap: ReadCap,
+		loadCap: ReadCap,
 	}
+}
+
+func (q *Queue) SetScorer(s Scorer) { q.scorer = s }
+
+func (q *Queue) PackCaps() (item, load int) { return q.itemCap, q.loadCap }
+
+func (q *Queue) SetPackCaps(items, load int) {
+	if items <= 0 || load <= 0 {
+		panic(fmt.Sprintf("graph: pack caps %d/%d: the ceiling needs a bound", items, load))
+	}
+	q.itemCap = items
+	q.loadCap = load
 }
 
 func (q *Queue) Home() string { return q.home }
@@ -271,6 +284,9 @@ func (q *Queue) Pack(ctx context.Context, cwd, target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if strings.Contains(target, " ") && !isFile(filepath.Join(cwd, target)) && !isFile(target) {
+		return q.packTask(ctx, db, root, target)
+	}
 	if strings.Contains(target, "/") || isFile(filepath.Join(cwd, target)) || isFile(target) {
 		if looksQualified(target) && !isFile(filepath.Join(cwd, target)) && !isFile(target) {
 			return "", fmt.Errorf("graph: %s reads as an import path; name the symbol by its package tail (%s), or a file path", target, tailOf(target))
@@ -355,12 +371,12 @@ func querySymbols(ctx context.Context, db store.DB, q string, args ...any) ([]sy
 	return out, rows.Err()
 }
 
-func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, target string) (string, error) {
+func (q *Queue) lookupSymbol(ctx context.Context, db store.DB, module, target string) (symRow, error) {
 	var rows []symRow
 	if qual, name, ok := strings.Cut(target, "."); ok && qual != "" && name != "" {
 		all, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ?`, name)
 		if err != nil {
-			return "", err
+			return symRow{}, err
 		}
 		for _, s := range all {
 			if qualMatches(s.Package, qual, module) {
@@ -370,31 +386,31 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 		if len(rows) == 0 {
 			rows, err = querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ?`, target)
 			if err != nil {
-				return "", err
+				return symRow{}, err
 			}
 		}
 	} else {
 		var err error
 		rows, err = querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ?`, target)
 		if err != nil {
-			return "", err
+			return symRow{}, err
 		}
 	}
 	if len(rows) == 0 {
 		if qual, name, ok := strings.Cut(target, "."); ok && qual != "" && name != "" {
 			elsewhere, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ? ORDER BY package`, name)
 			if err != nil {
-				return "", err
+				return symRow{}, err
 			}
 			if len(elsewhere) > 0 {
 				var names []string
 				for _, s := range elsewhere {
 					names = append(names, baseName(s.Package)+"."+s.Name)
 				}
-				return "", fmt.Errorf("graph: no %s in package %s; the map has %s", name, qual, strings.Join(names, ", "))
+				return symRow{}, fmt.Errorf("graph: no %s in package %s; the map has %s", name, qual, strings.Join(names, ", "))
 			}
 		}
-		return "", fmt.Errorf("graph: %s is not in the map; run index first", target)
+		return symRow{}, fmt.Errorf("graph: %s is not in the map; run index first", target)
 	}
 	pkgs := map[string]bool{}
 	for _, s := range rows {
@@ -406,10 +422,31 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 			names = append(names, p)
 		}
 		sort.Strings(names)
-		return "", fmt.Errorf("graph: %s is defined in %s and %s: name the package", target, names[0], strings.Join(names[1:], ", "))
+		return symRow{}, fmt.Errorf("graph: %s is defined in %s and %s: name the package", target, names[0], strings.Join(names[1:], ", "))
 	}
-	sym := rows[0]
+	return rows[0], nil
+}
 
+func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, target string) (string, error) {
+	sym, err := q.lookupSymbol(ctx, db, module, target)
+	if err != nil {
+		return "", err
+	}
+	block, err := q.packOne(ctx, db, root, sym)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	b.WriteString(block)
+	coverage(ctx, db, root, &b)
+	out := b.String()
+	if len(out) > ReadCap {
+		out = out[:ReadCap] + "\n[truncated at the read ceiling]"
+	}
+	return out, nil
+}
+
+func (q *Queue) packOne(ctx context.Context, db store.DB, root string, sym symRow) (string, error) {
 	if moved, err := q.refresh(ctx, db, root, sym.File); err != nil {
 		return "", err
 	} else if moved {
@@ -418,7 +455,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 			return "", err
 		}
 		if len(sel) == 0 {
-			return "", fmt.Errorf("graph: %s left the map at the re-extraction", target)
+			return "", fmt.Errorf("graph: %s left the map at the re-extraction", sym.Name)
 		}
 		sym = sel[0]
 	}
@@ -464,7 +501,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 		return "", err
 	}
 	if len(sel) == 0 {
-		return "", fmt.Errorf("graph: %s left the map at the re-extraction", target)
+		return "", fmt.Errorf("graph: %s left the map at the re-extraction", sym.Name)
 	}
 	sym = sel[0]
 	if movedAny && symLang != "go" && client != nil {
@@ -518,12 +555,7 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 			}
 		}
 	}
-	coverage(ctx, db, root, &b)
-	out := b.String()
-	if len(out) > ReadCap {
-		out = out[:ReadCap] + "\n[truncated at the read ceiling]"
-	}
-	return out, nil
+	return b.String(), nil
 }
 
 type edgeRow struct {

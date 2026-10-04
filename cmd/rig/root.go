@@ -53,12 +53,13 @@ type root struct {
 
 	drec decision.Recorder
 
-	proposals decision.Proposer
-	decQ      *decision.Queue
-	decRev    *decision.Reviewer
-	decide    *decision.Decide
-	delegate  func(sched.DelegateInput) (sched.DelegateResult, error)
-	eco       *plugins.Ecosystem
+	proposals  decision.Proposer
+	decQ       *decision.Queue
+	decRev     *decision.Reviewer
+	packScorer *decision.PackScorer
+	decide     *decision.Decide
+	delegate   func(sched.DelegateInput) (sched.DelegateResult, error)
+	eco        *plugins.Ecosystem
 
 	pluginsDir string
 	rigHome    string
@@ -153,8 +154,14 @@ func wire(r *root) *rig.Kernel {
 		rig.WithConcurrent(func(c core.ToolCall) bool { return concurrentNatives[c.Name] }),
 	)
 	k.Session = r.session
+	if r.graph != nil {
+		r.graph.SetPackCaps(graph.ReadCap, r.resultCap)
+	}
 	if r.decide != nil {
 		r.decide.SetParallel(k.EffectiveParallel())
+	}
+	if r.packScorer != nil {
+		r.packScorer.SetParallel(k.EffectiveParallel())
 	}
 	r.k = k
 	return k

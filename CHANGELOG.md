@@ -1,4 +1,44 @@
 # Changelog
+## [2.10.0]: the pack takes a task
+
+`rem pack` needed a symbol or a file, and the question a model arrives
+with is about a task: "who builds the decision queue", "where does the
+pack budget live". The target now also takes a sentence: a target with
+a space that names no file is a task. The candidates come from the map
+through the two lexical arms recall uses — an FTS5 virtual table and a
+trigram shadow over each symbol's name, kind, package and file, fused
+as recall fuses them (reciprocal rank) — and the tables land in the
+graph store's extra.sql, the generated ddl and domain untouched.
+
+With `decisionUrl` set, candidates are scored with one yes/no —
+"Does this symbol matter for the task?" — through the fan-out decide
+uses (now exported as `decision.FanOut`), bounded by the kernel's
+Parallel; the candidate's item is its live signature and file. No more
+candidates go out than the pack could load: the blocks (definition,
+callers, callees — what actually spends the cap) are built down the
+rank until the result cap the root passes in is spent, and only that
+prefix is scored — the pack loads the blocks it built, so the menu
+task's minute of fan-out becomes about ten seconds. The lexical rank
+is the pack's spine: the
+yes set loads live in rank order, the server's judgment promotes
+within the rank and never re-orders it; an answer whose confidence is
+under one half is unsure and the unsure are listed by name at the end
+so the model can pack one by hand, a confident no is not listed, and
+the lexical top fills the rest of the budget, so a scored pack is
+never worse than an unscored one.
+Every answered candidate is one pending row in the decision store (the
+new site `pack`, the server as decider, the task and the item as state)
+and the reviewer settles them at turn end as it settles bash rows, a
+deny naming the right answer. Unset, pack by task uses the lexical
+candidates alone, in rank order, and records nothing. No automatic
+pack: the model asks, and one guideline joins the system prompt only
+when decisionUrl is set. The lexical containers are schema version 2:
+the migration rebuilds them from `symbols` on open, so a store mapped
+before this release searches without a re-index.
+
+The target description grows by the clause "the symbol, the file, or
+the task as a sentence"; the menu budget holds.
+
 ## [2.9.6]: one word for an edit's piece
 
 The registry calls the unit of an `edit` a chunk ("one line per chunk";

@@ -140,7 +140,7 @@ func TestExtraStatementsAreApplied(t *testing.T) {
 	for _, s := range statements {
 		joined += s + "\n"
 	}
-	for _, want := range []string{"idx_symbols_file", "idx_symbols_name", "idx_edges_to", "idx_edges_from", "idx_edges_file"} {
+	for _, want := range []string{"idx_symbols_file", "idx_symbols_name", "idx_edges_to", "idx_edges_from", "idx_edges_file", "idx_symbol_grams_gram"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("extra.sql absent from the applied statements (%s)", want)
 		}
@@ -154,7 +154,7 @@ func TestExtraStatementsAreApplied(t *testing.T) {
 	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name LIKE 'idx_%'").Scan(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got != 5 {
-		t.Fatalf("extra statements applied after open = %d, want 5", got)
+	if got != 6 {
+		t.Fatalf("extra statements applied after open = %d, want 6", got)
 	}
 }

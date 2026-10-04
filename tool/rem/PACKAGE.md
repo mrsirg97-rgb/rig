@@ -18,9 +18,11 @@ calls what).
   (`learn`, `recall`, `reflect`, `prune`) and the graph store's map
   operations (`index`, `pack`), each with an optional `project` (a path,
   resolved through `store/scope`, worktree-safe). `pack` takes a
-  `target`: a symbol (package-qualified or bare) or a file path, and
-  replies from the live files — the definition, callers with their call
-  lines, the signatures of what it calls, one coverage line. `index`
+  `target`: a symbol (package-qualified or bare), a file path, or a task
+  as a sentence (a target with a space that names no file) — the symbol
+  and the file reply from the live files, the task replies with the
+  candidates the map's lexical arms surface, the decision server's yes
+  set loaded live and the declines listed by name (2.10.0). `index`
   maps the whole project through the queue.
 
 ## How it is consumed
@@ -29,6 +31,9 @@ calls what).
   the graph queue. The `/rem` command (SPEC_COMMANDS 11) is the
   operator's verb surface over the memory store; the tool stays the
   model's multi-line surface over both stores.
+- `Guide` is the one-link `ToolMiddleware` whose `Guidelines()` joins
+  the system prompt when the decision server stands: in a mapped
+  project, pack the task before reading files for it.
 - The compaction `AutoReflect` seam is cut: compaction writes nothing to
   rem (SPEC_COMPACT 6).
 
