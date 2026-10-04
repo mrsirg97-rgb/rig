@@ -41,7 +41,11 @@ func (t Theme) Paint(slot, s string) string {
 }
 
 func (t Theme) EmberPaint(i int, s string) string {
-	return paintSeq(t.sgrHex(t.emberHex(i)), s)
+	return t.BreathPaint(SlotEmber, i, s)
+}
+
+func (t Theme) BreathPaint(slot string, i int, s string) string {
+	return paintSeq(t.sgrHex(t.breathHex(slot, i)), s)
 }
 
 func paintSeq(seq, s string) string {

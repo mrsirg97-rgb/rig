@@ -57,6 +57,10 @@ func (m *member) Subscribe(ctx context.Context, callback func(err error, message
 	m.transport.Recv(ctx, callback)
 }
 
-func Say(m Member, source, text string) {
-	m.Publish(context.Background(), func(error) {}, NewMessage(m.Id(), true, core.Notice{Source: source, Text: text}))
+func Say(m Member, source, text string, level ...core.Level) {
+	n := core.Notice{Source: source, Text: text}
+	if len(level) > 0 {
+		n.Level = level[0]
+	}
+	m.Publish(context.Background(), func(error) {}, NewMessage(m.Id(), true, n))
 }

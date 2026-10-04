@@ -385,7 +385,11 @@ func (t Theme) emberCollapsed(stops [emberBreathStops]string) bool {
 }
 
 func (t Theme) emberHex(i int) string {
-	stops := emberStops(t.slots[SlotEmber])
+	return t.breathHex(SlotEmber, i)
+}
+
+func (t Theme) breathHex(slot string, i int) string {
+	stops := emberStops(t.slots[slot])
 	if !t.TrueColor && t.emberCollapsed(stops) {
 		two := [2]string{stops[0], stops[emberBreathStops/2]}
 		return two[i%2]

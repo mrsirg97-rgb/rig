@@ -2,6 +2,7 @@ package command_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/command"
@@ -11,8 +12,12 @@ func TestRoleBareShowsDefault(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Role: func() string { return "" }}
 	out, err := byName["role"].Run(context.Background(), "", env)
-	if err != nil || out != "role: default" {
-		t.Fatalf("the bare reply = (%q, %v), want the pinned voice", out, err)
+	want := "3 roles · active default\n" +
+		"  default   [~] no stance: the plain prompt\n" +
+		"  architect design first, build second\n" +
+		"  reviewer  review only: hunt defects, build nothing"
+	if err != nil || out != want {
+		t.Fatalf("the bare reply = (%q, %v), want the roles with default marked", out, err)
 	}
 }
 
@@ -20,8 +25,8 @@ func TestRoleBareShowsActive(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Role: func() string { return "architect" }}
 	out, err := byName["role"].Run(context.Background(), "", env)
-	if err != nil || out != "role: architect" {
-		t.Fatalf("the bare reply = (%q, %v), want the pinned voice", out, err)
+	if err != nil || !strings.Contains(out, "active architect") || !strings.Contains(out, "  architect [~] design first") {
+		t.Fatalf("the bare reply = (%q, %v), want architect marked", out, err)
 	}
 }
 

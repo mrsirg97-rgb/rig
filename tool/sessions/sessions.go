@@ -165,18 +165,18 @@ func (a adapter) summary(ctx context.Context, db store.DB, project string, n int
 		pct = int(cacheRead * 100 / prompt)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: %d session%s, %d turn%s\n",
+	fmt.Fprintf(&b, "%s \u00b7 %d session%s \u00b7 %d turn%s",
 		scope.Label(project), len(rows), plural(len(rows)), turns, plural(turns))
-	fmt.Fprintf(&b, "models: %s\n", strings.Join(modelLines, ", "))
+	fmt.Fprintf(&b, "\n  models  %s", strings.Join(modelLines, ", "))
 	if mixed {
-		fmt.Fprintf(&b, "tokens: %s\n", strings.Join(servedLines, ", "))
+		fmt.Fprintf(&b, "\n  tokens  %s", strings.Join(servedLines, ", "))
 	}
 	if faultCount == 0 {
-		b.WriteString("faults: 0\n")
+		b.WriteString("\n  faults  0")
 	} else {
-		fmt.Fprintf(&b, "faults: %d — last: %s\n", faultCount, firstLine(lastFault.Message))
+		fmt.Fprintf(&b, "\n  faults  %d \u00b7 last: %s", faultCount, firstLine(lastFault.Message))
 	}
-	fmt.Fprintf(&b, "cache ratio: %d%% (cache_read %d / prompt %d)", pct, cacheRead, prompt)
+	fmt.Fprintf(&b, "\n  cache   %d%% \u00b7 cache_read %d / prompt %d", pct, cacheRead, prompt)
 	return b.String(), nil
 }
 

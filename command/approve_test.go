@@ -13,12 +13,15 @@ func TestApproveBareShows(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{Approve: func() string { return "" }}
 	out, err := byName["approve"].Run(context.Background(), "", env)
-	if err != nil || out != "approve: auto" {
-		t.Fatalf("bare = (%q, %v), want the auto label", out, err)
+	want := "2 modes · active auto\n" +
+		"  auto   [~] runs tools without asking\n" +
+		"  manual waits for your y/n before every call that changes something"
+	if err != nil || out != want {
+		t.Fatalf("bare = (%q, %v), want the two modes with auto active", out, err)
 	}
 	env.Approve = func() string { return "manual" }
 	out, err = byName["approve"].Run(context.Background(), "", env)
-	if err != nil || out != "approve: manual" {
+	if err != nil || !strings.Contains(out, "active manual") || !strings.Contains(out, "  manual [~] ") {
 		t.Fatalf("bare manual = (%q, %v)", out, err)
 	}
 }

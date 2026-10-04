@@ -137,3 +137,24 @@ func TestHeartbeatsAreOneFrameUntilTheLoopRuns(t *testing.T) {
 		t.Fatalf("the frame that lands is the latest, got pending %d", st.Pending)
 	}
 }
+
+func TestTheFrontendMemberDeliversOnlyWhatAFrontendRenders(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	storeRoot(t, r)
+	fleet(r)
+	go r.engine.Start(context.Background())
+	defer r.engine.Stop()
+	fe := &recordingFrontend{}
+	r.rec = recorderFor(r, fe)
+	worker := r.room.Mint()
+	worker.Publish(context.Background(), func(error) {}, broadcast.NewMessage(worker.Id(), true, core.ReasoningDelta{Text: "a worker's thought"}))
+	worker.Publish(context.Background(), func(error) {}, broadcast.NewMessage(worker.Id(), true, core.Phase{Name: "reviewing"}))
+	awaitCount(t, fe, 1)
+	time.Sleep(50 * time.Millisecond)
+	if fe.count() != 1 {
+		t.Fatalf("a worker's raw delta never reaches the frontend as the session's own, got %d events", fe.count())
+	}
+	if _, ok := fe.events[0].(core.Phase); !ok {
+		t.Fatalf("the phase reaches the frontend: %+v", fe.events[0])
+	}
+}

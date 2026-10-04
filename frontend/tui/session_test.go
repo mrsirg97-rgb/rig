@@ -1187,7 +1187,7 @@ func TestCompactingLoader(t *testing.T) {
 	s.await(promptMark(th))
 
 	s.fe.Notify(core.Compacting{})
-	s.await("compacting")
+	s.await("summarizing")
 	screen := func() []string {
 		t.Helper()
 		v := newVT(50)
@@ -1200,7 +1200,7 @@ func TestCompactingLoader(t *testing.T) {
 	rows := screen()
 	found := false
 	for _, r := range rows {
-		if strings.Contains(r, "compacting") {
+		if strings.Contains(r, "summarizing") {
 			found = true
 		}
 	}
@@ -1212,7 +1212,7 @@ func TestCompactingLoader(t *testing.T) {
 	s.await("compact:")
 	rows = screen()
 	for _, r := range rows {
-		if strings.Contains(r, "compacting") {
+		if strings.Contains(r, "summarizing") {
 			t.Fatalf("the loader row must leave with the commit: %q", rows)
 		}
 	}

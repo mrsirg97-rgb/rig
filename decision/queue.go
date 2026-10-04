@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const QueueCap = 256
@@ -114,6 +115,6 @@ func (q *Queue) decide(ctx context.Context, p Pending) {
 
 func (q *Queue) say(format string, args ...any) {
 	if q.voice != nil {
-		broadcast.Say(q.voice, "decision", fmt.Sprintf(format, args...))
+		broadcast.Say(q.voice, "decision", fmt.Sprintf(format, args...), core.LevelError)
 	}
 }

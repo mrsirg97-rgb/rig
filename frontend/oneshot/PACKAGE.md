@@ -20,7 +20,10 @@ prompt, the process's stdout is the response.
   transport, nil when nobody listens) carries the liveness: a heartbeat
   message while a tool runs, so a worker silent during a long tool run
   never looks hung to the supervisor, the delegate tool or the runner's
-  stall watch; `Heartbeat` (default 30s) sets the cadence. Without a
+  stall watch; `Heartbeat` (default 30s) sets the cadence. The reasoning
+  deltas cross the same fleet as themselves (2.11.7), beside the stderr
+  copy the run log keeps, so a parent that asked for the work can show
+  the thinking as a phase. Without a
   fleet there is no heartbeat and no ticker: the `rig: heartbeat`
   stderr line is gone (2.11.0).
 - `Faulted`: whether any fault crossed the session. The run-job record

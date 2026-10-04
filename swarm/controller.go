@@ -282,7 +282,7 @@ func (c *Controller) Stop() (string, error) {
 	}
 	c.call(func() {
 		c.emit()
-		c.say("/swarm exited — %d %s stopped", count, plural(count, "worker"))
+		c.say(core.LevelSuccess, "/swarm exited — %d %s stopped", count, plural(count, "worker"))
 	})
 	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "agent")), nil
 }
@@ -307,15 +307,15 @@ func (c *Controller) status() core.SwarmStatus {
 	return core.SwarmStatus{Workers: workers, Pending: counts.Pending, Review: counts.Review}
 }
 
-func (c *Controller) say(format string, args ...any) {
-	broadcast.Say(c.self, "swarm", strings.TrimRight(fmt.Sprintf(format, args...), "\n"))
+func (c *Controller) say(level core.Level, format string, args ...any) {
+	broadcast.Say(c.self, "swarm", strings.TrimRight(fmt.Sprintf(format, args...), "\n"), level)
 }
 
 func (c *Controller) loud(w *worker, format string, args ...any) {
 	if w.ctx.Err() != nil {
 		return
 	}
-	c.say(format, args...)
+	c.say(core.LevelError, format, args...)
 }
 
 func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {

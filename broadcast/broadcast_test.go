@@ -2,6 +2,8 @@ package broadcast_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -416,5 +418,26 @@ func TestAVerdictCrossesTheEncoder(t *testing.T) {
 	v, ok := back.Event().(core.Verdict)
 	if !ok || v.Row != 12 || v.Accept || v.Reason != "changes" || back.Origin() != -7 {
 		t.Fatalf("round trip = %+v from %s", back.Event(), raw)
+	}
+}
+
+func TestAPhaseAndAReasoningDeltaCrossTheEncoder(t *testing.T) {
+	enc := broadcast.NewJSONEncoder()
+	for _, ev := range []core.Event{
+		core.Phase{Name: "reviewing", Text: "hmm"},
+		core.Phase{Name: "reviewing", Done: true, Ok: true, Note: "3 rows settled"},
+		core.ReasoningDelta{Text: "weighing", Details: json.RawMessage(`{"n":1}`)},
+	} {
+		raw, err := enc.Encode(broadcast.NewMessage(-7, true, ev))
+		if err != nil {
+			t.Fatal(err)
+		}
+		back, err := enc.Decode(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprintf("%+v", back.Event()) != fmt.Sprintf("%+v", ev) {
+			t.Fatalf("round trip = %+v, want %+v", back.Event(), ev)
+		}
 	}
 }

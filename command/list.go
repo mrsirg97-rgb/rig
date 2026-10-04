@@ -27,13 +27,15 @@ func row(id string, width int, mark, text string, details ...string) string {
 	if mark != "" {
 		b.WriteString(" " + mark)
 	}
-	b.WriteString(" " + text)
+	if text != "" {
+		b.WriteString(" " + text)
+	}
 	for _, d := range details {
 		if d != "" {
 			b.WriteString(" · " + d)
 		}
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), " ")
 }
 
 func plural(n int, one string) string {
@@ -79,4 +81,38 @@ func moreFooter(hidden int, verb string) string {
 		return ""
 	}
 	return fmt.Sprintf("\n· %d more · %s", hidden, verb)
+}
+
+func choices(head, active string, names []string, descs map[string]string) string {
+	w := 0
+	for _, n := range names {
+		if len(n) > w {
+			w = len(n)
+		}
+	}
+	var b strings.Builder
+	b.WriteString(head + " \u00b7 active " + active)
+	for _, n := range names {
+		mark := ""
+		if n == active {
+			mark = markActive
+		}
+		b.WriteString("\n" + row(n, w, mark, descs[n]))
+	}
+	return b.String()
+}
+
+func detail(head string, facts [][2]string) string {
+	w := 0
+	for _, f := range facts {
+		if len(f[0]) > w {
+			w = len(f[0])
+		}
+	}
+	var b strings.Builder
+	b.WriteString(head)
+	for _, f := range facts {
+		b.WriteString("\n" + row(f[0], w, "", f[1]))
+	}
+	return b.String()
 }

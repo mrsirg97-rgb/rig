@@ -16,7 +16,12 @@ type, an interface, or a context helper.
   `ToolCallEvent`, `Done`, `Fault`, `ToolStart`, `ToolResult`, `TurnEnd`,
   `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, and
   `Notice` — the 2.8.3 reopening: one event for a background notice, `Source`
-  (2.11.0 folded `SwarmNotice` into it: the swarm is a source like any other)
+  (2.11.0 folded `SwarmNotice` into it: the swarm is a source like any other;
+  2.11.7 added `Level`, `LevelInfo` the zero value, `LevelSuccess`,
+  `LevelError`, so a frontend paints a notice by what it means) and
+  `Phase` (2.11.7: a side activity the operator watches, `Name`, a
+  `Text` delta of its thinking, `Done` with `Ok` and a `Note`; one type
+  for begin, delta and end, as `reviewing` and `summarizing` use it)
   — and `Snapshot` (2.11.0, the same reopening): an `Event` whose latest
   value is the whole truth (`SwarmStatus` is one), so a transport may keep
   one pending per sender; `Source`

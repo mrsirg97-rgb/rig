@@ -553,10 +553,29 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
 - A delegate shows the worker row only: its snapshot carries the one
   in-flight worker and zero queue counts, and the band is the rule plus
   one row.
-- `core.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) commits
-  one dim line in the transcript at the decision points, exactly the
-  events SPEC_SWARM 7 names, rendered as every other notice is:
-  `source: text`. The CLI and the oneshot ignore both events (the compat rule:
+- `core.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) is the
+  decision-point notice SPEC_SWARM 7 names. Through 2.11.6 a notice
+  committed one dim line in the transcript. Since 2.11.7 no notice
+  commits: notices queue (identical ones collapse, no size) and, when
+  the live region's action row is idle, the oldest takes that exact row
+  as `source: text`, breathes in once on the ember's curve in its
+  level's slot (`error`, `success`, or `text` for info) and is gone, the
+  next following; while a turn or a compaction owns the row they wait.
+  No new row, no height change, no second clock: the breath rides the
+  frame ticker, started for a notice on an idle row and stopped after
+  the last. The recorder and the web frontend still receive every
+  notice; the transcript is no longer where they live.
+- A `core.Phase` (2.11.7) is a side activity the operator watches: the
+  decision review's bite (`reviewing`) and compaction's summary call
+  (`summarizing`). When no turn owns the row, the phase opening takes the
+  indicator's row as `<name> · <elapsed>` on the ember; its deltas are
+  the activity's own reasoning and stream dim under the row through the
+  reasoning toggle; its end commits one line, the ok glyph in `success`
+  or the fail glyph in `error`, the name dim, the note dim, and the row
+  returns to idle; waiting notices then breathe. During a live turn the
+  turn's indicator keeps the row and a phase waits, its deltas unshown,
+  except the summarizing phase, which runs inside the turn and streams.
+  Same ticker, same curve, same height. The CLI and the oneshot ignore both events (the compat rule:
   unknown events are ignored, never misread).
 
 ### 4. Tool rows

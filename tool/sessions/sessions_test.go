@@ -181,10 +181,10 @@ func TestSessionsSummaryCacheRatioFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "vitals: 2 sessions, 2 turns\n" +
-		"models: local 0.16.1, qwen3.8-workers 0.16.1\n" +
-		"faults: 1 — last: provider: the stream died\n" +
-		"cache ratio: 46% (cache_read 140 / prompt 300)"
+	want := "vitals · 2 sessions · 2 turns\n" +
+		"  models  local 0.16.1, qwen3.8-workers 0.16.1\n" +
+		"  faults  1 · last: provider: the stream died\n" +
+		"  cache   46% · cache_read 140 / prompt 300"
 	if out != want {
 		t.Fatalf("the summary must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}
@@ -224,7 +224,7 @@ func TestSessionsSummaryPicksTheLatestFaultAcrossSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "faults: 2 — last: new fault") {
+	if !strings.Contains(out, "  faults  2 · last: new fault") {
 		t.Fatalf("the last fault must be the latest across the slice:\n%s", out)
 	}
 	if strings.Contains(out, "old fault") {
@@ -365,11 +365,11 @@ func TestSessionsSummarySplitsTokensByModelForAMixedSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "split: 2 sessions, 2 turns\n" +
-		"models: dsv4 0.16.1, qwen3.8-workers 0.16.1\n" +
-		"tokens: dsv4 100, ox-alpha 100, qwen3.8-workers 150\n" +
-		"faults: 1 — last: provider: the stream died\n" +
-		"cache ratio: 40% (cache_read 140 / prompt 350)"
+	want := "split · 2 sessions · 2 turns\n" +
+		"  models  dsv4 0.16.1, qwen3.8-workers 0.16.1\n" +
+		"  tokens  dsv4 100, ox-alpha 100, qwen3.8-workers 150\n" +
+		"  faults  1 · last: provider: the stream died\n" +
+		"  cache   40% · cache_read 140 / prompt 350"
 	if out != want {
 		t.Fatalf("the summary must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}

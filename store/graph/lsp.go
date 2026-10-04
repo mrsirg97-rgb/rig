@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const lspRequestTimeout = 30 * time.Second
@@ -163,7 +164,7 @@ func (c *lspClient) stop() {
 
 func (c *lspClient) say(format string, args ...any) {
 	if c.voice != nil {
-		broadcast.Say(c.voice, "graph", fmt.Sprintf(format, args...))
+		broadcast.Say(c.voice, "graph", fmt.Sprintf(format, args...), core.LevelError)
 	}
 }
 

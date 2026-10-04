@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,23 +154,37 @@ func sessionMark(r SessionRow) string {
 
 func RenderShow(s *core.Session) string {
 	var b strings.Builder
-	n := 0
-	for _, m := range s.Messages {
-		n++
+	b.WriteString("session " + s.ID + " \u00b7 " + plural(len(s.Messages), "message"))
+	w := len(strconv.Itoa(len(s.Messages)))
+	for i, m := range s.Messages {
+		id := strconv.Itoa(i + 1)
+		head, rest := firstAndRest(m.Content)
 		switch m.Role {
 		case core.RoleUser:
-			fmt.Fprintf(&b, "[%d] user: %s\n", n, m.Content)
+			b.WriteString("\n" + row(id, w, "", "user: "+head))
 		case core.RoleAssistant:
-			fmt.Fprintf(&b, "[%d] assistant: %s\n", n, m.Content)
+			b.WriteString("\n" + row(id, w, "", "assistant: "+head))
+		case core.RoleTool:
+			b.WriteString("\n" + row(id, w, "", "tool "+m.ToolID+": "+head))
+		default:
+			continue
+		}
+		for _, line := range rest {
+			b.WriteString("\n    " + line)
+		}
+		if m.Role == core.RoleAssistant {
 			if m.Reasoning != "" {
-				fmt.Fprintf(&b, "    thinking: %s\n", m.Reasoning)
+				b.WriteString("\n    thinking: " + m.Reasoning)
 			}
 			for _, call := range m.ToolCalls {
-				fmt.Fprintf(&b, "    call %s %s %s\n", call.ID, call.Name, string(call.Args))
+				b.WriteString("\n    call " + call.ID + " " + call.Name + " " + string(call.Args))
 			}
-		case core.RoleTool:
-			fmt.Fprintf(&b, "[%d] tool (%s): %s\n", n, m.ToolID, m.Content)
 		}
 	}
 	return b.String()
+}
+
+func firstAndRest(content string) (string, []string) {
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	return lines[0], lines[1:]
 }

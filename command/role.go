@@ -43,5 +43,11 @@ func (roleCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	if label == "" {
 		label = "default"
 	}
-	return "role: " + label, nil
+	names := make([]string, 0, len(roleHints))
+	descs := map[string]string{}
+	for _, h := range roleHints {
+		names = append(names, h.Name)
+		descs[h.Name] = h.Desc
+	}
+	return choices(plural(len(names), "role"), label, names, descs), nil
 }

@@ -348,6 +348,11 @@ func (r *root) deliver(ev core.Event) {
 			fmt.Fprintf(out, "rig: fleet: frontend: recovered from panic: %v\n", p)
 		}
 	}()
+	switch ev.(type) {
+	case core.Notice, core.SwarmStatus, core.Phase:
+	default:
+		return
+	}
 	if fe := r.rec; fe != nil {
 		fe.Notify(ev)
 		return

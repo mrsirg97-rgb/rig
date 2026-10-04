@@ -7,7 +7,9 @@ the soak's own vitals; a store an older build left behind is migrated on
 open. `list` is the recent sessions, newest first, one line each (short id,
 started, model, version, turns, faults); `summary` is the vitals over the
 same slice; session and turn counts, the models with their versions, the
-fault count with the last fault's first line, and the aggregate cache ratio
+fault count with the last fault's first line, and the aggregate cache ratio,
+in the list shape every command reply shares (SPEC_COMMANDS 13: a head, then
+`  models`, `  tokens`, `  faults`, `  cache` rows)
 (cache_read over prompt, the status row's arithmetic). When a session in
 the slice ran on more than one model — usage rows carry the id that
 produced each call — the summary adds a `tokens:` line splitting the

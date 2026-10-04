@@ -114,6 +114,7 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	}
 
 	p.fe.Notify(core.Compacting{})
+	p.fe.Notify(core.Phase{Name: phaseSummarizing})
 	summary, usage, model, err := p.summarize(ctx, input, minInt(p.row.MaxTokens, p.row.Window-est))
 	if err != nil {
 		return core.Compacted{}, false, err
@@ -137,6 +138,8 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 	return ev, true, nil
 }
 
+const phaseSummarizing = "summarizing"
+
 func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens int) (string, core.Usage, string, error) {
 	effort := p.row.Effort
 	if effort == "" {
@@ -155,6 +158,10 @@ func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens 
 	)
 	for ev := range ch {
 		switch e := ev.(type) {
+		case core.ReasoningDelta:
+			if e.Text != "" {
+				p.fe.Notify(core.Phase{Name: phaseSummarizing, Text: e.Text})
+			}
 		case core.TextDelta:
 			body.WriteString(e.Text)
 		case core.Done:

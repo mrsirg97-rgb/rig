@@ -47,11 +47,14 @@ func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
 	}
 
 	evs := fe.snapshot()
-	if len(evs) != 1 {
-		t.Fatalf("the action emits exactly the cue (the caller delivers Compacted), got %v", evs)
+	if len(evs) != 2 {
+		t.Fatalf("the action emits the cue and the summarizing phase (the caller delivers Compacted), got %v", evs)
 	}
 	if _, ok := evs[0].(core.Compacting); !ok {
 		t.Fatalf("event 0 = %T, want the Compacting cue", evs[0])
+	}
+	if p, ok := evs[1].(core.Phase); !ok || p.Name != "summarizing" {
+		t.Fatalf("event 1 = %+v, want the summarizing phase", evs[1])
 	}
 	if prov.calls() != 1 {
 		t.Fatalf("exactly one summary call, got %d", prov.calls())

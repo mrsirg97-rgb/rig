@@ -15,8 +15,9 @@ func TestEffortBareShowsActiveAndAvailable(t *testing.T) {
 		ActiveModel: func() string { return "huihui3.8" },
 	}
 	out, err := byName["effort"].Run(context.Background(), "", env)
-	if err != nil || out != "effort: xhigh (available: low, medium, xhigh)" {
-		t.Fatalf("the bare reply = (%q, %v), want the pinned voice", out, err)
+	want := "3 levels · active xhigh\n  low\n  medium\n  xhigh  [~]"
+	if err != nil || out != want {
+		t.Fatalf("the bare reply = (%q, %v), want the levels with the active marked", out, err)
 	}
 }
 
@@ -28,8 +29,9 @@ func TestEffortBareServerDefault(t *testing.T) {
 		ActiveModel: func() string { return "huihui3.8" },
 	}
 	out, err := byName["effort"].Run(context.Background(), "", env)
-	if err != nil || out != "effort: server default (available: low, medium, xhigh)" {
-		t.Fatalf("the unset dial's bare reply = (%q, %v), want the pinned voice", out, err)
+	want := "3 levels · active server default\n  low\n  medium\n  xhigh"
+	if err != nil || out != want {
+		t.Fatalf("the unset dial's bare reply = (%q, %v), want the levels with none marked", out, err)
 	}
 }
 

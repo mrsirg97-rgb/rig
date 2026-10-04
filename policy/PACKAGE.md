@@ -82,6 +82,11 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
   call boundary); the remainder rides ahead of the tail and folds on a
   later pass. A prefix of one message that does not fit is the loud
   failure (SPEC_COMPACT 3, amended 2026-08-21).
+- The summary call is the `summarizing` phase (2.11.7): `Compacting` is
+  the cue, then `core.Phase{Name: "summarizing"}` opens, each reasoning
+  delta of the summary stream is a phase delta, and `Compacted` is the
+  end. The TUI labels the row `summarizing · <elapsed>` and streams the
+  thinking; nothing carries a percentage because the call has none.
 - `clampMaxTokens` refuses loud when the kept batch overruns the window
   (budget below the smaller of `Reserve/4` and 256); surfaced as a Fault
   so `-p` exits non-zero.

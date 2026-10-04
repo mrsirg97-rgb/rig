@@ -273,12 +273,21 @@ for something specific.
 The command replies and refusals, verbatim:
 
 ```text
-effort: xhigh (available: low, medium, xhigh)
-effort: server default (available: low, medium, xhigh)
+3 levels · active xhigh
+  low
+  medium
+  xhigh  [~]
+3 levels · active server default
+  low
+  medium
+  xhigh
 effort: xhigh (next turn)
 effort: "turbo" is not a level for huihui3.8 (available: low, medium, xhigh)
 effort: huihui3.8 names no levels (models.json: "efforts")
-role: default
+3 roles · active default
+  default   [~] no stance: the plain prompt
+  architect design first, build second
+  reviewer  review only: hunt defects, build nothing
 role: reviewer (next turn)
 role: "pirate" is not a role (default, architect, reviewer)
 ```

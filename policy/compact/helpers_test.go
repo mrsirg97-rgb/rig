@@ -111,7 +111,8 @@ func stringify(ev core.Event) string { return fmt.Sprintf("%T %+v", ev, ev) }
 func stripCue(evs []core.Event) []core.Event {
 	out := evs[:0:0]
 	for _, ev := range evs {
-		if _, ok := ev.(core.Compacting); ok {
+		switch ev.(type) {
+		case core.Compacting, core.Phase:
 			continue
 		}
 		out = append(out, ev)

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -247,29 +248,73 @@ func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
 	}
 }
 
-func TestSwarmNoticeCommitsOneLine(t *testing.T) {
-	th := oledTheme(t)
+func idleSession(t *testing.T, th Theme) *scriptedSession {
+	t.Helper()
 	s := newScriptedSession(t, th, WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
-	s.fe.Notify(core.Notice{Source: "swarm", Text: "t1 failed — the worker died twice"})
-	s.await("swarm: t1 failed — the worker died twice")
-	rows := screenLines(t, s, 60)
-	count := 0
-	for _, r := range rows {
-		if strings.Contains(paintFree(r), "swarm: t1 failed — the worker died twice") {
-			count++
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	return s
+}
+
+func screenHas(t *testing.T, s *scriptedSession, text string) int {
+	t.Helper()
+	n := 0
+	for _, r := range screenLines(t, s, 60) {
+		if strings.Contains(paintFree(r), text) {
+			n++
 		}
 	}
-	if count != 1 {
-		t.Fatalf("the notice painted %d times, want one line:\n%q", count, rows)
+	return n
+}
+
+var breathClock atomic.Int64
+
+func breathe(t *testing.T, s *scriptedSession, frames int) {
+	t.Helper()
+	for i := 0; i < frames; i++ {
+		n := breathClock.Add(1)
+		select {
+		case s.ticks <- time.Unix(0, 0).Add(time.Duration(n) * animPeriod * 10):
+		case <-time.After(2 * time.Second):
+			t.Fatal("the frame ticker is not listening")
+		}
 	}
 }
 
-func TestNoticeCommitsOneDimLine(t *testing.T) {
+func awaitScreen(t *testing.T, s *scriptedSession, text string, present bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for (screenHas(t, s, text) > 0) != present {
+		if time.Now().After(deadline) {
+			t.Fatalf("screen never reached %q present=%v:\n%s", text, present, strings.Join(screenLines(t, s, 60), "\n"))
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestANoticeBreathesInTheIndicatorRowThenGoes(t *testing.T) {
+	th := oledTheme(t)
+	s := idleSession(t, th)
+	s.fe.Notify(core.Notice{Source: "decision", Text: "review: fire: refused", Level: core.LevelError})
+	awaitScreen(t, s, "decision: review: fire: refused", true)
+	if n := screenHas(t, s, "decision: review: fire: refused"); n != 1 {
+		t.Fatalf("the notice paints one row while it breathes, got %d", n)
+	}
+	breathe(t, s, emberBreathStops)
+	awaitScreen(t, s, "decision: review: fire: refused", false)
+	s.fe.mu.Lock()
+	noticing, running := s.fe.noticing, s.fe.tickStop != nil
+	s.fe.mu.Unlock()
+	if noticing || running {
+		t.Fatalf("after the breath the row is idle and the ticker stopped: noticing=%v ticker=%v", noticing, running)
+	}
+}
+
+func TestANoticeWaitsWhileTheTurnIsLive(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, th, WithWidth(60),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
@@ -277,16 +322,125 @@ func TestNoticeCommitsOneDimLine(t *testing.T) {
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
-	s.fe.Notify(core.Notice{Source: "decision", Text: "review: fire: refused"})
-	s.await("decision: review: fire: refused")
-	rows := screenLines(t, s, 60)
-	count := 0
-	for _, r := range rows {
-		if strings.Contains(paintFree(r), "decision: review: fire: refused") {
-			count++
+	s.fe.Notify(core.Notice{Source: "graph", Text: "queue full, dropping a.go", Level: core.LevelError})
+	breathe(t, s, 3)
+	if n := screenHas(t, s, "graph: queue full"); n != 0 {
+		t.Fatalf("a notice waits while the model works, got %d rows", n)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	awaitScreen(t, s, "graph: queue full, dropping a.go", true)
+	breathe(t, s, emberBreathStops)
+	awaitScreen(t, s, "graph: queue full, dropping a.go", false)
+}
+
+func TestNoticesShowInOrderAndADuplicateCollapses(t *testing.T) {
+	th := oledTheme(t)
+	s := idleSession(t, th)
+	first := core.Notice{Source: "swarm", Text: "w1 died — t1 restarted", Level: core.LevelError}
+	second := core.Notice{Source: "swarm", Text: "/swarm exited — 2 workers stopped", Level: core.LevelSuccess}
+	s.fe.Notify(first)
+	s.fe.Notify(first)
+	s.fe.Notify(second)
+	s.fe.mu.Lock()
+	queued := len(s.fe.notices)
+	s.fe.mu.Unlock()
+	if queued != 2 {
+		t.Fatalf("a duplicate collapses: queued %d, want 2", queued)
+	}
+	awaitScreen(t, s, "swarm: w1 died — t1 restarted", true)
+	if screenHas(t, s, "/swarm exited") != 0 {
+		t.Fatal("the second notice waits for the first breath")
+	}
+	breathe(t, s, emberBreathStops)
+	awaitScreen(t, s, "swarm: /swarm exited — 2 workers stopped", true)
+	breathe(t, s, emberBreathStops)
+	awaitScreen(t, s, "swarm: /swarm exited — 2 workers stopped", false)
+	if n := screenHas(t, s, "w1 died"); n != 0 {
+		t.Fatalf("nothing commits to the transcript, found %d rows", n)
+	}
+}
+
+func TestANoticeBreathesInItsLevelsSlot(t *testing.T) {
+	th := oledTheme(t)
+	s := idleSession(t, th)
+	text := "swarm: /swarm exited — 1 worker stopped"
+	s.fe.Notify(core.Notice{Source: "swarm", Text: "/swarm exited — 1 worker stopped", Level: core.LevelSuccess})
+	awaitScreen(t, s, text, true)
+	stream := s.out.String()
+	ok := false
+	for i := 0; i < emberBreathStops; i++ {
+		if strings.Contains(stream, th.BreathPaint(SlotSuccess, i, text)) {
+			ok = true
 		}
 	}
-	if count != 1 {
-		t.Fatalf("the notice must commit exactly one line, got %d in:\n%s", count, strings.Join(rows, "\n"))
+	if !ok {
+		t.Fatal("a success notice breathes on the success slot's curve")
+	}
+	for i := 0; i < emberBreathStops; i++ {
+		if strings.Contains(stream, th.EmberPaint(i, text)) {
+			t.Fatal("a notice never wears the ember")
+		}
+	}
+}
+
+func TestAPhaseTakesTheIdleRowStreamsItsThinkingAndChecksOut(t *testing.T) {
+	th := oledTheme(t)
+	s := idleSession(t, th)
+	s.fe.Notify(core.Phase{Name: "reviewing"})
+	awaitScreen(t, s, "reviewing · ", true)
+	s.fe.Notify(core.Phase{Name: "reviewing", Text: "row 1 reads safe\n"})
+	breathe(t, s, 1)
+	awaitScreen(t, s, "row 1 reads safe", true)
+	s.fe.Notify(core.Phase{Name: "reviewing", Done: true, Ok: true, Note: "3 rows settled"})
+	awaitScreen(t, s, "reviewing · 3 rows settled", true)
+	awaitScreen(t, s, "reviewing · 0s", false)
+	s.fe.mu.Lock()
+	aside, running := s.fe.aside, s.fe.tickStop != nil
+	s.fe.mu.Unlock()
+	if aside != "" || running {
+		t.Fatalf("after the check the row is idle: aside=%q ticker=%v", aside, running)
+	}
+	if !strings.Contains(s.out.String(), th.Paint(SlotSuccess, th.Glyph(GlyphOK))+" "+th.Paint(SlotDim, "reviewing")) {
+		t.Fatal("the end line is a green check beside the phase name")
+	}
+}
+
+func TestAPhaseWaitsBehindALiveTurn(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.Phase{Name: "reviewing"})
+	s.fe.Notify(core.Phase{Name: "reviewing", Text: "quiet thought"})
+	breathe(t, s, 2)
+	if screenHas(t, s, "reviewing · ") != 0 || screenHas(t, s, "quiet thought") != 0 {
+		t.Fatal("the turn's indicator owns the row; the phase and its thinking wait")
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	awaitScreen(t, s, "reviewing · ", true)
+}
+
+func TestCompactionIsTheSummarizingPhaseWithElapsedAndThinking(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.Compacting{})
+	s.fe.Notify(core.Phase{Name: "summarizing"})
+	breathe(t, s, 1)
+	awaitScreen(t, s, "summarizing · 0s", true)
+	s.fe.Notify(core.Phase{Name: "summarizing", Text: "folding the older turns\n"})
+	breathe(t, s, 1)
+	awaitScreen(t, s, "folding the older turns", true)
+	s.fe.Notify(core.Compacted{Summary: "s", Dropped: 1200, Kept: 400})
+	awaitScreen(t, s, "summarizing · 0s", false)
+	if screenHas(t, s, "compact: -1.2k kept 400") != 1 {
+		t.Fatal("the compaction line is the summarizing phase's end")
 	}
 }

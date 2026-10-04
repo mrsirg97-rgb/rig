@@ -1,4 +1,68 @@
 # Changelog
+## [2.11.7]: notices breathe once
+
+A notice was a dim line committed to the transcript, and the transcript
+is what the operator is reading. One fact that held for a thousand rows
+scrolled it a thousand times; even one decision bite per turn scrolled
+it. Now a notice is a state the operator sees for a moment, not a line
+they scroll past forever. The TUI queues notices (identical ones
+collapse, no size) and, when the action indicator's row is idle, the
+oldest takes that exact row in the indicator's shape, breathes in once
+on the ember's curve and is gone; the next follows. While the model
+thinks or a tool runs the indicator owns the row and notices wait. No
+new row, no height change, and no second clock: the breath rides the
+frame ticker that already drives the indicator.
+
+The color says what the notice means. `core.Notice` gains a `Level`
+(`LevelInfo` the zero value, `LevelSuccess`, `LevelError`; the same kind
+of reopening as `Snapshot` and `Verdict`), `broadcast.Say` carries it,
+and the three places that make the text choose it by one rule: error
+when something failed or was refused, success when something the
+operator asked for completed, info otherwise. The breath paints in the
+level's existing slot, red, green or white, the slots the tool rows have
+trained the eye on all session; no new theme vocabulary. The web
+frontend receives the level in its `notice` frame for free; the
+recorder stores it. `RenderNotice` and the transcript line are gone.
+
+The second commit lets the operator watch the two things that used to
+happen behind the indicator. The decision review's bite and
+compaction's summary call were both a model thinking out of sight: the
+bite in a child whose reasoning went to its run log, the summary in a
+stream the policy read and dropped. Both are now a `core.Phase`, one
+type for begin, delta and end (`reviewing`, `summarizing`), the same
+kind of reopening as `Snapshot`, `Verdict` and `Level`. The one-shot
+worker sends its reasoning deltas over the fleet pipe as themselves;
+the reviewer, which minted the voice and knows what the fire is for,
+turns them into phase deltas and closes the phase at settle with the
+count; the compaction policy opens `summarizing` before the summary
+call and streams its reasoning, with `Compacted` as the end. The TUI
+shows a phase in the indicator's row as `reviewing · 14s`, streams the
+thinking dim under it through the reasoning toggle, and commits one
+checked line when it ends, then returns the row to idle and lets any
+waiting notice breathe; during a live turn a phase waits, except
+summarizing, which runs inside the turn. The frontend member now
+delivers only what a frontend renders, `Notice`, `SwarmStatus` and
+`Phase`, so a worker's raw thinking never reads as the session's own.
+Named, not built: no percentage for compaction (the call has none, so
+the elapsed time is the fact), and the swarm's workers' thinking, which
+already crosses the pipe, stays off the screen until there is a screen
+for three of them.
+
+The same release makes every slash reply one of two shapes: a one-line
+ack, or the list shape of SPEC_COMMANDS 13. Six replies were prose that
+the TUI painted as plain text. The bare `effort`, `role` and `approve`
+are choice sets now, a head with the count and the active one and a row
+per choice with the active marked `[~]`. `sessions show`, `sessions
+summary` and `rem show` are details: a head naming the thing and a row
+per fact with the key in the id slot, a transcript's messages numbered
+as rows with their further lines, thinking and calls as continuation
+lines, a memory's content as plain lines after its facts. One painter
+draws all of it and still knows no command's name; `choices` and
+`detail` join the list helpers. The piped frontends print the same text,
+the model reads the same summary, and a row with no text no longer
+carries trailing spaces. The sessions tool's reply words name the new
+shape, which moves the wire prefix; the prefix golden is updated
+deliberately and the menu sits at 13,921 of 14,000 characters.
 ## [2.11.6]: the store answers before the model
 
 The decision store had become the busiest reader in the tree: 1,110

@@ -40,6 +40,18 @@ func RenderCompacted(t Theme, ev core.Compacted) string {
 			formatTokens(ev.Usage.Prompt), formatTokens(ev.Usage.Completion)))
 }
 
+func RenderPhaseEnd(t Theme, p core.Phase) string {
+	glyph, slot := t.Glyph(GlyphOK), SlotSuccess
+	if !p.Ok {
+		glyph, slot = t.Glyph(GlyphFail), SlotError
+	}
+	line := t.Paint(slot, glyph) + " " + t.Paint(SlotDim, p.Name)
+	if p.Note != "" {
+		line += t.Paint(SlotDim, " \u00b7 "+p.Note)
+	}
+	return line
+}
+
 func RenderFault(t Theme, err error) string {
 	return t.Paint(SlotError, t.Glyph(GlyphFail)+" fault: "+err.Error())
 }

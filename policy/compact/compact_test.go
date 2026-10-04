@@ -567,14 +567,17 @@ func TestCompactingCueOrder(t *testing.T) {
 		t.Fatalf("Assemble: %v", err)
 	}
 	evs := fe.snapshot()
-	if len(evs) != 2 {
-		t.Fatalf("events = %v, want the cue then Compacted", evs)
+	if len(evs) != 3 {
+		t.Fatalf("events = %v, want the cue, the summarizing phase, then Compacted", evs)
 	}
 	if _, ok := evs[0].(core.Compacting); !ok {
 		t.Fatalf("event 0 = %T, want the Compacting cue first", evs[0])
 	}
-	if _, ok := evs[1].(core.Compacted); !ok {
-		t.Fatalf("event 1 = %T, want Compacted after the cue", evs[1])
+	if p, ok := evs[1].(core.Phase); !ok || p.Name != "summarizing" || p.Text != "" || p.Done {
+		t.Fatalf("event 1 = %+v, want the summarizing phase opening", evs[1])
+	}
+	if _, ok := evs[2].(core.Compacted); !ok {
+		t.Fatalf("event 2 = %T, want Compacted after the phase", evs[2])
 	}
 }
 
@@ -687,5 +690,35 @@ func TestCompactedCarriesTheSummaryCallModel(t *testing.T) {
 	}
 	if c.Model != "ox-alpha" {
 		t.Fatalf("Compacted model = %q, want the summary call's own id ox-alpha", c.Model)
+	}
+}
+
+func TestTheSummaryCallsThinkingStreamsAsTheSummarizingPhase(t *testing.T) {
+	s := compactFixture()
+	prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{
+		core.ReasoningDelta{Text: "weighing "},
+		core.ReasoningDelta{Text: "the tail"},
+		core.TextDelta{Text: "SUM"},
+		core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}},
+	}}}}
+	fe := &captureFrontend{}
+	pol, err := compact.New(prov, fe, s, "S", testRow)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := pol.Assemble(context.Background(), s); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	var thinking []string
+	for _, ev := range fe.snapshot() {
+		if p, ok := ev.(core.Phase); ok && p.Text != "" {
+			if p.Name != "summarizing" {
+				t.Fatalf("a delta names its phase: %+v", p)
+			}
+			thinking = append(thinking, p.Text)
+		}
+	}
+	if strings.Join(thinking, "") != "weighing the tail" {
+		t.Fatalf("the summary call's reasoning streams as phase deltas, got %q", thinking)
 	}
 }

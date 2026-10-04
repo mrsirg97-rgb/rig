@@ -108,6 +108,16 @@ sees core and models and nothing else.
   its next boundary. The session row closes with what the run was
   (ok / fault / cancelled).
 
+## The frontend member
+
+The root is the room's frontend member (`rig.MemberFrontend`): it
+subscribes once and hands each event to the current recorder, so a
+session swap routes to the new one. It delivers what a frontend renders,
+`Notice`, `SwarmStatus` and `Phase` (2.11.7), and drops the rest: a
+worker's `ReasoningDelta` on the room is the worker's, never the
+session's own, and only the member that asked for the work may turn it
+into a `Phase`. A notice with no recorder yet goes to stderr.
+
 ## Gotchas
 
 - The suite runs under `testenv.Main`: `HOME` and `RIG_HOME` point at a

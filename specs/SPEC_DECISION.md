@@ -208,7 +208,12 @@ without a correction is not a verdict (the tool refuses it before it
 crosses). A drain reports what it fired, what settled, and what stays
 pending; the row's reviewer name is the model that reviewed: the one the
 fire resolved to, carried back on the delegate's result. The fire runs
-bare: no report-back brief, and the verdict tool as its only tool.
+bare: no report-back brief, and the verdict tool as its only tool. The
+bite is a `core.Phase` named `reviewing` (2.11.7): opened when the fire
+starts, its deltas the fire's own reasoning crossing the fleet pipe and
+renamed by the reviewer, closed at settle with `n rows settled` or the
+fire's error; the TUI shows it in the indicator's row with the elapsed
+time and streams the thinking under it.
 
 Nothing the queue or the reviewer has to say reaches stderr while a
 frontend owns the screen: a dropped proposal, a decide error, a store

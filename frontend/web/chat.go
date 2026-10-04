@@ -336,7 +336,7 @@ func (c *chat) Notify(ev core.Event) {
 		c.hub.Unlock()
 		c.publish(map[string]any{"kind": "swarm_status", "workers": swarmRows(e.Workers), "pending": e.Pending, "review": e.Review})
 	case core.Notice:
-		c.publish(map[string]any{"kind": "notice", "source": e.Source, "text": e.Text})
+		c.publish(map[string]any{"kind": "notice", "source": e.Source, "text": e.Text, "level": e.Level.String()})
 	}
 }
 

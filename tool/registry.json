@@ -559,7 +559,7 @@
     "enabled": true,
     "what": "the session store. list shows sessions; summary shows an overview: models, faults, cache ratio.",
     "guidelines": "the current workspace by default; project and n widen it.",
-    "reply": "a line per session, or the summary.",
+    "reply": "a line per session, or the summary: a head, then models, tokens, faults and cache rows.",
     "schema": {
       "type": "object",
       "required": [

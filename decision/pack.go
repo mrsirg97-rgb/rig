@@ -103,6 +103,6 @@ func (s *PackScorer) record(ctx context.Context, state string, a Answer) {
 
 func (s *PackScorer) say(format string, args ...any) {
 	if s.voice != nil {
-		broadcast.Say(s.voice, "decision", fmt.Sprintf(format, args...))
+		broadcast.Say(s.voice, "decision", fmt.Sprintf(format, args...), core.LevelError)
 	}
 }

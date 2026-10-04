@@ -92,7 +92,7 @@ func (effortCmd) Run(ctx context.Context, args string, env any) (string, error) 
 	if len(levels) == 0 {
 		return "effort: " + label, nil
 	}
-	return fmt.Sprintf("effort: %s (available: %s)", label, strings.Join(levels, ", ")), nil
+	return choices(plural(len(levels), "level"), label, levels, nil), nil
 }
 
 func contains(list []string, s string) bool {

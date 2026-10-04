@@ -435,16 +435,20 @@ put it in Env.Tools)`.
 
 **`sessions show <id>`**; the transcript projection (the same
 `state.Resume` function `-resume` uses; one projection, one truth)
-rendered plain, numbered in projection order, headers always
-`[n]`-prefixed so `grep '^\['` walks the conversation:
+rendered in the list shape (13, the detail form since 2.11.7): a head
+`session <id> · <n> messages`, one row per message numbered in the id
+slot, the message's further lines, its thinking and its calls as
+four-space continuation lines, so `grep '^  [0-9]'` walks the
+conversation:
 
 ```
-[1] user: fix the flaky test
-[2] assistant: let me look
+session s1 · 4 messages
+  1 user: fix the flaky test
+  2 assistant: let me look
     thinking: the guard test is the flaky one…
     call c7 bash go test ./middleware/
-[3] tool (c7): ok  middleware/guard 0.4s
-[4] assistant: fixed the race in the budget map
+  3 tool c7: ok  middleware/guard 0.4s
+  4 assistant: fixed the race in the budget map
 ```
 
 - one line per message: multi-line content keeps its lines verbatim
@@ -754,7 +758,10 @@ global, in the list shape (13): a head (`12 memories`), one row each
 (`  m<id> <kind> · <age> · <strength> · <first 80 chars>`; a glance, not
 a browse; the store caps it, and `rem list [all|<n>]` names how many
 rows to show, the screen otherwise). **`rem show
-<id>`**; the full memory row (all fields, the source, supersession).
+<id>`**; the full memory row in the detail form of (13): a head `m<id> ·
+<kind> · <scope>` (`· superseded by m<n>` when it is), a `created` row
+with the age, strength and importance, a `source` row when one exists,
+then the content as plain lines.
 **`rem forget <id>`**; prune-remove that id (the operator's prune, a
 verb); only this project's or a global memory; ids are file-wide, and a
 typo must not reach another repo's row: `rem: another project's memory:
@@ -855,6 +862,22 @@ Since 2.9.1 the TUI frames every reply the same way (SPEC_TUI, the reply
 block): the opening line, then the reply, with a one-line ack read dim
 without its `name: ` prefix. The prefix stays in the text itself: the
 piped frontends and the tests read the command's voice unchanged.
+
+Since 2.11.7 the shape has two more uses, so every reply that is not a
+one-line ack is a list. A **choice set** (the bare `effort`, `role`,
+`approve`) is a head with the count and the active one (`3 roles ·
+active architect`) and one row per choice, the active marked `[~]`, a
+description as the text where one exists. A **detail** (`sessions show`,
+`sessions summary`, `rem show`) is a head naming the thing and one row
+per fact, the key in the id slot padded to the widest so the values
+line up (`  models  local 0.16.1`, `  cache   46% · cache_read 140 /
+prompt 300`); a transcript's messages are rows numbered in the id slot
+with the message's further lines, its thinking and its calls as
+four-space continuation lines; a memory's content follows its detail
+rows as plain lines. One painter, `RenderListBlock`, draws all three;
+nothing else in the TUI knows a command's name (`todo` and `scheduler`
+keep their richer blocks). Helpers: `choices` and `detail` in
+`command/list.go`.
 
 ## testing
 

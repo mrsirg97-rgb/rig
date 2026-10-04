@@ -15,8 +15,9 @@ import (
 )
 
 type wire struct {
-	mu    sync.Mutex
-	beats int
+	mu     sync.Mutex
+	beats  int
+	events []core.Event
 }
 
 func (w *wire) Id() int64 { return 7 }
@@ -26,6 +27,9 @@ func (w *wire) Send(ctx context.Context, callback func(error), messages ...broad
 	for _, m := range messages {
 		if m.Origin() == 7 && m.Ok() && m.Event() == nil {
 			w.beats++
+		}
+		if m.Event() != nil {
+			w.events = append(w.events, m.Event())
 		}
 	}
 	w.mu.Unlock()
@@ -181,5 +185,25 @@ func TestOneShotBatchHeartbeatOutlivesTheFirstResult(t *testing.T) {
 	}
 	if out.String() != "" {
 		t.Fatalf("a silent batch must not touch stdout: %q", out.String())
+	}
+}
+
+func TestOneShotSendsItsThinkingOnTheFleet(t *testing.T) {
+	var out, errB syncBuffer
+	fleet := &wire{}
+	o := &oneshot.OneShot{Out: &out, Err: &errB, Fleet: fleet}
+	o.Notify(core.ReasoningDelta{Text: "weighing"})
+	o.Notify(core.ReasoningDelta{Text: ""})
+	o.Notify(core.TextDelta{Text: "the answer"})
+	fleet.mu.Lock()
+	defer fleet.mu.Unlock()
+	if len(fleet.events) != 1 {
+		t.Fatalf("one non-empty reasoning delta crosses, got %+v", fleet.events)
+	}
+	if d, ok := fleet.events[0].(core.ReasoningDelta); !ok || d.Text != "weighing" {
+		t.Fatalf("the delta crosses as itself: %+v", fleet.events[0])
+	}
+	if !strings.Contains(errB.String(), "weighing") {
+		t.Fatal("stderr still carries the thinking for the run log")
 	}
 }

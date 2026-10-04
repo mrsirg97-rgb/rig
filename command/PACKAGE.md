@@ -25,9 +25,12 @@ the leaf.
   the liveness fact).
 - `SessionRow`, `PluginInfo`: the sessions and plugins rows.
 - Renderers: `renderTable`, `renderList`, `RenderShow`, `RenderPlugins`,
-  `renderRemList`, `swarmList`, all in the list shape of `list.go`
-  (`row`, `plural`, the markers, `listLimit`/`fit`/`moreFooter` for
-  the screen cap; SPEC_COMMANDS 13).
+  `renderRemList`, `renderRemShow`, `swarmList`, and the bare `effort`,
+  `role` and `approve`, all in the list shape of `list.go` (`row`,
+  `plural`, the markers, `listLimit`/`fit`/`moreFooter` for the screen
+  cap, `choices` for a set with one active, `detail` for a head and its
+  facts; SPEC_COMMANDS 13). A reply is a one-line ack or a list; nothing
+  else.
 - `Env.Lines`: the frontend's row budget for a listing (the TUI sets it;
   nil means no cap).
 
