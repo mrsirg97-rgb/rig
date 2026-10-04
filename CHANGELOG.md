@@ -1,4 +1,16 @@
 # Changelog
+## [2.11.9]: a number is a link, and a refused create shows the queue
+
+A model planning five tasks in one create wrote `"requires": 2` the way
+the words invited, "its number in this list", and the tool refused it,
+since a link had to be a string; GLM then mangled the retry into
+`"}, 2"` three times and hit the retry guard. A JSON number is a link
+now, the sibling's position, with a fraction or a zero refused by name,
+and the schema says so first. A create that cannot resolve a link still
+lands nothing, but its refusal names the three forms with an example
+each and shows the queue as `read` would, open rows and the finished
+tail, so the next call links to the ids it names instead of guessing.
+
 ## [2.11.8]: the project's contract follows the session
 
 A project's `AGENTS.md` loaded only when it sat exactly in the process's

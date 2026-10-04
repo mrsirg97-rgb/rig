@@ -28,7 +28,9 @@ plan links it in one call instead of one create per task (amended
 - `create` refuses loudly and names the tasks: an unknown link
   (`requires 'x' not found`, then once per refusal the forms a link
   takes: `a link is tN from a reply, a sibling's exact text, or its
-  number in this list`), a link to itself by text or position
+  number in this list`; since 2.11.9 the number may be a JSON number as
+  well as a string, and the refusal shows the queue so the next call can
+  link by id), a link to itself by text or position
   (`'x' cannot require itself`), and a cycle through either relation
   (`links would form a cycle: t1 -> t2 -> t1`). The graph is the waits-for relation:
   `requires` gives t -> required, `blocks` gives target -> blocker;

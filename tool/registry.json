@@ -141,7 +141,7 @@
     "name": "todo",
     "enabled": true,
     "what": "the task queue for the current workspace — for any job of three or more steps: create the tasks before the first edit, start one before working on it, complete or fail it when done, and leave the queue empty at the end.",
-    "guidelines": "`requires` makes a task wait on another; `claim` takes the next pending task with no unfinished `requires` or `blocks` link; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them. set `project` only when the work is in a different workspace than the one you started in.",
+    "guidelines": "`requires` makes a task wait on another; a refused create shows the queue; `claim` takes the next pending task with no unfinished `requires` or `blocks` link; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them. set `project` only when the work is in a different workspace than the one you started in.",
     "reply": "the affected row and the queue's summary, scoped by its workspace ([rig]).",
     "schema": {
       "type": "object",
@@ -186,13 +186,15 @@
               "requires": {
                 "type": [
                   "string",
+                  "integer",
                   "null"
                 ],
-                "description": "the task this one waits for: its id (tN), its exact text, or its number in this list, where 1 is the first. omit when none; null removes a link."
+                "description": "the task this one waits for: its number in this list (2 is the second), a task id from a reply (t12), or its exact text. omit when none; null removes a link."
               },
               "blocks": {
                 "type": [
                   "string",
+                  "integer",
                   "null"
                 ],
                 "description": "the task that waits for this one, named the same way. omit when none; null removes a link."
