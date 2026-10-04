@@ -284,7 +284,7 @@ never on the wire: the model needs the reply contract, not the event
 log's compaction rule. Refusals and descriptions share vocabulary (the
 pending zone, approve, the door), so the model meets each word in both
 places. The whole menu; every native's description plus schema; is
-pinned under 14,000 characters by a case in `cmd/rig` over the wire
+pinned under 15,000 characters (14,000 until 2.11.12: the wall cut words that carried meaning three times in one week, and 2.12.1 makes it a guideline with a CI delta) by a case in `cmd/rig` over the wire
 golden (13.1k at the amendment: 5.5k of description, 7.5k of schema),
 so growth is a decision (a vision model's row pays 457 more for `view`,
 which joins that menu only for a row whose `vision` flag is set, SPEC_VIEW); the schemas of `rem`, `scheduler`, and

@@ -208,7 +208,7 @@
         },
         "note": {
           "type": "string",
-          "description": "the note text, or the reject reason."
+          "description": "the note or reject reason; 1000 chars at most."
         },
         "status": {
           "type": "string",

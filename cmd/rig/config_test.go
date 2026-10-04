@@ -1271,7 +1271,7 @@ func TestToolMenuBudgetAndVocabulary(t *testing.T) {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		t.Fatal(err)
 	}
-	const budget = 14000
+	const budget = 15000
 	total := 0
 	for _, tl := range wire.Tools {
 		f := tl.Function

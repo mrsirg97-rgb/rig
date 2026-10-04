@@ -1,6 +1,13 @@
 # Changelog
 ## [2.11.12]: a yes/no question is a binary
 
+The tool menu's budget moves from 14,000 to 15,000 characters. The wall
+at 14,000 trimmed a sentence that taught the model something three times
+in one week, twice this release, to save a handful of characters; the
+budget exists to make the cost visible, not to cut meaning at a round
+number. 2.12.1 turns it into a guideline with the delta shown on every
+PR. The menu stands at 13,998.
+
 The question kind `yesno` is `binary`: the constant, the constructor,
 the decide tool's enum and the docs say one word for one shape. The
 answer values stay `yes` and `no`, and the decision server's wire never
