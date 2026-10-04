@@ -7,7 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
@@ -209,5 +213,56 @@ func TestDocumentSymbolsLandAndReferencesResolveOnPack(t *testing.T) {
 	}
 	if got := logCount(log, "textDocument/references"); got != 2 {
 		t.Fatalf("the moved sha did not re-resolve: references count %d", got)
+	}
+}
+
+func TestAMissingLanguageServerIsSaidOnceAndTheLanguageIsSkipped(t *testing.T) {
+	root, _ := lspProject(t)
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	said := make(chan string, 8)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				said <- n.Source + ": " + n.Text
+			}
+		}
+	})
+	q := graph.NewQueue(t.TempDir(), room.Add(0))
+	defer q.Close()
+	graph.SetServer("typescript", filepath.Join(t.TempDir(), "no-such-language-server"), "--stdio")
+	t.Cleanup(func() { graph.SetServer("typescript") })
+	q.Touch(filepath.Join(root, "src", "widget.ts"))
+	q.Drain(context.Background())
+	q.Touch(filepath.Join(root, "lib", "other.ts"))
+	q.Drain(context.Background())
+	q.Touch(filepath.Join(root, "src", "widget.ts"))
+	q.Drain(context.Background())
+	var lines []string
+	deadline := time.After(2 * time.Second)
+	for len(lines) == 0 {
+		select {
+		case l := <-said:
+			lines = append(lines, l)
+		case <-deadline:
+			t.Fatal("the missing server was never said")
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	for len(said) > 0 {
+		lines = append(lines, <-said)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("three files on a missing server are one line, got %d:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+	if !strings.HasPrefix(lines[0], "graph: lsp typescript:") || !strings.Contains(lines[0], "typescript files stay unmapped until the next start") {
+		t.Fatalf("the one line names the language and the consequence: %q", lines[0])
+	}
+	if strings.Contains(lines[0], "graph: graph:") {
+		t.Fatalf("the source is on the event, never doubled in the text: %q", lines[0])
 	}
 }

@@ -81,7 +81,11 @@ answers `written=false` and touches nothing. The call never waits: a
 full queue drops with one loud line, never blocks. `index` does not ride
 the channel: it walks the project root and extracts every mapped file on
 the call's own thread, nothing dropped, and replies with the count
-mapped when done — it pays the loop's thread once, by request.
+mapped when done — it pays the loop's thread once, by request. The root
+is a project or the call refuses (2.11.4: a `go.mod` above the cwd or a
+git worktree, `ProjectRoot`; from a plain directory the old fallback
+walked the directory itself, which from `~` is everything), and a
+cancelled context ends the walk at the first file it reaches, said once.
 
 ## rem gains two actions
 

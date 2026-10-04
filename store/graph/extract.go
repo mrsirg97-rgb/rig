@@ -76,11 +76,18 @@ func ProjectOf(abs string) (root, module string, err error) {
 }
 
 func RootOf(dir string) (root, module string, err error) {
+	if root, module, ok := ProjectRoot(dir); ok {
+		return root, module, nil
+	}
+	return dir, "", nil
+}
+
+func ProjectRoot(dir string) (root, module string, ok bool) {
 	start := dir
 	for ; ; dir = filepath.Dir(dir) {
 		b, rerr := os.ReadFile(filepath.Join(dir, "go.mod"))
 		if rerr == nil {
-			return dir, moduleLine(b), nil
+			return dir, moduleLine(b), true
 		}
 		up := filepath.Dir(dir)
 		if up == dir {
@@ -96,10 +103,10 @@ func RootOf(dir string) (root, module string, err error) {
 			if real, err := filepath.EvalSymlinks(p); err == nil {
 				p = real
 			}
-			return p, "", nil
+			return p, "", true
 		}
 	}
-	return start, "", nil
+	return "", "", false
 }
 
 func moduleLine(b []byte) string {

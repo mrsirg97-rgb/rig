@@ -1,4 +1,28 @@
 # Changelog
+## [2.11.4]: the map stays inside the project and says a thing once
+
+Two walks of the wrong size, found the same evening. `rem index` from a
+directory that is not a project walked whatever `RootOf` fell back to,
+which from the home directory is the home directory: every Go toolchain
+under `go/pkg/mod`, every file of every project, and on quit one notice
+per remaining file saying `context canceled`, because the walk treated
+a cancelled context as a per-file error to say and continue. The
+session could not exit until the walk ran out of disk. `ProjectRoot` is
+the one rule for what a project is (a `go.mod` above the directory, or
+a git worktree); `index` refuses anything else by name, and the walk
+returns the context's error at the first cancelled file, so a quit is
+one line. `RootOf` keeps its fallback for the per-file touch, which is
+bounded by the file it was given.
+
+The other walk was the transcript. Opening a JavaScript project with no
+`typescript-language-server` on `PATH` put one notice per file the code
+map tried, a few thousand lines of the same sentence. A missing server
+is a fact about the session, not about the file: the queue says it once,
+naming the language and that its files stay unmapped until the next
+start, and skips that language for the rest of the queue's life. The
+doubled `graph: graph:` prefix on the queue's notices goes with it,
+since the source rides the event.
+
 ## [2.11.3]: the edit shows its diff again
 
 The TUI's edit block previews the arguments as a diff: the old side as
