@@ -3,7 +3,6 @@ package swarm_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -209,16 +211,19 @@ type harness struct {
 	fetch   *fetchState
 	ctl     *swarm.Controller
 	fe      *recordFrontend
+	engine  evt.Engine
+	room    broadcast.Room
 }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	return newHarnessResolved(t, nil)
-}
-
-func newHarnessResolved(t *testing.T, resolve func() core.Frontend) *harness {
-	t.Helper()
 	h := &harness{}
+	h.engine = evt.NewEngine()
+	go h.engine.Start(context.Background())
+	t.Cleanup(h.engine.Stop)
+	h.room = broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, h.engine, rig.PriorityFleet)
+	})
 	todoDB, _, _, err := store.Open(filepath.Join(t.TempDir(), "todo.sqlite"), todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatalf("todo store: %v", err)
@@ -235,9 +240,7 @@ func newHarnessResolved(t *testing.T, resolve func() core.Frontend) *harness {
 	h.spawn = &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	h.fetch = &fetchState{}
 	h.fe = &recordFrontend{}
-	if resolve == nil {
-		resolve = func() core.Frontend { return h.fe }
-	}
+	h.listen(h.room)
 	h.ctl = swarm.New(swarm.Opts{
 		TodoDB:       todoDB,
 		SchedDB:      schedDB,
@@ -253,10 +256,29 @@ func newHarnessResolved(t *testing.T, resolve func() core.Frontend) *harness {
 		StateDir:     t.TempDir(),
 		DefaultModel: "qwen3.8-workers",
 		Models:       func() models.Table { return modelRows(t) },
-		Frontend:     resolve,
+		Engine:       h.engine,
+		Room:         h.room,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	return h
+}
+
+func (h *harness) listen(room broadcast.Room) {
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err == nil && m.Event() != nil {
+				h.fe.Notify(m.Event())
+			}
+		}
+	})
+}
+
+func (h *harness) newRoom() broadcast.Room {
+	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, h.engine, rig.PriorityFleet)
+	})
+	h.listen(room)
+	return room
 }
 
 func (h *harness) create(t *testing.T, texts ...string) {
@@ -380,7 +402,8 @@ func TestSwarmSpawnCarriesNoStallNoTimeoutAndWaitsOnTheServer(t *testing.T) {
 		StateDir:     t.TempDir(),
 		DefaultModel: "qwen3.8-workers",
 		Models:       func() models.Table { return modelRows(t) },
-		Frontend:     func() core.Frontend { return h.fe },
+		Engine:       h.engine,
+		Room:         h.newRoom(),
 		Delegate: func(in sched.DelegateInput) (sched.DelegateResult, error) {
 			captured <- in
 			return sched.DelegateResult{Exit: 0, Stdout: "done\n"}, nil
@@ -449,7 +472,8 @@ func TestSwarmTwoSessionsOnOneQueueNeverRunATaskTwice(t *testing.T) {
 		StateDir:     t.TempDir(),
 		DefaultModel: "qwen3.8-workers",
 		Models:       func() models.Table { return modelRows(t) },
-		Frontend:     func() core.Frontend { return h.fe },
+		Engine:       h.engine,
+		Room:         h.newRoom(),
 	})
 	t.Cleanup(func() { second.Stop() })
 	ctx := core.WithSession(context.Background(), core.NewSession())
@@ -505,10 +529,13 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 	if got := h.spawn.count(); got != 3 {
 		t.Fatalf("spawn calls = %d, want one per task (3)", got)
 	}
-	for i, text := range []string{"write the parser", "write the tests", "write the docs"} {
-		if !strings.Contains(h.spawn.prompt(i), text) {
-			t.Errorf("spawn %d must carry the task brief %q:\n%s", i, text, h.spawn.prompt(i))
+	briefs := h.spawn.prompt(0) + h.spawn.prompt(1) + h.spawn.prompt(2)
+	for _, text := range []string{"write the parser", "write the tests", "write the docs"} {
+		if strings.Count(briefs, text) != 1 {
+			t.Errorf("one spawn must carry the task brief %q once:\n%s", text, briefs)
 		}
+	}
+	for i := 0; i < 3; i++ {
 		if !strings.Contains(h.spawn.prompt(i), "The supervisor owns this board entry") {
 			t.Errorf("spawn %d must tell the worker the supervisor owns the board entry:\n%s", i, h.spawn.prompt(i))
 		}
@@ -688,12 +715,8 @@ func TestSwarmListsWorkersAndStops(t *testing.T) {
 	if got := h.status(t, "t1"); got != "pending" {
 		t.Errorf("a stopped swarm must release its claim: status %q, want pending", got)
 	}
-	stream, err := os.ReadFile(filepath.Join(h.home, "swarm", fmt.Sprintf("w%d.stream", busy.ID)))
-	if err != nil {
-		t.Fatalf("the run stream: %v", err)
-	}
-	if !strings.Contains(string(stream), "rig: heartbeat") {
-		t.Errorf("the run stream must carry the worker's heartbeat:\n%s", stream)
+	if _, err := os.Stat(filepath.Join(h.home, "swarm")); !os.IsNotExist(err) {
+		t.Errorf("the worker's bytes are the run log's; no stream file is written beside it (%v)", err)
 	}
 }
 

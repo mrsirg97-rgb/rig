@@ -311,13 +311,13 @@ that is harder than writing a lot, and it is the bar.
   a recorded run in the cwd-scope scheduler store, a resumable
   transcript; the optional `Notify` seam (SPEC_SWARM 7) emits the
   status snapshot for an interactive delegate.
-- `swarm`: the drain-worker controller (SPEC_SWARM): supervisor-side
-  claim/spawn/complete loops over the session's bound queue, the
-  reviewer verdict protocol, the run streams and the in-memory roster;
-  the GPU slots are the parallelism, the dead claim is released via the
-  todo store's Reap door; the optional `Frontend` seam is the
-  transcript door (the four decision-worthy notices and the throttled
-  `SwarmStatus` band, SPEC_SWARM 7).
+- `swarm`: the drain-worker controller (SPEC_SWARM): the router and the
+  settle as closures on the loop at the fleet's priority, the worker
+  goroutines waiting on the world, the reviewer verdict protocol; the
+  supervisor is a member of the session's `broadcast` room and says
+  everything there (the four decision-worthy notices, the `SwarmStatus`
+  snapshots, the loud lines as `Notice`); the dead claim is released via
+  the todo store's Reap door.
 - `tool/sessions`: the session-store introspection tool: `list` and
   `summary`, the vitals (which models ran, what failed, the cache
   ratio), and the store's schema migration on open.

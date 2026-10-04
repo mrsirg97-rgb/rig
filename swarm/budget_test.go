@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -132,7 +131,8 @@ func TestSwarmRemoteRowNeverConsultsTheSwap(t *testing.T) {
 		StateDir:     t.TempDir(),
 		DefaultModel: "qwen3.8-workers",
 		Models:       func() models.Table { return tbl },
-		Frontend:     func() core.Frontend { return h.fe },
+		Engine:       h.engine,
+		Room:         h.newRoom(),
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})

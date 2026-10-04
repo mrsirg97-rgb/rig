@@ -16,6 +16,9 @@ type, an interface, or a context helper.
   `ToolCallEvent`, `Done`, `Fault`, `ToolStart`, `ToolResult`, `TurnEnd`,
   `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, `SwarmNotice`, and
   `Notice` — the 2.8.3 reopening: one event for a background notice, `Source`
+  — and `Snapshot` (2.11.0, the same reopening): an `Event` whose latest
+  value is the whole truth (`SwarmStatus` is one), so a transport may keep
+  one pending per sender; `Source`
   and `Text`, so a queue or a reviewer reaches the operator through the
   frontend and never through stderr while a frontend owns the screen). The 1.5.0 hosted-mode extension
   (SPEC_HOSTED, the named reopening, closed when the gate re-froze core at

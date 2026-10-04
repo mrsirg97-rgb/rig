@@ -260,11 +260,23 @@ test.
 
 ### 7. The transcript notices and the status band
 
-The controller gains an optional `Frontend` seam (wired once at the root,
-like `Steer`): the four decision-worthy events emit one-line
+AMENDED 2.11.0 (SPEC_EVT 8): the `Frontend` seam, the status emitter and
+its 250 ms throttle, the controller's mutex and the per-worker stream
+files are gone. The controller is a member of the session's `broadcast`
+room (`SupervisorID` 0, each worker a member by its id); it publishes
+the notices and the status snapshots below, the root's frontend member
+subscribes once and hands each event to the current recorder, and the
+loop transport keeps one pending status per sender with the latest
+value, which is the throttle without a clock. Every state change is a
+closure posted at `rig.PriorityFleet`; the worker goroutines wait on the
+world and post their settle. The run log is the worker's bytes; no
+stream file is written. The text that follows describes the events,
+which did not change.
+
+The four decision-worthy events emit one-line
 `core.SwarmNotice` transcript notices, and nothing else does — the drain
 loop's ordinary claim/complete/bytes stay out of the transcript (the run
-stream and the bare `/swarm` are their audit).
+log and the bare `/swarm` are their audit).
 
 - **A task failed (with its note)**: `swarm: t1 failed — the worker died
   twice` (the worker's second death; the reason is noted on the task),

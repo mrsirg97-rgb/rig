@@ -2,8 +2,10 @@ package broadcast
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
+	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
@@ -26,25 +28,44 @@ loopTransport
 	loopTransport delivers through the event loop: a send is a closure posted at the transport's priority,
 	the ack is the post (the queue is the durability, an event stays until the consumer runs it),
 	and the receive is the callback the closure resolves to on the loop's goroutine.
-	a heartbeat already waiting in the queue is not posted again: one pending heartbeat per member.
+	a heartbeat, or a snapshot (core.Snapshot), is a state and not a story: one waits per sender,
+	and a later one before it ran replaces its value instead of posting again.
 */
 type loopTransport struct {
 	id       int64
 	engine   evt.Engine
 	priority int
 
-	mu        sync.Mutex
-	recv      func(err error, messages ...Message)
-	closed    bool
-	heartbeat bool
+	mu      sync.Mutex
+	recv    func(err error, messages ...Message)
+	closed  bool
+	pending map[string]*latest
+}
+
+type latest struct {
+	message Message
 }
 
 func NewLoopTransport(id int64, engine evt.Engine, priority int) Transport {
-	return &loopTransport{id: id, engine: engine, priority: priority}
+	return &loopTransport{id: id, engine: engine, priority: priority, pending: map[string]*latest{}}
 }
 
 func (t *loopTransport) Id() int64 {
 	return t.id
+}
+
+func stateKey(messages []Message) (string, bool) {
+	if len(messages) != 1 {
+		return "", false
+	}
+	m := messages[0]
+	switch ev := m.Event().(type) {
+	case nil:
+		return fmt.Sprintf("%d/heartbeat", m.Origin()), true
+	case core.Snapshot:
+		return fmt.Sprintf("%d/%T", m.Origin(), ev), true
+	}
+	return "", false
 }
 
 func (t *loopTransport) Send(ctx context.Context, callback func(ack error), messages ...Message) {
@@ -58,20 +79,23 @@ func (t *loopTransport) Send(ctx context.Context, callback func(ack error), mess
 		callback(context.Canceled)
 		return
 	}
-	if len(messages) == 1 && messages[0].Event() == nil {
-		if t.heartbeat {
+	key, state := stateKey(messages)
+	if state {
+		if slot, waiting := t.pending[key]; waiting {
+			slot.message = messages[0]
 			t.mu.Unlock()
 			callback(nil)
 			return
 		}
-		t.heartbeat = true
+		t.pending[key] = &latest{message: messages[0]}
 	}
 	t.mu.Unlock()
 	t.engine.Add(evt.Func(func(context.Context) {
 		t.mu.Lock()
 		recv, closed := t.recv, t.closed
-		if len(messages) == 1 && messages[0].Event() == nil {
-			t.heartbeat = false
+		if state {
+			messages = []Message{t.pending[key].message}
+			delete(t.pending, key)
 		}
 		t.mu.Unlock()
 		if closed || recv == nil {

@@ -3,7 +3,6 @@ package swarm
 import (
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -18,19 +17,23 @@ func (c *Controller) run(w *worker) {
 	for {
 		select {
 		case <-w.ctx.Done():
-			c.set(w, func() { w.state = StateExited })
+			c.call(func() { w.state = StateExited; c.refresh() })
 			return
 		case id := <-w.tasks:
 			if w.ctx.Err() != nil {
-				c.set(w, func() { w.state = StateExited })
+				c.call(func() { w.state = StateExited; c.refresh() })
 				return
 			}
 			res := c.work(w, id)
-			c.settle(w, id, res)
-			if res.holder != nil {
-				c.set(w, func() { w.state = StateExited; w.task = "" })
-			}
-			c.emit(true)
+			c.call(func() {
+				c.settle(w, id, res)
+				if res.holder != nil {
+					w.state = StateExited
+					w.task = ""
+				}
+				c.refresh()
+				c.emit()
+			})
 			c.Wake()
 			if res.holder != nil {
 				return
@@ -46,13 +49,12 @@ type workResult struct {
 }
 
 func (c *Controller) work(w *worker, id string) workResult {
-	c.set(w, func() { w.heartbeat = time.Time{} })
+	c.call(func() { w.heartbeat = time.Time{}; c.refresh() })
 	task, err := todostore.Task(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 	if err != nil {
-		c.loud(w, "w%d: task %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: task %s: %v", w.id, id, err)
 		return workResult{}
 	}
-	c.stream(w, []byte(fmt.Sprintf("## swarm task %s (%s)\n", id, w.role)))
 	res, err := c.delegate(sched.DelegateInput{
 		DB:            c.opts.SchedDB,
 		Home:          c.opts.Home,
@@ -74,11 +76,13 @@ func (c *Controller) work(w *worker, id string) workResult {
 		StateDir:      c.opts.StateDir,
 		Allow:         c.opts.Allow,
 		SpawnCtx:      w.ctx,
-		Observe:       func(p []byte) { c.stream(w, p) },
+		Observe:       func(p []byte) { c.heartbeat(w, p) },
 	})
-	c.addSpent(res.Cost)
+	if res.Cost > 0 {
+		c.call(func() { c.spent += res.Cost })
+	}
 	if err != nil {
-		c.loud(w, "w%d: task %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: task %s: %v", w.id, id, err)
 		if errors.Is(err, sched.ErrNotResident) {
 			return workResult{holder: err}
 		}
@@ -93,23 +97,19 @@ func (c *Controller) work(w *worker, id string) workResult {
 		case "accept":
 			_, err := todostore.Accept(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 			if err != nil {
-				c.loud(w, "w%d: accept %s: %v\n", w.id, id, err)
-			} else {
-				c.emit(false)
+				c.loud(w, "w%d: accept %s: %v", w.id, id, err)
 			}
 			return workResult{ok: err == nil}
 		case "reject":
-			ok := c.rejectTask(w, id, v.reason) == nil
-			if ok {
-				c.emit(false)
-			}
+			var ok bool
+			c.call(func() { ok = c.rejectTask(w, id, v.reason) == nil })
 			return workResult{ok: ok}
 		}
 		return workResult{noVerdict: true}
 	}
 	_, err = todostore.Complete(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, true)
 	if err != nil {
-		c.loud(w, "w%d: complete %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: complete %s: %v", w.id, id, err)
 	}
 	return workResult{ok: err == nil}
 }
@@ -128,24 +128,26 @@ func (c *Controller) settle(w *worker, id string, res workResult) {
 		return
 	}
 	if res.ok {
-		c.set(w, func() { w.done++; w.task = "" })
+		w.done++
+		w.task = ""
 		return
 	}
-	c.bump(w, "retries", id)
-	if c.countOf("retries", id) == 1 {
+	c.retries[id]++
+	if c.retries[id] == 1 {
 		c.notice(fmt.Sprintf("swarm: w%d died — %s restarted", w.id, id))
 		c.release(w, id)
-		c.set(w, func() { w.task = "" })
+		w.task = ""
 		return
 	}
 	c.notice(fmt.Sprintf("swarm: w%d died — %s exited", w.id, id))
 	c.failTask(w, id, res.noVerdict)
-	c.set(w, func() { w.failed++; w.task = "" })
+	w.failed++
+	w.task = ""
 }
 
 func (c *Controller) release(w *worker, id string) {
 	if _, err := todostore.Reap(w.ctx, c.opts.TodoDB, w.proj, []string{w.identity}, w.architect); err != nil {
-		c.loud(w, "w%d: release %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: release %s: %v", w.id, id, err)
 	}
 }
 
@@ -160,25 +162,25 @@ func (c *Controller) failTask(w *worker, id string, noVerdict bool) {
 	}
 	c.note(w, id, "the worker died twice")
 	if _, err := todostore.Fail(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, false); err != nil {
-		c.loud(w, "w%d: fail %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 		return
 	}
 	c.notice(fmt.Sprintf("swarm: %s failed — the worker died twice", id))
 }
 
 func (c *Controller) rejectTask(w *worker, id, reason string) error {
-	c.bump(w, "rejects", id)
-	if c.countOf("rejects", id) > 2 {
+	c.rejects[id]++
+	if c.rejects[id] > 2 {
 		c.note(w, id, "the reviewer rejected this twice; the swarm failed it")
 		if _, err := todostore.Fail(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, false); err != nil {
-			c.loud(w, "w%d: fail %s: %v\n", w.id, id, err)
+			c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 			return err
 		}
 		c.notice(fmt.Sprintf("swarm: %s failed — the reviewer rejected this twice; the swarm failed it", id))
 		return nil
 	}
 	if _, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, reason, w.identity); err != nil {
-		c.loud(w, "w%d: reject %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: reject %s: %v", w.id, id, err)
 		return err
 	}
 	c.notice(fmt.Sprintf("swarm: %s rejected — %s", id, reason))
@@ -187,38 +189,6 @@ func (c *Controller) rejectTask(w *worker, id, reason string) error {
 
 func (c *Controller) note(w *worker, id, text string) {
 	if _, err := todostore.Note(w.ctx, c.opts.TodoDB, w.proj, id, text, w.architect); err != nil {
-		c.loud(w, "w%d: note %s: %v\n", w.id, id, err)
+		c.loud(w, "w%d: note %s: %v", w.id, id, err)
 	}
-}
-
-func (c *Controller) countOf(key, id string) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if key == "rejects" {
-		return c.rejects[id]
-	}
-	return c.retries[id]
-}
-
-func (c *Controller) bump(w *worker, key, id string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if key == "rejects" {
-		c.rejects[id]++
-	} else {
-		c.retries[id]++
-	}
-}
-
-func (c *Controller) loud(w *worker, format string, args ...any) {
-	if w.ctx.Err() != nil {
-		return
-	}
-	fmt.Fprintf(os.Stderr, "swarm: "+format, args...)
-}
-
-func (c *Controller) set(w *worker, fn func()) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	fn()
 }

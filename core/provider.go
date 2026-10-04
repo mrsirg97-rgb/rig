@@ -8,6 +8,11 @@ import (
 
 type Event interface{ event() }
 
+type Snapshot interface {
+	Event
+	Snapshot()
+}
+
 var (
 	_ Event = TextDelta{}
 	_ Event = ReasoningDelta{}
@@ -129,6 +134,8 @@ type SwarmStatus struct {
 }
 
 func (SwarmStatus) event() {}
+
+func (SwarmStatus) Snapshot() {}
 
 type SwarmNotice struct{ Text string }
 

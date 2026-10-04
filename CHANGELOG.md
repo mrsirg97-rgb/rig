@@ -34,12 +34,29 @@ decision review, so a worker's message runs in the gaps of a turn and a
 review bite starts only when nothing else is queued. The root assigns,
 the loop reads.
 
-The first commit is the package and its tests; the second the engine.
-The commits that follow in this release: the swarm moves onto the room
-and its roster, heartbeat field, emitter and goroutines leave; the
-frontends subscribe and the two notice events become one message; the
-delegate and the review fire cross a pipe transport through the
-encoder, and the stdout scrape leaves.
+The swarm moves onto the room (the third commit). The controller is
+the supervisor member, each worker a member by its id; every state
+change is a closure posted at the fleet's priority, so the mutex is
+gone; the router is a posted dispatch, deduplicated while one waits;
+the worker's heartbeat line becomes a heartbeat message to the
+supervisor; what the supervisor said to the frontend it now publishes
+(the notices, the status snapshots, and the stderr lines as `Notice`
+with source `swarm`). `core` gains `Snapshot` (the same reopening as
+`Notice`): an event whose latest value is the whole truth, and the loop
+transport keeps one pending per sender for a heartbeat or a snapshot,
+which is the status throttle without its 250 ms clock. The root is the
+frontend member: it subscribes once and hands each event to the current
+recorder, with the panic recovery that lived in the swarm. Gone: the
+`Frontend` seam and its resolver, the `status` emitter and its clock in
+the swarm, the stream files under the scheduler home, the controller's
+mutex and `set`/`bump`/`countOf`. The delegate tool still carries the
+emitter until it moves onto the room.
+
+The first commit is the package and its tests; the second the engine;
+the third the swarm. The commits that follow in this release: the
+delegate tool and the review fire move onto the room and cross a pipe
+transport through the encoder, the stdout scrape leaves, and the two
+notice events become one message.
 
 ## [2.10.2]: claim says what claim does
 

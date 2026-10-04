@@ -465,6 +465,7 @@ func main() {
 			Notify:       func(ev core.Event) { r.rec.Notify(ev) },
 		})
 	}
+	r.fleet()
 	if delegateOn {
 		r.swarm = swarm.New(swarm.Opts{
 			TodoDB:  tdb,
@@ -485,7 +486,8 @@ func main() {
 			Allow:        allowList,
 			DefaultModel: modelID,
 			Models:       func() models.Table { return r.runtime },
-			Frontend:     func() core.Frontend { return r.rec },
+			Engine:       r.engine,
+			Room:         r.room,
 		})
 	}
 	r.swarmWhy = swarmWhy

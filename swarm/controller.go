@@ -4,17 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
-	"github.com/mrsirg97-rgb/rig/v2/swarm/status"
 )
 
 const (
@@ -26,9 +28,15 @@ const (
 
 	MaxWorkers = 16
 
+	SupervisorID int64 = 0
+
 	maxVerdictReason = todostore.MaxNoteLen
 
 	heartbeatLine = "rig: heartbeat"
+
+	briefBoard  = "\nThe supervisor owns this board entry: the claim is the supervisor's, so findings go in the task's note (todo note) and in rem; do not create tasks, and do not start, complete, or fail the board's tasks.\n"
+	briefReview = "\nReview the work now: read the diff and the task's notes; then decide. End your reply with exactly one verdict line as the last line: 'verdict: accept' or 'verdict: reject <reason>'.\n"
+	briefWork   = "\nDo the task now in this cwd. Report back: when you finish, persist durable findings with the rem tool (project scope: this cwd) and end your reply with a short summary of what you did.\n"
 )
 
 type StartOpts struct {
@@ -66,14 +74,15 @@ type Opts struct {
 	Allow        []string
 	DefaultModel string
 	Models       func() models.Table
-	Frontend     func() core.Frontend
 	Delegate     func(sched.DelegateInput) (sched.DelegateResult, error)
+	Engine       evt.Engine
+	Room         broadcast.Room
 }
 
 type Controller struct {
 	opts Opts
+	self broadcast.Member
 
-	mu         sync.Mutex
 	ctx        context.Context
 	cancel     context.CancelFunc
 	workers    []*worker
@@ -85,10 +94,11 @@ type Controller struct {
 	budget     float64
 	spent      float64
 	budgetSaid bool
-	emitter    *status.Emitter
 	role       string
 	model      string
-	wake       chan struct{}
+
+	view        atomic.Pointer[[]Worker]
+	dispatching atomic.Bool
 }
 
 type worker struct {
@@ -108,45 +118,63 @@ type worker struct {
 }
 
 func New(o Opts) *Controller {
-	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}, wake: make(chan struct{}, 1)}
-	if o.Frontend != nil {
-		c.emitter = status.New(c.safeNotify)
+	if o.Engine == nil || o.Room == nil {
+		panic("swarm: the controller posts on the loop and speaks in a room; both are constructor arguments")
 	}
+	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}}
+	c.view.Store(&[]Worker{})
+	c.self = o.Room.Add(SupervisorID)
+	c.self.Subscribe(context.Background(), c.receive)
 	return c
 }
 
-func (c *Controller) safeNotify(ev core.Event) {
-	defer func() {
-		if p := recover(); p != nil {
-			fmt.Fprintf(os.Stderr, "swarm: notify: recovered from panic: %v\n", p)
-		}
-	}()
-	resolve := c.opts.Frontend
-	if resolve == nil {
-		return
-	}
-	if fe := resolve(); fe != nil {
-		fe.Notify(ev)
-	}
+func (c *Controller) post(fn func()) {
+	c.opts.Engine.Add(evt.Func(func(context.Context) { fn() }), rig.PriorityFleet)
 }
 
-func (c *Controller) addSpent(v float64) {
-	if v <= 0 {
+func (c *Controller) call(fn func()) {
+	done := make(chan struct{})
+	if c.opts.Engine.Add(evt.Func(func(context.Context) { fn(); close(done) }), rig.PriorityFleet) == 0 {
+		fn()
 		return
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.spent += v
+	<-done
+}
+
+func (c *Controller) receive(err error, messages ...broadcast.Message) {
+	if err != nil {
+		return
+	}
+	for _, m := range messages {
+		if m.Event() != nil {
+			continue
+		}
+		for _, w := range c.workers {
+			if int64(w.id) == m.Origin() {
+				w.heartbeat = time.Now()
+			}
+		}
+	}
+	c.refresh()
+	c.emit()
+}
+
+func (c *Controller) refresh() {
+	out := make([]Worker, len(c.workers))
+	for i, w := range c.workers {
+		out[i] = Worker{
+			ID: w.id, Role: w.role, Model: modelName(w.model), Task: w.task,
+			Heartbeat: w.heartbeat, Done: w.done, Failed: w.failed, State: w.state,
+		}
+	}
+	c.view.Store(&out)
 }
 
 func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
-	c.mu.Lock()
 	if in.Count < 1 {
-		c.mu.Unlock()
 		return "", fmt.Errorf("swarm: count %d is below one (swarm start <count> [role=…] [model=…] [budget=…])", in.Count)
 	}
 	if in.Count > MaxWorkers {
-		c.mu.Unlock()
 		return "", fmt.Errorf("swarm: count %d is past the %d cap", in.Count, MaxWorkers)
 	}
 	role := in.Role
@@ -154,12 +182,10 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 		role = RoleWorker
 	}
 	if role != RoleWorker && role != RoleReviewer {
-		c.mu.Unlock()
 		return "", fmt.Errorf("swarm: unknown role %q (worker, reviewer)", role)
 	}
 	model, err := c.modelFor(role, in.Model)
 	if err != nil {
-		c.mu.Unlock()
 		return "", err
 	}
 	session := ""
@@ -168,39 +194,36 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	}
 	proj, err := c.opts.Project(ctx, session)
 	if err != nil {
-		c.mu.Unlock()
 		return "", fmt.Errorf("swarm: queue: %w", err)
 	}
-	growing := c.ctx != nil
-	if !growing {
-		c.ctx, c.cancel = context.WithCancel(ctx)
-	}
-	if c.role == "" {
-		c.role, c.model = role, model
-	}
-	c.proj = proj
-	c.architect = session
-	c.budget = in.Budget
-	base := len(c.workers)
-	for i := 1; i <= in.Count; i++ {
-		w := &worker{
-			id: base + i, role: role, model: model,
-			identity:  core.NewSession().ID,
-			ctx:       c.ctx,
-			proj:      proj,
-			architect: session,
-			state:     StateRunning,
-			tasks:     make(chan string, 1),
+	c.call(func() {
+		if c.ctx == nil {
+			c.ctx, c.cancel = context.WithCancel(ctx)
 		}
-		c.workers = append(c.workers, w)
-		c.wg.Add(1)
-		go c.run(w)
-	}
-	if !growing {
-		c.wg.Add(1)
-		go c.route(c.ctx)
-	}
-	c.mu.Unlock()
+		if c.role == "" {
+			c.role, c.model = role, model
+		}
+		c.proj = proj
+		c.architect = session
+		c.budget = in.Budget
+		base := len(c.workers)
+		for i := 1; i <= in.Count; i++ {
+			w := &worker{
+				id: base + i, role: role, model: model,
+				identity:  core.NewSession().ID,
+				ctx:       c.ctx,
+				proj:      proj,
+				architect: session,
+				state:     StateRunning,
+				tasks:     make(chan string, 1),
+			}
+			c.opts.Room.Add(int64(w.id))
+			c.workers = append(c.workers, w)
+			c.wg.Add(1)
+			go c.run(w)
+		}
+		c.refresh()
+	})
 	c.Wake()
 	return fmt.Sprintf("swarm: added %d %s (role %s · model %s)", in.Count, plural(in.Count, "agent"), role, modelName(model)), nil
 }
@@ -224,46 +247,98 @@ func (c *Controller) modelFor(role, override string) (string, error) {
 }
 
 func (c *Controller) List() []Worker {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	out := make([]Worker, len(c.workers))
-	for i, w := range c.workers {
-		out[i] = Worker{
-			ID: w.id, Role: w.role, Model: modelName(w.model), Task: w.task,
-			Heartbeat: w.heartbeat, Done: w.done, Failed: w.failed, State: w.state,
-		}
-	}
-	return out
+	return append([]Worker(nil), (*c.view.Load())...)
 }
 
 func (c *Controller) Stop() (string, error) {
-	c.mu.Lock()
-	if c.ctx == nil {
-		c.mu.Unlock()
+	var cancel context.CancelFunc
+	c.call(func() { cancel = c.cancel })
+	if cancel == nil {
 		return "", errors.New("swarm: no swarm running")
 	}
-	cancel := c.cancel
-	count := len(c.workers)
-	proj := c.proj
-	architect := c.architect
-	c.mu.Unlock()
 	cancel()
 	c.wg.Wait()
-	c.mu.Lock()
-	ended := make([]string, 0, len(c.workers))
-	for _, w := range c.workers {
-		ended = append(ended, w.identity)
-	}
-	c.workers = nil
-	c.ctx = nil
-	c.cancel = nil
-	c.role = ""
-	c.model = ""
-	c.mu.Unlock()
+	var count int
+	var ended []string
+	var proj todostore.Project
+	var architect string
+	c.call(func() {
+		count = len(c.workers)
+		proj, architect = c.proj, c.architect
+		for _, w := range c.workers {
+			ended = append(ended, w.identity)
+			c.opts.Room.Remove(int64(w.id))
+		}
+		c.workers = nil
+		c.ctx = nil
+		c.cancel = nil
+		c.role = ""
+		c.model = ""
+		c.refresh()
+	})
 	if _, err := todostore.Reap(context.Background(), c.opts.TodoDB, proj, ended, architect); err != nil {
 		return "", fmt.Errorf("swarm: stop: release: %w", err)
 	}
-	c.emit(true)
-	c.notice(fmt.Sprintf("swarm: /swarm exited — %d %s stopped", count, plural(count, "worker")))
+	c.call(func() {
+		c.emit()
+		c.notice(fmt.Sprintf("swarm: /swarm exited — %d %s stopped", count, plural(count, "worker")))
+	})
 	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "agent")), nil
+}
+
+func (c *Controller) emit() {
+	c.self.Publish(context.Background(), func(error) {}, broadcast.NewMessage(SupervisorID, true, c.status()))
+}
+
+func (c *Controller) status() core.SwarmStatus {
+	rows := c.List()
+	workers := make([]core.SwarmWorker, len(rows))
+	for i, w := range rows {
+		workers[i] = core.SwarmWorker{
+			ID: w.ID, Role: w.Role, Task: w.Task,
+			Heartbeat: w.Heartbeat, Done: w.Done, Failed: w.Failed, State: w.State,
+		}
+	}
+	counts, err := todostore.Counts(context.Background(), c.opts.TodoDB, c.proj)
+	if err != nil {
+		return core.SwarmStatus{Workers: workers}
+	}
+	return core.SwarmStatus{Workers: workers, Pending: counts.Pending, Review: counts.Review}
+}
+
+func (c *Controller) notice(text string) {
+	c.self.Publish(context.Background(), func(error) {}, broadcast.NewMessage(SupervisorID, true, core.SwarmNotice{Text: text}))
+}
+
+func (c *Controller) loud(w *worker, format string, args ...any) {
+	if w.ctx.Err() != nil {
+		return
+	}
+	text := fmt.Sprintf(format, args...)
+	c.self.Publish(context.Background(), func(error) {}, broadcast.NewMessage(SupervisorID, true, core.Notice{Source: "swarm", Text: strings.TrimRight(text, "\n")}))
+}
+
+func (c *Controller) heartbeat(w *worker, p []byte) {
+	if !strings.Contains(string(p), heartbeatLine) {
+		return
+	}
+	c.self.Forward(w.ctx, func(int64, error) {}, broadcast.Heartbeat(int64(w.id), true))
+}
+
+func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "swarm task %s · %s (queue %s):\n%s\n", task.ID, w.role, c.proj.Label, task.Text)
+	if len(task.Notes) > 0 {
+		b.WriteString("\nNotes:\n")
+		for _, n := range task.Notes {
+			fmt.Fprintf(&b, "- %s (by %s)\n", n.Text, n.Session)
+		}
+	}
+	b.WriteString(briefBoard)
+	if w.role == RoleReviewer {
+		b.WriteString(briefReview)
+	} else {
+		b.WriteString(briefWork)
+	}
+	return b.String()
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"io"
 	"os"
@@ -85,6 +87,8 @@ type root struct {
 
 	swarm    *swarm.Controller
 	swarmWhy string
+	engine   evt.Engine
+	room     broadcast.Room
 
 	pluginTools []core.Tool
 
@@ -152,6 +156,7 @@ func wire(r *root) *rig.Kernel {
 		)...),
 		rig.WithMiddleware(mw...),
 		rig.WithConcurrent(func(c core.ToolCall) bool { return concurrentNatives[c.Name] }),
+		rig.WithEngine(r.engine),
 	)
 	k.Session = r.session
 	if r.graph != nil {
@@ -332,4 +337,39 @@ func (r *root) notice(source, text string) {
 		out = os.Stderr
 	}
 	fmt.Fprintln(out, "rig: "+source+": "+text)
+}
+
+const frontendMemberID int64 = -1
+
+func (r *root) fleet() {
+	r.engine = evt.NewEngine()
+	r.room = broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, r.engine, rig.PriorityFleet)
+	})
+	r.room.Add(frontendMemberID).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		if err != nil {
+			return
+		}
+		for _, m := range messages {
+			if m.Event() == nil {
+				continue
+			}
+			r.deliver(m.Event())
+		}
+	})
+}
+
+func (r *root) deliver(ev core.Event) {
+	defer func() {
+		if p := recover(); p != nil {
+			out := r.errOut
+			if out == nil {
+				out = os.Stderr
+			}
+			fmt.Fprintf(out, "rig: fleet: frontend: recovered from panic: %v\n", p)
+		}
+	}()
+	if fe := r.rec; fe != nil {
+		fe.Notify(ev)
+	}
 }

@@ -275,3 +275,25 @@ func TestMembershipIsSortedAndRemoveIsHonest(t *testing.T) {
 		t.Fatal("the first remove is true, the second false")
 	}
 }
+
+func TestASnapshotKeepsOnePendingPerSenderWithTheLatestValue(t *testing.T) {
+	room, engine := loopRoom(t)
+	ctx := context.Background()
+	a, b := room.Add(1), room.Add(2)
+	in := newInbox()
+	b.Subscribe(ctx, in.take)
+	for i := 1; i <= 4; i++ {
+		a.Publish(ctx, func(error) {}, broadcast.NewMessage(1, true, core.SwarmStatus{Pending: i}))
+	}
+	a.Publish(ctx, func(error) {}, broadcast.NewMessage(1, true, core.SwarmNotice{Text: "a story, not a state"}))
+	room.Add(3).Publish(ctx, func(error) {}, broadcast.NewMessage(3, true, core.SwarmStatus{Pending: 9}))
+	if n := len(engine.Pending()); n != 4 {
+		t.Fatalf("four snapshots from one sender are one event to b, the notice is its own, the third member's snapshot is one each to a and b: got %d", n)
+	}
+	go engine.Start(ctx)
+	defer engine.Stop()
+	in.await(t, 3)
+	if st := in.got[0][0].Event().(core.SwarmStatus); st.Pending != 4 {
+		t.Fatalf("the frame that lands is the latest, got %d", st.Pending)
+	}
+}
