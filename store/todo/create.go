@@ -352,7 +352,7 @@ func cyclePath(f *folded, planned map[string]*taskState) []string {
 	return nil
 }
 
-const linkForms = " (a link is tN from a reply, a sibling's exact text, or its number in this list)"
+const linkForms = " (a link is a sibling's number in this list, 2 for the second; a task id from a reply, \"t12\"; or a sibling's exact text)"
 
 func linkFormsHint(problems []string) string {
 	for _, problem := range problems {

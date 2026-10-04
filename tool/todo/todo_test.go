@@ -278,7 +278,7 @@ func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 		t.Fatalf("schema: %v", err)
 	}
 	want := map[string]string{
-		"requires": "the task this one waits for: its id (tN), its exact text, or its number in this list, where 1 is the first. omit when none; null removes a link.",
+		"requires": "the task this one waits for: its number in this list (2 is the second), a task id from a reply (t12), or its exact text. omit when none; null removes a link.",
 		"blocks":   "the task that waits for this one, named the same way. omit when none; null removes a link.",
 	}
 	for key, wantDesc := range want {
@@ -990,5 +990,46 @@ func TestTodoUpdateRemovingARequiresLinkWakesTheRouter(t *testing.T) {
 	}
 	if strings.Contains(shown, "requires") {
 		t.Fatalf("the update must clear the link:\n%s", shown)
+	}
+}
+
+func TestANumberLinksASiblingByItsPosition(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "gate"},
+		map[string]any{"text": "work", "requires": 1},
+		map[string]any{"text": "ship", "requires": 2.0},
+	}})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if !strings.Contains(reply, "\u00b7 requires t1") || !strings.Contains(reply, "\u00b7 requires t2") {
+		t.Fatalf("a JSON number is the sibling's position:\n%s", reply)
+	}
+	_, err = exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "half", "requires": 1.5},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "1.5 is not a position") {
+		t.Fatalf("a fraction is not a position: %v", err)
+	}
+}
+
+func TestACreateThatCannotLinkShowsTheQueue(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "already here"}}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+		map[string]any{"text": "new", "requires": "}, 2"},
+	}})
+	if err == nil {
+		t.Fatal("an unresolvable link lands nothing")
+	}
+	for _, want := range []string{"requires '}, 2' not found", "2 for the second", "t1", "already here"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal teaches the forms and shows the queue, missing %q:\n%v", want, err)
+		}
 	}
 }

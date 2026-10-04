@@ -412,12 +412,18 @@ func TestPositionOutOfRangeRefusesTeachingTheLinkForms(t *testing.T) {
 	if err == nil {
 		t.Fatal("an out-of-range position linked")
 	}
-	for _, want := range []string{"requires '3' not found", "requires '0' not found", "a link is tN from a reply, a sibling's exact text, or its number in this list"} {
+	for _, want := range []string{"requires '3' not found", "requires '0' not found", "a link is a sibling's number in this list, 2 for the second; a task id from a reply, \"t12\"; or a sibling's exact text"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("missing %q in: %v", want, err)
 		}
 	}
-	if strings.Count(err.Error(), "a link is tN") != 1 {
+	if strings.Count(err.Error(), "a link is a sibling's number") != 1 {
+		t.Errorf("the link forms are taught once per refusal: %v", err)
+	}
+	if !strings.Contains(err.Error(), "\n") || !strings.Contains(err.Error(), "open") {
+		t.Errorf("the refusal shows the queue so the next call can link by id: %v", err)
+	}
+	if false {
 		t.Errorf("the link forms are taught once per refusal: %v", err)
 	}
 }

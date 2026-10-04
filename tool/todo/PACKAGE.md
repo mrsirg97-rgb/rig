@@ -44,7 +44,7 @@ plan in one queue.
   found` and then believed a link needed a second call. A link may name a
   sibling task's exact text in the same create: `resolveDep` runs over
   the batch, so one create of `{text: "gate"}` and `{text: "work",
-  requires: "gate"}` links t2 to t1. A bare number is the sibling's
+  requires: "gate"}` links t2 to t1. A bare number, as a JSON number or a string (2.11.9), is the sibling's
   1-based position in that create, tried last (2.1.9): a small model
   numbering its plan wrote `requires: "1"`, was refused, and fell back to
   one create per task. The `not found` refusal names the link forms once.
