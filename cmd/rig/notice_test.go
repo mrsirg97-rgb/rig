@@ -82,10 +82,12 @@ func TestTheReviewFireNamesNoModelAndFallsBackToTheSessionsOwn(t *testing.T) {
 	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
 	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
 		seen = in
-		return sched.DelegateResult{Model: "ox-alpha", Exit: 0, Stdout: "verdict: 1 approve\n"}, nil
+		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
 	}
+	fleet(r)
+	voice := r.room.Mint()
 	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
-	reply, model, err := fire(context.Background(), "review these")
+	model, err := fire(context.Background(), "review these", voice)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +97,17 @@ func TestTheReviewFireNamesNoModelAndFallsBackToTheSessionsOwn(t *testing.T) {
 	if seen.DefaultModel != "ox-alpha" {
 		t.Fatalf("the fallback = %q, want the session's active model", seen.DefaultModel)
 	}
-	if !seen.NoTools {
-		t.Fatal("the review fire runs with no tools")
+	if !seen.Bare || len(seen.Allow) != 1 || seen.Allow[0] != "verdict" {
+		t.Fatalf("the review fire is bare with the verdict tool alone, got bare=%v allow=%v", seen.Bare, seen.Allow)
 	}
-	if model != "ox-alpha" || reply != "verdict: 1 approve\n" {
-		t.Fatalf("fire returned %q %q, want the delegate's model and stdout", model, reply)
+	if seen.Member != voice {
+		t.Fatal("the fire's worker speaks as the voice the reviewer minted")
+	}
+	if model != "ox-alpha" {
+		t.Fatalf("fire returned %q, want the delegate's model", model)
 	}
 	r.activeID = "dsv4"
-	fire(context.Background(), "again")
+	fire(context.Background(), "again", voice)
 	if seen.DefaultModel != "dsv4" {
 		t.Fatalf("the fallback must follow the session's model at fire time, got %q", seen.DefaultModel)
 	}

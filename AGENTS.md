@@ -307,6 +307,10 @@ that is harder than writing a lot, and it is the bar.
 - `tool/todo`, `tool/rem`, `tool/scheduler`: thin adapters over their
   stores: session attribution and the store's shapes, verbatim. The rem
   tool's description carries the contract sentence (rem is deliberate).
+- `tool/verdict`: the reviewer's one word (2.11.0): registered only in a
+  worker that holds a fleet pipe, its call crosses as `core.Verdict`
+  published as the worker's member; the swarm reviewer and the decision
+  bite read it from the room, and nothing scrapes stdout for it.
 - `tool/delegate`: the one-shot worker tool (SPEC_DELEGATE): spawn a
   headless worker on a task now, wait, and feed back its last message;
   a recorded run in the cwd-scope scheduler store, a resumable
@@ -314,7 +318,7 @@ that is harder than writing a lot, and it is the bar.
   status snapshot for an interactive delegate.
 - `swarm`: the drain-worker controller (SPEC_SWARM): the router and the
   settle as closures on the loop at the fleet's priority, the worker
-  goroutines waiting on the world, the reviewer verdict protocol; the
+  goroutines waiting on the world, the reviewer's verdict as a message; the
   supervisor is a member of the session's `broadcast` room and says
   everything there as `Notice` with source `swarm` and `SwarmStatus`
   snapshots; the dead claim is released via the todo store's Reap door.

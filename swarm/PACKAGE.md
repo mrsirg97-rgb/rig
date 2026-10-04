@@ -36,8 +36,9 @@ everything the supervisor says is a `broadcast` message.
   life) and one goroutine, because the spawn waits on the world: build
   the brief from `todo.Task`, spawn a one-shot `rig -p` through the
   delegate seam, finish the task itself (workers `complete` in worker
-  mode, reviewers parse the worker's last `verdict:` line and
-  `accept`/`reject`), then post the settle to the loop and wait for it.
+  mode, reviewers take the `core.Verdict` the worker's `verdict` tool
+  sent through the pipe and `accept`/`reject`), then post the settle to
+  the loop and wait for it. A reviewer's allow list gains `verdict`.
   Each worker is a room member by its id and the spawn carries that
   member (`DelegateInput.Member`): the child heartbeats on the fleet
   pipe and `Delegate` publishes each frame as the worker, so the

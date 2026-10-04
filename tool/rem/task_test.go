@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/evt"
@@ -354,19 +357,24 @@ func TestTheReviewerDeniesAPackRowWithTheCorrectedAnswer(t *testing.T) {
 	if _, err := packExec(t, tool, root, packTask, nil); err != nil {
 		t.Fatalf("pack: %v", err)
 	}
-	fire := func(ctx context.Context, prompt string) (string, string, error) {
-		var lines []string
+	fire := func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
 		for _, block := range strings.Split(prompt, "\n== ")[1:] {
-			id := block[:strings.Index(block, " ")]
+			id, _ := strconv.ParseInt(block[:strings.Index(block, " ")], 10, 64)
+			v := core.Verdict{Row: id, Accept: true}
 			if strings.Contains(block, "func Call()") {
-				lines = append(lines, "verdict: "+id+" deny yes")
-				continue
+				v = core.Verdict{Row: id, Accept: false, Reason: "yes"}
 			}
-			lines = append(lines, "verdict: "+id+" approve")
+			voice.Publish(ctx, func(error) {}, broadcast.NewMessage(voice.Id(), true, v))
 		}
-		return strings.Join(lines, "\n"), "rev", nil
+		return "rev", nil
 	}
-	rev := decision.NewReviewer(context.Background(), evt.NewEngine(), packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, nil)
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
+	})
+	rev := decision.NewReviewer(context.Background(), engine, packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room)
 	if _, err := rev.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}

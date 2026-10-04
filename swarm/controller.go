@@ -30,10 +30,8 @@ const (
 
 	SupervisorID int64 = 0
 
-	maxVerdictReason = todostore.MaxNoteLen
-
 	briefBoard  = "\nThe supervisor owns this board entry: the claim is the supervisor's, so findings go in the task's note (todo note) and in rem; do not create tasks, and do not start, complete, or fail the board's tasks.\n"
-	briefReview = "\nReview the work now: read the diff and the task's notes; then decide. End your reply with exactly one verdict line as the last line: 'verdict: accept' or 'verdict: reject <reason>'.\n"
+	briefReview = "\nReview the work now: read the diff and the task's notes; then decide, and deliver it with the verdict tool: accept, or reject with the reason the author needs.\n"
 	briefWork   = "\nDo the task now in this cwd. Report back: when you finish, persist durable findings with the rem tool (project scope: this cwd) and end your reply with a short summary of what you did.\n"
 )
 
@@ -114,6 +112,7 @@ type worker struct {
 	state     string
 	tasks     chan string
 	member    broadcast.Member
+	verdict   *core.Verdict
 }
 
 func New(o Opts) *Controller {
@@ -145,12 +144,15 @@ func (c *Controller) receive(err error, messages ...broadcast.Message) {
 		return
 	}
 	for _, m := range messages {
-		if m.Event() != nil {
-			continue
-		}
 		for _, w := range c.workers {
-			if int64(w.id) == m.Origin() {
+			if int64(w.id) != m.Origin() {
+				continue
+			}
+			switch ev := m.Event().(type) {
+			case nil:
 				w.heartbeat = time.Now()
+			case core.Verdict:
+				w.verdict = &ev
 			}
 		}
 	}

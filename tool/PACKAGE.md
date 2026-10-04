@@ -33,7 +33,9 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
 ## How it is consumed
 
 - Each tool package embeds `tool.Definition` in its tool type and writes
-  only `Exec`; the two with live text wrap theirs with `Fill`. `plugin`
+  only `Exec`; the two with live text wrap theirs with `Fill`; `verdict`
+  and `decide` are conditional natives, registered only when their door
+  exists (a fleet pipe, a decision server). `plugin`
   implements `Schema()` itself to add the live name enum to the
   registry's schema: the embedded interface supplies the rest.
 - `cmd/rig` derives the native tool list from `Names()`, so flipping

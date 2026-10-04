@@ -51,10 +51,12 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   loop, `Drain` the pass — the pending rows oldest first, up to what the
   reviewer's model row leaves for a prompt (the window minus its
   reserve, at four bytes to the token; a row that cannot fit alone
-  still goes), one fire through the `Fire` seam, one verdict line per
-  row parsed like the swarm reviewer's (`verdict: <id> approve` or
-  `verdict: <id> deny <corrected answer>`), last naming wins, a deny
-  without a correction is not a verdict, unnamed rows stay pending. A
+  still goes), one fire through the `Fire` seam, which takes the minted
+  member the fire's worker speaks as; the worker's `verdict` tool calls
+  arrive as `core.Verdict` messages on the reviewer's member and settle
+  on the loop after the fire ends, last naming wins, a reject without a
+  correction is not a verdict, unnamed rows stay pending. The reviewer
+  takes the room in its constructor (2.11.0); nothing parses stdout. A
   fire that settled something and left pending rows leaves the reviewer
   dirty, so the next turn end takes the rest; a fire that settled
   nothing waits for the next landing.

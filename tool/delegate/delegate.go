@@ -45,6 +45,7 @@ type Opts struct {
 }
 
 type workerState struct {
+	n         int
 	task      string
 	heartbeat time.Time
 	state     string
@@ -171,13 +172,13 @@ func (a *adapter) begin(task string) broadcast.Member {
 	if a.member == nil {
 		return nil
 	}
+	member := a.Room.Mint()
 	a.mu.Lock()
 	a.seq++
-	id := rig.MemberMinted - a.seq
-	a.workers[id] = workerState{task: firstLine(task), heartbeat: time.Now(), state: "running"}
+	a.workers[member.Id()] = workerState{n: int(a.seq), task: firstLine(task), heartbeat: time.Now(), state: "running"}
 	a.mu.Unlock()
 	a.emit()
-	return a.Room.Add(id)
+	return member
 }
 
 func (a *adapter) end(member broadcast.Member) {
@@ -216,8 +217,8 @@ func (a *adapter) emit() {
 func (a *adapter) snapshot() core.SwarmStatus {
 	a.mu.Lock()
 	ws := make([]core.SwarmWorker, 0, len(a.workers))
-	for id, w := range a.workers {
-		ws = append(ws, core.SwarmWorker{ID: int(rig.MemberMinted - id), Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
+	for _, w := range a.workers {
+		ws = append(ws, core.SwarmWorker{ID: w.n, Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
 	}
 	a.mu.Unlock()
 	sort.Slice(ws, func(i, j int) bool { return ws[i].ID < ws[j].ID })

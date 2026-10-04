@@ -35,7 +35,7 @@ type DelegateInput struct {
 	RigHome       string
 	StateDir      string
 	Allow         []string
-	NoTools       bool
+	Bare          bool
 	LandlockABI   func() (int, error)
 	Now           func() time.Time
 	DefaultModel  string
@@ -175,9 +175,11 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	}
 	prompt := in.Task + ReportBack
 	allow := joinAllow(in.Allow)
-	if in.NoTools {
+	if in.Bare {
 		prompt = in.Task
-		allow = NoToolsAllow
+		if allow == "" {
+			allow = NoToolsAllow
+		}
 	}
 
 	profile, err := SandboxProfile(in.Sandbox)

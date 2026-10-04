@@ -61,6 +61,7 @@ func TestFreezeGate(t *testing.T) {
 			p == "tool/scheduler" || strings.HasPrefix(p, "tool/scheduler/") ||
 
 			p == "tool/delegate" || strings.HasPrefix(p, "tool/delegate/") ||
+			p == "tool/verdict" || strings.HasPrefix(p, "tool/verdict/") ||
 			p == "swarm" || strings.HasPrefix(p, "swarm/") ||
 
 			p == "middleware/perm" || strings.HasPrefix(p, "middleware/perm/") ||

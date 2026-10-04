@@ -379,3 +379,42 @@ func TestPipeTransportClosesOnAFrameItCannotDecode(t *testing.T) {
 		t.Fatal("the read end is closed after a bad frame, so the write fails")
 	}
 }
+
+func TestMintIssuesIdsBelowEveryMemberAndNeverReissues(t *testing.T) {
+	engine := evt.NewEngine()
+	room := broadcast.NewRoom("fleet", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	room.Add(-1)
+	room.Add(-4)
+	room.Add(3)
+	first := room.Mint()
+	if first.Id() != -5 {
+		t.Fatalf("the first minted id is below the lowest named one, got %d", first.Id())
+	}
+	first.Leave()
+	second := room.Mint()
+	if second.Id() != -6 {
+		t.Fatalf("a left member's id is never reissued, got %d", second.Id())
+	}
+	room.Add(-9)
+	if third := room.Mint(); third.Id() != -10 {
+		t.Fatalf("a named member below the floor moves it, got %d", third.Id())
+	}
+}
+
+func TestAVerdictCrossesTheEncoder(t *testing.T) {
+	enc := broadcast.NewJSONEncoder()
+	raw, err := enc.Encode(broadcast.NewMessage(-7, true, core.Verdict{Row: 12, Accept: false, Reason: "changes"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := enc.Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, ok := back.Event().(core.Verdict)
+	if !ok || v.Row != 12 || v.Accept || v.Reason != "changes" || back.Origin() != -7 {
+		t.Fatalf("round trip = %+v from %s", back.Event(), raw)
+	}
+}

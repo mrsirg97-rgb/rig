@@ -170,17 +170,22 @@ send — the exit code alone cannot name it). A spawned worker's process
 group also carries `Pdeathsig`, so a runner that dies hard does not
 leave the worker running orphaned.
 
-### 3. The reviewer verdict is a protocol line
+### 3. The reviewer verdict is a message
 
-A reviewer drain worker's brief ends with a directive naming the verdict
-shape: the worker's last line must be `verdict: accept`, or
-`verdict: reject <reason>` (the reason rides the reject note, bounded by
-`MaxNoteLen`). The drain worker takes the last line with the `verdict:`
-prefix; a worker that returns no verdict is treated as a dead worker
-(release, retry once; a second no-verdict rejects with
-`reviewer gave no verdict`). The verdict line is the one contract between
-the swarm and its reviewer worker, and the task text and notes are in the
-brief so the reviewer needs no queue parse. The rejections are capped per
+Through 2.10.x the verdict was a protocol line, `verdict: accept` or
+`verdict: reject <reason>`, the last line of the worker's stdout, parsed
+by the drain worker. Since 2.11.0 it is a message: the reviewer worker
+runs with the `verdict` tool (the one tool added to its allow list), its
+call crosses the fleet pipe as `core.Verdict` published as the worker's
+member, and the supervisor stamps it on the worker on the loop; the drain
+worker reads it after the spawn ends. A reject's reason rides the reject
+note, bounded by `MaxNoteLen`; a reject without a reason is refused by
+the tool before it crosses, so the model fixes it instead of dying. A
+worker that ends without a verdict is treated as a dead worker (release,
+retry once; a second no-verdict rejects with `reviewer gave no verdict`).
+The verdict message is the one contract between the swarm and its
+reviewer worker, and the task text and notes are in the brief so the
+reviewer needs no queue parse. The rejections are capped per
 task: the controller counts every reject door (the verdict reject, the
 no-verdict fallback, the died fallback) and a third rejection fails the
 task with a note (`rejected twice — the swarm failed it`) instead of

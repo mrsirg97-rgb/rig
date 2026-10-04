@@ -167,6 +167,7 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 	if f.onCall != nil {
 		f.onCall(ctx)
 	}
+	speakVerdict(ctx, result.Stdout)
 	if f.block != nil {
 		select {
 		case <-f.block:
@@ -174,6 +175,22 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 		}
 	}
 	return result, f.err
+}
+
+func speakVerdict(ctx context.Context, stdout string) {
+	for _, line := range strings.Split(stdout, "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "verdict:")
+		if !ok {
+			continue
+		}
+		id, w, ok := sched.FleetFrom(ctx)
+		if !ok {
+			panic("the spawn context carries no fleet pipe")
+		}
+		kind, reason, _ := strings.Cut(strings.TrimSpace(rest), " ")
+		v := core.Verdict{Accept: kind == "accept", Reason: reason}
+		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder()).Send(ctx, func(error) {}, broadcast.NewMessage(id, true, v))
+	}
 }
 
 func beat(ctx context.Context, n int) {

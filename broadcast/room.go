@@ -17,10 +17,12 @@ Room
 	each member can publish messages to the entire group or forward messages to individual users.
 	a broadcast fans out to every other member and collects one ack per member; the error names the members that did not take it.
 	the room is built with the transport its members speak through, so the room never names one.
+	a member that needs no name is minted: the room issues the id below every id it has ever seen, so a minted id never collides.
 */
 type Room interface {
 	Id() string
 	Add(origin int64) Member
+	Mint() Member
 	Remove(origin int64) bool
 	Members() []int64
 	Broadcast(ctx context.Context, origin int64, messages ...Message) error
@@ -31,6 +33,7 @@ type room struct {
 	transport func(origin int64) Transport
 	mu        sync.Mutex
 	registry  map[int64]Member
+	floor     int64
 }
 
 func NewRoom(id string, transport func(origin int64) Transport) Room {
@@ -44,10 +47,23 @@ func (r *room) Id() string {
 func (r *room) Add(origin int64) Member {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.add(origin)
+}
+
+func (r *room) add(origin int64) Member {
+	if origin < r.floor {
+		r.floor = origin
+	}
 	if _, ok := r.registry[origin]; !ok {
 		r.registry[origin] = NewMember(r, r.transport(origin))
 	}
 	return r.registry[origin]
+}
+
+func (r *room) Mint() Member {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.add(r.floor - 1)
 }
 
 func (r *room) Remove(origin int64) bool {

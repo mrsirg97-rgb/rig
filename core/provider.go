@@ -27,6 +27,7 @@ var (
 	_ Event = Compacted{}
 	_ Event = SwarmStatus{}
 	_ Event = Notice{}
+	_ Event = Verdict{}
 )
 
 type TextDelta struct{ Text string }
@@ -142,6 +143,14 @@ type Notice struct {
 }
 
 func (Notice) event() {}
+
+type Verdict struct {
+	Row    int64
+	Accept bool
+	Reason string
+}
+
+func (Verdict) event() {}
 
 type Provider interface {
 	Stream(ctx context.Context, req Request) (<-chan Event, error)

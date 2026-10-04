@@ -41,7 +41,6 @@ const (
 	MemberDelegate int64 = -2
 	MemberGraph    int64 = -3
 	MemberDecision int64 = -4
-	MemberMinted   int64 = -5
 )
 
 type Option func(*Kernel)

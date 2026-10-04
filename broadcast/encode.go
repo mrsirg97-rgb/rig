@@ -65,6 +65,7 @@ func (e *encoder) Decode(encoded []byte) (Message, error) {
 const (
 	kindNotice      = "notice"
 	kindSwarmStatus = "swarm_status"
+	kindVerdict     = "verdict"
 )
 
 func kindOf(ev core.Event) (string, bool) {
@@ -73,6 +74,8 @@ func kindOf(ev core.Event) (string, bool) {
 		return kindNotice, true
 	case core.SwarmStatus:
 		return kindSwarmStatus, true
+	case core.Verdict:
+		return kindVerdict, true
 	}
 	return "", false
 }
@@ -84,6 +87,9 @@ func eventOf(kind string, payload json.RawMessage) (core.Event, error) {
 		return ev, json.Unmarshal(payload, &ev)
 	case kindSwarmStatus:
 		var ev core.SwarmStatus
+		return ev, json.Unmarshal(payload, &ev)
+	case kindVerdict:
+		var ev core.Verdict
 		return ev, json.Unmarshal(payload, &ev)
 	}
 	return nil, fmt.Errorf("broadcast: unknown kind %q", kind)

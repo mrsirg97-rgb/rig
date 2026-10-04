@@ -147,10 +147,10 @@ start, naming the key.
 
 Two ceilings stay underneath the batch, never above it:
 
-- The reply. The fire answers with one verdict line per row, so the rows
-per fire are bounded by the reviewer row's max output tokens over a
-verdict line's token cost — the cost derived from the contract's own
-verdict templates at their worst (a full-width id, a correction at the
+- The reply. The fire answers with one `verdict` tool call per row, so
+the rows per fire are bounded by the reviewer row's max output tokens
+over a verdict call's token cost — the cost derived from the call's own
+arguments at their worst (a full-width id, a correction at the
 1,024-byte cap), never a constant.
 - The window minus its reserve, at four bytes to the token. A row that
 cannot fit alone still goes, so one huge row cannot wedge the queue.
@@ -179,17 +179,17 @@ operator's box 262 pending bash rows made a 176 KB prompt, over Linux's
 128 KiB cap on one argument, and every fire died with `argument list
 too long` until the carrier moved.
 
-It replies with one verdict line per row, parsed like the swarm
-reviewer's:
-
-    verdict: <id> approve
-    verdict: <id> deny <corrected answer>
-
-Lines scan in reply order, last naming wins, an unnamed or malformed row
-stays pending, a deny without a correction is not a verdict. A drain
-reports what it fired, what settled, and what stays pending; the row's
-reviewer name is the model that reviewed: the one the fire resolved to,
-carried back on the delegate's result.
+It answers with the `verdict` tool, one call per row naming the row
+(2.11.0; through 2.10.x it was one `verdict: <id> approve|deny <answer>`
+line per row scraped from stdout). Each call crosses the fleet pipe as
+`core.Verdict` published as the fire's minted member; the reviewer hears
+them on its `rig.MemberDecision` member on the loop and settles after the
+fire ends. Last naming wins, an unnamed row stays pending, a reject
+without a correction is not a verdict (the tool refuses it before it
+crosses). A drain reports what it fired, what settled, and what stays
+pending; the row's reviewer name is the model that reviewed: the one the
+fire resolved to, carried back on the delegate's result. The fire runs
+bare: no report-back brief, and the verdict tool as its only tool.
 
 Nothing the queue or the reviewer has to say reaches stderr while a
 frontend owns the screen: a dropped proposal, a decide error, a store

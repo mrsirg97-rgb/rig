@@ -99,8 +99,8 @@ func TestDelegateEmitsSwarmStatus(t *testing.T) {
 	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"task":"sweep the floor"}`)); err != nil {
 		t.Fatalf("exec: %v", err)
 	}
-	if n := len(engine.Pending()); n != 3 {
-		t.Fatalf("before the loop runs: the claim and the exit are one pending frame, the thirty heartbeats one per listener (the frontend, the tool), got %d", n)
+	if n := len(engine.Pending()); n != 4 {
+		t.Fatalf("before the loop runs: the claim and the exit are one pending frame per other member (the frontend, the minted worker), the thirty heartbeats one per listener (the frontend, the tool), got %d", n)
 	}
 	go engine.Start(context.Background())
 	defer engine.Stop()

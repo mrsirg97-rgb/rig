@@ -91,8 +91,8 @@ is a loud line naming the known set, never silently a prompt.
   a worker finishing); each claims a task,
   spawns a one-shot `rig -p` through the delegate path (jail, socket
   proxy, recorded run), and finishes it itself: workers submit for
-  review, reviewers parse the worker's last `verdict: accept|reject
-  <reason>` line and call `accept`/`reject`. A worker on a hosted row
+  review, reviewers take the verdict the worker delivered with the
+  `verdict` tool and call `accept`/`reject`. A worker on a hosted row
   skips the local swap and the gate entirely. The drain pair is wired
   only where a second request can run — the session's model row is
   remote, or the resident server reports more than one slot, one live

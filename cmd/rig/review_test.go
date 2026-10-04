@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -54,20 +56,20 @@ type biteFire struct {
 	prompts []string
 }
 
-func (f *biteFire) fire(ctx context.Context, prompt string) (string, string, error) {
+func (f *biteFire) fire(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
 	f.mu.Lock()
 	f.prompts = append(f.prompts, prompt)
 	f.mu.Unlock()
-	var b strings.Builder
 	for i, seg := range strings.Split(prompt, "\n== ") {
 		if i == 0 {
 			continue
 		}
 		if id, _, ok := strings.Cut(seg, " "); ok {
-			b.WriteString("verdict: " + id + " approve\n")
+			row, _ := strconv.ParseInt(id, 10, 64)
+			voice.Publish(context.Background(), func(error) {}, broadcast.NewMessage(voice.Id(), true, core.Verdict{Row: row, Accept: true}))
 		}
 	}
-	return b.String(), "local", nil
+	return "local", nil
 }
 
 func (f *biteFire) calls() int {
@@ -96,7 +98,7 @@ func TestATurnEndFiresOneBiteAndTheNextTakesTheRest(t *testing.T) {
 	go r.engine.Start(context.Background())
 	defer r.engine.Stop()
 	r.decRev = decision.NewReviewer(context.Background(), r.engine, &dbReviews{db: decDB}, f.fire, 10,
-		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, nil)
+		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, r.room)
 	r.decQ = decision.NewQueue(&countingDecider{answers: []decision.Answer{{
 		Question: "risk", Value: "safe", Confidence: 0.71, Decider: "laya",
 	}}}, &dbSink{db: decDB}, r.decRev.Land, nil)
@@ -137,8 +139,9 @@ func TestTheReviewFireNamesTheDeathAndTheRunLog(t *testing.T) {
 			LogRel: filepath.Join("runs", "j31", "2026-08-15T12-00-00-000Z.log"),
 		}, nil
 	}
+	fleet(r)
 	fire := r.reviewFire(home, store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
-	_, _, err := fire(context.Background(), "review these")
+	_, err := fire(context.Background(), "review these", r.room.Mint())
 	if err == nil {
 		t.Fatal("a dead fire is an error")
 	}
@@ -153,17 +156,18 @@ func TestTheReviewFireNamesTheDeathAndTheRunLog(t *testing.T) {
 	}
 }
 
-func TestAHealthyReviewFireReturnsTheReply(t *testing.T) {
+func TestAHealthyReviewFireReturnsTheModel(t *testing.T) {
 	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
 	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
-		return sched.DelegateResult{Model: "ox-alpha", Exit: 0, Stdout: "verdict: 1 approve\n"}, nil
+		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
 	}
+	fleet(r)
 	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
-	reply, model, err := fire(context.Background(), "review these")
+	model, err := fire(context.Background(), "review these", r.room.Mint())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reply != "verdict: 1 approve\n" || model != "ox-alpha" {
-		t.Fatalf("fire = %q %q", reply, model)
+	if model != "ox-alpha" {
+		t.Fatalf("fire = %q", model)
 	}
 }

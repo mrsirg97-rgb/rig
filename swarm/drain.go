@@ -48,7 +48,7 @@ type workResult struct {
 }
 
 func (c *Controller) work(w *worker, id string) workResult {
-	c.call(func() { w.heartbeat = time.Time{}; c.refresh() })
+	c.call(func() { w.heartbeat, w.verdict = time.Time{}, nil; c.refresh() })
 	task, err := todostore.Task(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 	if err != nil {
 		c.loud(w, "w%d: task %s: %v", w.id, id, err)
@@ -73,7 +73,7 @@ func (c *Controller) work(w *worker, id string) workResult {
 		SandboxBinds:  c.opts.SandboxBinds,
 		RigHome:       c.opts.RigHome,
 		StateDir:      c.opts.StateDir,
-		Allow:         c.opts.Allow,
+		Allow:         c.allow(w),
 		SpawnCtx:      w.ctx,
 		Member:        w.member,
 	})
@@ -91,26 +91,38 @@ func (c *Controller) work(w *worker, id string) workResult {
 		return workResult{}
 	}
 	if w.role == RoleReviewer {
-		v := parseVerdict(res.Stdout)
-		switch v.kind {
-		case "accept":
+		var v *core.Verdict
+		c.call(func() { v, w.verdict = w.verdict, nil })
+		switch {
+		case v == nil || (!v.Accept && v.Reason == ""):
+			return workResult{noVerdict: true}
+		case v.Accept:
 			_, err := todostore.Accept(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 			if err != nil {
 				c.loud(w, "w%d: accept %s: %v", w.id, id, err)
 			}
 			return workResult{ok: err == nil}
-		case "reject":
-			var ok bool
-			c.call(func() { ok = c.rejectTask(w, id, v.reason) == nil })
-			return workResult{ok: ok}
 		}
-		return workResult{noVerdict: true}
+		reason := v.Reason
+		if len(reason) > todostore.MaxNoteLen {
+			reason = reason[:todostore.MaxNoteLen]
+		}
+		var ok bool
+		c.call(func() { ok = c.rejectTask(w, id, reason) == nil })
+		return workResult{ok: ok}
 	}
 	_, err = todostore.Complete(w.ctx, c.opts.TodoDB, w.proj, id, w.identity, true)
 	if err != nil {
 		c.loud(w, "w%d: complete %s: %v", w.id, id, err)
 	}
 	return workResult{ok: err == nil}
+}
+
+func (c *Controller) allow(w *worker) []string {
+	if w.role != RoleReviewer {
+		return c.opts.Allow
+	}
+	return append(append([]string{}, c.opts.Allow...), "verdict")
 }
 
 func (c *Controller) delegate(in sched.DelegateInput) (sched.DelegateResult, error) {

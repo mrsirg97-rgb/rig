@@ -100,10 +100,29 @@ source is on the event now. The run-job process opens the same room
 for its recorder's one rare line. The web client renders every
 `notice` in its feed, where before it showed only the swarm's.
 
+The verdict is a message (the seventh commit). A reviewer used to end
+its reply with a line the parent scraped, `verdict: accept` for the
+swarm, `verdict: <id> approve|deny` for the decision bite: two parsers,
+two vocabularies, and a line written slightly wrong counted as a dead
+worker. Now the worker calls a tool. `tool/verdict` is registered only
+in a process that holds a fleet pipe; its call crosses as `core.Verdict`
+published as the worker's member, the swarm supervisor stamps it on the
+worker and the decision reviewer keys it by row, both on the loop, and
+a reject without a reason is refused before it crosses, so the model
+fixes it instead of dying. The decision bite still runs bare (no
+report-back) with `verdict` as its only tool, and its reply ceiling is
+derived from the call's arguments at their worst instead of the old
+contract's lines. The room mints an id for a member that needs no name
+(`Room.Mint`, below every id it has seen), which the delegate tool's
+workers and the bite's fire use, so `MemberMinted` goes. Gone: both
+parsers, the `verdict:` sentences in the briefs, `DelegateInput.NoTools`
+(now `Bare`: no brief, and only the named tools), and the reviewer's
+`Fire` returning stdout.
+
 The first commit is the package and its tests; the second the engine;
 the third the swarm; the fourth the reviewer and the delegate tool; the
-fifth the pipe; the sixth the one notice. What remains in this release:
-the verdict crosses the pipe as a message and the stdout scrape leaves.
+fifth the pipe; the sixth the one notice; the seventh the verdict. The
+stdout scrape is gone from the tree.
 
 ## [2.10.2]: claim says what claim does
 

@@ -45,6 +45,7 @@ import (
 	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
 	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
 	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
+	verdicttool "github.com/mrsirg97-rgb/rig/v2/tool/verdict"
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
@@ -277,6 +278,14 @@ func main() {
 	if decisionURL != "" {
 		native["decide"] = true
 	}
+	fleet, err := sched.Fleet()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	if fleet != nil {
+		native["verdict"] = true
+	}
 	pluginReports := make([]plugins.Report, 0)
 	if len(pluginFiles) > 0 {
 		pluginReports, err = plugins.DiscoverChecked(context.Background(), py, pluginFiles, native)
@@ -450,6 +459,9 @@ func main() {
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
+	if fleet != nil {
+		r.tools["verdict"] = verdicttool.New(fleet)
+	}
 	r.listen()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -537,11 +549,6 @@ func main() {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
 		}
-		fleet, ferr := sched.Fleet()
-		if ferr != nil {
-			fmt.Fprintln(os.Stderr, "rig:", ferr)
-			os.Exit(1)
-		}
 		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout, Err: os.Stderr, Fleet: fleet}
 	} else if *tuiMode == "true" || (*tuiMode == "auto" && tui.IsTerminal(os.Stdout.Fd())) {
 		th, terr := tui.ResolveTheme(cfg.Settings.Theme, cfg.Theme, tuiTrueColor())
@@ -585,7 +592,7 @@ func main() {
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, &dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				cfg.Settings.ReviewBatchOrDefault(), row, voice)
+				cfg.Settings.ReviewBatchOrDefault(), row, room)
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, rev.Land, voice)
 		}

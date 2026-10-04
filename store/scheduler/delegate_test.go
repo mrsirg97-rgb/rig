@@ -226,10 +226,10 @@ func TestDelegateDefaultsAreUnchanged(t *testing.T) {
 	}
 }
 
-func TestANoToolsFireRunsAllowNoneAndNoReportBack(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "verdict: 1 approve\n"}}
+func TestABareFireWithNoAllowRunsAllowNoneAndNoReportBack(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
-	in.NoTools = true
+	in.Bare = true
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestADelegateFireNamesItsDeathAndItsLog(t *testing.T) {
 		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
 		SwapURL: "http://127.0.0.1:8090",
 		RigHome: h.rigHome, StateDir: filepath.Join(h.rigHome, "sessions"),
-		NoTools: true, Sandbox: "off",
+		Bare: true, Sandbox: "off",
 		Models: modelTable(t, "qwen3.8-27b-workers"),
 	})
 	if err != nil {
