@@ -72,15 +72,19 @@ is not a decision), and a decider error drops it loudly.
 
 The store answers before the model. The proposed state carries the
 normalized command — one leading `cd <path> &&` (or `;`) stripped, once,
-only when a path precedes it, runs of whitespace collapsed, ends trimmed —
-so twins of one command share a state. Before the decider is called, the
-queue asks the store what is settled: the most recent approved or denied
-row for the same site, question id and state answers a twin, which lands a
-final row (the store's answer, confidence 1, decider `reviewed`) and
-proposes nothing — a question whose answer is already settled is never
-asked again, and a denied row's answer is its correction. A store error on
-the read falls through to the proposer: the read fails open, the queue
-never blocks.
+and only when the path it names is the workspace the call named or under
+it, a relative path resolved against the working directory, runs of
+whitespace collapsed, ends trimmed — so twins of one command share a
+state while a `cd` that leaves the workspace stays in the state: the risk
+answer is workspace-relative by its own words, and stripping any `cd`
+would twin `cd ~/Projects/rig && rm -rf build` with `cd /etc && rm -rf
+build`. Before the decider is called, the queue asks the store what is
+settled: the most recent approved or denied row for the same site,
+question id and state answers a twin, which lands a final row (the
+store's answer, confidence 1, decider `reviewed`) and proposes nothing —
+a question whose answer is already settled is never asked again, and a
+denied row's answer is its correction. A store error on the read falls
+through to the proposer: the read fails open, the queue never blocks.
 
 ### the pack site (2.10.0)
 

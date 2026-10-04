@@ -40,7 +40,7 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		paths.Middleware(r.drec),
 	)
 	if r.proposals != nil {
-		mw = append(mw, decision.Site(r.proposals))
+		mw = append(mw, decision.Site(r.proposals, r.cwd))
 	}
 	if r.decide != nil {
 		mw = append(mw, remapi.Guide())

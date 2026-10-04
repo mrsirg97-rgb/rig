@@ -3,6 +3,7 @@ package decision_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestABashCallProposesPendingAndTheReplyIsUnchanged(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "total 0\n", nil
 	}
-	site := decision.Site(q).Wrap(exec)
+	site := decision.Site(q, "").Wrap(exec)
 	got, err := site(core.WithSession(context.Background(), &core.Session{ID: "s1"}), core.ToolCall{
 		ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"rm -rf /tmp/x"}`),
 	})
@@ -64,7 +65,7 @@ func TestOnlyBashProposes(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "read", nil
 	}
-	site := decision.Site(q).Wrap(exec)
+	site := decision.Site(q, "").Wrap(exec)
 	if _, err := site(context.Background(), core.ToolCall{ID: "c1", Name: "read", Args: json.RawMessage(`{"path":"a"}`)}); err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +82,7 @@ func TestAProposalCarriesTheNormalizedCommand(t *testing.T) {
 	var dec fakeDecider
 	dec.answers = []decision.Answer{{Question: "risk", Value: "safe", Confidence: 0.5, Decider: "laya"}}
 	q := decision.NewQueue(&dec, sink, storeSettled{db: db}, decisionstore.Recorder{DB: db, Scope: "proj"}, func() {}, nil)
+	workspace := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go q.Run(ctx)
@@ -88,30 +90,43 @@ func TestAProposalCarriesTheNormalizedCommand(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "total 0\n", nil
 	}
-	site := decision.Site(q).Wrap(exec)
-	if _, err := site(context.Background(), core.ToolCall{
-		ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"cd  /tmp  &&  rm  -rf  x"}`),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	<-sink.written
-
-	rows, err := decisionstore.Pending(context.Background(), db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("one pending proposal, got %d", len(rows))
-	}
-	var state struct {
-		Command   string `json:"command"`
-		Workspace string `json:"workspace"`
-	}
-	if err := json.Unmarshal([]byte(rows[0].State), &state); err != nil {
-		t.Fatal(err)
-	}
-	if state.Command != "rm -rf x" {
-		t.Fatalf("the state carries the normalized command: %q", state.Command)
+	site := decision.Site(q, workspace).Wrap(exec)
+	for _, c := range []struct{ name, command, want string }{
+		{"cd into the workspace", "cd " + workspace + " && rm -rf x", "rm -rf x"},
+		{"cd relative to the workspace", `cd  sub  &&  rm  -rf  y`, "rm -rf y"},
+		{"cd outside the workspace stays", "cd /etc && rm -rf z", "cd /etc && rm -rf z"},
+	} {
+		if _, err := site(context.Background(), core.ToolCall{
+			ID: "c1", Name: "bash", Args: json.RawMessage(fmt.Sprintf(`{"command":%q,"workspace":%q}`, c.command, workspace)),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		<-sink.written
+		rows, err := decisionstore.Pending(context.Background(), db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("%s: one pending proposal, got %d", c.name, len(rows))
+		}
+		var state struct {
+			Command   string `json:"command"`
+			Workspace string `json:"workspace"`
+		}
+		if err := json.Unmarshal([]byte(rows[0].State), &state); err != nil {
+			t.Fatal(err)
+		}
+		if state.Command != c.want {
+			t.Fatalf("%s: the state carries %q, want %q", c.name, state.Command, c.want)
+		}
+		if state.Workspace != workspace {
+			t.Fatalf("%s: the state names the workspace: %q", c.name, state.Workspace)
+		}
+		if err := decisionstore.Settle(context.Background(), db, decisionstore.SettleInput{
+			ID: rows[0].ID, Approved: true, Reviewer: "reviewer",
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -123,7 +138,7 @@ func TestTheProposerNeverBlocksTheCall(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	site := decision.Site(q).Wrap(exec)
+	site := decision.Site(q, "").Wrap(exec)
 	got, err := site(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)})
 	if err != nil || got != "ran" {
 		t.Fatalf("the call never waits on the proposal: (%q, %v)", got, err)

@@ -11,16 +11,20 @@ already on file was asked again, because nothing looked before the
 model did.
 
 Two rules close it. The proposed state carries the normalized command —
-one leading `cd <path> &&` (or `;`) stripped, once, only when a path
-precedes it, runs of whitespace collapsed, ends trimmed — so twins of
-one command share a state. And before the decider is called, the queue
-asks the store what is settled: the most recent approved or denied row
-for the same site, question id and state answers a twin, which lands a
-final row (the store's answer, confidence 1, decider `reviewed`) and
-proposes nothing — the model is never asked a question the store has
-already answered, and a denied row's answer is its correction. A store
-error on the read falls through to the proposer: the read fails open
-and the queue never blocks.
+one leading `cd <path> &&` (or `;`) stripped, once, and only when the
+path it names is the workspace the call named or under it, runs of
+whitespace collapsed, ends trimmed — so twins of one command share a
+state while a `cd` that leaves the workspace stays in the state: the
+risk answer is workspace-relative by its own words, and `cd
+~/Projects/rig && rm -rf build` must not twin with `cd /etc && rm -rf
+build`. And before the decider is called, the queue asks the store what
+is settled: the most recent approved or denied row for the same site,
+question id and state answers a twin, which lands a final row (the
+store's answer, confidence 1, decider `reviewed`) and proposes nothing
+— the model is never asked a question the store has already answered,
+and a denied row's answer is its correction. A store error on the read
+falls through to the proposer: the read fails open and the queue never
+blocks.
 
 ## [2.11.5]: the map forgets a vanished file, and says a sentence once
 

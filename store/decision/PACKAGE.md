@@ -53,3 +53,8 @@ itself, and `Outcome` writes the one fact that arrives later.
   held, no crontab line, no job row) have no project and record nothing.
 - `Pending` skips an unparseable question rather than failing the drain:
   one corrupt row must not block the review of the rest.
+- `Settled` walks the settled rows of the site, comparing the state text
+  in SQL and the question id in Go, once per bash call — fine while the
+  store is small, and it grows, since every call now lands a final row.
+  An index on (site, state) is the one-line schema bump when it starts
+  to show; the migration door is `migrate.go`.

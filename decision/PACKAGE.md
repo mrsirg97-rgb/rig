@@ -8,7 +8,8 @@ decision server implements (`Decide(ctx, state, questions) -> answers`), and
 `Recorder`, the seam the gates hold to record a final row. A question is
 typed (`choice` with its choices, `score`, `yesno`); an answer carries a
 value, a confidence (the probability, 0..1), and its decider (who produced
-it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
+it). Stdlib-only leaf; no imports of the stores; its one leaf import is
+`pathguard`, whose containment answer the bash site's strip borrows.
 
 ## What it includes
 
@@ -39,11 +40,13 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   the store what is settled (`Settled`, the one read it holds): the
   most recent approved or denied row for the same site, question id and
   state answers a twin, which lands a final row (the store's answer,
-  confidence 1, decider `reviewed`) and proposes nothing — the model is
-  never asked a question the store has answered, and the landing marks
-  nothing, since a final row is not review work. A store error on the
-  read says itself and falls through to the proposer: the read fails
-  open, the queue never blocks. The settled read and the recorder are
+  confidence 1, decider `reviewed`) through the `Recorder` and proposes
+  nothing — the model is never asked a question the store has answered,
+  and the landing marks nothing, since a final row is not review work.
+  The queue holds two write doors, the `Sink` for pending rows and the
+  `Recorder` for finals. A store error on the read says itself and
+  falls through to the proposer: the read fails open, the queue never
+  blocks. The settled read and the recorder are
   constructor arguments and are refused nil — a hit with either missing
   would vanish the proposal. A full queue drops loudly (a proposal is
   not a decision); a decider or sink error drops loudly and lands
@@ -77,11 +80,16 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   bash call returns it proposes the risk question (choice: safe,
   changes, dangerous, each label described) over the command, the
   workspace, and how the call ended. The command is normalized first
-  (`normalize`): one leading `cd <path> &&` (or `;`) is stripped — once,
-  and only when a path precedes it, so `cd` home keeps its semantics —
-  runs of whitespace collapse, and the ends trim, so twins of one
-  command share a state. The call never waits: the proposal rides the
-  queue's channel and returns at once.
+  (`normalize`, with the call's workspace and the site's cwd): one
+  leading `cd <path> &&` (or `;`) is stripped — once, and only when the
+  path it names is the workspace the call named or under it, a relative
+  path resolved against the working directory, a `~` against the home —
+  so twins of one command share a state while a `cd` that leaves the
+  workspace stays in the state: the risk answer is workspace-relative by
+  its own words, and stripping any `cd` would twin `cd
+  ~/Projects/rig && rm -rf build` with `cd /etc && rm -rf build`. Runs
+  of whitespace collapse and the ends trim either way. The call never
+  waits: the proposal rides the queue's channel and returns at once.
 - `pack.go`: the pack scorer (2.10.0, SPEC_DECISION's pack site): the
   code map's task pack holds one and hands it the candidate items; each
   is scored with one yes/no through the fan-out, the task and the item

@@ -11,15 +11,19 @@ tools and the jail.
 ## What it includes
 
 - `pathguard.go`: `Canonical` (absolute, must exist and be a directory,
-  symlinks resolved) and `Within` (`Canonical` plus containment under the
-  session cwd or the rig home, checked canonically).
+  symlinks resolved), `Within` (`Canonical` plus containment under the
+  session cwd or the rig home, checked canonically), and `Under` (is
+  this path inside this root, the root's symlink form resolved — the
+  containment primitive `Within` is built on).
 
 ## How it is consumed
 
 - `tool/delegate` and `tool/scheduler` call `Within` at the boundary; the
   `store/scheduler` runner calls `Canonical` at fire time and requires the
   stored cwd to still resolve to itself (a replaced, moved, or deleted
-  cwd skips the fire).
+  cwd skips the fire). `decision`'s bash site calls `Under` to answer
+  whether a leading `cd` stays inside the workspace before it strips
+  the prefix off the proposed state.
 - The errors carry no tool prefix: the callers wrap with their own name.
 
 ## Gotchas
