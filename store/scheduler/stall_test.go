@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
@@ -215,7 +216,7 @@ func TestRunJobKillsASilentFireAfterTheStallWindow(t *testing.T) {
 	}
 }
 
-func TestRunJobKeepsAFireThatHeartbeatsOnStderr(t *testing.T) {
+func TestRunJobKeepsAFireThatHeartbeatsOnTheFleet(t *testing.T) {
 	cwd := realCwd(t, "stallactive")
 	h := newHarness(t, cwd)
 	_, err := h.create(sched.CreateInput{
@@ -225,13 +226,16 @@ func TestRunJobKeepsAFireThatHeartbeatsOnStderr(t *testing.T) {
 	mustOK(t, err)
 	spawn := func(ctx context.Context, argv []string, wd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 		answer := "the answer\n"
-		heartbeats := ""
+		id, w, ok := sched.FleetFrom(ctx)
+		if !ok {
+			t.Error("the fire's spawn context carries no fleet pipe")
+		}
+		wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
 		for i := 0; i < 8; i++ {
-			observe([]byte("rig: heartbeat\n"))
-			heartbeats += "rig: heartbeat\n"
+			wire.Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
 			time.Sleep(50 * time.Millisecond)
 		}
-		return sched.SpawnResult{Exit: 0, Stdout: answer, Stderr: heartbeats}, nil
+		return sched.SpawnResult{Exit: 0, Stdout: answer}, nil
 	}
 	opts := runOpts(h, nil, &fakeSpawn{}, fetchOpts{})
 	opts.Spawn = spawn
@@ -241,7 +245,7 @@ func TestRunJobKeepsAFireThatHeartbeatsOnStderr(t *testing.T) {
 	}
 	logBody := readRunLog(t, h, "j1", logName)
 	if strings.Contains(logBody, "killed after stall") {
-		t.Fatalf("a fire silent on stdout but heartbeating on stderr must never stall: %s", logBody)
+		t.Fatalf("a fire silent on stdout but heartbeating on the fleet must never stall: %s", logBody)
 	}
 	if !strings.Contains(logBody, "exit=0") {
 		t.Fatalf("the heartbeating fire must end ok: %s", logBody)
@@ -348,5 +352,34 @@ func TestRealSpawnPipesThePromptToStdin(t *testing.T) {
 	}
 	if strings.TrimSpace(res.Stdout) != "0" {
 		t.Fatalf("no prompt in the context means an empty stdin, got %q", res.Stdout)
+	}
+}
+
+func TestRealSpawnHandsTheChildTheFleetPipeAsFdThree(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	heard := make(chan broadcast.Message, 1)
+	wire := broadcast.NewPipeTransport(9, r, broadcast.NewJSONEncoder())
+	wire.Recv(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			heard <- m
+		}
+	})
+	defer wire.Close()
+	ctx := sched.WithFleet(context.Background(), 9, w)
+	res, err := sched.RealSpawn(ctx, []string{"/bin/sh", "-c", `printf '{"origin":9,"ok":true}\n' >&3`}, "", nil, func([]byte) {})
+	w.Close()
+	if err != nil || res.Exit != 0 {
+		t.Fatalf("spawn: %v %+v", err, res)
+	}
+	select {
+	case m := <-heard:
+		if m.Origin() != 9 || !m.Ok() || m.Event() != nil {
+			t.Fatalf("frame = %d %v %v, want the child's heartbeat", m.Origin(), m.Ok(), m.Event())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the child's frame on fd 3 never arrived")
 	}
 }

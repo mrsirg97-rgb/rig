@@ -38,10 +38,12 @@ everything the supervisor says is a `broadcast` message.
   delegate seam, finish the task itself (workers `complete` in worker
   mode, reviewers parse the worker's last `verdict:` line and
   `accept`/`reject`), then post the settle to the loop and wait for it.
-  The worker's heartbeat line in the delegate's stream becomes a
-  heartbeat message forwarded to the supervisor; the supervisor's
-  handler on the loop stamps the worker and emits a status. No stream
-  file is written: the run log is the worker's bytes.
+  Each worker is a room member by its id and the spawn carries that
+  member (`DelegateInput.Member`): the child heartbeats on the fleet
+  pipe and `Delegate` publishes each frame as the worker, so the
+  supervisor's handler on the loop stamps the worker and emits a status
+  without reading a byte. No stream file is written: the run log is the
+  worker's bytes.
 - `Opts.Delegate` is the spawn seam (default `sched.Delegate`): the
   tests drive the controller with a fake; the wiring passes nothing.
   The spawn carries no stall and no timeout; the worker's context (the

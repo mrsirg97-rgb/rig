@@ -76,7 +76,7 @@ func (c *Controller) work(w *worker, id string) workResult {
 		StateDir:      c.opts.StateDir,
 		Allow:         c.opts.Allow,
 		SpawnCtx:      w.ctx,
-		Observe:       func(p []byte) { c.heartbeat(w, p) },
+		Member:        w.member,
 	})
 	if res.Cost > 0 {
 		c.call(func() { c.spent += res.Cost })

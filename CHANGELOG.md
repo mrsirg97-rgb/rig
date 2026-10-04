@@ -63,12 +63,28 @@ arguments. The delegate tool is a room member and publishes its status
 snapshots there; the `Notify` closure, the `swarm/status` emitter and
 the last 250 ms clock in the tree are gone.
 
+The heartbeat crosses a pipe (the fifth commit). A spawned worker gets
+the write end of a pipe as fd 3 and its member id in `RIG_FLEET`; the
+one-shot frontend heartbeats through a `broadcast` pipe transport on
+it, one JSON frame per line through the encoder, and without a fleet
+it has no heartbeat and no ticker. The parent reads the frames through
+the same transport: `Delegate` publishes each as the worker's member
+(`DelegateInput.Member`, the swarm's worker and the delegate tool's
+worker rows are members now), so the supervisor and the delegate tool
+stamp the heartbeat from the room; the run-job runner touches its
+stall watch per frame. The parent closes its end after the spawn and
+waits for the reader's end-of-file, so no frame is lost behind the
+result; the child marks the fd close-on-exec, so no tool's subprocess
+holds the pipe open. Gone: the `rig: heartbeat` stderr line, the
+`Observe` byte observer on `DelegateInput`, and both greps for the
+line. The stall watch still reads stdout bytes too: a worker's text is
+still progress.
+
 The first commit is the package and its tests; the second the engine;
-the third the swarm; the fourth the reviewer and the delegate tool. The
-commits that follow in this release: the heartbeat and the verdict
-cross a pipe transport through the encoder and the stdout scrape
-leaves; the two notice events become one message and the `loud`
-closures go.
+the third the swarm; the fourth the reviewer and the delegate tool; the
+fifth the pipe. The commits that follow in this release: the verdict
+crosses the pipe as a message and the stdout scrape leaves; the two
+notice events become one message and the `loud` closures go.
 
 ## [2.10.2]: claim says what claim does
 

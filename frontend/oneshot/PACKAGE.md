@@ -15,11 +15,14 @@ prompt, the process's stdout is the response.
 - `Input`: the prompt once, then EOF.
 - `Notify`: assistant text straight through, faults loud. Tool events
   stay out of the worker's stdout: their results are the turn's
-  substance, not its report. `Err` carries the worker's liveness: the
-  reasoning deltas as they stream, one line at tool start and end, and a
-  periodic heartbeat while a tool runs — the scheduler's stall watch
-  reads bytes, and a worker silent during a long tool run must never
-  look hung. `Heartbeat` (default 30s) sets the cadence.
+  substance, not its report. `Err` carries the reasoning deltas as they
+  stream and one line at tool start and end. `Fleet` (a `broadcast`
+  transport, nil when nobody listens) carries the liveness: a heartbeat
+  message while a tool runs, so a worker silent during a long tool run
+  never looks hung to the supervisor, the delegate tool or the runner's
+  stall watch; `Heartbeat` (default 30s) sets the cadence. Without a
+  fleet there is no heartbeat and no ticker: the `rig: heartbeat`
+  stderr line is gone (2.11.0).
 - `Faulted`: whether any fault crossed the session. The run-job record
   derives status from the exit code, so a faulted worker must exit
   non-zero or the run logs as ok.

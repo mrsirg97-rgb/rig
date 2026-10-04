@@ -254,9 +254,10 @@ error, so the operator always has the session id and log path.
   behavior. `WaitBusy` (false): a busy GPU is waited on — the busy
   check polls `busyState` on a short interval until the model runs or
   the call's context ends; the swarm's parallelism is the GPU slots,
-  and a busy-check failure still fails closed. `Observe` (nil): the
-  spawn's byte observer, so the swarm streams the worker's stderr to
-  the run stream and reads its heartbeat. `SpawnCtx` (Background): the
+  and a busy-check failure still fails closed. `Member` (nil): the
+  worker's member in the session's room (2.11.0); with one, the spawn
+  gets the fleet pipe and every frame the child sends is published as
+  the worker. `SpawnCtx` (Background): the
   base context the spawn timeout wraps, so a swarm stop kills the
   in-flight worker instead of leaving it to its timeout. `Stall` (0):
   the silence window, wired to the same stall watch the runner uses

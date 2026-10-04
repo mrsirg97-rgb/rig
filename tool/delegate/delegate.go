@@ -55,6 +55,7 @@ func New(o Opts) core.Tool {
 	a := &adapter{Definition: tool.Fill(tool.Def("delegate"), "{default_model}", o.DefaultModel), Opts: o, workers: map[int64]workerState{}}
 	if o.Room != nil {
 		a.member = o.Room.Add(MemberID)
+		a.member.Subscribe(context.Background(), a.receive)
 	}
 	return a
 }
@@ -83,9 +84,9 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if strings.TrimSpace(g.Task) == "" {
 		return "", errors.New("delegate: task is required")
 	}
-	id := a.begin(g.Task)
-	if id > 0 {
-		defer a.end(id)
+	member := a.begin(g.Task)
+	if member != nil {
+		defer a.end(member)
 	}
 	session := "anon"
 	if s, ok := core.SessionFrom(ctx); ok && s != nil {
@@ -131,7 +132,7 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		RigHome:       a.RigHome,
 		StateDir:      a.StateDir,
 		Allow:         a.Allow,
-		Observe:       a.observe(id),
+		Member:        member,
 	})
 	if err != nil {
 		return "", err
@@ -167,43 +168,44 @@ func strictDecode(data json.RawMessage, out any) error {
 	return dec.Decode(out)
 }
 
-func (a *adapter) begin(task string) int64 {
-	if a.member == nil {
-		return 0
-	}
-	a.mu.Lock()
-	a.seq++
-	id := a.seq
-	a.workers[id] = workerState{task: firstLine(task), heartbeat: time.Now(), state: "running"}
-	a.mu.Unlock()
-	a.emit()
-	return id
-}
-
-func (a *adapter) end(id int64) {
-	if a.member == nil {
-		return
-	}
-	a.mu.Lock()
-	delete(a.workers, id)
-	a.mu.Unlock()
-	a.emit()
-}
-
-func (a *adapter) observe(id int64) func([]byte) {
+func (a *adapter) begin(task string) broadcast.Member {
 	if a.member == nil {
 		return nil
 	}
-	return func(p []byte) {
-		if !bytes.Contains(p, []byte("rig: heartbeat")) {
-			return
+	a.mu.Lock()
+	a.seq++
+	id := MemberID - a.seq
+	a.workers[id] = workerState{task: firstLine(task), heartbeat: time.Now(), state: "running"}
+	a.mu.Unlock()
+	a.emit()
+	return a.Room.Add(id)
+}
+
+func (a *adapter) end(member broadcast.Member) {
+	member.Leave()
+	a.mu.Lock()
+	delete(a.workers, member.Id())
+	a.mu.Unlock()
+	a.emit()
+}
+
+func (a *adapter) receive(err error, messages ...broadcast.Message) {
+	if err != nil {
+		return
+	}
+	beat := false
+	a.mu.Lock()
+	for _, m := range messages {
+		w, ok := a.workers[m.Origin()]
+		if m.Event() != nil || !ok {
+			continue
 		}
-		a.mu.Lock()
-		if w, ok := a.workers[id]; ok {
-			w.heartbeat = time.Now()
-			a.workers[id] = w
-		}
-		a.mu.Unlock()
+		w.heartbeat = time.Now()
+		a.workers[m.Origin()] = w
+		beat = true
+	}
+	a.mu.Unlock()
+	if beat {
 		a.emit()
 	}
 }
@@ -216,7 +218,7 @@ func (a *adapter) snapshot() core.SwarmStatus {
 	a.mu.Lock()
 	ws := make([]core.SwarmWorker, 0, len(a.workers))
 	for id, w := range a.workers {
-		ws = append(ws, core.SwarmWorker{ID: int(id), Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
+		ws = append(ws, core.SwarmWorker{ID: int(MemberID - id), Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
 	}
 	a.mu.Unlock()
 	sort.Slice(ws, func(i, j int) bool { return ws[i].ID < ws[j].ID })

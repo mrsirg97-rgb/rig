@@ -130,10 +130,8 @@ func TestSwarmNoticesStop(t *testing.T) {
 func TestSwarmStatusFramesClaimHeartbeatAndFinish(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "do the work")
-	h.spawn.onCall = func(observe func([]byte)) {
-		for i := 0; i < 40; i++ {
-			observe([]byte("rig: heartbeat\n"))
-		}
+	h.spawn.onCall = func(ctx context.Context) {
+		beat(ctx, 40)
 	}
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.waitFor(t, "the task in review", func() bool {
@@ -155,7 +153,7 @@ func TestSwarmStatusFramesClaimHeartbeatAndFinish(t *testing.T) {
 		t.Fatalf("the last status is not the finish: %+v", last)
 	}
 	if last.Workers[0].Heartbeat.IsZero() {
-		t.Fatalf("the bytes never updated the heartbeat: %+v", last)
+		t.Fatalf("the pipe never updated the heartbeat: %+v", last)
 	}
 	if last.Pending != 0 || last.Review != 1 {
 		t.Fatalf("the finish status does not carry the fold counts: %+v", last)

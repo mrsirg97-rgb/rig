@@ -32,8 +32,6 @@ const (
 
 	maxVerdictReason = todostore.MaxNoteLen
 
-	heartbeatLine = "rig: heartbeat"
-
 	briefBoard  = "\nThe supervisor owns this board entry: the claim is the supervisor's, so findings go in the task's note (todo note) and in rem; do not create tasks, and do not start, complete, or fail the board's tasks.\n"
 	briefReview = "\nReview the work now: read the diff and the task's notes; then decide. End your reply with exactly one verdict line as the last line: 'verdict: accept' or 'verdict: reject <reason>'.\n"
 	briefWork   = "\nDo the task now in this cwd. Report back: when you finish, persist durable findings with the rem tool (project scope: this cwd) and end your reply with a short summary of what you did.\n"
@@ -115,6 +113,7 @@ type worker struct {
 	failed    int
 	state     string
 	tasks     chan string
+	member    broadcast.Member
 }
 
 func New(o Opts) *Controller {
@@ -217,7 +216,7 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 				state:     StateRunning,
 				tasks:     make(chan string, 1),
 			}
-			c.opts.Room.Add(int64(w.id))
+			w.member = c.opts.Room.Add(int64(w.id))
 			c.workers = append(c.workers, w)
 			c.wg.Add(1)
 			go c.run(w)
@@ -267,7 +266,7 @@ func (c *Controller) Stop() (string, error) {
 		proj, architect = c.proj, c.architect
 		for _, w := range c.workers {
 			ended = append(ended, w.identity)
-			c.opts.Room.Remove(int64(w.id))
+			w.member.Leave()
 		}
 		c.workers = nil
 		c.ctx = nil
@@ -316,13 +315,6 @@ func (c *Controller) loud(w *worker, format string, args ...any) {
 	}
 	text := fmt.Sprintf(format, args...)
 	c.self.Publish(context.Background(), func(error) {}, broadcast.NewMessage(SupervisorID, true, core.Notice{Source: "swarm", Text: strings.TrimRight(text, "\n")}))
-}
-
-func (c *Controller) heartbeat(w *worker, p []byte) {
-	if !strings.Contains(string(p), heartbeatLine) {
-		return
-	}
-	c.self.Forward(w.ctx, func(int64, error) {}, broadcast.Heartbeat(int64(w.id), true))
 }
 
 func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {

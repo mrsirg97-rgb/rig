@@ -145,7 +145,7 @@ type fakeSpawn struct {
 	queue  []sched.SpawnResult
 	result sched.SpawnResult
 	err    error
-	onCall func(observe func([]byte))
+	onCall func(ctx context.Context)
 	block  chan struct{}
 }
 
@@ -165,7 +165,7 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 	}
 	f.mu.Unlock()
 	if f.onCall != nil {
-		f.onCall(observe)
+		f.onCall(ctx)
 	}
 	if f.block != nil {
 		select {
@@ -174,6 +174,17 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 		}
 	}
 	return result, f.err
+}
+
+func beat(ctx context.Context, n int) {
+	id, w, ok := sched.FleetFrom(ctx)
+	if !ok {
+		panic("the spawn context carries no fleet pipe")
+	}
+	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
+	for i := 0; i < n; i++ {
+		wire.Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
+	}
 }
 
 func (f *fakeSpawn) count() int {
@@ -374,7 +385,7 @@ func TestSwarmWorkerFinishingIsTheNextHandout(t *testing.T) {
 func TestSwarmQueuedWorkerLivesPastTheOldStallBound(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "queued behind the session")
-	h.spawn.onCall = func(observe func([]byte)) {
+	h.spawn.onCall = func(context.Context) {
 		time.Sleep(150 * time.Millisecond)
 	}
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
@@ -415,8 +426,8 @@ func TestSwarmSpawnCarriesNoStallNoTimeoutAndWaitsOnTheServer(t *testing.T) {
 	if in.Timeout >= 0 {
 		t.Errorf("timeout = %v, want the caller's context as the only bound (negative)", in.Timeout)
 	}
-	if in.Observe == nil {
-		t.Error("the run stream's observer must stay")
+	if in.Member == nil {
+		t.Error("the worker's member must ride the input; the pipe publishes as it")
 	}
 }
 
@@ -685,8 +696,8 @@ func TestSwarmListsWorkersAndStops(t *testing.T) {
 	h.create(t, "supervised")
 	block := make(chan struct{})
 	h.spawn.block = block
-	h.spawn.onCall = func(observe func([]byte)) {
-		observe([]byte("rig: heartbeat\n"))
+	h.spawn.onCall = func(ctx context.Context) {
+		beat(ctx, 1)
 	}
 	h.fetch.resident = []string{"qwen3.8-review"}
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "qwen3.8-review"})

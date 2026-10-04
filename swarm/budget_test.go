@@ -55,7 +55,7 @@ func recordWorkerCost(t *testing.T, rigHome, cwd, session string, cost float64) 
 func TestSwarmBudgetStopsClaimsWithANotice(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "first", "second")
-	h.spawn.onCall = func(observe func([]byte)) {
+	h.spawn.onCall = func(context.Context) {
 		session := workerSessionFromArgv(h.spawn.argv(h.spawn.count() - 1))
 		if session == "" {
 			t.Fatalf("the spawn argv must carry the worker session id: %s", h.spawn.argv(h.spawn.count()-1))

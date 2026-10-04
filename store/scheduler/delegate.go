@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
@@ -39,7 +40,7 @@ type DelegateInput struct {
 	Now           func() time.Time
 	DefaultModel  string
 	Models        func() models.Table
-	Observe       func([]byte)
+	Member        broadcast.Member
 	SpawnCtx      context.Context
 }
 
@@ -224,7 +225,19 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 
-	res, err := in.Spawn(WithPrompt(ctx, prompt), argv, in.Cwd, spawnEnv, in.Observe)
+	spawnCtx := WithPrompt(ctx, prompt)
+	if in.Member != nil {
+		pipe, err := openFleet(ctx, in.Member.Id(), func(messages ...broadcast.Message) {
+			in.Member.Publish(ctx, func(error) {}, messages...)
+		})
+		if err != nil {
+			return DelegateResult{}, fmt.Errorf("delegate: fleet: %w", err)
+		}
+		spawnCtx = WithPrompt(pipe.spawnCtx(), prompt)
+		spawnEnv = append(spawnEnv, pipe.env())
+		defer pipe.close()
+	}
+	res, err := in.Spawn(spawnCtx, argv, in.Cwd, spawnEnv, nil)
 	if err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
 	}

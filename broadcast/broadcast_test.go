@@ -2,6 +2,8 @@ package broadcast_test
 
 import (
 	"context"
+	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -295,5 +297,85 @@ func TestASnapshotKeepsOnePendingPerSenderWithTheLatestValue(t *testing.T) {
 	in.await(t, 3)
 	if st := in.got[0][0].Event().(core.SwarmStatus); st.Pending != 4 {
 		t.Fatalf("the frame that lands is the latest, got %d", st.Pending)
+	}
+}
+
+func TestPipeTransportCarriesFramesAcrossAnOSPipeAndReportsTheEndOnce(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc := broadcast.NewJSONEncoder()
+	child := broadcast.NewPipeTransport(4, w, enc)
+	parent := broadcast.NewPipeTransport(4, r, enc)
+	var mu sync.Mutex
+	var got []broadcast.Message
+	ends := 0
+	parent.Recv(context.Background(), func(err error, messages ...broadcast.Message) {
+		mu.Lock()
+		defer mu.Unlock()
+		if err != nil {
+			ends++
+			return
+		}
+		got = append(got, messages...)
+	})
+	acks := 0
+	child.Send(context.Background(), func(ack error) {
+		if ack != nil {
+			t.Errorf("ack = %v", ack)
+		}
+		acks++
+	}, broadcast.Heartbeat(4, true), broadcast.NewMessage(4, true, core.Notice{Source: "w4", Text: "hi"}))
+	if acks != 1 {
+		t.Fatalf("one send is one ack, got %d", acks)
+	}
+	child.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		n, e := len(got), ends
+		mu.Unlock()
+		if e == 1 {
+			if n != 2 || got[0].Event() != nil || got[1].Event().(core.Notice).Text != "hi" {
+				t.Fatalf("frames = %d %+v, want the heartbeat then the notice", n, got)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the reader never reported the end: frames %d ends %d", n, e)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	child.Send(context.Background(), func(ack error) {
+		if ack == nil {
+			t.Fatal("a closed pipe refuses the send")
+		}
+	}, broadcast.Heartbeat(4, true))
+}
+
+func TestPipeTransportClosesOnAFrameItCannotDecode(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := broadcast.NewPipeTransport(4, r, broadcast.NewJSONEncoder())
+	end := make(chan error, 1)
+	parent.Recv(context.Background(), func(err error, messages ...broadcast.Message) {
+		if err != nil {
+			end <- err
+		}
+	})
+	io.WriteString(w, "{\"origin\":4,\"ok\":true,\"kind\":\"ghost\"}\n")
+	select {
+	case err := <-end:
+		if !strings.Contains(err.Error(), "ghost") {
+			t.Fatalf("end = %v, want the unknown kind named", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a bad frame must end the receive")
+	}
+	if _, err := w.Write([]byte("x\n")); err == nil {
+		t.Fatal("the read end is closed after a bad frame, so the write fails")
 	}
 }

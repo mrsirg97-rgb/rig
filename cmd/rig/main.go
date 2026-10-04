@@ -533,7 +533,12 @@ func main() {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)
 		}
-		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout, Err: os.Stderr}
+		fleet, ferr := sched.Fleet()
+		if ferr != nil {
+			fmt.Fprintln(os.Stderr, "rig:", ferr)
+			os.Exit(1)
+		}
+		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout, Err: os.Stderr, Fleet: fleet}
 	} else if *tuiMode == "true" || (*tuiMode == "auto" && tui.IsTerminal(os.Stdout.Fd())) {
 		th, terr := tui.ResolveTheme(cfg.Settings.Theme, cfg.Theme, tuiTrueColor())
 		if terr != nil {

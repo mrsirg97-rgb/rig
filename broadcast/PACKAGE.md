@@ -33,6 +33,16 @@ no quorum. Imports `core` and `evt` only.
   sorted `Members`, and `Broadcast`, a fan-out to every other member
   collecting one ack each; the error names the members that missed it.
   Safe for many goroutines; the loop is still the one consumer.
+- `pipe.go`: the pipe transport, `NewPipeTransport(id, rw, enc)`, for
+  a member whose other end is another process: a send is one encoded
+  frame per line on the writer, acked on the write; a receive reads
+  frames off the reader on its own goroutine until the far end closes
+  it or the context ends, and reports that end once. The parent holds
+  the read end and publishes what arrives as the child's member; the
+  child holds the write end and is a voice on the wire, never a member
+  of a room. A frame that does not decode closes the transport: the
+  child is rig itself, so a bad frame is a version mismatch, and the
+  rule is to fail closed.
 - `encode.go`: the JSON `Encoder` for a transport that crosses a
   process: the frame is origin, ok, kind, payload, and the kind names
   the `core` event (`notice`, `swarm_notice`, `swarm_status`); an event
@@ -40,11 +50,16 @@ no quorum. Imports `core` and `evt` only.
 
 ## How it is consumed
 
-Not yet wired. The next commits: the kernel owns the engine and hands it
-to the loop and the room (the named reopening); the swarm's roster,
-heartbeat, status snapshots and notices become members and messages;
-the frontends subscribe; the delegate and the review fire cross a pipe
-transport with the encoder.
+The root builds the session's room over the loop transport at
+`rig.PriorityFleet` and is its frontend member; the swarm supervisor and
+its workers, and the delegate tool and its workers, are members by id.
+A spawned worker (`rig -p -`) gets the write end of a pipe as fd 3 and
+its member id in `RIG_FLEET` (`store/scheduler`'s `Fleet` door); the
+one-shot frontend heartbeats through a pipe transport on it, and the
+parent's `Delegate` publishes every frame as the worker's member, so
+the supervisor and the delegate tool stamp the heartbeat from the room,
+never from the bytes. The run-job runner opens the same pipe and
+touches its stall watch per frame.
 
 ## Gotchas
 

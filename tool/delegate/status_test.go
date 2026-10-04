@@ -46,14 +46,24 @@ type statusSpawn struct {
 	mu     sync.Mutex
 	calls  int
 	result sched.SpawnResult
+	until  func() bool
 }
 
 func (f *statusSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	f.mu.Lock()
 	f.calls++
 	f.mu.Unlock()
+	id, w, ok := sched.FleetFrom(ctx)
+	if !ok {
+		panic("the spawn context carries no fleet pipe")
+	}
+	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
 	for i := 0; i < 30; i++ {
-		observe([]byte("rig: heartbeat\n"))
+		wire.Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for f.until != nil && !f.until() && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
 	}
 	return f.result, nil
 }
@@ -89,8 +99,8 @@ func TestDelegateEmitsSwarmStatus(t *testing.T) {
 	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"task":"sweep the floor"}`)); err != nil {
 		t.Fatalf("exec: %v", err)
 	}
-	if n := len(engine.Pending()); n != 1 {
-		t.Fatalf("the claim, thirty heartbeats and the exit before the loop runs are one pending frame, got %d", n)
+	if n := len(engine.Pending()); n != 3 {
+		t.Fatalf("before the loop runs: the claim and the exit are one pending frame, the thirty heartbeats one per listener (the frontend, the tool), got %d", n)
 	}
 	go engine.Start(context.Background())
 	defer engine.Stop()
@@ -128,6 +138,14 @@ func TestDelegateFramesRunningThenCleared(t *testing.T) {
 		}
 	})
 	spawn := &statusSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	spawn.until = func() bool {
+		for _, s := range fe.statuses() {
+			if len(s.Workers) == 1 && !s.Workers[0].Heartbeat.IsZero() {
+				return true
+			}
+		}
+		return false
+	}
 	tool := delegate.New(delegate.Opts{
 		DB:           h.db,
 		Home:         h.home,
@@ -178,6 +196,6 @@ func TestDelegateFramesRunningThenCleared(t *testing.T) {
 		}
 	}
 	if !heartbeat {
-		t.Fatalf("the bytes never updated the heartbeat")
+		t.Fatalf("the pipe never updated the heartbeat")
 	}
 }

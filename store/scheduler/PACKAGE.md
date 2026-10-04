@@ -228,8 +228,22 @@ A command job's fire skips the busy probe and
   "ceiling only" (no stall kill), because a command job that is silent
   by nature — a backup, a digest — must never be killed for not
   printing. A model job that should never sit mute states its own
-  window. The liveness signal is bytes written, not the process: a long
-  silent computation is not a stall, a hung provider is. The one-shot
-  worker keeps its stdout answer-only and heartbeats on stderr
-  (reasoning deltas, tool start/end lines, a 30s heartbeat while a tool
-  runs), so a worker deep in a silent tool stays alive.
+  window. The liveness signal is bytes written or a frame on the fleet
+  pipe, not the process: a long silent computation is not a stall, a
+  hung provider is. The one-shot worker keeps its stdout answer-only,
+  its stderr the reasoning deltas and the tool start/end lines, and
+  heartbeats on the fleet pipe (`fleet.go`, 2.11.0) while a tool runs,
+  so a worker deep in a silent tool stays alive.
+- `fleet.go`: the fleet pipe, the one door a worker's typed messages
+  cross. The parent (`Delegate`, `RunJob`) opens an `os.Pipe`, hands
+  the write end through the spawn's context (`WithFleet`/`FleetFrom`,
+  `RealSpawn` sets it as the first extra file, fd 3) and the child's
+  member id in `RIG_FLEET`; it reads frames through a
+  `broadcast` pipe transport and, in `Delegate`, publishes each as the
+  worker's `Member` (`DelegateInput.Member`, nil = no pipe); the runner
+  touches its stall watch instead, its origin 0 since it has no room.
+  The parent closes its write end after the spawn and waits for the
+  reader's end-of-file before returning, so no frame is lost behind the
+  result. The child side is `Fleet()`: with the env set it marks fd 3
+  close-on-exec, so no tool's subprocess inherits the pipe, and returns
+  the transport the one-shot frontend speaks through.

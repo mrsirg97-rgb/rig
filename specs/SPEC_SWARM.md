@@ -141,10 +141,11 @@ today's behavior:
   refused — the busy check polls `busyState` on a short interval until the
   model runs or the context ends. This is the swarm's parallelism: the GPU
   slots, not the worker count. A busy-check failure still fails closed.
-- `Observe` (default nil): the spawn's byte observer, so the swarm streams
-  the worker's stderr (the oneshot liveness stream: `rig: heartbeat`, tool
-  start/end) into the worker's run stream and reads the heartbeat from it.
-  The delegate's interactive calls stay unobserved.
+- `Member` (default nil): the worker's member in the session's room
+  (2.11.0, replacing the `Observe` byte observer): the child heartbeats
+  on the fleet pipe (fd 3, `RIG_FLEET`) and `Delegate` publishes each
+  frame as that member, so the supervisor reads the heartbeat from the
+  room and never from the worker's bytes.
 - `SpawnCtx` (default Background): the base context the spawn timeout
   wraps, so `/swarm stop` kills the in-flight task worker's process tree
   instead of leaving it to its timeout.
@@ -224,10 +225,11 @@ owns every concrete type; the command owns only the vocabulary.
   agents`; a stop with no swarm refuses by name. Session teardown stops
   the swarm the same way (`cmd/rig`'s exit path), so the in-flight
   spawns' deaths are recorded before the process ends.
-- **The run stream**: `<scheduler home>/swarm/wN.stream`, one file per
-  drain worker, appended across its life with task markers; the heartbeat
-  the list shows is the supervisor's in-memory read of that stream. The
-  stream file is the audit; the heartbeat is the liveness.
+- **The run stream** (through 2.10.x): `<scheduler home>/swarm/wN.stream`,
+  one file per drain worker, appended across its life with task markers;
+  the heartbeat the list shows was the supervisor's read of that stream.
+  Since 2.11.0 no stream file is written: the run log is the audit and
+  the heartbeat is a message on the fleet pipe.
 
 ### 5. The dead claim: release via Reap
 
