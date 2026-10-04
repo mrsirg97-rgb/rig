@@ -1,4 +1,15 @@
 # Changelog
+## [2.11.10]: the refusal shows the queue that exists
+
+2.11.9 made a refused create show the queue, and showed the wrong one:
+the planner adds the planned tasks to the folded state before the links
+are checked, so the rendered queue carried the four tasks that were
+about to not land, and the transaction then rolled them back. A model
+read `4 open`, took the create as done, and found `0 open` on the next
+read. The queue in the refusal is rendered before the plan now, so it is
+the one that exists; a test pins that a refused task's text never
+appears in it.
+
 ## [2.11.9]: a number is a link, and a refused create shows the queue
 
 A model planning five tasks in one create wrote `"requires": 2` the way

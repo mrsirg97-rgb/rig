@@ -21,10 +21,11 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		if e != nil {
 			return "", e
 		}
+		before := renderQueue(f, session, modePresent, 0, p.Label)
 		modified, given, fresh, problems := planCreate(f, items)
 		if len(problems) != 0 {
 			sort.Strings(problems)
-			return "", fmt.Errorf("todo: %s%s\n%s", strings.Join(problems, "; "), linkFormsHint(problems), renderQueue(f, session, modePresent, 0, p.Label))
+			return "", fmt.Errorf("todo: %s%s\n%s", strings.Join(problems, "; "), linkFormsHint(problems), before)
 		}
 		note := mergeNote(given, fresh)
 		if len(items) == 0 {
