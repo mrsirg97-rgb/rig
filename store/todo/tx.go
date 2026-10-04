@@ -23,6 +23,10 @@ func verb(
 	if session == "" {
 		session = anon
 	}
+	scopeWord := ""
+	if op == "start" {
+		scopeWord = p.Dir
+	}
 	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
 		ts, ok := f.tasks[id]
 		if !ok {
@@ -33,7 +37,7 @@ func verb(
 			return "", fmt.Errorf("%s", voice)
 		}
 		if noop {
-			return echoTask(f, session, id, note), nil
+			return echoTask(f, session, id, note, scopeWord), nil
 		}
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
@@ -59,7 +63,7 @@ func verb(
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, note), foot), nil
+		return withFoot(echoTask(f, session, id, note, scopeWord), foot), nil
 	})
 }
 

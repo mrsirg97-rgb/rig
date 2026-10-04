@@ -56,7 +56,7 @@ func TestTodoBlockExactBytes(t *testing.T) {
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).queue())
 
-	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰")+th.Paint("dim", "▱▱▱")+th.Paint("dim", " 3 open · 2 of 2 finished shown · next t5")) {
+	if !strings.Contains(got, th.Paint("dim", "[global] ")+th.Paint("ember", "▰▰")+th.Paint("dim", "▱▱▱")+th.Paint("dim", " 3 open · 2 of 2 finished shown · next t5")) {
 		t.Fatalf("the scoped progress head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "wire the models table")) {
@@ -95,7 +95,7 @@ func TestTodoBlockReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).review())
-	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open")) {
+	if !strings.Contains(got, th.Paint("dim", "[global] ")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open")) {
 		t.Fatalf("the review queue's head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("warn", "⧗")+" "+th.Paint("dim", "t1")+" "+th.Paint("text", "ready")+th.Paint("dim", " · claimed for review by sessB")) {
@@ -109,7 +109,7 @@ func TestTodoBlockPresentRendersHeadAndHint(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).present())
-	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰▰▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 2 open · 10 of 13 finished shown · next t4")) {
+	if !strings.Contains(got, th.Paint("dim", "[global] ")+th.Paint("ember", "▰▰▰▰▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 2 open · 10 of 13 finished shown · next t4")) {
 		t.Fatalf("the present head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("error", "✕")+" "+th.Paint("dim", "t5")+" "+th.Paint("text", "later")+th.Paint("dim", " · requires t1")) {
@@ -135,7 +135,7 @@ func TestTodoBlockFinishedListPinsTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).finishedList())
-	if !strings.Contains(got, th.Paint("dim", "[rig] ")+th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open · 2 of 3 finished shown · next t4")) {
+	if !strings.Contains(got, th.Paint("dim", "[global] ")+th.Paint("ember", "▰▰▰")+th.Paint("dim", "▱")+th.Paint("dim", " 1 open · 2 of 3 finished shown · next t4")) {
 		t.Fatalf("the finished list head is missing or wrong:\n%s", got)
 	}
 	if !strings.Contains(got, th.Paint("success", "●")+" "+th.Paint("dim", "t3")+" "+th.Paint("text", "c")) {
@@ -143,16 +143,6 @@ func TestTodoBlockFinishedListPinsTheStore(t *testing.T) {
 	}
 	if !strings.Contains(got, th.Paint("dim", "  · 1 more finished · todo list finished 3")) {
 		t.Fatalf("the finished list names its hidden rows:\n%s", got)
-	}
-}
-
-func TestTodoBlockBareQueueOneDimLine(t *testing.T) {
-	th, err := tui.ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := tui.RenderTodoBlock(th, "OPEN", newTodoFixture(t).bareQueue()); got != th.Paint("dim", "queue: rig (bound)") {
-		t.Fatalf("a bare queue report prints as one dim line, got:\n%s", got)
 	}
 }
 
@@ -190,7 +180,7 @@ func TestTodoBlockEchoRendersNoteAndRowThroughTheQueuePainter(t *testing.T) {
 	if !strings.Contains(got, th.Paint(tui.SlotSuccess, "\u25cf")+" "+th.Paint(tui.SlotDim, "t1")+" "+th.Paint(tui.SlotText, "wire the models table")) {
 		t.Fatalf("the echo's row must ride the queue's task-line painter, got:\n%s", got)
 	}
-	if !strings.Contains(got, th.Paint(tui.SlotDim, "[rig] ")+th.Paint(tui.SlotEmber, "\u25b0")+th.Paint(tui.SlotDim, " 0 open · 1 of 1 finished shown")) {
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "[global] ")+th.Paint(tui.SlotEmber, "\u25b0")+th.Paint(tui.SlotDim, " 0 open · 1 of 1 finished shown")) {
 		t.Fatalf("the echo's summary renders as the head, got:\n%s", got)
 	}
 }

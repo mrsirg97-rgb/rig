@@ -6,6 +6,7 @@ func All() []core.Command {
 	return []core.Command{
 		compactCmd{},
 		newCmd{},
+		projectCmd{},
 		sessionsCmd{},
 		&modelsCmd{},
 		steerCmd{},

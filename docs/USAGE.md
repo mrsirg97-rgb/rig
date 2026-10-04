@@ -31,6 +31,10 @@ is a loud line naming the known set, never silently a prompt.
 - `/compact`: force a compaction now (the `⧉` line reports dropped/kept),
   or `compact: nothing to drop`.
 - `/new`: close the session row ok, mint a fresh session, same process.
+- `/project <path>`: close this session and open a fresh one whose
+  workspace is that path (same process, same seam as `/new`); `~`
+  expands, the path canonicalizes, and a non-directory refuses by name.
+  The new session's system prompt carries that workspace's AGENTS.md.
 - `/sessions`: list (as many rows as fit the screen; `list all` or
   `list <n>` for more); `summary` shows the vitals over the recent
   sessions (models, faults, the cache ratio); `show <id>` renders a
@@ -61,10 +65,10 @@ is a loud line naming the known set, never silently a prompt.
   lists the disabled zone, `disable <name>` and `enable <name>` move
   a plugin across it, `reload` re-registers from disk (the `plugins`
   tool's command door), `create <text>` queues the authoring prompt.
-- `/todo project [path]`: the queue's binding door. With a path it binds
-  this session to that project's queue and shows it; bare, it says where
-  the queue is. `todo <path> <verb>` binds and acts in one line, and
-  `/todo prune` drops the done rows. The swarm surface (1.3.9): `claim`
+- `/todo project [path]`: shows a queue — with a path that project's,
+  bare this workspace's. Every todo call names its scope: the workspace
+  path, or global (the tool refuses without it). `todo <path> <verb>`
+  acts there in one line, and `/todo prune` drops the done rows. The swarm surface (1.3.9): `claim`
   takes the next task nothing waits for (or `claim review`), `note
   <id>` attaches a message to any task, `notes <id>` lists a task's
   notes in order with their session and time, `read <id>` renders one
@@ -77,8 +81,8 @@ is a loud line naming the known set, never silently a prompt.
   Tasks carry two links, one each: `requires tN` (I wait for it) and
   `blocks tN` (it waits for me), gating claim and finish
   (`specs/SPEC_TODO_EDGES.md`).
-- `/rem project <path>`: a one-off read or write of another project's
-  memories: the path resolves to a repo identity (worktrees share).
+- `/rem project <path>`: a one-off read of another project's memories:
+  the path resolves to a repo identity (worktrees share).
 - `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's
   workers (`2 workers · 1 running`, then `w1 [~] worker resident · task t3 ·
   heartbeat 2s ago · done 1 failed 0`); `swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`

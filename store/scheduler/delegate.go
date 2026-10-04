@@ -173,7 +173,7 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 		}
 		workerCmd = []string{exe}
 	}
-	prompt := in.Task + ReportBack
+	prompt := in.Task + ReportBack(in.Cwd)
 	allow := joinAllow(in.Allow)
 	if in.Bare {
 		prompt = in.Task

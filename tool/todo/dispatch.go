@@ -36,8 +36,6 @@ func (a adapter) dispatch(ctx context.Context, g given, p todostore.Project, ses
 		}
 		a.wakeRouter()
 		return reply, nil
-	case "bind":
-		return todostore.Read(ctx, a.db, p, session)
 	case "prune":
 		return todostore.Prune(ctx, a.db, p, session)
 	case "claim":

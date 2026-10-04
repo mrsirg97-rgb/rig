@@ -12,21 +12,30 @@ the common dir relative from the main worktree and as a realpath from
 a linked one; without it a symlinked cwd splits one repo into two keys. Two worktrees of one repo share a scope; a renamed
 directory keeps its identity; a subdirectory reads the repo's queue.
 
+Beside the repo identity stands the one reserved word: `Global` is the
+fixed global scope, never a hash of a path. `Path` never git-probes it
+(a probe would resolve it against the process cwd — the guess this
+package exists to kill), `Key` returns it verbatim, and the cwd-hash
+fallback stays for a real directory that is not a repo.
+
 ## What it includes
 
-- `scope.go`: `ShortHash`, `Path` (the memoized git probe with the
-  relative-output resolution and the echoed-option fallback), `Key`
-  (`ShortHash(Path)`), `Label` (the display name: `filepath.Base`,
-  `"."`/`""` → `root`), `InRepo` (whether a directory resolved to a
-  repo at all, so a caller can say "this is a bucket, not a project"
-  instead of implying it), and `Bare` (the `--is-bare-repository`
-  probe: a bare layout's common dir is the cwd itself, so the path
-  alone cannot tell it from a plain directory).
+- `scope.go`: `Global` (the reserved word and fixed key), `ShortHash`,
+  `Path` (the memoized git probe with the relative-output resolution
+  and the echoed-option fallback; the reserved word rides through),
+  `Key` (`Global` verbatim, else `ShortHash(Path)`), `Label` (the
+  display name: `filepath.Base`, `"."`/`""` → `root`), `InRepo`
+  (whether a directory resolved to a repo at all, so a caller can say
+  "this is a bucket, not a project" instead of implying it), and
+  `Bare` (the `--is-bare-repository` probe: a bare layout's common dir
+  is the cwd itself, so the path alone cannot tell it from a plain
+  directory).
 
 ## How it is consumed
 
 - `store/rem` and `store/todo` resolve their scopes through it: the rem
-  and todo tools resolve an explicit `project` path through it too.
+  and todo tools resolve the required `scope` parameter — the reserved
+  word or a directory path — through it too.
 
 ## Gotchas
 

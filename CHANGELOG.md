@@ -1,4 +1,29 @@
 # Changelog
+## [2.12.0]: scope is a parameter, never a guess
+
+The evidence was one live session: rig started in `~`, the work lived in
+`~/Projects/rig`, and three of five `rem` calls plus a `todo create`
+failed — `pack` found no map, `index` refused the home as a project —
+because both tools resolved the project from the process cwd or from an
+optional `project` argument the model never passes, and todo carried a
+`bind` action and a session binding to make the guess sticky. Scope is a
+required parameter on both tools now: `"global"` is the one reserved
+word, anything else is a project directory (`~` expands at the paths
+boundary, a worktree shares its repo's key), and a call without it
+refuses naming the rule. No cwd fallback is left in either tool, todo's
+`bind` and the `session_project` binding are gone, rem's old
+`project`/`scope: project|global|all` pair is one `scope`, and the
+global scope is a fixed key in `store/scope`, never a hash of a path.
+The `start` and `claim` replies carry `· scope <path>` on the row so the
+model knows where to run and what to pass next; the swarm brief and the
+run-job report-back name the scope path the worker must pass. The
+operator moves the session, never a tool: `/project <path>` closes the
+current session and opens a fresh one in that workspace through the same
+seam `/new` uses, with the path canonicalized, a non-directory refused
+by name, and the workspace's AGENTS.md riding the new session's system
+prompt. On the wire the menu moved within budget: 13,998 chars before,
+13,846 after, of 15,000.
+
 ## [2.11.12]: a yes/no question is a binary
 
 The tool menu's budget moves from 14,000 to 15,000 characters. The wall

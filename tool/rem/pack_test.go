@@ -108,7 +108,7 @@ func packJSON(t *testing.T, args map[string]any) json.RawMessage {
 
 func packExec(t *testing.T, tool core.Tool, root, target string, extra map[string]any) (string, error) {
 	t.Helper()
-	args := map[string]any{"action": "pack", "target": target, "project": root}
+	args := map[string]any{"action": "pack", "target": target, "scope": root}
 	for k, v := range extra {
 		args[k] = v
 	}
@@ -156,7 +156,7 @@ func TestPackShowsDefinitionCallersAndSignaturesAfterExternalChange(t *testing.T
 func TestPackRefusesAnAmbiguousBareName(t *testing.T) {
 	root, q, tool := packModule(t)
 	ctx := context.Background()
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root}); err != nil {
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "scope": root}); err != nil {
 		t.Fatalf("index: %v", err)
 	}
 	q.Drain(ctx)
@@ -186,7 +186,7 @@ func TestPackRegistersNoObservation(t *testing.T) {
 func TestIndexMapsTheWholeProject(t *testing.T) {
 	root, q, tool := packModule(t)
 	ctx := context.Background()
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root})
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "index", "scope": root})
 	if err != nil {
 		t.Fatalf("index: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestIndexMapsTheWholeProject(t *testing.T) {
 func TestPackRefusesAnAmbiguousNameAcrossTestPackages(t *testing.T) {
 	root, q, tool := graphModule(t)
 	ctx := context.Background()
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root}); err != nil {
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "scope": root}); err != nil {
 		t.Fatalf("index: %v", err)
 	}
 	q.Close()
@@ -232,7 +232,7 @@ func TestPackRefusesAnAmbiguousNameAcrossTestPackages(t *testing.T) {
 func TestPackGateOnceShowsExactlyItsSeventeenLines(t *testing.T) {
 	root, q, tool := graphModule(t)
 	ctx := context.Background()
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root}); err != nil {
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "scope": root}); err != nil {
 		t.Fatalf("index: %v", err)
 	}
 	q.Close()
@@ -280,7 +280,7 @@ func TestPackArgsCarryTheWireShape(t *testing.T) {
 func TestPackTeachesTheQualifierShape(t *testing.T) {
 	root, q, tool := packModule(t)
 	ctx := context.Background()
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "project": root}); err != nil {
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "index", "scope": root}); err != nil {
 		t.Fatalf("index: %v", err)
 	}
 	q.Drain(ctx)

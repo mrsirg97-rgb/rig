@@ -30,10 +30,16 @@ const (
 
 	SupervisorID int64 = 0
 
-	briefBoard  = "\nThe supervisor owns this board entry: the claim is the supervisor's, so findings go in the task's note (todo note) and in rem; do not create tasks, and do not start, complete, or fail the board's tasks.\n"
 	briefReview = "\nReview the work now: read the diff and the task's notes; then decide, and deliver it with the verdict tool: accept, or reject with the reason the author needs.\n"
-	briefWork   = "\nDo the task now in this cwd. Report back: when you finish, persist durable findings with the rem tool (project scope: this cwd) and end your reply with a short summary of what you did.\n"
 )
+
+func boardBrief(scope string) string {
+	return "\nThe supervisor owns this board entry: the claim is the supervisor's, so findings go in the task's note (todo note) and in rem; do not create tasks, and do not start, complete, or fail the board's tasks. Every todo and rem call names scope: " + scope + ".\n"
+}
+
+func workBrief(scope string) string {
+	return "\nDo the task now in this cwd. Report back: when you finish, persist durable findings with the rem tool (scope: " + scope + ") and end your reply with a short summary of what you did.\n"
+}
 
 type StartOpts struct {
 	Count  int
@@ -327,11 +333,11 @@ func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {
 			fmt.Fprintf(&b, "- %s (by %s)\n", n.Text, n.Session)
 		}
 	}
-	b.WriteString(briefBoard)
+	b.WriteString(boardBrief(c.proj.Dir))
 	if w.role == RoleReviewer {
 		b.WriteString(briefReview)
 	} else {
-		b.WriteString(briefWork)
+		b.WriteString(workBrief(c.proj.Dir))
 	}
 	return b.String()
 }

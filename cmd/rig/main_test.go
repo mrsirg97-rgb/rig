@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.11.12" {
-		t.Fatalf("Version = %q, want 2.11.12", Version)
+	if Version != "2.12.0" {
+		t.Fatalf("Version = %q, want 2.12.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -575,12 +575,47 @@ func TestApproveDialDoorRule(t *testing.T) {
 	}
 }
 
+func TestProjectMovesTheSessionToTheNamedWorkspace(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	other := t.TempDir()
+	jobAgents := "the other workspace's contract"
+	if err := os.WriteFile(filepath.Join(other, "AGENTS.md"), []byte(jobAgents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := h.r.cwd
+	if _, err := h.r.newSession(context.Background(), other); err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if h.r.cwd != other {
+		t.Fatalf("the session's workspace must move, got %q want %q", h.r.cwd, other)
+	}
+	if !strings.Contains(h.r.fullSystem, "The session's workspace is "+other) {
+		t.Fatalf("the system prompt must carry the moved workspace:\n%s", h.r.fullSystem)
+	}
+	if !strings.Contains(h.r.fullSystem, jobAgents) {
+		t.Fatalf("the moved session must carry that workspace's AGENTS.md:\n%s", h.r.fullSystem)
+	}
+	if _, err := h.r.newSession(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if h.r.cwd != other {
+		t.Fatalf("new must keep the workspace, got %q", h.r.cwd)
+	}
+	if h.r.cwd == before {
+		t.Fatalf("the workspace must have moved away from the launch dir %q", before)
+	}
+	if _, err := h.r.newSession(context.Background(), filepath.Join(other, "absent")); err == nil ||
+		!strings.Contains(err.Error(), "project: not a directory:") {
+		t.Fatalf("a non-directory must refuse by name, got %v", err)
+	}
+}
+
 func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	h.r.approveDefault = "manual"
 	h.r.askDoor = func(ctx context.Context, prompt string) bool { return true }
 	h.r.approve = "auto"
-	if _, err := h.r.newSession(context.Background()); err != nil {
+	if _, err := h.r.newSession(context.Background(), ""); err != nil {
 		t.Fatalf("newSession: %v", err)
 	}
 	if h.r.approve != "manual" {
@@ -632,7 +667,7 @@ func TestNewResetsDials(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	h.r.effort = "xhigh"
 	h.r.role = "architect"
-	if _, err := h.r.newSession(context.Background()); err != nil {
+	if _, err := h.r.newSession(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if h.r.effort != "" || h.r.role != "" {

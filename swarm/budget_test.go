@@ -72,7 +72,7 @@ func TestSwarmBudgetStopsClaimsWithANotice(t *testing.T) {
 		return false
 	})
 	h.waitFor(t, "the swarm to stop claiming", func() bool {
-		rows, err := h.todoDB.DB.Query(`SELECT count(*) FROM tasks WHERE scope = 'swarm' AND status = 'pending'`)
+		rows, err := h.todoDB.DB.Query(`SELECT count(*) FROM tasks WHERE scope = ? AND status = 'pending'`, h.proj.Key)
 		if err != nil {
 			return false
 		}
@@ -120,7 +120,7 @@ func TestSwarmRemoteRowNeverConsultsTheSwap(t *testing.T) {
 		TodoDB:       h.todoDB,
 		SchedDB:      h.schedDB,
 		Home:         h.home,
-		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return h.proj, nil },
 		Cwd:          h.cwd,
 		WorkerCmd:    []string{"/x/rig"},
 		Fetch:        h.fetch.fetch,

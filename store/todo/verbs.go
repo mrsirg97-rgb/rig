@@ -95,7 +95,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 		}
 		switch ts.status {
 		case statusDone:
-			return echoTask(f, session, id, "'"+id+"' completed"), nil
+			return echoTask(f, session, id, "'"+id+"' completed", ""), nil
 		case statusReview:
 			return "", fmt.Errorf("'%s' is in review; accept or reject it first", id)
 		case statusFailed:
@@ -158,7 +158,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, note), foot), nil
+		return withFoot(echoTask(f, session, id, note, ""), foot), nil
 	})
 }
 
@@ -218,7 +218,7 @@ func Fail(ctx context.Context, db store.DB, p Project, id, session string, worke
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, note), foot), nil
+		return withFoot(echoTask(f, session, id, note, ""), foot), nil
 	})
 }
 
@@ -279,7 +279,7 @@ func Claim(ctx context.Context, db store.DB, p Project, session, status string) 
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, ts.id, note), foot), nil
+		return withFoot(echoTask(f, session, ts.id, note, p.Dir), foot), nil
 	})
 }
 
@@ -306,7 +306,7 @@ func Note(ctx context.Context, db store.DB, p Project, id, text, session string)
 			return "", e
 		}
 		f.tasks[id].notes = append(f.tasks[id].notes, noteState{text: note, session: session, ts: ts})
-		return withFoot(echoTask(f, session, id, "note added to '"+id+"'"), foot), nil
+		return withFoot(echoTask(f, session, id, "note added to '"+id+"'", ""), foot), nil
 	})
 }
 
@@ -366,7 +366,7 @@ func Accept(ctx context.Context, db store.DB, p Project, id, session string) (st
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, note), foot), nil
+		return withFoot(echoTask(f, session, id, note, ""), foot), nil
 	})
 }
 
@@ -415,7 +415,7 @@ func Reject(ctx context.Context, db store.DB, p Project, id, reason, session str
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, reply), foot), nil
+		return withFoot(echoTask(f, session, id, reply, ""), foot), nil
 	})
 }
 
@@ -464,7 +464,7 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, "'"+id+"' moved to position "+strconv.Itoa(pos)), foot), nil
+		return withFoot(echoTask(f, session, id, "'"+id+"' moved to position "+strconv.Itoa(pos), ""), foot), nil
 	})
 }
 
@@ -521,7 +521,7 @@ func Release(ctx context.Context, db store.DB, p Project, id, session string) (s
 			if e := rewrite(tx, f, p.Key); e != nil {
 				return "", e
 			}
-			return withFoot(echoTask(f, session, id, "'"+id+"' released (was claimed for review by "+owner+")"), foot), nil
+			return withFoot(echoTask(f, session, id, "'"+id+"' released (was claimed for review by "+owner+")", ""), foot), nil
 		}
 		ts.status = statusPending
 		ts.owner = ""
@@ -530,7 +530,7 @@ func Release(ctx context.Context, db store.DB, p Project, id, session string) (s
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(echoTask(f, session, id, "'"+id+"' released (was claimed by "+owner+")"), foot), nil
+		return withFoot(echoTask(f, session, id, "'"+id+"' released (was claimed by "+owner+")", ""), foot), nil
 	})
 }
 

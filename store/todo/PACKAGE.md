@@ -69,20 +69,17 @@ drops done only, and the summary counts review rows (`· N in review`).
   brief: text + notes with sessions) and `Counts` (the fold's
   per-status counts, read-only) — the swarm's brief and status band
   never parse the rendered reply.
-- `binding.go`: which queue a session works in. `ProjectOf(dir)` mints a
+- `project.go`: which queue a call acts on. `ProjectOf(dir)` mints a
   `Project` from a directory (abs first: one workspace must not have two
-  keys), `Bind`/`BindingOf` record and read a session's binding in
-  `session_project`, `RealSession` says whether a session can hold one
-  (the anonymous attribution a threadless call gets is shared by every
-  anonymous caller, so a binding recorded under it would leak one
-  session's project onto another's). `Bind` on an unattributable session
-  is inert, not an error: an unthreaded verb still works, it just cannot
-  carry a binding forward. Inside a repo the queue's label is the common
-  dir's own base, so a session in a subdirectory or a second worktree
-  names the workspace it is in, not the folder it started in; a bare repo's
-  common dir is the repo root itself, so the name is the root's own base.
-  The binding is mutable state beside the log: the log decides what a
-  queue holds, the binding only which queue a call touches.
+  keys) and `Global()` mints the reserved word's own queue. Inside a
+  repo the queue's label is the common dir's own base, so a call in a
+  subdirectory or a second worktree names the workspace it is in, not
+  the folder rig started in; a bare repo's common dir is the repo root
+  itself, so the name is the root's own base. `Project.Dir` carries the
+  scope word the project resolved from (the absolute directory, or
+  `global`), and the `start`/`claim` echoes ride it as `· scope <word>`.
+  The store does not decide which project a call means; the caller
+  resolves it (the tool holds the scope resolution).
 - `path.go`: `FilePath(home)`, the store's file: `<home>/todo/todo.sqlite`.
 - `migration.go`: the one-time 1→2 migration: folds the legacy
   per-cwd stores into `todo.sqlite` (scope = the file's hash) and rem's
@@ -92,8 +89,7 @@ drops done only, and the summary counts review rows (`· N in review`).
   column — the projection is rebuilt from the log inside every
   transaction and never trusted, so dropping it is safe; the log carries
   the edges.
-- `metadata/metadata.go`: hand-written metadata (plus `extra.sql`, which
-  now also carries the `session_project` table).
+- `metadata/metadata.go`: hand-written metadata (plus `extra.sql`).
 
 ## How it is consumed
 
@@ -159,13 +155,12 @@ drops done only, and the summary counts review rows (`· N in review`).
   semantics: a hidden done task still resolves by id, links resolve by
   id, and notes and show work on any id.
 - One store, every row scoped: `FilePath(home)` is the one `todo.sqlite`,
-  and every operation takes a `Project{Key, Label, OutsideRepo}`: the
+  and every operation takes a `Project{Key, Label, OutsideRepo, Dir}`: the
   queue's identity (the workspace's scope, `store/scope`, or the cwd hash
   outside a repo), its display label, and whether that hash belongs to a
-  non-repo directory — the flag lives on in the store and the binding
-  table, nothing renders it. The store does not decide which project a
-  call means; the caller resolves it (the tool holds the order, the
-  `session_project` table holds a session's answer). Ids stay `tN` per
+  non-repo directory — the flag lives on in the store, nothing renders
+  it. The store does not decide which project a call means; the caller
+  resolves it (the tool holds the scope resolution). Ids stay `tN` per
   scope; minted event seq is one sequence across scopes; compact folds
   and stale footers are per scope. The compact snapshot carries the
   events the counters were rebuilt from, so it carries the ids: ids are

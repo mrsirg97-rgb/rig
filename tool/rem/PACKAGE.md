@@ -16,8 +16,14 @@ calls what).
 
 - `Tool`: a `core.Tool` over the rem store's read/write operations
   (`learn`, `recall`, `reflect`, `prune`) and the graph store's map
-  operations (`index`, `pack`), each with an optional `project` (a path,
-  resolved through `store/scope`, worktree-safe). `pack` takes a
+  operations (`index`, `pack`), each carrying the required `scope`: the
+  reserved word `global` or a directory path, resolved through
+  `store/scope` (worktree-safe; `~` expands at the `middleware/paths`
+  boundary). A call without it refuses naming the rule — there is no
+  cwd fallback in the tool. A path recall searches that project first
+  and fills from global, as ever; a global learn, recall or prune is
+  the global memory alone; `index` and `pack` refuse `global` by name
+  (a map needs a directory). `pack` takes a
   `target`: a symbol (package-qualified or bare), a file path, or a task
   as a sentence (a target with a space that names no file) — the symbol
   and the file reply from the live files, the task replies with the

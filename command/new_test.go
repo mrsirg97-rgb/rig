@@ -21,7 +21,7 @@ func TestNewRefusesLiveTurn(t *testing.T) {
 	swapped := false
 	env := &command.Env{
 		Steer: fs,
-		NewSession: func(ctx context.Context) (string, error) {
+		NewSession: func(ctx context.Context, dir string) (string, error) {
 			swapped = true
 			return "s2", nil
 		},
@@ -40,7 +40,7 @@ func TestNewSuccessLineAndSlotClear(t *testing.T) {
 	fs := &fakeSteer{slot: "queued steer", hasSlot: true}
 	env := &command.Env{
 		Steer: fs,
-		NewSession: func(ctx context.Context) (string, error) {
+		NewSession: func(ctx context.Context, dir string) (string, error) {
 			return "s2-fresh", nil
 		},
 	}
@@ -59,7 +59,7 @@ func TestNewSuccessLineAndSlotClear(t *testing.T) {
 func TestNewRefusedCloseKeepsTheCurrent(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{
-		NewSession: func(ctx context.Context) (string, error) {
+		NewSession: func(ctx context.Context, dir string) (string, error) {
 			return "", errStoreFault
 		},
 	}

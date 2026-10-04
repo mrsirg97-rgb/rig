@@ -21,8 +21,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 
-var proj = todostore.Project{Key: "swarm", Label: "swarm"}
-
 var modelsFixture = []struct {
 	ID     string
 	Alias  []string
@@ -230,6 +228,7 @@ func (f *fakeSpawn) prompt(i int) string {
 }
 
 type harness struct {
+	proj    todostore.Project
 	todoDB  store.DB
 	schedDB store.DB
 	home    string
@@ -269,11 +268,12 @@ func newHarness(t *testing.T) *harness {
 	h.fetch = &fetchState{}
 	h.fe = &recordFrontend{}
 	h.listen(h.room)
+	h.proj = todostore.ProjectOf(h.cwd)
 	h.ctl = swarm.New(swarm.Opts{
 		TodoDB:       todoDB,
 		SchedDB:      schedDB,
 		Home:         h.home,
-		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return h.proj, nil },
 		Cwd:          h.cwd,
 		WorkerCmd:    []string{"/x/rig"},
 		Fetch:        h.fetch.fetch,
@@ -315,14 +315,14 @@ func (h *harness) create(t *testing.T, texts ...string) {
 	for i, text := range texts {
 		items[i] = todostore.CreateItem{Text: text}
 	}
-	if _, err := todostore.Create(context.Background(), h.todoDB, proj, items, "sess-architect"); err != nil {
+	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, items, "sess-architect"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 }
 
 func (h *harness) status(t *testing.T, id string) string {
 	t.Helper()
-	rows, err := h.todoDB.DB.Query(`SELECT status FROM tasks WHERE scope = 'swarm' AND id = ?`, id)
+	rows, err := h.todoDB.DB.Query(`SELECT status FROM tasks WHERE scope = ? AND id = ?`, h.proj.Key, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +419,7 @@ func TestSwarmSpawnCarriesNoStallNoTimeoutAndWaitsOnTheServer(t *testing.T) {
 		TodoDB:       h.todoDB,
 		SchedDB:      h.schedDB,
 		Home:         h.home,
-		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return h.proj, nil },
 		Cwd:          h.cwd,
 		WorkerCmd:    []string{"/x/rig"},
 		Fetch:        h.fetch.fetch,
@@ -457,7 +457,7 @@ func TestSwarmDeadWorkerTaskReleasedAndHandedToAnother(t *testing.T) {
 	}
 	h.start(t, swarm.StartOpts{Count: 2, Role: "worker"})
 	h.waitFor(t, "the dead claim released", func() bool {
-		rows, err := h.todoDB.DB.Query(`SELECT op FROM events WHERE scope = 'swarm' AND op = 'release'`)
+		rows, err := h.todoDB.DB.Query(`SELECT op FROM events WHERE scope = ? AND op = 'release'`, h.proj.Key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -489,7 +489,7 @@ func TestSwarmTwoSessionsOnOneQueueNeverRunATaskTwice(t *testing.T) {
 		TodoDB:       h.todoDB,
 		SchedDB:      h.schedDB,
 		Home:         h.home,
-		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return proj, nil },
+		Project:      func(ctx context.Context, session string) (todostore.Project, error) { return h.proj, nil },
 		Cwd:          h.cwd,
 		WorkerCmd:    []string{"/x/rig"},
 		Fetch:        h.fetch.fetch,
@@ -567,6 +567,12 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 		if !strings.Contains(h.spawn.prompt(i), "The supervisor owns this board entry") {
 			t.Errorf("spawn %d must tell the worker the supervisor owns the board entry:\n%s", i, h.spawn.prompt(i))
 		}
+		if !strings.Contains(h.spawn.prompt(i), "Every todo and rem call names scope: "+h.cwd) {
+			t.Errorf("spawn %d must name the scope the worker passes:\n%s", i, h.spawn.prompt(i))
+		}
+		if !strings.Contains(h.spawn.prompt(i), "rem tool (scope: "+h.cwd+")") {
+			t.Errorf("spawn %d's report-back must carry the scope path:\n%s", i, h.spawn.prompt(i))
+		}
 	}
 	rows := h.ctl.List()
 	done := 0
@@ -586,10 +592,10 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 func TestSwarmCompletedRequirementHandsTheDependentOut(t *testing.T) {
 	h := newHarness(t)
 	req := "t1"
-	if _, err := todostore.Create(context.Background(), h.todoDB, proj, []todostore.CreateItem{{Text: "the blocker"}}, "sess-architect"); err != nil {
+	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, []todostore.CreateItem{{Text: "the blocker"}}, "sess-architect"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := todostore.Create(context.Background(), h.todoDB, proj, []todostore.CreateItem{{Text: "the dependent", Requires: &req}}, "sess-architect"); err != nil {
+	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, []todostore.CreateItem{{Text: "the dependent", Requires: &req}}, "sess-architect"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	h.spawn.queue = []sched.SpawnResult{
@@ -634,7 +640,7 @@ func TestSwarmReviewerRejectsAndAWorkerPicksItUp(t *testing.T) {
 	h.waitFor(t, "the rejection picked up and accepted", func() bool {
 		return h.status(t, "t1") == "done"
 	})
-	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, h.proj, "t1", "sess-architect")
 	if err != nil {
 		t.Fatalf("notes: %v", err)
 	}
@@ -676,10 +682,10 @@ func TestSwarmSecondDeathFailsTheTask(t *testing.T) {
 func TestSwarmReviewerSecondDeathRejectsWithTheReason(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "in review")
-	if _, err := todostore.Claim(context.Background(), h.todoDB, proj, "sess-architect", ""); err != nil {
+	if _, err := todostore.Claim(context.Background(), h.todoDB, h.proj, "sess-architect", ""); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	if _, err := todostore.Complete(context.Background(), h.todoDB, proj, "t1", "sess-architect", true); err != nil {
+	if _, err := todostore.Complete(context.Background(), h.todoDB, h.proj, "t1", "sess-architect", true); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	h.spawn.result = sched.SpawnResult{Exit: 1, Stderr: "reviewer died\n"}
@@ -687,7 +693,7 @@ func TestSwarmReviewerSecondDeathRejectsWithTheReason(t *testing.T) {
 	h.waitFor(t, "the review rejected after the restart", func() bool {
 		return h.status(t, "t1") == "pending"
 	})
-	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, h.proj, "t1", "sess-architect")
 	if err != nil {
 		t.Fatalf("notes: %v", err)
 	}
@@ -861,7 +867,7 @@ func TestSwarmReviewerNoVerdictCappedAtTwoRejectsThenFails(t *testing.T) {
 	if got := h.spawn.count(); got != 7 {
 		t.Fatalf("spawn calls = %d, want 7 (three work rounds plus four review rounds)", got)
 	}
-	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, h.proj, "t1", "sess-architect")
 	if err != nil {
 		t.Fatalf("notes: %v", err)
 	}
@@ -890,7 +896,7 @@ func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
 	if got := h.spawn.count(); got != 7 {
 		t.Fatalf("spawn calls = %d, want 7 (the worker's death consumed the one retry the reviewer would have had)", got)
 	}
-	notes, err := todostore.Notes(context.Background(), h.todoDB, proj, "t1", "sess-architect")
+	notes, err := todostore.Notes(context.Background(), h.todoDB, h.proj, "t1", "sess-architect")
 	if err != nil {
 		t.Fatalf("notes: %v", err)
 	}

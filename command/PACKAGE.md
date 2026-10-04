@@ -5,16 +5,17 @@
 The user-command leaf (SPEC_COMMANDS): the prefix rule, the `Env` the
 root builds, and the standard set; one file per command, testable with
 fakes: no kernel, no stores, no provider. Stdlib plus core and models,
-nothing else: the leaf depends on core and models; the root depends on
-the leaf.
+nothing else — except `project`'s `~`, which rides `middleware/paths`
+(the one expansion rule) and lands no store in the leaf: the leaf
+depends on core and models; the root depends on the leaf.
 
 ## What it includes
 
 - The prefix rule (`IsCommandLine`), the escape (`Unescape`), and the
   line splitter (`Parse`).
-- `All()`: the standard set of fourteen commands: `compact`, `new`,
-  `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
-  `rem`, `effort`, `role`, `approve`, `swarm`, `theme`.
+- `All()`: the standard set of fifteen commands: `compact`, `new`,
+  `project`, `models`, `sessions`, `steer`, `todo`, `scheduler`,
+  `plugins`, `rem`, `effort`, `role`, `approve`, `swarm`, `theme`.
 - `Env`: the command's world, built at the root: closures, not
   handles. `Env.Workers` carries the fleet (the model, the slots, the
   file, the configured fact) and is what a missing `scheduler` tool
@@ -56,6 +57,14 @@ the leaf.
   root; the loop reads `k.Provider`/`k.Policy` fresh at each turn start).
 - **new**: closes the current session row ok, mints a fresh session and
   recorder, swaps them into the kernel; the steering slot is dropped.
+- **project**: the operator moves the session, never a tool (2.12.0):
+  `/project <path>` closes the current session through the same seam
+  `new` uses and opens a fresh one whose workspace is that path —
+  `~` expands, the path canonicalizes, a non-directory refuses by name,
+  and the reply is the new session id and the workspace line. The moved
+  session reads that workspace's AGENTS.md at wire (2.11.8's
+  `config.ProjectAgents`); bare, it refuses with the usage. `new` passes
+  the empty path and keeps the workspace.
 - **sessions**: lists, shows, resumes over the rows that exist; its
   `Sub()` hints are `list`, `show`, `resume` (the TUI's verb menu), and
   `list` is the bare command's read under a name.
@@ -67,12 +76,13 @@ the leaf.
   goroutines.
 - **todo/scheduler**: a thin shared adapter over one of the model's own
   tools: parse the line into the tool's JSON args, call `Exec` with the
-  session threaded, return the reply verbatim. `todo project [path]` is
-  the binding door (SPEC_STATE): with a path it binds this session to
-  that project's queue and renders it, bare it reports where the queue
-  is; `todo <path> <verb…>` binds and acts in one line, `todo notes
-  <id>` lists a task's notes, `todo read <id>` renders one task, and
-  `todo prune` drops the done rows. The path form folds the path
+  session threaded, return the reply verbatim. Since the tool's `scope`
+  is required (2.12.0), the command names it for the operator:
+  `Env.Workspace` is the session's workspace, and a verb that names no
+  scope acts there; `todo project [path]` shows a queue — with a path
+  that project's, bare this workspace's; `todo <path> <verb…>` acts
+  there in one line, `todo notes <id>` lists a task's notes, `todo read
+  <id>` renders one task, and `todo prune` drops the done rows. The path form folds the path
   argument into the args the verb parse produced, so one grammar serves
   both shapes. A leading field that is not one of the tool's
   verbs reads as a path, so a mistyped verb refuses as a missing

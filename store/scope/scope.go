@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+const Global = "global"
+
 func ShortHash(s string) string {
 	d := sha1.Sum([]byte(s))
 	return hex.EncodeToString(d[:])[:12]
@@ -24,8 +26,8 @@ type cacheT struct {
 var cache = cacheT{vals: map[string]string{}, bare: map[string]bool{}, wt: map[string]string{}}
 
 func Path(cwd string) string {
-	if cwd == "" {
-		return ""
+	if cwd == "" || cwd == Global {
+		return cwd
 	}
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
@@ -50,6 +52,9 @@ func Path(cwd string) string {
 }
 
 func Key(cwd string) string {
+	if cwd == Global {
+		return Global
+	}
 	return ShortHash(Path(cwd))
 }
 
@@ -101,7 +106,7 @@ func InRepo(cwd string) bool {
 }
 
 func Bare(cwd string) bool {
-	if cwd == "" {
+	if cwd == "" || cwd == Global {
 		return false
 	}
 	cache.mu.Lock()

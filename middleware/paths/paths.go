@@ -12,7 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 )
 
-var Fields = []string{"path", "root", "project", "dir", "directory", "file", "target", "dest", "destination", "workspace"}
+var Fields = []string{"path", "root", "project", "scope", "dir", "directory", "file", "target", "dest", "destination", "workspace"}
 
 func Expand(p string) string {
 	if p == "" || p[0] != '~' {

@@ -152,7 +152,7 @@ func TestUnknownCommandIsLoudNeverAPrompt(t *testing.T) {
 	if err != nil || line != "hello" {
 		t.Fatalf("the command line is consumed; the next line runs as a prompt, got %q %v", line, err)
 	}
-	want := "unknown command: bogus (known: approve, compact, effort, models, new, plugins, rem, role, scheduler, sessions, steer, swarm, theme, todo)"
+	want := "unknown command: bogus (known: approve, compact, effort, models, new, plugins, project, rem, role, scheduler, sessions, steer, swarm, theme, todo)"
 	if !strings.Contains(r.out.String(), want) {
 		t.Fatalf("the refusal must name the wrong and the right: %q", r.out.String())
 	}
@@ -259,7 +259,7 @@ func TestSteerEmptyInterrupts(t *testing.T) {
 
 func TestNewDropsTheQueuedSteer(t *testing.T) {
 	env := &command.Env{
-		NewSession: func(ctx context.Context) (string, error) { return "s2", nil },
+		NewSession: func(ctx context.Context, dir string) (string, error) { return "s2", nil },
 	}
 	r := buildWithCommands(t, env, "one\n")
 

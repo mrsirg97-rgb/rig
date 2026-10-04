@@ -9,7 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 	"github.com/mrsirg97-rgb/rig/v2/tool"
-	"os"
 )
 
 type adapter struct {
@@ -42,7 +41,6 @@ type given struct {
 	Kind              *string  `json:"kind"`
 	Importance        *float64 `json:"importance"`
 	Scope             *string  `json:"scope"`
-	Project           *string  `json:"project"`
 	K                 *int     `json:"k"`
 	Verb              *string  `json:"verb"`
 	IDs               []any    `json:"ids"`
@@ -57,33 +55,32 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if err := json.Unmarshal(args, &g); err != nil {
 		return "", fmt.Errorf("rem: %v", err)
 	}
-	cwd := ""
-	if g.Project != nil && *g.Project != "" {
-		cwd = *g.Project
-	} else {
-		wd, err := os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("rem: %v", err)
-		}
-		cwd = wd
-	}
-	if g.Project != nil && *g.Project != "" && g.Scope != nil && *g.Scope == "global" {
-		return "", fmt.Errorf("rem: project + scope:global: a global memory has no project")
-	}
 	switch g.Action {
 	case "":
 		return "", fmt.Errorf("rem: action required")
+	case "index", "pack", "learn", "recall", "reflect", "prune":
+	default:
+		return "", fmt.Errorf("rem: action '%s' not implemented", g.Action)
+	}
+	cwd, global, err := scopeOf(g.Scope)
+	if err != nil {
+		return "", err
+	}
+	switch g.Action {
 	case "index":
+		if global {
+			return "", fmt.Errorf("rem: index: global has no map; a map needs a directory")
+		}
 		return a.graph.IndexProject(ctx, cwd)
 	case "pack":
+		if global {
+			return "", fmt.Errorf("rem: pack: global has no map; a map needs a directory")
+		}
 		if g.Target == nil || *g.Target == "" {
 			return "", fmt.Errorf("rem: action 'pack' requires target")
 		}
 		return a.graph.Pack(ctx, cwd, *g.Target)
 	case "learn":
-		if err := scopeCheck(g.Scope); err != nil {
-			return "", err
-		}
 		if g.Content == nil || *g.Content == "" {
 			return "", fmt.Errorf("rem: action 'learn' requires content")
 		}
@@ -104,15 +101,12 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			Kind:          kind,
 			Importance:    importance,
 			ImportanceSet: importanceSet,
-			Scope:         scopeOf(g.Scope),
+			Scope:         internalScope(global),
 			Source:        attributedSource(g.Source, ctx),
 			Supersedes:    supersedes,
 		})
 		return reply, err
 	case "recall":
-		if err := scopeCheck(g.Scope); err != nil {
-			return "", err
-		}
 		if g.K != nil && (*g.K < 1 || *g.K > 50) {
 			return "", fmt.Errorf("rem: k must be within 1..50, got %d", *g.K)
 		}
@@ -120,7 +114,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.K != nil {
 			k = *g.K
 		}
-		scope := scopeOf(g.Scope)
+		scope := internalScope(global)
 		reply, _, err := remstore.Recall(ctx, a.db, cwd, remstore.RecallInput{
 			Query:             queryOf(g.Query),
 			Scope:             scope,
@@ -130,9 +124,6 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		})
 		return reply, err
 	case "reflect":
-		if err := scopeCheck(g.Scope); err != nil {
-			return "", err
-		}
 		if g.Content == nil || *g.Content == "" {
 			return "", fmt.Errorf("rem: action 'reflect' requires content")
 		}
@@ -147,14 +138,11 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 			Content:       *g.Content,
 			Importance:    importance,
 			ImportanceSet: importanceSet,
-			Scope:         scopeOf(g.Scope),
+			Scope:         internalScope(global),
 			Source:        attributedSource(g.Source, ctx),
 		})
 		return reply, err
 	case "prune":
-		if err := scopeCheck(g.Scope); err != nil {
-			return "", err
-		}
 		verb := ""
 		if g.Verb != nil {
 			verb = *g.Verb
@@ -170,7 +158,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if err != nil {
 			return "", err
 		}
-		scope := scopeOf(g.Scope)
+		scope := internalScope(global)
 		var importance *float64
 		if g.Importance != nil {
 			v, _, err := importanceOf(g.Importance)

@@ -140,13 +140,14 @@
   {
     "name": "todo",
     "enabled": true,
-    "what": "the task queue for the current workspace — for any job of three or more steps: create the tasks before the first edit, start one before working on it, complete or fail it when done, and leave the queue empty at the end.",
-    "guidelines": "`requires` makes a task wait on another; a refused create shows the queue; `claim` takes the next pending task with no unfinished `requires` or `blocks` link; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them. set `project` only when the work is in a different workspace than the one you started in.",
+    "what": "the task queue for the current workspace — for any job of three or more steps: create the tasks before the first edit, start one before working on it, complete or fail it when done, and leave the queue empty at the end. every call names its scope: the workspace path, or global.",
+    "guidelines": "`requires` makes a task wait on another; a refused create shows the queue; `claim` takes the next pending task with no unfinished `requires` or `blocks` link; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them.",
     "reply": "the affected row and the queue's summary, scoped by its workspace ([rig]).",
     "schema": {
       "type": "object",
       "required": [
-        "action"
+        "action",
+        "scope"
       ],
       "properties": {
         "action": {
@@ -160,7 +161,6 @@
             "retry",
             "move",
             "prune",
-            "bind",
             "read",
             "note",
             "notes",
@@ -232,9 +232,9 @@
           "maximum": 100,
           "description": "for finished: how many to list; 10 default, 100 max."
         },
-        "project": {
+        "scope": {
           "type": "string",
-          "description": "another workspace, as a path; later calls act there until you name another. ~ expands."
+          "description": "the workspace this acts on, as a path; or global. required."
         }
       }
     }
@@ -242,13 +242,14 @@
   {
     "name": "rem",
     "enabled": true,
-    "what": "memory across sessions and this project's code map.",
-    "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session need not re-derive; supersede by id when the code disagrees; name `project` when the fact belongs to another workspace than the one you started in. actions: `learn` commits a fact or constraint, once; `recall` finds past solutions by intent (this workspace first, then global; an empty query browses); `reflect` stores a distilled memory with its source; `prune` removes, reduces, or consolidates; `pack` loads the live code around a symbol or file — definition, callers, callees — from disk now; `index` maps the whole project. memory ids (`mN`) come from the replies: copy them, never invent them.",
+    "what": "memory across sessions and this project's code map. every call names its scope: the workspace path, or global.",
+    "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session need not re-derive; supersede by id when the code disagrees; actions: `learn` commits a fact or constraint, once; `recall` finds past solutions by intent (this workspace first, then global; an empty query browses); `reflect` stores a distilled memory with its source; `prune` removes, reduces, or consolidates; `pack` loads the live code around a symbol or file — definition, callers, callees — from disk now; `index` maps the whole project. memory ids (`mN`) come from the replies: copy them, never invent them.",
     "reply": "the hits with their ids, strength and arm, the written row, or the pack with its coverage.",
     "schema": {
       "type": "object",
       "required": [
-        "action"
+        "action",
+        "scope"
       ],
       "properties": {
         "action": {
@@ -282,17 +283,6 @@
           "minimum": 0,
           "maximum": 1,
           "description": "0..1; strength starts here and decays"
-        },
-        "scope": {
-          "enum": [
-            "project",
-            "global",
-            "all"
-          ]
-        },
-        "project": {
-          "type": "string",
-          "description": "another workspace, as a path; later calls act there until you name another. ~ expands."
         },
         "k": {
           "type": "integer",
@@ -339,6 +329,10 @@
         "include_superseded": {
           "type": "boolean",
           "description": "fill unused budget with superseded hits"
+        },
+        "scope": {
+          "type": "string",
+          "description": "the workspace this acts on, as a path; or global. required."
         }
       }
     }

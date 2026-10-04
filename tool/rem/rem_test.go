@@ -37,6 +37,13 @@ func newDB(t *testing.T) store.DB {
 
 func exec(t *testing.T, tool core.Tool, ctx context.Context, args map[string]any) (string, error) {
 	t.Helper()
+	if _, ok := args["scope"]; !ok {
+		wd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		args["scope"] = wd
+	}
 	payload, err := json.Marshal(args)
 	if err != nil {
 		t.Fatal(err)
@@ -111,32 +118,6 @@ func TestKShapeRefusesLoudly(t *testing.T) {
 		} else if !strings.Contains(err.Error(), "k must be within 1..50") {
 			t.Errorf("voice:\n%q", err.Error())
 		}
-	}
-}
-
-func TestScopeBogusRefusesLoudly(t *testing.T) {
-	tool := remTool(t, newDB(t))
-	for _, action := range []map[string]any{
-		{"action": "recall", "query": "x", "scope": "bogus"},
-		{"action": "learn", "content": "x", "scope": "bogus"},
-		{"action": "reflect", "content": "x", "scope": "bogus"},
-		{"action": "prune", "verb": "consolidate", "scope": "bogus"},
-	} {
-		if _, err := exec(t, tool, context.Background(), action); err == nil {
-			t.Fatalf("bogus scope succeeded: %v", action)
-		} else if want := "rem: scope must be project, global, or all, got 'bogus'"; err.Error() != want {
-			t.Errorf("voice:\n%q", err.Error())
-		}
-	}
-}
-
-func TestScopeAllAtWriteRefusesLoudly(t *testing.T) {
-	tool := remTool(t, newDB(t))
-	if _, err := exec(t, tool, context.Background(),
-		map[string]any{"action": "learn", "content": "x", "scope": "all"}); err == nil {
-		t.Fatal("scope=all learn succeeded")
-	} else if !strings.Contains(err.Error(), "scope must be project or global, got 'all'") {
-		t.Errorf("voice:\n%q", err.Error())
 	}
 }
 
@@ -257,7 +238,7 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 		t.Fatalf("name %q", tool.Name())
 	}
 	d := tool.Description()
-	for _, want := range []string{"`learn` commits a fact", "`prune` removes, reduces, or consolidates", "memory ids (`mN`) come from the replies", "this workspace first, then global", "name `project` when the fact belongs to another workspace", "`pack` loads the live code around a symbol or file", "`index` maps the whole project"} {
+	for _, want := range []string{"`learn` commits a fact", "`prune` removes, reduces, or consolidates", "memory ids (`mN`) come from the replies", "this workspace first, then global", "every call names its scope: the workspace path, or global", "`pack` loads the live code around a symbol or file", "`index` maps the whole project"} {
 		if !strings.Contains(d, want) {
 			t.Fatalf("description missing %q:\n%s", want, d)
 		}
@@ -273,23 +254,26 @@ func TestNameDescriptionSchemaShape(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if schema.Type != "object" || len(schema.Required) != 1 || schema.Required[0] != "action" {
+	if schema.Type != "object" || len(schema.Required) != 2 || schema.Required[0] != "action" || schema.Required[1] != "scope" {
 		t.Fatalf("schema %+v", schema)
 	}
 	if got := schema.Props["action"].Enum; len(got) != 6 || got[0] != "learn" || got[4] != "index" || got[5] != "pack" {
 		t.Fatalf("action enum %v", got)
 	}
-	if got := schema.Props["scope"].Enum; len(got) != 3 || got[2] != "all" {
-		t.Fatalf("scope enum %v", got)
+	if got := schema.Props["action"].Enum; len(got) != 6 || got[0] != "learn" {
+		t.Fatalf("action enum %v", got)
 	}
 	if got := schema.Props["verb"].Enum; len(got) != 3 || got[0] != "remove" {
 		t.Fatalf("verb enum %v", got)
 	}
-	if _, ok := schema.Props["project"]; !ok {
-		t.Fatal("the schema must carry a project field (the deliberate project)")
+	if _, ok := schema.Props["scope"]; !ok {
+		t.Fatal("the schema must carry the scope field")
 	}
-	if got := schema.Props["project"].Description; got != "another workspace, as a path; later calls act there until you name another. ~ expands." {
-		t.Fatalf("the project field must read the one sentence, got %q", got)
+	if got := schema.Props["scope"].Description; got != "the workspace this acts on, as a path; or global. required." {
+		t.Fatalf("the scope field must read the one sentence, got %q", got)
+	}
+	if _, ok := schema.Props["project"]; ok {
+		t.Fatal("the project field is gone: scope is the one parameter")
 	}
 	if got := schema.Props["importance"].Description; got != "0..1; strength starts here and decays" {
 		t.Fatalf("the importance field must say what strength does, got %q", got)
@@ -326,13 +310,13 @@ func TestLearnWithProjectFromNonRepoCwdRecallsFromRepoAndWorktree(t *testing.T) 
 	db := newDB(t)
 	tool := remTool(t, db)
 	if _, err := exec(t, tool, context.Background(), map[string]any{
-		"action": "learn", "content": "a fact about the repo", "project": repo,
+		"action": "learn", "content": "a fact about the repo", "scope": repo,
 	}); err != nil {
 		t.Fatalf("learn with project: %v", err)
 	}
 	for _, proj := range []string{repo, wt} {
 		reply, err := exec(t, tool, context.Background(), map[string]any{
-			"action": "recall", "query": "fact about the repo", "project": proj,
+			"action": "recall", "query": "fact about the repo", "scope": proj,
 		})
 		if err != nil {
 			t.Fatalf("recall %s: %v", proj, err)
@@ -353,7 +337,7 @@ func TestRecallWithProjectFillsFromGlobalAfter(t *testing.T) {
 	db := newDB(t)
 	tool := remTool(t, db)
 	if _, err := exec(t, tool, context.Background(), map[string]any{
-		"action": "learn", "content": "widget local lore", "project": repo,
+		"action": "learn", "content": "widget local lore", "scope": repo,
 	}); err != nil {
 		t.Fatalf("learn project: %v", err)
 	}
@@ -363,7 +347,7 @@ func TestRecallWithProjectFillsFromGlobalAfter(t *testing.T) {
 		t.Fatalf("learn global: %v", err)
 	}
 	reply, err := exec(t, tool, context.Background(), map[string]any{
-		"action": "recall", "query": "widget", "project": repo,
+		"action": "recall", "query": "widget", "scope": repo,
 	})
 	if err != nil {
 		t.Fatalf("recall: %v", err)
@@ -387,22 +371,71 @@ func TestRecallWithProjectFillsFromGlobalAfter(t *testing.T) {
 	}
 }
 
-func TestProjectPlusGlobalRefuses(t *testing.T) {
+func TestIndexAndPackRefuseGlobalByName(t *testing.T) {
+	db := newDB(t)
+	tool := remTool(t, db)
+	for _, action := range []map[string]any{
+		{"action": "index", "scope": "global"},
+		{"action": "pack", "scope": "global", "target": "anything"},
+	} {
+		if _, err := exec(t, tool, context.Background(), action); err == nil {
+			t.Fatalf("global map work succeeded: %v", action)
+		} else if !strings.Contains(err.Error(), "global has no map; a map needs a directory") {
+			t.Errorf("voice:\n%q", err.Error())
+		}
+	}
+}
+
+func TestACallWithoutScopeRefusesNamingTheRule(t *testing.T) {
+	tool := remTool(t, newDB(t))
+	for _, args := range []map[string]any{
+		{"action": "learn"},
+		{"action": "recall"},
+		{"action": "index"},
+	} {
+		payload, err := json.Marshal(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = tool.Exec(context.Background(), payload)
+		if err == nil || !strings.Contains(err.Error(), "scope required: name the workspace this acts on, as a path, or global") {
+			t.Fatalf("a call without scope must refuse naming the rule, got %v", err)
+		}
+	}
+}
+
+func TestGlobalScopeLandsInTheGlobalStore(t *testing.T) {
 	repo := t.TempDir()
 	gitInit(t, repo)
 	db := newDB(t)
 	tool := remTool(t, db)
-	for _, action := range []map[string]any{
-		{"action": "learn", "content": "x", "project": repo, "scope": "global"},
-		{"action": "reflect", "content": "x", "project": repo, "scope": "global"},
-		{"action": "recall", "query": "x", "project": repo, "scope": "global"},
-		{"action": "prune", "verb": "consolidate", "project": repo, "scope": "global"},
-	} {
-		if _, err := exec(t, tool, context.Background(), action); err == nil {
-			t.Fatalf("project + global succeeded: %v", action)
-		} else if !strings.Contains(err.Error(), "project") || !strings.Contains(err.Error(), "global") {
-			t.Errorf("voice:\n%q", err.Error())
-		}
+	if _, err := exec(t, tool, context.Background(), map[string]any{
+		"action": "learn", "content": "global fact", "scope": "global",
+	}); err != nil {
+		t.Fatalf("learn global: %v", err)
+	}
+	reply, err := exec(t, tool, context.Background(), map[string]any{
+		"action": "recall", "query": "global fact", "scope": "global",
+	})
+	if err != nil {
+		t.Fatalf("recall global: %v", err)
+	}
+	if !strings.Contains(reply, "global fact") {
+		t.Fatalf("the global scope must hold the memory:\n%s", reply)
+	}
+	if _, err := exec(t, tool, context.Background(), map[string]any{
+		"action": "learn", "content": "project fact", "scope": repo,
+	}); err != nil {
+		t.Fatalf("learn at the project: %v", err)
+	}
+	reply, err = exec(t, tool, context.Background(), map[string]any{
+		"action": "recall", "query": "project fact", "scope": "global",
+	})
+	if err != nil {
+		t.Fatalf("recall global: %v", err)
+	}
+	if strings.Contains(reply, "project fact") {
+		t.Fatalf("the global recall is the global memory alone:\n%s", reply)
 	}
 }
 
@@ -420,13 +453,13 @@ func TestRelativeAndTildeProjectResolveIdentically(t *testing.T) {
 		return tool.Exec(ctx, call.Args)
 	})
 	tilearn, err := mwExec(context.Background(), core.ToolCall{
-		Name: "rem", Args: json.RawMessage(`{"action":"learn","content":"tilde fact","project":"~/repo"}`),
+		Name: "rem", Args: json.RawMessage(`{"action":"learn","content":"tilde fact","scope":"~/repo"}`),
 	})
 	if err != nil {
 		t.Fatalf("tilde learn: %v", err)
 	}
 	abslearn, err := mwExec(context.Background(), core.ToolCall{
-		Name: "rem", Args: json.RawMessage(`{"action":"learn","content":"tilde fact","project":"` + repo + `"}`),
+		Name: "rem", Args: json.RawMessage(`{"action":"learn","content":"tilde fact","scope":"` + repo + `"}`),
 	})
 	if err != nil {
 		t.Fatalf("abs learn: %v", err)
