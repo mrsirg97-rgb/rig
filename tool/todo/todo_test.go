@@ -608,6 +608,24 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	}
 }
 
+func TestTodoScopeRefusesAnAbsentDirectoryByName(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	aFile := filepath.Join(t.TempDir(), "a-file")
+	if err := os.WriteFile(aFile, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{filepath.Join(t.TempDir(), "absent"), aFile} {
+		payload, err := json.Marshal(map[string]any{"action": "read", "scope": bad})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tool.Exec(core.WithSession(context.Background(), core.NewSession()), payload); err == nil ||
+			!strings.Contains(err.Error(), "todo: no such project directory: "+bad) {
+			t.Fatalf("a scope that is not a directory must refuse by name, got %v", err)
+		}
+	}
+}
+
 func TestACallWithoutScopeRefusesNamingTheRule(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	payload, err := json.Marshal(map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "x"}}})

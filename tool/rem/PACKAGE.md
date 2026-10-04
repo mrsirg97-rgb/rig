@@ -20,7 +20,9 @@ calls what).
   reserved word `global` or a directory path, resolved through
   `store/scope` (worktree-safe; `~` expands at the `middleware/paths`
   boundary). A call without it refuses naming the rule — there is no
-  cwd fallback in the tool. A path recall searches that project first
+  cwd fallback in the tool — and a path that is not a directory refuses
+  by name, the same words todo's scope refuses: a typo must not mint a
+  memory scope keyed by a path that is not there. A path recall searches that project first
   and fills from global, as ever; a global learn, recall or prune is
   the global memory alone; `index` and `pack` refuse `global` by name
   (a map needs a directory). `pack` takes a

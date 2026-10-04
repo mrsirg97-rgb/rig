@@ -3,10 +3,12 @@ package rem
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
-	"path/filepath"
 )
 
 func attributedSource(explicit *string, ctx context.Context) string {
@@ -29,6 +31,9 @@ func scopeOf(s *string) (string, bool, error) {
 	dir, err := filepath.Abs(paths.Expand(*s))
 	if err != nil {
 		return "", false, fmt.Errorf("rem: scope %q: %v", *s, err)
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return "", false, fmt.Errorf("rem: no such project directory: %s", *s)
 	}
 	return dir, false, nil
 }

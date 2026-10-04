@@ -386,6 +386,24 @@ func TestIndexAndPackRefuseGlobalByName(t *testing.T) {
 	}
 }
 
+func TestRemScopeRefusesAnAbsentDirectoryByName(t *testing.T) {
+	tool := remTool(t, newDB(t))
+	aFile := filepath.Join(t.TempDir(), "a-file")
+	if err := os.WriteFile(aFile, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{filepath.Join(t.TempDir(), "absent"), aFile} {
+		payload, err := json.Marshal(map[string]any{"action": "learn", "content": "x", "scope": bad})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tool.Exec(context.Background(), payload); err == nil ||
+			!strings.Contains(err.Error(), "rem: no such project directory: "+bad) {
+			t.Fatalf("a scope that is not a directory must refuse like todo's, got %v", err)
+		}
+	}
+}
+
 func TestACallWithoutScopeRefusesNamingTheRule(t *testing.T) {
 	tool := remTool(t, newDB(t))
 	for _, args := range []map[string]any{
