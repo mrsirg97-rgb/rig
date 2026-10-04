@@ -471,7 +471,7 @@ env names**, lowerCamel of the env minus the `RIG_` prefix:
 | `webFetchProxy` | `RIG_WEB_FETCH_PROXY`| `http://127.0.0.1:8889` (presence key) |
 | `trafilatura`   | `RIG_TRAFILATURA`   | (none: auto; presence key)        |
 | `swapUrl`       | `RIG_SWAP_URL`      | `http://127.0.0.1:8090`            |
-| `reviewBatch`   | —                   | `10` (2.9.4: rows per review fire, SPEC_DECISION; `0` leaves the reviewer off; a negative or non-integer refuses) |
+| `reviewBatch`   | —                   | `3` (2.9.4: rows per review fire, SPEC_DECISION; 2.11.0 lowered the default from 10: a bite is a glance at the queue mid-work, three at most; `0` leaves the reviewer off; a negative or non-integer refuses) |
 
 Shapes: `allow` is a **JSON array of tool names** in the file (the env
 stays CSV; the 0.2.0 env surface is unchanged); the rest are strings

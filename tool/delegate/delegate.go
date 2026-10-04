@@ -52,7 +52,7 @@ type workerState struct {
 }
 
 func New(o Opts) core.Tool {
-	a := &adapter{Definition: tool.Fill(tool.Def("delegate"), "{default_model}", o.DefaultModel), Opts: o, workers: map[int64]workerState{}}
+	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}}
 	if o.Room != nil {
 		a.member = o.Room.Add(rig.MemberDelegate)
 		a.member.Subscribe(context.Background(), a.receive)

@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -49,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.11.0"
+const Version = "2.11.1"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -282,6 +283,9 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
+	}
+	if fleet != nil && !slices.Contains(allowList, "verdict") {
+		fleet = nil
 	}
 	if fleet != nil {
 		native["verdict"] = true

@@ -24,16 +24,17 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
   panics, since a tool asking for words it does not have is a
   programmer error caught at start, never at the model's call.
 - `Fill(d, slot, value)`: a Definition wrapping another with a slot
-  replaced in the description and the schema, for the two tools whose
-  text carries a runtime value (`scheduler` and `delegate` name the
-  default model as `{default_model}`); delegation by embedding, the
-  registry's own copy never changes.
+  replaced in the description and the schema, for the one tool whose
+  text carries a runtime value (`scheduler` names the default model as
+  `{default_model}` in its schema; `delegate` did too until 2.10.1
+  reworded it, and its wrap went in 2.11.0); delegation by embedding,
+  the registry's own copy never changes.
 - `Names()`: the enabled names in file order; `AllNames()`: every entry.
 
 ## How it is consumed
 
 - Each tool package embeds `tool.Definition` in its tool type and writes
-  only `Exec`; the two with live text wrap theirs with `Fill`; `verdict`
+  only `Exec`; the one with live text wraps its own with `Fill`; `verdict`
   and `decide` are conditional natives, registered only when their door
   exists (a fleet pipe, a decision server). `plugin`
   implements `Schema()` itself to add the live name enum to the

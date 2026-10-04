@@ -278,9 +278,9 @@ that is harder than writing a lot, and it is the bar.
   one entry per native tool (`name`, `enabled`, `what`, `guidelines`,
   `reply`, `schema`); `Definition` is the interface a tool embeds for
   `Name()`, `Description()` and `Schema()`, the registry's entry its one
-  concrete; `Fill` wraps one for the two tools whose text names the
-  default model; `Names()` is the root's native
-  list, in file order, enabled only.
+  concrete; `Fill` wraps the one tool whose schema names the default
+  model (`scheduler`); `Names()` is the root's native list, in file
+  order, enabled only.
 - `tool/bash`: bash(1) execution: real subprocesses, output surfaced
   and bounded.
 - `tool/execwrap`: the landlock subprocess seam: prepends the

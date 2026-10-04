@@ -138,8 +138,11 @@ reasoned 1,344 s over a slot the operator was about to want, died
 `killed by signal 13` on 131 KB of streamed reasoning, settled nothing,
 and re-fired the same batch at the next turn end while the operator
 typed. The wake was right; the bite was wrong. One fire now takes the
-oldest rows up to `reviewBatch` (settings.json, 2.9.4: rows per fire,
-the default 10), settles what the fire answers, and leaves the rest
+oldest rows up to `reviewBatch` (settings.json, 2.9.4: rows per fire;
+the default is 3 since 2.11.0, down from 10: a bite is a glance at the
+queue mid-work, three at most, and the backlog converges across turn
+ends rather than in one sitting), settles what the fire answers, and
+leaves the rest
 pending for the next turn end, so the backlog converges in bites while
 the slot stays between turns. `reviewBatch` 0 leaves the reviewer off
 while proposals keep landing; a negative or a non-integer refuses at
