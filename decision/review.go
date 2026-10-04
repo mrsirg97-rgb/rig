@@ -48,6 +48,7 @@ type Reviewer struct {
 	room     broadcast.Room
 	self     broadcast.Member
 	verdicts map[int64]core.Verdict
+	speaking atomic.Int64
 }
 
 func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, room broadcast.Room) *Reviewer {
@@ -74,10 +75,47 @@ func (r *Reviewer) receive(err error, messages ...broadcast.Message) {
 		return
 	}
 	for _, m := range messages {
-		if v, ok := m.Event().(core.Verdict); ok {
-			r.verdicts[v.Row] = v
+		switch ev := m.Event().(type) {
+		case core.Verdict:
+			r.verdicts[ev.Row] = ev
+		case core.ReasoningDelta:
+			if m.Origin() == r.speaking.Load() {
+				r.phase(core.Phase{Name: phaseReviewing, Text: ev.Text})
+			}
 		}
 	}
+}
+
+const phaseReviewing = "reviewing"
+
+func (r *Reviewer) phase(p core.Phase) {
+	p.Name = phaseReviewing
+	r.self.Publish(context.Background(), func(error) {}, broadcast.NewMessage(r.self.Id(), true, p))
+}
+
+func (r *Reviewer) speak(ctx context.Context, rows []ReviewRow) (string, error) {
+	voice := r.room.Mint()
+	r.speaking.Store(voice.Id())
+	r.phase(core.Phase{})
+	reviewer, err := r.fire(ctx, reviewPrompt(rows), voice)
+	voice.Leave()
+	return reviewer, err
+}
+
+func (r *Reviewer) settled(n int, err error) {
+	r.speaking.Store(0)
+	if err != nil {
+		r.phase(core.Phase{Done: true, Note: err.Error()})
+		return
+	}
+	r.phase(core.Phase{Done: true, Ok: true, Note: fmt.Sprintf("%d %s settled", n, plural(n, "row"))})
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	return word + "s"
 }
 
 func (r *Reviewer) call(fn func()) {
@@ -115,15 +153,14 @@ func (r *Reviewer) bite() {
 		return
 	}
 	go func() {
-		voice := r.room.Mint()
-		reviewer, err := r.fire(r.ctx, reviewPrompt(rows), voice)
-		voice.Leave()
+		reviewer, err := r.speak(r.ctx, rows)
 		r.engine.Add(evt.Func(func(context.Context) {
 			if err != nil {
 				r.say("review: fire: %v", err)
+				r.settled(0, err)
 				return
 			}
-			r.settle(r.ctx, rows, all, reviewer)
+			r.settled(r.settle(r.ctx, rows, all, reviewer), nil)
 		}), rig.PriorityReview)
 	}()
 }
@@ -157,14 +194,14 @@ func (r *Reviewer) Drain(ctx context.Context) (string, error) {
 		}
 		return "nothing pending", nil
 	}
-	voice := r.room.Mint()
-	reviewer, err := r.fire(ctx, reviewPrompt(rows), voice)
-	voice.Leave()
+	reviewer, err := r.speak(ctx, rows)
 	if err != nil {
+		r.settled(0, err)
 		return "", fmt.Errorf("fire: %w", err)
 	}
 	settled := 0
 	r.call(func() { settled = r.settle(ctx, rows, all, reviewer) })
+	r.settled(settled, nil)
 	return fmt.Sprintf("fired %d rows, settled %d, %d stay pending", len(rows), settled, len(all)-len(rows)), nil
 }
 

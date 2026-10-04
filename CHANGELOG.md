@@ -24,6 +24,30 @@ trained the eye on all session; no new theme vocabulary. The web
 frontend receives the level in its `notice` frame for free; the
 recorder stores it. `RenderNotice` and the transcript line are gone.
 
+The second commit lets the operator watch the two things that used to
+happen behind the indicator. The decision review's bite and
+compaction's summary call were both a model thinking out of sight: the
+bite in a child whose reasoning went to its run log, the summary in a
+stream the policy read and dropped. Both are now a `core.Phase`, one
+type for begin, delta and end (`reviewing`, `summarizing`), the same
+kind of reopening as `Snapshot`, `Verdict` and `Level`. The one-shot
+worker sends its reasoning deltas over the fleet pipe as themselves;
+the reviewer, which minted the voice and knows what the fire is for,
+turns them into phase deltas and closes the phase at settle with the
+count; the compaction policy opens `summarizing` before the summary
+call and streams its reasoning, with `Compacted` as the end. The TUI
+shows a phase in the indicator's row as `reviewing · 14s`, streams the
+thinking dim under it through the reasoning toggle, and commits one
+checked line when it ends, then returns the row to idle and lets any
+waiting notice breathe; during a live turn a phase waits, except
+summarizing, which runs inside the turn. The frontend member now
+delivers only what a frontend renders, `Notice`, `SwarmStatus` and
+`Phase`, so a worker's raw thinking never reads as the session's own.
+Named, not built: no percentage for compaction (the call has none, so
+the elapsed time is the fact), and the swarm's workers' thinking, which
+already crosses the pipe, stays off the screen until there is a screen
+for three of them.
+
 The same release makes every slash reply one of two shapes: a one-line
 ack, or the list shape of SPEC_COMMANDS 13. Six replies were prose that
 the TUI painted as plain text. The bare `effort`, `role` and `approve`

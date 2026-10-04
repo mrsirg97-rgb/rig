@@ -5,6 +5,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (t *tui) Notify(ev core.Event) {
@@ -106,7 +107,8 @@ func (t *tui) Notify(ev core.Event) {
 	case core.Compacting:
 
 		t.mu.Lock()
-		t.phase = "compacting"
+		t.phase = "summarizing"
+		t.asideAt = time.Now()
 		t.frame = 0
 		if !t.turnLive {
 			t.compacting = true
@@ -174,6 +176,28 @@ func (t *tui) Notify(ev core.Event) {
 		t.mu.Lock()
 		t.enqueueNoticeLocked(e)
 		t.mu.Unlock()
+	case core.Phase:
+		switch {
+		case e.Done:
+			t.mu.Lock()
+			t.endPhaseLocked()
+			t.mu.Unlock()
+			t.flow("", "\n")
+			t.commit(RenderPhaseEnd(t.theme, e) + "\n")
+		case e.Text != "":
+			t.mu.Lock()
+			visible := t.showReasoning && t.phaseFlows()
+			t.mu.Unlock()
+			if visible {
+				t.flow(SlotReasoning, e.Text)
+			}
+		default:
+			t.mu.Lock()
+			if !t.compacting {
+				t.beginPhaseLocked(e.Name)
+			}
+			t.mu.Unlock()
+		}
 	case core.SwarmStatus:
 		t.mu.Lock()
 		t.swarm = e
@@ -258,7 +282,7 @@ type liveBlocks struct {
 func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap int) ([]string, string, int, liveBlocks) {
 	var blocks liveBlocks
 	var lines []string
-	if t.turnLive || t.compacting || t.noticing {
+	if t.turnLive || t.compacting || t.noticing || t.aside != "" {
 
 		if pl, rows := t.pendingBlockLocked(pendCap); rows > 0 {
 			blocks.pendRows = rows

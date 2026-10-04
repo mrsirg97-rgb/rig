@@ -626,3 +626,49 @@ func speak(voice broadcast.Member, script string) {
 		voice.Publish(context.Background(), func(error) {}, broadcast.NewMessage(voice.Id(), true, v))
 	}
 }
+
+func TestABiteIsAReviewingPhaseWithItsThinking(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
+	})
+	phases := make(chan core.Phase, 16)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if p, ok := m.Event().(core.Phase); err == nil && ok {
+				phases <- p
+			}
+		}
+	})
+	fire := func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
+		voice.Publish(ctx, func(error) {}, broadcast.NewMessage(voice.Id(), true, core.ReasoningDelta{Text: "row 1 reads safe"}))
+		speak(voice, "verdict: 1 approve")
+		return "dsv4", nil
+	}
+	r := decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, 10, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room)
+	if _, err := r.Drain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var got []core.Phase
+	deadline := time.After(5 * time.Second)
+	for len(got) < 3 {
+		select {
+		case p := <-phases:
+			got = append(got, p)
+		case <-deadline:
+			t.Fatalf("the bite is three phase events, got %+v", got)
+		}
+	}
+	if got[0].Name != "reviewing" || got[0].Text != "" || got[0].Done {
+		t.Fatalf("the bite opens the reviewing phase: %+v", got[0])
+	}
+	if got[1].Name != "reviewing" || got[1].Text != "row 1 reads safe" {
+		t.Fatalf("the fire's thinking streams as the phase: %+v", got[1])
+	}
+	if !got[2].Done || !got[2].Ok || got[2].Note != "1 row settled" {
+		t.Fatalf("the settle closes the phase with the count: %+v", got[2])
+	}
+}

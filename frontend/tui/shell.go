@@ -40,6 +40,8 @@ type tui struct {
 	notices       []core.Notice
 	noticing      bool
 	noticeFrame   int
+	aside         string
+	asideAt       time.Time
 
 	turnEstablished bool
 	reading         bool

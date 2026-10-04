@@ -50,6 +50,16 @@ width); no core or loop line (decision 10).
   next follows. While the model works the indicator owns the row and
   notices wait. The breath rides the one frame ticker; a notice on an
   idle row starts it for its own breath and the last breath stops it.
+- **Phases share the row too** (`frame.go`, 2.11.7): a `core.Phase`
+  opening takes the indicator's row as `<name> · <elapsed>` on the ember
+  when no turn owns it, its deltas stream dim under it through the same
+  reasoning toggle, and its end commits one line, a green check or a red
+  cross beside the name and its note, then the row goes idle and any
+  waiting notice breathes. A phase that arrives during a live turn waits
+  and its deltas are not shown (the run log has them). Compaction is the
+  `summarizing` phase: the cue sets the label and the clock, the policy
+  streams the summary call's thinking, and the compaction line is its
+  end.
 - **The swarm band** (`swarm.go`): `RenderSwarmBand`
   folds the latest `SwarmStatus` into one row per role below the status
   rows, behind a short dim rule (four cells), while a swarm runs — the

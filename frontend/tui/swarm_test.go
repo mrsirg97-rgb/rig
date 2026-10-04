@@ -382,3 +382,65 @@ func TestANoticeBreathesInItsLevelsSlot(t *testing.T) {
 		}
 	}
 }
+
+func TestAPhaseTakesTheIdleRowStreamsItsThinkingAndChecksOut(t *testing.T) {
+	th := oledTheme(t)
+	s := idleSession(t, th)
+	s.fe.Notify(core.Phase{Name: "reviewing"})
+	awaitScreen(t, s, "reviewing · ", true)
+	s.fe.Notify(core.Phase{Name: "reviewing", Text: "row 1 reads safe\n"})
+	breathe(t, s, 1)
+	awaitScreen(t, s, "row 1 reads safe", true)
+	s.fe.Notify(core.Phase{Name: "reviewing", Done: true, Ok: true, Note: "3 rows settled"})
+	awaitScreen(t, s, "reviewing · 3 rows settled", true)
+	awaitScreen(t, s, "reviewing · 0s", false)
+	s.fe.mu.Lock()
+	aside, running := s.fe.aside, s.fe.tickStop != nil
+	s.fe.mu.Unlock()
+	if aside != "" || running {
+		t.Fatalf("after the check the row is idle: aside=%q ticker=%v", aside, running)
+	}
+	if !strings.Contains(s.out.String(), th.Paint(SlotSuccess, th.Glyph(GlyphOK))+" "+th.Paint(SlotDim, "reviewing")) {
+		t.Fatal("the end line is a green check beside the phase name")
+	}
+}
+
+func TestAPhaseWaitsBehindALiveTurn(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.Phase{Name: "reviewing"})
+	s.fe.Notify(core.Phase{Name: "reviewing", Text: "quiet thought"})
+	breathe(t, s, 2)
+	if screenHas(t, s, "reviewing · ") != 0 || screenHas(t, s, "quiet thought") != 0 {
+		t.Fatal("the turn's indicator owns the row; the phase and its thinking wait")
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	awaitScreen(t, s, "reviewing · ", true)
+}
+
+func TestCompactionIsTheSummarizingPhaseWithElapsedAndThinking(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.Compacting{})
+	s.fe.Notify(core.Phase{Name: "summarizing"})
+	breathe(t, s, 1)
+	awaitScreen(t, s, "summarizing · 0s", true)
+	s.fe.Notify(core.Phase{Name: "summarizing", Text: "folding the older turns\n"})
+	breathe(t, s, 1)
+	awaitScreen(t, s, "folding the older turns", true)
+	s.fe.Notify(core.Compacted{Summary: "s", Dropped: 1200, Kept: 400})
+	awaitScreen(t, s, "summarizing · 0s", false)
+	if screenHas(t, s, "compact: -1.2k kept 400") != 1 {
+		t.Fatal("the compaction line is the summarizing phase's end")
+	}
+}

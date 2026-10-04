@@ -12,7 +12,7 @@ const (
 )
 
 func (t *tui) startFrameTickerLocked() {
-	if !(t.turnLive || t.compacting || t.noticing) || t.tickStop != nil {
+	if !(t.turnLive || t.compacting || t.noticing || t.aside != "") || t.tickStop != nil {
 		return
 	}
 	if t.ticker == nil && t.ticks == nil {
@@ -24,7 +24,7 @@ func (t *tui) startFrameTickerLocked() {
 }
 
 func (t *tui) stopFrameTickerLocked() {
-	if t.turnLive || t.compacting || t.noticing || t.tickStop == nil {
+	if t.turnLive || t.compacting || t.noticing || t.aside != "" || t.tickStop == nil {
 		return
 	}
 	close(t.tickStop)
@@ -55,7 +55,7 @@ func (t *tui) tickLoop() {
 			t.mu.Lock()
 			dirty := t.dirty
 			t.dirty = false
-			live := (t.turnLive || t.compacting || t.noticing) && len(t.live.lines) > 0
+			live := (t.turnLive || t.compacting || t.noticing || t.aside != "") && len(t.live.lines) > 0
 			if live && now.Sub(lastAnim) >= animPeriod {
 				lastAnim = now
 				t.frame++
@@ -91,7 +91,7 @@ func (t *tui) winchLoop() {
 }
 
 func (t *tui) breatheNoticeLocked() {
-	if !t.noticing || t.turnLive || t.compacting {
+	if !t.noticing || t.turnLive || t.compacting || t.aside != "" {
 		return
 	}
 	t.noticeFrame++
@@ -117,7 +117,7 @@ func (t *tui) enqueueNoticeLocked(n core.Notice) {
 }
 
 func (t *tui) kickNoticesLocked() {
-	if t.noticing || len(t.notices) == 0 || t.turnLive || t.compacting {
+	if t.noticing || len(t.notices) == 0 || t.turnLive || t.compacting || t.aside != "" {
 		return
 	}
 	t.noticing = true
@@ -136,4 +136,24 @@ func noticeSlot(l core.Level) string {
 		return SlotSuccess
 	}
 	return SlotText
+}
+
+func (t *tui) beginPhaseLocked(name string) {
+	t.aside = name
+	t.asideAt = time.Now()
+	t.frame = 0
+	t.startFrameTickerLocked()
+	if len(t.live.lines) > 0 {
+		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+	}
+}
+
+func (t *tui) endPhaseLocked() {
+	t.aside = ""
+	t.stopFrameTickerLocked()
+	t.kickNoticesLocked()
+}
+
+func (t *tui) phaseFlows() bool {
+	return !t.turnLive || t.compacting || t.phase == "summarizing"
 }

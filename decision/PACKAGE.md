@@ -73,6 +73,10 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   on the loop after the fire ends, last naming wins, a reject without a
   correction is not a verdict, unnamed rows stay pending. The reviewer
   takes the room in its constructor (2.11.0); nothing parses stdout. A
+  bite is a `reviewing` phase (2.11.7): the reviewer opens it, turns the
+  fire's reasoning deltas (the voice it minted, heard on its own member)
+  into phase deltas, and closes it at settle with the count or the fire's
+  error, so the operator watches the review think and sees it check out. A
   fire that settled something and left pending rows leaves the reviewer
   dirty, so the next turn end takes the rest; a fire that settled
   nothing waits for the next landing.

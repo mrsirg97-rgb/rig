@@ -66,6 +66,8 @@ const (
 	kindNotice      = "notice"
 	kindSwarmStatus = "swarm_status"
 	kindVerdict     = "verdict"
+	kindPhase       = "phase"
+	kindReasoning   = "reasoning"
 )
 
 func kindOf(ev core.Event) (string, bool) {
@@ -76,6 +78,10 @@ func kindOf(ev core.Event) (string, bool) {
 		return kindSwarmStatus, true
 	case core.Verdict:
 		return kindVerdict, true
+	case core.Phase:
+		return kindPhase, true
+	case core.ReasoningDelta:
+		return kindReasoning, true
 	}
 	return "", false
 }
@@ -90,6 +96,12 @@ func eventOf(kind string, payload json.RawMessage) (core.Event, error) {
 		return ev, json.Unmarshal(payload, &ev)
 	case kindVerdict:
 		var ev core.Verdict
+		return ev, json.Unmarshal(payload, &ev)
+	case kindPhase:
+		var ev core.Phase
+		return ev, json.Unmarshal(payload, &ev)
+	case kindReasoning:
+		var ev core.ReasoningDelta
 		return ev, json.Unmarshal(payload, &ev)
 	}
 	return nil, fmt.Errorf("broadcast: unknown kind %q", kind)

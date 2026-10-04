@@ -88,6 +88,9 @@ func (o *OneShot) Notify(ev core.Event) {
 		if o.Err != nil {
 			io.WriteString(o.Err, e.Text)
 		}
+		if o.Fleet != nil && e.Text != "" {
+			o.Fleet.Send(context.Background(), func(error) {}, broadcast.NewMessage(o.Fleet.Id(), true, e))
+		}
 	case core.Notice:
 		if o.Err != nil {
 			io.WriteString(o.Err, "\nrig: "+e.Source+": "+e.Text+"\n")
