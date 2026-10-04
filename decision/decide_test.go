@@ -17,6 +17,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	filetool "github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
 
@@ -575,22 +576,12 @@ func TestANilRecorderRecordsNothing(t *testing.T) {
 	}
 }
 
-func TestTheGuidelineRidesTheContributorSeam(t *testing.T) {
-	g := decision.Guide()
-	gc, ok := g.(core.GuidelineContributor)
-	if !ok {
-		t.Fatal("the guideline rides the GuidelineContributor seam")
+func TestTheTriggerLivesInTheToolDescription(t *testing.T) {
+	d := tool.Def("decide").Description()
+	if !strings.Contains(d, "instead of finding it out yourself") {
+		t.Fatalf("decide's description carries the trigger: %q", d)
 	}
-	if !strings.Contains(gc.Guidelines(), "hand the items to decide") {
-		t.Fatalf("the guideline carries the contract: %q", gc.Guidelines())
-	}
-	called := false
-	exec := g.Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
-		called = true
-		return "next", nil
-	})
-	out, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash"})
-	if err != nil || out != "next" || !called {
-		t.Fatalf("the guideline link passes through: (%q, %v, %v)", out, err, called)
+	if strings.Contains(d, "hand the items to decide") {
+		t.Fatalf("the old system-prompt wording is gone: %q", d)
 	}
 }

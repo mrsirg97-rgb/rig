@@ -1027,8 +1027,8 @@ func TestSchedulerCreateWithoutAModelStoresTheUnnamedJob(t *testing.T) {
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
 	tool := schedapi.New(st, ct, "rig run-job", "local", home)
-	if !strings.Contains(tool.Description(), "(default local when nothing is)") {
-		t.Fatalf("the tool description must name the session's model: %q", tool.Description())
+	if !strings.Contains(string(tool.Schema()), "(default local when nothing is)") {
+		t.Fatalf("the tool schema must name the session's model: %s", tool.Schema())
 	}
 	raw, err := json.Marshal(map[string]any{
 		"action": "create", "name": "defaulted", "prompt": "p",

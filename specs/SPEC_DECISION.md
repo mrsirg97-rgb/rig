@@ -115,10 +115,9 @@ The store carries the mark as the `unsure` column (schema version 2; the
 migration adds the column to a version 1 file, old rows read 0), null
 confidence and false unsure for a rule that does not estimate.
 
-When `decisionUrl` is set, one guideline joins the system prompt through
-the GuidelineContributor seam: when a step is sorting or filtering many
-items against a question you can state, hand the items to decide instead
-of reading them. Unset, the system prompt is byte-identical.
+When `decisionUrl` is set, the decide tool joins the menu and its
+registry description carries the trigger; the system prompt stays
+byte-identical with or without it.
 
 ## the reviewer
 

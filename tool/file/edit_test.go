@@ -338,9 +338,9 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 func TestEditDescriptionNamesTheGuideline(t *testing.T) {
 	desc := file.Edit().Description()
 	for _, want := range []string{
-		"put enough of the file in each old to match exactly once",
-		"several changes to one file go in one call, applied in order, all or none",
-		"comes back as the file's text instead of a refusal",
+		"put enough of it in each `old` to match exactly once",
+		"chunks apply in order, all or none",
+		"returns the file's text instead of refusing",
 		"the next call edits it",
 		"the file changed since your read",
 		"one line per chunk",

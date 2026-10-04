@@ -63,17 +63,17 @@ func TestNamesListsOnlyTheEnabledInFileOrder(t *testing.T) {
 
 func TestFillReplacesTheSlotEverywhereAndLeavesTheOriginal(t *testing.T) {
 	d := tool.Def("scheduler")
-	if !strings.Contains(d.Description(), "{default_model}") || !strings.Contains(string(d.Schema()), "{default_model}") {
-		t.Fatal("scheduler's registry text must carry the {default_model} slot in both the description and the schema")
+	if !strings.Contains(string(d.Schema()), "{default_model}") {
+		t.Fatal("scheduler's schema must carry the {default_model} slot; the description speaks of the resident default in words")
 	}
 	f := tool.Fill(d, "{default_model}", "dsv4")
 	if strings.Contains(f.Description(), "{default_model}") || strings.Contains(string(f.Schema()), "{default_model}") {
 		t.Fatal("Fill must replace the slot in the description and the schema")
 	}
-	if !strings.Contains(f.Description(), "(default dsv4 when nothing is)") {
-		t.Fatalf("filled description = %q", f.Description())
+	if !strings.Contains(string(f.Schema()), "(default dsv4 when nothing is)") {
+		t.Fatalf("filled schema = %s", string(f.Schema()))
 	}
-	if !strings.Contains(tool.Def("scheduler").Description(), "{default_model}") {
+	if !strings.Contains(string(tool.Def("scheduler").Schema()), "{default_model}") {
 		t.Fatal("Fill must not change the registry's own copy")
 	}
 }

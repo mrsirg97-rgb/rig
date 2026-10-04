@@ -1,4 +1,24 @@
 # Changelog
+## [2.10.1]: the words the model reads
+
+The seven wordiest tool descriptions were rewritten trigger-first: the
+first sentence says when to reach for the tool, rules follow one to a
+sentence, and edge cases and refusal semantics come last. The decide
+trigger left the system prompt — the tool's own description is the one
+source of truth, so the GuidelineContributor link carrying it is gone.
+Scheduler's pinned-model default is named where it lands on the wire,
+in the schema's model description; the description speaks of the
+resident default in words.
+
+- **tool**: seven registry entries reworded (read, edit, todo, rem,
+  scheduler, delegate, decide); schemas untouched, except none —
+  scheduler's keeps the `{default_model}` slot Fill replaces, now the
+  only place the slot lives.
+- **decision**: the guideline seam link is gone; a description test
+  replaces the seam test.
+- **cmd/rig**: the wire tools prefix and the golden_020 request bodies
+  regoldened; the scheduler test asserts the schema now.
+
 ## [2.10.0]: the pack takes a task
 
 `rem pack` needed a symbol or a file, and the question a model arrives

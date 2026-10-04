@@ -25,8 +25,8 @@
   {
     "name": "read",
     "enabled": true,
-    "what": "reads the content of a file, or a range of it by line with offset and limit.",
-    "guidelines": "the native way to look at a file. when a range is capped, it says how many lines came back and where to continue. when a file has changed since you last read it, it says so; diff: true appends its git diff against HEAD; a range past the end refuses, naming the file's total lines. the edit tool checks against the output of read.",
+    "what": "reads a file, or a line range via offset and limit.",
+    "guidelines": "the native way to look at a file. read before using edit; edit checks against its content. a capped range says how many lines came back and where to continue; a range past the end refuses, naming the file's total lines; a file that changed since your last read states so. `diff: true` appends the git diff against HEAD.",
     "reply": "the file's text, exactly as edit will match it.",
     "schema": {
       "type": "object",
@@ -80,8 +80,8 @@
   {
     "name": "edit",
     "enabled": true,
-    "what": "updates the content of an existing file, replacing exact text.",
-    "guidelines": "put enough of the file in each old to match exactly once; several changes to one file go in one call, applied in order, all or none. on a file you have not read this session, a chunk that does not match once comes back as the file's text instead of a refusal, and the next call edits it. on a file you have read, the call refuses and names why: a chunk matched never or more than once as the earlier chunks leave it, or the file changed since your read.",
+    "what": "replaces exact text in an existing file.",
+    "guidelines": "read the file first, then put enough of it in each `old` to match exactly once; batch several changes to one file in a single call — chunks apply in order, all or none. on a file not read this session, a non-matching chunk returns the file's text instead of refusing; the next call edits it. on a read file the call refuses and names why: the chunk matched zero or several times after earlier chunks applied, or the file changed since your read.",
     "reply": "one line per chunk, then the path and total bytes replaced.",
     "schema": {
       "type": "object",
@@ -140,8 +140,8 @@
   {
     "name": "todo",
     "enabled": true,
-    "what": "the task queue for the current workspace.",
-    "guidelines": "for any job of three or more steps, create the tasks before the first edit. start a task before working on it, complete or fail it when done, and leave the queue empty at the end. read shows what is open. note attaches a finding to a task. claim takes the next task nothing waits for, when other sessions share the queue. a task can wait for another: set requires on the one that waits. task ids (tN) come from the tool's replies: copy them, never invent them. set project only when the work is in a different workspace than the one you started in.",
+    "what": "the task queue for the current workspace — for any job of three or more steps: create the tasks before the first edit, start one before working on it, complete or fail it when done, and leave the queue empty at the end.",
+    "guidelines": "`requires` makes a task wait on another; `claim` assigns the next available task to you; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them. set `project` only when the work is in a different workspace than the one you started in.",
     "reply": "the affected row and the queue's summary, scoped by its workspace ([rig]).",
     "schema": {
       "type": "object",
@@ -240,8 +240,8 @@
   {
     "name": "rem",
     "enabled": true,
-    "what": "memory across sessions and this project's code map. learn commits a fact or constraint, once. recall finds past solutions by intent, this workspace first, then global; without a query it browses. reflect stores a distilled memory with its source. prune removes, reduces, or consolidates. pack loads the live code around a symbol or file: definition, callers and callees, from disk now. index maps the whole project.",
-    "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session need not re-derive; supersede by id when the code disagrees; name project when the fact belongs to another workspace than the one you started in. memory ids (mN) come from the replies: copy them, never invent them.",
+    "what": "memory across sessions and this project's code map.",
+    "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session need not re-derive; supersede by id when the code disagrees; name `project` when the fact belongs to another workspace than the one you started in. actions: `learn` commits a fact or constraint, once; `recall` finds past solutions by intent (this workspace first, then global; an empty query browses); `reflect` stores a distilled memory with its source; `prune` removes, reduces, or consolidates; `pack` loads the live code around a symbol or file — definition, callers, callees — from disk now; `index` maps the whole project. memory ids (`mN`) come from the replies: copy them, never invent them.",
     "reply": "the hits with their ids, strength and arm, the written row, or the pack with its coverage.",
     "schema": {
       "type": "object",
@@ -344,8 +344,8 @@
   {
     "name": "scheduler",
     "enabled": true,
-    "what": "persistent background jobs on the operator's crontab: each is a headless worker session with an optional pinned model: omit it and the job runs on whatever is resident (default {default_model} when nothing is); each job runs in its own workspace; a command job runs a shell line with no model.",
-    "guidelines": "create for work that recurs (cron 'M H D Mo DOW') or once (at, self-deletes after one fire); command jobs are for deterministic scripts, never judgment calls. list shows every job with any store-vs-crontab drift. drifting jobs are untrustworthy until their notes clear; repair re-derives a crontab, targeting a single job id or every drifting one. runs is the audit trail; job ids (jN) come from list: copy them, never invent them. sending waits on the queue; if a different model is resident it skips and names it; eviction policy falls on the operator. a failed once job is done; re-create it to retry. timeout and budget bound each fire.",
+    "what": "persistent background jobs on the operator's crontab. each job is a headless worker session; a model can be optionally pinned (omit it and the job runs on what is resident). `command` jobs run one shell line with no model.",
+    "guidelines": "create for work that recurs (`cron`, 5-field vixie) or happens once (`at`, self-deletes after firing); command jobs are for deterministic scripts, never judgment calls. each job runs in its own workspace; timeout and budget cap each fire. `list` shows every job with any store-vs-crontab drift; drifting jobs are untrustworthy until their notes clear; `repair` re-derives a crontab, targeting a single job id or every drifting one. if a different model is resident at fire time the send skips and names it, and eviction policy falls on the operator. a failed once job is done; re-create it to retry. `runs` is the audit trail; job ids (`jN`) come from `list` — copy them, never invent them.",
     "reply": "the job row or the list.",
     "schema": {
       "type": "object",
@@ -411,8 +411,8 @@
   {
     "name": "delegate",
     "enabled": true,
-    "what": "spawns a headless worker to execute a task now; waits until the worker completes.",
-    "guidelines": "give it a bounded sub-task whose result is a message, a long compute, a sweep, a review, never a conversation. fan out with several delegate calls in one turn; each sends and waits on the server's queue; the worker model defaults to the resident one ({default_model} when nothing is resident), and a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home.",
+    "what": "fan out bounded sub-tasks to headless workers: spawns a worker(s) to execute a task now and waits for completion.",
+    "guidelines": "the task should be bounded with a message-shaped result. use for long computations, broad research, or reviews, never a conversation. several delegate calls in one turn run as parallel fan-out. a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home.",
     "reply": "the worker's message plus a trailer with exit, duration, session id and log.",
     "schema": {
       "type": "object",
@@ -584,8 +584,8 @@
   {
     "name": "decide",
     "enabled": true,
-    "what": "asks the decision server one typed question over many items.",
-    "guidelines": "make a choice (each label described), pick yes/no, or apply a score over the list; the items never enter your context. server errors refuse: nothing was sorted.",
+    "what": "ask one, typed question (covering many items) to the decision server instead of finding it out yourself. answered as a choice (each label described), a yes/no, or a score.",
+    "guidelines": "the items never enter your context; state the prompt so one item is answered by one label or value. a server error refuses and nothing was sorted.",
     "reply": "the items grouped by the label, numbered from 1 with the first line; unsure choices return in full for you to judge.",
     "schema": {
       "type": "object",
