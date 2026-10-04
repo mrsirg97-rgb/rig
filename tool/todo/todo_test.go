@@ -1032,4 +1032,7 @@ func TestACreateThatCannotLinkShowsTheQueue(t *testing.T) {
 			t.Fatalf("the refusal teaches the forms and shows the queue, missing %q:\n%v", want, err)
 		}
 	}
+	if strings.Contains(err.Error(), "new") || strings.Contains(err.Error(), "t2") {
+		t.Fatalf("the queue shown is the one that exists, never the tasks that did not land:\n%v", err)
+	}
 }

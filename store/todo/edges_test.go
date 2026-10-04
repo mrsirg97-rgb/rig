@@ -420,8 +420,8 @@ func TestPositionOutOfRangeRefusesTeachingTheLinkForms(t *testing.T) {
 	if strings.Count(err.Error(), "a link is a sibling's number") != 1 {
 		t.Errorf("the link forms are taught once per refusal: %v", err)
 	}
-	if !strings.Contains(err.Error(), "\n") || !strings.Contains(err.Error(), "open") {
-		t.Errorf("the refusal shows the queue so the next call can link by id: %v", err)
+	if !strings.Contains(err.Error(), "\n(no tasks in ws's queue)") {
+		t.Errorf("the refusal shows the queue that exists, here an empty one, so the next call can link by id: %v", err)
 	}
 	if false {
 		t.Errorf("the link forms are taught once per refusal: %v", err)
