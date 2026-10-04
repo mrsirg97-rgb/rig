@@ -76,6 +76,8 @@ nothing is read into the prompt by a session start.
   record the access after the read rather than dropping it.
 - The trigram arm uses the pg_trgm convention (two-space padding): the
   fuzzy arm enforces a minimum absolute overlap and a containment floor.
+  The tokenizing, the grams and the OR-query are `store/fts`'s — the
+  one contract `store/graph` shares.
 - Fusion is reciprocal rank (k=60) over the arms' rankings, deduped by
   memory id, annotated with the reaching arm. The fts arm ORs its tokens
   and orders by FTS5's own rank (bm25), so a long query degrades by

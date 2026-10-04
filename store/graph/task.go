@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v2/store/fts"
 )
 
 const (
@@ -150,14 +150,14 @@ func candidateItem(root string, s symRow) (string, error) {
 
 func lexicalCandidates(ctx context.Context, db store.DB, task string, limit int) ([]symRow, error) {
 	arms := make([][]armHit, 0, 2)
-	if tokens := tokenize(task); len(tokens) > 0 {
-		hits, err := ftsArm(ctx, db, ftsQuery(tokens), limit)
+	if tokens := fts.Tokenize(task); len(tokens) > 0 {
+		hits, err := ftsArm(ctx, db, fts.Query(tokens), limit)
 		if err != nil {
 			return nil, err
 		}
 		arms = append(arms, hits)
 	}
-	if grams := gramsOf(task); len(grams) > 0 {
+	if grams := fts.GramsOf(task); len(grams) > 0 {
 		hits, err := gramArm(ctx, db, grams, limit)
 		if err != nil {
 			return nil, err
@@ -250,48 +250,6 @@ func fuseArms(arms [][]armHit) []symRow {
 	return out
 }
 
-var wordSplit = regexp.MustCompile(`[^a-z0-9]+`)
-
-func tokenize(text string) []string {
-	var out []string
-	for _, tok := range wordSplit.Split(strings.ToLower(text), -1) {
-		if tok != "" {
-			out = append(out, tok)
-		}
-	}
-	return out
-}
-
-func gramsOf(text string) []string {
-	set := map[string]bool{}
-	var out []string
-	for _, word := range tokenize(text) {
-		padded := fmt.Sprintf("  %s  ", word)
-		for i := 0; i+2 < len(padded); i++ {
-			gram := padded[i : i+3]
-			if !set[gram] {
-				set[gram] = true
-				out = append(out, gram)
-			}
-		}
-	}
-	return out
-}
-
-var reservedFTS = regexp.MustCompile(`^(and|or|not)$`)
-
-func ftsQuery(tokens []string) string {
-	parts := make([]string, len(tokens))
-	for i, tok := range tokens {
-		if reservedFTS.MatchString(tok) {
-			parts[i] = fmt.Sprintf("%q", tok)
-		} else {
-			parts[i] = tok
-		}
-	}
-	return strings.Join(parts, " OR ")
-}
-
 func symbolGrams(s Symbol) []string {
-	return gramsOf(strings.Join([]string{s.Name, s.Kind, s.Package, s.File}, " "))
+	return fts.GramsOf(strings.Join([]string{s.Name, s.Kind, s.Package, s.File}, " "))
 }

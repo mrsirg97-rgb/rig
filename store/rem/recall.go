@@ -1,10 +1,7 @@
 package rem
 
 import (
-	"fmt"
 	"math"
-	"regexp"
-	"strings"
 )
 
 const (
@@ -53,55 +50,6 @@ func reinforce(strength float64, accessCount int64, importance float64) float64 
 
 func consolidate(strength, days float64, accessCount int64, importance float64) float64 {
 	return clamp01(reinforce(decay(strength, days), accessCount, importance))
-}
-
-var wordSplit = regexp.MustCompile(`[^a-z0-9]+`)
-
-func tokenize(text string) []string {
-	var out []string
-	for _, tok := range wordSplit.Split(strings.ToLower(text), -1) {
-		if tok != "" {
-			out = append(out, tok)
-		}
-	}
-	return out
-}
-
-func gramsOfWord(word string) []string {
-	padded := fmt.Sprintf("  %s  ", word)
-	var out []string
-	for i := 0; i+2 < len(padded); i++ {
-		out = append(out, padded[i:i+3])
-	}
-	return out
-}
-
-func gramsOf(text string) []string {
-	set := map[string]bool{}
-	var out []string
-	for _, word := range tokenize(text) {
-		for _, gram := range gramsOfWord(word) {
-			if !set[gram] {
-				set[gram] = true
-				out = append(out, gram)
-			}
-		}
-	}
-	return out
-}
-
-var reservedFTS = regexp.MustCompile(`^(and|or|not)$`)
-
-func ftsQuery(tokens []string) string {
-	parts := make([]string, len(tokens))
-	for i, tok := range tokens {
-		if reservedFTS.MatchString(tok) {
-			parts[i] = fmt.Sprintf("%q", tok)
-		} else {
-			parts[i] = tok
-		}
-	}
-	return strings.Join(parts, " OR ")
 }
 
 type armHit struct {

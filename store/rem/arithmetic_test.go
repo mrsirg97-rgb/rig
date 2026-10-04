@@ -58,48 +58,6 @@ func TestEffectiveAgedLosesToFresh(t *testing.T) {
 	}
 }
 
-func TestTokenizeLowercasesAndSplits(t *testing.T) {
-	got := tokenize("LLama-Swap :8090")
-	want := []string{"llama", "swap", "8090"}
-	if len(got) != len(want) {
-		t.Fatalf("tokenize = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("tokenize = %v, want %v", got, want)
-		}
-	}
-}
-
-func TestGramsOfWordArePaddedTrigrams(t *testing.T) {
-	got := gramsOfWord("abc")
-	want := []string{"  a", " ab", "abc", "bc ", "c  "}
-	if len(got) != len(want) {
-		t.Fatalf("gramsOfWord(abc) = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("gramsOfWord(abc) = %v, want %v", got, want)
-		}
-	}
-}
-
-func TestGramsOfDeduplicatesPerMemory(t *testing.T) {
-	got := gramsOf("aa aa")
-	if len(got) != len(gramsOfWord("aa")) {
-		t.Errorf("gramsOf deduped = %d, want %d", len(got), len(gramsOfWord("aa")))
-	}
-}
-
-func TestFtsQueryQuotesReservedOperators(t *testing.T) {
-	if got, want := ftsQuery([]string{"to", "or", "not"}), `to OR "or" OR "not"`; got != want {
-		t.Errorf("ftsQuery = %q, want %q", got, want)
-	}
-	if got, want := ftsQuery([]string{"run", "fast"}), "run OR fast"; got != want {
-		t.Errorf("ftsQuery = %q, want %q", got, want)
-	}
-}
-
 func TestFuseIsReciprocalRank(t *testing.T) {
 	f := fuse([][]armHit{
 		{{memoryID: 1, arm: "fts", rank: 1}, {memoryID: 2, arm: "fts", rank: 1}},
