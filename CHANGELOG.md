@@ -52,11 +52,23 @@ the swarm, the stream files under the scheduler home, the controller's
 mutex and `set`/`bump`/`countOf`. The delegate tool still carries the
 emitter until it moves onto the room.
 
+The reviewer bites on the loop and the delegate tool speaks in the room
+(the fourth commit). A turn end posts the bite at `PriorityReview`, the
+lowest rung, so it starts only when nothing else is queued; the bite
+takes its rows on the loop, fires in a goroutine, and posts the settle
+back, so a four-minute review never holds the operator's input; one
+bite is posted at a time; the reviewer's `Run` goroutine and its wake
+channel are gone, the engine and the context are constructor
+arguments. The delegate tool is a room member and publishes its status
+snapshots there; the `Notify` closure, the `swarm/status` emitter and
+the last 250 ms clock in the tree are gone.
+
 The first commit is the package and its tests; the second the engine;
-the third the swarm. The commits that follow in this release: the
-delegate tool and the review fire move onto the room and cross a pipe
-transport through the encoder, the stdout scrape leaves, and the two
-notice events become one message.
+the third the swarm; the fourth the reviewer and the delegate tool. The
+commits that follow in this release: the heartbeat and the verdict
+cross a pipe transport through the encoder and the stdout scrape
+leaves; the two notice events become one message and the `loud`
+closures go.
 
 ## [2.10.2]: claim says what claim does
 

@@ -7,8 +7,12 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
 )
@@ -57,6 +61,17 @@ func (f *statusSpawn) spawn(ctx context.Context, argv []string, cwd string, env 
 func TestDelegateEmitsSwarmStatus(t *testing.T) {
 	h := newHarness(t, "/tmp/wt")
 	fe := &recordFrontend{}
+	engine := evt.NewEngine()
+	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
+	})
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err == nil && m.Event() != nil {
+				fe.Notify(m.Event())
+			}
+		}
+	})
 	spawn := &statusSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	tool := delegate.New(delegate.Opts{
 		DB:           h.db,
@@ -69,17 +84,80 @@ func TestDelegateEmitsSwarmStatus(t *testing.T) {
 		Fetch:        fakeFetch(""),
 		Spawn:        spawn.spawn,
 		Sandbox:      "off",
-		Notify:       fe.Notify,
+		Room:         room,
 	})
 	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"task":"sweep the floor"}`)); err != nil {
 		t.Fatalf("exec: %v", err)
 	}
+	if n := len(engine.Pending()); n != 1 {
+		t.Fatalf("the claim, thirty heartbeats and the exit before the loop runs are one pending frame, got %d", n)
+	}
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	deadline := time.Now().Add(2 * time.Second)
+	for len(fe.statuses()) < 1 && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	st := fe.statuses()
+	if len(st) != 1 {
+		t.Fatalf("statuses = %d, want the one latest frame", len(st))
+	}
+	last := st[len(st)-1]
+	if len(last.Workers) != 0 {
+		t.Fatalf("the latest frame is the exit, which clears the worker row: %+v", last)
+	}
+	if last.Pending != 0 || last.Review != 0 {
+		t.Fatalf("a delegate carries zero queue counts: %+v", last)
+	}
+}
+
+func TestDelegateFramesRunningThenCleared(t *testing.T) {
+	h := newHarness(t, "/tmp/wt")
+	fe := &recordFrontend{}
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
+	})
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err == nil && m.Event() != nil {
+				fe.Notify(m.Event())
+			}
+		}
+	})
+	spawn := &statusSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	tool := delegate.New(delegate.Opts{
+		DB:           h.db,
+		Home:         h.home,
+		RigHome:      h.rigHome,
+		StateDir:     filepath.Join(h.rigHome, "sessions"),
+		SwapURL:      "http://127.0.0.1:8090",
+		WorkerCmd:    []string{"/x/rig"},
+		DefaultModel: "qwen3.8-workers",
+		Fetch:        fakeFetch(""),
+		Spawn:        spawn.spawn,
+		Sandbox:      "off",
+		Room:         room,
+	})
+	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"task":"sweep the floor"}`)); err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		st := fe.statuses()
+		if len(st) > 0 && len(st[len(st)-1].Workers) == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the exit frame never landed: %+v", st)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 	st := fe.statuses()
 	if len(st) < 2 {
-		t.Fatalf("statuses = %d, want the claim and the exit", len(st))
-	}
-	if len(st) > 4 {
-		t.Fatalf("30 byte observes coalesced into %d statuses, want a few", len(st))
+		t.Fatalf("statuses = %d, want at least the claim and the exit", len(st))
 	}
 	first := st[0]
 	if len(first.Workers) != 1 || first.Workers[0].Task != "sweep the floor" ||

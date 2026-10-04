@@ -39,7 +39,15 @@ it). Stdlib-only leaf beside `pathguard`; no imports of the stores.
   decision); a decider or sink error drops loudly and lands nothing.
 - `review.go`: the reviewer: a landing (`Land`) marks it dirty, the
   session's turn end (`Wake`, through `TurnEnds`' frontend wrap) is the
-  wake, and a turn end with nothing landed costs nothing. `Run` is the
+  wake, and a turn end with nothing landed costs nothing. Since 2.11.0
+  the wake posts the bite on the kernel's engine at `rig.PriorityReview`,
+  below the turn and the fleet, so it starts only when nothing else is
+  queued; the bite takes its rows on the loop, fires in a goroutine (the
+  loop never waits on the world), and the completion posts the settle
+  at the same priority. One bite is posted at a time. There is no `Run`
+  goroutine; the engine and the context are constructor arguments. `Drain`
+  is the same take-fire-settle done synchronously, for a caller that
+  wants the result. The old sentence: `Run` is the
   loop, `Drain` the pass — the pending rows oldest first, up to what the
   reviewer's model row leaves for a prompt (the window minus its
   reserve, at four bytes to the token; a row that cannot fit alone

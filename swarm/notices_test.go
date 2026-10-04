@@ -127,7 +127,7 @@ func TestSwarmNoticesStop(t *testing.T) {
 	}
 }
 
-func TestSwarmStatusEmitsThrottled(t *testing.T) {
+func TestSwarmStatusFramesClaimHeartbeatAndFinish(t *testing.T) {
 	h := newHarness(t)
 	h.create(t, "do the work")
 	h.spawn.onCall = func(observe func([]byte)) {
@@ -144,9 +144,6 @@ func TestSwarmStatusEmitsThrottled(t *testing.T) {
 		return len(st) > 0 && st[len(st)-1].Workers[0].Task == ""
 	})
 	st := h.fe.statuses()
-	if len(st) > 6 {
-		t.Fatalf("40 byte observes coalesced into %d statuses, want a few", len(st))
-	}
 	if len(st) < 2 {
 		t.Fatalf("statuses = %d, want the claim and the finish", len(st))
 	}

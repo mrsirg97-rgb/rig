@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
@@ -147,7 +148,9 @@ func reviewerBatch(db store.DB, fire decision.Fire, batch int) *decision.Reviewe
 }
 
 func reviewerRow(db store.DB, fire decision.Fire, batch int, row models.Model) *decision.Reviewer {
-	return decision.NewReviewer(storeReviews{db: db}, fire, batch, row, func(string) {})
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	return decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch, row, func(string) {})
 }
 
 func waitSettled(t *testing.T, db store.DB, want int) {
@@ -278,9 +281,6 @@ func TestTwoHundredSixtyFourRowsBiteTenAtATimeAcrossTwentySevenWakes(t *testing.
 	db := openReviewedStore(t, 264)
 	f := &verdictFire{fired: make(chan struct{}, 64)}
 	r := reviewerBatch(db, f.fire, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	for i := 0; i < 27; i++ {
 		r.Land()
@@ -319,9 +319,6 @@ func TestAQuietTurnEndWithABacklogStillTakesABite(t *testing.T) {
 	db := openReviewedStore(t, 12)
 	f := &verdictFire{fired: make(chan struct{}, 64)}
 	r := reviewerBatch(db, f.fire, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -338,9 +335,6 @@ func TestReviewBatchZeroWakesAndFiresNothing(t *testing.T) {
 	db := openReviewedStore(t, 3)
 	f := &verdictFire{fired: make(chan struct{}, 64)}
 	r := reviewerBatch(db, f.fire, 0)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -382,9 +376,6 @@ func TestAGarbageBiteWaitsForTheNextLanding(t *testing.T) {
 	db := openReviewedStore(t, 12)
 	f := &verdictFire{fired: make(chan struct{}, 64), reply: "I have no idea"}
 	r := reviewerBatch(db, f.fire, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -411,9 +402,6 @@ func TestAFireThatSettlesNothingWithNoCutWaitsForTheNextLanding(t *testing.T) {
 	db := openReviewedStore(t, 2)
 	f := &fakeFire{stdouts: []string{"I have no idea"}, fired: make(chan struct{}, 4)}
 	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -434,9 +422,6 @@ func TestALandingMarksDirtyAndTheTurnEndWakes(t *testing.T) {
 	db := openReviewedStore(t, 1)
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
 	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()
@@ -451,9 +436,6 @@ func TestATurnEndWithNoLandingCostsNothing(t *testing.T) {
 	db := openReviewedStore(t, 1)
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
 	r := reviewer(db, f)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Wake()
 	select {
@@ -471,9 +453,6 @@ func TestTheRowsPastTheBudgetStayDirtyForTheNextTurnEnd(t *testing.T) {
 	}
 	f := &fakeFire{stdouts: []string{"verdict: 1 approve", "verdict: 2 approve"}, fired: make(chan struct{}, 4)}
 	r := reviewerRow(db, f.fire, 10, models.Model{Window: 1500, Reserve: 500, MaxTokens: 1 << 30})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.Run(ctx)
 
 	r.Land()
 	r.Wake()

@@ -92,7 +92,10 @@ func TestATurnEndFiresOneBiteAndTheNextTakesTheRest(t *testing.T) {
 	t.Cleanup(func() { sdb.Close() })
 	r.rec = state.NewRecorder(nullFrontend{}, sdb, t.TempDir(), "local", Version, r.session.ID, r.session)
 	f := &biteFire{}
-	r.decRev = decision.NewReviewer(&dbReviews{db: decDB}, f.fire, 10,
+	r.fleet()
+	go r.engine.Start(context.Background())
+	defer r.engine.Stop()
+	r.decRev = decision.NewReviewer(context.Background(), r.engine, &dbReviews{db: decDB}, f.fire, 10,
 		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, func(string) {})
 	r.decQ = decision.NewQueue(&countingDecider{answers: []decision.Answer{{
 		Question: "risk", Value: "safe", Confidence: 0.71, Decider: "laya",
@@ -100,7 +103,6 @@ func TestATurnEndFiresOneBiteAndTheNextTakesTheRest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go r.decQ.Run(ctx)
-	go r.decRev.Run(ctx)
 
 	for i := 0; i < 12; i++ {
 		r.decQ.Propose(decision.Pending{

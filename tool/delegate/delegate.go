@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/swarm/status"
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
@@ -40,8 +40,10 @@ type Opts struct {
 	Fetch        sched.Fetch
 	Spawn        sched.Spawn
 	Models       func() models.Table
-	Notify       func(core.Event)
+	Room         broadcast.Room
 }
+
+const MemberID int64 = -2
 
 type workerState struct {
 	task      string
@@ -51,8 +53,8 @@ type workerState struct {
 
 func New(o Opts) core.Tool {
 	a := &adapter{Definition: tool.Fill(tool.Def("delegate"), "{default_model}", o.DefaultModel), Opts: o, workers: map[int64]workerState{}}
-	if o.Notify != nil {
-		a.emitter = status.New(o.Notify)
+	if o.Room != nil {
+		a.member = o.Room.Add(MemberID)
 	}
 	return a
 }
@@ -63,7 +65,7 @@ type adapter struct {
 	mu      sync.Mutex
 	seq     int64
 	workers map[int64]workerState
-	emitter *status.Emitter
+	member  broadcast.Member
 }
 
 type args struct {
@@ -166,7 +168,7 @@ func strictDecode(data json.RawMessage, out any) error {
 }
 
 func (a *adapter) begin(task string) int64 {
-	if a.emitter == nil {
+	if a.member == nil {
 		return 0
 	}
 	a.mu.Lock()
@@ -174,44 +176,40 @@ func (a *adapter) begin(task string) int64 {
 	id := a.seq
 	a.workers[id] = workerState{task: firstLine(task), heartbeat: time.Now(), state: "running"}
 	a.mu.Unlock()
-	a.emit(false)
+	a.emit()
 	return id
 }
 
 func (a *adapter) end(id int64) {
-	if a.emitter == nil {
+	if a.member == nil {
 		return
 	}
 	a.mu.Lock()
 	delete(a.workers, id)
 	a.mu.Unlock()
-	a.emit(true)
+	a.emit()
 }
 
 func (a *adapter) observe(id int64) func([]byte) {
-	if a.emitter == nil {
+	if a.member == nil {
 		return nil
 	}
 	return func(p []byte) {
+		if !bytes.Contains(p, []byte("rig: heartbeat")) {
+			return
+		}
 		a.mu.Lock()
 		if w, ok := a.workers[id]; ok {
 			w.heartbeat = time.Now()
 			a.workers[id] = w
 		}
 		a.mu.Unlock()
-		a.emit(false)
+		a.emit()
 	}
 }
 
-func (a *adapter) emit(force bool) {
-	if a.emitter == nil {
-		return
-	}
-	if force {
-		a.emitter.Force(a.snapshot)
-	} else {
-		a.emitter.Emit(a.snapshot)
-	}
+func (a *adapter) emit() {
+	a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(MemberID, true, a.snapshot()))
 }
 
 func (a *adapter) snapshot() core.SwarmStatus {

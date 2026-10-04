@@ -12,6 +12,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
@@ -365,7 +366,7 @@ func TestTheReviewerDeniesAPackRowWithTheCorrectedAnswer(t *testing.T) {
 		}
 		return strings.Join(lines, "\n"), "rev", nil
 	}
-	rev := decision.NewReviewer(packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, func(string) {})
+	rev := decision.NewReviewer(context.Background(), evt.NewEngine(), packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, func(string) {})
 	if _, err := rev.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}

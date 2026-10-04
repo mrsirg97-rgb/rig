@@ -446,6 +446,9 @@ func main() {
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
+	r.fleet()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
 	if delegateOn {
 		r.tools["delegate"] = delegate.New(delegate.Opts{
@@ -462,10 +465,9 @@ func main() {
 			Fetch:        sched.RealFetch(0),
 			Spawn:        sched.RealSpawn,
 			Models:       func() models.Table { return r.runtime },
-			Notify:       func(ev core.Event) { r.rec.Notify(ev) },
+			Room:         r.room,
 		})
 	}
-	r.fleet()
 	if delegateOn {
 		r.swarm = swarm.New(swarm.Opts{
 			TodoDB:  tdb,
@@ -573,7 +575,7 @@ func main() {
 		if headless {
 			r.decQ = decision.NewQueue(dec, sink, nil, loud)
 		} else {
-			rev := decision.NewReviewer(&dbReviews{db: decdb},
+			rev := decision.NewReviewer(ctx, r.engine, &dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
 				cfg.Settings.ReviewBatchOrDefault(), row, loud)
 			r.decRev = rev
@@ -626,15 +628,9 @@ func main() {
 
 	k := wire(r)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	go gq.Run(ctx)
 	if r.decQ != nil {
 		go r.decQ.Run(ctx)
-	}
-	if r.decRev != nil {
-		go r.decRev.Run(ctx)
 	}
 
 	if webSrv != nil {

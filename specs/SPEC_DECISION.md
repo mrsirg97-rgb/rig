@@ -123,7 +123,12 @@ byte-identical with or without it.
 
 Only an interactive session reviews: headless workers and fires propose and
 never review. A landing marks the reviewer dirty; the session's turn end is
-the wake — a size-one channel, no timer, no poll — and a turn end with
+the wake — since 2.11.0 a closure posted on the kernel's engine at
+`rig.PriorityReview`, the lowest rung, so a bite starts only when the
+operator's input, the turn's events and the fleet's messages have all
+run (SPEC_EVT 8); the bite takes its rows on the loop, fires in a
+goroutine and posts the settle back at the same priority; before that a
+size-one channel on a goroutine of its own — no timer, no poll — and a turn end with
 nothing landed costs nothing.
 
 The wake is the metronome, not the work. Run j31 woke at a turn end with

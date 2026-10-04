@@ -9,7 +9,9 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
@@ -33,8 +35,10 @@ type Reviews interface {
 type Fire func(ctx context.Context, prompt string) (reply, model string, err error)
 
 type Reviewer struct {
-	wake    chan struct{}
+	ctx     context.Context
+	engine  evt.Engine
 	dirty   atomic.Bool
+	posted  atomic.Bool
 	reviews Reviews
 	fire    Fire
 	batch   int
@@ -42,9 +46,13 @@ type Reviewer struct {
 	loud    func(string)
 }
 
-func NewReviewer(reviews Reviews, fire Fire, batch int, row models.Model, loud func(string)) *Reviewer {
+func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, loud func(string)) *Reviewer {
+	if engine == nil {
+		panic("decision: the reviewer bites on the loop; the engine is a constructor argument")
+	}
 	return &Reviewer{
-		wake:    make(chan struct{}, 1),
+		ctx:     ctx,
+		engine:  engine,
 		reviews: reviews,
 		fire:    fire,
 		batch:   batch,
@@ -59,10 +67,35 @@ func (r *Reviewer) Wake() {
 	if !r.dirty.Load() {
 		return
 	}
-	select {
-	case r.wake <- struct{}{}:
-	default:
+	if r.posted.Swap(true) {
+		return
 	}
+	r.engine.Add(evt.Func(func(context.Context) {
+		r.posted.Store(false)
+		r.dirty.Store(false)
+		r.bite()
+	}), rig.PriorityReview)
+}
+
+func (r *Reviewer) bite() {
+	rows, all, err := r.take(r.ctx)
+	if err != nil {
+		r.say("decision: review: %v", err)
+		return
+	}
+	if len(rows) == 0 {
+		return
+	}
+	go func() {
+		out, reviewer, err := r.fire(r.ctx, reviewPrompt(rows))
+		r.engine.Add(evt.Func(func(context.Context) {
+			if err != nil {
+				r.say("decision: review: fire: %v", err)
+				return
+			}
+			r.settle(r.ctx, rows, all, out, reviewer)
+		}), rig.PriorityReview)
+	}()
 }
 
 func TurnEnds(fe core.Frontend, r *Reviewer) core.Frontend {
@@ -83,39 +116,44 @@ func (w turnEndWake) Notify(ev core.Event) {
 	}
 }
 
-func (r *Reviewer) Run(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-r.wake:
-			r.dirty.Store(false)
-			if _, err := r.Drain(ctx); err != nil {
-				r.say("decision: review: %v", err)
-			}
-		}
+func (r *Reviewer) Drain(ctx context.Context) (string, error) {
+	rows, all, err := r.take(ctx)
+	if err != nil {
+		return "", err
 	}
+	if len(rows) == 0 {
+		if r.batch == 0 {
+			return "reviewBatch is 0: the reviewer stays off", nil
+		}
+		return "nothing pending", nil
+	}
+	out, reviewer, err := r.fire(ctx, reviewPrompt(rows))
+	if err != nil {
+		return "", fmt.Errorf("fire: %w", err)
+	}
+	settled := r.settle(ctx, rows, all, out, reviewer)
+	return fmt.Sprintf("fired %d rows, settled %d, %d stay pending", len(rows), settled, len(all)-len(rows)), nil
 }
 
-func (r *Reviewer) Drain(ctx context.Context) (string, error) {
+func (r *Reviewer) take(ctx context.Context) (rows, all []ReviewRow, err error) {
 	if r.batch < 0 {
-		return "", fmt.Errorf("reviewBatch %d: a negative batch is refused", r.batch)
+		return nil, nil, fmt.Errorf("reviewBatch %d: a negative batch is refused", r.batch)
 	}
 	if r.batch == 0 {
-		return "reviewBatch is 0: the reviewer stays off", nil
+		return nil, nil, nil
 	}
-	all, err := r.reviews.Pending(ctx)
+	all, err = r.reviews.Pending(ctx)
 	if err != nil {
-		return "", fmt.Errorf("pending: %w", err)
+		return nil, nil, fmt.Errorf("pending: %w", err)
 	}
 	if len(all) == 0 {
-		return "nothing pending", nil
+		return nil, nil, nil
 	}
 	cost := VerdictLineCost()
 	if cost <= 0 {
-		return "", errors.New("the contract lost its verdict lines; the reply bound cannot be derived")
+		return nil, nil, errors.New("the contract lost its verdict lines; the reply bound cannot be derived")
 	}
-	rows := fitRows(all, reviewContract, r.row.Window-r.row.Reserve)
+	rows = fitRows(all, reviewContract, r.row.Window-r.row.Reserve)
 	if reply := r.row.MaxTokens / cost; reply < 1 {
 		rows = rows[:1]
 	} else if reply < len(rows) {
@@ -124,10 +162,10 @@ func (r *Reviewer) Drain(ctx context.Context) (string, error) {
 	if len(rows) > r.batch {
 		rows = rows[:r.batch]
 	}
-	out, reviewer, err := r.fire(ctx, reviewPrompt(rows))
-	if err != nil {
-		return "", fmt.Errorf("fire: %w", err)
-	}
+	return rows, all, nil
+}
+
+func (r *Reviewer) settle(ctx context.Context, rows, all []ReviewRow, out, reviewer string) int {
 	verdicts := parseVerdicts(out)
 	answered := answeredRows(rows, verdicts)
 	if len(answered) > 0 && len(rows) < len(all) {
@@ -142,7 +180,7 @@ func (r *Reviewer) Drain(ctx context.Context) (string, error) {
 		}
 		settled++
 	}
-	return fmt.Sprintf("fired %d rows, settled %d, %d stay pending", len(rows), settled, len(all)-len(rows)), nil
+	return settled
 }
 
 func (r *Reviewer) say(format string, args ...any) {
