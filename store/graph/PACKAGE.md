@@ -32,8 +32,19 @@ project-relative; each worktree's store maps its own tree.
   module-internal imports from source, one cache per project, and
   delegates everything else to `importer.Default()` — no subprocess, no
   cwd dependence.
+- `extract.go`: `ProjectRoot(dir)` is the one rule for what a project is
+  (a `go.mod` above the directory, or a git worktree); `index` refuses a
+  directory that is neither, by name (2.11.4: from the home directory
+  the fallback root was the home directory). `RootOf` keeps the fallback
+  for the per-file touch, which is bounded by the file it was given. The
+  index walk returns the context's error at the first cancelled file, so
+  a quit mid-index is one line, never one per remaining file.
 - `extract_lsp.go` + `lsp.go`: every other language through a
-  language server. `lsp.go` is the stdio JSON-RPC client
+  language server. A server that will not start (not on `PATH`, dies at
+  initialize) is said once, naming the language and that its files
+  stay unmapped until the next start, and the language is skipped for
+  the queue's life (2.11.5; before, every file of that language was a
+  line). `lsp.go` is the stdio JSON-RPC client
   (Content-Length framing, numbered requests, server notifications
   ignored, a 30s cap per request) and the one-at-a-time child: a server
   starts on the first read of a file in its language, touching another

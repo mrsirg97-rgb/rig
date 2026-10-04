@@ -8,7 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
@@ -112,4 +116,53 @@ func TestUnboundedPackCapsRefuseAtConstruction(t *testing.T) {
 		}
 	}()
 	graph.NewQueue(t.TempDir(), nil, graph.WithPackCaps(0, 1))
+}
+
+func TestIndexRefusesADirectoryThatIsNoProject(t *testing.T) {
+	plain := t.TempDir()
+	if err := os.WriteFile(filepath.Join(plain, "a.go"), []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	q := graph.NewQueue(t.TempDir(), nil)
+	_, err := q.IndexProject(context.Background(), plain)
+	if err == nil || !strings.Contains(err.Error(), "is not a project") || !strings.Contains(err.Error(), plain) {
+		t.Fatalf("a directory with no go.mod above it and no git worktree must refuse by name, got %v", err)
+	}
+}
+
+func TestIndexStopsAtTheFirstCancelledFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("f%02d.go", i)), []byte("package m\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, 0)
+	})
+	said := make(chan string, 64)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				said <- n.Text
+			}
+		}
+	})
+	q := graph.NewQueue(t.TempDir(), room.Add(0))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := q.IndexProject(ctx, root)
+	if err == nil || !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("a cancelled index ends with the context's error once, got %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := len(said); n != 0 {
+		t.Fatalf("a cancelled walk says nothing per file, got %d lines", n)
+	}
 }

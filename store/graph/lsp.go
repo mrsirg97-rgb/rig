@@ -63,12 +63,13 @@ func (q *Queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
 		q.lsp = nil
 	}
 	argv := ServerOf(lang)
-	if argv == nil {
+	if argv == nil || q.lspGone[lang] {
 		return nil, nil
 	}
 	c, err := startServer(ctx, lang, argv, q.voice)
 	if err != nil {
-		return nil, err
+		q.lspGone[lang] = true
+		return nil, fmt.Errorf("%w; %s files stay unmapped until the next start", err, lang)
 	}
 	q.lsp = c
 	q.lspLang = lang

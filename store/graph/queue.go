@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
@@ -29,6 +30,7 @@ type Queue struct {
 	lspMu   sync.Mutex
 	lsp     *lspClient
 	lspLang string
+	lspGone map[string]bool
 	scorer  Scorer
 	itemCap int
 	loadCap int
@@ -54,6 +56,7 @@ func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 		voice:   voice,
 		extract: &GoExtract{},
 		dbs:     map[string]store.DB{},
+		lspGone: map[string]bool{},
 		itemCap: ReadCap,
 		loadCap: ReadCap,
 	}
@@ -104,7 +107,7 @@ func (q *Queue) Drain(ctx context.Context) {
 
 func (q *Queue) say(format string, args ...any) {
 	if q.voice != nil {
-		broadcast.Say(q.voice, "graph", fmt.Sprintf(format, args...))
+		broadcast.Say(q.voice, "graph", strings.TrimPrefix(fmt.Sprintf(format, args...), "graph: "))
 	}
 }
 
@@ -139,7 +142,10 @@ func (q *Queue) extractor(lang string) Extractor {
 	if lang == "go" {
 		return q.extract
 	}
-	if ServerOf(lang) != nil {
+	q.lspMu.Lock()
+	gone := q.lspGone[lang]
+	q.lspMu.Unlock()
+	if ServerOf(lang) != nil && !gone {
 		return &lspExtract{q: q, lang: lang}
 	}
 	return nil
@@ -224,9 +230,9 @@ func sha256File(path string) (string, error) {
 }
 
 func (q *Queue) IndexProject(ctx context.Context, cwd string) (string, error) {
-	root, _, err := RootOf(cwd)
-	if err != nil {
-		return "", fmt.Errorf("graph: project of %s: %w", cwd, err)
+	root, _, ok := ProjectRoot(cwd)
+	if !ok {
+		return "", fmt.Errorf("graph: %s is not a project (no go.mod above it and not a git worktree); index from inside one, or name it with project", cwd)
 	}
 	db, err := q.open(root)
 	if err != nil {
@@ -236,6 +242,9 @@ func (q *Queue) IndexProject(ctx context.Context, cwd string) (string, error) {
 	err = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		if d.IsDir() {
 			if p != root && Skip(p) {
@@ -248,17 +257,17 @@ func (q *Queue) IndexProject(ctx context.Context, cwd string) (string, error) {
 			return nil
 		}
 		if err := q.index(ctx, db, root, p); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			q.say("%s: %v", p, err)
 			return nil
 		}
 		mapped++
-		if ctx.Err() != nil {
-			return filepath.SkipAll
-		}
 		return nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("graph: walk %s: %w", root, err)
+		return "", fmt.Errorf("graph: walk %s: %w (mapped %d files)", root, err, mapped)
 	}
 	return fmt.Sprintf("mapped %d files", mapped), nil
 }
