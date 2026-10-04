@@ -12,7 +12,7 @@ stores.
 
 - `Tokenize` lowercases and splits on anything outside `[a-z0-9]`;
   empty tokens never come back.
-- `GramsOfWord` pads a word with two spaces each side and slides a
+- `gramsOfWord` pads a word with two spaces each side and slides a
   3-gram across it; `GramsOf` runs it per token and deduplicates
   in order.
 - `Query` joins the tokens with ` OR `, quoting FTS5's reserved

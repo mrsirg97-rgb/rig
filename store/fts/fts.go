@@ -20,7 +20,7 @@ func Tokenize(text string) []string {
 	return out
 }
 
-func GramsOfWord(word string) []string {
+func gramsOfWord(word string) []string {
 	padded := "  " + word + "  "
 	var out []string
 	for i := 0; i+2 < len(padded); i++ {
@@ -33,7 +33,7 @@ func GramsOf(text string) []string {
 	set := map[string]bool{}
 	var out []string
 	for _, word := range Tokenize(text) {
-		for _, gram := range GramsOfWord(word) {
+		for _, gram := range gramsOfWord(word) {
 			if !set[gram] {
 				set[gram] = true
 				out = append(out, gram)

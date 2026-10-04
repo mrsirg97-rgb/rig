@@ -16,7 +16,7 @@ func TestTokenizeLowercasesAndSplits(t *testing.T) {
 }
 
 func TestGramsOfWordArePaddedTrigrams(t *testing.T) {
-	got := GramsOfWord("abc")
+	got := gramsOfWord("abc")
 	want := []string{"  a", " ab", "abc", "bc ", "c  "}
 	if len(got) != len(want) {
 		t.Fatalf("gramsOfWord(abc) = %v, want %v", got, want)
@@ -30,8 +30,8 @@ func TestGramsOfWordArePaddedTrigrams(t *testing.T) {
 
 func TestGramsOfDeduplicatesPerMemory(t *testing.T) {
 	got := GramsOf("aa aa")
-	if len(got) != len(GramsOfWord("aa")) {
-		t.Errorf("gramsOf deduped = %d, want %d", len(got), len(GramsOfWord("aa")))
+	if len(got) != len(gramsOfWord("aa")) {
+		t.Errorf("gramsOf deduped = %d, want %d", len(got), len(gramsOfWord("aa")))
 	}
 }
 

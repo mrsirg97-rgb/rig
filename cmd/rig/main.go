@@ -424,32 +424,6 @@ func main() {
 	drec := decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	var decRev *decision.Reviewer
-	land := func() {
-		if decRev != nil {
-			decRev.Land()
-		}
-	}
-	var dec decision.Decider
-	var sink *dbSink
-	var psc *decision.PackScorer
-	if decisionURL != "" {
-		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
-		if derr != nil {
-			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
-			os.Exit(1)
-		}
-		sink = &dbSink{db: decdb, scope: scope.Key(cwd)}
-		p, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
-		if perr != nil {
-			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
-			os.Exit(1)
-		}
-		psc = p
-	}
-	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph),
-		graph.WithPackCaps(graph.ReadCap, resultCapN),
-		graph.WithScorer(psc))
 
 	r := &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
@@ -462,7 +436,6 @@ func main() {
 		resultCap:  resultCapN,
 		sdb:        sdb,
 		drec:       drec,
-		packScorer: psc,
 		remDB:      rdb,
 		cwd:        cwd,
 		home:       userHome(),
@@ -479,14 +452,12 @@ func main() {
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
 			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
-			"rem":    remapi.New(rdb, gq),
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
 		pluginTools: pluginTools,
 		py:          py,
 		pluginsHome: cfgDir,
-		graph:       gq,
 		pluginInfos: pluginInfos,
 		engine:      engine,
 		room:        room,
@@ -600,7 +571,13 @@ func main() {
 		fe = cli.New(os.Stdin, os.Stdout, cli.WithCommands(command.All(), env))
 	}
 
+	var packScorer graph.Scorer
 	if decisionURL != "" {
+		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
+		if derr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
+			os.Exit(1)
+		}
 		dtool, derr := decision.NewDecide(decision.DecideOptions{
 			Decider:  dec,
 			Recorder: r.drec,
@@ -611,19 +588,35 @@ func main() {
 			os.Exit(1)
 		}
 		r.decide = dtool
+		sink := &dbSink{db: decdb, scope: scope.Key(cwd)}
 		_, headless := fe.(*oneshot.OneShot)
+		var land func()
 		if headless {
 			r.decQ = decision.NewQueue(dec, sink, nil, voice)
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, &dbReviews{db: decdb},
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
 				cfg.Settings.ReviewBatchOrDefault(), row, room)
-			decRev = rev
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, rev.Land, voice)
+			land = rev.Land
 		}
+		psc, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
+		if perr != nil {
+			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
+			os.Exit(1)
+		}
+		r.packScorer = psc
+		packScorer = psc
 		r.proposals = r.decQ
 	}
+	opts := []graph.Option{graph.WithPackCaps(graph.ReadCap, resultCapN)}
+	if packScorer != nil {
+		opts = append(opts, graph.WithScorer(packScorer))
+	}
+	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph), opts...)
+	r.graph = gq
+	r.tools["rem"] = remapi.New(rdb, gq)
 
 	session, err := sessionFor(*resumeID, func(id string) (*core.Session, error) {
 		return state.Resume(context.Background(), sdb, id)

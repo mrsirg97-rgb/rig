@@ -383,3 +383,62 @@ func TestAWorkerWhoseStderrReaderClosesStillAnswers(t *testing.T) {
 		t.Fatalf("the answer must land on stdout: %q", stdout.String())
 	}
 }
+
+func TestWithADecisionUrlTheBinaryStillReachesTheModelServer(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratch := t.TempDir()
+	bin := filepath.Join(t.TempDir(), "rig")
+	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+
+	var mu sync.Mutex
+	var served bool
+	dec := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"answers":[{"question":"risk","value":"safe","confidence":0.9}]}`))
+	}))
+	t.Cleanup(dec.Close)
+	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		mu.Lock()
+		served = true
+		mu.Unlock()
+		flusher := w.(http.Flusher)
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, `data: {"choices":[{"delta":{"content":"the answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`+"\n")
+		flusher.Flush()
+	}))
+	t.Cleanup(model.Close)
+
+	cmd := exec.Command(bin, "-p", "hi", "-model", "e2e", "-base-url", model.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(os.Environ(),
+		"HOME="+scratch,
+		"XDG_CONFIG_HOME="+scratch,
+		"RIG_DECISION_URL="+dec.URL,
+		"RIG_MODEL_WINDOW=4000",
+		"RIG_MODEL_RESERVE=100",
+		"RIG_MODEL_KEEP_RECENT=1000",
+		"RIG_MODEL_MAX_TOKENS=500",
+	)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("a decision server must not refuse the start:\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !served {
+		t.Fatalf("the model server must be reached with decisionUrl set:\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "the answer") {
+		t.Fatalf("the answer must land on stdout: %q", stdout.String())
+	}
+}

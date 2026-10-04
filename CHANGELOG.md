@@ -11,10 +11,12 @@ whole when it is constructed, and five survivors disagreed:
 and `PackScorer.SetParallel`, `tool/python`'s `SetCwd`. Each was called
 exactly once, at wiring; each was a constructor argument that was never
 given one. The queue takes its pack caps and its scorer as options now,
-and main() builds the decision stack before the queue so the values
-exist at the construction site — the wiring order became the dependency
-order, the context and the fleet moving up beside the stores they sit
-on. The kernel's `WithParallel` still bounds the tool batch; it no
+and the decision stack stands beside the frontend it reads: the
+decider, the decide tool, both queues, the reviewer and the pack scorer
+are built together, and the queue and the rem tool are constructed
+after them, so the scorer exists at the queue's construction site and
+the reviewer's land is the reviewer's own method, not a closure over a
+variable that filled in later. The kernel's `WithParallel` still bounds the tool batch; it no
 longer restamps the decision fan-out on the way through, because
 nothing in the tree ever set it and the stamp was always the default.
 An embedder who set it saw the decision tools follow; in-tree nobody
@@ -39,7 +41,11 @@ The tests got the same pass where the code was touched. The reviewer's
 bite tests waited on 200 ms sleeps for fires the fake had already
 signaled; `waitFires` receives the signal instead. The queue's
 unbounded-caps refusal is pinned at construction. The stamped-parallel,
-born-cwd and swap-atomic invariants carry their names.
+born-cwd and swap-atomic invariants carry their names. One e2e builds
+the binary, points `RIG_DECISION_URL` at a stub and asserts the run
+reaches the model server — the first cut of this pass shadowed the
+decider above the root and refused every start with a decision URL,
+and no test wired main, so the review caught what the suite could not.
 
 Named, not changed: `r.pluginTools` still holds the discovery-time
 plugins after a reload, so a model switch after a reload rebuilds the
