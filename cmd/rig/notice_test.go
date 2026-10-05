@@ -97,8 +97,8 @@ func TestTheReviewFireNamesNoModelAndFallsBackToTheSessionsOwn(t *testing.T) {
 	if seen.DefaultModel != "ox-alpha" {
 		t.Fatalf("the fallback = %q, want the session's active model", seen.DefaultModel)
 	}
-	if !seen.Bare || len(seen.Allow) != 1 || seen.Allow[0] != "verdict" {
-		t.Fatalf("the review fire is bare with the verdict tool alone, got bare=%v allow=%v", seen.Bare, seen.Allow)
+	if !seen.Bare || strings.Join(seen.Allow, " ") != "read rem verdict" {
+		t.Fatalf("the review fire is bare with read, rem and verdict, got bare=%v allow=%v", seen.Bare, seen.Allow)
 	}
 	if seen.Member != voice {
 		t.Fatal("the fire's worker speaks as the voice the reviewer minted")

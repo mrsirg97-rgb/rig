@@ -98,7 +98,7 @@ func TestATurnEndFiresOneBiteAndTheNextTakesTheRest(t *testing.T) {
 	go r.engine.Start(context.Background())
 	defer r.engine.Stop()
 	r.decRev = decision.NewReviewer(context.Background(), r.engine, &dbReviews{db: decDB}, f.fire, 10,
-		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, r.room)
+		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, r.room, "proj")
 	r.decQ = decision.NewQueue(&countingDecider{answers: []decision.Answer{{
 		Question: "risk", Value: "safe", Confidence: 0.71, Decider: "laya",
 	}}}, &dbSink{db: decDB}, &dbReviews{db: decDB}, decisionstore.Recorder{DB: decDB, Scope: "proj"}, r.decRev.Land, nil)

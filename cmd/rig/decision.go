@@ -43,7 +43,7 @@ func (r *dbReviews) Pending(ctx context.Context) ([]decision.ReviewRow, error) {
 	out := make([]decision.ReviewRow, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, decision.ReviewRow{
-			ID: row.ID, Site: row.Site, State: row.State, Question: row.Question,
+			ID: row.ID, Scope: row.Scope, Site: row.Site, State: row.State, Question: row.Question,
 			Answer: row.Answer, Confidence: row.Confidence, Decider: row.Decider,
 		})
 	}
@@ -86,7 +86,7 @@ func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandb
 			Sandbox:       sandbox,
 			SandboxBinds:  sandboxBinds,
 			Bare:          true,
-			Allow:         []string{"verdict"},
+			Allow:         []string{"read", "rem", "verdict"},
 			Member:        voice,
 			SpawnCtx:      ctx,
 		})

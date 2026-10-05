@@ -1,4 +1,17 @@
 # Changelog
+## [2.12.2]: the reviewer reads the code
+
+A review fire on pack rows reasoned "this is genuinely ambiguous without
+the code … the pack question is whether the symbol matters for the task"
+and guessed, because it had to: the fire ran with the verdict tool alone
+and a pack row's state is one line, the task and the symbol's file:line.
+The fire now has `read` and `rem` beside `verdict`, still bare and still
+jailed, and the contract says to look before judging a row about code and
+to name what was read in the reason. Because a row's scope is a key and
+not a path, a fire reviews only the rows of its own project or `global`;
+rows of other projects wait for a session opened there, and the drain's
+report counts them. No new setting: the tool list is the fire's.
+
 ## [2.12.1]: the compaction line lands last
 
 The summarizing phase streams the summary call's thinking, and the

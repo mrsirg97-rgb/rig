@@ -67,7 +67,10 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   loop, `Drain` the pass — the pending rows oldest first, up to what the
   reviewer's model row leaves for a prompt (the window minus its
   reserve, at four bytes to the token; a row that cannot fit alone
-  still goes), one fire through the `Fire` seam, which takes the minted
+  still goes), the rows of the reviewer's scope or `global` only (2.12.2:
+  a row's scope is a key, not a path, so a fire reads code only in its own
+  project; the rest wait for a session there and the drain counts them),
+  one fire through the `Fire` seam, which takes the minted
   member the fire's worker speaks as; the worker's `verdict` tool calls
   arrive as `core.Verdict` messages on the reviewer's member and settle
   on the loop after the fire ends, last naming wins, a reject without a

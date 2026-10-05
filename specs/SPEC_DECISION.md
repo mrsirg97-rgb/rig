@@ -180,8 +180,23 @@ fire that answers nothing waits for the next landing, so a garbage fire
 cannot spin.
 
 The fire is a headless worker the root wires through the scheduler's
-`Delegate` (which waits on the free-slot gate) with no tools — it reads
-the rows and replies on stdout — jailed like a swarm worker. The fire
+`Delegate` (which waits on the free-slot gate), jailed like a swarm
+worker. Through 2.12.1 it had the verdict tool alone, and on pack rows it
+guessed: row 1960's fire reasoned "this is genuinely ambiguous without
+the code" over a state that was one line, the task and the symbol's
+file:line, and judged anyway. Since 2.12.2 the fire has `read` and `rem`
+beside `verdict`, and the contract says to look before judging a row
+about code and to name what was read in the reason. A grounded fire is
+several turns, so a bite is slower; the batch of three is what keeps it a
+glance.
+
+A fire reviews the rows it can see. A row's `scope` is the project's key
+(`scope.Key`), not a path, so a fire in one project cannot open another's
+files: the bite takes rows of the session's scope or `global`, oldest
+first up to `reviewBatch`; rows of other scopes stay pending for a session
+opened in their project, and the drain's report counts them (`n wait for
+their project`). The filter is one predicate on the pending set, not a
+second queue. The fire
 names no model: it resolves to the resident model's row as a scheduled
 fire does (2.5.3), with the session's active model as the fallback when
 nothing is resident; it never fires on the settings default while another
@@ -208,7 +223,7 @@ without a correction is not a verdict (the tool refuses it before it
 crosses). A drain reports what it fired, what settled, and what stays
 pending; the row's reviewer name is the model that reviewed: the one the
 fire resolved to, carried back on the delegate's result. The fire runs
-bare: no report-back brief, and the verdict tool as its only tool. The
+bare: no report-back brief; its tools are read, rem and verdict. The
 bite is a `core.Phase` named `reviewing` (2.11.7): opened when the fire
 starts, its deltas the fire's own reasoning crossing the fleet pipe and
 renamed by the reviewer, closed at settle with `n rows settled` or the
@@ -226,6 +241,8 @@ reviewer being refused and printing it.
 
 ## testing
 
+- reviewer scope: a bite sees its own project's rows and global ones,
+  never another project's; the drain names how many wait for their project.
 - store: a final row round-trips with its decider; a proposal is pending;
   settle approves, denies with the corrected answer, and is a no-op on a
   settled row; pending lists pending only; outcome writes once.

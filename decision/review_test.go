@@ -32,7 +32,7 @@ func (r storeReviews) Pending(ctx context.Context) ([]decision.ReviewRow, error)
 	out := make([]decision.ReviewRow, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, decision.ReviewRow{
-			ID: row.ID, Site: row.Site, State: row.State, Question: row.Question,
+			ID: row.ID, Scope: row.Scope, Site: row.Site, State: row.State, Question: row.Question,
 			Answer: row.Answer, Confidence: row.Confidence, Decider: row.Decider,
 		})
 	}
@@ -163,7 +163,7 @@ func reviewerRow(db store.DB, fire decision.Fire, batch int, row models.Model) *
 	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
 	})
-	return decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch, row, room)
+	return decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch, row, room, "proj")
 }
 
 func waitFires(t *testing.T, fired <-chan struct{}, n int) {
@@ -191,6 +191,39 @@ func waitSettled(t *testing.T, db store.DB, want int) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("the rows never settled to %d pending", want)
+}
+
+func TestABiteTakesOnlyTheRowsOfItsOwnScopeOrGlobal(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	ctx := context.Background()
+	for _, sc := range []string{"elsewhere", "global"} {
+		if _, err := decisionstore.Propose(ctx, db, decisionstore.ProposeInput{
+			Scope: sc, Site: decision.SiteBash, State: `{"command":"ls ` + sc + `"}`,
+			Question: decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"),
+			Answer:   "safe", Confidence: 0.71, Decider: "laya",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve\nverdict: 3 approve"}}
+	r := reviewer(db, f)
+	report, err := r.Drain(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(f.prompts[0], "== 1 ·") || !strings.Contains(f.prompts[0], "== 3 ·") || strings.Contains(f.prompts[0], "== 2 ·") {
+		t.Fatalf("the fire sees its own project's row and the global one, never another project's:\n%s", f.prompts[0])
+	}
+	if report != "fired 2 rows, settled 2, 0 stay pending, 1 wait for their project" {
+		t.Fatalf("report = %q", report)
+	}
+	report, err = r.Drain(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report != "nothing pending here; 1 rows wait for their project" {
+		t.Fatalf("report = %q", report)
+	}
 }
 
 func TestThreePendingRowsAreReviewedInOneFire(t *testing.T) {
@@ -648,7 +681,7 @@ func TestABiteIsAReviewingPhaseWithItsThinking(t *testing.T) {
 		speak(voice, "verdict: 1 approve")
 		return "dsv4", nil
 	}
-	r := decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, 10, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room)
+	r := decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, 10, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room, "proj")
 	if _, err := r.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}

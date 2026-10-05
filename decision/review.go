@@ -14,12 +14,14 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
 
 const maxCorrection = 1024
 
 type ReviewRow struct {
 	ID         int64
+	Scope      string
 	Site       string
 	State      string
 	Question   Question
@@ -45,13 +47,14 @@ type Reviewer struct {
 	fire     Fire
 	batch    int
 	row      models.Model
+	scope    string
 	room     broadcast.Room
 	self     broadcast.Member
 	verdicts map[int64]core.Verdict
 	speaking atomic.Int64
 }
 
-func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, room broadcast.Room) *Reviewer {
+func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, room broadcast.Room, scope string) *Reviewer {
 	if engine == nil || room == nil {
 		panic("decision: the reviewer bites on the loop and hears verdicts in a room; both are constructor arguments")
 	}
@@ -62,6 +65,7 @@ func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire F
 		fire:     fire,
 		batch:    batch,
 		row:      row,
+		scope:    scope,
 		room:     room,
 		self:     room.Add(rig.MemberDecision),
 		verdicts: map[int64]core.Verdict{},
@@ -144,7 +148,7 @@ func (r *Reviewer) Wake() {
 }
 
 func (r *Reviewer) bite() {
-	rows, all, err := r.take(r.ctx)
+	rows, all, _, err := r.take(r.ctx)
 	if err != nil {
 		r.say("review: %v", err)
 		return
@@ -184,13 +188,16 @@ func (w turnEndWake) Notify(ev core.Event) {
 }
 
 func (r *Reviewer) Drain(ctx context.Context) (string, error) {
-	rows, all, err := r.take(ctx)
+	rows, all, waiting, err := r.take(ctx)
 	if err != nil {
 		return "", err
 	}
 	if len(rows) == 0 {
 		if r.batch == 0 {
 			return "reviewBatch is 0: the reviewer stays off", nil
+		}
+		if waiting > 0 {
+			return fmt.Sprintf("nothing pending here; %d rows wait for their project", waiting), nil
 		}
 		return "nothing pending", nil
 	}
@@ -202,22 +209,33 @@ func (r *Reviewer) Drain(ctx context.Context) (string, error) {
 	settled := 0
 	r.call(func() { settled = r.settle(ctx, rows, all, reviewer) })
 	r.settled(settled, nil)
-	return fmt.Sprintf("fired %d rows, settled %d, %d stay pending", len(rows), settled, len(all)-len(rows)), nil
+	report := fmt.Sprintf("fired %d rows, settled %d, %d stay pending", len(rows), settled, len(all)-len(rows))
+	if waiting > 0 {
+		report += fmt.Sprintf(", %d wait for their project", waiting)
+	}
+	return report, nil
 }
 
-func (r *Reviewer) take(ctx context.Context) (rows, all []ReviewRow, err error) {
+func (r *Reviewer) take(ctx context.Context) (rows, all []ReviewRow, waiting int, err error) {
 	if r.batch < 0 {
-		return nil, nil, fmt.Errorf("reviewBatch %d: a negative batch is refused", r.batch)
+		return nil, nil, 0, fmt.Errorf("reviewBatch %d: a negative batch is refused", r.batch)
 	}
 	if r.batch == 0 {
-		return nil, nil, nil
+		return nil, nil, 0, nil
 	}
-	all, err = r.reviews.Pending(ctx)
+	pending, err := r.reviews.Pending(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("pending: %w", err)
+		return nil, nil, 0, fmt.Errorf("pending: %w", err)
+	}
+	for _, row := range pending {
+		if r.sees(row) {
+			all = append(all, row)
+		} else {
+			waiting++
+		}
 	}
 	if len(all) == 0 {
-		return nil, nil, nil
+		return nil, nil, waiting, nil
 	}
 	cost := VerdictCost()
 	rows = fitRows(all, reviewContract, r.row.Window-r.row.Reserve)
@@ -229,7 +247,11 @@ func (r *Reviewer) take(ctx context.Context) (rows, all []ReviewRow, err error) 
 	if len(rows) > r.batch {
 		rows = rows[:r.batch]
 	}
-	return rows, all, nil
+	return rows, all, waiting, nil
+}
+
+func (r *Reviewer) sees(row ReviewRow) bool {
+	return row.Scope == r.scope || row.Scope == scope.Global
 }
 
 func (r *Reviewer) settle(ctx context.Context, rows, all []ReviewRow, reviewer string) int {
@@ -259,7 +281,7 @@ func (r *Reviewer) say(format string, args ...any) {
 	broadcast.Say(r.self, "decision", fmt.Sprintf(format, args...), core.LevelError)
 }
 
-const reviewContract = "Review these recorded decisions. For each row, judge the answer against the question and the state, then call the verdict tool naming the row: accept when the answer is right, reject with the corrected answer as the reason when it is wrong. Name every row; a row you do not name stays pending.\n"
+const reviewContract = "Review these recorded decisions. For each row, judge the answer against the question and the state, then call the verdict tool naming the row: accept when the answer is right, reject with the corrected answer as the reason when it is wrong. When a row is about code, look before you judge: pack the symbol with rem or read the file the state names, and say in the reason what you read; a verdict on code you did not look at is a guess. Name every row; a row you do not name stays pending.\n"
 
 func VerdictCost() int {
 	call, _ := json.Marshal(map[string]any{"row": int64(math.MaxInt64), "accept": false, "reason": strings.Repeat("v", maxCorrection)})
