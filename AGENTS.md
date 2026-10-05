@@ -310,9 +310,25 @@ that is harder than writing a lot, and it is the bar.
 - `tool/todo`, `tool/rem`, `tool/scheduler`: thin adapters over their
   stores: session attribution and the store's shapes, verbatim. The rem
   tool's description carries the contract sentence (rem is deliberate).
-  `tool/todo` is the template a native tool takes (2.12.4): a `Todo`
-  interface that embeds `tool.Definition`, declares `Exec` as the one
-  JSON door, and one typed method per verb; `Exec` only routes.
+  Every native tool is its interface (2.12.4 set the shape in
+  `tool/todo`, 2.12.6 gave it to every native): the package declares a
+  named interface — `Bash`, `Read`, `Write`, `Edit`, `View`, `Verdict`,
+  `Delegate`, `Web`, `Sessions`, `Python`, `Rem`, `Scheduler`, `Plugin`,
+  `Decide` — embedding `tool.Definition`, declaring `Exec` as the one
+  JSON door, and one method per verb taking that verb's fields; the
+  implementing struct is unexported and the constructor returns the
+  interface. `Exec` decodes and routes and nothing else: required
+  fields, mode gates and bounds live in the method, so a Go call and a
+  JSON call meet the same check and one reply is one format. A wire
+  shape Go cannot name (a todo `link`, an id or a list of ids; a
+  scheduler `model`, absent, null or a name) is decoded at the door and
+  reaches the method decoded, or as a pointer where absent and zero
+  differ. A verb's target stays positional — the workspace, the path,
+  the job id — with at most three of its own fields beside it, and the
+  fields go in one input struct named for the verb (`CreateInput`,
+  `LearnInput`) as soon as they are a bag of options rather than an
+  order: a door whose ten arguments are six strings in a row is the wire
+  again with type names on it.
 - `tool/verdict`: the reviewer's one word (2.11.0): registered only in a
   worker that holds a fleet pipe, its call crosses as `core.Verdict`
   published as the worker's member; the swarm reviewer and the decision

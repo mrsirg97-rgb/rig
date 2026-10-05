@@ -7,8 +7,13 @@ bounded. Stdlib only.
 
 ## What it includes
 
-- `Tool`: a `core.Tool` that runs `bash -c <command>` via
-  `exec.CommandContext`, surfacing stdout/stderr and a bounded result.
+- `Bash`: the tool as its interface (2.12.6): `tool.Definition` (the
+  words), `Exec` as the one JSON door — it decodes and routes, nothing
+  else — and `Run(ctx, command, workspace)`, the one verb, named for what
+  it does. The empty-command refusal and the workspace check live in
+  `Run`, so a Go caller and the model meet the same words. The struct is
+  unexported and `New` returns the interface; the root's tool map holds it
+  as a `core.Tool`.
 
 ## How it is consumed
 

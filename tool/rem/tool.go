@@ -11,13 +11,71 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
+type Rem interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	Index(ctx context.Context, scope string) (string, error)
+	Pack(ctx context.Context, scope, target string) (string, error)
+	Learn(ctx context.Context, scope string, in LearnInput) (string, error)
+	Recall(ctx context.Context, scope string, in RecallInput) (string, error)
+	Reflect(ctx context.Context, scope string, in ReflectInput) (string, error)
+	Prune(ctx context.Context, scope string, in PruneInput) (string, error)
+}
+
+// A verb whose fields are a bag of options rather than an order takes
+// them as one input struct named for the verb, the store's CreateInput
+// shape. The scope stays on the verb itself: every verb carries it, and
+// an input with it left out must not read like a call. A field is a pointer where absent
+// and zero differ — Importance (absent is the default weight, zero is a
+// weight of nothing), K and OlderThanDays.
+
+// LearnInput is one memory: its content, its kind (an empty kind is
+// "fact"), its importance, the source to attribute it to (an empty
+// source attributes the session), and the ids it supersedes.
+type LearnInput struct {
+	Content    string
+	Kind       string
+	Importance *float64
+	Source     string
+	Supersedes []int64
+}
+
+// RecallInput is a search: the query (empty lists), a kind to filter to,
+// a K to cap the hits, and whether a superseded memory may answer.
+type RecallInput struct {
+	Query             string
+	Kind              string
+	K                 *int
+	IncludeSuperseded bool
+}
+
+// ReflectInput is a distilled finding: its content, its importance and
+// the source to attribute it to.
+type ReflectInput struct {
+	Content    string
+	Importance *float64
+	Source     string
+}
+
+// PruneInput is a cleanup: the verb (remove, reduce or consolidate), a
+// kind to narrow to, the ids to act on, the age to act from, and the
+// weight a reduce leaves behind.
+type PruneInput struct {
+	Verb          string
+	Kind          string
+	IDs           []int64
+	OlderThanDays *int
+	Importance    *float64
+}
+
 type adapter struct {
 	tool.Definition
 	db    store.DB
 	graph *graph.Queue
 }
 
-func New(db store.DB, g *graph.Queue) core.Tool {
+func New(db store.DB, g *graph.Queue) Rem {
 	return adapter{Definition: tool.Def("rem"), db: db, graph: g}
 }
 
@@ -55,135 +113,182 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if err := json.Unmarshal(args, &g); err != nil {
 		return "", fmt.Errorf("rem: %v", err)
 	}
+	scope := text(g.Scope)
 	switch g.Action {
 	case "":
 		return "", fmt.Errorf("rem: action required")
-	case "index", "pack", "learn", "recall", "reflect", "prune":
-	default:
-		return "", fmt.Errorf("rem: action '%s' not implemented", g.Action)
-	}
-	cwd, global, err := scopeOf(g.Scope)
-	if err != nil {
-		return "", err
-	}
-	switch g.Action {
 	case "index":
-		if global {
-			return "", fmt.Errorf("rem: index: global has no map; a map needs a directory")
-		}
-		return a.graph.IndexProject(ctx, cwd)
+		return a.Index(ctx, scope)
 	case "pack":
-		if global {
-			return "", fmt.Errorf("rem: pack: global has no map; a map needs a directory")
-		}
-		if g.Target == nil || *g.Target == "" {
-			return "", fmt.Errorf("rem: action 'pack' requires target")
-		}
-		return a.graph.Pack(ctx, cwd, *g.Target)
+		return a.Pack(ctx, scope, text(g.Target))
 	case "learn":
-		if g.Content == nil || *g.Content == "" {
-			return "", fmt.Errorf("rem: action 'learn' requires content")
-		}
-		importance, importanceSet, err := importanceOf(g.Importance)
-		if err != nil {
-			return "", err
-		}
 		supersedes, err := supersedesOf(g.Supersedes)
 		if err != nil {
 			return "", err
 		}
-		kind := "fact"
-		if g.Kind != nil && *g.Kind != "" {
-			kind = *g.Kind
-		}
-		reply, _, _, err := remstore.Learn(ctx, a.db, cwd, remstore.LearnInput{
-			Content:       *g.Content,
-			Kind:          kind,
-			Importance:    importance,
-			ImportanceSet: importanceSet,
-			Scope:         internalScope(global),
-			Source:        attributedSource(g.Source, ctx),
-			Supersedes:    supersedes,
+		return a.Learn(ctx, scope, LearnInput{
+			Content: text(g.Content), Kind: text(g.Kind), Importance: g.Importance, Source: text(g.Source), Supersedes: supersedes,
 		})
-		return reply, err
 	case "recall":
-		if g.K != nil && (*g.K < 1 || *g.K > 50) {
-			return "", fmt.Errorf("rem: k must be within 1..50, got %d", *g.K)
-		}
-		var k int
-		if g.K != nil {
-			k = *g.K
-		}
-		scope := internalScope(global)
-		reply, _, err := remstore.Recall(ctx, a.db, cwd, remstore.RecallInput{
-			Query:             queryOf(g.Query),
-			Scope:             scope,
-			Kind:              kindOf(g.Kind),
-			K:                 k,
-			IncludeSuperseded: g.IncludeSuperseded != nil && *g.IncludeSuperseded,
+		return a.Recall(ctx, scope, RecallInput{
+			Query: text(g.Query), Kind: text(g.Kind), K: g.K, IncludeSuperseded: g.IncludeSuperseded != nil && *g.IncludeSuperseded,
 		})
-		return reply, err
 	case "reflect":
-		if g.Content == nil || *g.Content == "" {
-			return "", fmt.Errorf("rem: action 'reflect' requires content")
-		}
-		importance, importanceSet, err := importanceOf(g.Importance)
-		if err != nil {
-			return "", err
-		}
-		if !importanceSet {
-			importance = 0.3
-		}
-		reply, _, _, err := remstore.Reflect(ctx, a.db, cwd, remstore.ReflectInput{
-			Content:       *g.Content,
-			Importance:    importance,
-			ImportanceSet: importanceSet,
-			Scope:         internalScope(global),
-			Source:        attributedSource(g.Source, ctx),
-		})
-		return reply, err
+		return a.Reflect(ctx, scope, ReflectInput{Content: text(g.Content), Importance: g.Importance, Source: text(g.Source)})
 	case "prune":
-		verb := ""
-		if g.Verb != nil {
-			verb = *g.Verb
-		}
-		switch verb {
-		case "":
-
-		case "consolidate", "remove", "reduce":
-		default:
-			return "", fmt.Errorf("rem: verb must be remove, reduce, or consolidate, got '%s'", verb)
-		}
 		ids, err := idsOf(g.IDs)
 		if err != nil {
 			return "", err
 		}
-		scope := internalScope(global)
-		var importance *float64
-		if g.Importance != nil {
-			v, _, err := importanceOf(g.Importance)
-			if err != nil {
-				return "", err
-			}
-			importance = &v
-		}
-		older := 0
-		if g.OlderThanDays != nil {
-			older = *g.OlderThanDays
-			if older < 1 {
-				return "", fmt.Errorf("rem: older_than_days must be at least 1, got %d", older)
-			}
-		}
-		reply, _, err := remstore.Prune(ctx, a.db, cwd, remstore.PruneInput{
-			Verb:          verb,
-			IDs:           ids,
-			Scope:         scope,
-			Kind:          kindOf(g.Kind),
-			OlderThanDays: older,
-			Importance:    importance,
+		return a.Prune(ctx, scope, PruneInput{
+			Verb: text(g.Verb), Kind: text(g.Kind), IDs: ids, OlderThanDays: g.OlderThanDays, Importance: g.Importance,
 		})
-		return reply, err
 	default:
 		return "", fmt.Errorf("rem: action '%s' not implemented", g.Action)
 	}
+}
+
+func text(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func (a adapter) Index(ctx context.Context, scope string) (string, error) {
+	cwd, global, err := scopeOf(scope)
+	if err != nil {
+		return "", err
+	}
+	if global {
+		return "", fmt.Errorf("rem: index: global has no map; a map needs a directory")
+	}
+	return a.graph.IndexProject(ctx, cwd)
+}
+
+func (a adapter) Pack(ctx context.Context, scope, target string) (string, error) {
+	cwd, global, err := scopeOf(scope)
+	if err != nil {
+		return "", err
+	}
+	if global {
+		return "", fmt.Errorf("rem: pack: global has no map; a map needs a directory")
+	}
+	if target == "" {
+		return "", fmt.Errorf("rem: action 'pack' requires target")
+	}
+	return a.graph.Pack(ctx, cwd, target)
+}
+
+func (a adapter) Learn(ctx context.Context, scope string, in LearnInput) (string, error) {
+	cwd, global, err := scopeOf(scope)
+	if err != nil {
+		return "", err
+	}
+	if in.Content == "" {
+		return "", fmt.Errorf("rem: action 'learn' requires content")
+	}
+	weight, weightSet, err := importanceOf(in.Importance)
+	if err != nil {
+		return "", err
+	}
+	kind := in.Kind
+	if kind == "" {
+		kind = "fact"
+	}
+	reply, _, _, err := remstore.Learn(ctx, a.db, cwd, remstore.LearnInput{
+		Content:       in.Content,
+		Kind:          kind,
+		Importance:    weight,
+		ImportanceSet: weightSet,
+		Scope:         internalScope(global),
+		Source:        attributedSource(in.Source, ctx),
+		Supersedes:    in.Supersedes,
+	})
+	return reply, err
+}
+
+func (a adapter) Recall(ctx context.Context, scope string, in RecallInput) (string, error) {
+	cwd, global, err := scopeOf(scope)
+	if err != nil {
+		return "", err
+	}
+	if in.K != nil && (*in.K < 1 || *in.K > 50) {
+		return "", fmt.Errorf("rem: k must be within 1..50, got %d", *in.K)
+	}
+	var found int
+	if in.K != nil {
+		found = *in.K
+	}
+	reply, _, err := remstore.Recall(ctx, a.db, cwd, remstore.RecallInput{
+		Query:             in.Query,
+		Scope:             internalScope(global),
+		Kind:              in.Kind,
+		K:                 found,
+		IncludeSuperseded: in.IncludeSuperseded,
+	})
+	return reply, err
+}
+
+func (a adapter) Reflect(ctx context.Context, scope string, in ReflectInput) (string, error) {
+	cwd, global, err := scopeOf(scope)
+	if err != nil {
+		return "", err
+	}
+	if in.Content == "" {
+		return "", fmt.Errorf("rem: action 'reflect' requires content")
+	}
+	weight, weightSet, err := importanceOf(in.Importance)
+	if err != nil {
+		return "", err
+	}
+	if !weightSet {
+		weight = 0.3
+	}
+	reply, _, _, err := remstore.Reflect(ctx, a.db, cwd, remstore.ReflectInput{
+		Content:       in.Content,
+		Importance:    weight,
+		ImportanceSet: weightSet,
+		Scope:         internalScope(global),
+		Source:        attributedSource(in.Source, ctx),
+	})
+	return reply, err
+}
+
+func (a adapter) Prune(ctx context.Context, scope string, in PruneInput) (string, error) {
+	cwd, global, err := scopeOf(scope)
+	if err != nil {
+		return "", err
+	}
+	switch in.Verb {
+	case "":
+
+	case "consolidate", "remove", "reduce":
+	default:
+		return "", fmt.Errorf("rem: verb must be remove, reduce, or consolidate, got '%s'", in.Verb)
+	}
+	var weight *float64
+	if in.Importance != nil {
+		v, _, err := importanceOf(in.Importance)
+		if err != nil {
+			return "", err
+		}
+		weight = &v
+	}
+	older := 0
+	if in.OlderThanDays != nil {
+		older = *in.OlderThanDays
+		if older < 1 {
+			return "", fmt.Errorf("rem: older_than_days must be at least 1, got %d", older)
+		}
+	}
+	reply, _, err := remstore.Prune(ctx, a.db, cwd, remstore.PruneInput{
+		Verb:          in.Verb,
+		IDs:           in.IDs,
+		Scope:         internalScope(global),
+		Kind:          in.Kind,
+		OlderThanDays: older,
+		Importance:    weight,
+	})
+	return reply, err
 }

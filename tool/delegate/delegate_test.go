@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -192,7 +191,7 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	return &harness{home: home, rigHome: rigHome, db: db}
 }
 
-func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) core.Tool {
+func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) delegate.Delegate {
 	t.Helper()
 	return delegate.New(delegate.Opts{
 		DB:           h.db,
@@ -595,5 +594,34 @@ func TestDelegateTimeoutCeilingStaysThirtyMinutes(t *testing.T) {
 	}
 	if spawn.deadline <= 29*time.Minute || spawn.deadline > 31*time.Minute {
 		t.Fatalf("the interactive timeout ceiling must stay 30 minutes, got %v", spawn.deadline)
+	}
+}
+
+func TestDelegateRunAndExecShareTheirChecks(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "the answer"}}
+	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
+	ctx := context.Background()
+
+	_, runErr := tool.Run(ctx, "   ", "", "", 0)
+	_, execErr := tool.Exec(ctx, runArgs("   "))
+	if runErr == nil || execErr == nil {
+		t.Fatalf("a blank task refuses on both doors, run=%v exec=%v", runErr, execErr)
+	}
+	if runErr.Error() != "delegate: task is required" || execErr.Error() != runErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: run %q exec %q", runErr, execErr)
+	}
+
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	_, runErr = tool.Run(ctx, "do the sweep", outside, "", 0)
+	_, execErr = tool.Exec(ctx, json.RawMessage(`{"task":"do the sweep","workspace":"`+outside+`"}`))
+	if runErr == nil || execErr == nil {
+		t.Fatalf("a workspace outside the session's cwd and the rig home refuses on both doors, run=%v exec=%v", runErr, execErr)
+	}
+	if runErr.Error() != execErr.Error() {
+		t.Fatalf("the workspace refusal is the same words on either door: run %q exec %q", runErr, execErr)
+	}
+	if spawn.count() != 0 {
+		t.Fatalf("a refused call spawns nothing, got %d", spawn.count())
 	}
 }

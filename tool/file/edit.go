@@ -18,9 +18,16 @@ import (
 
 const driftCap = 20
 
+type Edit interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	Edit(ctx context.Context, path, old, new string) (string, error)
+}
+
 type editTool struct{ tool.Definition }
 
-func Edit() core.Tool { return &editTool{tool.Def("edit")} }
+func NewEdit() Edit { return &editTool{tool.Def("edit")} }
 
 type editArgs struct {
 	Path string `json:"path"`
@@ -28,20 +35,24 @@ type editArgs struct {
 	New  string `json:"new"`
 }
 
-func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
+func (t editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a editArgs
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("edit: args: %w", err)
 	}
-	a.Path = normalizePath(a.Path)
-	if a.Old == "" {
+	return t.Edit(ctx, a.Path, a.Old, a.New)
+}
+
+func (editTool) Edit(ctx context.Context, path, old, new string) (string, error) {
+	path = normalizePath(path)
+	if old == "" {
 		return "", errors.New("edit: old is empty; give the text to replace")
 	}
-	if total := len(a.Old) + len(a.New); total >= ReadCap {
+	if total := len(old) + len(new); total >= ReadCap {
 		return "", fmt.Errorf("edit: old plus new is %d bytes, the read ceiling is %d; split the change across calls", total, ReadCap)
 	}
 
-	fileData, err := os.ReadFile(a.Path)
+	fileData, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
@@ -49,32 +60,32 @@ func (editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 	sum := sha256.Sum256(fileData)
 
 	_, threaded := core.SessionFrom(ctx)
-	recorded, seen := stateOf(ctx, a.Path)
+	recorded, seen := stateOf(ctx, path)
 	fresh := threaded && !seen
 	if seen {
-		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
-			return "", fmt.Errorf("%s", driftRefusal(ctx, a.Path, content))
+		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(path) {
+			return "", fmt.Errorf("%s", driftRefusal(ctx, path, content))
 		}
 	}
 
-	if count := strings.Count(content, a.Old); count != 1 {
+	if count := strings.Count(content, old); count != 1 {
 		if fresh {
-			return unreadObservation(ctx, a.Path)
+			return unreadObservation(ctx, path)
 		}
 		if count == 0 {
 			return "", errors.New("edit: old matched 0 times; nothing landed")
 		}
 		return "", fmt.Errorf("edit: old matched %d times, want exactly 1; nothing landed", count)
 	}
-	updated := strings.Replace(content, a.Old, a.New, 1)
+	updated := strings.Replace(content, old, new, 1)
 
-	if err := os.WriteFile(a.Path, []byte(updated), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
-	recordState(ctx, a.Path, []byte(updated))
+	recordState(ctx, path, []byte(updated))
 	s, _ := core.SessionFrom(ctx)
-	rememberContent(s, a.Path, updated)
-	return fmt.Sprintf("edited %s: replaced %d byte(s)", a.Path, len(a.Old)), nil
+	rememberContent(s, path, updated)
+	return fmt.Sprintf("edited %s: replaced %d byte(s)", path, len(old)), nil
 }
 
 func unreadObservation(ctx context.Context, path string) (string, error) {

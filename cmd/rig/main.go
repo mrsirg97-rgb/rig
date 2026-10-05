@@ -50,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.12.5"
+const Version = "2.12.6"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -451,7 +451,7 @@ func main() {
 		themeDoc:       cfg.Theme,
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
-			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
+			"bash": bash.New(), "read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},

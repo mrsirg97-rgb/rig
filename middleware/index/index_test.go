@@ -117,7 +117,7 @@ func TestEditReplacesSymbolsAndEdgesInPlace(t *testing.T) {
 
 func mapped(q *graph.Queue) (core.ToolExec, core.ToolExec) {
 	mw := index.Middleware(q)
-	return mw.Wrap(execOf(file.Read())), mw.Wrap(execOf(file.Edit()))
+	return mw.Wrap(execOf(file.NewRead())), mw.Wrap(execOf(file.NewEdit()))
 }
 
 func execOf(tool core.Tool) core.ToolExec {

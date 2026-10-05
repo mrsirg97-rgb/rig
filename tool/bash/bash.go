@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
 	"golang.org/x/sys/unix"
@@ -20,31 +19,42 @@ import (
 
 const outputCap = 256 * 1024
 
+type Bash interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	Run(ctx context.Context, command, workspace string) (string, error)
+}
+
 type bashTool struct{ tool.Definition }
 
-func New() core.Tool { return &bashTool{tool.Def("bash")} }
+func New() Bash { return &bashTool{tool.Def("bash")} }
 
 type args struct {
 	Command   string `json:"command"`
 	Workspace string `json:"workspace,omitempty"`
 }
 
-func (bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
+func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a args
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("bash: args: %w", err)
 	}
-	if strings.TrimSpace(a.Command) == "" {
+	return t.Run(ctx, a.Command, a.Workspace)
+}
+
+func (bashTool) Run(ctx context.Context, command, workspace string) (string, error) {
+	if strings.TrimSpace(command) == "" {
 		return "", errors.New("bash: empty command")
 	}
 
-	argv := execwrap.Args([]string{"bash", "-c", a.Command})
+	argv := execwrap.Args([]string{"bash", "-c", command})
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	if a.Workspace != "" {
-		if err := checkCwd(a.Workspace); err != nil {
-			return "", fmt.Errorf("bash: workspace %s: %v", a.Workspace, err)
+	if workspace != "" {
+		if err := checkCwd(workspace); err != nil {
+			return "", fmt.Errorf("bash: workspace %s: %v", workspace, err)
 		}
-		cmd.Dir = a.Workspace
+		cmd.Dir = workspace
 	}
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -62,7 +72,7 @@ func (bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) 
 
 	content := out.String()
 	if err != nil {
-		dir := a.Workspace
+		dir := workspace
 		if dir == "" {
 			if d, werr := os.Getwd(); werr == nil {
 				dir = d

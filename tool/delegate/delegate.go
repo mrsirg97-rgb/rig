@@ -51,7 +51,14 @@ type workerState struct {
 	state     string
 }
 
-func New(o Opts) core.Tool {
+type Delegate interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	Run(ctx context.Context, task, workspace, model string, timeoutMs int64) (string, error)
+}
+
+func New(o Opts) Delegate {
 	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}}
 	if o.Room != nil {
 		a.member = o.Room.Add(rig.MemberDelegate)
@@ -81,10 +88,14 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if err := strictDecode(data, &g); err != nil {
 		return "", fmt.Errorf("delegate: args: %w", err)
 	}
-	if strings.TrimSpace(g.Task) == "" {
+	return a.Run(ctx, g.Task, g.Workspace, g.Model, g.TimeoutMs)
+}
+
+func (a *adapter) Run(ctx context.Context, task, workspace, model string, timeoutMs int64) (string, error) {
+	if strings.TrimSpace(task) == "" {
 		return "", errors.New("delegate: task is required")
 	}
-	member := a.begin(g.Task)
+	member := a.begin(task)
 	if member != nil {
 		defer a.end(member)
 	}
@@ -97,16 +108,15 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		return "", fmt.Errorf("delegate: %v", err)
 	}
 	cwd := sessionCwd
-	if g.Workspace != "" {
-		cwd, err = pathguard.Within(g.Workspace, sessionCwd, a.RigHome)
+	if workspace != "" {
+		cwd, err = pathguard.Within(workspace, sessionCwd, a.RigHome)
 		if err != nil {
 			return "", fmt.Errorf("delegate: %w", err)
 		}
 	}
-	model := g.Model
 	timeout := defaultTimeout
-	if g.TimeoutMs > 0 {
-		timeout = time.Duration(g.TimeoutMs) * time.Millisecond
+	if timeoutMs > 0 {
+		timeout = time.Duration(timeoutMs) * time.Millisecond
 		if timeout > delegateTimeoutCap {
 			timeout = delegateTimeoutCap
 		}
@@ -117,7 +127,7 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		Home:          a.Home,
 		Session:       session,
 		Cwd:           cwd,
-		Task:          g.Task,
+		Task:          task,
 		Model:         model,
 		WorkerSession: core.NewSession().ID,
 		DefaultModel:  a.DefaultModel,

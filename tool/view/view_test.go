@@ -718,3 +718,38 @@ func TestAViewWithoutAStoreRefusesInsteadOfWritingRelative(t *testing.T) {
 		t.Fatal("nothing was written")
 	}
 }
+
+func TestViewViewAndExecShareTheirChecks(t *testing.T) {
+	dir, blobs := t.TempDir(), t.TempDir()
+	src := writeImage(t, dir, "shot.png", blocks(16, 16))
+	tool := view.New(blobs)
+	ctx := context.Background()
+
+	_, lookErr := tool.View(ctx, "")
+	_, execErr := tool.Exec(ctx, jsonArgs(t, ""))
+	if lookErr == nil || execErr == nil {
+		t.Fatalf("an absent path refuses on both doors, view=%v exec=%v", lookErr, execErr)
+	}
+	if lookErr.Error() != "view: path required (the image file to look at)" || execErr.Error() != lookErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: view %q exec %q", lookErr, execErr)
+	}
+
+	missing := filepath.Join(dir, "gone.png")
+	_, lookErr = tool.View(ctx, missing)
+	_, execErr = tool.Exec(ctx, jsonArgs(t, missing))
+	if lookErr == nil || execErr == nil || lookErr.Error() != execErr.Error() {
+		t.Fatalf("an image that is not there refuses the same way on either door: view=%v exec=%v", lookErr, execErr)
+	}
+
+	got, err := tool.View(ctx, src)
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	want, err := tool.Exec(ctx, jsonArgs(t, src))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if got != want {
+		t.Fatalf("one look replies the same bytes through either door: view %q exec %q", got, want)
+	}
+}

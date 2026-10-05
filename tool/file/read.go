@@ -22,9 +22,16 @@ const ReadCap = 1 << 20
 
 const readChunk = 64 * 1024
 
+type Read interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	Read(ctx context.Context, path string, offset, limit *int, diff bool) (string, error)
+}
+
 type readTool struct{ tool.Definition }
 
-func Read() core.Tool { return &readTool{tool.Def("read")} }
+func NewRead() Read { return &readTool{tool.Def("read")} }
 
 type readArgs struct {
 	Path   string `json:"path"`
@@ -33,50 +40,54 @@ type readArgs struct {
 	Diff   bool   `json:"diff"`
 }
 
-func (readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
+func (t readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a readArgs
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("read: args: %w", err)
 	}
-	a.Path = normalizePath(a.Path)
-	offset := 0
-	if a.Offset != nil {
-		if *a.Offset < 0 {
-			return "", fmt.Errorf("read: offset %d is negative", *a.Offset)
+	return t.Read(ctx, a.Path, a.Offset, a.Limit, a.Diff)
+}
+
+func (readTool) Read(ctx context.Context, path string, offset, limit *int, diff bool) (string, error) {
+	path = normalizePath(path)
+	var start int
+	if offset != nil {
+		if *offset < 0 {
+			return "", fmt.Errorf("read: offset %d is negative", *offset)
 		}
-		offset = *a.Offset
+		start = *offset
 	}
-	limit := -1
-	if a.Limit != nil {
-		if *a.Limit < 0 {
-			return "", fmt.Errorf("read: limit %d is negative", *a.Limit)
+	window := -1
+	if limit != nil {
+		if *limit < 0 {
+			return "", fmt.Errorf("read: limit %d is negative", *limit)
 		}
-		limit = *a.Limit
+		window = *limit
 	}
-	content, total, sum, err := readWindow(a.Path, offset, limit)
+	content, total, sum, err := readWindow(path, start, window)
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
 	}
-	if offset >= total {
-		return "", fmt.Errorf("read: offset %d is past the end (%d lines)", offset, total)
+	if start >= total {
+		return "", fmt.Errorf("read: offset %d is past the end (%d lines)", start, total)
 	}
 	stale := false
-	if recorded, seen := stateOf(ctx, a.Path); seen {
-		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(a.Path) {
+	if recorded, seen := stateOf(ctx, path); seen {
+		if recorded.Hash != hex.EncodeToString(sum[:]) || recorded.Mtime != mtimeOf(path) {
 			stale = true
 		}
 	}
-	recordDigest(ctx, a.Path, sum)
+	recordDigest(ctx, path, sum)
 	s, _ := core.SessionFrom(ctx)
-	rememberContent(s, a.Path, content)
+	rememberContent(s, path, content)
 	if len(content) > ReadCap {
-		content = capReply(content, total, offset)
+		content = capReply(content, total, start)
 	}
 	if stale {
-		content = "[changed since your observation] " + a.Path + " — re-read before acting on it\n" + content
+		content = "[changed since your observation] " + path + " — re-read before acting on it\n" + content
 	}
-	if a.Diff {
-		d, err := difftool.Files(ctx, "HEAD", []string{a.Path})
+	if diff {
+		d, err := difftool.Files(ctx, "HEAD", []string{path})
 		if err != nil {
 			return "", fmt.Errorf("read: diff: %w", err)
 		}

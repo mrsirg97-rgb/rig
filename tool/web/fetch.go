@@ -13,7 +13,7 @@ import (
 
 const (
 	maxBytesDefault  = 5 * 1024 * 1024
-	maxChars         = 20_000
+	defaultMaxChars  = 20_000
 	minTimeoutMs     = 1_000
 	maxTimeoutMs     = 300_000
 	defaultTimeoutMs = 30_000
@@ -54,7 +54,7 @@ type fetch struct {
 	maxBytes int
 }
 
-func NewFetch(cfg FetchConfig) *fetch {
+func newFetch(cfg FetchConfig) *fetch {
 	f := &fetch{
 		proxy:    cfg.Proxy,
 		lookup:   cfg.Lookup,

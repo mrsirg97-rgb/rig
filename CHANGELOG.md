@@ -1,4 +1,49 @@
 # Changelog
+## [2.12.6]: every native tool is its interface
+
+A native tool was a struct with one `Exec`: it decoded JSON, held every
+check, and answered with a string. A Go caller that wanted what the tool
+does had to speak the wire to get the checks — marshal arguments it
+already held, call `Exec`, and match the refusal's words hoping they were
+the words the model sees. 2.12.4 gave `tool/todo` the other shape, a
+`Todo` interface embedding `tool.Definition`, declaring `Exec` as the one
+JSON door and one typed method per verb with the checks inside it, and
+this release gives it to every native: `Bash`, `Read`, `Write`, `Edit`,
+`View`, `Verdict`, `Delegate`, `Web`, `Sessions`, `Python`, `Rem`,
+`Scheduler`, `Plugin`, `Decide`. The implementing struct is unexported,
+the constructor returns the interface, `Exec` decodes and routes and does
+nothing else, and the verb's required fields, mode gates and bounds sit
+in the method the model's call lands in: `Edit(ctx, path, old, new)`
+refuses `old matched 0 times` from Go exactly as from JSON,
+`Scheduler.Create` holds the command-job model gate and the workspace
+containment, `Web.Fetch` holds the `maxChars` and `timeoutMs` bounds,
+`Rem.Learn` holds the scope rule that mints no memory under a path that
+is not there. A wire shape Go cannot name — a todo `link`, an id or a
+list of ids; a scheduler `model`, absent, null or a name — is decoded at
+the door and reaches the method decoded, or as a pointer where absent and
+zero differ. A verb's target stays positional — the workspace, the path,
+the job id — with at most three of its own fields beside it, and the
+fields go in one input struct named for the verb — `Create(ctx, in
+CreateInput)`, `Learn(ctx, scope, in LearnInput)` — as soon as they are a
+bag of options rather than an order, because a door whose ten arguments
+are six strings in a row is the wire again with type names on it. The bytes the model sees do not move: not one registry word,
+not one refusal sentence, and `TestFrontendMenuBytesStayWithinTheBudget`
+holds the menu at its 1099.
+
+Where the template did not fit it is named, not forced. The plugin door's
+schema verb is a method called `Contract`, because `Schema()` is the
+tool's own argument schema — the one the door overrides to carry the live
+plugin names; its four forge verbs now call the ecosystem's typed
+methods, so the ecosystem lost the JSON door that had no caller left. The
+decide tool routes on `kind` and its three methods are its three question
+kinds, `Choice`, `Binary` and `Score`, sharing the item refusals and the
+read ceiling in one run. `Python` carries beside its three verbs the
+kernel seams the root and plugin discovery already held: `Run`, `Host`,
+`Close`. Each interface gained one invariant test that a typed call and a
+JSON call refuse and reply the same way, fourteen in all.
+
+---
+
 ## [2.12.5]: edit takes one change
 
 The chunk list was a second way to use the tool, with its own grammar:

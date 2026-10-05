@@ -9,7 +9,17 @@ The shared kernel is also the plugin discovery/execution surface
 
 ## What it includes
 
-- `Tool`: a `core.Tool` implementing the `plugins.Kernel` seam (`Run`).
+- `Python`: the tool as its interface (2.12.6): `tool.Definition`, `Exec`
+  as the one JSON door — decode `action`/`code`/`timeoutMs`, apply the
+  absent-field default, route, and refuse an unknown action with the words
+  that name the actions — and one method per verb: `Code(ctx, code,
+  timeoutMs)`, `Vars(ctx, timeoutMs)`, `Reset(ctx, timeoutMs)`. The
+  blank-cell refusal and the `timeoutMs` bound live in the verb, so a Go
+  caller and the model hit the same checks. The interface also carries the
+  seams the root and plugin discovery hold: `Run(ctx, code, timeoutMs)`
+  (the raw `Reply`, what `plugins.Kernel` asks for), `Host()` and
+  `Close()`. `New`/`NewWith` return the interface; the struct is
+  unexported.
 - `kernel_host.py`: embedded host script (`//go:embed`).
 - The JSON-lines wire protocol reader/writer over the subprocess stdio.
 

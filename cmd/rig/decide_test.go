@@ -27,7 +27,7 @@ func (f fakeDecider) Decide(ctx context.Context, state string, questions []decis
 	return []decision.Answer{f.reply(state)}, nil
 }
 
-func wiredDecide(t *testing.T, rec decision.Recorder, reply func(state string) decision.Answer) *decision.Decide {
+func wiredDecide(t *testing.T, rec decision.Recorder, reply func(state string) decision.Answer) decision.Decide {
 	t.Helper()
 	d, err := decision.NewDecide(decision.DecideOptions{Decider: fakeDecider{reply: reply}, Recorder: rec, Parallel: 1})
 	if err != nil {

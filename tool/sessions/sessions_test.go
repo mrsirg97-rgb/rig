@@ -374,3 +374,54 @@ func TestSessionsSummarySplitsTokensByModelForAMixedSession(t *testing.T) {
 		t.Fatalf("the summary must be exact:\ngot:\n%s\nwant:\n%s", out, want)
 	}
 }
+
+func TestSessionsListSummaryAndExecShareTheirChecks(t *testing.T) {
+	home := t.TempDir()
+	this := "/workspace/this"
+	openProject(t, home, this, seedSpec{id: "t0000001", model: "local", version: "0.16.1", turns: 1})
+	tool := sessions.New(home, this)
+	ctx := context.Background()
+
+	_, listErr := tool.List(ctx, "", 0)
+	_, execErr := run(t, tool, `{"action":"list","n":0}`)
+	if listErr == nil || execErr == nil {
+		t.Fatalf("an out-of-range n refuses on both doors, list=%v exec=%v", listErr, execErr)
+	}
+	if listErr.Error() != "sessions: n must be within 1..50, got 0" || execErr.Error() != listErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: list %q exec %q", listErr, execErr)
+	}
+
+	_, summaryErr := tool.Summary(ctx, "", 51)
+	_, execErr = run(t, tool, `{"action":"summary","n":51}`)
+	if summaryErr == nil || execErr == nil || summaryErr.Error() != execErr.Error() {
+		t.Fatalf("an n past the cap refuses the same way on either door: summary=%v exec=%v", summaryErr, execErr)
+	}
+
+	got, err := tool.List(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	want, err := run(t, tool, `{"action":"list"}`)
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if got != want {
+		t.Fatalf("one list replies the same bytes through either door: list %q exec %q", got, want)
+	}
+	if summary, err := tool.Summary(ctx, "", 10); err != nil || summary == got {
+		t.Fatalf("summary is its own reply through the verb, got %q (err %v)", summary, err)
+	}
+
+	absent := sessions.New(home, "/workspace/that")
+	fromMethod, err := absent.List(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("a project with no store replies empty: %v", err)
+	}
+	fromExec, err := run(t, absent, `{"action":"list"}`)
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if fromMethod != fromExec {
+		t.Fatalf("the empty project reply names itself the same way on either door: list %q exec %q", fromMethod, fromExec)
+	}
+}

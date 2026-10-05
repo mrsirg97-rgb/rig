@@ -285,3 +285,63 @@ func TestDoorRunNeedsANameAndTheEcosystemVerbsDoNot(t *testing.T) {
 		t.Fatalf("unknown action: %v", err)
 	}
 }
+
+func TestPluginDoorVerbsAndExecShareTheirChecks(t *testing.T) {
+	live := &stubLive{names: []string{"networth"}, tool: &stubTool{name: "networth"}}
+	door := NewDoor(live, nil, nil)
+	ctx := context.Background()
+
+	_, runErr := door.Run(ctx, "", json.RawMessage(`{}`))
+	_, execErr := door.Exec(ctx, json.RawMessage(`{"action":"run"}`))
+	if runErr == nil || execErr == nil {
+		t.Fatalf("a run without a name refuses on both doors, run=%v exec=%v", runErr, execErr)
+	}
+	if runErr.Error() != "plugin: run needs a name (the live plugin)" || execErr.Error() != runErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: run %q exec %q", runErr, execErr)
+	}
+
+	_, schemaErr := door.Contract(ctx, "")
+	_, execErr = door.Exec(ctx, json.RawMessage(`{"action":"schema"}`))
+	if schemaErr == nil || execErr == nil {
+		t.Fatalf("a schema without a name refuses on both doors, schema=%v exec=%v", schemaErr, execErr)
+	}
+	if schemaErr.Error() != "plugin: schema needs a name (the live plugin)" || execErr.Error() != schemaErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: schema %q exec %q", schemaErr, execErr)
+	}
+
+	_, runErr = door.Run(ctx, "nope", json.RawMessage(`{}`))
+	_, execErr = door.Exec(ctx, json.RawMessage(`{"action":"run","name":"nope"}`))
+	if runErr == nil || execErr == nil || !strings.Contains(runErr.Error(), `unknown plugin "nope"`) || !strings.Contains(runErr.Error(), "networth") || execErr.Error() != runErr.Error() {
+		t.Fatalf("an unknown plugin refuses the same words on either door: run=%v exec=%v", runErr, execErr)
+	}
+
+	_, listErr := door.List(ctx)
+	_, execErr = door.Exec(ctx, json.RawMessage(`{"action":"list"}`))
+	if listErr == nil || execErr == nil || !strings.Contains(listErr.Error(), "no ecosystem seam") || execErr.Error() != listErr.Error() {
+		t.Fatalf("a door without the ecosystem seam refuses the same words on either door: list=%v exec=%v", listErr, execErr)
+	}
+
+	got, err := door.Run(ctx, "networth", json.RawMessage(`{"a":1}`))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	want, err := door.Exec(ctx, json.RawMessage(`{"action":"run","name":"networth","args":{"a":1}}`))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if got != want || got != `ran networth: {"a":1}` {
+		t.Fatalf("one run replies the same bytes through either door: run %q exec %q", got, want)
+	}
+
+	fromContract, err := door.Contract(ctx, "networth")
+	if err != nil {
+		t.Fatalf("contract: %v", err)
+	}
+	fromSchema, err := door.Exec(ctx, json.RawMessage(`{"action":"schema","name":"networth"}`))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if fromContract != fromSchema {
+		t.Fatalf("one contract replies the same bytes through either door: contract %q exec %q", fromContract, fromSchema)
+	}
+}

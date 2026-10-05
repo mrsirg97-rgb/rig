@@ -19,7 +19,7 @@ import (
 	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
 )
 
-func remTool(t *testing.T, db store.DB) core.Tool {
+func remTool(t *testing.T, db store.DB) remapi.Rem {
 	return remapi.New(db, graph.NewQueue(t.TempDir(), nil))
 }
 
@@ -490,5 +490,78 @@ func TestRelativeAndTildeProjectResolveIdentically(t *testing.T) {
 	}
 	if scope.Key(repo) != scope.Key(filepath.Join(home, "repo")) {
 		t.Fatalf("the two paths must share one scope")
+	}
+}
+
+func TestRemVerbMethodsAndExecShareTheirChecks(t *testing.T) {
+	tool := remapi.New(newDB(t), graph.NewQueue(t.TempDir(), nil))
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	_, indexErr := tool.Index(ctx, "")
+	_, execErr := exec(t, tool, ctx, map[string]any{"action": "index", "scope": ""})
+	if indexErr == nil || execErr == nil {
+		t.Fatalf("an absent scope refuses on both doors, index=%v exec=%v", indexErr, execErr)
+	}
+	if indexErr.Error() != "rem: scope required: name the workspace this acts on, as a path, or global" || execErr.Error() != indexErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: index %q exec %q", indexErr, execErr)
+	}
+
+	_, indexErr = tool.Index(ctx, scope.Global)
+	_, execErr = exec(t, tool, ctx, map[string]any{"action": "index", "scope": scope.Global})
+	if indexErr == nil || execErr == nil || indexErr.Error() != execErr.Error() {
+		t.Fatalf("global has no map on either door: index=%v exec=%v", indexErr, execErr)
+	}
+	if indexErr.Error() != "rem: index: global has no map; a map needs a directory" {
+		t.Fatalf("the global refusal names what a map needs: %q", indexErr)
+	}
+
+	_, packErr := tool.Pack(ctx, dir, "")
+	_, execErr = exec(t, tool, ctx, map[string]any{"action": "pack", "scope": dir})
+	if packErr == nil || execErr == nil || packErr.Error() != execErr.Error() {
+		t.Fatalf("a pack without a target refuses the same way on either door: pack=%v exec=%v", packErr, execErr)
+	}
+
+	_, learnErr := tool.Learn(ctx, dir, remapi.LearnInput{})
+	_, execErr = exec(t, tool, ctx, map[string]any{"action": "learn", "scope": dir})
+	if learnErr == nil || execErr == nil || learnErr.Error() != "rem: action 'learn' requires content" || execErr.Error() != learnErr.Error() {
+		t.Fatalf("a learn without content refuses the same words on either door: learn=%v exec=%v", learnErr, execErr)
+	}
+
+	tooBig := 51
+	_, recallErr := tool.Recall(ctx, dir, remapi.RecallInput{Query: "x", K: &tooBig})
+	_, execErr = exec(t, tool, ctx, map[string]any{"action": "recall", "query": "x", "scope": dir, "k": 51})
+	if recallErr == nil || execErr == nil || recallErr.Error() != execErr.Error() {
+		t.Fatalf("k past the cap refuses the same way on either door: recall=%v exec=%v", recallErr, execErr)
+	}
+
+	_, pruneErr := tool.Prune(ctx, dir, remapi.PruneInput{Verb: "sync"})
+	_, execErr = exec(t, tool, ctx, map[string]any{"action": "prune", "scope": dir, "verb": "sync"})
+	if pruneErr == nil || execErr == nil || pruneErr.Error() != execErr.Error() {
+		t.Fatalf("a verb that is not a prune refuses the same way on either door: prune=%v exec=%v", pruneErr, execErr)
+	}
+
+	older := 0
+	_, pruneErr = tool.Prune(ctx, dir, remapi.PruneInput{Verb: "remove", OlderThanDays: &older})
+	_, execErr = exec(t, tool, ctx, map[string]any{"action": "prune", "scope": dir, "verb": "remove", "older_than_days": 0})
+	if pruneErr == nil || execErr == nil || pruneErr.Error() != execErr.Error() {
+		t.Fatalf("older_than_days under one refuses the same way on either door: prune=%v exec=%v", pruneErr, execErr)
+	}
+
+	if _, err := tool.Learn(ctx, dir, remapi.LearnInput{Content: "the verb and the wire agree"}); err != nil {
+		t.Fatalf("learn through the verb: %v", err)
+	}
+	fromVerb, err := tool.Recall(ctx, dir, remapi.RecallInput{Query: "agree"})
+	if err != nil {
+		t.Fatalf("recall through the verb: %v", err)
+	}
+	fromDoor, err := exec(t, tool, ctx, map[string]any{"action": "recall", "query": "agree", "scope": dir})
+	if err != nil {
+		t.Fatalf("recall through the door: %v", err)
+	}
+	for _, reply := range []string{fromVerb, fromDoor} {
+		if !strings.Contains(reply, "recall: 1 memories") || !strings.Contains(reply, "the verb and the wire agree") {
+			t.Fatalf("a memory learned through the verb is not recalled the same way it is through the door:\n%s", reply)
+		}
 	}
 }

@@ -86,7 +86,7 @@ func graphModule(t *testing.T) (string, *graph.Queue, core.Tool) {
 func mapWithReads(t *testing.T, root string, q *graph.Queue, paths ...string) {
 	t.Helper()
 	read := index.Middleware(q).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
-		return file.Read().Exec(ctx, call.Args)
+		return file.NewRead().Exec(ctx, call.Args)
 	})
 	ctx := context.Background()
 	for _, p := range paths {

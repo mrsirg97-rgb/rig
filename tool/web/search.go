@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	searchTimeout = 15 * time.Second
-	snippetCap    = 300
-	searchBodyCap = 1 << 20
+	defaultMaxResults = 5
+	searchTimeout     = 15 * time.Second
+	snippetCap        = 300
+	searchBodyCap     = 1 << 20
 )
 
 var (
@@ -33,7 +34,7 @@ type search struct {
 	do        func(*http.Request) (*http.Response, error)
 }
 
-func NewSearch(cfg SearchConfig) *search {
+func newSearch(cfg SearchConfig) *search {
 	base := cfg.BaseURL
 	if base == "" {
 		base = DefaultSearXNG

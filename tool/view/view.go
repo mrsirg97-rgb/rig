@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 	_ "golang.org/x/image/webp"
@@ -37,30 +36,41 @@ type viewArgs struct {
 	Path string `json:"path"`
 }
 
+type View interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	View(ctx context.Context, path string) (string, error)
+}
+
 type toolView struct {
 	tool.Definition
 	blobs string
 }
 
-func New(blobsDir string) core.Tool {
+func New(blobsDir string) View {
 	return &toolView{Definition: tool.Def("view"), blobs: blobsDir}
 }
 
 func (v *toolView) Exec(ctx context.Context, data json.RawMessage) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
 	var a viewArgs
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("view: %v", err)
 	}
-	if a.Path == "" {
+	return v.View(ctx, a.Path)
+}
+
+func (v *toolView) View(ctx context.Context, path string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if path == "" {
 		return "", errors.New("view: path required (the image file to look at)")
 	}
 	if v.blobs == "" {
 		return "", errors.New("view: no blob store is configured, so an image has nowhere to be kept")
 	}
-	path, err := filepath.Abs(a.Path)
+	path, err := filepath.Abs(path)
 	if err != nil {
 		return "", fmt.Errorf("view: %v", err)
 	}

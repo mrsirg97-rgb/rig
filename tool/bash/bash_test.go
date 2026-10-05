@@ -265,3 +265,40 @@ func TestHugeOutputIsBoundedWithTheMarker(t *testing.T) {
 		t.Fatalf("huge output must be the head plus the marker, got %d bytes (want %d)", len(got), len(want))
 	}
 }
+
+func TestBashRunAndExecShareTheirChecks(t *testing.T) {
+	tool := bash.New()
+	ctx := context.Background()
+
+	_, runErr := tool.Run(ctx, "   ", "")
+	_, execErr := tool.Exec(ctx, argsJSON(t, map[string]any{"command": "   "}))
+	if runErr == nil || execErr == nil {
+		t.Fatalf("the empty command refuses on both doors, run=%v exec=%v", runErr, execErr)
+	}
+	if runErr.Error() != "bash: empty command" || execErr.Error() != "bash: empty command" {
+		t.Fatalf("the refusal is the same words on either door: run %q exec %q", runErr, execErr)
+	}
+
+	dir := t.TempDir()
+	got, err := tool.Run(ctx, "pwd", dir)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	want, err := tool.Exec(ctx, argsJSON(t, map[string]any{"command": "pwd", "workspace": dir}))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if got != want {
+		t.Fatalf("one call replies the same bytes through either door: run %q exec %q", got, want)
+	}
+
+	missing := filepath.Join(dir, "no-such-dir")
+	_, runErr = tool.Run(ctx, "true", missing)
+	_, execErr = tool.Exec(ctx, argsJSON(t, map[string]any{"command": "true", "workspace": missing}))
+	if runErr == nil || execErr == nil {
+		t.Fatalf("an absent workspace refuses on both doors, run=%v exec=%v", runErr, execErr)
+	}
+	if runErr.Error() != execErr.Error() {
+		t.Fatalf("the workspace refusal is the same words on either door: run %q exec %q", runErr, execErr)
+	}
+}

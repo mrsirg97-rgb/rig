@@ -17,7 +17,15 @@ it acts on it.
 
 ## What it includes
 
-- `read`, `write`, `edit`: a `core.Tool` each, over `os`/`path/filepath`.
+- `Read`, `Write`, `Edit`: the three tools as their own interfaces
+  (2.12.6), one verb each over `os`/`path/filepath`: `Read(ctx, path,
+  offset, limit, diff)`, `Write(ctx, path, content)`, `Edit(ctx, path,
+  old, new)`. `NewRead`, `NewWrite` and `NewEdit` return the interfaces;
+  the structs are unexported and the root's tool map holds them as
+  `core.Tool`. Each `Exec` is the JSON door — decode and route, nothing
+  else — so the path normalization, the negative `offset`/`limit`
+  refusals, the empty-`old` refusal and the read-ceiling bound are the
+  verb's own: a Go caller and the model meet the same words.
 - The edit license, narrowed to the drift check: edit takes `path`,
   `old` and `new` — one change per call, the chunk list gone with its
   indices, its 32-chunk bound and its per-chunk reply line. Several

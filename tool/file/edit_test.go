@@ -20,7 +20,7 @@ func TestEditSingleChangeReplacesExactlyOnce(t *testing.T) {
 	if err := os.WriteFile(path, []byte("alpha beta gamma"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "old": "beta", "new": "BETA",
 	}))
 	if err != nil {
@@ -45,10 +45,10 @@ func TestEditReplyNamesThePathAndBytesReplaced(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "two three", "new": "2 3",
 	}))
 	if err != nil {
@@ -67,10 +67,10 @@ func TestEditAmbiguousOldNamesTheCount(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "x", "new": "y",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "matched 3 times, want exactly 1") {
@@ -98,10 +98,10 @@ func TestEditAbsentOldRefusesLoud(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "absent", "new": "x",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "matched 0 times") {
@@ -125,14 +125,14 @@ func TestEditAfterExternalChangeFailsLoud(t *testing.T) {
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
 
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
 
 	if err := os.WriteFile(path, []byte("version two"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "version", "new": "draft",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
@@ -165,14 +165,14 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
 
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
 	if err := os.WriteFile(path, []byte("version two"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": "." + string(os.PathSeparator) + "code.txt", "old": "version", "new": "draft",
 	})); err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
 		t.Fatalf("drift check bypassed by path spelling, got %v", err)
@@ -180,7 +180,7 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 }
 
 func TestEditDescriptionNamesTheGuideline(t *testing.T) {
-	desc := file.Edit().Description()
+	desc := file.NewEdit().Description()
 	for _, want := range []string{
 		"put enough of it in `old` to match exactly once",
 		"one change per call",
@@ -199,7 +199,7 @@ func TestEditDescriptionNamesTheGuideline(t *testing.T) {
 
 func TestEditSchemaTakesPathOldNew(t *testing.T) {
 	var m map[string]any
-	if err := json.Unmarshal(file.Edit().Schema(), &m); err != nil {
+	if err := json.Unmarshal(file.NewEdit().Schema(), &m); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
 	req, _ := m["required"].([]any)
@@ -225,7 +225,7 @@ func TestEditRefusesLegacyEditsArray(t *testing.T) {
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "edits": []map[string]string{{"old": "one", "new": "two"}},
 	}))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") {
@@ -241,7 +241,7 @@ func TestEditWithoutPriorReadAppliesWhenOldMatches(t *testing.T) {
 	}
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "one", "new": "1",
 	}))
 	if err != nil {
@@ -270,7 +270,7 @@ func TestEditWithoutPriorReadMismatchReturnsTheFileText(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
@@ -296,7 +296,7 @@ func TestEditWithoutPriorReadAmbiguousReturnsTheFileText(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "x", "new": "z",
 	}))
 	if err != nil {
@@ -322,7 +322,7 @@ func TestEditUnreadTeachesOnceOnAMiss(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
@@ -350,12 +350,12 @@ func TestEditWithoutPriorReadReplyIsReadPlusTheMarker(t *testing.T) {
 	if err := os.WriteFile(path, []byte("alpha\nbeta\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fromRead, err := file.Read().Exec(core.WithSession(context.Background(), core.NewSession()), argsJSON(t, map[string]any{"path": path}))
+	fromRead, err := file.NewRead().Exec(core.WithSession(context.Background(), core.NewSession()), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
@@ -378,7 +378,7 @@ func TestEditWithoutPriorReadReplyCapsLikeRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
@@ -391,7 +391,7 @@ func TestEditWithoutPriorReadReplyCapsLikeRead(t *testing.T) {
 	if !strings.Contains(got, "[output truncated: ") {
 		t.Fatalf("a file over the cap must carry read's truncation marker, got %d bytes", len(got))
 	}
-	fromRead, err := file.Read().Exec(core.WithSession(context.Background(), core.NewSession()), argsJSON(t, map[string]any{"path": path}))
+	fromRead, err := file.NewRead().Exec(core.WithSession(context.Background(), core.NewSession()), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestEditAfterUnreadTeachingReplyIsDriftChecked(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "absent", "new": "x",
 	})); err != nil {
 		t.Fatalf("the teaching reply: %v", err)
@@ -415,7 +415,7 @@ func TestEditAfterUnreadTeachingReplyIsDriftChecked(t *testing.T) {
 	if err := os.WriteFile(path, []byte("alpha\nBETA\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "beta", "new": "gamma",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
@@ -430,12 +430,12 @@ func TestEditAfterUnreadTeachingReplyAppliesWithoutARead(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "absent", "new": "x",
 	})); err != nil {
 		t.Fatalf("the teaching reply: %v", err)
 	}
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "beta", "new": "gamma",
 	})); err != nil {
 		t.Fatalf("the follow-up edit must apply without a separate read: %v", err)
@@ -459,7 +459,7 @@ func TestEditEmptyOldRefusesAheadOfTheFile(t *testing.T) {
 		core.WithSession(context.Background(), core.NewSession()),
 		context.Background(),
 	} {
-		_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+		_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 			"path": path, "old": "", "new": "x",
 		}))
 		if err == nil || !strings.Contains(err.Error(), "empty") {
@@ -470,7 +470,7 @@ func TestEditEmptyOldRefusesAheadOfTheFile(t *testing.T) {
 
 func TestEditWithoutPriorReadMissingFileRefusesLoud(t *testing.T) {
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": filepath.Join(t.TempDir(), "absent.txt"), "old": "x", "new": "y",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "absent.txt") {
@@ -484,7 +484,7 @@ func TestEditWithoutPriorReadProceedsStandalone(t *testing.T) {
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
+	got, err := file.NewEdit().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "old": "one", "new": "two",
 	}))
 	if err != nil {
@@ -499,12 +499,12 @@ func TestEditAfterWriteProceedsThreaded(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Write().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewWrite().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "content": "one",
 	})); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "one", "new": "two",
 	})); err != nil {
 		t.Fatalf("write mints the edit license: %v", err)
@@ -512,7 +512,7 @@ func TestEditAfterWriteProceedsThreaded(t *testing.T) {
 }
 
 func TestEditOldPlusNewAtTheReadCeilingRefuses(t *testing.T) {
-	_, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": filepath.Join(t.TempDir(), "absent.txt"),
 		"old":  "a", "new": strings.Repeat("x", readCap-1),
 	}))
@@ -528,7 +528,7 @@ func TestEditOldPlusNewUnderTheReadCeilingApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "a", "new": strings.Repeat("x", readCap-2),
 	})); err != nil {
 		t.Fatalf("old plus new under the read ceiling applies: %v", err)
@@ -550,19 +550,19 @@ func TestDriftDiffKeysOnTheSession(t *testing.T) {
 	}
 	ctxA := core.WithSession(context.Background(), core.NewSession())
 	ctxB := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Read().Exec(ctxA, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctxA, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read A: %v", err)
 	}
 	if err := os.WriteFile(path, []byte("B content\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := file.Read().Exec(ctxB, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctxB, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read B: %v", err)
 	}
 	if err := os.WriteFile(path, []byte("C content\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Edit().Exec(ctxA, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctxA, argsJSON(t, map[string]any{
 		"path": path, "old": "A content", "new": "X",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
@@ -585,10 +585,10 @@ func TestEditRecordsFreshProvenance(t *testing.T) {
 	}
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "one", "new": "two",
 	})); err != nil {
 		t.Fatalf("edit: %v", err)
@@ -597,7 +597,7 @@ func TestEditRecordsFreshProvenance(t *testing.T) {
 	if !ok || state.Hash == "" {
 		t.Fatal("edit must record fresh, complete provenance for subsequent edits")
 	}
-	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "two", "new": "three",
 	})); err != nil {
 		t.Fatalf("second edit: %v", err)
@@ -618,7 +618,7 @@ func driftSetup(t *testing.T, path, content string) (context.Context, *core.Sess
 	}
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
 	return ctx, session
@@ -631,7 +631,7 @@ func TestDriftRefusalShowsASmallDriftWhole(t *testing.T) {
 	if err := os.WriteFile(path, []byte("alpha\nBETA\ngamma\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "beta", "new": "beta2",
 	}))
 	if err == nil {
@@ -669,7 +669,7 @@ func TestDriftRefusalCapsARewrite(t *testing.T) {
 	if err := os.WriteFile(path, []byte(nw.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
 		"path": path, "old": "old", "new": "new",
 	}))
 	if err == nil {

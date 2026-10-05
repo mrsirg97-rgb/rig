@@ -20,17 +20,25 @@ type Config struct {
 	Fetch  FetchConfig
 }
 
+type Web interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	Search(ctx context.Context, query string, maxResults int) (string, error)
+	Fetch(ctx context.Context, url string, maxChars, timeoutMs int) (string, error)
+}
+
 type web struct {
 	tool.Definition
 	search *search
 	fetch  *fetch
 }
 
-func New(cfg Config) *web {
-	return &web{Definition: tool.Def("web"), search: NewSearch(cfg.Search), fetch: NewFetch(cfg.Fetch)}
+func New(cfg Config) Web {
+	return &web{Definition: tool.Def("web"), search: newSearch(cfg.Search), fetch: newFetch(cfg.Fetch)}
 }
 
-func Web() *web {
+func NewDefault() Web {
 	return New(Config{Fetch: FetchConfig{Proxy: DefaultProxy}})
 }
 
@@ -47,39 +55,47 @@ func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	}
 	switch p.Action {
 	case "search":
-		if p.Target == "" {
-			return "", errors.New("web: search: no query supplied")
-		}
-		n := 5
+		n := defaultMaxResults
 		if p.MaxResults != nil {
 			n = *p.MaxResults
 		}
-		if n < 1 || n > 20 {
-			return "", fmt.Errorf("web: maxResults must be between 1 and 20, got %d", n)
-		}
-		return w.search.exec(ctx, p.Target, n)
+		return w.Search(ctx, p.Target, n)
 	case "fetch":
-		if p.Target == "" {
-			return "", errors.New("web: fetch: no url supplied")
-		}
-		maxC := maxChars
+		maxC := defaultMaxChars
 		if p.MaxChars != nil {
 			maxC = *p.MaxChars
-		}
-		if maxC < 100 {
-			return "", fmt.Errorf("web: maxChars must be at least 100, got %d", maxC)
 		}
 		timeoutMs := defaultTimeoutMs
 		if p.TimeoutMs != nil {
 			timeoutMs = *p.TimeoutMs
 		}
-		if timeoutMs < minTimeoutMs || timeoutMs > maxTimeoutMs {
-			return "", fmt.Errorf("web: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, timeoutMs)
-		}
-		return w.fetch.exec(ctx, p.Target, maxC, timeoutMs)
+		return w.Fetch(ctx, p.Target, maxC, timeoutMs)
 	default:
 		return "", fmt.Errorf("web: unknown action %q (search|fetch)", p.Action)
 	}
+}
+
+func (w *web) Search(ctx context.Context, query string, maxResults int) (string, error) {
+	if query == "" {
+		return "", errors.New("web: search: no query supplied")
+	}
+	if maxResults < 1 || maxResults > 20 {
+		return "", fmt.Errorf("web: maxResults must be between 1 and 20, got %d", maxResults)
+	}
+	return w.search.exec(ctx, query, maxResults)
+}
+
+func (w *web) Fetch(ctx context.Context, url string, maxChars, timeoutMs int) (string, error) {
+	if url == "" {
+		return "", errors.New("web: fetch: no url supplied")
+	}
+	if maxChars < 100 {
+		return "", fmt.Errorf("web: maxChars must be at least 100, got %d", maxChars)
+	}
+	if timeoutMs < minTimeoutMs || timeoutMs > maxTimeoutMs {
+		return "", fmt.Errorf("web: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, timeoutMs)
+	}
+	return w.fetch.exec(ctx, url, maxChars, timeoutMs)
 }
 
 func DefaultTrafilatura() string {
