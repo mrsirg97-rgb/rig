@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var suite *Tool
+var suite Python
 
 func TestMain(m *testing.M) {
 	suite = New()
@@ -60,7 +60,7 @@ func mustRun(t *testing.T, params map[string]any) (string, bool) {
 	return text, ok
 }
 
-func call(t *testing.T, tl *Tool, params map[string]any) (string, error) {
+func call(t *testing.T, tl Python, params map[string]any) (string, error) {
 	t.Helper()
 	payload, _ := json.Marshal(params)
 	text, err := tl.Exec(context.Background(), payload)
@@ -379,7 +379,7 @@ func TestQuiescentDeathBetweenCallsIsAnnouncedOnTheNextCallOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed failed: %s (%v)", seed, err)
 	}
-	p := kt.k.proc
+	p := kt.(*pyTool).k.proc
 	if p == nil {
 		t.Fatal("kernel not started")
 	}
@@ -481,7 +481,7 @@ for line in sys.stdin:
     print(json.dumps(resp), flush=True)
 `
 
-func fakeKernel(t *testing.T, mode string) *Tool {
+func fakeKernel(t *testing.T, mode string) Python {
 	t.Helper()
 	py := pythonAvailable(t)
 	dir := t.TempDir()
@@ -542,7 +542,7 @@ func TestTimeoutMessageDescribesTheLazyRestartAccurately(t *testing.T) {
 }
 
 func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) {
-	seam := NewWith("/opt/operator/python3", "/tmp/whatever/kernel_host.py")
+	seam := NewWith("/opt/operator/python3", "/tmp/whatever/kernel_host.py").(*pyTool)
 	if seam.k.python != "/opt/operator/python3" {
 		t.Fatalf("interpreter = %q, want the explicit one", seam.k.python)
 	}
@@ -550,7 +550,7 @@ func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) 
 		t.Fatal("the seam must skip the default-venv bootstrap")
 	}
 
-	def := New()
+	def := New().(*pyTool)
 	defer def.Close()
 	if def.k.python != defaultInterpreter() {
 		t.Fatalf("default interpreter = %q, want the shared venv", def.k.python)
@@ -580,7 +580,7 @@ func TestKernelIsBornInTheConfiguredCwd(t *testing.T) {
 }
 
 func TestNoCwdInheritsTheProcessDirectory(t *testing.T) {
-	seam := New()
+	seam := New().(*pyTool)
 	if seam.k.cwd != "" {
 		t.Fatalf("cwd = %q, want the process directory", seam.k.cwd)
 	}
@@ -593,5 +593,52 @@ func TestOutOfRangeTimeoutMsRefuses(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "timeoutMs must be between") {
 			t.Fatalf("timeoutMs=%d: want a refusal naming the range, got %v", n, err)
 		}
+	}
+}
+
+func TestPythonCodeVarsResetAndExecShareTheirChecks(t *testing.T) {
+	seam := NewWith("false", "/nonexistent-kernel-host.py")
+	ctx := context.Background()
+
+	_, codeErr := seam.Code(ctx, "   ", defaultTimeoutMs)
+	_, execErr := seam.Exec(ctx, []byte(`{"code":"   "}`))
+	if codeErr == nil || execErr == nil {
+		t.Fatalf("a blank cell refuses on both doors, code=%v exec=%v", codeErr, execErr)
+	}
+	if codeErr.Error() != "no code supplied" || execErr.Error() != codeErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: code %q exec %q", codeErr, execErr)
+	}
+
+	verbs := []struct {
+		name string
+		verb func(int) (string, error)
+		json string
+	}{
+		{"code", func(ms int) (string, error) { return seam.Code(ctx, "1", ms) }, `{"code":"1","timeoutMs":%d}`},
+		{"vars", func(ms int) (string, error) { return seam.Vars(ctx, ms) }, `{"action":"vars","timeoutMs":%d}`},
+		{"reset", func(ms int) (string, error) { return seam.Reset(ctx, ms) }, `{"action":"reset","timeoutMs":%d}`},
+	}
+	for _, v := range verbs {
+		_, verbErr := v.verb(999)
+		_, doorErr := seam.Exec(ctx, []byte(fmt.Sprintf(v.json, 999)))
+		if verbErr == nil || doorErr == nil || verbErr.Error() != doorErr.Error() {
+			t.Fatalf("%s: a timeoutMs past the bound refuses the same way on either door: verb=%v exec=%v", v.name, verbErr, doorErr)
+		}
+		if verbErr.Error() != "python: timeoutMs must be between 1000 and 600000, got 999" {
+			t.Fatalf("%s: the bound refusal names the range and the value: %q", v.name, verbErr)
+		}
+	}
+
+	requireKernel(t)
+	fromVerb, err := suite.Code(ctx, `print("same on both doors")`, defaultTimeoutMs)
+	if err != nil {
+		t.Fatalf("code: %v", err)
+	}
+	fromDoor, err := suite.Exec(ctx, []byte(`{"code":"print(\"same on both doors\")"}`))
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if fromVerb != fromDoor {
+		t.Fatalf("one cell replies the same bytes through either door: code %q exec %q", fromVerb, fromDoor)
 	}
 }
