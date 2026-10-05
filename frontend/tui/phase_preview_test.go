@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -318,6 +319,31 @@ func TestPhasePreviewSurvivesATerminalOneRowTall(t *testing.T) {
 	p.feed(t)
 }
 
+func TestPhaseBufferKeepsOnlyThePreviewRows(t *testing.T) {
+	th := oledTheme(t)
+	p := newPhaseScreen(t, th, 60, 24)
+	p.s.fe.Notify(core.Phase{Name: "reviewing"})
+	p.s.tick()
+	p.feed(t)
+	for i := 1; i <= 300; i++ {
+		p.say(fmt.Sprintf("line %03d\n", i))
+	}
+	p.awaitOut(t, "\u00b7 290 rows above \u00b7")
+	p.drain(t)
+	p.s.fe.mu.Lock()
+	kept, carry := len(p.s.fe.phaseLines), p.s.fe.phaseHidden
+	p.s.fe.mu.Unlock()
+	if kept != phasePreviewRows {
+		t.Fatalf("the buffer holds %d closed lines, want the %d the preview can show", kept, phasePreviewRows)
+	}
+	if carry != 290 {
+		t.Fatalf("the carry counts %d hidden rows, want the 290 that scrolled", carry)
+	}
+	if indexOfRowContaining(p.rows(), "· 290 rows above ·") < 0 {
+		t.Fatalf("the header lost the carry:\n%q", p.rows())
+	}
+}
+
 func TestPhasePreviewReMeasuresOnResize(t *testing.T) {
 	th := oledTheme(t)
 	p := newPhaseScreen(t, th, 60, 24)
@@ -339,7 +365,7 @@ func TestPhasePreviewReMeasuresOnResize(t *testing.T) {
 	p.size.set(20, 24)
 	p.v = resizeVT(p.v, 20, 24)
 	p.say(lineOf(41) + "\n")
-	p.awaitOut(t, "\u00b7 113 rows above \u00b7")
+	p.awaitOut(t, "\u00b7 53 rows above \u00b7")
 	p.drain(t)
 
 	rows := p.rows()
@@ -360,9 +386,45 @@ func TestPhasePreviewReMeasuresOnResize(t *testing.T) {
 	if visible != phasePreviewRows {
 		t.Fatalf("the resized preview shows %d rows, want %d:\n%q", visible, phasePreviewRows, rows)
 	}
-	wrapped := 41 * 3
-	if indexOfRowContaining(rows, fmt.Sprintf("· %d rows above ·", wrapped-phasePreviewRows)) < 0 {
-		t.Fatalf("the header did not re-measure at width 20 (each %q-worth of text wraps to 3 rows):\n%q",
-			"line NN - word...", rows)
+	if indexOfRowContaining(rows, "· 53 rows above ·") < 0 {
+		t.Fatalf("the header must carry the thirty rows hidden at width 60, the three rows of the line dropped at width 20 and the twenty kept rows above the tail:\n%q", rows)
+	}
+}
+
+func BenchmarkFramePaint100kPhaseParagraph(b *testing.B) {
+	th, err := ResolveTheme("oled", nil, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+	const width, height = 100, 30
+	fe := New(newScriptInput(), io.Discard, th,
+		WithWidth(width), WithSize(sizeFixture(width, height)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	).(*tui)
+	defer fe.Close()
+
+	fe.Notify(core.Phase{Name: "reviewing"})
+	words := []string{"alpha", "beta", "gamma", "delta", "eps", "zeta"}
+	for total := 0; total < 1250; total++ {
+		line := fmt.Sprintf("%d ", total)
+		for n := 0; n < 14; n++ {
+			line += words[(total+n)%len(words)] + " "
+		}
+		fe.Notify(core.Phase{Name: "reviewing", Text: line + "\n"})
+	}
+
+	paint := func() {
+		fe.mu.Lock()
+		fe.paintLiveLocked()
+		fe.mu.Unlock()
+	}
+	b.ResetTimer()
+	start := time.Now()
+	for i := 0; i < b.N; i++ {
+		paint()
+	}
+	per := time.Since(start) / time.Duration(b.N)
+	if per > time.Millisecond {
+		b.Fatalf("a frame over a phase that thought 100k characters costs %s, want under 1ms", per)
 	}
 }

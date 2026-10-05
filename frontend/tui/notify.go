@@ -108,7 +108,7 @@ func (t *tui) Notify(ev core.Event) {
 
 		t.mu.Lock()
 		t.phase = "summarizing"
-		t.phaseText = ""
+		t.resetPhaseLocked()
 		t.asideAt = time.Now()
 		t.frame = 0
 		if !t.turnLive {
@@ -124,7 +124,7 @@ func (t *tui) Notify(ev core.Event) {
 
 		t.mu.Lock()
 		t.compacting = false
-		t.phaseText = ""
+		t.resetPhaseLocked()
 		if t.turnLive {
 			t.phase = "thinking"
 		}
@@ -192,8 +192,9 @@ func (t *tui) Notify(ev core.Event) {
 			t.commit(RenderPhaseEnd(t.theme, e) + "\n")
 		case e.Text != "":
 			t.mu.Lock()
+			t.syncSizeLocked()
 			if t.showReasoning && t.phaseFlows() {
-				t.phaseText += e.Text
+				t.appendPhaseLocked(e.Text)
 				t.dirty = true
 			}
 			t.mu.Unlock()
