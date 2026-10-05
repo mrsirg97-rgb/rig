@@ -60,8 +60,9 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 
-	if read != strings.TrimPrefix(created, "\u2192 added t1\n") {
-		t.Fatalf("read must be the same queue the create reported:\ncreate:\n%s\nread:\n%s", created, read)
+	summary := strings.SplitN(read, "\n", 2)[0]
+	if created != "\u2192 added t1\n  t1 [ ] write the spec\n"+summary {
+		t.Fatalf("the create reply is its own row over the summary the read shows:\ncreate:\n%s\nread:\n%s", created, read)
 	}
 
 	started, err := runCmd(t, "todo", "start t1", env)

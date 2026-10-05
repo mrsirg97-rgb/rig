@@ -21,7 +21,7 @@ func TestNotesActionRoundTripsThroughTheTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	work := strings.Fields(strings.Split(reply, "\n")[3])[0]
+	work := rowIDs(t, reply)[1]
 	if !strings.Contains(reply, "· requires t1") || !strings.Contains(reply, "· blocks t3") {
 		t.Errorf("the tool surface must carry both links:\n%s", reply)
 	}
@@ -58,7 +58,7 @@ func TestNotesActionRoundTripsThroughTheTool(t *testing.T) {
 	if strings.Contains(one, "on it") {
 		t.Errorf("read one must not inline the note:\n%s", one)
 	}
-	empty, err := exec(t, tool, ctx, map[string]any{"action": "notes", "id": strings.Fields(strings.Split(reply, "\n")[2])[0]})
+	empty, err := exec(t, tool, ctx, map[string]any{"action": "notes", "id": rowIDs(t, reply)[0]})
 	if err != nil {
 		t.Fatalf("notes on a quiet task: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestNotesActionIsWorkerReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	if _, err := exec(t, worker, ctx, map[string]any{"action": "note", "id": id, "note": "findings"}); err != nil {
 		t.Fatalf("a worker's note must land: %v", err)
 	}

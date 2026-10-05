@@ -21,12 +21,14 @@ work first in queue order, then the finished work related to it
 terminal event first, until ten finished rows show in total
 (DefaultFinishedShown), one dim hint line naming what is hidden and
 the finished-list door; ReadFinished lists the n most recent finished
-(default ten, cap FinishedListCap); ReadAll the history; Create the
-full present. Retirement is a view, not a state: a hidden finished task
-still satisfies requires, links resolve by id, and notes and show work
-on any id. The operation that crosses the compaction threshold
-names it in its own reply (`· log compacted (N events folded into the
-snapshot)`), so the stale footer's quieting after the fold reads as
+(default ten, cap FinishedListCap); ReadAll the history. Every write,
+create included, is the echo shape; `read` is where the queue is, and a
+refused create is the exception that carries it, because the refusal is
+where the ids are needed. Retirement is a view, not a state: a hidden
+finished task still satisfies requires, links resolve by id, and notes
+and show work on any id. The operation that crosses the compaction
+threshold names it in its own reply (`· log compacted (N events folded
+into the snapshot)`), so the stale footer's quieting after the fold reads as
 explained, not as state loss (SPEC_STREAMLINE 2). The unknown-id
 refusal carries the minting voice at every verb (SPEC_STREAMLINE 3).
 
@@ -152,11 +154,14 @@ drops done only, and the summary counts review rows (`· N in review`).
   clause omitted when nothing is done), never "(no tasks in
   <label>'s queue)" on an all-done queue; ReadFinished lists the n
   most recent done, newest first, default ten, cap `FinishedListCap`;
-  ReadAll returns the history (the operator's read); a transition echo
-  is the affected row plus the summary. Create keeps the full present:
-  after a merge the whole queue is the news. Retirement never changes
-  semantics: a hidden done task still resolves by id, links resolve by
-  id, and notes and show work on any id.
+  ReadAll returns the history (the operator's read); every write echoes
+  the affected row plus the summary and `read` is the queue — create
+  included since 2.12.8, so a five-call plan costs five rows, not five
+  copies of the queue; a refused create still shows the queue (2.11.10).
+  Prune, the one write with no single affected row, answers with its
+  note over the present. Retirement never changes semantics: a hidden
+  done task still resolves by id, links to it resolve by id, and notes
+  and show work on any id.
 - One store, every row scoped: `FilePath(home)` is the one `todo.sqlite`,
   and every operation takes a `Project{Key, Label, OutsideRepo, Dir}`: the
   queue's identity (the workspace's scope, `store/scope`, or the cwd hash

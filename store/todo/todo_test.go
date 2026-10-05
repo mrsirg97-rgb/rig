@@ -169,18 +169,21 @@ func TestNewTextsMintAtNextPositions(t *testing.T) {
 	}
 }
 
-func TestExplicitClearStillEmptiesTheQueue(t *testing.T) {
+func TestCreateWithoutTextRefusesAndLandsNothing(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	if _, err := create(ctx, db, p, []item{{Text: "a"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	reply, err := create(ctx, db, p, nil, "s1")
+	if _, err := todostore.Create(ctx, db, p, item{}, "s1"); err == nil {
+		t.Fatal("a create with no text must refuse; the queue-clearing create went with the tasks array (2.12.4)")
+	}
+	queue, err := todostore.Read(ctx, db, p, "s1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(reply, "t1") {
-		t.Errorf("clear left rows:\n%s", reply)
+	if rowCount(queue) != 1 || !strings.Contains(queue, "t1 [ ] a") {
+		t.Errorf("the refusal lands nothing:\n%s", queue)
 	}
 }
 
@@ -1876,6 +1879,76 @@ func TestTransitionEchoCarriesTheStaleFooter(t *testing.T) {
 	}
 }
 
+func TestCreateEchoesTheTaskAndTheSummaryNotTheQueue(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := create(ctx, db, p, []item{{Text: "done one"}, {Text: "done two"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for _, id := range []string{"t1", "t2"} {
+		if _, err := todostore.Complete(ctx, db, p, id, "s1", false); err != nil {
+			t.Fatalf("complete %s: %v", id, err)
+		}
+	}
+	echo, err := todostore.Create(ctx, db, p, item{Text: "the third step"}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	want := "\u2192 added t3\n  t3 [ ] the third step\n" + "[ws] 1 open \u00b7 2 of 2 finished shown \u00b7 next: t3"
+	if echo != want {
+		t.Errorf("create echo:\n%s\nwant:\n%s", echo, want)
+	}
+	if strings.Count(echo, "\n  t") != 1 {
+		t.Errorf("the create echo shows its own row: %d rows:\n%s", strings.Count(echo, "\n  t"), echo)
+	}
+	if !strings.Contains(echo, "next: t3") {
+		t.Errorf("the create echo's summary keeps next: so a plan's first claim needs no read:\n%s", echo)
+	}
+}
+
+func TestCreateOnAMergedTextEchoesTheExistingTask(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := create(ctx, db, p, []item{{Text: "a"}, {Text: "b"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	echo, err := todostore.Create(ctx, db, p, item{Text: "b"}, "s1")
+	if err != nil {
+		t.Fatalf("the merge must not refuse: %v", err)
+	}
+	if !strings.HasPrefix(echo, "\u2192 t2 already there\n  t2 [ ] b\n") {
+		t.Errorf("the merge's echo names the task it merged into:\n%s", echo)
+	}
+	if strings.Count(echo, "\n  t") != 1 {
+		t.Errorf("the merge's echo is one row: %d rows:\n%s", strings.Count(echo, "\n  t"), echo)
+	}
+}
+
+func TestARefusedCreateStillShowsTheQueueAndTheEchoDoesNot(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := create(ctx, db, p, []item{{Text: "a"}, {Text: "b"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	echo, err := todostore.Create(ctx, db, p, item{Text: "c"}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if rowCount(echo) != 1 {
+		t.Errorf("the accepted create echoes its own row: %d rows:\n%s", rowCount(echo), echo)
+	}
+	_, err = todostore.Create(ctx, db, p, item{Text: "d", Requires: ptrTo("t9")}, "s1")
+	if err == nil {
+		t.Fatal("the unknown link must refuse")
+	}
+	if rowCount(err.Error()) != 3 {
+		t.Errorf("the refusal shows the queue the next call will link by id: %d rows in:\n%v", rowCount(err.Error()), err)
+	}
+	if !strings.Contains(err.Error(), "requires 't9' not found") {
+		t.Errorf("the refusal names the unknown link: %v", err)
+	}
+}
+
 func TestClaimsAndDriftArePerScope(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -2130,22 +2203,24 @@ func linkID(ids map[string]string, raw *string) *string {
 }
 
 func create(ctx context.Context, db store.DB, p todostore.Project, items []item, session string) (string, error) {
-	var reply string
-	var err error
 	for _, it := range items {
-		if reply, err = todostore.Create(ctx, db, p, item{Text: it.Text}, session); err != nil {
-			return reply, err
+		if _, err := todostore.Create(ctx, db, p, item{Text: it.Text}, session); err != nil {
+			return "", err
 		}
 	}
-	ids := idsOf(reply)
+	queue, err := todostore.Read(ctx, db, p, session)
+	if err != nil {
+		return "", err
+	}
+	ids := idsOf(queue)
 	for _, it := range items {
 		if it.Requires == nil && it.Blocks == nil && !it.RequiresNull && !it.BlocksNull {
 			continue
 		}
 		linked := item{Text: it.Text, Requires: linkID(ids, it.Requires), RequiresNull: it.RequiresNull, Blocks: linkID(ids, it.Blocks), BlocksNull: it.BlocksNull}
-		if reply, err = todostore.Create(ctx, db, p, linked, session); err != nil {
-			return reply, err
+		if _, err := todostore.Create(ctx, db, p, linked, session); err != nil {
+			return "", err
 		}
 	}
-	return reply, nil
+	return todostore.Read(ctx, db, p, session)
 }

@@ -25,10 +25,14 @@ func Create(ctx context.Context, db store.DB, p Project, item CreateItem, sessio
 			return "", e
 		}
 		before := renderQueue(f, session, modePresent, 0, p.Label)
-		modified, note, problems := planCreate(f, item)
+		modified, ts, added, problems := planCreate(f, item)
 		if len(problems) != 0 {
 			sort.Strings(problems)
 			return "", fmt.Errorf("todo: %s%s\n%s", strings.Join(problems, "; "), linkFormsHint(problems), before)
+		}
+		note := "added " + ts.id
+		if !added {
+			note = ts.id + " already there"
 		}
 		args, _ := json.Marshal(asGiven(item))
 		seq := f.nextSeq()
@@ -42,7 +46,7 @@ func Create(ctx context.Context, db store.DB, p Project, item CreateItem, sessio
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
-		return withFoot(replyText(f, session, note, modePresent, 0, p.Label), foot), nil
+		return withFoot(echoTask(f, session, ts.id, note, ""), foot), nil
 	})
 }
 

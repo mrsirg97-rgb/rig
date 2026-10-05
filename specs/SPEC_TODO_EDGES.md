@@ -40,7 +40,10 @@ sibling and position forms they were written in.
   existing text with its own id), and a cycle through either relation
   (`links would form a cycle: t1 -> t2 -> t1`). The graph is the waits-for relation:
   `requires` gives t -> required, `blocks` gives target -> blocker;
-  `cyclePath` walks both.
+  `cyclePath` walks both. The refusal is the only place a create reply
+  shows the queue (2.12.8): an accepted create echoes its own row and
+  the summary, the shape every other write has, and `read` is where the
+  queue is.
 - Same events, fold, compaction, replay. The compact snapshot carries
   both links; old snapshots' `dependsOn` folds as `requires`.
 

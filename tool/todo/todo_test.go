@@ -149,7 +149,7 @@ func TestExecThreadsTheSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestAnonymousExecutivesRecordAnon(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "start", "id": id}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -199,6 +199,28 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 	}
 	if !strings.Contains(read, "requires t1") {
 		t.Errorf("presence labels missing:\n%s", read)
+	}
+}
+
+func TestCreateRepliesItsEchoThroughTheTool(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := createAll(t, tool, ctx, []map[string]any{
+		map[string]any{"text": "one"},
+		map[string]any{"text": "two"},
+		map[string]any{"text": "three"},
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	echo, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "four"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got := len(rowIDs(t, echo)); got != 1 {
+		t.Errorf("a create through the tool echoes its own row: %d rows:\n%s", got, echo)
+	}
+	if !strings.HasPrefix(echo, "\u2192 added t4\n") || !strings.Contains(echo, "next: t1") {
+		t.Errorf("the create echo is its note, its row, the summary:\n%s", echo)
 	}
 }
 
@@ -316,7 +338,7 @@ func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	if _, err := exec(t, tool, ctxA, map[string]any{"action": "start", "id": id}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -337,7 +359,7 @@ func TestNewVerbsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	claimed, err := exec(t, tool, ctx, map[string]any{"action": "claim"})
 	if err != nil {
 		t.Fatalf("claim: %v", err)
@@ -382,7 +404,7 @@ func TestCompleteTwiceIsIdempotentThroughTheTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -416,7 +438,7 @@ func TestStartTwiceIsIdempotentThroughTheTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -447,7 +469,7 @@ func TestModeKeysTheGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	if _, err := exec(t, solo, ctx, map[string]any{"action": "claim"}); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
@@ -481,7 +503,7 @@ func TestWorkerModeIsReadNoteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	id := strings.Fields(strings.Split(reply, "\n")[2])[0]
+	id := rowIDs(t, reply)[0]
 	for _, action := range []string{"claim", "start", "complete", "fail", "accept", "reject"} {
 		args := map[string]any{"action": action}
 		if action != "claim" {
@@ -555,11 +577,8 @@ func TestFinishedActionListsNewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	rows := strings.Split(reply, "\n")
-	a := strings.Fields(rows[2])[0]
-	b := strings.Fields(rows[3])[0]
-	c := strings.Fields(rows[4])[0]
-	for _, id := range []string{a, b, c} {
+	ids := rowIDs(t, reply)
+	for _, id := range ids[:3] {
 		if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
 			t.Fatalf("complete %s: %v", id, err)
 		}
@@ -591,7 +610,7 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	drop := strings.Fields(strings.Split(reply, "\n")[3])[0]
+	drop := rowIDs(t, reply)[1]
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": drop}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -999,6 +1018,20 @@ func TestACreateThatCannotLinkShowsTheQueue(t *testing.T) {
 
 var taskLine = regexp.MustCompile(`\b(t\d+) \[[~x!r ]\] (.*?)(?: · |$)`)
 
+func rowIDs(t *testing.T, reply string) []string {
+	t.Helper()
+	var out []string
+	for _, line := range strings.Split(reply, "\n") {
+		if m := taskLine.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			out = append(out, m[1])
+		}
+	}
+	if len(out) == 0 {
+		t.Fatalf("no task row in:\n%s", reply)
+	}
+	return out
+}
+
 func createAll(t *testing.T, tool core.Tool, ctx context.Context, tasks []map[string]any, extra ...map[string]any) (string, error) {
 	t.Helper()
 	call := func(fields map[string]any) (string, error) {
@@ -1013,6 +1046,9 @@ func createAll(t *testing.T, tool core.Tool, ctx context.Context, tasks []map[st
 		}
 		return exec(t, tool, ctx, args)
 	}
+	read := func() (string, error) {
+		return exec(t, tool, ctx, map[string]any{"action": "read"})
+	}
 	var reply string
 	var err error
 	for _, task := range tasks {
@@ -1020,8 +1056,12 @@ func createAll(t *testing.T, tool core.Tool, ctx context.Context, tasks []map[st
 			return reply, err
 		}
 	}
+	queue, err := read()
+	if err != nil {
+		return queue, err
+	}
 	ids := map[string]string{}
-	for _, line := range strings.Split(reply, "\n") {
+	for _, line := range strings.Split(queue, "\n") {
 		if m := taskLine.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
 			ids[m[2]] = m[1]
 		}
@@ -1045,9 +1085,9 @@ func createAll(t *testing.T, tool core.Tool, ctx context.Context, tasks []map[st
 		if !linked {
 			continue
 		}
-		if reply, err = call(fields); err != nil {
-			return reply, err
+		if _, err = call(fields); err != nil {
+			return "", err
 		}
 	}
-	return reply, nil
+	return read()
 }

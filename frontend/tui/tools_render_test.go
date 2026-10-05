@@ -1,11 +1,13 @@
 package tui_test
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
+	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
 const schedListReply = "/home/ng/Projects/rig:\n" +
@@ -196,6 +198,31 @@ func TestTodoBlockNoteEchoRendersNoteAndRow(t *testing.T) {
 	}
 	if !strings.Contains(got, th.Paint(tui.SlotDim, "    \u00b7 1 note")) {
 		t.Fatalf("the note echo's count rides the row, got:\n%s", got)
+	}
+}
+
+func TestTodoBlockCreateEchoRendersOneRowAndTheSummary(t *testing.T) {
+	th, err := tui.ResolveTheme("oled", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newTodoFixture(t)
+	reply := f.create("s1", todostore.CreateItem{Text: "wire the models table"})
+	f.exec(func() (string, error) {
+		return todostore.Complete(context.Background(), f.db, f.proj, f.id(reply, "wire the models table"), "s1", false)
+	})
+	got := tui.RenderTodoBlock(th, "OPEN", f.createEcho("the switch seam"))
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "\u2192 added t2")) {
+		t.Fatalf("the create echo's note renders dim, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, th.Glyph(tui.GlyphPending))+" "+th.Paint(tui.SlotDim, "t2")+" "+th.Paint(tui.SlotText, "the switch seam")) {
+		t.Fatalf("the create echo renders its own row, got:\n%s", got)
+	}
+	if strings.Contains(got, th.Paint(tui.SlotText, "wire the models table")) {
+		t.Fatalf("a create block shows no other row, got:\n%s", got)
+	}
+	if !strings.Contains(got, th.Paint(tui.SlotDim, "[global] ")+th.Paint(tui.SlotEmber, th.Glyph(tui.GlyphBarOn))+th.Paint(tui.SlotDim, th.Glyph(tui.GlyphBarOff))+th.Paint(tui.SlotDim, " 1 open \u00b7 1 of 1 finished shown \u00b7 next t2")) {
+		t.Fatalf("the create echo's summary renders as the head with no finished rows, got:\n%s", got)
 	}
 }
 

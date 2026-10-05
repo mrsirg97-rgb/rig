@@ -315,8 +315,8 @@ func TestTodoCreateWalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	reply, _ := created["reply"].(string)
-	if !strings.Contains(reply, "alpha") || !strings.Contains(reply, "beta") {
-		t.Fatalf("create: reply %q, want the created tasks", reply)
+	if !strings.HasPrefix(reply, "\u2192 added t3\n  t3 [ ] beta\n") {
+		t.Fatalf("create replies the echo of its own task at every door, the queue is the read: %q", reply)
 	}
 
 	rec = doReq(t, h, "GET", "/api/todo"+q, nil, bearer(tok))
