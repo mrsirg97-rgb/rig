@@ -393,10 +393,11 @@ the same new-session seam (`NewSession(ctx, dir)`): it expands `~` (the
 one rule, `middleware/paths.Expand`), canonicalizes (abs, symlinks
 resolved), refuses a non-directory by name (`project: not a directory:
 <path>`), and passes the path through the seam; the root revalidates
-and fails closed, moves the process itself (`os.Chdir`, refused by
-name before the old row closes — the tools read the process cwd at
-exec time, and one session per process makes that one truth rather
-than two) and its workspace fact (`r.cwd`), and the fresh recorder,
+and fails closed, closes the old row, moves the process itself
+(`os.Chdir`, refused by name — a close failure leaves the process
+unmoved; the tools read the process cwd at exec time, and one session
+per process makes that one truth rather than two) and its workspace
+fact (`r.cwd`), and the fresh recorder,
 the session section of the system prompt, and the workspace's
 AGENTS.md (2.11.8's `config.ProjectAgents`, read at wire) all follow.
 The reply is the new session id and the workspace line, so the

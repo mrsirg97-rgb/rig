@@ -629,6 +629,28 @@ func TestProjectMovesTheSessionToTheNamedWorkspace(t *testing.T) {
 	}
 }
 
+func TestProjectRefusesToMoveWhenTheOldSessionCannotClose(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	other := t.TempDir()
+	launched, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(launched) })
+	before := h.r.cwd
+	h.r.sdb.DB.Close()
+	_, err = h.r.newSession(context.Background(), other)
+	if err == nil || !strings.Contains(err.Error(), "new:") {
+		t.Fatalf("a close failure must refuse by name, got %v", err)
+	}
+	if got, err := os.Getwd(); err != nil || got != launched {
+		t.Fatalf("the process must not move when the old session cannot close, Getwd = %q, %v", got, err)
+	}
+	if h.r.cwd != before {
+		t.Fatalf("the workspace must not move when the old session cannot close, got %q", h.r.cwd)
+	}
+}
+
 func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	h.r.approveDefault = "manual"
