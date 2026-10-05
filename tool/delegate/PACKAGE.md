@@ -16,12 +16,16 @@ nothing scheduled) and a resumable transcript in the state store.
 
 ## What it includes
 
-- `delegate.go`: `Opts` (the root's wiring, carrying the session's
-  default model) and `New`, the adapter with the description (the
-  claim-time resolution and the slot gate), schema, and `Exec`;
+- `Delegate`: the tool as its interface (2.12.6): `tool.Definition` (the
+  description carries the claim-time resolution and the slot gate, the
+  schema beside it) and `Run(ctx, task, workspace, model, timeoutMs)`,
+  the one verb; `Exec` decodes and routes, so the blank-task refusal and
   the `pathguard` workspace rule (canonicalization, the
-  outside-the-session/rig-home refusal, the directory check); the
-  output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
+  outside-the-session/rig-home refusal, the directory check) are met by a
+  Go caller and the model alike. `Opts` is the root's wiring (carrying
+  the session's default model) and `New` returns the interface; the
+  adapter struct is unexported. Beside the verb:
+  the output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
   the explicit worker session id threaded through the spawn.
 - `delegate.go`: `stallMs` rides the schema beside `timeoutMs`
