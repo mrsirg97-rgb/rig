@@ -324,10 +324,11 @@ that is harder than writing a lot, and it is the bar.
   scheduler `model`, absent, null or a name) is decoded at the door and
   reaches the method decoded, or as a pointer where absent and zero
   differ. A verb's target stays positional — the workspace, the path,
-  the job id — and at most two of its own fields beside it; past that
-  they go in one input struct named for the verb (`CreateInput`,
-  `LearnInput`), the store's shape, because a caller must not count nine
-  arguments or transpose six strings to schedule a job.
+  the job id — with at most three of its own fields beside it, and the
+  fields go in one input struct named for the verb (`CreateInput`,
+  `LearnInput`) as soon as they are a bag of options rather than an
+  order: a door whose ten arguments are six strings in a row is the wire
+  again with type names on it.
 - `tool/verdict`: the reviewer's one word (2.11.0): registered only in a
   worker that holds a fleet pipe, its call crosses as `core.Verdict`
   published as the worker's member; the swarm reviewer and the decision

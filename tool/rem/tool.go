@@ -23,10 +23,10 @@ type Rem interface {
 	Prune(ctx context.Context, scope string, in PruneInput) (string, error)
 }
 
-// A verb of more than two fields of its own takes them as one input
-// struct named for the verb, the store's CreateInput shape. The scope
-// stays on the verb itself: every verb carries it, and an input with it
-// left out must not read like a call. A field is a pointer where absent
+// A verb whose fields are a bag of options rather than an order takes
+// them as one input struct named for the verb, the store's CreateInput
+// shape. The scope stays on the verb itself: every verb carries it, and
+// an input with it left out must not read like a call. A field is a pointer where absent
 // and zero differ — Importance (absent is the default weight, zero is a
 // weight of nothing), K and OlderThanDays.
 

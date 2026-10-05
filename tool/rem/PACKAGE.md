@@ -21,9 +21,9 @@ calls what).
   `Learn(ctx, scope, in LearnInput)`,
   `Recall(ctx, scope, in RecallInput)`,
   `Reflect(ctx, scope, in ReflectInput)` and
-  `Prune(ctx, scope, in PruneInput)` — a verb of more than two fields of
-  its own takes them as one input struct, the scope staying on the verb
-  because every verb carries it — each
+  `Prune(ctx, scope, in PruneInput)` — a verb whose fields are a bag of
+  options rather than an order takes them as one input struct, the scope
+  staying on the verb because every verb carries it — each
   over the rem store's operations and the graph store's map operations,
   each carrying the required `scope`: the
   reserved word `global` or a directory path, resolved through
