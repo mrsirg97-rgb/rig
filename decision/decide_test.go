@@ -129,7 +129,7 @@ func httpDecider(t *testing.T, url string) decision.Decider {
 	return dec
 }
 
-func testDecide(t *testing.T, dec decision.Decider, rec decision.Recorder, parallel int) *decision.Decide {
+func testDecide(t *testing.T, dec decision.Decider, rec decision.Recorder, parallel int) decision.Decide {
 	t.Helper()
 	d, err := decision.NewDecide(decision.DecideOptions{Decider: dec, Recorder: rec, Parallel: parallel})
 	if err != nil {
@@ -583,5 +583,74 @@ func TestTheTriggerLivesInTheToolDescription(t *testing.T) {
 	}
 	if strings.Contains(d, "hand the items to decide") {
 		t.Fatalf("the old system-prompt wording is gone: %q", d)
+	}
+}
+
+func TestDecideChoiceBinaryScoreAndExecShareTheirChecks(t *testing.T) {
+	p := &probe{}
+	srv := decideServer(t, p, byState(map[string]string{"ls": noulReply(0.7)}))
+	d := testDecide(t, httpDecider(t, srv.URL), nil, 1)
+	ctx := context.Background()
+
+	_, verbErr := d.Choice(ctx, "  ", []decision.Label{{Label: "a"}, {Label: "b"}}, []string{"a"})
+	_, doorErr := d.Exec(ctx, json.RawMessage(`{"kind":"choice","prompt":"  ","labels":[{"label":"a"},{"label":"b"}],"items":["a"]}`))
+	if verbErr == nil || doorErr == nil {
+		t.Fatalf("an empty prompt refuses on both doors, choice=%v exec=%v", verbErr, doorErr)
+	}
+	if verbErr.Error() != "decide: an empty prompt" || doorErr.Error() != verbErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: choice %q exec %q", verbErr, doorErr)
+	}
+
+	cases := []struct {
+		name string
+		verb func() (string, error)
+		door string
+		want string
+	}{
+		{"one label", func() (string, error) {
+			return d.Choice(ctx, "p", []decision.Label{{Label: "a"}}, []string{"a"})
+		}, `{"kind":"choice","prompt":"p","labels":[{"label":"a"}],"items":["a"]}`, `decide: choice needs at least two labels, got 1`},
+		{"duplicate labels", func() (string, error) {
+			return d.Choice(ctx, "p", []decision.Label{{Label: "a"}, {Label: "a"}}, []string{"a"})
+		}, `{"kind":"choice","prompt":"p","labels":[{"label":"a"},{"label":"a"}],"items":["a"]}`, `decide: duplicate label "a"`},
+		{"an empty label", func() (string, error) {
+			return d.Choice(ctx, "p", []decision.Label{{Label: "a"}, {Label: ""}}, []string{"a"})
+		}, `{"kind":"choice","prompt":"p","labels":[{"label":"a"},{"label":""}],"items":["a"]}`, `decide: an empty label`},
+		{"no criteria", func() (string, error) { return d.Score(ctx, "p", nil, []string{"a"}) },
+			`{"kind":"score","prompt":"p","items":["a"]}`, `decide: score needs at least two criteria, got 0`},
+		{"an empty criterion", func() (string, error) { return d.Score(ctx, "p", []string{"c", ""}, []string{"a"}) },
+			`{"kind":"score","prompt":"p","criteria":["c",""],"items":["a"]}`, `decide: an empty criterion`},
+		{"no items", func() (string, error) { return d.Binary(ctx, "p", nil) },
+			`{"kind":"binary","prompt":"p","items":[]}`, `decide: no items`},
+		{"an empty item", func() (string, error) { return d.Binary(ctx, "p", []string{""}) },
+			`{"kind":"binary","prompt":"p","items":[""]}`, `decide: an empty item`},
+	}
+	for _, c := range cases {
+		_, verbErr := c.verb()
+		_, doorErr := d.Exec(ctx, json.RawMessage(c.door))
+		if verbErr == nil || doorErr == nil || verbErr.Error() != c.want || doorErr.Error() != c.want {
+			t.Fatalf("%s: the refusal is the same words on either door: verb=%q exec=%q", c.name, verbErr, doorErr)
+		}
+	}
+
+	_, doorErr = d.Exec(ctx, json.RawMessage(`{"kind":"vibe","prompt":"p","items":["a"]}`))
+	if doorErr == nil || doorErr.Error() != `decide: kind "vibe": want choice, binary or score` {
+		t.Fatalf("an unknown kind refuses by naming the kinds: %v", doorErr)
+	}
+
+	if requests, _, _ := p.snapshot(); requests != 0 {
+		t.Fatalf("every refusal above holds ahead of any I/O: %d requests went out", requests)
+	}
+
+	fromVerb, err := d.Binary(ctx, "Is this a read?", []string{"ls"})
+	if err != nil {
+		t.Fatalf("binary through the verb: %v", err)
+	}
+	fromDoor, err := d.Exec(ctx, jsonArgs(map[string]any{"kind": "binary", "prompt": "Is this a read?", "items": []string{"ls"}}))
+	if err != nil {
+		t.Fatalf("binary through the door: %v", err)
+	}
+	if fromVerb != fromDoor || fromVerb != "yes (1): #1 ls" {
+		t.Fatalf("one call replies the same bytes through either door: verb %q exec %q", fromVerb, fromDoor)
 	}
 }

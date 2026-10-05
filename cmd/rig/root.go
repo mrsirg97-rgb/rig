@@ -60,7 +60,7 @@ type root struct {
 	decQ       *decision.Queue
 	decRev     *decision.Reviewer
 	packScorer *decision.PackScorer
-	decide     *decision.Decide
+	decide     decision.Decide
 	delegate   func(sched.DelegateInput) (sched.DelegateResult, error)
 	eco        *plugins.Ecosystem
 

@@ -109,10 +109,20 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   fails the score.
 - `decide.go`: the decide tool, the model's delegate door (SPEC_DECISION,
   the delegate section): one typed question — a choice with a
-  description per label, a yes/no, or a score — and a list of items; one
-  request per item through the `Decider` (the state on the wire is the
-  item), up to the tool's `Parallel` at once, and the reply grouped: for
-  each label the items that got it (numbered from 1, first line), then
+  description per label, a yes/no, or a score — and a list of items. As
+  of 2.12.6 the tool is its interface: `NewDecide` returns `Decide` (the
+  struct is unexported), `Exec` decodes the args and routes on `kind`,
+  and one method carries each question kind — `Choice(ctx, prompt,
+  labels, items)`, `Binary(ctx, prompt, items)` and `Score(ctx, prompt,
+  criteria, items)`. The three kinds are the tool's three verbs: the
+  prompt, label and criterion refusals live in the kind that owns them,
+  the item refusals and the read ceiling in the shared run, so a Go
+  caller and the model hit the same checks. `Label` is the exported
+  label (the wire's `{label, description}`), where the question kinds
+  themselves stay the package's `Choice`/`Score`/`Binary` constructors.
+  One request per item through the `Decider` (the state on the wire is
+  the item), up to the tool's `Parallel` at once, and the reply grouped:
+  for each label the items that got it (numbered from 1, first line), then
   the unsure items in full for the model to judge itself. A choice is
   unsure when its confidence is under one half; a yes/no and a score are
   never unsure. The bound holds ahead of any I/O: the items' total stays
