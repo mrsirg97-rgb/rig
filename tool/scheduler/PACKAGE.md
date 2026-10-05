@@ -13,11 +13,13 @@ seams).
   `Exec` as the one JSON door — decode `action` and the fields, keep the
   wire's three-state `model` (absent / `null` / a name, read from the raw
   args because Go cannot say it otherwise), route — and one method per
-  verb over the scheduler store: `Create(ctx, name, prompt, command, cron,
-  at, workspace, model, timeout, budget)`, `Update(ctx, id, name, prompt,
-  command, cron, at, workspace, model *string, timeout, budget)`,
-  `List(ctx)`, `Pause(ctx, id)`, `Resume(ctx, id)`, `Remove(ctx, id)`,
-  `Runs(ctx, id, n)` and `Repair(ctx, id)`. The required-argument
+  verb over the scheduler store: `Create(ctx, in CreateInput)` and
+  `Update(ctx, id, in UpdateInput)` — the job's nine fields go in one
+  input struct, the store's `CreateInput` shape, because six of them are
+  strings and a caller must not transpose a schedule for a workspace —
+  and `List(ctx)`, `Pause(ctx, id)`, `Resume(ctx, id)`, `Remove(ctx, id)`,
+  `Runs(ctx, id, n)` and `Repair(ctx, id)`, small enough to stay
+  positional with the job named first. The required-argument
   refusals, the command-job model gate and the `pathguard` workspace rule
   live in the verb they belong to, so a Go caller and the model hit the
   same checks. `New` returns the interface; the struct is unexported. The

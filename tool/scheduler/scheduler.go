@@ -18,14 +18,44 @@ type Scheduler interface {
 	tool.Definition
 	Exec(ctx context.Context, args json.RawMessage) (string, error)
 
-	Create(ctx context.Context, name, prompt, command, cron, at, workspace, model string, timeout int, budget float64) (string, error)
-	Update(ctx context.Context, id, name, prompt, command, cron, at, workspace string, model *string, timeout int, budget float64) (string, error)
+	Create(ctx context.Context, in CreateInput) (string, error)
+	Update(ctx context.Context, id string, in UpdateInput) (string, error)
 	List(ctx context.Context) (string, error)
 	Pause(ctx context.Context, id string) (string, error)
 	Resume(ctx context.Context, id string) (string, error)
 	Remove(ctx context.Context, id string) (string, error)
 	Runs(ctx context.Context, id string, n int) (string, error)
 	Repair(ctx context.Context, id string) (string, error)
+}
+
+// CreateInput is one job as create takes it: the schedule (a 5-field
+// cron, or "once" with At), the work (a Prompt for a worker, or a
+// Command line for no model), and the limits. A zero value leaves each
+// field to the store's default.
+type CreateInput struct {
+	Name      string
+	Prompt    string
+	Command   string
+	Cron      string
+	At        string
+	Workspace string
+	Model     string
+	Timeout   int
+	Budget    float64
+}
+
+// UpdateInput is the same fields as they change; the job is named by id
+// on the verb itself, as every other verb names its job.
+type UpdateInput struct {
+	Name      string
+	Prompt    string
+	Command   string
+	Cron      string
+	At        string
+	Workspace string
+	Model     *string
+	Timeout   int
+	Budget    float64
 }
 
 type given struct {
@@ -88,13 +118,19 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.Model != nil {
 			model = *g.Model
 		}
-		return a.Create(ctx, g.Name, g.Prompt, g.Command, g.Cron, g.At, g.Workspace, model, g.Timeout, g.Budget)
+		return a.Create(ctx, CreateInput{
+			Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron, At: g.At,
+			Workspace: g.Workspace, Model: model, Timeout: g.Timeout, Budget: g.Budget,
+		})
 	case "update":
 		model, err := updateModelArg(args)
 		if err != nil {
 			return "", err
 		}
-		return a.Update(ctx, g.ID, g.Name, g.Prompt, g.Command, g.Cron, g.At, g.Workspace, model, g.Timeout, g.Budget)
+		return a.Update(ctx, g.ID, UpdateInput{
+			Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron, At: g.At,
+			Workspace: g.Workspace, Model: model, Timeout: g.Timeout, Budget: g.Budget,
+		})
 	case "list":
 		return a.List(ctx)
 	case "pause":
@@ -128,28 +164,29 @@ func callerOf(ctx context.Context) (string, string, error) {
 	return session, cwd, nil
 }
 
-func (a adapter) Create(ctx context.Context, name, prompt, command, cron, at, workspace, model string, timeout int, budget float64) (string, error) {
+func (a adapter) Create(ctx context.Context, in CreateInput) (string, error) {
 	session, cwd, err := callerOf(ctx)
 	if err != nil {
 		return "", err
 	}
-	name = strings.TrimSpace(name)
+	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		return "", fmt.Errorf("scheduler: create requires 'name'")
 	}
-	command = strings.TrimSpace(command)
-	if command == "" && strings.TrimSpace(prompt) == "" {
+	command := strings.TrimSpace(in.Command)
+	if command == "" && strings.TrimSpace(in.Prompt) == "" {
 		return "", fmt.Errorf("scheduler: create requires 'prompt' or 'command'")
 	}
-	if strings.TrimSpace(cron) == "" {
+	if strings.TrimSpace(in.Cron) == "" {
 		return "", fmt.Errorf("scheduler: create requires 'cron' (5-field or 'once' + 'at')")
 	}
+	model := in.Model
 	if command == "" {
 		model = strings.TrimSpace(model)
 	} else if model != "" {
 		return "", fmt.Errorf("scheduler: a command job takes no model and no busy policy")
 	}
-	jobCwd := workspace
+	jobCwd := in.Workspace
 	if jobCwd != "" {
 		validated, err := pathguard.Within(jobCwd, cwd, a.home)
 		if err != nil {
@@ -158,12 +195,12 @@ func (a adapter) Create(ctx context.Context, name, prompt, command, cron, at, wo
 		jobCwd = validated
 	}
 	return sched.Create(ctx, a.db, a.ct, sched.CreateInput{
-		Name: name, Prompt: prompt, Command: command, Cron: cron, At: at,
-		Model: model, Cwd: jobCwd, Timeout: timeout, Budget: budget,
+		Name: name, Prompt: in.Prompt, Command: command, Cron: in.Cron, At: in.At,
+		Model: model, Cwd: jobCwd, Timeout: in.Timeout, Budget: in.Budget,
 	}, cwd, session, a.runnerCmd, a.home, time.Now)
 }
 
-func (a adapter) Update(ctx context.Context, id, name, prompt, command, cron, at, workspace string, model *string, timeout int, budget float64) (string, error) {
+func (a adapter) Update(ctx context.Context, id string, in UpdateInput) (string, error) {
 	session, cwd, err := callerOf(ctx)
 	if err != nil {
 		return "", err
@@ -171,7 +208,7 @@ func (a adapter) Update(ctx context.Context, id, name, prompt, command, cron, at
 	if id == "" {
 		return "", fmt.Errorf("scheduler: update requires 'id' (jN)")
 	}
-	updateCwd := workspace
+	updateCwd := in.Workspace
 	if updateCwd != "" {
 		validated, err := pathguard.Within(updateCwd, cwd, a.home)
 		if err != nil {
@@ -180,8 +217,8 @@ func (a adapter) Update(ctx context.Context, id, name, prompt, command, cron, at
 		updateCwd = validated
 	}
 	return sched.Update(ctx, a.db, a.ct, sched.UpdateInput{
-		ID: id, Name: name, Prompt: prompt, Command: command, Cron: cron,
-		At: at, Cwd: updateCwd, Model: model, Timeout: timeout, Budget: budget,
+		ID: id, Name: in.Name, Prompt: in.Prompt, Command: in.Command, Cron: in.Cron,
+		At: in.At, Cwd: updateCwd, Model: in.Model, Timeout: in.Timeout, Budget: in.Budget,
 	}, session, a.runnerCmd, a.home, time.Now)
 }
 

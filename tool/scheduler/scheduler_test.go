@@ -440,7 +440,7 @@ func TestSchedulerVerbsAndExecShareTheirChecks(t *testing.T) {
 	h := newHarness(t, "/ws/sched")
 	ctx := context.Background()
 
-	_, createErr := h.tool.Create(ctx, "  ", "the prompt", "", "0 3 * * *", "", "", "", 0, 0)
+	_, createErr := h.tool.Create(ctx, adapter.CreateInput{Prompt: "the prompt", Cron: "0 3 * * *"})
 	_, execErr := exec(t, h, map[string]any{"action": "create", "name": "  ", "prompt": "the prompt", "cron": "0 3 * * *"})
 	if createErr == nil || execErr == nil {
 		t.Fatalf("a job without a name refuses on both doors, create=%v exec=%v", createErr, execErr)
@@ -449,20 +449,20 @@ func TestSchedulerVerbsAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("the refusal is the same words on either door: create %q exec %q", createErr, execErr)
 	}
 
-	_, createErr = h.tool.Create(ctx, "sweep", "", "ls", "0 3 * * *", "", "", "some-model", 0, 0)
+	_, createErr = h.tool.Create(ctx, adapter.CreateInput{Name: "sweep", Command: "ls", Cron: "0 3 * * *", Model: "some-model"})
 	_, execErr = exec(t, h, map[string]any{"action": "create", "name": "sweep", "command": "ls", "cron": "0 3 * * *", "model": "some-model"})
 	if createErr == nil || execErr == nil || createErr.Error() != execErr.Error() {
 		t.Fatalf("a command job with a model refuses the same way on either door: create=%v exec=%v", createErr, execErr)
 	}
 
 	outside := filepath.Join(t.TempDir(), "elsewhere")
-	_, createErr = h.tool.Create(ctx, "sweep", "the prompt", "", "0 3 * * *", "", outside, "", 0, 0)
+	_, createErr = h.tool.Create(ctx, adapter.CreateInput{Name: "sweep", Prompt: "the prompt", Cron: "0 3 * * *", Workspace: outside})
 	_, execErr = exec(t, h, map[string]any{"action": "create", "name": "sweep", "prompt": "the prompt", "cron": "0 3 * * *", "workspace": outside})
 	if createErr == nil || execErr == nil || createErr.Error() != execErr.Error() {
 		t.Fatalf("a workspace outside the guard refuses the same way on either door: create=%v exec=%v", createErr, execErr)
 	}
 
-	_, updateErr := h.tool.Update(ctx, "", "n", "", "", "", "", "", nil, 0, 0)
+	_, updateErr := h.tool.Update(ctx, "", adapter.UpdateInput{Name: "n"})
 	_, execErr = exec(t, h, map[string]any{"action": "update", "name": "n"})
 	if updateErr == nil || execErr == nil || updateErr.Error() != "scheduler: update requires 'id' (jN)" || execErr.Error() != updateErr.Error() {
 		t.Fatalf("an update without a job id refuses the same words on either door: update=%v exec=%v", updateErr, execErr)
@@ -480,7 +480,7 @@ func TestSchedulerVerbsAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("a runs without a job id refuses the same words on either door: runs=%v exec=%v", runsErr, execErr)
 	}
 
-	if _, err := h.tool.Create(ctx, "nightly", "the prompt", "", "0 3 * * *", "", "", "", 0, 0); err != nil {
+	if _, err := h.tool.Create(ctx, adapter.CreateInput{Name: "nightly", Prompt: "the prompt", Cron: "0 3 * * *"}); err != nil {
 		t.Fatalf("create through the verb: %v", err)
 	}
 	fromVerb, err := h.tool.List(ctx)
