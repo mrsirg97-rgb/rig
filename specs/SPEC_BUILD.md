@@ -292,9 +292,10 @@ whole job: resolve the merge-base, add it as a detached worktree, render
 the base and the head, diff, post. The renderer is `TestWireDump`
 (`cmd/rig`), flag-driven (`-wire-dump <dir>`, `-rig-root <tree>`), and
 it is the golden fixture by another name: the same swap-server capture,
-the same scratch home and env, the session section stripped, the
-report-back workdir renamed — its three bodies came out byte-identical
-to `golden_020` the day the goldens went, and
+the same scratch home and env, the session section stripped when it
+matches (a PR that changed the words leaves it in, for the diff to
+carry), the report-back workdir renamed — its three bodies came out
+byte-identical to `golden_020` the day the goldens went, and
 `TestWireDumpRendersByteIdenticalFromTwoWorlds` pins the property the
 job depends on (the render is machine-independent, or the diff lies).
 The five artifacts are `oneshot.json`, `repl.json`, `runjob.json`,

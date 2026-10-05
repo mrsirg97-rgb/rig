@@ -123,7 +123,7 @@ func dumpWire(t *testing.T, out, root string) {
 	if s.count() != 1 {
 		t.Fatalf("requests = %d, want 1", s.count())
 	}
-	oneshot := stripSession(t, s.last(), cmdDir, scratch)
+	oneshot := stripSession(s.last(), cmdDir, scratch)
 	writeArtifact(t, out, "oneshot.json", oneshot)
 	tools, menu := toolsAndMenu(t, oneshot)
 	writeArtifact(t, out, "tools.json", tools)
@@ -144,7 +144,7 @@ func dumpWire(t *testing.T, out, root string) {
 	if s2.count() != 1 {
 		t.Fatalf("requests = %d, want 1", s2.count())
 	}
-	writeArtifact(t, out, "repl.json", stripSession(t, s2.last(), cmdDir2, scratch2))
+	writeArtifact(t, out, "repl.json", stripSession(s2.last(), cmdDir2, scratch2))
 
 	s3 := &bodySrv{model: "brain"}
 	srv3 := newBodySrv(t, s3)
@@ -184,19 +184,22 @@ func dumpWire(t *testing.T, out, root string) {
 	got := s3.last()
 	escaped := strings.ReplaceAll(sched.ReportBack(workDir), "\n", `\n`)
 	got = bytes.Replace(got, []byte(escaped), []byte(strings.ReplaceAll(sched.ReportBack("WORKDIR"), "\n", `\n`)), 1)
-	writeArtifact(t, out, "runjob.json", stripSession(t, got, workDir, scratch3))
+	writeArtifact(t, out, "runjob.json", stripSession(got, workDir, scratch3))
 }
 
-func stripSession(t *testing.T, data []byte, cwd, home string) []byte {
-	t.Helper()
+func stripSession(data []byte, cwd, home string) []byte {
 	section := sessionSection(cwd, home)
-	if section == "" {
+	if section == "" || !bytes.Contains(data, []byte(section)) {
 		return data
 	}
-	if !bytes.Contains(data, []byte(section)) {
-		t.Fatalf("the request must carry the session section %q", section)
-	}
 	return bytes.Replace(data, []byte(`\n\n`+section), nil, 1)
+}
+
+func TestStripSessionLeavesABodyWithoutTheSectionUnchanged(t *testing.T) {
+	data := []byte(`{"messages":[]}`)
+	if got := stripSession(data, "/tmp/cwd", "/tmp/home"); !bytes.Equal(got, data) {
+		t.Fatalf("a body without the session section must pass through for the diff to carry it, got %s", got)
+	}
 }
 
 func toolsAndMenu(t *testing.T, body []byte) (json.RawMessage, int) {

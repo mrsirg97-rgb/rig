@@ -17,16 +17,16 @@ step "resolving the merge-base"
 base=$(git merge-base origin/main HEAD) || refuse "no merge-base with origin/main (fetch-depth: 0 carries it)"
 
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+trap 'rm -rf "$work"; git worktree prune' EXIT
 
 step "adding the base worktree at $(git rev-parse --short "$base")"
 git worktree add --detach "$work/tree" "$base" >/dev/null || refuse "the base worktree refused"
 
 step "rendering the base wire"
-go test ./cmd/rig/ -run TestWireDump -wire-dump "$work/base" -rig-root "$work/tree" >/dev/null || refuse "the base render refused"
+go test ./cmd/rig/ -run '^TestWireDump$' -wire-dump "$work/base" -rig-root "$work/tree" >/dev/null || refuse "the base render refused"
 
 step "rendering the head wire"
-go test ./cmd/rig/ -run TestWireDump -wire-dump "$work/head" >/dev/null || refuse "the head render refused"
+go test ./cmd/rig/ -run '^TestWireDump$' -wire-dump "$work/head" >/dev/null || refuse "the head render refused"
 
 step "diffing the wire"
 difffile="$work/wire.diff"
