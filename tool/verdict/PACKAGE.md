@@ -11,11 +11,16 @@ slightly misspelled line counted as a dead worker.
 
 ## What it includes
 
-- `verdict.go`: `New(fleet broadcast.Transport) core.Tool`; the words are
-  the registry's `verdict` entry. `Exec` decodes `{row?, accept, reason?}`
-  strictly, refuses a reject with no reason before anything crosses, and
-  sends one `core.Verdict{Row, Accept, Reason}` on the transport as the
-  transport's id; the reply is `recorded`.
+- `Verdict`: the tool as its interface (2.12.6): `tool.Definition` (the
+  words are the registry's `verdict` entry), `Exec` as the one JSON door —
+  decode `{row?, accept, reason?}` strictly and route — and
+  `Deliver(ctx, row, accept, reason)`, the one verb, named for what the
+  registry says it delivers. The reject-without-a-reason refusal lives in
+  the verb, before anything crosses, so a Go caller and the model are
+  refused by the same words. One `core.Verdict{Row, Accept, Reason}` goes
+  out on the transport as the transport's id; the reply is `recorded`.
+  `New(fleet broadcast.Transport)` returns the interface; the struct is
+  unexported.
 
 ## How it is consumed
 
