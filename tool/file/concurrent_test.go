@@ -25,7 +25,7 @@ func TestReadsRecordFileStateConcurrently(t *testing.T) {
 	}
 	s := core.NewSession()
 	ctx := core.WithSession(context.Background(), s)
-	read := file.Read()
+	read := file.NewRead()
 	var wg sync.WaitGroup
 	for _, p := range paths {
 		wg.Add(1)

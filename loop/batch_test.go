@@ -343,7 +343,7 @@ func TestBatchEditsToOneFileRunInCallOrderAgainstThePreviousLanding(t *testing.T
 		fileCall(t, "c2", "edit", map[string]any{"path": path, "old": "alpha", "new": "beta"}),
 		fileCall(t, "c3", "edit", map[string]any{"path": path, "old": "beta", "new": "gamma"}),
 	}
-	k, f, s := batchKernel(t, []core.Tool{file.Read(), file.Edit()}, calls, rig.WithConcurrent(onlyRead))
+	k, f, s := batchKernel(t, []core.Tool{file.NewRead(), file.NewEdit()}, calls, rig.WithConcurrent(onlyRead))
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("run: %v", err)
 	}

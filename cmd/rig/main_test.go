@@ -148,7 +148,7 @@ func (*oneLineFrontend) Notify(ev core.Event) {}
 
 func testTools() map[string]core.Tool {
 	return map[string]core.Tool{
-		"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
+		"bash": bash.New(), "read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 		"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": fakePython{},
 		"web": fakeWeb{},
 

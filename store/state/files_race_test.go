@@ -32,7 +32,7 @@ func TestRecorderUpsertDoesNotRaceTheFileTool(t *testing.T) {
 		for i := 0; i < 300; i++ {
 			os.WriteFile(p, []byte("x"), 0o644)
 			args, _ := json.Marshal(map[string]string{"path": p})
-			if _, err := file.Read().Exec(ctx, args); err != nil {
+			if _, err := file.NewRead().Exec(ctx, args); err != nil {
 				t.Error(err)
 				return
 			}

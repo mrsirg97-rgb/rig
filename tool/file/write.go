@@ -10,26 +10,37 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
+type Write interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	Write(ctx context.Context, path, content string) (string, error)
+}
+
 type writeTool struct{ tool.Definition }
 
-func Write() core.Tool { return &writeTool{tool.Def("write")} }
+func NewWrite() Write { return &writeTool{tool.Def("write")} }
 
 type writeArgs struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
 }
 
-func (writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
+func (t writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a writeArgs
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("write: args: %w", err)
 	}
-	a.Path = normalizePath(a.Path)
-	if err := os.WriteFile(a.Path, []byte(a.Content), 0o644); err != nil {
+	return t.Write(ctx, a.Path, a.Content)
+}
+
+func (writeTool) Write(ctx context.Context, path, content string) (string, error) {
+	path = normalizePath(path)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return "", fmt.Errorf("write: %w", err)
 	}
-	recordState(ctx, a.Path, []byte(a.Content))
+	recordState(ctx, path, []byte(content))
 	s, _ := core.SessionFrom(ctx)
-	rememberContent(s, a.Path, a.Content)
-	return fmt.Sprintf("wrote %d bytes to %s", len(a.Content), a.Path), nil
+	rememberContent(s, path, content)
+	return fmt.Sprintf("wrote %d bytes to %s", len(content), path), nil
 }

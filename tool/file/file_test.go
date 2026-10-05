@@ -33,7 +33,7 @@ func TestReadReturnsContent(t *testing.T) {
 	if err := os.WriteFile(path, []byte("read me"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestReadRecordsProvenanceWhenThreaded(t *testing.T) {
 	}
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
 	state, ok := session.Files[path]
@@ -70,13 +70,13 @@ func TestReadNotesStaleObservation(t *testing.T) {
 	}
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
 	if err := os.WriteFile(path, []byte("second"), 0o644); err != nil { // external change, no session call
 		t.Fatal(err)
 	}
-	got, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path}))
+	got, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -96,10 +96,10 @@ func TestReadFreshObservationStaysQuiet(t *testing.T) {
 	}
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	got, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path}))
+	got, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -109,14 +109,14 @@ func TestReadFreshObservationStaysQuiet(t *testing.T) {
 }
 
 func TestReadRefusesUnknownArg(t *testing.T) {
-	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": "/tmp/x", "extra": 1}))
+	_, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": "/tmp/x", "extra": 1}))
 	if err == nil {
 		t.Fatal("unknown args must be refused")
 	}
 }
 
 func TestReadDescriptionNamesWhatEditChecksAgainst(t *testing.T) {
-	desc := file.Read().Description()
+	desc := file.NewRead().Description()
 	for _, want := range []string{
 		"the native way to look at a file",
 		"edit checks against its content",
@@ -143,7 +143,7 @@ func TestReadOffsetLimitReturnsTheRange(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "offset": 2, "limit": 3,
 	}))
 	if err != nil {
@@ -161,7 +161,7 @@ func TestReadOffsetPastTheEndRefusesLoud(t *testing.T) {
 	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+	_, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "offset": 9,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "past the end") {
@@ -175,7 +175,7 @@ func TestReadOffsetNegativeRefusesLoud(t *testing.T) {
 	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+	_, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "offset": -1,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "negative") {
@@ -189,7 +189,7 @@ func TestReadLimitNegativeRefusesLoud(t *testing.T) {
 	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+	_, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "limit": -1,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "negative") {
@@ -200,7 +200,7 @@ func TestReadLimitNegativeRefusesLoud(t *testing.T) {
 func TestWriteCreatesAndOverwrites(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "note.txt")
-	tool := file.Write()
+	tool := file.NewWrite()
 	if _, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "content": "first",
 	})); err != nil {
@@ -223,7 +223,7 @@ func TestWriteCreatesAndOverwrites(t *testing.T) {
 func TestWriteRefusesMissingParentDir(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "no/such/dir/note.txt")
-	_, err := file.Write().Exec(context.Background(), argsJSON(t, map[string]any{
+	_, err := file.NewWrite().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "content": "x",
 	}))
 	if err == nil {
@@ -270,7 +270,7 @@ func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
 		n := strings.Count(want[:cut], "\n")
 		want = want[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines; continue at offset %d]", n, len(lines), n)
 	}
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestReadWindowOfABigFileIsByteIdentical(t *testing.T) {
 		end = len(lines)
 	}
 	want := strings.Join(lines[100:end], "\n")
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "offset": 100, "limit": 3,
 	}))
 	if err != nil {
@@ -316,7 +316,7 @@ func TestReadOneHugeLineFallsBackToARuneBoundary(t *testing.T) {
 	if err := os.WriteFile(straddle, []byte(strings.Repeat("a", readCap-1)+"é"+"tail"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": straddle}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": straddle}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestReadOneHugeLineFallsBackToARuneBoundary(t *testing.T) {
 	if err := os.WriteFile(aligned, []byte(strings.Repeat("a", readCap)+"é"+"tail"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err = file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": aligned}))
+	got, err = file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": aligned}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestReadOneHugeLineCapsByteIdentical(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := huge[:readCap] + "\n[output truncated: line 1 is longer than the 1 MiB cap; slice it with bash]"
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestReadBigFileDoesNotAllocateTheWholeFile(t *testing.T) {
 	}
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestReadBigFileRangesReassembleExactly(t *testing.T) {
 		if reads >= 10 {
 			t.Fatal("the range walk did not terminate")
 		}
-		rep, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "offset": offset}))
+		rep, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "offset": offset}))
 		if err != nil {
 			t.Fatalf("read at offset %d: %v", offset, err)
 		}
@@ -487,7 +487,7 @@ func TestReadDiffShowsTheHunk(t *testing.T) {
 	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
 	if err != nil {
 		t.Fatalf("read diff: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestReadDiffShowsTheHunkWithTheEditStaged(t *testing.T) {
 		t.Fatal(err)
 	}
 	git(t, dir, "add", "note.txt")
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
 	if err != nil {
 		t.Fatalf("read diff: %v", err)
 	}
@@ -545,7 +545,7 @@ func TestReadDiffShowsAnAddedFileStagedWhole(t *testing.T) {
 		t.Fatal(err)
 	}
 	git(t, dir, "add", "new.txt")
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
 	if err != nil {
 		t.Fatalf("read diff: %v", err)
 	}
@@ -573,7 +573,7 @@ func TestReadDiffCleanSaysNoChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	commitAll(t, dir, "base")
-	got, err := file.Read().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
+	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
 	if err != nil {
 		t.Fatalf("read diff: %v", err)
 	}

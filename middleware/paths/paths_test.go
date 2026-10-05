@@ -79,7 +79,7 @@ func TestToolsExpandTheLeadingTildeAtTheBoundary(t *testing.T) {
 		case "bash":
 			return bash.New().Exec(ctx, call.Args)
 		case "read":
-			return file.Read().Exec(ctx, call.Args)
+			return file.NewRead().Exec(ctx, call.Args)
 		default:
 			return "", errors.New("unexpected tool: " + call.Name)
 		}

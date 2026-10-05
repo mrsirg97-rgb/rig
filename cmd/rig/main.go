@@ -451,7 +451,7 @@ func main() {
 		themeDoc:       cfg.Theme,
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
-			"bash": bash.New(), "read": file.Read(), "write": file.Write(), "edit": file.Edit(),
+			"bash": bash.New(), "read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
