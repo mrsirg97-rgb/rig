@@ -14,12 +14,22 @@ calls what).
 
 ## What it includes
 
-- `Tool`: a `core.Tool` over the rem store's read/write operations
-  (`learn`, `recall`, `reflect`, `prune`) and the graph store's map
-  operations (`index`, `pack`), each carrying the required `scope`: the
+- `Rem`: the tool as its interface (2.12.6): `tool.Definition`, `Exec` as
+  the one JSON door — decode `action` and the fields, turn the wire's
+  shapes that Go cannot name (`supersedes`, `ids`) into ids, route — and
+  one method per verb: `Index(ctx, scope)`, `Pack(ctx, scope, target)`,
+  `Learn(ctx, scope, content, kind, importance, source, supersedes)`,
+  `Recall(ctx, scope, query, kind, k, includeSuperseded)`,
+  `Reflect(ctx, scope, content, importance, source)` and
+  `Prune(ctx, scope, verb, kind, ids, olderThanDays, importance)`, each
+  over the rem store's operations and the graph store's map operations,
+  each carrying the required `scope`: the
   reserved word `global` or a directory path, resolved through
   `store/scope` (worktree-safe; `~` expands at the `middleware/paths`
-  boundary). A call without it refuses naming the rule — there is no
+  boundary). The scope resolution, the `k`/`older_than_days`/`importance`
+  bounds and the `pack`/`learn`/`reflect` required-field refusals live in
+  the verb they belong to, so a Go caller and the model hit the same
+  checks. A call without it refuses naming the rule — there is no
   cwd fallback in the tool — and a path that is not a directory refuses
   by name, the same words todo's scope refuses: a typo must not mint a
   memory scope keyed by a path that is not there. A path recall searches that project first
