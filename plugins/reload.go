@@ -2,7 +2,6 @@ package plugins
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -167,40 +166,14 @@ func NewEcosystem(home string, natives map[string]bool, k Kernel, swap func(ctx 
 	return &Ecosystem{home: home, natives: natives, Kernel: k, swap: swap, list: list}
 }
 
-func (e *Ecosystem) Exec(ctx context.Context, args json.RawMessage) (string, error) {
-	var in struct {
-		Action string `json:"action"`
-		Name   string `json:"name"`
-		Source string `json:"source"`
-	}
-	if err := json.Unmarshal(args, &in); err != nil {
-		return "", fmt.Errorf("plugin: bad call (want {action, name, source}): %v", err)
-	}
-	if in.Action == "" {
-		return "", fmt.Errorf("plugin: no action (want {action, name, source})")
-	}
-	switch in.Action {
-	case "list":
-		return e.listEcosystem(ctx)
-	case "create":
-		return e.create(ctx, in.Name, in.Source)
-	case "delete":
-		return e.delete(ctx, in.Name)
-	case "reload":
-		return e.reload(ctx)
-	default:
-		return "", fmt.Errorf("plugin: unknown action %q (want run, schema, list, create, delete or reload)", in.Action)
-	}
-}
-
-func (e *Ecosystem) listEcosystem(ctx context.Context) (string, error) {
+func (e *Ecosystem) ListEcosystem(ctx context.Context) (string, error) {
 	if e.list == nil {
 		return "", fmt.Errorf("plugin: list: no listing seam (the root did not wire one)")
 	}
 	return e.list()
 }
 
-func (e *Ecosystem) create(ctx context.Context, name, source string) (string, error) {
+func (e *Ecosystem) Create(ctx context.Context, name, source string) (string, error) {
 	path, created, err := WritePending(e.home, e.natives, name, source)
 	if err != nil {
 		return "", fmt.Errorf("plugin: create: %v", err)
@@ -212,7 +185,7 @@ func (e *Ecosystem) create(ctx context.Context, name, source string) (string, er
 	return "plugin: create: " + verb + " " + name + " (" + path + "; the operator installs it with /plugins approve)", nil
 }
 
-func (e *Ecosystem) delete(ctx context.Context, name string) (string, error) {
+func (e *Ecosystem) Delete(ctx context.Context, name string) (string, error) {
 	src, dst, err := Move(filepath.Join(e.home, "plugins"), name, "", "disabled")
 	if err != nil {
 		return "", fmt.Errorf("plugin: delete: %v", err)
@@ -220,7 +193,7 @@ func (e *Ecosystem) delete(ctx context.Context, name string) (string, error) {
 	return "plugin: delete: " + name + " (" + src + " -> " + dst + "; a reload re-registers without it; /plugins enable brings it back)", nil
 }
 
-func (e *Ecosystem) reload(ctx context.Context) (string, error) {
+func (e *Ecosystem) Reload(ctx context.Context) (string, error) {
 	files, err := List(e.home)
 	if err != nil {
 		return "", fmt.Errorf("plugin: reload: %v", err)

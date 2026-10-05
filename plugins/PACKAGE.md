@@ -47,14 +47,24 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   lookup admits plugins only: a native named through the door is an
   unknown plugin, so the door never widens the allowlist or skips the
   approval gate, which key on the outer call's name.
-- `Door` + `NewDoor`: the `plugin` native (SPEC_GROWTH 9, amended): one
+- `Plugin` + `NewDoor`: the `plugin` native (SPEC_GROWTH 9, amended): one
   dispatch tool collapsing all plugin schemas to one request entry; an
   `action` enum; `run` (resolves and calls) and `schema` (returns a
   live plugin's description and schema verbatim, the model fetches args
   on demand), both non-mutating. The schema's `name` enum is the live
   plugin names. An unknown name runs the `redo` seam once (the root's
   reload) and re-resolves; a nil redo keeps the plain refusal
-  (SPEC_STREAMLINE 4).
+  (SPEC_STREAMLINE 4). As of 2.12.6 the door is its interface — the
+  struct is unexported and `NewDoor` returns `Plugin` — with one method
+  per action: `Run(ctx, name, args)`, `Contract(ctx, name)`, `List(ctx)`,
+  `Create(ctx, name, source)`, `Delete(ctx, name)` and `Reload(ctx)`. The
+  name-required refusal and the live lookup (redo and all) live in the
+  live verbs, the missing-seam refusal in the four forge verbs, which
+  call the ecosystem's own typed methods — the ecosystem no longer has a
+  JSON door of its own. The schema verb is named `Contract` because
+  `Schema()` is the tool's own argument schema, which the door still
+  overrides to carry the live plugin names: the one place the template's
+  verb-name rule does not fit, named here rather than forced.
 
 ## How it is consumed
 
