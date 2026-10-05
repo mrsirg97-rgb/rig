@@ -456,19 +456,12 @@ func TestTheCompactionLineLandsAfterTheSummarysLastThought(t *testing.T) {
 	s.fe.Notify(core.Compacting{})
 	s.fe.Notify(core.Phase{Name: "summarizing"})
 	s.fe.Notify(core.Phase{Name: "summarizing", Text: "folding the older turns into one"})
+	breathe(t, s, 1)
+	awaitScreen(t, s, "folding the older turns into one", true)
 	s.fe.Notify(core.Compacted{Summary: "s", Dropped: 1200, Kept: 400, Usage: core.Usage{Prompt: 2000, Completion: 1000}})
 	awaitScreen(t, s, "compact: -1.2k kept 400 · up 2.0k down 1.0k", true)
-	rows := screenLines(t, s, 60)
-	thought, line := -1, -1
-	for i, r := range rows {
-		if strings.Contains(paintFree(r), "folding the older turns") {
-			thought = i
-		}
-		if strings.Contains(paintFree(r), "compact: -1.2k") {
-			line = i
-		}
-	}
-	if thought < 0 || line < 0 || thought > line {
-		t.Fatalf("the compaction line lands after the summary's last thought (thought row %d, line row %d):\n%s", thought, line, strings.Join(rows, "\n"))
+	if n := screenHas(t, s, "folding the older turns"); n != 0 {
+		t.Fatalf("the summarizing preview left %d rows in the record, want 0:\n%s", n,
+			strings.Join(screenLines(t, s, 60), "\n"))
 	}
 }

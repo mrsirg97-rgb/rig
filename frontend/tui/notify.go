@@ -108,6 +108,7 @@ func (t *tui) Notify(ev core.Event) {
 
 		t.mu.Lock()
 		t.phase = "summarizing"
+		t.resetPhaseLocked()
 		t.asideAt = time.Now()
 		t.frame = 0
 		if !t.turnLive {
@@ -123,6 +124,7 @@ func (t *tui) Notify(ev core.Event) {
 
 		t.mu.Lock()
 		t.compacting = false
+		t.resetPhaseLocked()
 		if t.turnLive {
 			t.phase = "thinking"
 		}
@@ -190,11 +192,12 @@ func (t *tui) Notify(ev core.Event) {
 			t.commit(RenderPhaseEnd(t.theme, e) + "\n")
 		case e.Text != "":
 			t.mu.Lock()
-			visible := t.showReasoning && t.phaseFlows()
-			t.mu.Unlock()
-			if visible {
-				t.flow(SlotReasoning, e.Text)
+			t.syncSizeLocked()
+			if t.showReasoning && t.phaseFlows() {
+				t.appendPhaseLocked(e.Text)
+				t.dirty = true
 			}
+			t.mu.Unlock()
 		default:
 			t.mu.Lock()
 			if !t.compacting {
@@ -242,6 +245,7 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 	t.syncSizeLocked()
 
 	pendCap, menuCap, inputCap := 1<<30, menuMaxRows, maxInputRows
+	previewCap := phasePreviewRows + 1
 	h := t.live.height
 	if h >= 1 {
 		pendCap = h
@@ -252,12 +256,16 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 	var col int
 	var blocks liveBlocks
 	for i := 0; i < 6 && !giveUp; i++ {
-		lines, line, col, blocks = t.buildLiveLinesLocked(pendCap, menuCap, inputCap)
+		lines, line, col, blocks = t.buildLiveLinesLocked(pendCap, menuCap, inputCap, previewCap)
 		over := t.live.rowsOver(lines[blocks.pendRows:], t.statusViewportRowsLocked()) + blocks.pendRows
 		if h <= 0 || over <= 0 {
 			break
 		}
 		switch {
+		case blocks.previewRows > 0 && previewCap > 0:
+			if previewCap = blocks.previewRows - over; previewCap < 0 {
+				previewCap = 0
+			}
 		case blocks.pendRows > 0 && pendCap > 0:
 			if pendCap = blocks.pendRows - over; pendCap < 0 {
 				pendCap = 0
@@ -278,12 +286,13 @@ func (t *tui) liveRegionLocked() ([]string, string, int) {
 }
 
 type liveBlocks struct {
-	pendRows  int
-	menuRows  int
-	inputRows int
+	pendRows    int
+	previewRows int
+	menuRows    int
+	inputRows   int
 }
 
-func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap int) ([]string, string, int, liveBlocks) {
+func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap, previewCap int) ([]string, string, int, liveBlocks) {
 	var blocks liveBlocks
 	var lines []string
 	if t.turnLive || t.compacting || t.noticing || t.aside != "" {
@@ -297,6 +306,10 @@ func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap int) ([]string, st
 			lines = append(lines, "")
 		}
 		lines = append(lines, t.activityLineLocked())
+		if pl, rows := t.phasePreviewLocked(previewCap); rows > 0 {
+			blocks.previewRows = rows
+			lines = append(lines, pl...)
+		}
 	}
 
 	if len(lines) > 0 || !t.live.lastBlank {

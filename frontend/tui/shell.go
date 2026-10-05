@@ -42,6 +42,9 @@ type tui struct {
 	noticeFrame   int
 	aside         string
 	asideAt       time.Time
+	phaseLines    []string
+	phaseOpen     string
+	phaseHidden   int
 
 	turnEstablished bool
 	reading         bool
