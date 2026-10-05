@@ -10,9 +10,14 @@ its reference. The tool is registered only for a model row with `vision`
 
 ## What it includes
 
-- `view.go`: the schema, the caps, the decode, the box resample, the
-  re-encode, and the blob write. The reply is `imagemarker.Format`'s line
-  and nothing else.
+- `View`: the tool as its interface (2.12.6): `tool.Definition` (the
+  words), `Exec` as the one JSON door — decode and route, nothing else —
+  and `View(ctx, path)`, the one verb, named for what it does. The
+  path-required refusal, the blob-store gate, the caps and the decode
+  live in the verb, so a Go caller and the model meet the same words and
+  the same refusal; a cancelled ctx refuses before the filesystem is
+  touched. `New(blobsDir)` returns the interface; the struct is
+  unexported. The reply is `imagemarker.Format`'s line and nothing else.
 
 ## How it is consumed
 
