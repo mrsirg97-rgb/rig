@@ -1,4 +1,16 @@
 # Changelog
+## [2.12.1]: the compaction line lands last
+
+The summarizing phase streams the summary call's thinking, and the
+`⧉ compact` line committed before that stream had closed: the handler
+flushed the finished lines of the flow but left the open tail in the
+pending region, so the tail painted after the compaction line and the
+transcript read as compact, then more thinking, then the indicator. The
+compaction end now closes the pending flow the way a turn end does, so
+the line lands after the last word of the summary's thinking. Its words
+shorten too: `· up 111k down 4.3k`, since the row above just said
+`summarizing` for the whole call and the arrows name the direction.
+
 ## [2.12.0]: scope is a parameter, never a guess
 
 The evidence was one live session: rig started in `~`, the work lived in

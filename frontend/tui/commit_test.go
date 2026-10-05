@@ -33,7 +33,7 @@ func TestCompactedLineExact(t *testing.T) {
 	}
 	ev := core.Compacted{Dropped: 1200, Kept: 40000, Usage: core.Usage{Prompt: 2000, Completion: 1000}}
 	got := tui.RenderCompacted(th, ev)
-	want := th.Paint("ember", "⧉") + " " + th.Paint("dim", "compact: -1.2k kept 40k · summary up 2.0k down 1.0k")
+	want := th.Paint("ember", "⧉") + " " + th.Paint("dim", "compact: -1.2k kept 40k · up 2.0k down 1.0k")
 	if got != want {
 		t.Fatalf("compacted line = %q, want %q", got, want)
 	}

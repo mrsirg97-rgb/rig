@@ -131,7 +131,11 @@ func (t *tui) Notify(ev core.Event) {
 			t.statusUsed = e.Kept
 			t.statusHasUsed = true
 		}
+		pending := len(t.pend) > 0
 		t.mu.Unlock()
+		if pending {
+			t.flow("", "\n")
+		}
 		t.commit(chunk)
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
