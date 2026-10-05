@@ -9,11 +9,22 @@ seams).
 
 ## What it includes
 
-- `Tool`: a `core.Tool` over the scheduler store's verbs
-  (list/create/update/pause/resume/remove/runs/repair), consuming the opened
-  `sched.DB` (the one `global.sqlite`), `sched.Crontab`, the runner
-  command, and the fleet's model (the fire-time default the description
-  names; the tool carries no worker default of its own).
+- `Scheduler`: the tool as its interface (2.12.6): `tool.Definition`,
+  `Exec` as the one JSON door — decode `action` and the fields, keep the
+  wire's three-state `model` (absent / `null` / a name, read from the raw
+  args because Go cannot say it otherwise), route — and one method per
+  verb over the scheduler store: `Create(ctx, name, prompt, command, cron,
+  at, workspace, model, timeout, budget)`, `Update(ctx, id, name, prompt,
+  command, cron, at, workspace, model *string, timeout, budget)`,
+  `List(ctx)`, `Pause(ctx, id)`, `Resume(ctx, id)`, `Remove(ctx, id)`,
+  `Runs(ctx, id, n)` and `Repair(ctx, id)`. The required-argument
+  refusals, the command-job model gate and the `pathguard` workspace rule
+  live in the verb they belong to, so a Go caller and the model hit the
+  same checks. `New` returns the interface; the struct is unexported. The
+  tool consumes the opened `sched.DB` (the one `global.sqlite`),
+  `sched.Crontab`, the runner command, and the fleet's model (the fire-time
+  default the description names; the tool carries no worker default of its
+  own).
 
 ## How it is consumed
 

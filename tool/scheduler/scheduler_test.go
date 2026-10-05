@@ -10,7 +10,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	adapter "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
@@ -38,7 +37,7 @@ type harness struct {
 	db   sched.DB
 	ct   *fakeCrontab
 	home string
-	tool core.Tool
+	tool adapter.Scheduler
 }
 
 func newHarness(t *testing.T, cwd string) *harness {
@@ -434,5 +433,68 @@ func TestExecRunsHonorsTheCount(t *testing.T) {
 	}
 	if !strings.Contains(all, "j1 · 3 runs") || !strings.Contains(all, "2026-01-01") {
 		t.Fatalf("runs without n must show the default window, oldest first:\n%s", all)
+	}
+}
+
+func TestSchedulerVerbsAndExecShareTheirChecks(t *testing.T) {
+	h := newHarness(t, "/ws/sched")
+	ctx := context.Background()
+
+	_, createErr := h.tool.Create(ctx, "  ", "the prompt", "", "0 3 * * *", "", "", "", 0, 0)
+	_, execErr := exec(t, h, map[string]any{"action": "create", "name": "  ", "prompt": "the prompt", "cron": "0 3 * * *"})
+	if createErr == nil || execErr == nil {
+		t.Fatalf("a job without a name refuses on both doors, create=%v exec=%v", createErr, execErr)
+	}
+	if createErr.Error() != "scheduler: create requires 'name'" || execErr.Error() != createErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: create %q exec %q", createErr, execErr)
+	}
+
+	_, createErr = h.tool.Create(ctx, "sweep", "", "ls", "0 3 * * *", "", "", "some-model", 0, 0)
+	_, execErr = exec(t, h, map[string]any{"action": "create", "name": "sweep", "command": "ls", "cron": "0 3 * * *", "model": "some-model"})
+	if createErr == nil || execErr == nil || createErr.Error() != execErr.Error() {
+		t.Fatalf("a command job with a model refuses the same way on either door: create=%v exec=%v", createErr, execErr)
+	}
+
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	_, createErr = h.tool.Create(ctx, "sweep", "the prompt", "", "0 3 * * *", "", outside, "", 0, 0)
+	_, execErr = exec(t, h, map[string]any{"action": "create", "name": "sweep", "prompt": "the prompt", "cron": "0 3 * * *", "workspace": outside})
+	if createErr == nil || execErr == nil || createErr.Error() != execErr.Error() {
+		t.Fatalf("a workspace outside the guard refuses the same way on either door: create=%v exec=%v", createErr, execErr)
+	}
+
+	_, updateErr := h.tool.Update(ctx, "", "n", "", "", "", "", "", nil, 0, 0)
+	_, execErr = exec(t, h, map[string]any{"action": "update", "name": "n"})
+	if updateErr == nil || execErr == nil || updateErr.Error() != "scheduler: update requires 'id' (jN)" || execErr.Error() != updateErr.Error() {
+		t.Fatalf("an update without a job id refuses the same words on either door: update=%v exec=%v", updateErr, execErr)
+	}
+
+	_, pauseErr := h.tool.Pause(ctx, "")
+	_, execErr = exec(t, h, map[string]any{"action": "pause"})
+	if pauseErr == nil || execErr == nil || pauseErr.Error() != "scheduler: pause requires 'id' (jN)" || execErr.Error() != pauseErr.Error() {
+		t.Fatalf("a pause without a job id refuses the same words on either door: pause=%v exec=%v", pauseErr, execErr)
+	}
+
+	_, runsErr := h.tool.Runs(ctx, "", 5)
+	_, execErr = exec(t, h, map[string]any{"action": "runs", "n": 5})
+	if runsErr == nil || execErr == nil || runsErr.Error() != "scheduler: runs requires 'id' (jN)" || execErr.Error() != runsErr.Error() {
+		t.Fatalf("a runs without a job id refuses the same words on either door: runs=%v exec=%v", runsErr, execErr)
+	}
+
+	if _, err := h.tool.Create(ctx, "nightly", "the prompt", "", "0 3 * * *", "", "", "", 0, 0); err != nil {
+		t.Fatalf("create through the verb: %v", err)
+	}
+	fromVerb, err := h.tool.List(ctx)
+	if err != nil {
+		t.Fatalf("list through the verb: %v", err)
+	}
+	fromDoor, err := exec(t, h, map[string]any{"action": "list"})
+	if err != nil {
+		t.Fatalf("list through the door: %v", err)
+	}
+	if !strings.Contains(fromVerb, "nightly") {
+		t.Fatalf("the job created through the verb is not on the board:\n%s", fromVerb)
+	}
+	if fromVerb != fromDoor {
+		t.Fatalf("one listing replies the same bytes through either door:\nverb %q\ndoor %q", fromVerb, fromDoor)
 	}
 }
