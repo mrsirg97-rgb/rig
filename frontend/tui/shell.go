@@ -42,6 +42,7 @@ type tui struct {
 	noticeFrame   int
 	aside         string
 	asideAt       time.Time
+	phaseText     string
 
 	turnEstablished bool
 	reading         bool

@@ -1,4 +1,36 @@
 # Changelog
+## [2.12.9]: a phase streams a preview, not a transcript
+
+SPEC_TUI 3 said a phase's deltas "stream dim under the row" and the TUI
+read that as *flow them through the pending region* — and the pending
+region commits every line a newline closes. A reviewer's bite or a
+compaction's summary call therefore wrote its whole reasoning into the
+scrollback: hundreds of dim lines above the one check line, the thinking
+worth a glance while it runs kept as a page in the record
+(the operator's read, 2026-10-05).
+
+A phase's deltas now buffer in their own text and the live region draws
+them under the phase's indicator row as a preview: a rolling tail of at
+most `phasePreviewRows` (10) screen rows measured by `screenRows` at the
+terminal's width, dim in the reasoning slot, headed by one dim
+`· n rows above ·` line once the tail has scrolled — the tail-and-marker
+shape the tool bodies learned in 2.11.11, in the unit that is honest:
+forty lines of reasoning is ten rows and a count, whatever the width.
+The preview redraws with the live region on every delta and re-measures
+on resize; the viewport shrink loop gained its cap and gives it up
+first, because a peek is the cheapest row on the screen. The reasoning
+toggle gates it as it gated the flow. The end commits what it always
+committed, the one check line, and for `summarizing` the `⧉ compact`
+line after it: 2.12.1's ordering holds by construction now — the preview
+is gone with the phase's last frame, so nothing can land out of order.
+The recorder, the web feed and the headless frontends still receive
+every delta: this is the TUI's rendering choice, not the event's. The
+live turn's own thinking stream is untouched, and a phase that waits
+during a live turn still shows nothing. The loop, the policy and the
+events did not move.
+
+---
+
 ## [2.12.8]: create echoes the task
 
 Every transition verb answered with `echoTask` — the note, the affected

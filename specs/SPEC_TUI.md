@@ -568,9 +568,18 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
 - A `core.Phase` (2.11.7) is a side activity the operator watches: the
   decision review's bite (`reviewing`) and compaction's summary call
   (`summarizing`). When no turn owns the row, the phase opening takes the
-  indicator's row as `<name> · <elapsed>` on the ember; its deltas are
-  the activity's own reasoning and stream dim under the row through the
-  reasoning toggle; its end commits one line, the ok glyph in `success`
+  indicator's row as `<name> · <elapsed>` on the ember. Its deltas are
+  the activity's own reasoning, and since 2.12.9 they never commit: they
+  render as a preview under the indicator row — a rolling tail of at most
+  `phasePreviewRows` (10) screen rows measured by `screenRows` at the
+  terminal's width, dim in the reasoning slot, headed by one dim
+  `· n rows above ·` line once the tail has scrolled. The preview
+  redraws with the live region on each delta, re-measures on resize, and
+  is gone the moment the phase ends; the reasoning toggle gates it as it
+  gated the deltas before. The recorder, the web feed and the piped
+  frontends still receive every delta: this is the TUI's rendering
+  choice, not the event's.
+  The end commits one line, the ok glyph in `success`
   or the fail glyph in `error`, the name dim, the note dim, and the row
   returns to idle; waiting notices then breathe. During a live turn the
   turn's indicator keeps the row and a phase waits, its deltas unshown,

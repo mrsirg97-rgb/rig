@@ -140,6 +140,7 @@ func noticeSlot(l core.Level) string {
 
 func (t *tui) beginPhaseLocked(name string) {
 	t.aside = name
+	t.phaseText = ""
 	t.asideAt = time.Now()
 	t.frame = 0
 	t.startFrameTickerLocked()
@@ -150,6 +151,7 @@ func (t *tui) beginPhaseLocked(name string) {
 
 func (t *tui) endPhaseLocked() {
 	t.aside = ""
+	t.phaseText = ""
 	t.stopFrameTickerLocked()
 	t.kickNoticesLocked()
 }
