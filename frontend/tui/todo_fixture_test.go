@@ -32,12 +32,15 @@ func newTodoFixture(t *testing.T) *todoFixture {
 
 func (f *todoFixture) create(session string, items ...todostore.CreateItem) string {
 	f.t.Helper()
-	var reply string
-	var err error
+	ctx := context.Background()
 	for _, it := range items {
-		if reply, err = todostore.Create(context.Background(), f.db, f.proj, todostore.CreateItem{Text: it.Text}, session); err != nil {
+		if _, err := todostore.Create(ctx, f.db, f.proj, todostore.CreateItem{Text: it.Text}, session); err != nil {
 			f.t.Fatalf("create: %v", err)
 		}
+	}
+	queue, err := todostore.Read(ctx, f.db, f.proj, session)
+	if err != nil {
+		f.t.Fatalf("read: %v", err)
 	}
 	for _, it := range items {
 		if it.Requires == nil && it.Blocks == nil {
@@ -45,18 +48,18 @@ func (f *todoFixture) create(session string, items ...todostore.CreateItem) stri
 		}
 		linked := todostore.CreateItem{Text: it.Text}
 		if it.Requires != nil {
-			id := f.id(reply, *it.Requires)
+			id := f.id(queue, *it.Requires)
 			linked.Requires = &id
 		}
 		if it.Blocks != nil {
-			id := f.id(reply, *it.Blocks)
+			id := f.id(queue, *it.Blocks)
 			linked.Blocks = &id
 		}
-		if reply, err = todostore.Create(context.Background(), f.db, f.proj, linked, session); err != nil {
+		if _, err := todostore.Create(ctx, f.db, f.proj, linked, session); err != nil {
 			f.t.Fatalf("create: %v", err)
 		}
 	}
-	return reply
+	return queue
 }
 
 func (f *todoFixture) id(reply, text string) string {
@@ -189,6 +192,20 @@ func (f *todoFixture) stale() string {
 	out, err := todostore.Read(context.Background(), f.db, f.proj, "s1")
 	if err != nil {
 		f.t.Fatalf("read: %v", err)
+	}
+	return out
+}
+
+func (f *todoFixture) createEcho(text string) string {
+	f.t.Helper()
+	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
+	payload, err := json.Marshal(map[string]any{"action": "create", "scope": "global", "text": text})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, payload)
+	if err != nil {
+		f.t.Fatalf("create: %v", err)
 	}
 	return out
 }

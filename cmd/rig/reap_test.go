@@ -57,9 +57,12 @@ func TestReapAtOpenReleasesClaimsOwnedByEndedSessions(t *testing.T) {
 	if _, err := todostore.Create(ctx, tdb, proj, todostore.CreateItem{Text: "dead claim"}, deadID); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	reply, err := todostore.Create(ctx, tdb, proj, todostore.CreateItem{Text: "live claim"}, deadID)
-	if err != nil {
+	if _, err := todostore.Create(ctx, tdb, proj, todostore.CreateItem{Text: "live claim"}, deadID); err != nil {
 		t.Fatalf("create: %v", err)
+	}
+	reply, err := todostore.Read(ctx, tdb, proj, "current-session")
+	if err != nil {
+		t.Fatalf("read: %v", err)
 	}
 	dead := taskIDText(t, reply, "dead claim")
 	live := taskIDText(t, reply, "live claim")

@@ -221,18 +221,16 @@ func (f *folded) applyVerb(e eventRow) {
 	ts.updatedTs = e.ts
 }
 
-func planCreate(f *folded, item CreateItem) (modified []*taskState, note string, problems []string) {
+func planCreate(f *folded, item CreateItem) (modified []*taskState, ts *taskState, added bool, problems []string) {
 	raw := item.raw()
-	ts := f.byText(raw.text)
+	ts = f.byText(raw.text)
+	added = ts == nil
 	if ts == nil {
 		ts = &taskState{text: raw.text, status: statusPending}
 		ts.id = f.mintID()
 		ts.pos = f.nextPos()
 		f.tasks[ts.id] = ts
 		modified = append(modified, ts)
-		note = "added " + ts.id
-	} else {
-		note = ts.id + " already there"
 	}
 	for _, link := range []struct {
 		has, clear bool
@@ -267,7 +265,7 @@ func planCreate(f *folded, item CreateItem) (modified []*taskState, note string,
 	if path := cyclePath(f, map[string]*taskState{raw.text: ts}); path != nil {
 		problems = append(problems, "links would form a cycle: "+strings.Join(path, " -> "))
 	}
-	return modified, note, problems
+	return modified, ts, added, problems
 }
 
 func addOnce(list *[]string, s string) {

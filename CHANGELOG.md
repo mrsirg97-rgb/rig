@@ -1,4 +1,40 @@
 # Changelog
+## [2.12.8]: create echoes the task
+
+Every transition verb answered with `echoTask` — the note, the affected
+row with its links, the summary line. `Create` alone answered with the
+whole present: every open task and the ten most recent finished, one
+dim hint line for what was hidden. The exception was written for the
+array (`store/todo/PACKAGE.md`: "after a merge the whole queue is the
+news"), and 2.12.4 took the array away: a create is one task, so a plan
+of five steps is five creates, and five creates printed the queue five
+times. The reply shape was taxing the planning it exists to support —
+Qwen planning 2.12.6 on 2026-10-05 counted it out loud ("each returns
+the full queue though. That's ~7 × 1500 tokens = 10k tokens. Hmm,
+painful but tolerable") and then weighed batching its own plan to dodge
+the cost, trading the one-task atomicity 2.12.4 had just bought.
+
+`Create` replies through `echoTask` like every other verb: `→ added t4`
+or `→ t4 already there`, then the row with its `requires`/`blocks`/
+`waits for` suffixes, then the summary with its `next:`, so the first
+claim of a plan is visible without a read. The id the next call links
+by is on the line the create just printed. The refused create keeps the
+queue (2.11.10): that reply is where the ids a bad link was guessing
+at are listed, and nothing lands. `read` is unchanged and is where the
+queue lives; `read all:true` is still the history.
+
+One shape for every write, at every door: the tool's `create`, the
+`/todo create x` line, and the dashboard's POST all print the same
+echo, and the TUI needed no new renderer — `todoBlock`'s `Echo` path
+already draws a note, one row and the head, and a create block now
+renders exactly that with no finished rows under it. Three store tests,
+a tool test and a TUI block test pin the shape, one of the store tests
+by name (`TestCreateEchoesTheTaskAndTheSummaryNotTheQueue`); the create
+tests that had been reading the queue out of the create reply read it
+through `read`, which is where it was all along.
+
+---
+
 ## [2.12.7]: a delegate has no clock
 
 A delegate carried a clock: ten minutes by default, `timeoutMs` to
