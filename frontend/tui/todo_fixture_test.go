@@ -27,7 +27,7 @@ func newTodoFixture(t *testing.T) *todoFixture {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	return &todoFixture{t: t, db: db, proj: todostore.Project{Key: "ws", Label: "rig"}}
+	return &todoFixture{t: t, db: db, proj: todostore.Global()}
 }
 
 func (f *todoFixture) create(session string, items ...todostore.CreateItem) string {
@@ -157,8 +157,8 @@ func (f *todoFixture) stale() string {
 		if err != nil {
 			f.t.Fatalf("tx: %v", err)
 		}
-		if _, err := tx.Exec("INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'start', ?, NULL, 'ws')",
-			time.Now().UTC().Format(time.RFC3339), `{"id":"t999"}`); err != nil {
+		if _, err := tx.Exec("INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'start', ?, NULL, ?)",
+			time.Now().UTC().Format(time.RFC3339), `{"id":"t999"}`, f.proj.Key); err != nil {
 			tx.Rollback()
 			f.t.Fatalf("age: %v", err)
 		}
@@ -173,19 +173,11 @@ func (f *todoFixture) stale() string {
 	return out
 }
 
-func (f *todoFixture) bindSession(ctx context.Context, session string) {
-	f.t.Helper()
-	if err := todostore.Bind(ctx, f.db, todostore.Binding{Session: session, Scope: f.proj.Key, Label: f.proj.Label}); err != nil {
-		f.t.Fatalf("bind: %v", err)
-	}
-}
-
 func (f *todoFixture) completeEcho() string {
 	f.t.Helper()
 	reply := f.create("s1", todostore.CreateItem{Text: "wire the models table"})
 	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
-	f.bindSession(ctx, "s1")
-	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"complete","id":"`+f.id(reply, "wire the models table")+`"}`))
+	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"complete","scope":"global","id":"`+f.id(reply, "wire the models table")+`"}`))
 	if err != nil {
 		f.t.Fatalf("complete: %v", err)
 	}
@@ -196,8 +188,7 @@ func (f *todoFixture) noteEcho() string {
 	f.t.Helper()
 	reply := f.create("s1", todostore.CreateItem{Text: "wire the models table"})
 	ctx := core.WithSession(context.Background(), &core.Session{ID: "s1"})
-	f.bindSession(ctx, "s1")
-	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"note","id":"`+f.id(reply, "wire the models table")+`","note":"on it"}`))
+	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"note","scope":"global","id":"`+f.id(reply, "wire the models table")+`","note":"on it"}`))
 	if err != nil {
 		f.t.Fatalf("note: %v", err)
 	}
@@ -264,19 +255,6 @@ func (f *todoFixture) finishedList() string {
 	out, err := todostore.ReadFinished(context.Background(), f.db, f.proj, "s1", 2)
 	if err != nil {
 		f.t.Fatalf("read finished: %v", err)
-	}
-	return out
-}
-
-func (f *todoFixture) bareQueue() string {
-	f.t.Helper()
-	ctx := core.WithSession(context.Background(), &core.Session{ID: "sess-1"})
-	if err := todostore.Bind(ctx, f.db, todostore.Binding{Session: "sess-1", Scope: "ws", Label: "rig"}); err != nil {
-		f.t.Fatalf("bind: %v", err)
-	}
-	out, err := tooltodo.New(f.db, tooltodo.Interactive).Exec(ctx, json.RawMessage(`{"action":"bind"}`))
-	if err != nil {
-		f.t.Fatalf("report: %v", err)
 	}
 	return out
 }

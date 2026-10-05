@@ -40,9 +40,11 @@ func openTodo(t *testing.T) store.DB {
 
 func TestTodoCommandRoundTrip(t *testing.T) {
 	s := core.NewSession()
+	ws := t.TempDir()
 	env := &command.Env{
-		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(openTodo(t), todoapi.Interactive)},
+		Session:   func() *core.Session { return s },
+		Workspace: func() string { return ws },
+		Tools:     map[string]core.Tool{"todo": todoapi.New(openTodo(t), todoapi.Interactive)},
 	}
 
 	created, err := runCmd(t, "todo", "create write the spec", env)
@@ -88,9 +90,11 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 
 func TestTodoNotesAndReadIdThroughTheCommand(t *testing.T) {
 	s := core.NewSession()
+	ws := t.TempDir()
 	env := &command.Env{
-		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(openTodo(t), todoapi.Interactive)},
+		Session:   func() *core.Session { return s },
+		Workspace: func() string { return ws },
+		Tools:     map[string]core.Tool{"todo": todoapi.New(openTodo(t), todoapi.Interactive)},
 	}
 	created, err := runCmd(t, "todo", "create note me", env)
 	if err != nil {
@@ -392,13 +396,15 @@ func schedStores(t *testing.T, home, cwd string) sched.DB {
 
 func TestTodoProjectCommand(t *testing.T) {
 	db := openTodo(t)
+	here := t.TempDir()
 	env := &command.Env{
-		Session: func() *core.Session { return core.NewSession() },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
+		Session:   func() *core.Session { return core.NewSession() },
+		Workspace: func() string { return here },
+		Tools:     map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
 	proj := t.TempDir()
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, todostore.Project{Key: scope.Key(proj), Label: scope.Label(proj)}, []todostore.CreateItem{{Text: "elsewhere"}}, "seed"); err != nil {
+	if _, err := todostore.Create(ctx, db, todostore.ProjectOf(proj), []todostore.CreateItem{{Text: "elsewhere"}}, "seed"); err != nil {
 		t.Fatal(err)
 	}
 	rendered, err := runCmd(t, "todo", "project "+proj, env)
@@ -421,36 +427,40 @@ func TestTodoProjectCommand(t *testing.T) {
 		t.Fatalf("an unknown path's empty queue must not carry the not-a-repo decoration:\n%s", empty)
 	}
 
+	if _, err := runCmd(t, "todo", "create the home chore", env); err != nil {
+		t.Fatalf("create at the workspace: %v", err)
+	}
 	reported, err := runCmd(t, "todo", "project", env)
 	if err != nil {
-		t.Fatalf("a bare project must report where the queue is: %v", err)
+		t.Fatalf("a bare project must read this workspace's queue: %v", err)
 	}
-	if !strings.Contains(reported, "queue: ") {
-		t.Fatalf("a bare project must name the queue, got %q", reported)
+	if !strings.Contains(reported, "the home chore") || !strings.Contains(reported, "["+scope.Label(here)+"] ") {
+		t.Fatalf("a bare project must name this workspace's queue, got %q", reported)
 	}
 }
 
-func TestTodoPathFormBindsAndActs(t *testing.T) {
+func TestTodoPathFormActsAtTheScope(t *testing.T) {
 	db := openTodo(t)
-	s := core.NewSession()
+	here := t.TempDir()
 	env := &command.Env{
-		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
+		Session:   func() *core.Session { return core.NewSession() },
+		Workspace: func() string { return here },
+		Tools:     map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
 	proj := t.TempDir()
 	created, err := runCmd(t, "todo", proj+" create write the spec", env)
 	if err != nil {
 		t.Fatalf("todo <path> create: %v", err)
 	}
-	if !strings.Contains(created, "bound to") || !strings.Contains(created, "write the spec") {
-		t.Fatalf("the path form must bind and act:\n%s", created)
+	if !strings.Contains(created, "write the spec") {
+		t.Fatalf("the path form must act at that scope:\n%s", created)
 	}
 	read, err := runCmd(t, "todo", "read", env)
 	if err != nil {
-		t.Fatalf("read after a bind: %v", err)
+		t.Fatalf("read at the workspace: %v", err)
 	}
-	if !strings.Contains(read, "write the spec") {
-		t.Fatalf("the bind must carry to a bare verb:\n%s", read)
+	if strings.Contains(read, "write the spec") {
+		t.Fatalf("a bare verb must stay at the workspace scope:\n%s", read)
 	}
 	if _, err := runCmd(t, "todo", t.TempDir()+"/nowhere read", env); err == nil ||
 		!strings.Contains(err.Error(), "no such project directory") {
@@ -539,9 +549,11 @@ func TestTodoListFinishedCommandParses(t *testing.T) {
 func TestTodoPruneCommand(t *testing.T) {
 	db := openTodo(t)
 	s := core.NewSession()
+	ws := t.TempDir()
 	env := &command.Env{
-		Session: func() *core.Session { return s },
-		Tools:   map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
+		Session:   func() *core.Session { return s },
+		Workspace: func() string { return ws },
+		Tools:     map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
 	if _, err := runCmd(t, "todo", "create one task", env); err != nil {
 		t.Fatalf("create: %v", err)

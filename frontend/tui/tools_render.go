@@ -107,6 +107,9 @@ func parseTodo(reply string) (todoParsed, bool) {
 			task.Status = "pending"
 		}
 		rest := tm[3]
+		if j := strings.LastIndex(rest, " · scope "); j >= 0 {
+			rest = rest[:j]
+		}
 		for _, verb := range []string{" · claimed for review by ", " · claimed by "} {
 			if j := strings.LastIndex(rest, verb); j >= 0 {
 				task.Claim = rest[j+len(verb):]
@@ -155,9 +158,6 @@ func atoi(s string) (int, error) {
 }
 
 func RenderTodoBlock(t Theme, opening, reply string) string {
-	if !strings.Contains(reply, "\n") && strings.HasPrefix(reply, "queue: ") {
-		return t.Paint(SlotDim, reply)
-	}
 	p, ok := parseTodo(reply)
 	if !ok {
 		var b strings.Builder

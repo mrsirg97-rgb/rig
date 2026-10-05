@@ -71,7 +71,8 @@ type Env struct {
 	Lines func() int
 
 	Compact       func(ctx context.Context) (core.Compacted, bool, error)
-	NewSession    func(ctx context.Context) (string, error)
+	NewSession    func(ctx context.Context, dir string) (string, error)
+	Workspace     func() string
 	SessionList   func(ctx context.Context) ([]SessionRow, error)
 	SessionShow   func(ctx context.Context, id string) (string, error)
 	SessionResume func(ctx context.Context, id string) error
@@ -87,14 +88,14 @@ type Env struct {
 	Theme       func() string
 	SetTheme    func(ctx context.Context, name string) error
 
-	Approve    func() string
-	SetApprove func(ctx context.Context, mode string) error
-	Tools      map[string]core.Tool
-
 	RemList   func(ctx context.Context, project string) ([]RemRow, error)
 	RemShow   func(ctx context.Context, id int64) (RemRow, error)
 	RemForget func(ctx context.Context, id int64) error
 	RemLabel  func(ctx context.Context, project string) (string, error)
+
+	Approve    func() string
+	SetApprove func(ctx context.Context, mode string) error
+	Tools      map[string]core.Tool
 
 	Plugins    func() []PluginInfo
 	Reload     func(ctx context.Context) (string, error)

@@ -54,12 +54,14 @@ touch core (one interface) and the last before the loop freezes for good.
 ```
 core/command.go       NEW: the Command interface (Name, Description, Run)
 kernel.go             +Commands field, +WithCommands (duplicate-name panic)
-command/              NEW leaf package (stdlib + core + models, nothing else)
+command/              NEW leaf package (stdlib + core + models, nothing
+                      else; project's ~ rides middleware/paths, 2.12.0)
   env.go              Env, Steerer, SessionRow
   parse.go            the prefix rule: Parse(line)
   commands.go         the standard set: All()
   compact.go          compact
   new.go              new
+  project.go          project (2.12.0): a fresh session in another workspace
   sessions.go         sessions (list / summary / show / resume) + the plain render
   models.go           models (list / switch)
   steer.go            steer
@@ -131,7 +133,9 @@ type Env struct {
 
 	// root-owned operations
 	Compact       func(ctx context.Context) (core.Compacted, bool, error)
-	NewSession    func(ctx context.Context) (string, error)
+	NewSession    func(ctx context.Context, dir string) (string, error)
+	                                         // dir "" keeps the workspace (new);
+	                                         // project passes the canonical path
 	SessionList   func(ctx context.Context) ([]SessionRow, error)
 	SessionShow   func(ctx context.Context, id string) (string, error)
 	SessionResume func(ctx context.Context, id string) error
@@ -380,6 +384,33 @@ The output contract:
 
 - success: `new: session <id>`: the fresh id (it is in the store, in
   the session row, and on the line).
+
+**`project` (2.12.0): the operator moves the session, never a tool.**
+The 2.12.0 scope work made the tool parameters the only binding: a call
+without `scope` refuses, so the way a session sits in another workspace
+is the operator's move, not a tool side effect. `/project <path>` rides
+the same new-session seam (`NewSession(ctx, dir)`): it expands `~` (the
+one rule, `middleware/paths.Expand`), canonicalizes (abs, symlinks
+resolved), refuses a non-directory by name (`project: not a directory:
+<path>`), and passes the path through the seam; the root revalidates
+and fails closed, closes the old row, moves the process itself
+(`os.Chdir`, refused by name — a close failure leaves the process
+unmoved; the tools read the process cwd at exec time, and one session
+per process makes that one truth rather than two) and its workspace
+fact (`r.cwd`), and the fresh recorder,
+the session section of the system prompt, and the workspace's
+AGENTS.md (2.11.8's `config.ProjectAgents`, read at wire) all follow.
+The reply is the new session id and the workspace line, so the
+transcript shows the move:
+
+- success: `project: session <id>` then `The session's workspace is
+  <dir>.`
+- a turn live: `project: a turn is live; steer or interrupt first`
+  (the dispatcher's `LiveTurn`, read like `new`).
+- args: one path, `~` allowed. Bare → `project: usage: project <path>`.
+- a non-directory refuses by name and the seam does not run.
+- `new` passes the empty dir and keeps the workspace (the compat case
+  the seam's shape carries).
 - a turn live (the dispatcher's `LiveTurn`): `new: a turn is live;
   steer or interrupt first` (structural in the CLI; a TUI keypress
   mid-turn is the case).

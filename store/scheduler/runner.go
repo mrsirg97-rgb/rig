@@ -59,7 +59,9 @@ const defaultSwapURL = "http://127.0.0.1:8090"
 
 var Transport http.RoundTripper
 
-const ReportBack = "\n\nReport back: when you finish, persist durable findings with the rem tool (project scope: this job's cwd) and end your reply with a short summary of what you found and did."
+func ReportBack(scope string) string {
+	return "\n\nReport back: when you finish, persist durable findings with the rem tool (scope: " + scope + ") and end your reply with a short summary of what you found and did."
+}
 
 func (opts RunOpts) modelRow(model string) (models.Model, bool) {
 	if opts.Models == nil {
@@ -247,7 +249,7 @@ func RunJob(key string, opts RunOpts) error {
 			}
 			workerCmd = []string{exe}
 		}
-		prompt = job.Prompt + ReportBack
+		prompt = job.Prompt + ReportBack(job.Cwd)
 		workerSession = core.NewSession().ID
 
 		profile, err := SandboxProfile(opts.Sandbox)

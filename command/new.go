@@ -27,7 +27,7 @@ func (newCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	if e.NewSession == nil {
 		return "", errors.New("new: no new-session seam (the root did not wire one)")
 	}
-	id, err := e.NewSession(ctx)
+	id, err := e.NewSession(ctx, "")
 	if err != nil {
 		return "", err
 	}

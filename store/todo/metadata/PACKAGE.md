@@ -6,10 +6,11 @@ Hand-written metadata for the todo store: the containers SPEC_STATE's
 "### todo" section fixes; tasks, task_deps, and meta. Lift's four-tag
 grammar is the language. Nullable columns are pointers.
 
-`session_project` (the session's queue binding) is not a generated
-container: it is mutable state beside the log, created by `extra.sql` and
-read and written with plain SQL from `binding.go`. Generating it would
-put a derived projection in the same breath as the spine it points at.
+`extra.sql` carries the two indexes the DDL camera cannot emit (the
+text unique index and the ordering spine), both scoped per queue. The
+`session_project` table that lived here beside them (the session's
+queue binding) left in 2.12.0: the required `scope` parameter is the
+binding, and stores that still carry the table carry it unread.
 
 ## How it is consumed
 

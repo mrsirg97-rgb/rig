@@ -140,7 +140,7 @@ func TestExtraStatementsAreApplied(t *testing.T) {
 	for _, s := range statements {
 		joined += s + "\n"
 	}
-	for _, want := range []string{"tasks_text_unique", "tasks_pos_seq", "session_project"} {
+	for _, want := range []string{"tasks_text_unique", "tasks_pos_seq"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("extra.sql absent from the applied statements (%s)", want)
 		}
@@ -151,10 +151,10 @@ func TestExtraStatementsAreApplied(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	var got int
-	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name IN ('tasks_text_unique','tasks_pos_seq','session_project')").Scan(&got); err != nil {
+	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name IN ('tasks_text_unique','tasks_pos_seq')").Scan(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got != 3 {
-		t.Fatalf("extra statements applied after open = %d, want 3", got)
+	if got != 2 {
+		t.Fatalf("extra statements applied after open = %d, want 2", got)
 	}
 }

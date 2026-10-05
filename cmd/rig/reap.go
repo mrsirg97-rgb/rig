@@ -21,13 +21,6 @@ var mutatingNatives = map[string]bool{
 }
 
 func sessionQueue(ctx context.Context, tdb store.DB, cwd, session string) (todostore.Project, error) {
-	b, ok, err := todostore.BindingOf(ctx, tdb, session)
-	if err != nil {
-		return todostore.ProjectOf(cwd), err
-	}
-	if ok {
-		return b.Project(), nil
-	}
 	return todostore.ProjectOf(cwd), nil
 }
 

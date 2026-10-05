@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -30,16 +31,30 @@ func (r *root) compactNow(ctx context.Context) (core.Compacted, bool, error) {
 	return ev, true, nil
 }
 
-func (r *root) newSession(ctx context.Context) (string, error) {
+func (r *root) newSession(ctx context.Context, dir string) (string, error) {
+	workspace := r.cwd
+	if dir != "" {
+		fi, err := os.Stat(dir)
+		if err != nil || !fi.IsDir() {
+			return "", fmt.Errorf("project: not a directory: %s", dir)
+		}
+		workspace = dir
+	}
 	if err := r.rec.Close("ok"); err != nil {
 		return "", fmt.Errorf("new: %v", err)
+	}
+	if dir != "" {
+		if err := os.Chdir(workspace); err != nil {
+			return "", fmt.Errorf("project: chdir %s: %v", workspace, err)
+		}
 	}
 
 	r.effort = ""
 	r.role = ""
 	r.approve = r.approveDefault
+	r.cwd = workspace
 	s2 := core.NewSession()
-	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s2.ID, s2).Snapshot(file.SnapshotFiles)
+	rec2 := state.NewRecorder(r.fe, r.sdb, workspace, r.activeID, Version, s2.ID, s2).Snapshot(file.SnapshotFiles)
 	if err := rec2.Ensure(); err != nil {
 		return "", fmt.Errorf("new: %v", err)
 	}
@@ -228,6 +243,7 @@ func (r *root) commandEnv() *command.Env {
 		Session:       func() *core.Session { return r.session },
 		Compact:       r.compactNow,
 		NewSession:    r.newSession,
+		Workspace:     func() string { return r.cwd },
 		SessionList:   r.sessionList,
 		SessionShow:   r.sessionShow,
 		SessionResume: r.sessionResume,

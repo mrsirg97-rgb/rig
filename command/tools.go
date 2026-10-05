@@ -43,7 +43,7 @@ func (t toolCmd) Sub() []Sub {
 			{Name: "fail", Desc: "mark a task failed: fail <id>"},
 			{Name: "retry", Desc: "put a failed task back in the queue: retry <id>"},
 			{Name: "prune", Desc: "drop the finished tasks from the queue"},
-			{Name: "project", Desc: "which queue this is; project <path> binds another and reads it"},
+			{Name: "project", Desc: "show another queue: project <path>; bare, this workspace's"},
 		}
 	case "scheduler":
 		return []Sub{
@@ -72,6 +72,12 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 	raw, err := t.parse(args)
 	if err != nil {
 		return "", err
+	}
+	if t.name == "todo" && e.Workspace != nil {
+		raw, err = withDefaultScope(raw, e.Workspace())
+		if err != nil {
+			return "", err
+		}
 	}
 	if e.Session != nil {
 		if s := e.Session(); s != nil {
@@ -105,7 +111,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 		if err != nil {
 			return nil, err
 		}
-		return withProjectField(rest, fields[0])
+		return withScopeField(rest, fields[0])
 	}
 	switch {
 	case len(fields) == 0:
@@ -169,14 +175,12 @@ func todoArgs(args string) (json.RawMessage, error) {
 			return nil, fmt.Errorf("todo: %q: not a position (todo move <id> <pos>)", fields[2])
 		}
 		return json.Marshal(map[string]any{"action": "move", "id": fields[1], "pos": pos})
+	case fields[0] == "project" && len(fields) == 2:
+		return json.Marshal(map[string]any{"action": "read", "scope": fields[1]})
+	case fields[0] == "project" && len(fields) > 2:
+		return nil, errors.New("todo: project takes one path (todo project <path>)")
 	case fields[0] == "project":
-		m := map[string]any{"action": "bind"}
-		if len(fields) == 2 {
-			m["project"] = fields[1]
-		} else if len(fields) > 2 {
-			return nil, errors.New("todo: project takes one path (todo project <path>)")
-		}
-		return json.Marshal(m)
+		return json.RawMessage(`{"action":"read"}`), nil
 	}
 	switch {
 	case len(fields) == 0:
@@ -208,12 +212,24 @@ func todoArgs(args string) (json.RawMessage, error) {
 	}
 }
 
-func withProjectField(raw json.RawMessage, project string) (json.RawMessage, error) {
+func withScopeField(raw json.RawMessage, scope string) (json.RawMessage, error) {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, fmt.Errorf("todo: %v", err)
 	}
-	m["project"] = project
+	m["scope"] = scope
+	return json.Marshal(m)
+}
+
+func withDefaultScope(raw json.RawMessage, scope string) (json.RawMessage, error) {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("todo: %v", err)
+	}
+	if s, ok := m["scope"].(string); ok && s != "" {
+		return json.Marshal(m)
+	}
+	m["scope"] = scope
 	return json.Marshal(m)
 }
 

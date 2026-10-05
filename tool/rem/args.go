@@ -3,7 +3,12 @@ package rem
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
 
 func attributedSource(explicit *string, ctx context.Context) string {
@@ -16,18 +21,28 @@ func attributedSource(explicit *string, ctx context.Context) string {
 	return "anon"
 }
 
-func scopeOf(s *string) string {
-	if s != nil {
-		return *s
+func scopeOf(s *string) (string, bool, error) {
+	if s == nil || *s == "" {
+		return "", false, fmt.Errorf("rem: scope required: name the workspace this acts on, as a path, or global")
 	}
-	return ""
+	if *s == scope.Global {
+		return "", true, nil
+	}
+	dir, err := filepath.Abs(paths.Expand(*s))
+	if err != nil {
+		return "", false, fmt.Errorf("rem: scope %q: %v", *s, err)
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return "", false, fmt.Errorf("rem: no such project directory: %s", *s)
+	}
+	return dir, false, nil
 }
 
-func scopeCheck(s *string) error {
-	if s == nil || *s == "" || *s == "project" || *s == "global" || *s == "all" {
-		return nil
+func internalScope(global bool) string {
+	if global {
+		return scope.Global
 	}
-	return fmt.Errorf("rem: scope must be project, global, or all, got '%s'", *s)
+	return ""
 }
 
 func kindOf(s *string) string {

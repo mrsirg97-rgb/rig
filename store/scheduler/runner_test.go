@@ -264,7 +264,8 @@ func TestParseKeyJNAndGarbageRefuses(t *testing.T) {
 }
 
 func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "hello\n"}}
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
 		statuses: map[string]string{"qwen3.8-27b-workers": "loaded"},
@@ -285,7 +286,7 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 	if !strings.Contains(prompt, "rem") {
 		t.Fatal("report-back must mention rem")
 	}
-	if !strings.Contains(prompt, "cwd") {
+	if !strings.Contains(prompt, "scope: "+jobDir) {
 		t.Fatal("report-back must name the job cwd scope")
 	}
 	tail := c.Argv[len(c.Argv)-2:]
@@ -337,7 +338,8 @@ func TestOwnModelResidentViaAliasRunsArgvCwdReportBackLogOKRecord(t *testing.T) 
 }
 
 func TestNothingResidentRuns(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
 	if len(spawn.calls) != 1 {
@@ -346,7 +348,8 @@ func TestNothingResidentRuns(t *testing.T) {
 }
 
 func TestSomethingElseResidentSkipRecordsAndSpawnsNothing(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	spawn := &fakeSpawn{}
 	before := h.ct.text
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{}))
@@ -370,7 +373,8 @@ func TestSomethingElseResidentSkipRecordsAndSpawnsNothing(t *testing.T) {
 }
 
 func TestOwnModelLoadedIdleWhileAnotherResidentRuns(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
 		statuses: map[string]string{"qwen3.8-27b-workers": "loaded"},
@@ -382,7 +386,8 @@ func TestOwnModelLoadedIdleWhileAnotherResidentRuns(t *testing.T) {
 }
 
 func TestOwnModelNotLoadedSomethingElseResidentSkips(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	spawn := &fakeSpawn{}
 	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
 		statuses: map[string]string{"qwen3.8-27b": "loaded"},
@@ -398,7 +403,8 @@ func TestOwnModelNotLoadedSomethingElseResidentSkips(t *testing.T) {
 }
 
 func TestBusyCheckFetchFailureFailsClosedWithReason(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	spawn := &fakeSpawn{}
 	err := sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{failing: "fetch failed: ECONNREFUSED"}))
 	mustOK(t, err)
@@ -418,7 +424,8 @@ func TestBusyCheckFetchFailureFailsClosedWithReason(t *testing.T) {
 }
 
 func TestWorkerExitNonZeroRecordsFailWithExitLogCarriesStderr(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 3, Stdout: "out", Stderr: "boom\n"}}
 	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
 	rec := runEvents(t, h, "")[0]
@@ -519,7 +526,8 @@ func TestOnceDoneIsAnEventAndSurvivesTheNextFold(t *testing.T) {
 }
 
 func TestZombieLineWithMissingRowLineDeletedSkipRecorded(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 
 	if _, err := h.db.DB.Exec(`DELETE FROM jobs WHERE id = 'j1'`); err != nil {
 		t.Fatal(err)
@@ -553,7 +561,8 @@ func TestCrashWindowRowDoneButLineAliveLineDeletedSkipRecorded(t *testing.T) {
 }
 
 func TestPausedRowLineDriftedActiveSkipLineUntouched(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	if _, err := h.db.DB.Exec(`UPDATE jobs SET state = 'paused' WHERE id = 'j1'`); err != nil {
 		t.Fatal(err)
 	}
@@ -569,7 +578,8 @@ func TestPausedRowLineDriftedActiveSkipLineUntouched(t *testing.T) {
 }
 
 func TestLogsPruneToTheNewestTwenty(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	dir := filepath.Join(h.home, "runs", "j1")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -613,7 +623,8 @@ func TestLogsPruneToTheNewestTwenty(t *testing.T) {
 }
 
 func TestLockHeldRecordsSkipWithoutRunningTheWorker(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	lockDir := filepath.Join(h.home, "locks")
 	if err := os.MkdirAll(lockDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -645,7 +656,8 @@ func TestLockHeldRecordsSkipWithoutRunningTheWorker(t *testing.T) {
 }
 
 func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), nil)
+	jobDir := realCwd(t, "job")
+	h, key := setupJob(t, jobDir, nil)
 	fc := failingCrontab{listErr: jsonErr("crontab list failed (exit 1): PAM: user not authorized")}
 	err := sched.RunJob(key, sched.RunOpts{
 		Home:      h.home,

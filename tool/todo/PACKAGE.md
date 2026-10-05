@@ -4,22 +4,19 @@
 
 Adapts `store/todo` to the loop's tool surface: session attribution from
 the threaded ctx; replies exactly as the store shapes them. The adapter
-owns one question: *whose queue is this call*, answered in a fixed order
-and nowhere else —
+owns one question: *whose queue is this call*, answered by the required
+`scope` and nowhere else — the reserved word `global` for the global
+queue (`store/todo.Global`), otherwise a project directory resolved
+through `store/todo.ProjectOf` (`scope.Key`/`scope.Label` inside): a
+subdirectory and a second worktree reach the repo's one queue, a
+non-repo directory its own workspace. A call without `scope` refuses
+naming the rule — there is no cwd fallback and no session binding: the
+parameter is the binding, and a session that reads three repos names
+the scope each call means.
 
-1. the `project` field, if given: it resolves the queue (the workspace's
-   scope via `store/scope`, else the directory's own workspace). On a
-   write it then binds the session, once the action succeeded
-   (`→ bound to <label>`); on a `read` it is a peek and the session stays
-   where it was; the `bind` action is the declaration and records
-   whatever the read does;
-2. else the session's recorded binding (`session_project`);
-3. else the launch directory's own workspace: inside a repo that is the
-   repo's queue, outside one the directory's, and writes land there.
-
-`~` is expanded at the `middleware/paths` boundary. Nothing is inferred
-from the paths a call names: a session that reads three repos keeps its
-plan in one queue.
+`~` is expanded at the `middleware/paths` boundary. The `start` and
+`claim` echoes carry `· scope <path>` (or `· scope global`) on the
+row's details, so the reply names where the work lives.
 
 ## What it includes
 
@@ -49,19 +46,13 @@ plan in one queue.
   numbering its plan wrote `requires: "1"`, was refused, and fell back to
   one create per task. The `not found` refusal names the link forms once.
   `null` clears an existing link.
-- `project` is resolved through `store/todo.ProjectOf` (`scope.Key`/
-  `scope.Label` inside): a subdirectory and a second worktree reach the
-  repo's one queue, a non-repo directory its own workspace. Naming it on a
-  write binds the session — so a session launched in `~` can work one
-  workspace's queue by naming it once — while naming it on a read just
-  reads: an agent glancing at a neighbour's queue does not move its own
-  plan. A failed write changes nothing, the binding included; `bind` with
-  no project reports where the queue is and touches nothing.
-- Outside a repo a bare write lands in the directory's own workspace:
-  every session started there shares the queue, and claim is the door. A
-  session with no id at all (`anon`) binds nothing: the attribution is
-  shared, so a binding under it would leak one caller's project onto
-  another's.
+- Outside a repo a scope'd write lands in the directory's own workspace:
+  every session working there shares the queue, and claim is the door. A
+  session with no id at all (`anon`) attributes to the shared `anon`, so
+  no caller's claim leaks onto another's.
+- The `scope` parameter is per call: nothing in the session moves when a
+  call names another workspace, and the operator moves the session itself
+  with `/project <path>` (`command`), not with a todo call.
 - `prune` is the door for the done rows the summary keeps counting; the
   log keeps them.
 - Complete on your own unclaimed pending task implicitly claims and

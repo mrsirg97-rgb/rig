@@ -123,3 +123,18 @@ func TestScopeResolvesSymlinksToOneKey(t *testing.T) {
 		t.Fatalf("the scope path must be the real path: %q", Path(real))
 	}
 }
+
+func TestGlobalIsAFixedKeyNeverAHash(t *testing.T) {
+	if Key(Global) != Global {
+		t.Fatalf("the reserved word is the fixed global key, got %q", Key(Global))
+	}
+	if Key(Global) == ShortHash(Global) {
+		t.Fatal("global must never be hashed")
+	}
+	if Path(Global) != Global {
+		t.Fatalf("the reserved word must not be git-probed, got %q", Path(Global))
+	}
+	if Label(Global) != "global" {
+		t.Fatalf("the global label is global, got %q", Label(Global))
+	}
+}

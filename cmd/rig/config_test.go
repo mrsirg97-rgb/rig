@@ -310,7 +310,7 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 		for _, m := range req.Messages {
 			if m.Role == "user" {
 				foundUser = true
-				if m.Content != "say hi"+sched.ReportBack {
+				if m.Content != "say hi"+sched.ReportBack(workDir) {
 					t.Fatalf("the worker's prompt = %q, want the job prompt plus the report-back directive", m.Content)
 				}
 			}
@@ -322,6 +322,8 @@ func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
 			t.Fatalf("the worker's model = %q, want the job's model (the argv's -model)", req.Model)
 		}
 
+		escaped := strings.ReplaceAll(sched.ReportBack(workDir), "\n", `\n`)
+		got = bytes.Replace(got, []byte(escaped), []byte(strings.ReplaceAll(sched.ReportBack("WORKDIR"), "\n", `\n`)), 1)
 		goldenCheckSession(t, "runjob.json", got, workDir, scratch)
 	})
 }

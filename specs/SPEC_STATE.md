@@ -242,9 +242,10 @@ dir is its own root, so the path alone cannot tell it from a plain
 directory and the probe asks (`scope.Bare`): a bare repo is a repo of
 its own, never the cwd workspace. Outside a repo that hash is the
 directory's own workspace: a place every session started there shares,
-and claim is the door. Which queue a session writes to is its binding —
-`project` (a path naming another workspace) — decided in the open,
-never inferred from the paths a call happens to name (see the binding
+and claim is the door. Which queue a call acts on is the required
+`scope` parameter (2.12.0) — the reserved word `global` or a path
+naming another workspace — decided in the open, never inferred from the
+process cwd or the paths a call happens to name (see the scope
 decision).
 
 - `meta`: key (primary), value.
@@ -258,14 +259,10 @@ decision).
   a task carries one edge per kind), depends_on, created_seq — both sides
   link tasks within one scope.
 - `extra.sql`: `tasks_pos_seq` index on (scope, pos, created_seq): the unique
-  index on (scope, text), and `session_project`: session_id (primary), scope,
-  label, outside_repo, bound_at — the session's queue binding, keyed by
-  session because the question is whose queue this session is in, and the
-  answer must survive a resume from another directory. Mutable state beside
-  the log, like `meta`: the log is the queue's spine, the binding only says
-  which spine a call reads. An anonymous call (`anon`, no session row) binds
-  nothing: the attribution is shared, so a binding recorded under it would
-  leak one caller's project onto another's.
+  index on (scope, text). The `session_project` table (the session's queue
+  binding, 1.3.3–2.11.x) is gone in 2.12.0: the required `scope` parameter
+  is the binding, and the table — created by extra.sql before it, left in
+  place on stores that carry it — is read by nothing.
 - Semantics kept verbatim, per scope: projection rebuilt from the log on
   every call and never trusted; replay is total and skips inapplicable rows;
   positions minted never mutated; move via events; claim semantics (start
@@ -330,8 +327,9 @@ decision).
 - Every reply names the queue it speaks for: the summary leads with
   `[<label>]` for every workspace, and the empty
   reply still says `(no tasks in <label>'s queue)` (SPEC_CORE's naming rule).
-  A queue reached by binding is not the one the process started next to, and
-  a reply that could be read either way carries the word that picks one. The
+  A queue other than the workspace rig started next to is reached by naming
+  the scope, and a reply that could be read either way carries the word that
+  picks one. The
   unknown-id refusal names the queue it looked in (`no task 't7' in rig
   (…)`): ids are `tN` per scope, so an id carried over from another project's
   reply is the likeliest reason it does not match here.
@@ -439,20 +437,23 @@ decision).
   is context, not memory (SPEC_COMPACT 6, cut), and nothing is read into
   the prompt by a session start (the root's remembered segment, cut; the
   system prompt names the rule).
-- **The project a fact belongs to is a choice, not an accident of where
-  rig started.** The model says the project the way it already says
-  scope: `project` is a path on learn/reflect/recall/prune, resolved
-  through `store/scope` and replacing the session cwd in
-  `writeScope`/`readScopes` for that call (worktree-safe; `~` expands at
-  the `middleware/paths` boundary). The why is the failure it fixes: a
-  session in `~/Projects` learning about `~/Projects/rig` files facts
-  into a scope nobody recalls from inside the repo; the directory rig
-  happened to start in, not the repo the fact describes. `project` +
-  `scope: global` refuses by name (a global memory has no project), and
-  the label stays the resolved path's base name. The description carries
-  one Guidelines clause: name `project` when the fact belongs to a repo
-  you did not start in (mind the menu-budget case; the clause is short
-  by design).
+- **The scope a call acts on is a parameter, never a guess (2.12.0).**
+  Both tools' calls carry the required `scope`: the reserved word
+  `global` or a project directory path, resolved through `store/scope`
+  and replacing the session cwd in `writeScope`/`readScopes` for that
+  call (worktree-safe; `~` expands at the `middleware/paths` boundary).
+  The why is the failure it fixes: the session that started in `~`
+  guessed a project from the process cwd — `pack` found no map, `index`
+  refused the home — and the optional `project` argument the words
+  offered was one the model never passed. A call without `scope` refuses
+  naming the rule; there is no cwd fallback in either tool, and no
+  session binding: the parameter is the binding. A path recall searches
+  that project first and fills from global, as ever; a global write or
+  read is the global memory alone; rem's `index`/`pack` refuse `global`
+  by name (a map needs a directory). The label stays the resolved
+  path's base name (or `global`), and the `start`/`claim` echoes carry
+  `· scope <word>` on the row's details so the reply names where the
+  work lives.
 - **Scope is a repo identity, not a cwd.** scope = the absolute git common
   dir of the cwd (`git rev-parse --git-common-dir`, resolved against the
   cwd when git prints it relative; an echoed option or an empty line is
@@ -727,8 +728,8 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
 - **One transaction per tool call, serializable, opened in the adapter.**
   Not per turn, not per process. Cross-process safety (scheduler runner
   writing while a session reads) is WAL plus busy_timeout, as in pane.
-- **The queue a session works in is its binding, not its launch workspace
-  (1.3.3).** The lazy re-scope keyed the fix on the launch cwd and misses the
+- **The queue a call acts on is its scope parameter, not its launch workspace
+  (1.3.3, reworked 2.12.0).** The lazy re-scope keyed the fix on the launch cwd and misses the
   operator's shape: `rig` launched in `~`, working several repos by absolute
   path (or none at all: a ledger, an inbox). The measured result was 593
   finished tasks from six projects in one cwd workspace while the repo's own
@@ -736,27 +737,28 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   project. Rejected: deriving the scope from the paths a session edits (a
   session dips into a neighbour's files and its plan migrates under it);
   per-session queues with a shared view (the claim semantics need one queue
-  per workspace). So the scope is an explicit, sticky binding, resolved in one
-  order everywhere: the `project` a call names, else the session's binding,
-  else the launch cwd's own workspace (inside a repo that is the repo's
-  queue, outside one the directory's, and writes land there). Naming a
-  project binds according to what the call did: a **write** records the
-  binding once the action succeeds (a call that changed nothing changes no
-  one's queue, and its refusal already named the queue it tried), a **read**
-  is a peek that leaves the binding where it was, and `bind` — `/todo project
-  <path>` — is the declaration itself and records regardless. Rejected:
-  binding on every named call, which let a failed `complete t99` in another
-  project, or a glance at a neighbour's queue, move a session's own later
-  bare verbs. Chosen over inference because the plan belongs to a workspace
-  by the operator's word, not our guess — the same reason SPEC_UX 1
-  withdrew a create-side guard: the behaviour was fine, the guess about it
-  was not. `~` is a legal binding: the home directory is a workspace of its
-  own. Failure mode: a resume from any directory re-reads
-  the same binding, so a queue cannot move because a process started
-  elsewhere; the cost is one row of mutable state per session. The binding
-  is not derived state
-  (SPEC_STATE's rule): the log alone rebuilds every queue exactly; the
-  binding only decides which queue a call touches, never what it holds.
+  per workspace). The 1.3.3 answer — an explicit, sticky binding recorded in
+  `session_project`, resolved as the `project` a call names, else the
+  session's binding, else the launch cwd — still guessed: the optional
+  `project` argument was one the model never passed (three of five `rem`
+  calls in one live session failed on the cwd guess), and the sticky
+  binding moved a session without the operator's word. 2.12.0 makes the
+  scope a required parameter on every todo and rem call: the reserved word
+  `global` or a project directory path, resolved through `store/scope`
+  (`~` expands at the `middleware/paths` boundary), with no cwd fallback in
+  either tool and no session binding — the parameter is the binding. The
+  `start`/`claim` echoes carry `· scope <word>` on the row's details so
+  the reply names where the work lives, and the operator moves the session
+  itself with `/project <path>` (SPEC_COMMANDS 4), which rides the `new`
+  seam and carries that workspace's AGENTS.md. Chosen over inference
+  because the workspace a call acts on belongs to the caller's word, not
+  our guess — the same reason SPEC_UX 1 withdrew a create-side guard: the
+  behaviour was fine, the guess about it was not. `global` is a legal
+  scope: the reserved word is a fixed key in `store/scope`, never a hash
+  of a path, and the cwd-hash fallback stays for a real directory that is
+  not a repo. The log alone rebuilds every queue exactly
+  (SPEC_STATE's rule): the scope only decides which queue a call touches,
+  never what it holds.
 - **Session id.** `core.Session` gains an `ID string` (minted at
   `NewSession`, ULID-style time-ordered, stdlib `crypto/rand`); the recorder
   and todo's claim semantics attribute to it. This is the one `core/` change

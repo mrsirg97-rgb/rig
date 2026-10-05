@@ -403,13 +403,20 @@ func renderQueue(f *folded, session string, mode readMode, n int, label string) 
 	return b.String()
 }
 
-func echoTask(f *folded, session, id, note string) string {
+func echoTask(f *folded, session, id, note, scope string) string {
 	var b strings.Builder
 	if note != "" {
 		fmt.Fprintf(&b, "\u2192 %s\n", note)
 	}
 	if ts := f.tasks[id]; ts != nil {
-		b.WriteString(renderTask(f, ts, session))
+		line := lineOf(f, ts, session)
+		if scope != "" {
+			line += " \u00b7 scope " + scope
+		}
+		b.WriteString(line)
+		if count := noteCountLine(ts, false); count != "" {
+			b.WriteString("\n" + count)
+		}
 	}
 	b.WriteString("\n" + summaryOf(f, defaultShown(f)))
 	if foot := staleFooter(f); foot != "" {

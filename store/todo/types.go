@@ -28,6 +28,7 @@ type Project struct {
 	Key         string
 	Label       string
 	OutsideRepo bool
+	Dir         string
 }
 
 type CreateItem struct {

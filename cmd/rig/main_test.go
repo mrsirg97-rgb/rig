@@ -29,8 +29,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.11.12" {
-		t.Fatalf("Version = %q, want 2.11.12", Version)
+	if Version != "2.12.0" {
+		t.Fatalf("Version = %q, want 2.12.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -575,12 +575,88 @@ func TestApproveDialDoorRule(t *testing.T) {
 	}
 }
 
+func TestProjectMovesTheSessionToTheNamedWorkspace(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	other := t.TempDir()
+	jobAgents := "the other workspace's contract"
+	if err := os.WriteFile(filepath.Join(other, "AGENTS.md"), []byte(jobAgents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	launched, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(launched) })
+	marker := "the file only the moved process sees"
+	if err := os.WriteFile(filepath.Join(other, "workspace-marker"), []byte(marker), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := h.r.cwd
+	if _, err := h.r.newSession(context.Background(), other); err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if h.r.cwd != other {
+		t.Fatalf("the session's workspace must move, got %q want %q", h.r.cwd, other)
+	}
+	if got, err := os.Getwd(); err != nil || got != other {
+		t.Fatalf("the move must move the process, Getwd = %q, %v", got, err)
+	}
+	out, err := h.r.tools["bash"].Exec(context.Background(), json.RawMessage(`{"command":"cat workspace-marker"}`))
+	if err != nil || !strings.Contains(out, marker) {
+		t.Fatalf("a tool exec must run in the moved workspace, out = %q, %v", out, err)
+	}
+	if !strings.Contains(h.r.fullSystem, "The session's workspace is "+other) {
+		t.Fatalf("the system prompt must carry the moved workspace:\n%s", h.r.fullSystem)
+	}
+	if !strings.Contains(h.r.fullSystem, jobAgents) {
+		t.Fatalf("the moved session must carry that workspace's AGENTS.md:\n%s", h.r.fullSystem)
+	}
+	if _, err := h.r.newSession(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if h.r.cwd != other {
+		t.Fatalf("new must keep the workspace, got %q", h.r.cwd)
+	}
+	if got, err := os.Getwd(); err != nil || got != other {
+		t.Fatalf("new must keep the process, Getwd = %q, %v", got, err)
+	}
+	if h.r.cwd == before {
+		t.Fatalf("the workspace must have moved away from the launch dir %q", before)
+	}
+	if _, err := h.r.newSession(context.Background(), filepath.Join(other, "absent")); err == nil ||
+		!strings.Contains(err.Error(), "project: not a directory:") {
+		t.Fatalf("a non-directory must refuse by name, got %v", err)
+	}
+}
+
+func TestProjectRefusesToMoveWhenTheOldSessionCannotClose(t *testing.T) {
+	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
+	other := t.TempDir()
+	launched, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(launched) })
+	before := h.r.cwd
+	h.r.sdb.DB.Close()
+	_, err = h.r.newSession(context.Background(), other)
+	if err == nil || !strings.Contains(err.Error(), "new:") {
+		t.Fatalf("a close failure must refuse by name, got %v", err)
+	}
+	if got, err := os.Getwd(); err != nil || got != launched {
+		t.Fatalf("the process must not move when the old session cannot close, Getwd = %q, %v", got, err)
+	}
+	if h.r.cwd != before {
+		t.Fatalf("the workspace must not move when the old session cannot close, got %q", h.r.cwd)
+	}
+}
+
 func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	h.r.approveDefault = "manual"
 	h.r.askDoor = func(ctx context.Context, prompt string) bool { return true }
 	h.r.approve = "auto"
-	if _, err := h.r.newSession(context.Background()); err != nil {
+	if _, err := h.r.newSession(context.Background(), ""); err != nil {
 		t.Fatalf("newSession: %v", err)
 	}
 	if h.r.approve != "manual" {
@@ -632,7 +708,7 @@ func TestNewResetsDials(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
 	h.r.effort = "xhigh"
 	h.r.role = "architect"
-	if _, err := h.r.newSession(context.Background()); err != nil {
+	if _, err := h.r.newSession(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if h.r.effort != "" || h.r.role != "" {
