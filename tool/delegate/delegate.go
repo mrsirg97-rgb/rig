@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	outputCap          = 256 * 1024
-	defaultTimeout     = 10 * time.Minute
-	delegateTimeoutCap = 30 * time.Minute
+	outputCap = 256 * 1024
+
+	noTimeout = time.Duration(-1)
 )
 
 type Opts struct {
@@ -55,7 +55,7 @@ type Delegate interface {
 	tool.Definition
 	Exec(ctx context.Context, args json.RawMessage) (string, error)
 
-	Run(ctx context.Context, task, workspace, model string, timeoutMs int64) (string, error)
+	Run(ctx context.Context, task, workspace, model string) (string, error)
 }
 
 func New(o Opts) Delegate {
@@ -80,7 +80,6 @@ type args struct {
 	Task      string `json:"task"`
 	Workspace string `json:"workspace,omitempty"`
 	Model     string `json:"model,omitempty"`
-	TimeoutMs int64  `json:"timeoutMs,omitempty"`
 }
 
 func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -88,10 +87,10 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if err := strictDecode(data, &g); err != nil {
 		return "", fmt.Errorf("delegate: args: %w", err)
 	}
-	return a.Run(ctx, g.Task, g.Workspace, g.Model, g.TimeoutMs)
+	return a.Run(ctx, g.Task, g.Workspace, g.Model)
 }
 
-func (a *adapter) Run(ctx context.Context, task, workspace, model string, timeoutMs int64) (string, error) {
+func (a *adapter) Run(ctx context.Context, task, workspace, model string) (string, error) {
 	if strings.TrimSpace(task) == "" {
 		return "", errors.New("delegate: task is required")
 	}
@@ -114,13 +113,6 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string, timeou
 			return "", fmt.Errorf("delegate: %w", err)
 		}
 	}
-	timeout := defaultTimeout
-	if timeoutMs > 0 {
-		timeout = time.Duration(timeoutMs) * time.Millisecond
-		if timeout > delegateTimeoutCap {
-			timeout = delegateTimeoutCap
-		}
-	}
 
 	res, err := sched.Delegate(sched.DelegateInput{
 		DB:            a.DB,
@@ -136,13 +128,14 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string, timeou
 		Spawn:         a.Spawn,
 		WorkerCmd:     a.WorkerCmd,
 		SwapURL:       a.SwapURL,
-		Timeout:       timeout,
+		Timeout:       noTimeout,
 		Sandbox:       a.Sandbox,
 		SandboxBinds:  a.SandboxBinds,
 		RigHome:       a.RigHome,
 		StateDir:      a.StateDir,
 		Allow:         a.Allow,
 		Member:        member,
+		SpawnCtx:      ctx,
 	})
 	if err != nil {
 		return "", err
@@ -156,10 +149,7 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string, timeou
 	}
 	content += "\n" + trailer
 
-	switch {
-	case res.TimedOut:
-		return content, fmt.Errorf("delegate: the worker timed out after %s (process tree killed)", res.Duration.Round(time.Millisecond))
-	case res.Exit != 0:
+	if res.Exit != 0 {
 		return content, fmt.Errorf("delegate: the worker failed (exit %d)", res.Exit)
 	}
 	return content, nil

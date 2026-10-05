@@ -101,13 +101,13 @@ func (e jsonErr) Error() string { return string(e) }
 func jsonError(s string) error { return jsonErr(s) }
 
 type fakeSpawn struct {
-	mu       sync.Mutex
-	calls    []fakeCall
-	result   sched.SpawnResult
-	err      error
-	record   func()
-	block    <-chan struct{}
-	deadline time.Duration
+	mu          sync.Mutex
+	calls       []fakeCall
+	result      sched.SpawnResult
+	err         error
+	record      func()
+	block       <-chan struct{}
+	deadlineSet bool
 }
 
 type fakeCall struct {
@@ -125,13 +125,19 @@ func (f *fakeSpawn) count() int {
 	return len(f.calls)
 }
 
+func (f *fakeSpawn) hadDeadline() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.deadlineSet
+}
+
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	started := time.Now()
 	f.mu.Lock()
 	idx := len(f.calls)
 	f.calls = append(f.calls, fakeCall{Argv: argv, Env: env, Cwd: cwd, Ctx: ctx, Started: started})
-	if d, ok := ctx.Deadline(); ok {
-		f.deadline = time.Until(d)
+	if _, ok := ctx.Deadline(); ok {
+		f.deadlineSet = true
 	}
 	f.mu.Unlock()
 	if f.block != nil {
@@ -426,25 +432,6 @@ func TestDelegateNamedModelWhileAnotherResidentRefuses(t *testing.T) {
 	}
 }
 
-func TestDelegateTimeoutNamesItAndTheSpawnSawTheDeadline(t *testing.T) {
-	h := newHarness(t, "/ws/sess")
-	wd, _ := os.Getwd()
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 1, TimedOut: true, Stderr: "hung"}}
-	spawn.record = func() { seedSession(t, h.rigHome, wd) }
-	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "timeoutMs": 100})
-	out, err := tool.Exec(context.Background(), b)
-	if err == nil || !strings.Contains(err.Error(), "timed out") {
-		t.Fatalf("the timeout must be a named error: (%q, %v)", out, err)
-	}
-	if !strings.Contains(err.Error(), "process tree killed") {
-		t.Fatalf("the timeout error must name the kill: %v", err)
-	}
-	if spawn.deadline <= 0 || spawn.deadline > 200*time.Millisecond {
-		t.Fatalf("the spawn must carry the timeoutMs deadline, got %v", spawn.deadline)
-	}
-}
-
 func TestDelegateFanOutOnTwoFreeSlotsSpawnsBoth(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	block := make(chan struct{})
@@ -584,26 +571,13 @@ func TestDelegateCapsOutputWithTheSize(t *testing.T) {
 	}
 }
 
-func TestDelegateTimeoutCeilingStaysThirtyMinutes(t *testing.T) {
-	h := newHarness(t, "/ws/sess")
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}}
-	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	b, _ := json.Marshal(map[string]any{"task": "t", "timeoutMs": 7200000})
-	if _, err := tool.Exec(context.Background(), b); err != nil {
-		t.Fatalf("delegate: %v", err)
-	}
-	if spawn.deadline <= 29*time.Minute || spawn.deadline > 31*time.Minute {
-		t.Fatalf("the interactive timeout ceiling must stay 30 minutes, got %v", spawn.deadline)
-	}
-}
-
 func TestDelegateRunAndExecShareTheirChecks(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "the answer"}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
 	ctx := context.Background()
 
-	_, runErr := tool.Run(ctx, "   ", "", "", 0)
+	_, runErr := tool.Run(ctx, "   ", "", "")
 	_, execErr := tool.Exec(ctx, runArgs("   "))
 	if runErr == nil || execErr == nil {
 		t.Fatalf("a blank task refuses on both doors, run=%v exec=%v", runErr, execErr)
@@ -613,7 +587,7 @@ func TestDelegateRunAndExecShareTheirChecks(t *testing.T) {
 	}
 
 	outside := filepath.Join(t.TempDir(), "elsewhere")
-	_, runErr = tool.Run(ctx, "do the sweep", outside, "", 0)
+	_, runErr = tool.Run(ctx, "do the sweep", outside, "")
 	_, execErr = tool.Exec(ctx, json.RawMessage(`{"task":"do the sweep","workspace":"`+outside+`"}`))
 	if runErr == nil || execErr == nil {
 		t.Fatalf("a workspace outside the session's cwd and the rig home refuses on both doors, run=%v exec=%v", runErr, execErr)

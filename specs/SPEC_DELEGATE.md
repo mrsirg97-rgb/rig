@@ -18,6 +18,14 @@ per-session flocks are retired — the worker model resolves at claim
 time (the resident model, else the session's default) and the gate is
 the live free-slot read; decision 6's slot bounds below are historical.
 
+**Amended in 2.12.7 (a delegate has no clock)**: `timeoutMs` leaves the
+tool — the schema, the defaults and the timed-out voice with it. The
+spawn context is the turn's context, so a worker lives until it exits
+or the turn is interrupted, and the worker's silence is shown in the
+indicator's swarm row rather than killed. The scheduler's own callers
+(`run-job`'s per-job timeout, the review fire) keep theirs; decision 1
+carries the rule and the evidence.
+
 ## what it is not (named)
 
 - **Not a distributed work queue.** The "notify the workers and the
@@ -54,9 +62,9 @@ the live free-slot read; decision 6's slot bounds below are historical.
   tool result names that session id so the operator can
   `sessions resume <id>` it.
 - The result is the worker's last assistant message, capped the way
-  bash output is capped, plus one trailer line. A failed or timed-out
-  worker is a tool error naming which; a timeout kills the worker's
-  process tree.
+  bash output is capped, plus one trailer line. A failed worker is a
+  tool error naming its exit; an interrupted turn ends the turn and
+  kills the worker's process tree.
 
 ## non-goals
 
@@ -64,7 +72,7 @@ the live free-slot read; decision 6's slot bounds below are historical.
   grab-the-fire model is the cron runner's, and the interactive turn
   needs a synchronous result (see what it is not).
 - No async returns, no out-of-band results: the delegate blocks the
-  turn until the worker finishes or times out.
+  turn until the worker finishes or the turn is interrupted.
 - No fan-out inside a call: one worker per call, no parallel
   sub-delegates (fan-out is N calls in one turn, bounded by the
   fleet's slots).
@@ -82,10 +90,8 @@ the live free-slot read; decision 6's slot bounds below are historical.
   "type": "object",
   "properties": {
     "task":       {"type": "string"},
-    "cwd":        {"type": "string"},
-    "model":      {"type": "string"},
-    "timeoutMs":  {"type": "integer", "minimum": 1},
-    "stallMs":    {"type": "integer", "minimum": 1}
+    "workspace":  {"type": "string"},
+    "model":      {"type": "string"}
   },
   "required": ["task"]
 }
@@ -100,18 +106,39 @@ the live free-slot read; decision 6's slot bounds below are historical.
   fleet): the worker row, exactly as `scheduler create` defaults. The
   fleet's model is a row of the operator's models table; there is no
   fallback baked into the binary.
-- `timeoutMs` (default 10 minutes): capped at 30 minutes by the
-  tool, the ceiling named; a larger value clamps to it. The timeout
-  bounds the work an untrusted caller can induce. The seam's own
-  ceiling is the scheduler's 24h spend bound (`maxDelegateTimeout`),
-  so a trusted caller — the swarm — passes a 2h budget of its own.
-- `stallMs` (default 0 = off): the silence window, the scheduler's
-  stall kill (1.3.8) at the delegate seam. A worker that writes
-  nothing for longer than the window is killed as hung, its stderr
-  naming the reason, the result marked `Stalled`; the timeout stays
-  the spend ceiling, so a worker still producing output is never
-  killed for the clock. Off by default: the interactive delegate
-  keeps its plain timeout unless the caller sets a window.
+- The tool has no clock (2.12.7). `timeoutMs` is off the schema, the
+  seam takes no default, and the spawn context is the turn's context:
+  a worker lives until it exits or the turn is interrupted, and the
+  interrupt's process-group cancel takes the whole tree down with it
+  (decision 2). A timeout on a fan-out seam guesses how long the work
+  should take, and under a shared slot the guess is always wrong for
+  someone: a ten-way fan-out of test-pass reads on a one-slot model on
+  2026-10-05 lost its tail worker at 1500.3s to `the worker timed out
+  after 25m0.003s (process tree killed)`, the clock started at spawn,
+  so it measured the nine ahead of it in the server's queue rather
+  than the work. Waiting was right — *extras wait for a slot rather
+  than failing* — and a clock turned the wait into a death sentence on
+  a schedule. What bounds an induced worker is the turn that asked for
+  it and the operator's hand on the interrupt; neither needs a guess
+  at a duration.
+- Silence is shown, never acted on: the indicator's swarm row carries
+  each worker's heartbeat age (SPEC_SWARM 7), so a worker that has
+  written nothing for ten minutes reads as one in the band and the
+  operator ends the turn. The stall kill (1.3.8) stays exactly where
+  it was and is not a clock on the work: it is the runner's per-job
+  `stall` window (minutes), an opt-in operator setting that speaks
+  about a process that has written nothing for the window, never about
+  how long a worker may run. The interactive delegate carries no
+  window — `stallMs` left the schema with the 2.6.0 send-and-wait gate,
+  which queues at the server and would shoot a worker for waiting —
+  and gains none here.
+- `DelegateInput.Timeout` stays for the scheduler's own callers: a
+  positive value is the fire's spend bound, capped at the seam's 24h
+  (`maxDelegateTimeout`), exactly as a `run-job` fire carries its
+  per-job `timeout` in minutes; the runner and its default are
+  untouched. A negative value runs the worker on the caller's context
+  alone, which is what the delegate tool passes, beside the review
+  fire and the swarm.
 - The tool registers only when the fleet is configured (SPEC_CONFIG
   12's presence rule): no `workers.json`, no `delegate` on the wire:
   there is no worker to spawn, and a tool that can only refuse is
@@ -143,8 +170,10 @@ seam, reusing the exact pieces `run-job` uses:
   eviction from inside a turn. A busy-check failure (uncertain GPU
   state) fails closed the same way, naming the failed check.
 - **The spawn**: `RealSpawn` (`CommandContext`, Setpgid, the SIGKILL
-  process-group cancel); a timeout kills the worker's process tree,
-  and an interrupted turn (the turn ctx dies) kills it the same way.
+  process-group cancel). The context handed it is the turn's (2.12.7):
+  an interrupted turn kills the worker's process tree, and a caller
+  that gives the fire its own spend ceiling kills it the same way when
+  the ceiling expires. Nothing else kills it.
 
 The worker prompt is `task + ReportBack` (`ReportBack`, the runner's
 standing directive), exactly the prompt `run-job` builds. The worker
@@ -215,11 +244,11 @@ is that text, capped the way bash output is capped: the loud
 
     delegate: exit N · 123ms · session <id> · log <rel path>
 
-A failed, stalled, or timed-out worker is a tool error naming which:
-`delegate: the worker failed (exit N): <last message>` /
-`delegate: the worker stalled after <dur> (process tree killed):
-<last message>` / `delegate: the worker timed out after <dur>
-(process tree killed): <last message>`. The trailer still rides the
+A failed worker is a tool error naming its exit:
+`delegate: the worker failed (exit N)`. A worker killed by an
+interrupt dies with the turn, its run records `canceled`, and the tool
+answers while the turn ends. There is no timeout voice: the tool has
+no clock (decision 1). The trailer still rides the
 error, so the operator always has the session id and log path.
 
 ### 6. Bounds, named
@@ -247,8 +276,9 @@ error, so the operator always has the session id and log path.
   server, not by rig; the one read at dispatch refuses only a model
   that is not resident. `Stall` retires with the stall kill: a
   queued worker writes nothing and the silence kill would shoot it;
-  the timeout stays the spend ceiling. `Observe` and `SpawnCtx`
-  stay as amended below.
+  the timeout stays the spend ceiling until 2.12.7 takes it out of the
+  tool too, leaving the turn as the only bound. `Observe` and
+  `SpawnCtx` stay as amended below.
 
 - **Four swarm amendments (SPEC_SWARM)**, all defaulted to today's
   behavior. `WaitBusy` (false): a busy GPU is waited on — the busy
@@ -258,12 +288,12 @@ error, so the operator always has the session id and log path.
   worker's member in the session's room (2.11.0); with one, the spawn
   gets the fleet pipe and every frame the child sends is published as
   the worker. `SpawnCtx` (Background): the
-  base context the spawn timeout wraps, so a swarm stop kills the
-  in-flight worker instead of leaving it to its timeout. `Stall` (0):
-  the silence window, wired to the same stall watch the runner uses
-  and touched by the `Observe` stream; the swarm sets 10m beside a 2h
-  spend ceiling, so a worker keeps its slot while it writes and a
-  silent one is gone in ten minutes.
+  base context the spawn runs on, so a swarm stop kills the in-flight
+  worker with it — since 2.12.7 that is the whole of it, the tool's
+  spawn context is the turn's and there is no timeout to leave a
+  worker to. The seam has no silence window: `Stall` left it with the
+  2.6.0 retirement above, and the silence kill is the runner's per-job
+  `stall`, which no delegate sets.
 - **The status Observe (SPEC_SWARM 7)**: the tool gains an optional
   `Notify` seam (nil = silent, today's behavior); with it, an
   interactive delegate emits a `core.SwarmStatus` snapshot on start,
@@ -315,15 +345,17 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
 - **The busy refusal**: a held GPU refuses loudly naming the holder
   (busy:skip; never an eviction); a busy-check failure fails closed
   naming the failed check.
-- **The timeout kill**: a `timeoutMs`-deadline spawn returns a
-  timed-out result; the error names the timeout, and the fake
-  `Spawn` saw the deadline kill.
-- **The stall kill**: with `Stall` set, a spawn silent past the
-  window is killed as stalled (`Stalled`, the stderr and the run log
-  naming the reason), while one still writing finishes and carries
-  the caller's 2h deadline — the seam's ceiling never clamps it to
-  the runner's 30-minute default. The interactive `stallMs` stays off
-  by default, and its `timeoutMs` ceiling stays 30 minutes.
+- **No clock on the work**: the spawn context carries no deadline, a
+  worker still working past the old ten-minute default returns its
+  message, and a call carrying `timeoutMs` refuses as an unknown
+  field.
+- **The interrupt takes the tree**: cancelling the caller's context
+  cancels the spawn context, and over the real `RealSpawn` (`Setpgid`)
+  both the worker and the child it backgrounded are gone by the time
+  the turn ends.
+- **The silence window is the runner's**: the stall kill has no test
+  here because the tool sets no window; the per-job `stall` cases are
+  `store/scheduler`'s.
 - **The fan-out overlap**: `slots` 3: three concurrent Execs run, and
   the spawn seam's timestamps prove the three spawns overlap.
 - **The one-slot sequence**: `slots` 1: three concurrent Execs run
