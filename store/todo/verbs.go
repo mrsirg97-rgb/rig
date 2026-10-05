@@ -12,9 +12,12 @@ import (
 	"time"
 )
 
-func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, session string) (string, error) {
+func Create(ctx context.Context, db store.DB, p Project, item CreateItem, session string) (string, error) {
 	if session == "" {
 		session = anon
+	}
+	if item.Text == "" {
+		return "", fmt.Errorf("todo: text required")
 	}
 	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
@@ -22,17 +25,12 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 			return "", e
 		}
 		before := renderQueue(f, session, modePresent, 0, p.Label)
-		modified, given, fresh, problems := planCreate(f, items)
+		modified, note, problems := planCreate(f, item)
 		if len(problems) != 0 {
 			sort.Strings(problems)
 			return "", fmt.Errorf("todo: %s%s\n%s", strings.Join(problems, "; "), linkFormsHint(problems), before)
 		}
-		note := mergeNote(given, fresh)
-		if len(items) == 0 {
-			f.tasks = map[string]*taskState{}
-			note = "queue cleared"
-		}
-		args, _ := json.Marshal(map[string]any{"tasks": asGiven(items)})
+		args, _ := json.Marshal(asGiven(item))
 		seq := f.nextSeq()
 		if _, e := appendEvent(bound, seq, "create", string(args), session, p.Key); e != nil {
 			return "", e
@@ -46,19 +44,6 @@ func Create(ctx context.Context, db store.DB, p Project, items []CreateItem, ses
 		}
 		return withFoot(replyText(f, session, note, modePresent, 0, p.Label), foot), nil
 	})
-}
-
-func mergeNote(given, fresh int) string {
-	switch {
-	case given == 0:
-		return "queue unchanged: no task text given"
-	case fresh == 0:
-		return "queue merged: nothing new"
-	case given-fresh == 0:
-		return "queue merged: " + strconv.Itoa(fresh) + " new"
-	default:
-		return "queue merged: " + strconv.Itoa(fresh) + " new, " + strconv.Itoa(given-fresh) + " already there"
-	}
 }
 
 func Start(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {

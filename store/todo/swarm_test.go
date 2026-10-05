@@ -14,7 +14,7 @@ import (
 func TestClaimTakesTheFirstUnblockedPendingTask(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")}, {Text: "later"},
 	}, sessA)
 	if err != nil {
@@ -46,7 +46,7 @@ func TestClaimTakesTheFirstUnblockedPendingTask(t *testing.T) {
 func TestClaimRepliesNothingToDoWhenAllBlocked(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")},
 	}, sessA)
 	if err != nil {
@@ -79,7 +79,7 @@ func TestClaimOnAnEmptyQueueRepliesNothingToDo(t *testing.T) {
 func TestClaimRepliesNothingToDoWhenOnlyFailedTasks(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "broken"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "broken"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestClaimRepliesNothingToDoWhenOnlyFailedTasks(t *testing.T) {
 func TestClaimAppendsOneClaimEventForTheSession(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "taken"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "taken"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestClaimAppendsOneClaimEventForTheSession(t *testing.T) {
 func TestConcurrentClaimExactlyOneSessionWins(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "one task"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "one task"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestConcurrentClaimExactlyOneSessionWins(t *testing.T) {
 func TestClaimWithReviewFilterTakesTheFirstUnownedReviewTask(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "ready"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "ready"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestClaimWithReviewFilterTakesTheFirstUnownedReviewTask(t *testing.T) {
 func TestClaimReviewSkipsTasksAlreadyHeld(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "one"}, {Text: "two"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "one"}, {Text: "two"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestClaimReviewSkipsTasksAlreadyHeld(t *testing.T) {
 func TestClaimReviewWithNoReviewTasksRepliesNothingToDo(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "pending"}}, sessA); err != nil {
+	if _, err := create(ctx, db, p, []item{{Text: "pending"}}, sessA); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	claimed, err := todostore.Claim(ctx, db, p, sessA, "review")
@@ -273,7 +273,7 @@ func TestClaimRefusesAnUnknownStatusFilter(t *testing.T) {
 func TestNoteAppendsAndReadShowsNotesInOrderWithTheirSession(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "shared work"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "shared work"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestNoteAppendsAndReadShowsNotesInOrderWithTheirSession(t *testing.T) {
 func TestNoteOnATaskYouDoNotHoldIsAllowed(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "theirs"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "theirs"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestNoteOnATaskYouDoNotHoldIsAllowed(t *testing.T) {
 func TestNoteMustNameATask(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "here"}}, sessA); err != nil {
+	if _, err := create(ctx, db, p, []item{{Text: "here"}}, sessA); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if _, err := todostore.Note(ctx, db, p, "t99", "hello", sessA); err == nil {
@@ -343,7 +343,7 @@ func TestNoteMustNameATask(t *testing.T) {
 func TestNoteRefusesEmptyAndOverlongText(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "here"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "here"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestNoteRefusesEmptyAndOverlongText(t *testing.T) {
 func TestNoteSurvivesCompaction(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "remembered"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "remembered"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestNoteSurvivesCompaction(t *testing.T) {
 func TestCompleteMovesActiveToReview(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "done enough"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "done enough"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestCompleteMovesActiveToReview(t *testing.T) {
 func TestCompleteOnOwnClaimSubmitsForReview(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "quick"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "quick"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -443,7 +443,7 @@ func TestCompleteOnOwnClaimSubmitsForReview(t *testing.T) {
 func TestWorkerModeRefusesUnclaimedStartCompleteFail(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "board entry"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "board entry"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestWorkerModeRefusesUnclaimedStartCompleteFail(t *testing.T) {
 func TestWorkerModeRefusesForeignStartCompleteFail(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "supervisor's"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "supervisor's"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestWorkerModeRefusesForeignStartCompleteFail(t *testing.T) {
 func TestCompleteOnAReviewTaskRefuses(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "twice"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "twice"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -525,7 +525,7 @@ func TestCompleteOnAReviewTaskRefuses(t *testing.T) {
 func TestStartOnAReviewTaskRefuses(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "held"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "held"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -546,7 +546,7 @@ func TestStartOnAReviewTaskRefuses(t *testing.T) {
 func TestFailOnAReviewTaskRefuses(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "broken"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "broken"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -567,7 +567,7 @@ func TestFailOnAReviewTaskRefuses(t *testing.T) {
 func TestAcceptMovesReviewToDone(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "accepted"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "accepted"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -596,7 +596,7 @@ func TestAcceptMovesReviewToDone(t *testing.T) {
 func TestAcceptAutoClaimsAnUnownedReviewTask(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "parent approved"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "parent approved"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -640,7 +640,7 @@ func TestAcceptAutoClaimsAnUnownedReviewTask(t *testing.T) {
 func TestAcceptStillRefusesAForeignHold(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "held"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "held"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -667,7 +667,7 @@ func TestAcceptStillRefusesAForeignHold(t *testing.T) {
 func TestAcceptOnNonReviewRefuses(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "active"}, {Text: "done"}, {Text: "failed"}, {Text: "unclaimed review"}, {Text: "pending"},
 	}, sessA)
 	if err != nil {
@@ -724,7 +724,7 @@ func TestAcceptOnNonReviewRefuses(t *testing.T) {
 func TestRejectMovesReviewToPendingAndNotesTheReason(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "needs work"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "needs work"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -760,7 +760,7 @@ func TestRejectMovesReviewToPendingAndNotesTheReason(t *testing.T) {
 func TestRejectAutoClaimsAndLeavesTheReasonAsTheNextBrief(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "write the parser"}, {Text: "held reject"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "write the parser"}, {Text: "held reject"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -816,7 +816,7 @@ func TestRejectAutoClaimsAndLeavesTheReasonAsTheNextBrief(t *testing.T) {
 func TestBlockedByClearsOnlyOnDone(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "gate"}, {Text: "work", Requires: ptrTo("gate")},
 	}, sessA)
 	if err != nil {
@@ -852,7 +852,7 @@ func TestBlockedByClearsOnlyOnDone(t *testing.T) {
 func TestPruneDropsDoneOnly(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "accepted"}, {Text: "failed"}, {Text: "in review"}, {Text: "pending"},
 	}, sessA)
 	if err != nil {
@@ -906,7 +906,7 @@ func TestPruneDropsDoneOnly(t *testing.T) {
 func TestReleaseFreesAStaleReviewClaimKeepingTheStatus(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "released"}, {Text: "reaped"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "released"}, {Text: "reaped"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -950,7 +950,7 @@ func TestReleaseFreesAStaleReviewClaimKeepingTheStatus(t *testing.T) {
 func TestReleaseOnAReviewTaskRefusesOwnUnclaimedAndFresh(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "mine"}, {Text: "fresh"}, {Text: "open"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "mine"}, {Text: "fresh"}, {Text: "open"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -991,7 +991,7 @@ func TestReleaseOnAReviewTaskRefusesOwnUnclaimedAndFresh(t *testing.T) {
 func TestReplayAcrossClaimNoteRejectAccept(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "ship it"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "ship it"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -1066,7 +1066,7 @@ func TestReplayAcrossClaimNoteRejectAccept(t *testing.T) {
 func TestNotesAndReviewSurviveCompaction(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "review me"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "review me"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -1112,7 +1112,7 @@ func TestNotesAndReviewSurviveCompaction(t *testing.T) {
 func TestSummaryCountsTasksInReview(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "awaiting"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "awaiting"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -1135,7 +1135,7 @@ func TestSummaryCountsTasksInReview(t *testing.T) {
 func TestSoloCompleteLandsDoneInOneCall(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "solo finish"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "solo finish"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -1166,7 +1166,7 @@ func TestSoloCompleteLandsDoneInOneCall(t *testing.T) {
 func TestSoloCompleteOnOwnPendingAutoStartsAndLandsDone(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "instant"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "instant"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -1203,7 +1203,7 @@ func TestSoloCompleteOnOwnPendingAutoStartsAndLandsDone(t *testing.T) {
 func TestWorkerCompleteLandsInReviewAndTheParentsAcceptFinishesIt(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "delegated work"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "delegated work"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

@@ -140,11 +140,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 		if len(fields) == 1 {
 			return json.RawMessage(`{"action":"create"}`), nil
 		}
-		text := strings.TrimSpace(args[len("create"):])
-		return json.Marshal(map[string]any{
-			"action": "create",
-			"tasks":  []map[string]any{{"text": text}},
-		})
+		return json.Marshal(map[string]any{"action": "create", "text": strings.TrimSpace(args[len("create"):])})
 	case fields[0] == "claim" && len(fields) == 1:
 		return json.RawMessage(`{"action":"claim"}`), nil
 	case fields[0] == "claim" && len(fields) == 2 && fields[1] == "review":

@@ -51,7 +51,7 @@ func TestQueueReadsIdenticallyAcrossRepoSubdirAndWorktree(t *testing.T) {
 	}
 	db := newDB(t)
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, proj(repo), []item{{Text: "shared plan"}}, "s1"); err != nil {
+	if _, err := create(ctx, db, proj(repo), []item{{Text: "shared plan"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	for _, cwd := range []string{repo, sub, wt} {
@@ -75,7 +75,7 @@ func TestNonRepoDirKeepsItsOwnQueue(t *testing.T) {
 	d2 := filepath.Join(t.TempDir(), "two")
 	os.MkdirAll(d1, 0o755)
 	os.MkdirAll(d2, 0o755)
-	if _, err := todostore.Create(ctx, db, proj(d1), []item{{Text: "only in one"}}, "s1"); err != nil {
+	if _, err := create(ctx, db, proj(d1), []item{{Text: "only in one"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	reply, err := todostore.Read(ctx, db, proj(d2), "")
@@ -95,10 +95,10 @@ func TestIdsArePerScope(t *testing.T) {
 	ctx := context.Background()
 	pA := todostore.Project{Key: "scope-a", Label: "a"}
 	pB := todostore.Project{Key: "scope-b", Label: "b"}
-	if _, err := todostore.Create(ctx, db, pA, []item{{Text: "a-one"}, {Text: "a-two"}}, "s1"); err != nil {
+	if _, err := create(ctx, db, pA, []item{{Text: "a-one"}, {Text: "a-two"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Create(ctx, db, pB, []item{{Text: "b-one"}}, "s1"); err != nil {
+	if _, err := create(ctx, db, pB, []item{{Text: "b-one"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	ra, err := todostore.Read(ctx, db, pA, "s1")
@@ -269,7 +269,7 @@ func TestReviewMigrationPairsHistoricalCompletesWithAccepts(t *testing.T) {
 		t.Fatalf("open v2: %v", err)
 	}
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, seed, p, []item{
+	reply, err := create(ctx, seed, p, []item{
 		{Text: "pruned"}, {Text: "active"}, {Text: "kept done"}, {Text: "pending"},
 	}, "s1")
 	if err != nil {
@@ -326,7 +326,7 @@ func TestReviewMigrationPairsHistoricalCompletesWithAccepts(t *testing.T) {
 		}
 		ops = append(ops, op)
 	}
-	want := []string{"create", "start", "complete", "accept", "prune", "claim", "start", "complete", "accept"}
+	want := []string{"create", "create", "create", "create", "start", "complete", "accept", "prune", "claim", "start", "complete", "accept"}
 	if strings.Join(ops, ",") != strings.Join(want, ",") {
 		t.Errorf("event order = %v, want %v", ops, want)
 	}
@@ -374,7 +374,7 @@ func TestEdgeMigrationRebuildsTheProjection(t *testing.T) {
 		t.Errorf("migration report = %q", report)
 	}
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, p, []item{
+	if _, err := create(ctx, db, p, []item{
 		{Text: "gate"},
 		{Text: "work", Requires: ptrTo("gate")},
 		{Text: "tail", Blocks: ptrTo("work")},

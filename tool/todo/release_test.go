@@ -32,7 +32,7 @@ func TestReleaseIsAStateVerbAndNeedsAnID(t *testing.T) {
 func TestReleaseRefusesAFreshForeignClaimThroughTheTool(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	ctx := context.Background()
-	created, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "wire the guard"}}})
+	created, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "wire the guard"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

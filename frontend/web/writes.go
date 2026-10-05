@@ -37,19 +37,18 @@ func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "no tasks (one per line)")
 		return
 	}
-	items := make([]todostore.CreateItem, 0, len(lines))
-	for _, l := range lines {
-		items = append(items, todostore.CreateItem{Text: l})
-	}
 	db, err := s.stores.todo(cwd)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	reply, err := todostore.Create(ctx, db, todoProject(cwd), items, sessionName)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
+	var reply string
+	for _, l := range lines {
+		reply, err = todostore.Create(ctx, db, todoProject(cwd), todostore.CreateItem{Text: l}, sessionName)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }

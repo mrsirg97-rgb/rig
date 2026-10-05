@@ -20,12 +20,19 @@ row's details, so the reply names where the work lives.
 
 ## What it includes
 
-- `Tool`: a `core.Tool` over the todo store's verbs, including the
-  1.3.9 swarm surface: `claim`, `note`, `notes`, `accept`, `reject` and
-  the `status: review` claim filter. `New` takes a `Mode` set once in
-  main.go from the frontend kind (`-p` is a worker, everything else is
-  interactive): it is the gate's switch, passed to the store's
-  `Complete` as the worker flag.
+- `Todo`: the tool as its interface (2.12.4), the template for every
+  native tool. It embeds `tool.Definition` (the words), declares `Exec`
+  (the one JSON door) and one typed method per verb: `Create(ctx, scope,
+  item)`, `Claim`, `Start`, `Complete`, `Fail`, `Release`, `Retry`,
+  `Move`, `Prune`, `Read`, `ReadAll`, `ReadOne`, `Finished`, `Note`,
+  `Notes`, `Accept`, `Reject`, each taking the scope and the verb's own
+  fields and reading the session from the ctx. `Exec` decodes the call
+  and routes it; it holds no logic of its own, so a Go caller and the
+  model reach the same verb through the same checks. The struct is
+  unexported and `New` returns the interface. `New` takes a `Mode` set
+  once in main.go from the frontend kind (`-p` is a worker, everything
+  else is interactive): the board verbs refuse in a worker, and the
+  store's `Complete` gets the worker flag.
 
 ## How it is consumed
 
@@ -35,16 +42,16 @@ row's details, so the reply names where the work lives.
 
 - Replies are the store's shapes, verbatim: the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
-- The link fields are `id (tN) | exact text | position | null`; an empty
-  string is the same as omitting the field (no edge, no refusal), because
-  a model filling every field with `requires: ""` was refused with `not
-  found` and then believed a link needed a second call. A link may name a
-  sibling task's exact text in the same create: `resolveDep` runs over
-  the batch, so one create of `{text: "gate"}` and `{text: "work",
-  requires: "gate"}` links t2 to t1. A bare number, as a JSON number or a string (2.11.9), is the sibling's
-  1-based position in that create, tried last (2.1.9): a small model
-  numbering its plan wrote `requires: "1"`, was refused, and fell back to
-  one create per task. The `not found` refusal names the link forms once.
+- `create` takes one task (2.12.4): `text`, and `requires` / `blocks`
+  as `id (tN) | null`. An empty string is the same as omitting the field
+  (no edge, no refusal), because a model filling every field with
+  `requires: ""` was refused with `not found` and then believed a link
+  needed a second call. A number, a text or anything but a string id or
+  null refuses at the door by name (`requires must be a task id (tN)
+  from a reply, or null`). Through 2.12.3 a create took a `tasks` array
+  whose links could be a sibling's text or position; GLM numbered its
+  plan and wrote `t1`, `t3`, `t4` for its own steps, which linked to the
+  queue's oldest tasks. The `not found` refusal names the one form once.
   `null` clears an existing link.
 - Outside a repo a scope'd write lands in the directory's own workspace:
   every session working there shares the queue, and claim is the door. A

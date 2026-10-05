@@ -42,7 +42,7 @@ func TestConcurrentCreatesSerialize(t *testing.T) {
 				defer wg.Done()
 				for i := 0; i < slice; i++ {
 					_, err := todostore.Create(context.Background(), db,
-						p, []todostore.CreateItem{{Text: fmt.Sprintf("w%d-g%d-%d", wi, g, i)}},
+						p, todostore.CreateItem{Text: fmt.Sprintf("w%d-g%d-%d", wi, g, i)},
 						fmt.Sprintf("s%dg%d", wi, g))
 					if err != nil {
 						mu.Lock()
@@ -76,7 +76,7 @@ func TestConcurrentCompletesSerialize(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	for i := 1; i <= 40; i++ {
-		if _, err := todostore.Create(context.Background(), d1, p, []todostore.CreateItem{{Text: fmt.Sprintf("task-%d", i)}}, "s0"); err != nil {
+		if _, err := todostore.Create(context.Background(), d1, p, todostore.CreateItem{Text: fmt.Sprintf("task-%d", i)}, "s0"); err != nil {
 			t.Fatalf("seed %d: %v", i, err)
 		}
 	}

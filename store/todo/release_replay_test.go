@@ -11,7 +11,7 @@ import (
 func TestReleaseOfAReviewClaimSurvivesReplay(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "in review"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "in review"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestReleaseOfAReviewClaimSurvivesReplay(t *testing.T) {
 func TestFailOfAReviewClaimSurvivesReplay(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "abandoned review"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "abandoned review"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestFailOfAReviewClaimSurvivesReplay(t *testing.T) {
 func TestWorkerModeFailOnAReviewClaimRefuses(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "review in flight"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "review in flight"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

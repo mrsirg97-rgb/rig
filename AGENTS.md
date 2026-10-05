@@ -310,6 +310,9 @@ that is harder than writing a lot, and it is the bar.
 - `tool/todo`, `tool/rem`, `tool/scheduler`: thin adapters over their
   stores: session attribution and the store's shapes, verbatim. The rem
   tool's description carries the contract sentence (rem is deliberate).
+  `tool/todo` is the template a native tool takes (2.12.4): a `Todo`
+  interface that embeds `tool.Definition`, declares `Exec` as the one
+  JSON door, and one typed method per verb; `Exec` only routes.
 - `tool/verdict`: the reviewer's one word (2.11.0): registered only in a
   worker that holds a fleet pipe, its call crosses as `core.Verdict`
   published as the worker's member; the swarm reviewer and the decision

@@ -11,7 +11,7 @@ import (
 func TestTodoCountsFromTheFold(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "work"}, {Text: "broken"}, {Text: "left"}, {Text: "over"},
 	}, sessA)
 	if err != nil {

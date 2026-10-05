@@ -741,9 +741,9 @@ func TestREPLCommands(t *testing.T) {
 	}
 	for _, st := range []step{
 		{"/models\n", "window 65536", 1},
-		{"/todo create x\n", "queue merged", 1},
+		{"/todo create x\n", "t1 [ ] x", 1},
 		{"/todo project ~\n", "no tasks in", 1},
-		{"/todo create x\n", "queue merged", 2},
+		{"/todo create x\n", "t1 [ ] x", 2},
 		{"/todo read\n", "next: t1", 2},
 		{"/new\n", "new: session", 1},
 		{"/sessions\n", "exit ok", 1},

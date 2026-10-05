@@ -3,18 +3,24 @@
 ## 1. edges
 
 A task carries two link fields, `requires` and `blocks`, each `id (tN) |
-exact text | null`, one edge per field from the row's point of view.
+null`, one edge per field from the row's point of view.
 `requires tN`: I cannot start until tN is done. `blocks tN`: tN cannot
 complete until I am done. `dependsOn` is renamed; old payloads (create
 events and compact snapshots) fold as `requires` at replay, verbatim.
 An empty string is the same as omitting the field: no edge, no refusal
 (a model filling every field does not invent a link to ""); `null`
-clears an existing link (amended 2.1.6). Within one `create`, a bare
-number N is the task at 1-based position N of that call's `tasks`,
-tried after the id and the exact text: ids are always `tN`, so no link
-that resolved before changes meaning, and a model numbering its own
-plan links it in one call instead of one create per task (amended
-2.1.9).
+clears an existing link (amended 2.1.6). A link names a task that
+exists, by the id its own create replied with: `create` takes one task
+(2.12.4), so the relation is real when it is written and there is
+nothing to resolve. Through 2.12.3 a create took a `tasks` array and a
+link could be a sibling's exact text or its 1-based position in the
+array; a model numbered its five-step plan and wrote `requires: "t3"`,
+which resolved to the queue's August t3 instead of its own third step,
+and the chain it meant was never recorded. One task per create is
+atomic: one call, one id back, one event in the log; independent tasks
+go out as parallel calls in one turn, and a chain serializes because it
+must. Old array payloads still fold at replay, verbatim, with the
+sibling and position forms they were written in.
 
 - `blocked(t)` = t.requires unfinished OR any task with blocks == t
   unfinished. Unfinished is pending, in_progress, review, failed: the
@@ -25,13 +31,13 @@ plan links it in one call instead of one create per task (amended
   waits for (the ids, in queue order, with a status hint). Start on a
   blocked task stays legal: the board does not stop a session that
   begins prep work, it just refuses the finish.
-- `create` refuses loudly and names the tasks: an unknown link
-  (`requires 'x' not found`, then once per refusal the forms a link
-  takes: `a link is tN from a reply, a sibling's exact text, or its
-  number in this list`; since 2.11.9 the number may be a JSON number as
-  well as a string, and the refusal shows the queue so the next call can
-  link by id), a link to itself by text or position
-  (`'x' cannot require itself`), and a cycle through either relation
+- `create` refuses loudly and names the task: an unknown link
+  (`requires 'x' not found`, then once per refusal the one form a link
+  takes: `a link is a task id from a reply, "t12"; create the task
+  first, then link to the id it was given`; the refusal shows the queue
+  so the next call can link by id, and nothing lands), a link to itself
+  (`'x' cannot require itself`, only reachable by re-creating an
+  existing text with its own id), and a cycle through either relation
   (`links would form a cycle: t1 -> t2 -> t1`). The graph is the waits-for relation:
   `requires` gives t -> required, `blocks` gives target -> blocker;
   `cyclePath` walks both.

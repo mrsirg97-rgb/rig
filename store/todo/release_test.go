@@ -14,7 +14,7 @@ const sessC = "sess-c"
 func TestReleaseReturnsAStaleForeignClaimToPendingAndNamesTheOwner(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "write the spec"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "write the spec"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestReleaseReturnsAStaleForeignClaimToPendingAndNamesTheOwner(t *testing.T)
 func TestReleaseRefusesOwnUnclaimedFreshAndFinished(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "own"}, {Text: "pending"}, {Text: "done"}, {Text: "fresh"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "own"}, {Text: "pending"}, {Text: "done"}, {Text: "fresh"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -71,6 +71,7 @@ func TestReleaseRefusesOwnUnclaimedFreshAndFinished(t *testing.T) {
 	if _, err := todostore.Start(ctx, db, p, fresh, sessA, false); err != nil {
 		t.Fatalf("start fresh: %v", err)
 	}
+	before := eventCount(t, db)
 	if _, err := todostore.Release(ctx, db, p, own, sessA); err == nil {
 		t.Error("releasing your own claim must refuse")
 	} else if !strings.Contains(err.Error(), "claimed by you") {
@@ -91,15 +92,15 @@ func TestReleaseRefusesOwnUnclaimedFreshAndFinished(t *testing.T) {
 	} else if !strings.Contains(err.Error(), sessA) {
 		t.Errorf("fresh-claim refusal must name the owner: %v", err)
 	}
-	if got := eventCount(t, db); got != 6 {
-		t.Errorf("refused releases must append nothing: %d events", got)
+	if got := eventCount(t, db); got != before {
+		t.Errorf("refused releases must append nothing: %d -> %d events", before, got)
 	}
 }
 
 func TestReapReleasesEndedAndStaleClaims(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p,
+	reply, err := create(ctx, db, p,
 		[]item{{Text: "dead"}, {Text: "stale"}, {Text: "fresh"}, {Text: "mine"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -154,7 +155,7 @@ func TestReapReleasesEndedAndStaleClaims(t *testing.T) {
 func TestReapIsIdleWhenNothingIsStale(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "fresh"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "fresh"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestReapReleasesNothingWhenDeadOwnerOwnsNothing(t *testing.T) {
 func TestStaleClaimSurvivesCompaction(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "old claim"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "old claim"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
