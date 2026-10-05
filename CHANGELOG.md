@@ -1,4 +1,50 @@
 # Changelog
+## [2.12.7]: a delegate has no clock
+
+A delegate carried a clock: ten minutes by default, `timeoutMs` to
+stretch it, thirty minutes as the ceiling it clamped to. The clock
+started at spawn, so it measured the queue and not the work — a ten-way
+fan-out of test-pass reads on 2026-10-05, all ten on GLM's one slot,
+lost the tail worker at 1500.3s to `delegate: the worker timed out
+after 25m0.003s (process tree killed)` with nine spawns ahead of it in
+the server's queue and its own first token still unwritten.
+SPEC_DELEGATE says extras wait for a slot rather than failing; they
+waited, and the clock failed the tenth of them on a schedule. A timeout
+on a concurrency seam guesses how long the work should take, and under a
+shared slot the guess is always wrong for someone.
+
+The tool has no clock. `timeoutMs` is off the schema and off the
+registry words, `defaultTimeout`, `delegateTimeoutCap` and the
+timed-out error voice are gone, and `Run(ctx, task, workspace, model)`
+is the verb. The spawn context is the turn's context (`SpawnCtx: ctx`
+beside `Timeout: -1`), so a worker lives until it exits or the turn is
+interrupted, and the interrupt — which the operator already had — ends
+the turn and takes the worker's process tree down through `RealSpawn`'s
+Setpgid cancel, the same kill the timeout used. What bounds an induced
+worker is the turn that asked for it, the fleet's slots, and the
+operator's hand; none of the three needs a guessed duration. The
+scheduler's own callers keep `DelegateInput.Timeout` untouched: a
+`run-job` fire carries its per-job timeout in minutes, the review fire
+and the swarm pass -1, and the seam's 24h ceiling bounds a positive
+caller.
+
+Silence is shown, never acted on: the fleet pipe already stamps a
+heartbeat per worker and the indicator's swarm row already prints its
+age, so a worker that has written nothing for ten minutes reads as one
+and the operator ends the turn. The 1.3.8 stall kill stays exactly
+where it was — the runner's per-job `stall` window, an opt-in operator
+setting about a process that has written nothing, not a ceiling on how
+long work may take — and the interactive delegate sets no window. Two
+tests that pinned the tool's clock are gone with it; four pin the rule
+in their place: no deadline on the spawn, so a worker outliving the old
+default returns its message; an interrupted turn cancels the spawn
+context; an interrupted turn over the real `RealSpawn` kills both the
+worker and the child it backgrounded; and a call carrying `timeoutMs`
+refuses as the unknown field it is. The menu drops to 13,487
+characters.
+
+---
+
 ## [2.12.6]: every native tool is its interface
 
 A native tool was a struct with one `Exec`: it decoded JSON, held every

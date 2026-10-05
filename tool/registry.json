@@ -398,11 +398,6 @@
         "model": {
           "type": "string",
           "description": "worker model id"
-        },
-        "timeoutMs": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "timeout in ms (default 600000, ceiling 1800000)"
         }
       },
       "required": [

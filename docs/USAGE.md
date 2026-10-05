@@ -154,10 +154,11 @@ resident), in a cwd under your session's or the rig home — wired
 wherever the worker tools are on and the swap is readable (one slot
 hosts it; the request queues at the server).
 Several delegate calls in one turn run in parallel; the turn blocks
-until each worker finishes or times out. `timeoutMs` is the spend
-ceiling (default 10 minutes, ceiling 30). A model that is not resident
-refuses by name, naming the holder — never an eviction from inside a
-turn. The
+until each worker finishes. There is no timeout to set: a worker lives
+until it exits or you interrupt the turn, and the interrupt kills its
+process tree (waiting behind nine others in a slot is work, not a
+hang). A model that is not resident refuses by name, naming the holder
+— never an eviction from inside a turn. The
 worker's last message comes back as the tool result, the run is
 recorded in the one scheduler store under an ad-hoc key, so
 `scheduler runs` shows it beside cron runs, and the worker's

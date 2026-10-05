@@ -18,7 +18,7 @@ nothing scheduled) and a resumable transcript in the state store.
 
 - `Delegate`: the tool as its interface (2.12.6): `tool.Definition` (the
   description carries the claim-time resolution and the slot gate, the
-  schema beside it) and `Run(ctx, task, workspace, model, timeoutMs)`,
+  schema beside it) and `Run(ctx, task, workspace, model)`,
   the one verb; `Exec` decodes and routes, so the blank-task refusal and
   the `pathguard` workspace rule (canonicalization, the
   outside-the-session/rig-home refusal, the directory check) are met by a
@@ -28,9 +28,15 @@ nothing scheduled) and a resumable transcript in the state store.
   the output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
   the explicit worker session id threaded through the spawn.
-- `delegate.go`: `stallMs` rides the schema beside `timeoutMs`
-  (0 = off, today's plain timeout; the tool keeps its own 30-minute
-  `timeoutMs` ceiling), and `Stall` rides `DelegateInput`.
+- `delegate.go`: the tool has no clock (2.12.7, SPEC_DELEGATE 1). No
+  `timeoutMs` on the schema, no default, no ceiling: `Timeout:
+  noTimeout` and `SpawnCtx: ctx` hand the worker the turn's context, so
+  it lives until it exits or the turn is interrupted and
+  `RealSpawn`'s process-group cancel takes the tree down. A failed
+  worker is the one error voice (`the worker failed (exit N)`); the
+  silence window is the runner's per-job `stall` setting, not this
+  tool's, and a silent worker is shown (the swarm row's heartbeat age),
+  never killed for it.
 - `delegate.go`: `Room` (optional, nil = silent): the tool is a member
   of the session's `broadcast` room (`MemberID`) and publishes
   `SwarmStatus` snapshots there (SPEC_SWARM 7, 2.11.0); each running
@@ -42,10 +48,13 @@ nothing scheduled) and a resumable transcript in the state store.
   snapshots on start, on the spawn's stream bytes (the same Observe),
   and on exit, one worker row, zero queue counts, throttled to a few
   per second with the exit's last frame always landing.
-- `delegate_test.go`: the failing-first named cases over a fake
-  `Spawn` and `Fetch` (happy path, cwd refusal, busy refusal, timeout,
-  the stall kill, the fan-out overlap and the one-slot sequence, the
-  slots-full wait, no-recursion, the cap).
+- `delegate_test.go`, `turn_test.go`: the failing-first named cases
+  over a fake `Spawn` and `Fetch` (happy path, cwd refusal, busy
+  refusal, the fan-out overlap and the one-slot sequence,
+  no-recursion, the cap) and the no-clock cases (no deadline on the
+  spawn so a long worker returns, `timeoutMs` refuses as an unknown
+  field, an interrupted turn cancels the spawn context, and over the
+  real `RealSpawn` it kills the worker's whole process tree).
 
 ## How it is consumed
 
@@ -58,13 +67,13 @@ nothing scheduled) and a resumable transcript in the state store.
 
 ## Gotchas
 
-- The no-recursion marker (`RIG_DELEGATE`) and the per-slot flocks
-  live in `store/scheduler`'s `Delegate`, not here: a worker's
-  inherited marker refuses by name, and a call that finds the
-  session's slots full waits on a short poll for one to free until
-  its call context ends (the lock check precedes the marker); the
-  standing "already in flight" voice at one slot, the full-set
-  "slots are full (slots N)" voice naming the wait time otherwise.
+- The no-recursion marker (`RIG_DELEGATE`) lives in
+  `store/scheduler`'s `Delegate`, not here: a worker's inherited
+  marker refuses by name. Fan-out beyond the fleet's slots is not
+  refused and not polled: the send-and-wait gate (SPEC_WORKERS 2.6.0)
+  lets the request queue at the server, and since 2.12.7 nothing on
+  the rig side bounds how long it may wait there — the turn's context
+  is the only thing that ends it.
 - The jailed worker's transcript lands at the operator's state-store
   path via `jailSpawn`'s sessions-dir bind (SPEC_DELEGATE 3); the
   parent mints its id and passes it as `-session-id`, so concurrent
