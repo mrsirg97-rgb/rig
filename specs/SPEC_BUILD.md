@@ -1,14 +1,15 @@
 # rig: the build surface (the Makefile, the CI job)
 
 The build surface, boring on purpose: one Makefile with six named targets,
-one Linux CI job (the PR gate), one release workflow (the tag path), one
-POSIX installer, and one static install site. The Makefile is CI's
-vocabulary and the operator's shorthand, nothing more. No Go code
-changes; except the gofmt drift that `fmt-check` catches on day one, the
-single formatting commit that pays it, and the one distribution-round
-delta: two Linux-only signal names dropped from the python tool's
-signal-name map (`tool/python/python.go`), so the darwin cross-build
-compiles; the named cost of the four-target matrix.
+three Linux CI jobs (build, freeze, wire — the PR gate), one release
+workflow (the tag path), one POSIX installer, and one static install
+site. The Makefile is CI's vocabulary and the operator's shorthand,
+nothing more. No Go code changes; except the gofmt drift that
+`fmt-check` catches on day one, the single formatting commit that pays
+it, and the one distribution-round delta: two Linux-only signal names
+dropped from the python tool's signal-name map
+(`tool/python/python.go`), so the darwin cross-build compiles; the
+named cost of the four-target matrix.
 
 The baseline is 0.4.0 (main at ce18671, the plugins merge included). The
 invariant: zero semantic Go diff on this branch; the only Go delta is the
@@ -30,11 +31,38 @@ alignment in the drift commit; the exception is named, not hidden).
   No other targets: no `all`, no `clean`, no `release`.
 - The `install` destination chain: `$(GOBIN)` when `go env GOBIN` is set,
   else `~/.local/bin`; `BINDIR=...` overrides.
-- The CI job (`.github/workflows/ci.yml`): on `pull_request` and `push` to
-  `main`, one Linux job; checkout, `setup-go` with
+- The CI jobs (`.github/workflows/ci.yml`): on `pull_request` and `push`
+  to `main`, three Linux jobs. `build`: checkout, `setup-go` with
   `go-version-file: go.mod` and the module cache, then `make test`,
-  `make fmt-check`, and `shellcheck install.sh`. It stays the PR gate;
-  a tag ships through the release workflow, not this one.
+  `make fmt-check`, and `shellcheck install.sh scripts/wire-check`.
+  `freeze`: a full-history checkout and `go run ./cmd/freeze -branch
+  "$GITHUB_HEAD_REF"` (decision 6). `wire`: the same checkout and
+  `scripts/wire-check` with the menu's two numbers as job env (decision
+  7). They are the PR gate; a tag ships through the release workflow,
+  not these.
+- The freeze gate's allowlist lives in `specs/FREEZE.txt`, a file the
+  repo owns: one path per line (a trailing `/` is a directory prefix, a
+  bare line is one exact path), a `#` line for why, the one glob
+  (`*/PACKAGE.md`), and `reopen <path> <version>` for a path of the
+  frozen surface reopened by name. `cmd/freeze` diffs
+  `origin/main...HEAD` (plus the untracked), refuses a touched path
+  matching no line — naming the path and the file to edit — and keeps
+  the frozen surface's own rule: `core/` and `loop/` are open to pure
+  addition only, measured comment-stripped and gofmt-normalized against
+  the merge-base. A branch name carrying `-refactor` skips the gate,
+  loudly, the documented escape; a reopening is a one-line diff to
+  `specs/FREEZE.txt`, reviewed in the PR.
+- The wire job renders, never stores: `TestWireDump` (`cmd/rig`) builds
+  the binary of any tree (`-rig-root`), drives it through the same
+  fixture the goldens used (the swap-server capture, the scratch home,
+  the session section stripped, the report-back workdir renamed), and
+  writes `oneshot.json`, `repl.json`, `runjob.json`, the verbatim
+  `tools.json`, and `menu.txt` (the description-plus-parameters count).
+  `scripts/wire-check` adds the merge-base as a second worktree, renders
+  both, and posts the unified diff to the job summary. The job never
+  fails on drift; the diff is the review artifact. The menu budget is
+  the one wall: aim 15,000 characters, fail past 15,500, the two
+  numbers in the job's env — the one place that reads them.
 - The drift commit: one commit on this branch runs `make fmt` and carries
   only the formatting delta, so `fmt-check` goes green and stays the gate.
 - The documented install paths, three (decision 5):
@@ -74,7 +102,10 @@ alignment in the drift commit; the exception is named, not hidden).
 
 ```
 Makefile                     the six targets (this spec)
-.github/workflows/ci.yml     the PR gate: test, fmt-check, shellcheck
+.github/workflows/ci.yml     the PR gate: build, freeze, wire
+cmd/freeze                   the freeze gate's program (decision 6)
+specs/FREEZE.txt             the allowlist: one path per line, the reopenings named
+scripts/wire-check           the wire job: render both trees, diff, the menu wall (decision 7)
 .github/workflows/release.yml the tag path: assert, cross-build, attest, release
 .github/workflows/pages.yml  the install site, on push to main
 install.sh                   the POSIX installer (decision 5)
@@ -231,6 +262,53 @@ README, `specs/`, and the latest release. The pages job copies
 `install.sh` into the artifact so the site URL serves the same bytes as
 the repo root.
 
+### 6. The freeze job
+
+The freeze gate is a CI job, not a test: `go run ./cmd/freeze` in the
+`freeze` job, the allowlist in `specs/FREEZE.txt`, the old
+`frontend/tui/freeze_test.go` gone. The file's grammar is four lines and
+nothing else: a `#` line is a why; `reopen <path> <version>` reopens a
+path of the frozen surface by name (the version is the one that reopened
+it, semver); `*/PACKAGE.md` is the one glob; every other line is a path
+— a trailing `/` marks a directory prefix, a bare line one exact path.
+A path matching no line refuses loud, naming the path and the file; the
+gate's own homes (`cmd/freeze/`, `scripts/`) are two ordinary lines
+added by the PR that moved the gate. The matcher refuses a malformed
+line by number, so the file cannot silently mean nothing. The frozen
+surface's own rule rides along: `core/` and `loop/` are open to pure
+addition only, compared comment-stripped and gofmt-normalized against
+the merge-base, non-Go files and gained/lost files refusing outright.
+The `-refactor` branch hatch is the documented escape (SPEC_EVT's
+re-freeze rounds) and stays: the job prints the skip and moves on, the
+PR names the reopening. The equivalence to the old Go boolean was proven
+test-against-test on the branch that moved the gate: every tracked path
+plus synthetic edges (sibling prefixes, children of exact files,
+PACKAGE.md anywhere) matched the old function and the file alike.
+
+### 7. The wire job
+
+The wire is a CI diff, not a stored golden. `scripts/wire-check` is the
+whole job: resolve the merge-base, add it as a detached worktree, render
+the base and the head, diff, post. The renderer is `TestWireDump`
+(`cmd/rig`), flag-driven (`-wire-dump <dir>`, `-rig-root <tree>`), and
+it is the golden fixture by another name: the same swap-server capture,
+the same scratch home and env, the session section stripped, the
+report-back workdir renamed — its three bodies came out byte-identical
+to `golden_020` the day the goldens went, and
+`TestWireDumpRendersByteIdenticalFromTwoWorlds` pins the property the
+job depends on (the render is machine-independent, or the diff lies).
+The five artifacts are `oneshot.json`, `repl.json`, `runjob.json`,
+`tools.json` (the request's own tools array, verbatim bytes), and
+`menu.txt`. The job's only failure is the menu: `MENU_AIM` and
+`MENU_WALL` live in the job's env (aim 15,000, wall 15,500 — the one
+place that reads them, the script refusing to run without them), the
+count and the delta against base print on every PR, and a count past the
+wall refuses naming the count. Drift never fails the job: the unified
+diff posts to the check summary, and a words pass is reviewed as the
+diff it is. The determinism invariants stay tests
+(`TestSystemPromptIsByteStableAcrossBuilds` and the registry's shape
+and vocabulary tests); only the stored bytes left.
+
 ## testing
 
 The proof is the CI itself: the workflow green on this PR is the
@@ -243,10 +321,20 @@ deliverable's own test. The local checklist, in order:
   `make install BINDIR=<dir>` lands it in the named directory.
 - `make build` leaves `bin/rig` and `git status` clean of it (the `/bin`
   ignore holds).
-- `shellcheck install.sh` green.
+- `shellcheck install.sh scripts/wire-check` green.
 - `sh install.sh 0.7.0` (a local, pre-tag version) downloads, verifies,
   and runs `rig -version`; an unknown `uname -m` pair and a checksum
   mismatch each fail loud, naming the step.
+- `go run ./cmd/freeze` green on the branch, and the stray-file probe:
+  a file at the root outside the allowlist refuses, naming the path and
+  `specs/FREEZE.txt`; `-branch x-refactor` prints the skip.
+- `MENU_AIM=15000 MENU_WALL=15500 scripts/wire-check` prints no wire
+  drift against the merge-base and the menu count with its delta; the
+  same run with `MENU_WALL=13000` refuses naming the count.
+- `go test ./cmd/rig/ -run TestWireDump -wire-dump <dir>` writes the
+  five artifacts; the dump run twice (different scratch worlds) is
+  byte-identical, and its three bodies equal the golden_020 bytes the
+  day the goldens left.
 - The full suite green before the PR.
 
 ## scope

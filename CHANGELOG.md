@@ -1,4 +1,37 @@
 # Changelog
+## [2.12.3]: the gates move to CI
+
+The freeze gate and the wire pins left the test suite for CI jobs: a gate
+is a job the PR sees, not a test the tree carries. The freeze allowlist
+left the Go boolean for `specs/FREEZE.txt`, a file the repo owns — one
+path per line, a `#` line for why, the reopenings named with the version
+that reopened them — and `cmd/freeze` is the small program the freeze job
+runs: diff `origin/main...HEAD`, every touched path must match a line,
+else the refusal names the path and the file to edit. A reopening is a
+one-line diff to that file, reviewed in the PR; the set is the old set
+plus the gate's own homes, `cmd/freeze` and `scripts`, and nothing else.
+
+The wire pins became a diff too. `scripts/wire-check` renders the three
+request bodies and the tools array at the merge-base and at the head from
+the same fixture the goldens used — the dump's bodies came out
+byte-identical to `golden_020` the day it moved — and posts the unified
+diff as the job's summary, so a words pass is reviewed as the diff it is
+instead of a regolden commit. The stored goldens, the `-update` flag, and
+the sha constant went with the job.
+
+- **The menu budget is a guideline now**: aim 15,000 characters, fail
+  past 15,500, the two numbers living in the wire job. The wall at
+  15,000 trimmed a sentence three times in 2.11.9 to fit; a sentence
+  that carries meaning is never cut to save forty characters. Today's
+  menu is 13,846.
+- **What stays pinned**: `TestSystemPromptIsByteStableAcrossBuilds`
+  (determinism is an invariant, not a golden), the registry's shape
+  tests, and the words' vocabulary — the no-other-harness's-voice check
+  moved to `tool/registry_test.go`, where the words live.
+- `frontend/tui/freeze_test.go` is gone; its equivalence to the file was
+  proven on the branch that moved it, and the corpus test in
+  `cmd/freeze` carries the file's behavior from there.
+
 ## [2.12.2]: the reviewer reads the code
 
 A review fire on pack rows reasoned "this is genuinely ambiguous without

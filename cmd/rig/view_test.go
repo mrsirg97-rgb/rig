@@ -85,32 +85,6 @@ func TestTheWireToolPrefixGrowsByViewAndNothingElse(t *testing.T) {
 	}
 }
 
-func TestViewSpecIsPinned(t *testing.T) {
-	seeing := visionRoot(t)
-	var spec struct {
-		Name        string          `json:"name"`
-		Description string          `json:"description"`
-		Schema      json.RawMessage `json:"schema"`
-	}
-	for _, tool := range wire(seeing).Tools {
-		if tool.Name() == "view" {
-			spec.Name, spec.Description, spec.Schema = tool.Name(), tool.Description(), tool.Schema()
-		}
-	}
-	if spec.Name != "view" {
-		t.Fatal("view is not registered for a vision row")
-	}
-	b, err := json.Marshal([]any{spec.Name, spec.Description, string(spec.Schema)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(b)
-	const golden = "68ea9d221c331547e93921ad559b3bf55c637d4d70d8c3a912a0094409a3eb98"
-	if got := hex.EncodeToString(sum[:]); got != golden {
-		t.Fatalf("the view spec changed: sha256 %s (want %s) — its description and schema are wire bytes; update the golden deliberately", got, golden)
-	}
-}
-
 func TestViewIsConcurrentAndNeverMutating(t *testing.T) {
 	if !concurrentNatives["view"] {
 		t.Fatal("view is read-only: it runs beside its admitted neighbours")

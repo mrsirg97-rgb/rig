@@ -51,5 +51,7 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
   when a wired tool has no entry or an entry has no wiring.
 - A tool's description drifts with its state: the more verbs a tool
   carries, the further its entry lags the behavior. A behavior change to
-  a wired tool diffs its registry entry in the same change; the wire
-  prefix golden moves with it, deliberately.
+  a wired tool diffs its registry entry in the same change; the wire job
+  (`scripts/wire-check`) renders the diff in the PR's check summary, and
+  the menu budget is a guideline there (aim 15,000 characters, fail past
+  15,500), never a reason to trim a sentence.

@@ -1,0 +1,66 @@
+#!/bin/sh
+set -eu
+
+refuse() {
+	printf 'wire-check: %s\n' "$1" >&2
+	exit 1
+}
+
+step() {
+	printf 'wire-check: %s\n' "$1" >&2
+}
+
+[ -n "${MENU_AIM:-}" ] || refuse "MENU_AIM is not set (the wire job carries it)"
+[ -n "${MENU_WALL:-}" ] || refuse "MENU_WALL is not set (the wire job carries it)"
+
+step "resolving the merge-base"
+base=$(git merge-base origin/main HEAD) || refuse "no merge-base with origin/main (fetch-depth: 0 carries it)"
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+step "adding the base worktree at $(git rev-parse --short "$base")"
+git worktree add --detach "$work/tree" "$base" >/dev/null || refuse "the base worktree refused"
+
+step "rendering the base wire"
+go test ./cmd/rig/ -run TestWireDump -wire-dump "$work/base" -rig-root "$work/tree" >/dev/null || refuse "the base render refused"
+
+step "rendering the head wire"
+go test ./cmd/rig/ -run TestWireDump -wire-dump "$work/head" >/dev/null || refuse "the head render refused"
+
+step "diffing the wire"
+difffile="$work/wire.diff"
+drift=0
+for f in oneshot.json repl.json runjob.json tools.json; do
+	if diff -u --label "base/$f" --label "head/$f" "$work/base/$f" "$work/head/$f" >>"$difffile" 2>/dev/null; then
+		:
+	else
+		rc=$?
+		[ "$rc" -eq 1 ] || refuse "diff $f refused (rc $rc)"
+		drift=1
+	fi
+done
+
+head_menu=$(cat "$work/head/menu.txt")
+base_menu=$(cat "$work/base/menu.txt")
+delta=$((head_menu - base_menu))
+
+summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+{
+	echo "## the wire"
+	echo
+	if [ "$drift" -eq 1 ]; then
+		echo '```diff'
+		cat "$difffile"
+		echo '```'
+	else
+		echo "no wire drift against $(git rev-parse --short "$base")"
+	fi
+	echo
+	echo "tool menu: $head_menu chars (base $base_menu, delta $delta; aim $MENU_AIM, wall $MENU_WALL)"
+} >>"$summary"
+
+if [ "$head_menu" -gt "$MENU_WALL" ]; then
+	refuse "the tool menu is $head_menu chars, past the $MENU_WALL wall: trimming is a decision, name it"
+fi
+step "tool menu: $head_menu chars (base $base_menu, delta $delta)"

@@ -2,6 +2,7 @@ package tool_test
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -34,6 +35,18 @@ func TestEveryEntryHasTheShapeAndAParsingSchema(t *testing.T) {
 		}
 		if schema["type"] != "object" {
 			t.Fatalf("%q: the schema is not an object schema", n)
+		}
+	}
+}
+
+func TestRegistryWordsCarryNoOtherHarnessVoice(t *testing.T) {
+	for _, n := range tool.AllNames() {
+		d := tool.Def(n)
+		text := d.Description() + string(d.Schema())
+		for _, bad := range []string{"pi", "pane"} {
+			if regexp.MustCompile(`\b` + bad + `\b`).MatchString(text) {
+				t.Errorf("%s carries another harness's voice: %q", n, bad)
+			}
 		}
 	}
 }

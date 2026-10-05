@@ -1,36 +1,8 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"sort"
 	"testing"
 )
-
-const wireToolsPrefixGolden = "244eb836017aa3f3cd8aa4359cf46b003969646f3cb9c7312ed11f8be093eb4b"
-
-func TestWireToolsPrefixGolden(t *testing.T) {
-	k := wire(testRoot(nullFrontend{}))
-	type spec struct {
-		Name        string          `json:"name"`
-		Description string          `json:"description"`
-		Schema      json.RawMessage `json:"schema"`
-	}
-	specs := make([]spec, 0, len(k.Tools))
-	for _, tool := range k.Tools {
-		specs = append(specs, spec{tool.Name(), tool.Description(), tool.Schema()})
-	}
-	sort.Slice(specs, func(i, j int) bool { return specs[i].Name < specs[j].Name })
-	b, err := json.Marshal(specs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(b)
-	if got := hex.EncodeToString(sum[:]); got != wireToolsPrefixGolden {
-		t.Fatalf("the wire tools prefix changed: sha256 %s (want %s) — a schema or description change moves the prefix cache; update the golden deliberately", got, wireToolsPrefixGolden)
-	}
-}
 
 func TestWireHasNoNamedFilesystemTools(t *testing.T) {
 	k := wire(testRoot(nullFrontend{}))
