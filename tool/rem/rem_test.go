@@ -522,36 +522,36 @@ func TestRemVerbMethodsAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("a pack without a target refuses the same way on either door: pack=%v exec=%v", packErr, execErr)
 	}
 
-	_, learnErr := tool.Learn(ctx, dir, "", "", nil, "", nil)
+	_, learnErr := tool.Learn(ctx, dir, remapi.LearnInput{})
 	_, execErr = exec(t, tool, ctx, map[string]any{"action": "learn", "scope": dir})
 	if learnErr == nil || execErr == nil || learnErr.Error() != "rem: action 'learn' requires content" || execErr.Error() != learnErr.Error() {
 		t.Fatalf("a learn without content refuses the same words on either door: learn=%v exec=%v", learnErr, execErr)
 	}
 
 	tooBig := 51
-	_, recallErr := tool.Recall(ctx, dir, "x", "", &tooBig, false)
+	_, recallErr := tool.Recall(ctx, dir, remapi.RecallInput{Query: "x", K: &tooBig})
 	_, execErr = exec(t, tool, ctx, map[string]any{"action": "recall", "query": "x", "scope": dir, "k": 51})
 	if recallErr == nil || execErr == nil || recallErr.Error() != execErr.Error() {
 		t.Fatalf("k past the cap refuses the same way on either door: recall=%v exec=%v", recallErr, execErr)
 	}
 
-	_, pruneErr := tool.Prune(ctx, dir, "sync", "", nil, nil, nil)
+	_, pruneErr := tool.Prune(ctx, dir, remapi.PruneInput{Verb: "sync"})
 	_, execErr = exec(t, tool, ctx, map[string]any{"action": "prune", "scope": dir, "verb": "sync"})
 	if pruneErr == nil || execErr == nil || pruneErr.Error() != execErr.Error() {
 		t.Fatalf("a verb that is not a prune refuses the same way on either door: prune=%v exec=%v", pruneErr, execErr)
 	}
 
 	older := 0
-	_, pruneErr = tool.Prune(ctx, dir, "remove", "", nil, &older, nil)
+	_, pruneErr = tool.Prune(ctx, dir, remapi.PruneInput{Verb: "remove", OlderThanDays: &older})
 	_, execErr = exec(t, tool, ctx, map[string]any{"action": "prune", "scope": dir, "verb": "remove", "older_than_days": 0})
 	if pruneErr == nil || execErr == nil || pruneErr.Error() != execErr.Error() {
 		t.Fatalf("older_than_days under one refuses the same way on either door: prune=%v exec=%v", pruneErr, execErr)
 	}
 
-	if _, err := tool.Learn(ctx, dir, "the verb and the wire agree", "", nil, "", nil); err != nil {
+	if _, err := tool.Learn(ctx, dir, remapi.LearnInput{Content: "the verb and the wire agree"}); err != nil {
 		t.Fatalf("learn through the verb: %v", err)
 	}
-	fromVerb, err := tool.Recall(ctx, dir, "agree", "", nil, false)
+	fromVerb, err := tool.Recall(ctx, dir, remapi.RecallInput{Query: "agree"})
 	if err != nil {
 		t.Fatalf("recall through the verb: %v", err)
 	}

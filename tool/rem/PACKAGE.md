@@ -18,10 +18,12 @@ calls what).
   the one JSON door — decode `action` and the fields, turn the wire's
   shapes that Go cannot name (`supersedes`, `ids`) into ids, route — and
   one method per verb: `Index(ctx, scope)`, `Pack(ctx, scope, target)`,
-  `Learn(ctx, scope, content, kind, importance, source, supersedes)`,
-  `Recall(ctx, scope, query, kind, k, includeSuperseded)`,
-  `Reflect(ctx, scope, content, importance, source)` and
-  `Prune(ctx, scope, verb, kind, ids, olderThanDays, importance)`, each
+  `Learn(ctx, scope, in LearnInput)`,
+  `Recall(ctx, scope, in RecallInput)`,
+  `Reflect(ctx, scope, in ReflectInput)` and
+  `Prune(ctx, scope, in PruneInput)` — a verb of more than two fields of
+  its own takes them as one input struct, the scope staying on the verb
+  because every verb carries it — each
   over the rem store's operations and the graph store's map operations,
   each carrying the required `scope`: the
   reserved word `global` or a directory path, resolved through
