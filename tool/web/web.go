@@ -35,7 +35,7 @@ type web struct {
 }
 
 func New(cfg Config) Web {
-	return &web{Definition: tool.Def("web"), search: NewSearch(cfg.Search), fetch: NewFetch(cfg.Fetch)}
+	return &web{Definition: tool.Def("web"), search: newSearch(cfg.Search), fetch: newFetch(cfg.Fetch)}
 }
 
 func NewDefault() Web {

@@ -54,7 +54,7 @@ type fetch struct {
 	maxBytes int
 }
 
-func NewFetch(cfg FetchConfig) *fetch {
+func newFetch(cfg FetchConfig) *fetch {
 	f := &fetch{
 		proxy:    cfg.Proxy,
 		lookup:   cfg.Lookup,

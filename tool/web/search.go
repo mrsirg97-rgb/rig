@@ -34,7 +34,7 @@ type search struct {
 	do        func(*http.Request) (*http.Response, error)
 }
 
-func NewSearch(cfg SearchConfig) *search {
+func newSearch(cfg SearchConfig) *search {
 	base := cfg.BaseURL
 	if base == "" {
 		base = DefaultSearXNG
