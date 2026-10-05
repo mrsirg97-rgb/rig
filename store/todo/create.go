@@ -46,6 +46,13 @@ func decodeItems(args string) ([]rawItem, bool) {
 	if json.Unmarshal([]byte(args), &payload) != nil {
 		return nil, false
 	}
+	if payload.Tasks == nil {
+		var one map[string]any
+		if json.Unmarshal([]byte(args), &one) != nil || one["text"] == nil {
+			return nil, false
+		}
+		payload.Tasks = []map[string]any{one}
+	}
 	var out []rawItem
 	for _, raw := range payload.Tasks {
 		text, _ := raw["text"].(string)
@@ -214,81 +221,53 @@ func (f *folded) applyVerb(e eventRow) {
 	ts.updatedTs = e.ts
 }
 
-func planCreate(f *folded, items []CreateItem) (modified []*taskState, given, fresh int, problems []string) {
-	planned := map[string]*taskState{}
-	type depRef struct {
-		ts      *taskState
-		text    string
-		kind    string
-		depNull bool
-		dep     string
-	}
-	var refs []depRef
-	seen := map[string]bool{}
-	preIDs := depPreIDs(f)
-	order := make([]string, 0, len(items))
-	for _, item := range items {
-		raw := item.raw()
-		order = append(order, raw.text)
-		if raw.text == "" || seen[raw.text] {
-			continue
-		}
-		seen[raw.text] = true
-		given++
-		ex := f.byText(raw.text)
-		if ex != nil {
-			planned[raw.text] = ex
-			if raw.hasRequires {
-				refs = append(refs, depRef{ts: ex, text: raw.text, kind: "requires", depNull: raw.reqNull, dep: raw.requires})
-			}
-			if raw.hasBlocks {
-				refs = append(refs, depRef{ts: ex, text: raw.text, kind: "blocks", depNull: raw.blkNull, dep: raw.blocks})
-			}
-			continue
-		}
-		fresh++
-		ts := &taskState{text: raw.text, status: statusPending}
+func planCreate(f *folded, item CreateItem) (modified []*taskState, note string, problems []string) {
+	raw := item.raw()
+	ts := f.byText(raw.text)
+	if ts == nil {
+		ts = &taskState{text: raw.text, status: statusPending}
 		ts.id = f.mintID()
 		ts.pos = f.nextPos()
-		planned[raw.text] = ts
 		f.tasks[ts.id] = ts
 		modified = append(modified, ts)
-		if raw.hasRequires {
-			refs = append(refs, depRef{ts: ts, text: raw.text, kind: "requires", depNull: raw.reqNull, dep: raw.requires})
-		}
-		if raw.hasBlocks {
-			refs = append(refs, depRef{ts: ts, text: raw.text, kind: "blocks", depNull: raw.blkNull, dep: raw.blocks})
-		}
+		note = "added " + ts.id
+	} else {
+		note = ts.id + " already there"
 	}
-
-	for _, dr := range refs {
-		if dr.depNull {
-			setLink(dr.ts, dr.kind, "")
+	for _, link := range []struct {
+		has, clear bool
+		kind, ref  string
+	}{
+		{raw.hasRequires, raw.reqNull, "requires", raw.requires},
+		{raw.hasBlocks, raw.blkNull, "blocks", raw.blocks},
+	} {
+		if !link.has {
 			continue
 		}
-		resolved := ""
-		if dr.dep != dr.text {
-			resolved = resolveDep(preIDs, planned, order, f, dr.dep)
+		if link.clear {
+			setLink(ts, link.kind, "")
+			modified = append(modified, ts)
+			continue
 		}
-		if dr.dep == dr.text || resolved == dr.ts.id {
+		if link.ref == ts.id {
 			verb := "require"
-			if dr.kind == "blocks" {
+			if link.kind == "blocks" {
 				verb = "block"
 			}
-			addOnce(&problems, fmt.Sprintf("'%s' cannot %s itself", dr.text, verb))
+			addOnce(&problems, fmt.Sprintf("'%s' cannot %s itself", raw.text, verb))
 			continue
 		}
-		if resolved != "" {
-			setLink(dr.ts, dr.kind, resolved)
-			modified = append(modified, dr.ts)
-		} else {
-			addOnce(&problems, fmt.Sprintf("%s '%s' not found", dr.kind, dr.dep))
+		if _, ok := f.tasks[link.ref]; !ok {
+			addOnce(&problems, fmt.Sprintf("%s '%s' not found", link.kind, link.ref))
+			continue
 		}
+		setLink(ts, link.kind, link.ref)
+		modified = append(modified, ts)
 	}
-	if path := cyclePath(f, planned); path != nil {
+	if path := cyclePath(f, map[string]*taskState{raw.text: ts}); path != nil {
 		problems = append(problems, "links would form a cycle: "+strings.Join(path, " -> "))
 	}
-	return modified, given, fresh, problems
+	return modified, note, problems
 }
 
 func addOnce(list *[]string, s string) {
@@ -352,7 +331,7 @@ func cyclePath(f *folded, planned map[string]*taskState) []string {
 	return nil
 }
 
-const linkForms = " (a link is a sibling's number in this list, 2 for the second; a task id from a reply, \"t12\"; or a sibling's exact text)"
+const linkForms = " (a link is a task id from a reply, \"t12\"; create the task first, then link to the id it was given)"
 
 func linkFormsHint(problems []string) string {
 	for _, problem := range problems {

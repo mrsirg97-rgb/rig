@@ -30,7 +30,7 @@ func TestFilePathIsOneStoreUnderTodo(t *testing.T) {
 	defer db.DB.Close()
 	ctx := context.Background()
 	p := todostore.Project{Key: "scope-a", Label: "a"}
-	if _, err := todostore.Create(ctx, db, p, []todostore.CreateItem{{Text: "a task"}}, "seed"); err != nil {
+	if _, err := create(ctx, db, p, []todostore.CreateItem{{Text: "a task"}}, "seed"); err != nil {
 		t.Fatal(err)
 	}
 	text, err := todostore.Read(ctx, db, p, "seed")

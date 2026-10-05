@@ -81,7 +81,7 @@ func seedHome(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Create(ctx, tdb, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, []todostore.CreateItem{{Text: "seeded task"}}, "seed"); err != nil {
+	if _, err := todostore.Create(ctx, tdb, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, todostore.CreateItem{Text: "seeded task"}, "seed"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tdb.DB.Close(); err != nil {
@@ -1716,7 +1716,7 @@ func TestTodoRoutesResolveThroughTheRepoScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := todostore.Create(context.Background(), db, todostore.Project{Key: scope.Key(repo), Label: scope.Label(repo)}, []todostore.CreateItem{{Text: "repo plan"}}, "seed"); err != nil {
+	if _, err := todostore.Create(context.Background(), db, todostore.Project{Key: scope.Key(repo), Label: scope.Label(repo)}, todostore.CreateItem{Text: "repo plan"}, "seed"); err != nil {
 		t.Fatal(err)
 	}
 	rec := doReq(t, h, "GET", "/api/todo?cwd="+sub, nil, bearer(tok))

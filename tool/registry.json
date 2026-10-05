@@ -140,8 +140,8 @@
   {
     "name": "todo",
     "enabled": true,
-    "what": "the task queue for the current workspace — for any job of three or more steps: create the tasks before the first edit, start one before working on it, complete or fail it when done, and leave the queue empty at the end. every call names its scope: the workspace path, or global.",
-    "guidelines": "`requires` makes a task wait on another; a refused create shows the queue; `claim` takes the next pending task with no unfinished `requires` or `blocks` link; `note` attaches a finding to a task; `read` shows what is open. task ids (`tN`) come from the tool's replies: copy them, never invent them.",
+    "what": "the task queue for the current workspace — for any job of three or more steps: create each task before the first edit, start one before working on it, complete or fail it when done, and leave the queue empty at the end. every call names its scope: the workspace path, or global.",
+    "guidelines": "one task per create; its reply gives the id (`tN`). `requires` makes a task wait on another, named by that id: create the task it waits for first, then link. a refused create shows the queue; `claim` takes the next pending task with no unfinished `requires` or `blocks` link; `note` attaches a finding to a task; `read` shows what is open. ids come from the tool's replies: copy them, never invent them.",
     "reply": "the affected row and the queue's summary, scoped by its workspace ([rig]).",
     "schema": {
       "type": "object",
@@ -170,37 +170,23 @@
           ],
           "description": "what to do."
         },
-        "tasks": {
-          "type": "array",
-          "description": "tasks to add, in order. required for create; an empty list clears the queue.",
-          "items": {
-            "type": "object",
-            "required": [
-              "text"
-            ],
-            "properties": {
-              "text": {
-                "type": "string",
-                "description": "what needs doing."
-              },
-              "requires": {
-                "type": [
-                  "string",
-                  "integer",
-                  "null"
-                ],
-                "description": "the task this one waits for: its number in this list (2 is the second), a task id from a reply (t12), or its exact text. omit when none; null removes a link."
-              },
-              "blocks": {
-                "type": [
-                  "string",
-                  "integer",
-                  "null"
-                ],
-                "description": "the task that waits for this one, named the same way. omit when none; null removes a link."
-              }
-            }
-          }
+        "text": {
+          "type": "string",
+          "description": "for create: what needs doing. one task per call."
+        },
+        "requires": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "for create: the task this one waits for, as its id from a reply (t12). omit when none; null removes a link."
+        },
+        "blocks": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "for create: the task that waits for this one, as its id. omit when none; null removes a link."
         },
         "id": {
           "type": "string",

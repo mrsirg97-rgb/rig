@@ -54,7 +54,10 @@ func TestReapAtOpenReleasesClaimsOwnedByEndedSessions(t *testing.T) {
 	}
 
 	proj := todostore.Project{Key: "reaptest", Label: "reaptest"}
-	reply, err := todostore.Create(ctx, tdb, proj, []todostore.CreateItem{{Text: "dead claim"}, {Text: "live claim"}}, deadID)
+	if _, err := todostore.Create(ctx, tdb, proj, todostore.CreateItem{Text: "dead claim"}, deadID); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	reply, err := todostore.Create(ctx, tdb, proj, todostore.CreateItem{Text: "live claim"}, deadID)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -91,7 +94,7 @@ func TestReapAtOpenIsIdleWhenNoSessionsHaveEnded(t *testing.T) {
 		t.Fatalf("record live session: %v", err)
 	}
 	proj := todostore.Project{Key: "reaptest", Label: "reaptest"}
-	reply, err := todostore.Create(ctx, tdb, proj, []todostore.CreateItem{{Text: "live claim"}}, liveID)
+	reply, err := todostore.Create(ctx, tdb, proj, todostore.CreateItem{Text: "live claim"}, liveID)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

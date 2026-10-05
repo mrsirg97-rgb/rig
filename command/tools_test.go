@@ -60,7 +60,7 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 
-	if read != strings.TrimPrefix(created, "\u2192 queue merged: 1 new\n") {
+	if read != strings.TrimPrefix(created, "\u2192 added t1\n") {
 		t.Fatalf("read must be the same queue the create reported:\ncreate:\n%s\nread:\n%s", created, read)
 	}
 
@@ -404,7 +404,7 @@ func TestTodoProjectCommand(t *testing.T) {
 	}
 	proj := t.TempDir()
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, todostore.ProjectOf(proj), []todostore.CreateItem{{Text: "elsewhere"}}, "seed"); err != nil {
+	if _, err := todostore.Create(ctx, db, todostore.ProjectOf(proj), todostore.CreateItem{Text: "elsewhere"}, "seed"); err != nil {
 		t.Fatal(err)
 	}
 	rendered, err := runCmd(t, "todo", "project "+proj, env)

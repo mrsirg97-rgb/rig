@@ -32,9 +32,29 @@ func newTodoFixture(t *testing.T) *todoFixture {
 
 func (f *todoFixture) create(session string, items ...todostore.CreateItem) string {
 	f.t.Helper()
-	reply, err := todostore.Create(context.Background(), f.db, f.proj, items, session)
-	if err != nil {
-		f.t.Fatalf("create: %v", err)
+	var reply string
+	var err error
+	for _, it := range items {
+		if reply, err = todostore.Create(context.Background(), f.db, f.proj, todostore.CreateItem{Text: it.Text}, session); err != nil {
+			f.t.Fatalf("create: %v", err)
+		}
+	}
+	for _, it := range items {
+		if it.Requires == nil && it.Blocks == nil {
+			continue
+		}
+		linked := todostore.CreateItem{Text: it.Text}
+		if it.Requires != nil {
+			id := f.id(reply, *it.Requires)
+			linked.Requires = &id
+		}
+		if it.Blocks != nil {
+			id := f.id(reply, *it.Blocks)
+			linked.Blocks = &id
+		}
+		if reply, err = todostore.Create(context.Background(), f.db, f.proj, linked, session); err != nil {
+			f.t.Fatalf("create: %v", err)
+		}
 	}
 	return reply
 }

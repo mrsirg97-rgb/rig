@@ -1,4 +1,24 @@
 # Changelog
+## [2.12.4]: one task per create, the tool as its interface
+
+GLM numbered its five-step plan and wrote `requires: "t1"`, `"t3"`,
+`"t4"`, meaning its own steps; the ids resolved first, those tasks exist
+from August, and the chain it meant was never recorded. The array was
+the bug: a link in a batch could be an id, a sibling's text or a
+position, and every spelling was a guess at intent. `create` now takes
+one task, and a link is the id a reply gave: the relation exists when
+it is written, one call is one id and one event, and independent tasks
+go out as parallel calls in one turn. A number or a text as a link
+refuses at the door by name; the refusal teaches the one form and shows
+the queue. The empty create that cleared a queue went with the array.
+Old array events fold at replay as written.
+
+The tool is now its interface, the template for the other native
+tools: `Todo` embeds `tool.Definition`, declares `Exec` as the one JSON
+door, and has one typed method per verb (`Create`, `Claim`, `Start`,
+`Complete`, …) taking the scope and the verb's fields; `Exec` only
+routes, so a Go caller and the model hit the same checks. The menu
+drops to 13,736 characters.
 ## [2.12.3]: the gates move to CI
 
 The freeze gate and the wire pins left the test suite for CI jobs: a gate

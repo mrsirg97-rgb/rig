@@ -20,7 +20,7 @@ func completeText(t *testing.T, db store.DB, id string) {
 func presentQueue(t *testing.T, db store.DB) string {
 	t.Helper()
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "dep1"},
 		{Text: "dep2", Requires: ptrTo("dep1")},
 		{Text: "dep3", Requires: ptrTo("dep2")},
@@ -86,7 +86,7 @@ func TestReadDefaultRelatedChainsCapAtTheTenNearest(t *testing.T) {
 		items = append(items, item{Text: "d" + itoa(i), Requires: ptrTo("d" + itoa(i-1))})
 	}
 	items = append(items, item{Text: "root", Requires: ptrTo("d12")})
-	reply, err := todostore.Create(ctx, db, p, items, "s1")
+	reply, err := create(ctx, db, p, items, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestReadDefaultRelatedChainsCapAtTheTenNearest(t *testing.T) {
 func TestReadFinishedListsNewestFirst(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "a"},
 		{Text: "b"},
 		{Text: "c"},
@@ -150,7 +150,7 @@ func TestReadFinishedDefaultsToTenAndCapsAtOneHundred(t *testing.T) {
 		items = append(items, item{Text: "done " + itoa(i)})
 	}
 	items = append(items, item{Text: "work"})
-	reply, err := todostore.Create(ctx, db, p, items, "s1")
+	reply, err := create(ctx, db, p, items, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestHiddenFinishedStillResolvesByID(t *testing.T) {
 		items = append(items, item{Text: "d" + itoa(i), Requires: ptrTo("d" + itoa(i-1))})
 	}
 	items = append(items, item{Text: "root", Requires: ptrTo("d12")})
-	reply, err := todostore.Create(ctx, db, p, items, "s1")
+	reply, err := create(ctx, db, p, items, "s1")
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -206,13 +206,13 @@ func TestHiddenFinishedStillResolvesByID(t *testing.T) {
 func TestFailedRowsStayOpenAndReachable(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	drop, err := todostore.Create(ctx, db, p, []item{{Text: "drop"}}, "s1")
+	drop, err := create(ctx, db, p, []item{{Text: "drop"}}, "s1")
 	if err != nil {
 		t.Fatalf("create drop: %v", err)
 	}
 	dropID := taskIDText(t, drop, "drop")
 	completeText(t, db, dropID)
-	extra, err := todostore.Create(ctx, db, p, []item{{Text: "later", Requires: ptrTo("drop")}}, "s1")
+	extra, err := create(ctx, db, p, []item{{Text: "later", Requires: ptrTo("drop")}}, "s1")
 	if err != nil {
 		t.Fatalf("create later: %v", err)
 	}

@@ -11,7 +11,7 @@ import (
 func TestTaskReturnsTextAndNotesInOrderWithTheirSessions(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "the brief"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "the brief"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestTaskOnAMissingIDRefusesInTheStoreVoice(t *testing.T) {
 func TestTaskReadsNothing(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "peeked"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "peeked"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

@@ -103,12 +103,15 @@ drops done only, and the summary counts review rows (`· N in review`).
   thrown.
 - Positions are minted, never mutated in place: moves are events.
 - Create is the only link-mutation point: the requires/blocks DAG is
-  validated there at the boundary (SPEC_TODO_EDGES). A link resolves as
-  an id, then a sibling's or an existing task's exact text, then a bare
-  number as the 1-based position in that create's `tasks` (2.1.9); replay
-  resolves the same way from the logged payload, and a link that lands
-  on its own task is refused as a self-link at create and skipped at
-  replay. An unknown link's refusal ends with the link forms, once.
+  validated there at the boundary (SPEC_TODO_EDGES). `Create` takes one
+  `CreateItem` (2.12.4) and a link is an existing task's id, nothing
+  else; the event is the flat task (`text`, `requires`, `blocks`) and
+  the reply's note is `added tN` or `tN already there`. Old `tasks`
+  array events still fold at replay with the forms they were written
+  in (`resolveDep`: id, sibling or existing text, then position), and a
+  link that lands on its own task is refused as a self-link at create
+  and skipped at replay. An unknown link's refusal ends with the one
+  link form, once.
 - Complete on the caller's own unclaimed pending task implicitly claims
   and submits: start+complete, both events appended, the echo noting the
   auto-start. Foreign-claim and blocked-by-dependency refusals stay.
@@ -177,9 +180,11 @@ drops done only, and the summary counts review rows (`· N in review`).
 - `Prune` drops the done rows and is itself an event, so a replay drops
   the same rows and a later compact snapshot carries only what survived;
   failed rows stay (they still ask for a retry) and an idle prune appends
-  nothing. The empty create stays the one destructive verb; `Create` is
-  otherwise a merge on the text natural key, and its note counts the
-  merge (`queue merged: 2 new, 1 already there`), never claims a wipe.
+  nothing. `Create` is a merge on the text natural key: a text already
+  in the queue is that task, and the call edits its links; the note
+  says which (`added t4`, `t4 already there`). The empty `tasks: []`
+  create that cleared a queue went with the array (2.12.4); old clear
+  events still fold.
 - Migration (SPEC_STATE §todo): folds every `<12-hex>.sqlite` in the
   todo dir into `todo.sqlite` with `scope = <that hash>` verbatim, then
   re-scopes the launch cwd's hash to the repo scope once (the

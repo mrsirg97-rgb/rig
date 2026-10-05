@@ -18,7 +18,7 @@ func TestSevenLeavesBlockingARootGateClaimAndComplete(t *testing.T) {
 		items = append(items, item{Text: fmt.Sprintf("leaf %d", i), Blocks: ptrTo("root")})
 	}
 	items = append(items, item{Text: "root"})
-	reply, err := todostore.Create(ctx, db, p, items, sessA)
+	reply, err := create(ctx, db, p, items, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestSevenLeavesBlockingARootGateClaimAndComplete(t *testing.T) {
 func TestRequiresChainGatesTheFinish(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "a", Requires: ptrTo("b")},
 		{Text: "b", Requires: ptrTo("c")},
 		{Text: "c"},
@@ -108,7 +108,7 @@ func TestRequiresChainGatesTheFinish(t *testing.T) {
 func TestOneTaskCarriesBothEdges(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "first"},
 		{Text: "mid", Requires: ptrTo("first"), Blocks: ptrTo("last")},
 		{Text: "last"},
@@ -144,21 +144,21 @@ func TestOneTaskCarriesBothEdges(t *testing.T) {
 
 func TestBlockCycleRefusesWithTheTaskNames(t *testing.T) {
 	db := newDB(t)
-	_, err := todostore.Create(context.Background(), db, p, []item{
+	_, err := create(context.Background(), db, p, []item{
 		{Text: "a", Blocks: ptrTo("b")},
 		{Text: "b", Blocks: ptrTo("a")},
 	}, "s1")
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
-	if !strings.Contains(err.Error(), "cycle") || !strings.Contains(err.Error(), "t1 -> t2 -> t1") {
+	if !strings.Contains(err.Error(), "cycle") || !strings.Contains(err.Error(), "t2 -> t1 -> t2") {
 		t.Errorf("the cycle must name the tasks: %v", err)
 	}
 }
 
 func TestCycleThroughEitherRelationNamesEveryTask(t *testing.T) {
 	db := newDB(t)
-	_, err := todostore.Create(context.Background(), db, p, []item{
+	_, err := create(context.Background(), db, p, []item{
 		{Text: "a", Requires: ptrTo("b"), Blocks: ptrTo("c")},
 		{Text: "b", Requires: ptrTo("c")},
 		{Text: "c"},
@@ -166,19 +166,19 @@ func TestCycleThroughEitherRelationNamesEveryTask(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
-	if !strings.Contains(err.Error(), "cycle") || !strings.Contains(err.Error(), "t1 -> t2 -> t3 -> t1") {
+	if !strings.Contains(err.Error(), "cycle") || !strings.Contains(err.Error(), "t2 -> t3 -> t1 -> t2") {
 		t.Errorf("a cycle through either relation must name every task: %v", err)
 	}
 }
 
 func TestUnknownLinkRefusesNamingTheFieldAndTask(t *testing.T) {
 	db := newDB(t)
-	if _, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", Requires: ptrTo("nope")}}, "s1"); err == nil {
+	if _, err := create(context.Background(), db, p, []item{{Text: "a", Requires: ptrTo("nope")}}, "s1"); err == nil {
 		t.Fatal("unknown requires succeeded")
 	} else if !strings.Contains(err.Error(), "requires 'nope' not found") {
 		t.Errorf("unknown-requires voice: %v", err)
 	}
-	if _, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", Blocks: ptrTo("nope")}}, "s1"); err == nil {
+	if _, err := create(context.Background(), db, p, []item{{Text: "a", Blocks: ptrTo("nope")}}, "s1"); err == nil {
 		t.Fatal("unknown blocks succeeded")
 	} else if !strings.Contains(err.Error(), "blocks 'nope' not found") {
 		t.Errorf("unknown-blocks voice: %v", err)
@@ -187,12 +187,16 @@ func TestUnknownLinkRefusesNamingTheFieldAndTask(t *testing.T) {
 
 func TestSelfLinkRefusesNamingTheTaskAndRelation(t *testing.T) {
 	db := newDB(t)
-	if _, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", Requires: ptrTo("a")}}, "s1"); err == nil {
+	ctx := context.Background()
+	if _, err := todostore.Create(ctx, db, p, item{Text: "a"}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := todostore.Create(ctx, db, p, item{Text: "a", Requires: ptrTo("t1")}, "s1"); err == nil {
 		t.Fatal("self requires succeeded")
 	} else if !strings.Contains(err.Error(), "'a' cannot require itself") {
 		t.Errorf("self-requires voice: %v", err)
 	}
-	if _, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", Blocks: ptrTo("a")}}, "s1"); err == nil {
+	if _, err := todostore.Create(ctx, db, p, item{Text: "a", Blocks: ptrTo("t1")}, "s1"); err == nil {
 		t.Fatal("self blocks succeeded")
 	} else if !strings.Contains(err.Error(), "'a' cannot block itself") {
 		t.Errorf("self-blocks voice: %v", err)
@@ -249,7 +253,7 @@ func TestOldSnapshotDependsOnFoldsToRequires(t *testing.T) {
 func TestEdgesSurviveCompactionAndReplay(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "gate"},
 		{Text: "work", Requires: ptrTo("gate")},
 		{Text: "tail", Blocks: ptrTo("work")},
@@ -291,7 +295,7 @@ func TestEdgesSurviveCompactionAndReplay(t *testing.T) {
 func TestAcceptOnABlockedReviewTaskRefusesNamingWhatItWaitsFor(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "gate"},
 		{Text: "work", Requires: ptrTo("gate")},
 	}, sessA)
@@ -320,7 +324,7 @@ func TestAcceptOnABlockedReviewTaskRefusesNamingWhatItWaitsFor(t *testing.T) {
 	if _, err := todostore.Complete(ctx, db, p, work, sessA, true); err != nil {
 		t.Fatalf("complete work to review: %v", err)
 	}
-	postReply, err := todostore.Create(ctx, db, p, []item{{Text: "post", Blocks: ptrTo("work")}}, sessA)
+	postReply, err := create(ctx, db, p, []item{{Text: "post", Blocks: ptrTo("work")}}, sessA)
 	if err != nil {
 		t.Fatalf("create post: %v", err)
 	}
@@ -347,92 +351,35 @@ func TestAcceptOnABlockedReviewTaskRefusesNamingWhatItWaitsFor(t *testing.T) {
 	}
 }
 
-func TestPositionalLinkNamesASiblingInTheSameCreate(t *testing.T) {
-	db := newDB(t)
-	reply, err := todostore.Create(context.Background(), db, p, []item{
-		{Text: "read the spec"},
-		{Text: "write the tests", Requires: ptrTo("1")},
-		{Text: "land the change", Requires: ptrTo("2"), Blocks: ptrTo("4")},
-		{Text: "ship"},
-	}, "s1")
-	if err != nil {
-		t.Fatalf("a numbered plan must link in one create: %v", err)
-	}
-	spec, tests, ship := taskIDText(t, reply, "read the spec"), taskIDText(t, reply, "write the tests"), taskIDText(t, reply, "ship")
-	if !strings.Contains(reply, "· requires "+spec) || !strings.Contains(reply, "· requires "+tests) {
-		t.Errorf("positions must resolve to the siblings' ids:\n%s", reply)
-	}
-	if !strings.Contains(reply, "· blocks "+ship) {
-		t.Errorf("blocks takes a position too:\n%s", reply)
-	}
-	replayed, err := todostore.Read(context.Background(), db, p, "s1")
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	for _, want := range []string{"· requires " + spec, "· requires " + tests, "· blocks " + ship} {
-		if !strings.Contains(replayed, want) {
-			t.Errorf("replay from the log must keep %q:\n%s", want, replayed)
-		}
-	}
-}
-
-func TestPositionCountsWithinThisCreateNotTheQueue(t *testing.T) {
+func TestALinkIsAnIdAndTheRefusalTeachesTheOneFormOnce(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, p, []item{{Text: "older"}}, "s1"); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "first new"}, {Text: "second new", Requires: ptrTo("1")}}, "s1")
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	if first := taskIDText(t, reply, "first new"); !strings.Contains(reply, "· requires "+first) {
-		t.Errorf("position 1 is this create's first task, not the queue's:\n%s", reply)
-	}
-}
-
-func TestExactTextWinsOverPosition(t *testing.T) {
-	db := newDB(t)
-	reply, err := todostore.Create(context.Background(), db, p, []item{
-		{Text: "2"},
-		{Text: "x"},
-		{Text: "z", Requires: ptrTo("2")},
-	}, "s1")
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	if named := taskIDText(t, reply, "2"); !strings.Contains(reply, "· requires "+named) {
-		t.Errorf("a sibling whose text is '2' wins over position 2:\n%s", reply)
-	}
-}
-
-func TestPositionOutOfRangeRefusesTeachingTheLinkForms(t *testing.T) {
-	db := newDB(t)
-	_, err := todostore.Create(context.Background(), db, p, []item{{Text: "a", Requires: ptrTo("3")}, {Text: "b", Requires: ptrTo("0")}}, "s1")
+	_, err := todostore.Create(ctx, db, p, item{Text: "a", Requires: ptrTo("3"), Blocks: ptrTo("a")}, "s1")
 	if err == nil {
-		t.Fatal("an out-of-range position linked")
+		t.Fatal("a number or a text linked")
 	}
-	for _, want := range []string{"requires '3' not found", "requires '0' not found", "a link is a sibling's number in this list, 2 for the second; a task id from a reply, \"t12\"; or a sibling's exact text"} {
+	for _, want := range []string{"requires '3' not found", "blocks 'a' not found", "a link is a task id from a reply, \"t12\"; create the task first, then link to the id it was given"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("missing %q in: %v", want, err)
 		}
 	}
-	if strings.Count(err.Error(), "a link is a sibling's number") != 1 {
-		t.Errorf("the link forms are taught once per refusal: %v", err)
+	if strings.Count(err.Error(), "a link is a task id") != 1 {
+		t.Errorf("the link form is taught once per refusal: %v", err)
 	}
 	if !strings.Contains(err.Error(), "\n(no tasks in ws's queue)") {
-		t.Errorf("the refusal shows the queue that exists, here an empty one, so the next call can link by id: %v", err)
+		t.Errorf("the refusal shows the queue that exists, here an empty one: %v", err)
 	}
-	if false {
-		t.Errorf("the link forms are taught once per refusal: %v", err)
+	if n := eventCount(t, db); n != 0 {
+		t.Fatalf("a refused create lands nothing, got %d events", n)
 	}
-}
-
-func TestPositionalSelfLinkRefusesAsSelf(t *testing.T) {
-	db := newDB(t)
-	if _, err := todostore.Create(context.Background(), db, p, []item{{Text: "a"}, {Text: "b", Blocks: ptrTo("2")}}, "s1"); err == nil {
-		t.Fatal("a positional self-block succeeded")
-	} else if !strings.Contains(err.Error(), "'b' cannot block itself") {
-		t.Errorf("self-by-position voice: %v", err)
+	if _, err := todostore.Create(ctx, db, p, item{Text: "b"}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	_, err = todostore.Create(ctx, db, p, item{Text: "c", Requires: ptrTo("t9")}, "s1")
+	if err == nil || !strings.Contains(err.Error(), "requires 't9' not found") || !strings.Contains(err.Error(), "t1 [ ] b") {
+		t.Fatalf("an unknown id refuses and shows the queue so the next call can link by id: %v", err)
+	}
+	if strings.Contains(err.Error(), "t2") {
+		t.Fatalf("the queue shown is the one that exists, never the task that did not land: %v", err)
 	}
 }

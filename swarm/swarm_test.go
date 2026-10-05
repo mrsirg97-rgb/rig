@@ -311,12 +311,10 @@ func (h *harness) newRoom() broadcast.Room {
 
 func (h *harness) create(t *testing.T, texts ...string) {
 	t.Helper()
-	items := make([]todostore.CreateItem, len(texts))
-	for i, text := range texts {
-		items[i] = todostore.CreateItem{Text: text}
-	}
-	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, items, "sess-architect"); err != nil {
-		t.Fatalf("create: %v", err)
+	for _, text := range texts {
+		if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, todostore.CreateItem{Text: text}, "sess-architect"); err != nil {
+			t.Fatalf("create: %v", err)
+		}
 	}
 }
 
@@ -592,10 +590,10 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 func TestSwarmCompletedRequirementHandsTheDependentOut(t *testing.T) {
 	h := newHarness(t)
 	req := "t1"
-	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, []todostore.CreateItem{{Text: "the blocker"}}, "sess-architect"); err != nil {
+	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, todostore.CreateItem{Text: "the blocker"}, "sess-architect"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, []todostore.CreateItem{{Text: "the dependent", Requires: &req}}, "sess-architect"); err != nil {
+	if _, err := todostore.Create(context.Background(), h.todoDB, h.proj, todostore.CreateItem{Text: "the dependent", Requires: &req}, "sess-architect"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	h.spawn.queue = []sched.SpawnResult{

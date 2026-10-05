@@ -401,25 +401,21 @@ func rewrite(tx *sql.Tx, f *folded, scope string) error {
 	return nil
 }
 
-func asGiven(items []CreateItem) []any {
-	var out []any
-	for _, it := range items {
-		m := map[string]any{"text": it.Text}
-		switch {
-		case it.Requires != nil:
-			m["requires"] = *it.Requires
-		case it.RequiresNull:
-			m["requires"] = nil
-		}
-		switch {
-		case it.Blocks != nil:
-			m["blocks"] = *it.Blocks
-		case it.BlocksNull:
-			m["blocks"] = nil
-		}
-		out = append(out, m)
+func asGiven(it CreateItem) map[string]any {
+	m := map[string]any{"text": it.Text}
+	switch {
+	case it.Requires != nil:
+		m["requires"] = *it.Requires
+	case it.RequiresNull:
+		m["requires"] = nil
 	}
-	return out
+	switch {
+	case it.Blocks != nil:
+		m["blocks"] = *it.Blocks
+	case it.BlocksNull:
+		m["blocks"] = nil
+	}
+	return m
 }
 
 func nowRFC3339() string {

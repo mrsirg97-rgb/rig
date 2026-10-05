@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -92,25 +93,25 @@ func TestUnknownActionRefusesLoudly(t *testing.T) {
 	}
 }
 
-func TestCreateMissingTasksFailsLoudly(t *testing.T) {
+func TestCreateWithoutTextFailsLoudly(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "create"}); err == nil {
-		t.Fatal("create without tasks succeeded")
-	} else if want := "action 'create' requires tasks: array of {text}"; err.Error() != want {
+		t.Fatal("create without text succeeded")
+	} else if want := "action 'create' requires text"; err.Error() != want {
 		t.Errorf("voice:\n%q\nwant\n%q", err.Error(), want)
 	}
 }
 
-func TestCreateMalformedTasksFailLoudly(t *testing.T) {
+func TestCreateMalformedLinksFailLoudly(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	for _, tasks := range []any{
-		[]any{map[string]any{}},
-		[]any{"a"},
-		[]any{map[string]any{"text": "a"}, 1},
-	} {
-		if _, err := exec(t, tool, context.Background(), map[string]any{"action": "create", "tasks": tasks}); err == nil {
-			t.Fatalf("malformed tasks %v succeeded", tasks)
+	for _, link := range []any{1, 2.5, true, map[string]any{"id": "t1"}, []any{"t1"}} {
+		_, err := exec(t, tool, context.Background(), map[string]any{"action": "create", "text": "a", "requires": link})
+		if err == nil || !strings.Contains(err.Error(), "requires must be a task id (tN) from a reply, or null") {
+			t.Fatalf("a link that is not an id or null must refuse by name, %v gave %v", link, err)
 		}
+	}
+	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "create", "text": 1}); err == nil {
+		t.Fatal("a text that is not a string landed")
 	}
 }
 
@@ -144,7 +145,7 @@ func TestExecThreadsTheSession(t *testing.T) {
 	tool := todoapi.New(db, todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "attributed"}}})
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "attributed"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestExecThreadsTheSession(t *testing.T) {
 func TestAnonymousExecutivesRecordAnon(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
-	reply, err := exec(t, tool, context.Background(), map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "anon work"}}})
+	reply, err := exec(t, tool, context.Background(), map[string]any{"action": "create", "text": "anon work"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -179,10 +180,10 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "gate"},
 		map[string]any{"text": "work", "requires": "gate"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -204,10 +205,10 @@ func TestExecSurfacesTheReplies(t *testing.T) {
 func TestEmptyRequiresOrBlocksIsNoLink(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "gate", "requires": "", "blocks": ""},
 		map[string]any{"text": "work", "requires": "", "blocks": ""},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("an empty link must be the same as omitting the field, got: %v", err)
 	}
@@ -222,10 +223,10 @@ func TestEmptyRequiresOrBlocksIsNoLink(t *testing.T) {
 func TestSiblingTextLinkResolvesInOneCreate(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "gate"},
 		map[string]any{"text": "work", "requires": "gate"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -272,28 +273,36 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 
 func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	if d := tool.Description(); !strings.Contains(d, "`requires` makes a task wait on another") {
-		t.Fatalf("the description misses the one-line link sentence: %q", d)
+	for _, want := range []string{"one task per create", "create the task it waits for first, then link", "copy them, never invent them"} {
+		if !strings.Contains(tool.Description(), want) {
+			t.Fatalf("the description must carry %q:\n%s", want, tool.Description())
+		}
 	}
 	var s struct {
 		Properties map[string]struct {
-			Items struct {
-				Properties map[string]struct {
-					Description string `json:"description"`
-				} `json:"properties"`
-			} `json:"items"`
+			Type        any    `json:"type"`
+			Description string `json:"description"`
 		} `json:"properties"`
 	}
 	if err := json.Unmarshal(tool.Schema(), &s); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
+	if _, ok := s.Properties["tasks"]; ok {
+		t.Fatal("the schema must not offer a tasks array: one task per create")
+	}
 	want := map[string]string{
-		"requires": "the task this one waits for: its number in this list (2 is the second), a task id from a reply (t12), or its exact text. omit when none; null removes a link.",
-		"blocks":   "the task that waits for this one, named the same way. omit when none; null removes a link.",
+		"text":     "for create: what needs doing. one task per call.",
+		"requires": "for create: the task this one waits for, as its id from a reply (t12). omit when none; null removes a link.",
+		"blocks":   "for create: the task that waits for this one, as its id. omit when none; null removes a link.",
 	}
 	for key, wantDesc := range want {
-		if desc := s.Properties["tasks"].Items.Properties[key].Description; desc != wantDesc {
+		if desc := s.Properties[key].Description; desc != wantDesc {
 			t.Fatalf("%s description = %q, want %q", key, desc, wantDesc)
+		}
+	}
+	for _, key := range []string{"requires", "blocks"} {
+		if fmt.Sprint(s.Properties[key].Type) != "[string null]" {
+			t.Fatalf("%s takes a string or null, never a number: %v", key, s.Properties[key].Type)
 		}
 	}
 }
@@ -303,7 +312,7 @@ func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 	sessA := core.NewSession()
 	sessB := core.NewSession()
 	ctxA := core.WithSession(context.Background(), sessA)
-	reply, err := exec(t, tool, ctxA, map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "owned"}}})
+	reply, err := exec(t, tool, ctxA, map[string]any{"action": "create", "text": "owned"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -322,9 +331,9 @@ func TestNewVerbsRoundTrip(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "swarm work"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -367,9 +376,9 @@ func TestCompleteTwiceIsIdempotentThroughTheTool(t *testing.T) {
 	tool := todoapi.New(db, todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "twice"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -401,9 +410,9 @@ func TestStartTwiceIsIdempotentThroughTheTool(t *testing.T) {
 	tool := todoapi.New(db, todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "again"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -432,9 +441,9 @@ func TestModeKeysTheGate(t *testing.T) {
 	solo := todoapi.New(db, todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, solo, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, solo, ctx, []map[string]any{
 		map[string]any{"text": "solo"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -466,9 +475,9 @@ func TestWorkerModeIsReadNoteOnly(t *testing.T) {
 	worker := todoapi.New(newDB(t), todoapi.Worker)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, worker, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, worker, ctx, []map[string]any{
 		map[string]any{"text": "board entry"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -537,12 +546,12 @@ func TestFinishedActionListsNewestFirst(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "a"},
 		map[string]any{"text": "b"},
 		map[string]any{"text": "c"},
 		map[string]any{"text": "work"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -575,10 +584,10 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "keep"},
 		map[string]any{"text": "drop"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -628,7 +637,7 @@ func TestTodoScopeRefusesAnAbsentDirectoryByName(t *testing.T) {
 
 func TestACallWithoutScopeRefusesNamingTheRule(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	payload, err := json.Marshal(map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "x"}}})
+	payload, err := json.Marshal(map[string]any{"action": "create", "text": "x"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,7 +652,7 @@ func TestGlobalScopeLandsInTheGlobalQueue(t *testing.T) {
 	tool := todoapi.New(db, todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "scope": "global", "tasks": []any{map[string]any{"text": "everywhere"}}}); err != nil {
+		"action": "create", "scope": "global", "text": "everywhere"}); err != nil {
 		t.Fatalf("create at global: %v", err)
 	}
 	other := t.TempDir()
@@ -669,7 +678,7 @@ func TestStartAndClaimRepliesNameTheScope(t *testing.T) {
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	home := t.TempDir()
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "scope": home, "tasks": []any{map[string]any{"text": "the work"}}}); err != nil {
+		"action": "create", "scope": home, "text": "the work"}); err != nil {
 		t.Fatal(err)
 	}
 	started, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1", "scope": home})
@@ -680,7 +689,7 @@ func TestStartAndClaimRepliesNameTheScope(t *testing.T) {
 		t.Fatalf("the start reply must carry the scope on the row:\n%s", started)
 	}
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "scope": home, "tasks": []any{map[string]any{"text": "the next"}}}); err != nil {
+		"action": "create", "scope": home, "text": "the next"}); err != nil {
 		t.Fatal(err)
 	}
 	claimed, err := exec(t, tool, ctx, map[string]any{"action": "claim", "scope": home})
@@ -697,7 +706,7 @@ func TestStartReplyNamesTheGlobalScope(t *testing.T) {
 	tool := todoapi.New(db, todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "scope": "global", "tasks": []any{map[string]any{"text": "the work"}}}); err != nil {
+		"action": "create", "scope": "global", "text": "the work"}); err != nil {
 		t.Fatal(err)
 	}
 	started, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1", "scope": "global"})
@@ -715,7 +724,7 @@ func TestLaunchOutsideARepoWritesItsOwnWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	reply, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "scope": dir, "tasks": []any{map[string]any{"text": "a chore"}},
+		"action": "create", "scope": dir, "text": "a chore",
 	})
 	if err != nil {
 		t.Fatalf("a write outside a repo must land in its own workspace: %v", err)
@@ -748,7 +757,7 @@ func TestScopeExpandsTildeAtTheBoundary(t *testing.T) {
 		return tool.Exec(ctx, call.Args)
 	})
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	args := map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "tilde task"}}, "scope": "~/p"}
+	args := map[string]any{"action": "create", "text": "tilde task", "scope": "~/p"}
 	payload, err := json.Marshal(args)
 	if err != nil {
 		t.Fatal(err)
@@ -779,7 +788,7 @@ func TestTodoCreateAndCompleteWakeTheRouter(t *testing.T) {
 	})
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "tasks": []any{map[string]any{"text": "the work"}},
+		"action": "create", "text": "the work",
 	}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -869,7 +878,7 @@ func TestTodoCreateWakesTheRouterToClaimIt(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "scope": dir, "tasks": []any{map[string]any{"text": "the work"}},
+		"action": "create", "scope": dir, "text": "the work",
 	}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -905,12 +914,12 @@ func TestTodoUpdateRemovingARequiresLinkWakesTheRouter(t *testing.T) {
 	})
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "tasks": []any{map[string]any{"text": "the blocker"}},
+		"action": "create", "text": "the blocker",
 	}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "tasks": []any{map[string]any{"text": "the dependent", "requires": "the blocker"}},
+		"action": "create", "text": "the dependent", "requires": "t1",
 	}); err != nil {
 		t.Fatalf("the linked create: %v", err)
 	}
@@ -927,7 +936,7 @@ func TestTodoUpdateRemovingARequiresLinkWakesTheRouter(t *testing.T) {
 		t.Fatalf("the link must show before the update:\n%s", shown)
 	}
 	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "tasks": []any{map[string]any{"text": "the dependent", "requires": nil}},
+		"action": "create", "text": "the dependent", "requires": nil,
 	}); err != nil {
 		t.Fatalf("the update: %v", err)
 	}
@@ -945,46 +954,100 @@ func TestTodoUpdateRemovingARequiresLinkWakesTheRouter(t *testing.T) {
 	}
 }
 
-func TestANumberLinksASiblingByItsPosition(t *testing.T) {
+func TestALinkIsAnIdFromAReplyAndNothingElse(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
-		map[string]any{"text": "gate"},
-		map[string]any{"text": "work", "requires": 1},
-		map[string]any{"text": "ship", "requires": 2.0},
-	}})
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "gate"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	_, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "work", "requires": 1})
+	if err == nil || !strings.Contains(err.Error(), "requires must be a task id") {
+		t.Fatalf("a number is not a link: %v", err)
+	}
+	_, err = exec(t, tool, ctx, map[string]any{"action": "create", "text": "work", "requires": "gate"})
+	if err == nil || !strings.Contains(err.Error(), "requires 'gate' not found") || !strings.Contains(err.Error(), "a link is a task id from a reply") {
+		t.Fatalf("a text is not a link, and the refusal teaches the one form: %v", err)
+	}
+	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "work", "requires": "t1"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(reply, "\u00b7 requires t1") || !strings.Contains(reply, "\u00b7 requires t2") {
-		t.Fatalf("a JSON number is the sibling's position:\n%s", reply)
-	}
-	_, err = exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
-		map[string]any{"text": "half", "requires": 1.5},
-	}})
-	if err == nil || !strings.Contains(err.Error(), "1.5 is not a position") {
-		t.Fatalf("a fraction is not a position: %v", err)
+	if !strings.Contains(reply, "t2 [ ] work \u00b7 requires t1") {
+		t.Fatalf("the id from the reply links:\n%s", reply)
 	}
 }
 
 func TestACreateThatCannotLinkShowsTheQueue(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{map[string]any{"text": "already here"}}}); err != nil {
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "already here"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
-		map[string]any{"text": "new", "requires": "}, 2"},
-	}})
+	_, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "new", "requires": "}, 2"})
 	if err == nil {
 		t.Fatal("an unresolvable link lands nothing")
 	}
-	for _, want := range []string{"requires '}, 2' not found", "2 for the second", "t1", "already here"} {
+	for _, want := range []string{"requires '}, 2' not found", "a task id from a reply", "t1", "already here"} {
 		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("the refusal teaches the forms and shows the queue, missing %q:\n%v", want, err)
+			t.Fatalf("the refusal teaches the form and shows the queue, missing %q:\n%v", want, err)
 		}
 	}
-	if strings.Contains(err.Error(), "new") || strings.Contains(err.Error(), "t2") {
-		t.Fatalf("the queue shown is the one that exists, never the tasks that did not land:\n%v", err)
+	if strings.Contains(err.Error(), "new") || strings.Contains(err.Error(), "t2 [") {
+		t.Fatalf("the queue shown is the one that exists, never the task that did not land:\n%v", err)
 	}
+}
+
+var taskLine = regexp.MustCompile(`\b(t\d+) \[[~x!r ]\] (.*?)(?: · |$)`)
+
+func createAll(t *testing.T, tool core.Tool, ctx context.Context, tasks []map[string]any, extra ...map[string]any) (string, error) {
+	t.Helper()
+	call := func(fields map[string]any) (string, error) {
+		args := map[string]any{"action": "create"}
+		for _, e := range extra {
+			for k, v := range e {
+				args[k] = v
+			}
+		}
+		for k, v := range fields {
+			args[k] = v
+		}
+		return exec(t, tool, ctx, args)
+	}
+	var reply string
+	var err error
+	for _, task := range tasks {
+		if reply, err = call(map[string]any{"text": task["text"]}); err != nil {
+			return reply, err
+		}
+	}
+	ids := map[string]string{}
+	for _, line := range strings.Split(reply, "\n") {
+		if m := taskLine.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			ids[m[2]] = m[1]
+		}
+	}
+	for _, task := range tasks {
+		fields := map[string]any{"text": task["text"]}
+		linked := false
+		for _, key := range []string{"requires", "blocks"} {
+			v, ok := task[key]
+			if !ok {
+				continue
+			}
+			linked = true
+			if s, isText := v.(string); isText {
+				if id, known := ids[s]; known {
+					v = id
+				}
+			}
+			fields[key] = v
+		}
+		if !linked {
+			continue
+		}
+		if reply, err = call(fields); err != nil {
+			return reply, err
+		}
+	}
+	return reply, nil
 }

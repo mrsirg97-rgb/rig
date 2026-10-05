@@ -12,7 +12,7 @@ import (
 func TestReadShowsNoteCountAndNoNoteText(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "shared work"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "shared work"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestReadShowsNoteCountAndNoNoteText(t *testing.T) {
 func TestNotesActionListsNotesInOrderWithSessionAndTime(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{
+	reply, err := create(ctx, db, p, []item{
 		{Text: "gate"},
 		{Text: "shared work", Requires: ptrTo("gate"), Blocks: ptrTo("after")},
 		{Text: "after"},
@@ -91,7 +91,7 @@ func TestNotesActionListsNotesInOrderWithSessionAndTime(t *testing.T) {
 func TestNotesOnATaskWithoutNotesRepliesNoNotes(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "quiet"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "quiet"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestNotesOnAMissingTaskRefusesInTheStoreVoice(t *testing.T) {
 func TestReadOneRendersSummaryOnlyAndPointsAtNotes(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "peeked"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "peeked"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestReadOneRendersSummaryOnlyAndPointsAtNotes(t *testing.T) {
 func TestNotesSurviveCompactionWithTheirTime(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "noted"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "noted"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestNotesSurviveCompactionWithTheirTime(t *testing.T) {
 func TestReadCountSurvivesCompaction(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
-	reply, err := todostore.Create(ctx, db, p, []item{{Text: "counted"}}, sessA)
+	reply, err := create(ctx, db, p, []item{{Text: "counted"}}, sessA)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

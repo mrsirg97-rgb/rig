@@ -13,11 +13,11 @@ func TestNotesActionRoundTripsThroughTheTool(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, tool, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, tool, ctx, []map[string]any{
 		map[string]any{"text": "gate"},
 		map[string]any{"text": "work", "requires": "gate", "blocks": "after"},
 		map[string]any{"text": "after"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -71,9 +71,9 @@ func TestNotesActionIsWorkerReadOnly(t *testing.T) {
 	worker := todoapi.New(newDB(t), todoapi.Worker)
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
-	reply, err := exec(t, worker, ctx, map[string]any{"action": "create", "tasks": []any{
+	reply, err := createAll(t, worker, ctx, []map[string]any{
 		map[string]any{"text": "board entry"},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
