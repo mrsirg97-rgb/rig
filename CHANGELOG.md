@@ -21,7 +21,11 @@ containment, `Web.Fetch` holds the `maxChars` and `timeoutMs` bounds,
 is not there. A wire shape Go cannot name — a todo `link`, an id or a
 list of ids; a scheduler `model`, absent, null or a name — is decoded at
 the door and reaches the method decoded, or as a pointer where absent and
-zero differ. The bytes the model sees do not move: not one registry word,
+zero differ. A verb's target stays positional and at most two of its own
+fields ride beside it; past that they go in one input struct named for
+the verb — `Create(ctx, in CreateInput)`, `Learn(ctx, scope, in
+LearnInput)` — the store's shape, because a door whose ten arguments are
+six strings in a row is the wire again with type names on it. The bytes the model sees do not move: not one registry word,
 not one refusal sentence, and `TestFrontendMenuBytesStayWithinTheBudget`
 holds the menu at its 1099.
 
