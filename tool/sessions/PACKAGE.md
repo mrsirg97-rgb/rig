@@ -25,7 +25,14 @@ rows are touched.
 
 ## What it includes
 
-- `Tool`: a `core.Tool` over the state store's read verbs.
+- `Sessions`: the tool as its interface (2.12.6): `tool.Definition`,
+  `Exec` as the one JSON door — decode `action`/`project`/`n`, apply the
+  absent-field default, route, and refuse a missing or unknown action —
+  and two verbs over the state store's read path, `List(ctx, project, n)`
+  and `Summary(ctx, project, n)`. The `n` bound and the project
+  resolution (an empty project is the tool's own cwd) live in the verbs,
+  so a Go caller and the model hit the same checks. `New(home, cwd)`
+  returns the interface; the struct is unexported.
 
 ## How it is consumed
 

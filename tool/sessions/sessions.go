@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -22,13 +21,21 @@ const (
 	maxN     = state.ListCap
 )
 
+type Sessions interface {
+	tool.Definition
+	Exec(ctx context.Context, args json.RawMessage) (string, error)
+
+	List(ctx context.Context, project string, n int) (string, error)
+	Summary(ctx context.Context, project string, n int) (string, error)
+}
+
 type adapter struct {
 	tool.Definition
 	home string
 	cwd  string
 }
 
-func New(home, cwd string) core.Tool {
+func New(home, cwd string) Sessions {
 	return adapter{Definition: tool.Def("sessions"), home: home, cwd: cwd}
 }
 
@@ -43,26 +50,52 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 	if err := json.Unmarshal(args, &g); err != nil {
 		return "", fmt.Errorf("sessions: %v", err)
 	}
-	project := a.cwd
-	if g.Project != nil && *g.Project != "" {
+	project := ""
+	if g.Project != nil {
 		project = *g.Project
-		if abs, err := filepath.Abs(project); err == nil {
-			project = abs
-		}
 	}
 	n := defaultN
 	if g.N != nil {
-		if *g.N < 1 || *g.N > maxN {
-			return "", fmt.Errorf("sessions: n must be within 1..50, got %d", *g.N)
-		}
 		n = *g.N
 	}
 	switch g.Action {
 	case "":
 		return "", fmt.Errorf("sessions: action required")
-	case "list", "summary":
+	case "list":
+		return a.List(ctx, project, n)
+	case "summary":
+		return a.Summary(ctx, project, n)
 	default:
 		return "", fmt.Errorf("sessions: unknown action %q", g.Action)
+	}
+}
+
+func (a adapter) List(ctx context.Context, project string, n int) (string, error) {
+	if err := nBound(n); err != nil {
+		return "", err
+	}
+	return a.render(ctx, project, n, a.list)
+}
+
+func (a adapter) Summary(ctx context.Context, project string, n int) (string, error) {
+	if err := nBound(n); err != nil {
+		return "", err
+	}
+	return a.render(ctx, project, n, a.summary)
+}
+
+func nBound(n int) error {
+	if n < 1 || n > maxN {
+		return fmt.Errorf("sessions: n must be within 1..50, got %d", n)
+	}
+	return nil
+}
+
+func (a adapter) render(ctx context.Context, project string, n int, via func(context.Context, store.DB, string, int) (string, error)) (string, error) {
+	if project == "" {
+		project = a.cwd
+	} else if abs, err := filepath.Abs(project); err == nil {
+		project = abs
 	}
 	path := state.StorePath(a.home, project)
 	fi, err := os.Stat(path)
@@ -80,10 +113,7 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		return "", fmt.Errorf("sessions: %v", err)
 	}
 	defer db.DB.Close()
-	if g.Action == "list" {
-		return a.list(ctx, db, project, n)
-	}
-	return a.summary(ctx, db, project, n)
+	return via(ctx, db, project, n)
 }
 
 func (a adapter) list(ctx context.Context, db store.DB, project string, n int) (string, error) {
