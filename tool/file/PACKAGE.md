@@ -18,23 +18,24 @@ it acts on it.
 ## What it includes
 
 - `read`, `write`, `edit`: a `core.Tool` each, over `os`/`path/filepath`.
-- The edit license, narrowed to the drift check: edit takes `path` and
-  `edits`, a list of `{old, new}` applied in order; a single change is a
-  list of one, and the top-level `old`/`new` are gone from the schema.
-  Every chunk is validated against the content as the earlier chunks leave
-  it, each matching exactly once, before anything writes — all or none;
-  a later chunk may match text an earlier one created. An edit of a path
-  with no recorded `FileState` applies when every chunk matches exactly
-  once (an exact-once match cannot come from a model that never saw the
-  bytes); on any miss the reply is the file's text exactly as a read
+- The edit license, narrowed to the drift check: edit takes `path`,
+  `old` and `new` — one change per call, the chunk list gone with its
+  indices, its 32-chunk bound and its per-chunk reply line. Several
+  changes to one file are several calls in one turn: the loop applies a
+  batch in call order (a mutating call is a barrier, SPEC_EVT 2a) and
+  every landing records the file's new state, so each call matches and
+  is drift-checked against what the one before left. An edit of a path
+  with no recorded `FileState` applies when `old` matches exactly once
+  (an exact-once match cannot come from a model that never saw the
+  bytes); on a miss the reply is the file's text exactly as a read
   returns it — the same cap and truncation marker, taught once — ending
   with `[edit: <path> was not read this session; its text is above, now
   edit it]`, and the reply records the observation, so the edit that
   follows is drift-checked like any other. A file the session has read
-  refuses by name: the first missing chunk, its match count, and what it
-  found. The bounds stand ahead of any I/O: at most 32 chunks, total old
-  plus new under read's ceiling, no zero-width old. `read` or `write`
-  still mints the license, an external change
+  refuses by name: `old matched 0 times`, or `matched 3 times, want
+  exactly 1`. The bounds ahead of any I/O are the ones about the call:
+  `old` is not empty, and `old` plus `new` sit under read's ceiling.
+  `read` or `write` still mints the license, an external change
   invalidates it, and a standalone exec carries no session and so no
   license to check.
 - The stale-observation note on read: compared against the recorded
@@ -87,10 +88,11 @@ it acts on it.
 - The drift check refuses when the file's hash or mtime differs from the
   recorded `FileState`; edit-after-external-change never silently
   clobbers.
-- The chunks are applied by a pure function over the file's bytes
-  (`applyChunks`): no I/O, no session, and the miss report (chunk index,
-  match count) comes out of it, so the imperative shell only reads,
-  validates, and writes.
+- One call is one change; the order of several changes to one file is
+  the loop's, not the tool's. `edit` is a barrier in the batch
+  (SPEC_EVT 2a), so same-turn calls land in call order and each records
+  the file's new state for the next call's drift check. Nothing in the
+  tool serializes two calls, and nothing should.
 - The remembered bytes a drift refusal diffs against live in a bounded
   cache keyed by session ID and path (16 MiB, FIFO-evicted): two
   sessions sharing one process each diff against their own observation,

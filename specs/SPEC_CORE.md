@@ -328,28 +328,31 @@ and a fresh observation re-records as usual.
 
 **An edit of a path with no recorded observation applies on a match and
 teaches with bytes on a miss** (amended 2.3.3, retiring the read-first
-refusal; 2.5.0 restates the call as a list): an `old` that matches
-exactly once cannot come from a model that never saw the file, so the
-edit applies. Edit takes `path` and `edits`, a list of `{old, new}`
-applied in order — a single change is a list of one, the top-level
-`old`/`new` are gone from the schema — and every chunk is validated
-against the content as the earlier chunks leave it, each matching exactly
-once, before anything writes: all or none, and a later chunk may match
-text an earlier one created (the evidence: since 2.1.0, 412 edits, 22%
-of them another edit to the file the previous call had just edited —
-several changes to one file belong in one call, applied once,
-drift-checked once). A mismatch is not a refusal but the file's text
-exactly as a read returns it (the same cap and truncation marker,
-taught once), ending with `[edit: <path> was not read this session; its
-text is above, now edit it]`, and the reply records the observation, so
-the edit that follows is drift-checked like any other read. A file the
-session has read keeps today's refusals: the first missing chunk names
-itself, its match count, and what it found, a change since the read
-names the drift (the `Files` license, below), and a standalone exec
-carries no license to check. The bounds stand ahead of any I/O — at
-most 32 chunks, total old plus new under read's ceiling, no zero-width
-old. The reply is one line per chunk, then the path and total
-bytes replaced.
+refusal; 2.5.0 restated the call as a list of chunks, 2.12.5 restates it
+as one change): an `old` that matches exactly once cannot come from a
+model that never saw the file, so the edit applies. Edit takes `path`,
+`old` and `new`: one change per call, the chunk list gone along with its
+chunk indices, its 32-chunk bound and its per-chunk reply line. Several
+changes to one file are several calls in one turn — the batch applies
+them in call order, a mutating call being a barrier (SPEC_EVT 2a), and
+every landing records the file's new state, so the next call matches and
+is drift-checked against what the previous one left. That is 2.5.0's
+evidence served by the turn instead of by a second grammar in the tool
+(412 edits, 22% of them to the file the previous call had just edited);
+a later change may still match text an earlier one created, and calls on
+different files stay independent. A mismatch on a path with no
+observation is not a refusal but the file's text exactly as a read
+returns it (the same cap and truncation marker, taught once), ending
+with `[edit: <path> was not read this session; its text is above, now
+edit it]`, and the reply records the observation, so the edit that
+follows is drift-checked like any other read. A file the session has
+read refuses by name: `old matched 0 times`, or `matched 3 times, want
+exactly 1`, each naming that nothing landed; a change since the read
+names the drift (the `Files` license, below); a standalone exec carries
+no license to check. Two bounds stand ahead of any I/O because both are
+about the call, not the file: `old` is not empty — the teaching reply is
+no route for a zero-width old — and `old` plus `new` sit under read's
+ceiling. The reply is the path and the bytes replaced.
 
 ### ToolMiddleware
 

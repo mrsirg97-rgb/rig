@@ -225,7 +225,7 @@ func TestEditBlockPreviewsOldAndNewElided(t *testing.T) {
 		}
 		old.WriteString("o" + itoa(i))
 	}
-	raw, _ := json.Marshal(map[string]any{"path": "b.go", "edits": []map[string]string{{"old": old.String(), "new": "n1\nn2"}}})
+	raw, _ := json.Marshal(map[string]any{"path": "b.go", "old": old.String(), "new": "n1\nn2"})
 	got := tui.RenderToolBlock(th, 0, "edit", raw, "edited b.go", false, 50*time.Millisecond)
 	want := []string{
 		th.Paint("ember", "●") + " " + th.Paint("ember", "edit") + th.Paint("dim", " · ") + th.Paint("text", "b.go"),
@@ -257,29 +257,25 @@ func TestArgsPreviewOnlyForWriteAndEdit(t *testing.T) {
 	if strings.Contains(got, "never shown") {
 		t.Fatalf("read must not preview its args:\n%s", got)
 	}
-	got = tui.RenderToolBlock(th, 0, "edit", json.RawMessage(`{"path":"a.go","edits":[{"old":"","new":""}]}`), "edited", false, time.Second)
+	got = tui.RenderToolBlock(th, 0, "edit", json.RawMessage(`{"path":"a.go","old":"","new":""}`), "edited", false, time.Second)
 	if lines := strings.Split(got, "\n"); len(lines) != 3 {
 		t.Fatalf("empty sides must add no rows, got %d:\n%s", len(lines), got)
 	}
 }
 
-func TestEditBlockPreviewsEveryChunkRedThenGreen(t *testing.T) {
+func TestEditBlockPreviewsThePairRedThenGreen(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := json.RawMessage(`{"path":"a.go","edits":[{"old":"x := 1\n","new":"x := 2\n"},{"old":"return x","new":"return x + 1\n"}]}`)
-	content := "chunk 1: replaced 7 byte(s)\nchunk 2: replaced 8 byte(s)\nedited a.go: replaced 15 byte(s)"
+	args := json.RawMessage(`{"path":"a.go","old":"x := 1\n","new":"x := 2\n"}`)
+	content := "edited a.go: replaced 7 byte(s)"
 	got := tui.RenderToolBlock(th, 0, "edit", args, content, false, 10*time.Millisecond)
 	want := []string{
 		th.Paint("ember", "●") + " " + th.Paint("ember", "edit") + th.Paint("dim", " · ") + th.Paint("text", "a.go"),
 		th.Paint("error", "- x := 1"),
 		th.Paint("success", "+ x := 2"),
-		th.Paint("error", "- return x"),
-		th.Paint("success", "+ return x + 1"),
-		th.Paint("dim", "  chunk 1: replaced 7 byte(s)"),
-		th.Paint("dim", "  chunk 2: replaced 8 byte(s)"),
-		th.Paint("dim", "  edited a.go: replaced 15 byte(s)"),
+		th.Paint("dim", "  edited a.go: replaced 7 byte(s)"),
 		th.Paint("dim", "edit") + " " + th.Paint("success", "✓") + " " + th.Paint("dim", "0.0s"),
 	}
 	lines := strings.Split(got, "\n")
@@ -298,7 +294,7 @@ func TestEditBlockWithUnreadFileShowsOnlyTheRedSide(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := json.RawMessage(`{"path":"a.go","edits":[{"old":"gone","new":""}]}`)
+	args := json.RawMessage(`{"path":"a.go","old":"gone","new":""}`)
 	got := tui.RenderToolBlock(th, 0, "edit", args, "the file", false, 10*time.Millisecond)
 	if !strings.Contains(got, th.Paint("error", "- gone")) || strings.Contains(got, th.Paint("success", "+ ")) {
 		t.Fatalf("an empty new side adds no green row:\n%s", got)

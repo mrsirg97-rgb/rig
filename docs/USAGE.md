@@ -267,14 +267,14 @@ Narrowing is always available and compose-order-agnostic.
 
 The file tools normalize paths before any provenance decision, and `edit`
 validates that the file is still what it was when last read; external drift
-is named and the write is refused. Edit takes a list of `{old, new}`
-changes applied in order, every chunk validated against the content the
-earlier chunks leave, all or none. An edit of a file the session has not
-read applies when every
-chunk matches exactly once; on a miss it hands back the file's text
-(capped like a read) so the next call edits from it. Ambiguous
-old-strings are never guessed at: a read file's edit refuses naming the
-chunk and the count, an unread file's edit hands back the text. Outputs are
+is named and the write is refused. Edit takes `path`, `old` and `new`:
+one change per call, and several changes to one file are several calls
+in one turn, applied in call order, each drift-checked against what the
+call before it left. An edit of a file the session has not
+read applies when `old` matches exactly once; on a miss it hands back the
+file's text (capped like a read) so the next call edits from it.
+Ambiguous old-strings are never guessed at: a read file's edit refuses
+naming the count, an unread file's edit hands back the text. Outputs are
 capped (bash 256 KiB, read 1 MiB)
 and the truncation is named in the output; a read streams the file, so a
 huge file is never materialised through a read.

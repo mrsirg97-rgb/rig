@@ -14,14 +14,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
 
-func chunks(pairs ...[2]string) []map[string]string {
-	out := make([]map[string]string, 0, len(pairs))
-	for _, p := range pairs {
-		out = append(out, map[string]string{"old": p[0], "new": p[1]})
-	}
-	return out
-}
-
 func TestEditSingleChangeReplacesExactlyOnce(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
@@ -29,8 +21,7 @@ func TestEditSingleChangeReplacesExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"beta", "BETA"}),
+		"path": path, "old": "beta", "new": "BETA",
 	}))
 	if err != nil {
 		t.Fatalf("edit: %v", err)
@@ -47,7 +38,7 @@ func TestEditSingleChangeReplacesExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestEditReplyIsOneLinePerChunkThenPathAndTotal(t *testing.T) {
+func TestEditReplyNamesThePathAndBytesReplaced(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one two three\n"), 0o644); err != nil {
@@ -58,83 +49,18 @@ func TestEditReplyIsOneLinePerChunkThenPathAndTotal(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"two", "TWO"}, [2]string{"three", "THREE"}),
+		"path": path, "old": "two three", "new": "2 3",
 	}))
 	if err != nil {
 		t.Fatalf("edit: %v", err)
 	}
-	want := "chunk 1: replaced 3 byte(s)\nchunk 2: replaced 5 byte(s)\nedited " + path + ": replaced 8 byte(s)"
+	want := "edited " + path + ": replaced 9 byte(s)"
 	if got != want {
-		t.Fatalf("the reply is one line per chunk then the path and total:\n got %q\nwant %q", got, want)
+		t.Fatalf("the reply is one line, the path and the bytes replaced:\n got %q\nwant %q", got, want)
 	}
 }
 
-func TestEditNChunksEqualNSequentialEdits(t *testing.T) {
-	for n := 1; n <= 6; n++ {
-		toks := make([]string, n)
-		var b strings.Builder
-		for i := range toks {
-			toks[i] = fmt.Sprintf("tok%02d", i)
-			b.WriteString(toks[i] + "\n")
-		}
-		content := b.String()
-		pathA := filepath.Join(t.TempDir(), "code.txt")
-		pathB := filepath.Join(t.TempDir(), "code.txt")
-		if err := os.WriteFile(pathA, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(pathB, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		sessA, sessB := core.NewSession(), core.NewSession()
-		ctxA := core.WithSession(context.Background(), sessA)
-		ctxB := core.WithSession(context.Background(), sessB)
-		if _, err := file.Read().Exec(ctxA, argsJSON(t, map[string]any{"path": pathA})); err != nil {
-			t.Fatalf("read A: %v", err)
-		}
-		if _, err := file.Read().Exec(ctxB, argsJSON(t, map[string]any{"path": pathB})); err != nil {
-			t.Fatalf("read B: %v", err)
-		}
-		edits := make([]map[string]string, n)
-		for i := range toks {
-			edits[i] = map[string]string{"old": toks[i], "new": "TOK" + toks[i][3:]}
-		}
-		reply, err := file.Edit().Exec(ctxA, argsJSON(t, map[string]any{
-			"path": pathA, "edits": edits,
-		}))
-		if err != nil {
-			t.Fatalf("n=%d multi-chunk: %v", n, err)
-		}
-		if lines := strings.Count(reply, "\n") + 1; lines != n+1 {
-			t.Fatalf("n=%d: the reply must carry one line per chunk plus the total, got %d lines:\n%s", n, lines, reply)
-		}
-		for i := range toks {
-			if _, err := file.Edit().Exec(ctxB, argsJSON(t, map[string]any{
-				"path":  pathB,
-				"edits": chunks([2]string{toks[i], "TOK" + toks[i][3:]}),
-			})); err != nil {
-				t.Fatalf("n=%d sequential chunk %d: %v", n, i+1, err)
-			}
-		}
-		dataA, err := os.ReadFile(pathA)
-		if err != nil {
-			t.Fatal(err)
-		}
-		dataB, err := os.ReadFile(pathB)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(dataA) != string(dataB) {
-			t.Fatalf("n=%d: the multi-chunk result drifted from the sequential edits", n)
-		}
-		if sessA.Files[pathA].Hash != sessB.Files[pathB].Hash {
-			t.Fatalf("n=%d: the recorded provenance drifted between the two shapes", n)
-		}
-	}
-}
-
-func TestEditAmbiguousChunkNamesTheCount(t *testing.T) {
+func TestEditAmbiguousOldNamesTheCount(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("x x x"), 0o644); err != nil {
@@ -145,14 +71,16 @@ func TestEditAmbiguousChunkNamesTheCount(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"x", "y"}),
+		"path": path, "old": "x", "new": "y",
 	}))
-	if err == nil || !strings.Contains(err.Error(), "chunk 1 of 1") || !strings.Contains(err.Error(), "matched 3 times") {
-		t.Fatalf("an ambiguous chunk must name the chunk and its match count, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "matched 3 times, want exactly 1") {
+		t.Fatalf("an ambiguous old must refuse naming its match count, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "nothing landed") {
 		t.Fatalf("the refusal must say nothing landed, got %v", err)
+	}
+	if strings.Contains(err.Error(), "chunk") {
+		t.Fatalf("there is no chunk grammar to name, got %v", err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -163,7 +91,7 @@ func TestEditAmbiguousChunkNamesTheCount(t *testing.T) {
 	}
 }
 
-func TestEditAbsentChunkRefusesLoud(t *testing.T) {
+func TestEditAbsentOldRefusesLoud(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
@@ -174,11 +102,10 @@ func TestEditAbsentChunkRefusesLoud(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"absent", "x"}),
+		"path": path, "old": "absent", "new": "x",
 	}))
-	if err == nil || !strings.Contains(err.Error(), "chunk 1 of 1") || !strings.Contains(err.Error(), "matched 0 times") {
-		t.Fatalf("an absent chunk must refuse naming the chunk and the miss, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "matched 0 times") {
+		t.Fatalf("an absent old must refuse naming the miss, got %v", err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -186,87 +113,6 @@ func TestEditAbsentChunkRefusesLoud(t *testing.T) {
 	}
 	if string(data) != "hello" {
 		t.Fatal("a refused edit must not mutate the file")
-	}
-}
-
-func TestEditChunkTwoConsumingChunkOneTextRefusesLandingNothing(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	if err := os.WriteFile(path, []byte("ab\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"ab", "a"}, [2]string{"ab", "Z"}),
-	}))
-	if err == nil || !strings.Contains(err.Error(), "chunk 2 of 2") || !strings.Contains(err.Error(), "matched 0 times") {
-		t.Fatalf("chunk 2 must be validated against the content chunk 1 leaves and refuse by name, got %v", err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "ab\n" {
-		t.Fatalf("the refused call must land nothing, got %q", data)
-	}
-}
-
-func TestEditChunkTwoMatchingTwiceAfterChunkOneNamesTheCount(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	if err := os.WriteFile(path, []byte("xay\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"a", "aa"}, [2]string{"a", "Z"}),
-	}))
-	if err == nil || !strings.Contains(err.Error(), "chunk 2 of 2") || !strings.Contains(err.Error(), "matched 2 times") {
-		t.Fatalf("chunk 2 matching twice after chunk 1 must name the count, got %v", err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "xay\n" {
-		t.Fatalf("the refused call must land nothing, got %q", data)
-	}
-}
-
-func TestEditChunkMatchesOnlyAfterChunkOneApplies(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	if err := os.WriteFile(path, []byte("xay\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.Read().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"a", "bee"}, [2]string{"bee", "Z"}),
-	}))
-	if err != nil {
-		t.Fatalf("a later chunk may match text an earlier one created: %v", err)
-	}
-	if !strings.Contains(got, "chunk 1: replaced 1 byte(s)") || !strings.Contains(got, "chunk 2: replaced 3 byte(s)") {
-		t.Fatalf("the reply must carry each chunk's own count, got %q", got)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "xZy\n" {
-		t.Fatalf("content = %q, want xZy\\n", data)
 	}
 }
 
@@ -287,8 +133,7 @@ func TestEditAfterExternalChangeFailsLoud(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"version", "draft"}),
+		"path": path, "old": "version", "new": "draft",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
 		t.Fatalf("edit-after-external-change must fail loudly naming the drift, got %v", err)
@@ -328,8 +173,7 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 	}
 
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  "." + string(os.PathSeparator) + "code.txt",
-		"edits": chunks([2]string{"version", "draft"}),
+		"path": "." + string(os.PathSeparator) + "code.txt", "old": "version", "new": "draft",
 	})); err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
 		t.Fatalf("drift check bypassed by path spelling, got %v", err)
 	}
@@ -338,12 +182,14 @@ func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
 func TestEditDescriptionNamesTheGuideline(t *testing.T) {
 	desc := file.Edit().Description()
 	for _, want := range []string{
-		"put enough of it in each `old` to match exactly once",
-		"chunks apply in order, all or none",
+		"put enough of it in `old` to match exactly once",
+		"one change per call",
+		"several calls in one turn",
+		"land in the order they are listed",
 		"returns the file's text instead of refusing",
 		"the next call edits it",
 		"the file changed since your read",
-		"one line per chunk",
+		"the path and the bytes replaced",
 	} {
 		if !strings.Contains(desc, want) {
 			t.Fatalf("the edit description must say %q, got:\n%s", want, desc)
@@ -351,50 +197,43 @@ func TestEditDescriptionNamesTheGuideline(t *testing.T) {
 	}
 }
 
-func TestEditSchemaDropsTopLevelOldAndNew(t *testing.T) {
+func TestEditSchemaTakesPathOldNew(t *testing.T) {
 	var m map[string]any
 	if err := json.Unmarshal(file.Edit().Schema(), &m); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
 	req, _ := m["required"].([]any)
-	if len(req) != 2 || req[0] != "path" || req[1] != "edits" {
-		t.Fatalf("the schema must require path and edits only, got %v", req)
+	if len(req) != 3 || req[0] != "path" || req[1] != "old" || req[2] != "new" {
+		t.Fatalf("the schema must require path, old and new, got %v", req)
 	}
 	props, _ := m["properties"].(map[string]any)
-	for _, gone := range []string{"old", "new"} {
+	for _, gone := range []string{"edits"} {
 		if _, ok := props[gone]; ok {
-			t.Fatalf("the top-level %q must be gone from the schema", gone)
+			t.Fatalf("the chunk list %q must be gone from the schema", gone)
 		}
 	}
-	edits, ok := props["edits"].(map[string]any)
-	if !ok {
-		t.Fatal("the edits property is missing")
-	}
-	items, ok := edits["items"].(map[string]any)
-	if !ok {
-		t.Fatal("the edits property must carry item shapes")
-	}
-	ireq, _ := items["required"].([]any)
-	if len(ireq) != 2 || ireq[0] != "old" || ireq[1] != "new" {
-		t.Fatalf("each chunk must require old and new, got %v", ireq)
+	for _, want := range []string{"old", "new"} {
+		if _, ok := props[want].(map[string]any); !ok {
+			t.Fatalf("%q must be a property of its own, got %v", want, props[want])
+		}
 	}
 }
 
-func TestEditRefusesLegacyOldNewArgs(t *testing.T) {
+func TestEditRefusesLegacyEditsArray(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path": path, "old": "one", "new": "two",
+		"path": path, "edits": []map[string]string{{"old": "one", "new": "two"}},
 	}))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") {
-		t.Fatalf("the top-level old and new are gone from the schema; the legacy shape must refuse as args, got %v", err)
+		t.Fatalf("the chunk list is gone from the schema; the legacy shape must refuse as args, got %v", err)
 	}
 }
 
-func TestEditWithoutPriorReadAppliesWhenAllChunksMatch(t *testing.T) {
+func TestEditWithoutPriorReadAppliesWhenOldMatches(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
@@ -403,11 +242,10 @@ func TestEditWithoutPriorReadAppliesWhenAllChunksMatch(t *testing.T) {
 	session := core.NewSession()
 	ctx := core.WithSession(context.Background(), session)
 	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"one", "1"}, [2]string{"two", "2"}),
+		"path": path, "old": "one", "new": "1",
 	}))
 	if err != nil {
-		t.Fatalf("an unread file with every chunk matching once applies: %v", err)
+		t.Fatalf("an unread file whose old matches once applies: %v", err)
 	}
 	if !strings.Contains(got, "edited "+path) {
 		t.Fatalf("the reply must name the path and the total, got %q", got)
@@ -416,8 +254,8 @@ func TestEditWithoutPriorReadAppliesWhenAllChunksMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "1\n2\n" {
-		t.Fatalf("content = %q, want 1\\n2\\n", data)
+	if string(data) != "1\ntwo\n" {
+		t.Fatalf("content = %q, want 1\\ntwo\\n", data)
 	}
 	if _, ok := session.Files[path]; !ok {
 		t.Fatal("the applied edit must refresh the observation")
@@ -433,11 +271,10 @@ func TestEditWithoutPriorReadMismatchReturnsTheFileText(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"alpha", "A"}, [2]string{"absent", "x"}),
+		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
-		t.Fatalf("a mismatch on an unread file hands back the text instead of a refusal: %v", err)
+		t.Fatalf("a mismatch on an unread file hands back the text instead of refusing: %v", err)
 	}
 	want := content + "\n[edit: " + path + " was not read this session; its text is above, now edit it]"
 	if got != want {
@@ -460,8 +297,7 @@ func TestEditWithoutPriorReadAmbiguousReturnsTheFileText(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"x", "z"}),
+		"path": path, "old": "x", "new": "z",
 	}))
 	if err != nil {
 		t.Fatalf("an ambiguous old on an unread file hands back the text too: %v", err)
@@ -478,7 +314,7 @@ func TestEditWithoutPriorReadAmbiguousReturnsTheFileText(t *testing.T) {
 	}
 }
 
-func TestEditUnreadTeachesOnceOnAnyMiss(t *testing.T) {
+func TestEditUnreadTeachesOnceOnAMiss(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	content := "alpha\nbeta\n"
@@ -487,11 +323,10 @@ func TestEditUnreadTeachesOnceOnAnyMiss(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"alpha", "A"}, [2]string{"absent", "x"}),
+		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
-		t.Fatalf("any miss on an unread file teaches instead of refusing: %v", err)
+		t.Fatalf("a miss on an unread file teaches instead of refusing: %v", err)
 	}
 	marker := "\n[edit: " + path + " was not read this session; its text is above, now edit it]"
 	if strings.Count(got, marker) != 1 {
@@ -521,8 +356,7 @@ func TestEditWithoutPriorReadReplyIsReadPlusTheMarker(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"absent", "x"}),
+		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
 		t.Fatalf("edit: %v", err)
@@ -545,8 +379,7 @@ func TestEditWithoutPriorReadReplyCapsLikeRead(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	got, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"absent", "x"}),
+		"path": path, "old": "absent", "new": "x",
 	}))
 	if err != nil {
 		t.Fatalf("edit: %v", err)
@@ -575,8 +408,7 @@ func TestEditAfterUnreadTeachingReplyIsDriftChecked(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"absent", "x"}),
+		"path": path, "old": "absent", "new": "x",
 	})); err != nil {
 		t.Fatalf("the teaching reply: %v", err)
 	}
@@ -584,8 +416,7 @@ func TestEditAfterUnreadTeachingReplyIsDriftChecked(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"beta", "gamma"}),
+		"path": path, "old": "beta", "new": "gamma",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
 		t.Fatalf("the edit that follows the teaching reply must be drift-checked like any other, got %v", err)
@@ -600,14 +431,12 @@ func TestEditAfterUnreadTeachingReplyAppliesWithoutARead(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"absent", "x"}),
+		"path": path, "old": "absent", "new": "x",
 	})); err != nil {
 		t.Fatalf("the teaching reply: %v", err)
 	}
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"beta", "gamma"}),
+		"path": path, "old": "beta", "new": "gamma",
 	})); err != nil {
 		t.Fatalf("the follow-up edit must apply without a separate read: %v", err)
 	}
@@ -620,43 +449,29 @@ func TestEditAfterUnreadTeachingReplyAppliesWithoutARead(t *testing.T) {
 	}
 }
 
-func TestEditWithoutPriorReadZeroWidthOldRefusesLoud(t *testing.T) {
+func TestEditEmptyOldRefusesAheadOfTheFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"", "x"}),
-	}))
-	if err == nil || !strings.Contains(err.Error(), "zero-width") {
-		t.Fatalf("a zero-width old is an args problem, unread file or not, got %v", err)
-	}
-}
-
-func TestEditZeroWidthOldNamesTheChunk(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"one", "1"}, [2]string{"", "x"}, [2]string{"two", "2"}),
-	}))
-	if err == nil || !strings.Contains(err.Error(), "chunk 2 of 3") || !strings.Contains(err.Error(), "zero-width") {
-		t.Fatalf("a zero-width old must name its chunk, got %v", err)
+	for _, ctx := range []context.Context{
+		core.WithSession(context.Background(), core.NewSession()),
+		context.Background(),
+	} {
+		_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
+			"path": path, "old": "", "new": "x",
+		}))
+		if err == nil || !strings.Contains(err.Error(), "empty") {
+			t.Fatalf("an empty old is an args problem, unread file or not, got %v", err)
+		}
 	}
 }
 
 func TestEditWithoutPriorReadMissingFileRefusesLoud(t *testing.T) {
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  filepath.Join(t.TempDir(), "absent.txt"),
-		"edits": chunks([2]string{"x", "y"}),
+		"path": filepath.Join(t.TempDir(), "absent.txt"), "old": "x", "new": "y",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "absent.txt") {
 		t.Fatalf("a missing file is not a teaching moment, got %v", err)
@@ -670,8 +485,7 @@ func TestEditWithoutPriorReadProceedsStandalone(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"one", "two"}),
+		"path": path, "old": "one", "new": "two",
 	}))
 	if err != nil {
 		t.Fatalf("a standalone exec carries no session and so no license to check: %v", err)
@@ -691,59 +505,23 @@ func TestEditAfterWriteProceedsThreaded(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"one", "two"}),
+		"path": path, "old": "one", "new": "two",
 	})); err != nil {
 		t.Fatalf("write mints the edit license: %v", err)
 	}
 }
 
-func TestEditEmptyEditsListRefuses(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+func TestEditOldPlusNewAtTheReadCeilingRefuses(t *testing.T) {
 	_, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path": path, "edits": []map[string]string{},
-	}))
-	if err == nil || !strings.Contains(err.Error(), "empty") {
-		t.Fatalf("an empty edits list must refuse loud, got %v", err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "one" {
-		t.Fatal("a refused call must not mutate the file")
-	}
-}
-
-func TestEditChunkCountOverTheBoundRefuses(t *testing.T) {
-	edits := make([]map[string]string, 33)
-	for i := range edits {
-		edits[i] = map[string]string{"old": "a", "new": "b"}
-	}
-	_, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path":  filepath.Join(t.TempDir(), "absent.txt"),
-		"edits": edits,
-	}))
-	if err == nil || !strings.Contains(err.Error(), "33") || !strings.Contains(err.Error(), "32") {
-		t.Fatalf("33 chunks must refuse naming the 32-chunk bound before the file is even read, got %v", err)
-	}
-}
-
-func TestEditChunkTotalAtTheReadCeilingRefuses(t *testing.T) {
-	_, err := file.Edit().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path":  filepath.Join(t.TempDir(), "absent.txt"),
-		"edits": chunks([2]string{"a", strings.Repeat("x", readCap-1)}),
+		"path": filepath.Join(t.TempDir(), "absent.txt"),
+		"old":  "a", "new": strings.Repeat("x", readCap-1),
 	}))
 	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(readCap)) {
-		t.Fatalf("a chunk total at the read ceiling must refuse naming it, got %v", err)
+		t.Fatalf("old plus new at the read ceiling must refuse naming it, got %v", err)
 	}
 }
 
-func TestEditChunkTotalUnderTheReadCeilingApplies(t *testing.T) {
+func TestEditOldPlusNewUnderTheReadCeilingApplies(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("a\n"), 0o644); err != nil {
@@ -751,10 +529,9 @@ func TestEditChunkTotalUnderTheReadCeilingApplies(t *testing.T) {
 	}
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"a", strings.Repeat("x", readCap-2)}),
+		"path": path, "old": "a", "new": strings.Repeat("x", readCap-2),
 	})); err != nil {
-		t.Fatalf("a chunk total under the read ceiling applies: %v", err)
+		t.Fatalf("old plus new under the read ceiling applies: %v", err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -786,8 +563,7 @@ func TestDriftDiffKeysOnTheSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := file.Edit().Exec(ctxA, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"A content", "X"}),
+		"path": path, "old": "A content", "new": "X",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "the file changed since the read") {
 		t.Fatalf("session A's edit must refuse naming the drift, got %v", err)
@@ -813,8 +589,7 @@ func TestEditRecordsFreshProvenance(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"one", "two"}),
+		"path": path, "old": "one", "new": "two",
 	})); err != nil {
 		t.Fatalf("edit: %v", err)
 	}
@@ -823,8 +598,7 @@ func TestEditRecordsFreshProvenance(t *testing.T) {
 		t.Fatal("edit must record fresh, complete provenance for subsequent edits")
 	}
 	if _, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"two", "three"}),
+		"path": path, "old": "two", "new": "three",
 	})); err != nil {
 		t.Fatalf("second edit: %v", err)
 	}
@@ -858,8 +632,7 @@ func TestDriftRefusalShowsASmallDriftWhole(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"beta", "beta2"}),
+		"path": path, "old": "beta", "new": "beta2",
 	}))
 	if err == nil {
 		t.Fatal("the drift must refuse")
@@ -897,8 +670,7 @@ func TestDriftRefusalCapsARewrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := file.Edit().Exec(ctx, argsJSON(t, map[string]any{
-		"path":  path,
-		"edits": chunks([2]string{"old", "new"}),
+		"path": path, "old": "old", "new": "new",
 	}))
 	if err == nil {
 		t.Fatal("the drift must refuse")

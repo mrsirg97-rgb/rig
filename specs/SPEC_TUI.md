@@ -621,16 +621,17 @@ came back. Write previews the content in the dim, the result body's
 shape; edit previews the old side as `- ` lines in the error color and
 the new side as `+ ` lines in the success color. Each side elides by
 the same head/tail rule, an empty side adds no rows, and the result
-line follows as ever. Since the batched edit (2.9.x) the arguments are
-`edits`, a list of chunks, and the preview walks them in order, each
-chunk its red side then its green side (2.11.3: the preview had kept
-reading the old top-level `old`/`new` and showed nothing):
+line follows as ever. The batched edit (2.9.x) made the arguments
+`edits`, a list of chunks, and the preview walked the list, each chunk
+its red side then its green side (2.11.3: it had kept reading the
+top-level `old`/`new` and showed nothing); 2.12.5 makes them one
+`old`/`new` pair again, so the preview is that pair and several changes
+to one file read as the several blocks the several calls are:
 
 ```
 ● edit · store/todo/todo.go
 - 	return replyText(f, session, note), nil
 + 	return echoTask(f, session, id, note), nil
-  chunk 1: replaced 41 byte(s)
   edited store/todo/todo.go: replaced 41 byte(s)
 edit ✓ 0.0s
 ```
