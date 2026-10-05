@@ -35,7 +35,7 @@ func RenderUsage(t Theme, up, down, cacheRead int) string {
 
 func RenderCompacted(t Theme, ev core.Compacted) string {
 	return t.Paint(SlotEmber, t.Glyph(GlyphCompact)) + " " +
-		t.Paint(SlotDim, fmt.Sprintf("compact: -%s kept %s · summary up %s down %s",
+		t.Paint(SlotDim, fmt.Sprintf("compact: -%s kept %s · up %s down %s",
 			formatTokens(ev.Dropped), formatTokens(ev.Kept),
 			formatTokens(ev.Usage.Prompt), formatTokens(ev.Usage.Completion)))
 }
