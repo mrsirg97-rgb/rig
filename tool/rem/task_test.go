@@ -53,7 +53,7 @@ func (r packReviews) Pending(ctx context.Context) ([]decision.ReviewRow, error) 
 	out := make([]decision.ReviewRow, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, decision.ReviewRow{
-			ID: row.ID, Site: row.Site, State: row.State, Question: row.Question,
+			ID: row.ID, Scope: row.Scope, Site: row.Site, State: row.State, Question: row.Question,
 			Answer: row.Answer, Confidence: row.Confidence, Decider: row.Decider,
 		})
 	}
@@ -374,7 +374,7 @@ func TestTheReviewerDeniesAPackRowWithTheCorrectedAnswer(t *testing.T) {
 	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
 	})
-	rev := decision.NewReviewer(context.Background(), engine, packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room)
+	rev := decision.NewReviewer(context.Background(), engine, packReviews{db: db}, fire, 1<<20, models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room, "proj")
 	if _, err := rev.Drain(context.Background()); err != nil {
 		t.Fatal(err)
 	}

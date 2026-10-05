@@ -50,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.12.1"
+const Version = "2.12.2"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -597,7 +597,7 @@ func main() {
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, reviews,
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				cfg.Settings.ReviewBatchOrDefault(), row, room)
+				cfg.Settings.ReviewBatchOrDefault(), row, room, scope.Key(cwd))
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, rev.Land, voice)
 			land = rev.Land
