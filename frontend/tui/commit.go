@@ -223,14 +223,10 @@ func argsPreview(t Theme, width int, name string, args json.RawMessage) string {
 	if name == "write" {
 		return side("content", "  ", SlotDim)
 	}
-	chunks, _ := v["edits"].([]any)
 	var rows []string
-	for _, c := range chunks {
-		m, _ := c.(map[string]any)
-		for _, side := range [][3]string{{"old", "- ", SlotError}, {"new", "+ ", SlotSuccess}} {
-			if text, _ := m[side[0]].(string); text != "" {
-				rows = append(rows, previewWith(t, width, text, side[1], side[2]))
-			}
+	for _, pair := range [][3]string{{"old", "- ", SlotError}, {"new", "+ ", SlotSuccess}} {
+		if row := side(pair[0], pair[1], pair[2]); row != "" {
+			rows = append(rows, row)
 		}
 	}
 	return strings.Join(rows, "\n")

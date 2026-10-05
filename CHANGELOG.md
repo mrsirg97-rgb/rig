@@ -1,4 +1,29 @@
 # Changelog
+## [2.12.5]: edit takes one change
+
+The chunk list was a second way to use the tool, with its own grammar:
+`{old, new}` pairs applied in order, chunk indices in the refusals
+(`chunk 2 of 3: old matched 0 times (absent from the file as the earlier
+chunks leave it)`), a 32-chunk bound, a total-bytes bound, one reply line
+per chunk, and a TUI preview that walked the list. 2.12.4 took the same
+shape out of `todo` for the same reason: one way to use a tool is one
+thing to reason about. Edit takes `path`, `old` and `new`; `old` matches
+exactly once or the call refuses by name (`old matched 0 times` /
+`matched 3 times, want exactly 1`); the reply is the path and the bytes
+replaced. The bounds ahead of any I/O are the two about the call: `old`
+is not empty, and `old` plus `new` sit under read's ceiling.
+
+What the list bought, the loop already gives: `edit` is mutating, so
+several calls in one turn run one after another in call order (SPEC_EVT
+2a) and each landing records the file's new state, so the next call is
+drift-checked against what the one before left — a test in
+`loop/batch_test` names that order, because the order is the mechanism.
+2.5.0's evidence (412 edits, 22% of them to the file the previous call
+had just edited) is answered by the turn. The unread-file teaching reply
+and the drift refusal are untouched, and old transcripts keep their
+`edits` arrays as the history they are: nothing replays them, so there
+is no shim and a legacy call refuses as an unknown field. The menu drops
+to 13,594 characters.
 ## [2.12.4]: one task per create, the tool as its interface
 
 GLM numbered its five-step plan and wrote `requires: "t1"`, `"t3"`,

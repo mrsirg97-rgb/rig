@@ -2,8 +2,12 @@ package loop_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,6 +17,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
+	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
 
 type timedTool struct {
@@ -316,4 +321,56 @@ func (panickyTool) Description() string     { return "panics" }
 func (panickyTool) Schema() json.RawMessage { return json.RawMessage(`{}`) }
 func (panickyTool) Exec(context.Context, json.RawMessage) (string, error) {
 	panic("boom")
+}
+
+func fileCall(t *testing.T, id, name string, args map[string]any) core.ToolCall {
+	t.Helper()
+	raw, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return core.ToolCall{ID: id, Name: name, Args: raw}
+}
+
+func TestBatchEditsToOneFileRunInCallOrderAgainstThePreviousLanding(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.txt")
+	if err := os.WriteFile(path, []byte("alpha\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	calls := []core.ToolCall{
+		fileCall(t, "c1", "read", map[string]any{"path": path}),
+		fileCall(t, "c2", "edit", map[string]any{"path": path, "old": "alpha", "new": "beta"}),
+		fileCall(t, "c3", "edit", map[string]any{"path": path, "old": "beta", "new": "gamma"}),
+	}
+	k, f, s := batchKernel(t, []core.Tool{file.Read(), file.Edit()}, calls, rig.WithConcurrent(onlyRead))
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := resultOrder(f); !same(got, []string{"c1", "c2", "c3"}) {
+		t.Fatalf("result order %v, want call order", got)
+	}
+	for _, ev := range f.events {
+		r, ok := ev.(core.ToolResult)
+		if !ok || r.ID == "c1" {
+			continue
+		}
+		if r.Err != nil {
+			t.Fatalf("%s refused: %v\n%s", r.ID, r.Err, r.Content)
+		}
+		if strings.Contains(r.Content, "changed since the read") {
+			t.Fatalf("%s saw the pre-edit observation, so the landing did not re-arm the drift check:\n%s", r.ID, r.Content)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "gamma\n" {
+		t.Fatalf("content = %q, want c3 applied to what c2 left", data)
+	}
+	sum := sha256.Sum256(data)
+	if got := s.Files[path].Hash; got != hex.EncodeToString(sum[:]) {
+		t.Fatalf("the recorded observation is %q, want the last landing's hash", got)
+	}
 }

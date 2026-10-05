@@ -100,9 +100,8 @@ func TestEditReplacesSymbolsAndEdgesInPlace(t *testing.T) {
 	q.Drain(ctx)
 	if _, err := edit(ctx, core.ToolCall{Name: "edit", Args: argsJSON(t, map[string]any{
 		"path": a,
-		"edits": []map[string]string{
-			{"old": "func Alpha() int { return 1 }", "new": "func Beta() int { return 1 }"},
-		},
+		"old":  "func Alpha() int { return 1 }",
+		"new":  "func Beta() int { return 1 }",
 	})}); err != nil {
 		t.Fatalf("edit: %v", err)
 	}
