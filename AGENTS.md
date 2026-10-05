@@ -133,7 +133,7 @@ that is harder than writing a lot, and it is the bar.
 - **Sorted output everywhere.** Every slice a method returns leaves
   sorted (`Registry.Containers()`, `Dimension.Symbols()`, the todo
   queue, the model table). It costs five lines a type and buys
-  determinism, which is what makes the goldens and the drift tests
+  determinism, which is what makes the wire diff and the drift tests
   possible.
 
 - **One shape per concept.** One list shape for every slash command,

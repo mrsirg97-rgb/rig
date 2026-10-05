@@ -177,8 +177,9 @@ service is one process and the worker cannot outlive it.
 ## what the lock freezes
 
 `core/` and `loop/` are the frozen surface. The freeze gate
-(`frontend/tui/freeze_test.go`) refuses a real change there unless the
-branch name carries `-refactor` and the PR names the reopening.
+(`cmd/freeze`, the freeze job in `.github/workflows/ci.yml`) refuses a
+real change there unless the branch name carries `-refactor` and the PR
+names the reopening.
 
 - **core/** is frozen at 1.5.0's bytes. The 1.5.0 hosted-mode reopening
   (SPEC_HOSTED: `Usage.Cost`, `ReasoningDelta.Details`,

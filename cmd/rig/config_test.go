@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"io"
 	"net"
 	"net/http"
@@ -14,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,47 +25,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
 )
-
-var goldenUpdateFlag = flag.Bool("update", false, "regenerate the golden_020 fixtures in place")
-
-func goldenWrite(t *testing.T, name string, data []byte) {
-	t.Helper()
-	path := filepath.Join(goldenDir, name)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatalf("golden write: %v", err)
-	}
-}
-
-func goldenCheck(t *testing.T, name string, data []byte) {
-	t.Helper()
-	if *goldenUpdateFlag {
-		goldenWrite(t, name, data)
-		return
-	}
-	want, err := os.ReadFile(filepath.Join(goldenDir, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(data, want) {
-		t.Fatalf("the request body is not the pinned bytes:\ngot:\n%s\nwant:\n%s", data, want)
-	}
-}
-
-func goldenCheckSession(t *testing.T, name string, data []byte, cwd, home string) {
-	t.Helper()
-	section := sessionSection(cwd, home)
-	if section == "" {
-		goldenCheck(t, name, data)
-		return
-	}
-	if !bytes.Contains(data, []byte(section)) {
-		t.Fatalf("the request must carry the session section %q", section)
-	}
-	data = bytes.Replace(data, []byte(`\n\n`+section), nil, 1)
-	goldenCheck(t, name, data)
-}
-
-const goldenDir = "testdata/golden_020"
 
 type bodySrv struct {
 	mu     sync.Mutex
@@ -164,15 +120,7 @@ func systemOf(t *testing.T, body []byte) string {
 
 func buildBin(t *testing.T, binDir string) string {
 	t.Helper()
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	bin := filepath.Join(binDir, "rig")
-	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
-	}
-	return bin
+	return buildBinAt(t, binDir, "../..")
 }
 
 func rigEnv(scratch, binDir string, extra ...string) []string {
@@ -212,120 +160,6 @@ func swapPinned(extra []string) []string {
 func cfgDir(t *testing.T, scratch string) string {
 	t.Helper()
 	return filepath.Join(scratch, ".rig")
-}
-
-func TestNoUserFilesIsByteIdenticalToV020(t *testing.T) {
-	t.Run("oneshot", func(t *testing.T) {
-		s := &bodySrv{}
-		srv := newBodySrv(t, s)
-		bin := buildBin(t, t.TempDir())
-		scratch := t.TempDir()
-		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-		cmdDir := t.TempDir()
-		cmd.Dir = cmdDir
-		cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("the run must succeed: %v\n%s", err, out)
-		}
-		if s.count() != 1 {
-			t.Fatalf("requests = %d, want 1", s.count())
-		}
-		goldenCheckSession(t, "oneshot.json", s.last(), cmdDir, scratch)
-	})
-	t.Run("repl", func(t *testing.T) {
-		s := &bodySrv{}
-		srv := newBodySrv(t, s)
-		bin := buildBin(t, t.TempDir())
-		scratch := t.TempDir()
-		cmd := exec.Command(bin, "-base-url", srv.URL+"/v1")
-		cmdDir := t.TempDir()
-		cmd.Dir = cmdDir
-		cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
-		cmd.Stdin = strings.NewReader("hello\n")
-		out, err := cmd.CombinedOutput()
-		_ = err
-		if len(out) == 0 {
-			t.Fatal("the run printed nothing")
-		}
-		if s.count() != 1 {
-			t.Fatalf("requests = %d, want 1", s.count())
-		}
-		goldenCheckSession(t, "repl.json", s.last(), cmdDir, scratch)
-	})
-	t.Run("runjob", func(t *testing.T) {
-		s := &bodySrv{model: "brain"}
-		srv := newBodySrv(t, s)
-		binDir := t.TempDir()
-		bin := buildBin(t, binDir)
-		scratch := t.TempDir()
-		workDir := t.TempDir()
-		writeFakeCrontab(t, binDir, filepath.Join(scratch, "spool"))
-
-		home := filepath.Join(cfgDir(t, scratch), "scheduler")
-		fake := newFakeCrontab()
-		st := scratchStores(t, home, "/ws/golden")
-		if err := os.WriteFile(filepath.Join(cfgDir(t, scratch), "models.json"),
-			[]byte(`[{"id": "brain", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "worker"}]`), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		reply, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
-			Name: "golden", Prompt: "say hi", Cron: "0 5 * * *",
-			Cwd: workDir, Model: "brain", Busy: "skip",
-		}, "/ws/golden", "sess-golden", bin+" run-job", cfgDir(t, scratch), fixedNow)
-		if err != nil {
-			t.Fatalf("create: %v (%s)", err, reply)
-		}
-		key := "j1"
-		if err := os.WriteFile(filepath.Join(scratch, "spool"),
-			[]byte("0 5 * * * "+bin+" run-job # rig-scheduler:"+sched.TagHome(cfgDir(t, scratch))+":"+key+"\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		sandboxOff(t, scratch)
-
-		cmd := exec.Command(bin, "run-job", key)
-		cmd.Dir = workDir
-		cmd.Env = append(rigEnv(scratch, binDir), "RIG_SWAP_URL="+srv.URL)
-		out, runErr := cmd.CombinedOutput()
-		if runErr != nil {
-			t.Fatalf("run-job exited non-zero (recorded outcomes exit 0): %v\n%s", runErr, out)
-		}
-
-		if s.count() != 1 {
-			t.Fatalf("worker requests = %d, want 1 (the worker's chat call)", s.count())
-		}
-		got := s.last()
-
-		var req struct {
-			Model    string `json:"model"`
-			Messages []struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"messages"`
-		}
-		if err := json.Unmarshal(got, &req); err != nil {
-			t.Fatal(err)
-		}
-		foundUser := false
-		for _, m := range req.Messages {
-			if m.Role == "user" {
-				foundUser = true
-				if m.Content != "say hi"+sched.ReportBack(workDir) {
-					t.Fatalf("the worker's prompt = %q, want the job prompt plus the report-back directive", m.Content)
-				}
-			}
-		}
-		if !foundUser {
-			t.Fatal("the worker request carries no user message")
-		}
-		if req.Model != "brain" {
-			t.Fatalf("the worker's model = %q, want the job's model (the argv's -model)", req.Model)
-		}
-
-		escaped := strings.ReplaceAll(sched.ReportBack(workDir), "\n", `\n`)
-		got = bytes.Replace(got, []byte(escaped), []byte(strings.ReplaceAll(sched.ReportBack("WORKDIR"), "\n", `\n`)), 1)
-		goldenCheckSession(t, "runjob.json", got, workDir, scratch)
-	})
 }
 
 func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
@@ -1256,47 +1090,6 @@ func TestOperatorAllowStandsAsWritten(t *testing.T) {
 	}
 }
 
-func TestToolMenuBudgetAndVocabulary(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(goldenDir, "oneshot.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var wire struct {
-		Tools []struct {
-			Function struct {
-				Name        string          `json:"name"`
-				Description string          `json:"description"`
-				Parameters  json.RawMessage `json:"parameters"`
-			} `json:"function"`
-		} `json:"tools"`
-	}
-	if err := json.Unmarshal(data, &wire); err != nil {
-		t.Fatal(err)
-	}
-	const budget = 15000
-	total := 0
-	for _, tl := range wire.Tools {
-		f := tl.Function
-		total += len(f.Description) + len(f.Parameters)
-		text := f.Description + string(f.Parameters)
-		for _, bad := range []string{"pi", "pane"} {
-			if otherVoice(text, bad) {
-				t.Errorf("%s carries another harness's voice: %q", f.Name, bad)
-			}
-		}
-		if !strings.Contains(f.Description, "guidelines:") {
-			t.Errorf("%s has no Guidelines sentence", f.Name)
-		}
-		if !strings.Contains(f.Description, "reply:") {
-			t.Errorf("%s does not name its reply's shape", f.Name)
-		}
-	}
-	if total > budget {
-		t.Fatalf("the tool menu is %d chars on the wire, over the %d budget: trimming is a decision, name it", total, budget)
-	}
-	t.Logf("tool menu: %d chars of %d", total, budget)
-}
-
 func TestNoModelRefusesBeforeAnyRequest(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
@@ -1378,10 +1171,6 @@ func TestRigEnvPinsTheSwapUnlessTheTestNamesOne(t *testing.T) {
 	if n != 1 || val != "RIG_SWAP_URL=http://127.0.0.1:9" {
 		t.Fatalf("the test's own swap must win exactly once, got %d × %q", n, val)
 	}
-}
-
-func otherVoice(text, word string) bool {
-	return regexp.MustCompile(`\b` + word + `\b`).MatchString(text)
 }
 
 func TestTheProjectContractFollowsTheWorkspaceAtWire(t *testing.T) {

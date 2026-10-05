@@ -19,5 +19,34 @@ jobs:
         run: go vet ./... && go test -race -p 2 ./...
       - name: fmt-check
         run: make fmt-check
-      - name: shellcheck install.sh
-        run: shellcheck install.sh
+      - name: shellcheck install.sh and scripts/wire-check
+        run: shellcheck install.sh scripts/wire-check
+
+  freeze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: freeze
+        run: go run ./cmd/freeze -branch "${GITHUB_HEAD_REF:-}"
+
+  wire:
+    runs-on: ubuntu-latest
+    env:
+      MENU_AIM: '15000'
+      MENU_WALL: '15500'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: wire
+        run: scripts/wire-check

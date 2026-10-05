@@ -134,6 +134,12 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   forgets its own scratch can never write into the operator's `~/.rig`.
   The operator-home probes (the kernel venv, the config-home migration
   fixtures) read `testenv.OperatorHome` deliberately and never write.
+- The wire renders through `TestWireDump` (`go test ./cmd/rig/
+  -run TestWireDump -wire-dump <dir> [-rig-root <tree>]`): the three
+  request bodies, the tools array, and the menu count, from the fixture
+  the old goldens pinned byte-for-byte. `scripts/wire-check` renders two
+  trees and posts the diff; there are no stored goldens, no `-update`
+  flag, no sha constant, and no regolden commit.
 - `run-job` lands before state/session wiring: it is its own lifecycle
   (own stores, own record) and must not touch the REPL's closure order.
 - The queue the startup reap sweeps is `sessionQueue`: the session's

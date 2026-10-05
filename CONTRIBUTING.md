@@ -50,9 +50,10 @@ shellcheck install.sh
 ```
 
 CI runs `go vet ./...`, `go test -race -p 2 ./...`, `make fmt-check`, and
-`shellcheck install.sh`. The freeze gate (`frontend/tui/freeze_test.go`)
-refuses a diff that reaches outside its allowlist; add a new surface to the
-allowlist in the same PR.
+`shellcheck install.sh scripts/wire-check`, beside the freeze job
+(`go run ./cmd/freeze`) and the wire job (`scripts/wire-check`). The
+freeze gate refuses a diff that reaches outside `specs/FREEZE.txt`; add a
+new surface to that file in the same PR.
 
 ## versions and releases
 

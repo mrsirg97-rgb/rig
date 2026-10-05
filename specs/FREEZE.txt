@@ -1,0 +1,109 @@
+# The freeze gate: every path a PR touches must match a line of this file.
+# The gate lives in cmd/freeze (go run ./cmd/freeze), run by the freeze job
+# in .github/workflows/ci.yml; core/ and loop/ are further open to pure
+# addition only (SPEC_CORE). One path per line. A line ending in / is a
+# directory prefix: the path matches when it sits under it. A bare line is
+# one exact path. A touched path matching no line fails the job naming the
+# path and this file; a reopening is a one-line diff to this file, reviewed
+# in the PR.
+#
+# One glob line is recognized: */PACKAGE.md, any package's spec file.
+# `reopen <path> <version>` reopens a path of the frozen surface by name;
+# the version is the one that reopened it.
+
+# the four frontends
+frontend/tui/
+frontend/cli/
+frontend/web/
+frontend/oneshot/
+
+# the composition root and the command leaf
+cmd/rig/
+command/
+
+# the fleet and its message seams (SPEC_SWARM)
+broadcast/
+swarm/
+
+# the middleware chain (the approve gate, the live toolset, the provenance
+# rule, the cutoff link, the retry guard, the ~ boundary, the graph tap)
+middleware/perm/
+middleware/toolset/
+middleware/approve/
+middleware/cutoff/
+middleware/guard/
+middleware/paths/
+middleware/index/
+
+# the loop's edge and the plugin door
+evt/
+plugins/
+testenv/
+
+# the stores
+store/
+store/state/
+store/todo/
+store/scheduler/
+store/scope/
+store/decision/
+
+# the tool leaves and the registry that carries the words
+tool/diff/
+tool/python/
+tool/bash/
+tool/fs/
+tool/web/
+tool/file/
+tool/rem/
+tool/todo/
+tool/sessions/
+tool/scheduler/
+tool/delegate/
+tool/verdict/
+tool/view/
+tool/execwrap/
+tool/registry.go
+tool/registry.json
+tool/registry_test.go
+
+# the config surface around the kernel
+provider/
+config/
+models/
+policy/
+pathguard/
+imagemarker/
+decision/
+
+# the frozen surface itself: open to pure addition only (SPEC_CORE)
+core/
+
+# the repo's prose, plumbing, and the gate's own homes
+docs/
+specs/
+AGENTS.md
+Makefile
+.gitignore
+README.md
+SECURITY.md
+CONTRIBUTING.md
+.github/
+install.sh
+site/
+CHANGELOG.md
+ROADMAP.md
+PACKAGE.md
+*/PACKAGE.md
+go.mod
+go.sum
+cmd/freeze/
+scripts/
+
+# reopened by name (SPEC_CORE: the named change goes in the PR)
+reopen loop/ 1.1.4
+reopen kernel.go 2.0.1
+reopen kernel_test.go 2.0.1
+reopen core/seam_test.go 2.0.1
+reopen core/session_test.go 2.0.1
+reopen core/provider.go 2.8.3
