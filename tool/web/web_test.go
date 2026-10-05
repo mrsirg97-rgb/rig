@@ -433,7 +433,7 @@ func TestExecuteReportsGuardRefusalsAsToolErrorsNotThrows(t *testing.T) {
 }
 
 func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
-	w := web.Web()
+	w := web.NewDefault()
 	if w.Name() != "web" {
 		t.Fatalf("name = %q, want web", w.Name())
 	}
@@ -571,7 +571,7 @@ func TestJSONReplyIsCappedUnderTheSameMarker(t *testing.T) {
 }
 
 func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {
-	s := getSchema(t, web.Web())
+	s := getSchema(t, web.NewDefault())
 	if len(s.Required) != 2 || s.Required[0] != "action" || s.Required[1] != "target" {
 		t.Fatalf("required = %v, want [action target]", s.Required)
 	}
@@ -1003,5 +1003,64 @@ func TestSearchActionIgnoresFetchParamsAndViceVersa(t *testing.T) {
 	}
 	if !strings.HasPrefix(content, "no results for") {
 		t.Fatalf("search reply = %q", content)
+	}
+}
+
+func TestWebSearchFetchAndExecShareTheirChecks(t *testing.T) {
+	serve := func(req *http.Request) (*http.Response, error) {
+		return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
+	}
+	tool := web.New(web.Config{Search: web.SearchConfig{Do: serve}})
+	ctx := context.Background()
+
+	_, searchErr := tool.Search(ctx, "", 5)
+	_, execErr := execArgs(t, tool, `{"action":"search","target":""}`)
+	if searchErr == nil || execErr == nil {
+		t.Fatalf("an absent query refuses on both doors, search=%v exec=%v", searchErr, execErr)
+	}
+	if searchErr.Error() != "web: search: no query supplied" || execErr.Error() != searchErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: search %q exec %q", searchErr, execErr)
+	}
+
+	_, searchErr = tool.Search(ctx, "rig", 0)
+	_, execErr = execArgs(t, tool, `{"action":"search","target":"rig","maxResults":0}`)
+	if searchErr == nil || execErr == nil || searchErr.Error() != execErr.Error() {
+		t.Fatalf("maxResults outside its bound refuses the same way on either door: search=%v exec=%v", searchErr, execErr)
+	}
+	if searchErr.Error() != "web: maxResults must be between 1 and 20, got 0" {
+		t.Fatalf("the bound refusal names the range and the value: %q", searchErr)
+	}
+
+	_, fetchErr := tool.Fetch(ctx, "", 200, 30000)
+	_, execErr = execArgs(t, tool, `{"action":"fetch","target":""}`)
+	if fetchErr == nil || execErr == nil {
+		t.Fatalf("an absent url refuses on both doors, fetch=%v exec=%v", fetchErr, execErr)
+	}
+	if fetchErr.Error() != "web: fetch: no url supplied" || execErr.Error() != fetchErr.Error() {
+		t.Fatalf("the refusal is the same words on either door: fetch %q exec %q", fetchErr, execErr)
+	}
+
+	_, fetchErr = tool.Fetch(ctx, "https://example.com", 99, 30000)
+	_, execErr = execArgs(t, tool, `{"action":"fetch","target":"https://example.com","maxChars":99}`)
+	if fetchErr == nil || execErr == nil || fetchErr.Error() != execErr.Error() {
+		t.Fatalf("maxChars under its floor refuses the same way on either door: fetch=%v exec=%v", fetchErr, execErr)
+	}
+
+	_, fetchErr = tool.Fetch(ctx, "https://example.com", 200, 999)
+	_, execErr = execArgs(t, tool, `{"action":"fetch","target":"https://example.com","timeoutMs":999}`)
+	if fetchErr == nil || execErr == nil || fetchErr.Error() != execErr.Error() {
+		t.Fatalf("timeoutMs outside its bound refuses the same way on either door: fetch=%v exec=%v", fetchErr, execErr)
+	}
+
+	fromSearch, err := tool.Search(ctx, "rig", 5)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	fromExec, err := execArgs(t, tool, `{"action":"search","target":"rig"}`)
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if fromSearch != fromExec {
+		t.Fatalf("one search replies the same bytes through either door: search %q exec %q", fromSearch, fromExec)
 	}
 }

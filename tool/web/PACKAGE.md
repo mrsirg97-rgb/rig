@@ -9,10 +9,15 @@ client, no new venv.
 
 ## What it includes
 
-- The `web` tool: `action` `search|fetch` on one `target` field (the
-  query, or the URL), the per-action optionals (`maxResults`,
-  `maxChars`, `timeoutMs`), and the dispatch that validates at the
-  boundary and refuses an unknown action.
+- `Web`: the tool as its interface (2.12.6): `tool.Definition`, `Exec` as
+  the one JSON door — it decodes `action`/`target` and the per-action
+  optionals, applies the absent-field defaults, and routes, refusing an
+  unknown action — and two verbs, `Search(ctx, query, maxResults)` and
+  `Fetch(ctx, url, maxChars, timeoutMs)`. The no-query and no-url
+  refusals and the `maxResults`/`maxChars`/`timeoutMs` bounds live in the
+  verb they belong to, so a Go caller and the model hit the same checks.
+  `New(Config)` and `NewDefault()` return the interface; the struct is
+  unexported.
 - The engines behind it: the SearXNG `/search` JSON call, and the
   guarded reader — resolves the host, refuses private addresses (SSRF
   guard), follows redirects with re-checks and a hop cap, extracts via

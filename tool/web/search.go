@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	searchTimeout = 15 * time.Second
-	snippetCap    = 300
-	searchBodyCap = 1 << 20
+	defaultMaxResults = 5
+	searchTimeout     = 15 * time.Second
+	snippetCap        = 300
+	searchBodyCap     = 1 << 20
 )
 
 var (
