@@ -484,7 +484,12 @@ The decision model trains from rig's own rows (`specs/SPEC_DECISION.md`
 machinery plugins share, a different contract: `train(rows_path,
 out_dir)` and `evaluate(checkpoint, rows_path)`. The zone is read
 through `trainPython`, one kernel per run; torch is two gigabytes and
-the session kernel's venv is not where it belongs.
+the session kernel's venv is not where it belongs. `trainPython` needs
+`IPython` importable (the kernel host's) — the trainer venv wants one
+`pip install ipython`. A trainer whose stem names a package it imports
+(`laya.py` importing `laya`) must drop that key from `sys.modules`
+before importing: the discovery cell registers the file under its
+stem.
 
 - **The doors**: `/decision train <trainer>` enqueues the run — a
   scheduler command job (`rig decision train <trainer>`, once, a

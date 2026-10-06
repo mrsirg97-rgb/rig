@@ -154,6 +154,9 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   greater than the constant AND the incumbent on every question any of
   the three reports carries; a missing question is not a beat, an empty
   report promotes nothing). Pure; the orchestration is `cmd/rig`'s.
+  A trainer whose stem names a package it imports must drop that key
+  from `sys.modules` first: the discovery cell registers the file under
+  its stem, and the shadow breaks the package's own submodule imports.
 
 ## How it is consumed
 
