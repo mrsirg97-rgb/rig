@@ -144,6 +144,8 @@ cwd's file, not the creating session's.
 | session model |                | `RIG_MODEL`            | `model`          | no embedded default; the worker model resolves at claim time: the named one, else the resident model, else this |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
 | decision server |;            | `RIG_DECISION_URL`     | `decisionUrl`     | none; set it and every bash call gets a pending risk proposal the reviewer settles, and the `decide` tool joins the live table so the model hands it the sorting (SPEC_DECISION); unset, nothing proposes and the menu, the wire sha and the system prompt do not move |
+| decision unit |;               |;                      | `decisionUnit`    | none; the systemd user unit file a promotion rewrites — the one `Environment=` line naming `RIG_DECISION_CHECKPOINT` (SPEC_DECISION 2.13.0); unset, runs score and record but promote nothing |
+| trainer interpreter |;         |;                      | `trainPython`     | none; the `train/` zone's own interpreter, run headless with torch — two gigabytes that do not belong in the session kernel's venv (SPEC_DECISION 2.13.0); a run without it refuses naming the key |
 | approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
@@ -473,3 +475,39 @@ a streaming turn with its activity row, a tool line with its glyph and
 duration, the usage line at the turn's end, and a clean Ctrl-D exit.
 `--tui=true` under `tmux` gives the same session to `capture-pane`
 (piped `--tui=false` stays the byte reference).
+
+## training
+
+The decision model trains from rig's own rows (`specs/SPEC_DECISION.md`
+2.13.0). One trainer is one Python file in `~/.rig/train/` — top-level
+`*.py`, `pending/` and `disabled/` subzones beside it, the same
+machinery plugins share, a different contract: `train(rows_path,
+out_dir)` and `evaluate(checkpoint, rows_path)`. The zone is read
+through `trainPython`, one kernel per run; torch is two gigabytes and
+the session kernel's venv is not where it belongs.
+
+- **The doors**: `/decision train <trainer>` enqueues the run — a
+  scheduler command job (`rig decision train <trainer>`, once, a
+  couple of minutes out) that fires off the turn; nothing trains
+  inside one. By hand it is `rig decision train <trainer>`.
+- **The run**: exports the settled rows (an approved row takes the
+  proposer's answer, a denied row the reviewer's parsed correction;
+  unparseable rows count and skip), splits 80/20 stratified by
+  question and label, writes `decision/train/<run>/rig-train.jsonl`
+  and `rig-heldout.jsonl` in laya's shape, scores the candidate, the
+  incumbent and the constant baseline on the same held-out rows, and
+  records the run in the decision store's `trainings` table. One
+  notice carries the held-out table.
+- **The promotion**: only a measured win — the candidate must beat the
+  constant AND the incumbent on every question; a tie is not a beat.
+  Promotion rewrites the one `Environment=` line in the unit file
+  `decisionUnit` names and prints what the operator runs
+  (`systemctl --user daemon-reload && systemctl --user restart laya`);
+  rig restarts no service it does not own. No `decisionUnit`, no
+  incumbent, no promotion.
+- **The nightly**: one line to the model — "scheduler create a nightly
+  command job named decision-nightly that runs `rig decision train
+  laya` at 03:37" — or the same call through the scheduler tool:
+  `{"action": "create", "name": "decision-nightly", "command": "rig
+  decision train laya", "cron": "37 3 * * *"}`. Command jobs take no
+  model; the job's own bound is the scheduler's per-job timeout.

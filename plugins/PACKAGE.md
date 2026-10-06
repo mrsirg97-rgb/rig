@@ -12,14 +12,30 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 
 ## What it includes
 
-- `Zone(home, zone)`: the files of one zone (`pending`, `disabled`):
-  the directories under `plugins/`, the same `.py` filter as `List`.
+- `Zone(home, dir, zone)`: the files of one zone (`pending`,
+  `disabled`) under the home directory named (`plugins`, `train`), the
+  same `.py` filter as `List`. Since 2.13.0 the machinery is the rules
+  of a kernel-loaded zone, not the rules of a plugin
+  (SPEC_PLUGINS 2.13.0, SPEC_DECISION's training section).
 
-- `Discover`: imports every eligible file through the kernel and reports
-  each, in file order. `DiscoverChecked` preflights filename validity and
-  native collisions before any top-level plugin code executes.
+- `Discover(ctx, k, files, contract)`: imports every eligible file
+  through the kernel and reports each, in file order; the contract's
+  checks are generated into the discovery cell. `DiscoverChecked`
+  preflights filename validity and native collisions before any
+  top-level code executes. `Contract` names what one file of a zone
+  must expose: `PluginContract` (DESCRIPTION str, SCHEMA dict, run
+  callable) and `TrainerContract` (`train(rows_path, out_dir)` and
+  `evaluate(checkpoint, rows_path)` callable); the registry a cell
+  populates derives from the contract's kind (`__rig_plugins__`,
+  `__rig_trainers__`).
 - `Report`: one plugin file's discovery outcome.
 - `Tool`: one loaded plugin on the Tool seam.
+- `Invoke(ctx, k, kind, name, fn, timeoutMs, args...)`: one call cell
+  over a loaded file's method, the args splat from their JSON array and
+  the return printed as JSON (2.13.0) — the trainer call
+  (`train(rows_path, out_dir)`, `evaluate(checkpoint, rows_path)`) is
+  its consumer; the plugin tool's own `run(args)` cell, whose stdout is
+  the reply text, stays as it was.
 - `Ecosystem` + `NewEcosystem`: the ecosystem arms of the `plugin` door
   (SPEC_PLUGINS 8, amended 2.8.2: the `plugins` native folded into the
   door): one dispatcher over the ecosystem, by `action`:
@@ -32,12 +48,15 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 - `Move(dir, name, from, to)`: the one file-move shared with the
   `/plugins` disable/enable command: name-voice validation, src/dst
   refusals, the mkdir + rename; never an unlink.
-- `WritePending(home, natives, name, source)`: the one pending-write
-  shared with the web forge's save: the `PluginNameRe` filename-stem
-  rule, the native collision, the DESCRIPTION/SCHEMA/def run contract,
-  `created` from a prior stat. Each surface keeps its own reply voice.
+- `WritePending(home, dir, natives, name, source, contract)`: the one
+  pending-write shared with the web forge's save: the `PluginNameRe`
+  filename-stem rule, the native collision, the contract's attrs read
+  off the source text (`def <name>(` for a callable, the bare name
+  otherwise), `created` from a prior stat. Each surface keeps its own
+  reply voice.
 - `PluginNameRe`: the filename-stem rule (`^[a-z][a-z0-9_]{0,63}$`).
-- `List`: the home's plugin listing (top-level `*.py`).
+- `List(home, dir)`: the named home directory's listing (top-level
+  `*.py`).
 - `Check`: the collision refusal (a loaded plugin named like a native;
   `plugin` is a native, so it is reserved; `plugins` stays reserved as
   the operator command's name).

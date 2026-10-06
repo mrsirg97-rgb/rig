@@ -30,9 +30,6 @@ func ParseReport(raw string) (Report, error) {
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
 		return Report{}, fmt.Errorf("decision: the report is not JSON: %v", err)
 	}
-	if len(out.Questions) == 0 {
-		return Report{}, fmt.Errorf("decision: the report carries no questions")
-	}
 	for id, q := range out.Questions {
 		if q.N <= 0 {
 			return Report{}, fmt.Errorf("decision: question %s reports n %d", id, q.N)

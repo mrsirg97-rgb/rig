@@ -137,6 +137,24 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   `ToolMiddleware` whose `Guidelines()` joins the system prompt when the
   tool is wired.
 
+- `train.go`: the training surface (2.13.0, SPEC_DECISION's training
+  section): `Report` (per-question `n`, `correct`, `accuracy`, and for a
+  noul question `pTrue`, the mean predicted p(true) by gold class),
+  `ParseReport` (the shape check: accuracy a probability, n positive, a
+  report with no questions is a train report and legal), `GoldRow` and
+  `GoldRows` (the settled rows in laya's shape — an approved row takes
+  the proposer's answer, a denied row the correction parsed by
+  `ParseReviewerLabel`, whose regex is the one `~/laya/retrain_rig.py`
+  carried; unparseable rows, a score, and a label outside the choices
+  count and skip), `Split` (stratified and deterministic: groups by
+  question and gold label, ordered by row id, every fifth held out),
+  `ConstantReport` (the majority label of the train rows scored on
+  held-out, a noul's p(true) the train prior on both gold classes —
+  computed, never assumed), and `Beats` (the promotion rule: strictly
+  greater than the constant AND the incumbent on every question any of
+  the three reports carries; a missing question is not a beat, an empty
+  report promotes nothing). Pure; the orchestration is `cmd/rig`'s.
+
 ## How it is consumed
 
 - The gate packages (`middleware/approve`, `middleware/perm`,

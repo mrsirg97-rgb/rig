@@ -1,4 +1,57 @@
 # Changelog
+## [2.13.0]: the decision model is trained from rig's own rows
+
+The rows the reviewer settles were gold labels that trained nothing:
+the fine-tune pipeline lived outside rig, read the store through a
+read-only sqlite handle, and its output was whatever that script's last
+run left. 2.13.0 owns the pipeline. The evidence that made it worth
+owning: the base Laya scores 38% on held-out bash against a constant
+59% and carries no pack signal at all (mean p(yes) 0.11 on relevant
+against 0.13 on not); the 2026-10-06 full fine-tune on 167 settled rows
+scores 81% bash and 82% pack with p(yes) 0.33 against 0.03 — and
+head-only training equals the base model, so the gradient step must
+move the encoder, which is to say it is Python, never Go.
+
+- **`train/` is a kernel-loaded zone beside `plugins/`** (`plugins`):
+  one trainer is one Python file, the name the filename stem, its
+  contract two callables — `train(rows_path, out_dir) -> report` and
+  `evaluate(checkpoint, rows_path) -> report`, a report per-question
+  accuracy and, for noul, the mean predicted p(true) by gold class.
+  The zone machinery took a contract: `Contract` names what one file
+  of a zone must expose (`PluginContract`, `TrainerContract`), `Zone`,
+  `List`, `WritePending` and `DiscoverChecked` name the home directory
+  they read, the discovery cell generates its own checks, and one
+  `Invoke` cell calls a loaded file's method. The zone reads through
+  `trainPython` (settings, beside `decisionUrl`): torch is two
+  gigabytes and the session kernel's venv is not where it belongs.
+- **`decision train <trainer>` never runs inside a turn** (`command`,
+  `cmd/rig`): the slash command enqueues a scheduler command job
+  (`rig decision train <trainer>`, once, a couple of minutes out); the
+  job runs headless, exports the settled rows (approved takes the
+  proposer's answer, denied the reviewer's parsed correction — the
+  regex `~/laya/retrain_rig.py` carried, ported; unparseable rows
+  count and skip), splits 80/20 stratified by question and label with
+  no seed and no shuffle, writes `decision/train/<run>/rig-train.jsonl`
+  and `rig-heldout.jsonl` in laya's shape, and scores the candidate,
+  the incumbent and the constant baseline — computed from the train
+  rows, never assumed — on the same held-out rows.
+- **Promotion is a measured win** (`cmd/rig`): the candidate must beat
+  the constant AND the incumbent — the checkpoint the unit file
+  `decisionUnit` names serves — strictly, on every question; a tie is
+  not a beat and a missing question is not a beat. The run is recorded
+  in the decision store's `trainings` table (the three held-out
+  reports, promoted or not), one `core.Notice` carries the held-out
+  table, and promotion rewrites the one `Environment=` line in the
+  unit file and prints what the operator runs —
+  `systemctl --user daemon-reload && systemctl --user restart laya`.
+  rig restarts no service it does not own, and no `decisionUnit`
+  means no incumbent and no promotion. The nightly is the operator's
+  one line (docs/SETUP.md).
+- **`store/decision` gains `trainings`** (`store/decision`): the
+  metadata, the generated projections, the settled-rows read the
+  export holds, and the run record. Schema version stays 2: a new
+  table applies on open, nothing migrates.
+
 ## [2.12.11]: the models table is the operator's
 
 `/models` lists `local` beside the operator's five rows, and the

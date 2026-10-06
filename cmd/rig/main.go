@@ -50,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.12.11"
+const Version = "2.13.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -119,6 +119,10 @@ func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "run-job" {
 		os.Exit(runJob(os.Args[2:]))
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "decision" {
+		os.Exit(decisionTrain(os.Args[2:]))
 	}
 
 	serveAddr := ""
@@ -528,6 +532,7 @@ func main() {
 	})
 
 	env := r.commandEnv()
+	env.DecisionTrain = decisionTrainEnqueue(scdb, schedHome, self, cwd)
 
 	var fe core.Frontend
 	var webSrv *web.Server

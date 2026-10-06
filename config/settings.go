@@ -22,6 +22,8 @@ type Settings struct {
 	Workers       *bool
 	SwapURL       string
 	DecisionURL   string
+	DecisionUnit  string
+	TrainPython   string
 	ReviewBatch   *int
 	Theme         string
 	Sandbox       string
@@ -38,7 +40,7 @@ type SettingsPlugins struct {
 	Max int
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUrl", "defaultJobModel", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "updateKey", "webFetchProxy", "workers"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUnit", "decisionUrl", "defaultJobModel", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workers"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -121,6 +123,12 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.DecisionURL != "" {
 		out.DecisionURL = file.DecisionURL
+	}
+	if file.DecisionUnit != "" {
+		out.DecisionUnit = file.DecisionUnit
+	}
+	if file.TrainPython != "" {
+		out.TrainPython = file.TrainPython
 	}
 	if file.ReviewBatch != nil {
 		out.ReviewBatch = file.ReviewBatch
