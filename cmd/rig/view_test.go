@@ -149,13 +149,7 @@ func TestNativeNamesCarryViewAfterTheReadOnlyGroup(t *testing.T) {
 
 func TestViewThroughTheBinarySendsAPNGDataURL(t *testing.T) {
 	home := t.TempDir()
-	if err := os.MkdirAll(cfgDir(t, home), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cfgDir(t, home), "models.json"),
-		[]byte(`[{"id": "local", "vision": true}]`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeModelRows(t, cfgDir(t, home), `{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"], "vision": true}`)
 
 	work := t.TempDir()
 	png := gradientPNG(t, 400, 300)
@@ -174,7 +168,7 @@ func TestViewThroughTheBinarySendsAPNGDataURL(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	cmd := exec.Command(bin, "-p", "what is in this screenshot?", "-base-url", srv.URL+"/v1")
 	cmd.Dir = work
-	cmd.Env = rigEnv(home, "")
+	cmd.Env = rigEnv(t, home, "")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)

@@ -123,7 +123,25 @@ func buildBin(t *testing.T, binDir string) string {
 	return buildBinAt(t, binDir, "../..")
 }
 
-func rigEnv(scratch, binDir string, extra ...string) []string {
+const localModelRow = `{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]}`
+
+func writeModelRows(t *testing.T, dir string, rows ...string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "models.json")
+	if err := os.WriteFile(p, []byte("["+strings.Join(rows, ", ")+"]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func rigEnv(t *testing.T, scratch, binDir string, extra ...string) []string {
+	t.Helper()
+	dir := cfgDir(t, scratch)
+	if _, err := os.Stat(filepath.Join(dir, "models.json")); os.IsNotExist(err) {
+		writeModelRows(t, dir, localModelRow)
+	}
 	env := scrubSwap(os.Environ())
 	env = append(env,
 		"HOME="+scratch,
@@ -198,7 +216,7 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 			cmd := exec.Command(bin, args...)
 			cmdDir := t.TempDir()
 			cmd.Dir = cmdDir
-			env := rigEnv(scratch, "")
+			env := rigEnv(t, scratch, "")
 			if c.env != "" {
 				env = append(env, "RIG_SYSTEM="+c.env)
 			}
@@ -223,7 +241,7 @@ func TestFlagPresenceWins(t *testing.T) {
 		cmdDir := t.TempDir()
 		home := t.TempDir()
 		cmd.Dir = cmdDir
-		cmd.Env = rigEnv(home, "")
+		cmd.Env = rigEnv(t, home, "")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -269,7 +287,7 @@ func TestFlagPresenceWins(t *testing.T) {
 		bin := buildBin(t, t.TempDir())
 		cmd := exec.Command(bin, "-p", "run the probe", "-base-url", srv.URL+"/v1", "-retries", "0")
 		cmd.Dir = t.TempDir()
-		cmd.Env = rigEnv(t.TempDir(), "")
+		cmd.Env = rigEnv(t, t.TempDir(), "")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -351,7 +369,7 @@ func TestPrecedencePresenceKeyEnvEmptyBeatsFile(t *testing.T) {
 	run := func(envExtra ...string) string {
 		cmd := exec.Command(bin, "-p", "fetch the page", "-base-url", srv.URL+"/v1")
 		cmd.Dir = t.TempDir()
-		cmd.Env = append(rigEnv(scratch, ""), envExtra...)
+		cmd.Env = append(rigEnv(t, scratch, ""), envExtra...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -408,7 +426,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		}
 		cmd := exec.Command(bin, "run-job", key)
 		cmd.Dir = workDir
-		cmd.Env = rigEnv(scratch, binDir, "RIG_SWAP_URL="+swapURL)
+		cmd.Env = rigEnv(t, scratch, binDir, "RIG_SWAP_URL="+swapURL)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("run-job: %v\n%s", err, out)
 		}
@@ -633,7 +651,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	sandboxOff(t, scratch)
 	cmd := exec.Command(bin, "run-job", key)
 	cmd.Dir = sessDir
-	cmd.Env = append(rigEnv(scratch, binDir), "RIG_SWAP_URL="+srv.URL)
+	cmd.Env = append(rigEnv(t, scratch, binDir), "RIG_SWAP_URL="+srv.URL)
 	if out, runErr := cmd.CombinedOutput(); runErr != nil {
 		t.Fatalf("run-job: %v\n%s", runErr, out)
 	}
@@ -664,13 +682,7 @@ func TestAgentsOrderAgainstGuidelines(t *testing.T) {
 
 func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "models.json"),
-		[]byte(`[{"id": "local", "window": 32768}]`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeModelRows(t, dir, `{"id": "local", "window": 32768, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}`)
 	cfg, err := config.Load(dir, t.TempDir())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -722,7 +734,7 @@ func TestDefaultJobModelLegacyKeyIsNamedAtStart(t *testing.T) {
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	out, runErr := cmd.CombinedOutput()
 	if runErr != nil {
 		t.Fatalf("the mint must not break the run: %v\n%s", runErr, out)
@@ -746,7 +758,7 @@ func TestOneSlotWireRecordsTheMenuWithTheDrainPair(t *testing.T) {
 	scratch := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -771,7 +783,7 @@ func TestTwoSlotWirePutsTheDrainPairOn(t *testing.T) {
 	scratch := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -795,7 +807,7 @@ func TestWorkersFalseKeepsTheDrainPairOffAtTwoSlots(t *testing.T) {
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -814,16 +826,11 @@ func TestRemoteSessionRowWiresTheDrainPairWithoutSlots(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	scratch := t.TempDir()
 	dir := cfgDir(t, scratch)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	row := `{"id": "brain", "window": 8192, "maxTokens": 1024, "reserve": 64, "keepRecent": 128, "remote": true, "baseUrl": "` + srv.URL + `/v1", "apiKey": "sk-test"}`
-	if err := os.WriteFile(filepath.Join(dir, "models.json"), []byte("["+row+"]"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	remoteRow := `{"id": "brain", "window": 8192, "maxTokens": 1024, "reserve": 64, "keepRecent": 128, "remote": true, "baseUrl": "` + srv.URL + `/v1", "apiKey": "sk-test"}`
+	writeModelRows(t, dir, remoteRow)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL, "RIG_MODEL=brain")
+	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL, "RIG_MODEL=brain")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -846,7 +853,7 @@ func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
 	}
 	cmd := exec.Command(bin, "-p", "hello")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	out, _ := cmd.CombinedOutput()
 	if !strings.Contains(string(out), "workers.json retired: the fleet is the resident model") {
 		t.Fatalf("the retired file must be named once at start: %q", out)
@@ -899,7 +906,7 @@ func TestMalformedConfigRefusesBeforeStores(t *testing.T) {
 	}
 	cmd := exec.Command(bin, "-p", "hello")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	out, runErr := cmd.CombinedOutput()
 	if runErr == nil {
 		t.Fatalf("a malformed settings.json must refuse: %q", out)
@@ -928,7 +935,7 @@ func TestRoundsAndResultCapEnvRefuseLoud(t *testing.T) {
 			bin := buildBin(t, t.TempDir())
 			cmd := exec.Command(bin, "-p", "hello")
 			cmd.Dir = t.TempDir()
-			env := rigEnv(t.TempDir(), "")
+			env := rigEnv(t, t.TempDir(), "")
 			env = append(env, tc.env+"="+tc.value)
 			cmd.Env = env
 			out, runErr := cmd.CombinedOutput()
@@ -955,7 +962,7 @@ func TestNegativeEnvBoundsRefuseLoud(t *testing.T) {
 			bin := buildBin(t, t.TempDir())
 			cmd := exec.Command(bin, "-p", "hello")
 			cmd.Dir = t.TempDir()
-			env := rigEnv(t.TempDir(), "")
+			env := rigEnv(t, t.TempDir(), "")
 			env = append(env, tc.env)
 			cmd.Env = env
 			out, runErr := cmd.CombinedOutput()
@@ -971,24 +978,18 @@ func TestNegativeEnvBoundsRefuseLoud(t *testing.T) {
 
 func TestModelsFileRowListsAndSwitches(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "models.json"),
-		[]byte(`[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}]`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeModelRows(t, dir, localModelRow, `{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}`)
 	cfg, err := config.Load(dir, t.TempDir())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	brain, ok := cfg.Models.Get("brain")
 	if !ok {
-		t.Fatal("the merged table has no brain row")
+		t.Fatal("the table has no brain row")
 	}
 	local, ok := cfg.Models.Get("local")
 	if !ok {
-		t.Fatal("the merged table lost local")
+		t.Fatal("the table has no local row")
 	}
 	h := newHarness(t, local, "local", cfg.Models)
 	done := h.startRun()
@@ -1110,6 +1111,34 @@ func TestNoModelRefusesBeforeAnyRequest(t *testing.T) {
 	}
 }
 
+func TestNamedModelWithNoRowsRefusesBeforeAnyRequest(t *testing.T) {
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBin(t, t.TempDir())
+	scratch := t.TempDir()
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(scrubSwap(os.Environ()),
+		"HOME="+scratch,
+		"XDG_CONFIG_HOME="+scratch,
+		"RIG_MODEL=local",
+		"RIG_SWAP_URL="+srv.URL,
+	)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("a named model no file defines must refuse: %s", out)
+	}
+	if !strings.Contains(string(out), `no row for "local"`) {
+		t.Fatalf("the refusal must name the missing row, got %q", out)
+	}
+	if s.count() != 0 {
+		t.Fatalf("requests = %d, want 0 (the refusal precedes any call)", s.count())
+	}
+	if _, statErr := os.Stat(cfgDir(t, scratch)); !os.IsNotExist(statErr) {
+		t.Fatalf("the refusal must precede the stores: the rig home %v (%v)", cfgDir(t, scratch), statErr)
+	}
+}
+
 func TestSpawnedRigWithoutASwapFixtureNeverReadsTheDefaultSwapPort(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:8090")
 	if err != nil {
@@ -1134,7 +1163,7 @@ func TestSpawnedRigWithoutASwapFixtureNeverReadsTheDefaultSwapPort(t *testing.T)
 	scratch := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -1163,11 +1192,11 @@ func TestRigEnvPinsTheSwapUnlessTheTestNamesOne(t *testing.T) {
 		}
 		return n, val
 	}
-	n, val := count(rigEnv(t.TempDir(), ""))
+	n, val := count(rigEnv(t, t.TempDir(), ""))
 	if n != 1 || val != "RIG_SWAP_URL="+testenv.ClosedSwapURL {
 		t.Fatalf("the default env must carry exactly the closed port, got %d × %q", n, val)
 	}
-	n, val = count(rigEnv(t.TempDir(), "", "RIG_SWAP_URL=http://127.0.0.1:9"))
+	n, val = count(rigEnv(t, t.TempDir(), "", "RIG_SWAP_URL=http://127.0.0.1:9"))
 	if n != 1 || val != "RIG_SWAP_URL=http://127.0.0.1:9" {
 		t.Fatalf("the test's own swap must win exactly once, got %d × %q", n, val)
 	}

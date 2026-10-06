@@ -33,7 +33,9 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   the content never interpreted; `Load` turns it into the one notice.
 - `loadModels` / `parseRows` / `mergeRows`: the model table out of code;
   `concurrency` stays a known row key whose value is read and dropped
-  (the retired count), reported up as the notice.
+  (the retired count), reported up as the notice. The embedded side is
+  `[]` (2.12.11): `mergeRows` over it is the operator's table verbatim,
+  and the file, the embed, and the merge's error voice stay one path.
 - `readAgents`: the operator's AGENTS.md. `ProjectAgents(dir, cwd)`:
   the project's, the nearest file walking up from the workspace to the
   repository root and no further (a non-repo workspace reads its own
@@ -70,17 +72,24 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - The embedded allow is the native set (13 names) grown by `scheduler`
   and `delegate` whenever the operator named no allow of their own
   (their list stands as written) — the worker tools register for every
-  run now (SPEC_WORKERS). The embedded models table carries `local`
-  alone.
+  run now (SPEC_WORKERS). The embedded models table carries no rows: the
+  table is the operator's file, and a named model the file does not
+  define is the root's refusal at start (`models.Resolve`'s voice, before
+  any store opens), as a nameless run has been since 0.25.6. `/models`
+  lists what the operator wrote, in `Known()` order, and nothing else.
 - The settings chain is embedded < file, with the flag/env layers applied
   by the root above; zero means unset at the file layer (an empty string
   or zero descends), except the two presence-aware keys
   (`webFetchProxy`, `trafilatura`), for which present is set; even empty
   (2, 5).
-- Model rows: a user row overlays per-field on an embedded id (each set
-  field replaces, each unset keeps); a new id requires its numbers and
-  takes the defaults (role interactive, effort ""); unlisted embedded
-  rows are kept. The hosted keys (SPEC_HOSTED 1) merge the same way:
+- Model rows: the embedded table is empty (2.12.11), so the operator's
+  file is the table and a row with only `id` and `window` refuses for its
+  numbers. The merge keeps its shape for a non-empty embedded side (a
+  user row overlays per-field on an embedded id, each set field replacing
+  and each unset keeping; a new id requires its numbers and takes the
+  defaults role interactive, effort ""; unlisted embedded rows are kept),
+  and its cases run on a literal base row in `modelsmerge_test.go`.
+  The hosted keys (SPEC_HOSTED 1) merge the same way:
   `remote`, `provider` (a name implies remote), `baseUrl`, `apiKey`
   (never rendered by `/models`), `reasoning`,
   `providerPin` (a string or an array), `cacheControl`, `retries`. A

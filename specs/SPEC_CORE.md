@@ -64,7 +64,9 @@ rig/
                  provider/openai and frontend/tui
   config/        the config leaf (SPEC_CONFIG): one load for every entry
                  mode; the embedded settings.json and models.json are the
-                 0.2.0 defaults moved out of code
+                 0.2.0 defaults moved out of code (the embedded models
+                 table ships empty since 2.12.11: the operator's
+                 models.json is the table)
   cmd/
     rig/      main.go, the composition root
 ```

@@ -35,75 +35,49 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 	}
 }
 
-func TestModelsMergesOverEmbeddedRowByRow(t *testing.T) {
-	t.Run("overlay keeps the unset fields", func(t *testing.T) {
-		dir := t.TempDir()
-		write(t, dir, "models.json", `[{"id": "local", "window": 32768}]`)
-		cfg := load(t, dir, t.TempDir())
-		m, ok := cfg.Models.Get("local")
-		if !ok {
-			t.Fatalf("the merged table lost the embedded row local")
-		}
-		want := models.Model{ID: "local", Window: 32768, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive, Efforts: []string{"low", "medium", "xhigh"}}
-		if !reflect.DeepEqual(m, want) {
-			t.Fatalf("overlay = %+v, want the user's window over the embedded fields (+%+v)", m, want)
-		}
-	})
-	t.Run("new row added with its defaults", func(t *testing.T) {
-		dir := t.TempDir()
-		write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768}]`)
-		cfg := load(t, dir, t.TempDir())
-		m, ok := cfg.Models.Get("brain")
-		if !ok {
-			t.Fatalf("the new row must be added")
-		}
-		if m.Role != models.RoleInteractive {
-			t.Fatalf("a new row's role = %q, want the default interactive", m.Role)
-		}
-		if m.Effort != "" {
-			t.Fatalf("a new row's effort = %q, want the default (the policy's medium)", m.Effort)
-		}
-		if got := len(cfg.Models.Known()); got != 2 {
-			t.Fatalf("merged table = %d rows, want the embedded local plus the new one (%v)", got, cfg.Models.Known())
-		}
-	})
-	t.Run("role and effort are the file's when set", func(t *testing.T) {
-		dir := t.TempDir()
-		write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker", "effort": "low"}]`)
-		cfg := load(t, dir, t.TempDir())
-		m, ok := cfg.Models.Get("brain")
-		if !ok {
-			t.Fatalf("the new row must be added")
-		}
-		if m.Role != models.RoleWorker || m.Effort != "low" {
-			t.Fatalf("row = %+v, want the file's role worker and effort low", m)
-		}
-	})
-	t.Run("unlisted embedded row kept", func(t *testing.T) {
-		dir := t.TempDir()
-		write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768}]`)
-		cfg := load(t, dir, t.TempDir())
-		m, ok := cfg.Models.Get("local")
-		if !ok {
-			t.Fatalf("the unlisted embedded row must be kept (the file is an overlay, not a replacement)")
-		}
-		if m.Window != 65536 || m.MaxTokens != 8192 || m.Reserve != 8192 || m.KeepRecent != 16384 {
-			t.Fatalf("unlisted row = %+v, want the embedded values untouched", m)
-		}
-	})
-	t.Run("a new row's missing number refuses naming it", func(t *testing.T) {
-		dir := t.TempDir()
-		p := write(t, dir, "models.json", `[{"id": "brain", "window": 262144}]`)
-		err := loadErr(t, dir, t.TempDir())
-		if err.Error() != "config: "+p+": row 1: \"maxTokens\" is required" {
-			t.Fatalf("the voice = %q, want the missing field named", err)
-		}
-	})
+func TestEmbeddedModelsTableIsEmpty(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	if got := cfg.Models.Known(); len(got) != 0 {
+		t.Fatalf("a fresh install lists %v: the table is the operator's file, nothing else", got)
+	}
+}
+
+func TestModelsFileRowsAreTheTableVerbatim(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]}, {"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768}]`)
+	cfg := load(t, dir, t.TempDir())
+	if got := cfg.Models.Known(); !reflect.DeepEqual(got, []string{"brain", "local"}) {
+		t.Fatalf("known = %v, want the two rows the file wrote, in id order", got)
+	}
+	m, ok := cfg.Models.Get("local")
+	if !ok {
+		t.Fatal("the file's row is gone")
+	}
+	want := models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive, Efforts: []string{"low", "medium", "xhigh"}}
+	if !reflect.DeepEqual(m, want) {
+		t.Fatalf("row = %+v, want the file's row verbatim (+%+v)", m, want)
+	}
+	brain, ok := cfg.Models.Get("brain")
+	if !ok {
+		t.Fatal("the file's second row is gone")
+	}
+	if brain.Role != models.RoleInteractive || brain.Effort != "" {
+		t.Fatalf("row = %+v, want the defaults role interactive and effort empty (the policy's medium)", brain)
+	}
+}
+
+func TestModelsFileRowMissingItsNumbersRefusesNamingThem(t *testing.T) {
+	dir := t.TempDir()
+	p := write(t, dir, "models.json", `[{"id": "brain", "window": 262144}]`)
+	err := loadErr(t, dir, t.TempDir())
+	if err.Error() != "config: "+p+": row 1: \"maxTokens\" is required" {
+		t.Fatalf("the voice = %q, want the missing field named", err)
+	}
 }
 
 func TestModelsMergeViolationRefuses(t *testing.T) {
 	dir := t.TempDir()
-	p := write(t, dir, "models.json", `[{"id": "local", "reserve": 81920}]`)
+	p := write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 81920, "keepRecent": 16384}]`)
 	err := loadErr(t, dir, t.TempDir())
 	want := "config: " + p + ": local: Reserve 81920 must be in [0, Window 65536): as large as the window, the trigger fires at every estimate (the pi shape)"
 	if err.Error() != want {
@@ -112,25 +86,23 @@ func TestModelsMergeViolationRefuses(t *testing.T) {
 }
 
 func TestModelsVisionKeyDefaultsFalse(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
-	m, ok := cfg.Models.Get("local")
+	dir := t.TempDir()
+	write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}]`)
+	m, ok := load(t, dir, t.TempDir()).Models.Get("local")
 	if !ok {
-		t.Fatal("the embedded row is gone")
+		t.Fatal("the file's row is gone")
 	}
 	if m.Vision {
-		t.Fatal("the embedded table sets vision for nobody: the operator's file decides")
+		t.Fatal("the file sets vision for nobody unless it says so")
 	}
 }
 
-func TestModelsVisionKeySetsAndOverlays(t *testing.T) {
+func TestModelsVisionKeySetsTheRow(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "models.json", `[{"id": "local", "vision": true}]`)
+	write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "vision": true}]`)
 	m, ok := load(t, dir, t.TempDir()).Models.Get("local")
 	if !ok || !m.Vision {
 		t.Fatalf("vision = %+v, want the row to carry it", m)
-	}
-	if m.Window != 65536 {
-		t.Fatalf("the overlay keeps the unset fields: %+v", m)
 	}
 }
 
@@ -139,13 +111,10 @@ func TestModelsVisionKeyIsPresenceAware(t *testing.T) {
 	write(t, home, "models.json", `[{"id": "visionary", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "vision": true}, {"id": "plain", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "vision": false}]`)
 	cfg := load(t, home, t.TempDir())
 	if m, _ := cfg.Models.Get("visionary"); !m.Vision {
-		t.Fatal("a new row carries the flag")
+		t.Fatal("a row carries the flag")
 	}
 	if m, _ := cfg.Models.Get("plain"); m.Vision {
 		t.Fatal("an explicit false stands")
-	}
-	if m, _ := cfg.Models.Get("local"); m.Vision {
-		t.Fatal("an unlisted row keeps the embedded default")
 	}
 }
 

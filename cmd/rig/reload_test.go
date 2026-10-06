@@ -125,7 +125,7 @@ func newReloadHarnessWith(t *testing.T, home string, kernel plugins.Kernel, srv 
 		cwd:         dir,
 		activeID:    "local",
 		row:         defaultRow(),
-		runtime:     defaultsTableValue(),
+		runtime:     defaultsTable(t),
 		pluginsDir:  filepath.Join(home, "plugins"),
 		pluginsHome: home,
 		py:          kernel,
@@ -473,7 +473,7 @@ def run(args: dict) -> str:
 	}
 	cmd := exec.Command(bin, "-base-url", "http://127.0.0.1:1/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(scratch, py)
+	cmd.Env = pluginEnv(t, scratch, py)
 	cmd.Stdin = strings.NewReader("/plugins approve forge\n/plugins\n")
 	out, err := cmd.Output()
 	if err != nil {

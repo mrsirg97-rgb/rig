@@ -43,7 +43,8 @@ touch core (one interface) and the last before the loop freezes for good.
 - No config: the commands are code plus one registration line. Reversed,
   named (SPEC_CONFIG): the models table's source is the merged table
   (the embedded `config/models.json` overlaid by the user's `models.json`,
-  SPEC_CONFIG 4) plus the resolved active row; the command's surface
+  SPEC_CONFIG 4; the embedded table ships empty since 2.12.11, so the
+  user's file is the table) plus the resolved active row; the command's surface
   unchanged except the one named exception below: the role column.
 - No steering mailbox: the slot is 7's, latest wins, unchanged.
 - No change to `-p` one-shot or `run-job` semantics: commands are
@@ -542,7 +543,8 @@ operator watches, and the **role column** after the id (SPEC_CONFIG 4,
 the named exception of this spec's 6): `interactive` or `worker`,
 validated at parse. The rows come from the **runtime table**: the merged
 table (the embedded `config/models.json` overlaid by the user's
-`models.json`, SPEC_CONFIG 4) with the active row replaced by the
+`models.json`, SPEC_CONFIG 4; empty embedded since 2.12.11, which is
+why `/models` shows exactly the file) with the active row replaced by the
 resolved row when resolution overlaid or synthesized it, so it lists
 and `models <id>` can switch back to it. A table the operator cannot
 see is a table the operator cannot use. File rows list like any others:

@@ -116,7 +116,7 @@ func dumpWire(t *testing.T, out, root string) {
 	cmdDir := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = cmdDir
-	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
 	if outp, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the oneshot run must succeed: %v\n%s", err, outp)
 	}
@@ -135,7 +135,7 @@ func dumpWire(t *testing.T, out, root string) {
 	cmdDir2 := t.TempDir()
 	cmd = exec.Command(bin, "-base-url", srv2.URL+"/v1")
 	cmd.Dir = cmdDir2
-	cmd.Env = rigEnv(scratch2, "", "RIG_SWAP_URL="+srv2.URL)
+	cmd.Env = rigEnv(t, scratch2, "", "RIG_SWAP_URL="+srv2.URL)
 	cmd.Stdin = strings.NewReader("hello\n")
 	outp, _ := cmd.CombinedOutput()
 	if len(outp) == 0 {
@@ -155,10 +155,7 @@ func dumpWire(t *testing.T, out, root string) {
 	home := filepath.Join(cfgDir(t, scratch3), "scheduler")
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, "/ws/golden")
-	if err := os.WriteFile(filepath.Join(cfgDir(t, scratch3), "models.json"),
-		[]byte(`[{"id": "brain", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "worker"}]`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeModelRows(t, cfgDir(t, scratch3), localModelRow, `{"id": "brain", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "worker"}`)
 	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "golden", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: workDir, Model: "brain", Busy: "skip",
@@ -174,7 +171,7 @@ func dumpWire(t *testing.T, out, root string) {
 
 	cmd = exec.Command(bin, "run-job", key)
 	cmd.Dir = workDir
-	cmd.Env = append(rigEnv(scratch3, shimDir), "RIG_SWAP_URL="+srv3.URL)
+	cmd.Env = append(rigEnv(t, scratch3, shimDir), "RIG_SWAP_URL="+srv3.URL)
 	if outp, runErr := cmd.CombinedOutput(); runErr != nil {
 		t.Fatalf("run-job exited non-zero (recorded outcomes exit 0): %v\n%s", runErr, outp)
 	}

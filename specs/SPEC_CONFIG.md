@@ -32,7 +32,10 @@ TDD.
   `scheduler`); absent, there are no workers and no worker tools.
 - The models table out of code: `models.Defaults` becomes an embedded
   default `models.json` (go:embed); the user file merges over it row by
-  row; `RIG_MODEL_*` env still wins for the active id (4).
+  row; `RIG_MODEL_*` env still wins for the active id (4). Amended by
+  2.12.11: the embedded table carries **no rows** — the operator's
+  `models.json` is the table, and a named model with no row refuses at
+  start the way a nameless run has since 0.25.6.
 - Rows gain two optional fields: `role` (`worker` | `interactive`,
   default `interactive`, shown by `/models`) and `effort` (the request
   effort where a call sets one: the compaction summary's).
@@ -98,7 +101,9 @@ config/               NEW leaf (stdlib + models, nothing else):
   settings.json       EMBED: the embedded settings; the 0.2.0 flag
                       defaults, moved out of main.go (5)
   models.json         EMBED: the embedded table; the 0.2.0
-                      models.Defaults rows, moved out of models/ (4)
+                      models.Defaults rows moved out of models/ (4),
+                      emptied by 2.12.11: the operator's file is the
+                      table, the embed stays for the merge's shape
   config_test.go, settings_test.go, modelsfile_test.go,
   agents_test.go, theme_test.go
 models/               Model +Role / +Effort (4); Check's role
@@ -213,10 +218,17 @@ present, and the default allow grows by them then), and
 `config/models.json`:
 
 ```json
-[
-  {"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}
-]
+[]
 ```
+
+Amended by 2.12.11: the embedded table is **empty**. The file and its
+`go:embed` stay — the parse, the row-by-row merge, and the merge's error
+voice remain one path — and every row belongs to the operator's file.
+Before the amendment it carried one row (`local`, window 65536), which
+listed itself in `/models` beside whatever the operator had written; a
+row nobody wrote has no business in the picker, and the table is the
+operator's file, nothing else. The numbers are not gone from the tree:
+SETUP's example row and the tests' own rows carry them.
 
 (No `role` / `effort`: the field defaults apply; `interactive`, the
 policy's `medium`.) Amended by 12: the `qwen3.8-workers` row is cut:
@@ -375,6 +387,19 @@ table from `Load` (the test harnesses that name it construct it from
 the same rows). The embedded file is the 0.2.0 table, exactly; pinned
 by `TestEmbeddedDefaultsAreTheV020Values`.
 
+Amended by 2.12.11: the embedded table is empty — `config/models.json`
+is `[]` — so `Load` with no operator file yields no rows and the
+operator's file **is** the table. The embedded file stays embedded: the
+parse, the row-by-row merge, and their refusal voices keep one path, and
+`mergeRows` over an empty embedded table is the operator's table
+verbatim. Pinned by `TestEmbeddedModelsTableIsEmpty` and
+`TestEmbeddedModelsTableCarriesNoRows`; the merge cases that need an
+embedded row build it from a literal (`config/modelsmerge_test.go`),
+never from the binary. A fresh install that names a model the operator
+has not written refuses at start — before any store opens or request is
+made — naming the missing id with the table's known ids: 0.25.6's start
+refusal for a name nobody set, now reached by a row nobody wrote.
+
 **The row schema.** A JSON array of row objects, each:
 
 | field      | type   | required | notes |
@@ -398,7 +423,10 @@ keeps the fallback line so a row constructed without the default never
 loses it; providers that don't know the field ignore it, as today.
 
 **The merge, stated once.** The user file **merges over the embedded
-table row by row**, keyed by `id`:
+table row by row**, keyed by `id` (since 2.12.11 the embedded table is
+empty, so the merge is the identity and the operator's file is the
+table; the rules below stand as the shape of the merge, exercised by a
+literal base row in `config/modelsmerge_test.go`):
 
 - a user row for an **embedded id**: per-field overlay: each field the
   user set (non-zero / non-empty) replaces the embedded value; each
@@ -449,6 +477,10 @@ gains the **role column** after the id:
 (the list shape of SPEC_COMMANDS 13 since 2.8.3; the role is the row's
 text, the active row is `[~]`)
 
+Amended by 2.12.11: the two ids above are an example of an operator's
+`models.json`, not the binary's — with the embedded table empty, every
+row `/models` lists is one the operator wrote.
+
 File rows list like any others; same columns, same switch, same
 refusal voice for unknown ids. The listing order is stable: sorted by
 id (the table's `Known()` order), so the golden lines do not depend on
@@ -480,7 +512,13 @@ are strings; a non-string refuses (`allow[2]: …`).
 
 Amended (0.25.6): `model` carries no embedded value — a run that
 resolves no model refuses at start, naming `--model`, `RIG_MODEL`, and
-the file key.
+the file key. Amended (2.12.11): and the embedded models table carries
+no row either. 0.25.6 kept the row and said a model table is not a
+default, and `model: local` still works when the operator names it; the
+operator's read is that a row they never wrote has no business in the
+picker. The name still works when the operator writes the row; what
+stopped working is naming a row nobody wrote — that is now the same
+start refusal as a name nobody set, before any store opens.
 
 **`defaultJobModel`**; the one key without an env name (the sweep's
 move, 8): the scheduler's default job model, moved to the embedded
@@ -589,7 +627,7 @@ knobs.
 | default model id `local` | `main.go` flag default | **MOVED** → `settings.model` |
 | default allow-list (13 tools) | `main.go` flag default | **MOVED** → `settings.allow` |
 | default retries `3` | `main.go` `envOrInt` | **MOVED** → `settings.retries` |
-| models table rows | `models/models.go` `Defaults` | **MOVED** → `config/models.json` (embedded) |
+| models table rows | `models/models.go` `Defaults` | **MOVED** → `config/models.json` (embedded); **empty since 2.12.11**: the rows are the operator's file |
 | summary-call effort `"medium"` | `policy/compact/compact.go` | **MOVED** → the row's `effort`; the policy keeps `"medium"` as the field's default (4) |
 | default SearXNG `http://127.0.0.1:8888` | `tool/web/web.go` | **MOVED** → `settings.searxngUrl` |
 | default fetch proxy `http://127.0.0.1:8889` | `tool/web/web.go` | **MOVED** → `settings.webFetchProxy` |
@@ -799,9 +837,9 @@ start naming the move. The `store/scheduler` fallback constant goes
 with it: `Create` takes the model from its caller, never a literal
 (SPEC_STATE's scheduler section). The embedded `models.json` loses
 the `qwen3.8-workers` row (4's amendment): a `go install` user's
-embedded table is `local` alone, and the worker's row arrives with
-the operator's `models.json`; the fleet names it, the table defines
-it.
+embedded table is `local` alone — since 2.12.11 it is empty, and every
+row, `local` included, arrives with the operator's `models.json`; the
+fleet names it, the table defines it.
 
 **What does not move.** The stores, the crontab, the runner, and
 `run-job` are unchanged in shape: a job row carries its model (set at
@@ -829,14 +867,18 @@ case names one, the built binary for the e2e.
 **config; the parse and the overlay:**
 
 - `TestLoadAbsentFilesIsSilent`: no dir, no files, no AGENTS.md:
-  `Config` with the embedded values, `Theme` nil, `Agents` "".
+  `Config` with the embedded values, `Theme` nil, `Agents` "", and no
+  model rows (2.12.11).
 - `TestLoadEmptyDirIsSilent`: the dir exists, no files: the same
   result (the directory's presence is not an event).
 - `TestEmbeddedDefaultsAreTheV020Values`: the embedded settings equal
-  the 0.2.0 flag defaults key by key (baseUrl, model, the system text,
-  the 13-tool allow, retries 3, searxng, proxy, swap); the embedded
-  table equals the 0.2.0 `models.Defaults` row by row (ids, window,
-  maxTokens, reserve, keepRecent); the move is exact.
+  the 0.2.0 flag defaults key by key (baseUrl, the system text, the
+  13-tool allow, retries 3, searxng, proxy, swap); the `model` key is
+  the 0.25.6 exception (no default). Amended by 2.12.11: the models half
+  of this test left with the row it pinned —
+  `TestEmbeddedModelsTableIsEmpty` (`config.Load` of an empty dir lists
+  nothing) and `TestEmbeddedModelsTableCarriesNoRows` (the embedded file
+  still parses as a row array; the array is empty) own it now.
 - `TestSettingsMalformedNamesFileAndField`: subtests pinning each
   voice from 3: the retries type, the unknown key (the known list,
   sorted), the top-level not an object, the allow element.
@@ -849,13 +891,23 @@ case names one, the built binary for the e2e.
 - `TestModelsMalformedNamesFileRowAndField`: subtests: the top-level
   not an array, a row not an object, the missing id, the duplicate id,
   the unknown role, the bad int, the unknown row key.
-- `TestModelsMergesOverEmbeddedRowByRow`: a user row for `local` with
-  only `window`: the user's window, the embedded maxTokens/reserve/
-  keepRecent/role; a new row `brain` (full numbers): added,
-  `role interactive` (the default), `effort ""`; the unlisted
-  embedded row kept (4).
-- `TestModelsMergeViolationRefuses`: an overlay that breaks
-  `Reserve < Window`: the refusal names the file, the id, the clause.
+- `TestModelsFileRowsAreTheTableVerbatim`: the file's rows are the
+  merged table (2.12.11), in `Known()` order, their values untouched; a
+  row the file writes with only `id` and `window` still refuses for the
+  numbers (the required fields are the row's, not the embedded's).
+- `TestMerge*` (`config/modelsmerge_test.go`, the internal package):
+  the merge over a **literal** base row, never the binary's table: a
+  file row for the base id with only `window` keeps the base's
+  maxTokens/reserve/keepRecent/role/efforts; the hosted keys overlay the
+  same way; the unlisted base row is kept; an id the base does not know
+  is added with `role interactive` and `effort ""`; `vision: false`
+  descends and an unset key keeps the base's true (4).
+- `TestMergeOverAnEmptyTableIsTheOperatorsTableVerbatim`,
+  `TestMergeOfAnEmptyFileOverAnEmptyTableIsAnEmptyTable`: the shipped
+  shape — an empty embedded table merged with the operator's file.
+- `TestModelsMergeViolationRefuses`, `TestMergeRowViolationNamesTheIdAndClause`:
+  a row that breaks `Reserve < Window`, from the file and from an
+  overlay: the refusal names the file, the id, the clause.
 - `TestAgentsGlobalThenProject`: global `G` + project `P` →
   `"G\n\nP"`; `TestAgentsProjectOnly`, `TestAgentsGlobalOnly` (each
   alone, no stray blank line).
@@ -895,8 +947,8 @@ case names one, the built binary for the e2e.
   `…DisagreeingWithTheFleetRefuses`, `…UnknownToTheTableRefuses`
   (nothing minted), `…EmptyDefaultJobModelIsANotice`.
 - `TestEmbeddedDefaults` (amended): the embedded allow is the 17
-  non-worker natives, the embedded table is the one `local` row
-  (no `qwen3.8-workers`), and the embedded settings carry no
+  non-worker natives, the embedded table carries no rows at all
+  (2.12.11: not even `local`), and the embedded settings carry no
   `defaultJobModel` key.
 
 **models:**
@@ -1042,7 +1094,8 @@ PR A carries this spec file only; the diffs below land with PR B.
   gains the `workers.json` row (the fleet: `model`, `slots`), the
   `defaultJobModel` row is cut, the allow-list default is the 16
   non-worker natives (the two worker tools join it when a fleet is
-  configured), and the embedded table is the one `local` row.
+  configured), and the embedded table is empty (2.12.11): the example
+  row is the operator's to write.
 - **CHANGELOG + Version**: `0.2.0` → `0.3.0`, the test updated (10).
   12 lands under `[Unreleased]` (the worker fleet, the cut key, the
   presence rule, the regenerated goldens); a 0.19.0 bump is the

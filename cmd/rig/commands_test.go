@@ -686,6 +686,7 @@ func TestREPLCommands(t *testing.T) {
 	}
 	scratch := t.TempDir()
 	workDir := t.TempDir()
+	writeModelRows(t, cfgDir(t, scratch), localModelRow)
 
 	cmd := exec.Command(bin)
 	cmd.Dir = workDir

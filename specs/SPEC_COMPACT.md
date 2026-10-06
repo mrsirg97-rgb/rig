@@ -120,8 +120,9 @@ func Resolve(t Table, id string, env func(string) (string, bool)) (Model, error)
                                     // root's row resolution (decision 2);
                                     // the env overlays the active row's
                                     // fields, set beats the row (SPEC_CONFIG 4)
-// the built-in rows are the embedded config/models.json (SPEC_CONFIG 4):
-// the 0.2.0 rows out of code, the user file overlays them row by row.
+// the built-in rows are the embedded config/models.json (SPEC_CONFIG 4),
+// empty since 2.12.11: the user's file is the table, and the merge of a
+// non-empty embedded side stays row by row.
 
 // policy/compact: the policy, the decorator, the marker.
 const SummaryMarker = "[compaction] " // the transcript marker (decision 5)
@@ -224,7 +225,8 @@ package): `Model{ID, Window, MaxTokens, Reserve, KeepRecent, Role,
 Effort}`, a `Table` with lookup and `Resolve`; the root's row
 resolution at start, before any store is opened. The table is the
 embedded `config/models.json` overlaid by the user's `models.json`,
-merged row by row (SPEC_CONFIG 4):
+merged row by row (SPEC_CONFIG 4; the embedded side is empty since
+2.12.11, so what resolves is what the operator wrote):
 
 - the table row for the active id (`-model` / `RIG_MODEL`), with the
   `RIG_MODEL_WINDOW` / `_MAX_TOKENS` / `_RESERVE` / `_KEEP_RECENT` env
@@ -244,12 +246,14 @@ merged row by row (SPEC_CONFIG 4):
 start, not a slow death on the first turn. This is how a new model on the
 swap gets a row without a code change (flags and env only, SPEC_CORE).
 
-The embedded `config/models.json` ships the worker profile under rig's
-default id and the scheduler's worker id; `local` (interactive) and
-`qwen3.8-workers` (worker), both Window 65536, MaxTokens 8192, Reserve
-8192, KeepRecent 16384, and the 262k brain row is one table entry
-(Window 262144, MaxTokens 16384, Reserve 16384, KeepRecent 32768),
-added to `models.json` or carried by env.
+Amended by 2.12.11: `config/models.json` ships **no rows**. What this
+section described — the embedded `local` and `qwen3.8-workers` rows,
+both Window 65536, MaxTokens 8192, Reserve 8192, KeepRecent 16384 — is
+now the operator's `models.json`'s job (the `qwen3.8-workers` id was
+already cut by SPEC_CONFIG 12); every number below is what a row of that
+shape carries, and the 262k brain row is one table entry (Window 262144,
+MaxTokens 16384, Reserve 16384, KeepRecent 32768), written in
+`models.json` or carried by env.
 
 Row invariants, checked once, loud, naming the id and the fields:
 

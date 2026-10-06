@@ -1,4 +1,57 @@
 # Changelog
+## [2.12.11]: the models table is the operator's
+
+`/models` lists `local` beside the operator's five rows, and the
+operator's `~/.rig/models.json` has no such row: `config/models.json` is
+embedded in the binary with one row in it, and `config/modelsfile.go`
+folds it under the operator's file at every start. 0.25.6 removed the
+model *default* (`model: local` left the embedded settings.json, and a
+run naming no model refuses) and kept the row, on the reasoning that a
+model table is not a default. The table is not the binary's either: a
+row the operator never wrote has no business in the picker.
+
+- **the embedded table is empty** (`config`): `config/models.json` is
+  `[]`. The file and its `go:embed` stay — the parse, the row-by-row
+  merge, and the merge's error voice remain one path, and `mergeRows`
+  over an empty embedded table is the operator's table verbatim — but
+  nothing ships a row, so `Load` with no `models.json` yields no rows,
+  `/models` lists only what the operator wrote, and the only way a row
+  exists is that someone wrote it. No filtering, no hidden-row rule: the
+  row is gone from the data the fold reads.
+- **a named row nobody wrote refuses like a name nobody set**
+  (`cmd/rig`, unchanged code): the root resolves the active id through
+  `models.Resolve` at the point 0.25.6 moved to the front of the start,
+  so a fresh install naming `local` refuses before any store opens or
+  request is made, naming the missing id and the table's known ids — the
+  existing voice, not a new one (`TestNamedModelWithNoRowsRefusesBeforeAnyRequest`
+  counts zero requests and no rig home created). `RIG_MODEL_*` still
+  mints the active row for an id the table does not know: the env
+  surface is the escape hatch it always was.
+- **the tests own their rows** (`cmd/rig`, `config`): `rigEnv` writes a
+  `models.json` into the scratch rig home with the row its
+  `RIG_MODEL=local` names (the values the embedded row had, so every
+  wire body is unchanged; a test that writes its own table keeps it), and
+  the fixtures that used to lean on the embedded row for a base — the
+  vision row, the file-row switch, the wire's `run-job` home, the
+  `RIG_HOME` overrides, the cold-shell fire, the REPL command run — write
+  theirs whole. `defaultsTable` builds from the test's own row instead of
+  `config.Load` of an empty dir. The config merge tests that need an
+  embedded row build it from a literal (`config/modelsmerge_test.go`, the
+  internal package): overlay per field, the hosted fields, the unlisted
+  row kept, a new id's defaults, `vision`'s presence-aware descent, and
+  the violation voices, none of them reading the binary's table. The wire
+  job shows no drift: the row's values did not move, only who writes them.
+- **the docs say so** (`specs/SPEC_CONFIG.md`'s goals, layout, 4, and 5,
+  `config/PACKAGE.md`, `docs/SETUP.md`, plus the one-clause corrections
+  in `specs/SPEC_COMPACT.md`, `specs/SPEC_COMMANDS.md`, and
+  `specs/SPEC_CORE.md`): the embedded table is empty, the operator's file
+  *is* the table, the examples carry `local` only as a row the operator
+  wrote, SETUP's config section tells you to write the row for the model
+  you mean to name before the first run, and 0.25.6's "a model table is
+  not a default, and `model: local` still works when the operator names
+  it" gets its amendment: still true — when the operator names it, and
+  wrote it.
+
 ## [2.12.10]: a fired once-job is done, and a job can be read by id
 
 Every delegate fire registers the job it fires — `adHocCreate` mints a
