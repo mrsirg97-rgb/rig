@@ -529,6 +529,28 @@ Rejected, named:
   approves; a capability that installs itself is the sandbox's
   nightmare shape.
 
+## the train zone shares the machinery (2.13.0)
+
+The zone machinery is not plugin-specific: SPEC_DECISION 2.13.0 puts a
+second kernel-loaded zone (`train/`, one trainer per file) beside
+`plugins/`, and the machinery became the rules of a kernel-loaded zone
+rather than the rules of a plugin. `Contract` names what one file of a
+zone must expose — `PluginContract` (DESCRIPTION a str, SCHEMA a dict,
+run callable) and `TrainerContract` (`train(rows_path, out_dir)` and
+`evaluate(checkpoint, rows_path)` callable) — and every door that
+carried plugin knowledge takes it: `Zone` and `List` name the home
+directory they read (`plugins`, `train`), `WritePending` checks the
+contract's attrs from the source text (`def <name>(` for a callable,
+the bare name otherwise), `DiscoverChecked` checks the contract in the
+kernel, and one `Invoke` cell calls any loaded file's method with the
+args splat from a JSON array (the plugin tool's `run(args)` is its
+one-arg sibling). The registry a discovery cell populates derives from
+the contract's kind — `__rig_plugins__`, `__rig_trainers__`: a train
+kernel is its own process under the `trainPython` interpreter, but it
+is the same cell. `Move` never knew the home's layout beyond the dir it
+is handed and is unchanged; the pending and disabled subzones exist
+under both homes, and the filename rule is one rule.
+
 ## testing
 
 Named cases, failing first (the standing rule). The fake kernel is

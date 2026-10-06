@@ -239,6 +239,118 @@ headless run. Before 2.8.3 these were `Fprintln(os.Stderr)` over the
 TUI's frame; the torn footer the operator saw at every turn end was the
 reviewer being refused and printing it.
 
+## training (2.13.0)
+
+The rows the reviewer settles are gold labels, and until 2.13.0 they
+trained nothing: the pipeline that fine-tuned the decision model lived
+outside rig (`~/laya/retrain_rig.py`), read rig's store through a
+read-only sqlite handle, and its output — the checkpoint the decision
+server serves — was whatever that script's last run left. The evidence
+that made this worth owning in: 210 settled rows (bash `risk`, pack
+`matter`) with gold labels and 100-odd corrections with rationales; the
+base Laya at 127.0.0.1:8095 scores 38% on held-out bash against a
+constant 59% and carries no pack signal at all (mean p(yes) 0.11 on
+relevant against 0.13 on not); on 2026-10-06 a full fine-tune of
+`convaiinnovations/laya` on 167 of those rows, 4 epochs, CPU, 281 s,
+scored 81% bash and 82% pack on 43 held-out rows with p(yes) 0.33
+against 0.03. Head-only training (`--freeze-encoder`) equals the base
+model: the encoder must move, so the gradient step is Python, never Go,
+and Go never imports a tensor library.
+
+### the zone (`train/`)
+
+One trainer is one Python file under the rig home's `train/`, the name
+the filename stem (`laya.py` first), beside `pending/` and `disabled/`
+subzones, loaded through the machinery the plugins share (SPEC_PLUGINS,
+the 2.13.0 amendment): the same filename rule, the same contract check
+with a different contract, the same zone moves. The trainer contract is
+two callables: `train(rows_path, out_dir) -> report` and
+`evaluate(checkpoint, rows_path) -> report`, where a report is JSON —
+per-question `n`, `correct`, `accuracy`, and for a noul question the
+mean predicted p(true) by gold class (`pTrue.goldTrue`,
+`pTrue.goldFalse`), the two numbers that separated signal from none
+above. A train report carries one field more, `checkpoint`: the
+directory it wrote under `out_dir`.
+
+Trainers do not load into the session kernel: torch is two gigabytes
+and the kernel's venv is not where it belongs. The zone is read through
+its own interpreter, settings `trainPython` beside `decisionUrl`
+(empty refuses the run, naming the key), one kernel per run — so
+discovery is per-run, which is the reload a long-lived process would
+have needed.
+
+### the export, the split, the constant
+
+`rig decision train <trainer>` is the only runner and it is a headless
+command job, never a turn. It reads the settled rows — approved → the
+proposer's answer is gold; denied → the reviewer's label parsed from
+`reviewer_answer` free text (the regex `~/laya/retrain_rig.py` carried
+is the start, ported to Go; every rationale shape in the live store's
+history parses against it) — unparseable rows counted and skipped, not
+guessed. The question id and kind come off the row's stored question
+(the legacy `yesno` reads as binary); a kind the laya wire does not
+speak (a score) is counted and skipped. Rows leave in laya's shape —
+`{state, questions: {<id>: {type: choice|noul, instructions,
+criteria}}, expected}` — under the rig home's `decision/train/<run>/`
+as `rig-train.jsonl` and `rig-heldout.jsonl`.
+
+The split is stratified and deterministic: rows grouped by question id
+and gold label, each group ordered by (ts, id), every fifth row
+(zero-based) held out, the rest training. Same rows in, same split out;
+no seed, no shuffle.
+
+The constant baseline is computed, not assumed: per question the
+majority gold label of the train rows (ties break to the label that
+sorts first), scored against held-out; for a noul question its p(true)
+is the train prior, the same mass on both gold classes — the shape "no
+signal" takes. It scores the same held-out rows the candidate and the
+incumbent score, so the three reports share one table.
+
+### the run, the table, the promotion
+
+The run discovers the zone, calls the trainer's `train` (the cell bound
+is the kernel's max cell timeout, 600 s; the real bound is the
+scheduler's per-job timeout), then `evaluate` three ways on the same
+held-out rows: the candidate's checkpoint, the incumbent, and the
+constant. The incumbent is the currently served checkpoint, read from
+the unit file settings `decisionUnit` names (`~/.config/systemd/user/
+laya.service`): the `Environment=` line carrying
+`RIG_DECISION_CHECKPOINT` (`%h` expanded). Since 2026-10-06 the server
+is `~/laya/serve_rig.py` under the operator's `laya` user unit, and the
+incumbent is `~/laya/ft-rig-20261006-1658` (81% bash, 82% pack
+held-out). With no unit named, the run scores candidate against the
+constant and promotes nothing — there is nothing served to beat.
+
+Promotion is a measured win, never a loss: the candidate's held-out
+accuracy must be strictly greater than the constant's AND the
+incumbent's on every question the held-out rows carry; a question
+missing from any report is not a beat. The p(true) means ride the
+report and the table as the signal's evidence; they never gate.
+
+One `core.Notice` (source `decision`) carries the held-out table — the
+three reports per question and the promoted word — and the run is
+recorded in the decision store's `trainings` table: started, trainer,
+rows, skipped, split, run dir, candidate checkpoint, the three held-out
+reports, promoted or not. A run that dies before the three reports
+exist records nothing; the job's own status carries the death.
+
+Promotion writes the checkpoint path the decision server loads: the one
+`Environment=` line in the unit file named by `decisionUnit` is
+rewritten, and the reply names what the operator runs — `systemctl
+--user daemon-reload && systemctl --user restart laya`. rig restarts no
+service it does not own: the reload is printed, never executed.
+
+### the doors
+
+`decision train <trainer>` (the slash command) enqueues the run: a
+scheduler command job (`<rig> decision train <trainer>`, cron `once`,
+at the next even minute at least two minutes out — the crontab's minute
+granularity is the margin), named `decision-train-<trainer>-<tag>`. The
+nightly is the operator's one line — a command job on a 5-field cron
+running the same command (docs/SETUP.md). Nothing trains inside a turn:
+the door only enqueues, and the command the job runs is the CLI
+subcommand.
+
 ## testing
 
 - reviewer scope: a bite sees its own project's rows and global ones,
@@ -278,6 +390,21 @@ reviewer being refused and printing it.
   the guideline joins, and each item writes one store row; the migration
   adds `unsure` to a version 1 file.
 - the wire: the tool menu and the wire sha do not move.
+- training: the export parses every reviewer rationale shape in the
+  live store's history, pinned as fixtures; unparseable rows count and
+  skip; an approved row takes the proposer's answer, a denied row the
+  parsed correction; the split is stratified and deterministic (same
+  rows in, same split out, every fifth of each question-and-label
+  group); the constant baseline is computed from the train rows, never
+  assumed; the promote rule needs a strict win over the constant AND
+  the incumbent on every question and a missing question is not a beat;
+  a fake trainer (a Python file in the test's scratch home returning
+  fixed reports) drives the promote and the no-promote both ways; the
+  trainer contract check refuses a file missing `evaluate`; the unit
+  rewrite touches the one `Environment=` line and prints the restart,
+  never runs it; an empty `trainPython` or a promotion with no
+  `decisionUnit` refuses loudly naming the key; a trainings row
+  round-trips the three reports and the promoted word.
 
 ## scope
 
