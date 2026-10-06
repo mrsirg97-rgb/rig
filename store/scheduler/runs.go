@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	scheddomain "github.com/mrsirg97-rgb/rig/v2/store/scheduler/domain"
@@ -19,7 +20,6 @@ type RunRecordInput struct {
 	Started  string
 	Ended    string
 	Cost     *float64
-	Done     bool
 	Model    string
 }
 
@@ -46,22 +46,9 @@ func RecordRun(ctx context.Context, db DB, in RunRecordInput) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	job, ok := f.jobs[in.ID]
+	_, ok := f.jobs[in.ID]
 	if ok {
-		job.LastStatus = status
-		if in.Exit != nil {
-			job.LastExit = *in.Exit
-			job.LastExitSet = true
-		}
-		job.UpdatedSeq = seq
-	}
-	if ok && in.Done {
-		doneJSON, _ := json.Marshal(map[string]any{"id": in.ID})
-		doneSeq, err := appendEvent(bound, seq+1, "done", string(doneJSON), "")
-		if err != nil {
-			return 0, err
-		}
-		f.apply(eventRow{seq: doneSeq, ts: nowRFC3339(), op: "done", args: string(doneJSON)})
+		f.apply(eventRow{seq: seq, ts: nowRFC3339(), op: "run", args: string(argsJSON)})
 	}
 	var reason, log, model *string
 	if in.Reason != "" {
@@ -149,21 +136,9 @@ func Runs(ctx context.Context, db DB, id string, n int) (string, error) {
 		return "", schedErr("no job '%s'", id)
 	}
 
-	rows, err := tx.Query(`SELECT seq, started_at, status, exit, duration_ms, reason, log_path, model FROM runs WHERE job_id = ? ORDER BY seq DESC LIMIT ?`, id, n)
+	out, err := runRows(tx, id, n)
 	if err != nil {
-		return "", fmt.Errorf("scheduler: runs: %w", err)
-	}
-	defer rows.Close()
-	var out []runRecord
-	for rows.Next() {
-		var r runRecord
-		if err := rows.Scan(&r.Seq, &r.Started, &r.Status, &r.Exit, &r.DurationMs, &r.Reason, &r.LogPath, &r.Model); err != nil {
-			return "", fmt.Errorf("scheduler: runs: %w", err)
-		}
-		out = append(out, r)
-	}
-	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("scheduler: runs: %w", err)
+		return "", err
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Seq < out[j].Seq })
 	if len(out) == 0 {
@@ -172,9 +147,33 @@ func Runs(ctx context.Context, db DB, id string, n int) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s · %d run%s (oldest first):\n", id, len(out), plural(len(out)))
 	for _, r := range out {
-		fmt.Fprintf(&b, "%s  %s  %s\n", r.Started, r.Status, runDetail(r))
+		fmt.Fprintf(&b, "%s\n", runLine(r))
 	}
 	return b.String(), nil
+}
+
+func runRows(tx *sql.Tx, id string, n int) ([]runRecord, error) {
+	rows, err := tx.Query(`SELECT seq, started_at, status, exit, duration_ms, reason, log_path, model FROM runs WHERE job_id = ? ORDER BY seq DESC LIMIT ?`, id, n)
+	if err != nil {
+		return nil, fmt.Errorf("scheduler: runs: %w", err)
+	}
+	defer rows.Close()
+	var out []runRecord
+	for rows.Next() {
+		var r runRecord
+		if err := rows.Scan(&r.Seq, &r.Started, &r.Status, &r.Exit, &r.DurationMs, &r.Reason, &r.LogPath, &r.Model); err != nil {
+			return nil, fmt.Errorf("scheduler: runs: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scheduler: runs: %w", err)
+	}
+	return out, nil
+}
+
+func runLine(r runRecord) string {
+	return fmt.Sprintf("%s  %s  %s", r.Started, r.Status, runDetail(r))
 }
 
 func runDetail(r runRecord) string {

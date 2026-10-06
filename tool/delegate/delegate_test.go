@@ -291,8 +291,8 @@ func TestDelegateHappyPathFeedsBackAndRecords(t *testing.T) {
 	if err := h.db.DB.QueryRow(`SELECT name, cron, state FROM jobs`).Scan(&name, &cron, &state); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(name, "delegate:") || cron != "once" || state != "active" {
-		t.Fatalf("ad-hoc job row: name=%q cron=%q state=%q", name, cron, state)
+	if !strings.HasPrefix(name, "delegate:") || cron != "once" || state != "done" {
+		t.Fatalf("a fired ad-hoc job is a consumed once row: name=%q cron=%q state=%q", name, cron, state)
 	}
 	var logPath string
 	if err := h.db.DB.QueryRow(`SELECT log_path FROM runs`).Scan(&logPath); err != nil {

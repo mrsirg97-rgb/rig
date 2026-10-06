@@ -652,6 +652,7 @@ todo    start|complete|fail|retry <id>
 todo    move <id> <pos>
 todo    project <path>         show that project's queue (a one-off read)
 scheduler list
+scheduler show <id>             one job with its last run
 scheduler create <name> <prompt…> <cron>     5-field vixie, or
 scheduler create <name> <prompt…> once <ISO>
 scheduler pause|resume|remove <id>
@@ -674,6 +675,11 @@ scheduler repair [id]           re-derive a drifting job's crontab line
   line needs text; clearing the queue (`tasks: []`) stays a model-side
   call: the line shape has no spelling for an empty array, and that is
   fine.
+- `scheduler show <id>` reads one job by id: the reply is the block `list`
+  prints for that job plus its last run line (status, exit, duration, log
+  path). A bare `show` refuses the shape (`scheduler: show takes an id
+  (scheduler show <id>)`); an unknown id refuses naming it and pointing at
+  `list`.
 - `scheduler repair` re-derives a drifting job's crontab line (a
   crontab write only, no event, no state change): `repair <id>` fixes
   that one job (its drift named verbatim, `'jN' is in sync` when

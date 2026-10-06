@@ -21,6 +21,7 @@ type Scheduler interface {
 	Create(ctx context.Context, in CreateInput) (string, error)
 	Update(ctx context.Context, id string, in UpdateInput) (string, error)
 	List(ctx context.Context) (string, error)
+	Show(ctx context.Context, id string) (string, error)
 	Pause(ctx context.Context, id string) (string, error)
 	Resume(ctx context.Context, id string) (string, error)
 	Remove(ctx context.Context, id string) (string, error)
@@ -133,6 +134,8 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		})
 	case "list":
 		return a.List(ctx)
+	case "show":
+		return a.Show(ctx, g.ID)
 	case "pause":
 		return a.Pause(ctx, g.ID)
 	case "resume":
@@ -228,6 +231,13 @@ func (a adapter) List(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return sched.List(ctx, a.db, a.ct, cwd, a.home, nil, time.Now)
+}
+
+func (a adapter) Show(ctx context.Context, id string) (string, error) {
+	if id == "" {
+		return "", fmt.Errorf("scheduler: show requires 'id' (jN)")
+	}
+	return sched.Show(ctx, a.db, a.ct, id, a.home, nil, time.Now)
 }
 
 func (a adapter) Pause(ctx context.Context, id string) (string, error) {

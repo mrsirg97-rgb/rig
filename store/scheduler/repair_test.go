@@ -156,13 +156,13 @@ func TestRepairOfRemovedAndDoneJobsRefusesNothingToRepair(t *testing.T) {
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "one", Prompt: "p", Cron: "0 6 * * *", Cwd: "/ws/r6"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.create(sched.CreateInput{Model: "w", Name: "two", Prompt: "p", Cron: "0 7 * * *", Cwd: "/ws/r6"}); err != nil {
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "two", Prompt: "p", Cron: "once", At: "2026-08-16T03:07:00Z", Cwd: "/ws/r6"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sched.Remove(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{ID: "j2", Status: "ok", Done: true}); err != nil {
+	if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{ID: "j2", Status: "ok"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := sched.Repair(context.Background(), h.db, h.ct, "j1", runnerCmd, h.rigHome)

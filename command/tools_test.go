@@ -219,6 +219,20 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 		t.Fatalf("list must show the job verbatim:\n%s\n%v", list, err)
 	}
 
+	shown, err := runCmd(t, "scheduler", "show j1", env)
+	if err != nil || !strings.Contains(shown, "j1 nightly") {
+		t.Fatalf("show must print the one job verbatim:\n%s\n%v", shown, err)
+	}
+	if !strings.Contains(shown, "cron 0 3 * * *") {
+		t.Fatalf("show must carry the job's schedule:\n%s", shown)
+	}
+	if _, err := runCmd(t, "scheduler", "show", env); err == nil || err.Error() != "scheduler: show takes an id (scheduler show <id>)" {
+		t.Fatalf("a bare show must refuse naming the shape, got %v", err)
+	}
+	if _, err := runCmd(t, "scheduler", "show j7", env); err == nil || !strings.Contains(err.Error(), "no job 'j7'") {
+		t.Fatalf("show of an unknown id must refuse naming it, got %v", err)
+	}
+
 	once, err := runCmd(t, "scheduler", "create once-job do it once 2030-01-01T00:00:00Z", env)
 	if err != nil {
 		t.Fatalf("once create: %v (%s)", err, once)

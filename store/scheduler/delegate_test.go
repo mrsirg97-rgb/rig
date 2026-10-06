@@ -384,3 +384,35 @@ func TestAHealthyFireIsNoError(t *testing.T) {
 		t.Fatalf("exit 0 is no error: %v", err)
 	}
 }
+
+func TestADelegateFireLeavesItsJobDone(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
+	good, err := sched.Delegate(in)
+	if err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	spawn.result = sched.SpawnResult{Exit: 1, Stderr: "nope\n"}
+	bad, err := sched.Delegate(in)
+	if err != nil {
+		t.Fatalf("a failing fire returns its result: %v", err)
+	}
+	list, err := sched.List(context.Background(), in.DB, newFakeCrontab(""), in.Cwd, in.Home, nil, func() time.Time { return nowFixed })
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	contains(t, list, good.ID+" delegate:do the thing done")
+	contains(t, list, bad.ID+" delegate:do the thing done")
+	if strings.Contains(list, "active") {
+		t.Fatalf("a fired delegate job is done, not active:\n%s", list)
+	}
+	for _, id := range []string{good.ID, bad.ID} {
+		var state string
+		if err := in.DB.DB.QueryRow(`SELECT state FROM jobs WHERE id = ?`, id).Scan(&state); err != nil {
+			t.Fatal(err)
+		}
+		if state != "done" {
+			t.Fatalf("the projection of %s is %q, want done", id, state)
+		}
+	}
+}

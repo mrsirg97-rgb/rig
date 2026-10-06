@@ -1,4 +1,46 @@
 # Changelog
+## [2.12.10]: a fired once-job is done, and a job can be read by id
+
+Every delegate fire registers the job it fires — `adHocCreate` mints a
+row with `cron: once` and `at: now`, no crontab line — and records its
+run, but the state was a flag on the write, not a rule of the fold:
+`run-job` passed `Done: job.At != nil` and `RecordRun` appended a `done`
+event for it, while the delegate's record passed nothing. The live store
+kept the receipts: 89 once-jobs, 71 of them still `active`, 65 with a
+fire already recorded, nearly all named `delegate:Review these recorded
+decisions…` — one row per reviewer bite, dozens a day, and `list` printed
+all of them while the registry promised `at` "self-deletes after
+firing".
+
+The lifecycle moved into the fold, where one rule covers every writer:
+`jobState.consumeFiredOnce` settles a job whose `at` is set, whose state
+is still `active`, and whose `last_status` is `ok` or `fail`, and the
+fold calls it from the `run` verb and from the compact snapshot — a store
+compacted before the rule carries the fire as `lastStatus` with no `run`
+event left to fold, which is exactly what those 63 rows are. Whatever
+writes the run, the row settles: `RecordRun` applies its own run event
+through `fold.apply` instead of hand-mutating the state it just appended,
+so `RunRecordInput.Done` and the extra `done` event went away (the op
+stays in the fold for the logs written before this, and the fire now
+writes one event). No migration, no sweep, no direct write to the
+projection — the lingering rows move to `done` at the next fold and
+`list` treats them as it treats `done` today. A skip is deliberately not
+a fire: the runner records skips for the drift it wants the list to keep
+naming (a paused row behind a live line, a held lock), and a once-job
+that never ran stays live for its re-fire.
+
+`show` reads one job. An agent holding a `jN` from `list` or a `runs`
+reply could not read that row — `runs` is the audit trail, not the
+definition, and `list` is the whole board — so `Show(ctx, id)` joined the
+tool's `Scheduler` interface and answers with the `jobLines` block `list`
+prints for that job (crontab line, drift, running lock) plus one
+`last <run>` line off the runs container: one renderer draws a job row
+wherever it appears. An unknown id names itself and points at `list`, a
+removed one says so, and `/scheduler show jN` rides `schedulerVerbs`. The
+registry's words follow the code: `at` is "done after its one fire", and
+the guideline says `show` reads one job by id.
+
+---
 ## [2.12.9]: a phase streams a preview, not a transcript
 
 SPEC_TUI 3 said a phase's deltas "stream dim under the row" and the TUI
