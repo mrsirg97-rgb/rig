@@ -74,6 +74,7 @@ func (f *fold) applyCompact(e eventRow) {
 				j.LastExit = *r.LastExit
 				j.LastExitSet = true
 			}
+			j.consumeFiredOnce()
 			tasks[r.ID] = j
 		}
 	}

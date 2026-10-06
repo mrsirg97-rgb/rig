@@ -17,9 +17,9 @@ seams).
   `Update(ctx, id, in UpdateInput)` — the job's nine fields go in one
   input struct, the store's `CreateInput` shape, because six of them are
   strings and a caller must not transpose a schedule for a workspace —
-  and `List(ctx)`, `Pause(ctx, id)`, `Resume(ctx, id)`, `Remove(ctx, id)`,
-  `Runs(ctx, id, n)` and `Repair(ctx, id)`, small enough to stay
-  positional with the job named first. The required-argument
+  and `List(ctx)`, `Show(ctx, id)`, `Pause(ctx, id)`, `Resume(ctx, id)`,
+  `Remove(ctx, id)`, `Runs(ctx, id, n)` and `Repair(ctx, id)`, small
+  enough to stay positional with the job named first. The required-argument
   refusals, the command-job model gate and the `pathguard` workspace rule
   live in the verb they belong to, so a Go caller and the model hit the
   same checks. `New` returns the interface; the struct is unexported. The
@@ -54,6 +54,12 @@ seams).
   time.
 - The schema carries no `scope` (SPEC_STATE's one-store scheduler): `workspace`
   is the job's own field, ids are one sequence, `name` unique store-wide.
+- `show` reads one job by id: the store prints the same block `list`
+  prints for it plus the job's last run line, so a caller holding a `jN`
+  from `list` or a `runs` reply reads its row without the board; an
+  empty id refuses in the verb's own voice
+  (`scheduler: show requires 'id' (jN)`), an unknown one names it and
+  points at `list`.
 - `repair` takes an id or none: the id is optional on the schema (none
   repairs every drifting job), and the verb is a crontab write only —
   no event, no state change — with the drift it fixed named verbatim

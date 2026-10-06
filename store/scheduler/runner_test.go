@@ -488,7 +488,7 @@ func TestOnceWithFailingWorkerDoneWithFailNoRetry(t *testing.T) {
 	}
 }
 
-func TestOnceDoneIsAnEventAndSurvivesTheNextFold(t *testing.T) {
+func TestOnceDoneIsARuleOfTheFoldAndSurvivesTheNextFold(t *testing.T) {
 	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) {
 		in.Cron = "once"
 		in.At = "2026-08-16T03:07:00Z"
@@ -502,26 +502,80 @@ func TestOnceDoneIsAnEventAndSurvivesTheNextFold(t *testing.T) {
 	if row["state"] != "done" {
 		t.Fatalf("state after refold %v", row["state"])
 	}
-	var ops []string
-	rows, err := h.db.DB.Query(`SELECT op FROM events ORDER BY seq`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var op string
-		if err := rows.Scan(&op); err != nil {
-			t.Fatal(err)
-		}
-		ops = append(ops, op)
-	}
-	if strings.Join(ops, ",") != "create,run,done,create" {
-		t.Fatalf("ops %v", ops)
+	if ops := strings.Join(eventsOps(t, h), ","); ops != "create,run,create" {
+		t.Fatalf("the fire writes the run and nothing else: %v", ops)
 	}
 	out, err := h.list()
 	mustOK(t, err)
 	if !strings.Contains(out, "j1 job done") || strings.Contains(out, "no crontab line") {
 		t.Fatalf("list:\n%s", out)
+	}
+}
+
+func TestALegacyActiveOnceJobWithARunRowFoldsToDoneOnTheNextWrite(t *testing.T) {
+	h := newHarness(t, "/ws/once-fold")
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "bite", Prompt: "p", Cron: "once", At: "2026-08-16T03:07:00Z", Cwd: "/ws/once-fold"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{
+		ID: "j1", Status: "ok", Exit: int64ptr(0), Duration: int64ptr(1200), Log: "runs/j1/a.log",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.DB.Exec(`UPDATE jobs SET state = 'active' WHERE id = 'j1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "next", Prompt: "p", Cron: "0 5 * * *", Cwd: "/ws/once-fold"}); err != nil {
+		t.Fatal(err)
+	}
+	if row := jobsRow(t, h, "j1"); row["state"] != "done" {
+		t.Fatalf("the fold of create+run settles the once-job, no migration: %v", row)
+	}
+	list, err := h.list()
+	mustOK(t, err)
+	contains(t, list, "j1 bite done")
+}
+
+func TestALegacyCompactedSnapshotOfAFiredOnceJobFoldsToDone(t *testing.T) {
+	h := newHarness(t, "/ws/once-compact")
+	snapshot, err := json.Marshal(map[string]any{"jobs": []any{map[string]any{
+		"id": "j1", "name": "bite", "prompt": "p", "cron": "7 3 16 8 *", "at": "2026-08-16T03:07:00Z",
+		"cwd": "/ws/once-compact", "model": "w", "busy": "skip", "state": "active",
+		"lastStatus": "ok", "lastTs": "2026-08-16T03:07:20.000Z", "lastExit": int64(0),
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.DB.Exec(`INSERT INTO events (seq, ts, op, args, session) VALUES (1, ?, 'compact', ?, NULL)`,
+		nowFixed.Format(time.RFC3339), snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "next", Prompt: "p", Cron: "0 5 * * *", Cwd: "/ws/once-compact"}); err != nil {
+		t.Fatal(err)
+	}
+	if row := jobsRow(t, h, "j1"); row["state"] != "done" {
+		t.Fatalf("a snapshot that carries the fired run settles the once-job: %v", row)
+	}
+	list, err := h.list()
+	mustOK(t, err)
+	contains(t, list, "j1 bite done")
+}
+
+func TestASkipOfAOnceJobLeavesItActiveForItsFire(t *testing.T) {
+	h := newHarness(t, "/ws/once-skip")
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "bite", Prompt: "p", Cron: "once", At: "2026-08-16T03:07:00Z", Cwd: "/ws/once-skip"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sched.RecordRun(context.Background(), h.db, sched.RunRecordInput{
+		ID: "j1", Status: "skip", Reason: "model not resident",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.create(sched.CreateInput{Model: "w", Name: "next", Prompt: "p", Cron: "0 5 * * *", Cwd: "/ws/once-skip"}); err != nil {
+		t.Fatal(err)
+	}
+	if row := jobsRow(t, h, "j1"); row["state"] != "active" {
+		t.Fatalf("only a fire consumes a once-job; a skip keeps it live: %v", row)
 	}
 }
 

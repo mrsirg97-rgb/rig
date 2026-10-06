@@ -315,8 +315,8 @@
     "name": "scheduler",
     "enabled": true,
     "what": "persistent background jobs on the operator's crontab. each job is a headless worker session; a model can be optionally pinned (omit it and the job runs on what is resident). `command` jobs run one shell line with no model.",
-    "guidelines": "create for work that recurs (`cron`, 5-field vixie) or happens once (`at`, self-deletes after firing); command jobs are for deterministic scripts, never judgment calls. each job runs in its own workspace; timeout and budget cap each fire. `list` shows every job with any store-vs-crontab drift; drifting jobs are untrustworthy until their notes clear; `repair` re-derives a crontab, targeting a single job id or every drifting one. if a different model is resident at fire time the send skips and names it, and eviction policy falls on the operator. a failed once job is done; re-create it to retry. `runs` is the audit trail; job ids (`jN`) come from `list` — copy them, never invent them.",
-    "reply": "the job row or the list.",
+    "guidelines": "create for work that recurs (`cron`, 5-field vixie) or happens once (`at`, done after its one fire); command jobs are for deterministic scripts, never judgment calls. each job runs in its own workspace; timeout and budget cap each fire. `list` shows every job with any store-vs-crontab drift; `show` reads one job by id; drifting jobs are untrustworthy until their notes clear; `repair` re-derives a crontab, targeting a single job id or every drifting one. if a different model is resident at fire time the send skips and names it, and eviction policy falls on the operator. a fired once job is done, pass or fail; re-create it to retry. `runs` is the audit trail; job ids (`jN`) come from `list` — copy them, never invent them.",
+    "reply": "the job row (`show` adds its last run line) or the list.",
     "schema": {
       "type": "object",
       "properties": {
@@ -326,6 +326,7 @@
             "create",
             "update",
             "list",
+            "show",
             "pause",
             "resume",
             "remove",
@@ -351,7 +352,7 @@
         },
         "at": {
           "type": "string",
-          "description": "ISO time."
+          "description": "ISO time; done after its one fire."
         },
         "model": {
           "type": "string",
@@ -370,7 +371,7 @@
         },
         "id": {
           "type": "string",
-          "description": "job id jN from list; required for pause/resume/remove/runs; repair takes it or none."
+          "description": "job id jN from list; required for pause/resume/remove/runs/show; repair takes it or none."
         }
       },
       "required": [

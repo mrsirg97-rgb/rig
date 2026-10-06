@@ -52,12 +52,23 @@ func (f *fold) applyVerb(e eventRow) {
 			j.LastExit = int64(*a.Exit)
 			j.LastExitSet = true
 		}
+		j.consumeFiredOnce()
 	case "update":
 		j.applyUpdate(e.args)
 	default:
 		return
 	}
 	j.UpdatedSeq = e.seq
+}
+
+func (j *jobState) consumeFiredOnce() {
+	if j.State == "active" && j.At != "" && fired(j.LastStatus) {
+		j.State = "done"
+	}
+}
+
+func fired(status string) bool {
+	return status == "ok" || status == "fail"
 }
 
 func (j *jobState) applyUpdate(args string) {

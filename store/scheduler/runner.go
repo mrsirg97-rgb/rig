@@ -376,7 +376,7 @@ func RunJob(key string, opts RunOpts) error {
 	}
 	if _, err := RecordRun(context.Background(), db, RunRecordInput{
 		ID: id, Status: status, Exit: &exit, Duration: &duration,
-		Log: logRel, Started: started, Ended: ended, Cost: cost, Done: job.At != nil,
+		Log: logRel, Started: started, Ended: ended, Cost: cost,
 		Reason: spawnReason(ctx, res, stalled), Model: workerModel,
 	}); err != nil {
 		return fmt.Errorf("run-job: record: %w", err)

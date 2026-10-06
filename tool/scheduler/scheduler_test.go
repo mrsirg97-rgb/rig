@@ -76,7 +76,8 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 		"omit it and the job runs on what is resident",
 		"until their notes clear",
 		"re-create it to retry",
-		"self-deletes after firing",
+		"done after its one fire",
+		"`show` reads one job by id",
 		"each job runs in its own workspace",
 		"`repair` re-derives a crontab",
 	} {
@@ -100,7 +101,7 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("schema missing action")
 	}
 	enum, _ := action["enum"].([]any)
-	if want := []string{"create", "update", "list", "pause", "resume", "remove", "runs", "repair"}; len(enum) != len(want) {
+	if want := []string{"create", "update", "list", "show", "pause", "resume", "remove", "runs", "repair"}; len(enum) != len(want) {
 		t.Fatalf("action enum %v", enum)
 	} else {
 		for i, v := range want {
@@ -113,7 +114,7 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("the scope arg must be gone from the schema")
 	}
 	id, _ := schema.Properties["id"].(map[string]any)
-	if got, _ := id["description"].(string); got != "job id jN from list; required for pause/resume/remove/runs; repair takes it or none." {
+	if got, _ := id["description"].(string); got != "job id jN from list; required for pause/resume/remove/runs/show; repair takes it or none." {
 		t.Fatalf("id description %q", got)
 	}
 	if _, ok := schema.Properties["workspace"]; ok {
@@ -137,6 +138,9 @@ func TestExecVoices(t *testing.T) {
 	}
 	if _, err := exec(t, h, map[string]any{"action": "runs"}); err == nil || !strings.Contains(err.Error(), "scheduler: runs requires 'id' (jN)") {
 		t.Fatalf("runs-id voice: %v", err)
+	}
+	if _, err := exec(t, h, map[string]any{"action": "show"}); err == nil || !strings.Contains(err.Error(), "scheduler: show requires 'id' (jN)") {
+		t.Fatalf("show-id voice: %v", err)
 	}
 	if _, err := exec(t, h, map[string]any{"action": "update"}); err == nil || !strings.Contains(err.Error(), "scheduler: update requires 'id' (jN)") {
 		t.Fatalf("update-id voice: %v", err)
@@ -496,5 +500,39 @@ func TestSchedulerVerbsAndExecShareTheirChecks(t *testing.T) {
 	}
 	if fromVerb != fromDoor {
 		t.Fatalf("one listing replies the same bytes through either door:\nverb %q\ndoor %q", fromVerb, fromDoor)
+	}
+}
+
+func TestExecShowReadsOneJobWithItsLastRun(t *testing.T) {
+	h := newHarness(t, "/ws/sa")
+	if _, err := exec(t, h, map[string]any{
+		"action": "create", "name": "readme", "prompt": "work", "cron": "0 3 * * *",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.DB.Exec(`INSERT INTO runs (seq, job_id, started_at, ended_at, status, exit, duration_ms, log_path) VALUES (1, 'j1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:02Z', 'ok', 0, 2000, 'runs/j1/a.log')`); err != nil {
+		t.Fatal(err)
+	}
+	verb, err := h.tool.Show(context.Background(), "j1")
+	if err != nil {
+		t.Fatalf("show through the verb: %v", err)
+	}
+	door, err := exec(t, h, map[string]any{"action": "show", "id": "j1"})
+	if err != nil {
+		t.Fatalf("show through the door: %v", err)
+	}
+	if verb != door {
+		t.Fatalf("one job reads the same bytes through either door:\nverb %q\ndoor %q", verb, door)
+	}
+	for _, want := range []string{"j1 readme active", "cron 0 3 * * *", "2026-01-01T00:00:00Z  ok  exit 0 2000ms runs/j1/a.log"} {
+		if !strings.Contains(verb, want) {
+			t.Fatalf("show %q is missing %q", verb, want)
+		}
+	}
+	if strings.Contains(verb, "no jobs") {
+		t.Fatalf("show of one job is not the board: %q", verb)
+	}
+	if _, err := h.tool.Show(context.Background(), "j9"); err == nil || !strings.Contains(err.Error(), "no job 'j9'") {
+		t.Fatalf("show of an unknown job: %v", err)
 	}
 }

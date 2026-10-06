@@ -516,9 +516,13 @@ post-merge corrections)
   nothing. Rejected, named: reading both layouts forever; a `scope` that
   defaults to global but stays in the schema.
 - `events`: seq, ts, op (create|update|pause|resume|remove|run|done|compact),
-  args, session. `done` is the once-fire: the runner appends it after the
-  `run` in the same transaction and the fold moves the job to `done`; the
-  runner never writes the projection.
+  args, session. A fired once-job is `done` by a rule of the fold, not by
+  an op of the fire: a `run` whose status is `ok` or `fail` settles a job
+  with `at` set (a skip is no fire — the row stays live for its re-fire),
+  and the same rule reads the `lastStatus` a compact snapshot carries, so
+  a store compacted before the rule settles at the next fold with no
+  migration. `done` stays in the op list for the logs written before the
+  rule; the runner never writes the projection.
 - `jobs`: id (primary, `jN`), name (unique among live jobs only, enforced in
   Go, no unique index), prompt, cron, at (nullable), cwd (never empty;
   defaults to the creating session's cwd), model, busy (skip|force),

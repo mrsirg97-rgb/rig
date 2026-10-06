@@ -30,8 +30,8 @@ written before the store commit; drift is surfaced in list.
 - `verbs.go`: `Create` over the one
   `global.sqlite`; `state.go`: the state verbs
   (pause/resume/remove/repair), `update.go`: the update verb, `runs.go`:
-  the run record and the runs read. The crontab key is `jN` for every
-  job, `name` unique
+  the run record and the runs read, `show.go`: one job read. The
+  crontab key is `jN` for every job, `name` unique
   store-wide, ids one sequence. `Create` takes the model from the
   caller: a named model stores verbatim, an empty model is the unnamed
   job (the fire resolves it at run time), and `update` takes the model
@@ -107,7 +107,8 @@ A command job's fire skips the busy probe and
   refuses naming it and the known rows), the gate is the live free-slot read (skipped for
   a remote row via the `Models` seam — the swap is never consulted;
   `WaitBusy` waits like a fire up to `Timeout`, the claim-time read
-  refuses at once), the ad-hoc record (a minted job row with no crontab line), the
+  refuses at once), the ad-hoc record (a minted once-job row with no
+  crontab line, `done` once its fire lands), the
   state-store bind and explicit identity for the resumable transcript,
   the no-recursion marker, and the
   `Stall` watch: a set window kills a worker silent past it (the
@@ -151,6 +152,11 @@ A command job's fire skips the busy probe and
   `cwd` (this directory first, then the rest by path), the empty store
   named (`scheduler: no jobs (global.sqlite)`), and tagged crontab
   lines with no job row listed as orphans with the removal instruction.
+- `show.go`: `Show` reads one job by id — the same `jobLines` block the
+  list prints for it (crontab line, drift, running lock and all) plus
+  one `last <run>` line from the runs container — so an agent holding a
+  `jN` never lists the board to read a row; an unknown id and a removed
+  one refuse by name and point at `list`.
 - `metadata/scheduler.go`: hand-written metadata.
 
 ## How it is consumed
@@ -201,11 +207,19 @@ A command job's fire skips the busy probe and
   sorted), one reply line per repaired job with the drift verbatim
   from `driftOf`, `nothing drifted` when none. A crontab read failure
   refuses loudly: drift cannot be assessed, nothing is written.
-- `done` is the once-fire's own op: the runner's `RecordRun` appends it
-  after the `run` in the same transaction and the fold moves the job to
-  `done`; the projection is never written directly (a direct write is
-  undone by the next fold, the job reverting to `active` with a
-  "no crontab line" drift). A done job's consumed line is not drift.
+- A fired once-job is `done` and the rule lives in the fold alone:
+  `jobState.consumeFiredOnce` settles an `active` job whose `at` is set
+  and whose `last_status` is `ok` or `fail`. It runs on the `run` verb
+  and on the compact snapshot — a store compacted before the rule keeps
+  the fire as `lastStatus` with no `run` event left to fold — so those
+  rows settle at the next fold, with no migration and no direct write
+  (the projection is never written directly: a direct write is undone by
+  the next fold). The fire writes one event, `run`; the `done` op stays
+  in the fold for logs written before the rule. A skip is no fire: the
+  runner records skips for the drift it wants the list to keep naming (a
+  paused row with a live line, a held lock), and a once-job that never
+  ran stays live for the re-fire. A done job's consumed line is not
+  drift.
 - A once job's `at` must be in the future (refused otherwise) and is
   stored normalized UTC; the crontab fields stay local (the daemon
   fires in local time), the list shows the stored `at` rather than a

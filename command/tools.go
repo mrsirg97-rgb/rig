@@ -23,7 +23,7 @@ func (t toolCmd) Description() string {
 	case "todo":
 		return "the task queue: read it, add tasks, claim and start them, mark them done or failed, accept or reject reviews"
 	case "scheduler":
-		return "the scheduled jobs: list, create, update, pause, resume, remove, repair, or see a job's runs"
+		return "the scheduled jobs: list, create, update, show one, pause, resume, remove, repair, or see a job's runs"
 	}
 	return "over the same " + t.name + " tool the model gets: the line is parsed into the tool's args, the reply printed verbatim"
 }
@@ -48,6 +48,7 @@ func (t toolCmd) Sub() []Sub {
 	case "scheduler":
 		return []Sub{
 			{Name: "list", Desc: "show the jobs"},
+			{Name: "show", Desc: "one job with its last run: show <id>"},
 			{Name: "create", Desc: "add a job: create <name> <prompt> <cron>"},
 			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"},
 			{Name: "runs", Desc: "a job's recent runs: runs <id> [n]"},
@@ -229,7 +230,7 @@ func withDefaultScope(raw json.RawMessage, scope string) (json.RawMessage, error
 	return json.Marshal(m)
 }
 
-const schedulerVerbs = "list|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]|repair [id]"
+const schedulerVerbs = "list|show <id>|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]|repair [id]"
 
 func schedulerArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -238,6 +239,8 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 		return json.RawMessage(`{"action":""}`), nil
 	case fields[0] == "list" && len(fields) == 1:
 		return json.RawMessage(`{"action":"list"}`), nil
+	case fields[0] == "show" && len(fields) == 2:
+		return json.Marshal(map[string]any{"action": "show", "id": fields[1]})
 	case fields[0] == "update" && len(fields) >= 2:
 		return schedulerUpdate(fields)
 	case (fields[0] == "pause" || fields[0] == "resume" || fields[0] == "remove") && len(fields) == 2:
@@ -266,6 +269,8 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 		return nil, errors.New("scheduler: usage: scheduler " + schedulerVerbs)
 	case fields[0] == "list":
 		return nil, errors.New("scheduler: list takes no args (scheduler list)")
+	case fields[0] == "show":
+		return nil, errors.New("scheduler: show takes an id (scheduler show <id>)")
 	case fields[0] == "update":
 		return nil, errors.New("scheduler: update takes an id and named fields (scheduler " + schedulerVerbs)
 	case fields[0] == "pause" || fields[0] == "resume" || fields[0] == "remove":
