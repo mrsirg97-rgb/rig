@@ -145,6 +145,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	sandboxOff(t, scratch)
+	writeModelRows(t, cfgDir(t, scratch), localModelRow)
 
 	cmd := exec.Command(bin, "run-job", key)
 	cmd.Dir = workDir
@@ -204,7 +205,7 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	cmd := exec.Command(bin, "-p", "hi", "-model", "nope")
 	cmd.Dir = t.TempDir()
 
-	cmd.Env = rigEnv(t.TempDir(), "")
+	cmd.Env = rigEnv(t, t.TempDir(), "")
 	out, runErr := cmd.CombinedOutput()
 	if runErr == nil {
 		t.Fatalf("an unknown model with no env must refuse: %q", out)

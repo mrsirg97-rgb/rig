@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/config"
-	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
 func write(t *testing.T, dir, name, content string) string {
@@ -54,9 +53,6 @@ func TestLoadAbsentFilesIsSilent(t *testing.T) {
 	}
 	if cfg.Agents != "" {
 		t.Fatalf("Agents = %q, want empty when neither file exists", cfg.Agents)
-	}
-	if _, ok := cfg.Models.Get("local"); !ok {
-		t.Fatalf("the embedded table must resolve with no user file, got %v", cfg.Models.Known())
 	}
 }
 
@@ -112,22 +108,6 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	}
 	if s.DecisionURL != "" {
 		t.Fatalf("decisionUrl = %q, want empty (unset: no proposer)", s.DecisionURL)
-	}
-	m, ok := cfg.Models.Get("local")
-	if !ok {
-		t.Fatal("the embedded table has no row for local")
-	}
-	if m.Window != 65536 || m.MaxTokens != 8192 || m.Reserve != 8192 || m.KeepRecent != 16384 {
-		t.Fatalf("row local = %+v, want the 0.2.0 numbers", m)
-	}
-	if m.Role != models.RoleInteractive {
-		t.Fatalf("row local role = %q, want interactive (4's named roles)", m.Role)
-	}
-	if _, ok := cfg.Models.Get("qwen3.8-workers"); ok {
-		t.Fatalf("the embedded table still carries the qwen3.8-workers row (12 cut it: the worker's model is the operator's)")
-	}
-	if got := len(cfg.Models.Known()); got != 1 {
-		t.Fatalf("the embedded table = %d rows, want the one local row (%v)", got, cfg.Models.Known())
 	}
 }
 

@@ -43,7 +43,7 @@ func TestInteractiveREPLNeverConsultsTheJail(t *testing.T) {
 
 	cmd := exec.Command(bin, "-p", "hi")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, binDir)
+	cmd.Env = rigEnv(t, scratch, binDir)
 	cmd.Env = append(cmd.Env, "RIG_BASE_URL="+srv.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

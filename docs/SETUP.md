@@ -102,12 +102,18 @@ directory holds. The migration never runs under an explicit
 override stays absent, and the old home stays put. Every file is optional; a present-but-malformed file is
 a loud refusal at start naming the file and the field (exit 1, before
 any store is opened), and an absent one is silent. Unknown keys refuse:
-the file is a contract, not a filter.
+the file is a contract, not a filter. `models.json` is the one file
+whose content you cannot skip: the binary ships no model rows (2.12.11),
+so before your first run write the row for the model you mean to name —
+`--model`, `RIG_MODEL`, or settings.json's `model` — or the start refuses
+naming the row it could not find. The file stays optional in the letter
+of the rule: with no rows anywhere and no model named, the refusal is the
+one for the missing name.
 
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is retired (2.4.0): a present one is named once at start and ignored — move it to `model` by hand, then delete the key |
-| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on an embedded row), and the hosted run site: `remote` (bool), `provider` (a name like `openrouter` implies remote), `baseUrl` (required for a remote row), `apiKey` (sent as `Authorization: Bearer <key>`; never logged or rendered), `reasoning` (`reasoning_content` default, `reasoning` for OpenRouter), `providerPin` and `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for remote rows) |
+| `models.json`     | the model table: rows of `id`, `window`, `maxTokens`, `reserve`, `keepRecent`, optional `role` (`worker`/`interactive`, default `interactive`), `effort` (the compaction summary call's reasoning effort, default the policy's `medium`), `efforts` (the model's available effort levels; `low`, `medium`, `xhigh`; the `/effort` dial's vocabulary), `vision` (`true` only for a model that takes image input — it is what registers the `view` tool; written explicitly, `false` turns it back off on a row being overlaid), and the hosted run site: `remote` (bool), `provider` (a name like `openrouter` implies remote), `baseUrl` (required for a remote row), `apiKey` (sent as `Authorization: Bearer <key>`; never logged or rendered), `reasoning` (`reasoning_content` default, `reasoning` for OpenRouter), `providerPin` and `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound, default 3 for remote rows) |
 | `workers.json`    | **retired (2.4.0)**: the fleet is the resident model. A present file is read, ignored, and named once at start (`workers.json retired: the fleet is the resident model`); deleting it silences the line. Its content is never interpreted |
 | `AGENTS.md`       | global instructions; read before the project's `AGENTS.md` (the nearest one from the workspace up to the repo root) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's custom theme (`specs/SPEC_TUI.md` 7), the `/theme custom` preset: `base` (one of `warm`, `cool`, `paper`, `p1`, `p3`, or the legacy `oled`; required), optional `slots` (the slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema. The preset dial itself is settings.json's `theme` key (`/theme warm|cool|custom`) |
@@ -142,7 +148,7 @@ cwd's file, not the creating session's.
 | worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
 | sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
 | update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | the embedded pinned key that signs releases (SPEC_BUILD 5); env and file override it; a build without a pinned key refuses `-update` |
-| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`, `_CONCURRENCY`, `_RETRIES`; and `_BASE_URL`, `_API_KEY`, `_REASONING`, `_PROVIDER`, `_REMOTE`) | `models.json` | the one-row table (`local`) |
+| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`, `_CONCURRENCY`, `_RETRIES`; and `_BASE_URL`, `_API_KEY`, `_REASONING`, `_PROVIDER`, `_REMOTE`) | `models.json` | none: the table is the operator's file (`RIG_MODEL_WINDOW` alone still mints a row for the active id) |
 
 **On the worker sandbox**; `sandbox` is the scheduled worker's jail
 (`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the default; fail closed)
@@ -178,17 +184,23 @@ job's `budget`.
 
 **On the model row**; compaction is per-model: the active model must
 resolve to a row (window, max tokens, reserve, keep-recent). The table
-is the embedded rows overlaid by `models.json`, merged by id: fields you
-set replace the embedded row's, fields you leave unset keep it, a new id
-is added (numeric fields required), and a row you do not list stays.
-`RIG_MODEL_*` overlays the active id's fields, set beats the row, and
-synthesizes a row for an id the table does not know (a loud refusal
-naming the known ids otherwise). `/models` lists the runtime table with
-its role column and switches the active model.
+**is your `models.json`**: since 2.12.11 the embedded table ships empty,
+so a row you do not write does not exist, and naming a model with no row
+refuses at start — before any store opens or request is made — naming the
+missing id and the ids the table does know. The merge keeps its shape
+(fields you set replace the row beneath, fields you leave unset keep it,
+a new id is added with its numeric fields required, an unlisted row
+stays), it simply has nothing beneath to overlay. `RIG_MODEL_*` overlays
+the active id's fields, set beats the row, and synthesizes a row for an
+id the table does not know (the loud refusal otherwise). `/models` lists
+the runtime table — what you wrote, and nothing else — with its role
+column, and switches the active model.
 
 **On the `models.json` zero edge**; zero means unset at the overlay
-layer, so a zero numeric field on an embedded id is unreachable (a new
-row can carry it, an embedded id cannot): the named cost of the rule.
+layer, so a zero numeric field on a row that is being overlaid is
+unreachable (a row written whole can carry it, an overlay cannot): the
+named cost of the rule. With the embedded table empty the case only
+arises for a build that ships rows again.
 
 **On `RIG_RETRIES`**; read before tuning: the value does **not** permit
 silent re-execution. Every tool call executes exactly once; the value bounds
@@ -262,8 +274,8 @@ pauses every mutating call for your y/n; `sandbox: "off"` is the
 operator's explicit unjailing of the scheduled worker, one loud line
 per run.
 
-**`models.json`**: the per-model table, merged by id over the embedded
-rows:
+**`models.json`**: the per-model table — this file is the table (the
+embedded one is empty), merged by id over whatever the build ships:
 
 ```json
 [
@@ -273,9 +285,10 @@ rows:
 ]
 ```
 
-`id` must match the model id you pass to `--model`. A new id needs the
-numeric fields; a listed id keeps the ones you omit from the embedded
-row. `role` is `interactive` (the default) or `worker`; `efforts` is
+`id` must match the model id you pass to `--model`. Every row carries
+its numeric fields: with nothing embedded, an omitted `window`,
+`maxTokens`, `reserve`, or `keepRecent` refuses the row by name at
+start. `role` is `interactive` (the default) or `worker`; `efforts` is
 the `/effort` dial's vocabulary. The third row is a hosted run site
 (`specs/SPEC_HOSTED.md`): `remote` and `provider` (a name implies
 remote), `baseUrl` (the endpoint), `apiKey` (the bearer key, from the

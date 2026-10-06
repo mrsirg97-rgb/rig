@@ -172,8 +172,8 @@ func toolMessageOf(t *testing.T, body []byte) string {
 	return last
 }
 
-func pluginEnv(scratch, py string) []string {
-	env := rigEnv(scratch, "")
+func pluginEnv(t *testing.T, scratch, py string) []string {
+	env := rigEnv(t, scratch, "")
 	if py != "" {
 		env = append(env, "RIG_PYTHON="+py)
 	}
@@ -385,6 +385,7 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(override, "settings.json"), []byte(`{"system": "FROM-RIG-HOME"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	writeModelRows(t, override, localModelRow)
 	oldHome := filepath.Join(scratch, ".config", "rig")
 	if err := os.MkdirAll(oldHome, 0o755); err != nil {
 		t.Fatal(err)
@@ -395,7 +396,7 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmdDir := t.TempDir()
 	cmd.Dir = cmdDir
-	env := rigEnv(scratch, "")
+	env := rigEnv(t, scratch, "")
 	env = append(env, "RIG_HOME="+override)
 	cmd.Env = env
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -436,7 +437,7 @@ def run(args):
 `)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = append(pluginEnv(scratch, py), "RIG_SWAP_URL="+srv.URL)
+	cmd.Env = append(pluginEnv(t, scratch, py), "RIG_SWAP_URL="+srv.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -488,7 +489,7 @@ def run(args):
 `)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", "http://127.0.0.1:1/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(scratch, py)
+	cmd.Env = pluginEnv(t, scratch, py)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("a collision must refuse the start, got exit 0:\n%s", out)
@@ -522,7 +523,7 @@ def run(args: dict) -> str:
 	}
 	cmd := exec.Command(bin, "-p", "echo it", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(scratch, py)
+	cmd.Env = pluginEnv(t, scratch, py)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -558,7 +559,7 @@ def run(args: dict) -> str:
 	}
 	cmd := exec.Command(bin, "-p", "boom it", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(scratch, py)
+	cmd.Env = pluginEnv(t, scratch, py)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the run must succeed (the exception is a tool error, not a crash): %v\n%s", err, out)
@@ -592,6 +593,7 @@ func TestRigHomeOverrideWins(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(override, "settings.json"), []byte(`{"system": "FROM-OVERRIDE"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	writeModelRows(t, override, localModelRow)
 	writePlugin(t, override, "echo.py", `DESCRIPTION = "the override's echo plugin"
 SCHEMA = {"type": "object"}
 
@@ -610,7 +612,7 @@ def run(args):
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmdDir := t.TempDir()
 	cmd.Dir = cmdDir
-	env := rigEnv(scratch, "")
+	env := rigEnv(t, scratch, "")
 	env = append(env, "RIG_HOME="+override, "RIG_PYTHON="+py)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
@@ -638,7 +640,7 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 	scratch := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "", "RIG_SWAP_URL="+srv.URL)
+	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
@@ -671,7 +673,7 @@ func TestBothHomesPresentIsNamed(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	cmd := exec.Command(bin, "-p", "x", "-base-url", "http://127.0.0.1:1/v1", "-retries", "0")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	out, _ := cmd.CombinedOutput()
 	if !strings.Contains(string(out), "the old config home still exists: "+old) {
 		t.Fatalf("the leftover old home must be named on stderr:\n%s", out)

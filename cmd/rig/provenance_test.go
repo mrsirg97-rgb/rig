@@ -54,7 +54,7 @@ func TestModelWriteIntoPluginsRefusesLoud(t *testing.T) {
 	target := filepath.Join(scratch, ".rig", "plugins", "evil.py")
 	cmd := exec.Command(bin, "-p", "forge it", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed (the refusal is a tool error, not a fault): %v\n%s", err, out)
 	}
@@ -95,7 +95,7 @@ def run(args):
 	s.mu.Unlock()
 	cmd := exec.Command(bin, "-p", "forge it", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
@@ -141,7 +141,7 @@ def run(args):
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(scratch, py)
+	cmd.Env = pluginEnv(t, scratch, py)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
@@ -167,7 +167,7 @@ func pipedCommands(t *testing.T, bin string, scratch string, lines ...string) st
 	t.Helper()
 	cmd := exec.Command(bin, "-base-url", "http://127.0.0.1:1/v1")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(scratch, "")
+	cmd.Env = rigEnv(t, scratch, "")
 	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n") + "\n")
 	out, err := cmd.Output()
 	if err != nil {

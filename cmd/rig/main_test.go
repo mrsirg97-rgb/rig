@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
@@ -29,8 +28,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.12.10" {
-		t.Fatalf("Version = %q, want 2.12.10", Version)
+	if Version != "2.12.11" {
+		t.Fatalf("Version = %q, want 2.12.11", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -163,6 +162,10 @@ func fleet(r *root) {
 
 func testRoot(fe core.Frontend) *root {
 	sess := core.NewSession()
+	runtime, err := models.New(defaultRow())
+	if err != nil {
+		panic("rig: the test row: " + err.Error())
+	}
 	r := &root{
 		baseURL:  "http://127.0.0.1:8080/v1",
 		system:   "be terse",
@@ -174,7 +177,7 @@ func testRoot(fe core.Frontend) *root {
 		cwd:      "",
 		activeID: "local",
 		row:      defaultRow(),
-		runtime:  defaultsTableValue(),
+		runtime:  runtime,
 		session:  sess,
 		tools:    testTools(),
 	}
@@ -405,20 +408,7 @@ func defaultRow() models.Model {
 
 func defaultsTable(t *testing.T) models.Table {
 	t.Helper()
-	cfg, err := config.Load(t.TempDir(), t.TempDir())
-	if err != nil {
-		t.Fatalf("config.Load: %v", err)
-	}
-	return cfg.Models
-}
-
-func defaultsTableValue() models.Table {
-	dir := filepath.Join(os.TempDir(), "rig-test-nodir")
-	cfg, err := config.Load(dir, dir)
-	if err != nil {
-		panic("rig: defaultsTableValue: " + err.Error())
-	}
-	return cfg.Models
+	return tableWith(t, defaultRow())
 }
 
 func mustRead(t *testing.T, db store.DB, fn func(context.Context) (any, error)) any {
