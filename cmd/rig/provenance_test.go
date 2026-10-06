@@ -24,7 +24,7 @@ func TestListPluginFilesIgnoresThePendingZone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files, err := plugins.List(home)
+	files, err := plugins.List(home, "plugins")
 	if err != nil {
 		t.Fatalf("plugins.List: %v", err)
 	}

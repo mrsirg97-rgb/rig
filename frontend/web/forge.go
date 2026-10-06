@@ -84,7 +84,7 @@ func (s *Server) handlePluginSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(in.Name)
-	path, created, err := plugins.WritePending(s.home, s.natives, name, in.Source)
+	path, created, err := plugins.WritePending(s.home, "plugins", s.natives, name, in.Source, plugins.PluginContract)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

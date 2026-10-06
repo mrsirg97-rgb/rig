@@ -36,8 +36,8 @@ type wireReport struct {
 	Error       string          `json:"error"`
 }
 
-func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error) {
-	reply, err := k.Run(ctx, discoveryCell(files), defaultTimeoutMs)
+func Discover(ctx context.Context, k Kernel, files []string, c Contract) ([]Report, error) {
+	reply, err := k.Run(ctx, discoveryCell(files, c), defaultTimeoutMs)
 	if err != nil {
 		return nil, err
 	}
@@ -64,14 +64,14 @@ func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error) {
 	return reports, nil
 }
 
-func DiscoverChecked(ctx context.Context, k Kernel, files []string, natives map[string]bool) ([]Report, error) {
+func DiscoverChecked(ctx context.Context, k Kernel, files []string, natives map[string]bool, c Contract) ([]Report, error) {
 	eligible := make([]string, 0, len(files))
 	skipped := make(map[string]Report)
 	for _, file := range files {
 		name := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
 		switch {
 		case !PluginNameRe.MatchString(name):
-			skipped[file] = Report{Name: name, File: file, Skipped: true, Reason: "invalid plugin name (want lowercase, digits and underscores, a leading letter)"}
+			skipped[file] = Report{Name: name, File: file, Skipped: true, Reason: "invalid " + c.Kind + " name (want lowercase, digits and underscores, a leading letter)"}
 		case natives[name]:
 			return nil, nameCollisionError{name: name, file: file}
 		default:
@@ -80,7 +80,7 @@ func DiscoverChecked(ctx context.Context, k Kernel, files []string, natives map[
 	}
 	loaded := make(map[string]Report)
 	if len(eligible) > 0 {
-		reports, err := Discover(ctx, k, eligible)
+		reports, err := Discover(ctx, k, eligible, c)
 		if err != nil {
 			return nil, err
 		}
@@ -99,10 +99,29 @@ func DiscoverChecked(ctx context.Context, k Kernel, files []string, natives map[
 	return out, nil
 }
 
-func discoveryCell(files []string) string {
+func discoveryCell(files []string, c Contract) string {
 	paths, _ := json.Marshal(files)
+	names, _ := json.Marshal(attrNames(c))
+	attrs, _ := json.Marshal(attrPairs(c))
+	registry := c.registry()
+	description, schema := "", ""
+	for _, a := range c.Attrs {
+		switch a.Kind {
+		case "str":
+			description = a.Name
+		case "dict":
+			schema = a.Name
+		}
+	}
+	reads := ""
+	if description != "" {
+		reads += fmt.Sprintf("        _rig_e[\"description\"] = _rig_m.%s\n", description)
+	}
+	if schema != "" {
+		reads += fmt.Sprintf("        _rig_e[\"schema\"] = _rig_m.%s\n", schema)
+	}
 	return `import importlib.util as _rig_iu, json as _rig_j, os as _rig_os, sys as _rig_sys
-_rig_next_plugins = {}
+_rig_next = {}
 _rig_report = []
 for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
     _rig_n = _rig_os.path.basename(_rig_p)[:-3]
@@ -113,30 +132,67 @@ for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
         _rig_s = _rig_iu.spec_from_file_location(_rig_n, _rig_p)
         _rig_m = _rig_iu.module_from_spec(_rig_s)
         _rig_s.loader.exec_module(_rig_m)
-        _rig_miss = [f for f in ("DESCRIPTION", "SCHEMA", "run") if not hasattr(_rig_m, f)]
+        _rig_miss = [f for f in ` + string(names) + ` if not hasattr(_rig_m, f)]
         if _rig_miss:
             raise TypeError("missing " + ", ".join(_rig_miss))
-        if not isinstance(_rig_m.DESCRIPTION, str):
-            raise TypeError("DESCRIPTION must be a str")
-        if not isinstance(_rig_m.SCHEMA, dict):
-            raise TypeError("SCHEMA must be a dict")
-        if not callable(_rig_m.run):
-            raise TypeError("run must be callable")
-        _rig_next_plugins[_rig_n] = _rig_m
+        for _f, _k in ` + string(attrs) + `:
+            _v = getattr(_rig_m, _f)
+            if (_k == "str" and not isinstance(_v, str)) or (_k == "dict" and not isinstance(_v, dict)) or (_k == "callable" and not callable(_v)):
+                raise TypeError(_f + " must be a " + _k)
+        _rig_next[_rig_n] = _rig_m
         _rig_e["ok"] = True
-        _rig_e["description"] = _rig_m.DESCRIPTION
-        _rig_e["schema"] = _rig_m.SCHEMA
-    except Exception as _rig_ex:
+` + reads + `    except Exception as _rig_ex:
         _rig_e["ok"] = False
         _rig_e["error"] = type(_rig_ex).__name__ + ": " + str(_rig_ex)
     _rig_report.append(_rig_e)
-for _rig_n in set(globals().get("__rig_plugins__", {})) - set(_rig_next_plugins):
+for _rig_n in set(globals().get("` + registry + `", {})) - set(_rig_next):
     _rig_sys.modules.pop(_rig_n, None)
-for _rig_n, _rig_m in _rig_next_plugins.items():
+for _rig_n, _rig_m in _rig_next.items():
     _rig_sys.modules[_rig_n] = _rig_m
-__rig_plugins__ = _rig_next_plugins
+` + registry + ` = _rig_next
 print(_rig_j.dumps(_rig_report))
 `
+}
+
+func attrNames(c Contract) []string {
+	out := make([]string, 0, len(c.Attrs))
+	for _, a := range c.Attrs {
+		out = append(out, a.Name)
+	}
+	return out
+}
+
+func attrPairs(c Contract) [][2]string {
+	out := make([][2]string, 0, len(c.Attrs))
+	for _, a := range c.Attrs {
+		out = append(out, [2]string{a.Name, a.Kind})
+	}
+	return out
+}
+
+func Invoke(ctx context.Context, k Kernel, kind, name, fn string, timeoutMs int, args ...string) (json.RawMessage, error) {
+	reply, err := k.Run(ctx, invokeCell(kind, name, fn, args), timeoutMs)
+	if err != nil {
+		return nil, err
+	}
+	if !reply.Ok {
+		return nil, fmt.Errorf("%s.%s: %s", name, fn, errorTail(reply))
+	}
+	out := ""
+	if reply.Out != nil {
+		out = strings.TrimSpace(*reply.Out)
+	}
+	if out == "" {
+		return nil, fmt.Errorf("%s.%s: the kernel printed nothing", name, fn)
+	}
+	return json.RawMessage(out), nil
+}
+
+func invokeCell(kind, name, fn string, args []string) string {
+	payload, _ := json.Marshal(args)
+	named, _ := json.Marshal(name)
+	fnName, _ := json.Marshal(fn)
+	return "import json as _rig_j\nprint(_rig_j.dumps(getattr(__rig_" + kind + "s__[" + string(named) + "], " + string(fnName) + ")(*_rig_j.loads('" + pyLiteral(string(payload)) + "'))))"
 }
 
 type Tool struct {

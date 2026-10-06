@@ -262,7 +262,7 @@ func main() {
 	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "rig: plugins: create the pending zone: %v\n", err)
 	}
-	pluginFiles, err := plugins.List(cfgDir)
+	pluginFiles, err := plugins.List(cfgDir, "plugins")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
@@ -291,7 +291,7 @@ func main() {
 	}
 	pluginReports := make([]plugins.Report, 0)
 	if len(pluginFiles) > 0 {
-		pluginReports, err = plugins.DiscoverChecked(context.Background(), py, pluginFiles, native)
+		pluginReports, err = plugins.DiscoverChecked(context.Background(), py, pluginFiles, native, plugins.PluginContract)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
 			os.Exit(1)

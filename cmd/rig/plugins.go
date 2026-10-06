@@ -72,13 +72,13 @@ func (r *root) redoPlugins(ctx context.Context) error {
 }
 
 func (r *root) reloadPlugins(ctx context.Context) (string, error) {
-	files, err := plugins.List(r.pluginsHome)
+	files, err := plugins.List(r.pluginsHome, "plugins")
 	if err != nil {
 		return "", fmt.Errorf("plugins: reload: %v", err)
 	}
 	reports := make([]plugins.Report, 0)
 	if len(files) > 0 {
-		reports, err = plugins.DiscoverChecked(ctx, r.py, files, r.natives)
+		reports, err = plugins.DiscoverChecked(ctx, r.py, files, r.natives, plugins.PluginContract)
 		if err != nil {
 			if plugins.IsNameCollision(err) {
 				return "", err

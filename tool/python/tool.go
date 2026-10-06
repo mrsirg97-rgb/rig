@@ -23,6 +23,8 @@ const (
 	waitDelay        = 2 * time.Second
 )
 
+const MaxCellMs = maxTimeoutMs
+
 type Reply struct {
 	ID     *string `json:"id"`
 	Ok     bool    `json:"ok"`
