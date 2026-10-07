@@ -58,15 +58,20 @@ width); no core or loop line (decision 10).
   preview under that row, never into the record: a rolling tail of at
   most `phasePreviewRows` (10) screen rows, dim reasoning, headed by
   `· n rows above ·` once the tail scrolls, gated by the same reasoning
-  toggle and re-measured on resize. Its end commits one line, a green
-  check or a red cross beside the name and its note, and with it the
-  preview is gone — nothing of it reaches the scrollback; the recorder
-  and the web feed still carry every delta. Then the row goes idle and
-  any waiting notice breathes. A phase that arrives during a live turn
-  waits and its deltas are not shown (the run log has them). Compaction
-  is the `summarizing` phase: the cue sets the label and the clock, the
-  policy streams the summary call's thinking, and the compaction line is
-  its end.
+  toggle and re-measured on resize. With the end the preview is gone —
+  nothing of it reaches the scrollback. Then the row goes idle and any
+  waiting notice breathes. A phase that arrives during a live turn waits
+  and its deltas are not shown (the run log has them).
+  One phase is open at a time and it is ended, never abandoned:
+  `reviewing` ends on its settle, committing the check line (a green
+  check or a red cross beside the name and its note). `summarizing` has
+  no check line — the compaction line is its end — and since 2.13.1
+  `Compacted` and `Fault` close the phase through the same door
+  (`endPhaseLocked`), because a reactive compaction runs inside the turn,
+  where the cue cannot take the row and an abandoned phase would keep the
+  indicator lit and the ticker spinning for the rest of the session.
+  Notices and phases are rendered, not stored: the recorder has no case
+  for either, and the web feed carries them live.
 - **The swarm band** (`swarm.go`): `RenderSwarmBand`
   folds the latest `SwarmStatus` into one row per role below the status
   rows, behind a short dim rule (four cells), while a swarm runs — the

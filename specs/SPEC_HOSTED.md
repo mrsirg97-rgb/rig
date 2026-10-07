@@ -59,11 +59,15 @@ default 3).
   `providerPin` or `cacheControl` on a row whose provider is not
   `openrouter`, and a `reasoning` value outside the two names.
 - The env overlay gains `RIG_MODEL_BASE_URL`, `RIG_MODEL_API_KEY`,
-  `RIG_MODEL_REMOTE` (bool), `RIG_MODEL_CONCURRENCY`, and
-  `RIG_MODEL_REASONING`, so a key can live in the environment and
-  never in a file. The overlay wins over the row, like every other
-  field; `RIG_MODEL_API_KEY` in a process env is the one place a key
-  may live without being in settings.
+  `RIG_MODEL_REMOTE` (bool) and `RIG_MODEL_REASONING`, so a key can
+  live in the environment and never in a file. The overlay wins over
+  the row, like every other field; `RIG_MODEL_API_KEY` in a process
+  env is the one place a key may live without being in settings.
+  (Amended: `RIG_MODEL_CONCURRENCY` was retired with the row's
+  `concurrency` in 2.4.0 (SPEC_WORKERS); the overlay today is
+  `RIG_MODEL_WINDOW`/`MAX_TOKENS`/`RESERVE`/`KEEP_RECENT`/`RETRIES`,
+  `RIG_MODEL_BASE_URL`/`API_KEY`/`REASONING`/`REMOTE`, and
+  `RIG_MODEL_PROVIDER`.)
 - `config/modelsfile.go` accepts the new keys and merges them by id
   like the rest. A key that is not in the row's file is never
   rendered: `command/models` shows remote, provider, baseUrl, and
@@ -144,7 +148,7 @@ and the runner keep passing the swap URL and the worker ignores it.
 
 ### 5. Budgets
 
-- **Swarm**: `swarm <n> [budget=<dollars>]`; the controller keeps a
+- **Swarm**: `swarm start <n> [budget=<dollars>]`; the controller keeps a
   running `spent` from each delegate result's `Cost` (which the
   delegate read from the cost column). Before each claim, `spent >=
   budget` stops the worker with the notice `swarm: budget reached —

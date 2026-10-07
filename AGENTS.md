@@ -154,6 +154,20 @@ that is harder than writing a lot, and it is the bar.
   global, a duplicated query string, or a second type for one idea.
   Fewer lines that read as the design beat more lines that work.
 
+## working on a change
+
+- `make test`: `go vet ./...` then `go test -race ./...`.
+  `make fmt-check`: `gofmt -l .` must be empty; CI runs both.
+- The freeze gate (`go run ./cmd/freeze`) reads `specs/FREEZE.txt`:
+  every path a PR touches must match a line, a path matching none
+  fails naming the path and the file; `core/` and `loop/` stay open
+  to pure addition only, and a reopening is a one-line diff to that
+  file, reviewed in the PR.
+- The wire job (`scripts/wire-check`) renders the request bodies at
+  the merge-base and at the head and posts their diff as the job's
+  summary; the stored goldens and the `-update` flag are gone (2.12.3).
+- `CONTRIBUTING.md` is the process: spec first, tests before code.
+
 ## packages
 
 - `core`: the kernel's contract surface: the seams (Provider,
@@ -171,11 +185,17 @@ that is harder than writing a lot, and it is the bar.
 - `cmd/rig`: the binary and composition root: flag/env/file config
   resolution, the store wiring (the rem migration), plugin discovery.
   The only package that imports the whole tree.
+- `cmd/freeze`: the freeze gate program the CI freeze job runs: every
+  path a diff touches must match a line of `specs/FREEZE.txt` (a `/`
+  line is a directory prefix; `reopen <path> <version>` reopens a
+  frozen path by name); a touched path matching no line fails, naming
+  the path and the file.
 - `command`: the user-command leaf: the slash-command set (`compact`,
-  `new`, `models`, `sessions`, `steer`, `todo`, `scheduler`, `plugins`,
-  `rem`, `effort`, `role`, `approve`, `swarm`), testable with fakes:
-  no kernel, no stores, no provider; `swarm` owns the vocabulary, the
-  controller owns the goroutines (SPEC_SWARM).
+  `new`, `project`, `sessions`, `models`, `steer`, `todo`, `scheduler`,
+  `plugins`, `decision`, `rem`, `effort`, `role`, `approve`, `swarm`,
+  `theme`), testable with fakes: no kernel, no stores, no provider;
+  `swarm` owns the vocabulary, the controller owns the goroutines
+  (SPEC_SWARM).
 - `config`: the config-loading layer: four-layer resolution (flags >
   env > file > embedded defaults) and the models table out of code and
   into a file.
@@ -218,6 +238,9 @@ that is harder than writing a lot, and it is the bar.
 - `middleware/paths`: the `~`-expansion boundary: one chain link that
   expands a leading `~` in the path-shaped arguments before any tool
   sees them, so every tool inherits it.
+- `middleware/index`: the graph tap (SPEC_GRAPH): one chain link that
+  touches the code map's indexer with the path of a successful read,
+  write or edit; a nil indexer taps nothing.
 - `middleware/toolset`: the root's live tool table: a per-turn fact,
   swapped atomically so a plugin reload or model switch takes effect on
   the next turn.
@@ -227,6 +250,11 @@ that is harder than writing a lot, and it is the bar.
 - `plugins`: python plugin discovery: one file under the rig home's
   `plugins/` is one tool, discovered and executed through the shared
   kernel.
+- `testenv`: the suite's isolation from the operator's machine: `Main`
+  points `HOME`, `XDG_CONFIG_HOME` and `RIG_HOME` at one throwaway
+  directory per package run and puts a `crontab` shim first in `PATH`
+  that refuses loudly; `OperatorHome` keeps the real home for
+  read-only fixture probes.
 - `store`: the SQLite persistence substrate: the open path, the
   pragmas, schema versioning, corrupt-file quarantine.
 - `store/scope`: the project identity: the repo (the short sha1 of the
@@ -355,11 +383,17 @@ that is harder than writing a lot, and it is the bar.
 - `frontend/tui`: the terminal UI: the same events and commands in a
   live-region design; adds to the CLI's bytes, never changes them; the
   swarm band and the one-line transcript notices (SPEC_SWARM 7).
-- `frontend/web`: the `rig serve` dashboard (SPEC_SERVE): the third
-  frontend of the loop over loopback-only net/http (the live session as
-  a server-sent stream, in the TUI's grammar), token-gated, beside the
-  reads of the rig home's stores and the todo, scheduler, and
-  plugin-forge writes; installable as a home-screen app.
+- `frontend/web`: the `rig serve` dashboard (SPEC_SERVE): one of the
+  four frontends of the loop (tui, cli, web, oneshot, as
+  `specs/FREEZE.txt` names them) over loopback-only net/http (the live
+  session as a server-sent stream, in the TUI's grammar), token-gated,
+  beside the reads of the rig home's stores and the todo, scheduler,
+  and plugin-forge writes; installable as a home-screen app.
+- `scripts/`: the CI job scripts: `scripts/wire-check`, the wire job,
+  renders the request bodies at the merge-base and at the head and
+  posts their unified diff as the job's summary (the stored goldens
+  and the `-update` flag are gone, 2.12.3); the menu's aim and wall
+  char budgets ride its environment.
 - `specs/`: the specs, written and agreed before the code (SPEC_CORE
   first); the governing documents the `PACKAGE.md` files cite.
 - `docs/`: the architecture (`DESIGN.md`), setup, usage, the plugins

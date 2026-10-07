@@ -641,22 +641,35 @@ into the tool's JSON args, call `Exec` with the session threaded
 print the reply **verbatim**; success or refusal. No parallel
 implementation, no re-voicing: the queue the model reads is the queue
 the user reads, and the tool's own refusals teach the protocol
-(`todo: no task 't9'`, `scheduler: pause requires 'id' (jN)`).
+(`no task 't9' in <where> (ids are minted by the tool; copy from a
+reply)`, `scheduler: pause requires 'id' (jN)`). One thing is added, not
+printed: 2.12.0's scope. Every `todo` line carries the session's
+workspace as its `scope` unless the line named a path first, so a bare
+`todo start t3` acts on this directory's queue and the adapter stays
+the only place that guess is made.
 
 The arg syntax is named; `<tool> <action> [id] [n]`, token-shaped, and
 the per-action shape is enforced at the boundary (extras are refused
 loud, not silently dropped into the tool's ignored fields):
 
 ```
-todo    read
+todo    read [id]
 todo    create <text…>          the whole remainder, one task's text
-todo    start|complete|fail|retry <id>
+todo    start|complete|done|fail|release|retry <id>
+todo    claim [review]          claim review takes the first task in review
+todo    accept <id> | note <id> <text…> | reject <id> <text…>
+todo    notes <id>
+todo    list finished [n]
+todo    prune
 todo    move <id> <pos>
-todo    project <path>         show that project's queue (a one-off read)
+todo    <path> <verb…>          the same verbs, in that queue (scope per call)
 scheduler list
 scheduler show <id>             one job with its last run
 scheduler create <name> <prompt…> <cron>     5-field vixie, or
 scheduler create <name> <prompt…> once <ISO>
+scheduler update <id> [name <n>] [model <m>|none] [workspace <dir>]
+          [busy <skip|force>] [cron <5 fields|once>] [at <ISO>]
+          [prompt <the rest of the line>]
 scheduler pause|resume|remove <id>
 scheduler runs <id> [n]
 scheduler repair [id]           re-derive a drifting job's crontab line
@@ -673,10 +686,10 @@ scheduler repair [id]           re-derive a drifting job's crontab line
 - `todo create <text…>` folds one task into the queue (create merges by
   text, SPEC_STATE; the line is for the one-task case). A bare
   `todo create` passes `{"action":"create"}` to the tool, whose refusal
-  (`action 'create' requires tasks: array of {text}`) teaches that the
-  line needs text; clearing the queue (`tasks: []`) stays a model-side
-  call: the line shape has no spelling for an empty array, and that is
-  fine.
+  (`action 'create' requires text`) teaches that the line needs text.
+  Since 2.12.4 there is no array and no empty create: the queue-clearing
+  call that took `tasks: []` is gone from both doors, and `prune` is the
+  verb that removes finished rows.
 - `scheduler show <id>` reads one job by id: the reply is the block `list`
   prints for that job plus its last run line (status, exit, duration, log
   path). A bare `show` refuses the shape (`scheduler: show takes an id
@@ -700,23 +713,24 @@ scheduler repair [id]           re-derive a drifting job's crontab line
   task done in one call (the complete/accept pair), and in a worker
   (`rig -p`) it submits for review, which the parent finishes with
   `accept` or `reject` by id.
-- `todo project [path]` is the binding door (SPEC_STATE's binding
-  decision). With a path it binds the session to that project's queue and
-  renders it — `→ bound to <label>`, or `→ bound to <label> (was <old>)`
-  when the binding moves — and with nothing it reports where the queue is
-  and touches nothing (`queue: <label> (bound)`, or `queue: <label>
-  (this workspace; not bound)` before one). A path that is not a
-  directory refuses `todo: no such project directory: <path>`; an empty
+- `todo project [path]` is a read and nothing else. 2.12.0 took the
+  binding out — a session has no queue of its own to move — and what is
+  left is a one-off look at another workspace: with a path it renders
+  that queue as `read` renders it, bare it reads the session's own scope
+  and touches nothing. A path that is not a directory refuses
+  `todo: no such project directory: <path>`, a second field refuses
+  `todo: project takes one path (todo project <path>)`, and an empty
   queue renders `(no tasks in <label>'s queue)`: the empty reply names
-  the workspace it read (SPEC_CORE).
-- `todo <path> <verb…>` is the same door in the other order: a first
-  field that is not one of the tool's verbs is the project, and what
+  the workspace it read (SPEC_CORE). The door that moves the session is
+  `/project <path>`, its own command, because moving a session is the
+  process's business and never was a tool's.
+- `todo <path> <verb…>` is the same fact in the other order: a first
+  field that is not one of the tool's verbs is the scope, and what
   follows parses by the verb rules below (`todo ~/Projects/rig start t3`,
-  `todo ~/ledger create tidy the inbox`). It binds on a write that
-  succeeds, then acts, so the bare verbs after it stay in that queue; on a
-  `read` it is a peek — that queue's rows show and the session's own
-  binding does not move. One path field only; a second is the verb's own
-  argument, and the verb's own refusals still fire.
+  `todo ~/ledger create tidy the inbox`). The path rides that one call as
+  `scope`; the next bare verb is back in the session's workspace, since
+  there is nothing left to bind. One path field only; a second is the
+  verb's own argument, and the verb's own refusals still fire.
 - `todo prune` drops the queue's done rows (SPEC_STATE); it takes no
   args, and an idle prune says `nothing to prune` rather than pretending.
 - the int slot is parse-checked: `todo start t1 extra` →
@@ -737,16 +751,18 @@ executes (the root puts the live `todoTool` / `schedTool` in), so a
 same queue, same session attribution (the live session's id, or `anon`
 unthreaded; the tools' existing behavior), same store.
 
-- **No fleet, no `/scheduler`** (SPEC_CONFIG 12's presence rule): with
-  no `workers.json` the root registers no `scheduler` tool, and the
-  command refuses by name before the tool lookup: `scheduler: no
-  workers configured (~/.rig/workers.json names the model)`; the same
-  string the dashboard's scheduler view shows (SPEC_SERVE). The
-  refusal is the command's, not the generic no-tool voice: the
-  operator is told what is missing (the file, and its job; it names
-  the model), not only that a tool is absent. The fleet's model and
-  file path ride on the command env, so the refusal names the home the
-  root actually read, not a hardcoded path.
+- **The scheduler is always there; the fleet is conditional.** The root
+  registers the `scheduler` tool on every path — 2.4.0 retired
+  `workers.json`, and the presence rule that kept the tool off the table
+  went with it — so the command refuses only when the wiring itself is
+  absent, in the generic voice: `scheduler: no scheduler tool (the root
+  did not put it in Env.Tools)`. What the file used to decide is decided
+  now by `settings.json`'s `workers` key beside the swap read, and they
+  gate the *worker pair* (`delegate`, `swarm`), never the scheduler:
+  `swarm: the worker tools are off (settings.json "workers": false)`, or
+  `swarm: the swap is unreadable at start (the pair fails closed)` when
+  the active row is not remote and the swap will not say what is
+  resident (SPEC_WORKERS).
 
 Scheduler ids are one sequence across the single store (SPEC_STATE): a
 `jN` names the same job from any directory, the grammar has no `scope`
@@ -841,8 +857,11 @@ a store.
 shape (13): `2 workers · 1 running`, then one row each: `  w1 [~] worker
 qwen3.8-workers · task t3 · heartbeat 2s ago · done 1 failed 0`; an idle
 worker says `task none · heartbeat —`; a finished one is `[x]` and says
-`exited`. **`swarm <n> [role=worker|reviewer] [model=<id>]`**;
-starts n drain workers on the session's bound queue, each spawning one
+`exited`. **`swarm start <count> [role=worker|reviewer] [model=<id>]
+[budget=<dollars>]`**; the keyword carries the verb — a bare count
+refuses `swarm: the count rides start (…)` — and the `Sub()` hints are
+`start` and `stop`. It starts n drain workers on the queue named by the
+session's scope, each spawning one
 `rig -p` per task through the delegate path; against a running swarm it
 adds (the roles mix — a worker swarm gains a reviewer mid-drain), and a
 `model=` must resolve in the runtime models table. The start reply is
@@ -857,8 +876,10 @@ command package defines only the seam and the row types.
 Refusals, named: a non-numeric count and the unknown token → the usage
 line naming `[role=worker|reviewer] [model=<id>]`; `role=` twice, an
 empty `role=`, an empty `model=`, and `stop` with extra args → the
-voice naming the right shape; a start with no fleet →
-`swarm: no workers configured (<file> names the model)`; a stop with no
+voice naming the right shape; a start with no fleet → the wiring's own
+why, `swarm: the worker tools are off (settings.json "workers": false)`
+or `swarm: the swap is unreadable at start (the pair fails closed)`
+(SPEC_WORKERS 4); a stop with no
 swarm → `swarm: no swarm running`; `model=<id>` unknown in the runtime
 table → `swarm: no row for "<id>" (known: ...)`. The bare command with
 no seam and no rows is `swarm: no workers` (a read, not a refusal).
@@ -966,7 +987,7 @@ crontab spool for the scheduler (the e2e's existing pattern).
 - `TestCompactNothingToDrop`: a single-message transcript:
   `compact: nothing to drop`; the transcript untouched; no event, no
   row. Same for an empty session.
-- `TestCompactSummaryInputDoesNotFit`: the loud refusal naming the
+- `TestPolicyCompactSummaryInputDoesNotFit` (`policy/compact`): the loud refusal naming the
   window and the estimate.
 - `TestCompactUsageRefusal`: `compact extra` → `compact: usage:
   compact`.
@@ -1045,8 +1066,11 @@ crontab spool for the scheduler (the e2e's existing pattern).
 - `TestModelsListMarksActive`: two rows, the exact lines in the list
   shape (the head's active id, the padded ids, window, max, reserve,
   keep, trigger), the active one `[~]`, the other `[ ]`.
-- `TestModelsSwitchUnknownNamesKnown`: `models: no row for "nope"
-  (known: local, qwen3.8-workers)`.
+- `TestModelsRefusalPassesThrough`: an unknown id answers
+  `models: no row for "nope" (known: …)` from the root's resolver and the
+  command passes the voice through verbatim — it owns no copy of the
+  known set (`TestNamedModelWithNoRowsRefusesBeforeAnyRequest` is the
+  same voice at start, before any store opens).
 - `TestModelsSwitchTakesEffectNextTurn`: two scripted providers:
   `models <id2>`; the next prompt reaches provider two (and only
   provider two); `ActiveModel` reports the new id; the new policy was
@@ -1086,11 +1110,11 @@ crontab spool for the scheduler (the e2e's existing pattern).
   lines or the no-runs voice), `scheduler list extra` (the shape
   refusal), `scheduler create short` (the create refusal naming the
   shape).
-- `TestSchedulerCommandNoFleetRefuses`: no fleet on the env
-  (`Env.Workers` absent): any `scheduler …` line refuses by name, the
-  command's voice (`scheduler: no workers configured (… names the
-  model)`), the file path the home the root read; the generic
-  no-tool voice is not the one.
+- `TestSchedulerCommandMissingToolKeepsTheGenericVoice`: with no
+  scheduler on the table the line refuses in the generic no-tool voice
+  (`scheduler: no scheduler tool (…)`). There is no fleet-shaped
+  refusal left to pin: `workers.json` retired in 2.4.0 and the presence
+  rule with it, so the only absence is the tool's.
 - `TestToolCommandThreadsTheLiveSession`: a fake tool asserting
   `core.SessionFrom(ctx)` returns the live session's id (post-`/new`).
 - `TestCommandEnvRefusedLoud`: a `Run` with a foreign env type: the

@@ -131,28 +131,31 @@ cwd's file, not the creating session's.
 | endpoint      | `--base-url`   | `RIG_BASE_URL`         | `baseUrl`       | `http://127.0.0.1:8090/v1` (the model server; a jailed worker's proxy forwards here) |
 | model         | `--model`      | `RIG_MODEL`            | `model`         | none (a run without one refuses at start, naming the three ways) |
 | system        | `--system`     | `RIG_SYSTEM`           | `system`        | rig's default system prompt |
-| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the embedded default allow (twelve base names; `scheduler` and `delegate` join where a fleet stands and no operator allow does) |
+| allow-list    | `--allow` (CSV)| `RIG_ALLOW` (CSV)      | `allow` (JSON array) | the embedded default allow (twelve names; `scheduler` and `delegate` are appended whenever the settings file carries no `allow` key of its own — write the key and you decide what is permitted. The menu is a separate count: `view` only on a vision row, `decide` only with `decisionUrl`, `verdict` only in a fleet worker) |
 | bound         | `--retries`    | `RIG_RETRIES`          | `retries`       | `3` |
 | round cap     |                | `RIG_ROUNDS` (invalid loudly refuses) | `rounds` | `0` = no cap (the default); `N` caps the turn's tool calls (SPEC_HARDENING 9) |
 | result cap    |                | `RIG_RESULT_CAP` (invalid loudly refuses) | `resultCap` | `65536` (64 KiB); the wall on every tool result |
-| resume        | `--resume <id>`|;                      |;               | fresh session (refuses with `-p`; one-shot stays one-shot) |
-| terminal      | `--tui` (auto/true/false) |; |; | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
+| resume        | `--resume <id>`|  |  | fresh session (refuses with `-p`; one-shot stays one-shot) |
+| terminal      | `--tui` (auto/true/false) |  |  | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
 | python kernel |                | `RIG_PYTHON`           | `python`        | the default interpreter |
 | web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
 | session model |                | `RIG_MODEL`            | `model`          | no embedded default; the worker model resolves at claim time: the named one, else the resident model, else this |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
-| decision server |;            | `RIG_DECISION_URL`     | `decisionUrl`     | none; set it and every bash call gets a pending risk proposal the reviewer settles, and the `decide` tool joins the live table so the model hands it the sorting (SPEC_DECISION); unset, nothing proposes and the menu, the wire sha and the system prompt do not move |
-| decision unit |;               |;                      | `decisionUnit`    | none; the systemd user unit file a promotion rewrites — the one `Environment=` line naming `RIG_DECISION_CHECKPOINT` (SPEC_DECISION 2.13.0); unset, runs score and record but promote nothing |
-| trainer interpreter |;         |;                      | `trainPython`     | none; the `train/` zone's own interpreter, run headless with torch — two gigabytes that do not belong in the session kernel's venv (SPEC_DECISION 2.13.0); a run without it refuses naming the key |
-| approval dial  |                |;                      | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
-| worker sandbox |;              |;                      | `sandbox`         | `jailed`; `off` = unjailed (one loud line per worker run, the operator's explicit act) |
-| sandbox binds |;              |;                      | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
+| decision server |  | `RIG_DECISION_URL`     | `decisionUrl`     | none; set it and every bash call gets a pending risk proposal the reviewer settles, and the `decide` tool joins the live table so the model hands it the sorting (SPEC_DECISION); unset, nothing proposes and the menu, the wire sha and the system prompt do not move |
+| decision unit |  |  | `decisionUnit`    | none; the systemd user unit file a promotion rewrites — the one `Environment=` line naming `RIG_DECISION_CHECKPOINT` (SPEC_DECISION 2.13.0); unset, runs score and record but promote nothing |
+| trainer interpreter |  |  | `trainPython`     | none; the `train/` zone's own interpreter, run headless with torch — two gigabytes that do not belong in the session kernel's venv (SPEC_DECISION 2.13.0); a run without it refuses naming the key |
+| approval dial  |                |  | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
+| worker sandbox |              |                      | `sandbox`         | `jailed` (bwrap, unshare-all); `landlock` (the in-kernel jail, `RIG_LANDLOCK` and `RIG_EXEC_WRAPPER`); `off` = unjailed (one loud line per worker run, the operator's explicit act) |
+| sandbox binds |  |  | `sandboxBinds` (JSON array) | none; an entry is an absolute path, ro-bound unless it ends `:rw` |
 | update key    |                | `RIG_UPDATE_KEY`      | `updateKey`         | the embedded pinned key that signs releases (SPEC_BUILD 5); env and file override it; a build without a pinned key refuses `-update` |
-| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`, `_CONCURRENCY`, `_RETRIES`; and `_BASE_URL`, `_API_KEY`, `_REASONING`, `_PROVIDER`, `_REMOTE`) | `models.json` | none: the table is the operator's file (`RIG_MODEL_WINDOW` alone still mints a row for the active id) |
+| review batch  |                |                      | `reviewBatch`     | `3`: settled-review rows per review fire (SPEC_DECISION); `0` leaves the reviewer off; negative or non-integer refuses |
+| plugin cap    |                |                      | `plugins` (object) | no cap; `plugins.max` caps the live plugin set and an over-cap load is skipped naming the cap — the number is read at startup, so raising it takes a restart |
+| worker pair   |                |                      | `workers`         | on; `false` turns `delegate` and the swarm off (the pair the retired `workers.json` used to switch) |
+| model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`, `_RETRIES`; and `_BASE_URL`, `_API_KEY`, `_REASONING`, `_PROVIDER`, `_REMOTE`); `_CONCURRENCY` is gone, not retired: it is ignored with no line at all | `models.json` | none: the table is the operator's file (`RIG_MODEL_WINDOW` alone still mints a row for the active id) |
 
-**On the worker sandbox**; `sandbox` is the scheduled worker's jail
+**On the worker sandbox**: `sandbox` is the scheduled worker's jail
 (`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the default; fail closed)
 spawns the worker under bwrap's unshare-all profile, netless except
 the one bound socket its model calls ride, with its home a scratch
@@ -251,7 +254,7 @@ and an unknown key refuses at start naming the file and the field.
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
-  "allow": ["bash", "read", "write", "edit", "view", "python", "web", "todo", "rem", "sessions", "plugin", "plugins"],
+  "allow": ["bash", "read", "write", "edit", "view", "python", "web", "decide", "todo", "rem", "sessions", "plugin"],
   "retries": 3,
   "resultCap": 65536,
   "approve": "auto",

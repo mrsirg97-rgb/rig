@@ -93,69 +93,57 @@ At claim time, against the resolved model:
   never performs one. `busy: force` is refused at create/update
   (`force is retired: eviction is the operator's act`); historical
   rows replay as the one policy.
-- The model resident → the free-slot read (`GET /upstream/<model>/
-  slots`, `is_processing: false` per slot; a bare array, the
-  llama-server default endpoint):
-  - **A fire waits.** The fire polls the read every second up to its
-    own timeout; a free slot spawns the worker, an expired timeout
-    skips naming the holder and the wait.
-  - **A delegate inside a turn refuses.** One read, no wait: the turn
-    is interactive and the refusal is actionable now. On a one-slot
-    model the voice is `delegate: no free slot; this turn holds the
-    only one`; on more, `delegate: no free slot (all N slots are
-    processing)`.
-  - **The swarm's spawn waits** like a fire (its `WaitBusy` policy,
-    the 2h spend ceiling). The swarm's own count is the slot read, so
-    the wait is a backstop, not the shape.
+- The model resident → send. The gate is the same one read of the
+  resident set at all three sites (`gateOnce`): the free-slot read,
+  the fire's per-second poll, the delegate's `no free slot` voices
+  and the swarm's `WaitBusy` policy are gone with the 2.6.0
+  amendment — the llama-server's queue is the wait, and rig does not
+  count slots.
 
-The read is best-effort by construction: it races the worker's first
-request, and an over-subscribed spawn queues at llama-swap rather than
-failing. The gate keeps polite parallelism; the server owns the truth.
+The gate is best-effort by construction: it races the arrival of
+other requests, and an over-subscribed send queues at llama-swap
+rather than failing. The gate keeps polite refusals; the server owns
+the truth.
 
 ### 3. The delegate loses `Slots`
 
 The per-session slot flocks (`delegate:<session>:<i>`) and the
 row-token flocks (`delegate:model:<id>:<n>`) go with the count. A
-fan-out of delegate calls in one turn is bounded by the claim-time
-read: each call refuses or proceeds on its own read, and the
-one-slot-model refusal is the fan-out bound. The delegate's
-description names the resident model as the default and keeps
-workspace, timeout, stall, and the no-recursion guard verbatim.
+fan-out of delegate calls in one turn is bounded by the loop's
+`Parallel`, not by a slot read: the calls share one resident fact,
+each passes the gate or refuses naming the holder, and the
+llama-server queues what it is given. The delegate's schema is
+`task`, `workspace` and `model`: `stallMs` went with the slot gate
+(2.6.0) and `timeoutMs` with the clock (2.12.7: a delegate has no
+clock), and the no-recursion guard stands verbatim.
 
-### 4. The swarm drains with the free slots
+### 4. The swarm drains on the count it is given
 
-`/swarm` takes no count. Start reads the slots and begins one drain
-worker per free slot, at least one, at most `MaxWorkers` (16, the
-induced-work cap); nothing resident begins one, whose delegate loads
-the session's default. A tick on the poll loop re-reads the slots and
-starts one more worker when the free-slot read exceeds the live
-workers and tasks remain — the swarm grows as slots free (the
-operator's requests releasing theirs) and never past the cap. A
-worker exits after three empty claims as before; growth never
-respawns into an empty queue. `/swarm start [role=…] [model=…]
-[budget=…]` is the start gesture (the bare `/swarm` still lists) and
-`/swarm <n>` refuses naming the retirement (`a count is not taken:
-the free slots are the count`). The roster shows the swarm's model
-as `resident` when it resolves per task, the `model=` override when
-one is named.
+`/swarm` takes a count (2.6.0 restores it: the per-slot growth of
+2.4.0 is gone). `/swarm start <count> [role=…] [model=…] [budget=…]`
+starts exactly that many drain workers, at most `MaxWorkers` (16, the
+induced-work cap); nothing resident, the workers' delegate loads the
+session default. There is no growth tick: one router attached to the queue is
+the only reader, and it hands a ready task to an idle worker on
+events — the start, a task created or completed, a worker finishing —
+so idle workers wait, they do not exit after empty claims. A bare
+`/swarm` lists and `/swarm <n>` refuses naming the grammar (`the
+count rides start`). The roster shows the swarm's model as `resident`
+when it resolves per task, the `model=` override when one is named.
 
 ### 5. The drain pair is a capability, read once at wire time
 
-`scheduler` is wired everywhere: a fire waits and skips by itself, on
-any machine. `delegate` and the swarm are wired only where a second
-request can run: the session's model row is remote (the gate never
-consults the local swap), or the resident server reports more than
-one slot — one live read of the same `/upstream/<model>/slots` the
-gate reads, made once at wire time, nothing stored. Nothing resident
-at start wires the pair on: the model that loads is the session's
-default, and the claim-time gate already refuses on one slot — the
-read cannot know better than the gate. Only an unreadable swap, one
-resident slot, or `"workers": false` wires it off: the wire happens
-once, at start, an unreadable swap fails closed, and nothing turns
-the pair on where the slots are not (`"workers": true`, or absent,
-still waits for the read). The menu says nothing about what is
-absent; `/swarm` names the reason when it refuses. The tool-menu
-budget returns to 14000: the recorded golden is a one-slot wire.
+`scheduler` is wired everywhere: a fire skips by itself, on any
+machine. `delegate` and the swarm are wired where the pair can run:
+workers on and (the session's model row remote — the gate never
+consults the local swap — or the swap readable at start). The wire
+happens once, `fleetWiring` at start, and an unreadable swap fails
+closed; `"workers": false` wires it off naming the settings key. The
+slot count is not consulted: one slot hosts the pair, and the
+resident set says nothing about the wire. The menu says nothing about
+what is absent; `/swarm` names the reason when it refuses. The
+tool-menu budget is 15,000 characters (2.11.12), a guideline with a
+15,500 wall since 2.12.3.
 
 ### 6. What stays
 

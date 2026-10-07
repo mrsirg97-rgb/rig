@@ -19,13 +19,13 @@ Each number names its mechanism.
 
 The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery; the kink is visible. One SQL read of the state store: the store is the receipt.
 - **7k byte-stable preamble.** The system prompt, the tool schemas, and the append-only transcript are a few thousand bytes, pinned by `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`, and `TestSystemPromptIsByteStableAcrossBuilds` (and the wire job's diff, which renders the request bodies at the merge-base and at the head), so a stray timestamp cannot silently kill the cache.
-- **720 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
-- **42,118 lines of Go, 66,493 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
+- **642 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
+- **44,929 lines of Go, 70,439 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
 
 ## what's different
 
 - **the loop is closed.** The turn runtime names no concrete tool, provider, policy, frontend, or middleware. One file plus one registration line extends it.
-- **the wire is pinned.** The exact bytes sent to the model are golden-tested. The cache win is a measured property, not a claim.
+- **the wire is pinned.** The exact bytes sent to the model are diffed, not goldened: `scripts/wire-check` renders the request bodies at the merge-base and at the head and posts their diff as the job's summary (the stored goldens and the `-update` flag are gone, 2.12.3), while `TestSystemPromptIsByteStableAcrossBuilds` keeps the system assembly pinned in-tree. The cache win is a measured property, not a claim.
 - **the loop never retries.** A failed call executes once and the model is told. Results are capped with loud markers; denials are named refusals with reasons.
 - **state belongs to the repo.** Tasks, memory, and schedules carry the project's identity, shared by worktrees. A session resumes from the store in one read-only transaction.
 - **decisions are kept, answers are reviewed.** The gates record what they decide, an optional decision server proposes and an LLM reviews: one sqlite store of questions, answers, confidences, and verdicts (SPEC_DECISION) — proposals, never actions.
@@ -36,7 +36,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 | OS concept | rig | where |
 |---|---|---|
-| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 417 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
+| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 409 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
 | scheduler | the turn's batch: concurrent reads beside each other, bounded by the kernel's Parallel (8), effects in call order; background jobs on the operator's crontab, model fires jailed | `loop/batch.go`, `tool/scheduler`, `store/scheduler` |
 | processes | sessions (TUI, piped, one-shot), delegates, drain workers; each worker owns a transcript, sandboxed and resumable | `frontend/`, `tool/delegate`, `swarm/` |
 | IPC | the event stream (`TextDelta`, `ToolCallEvent`, `ToolResult`, `TurnEnd`) and tool calls through the middleware chain; the stores are the shared state across processes | `core/provider.go`, `evt/`, `store/` |
@@ -96,22 +96,26 @@ rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint default
   a repo and its worktrees share the same memories.
 - **schedules.** `scheduler` puts a job on the crontab; a job is a one-shot
   `rig -p` in its own cwd, jailed by default.
-- **the swarm.** `swarm start` drains the queue, one drain worker per
-  free slot on the resident model: workers claim, run one-shot, and
+- **the swarm.** `swarm start 2` drains the queue (the count rides
+  start, capped at 16): workers claim, run one-shot, and
   submit; reviewers accept or reject. `swarm stop` ends it;
-  `swarm start budget=5` caps the spend. The drain pair is wired only
-  where a second request can run — a remote row, or more than one slot
-  on the resident server (`workers: false` turns it off; the scheduler
-  is wired everywhere).
+  `swarm start 2 budget=5` caps the spend. The drain pair is wired only
+  where a second request can run — a remote row, or the resident swap
+  answering one live read (one slot hosts it; a queued request waits at
+  the server; `workers: false` turns it off; the scheduler is wired
+  everywhere).
 - **resume.** `sessions` lists the vitals; `rig --resume <id>` replays a
   session from the state store in one read-only transaction.
 
 ## the tools
 
-rig's default menu is 13 built-in tools on a model row without vision;
-`view` joins for a row whose `"vision": true` says it takes images.
-`scheduler` and `delegate` are on the menu everywhere and refuse by name
-where no worker fleet stands. Restrict them with `--allow`:
+rig's default menu is 12 built-in tools on a model row without vision,
+13 with `"vision": true` (`view` joins the set). `decide` joins when a
+decision server is set (`decisionUrl`), making it 13/14; `verdict` is
+never on the interactive menu, only on a fleet worker that holds the
+pipe. `scheduler` is on the menu everywhere; `delegate` is wired where
+a second request can run (a remote row, or a readable swap). Restrict
+them with `--allow`:
 
 | tool | what it does |
 |------|--------------|
@@ -123,9 +127,10 @@ where no worker fleet stands. Restrict them with `--allow`:
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
-| `delegate` | a headless worker for a bounded subtask; wired where a second request can run (a remote row, or more than one slot on the resident server) |
+| `delegate` | a headless worker for a bounded subtask; wired where a second request can run (a remote row, or a readable swap) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |
 | `decide` | hand many items to a decision server against one typed question instead of reading them (on the menu only when `decisionUrl` is set) |
+| `verdict` | deliver the reviewer's one word on work a worker was asked to review (registered only in a fleet worker that holds the pipe) |
 | `plugin` | the door into your python plugins: run one, read its contract, or tend the ecosystem (list, create, delete, reload) |
 
 Every tool result is capped. Repeated identical failures are bounded. An
@@ -152,7 +157,7 @@ rows read and echo `reasoning` / `reasoning_details` while everything
 else keeps `reasoning_content`; remote rows omit llama-server-only
 fields. A remote row's delegate and scheduled fire skip the local swap
 entirely — no gate at all; the endpoint's own 429 retry is the
-backpressure. `swarm start budget=5`
+backpressure. `swarm start 2 budget=5`
 and a scheduled job's `budget` cap spend in dollars, summed from the
 cost column (SPEC_HOSTED).
 
@@ -160,10 +165,10 @@ cost column (SPEC_HOSTED).
 
 `delegate` runs a bounded sub-task on a headless worker and waits for its
 last message. In one turn you can fan out several delegates: they run in
-parallel, the turn blocks until each finishes or times out, and the free
-slots llama-swap reports live bound how many run — one with no free slot
-refuses (`no free slot; this turn holds the only one` on a one-slot
-model). A worker runs on the resident model; a model you name asks for a
+parallel and the turn blocks until each finishes or is interrupted; there
+is no free-slot refusal — a queued request waits at the server (the slot
+gate is gone, 2.6.0; one slot hosts the pair). A worker runs on the
+resident model; a model you name asks for a
 swap only when nothing is resident, and a different resident model
 refuses, naming the holder (never an eviction from inside a turn).
 Workers are sandboxed, cannot delegate in turn (`RIG_DELEGATE`), and their
@@ -221,11 +226,20 @@ rig serve
 
 ```
 cmd/rig      composition root; wires every seam once; flags and env only
+cmd/freeze      the freeze gate program the CI job runs, reading specs/FREEZE.txt
 core            the seams, wire types, and the streaming-event vocabulary
 loop            the concrete turn runtime (fault/cancel-aware)
 evt             the event loop (SPEC_EVT): one consumer, many producers; the
                 turn runtime's engine
 kernel.go       the composition kernel
+broadcast/      the fleet's message seams (SPEC_SWARM): a Room of Members
+                over a Transport; Say is the one background voice
+swarm/          the drain-worker controller (SPEC_SWARM): router and settle
+                closures, worker goroutines, the reviewer's verdict
+decision/       the decision seam (SPEC_DECISION): typed questions, the
+                proposer, the queue, the reviewer, the decide door
+pathguard/      the one cwd-containment rule for a worker's workspace
+imagemarker/    the one image-marker contract (view, provider, tui agree on it)
 command/        the user commands (/compact, /models, /sessions, /effort, /theme, ...)
 config/         the four-layer config resolution (flag > env > file > embedded)
 models/         the per-model table (window, compaction numbers, role, effort)
@@ -234,27 +248,33 @@ policy/         ContextPolicy implementations: compact (per-model trigger),
                 empty (the empty-turn guard)
 middleware/     ToolMiddleware: toolset (the live table), approve (the gate),
                 paths (the ~ boundary), perm (deny by default + plugin
-                provenance), guard (the bound, the round cap, the result cap)
+                provenance), guard (the bound, the round cap, the result cap),
+                cutoff (refuse a call the provider cut off), index (the graph tap)
 provider/       Provider implementations (the openai-compatible SSE adapter)
 plugins/        python plugin discovery (one file, one tool) and the plugin
                 door: run/schema a live plugin, list/create/delete/reload the ecosystem
-store/          the SQLite stores (state, todo, rem, scheduler), the sqlx
-                transaction seam, the project scope identity (store/scope);
-                -resume projects a session back from the state rows
+store/          the SQLite stores (state, todo, rem, scheduler, graph the
+                code map, decision), the sqlx transaction seam, the fts
+                tokenization leaf, the lazy results, the project scope
+                identity (store/scope); -resume projects a session back from
+                the state rows
 tool/           Tool implementations: bash(1); file read/write/edit (read
                 appends the file's git diff against HEAD on ask, the
-                drift refusal carries the capped diff); view the image
-                reader (a vision row only); todo the job queue; rem
-                memory; scheduler
-                background jobs; delegate the one-shot worker; python the
-                persistent IPython kernel; web search and fetch; sessions
-                the soak's vitals
+                drift refusal carries the capped diff); diff the engine;
+                view the image reader (a vision row only); todo the job queue;
+                rem memory; scheduler background jobs; delegate the one-shot
+                worker; verdict the reviewer's word; execwrap the landlock
+                seam; python the persistent IPython kernel; web search and
+                fetch; sessions the soak's vitals
 frontend/       Frontend implementations: cli (the piped reference), tui (the
                 terminal default), oneshot (-p worker), web (the serve
                 dashboard)
 specs/          the specs, written and agreed before the code (SPEC_CORE first)
 docs/           DESIGN (architecture), SETUP (build/config), USAGE (running),
                 PLUGINS (the python plugins), EMBED (rig as a module)
+scripts/        the CI wire-check: renders the request bodies at the
+                merge-base and the head and posts their diff
+testenv/        the suite's isolation from the operator's machine (TestMain)
 ```
 
 ## extending

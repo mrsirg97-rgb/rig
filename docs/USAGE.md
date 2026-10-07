@@ -65,6 +65,12 @@ is a loud line naming the known set, never silently a prompt.
   lists the disabled zone, `disable <name>` and `enable <name>` move
   a plugin across it, `reload` re-registers from disk (the `plugins`
   tool's command door), `create <text>` queues the authoring prompt.
+- `/decision train <trainer>`: enqueue the decision model's training
+  run off the turn — `<trainer>` is a trainer file's name (its filename
+  stem, validated like a plugin name), and the command lands a one-shot
+  job on the scheduler that runs headless and never inside the turn; a
+  bare `/decision` reports the usage instead (2.13.0; the nightly is the
+  operator's own cron line).
 - `/todo project [path]`: shows a queue — with a path that project's,
   bare this workspace's. Every todo call names its scope: the workspace
   path, or global (the tool refuses without it). `todo <path> <verb>`
@@ -99,18 +105,18 @@ is a loud line naming the known set, never silently a prompt.
   `verdict` tool and call `accept`/`reject`. A worker on a hosted row
   skips the local swap and the gate entirely. The drain pair is wired
   only where a second request can run — the session's model row is
-  remote, or the resident server reports more than one slot, one live
-  read at wire time (`workers: false` turns it off; the scheduler is
+  remote, or the resident swap answers one live read (one slot hosts it;
+  a queued request waits at the server; `workers: false` turns it off;
+  the scheduler is
   wired everywhere; `/swarm` names the reason when it refuses).
   Against a running swarm a
   start adds workers (the roles mix); `swarm stop` ends it and releases
   the in-flight claims (`swarm: stopped N agents`; `specs/SPEC_SWARM.md`).
   The task workers run
-  on a 10-minute stall beside a 2h spend ceiling, so one that keeps
-  writing holds its slot and a silent one is killed as hung; every
-  abnormal end is recorded on the run (`killed after timeout`, `killed
-  after stall`, `canceled`, or `killed by signal N`), never only as a
-  log marker. A dead
+  with no stall and no timeout on the spawn — the worker's own context
+  (the swarm's) is the only bound, so one lives until it exits or the
+  swarm stops; every abnormal end is recorded on the run (`canceled` or
+  `killed by signal N`), never only as a log marker. A dead
   worker's claim
   is released and the task retried once; a second death fails it (or
   rejects it with the reason). No fleet configured refuses by name.
@@ -253,9 +259,14 @@ rig --allow bash,read            # run things, inspect things, change nothing
 ```
 
 Anything not named is refused at the boundary with the reason named, and the
-refusal goes back to the model. The default permits every native tool —
-thirteen on a model row without vision, fourteen with `vision: true`;
-`scheduler` and `delegate` refuse by name where no fleet stands. Python
+refusal goes back to the model. The execution allow-list is not vision-gated:
+twelve names in the embedded `settings.json`, fourteen once `scheduler` and
+`delegate` join them (they do whenever the settings file carries no `allow`
+key; write the key and you decide). What the model is offered is a different
+count — the menu: twelve on a model row without vision, thirteen with
+`vision: true` (`view` registers only there), `decide` only where
+`decisionUrl` is set. `scheduler` is wired everywhere; `delegate` registers
+only where a second request can run. Python
 plugins (outside the
 default) are admitted by their
 presence in `~/.rig/plugins/` root (SPEC_PLUGINS 7); an installed

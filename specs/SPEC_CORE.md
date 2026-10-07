@@ -41,27 +41,65 @@ rig/
     session.go
     interrupt.go // WithInterrupt / InterruptFrom: the turn's cancel rides the ctx
     command.go   // Command: the user-command seam (deliverable 9, SPEC_COMMANDS)
+  kernel.go      the composition kernel (package rig): the dependency bag
+                 the loop drives, assembled from options
+  evt/           the event loop (SPEC_EVT): one consumer, many producers,
+                 closures ordered by priority then arrival; the turn loop
+                 is its consumer
   loop/          the concrete turn loop
     loop.go
+    batch.go     // the concurrent-call batch (SPEC_EVT 2a)
   provider/
     openai/      OpenAI-compatible chat completions over net/http (llama.cpp)
+  policy/        the ContextPolicy implementations and the provider decorators
+    passthrough.go
+    compact/     transcript summarization (SPEC_COMPACT)
+    effort/      the reasoning dial
+    empty/       the empty-turn guard (SPEC_EMPTY)
+  middleware/    the chain links; the one order lives in cmd/rig
+    approve/     the manual approval gate (SPEC_MODES 4)
+    cutoff/      refuse-before-execute for cut-off calls (SPEC_HARDENING 10)
+    guard/       the retry bound, the round cap, the result bound
+    index/       the code map's read/write/edit hook (SPEC_GRAPH)
+    paths/       the `~`-expansion boundary
+    perm/        deny-by-default allowlist, the plugin landing zone
+    toolset/     the live tool table, swapped per turn
   tool/
     bash/
     file/        read, write, edit
-    fs/          ls, find, grep
+    diff/        the diff engine, no tool surface (SPEC_DIFF; 1.7.0)
+    execwrap/    the landlock subprocess seam (RIG_EXEC_WRAPPER)
     view/        view: the image reader (SPEC_VIEW)
     todo/        the concurrent job queue
     rem/         memory
     scheduler/   background jobs
+    sessions/    the session-store reads
     python/      the persistent IPython kernel
     web/         web (search and fetch)
+    delegate/    the one-shot worker tool (SPEC_DELEGATE)
+    verdict/     the reviewer's one word, a worker with a fleet pipe only
   frontend/
     cli/         stdin/stdout REPL
+    oneshot/     the `-p` single-prompt worker
+    tui/         the terminal UI (SPEC_TUI)
+    web/         the `rig serve` dashboard (SPEC_SERVE)
+  swarm/         the drain-worker controller (SPEC_SWARM)
+  broadcast/     the fleet's message seams: the room, the members, the post
+                 (SPEC_SWARM 7); none of them a heartbeat
+  decision/      the decision seam (SPEC_DECISION): the typed question, the
+                 proposer, the queue, the scorer, the reviewer
+  store/         the SQLite substrate: one open path, scope, fts, sqlx, lazy,
+                 and the stores — state, todo, rem, scheduler, decision, graph
+  pathguard/     the one cwd-containment rule (the delegate and the scheduler
+                 revalidate through it)
   command/       the user-command leaf (deliverable 9, SPEC_COMMANDS): the
                  prefix rule, the Env the root builds, one file per command
   imagemarker/   the image-reference leaf (SPEC_VIEW): the marker line and
                  the blob address, stdlib only, imported by tool/view,
                  provider/openai and frontend/tui
+  plugins/       the python plugin discovery (SPEC_PLUGINS)
+  models/        the per-model table: window, compaction numbers, role,
+                 effort; env overlay and loud row invariants
   config/        the config leaf (SPEC_CONFIG): one load for every entry
                  mode; the embedded settings.json and models.json are the
                  0.2.0 defaults moved out of code (the embedded models
@@ -69,6 +107,7 @@ rig/
                  models.json is the table)
   cmd/
     rig/      main.go, the composition root
+    freeze/   the freeze gate over specs/FREEZE.txt, run by CI (2.12.3)
 ```
 
 One concept per file, interfaces in `core`, concrete types unexported with
@@ -121,8 +160,20 @@ encoding and keeps the switch in the loop exhaustive by convention.
 ```go
 type Event interface{ event() }
 
+// Snapshot is a marker interface, not another event (2.11.0): an Event
+// that is state, not a story. broadcast/transport.go keeps one pending
+// message per sender and snapshot type: a later snapshot replaces an
+// earlier one before it has run. SwarmStatus (the band) is rig's one.
+type Snapshot interface {
+	Event
+	Snapshot()
+}
+
 type TextDelta struct{ Text string }
-type ReasoningDelta struct{ Text string } // the model's thinking (reasoning_content)
+type ReasoningDelta struct {
+	Text    string          // the model's thinking (reasoning_content)
+	Details json.RawMessage // the raw reasoning_details array chunk (1.5.0, SPEC_HOSTED)
+}
 type ToolCallEvent struct{ Call ToolCall }
 type Done struct {
 	StopReason string
@@ -170,6 +221,26 @@ type Compacted struct {
 	Usage   Usage
 }
 
+// Phase is begin, delta and end of one model call made behind the
+// turn and shown to the operator (2.11.7): `summarizing` from the
+// compaction policy, `reviewing` from the decision review.
+type Phase struct {
+	Name string // "summarizing" / "reviewing"
+	Text string // a delta of the call's thinking
+	Done bool   // the end, carrying the verdict in Note
+	Ok   bool
+	Note string
+}
+
+// fleet event (2.11.0, SPEC_SWARM): a worker's one word, published by
+// tool/verdict as the worker's member message; the reviewer settles
+// from the room, never from stdout.
+type Verdict struct {
+	Row    int64
+	Accept bool
+	Reason string
+}
+
 type TurnEnd struct{ Reason TurnReason } // closes every turn inside the run
 
 type Usage struct {
@@ -206,7 +277,14 @@ transcript line per decision) and `SwarmStatus` (the band snapshot) to
 the session's `broadcast` room, and the root's frontend member hands
 them to the frontend; the loop never emits or forwards them, and the
 compat rule keeps them additive. `SwarmNotice` was a second type for
-the same idea and folded into `Notice` in 2.11.0.
+the same idea and folded into `Notice` in 2.11.0. A worker's
+`Verdict` (2.11.0) rides the same room: `tool/verdict` publishes it as
+the worker's member, and the swarm reviewer and the decision bite
+settle from the room, never by scraping stdout. 2.11.7 named what the
+frontend member delivers: only what a frontend renders — `Notice`,
+`SwarmStatus` and `Phase` — so a worker's raw thinking never reads as
+the session's own; `Phase` reaches the room beside them, and the
+compaction policy and the reviewer are its two emitters.
 
 A `ToolCallEvent` is emitted for every accumulated call. A call whose args
 are invalid when the stream ends carries `Cut` set to the finish reason
@@ -223,7 +301,12 @@ The loop forwards the kinds it names and ignores the rest. This is what lets
 1.0 freeze: a Frontend written against 1.0 stays correct when 1.x adds
 `ToolStart` or `ReasoningDelta` (noise to the old Frontend, never a misread),
 and an adapter may emit a kind the loop does not yet name without breaking the
-stream.
+stream. Marker interfaces follow the same rule (2.11.0): `Snapshot` is an
+`Event` with a delivery contract, not a new kind — one pending message per
+sender, the later replacing the earlier before it runs — honored by the
+transport on assertion (`broadcast/transport.go`), so a consumer that does
+not know the marker still just sees an event, and a type opts in by the
+method alone.
 
 ## interfaces
 

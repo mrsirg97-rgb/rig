@@ -131,7 +131,8 @@ only while the toggle is on), ToolStart switches the activity line to the
 tool name, ToolResult commits the whole tool block (the separating blank
 flows here when another block precedes it), Done guarantees a
 trailing newline and the status line's used takes its Usage, TurnEnd
-commits the usage line and resets the live region to the input line,
+commits nothing but closes the pending flow and resets the live region to
+the input line,
 Compacted commits the compact line and the status line's used takes the
 compact's Kept (no block reprint), Fault commits the fault line, unknown
 events are ignored. The activity label is the phase: thinking before and
@@ -154,7 +155,6 @@ Kept); `new` and `resume` reset it with the session.
 block letters with the embedder's rows and adds a tagline under them
 (default: the rig rows, no tagline); the ascii glyph fallback prints
 the plain name.
-`tui.WithNews(fn)` supplies the session-start news line (empty = nothing).
 `StatusIn.Rows` is the embedder's footer band: the rows render under the
 status line behind a dim rule (empty = nothing), recaptured after every
 successful command (the Used reset stays at `/new` and `sessions
@@ -178,8 +178,9 @@ carries the ascii fallback (`....`, `~` for the review clock).
 The notices (`core.Notice`, source `swarm`) breathe once in the action indicator's row between turns, in their level's color, and commit nothing (2.11.7); before that they committed one dim line per decision in the
 transcript (SPEC_SWARM 7). Both are status-string extensions: the
 region's height-changing machinery covers them with no `live.go` line.
-News is the latest run since the previous session in this cwd that failed
-or is the job's first successful completion, one dim line, read-only.
+There is no session-start news line: `WithNews` was cut with the rule
+that the frontend reads no store (SPEC_TUI), and a phase's own thinking
+is what fills the row now.
 
 ## theme
 
@@ -206,16 +207,19 @@ file and the key.
 ## the key table
 
 Enter submits (steers when a turn is live: the slot plus the interrupt;
-accepts the menu's selection into the input when the menu is open, never
-dispatching), Ctrl-C ends the session (interrupting a live turn first),
+with the completion menu open it accepts the selection into the input —
+never dispatching — but only after a navigation keystroke, so an Enter
+on a menu nobody moved still runs what was typed), Ctrl-C ends the session (interrupting a live turn first),
 Ctrl-D is delete with text and session end at an empty prompt, Ctrl-T
 toggles subsequent reasoning, Tab cycles the completion menu's selection
 down (and completes a single candidate plus its trailing space), Shift-Tab
 (CSI Z) steps it up, arrows and home/end move the cursor, backspace and
-CSI-3~ delete, up/down walk the in-memory history, bracketed paste is
-stripped to a plain byte stream so pasted newlines become ordered prompts
-(the burst rule), and every unrecognized control or CSI sequence is
-consumed and ignored. Esc, outermost first: a pager open closes the pager;
+CSI-3~ delete, up/down walk the in-memory history, bracketed
+paste mode is on at start (`?2004h`) so a paste arrives as one held
+line: its newlines and tabs are literal text (a pasted Enter is `⏎` on
+the row, not a submit, and one paste never dispatches a queue of
+prompts), and every unrecognized control or CSI sequence is consumed and
+ignored. Esc, outermost first: a pager open closes the pager;
 else a menu open closes the menu (the input keeps its text); else Esc
 cancels the prompt whole (the reader names a lone Esc by the grace
 window, a sequence's bytes arriving in one burst).
@@ -228,9 +232,14 @@ with name, outcome glyph, and duration. Todo and scheduler replies are
 parsed out of the tools' own reply text and re-rendered pane's way (the
 progress bar fills done plus in-progress over the capped segments); a
 reply that fails to parse commits raw, the degrade-to-CLI rule. The
-command path prints the dim echo, then the reply bytes restyled by the
-theme, and the todo and scheduler renderers are the same function on both
-doors, differing only in the opening line.
+command path prints the dim echo, then the reply in one of
+two shapes (2.11.7): the list shape, repainted by `list_render.go` with
+the ids in the dim slot and the state glyphs from the theme, or a
+one-line ack. `todo` and `scheduler` keep their own blocks, and they are
+the same functions the tool door uses, differing only in the opening
+line. The list's row budget is the terminal's: `Env.Lines` carries the
+live height into the store's `listLimit`, so a listing shows what fits
+here.
 
 ## the theme tables
 

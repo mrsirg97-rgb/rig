@@ -234,29 +234,30 @@ Rejected, named:
 
 ### 7. PLACEMENT
 
+**Amended 1.7.0 (the header): the tool surface is gone.** What ships
+today is the engine alone, imported by `tool/file` and by nothing else
+— edit's drift note is `Diff`, read's `diff: true` is `Files`. No
+`diff.New`, no root registration, no allow-list entry, no wire
+fixture: those all died with the native tool.
+
 ```
 tool/diff/
-  diff.go         the tool surface: both verbs, the canonical call, the
-                  git shell-out (files only), the diff engine, the cap;
+  engine.go       Diff: two strings in, a unified patch out; pure,
                   stdlib only
+  files.go        Files: `git diff` against HEAD, capped; the one
+                  git shell-out
   diff_test.go    the named cases (testing, PR B)
 store/state/      CanonicalArgs (the one function, decision 3),
                   RecordToolCall applying it (the one write-path
                   change), RecentToolCalls (the one named read arm,
-                  beside ListSessions and mintSeq)
-cmd/rig/main.go   the tools map gains "diff": diff.New(sdb); the
-                  WithTools list gains r.tools["diff"]
-config/settings.json  the embedded allow-list default grows by diff,
-                  and the pinned default-list test grows with it
-                  (SPEC_PYTHON's pattern)
-cmd/rig/testdata/golden_020/   the wire fixtures (oneshot, repl,
-                  runjob) regenerate with the diff entry
-frontend/tui/     at most the one toolDetail entry (decision 6)
+                  beside ListSessions and mintSeq; since `last` died
+                  in 1.7.0 it has no caller outside tests)
 ```
 
-- Registered at the root, once, at the seam: `diff.New(sdb)` takes the
-  state DB the way `todo.New(tdb)` does; the session comes from ctx,
-  so the tool takes no session argument.
+- Registered nowhere, at the seam: a library with two callers, not a
+  tool. (Before 1.7.0 the root wired it once, `diff.New(sdb)`, taking
+  the state DB the way `todo.New(tdb)` did; the session came from ctx,
+  so the tool took no session argument.)
 - The freeze holds: `core/` and `loop/` byte-identical: no
   middleware, no new loop events, no command.
 - The tool description text is part of the wire and is pinned by a

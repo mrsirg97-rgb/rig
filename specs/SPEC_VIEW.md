@@ -61,7 +61,8 @@ line, and the bytes stay a function of the decoded pixels.
 
 ```
 imagemarker/                     the shared contract, stdlib only
-  marker.go                      Ref, Format, Parse, BlobPath, IsMarker
+  marker.go                      Ref, Format, Parse, BlobPath, BlobsDir,
+                                 HasControl, Find, IsAddress
   marker_test.go
 tool/view/                       the tool
   view.go                        the schema, the caps, the scale, the blob

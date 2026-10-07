@@ -489,8 +489,11 @@ dataflow for result mutation).
   Reopen if lived use shows a real alternation loop.
 - Accepted consequence, named: two or more failing calls of one tool
   alternating within a turn never trip the bound (pinned by
-  `TestDriftingArgsEachGetAFreshStreak`); the loop has no per-turn round
-  cap, so that loop is bounded only by the operator's interrupt.
+  `TestDriftingArgsEachGetAFreshStreak`); at this decision the loop has
+  no per-turn round cap, so that loop is bounded only by the operator's
+  interrupt (amended by decision 9: `guard.Rounds` rides the chain and
+  caps it when settings `rounds` sets one; the default is no cap, and
+  then the interrupt stands as the bound).
 - **Cleared per turn**, via `TurnStart` (the widened seam, decision 6;
   pane's `turn_start`). A new user message is a new budget. Today the
   counter persists across turns.
@@ -669,8 +672,8 @@ the turn's end does not disturb them; the cases below are new.
 provider bug), `TestCancellationMidStream` (run context dead at the
 boundary), `TestCancellationBetweenToolCalls` (run context dead tears the
 stream down), `TestMalformedCallFedBackOnce`,
-`TestOversizedToolResultStaysIntact`, `TestAssembleErrorAbortsTurnAnd
-Recovers`, `TestUnknownToolNameFedBackOnce`, `TestMissingSeamsFailLoud`,
+`TestOversizedToolResultStaysIntact`,
+`TestAssembleErrorAbortsTurnAndRecovers`, `TestUnknownToolNameFedBackOnce`, `TestMissingSeamsFailLoud`,
 `TestDuplicateToolNamesPanic`, `TestDenialIsFedBackAndBounded`,
 `TestToolFailureIsBoundedAndRecoverable` (the note lands on the bound-th
 failure, which the case does not assert; the refusal and the counts are
@@ -679,8 +682,10 @@ asserted, and hold).
 **Unchanged** (guard): `TestRepetitionIsBoundedWithoutSilentRetry`,
 `TestSuccessfulReissuanceStaysUnbounded`,
 `TestSuccessfulReissuanceResetsTheCount`. **Named change** (guard):
-`TestDistinctCallsAreCountedSeparately` inverts, then inverts back under
-the amendment (decision 7).
+the args-digest case inverts, then inverts back under the amendment
+(decision 7); the names that held those positions left with the renames,
+and `TestDriftingArgsEachGetAFreshStreak` plus
+`TestChangedCallResetsTheCount` are the pair that holds the rule now.
 
 **New named cases** (failing first, per decision):
 
@@ -734,7 +739,7 @@ the amendment (decision 7).
 - Compat: the loop forwards `TestEvent` untouched (no accumulation, no
   ordering break); the CLI and one-shot ignore it (no output, no panic).
 
-**The 0.25.5 amendment (decision 10).** `TestLengthFinishedTruncatedToolCallArgsFault`
+**The 0.25.5 amendment (decision 10).** `TestLengthFinishedTruncatedToolCallArgsMarked`
 inverts: `TestLengthFinishedTruncatedToolCallArgsMarked` requires the
 marked call and `Done` after it, and no `Fault`. New (cutoff):
 `TestMarkedCallRefusesWithoutExecuting` (the tool never runs),

@@ -1,4 +1,67 @@
 # Changelog
+## [2.13.1]: the summarizing phase gives the row back, and the docs catch up
+
+A reactive compaction runs inside the turn — the provider faults with a
+context-length error and the decorator summarizes before retrying — and
+in that position `core.Compacting` cannot take the indicator row: the
+turn owns it, so `compacting` stays false and the phase begin falls
+through to `beginPhaseLocked` and sets `aside`. The compaction line is
+summarizing's end (2.12.1 pinned it, test included), and the `Compacted`
+handler cleared `compacting` without ending the phase. `aside` is written
+in exactly two places, and nothing else clears it: after the first
+in-turn compaction the indicator painted `summarizing · <age>` for the
+rest of the session, the frame ticker restarted itself on every tick, and
+the 2.11.7 notice breath starved on its own gate — a phase owns the row,
+so no notice ever could. The fault path leaked the same way. A box with a
+decision server hid it: the next review bite's `Phase{Done}` cleared the
+stray phase by accident. Compaction had five tests and all five drove the
+idle path, where `aside` is never set.
+
+- **the phase ends when its end event arrives** (`frontend/tui`):
+  `Compacted` and `Fault` close the open phase through `endPhaseLocked`,
+  the way a reviewer's settle does. No check line joins summarizing:
+  the compaction line stays its end, and the pinned ordering tests are
+  untouched. Three tests name the invariant, one of them the breath.
+- **the specs stopped contradicting themselves** (`docs`, `specs`): the
+  audit this came out of found ~90 claims at odds with HEAD, and the
+  dominant shape was not a stale file but an amendment that landed
+  beside the clause it replaced. `todo project` was still "the binding
+  door" five releases after 2.12.0 deleted binding; SPEC_WORKERS' body
+  still ran the slot gate its own 2.6.0 amendment retired;
+  SPEC_PLUGINS' intro still put plugins on the wire that 2.8.2 folded
+  behind one door while decision 8 said otherwise in the same file.
+- **the retired concepts leave** (`specs`, `docs`): `workers.json`'s
+  presence rule (2.4.0) in SPEC_CONFIG's `Config` struct, the goals, the
+  layout and seven tests that no longer exist; the `plugins` tool and the
+  `allow` rule that now drops the name with a notice; `ls`/`find`/`grep`
+  in SPEC_CORE's layout and SPEC_MODES' approval sets; the `golden_020`
+  fixtures and the `-update` flag 2.12.3 moved to the wire job; `bind`
+  in SPEC_STATE's "verbatim" tool surface.
+- **the entry points count what the code counts** (`README.md`,
+  `AGENTS.md`, `docs/USAGE.md`): the menu's arithmetic (12 without
+  vision, 13 with, `decide` conditional, `verdict` fleet-only and missing
+  from the table), two `swarm start` examples the command refuses, a
+  layout tree missing six top-level packages, counts three releases
+  stale, 13 of 16 commands in the file an agent reads first, and no
+  build/test/gate workflow in AGENTS.md at all — nothing to warn a
+  contributor that the freeze job would refuse their PR.
+- **the embedder's example compiles** (`docs/EMBED.md`): `todo.Create`
+  takes one `CreateItem` since 2.12.4; the freeze paragraph states the
+  gate as `specs/FREEZE.txt` states it (`core/provider.go` reopened
+  2.8.3), the kernel surface is its nine options, and the retired row
+  `concurrency` token is gone.
+- **the config spec owns settings.json** (`specs/SPEC_CONFIG.md`,
+  `docs/SETUP.md`): the knobs table is `config.knownSettings`, with
+  `decisionUnit` and `trainPython` in the spec that governs them for the
+  first time; `RIG_MODEL_*_CONCURRENCY` left SETUP's overlay list (it is
+  ignored with no line), the example `allow` lost the name config drops,
+  and the knob table gained `reviewBatch`, `plugins.max` and `workers`.
+
+Named, not changed: the recorder has no case for `Notice` or `Phase`, so
+neither survives a resume — SPEC_TUI said the opposite and now says
+this; whether they should be persisted is the operator's call. The
+dashboard still ships the pre-2.4.0 `no workers configured` branch that
+the server can no longer trigger; that is a JS change for another PR.
 ## [2.13.0]: the decision model is trained from rig's own rows
 
 The rows the reviewer settles were gold labels that trained nothing:

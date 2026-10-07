@@ -67,12 +67,18 @@ every number and glyph is a reading of what the runtime already emits.
 ```
 frontend/tui/         NEW package, main module (decision 10 names the
                       module question and the rejection)
-  tui.go              the Frontend: Input, Notify, the dispatcher
-  live.go             the live region: the menu, activity, pending,
-                      input, and status rows; cursor-up redraw, width
+  shell.go            the Frontend: Input, the option set, the write
+                      gate, Close
+  notify.go           Notify: every event's transition, the live-region
+                      row building, the pager and the menu hand-off
+  frame.go            the frame ticker, the notice breath, the phase
+                      begin/end (one open phase: `aside`)
+  commands.go         the command door: dispatch, the two reply shapes'
+                      routing, the activity row
+  live.go             the live region's drawing: cursor-up redraw, width
                       handling, the one-op-one-write frame
   commit.go           committed blocks: turn text, reasoning, tool
-                      rows, command output, the usage line
+                      rows, the phase's check line
   status.go           the status line, the startup block, and the
                       snapshot's refresh points
   tools_render.go     the todo and scheduler block renderers (one
@@ -373,9 +379,10 @@ The commit points are the events, exactly:
   inherit the wave's latest start) (decision 4);
 - `Done`: the turn's text is complete, and the status line's used
   takes its `Usage` (decision 3);
-- `TurnEnd`: the usage line commits (`up 3.2k down 136 · cache r 918
-  92%`, pane's shaping) — plus `· $1.23` when the endpoint reported a
-  cost (SPEC_HOSTED 3, 1.5.0) — and the live region resets;
+- `TurnEnd`: nothing commits — the pending flow closes the way a turn
+  end does and the live region resets; the turn's usage is already in
+  the status row, where it was read while it ran (decision 3, and
+  2.12.1 closed the last ordering it left);
 - `Compacted`: the compact line commits, and the status line's used
   takes the compact's `Kept` (decision 3);
 - unknown events: ignored (the compat rule: the CLI's discipline).
@@ -496,16 +503,18 @@ long agentic turn shows its running totals and hit rate, which is
 when a cache miss is worth seeing), and the close keeps the turn's
 totals; before the first turn, the session's totals from the
 snapshot. No usage line commits per turn any more: the numbers live
-under the input, once. The live region's status is one string of newline-joined rows;
+under the input, once. The status is three rows — the model with
+`used/window` over it, `effort · role · auto|manual`, and the
+`up · down · cache r` row with `· $` on cost — and it is one string of newline-joined rows;
 the region splits and measures them (a wrapping usage row on a narrow
 terminal counts by its terminal rows, like every live row).
 
 The reprint triggers are amended to match: `/new`, `sessions resume`,
 and a `models` switch refresh the status line's snapshot (and reset
 its used number where the session did: `new`, `resume`); a
-`Compacted` no longer reprints a block at all. Between refreshes the
-per-turn usage line keeps the running numbers in the scrollback where
-they happened (decision 2, unchanged). Amended 1.5.8: the embedder
+`Compacted` no longer reprints a block at all. Nothing commits a usage
+line per turn: `RenderUsage` has no caller, and the running totals are
+read in the third status row, once, under the input (decision 3). Amended 1.5.8: the embedder
 may set `WithStatusTick(d)` — while the TUI waits for input (no turn
 streaming, no compaction), the status function is re-read every d on
 the Input loop and the region redraws only when the status rows
@@ -560,11 +569,14 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   the live region's action row is idle, the oldest takes that exact row
   as `source: text`, breathes in once on the ember's curve in its
   level's slot (`error`, `success`, or `text` for info) and is gone, the
-  next following; while a turn or a compaction owns the row they wait.
-  No new row, no height change, no second clock: the breath rides the
-  frame ticker, started for a notice on an idle row and stopped after
-  the last. The recorder and the web frontend still receive every
-  notice; the transcript is no longer where they live.
+  next following; while a turn, a phase or a compaction owns the row they
+  wait. No new row, no height change, no second clock: the breath rides
+  the frame ticker, started for a notice on an idle row and stopped after
+  the last. The web frontend renders every notice in its feed and the
+  piped frontends print theirs as `rig: source: text`; the transcript is
+  no longer where they live, and nothing persists one (2.13.1, named:
+  `Notice` has no recorder case), so a resumed session shows neither the
+  notices nor the phases.
 - A `core.Phase` (2.11.7) is a side activity the operator watches: the
   decision review's bite (`reviewing`) and compaction's summary call
   (`summarizing`). When no turn owns the row, the phase opening takes the
@@ -579,13 +591,21 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   gated the deltas before. The recorder, the web feed and the piped
   frontends still receive every delta: this is the TUI's rendering
   choice, not the event's.
-  The end commits one line, the ok glyph in `success`
-  or the fail glyph in `error`, the name dim, the note dim, and the row
-  returns to idle; waiting notices then breathe. During a live turn the
-  turn's indicator keeps the row and a phase waits, its deltas unshown,
-  except the summarizing phase, which runs inside the turn and streams.
-  Same ticker, same curve, same height. The CLI and the oneshot ignore both events (the compat rule:
-  unknown events are ignored, never misread).
+  A phase ends, and the row returns to idle: waiting notices then
+  breathe. `reviewing` ends with its settle, committing one line — the ok
+  glyph in `success` or the fail glyph in `error`, the name dim, the note
+  dim. `summarizing` has no check line of its own: the `⧉ compact` line
+  is its end (2.12.1), and since 2.13.1 `Compacted` closes the phase the
+  way a settle does, so nothing is left holding the row. A `core.Fault`
+  ends whatever phase was open — an end is an end, and a reactive
+  compaction that faults must not strand the indicator either. During a
+  live turn the turn's indicator keeps the row and a phase waits, its
+  deltas unshown, except the summarizing phase, which runs inside the
+  turn: it takes the row while the summary call is open and hands it back
+  to the turn when the compaction line lands.
+  Same ticker, same curve, same height. The piped frontends print
+  notices and ignore a phase (the compat rule: an unknown event is
+  ignored, never misread).
 
 ### 4. Tool rows
 
@@ -604,8 +624,10 @@ bash ✓ 0.4s
   first). Since 2.11.11 the unit is the row at the terminal's width, not
   the logical line: a bash result that is one 3,000-character line, a
   minified blob or a long `go test` line, is eight rows and a marker,
-  the same shape a read of a thousand short lines gets; the piped
-  frontends, which have no width, still see the whole body;
+  the same shape a read of a thousand short lines gets. The piped
+  frontends render no body at all — the CLI's tool row is name, glyph
+  and duration, the one-shot's is one line on stderr — so the width
+  question is the TUI's alone; the recorder is what keeps every byte;
 - `ToolResult` closes it: name, `✓`/`✕`, duration: a fed-back failure
   (`Err` non-nil) renders `✕` and the content stays visible: the
   refusal is the interesting part. `view` is the one tool whose body
@@ -655,10 +677,17 @@ committed history is immutable (decision 1). The transcript and the
 wire are untouched either way: this is display only.
 
 The committed prompt line is a command's only echo (a separate dim
-copy was built and removed: it doubled the line); the output commits
-as a plain block, exactly the CLI's bytes: SPEC_COMMANDS' output contracts are
-the render, restyled only by theme color. The scheduler session-start
-line (decision 6) and the startup block (decision 3) are the only
+copy was built and removed: it doubled the line). Since 2.11.7 a reply
+is one of two shapes and the painter knows no command's name: `todo`
+and `scheduler` keep their own block renderers; every other reply is
+either the list shape of SPEC_COMMANDS 13 (`RenderListBlock` re-reads
+the store's block and repaints it — ids dim, `[x]` as the theme's
+glyph, detail rows dim) or a one-line ack (`RenderReplyBlock`). The
+bytes are the CLI's in content, not in layout: the list is re-parsed
+and repainted, and its row budget is the terminal's — `Env.Lines`
+carries the TUI's height into `listLimit`, so a listing shows what fits
+here rather than a fixed dozen. The scheduler session-start line
+(decision 6) and the startup block (decision 3) are the only
 unprompted blocks.
 
 ### 6. todo and scheduler: one renderer, both doors
@@ -905,15 +934,19 @@ does not move, and the CLI never sees the menu.
   description in text, the selected row inverted. A menu row is one terminal row (decision 10: the live
   region is measured): the description takes what the width leaves
   after the name and is dotted when it overflows, never wrapped. At
-  most six rows show; the window follows the selection like the
-  input's five-row window does, and a dim `… N more` tail counts the
-  candidates past the window. Tab cycles the selection down, Shift-Tab
+  most `menuMaxRows` (8) rows show — six candidates, the dim `… N more`
+  tail when the candidates run past them, and the always-on hint row
+  `tab/↓ pick · enter runs` (SPEC_UX 5); the window follows the
+  selection like the input's five-row window does. Tab cycles the selection down, Shift-Tab
   up (CSI Z, added to the parser), the arrows step it too while the
   menu is open (the window follows the selection, so a long list
-  pages, with the menu closed the arrows stay the history), Enter
-  accepts the selection into the input; the typed prefix replaced by the candidate, a trailing
-  space, never dispatching, and Esc closes the menu until the input
-  changes.
+  pages, with the menu closed the arrows stay the history). Enter is
+  one key with two jobs, split by whether the operator has navigated:
+  after a Tab/Shift-Tab/arrow it accepts the selection into the input —
+  the typed prefix replaced by the candidate and a trailing space, never
+  dispatching — and with the menu open but untouched it dispatches what
+  was typed (SPEC_UX 5's navigation-intent rule). Esc closes the menu
+  until the input changes.
 - exactly one candidate: the ghost, today's rule: the remainder, dim,
   display only, drawn only when the cursor is at the end and the line
   fits, and Tab completes it, plus the trailing space. Enter over a

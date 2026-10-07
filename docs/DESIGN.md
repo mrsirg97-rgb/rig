@@ -74,9 +74,11 @@ Tool calls execute in batches (`specs/SPEC_EVT.md` 2a): a call the
 kernel's `Concurrent` predicate admits runs beside its admitted
 neighbours, bounded by the kernel's `Parallel` (default 8); any other
 call is a barrier in call order, and results are emitted and appended in
-the order the model asked. The root admits the pure reads (`read`,
-`web`); everything
-with effects, a store, or the shared kernel stays sequential.
+the order the model asked. The root admits the observations and the
+waits (`read`, `view`, `web`, `delegate`, `decide`, `cmd/rig`'s
+concurrent set); everything with effects, a store (`todo`, `rem`,
+`sessions`, `scheduler`), or the shared kernel (`python`, plugins)
+stays sequential.
 
 Turn-boundary semantics (the runtime's contract, enforced and tested):
 
@@ -104,22 +106,27 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 ### middleware composition
 
-The root's chain `WithMiddleware(toolset.Resolve, approve, cutoff,
-paths, perm.Plugins, perm.Allowlist, guard.Bound, guard.Rounds, guard.Cap)`
-composes **first-listed innermost**: execution reads the registration list
-in reverse, a call entering at the outermost link and unwinding inward:
+The root's chain `WithMiddleware([index.Middleware when a graph is
+wired], toolset.Resolve, approve.Gate, cutoff.Middleware, perm.Plugins,
+perm.AllowlistWithDoor, guard.Bound, guard.Rounds, guard.Cap,
+paths.Middleware, [decision.Site when proposals], [rem.Guide when
+decide])` composes **first-listed innermost**: execution reads the
+registration list in reverse, a call entering at the outermost link and
+unwinding inward (the bracketed links ride only their condition):
 
-    paths (the `~` expansion) -> guard.Cap -> guard.Rounds -> guard.Bound
-    -> perm.Allowlist -> perm.Plugins -> cutoff -> approve.Gate
-    -> toolset.Resolve -> the tool itself
+    (rem.Guide -> decision.Site ->) paths (the `~` expansion)
+    -> guard.Cap -> guard.Rounds -> guard.Bound -> perm.Allowlist
+    -> perm.Plugins -> cutoff -> approve.Gate -> toolset.Resolve
+    -> [index.Middleware] -> the tool itself
 
 This is a deliberate inversion of the common `http.Handler` convention:
 the bound sits outside the denial so a denied call still counts toward
 the streak, the path expansion happens before any rule sees a
 path-shaped argument, the cutoff link (SPEC_HARDENING 10) refuses a
 provider-marked cut call before the operator is asked to approve it, and
-the resolve sits innermost so the live table's plugin tool executes under
-every bound.
+the resolve sits innermost of the policy links (the graph tap, when a
+graph is wired, sits inside it) so the live table's plugin tool executes
+under every bound.
 
 ### guard semantics (`middleware/guard`)
 
@@ -219,10 +226,15 @@ and the loop never names a concrete type.
 
 ## constraints
 
-- **Stdlib-only core.** `core/` and `loop/` carry no dependencies: a leaf
-  dependency is justified in its spec first. The store's one is
-  `modernc.org/sqlite` (pure-Go driver, `specs/SPEC_STATE.md`); everything
-  else; providers, tools, middleware, frontends; is stdlib.
+- **Stdlib-only core.** `core/`, `loop/` and `evt/` carry no
+  dependencies: a leaf dependency is justified in its spec first. The
+  store's one is `modernc.org/sqlite` (pure-Go driver,
+  `specs/SPEC_STATE.md`); five more sit at the edges: `golang.org/x/image`
+  at `tool/view`, `golang.org/x/sys` at `tool/bash` (and a
+  `frontend/tui` pty test), `golang.org/x/term` and
+  `mattn/go-runewidth` at `frontend/tui`, and `golang.org/x/crypto` at
+  `cmd/rig`'s updater. Every other provider, tool, middleware and
+  frontend is stdlib.
 - **Closed, typed seams.** Dependencies are compile-time explicit: nothing is
   loaded, discovered, or reflected at runtime. Unknown at a seam is a loud
   error, never a guess.

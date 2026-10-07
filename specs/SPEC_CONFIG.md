@@ -22,14 +22,18 @@ TDD.
   the same way, once, before any store is opened or seam wired. The
   worker the runner spawns is a `rig -p`, so it inherits the same load
   in its own cwd; a job inherits its cwd's `AGENTS.md` (6).
-- The files, one home: `models.json`, `settings.json`, `workers.json`,
-  and `theme.json` (reserved) under the rig home (11: `~/.rig`,
-  `$RIG_HOME` over it); the same home the stores use (`sessions/`,
-  `todo/`, `rem/`, `scheduler/` next to the files) and the plugins'
-  `plugins/` (`specs/SPEC_PLUGINS.md`); plus `AGENTS.md`, global
-  there, project in `<cwd>`. `workers.json` names the worker fleet
-  (12): its presence is what registers the worker tools (`delegate`,
-  `scheduler`); absent, there are no workers and no worker tools.
+- The files, one home: `models.json`, `settings.json` and
+  `theme.json` under the rig home (11: `~/.rig`, `$RIG_HOME` over it);
+  the same home the stores use (`sessions/`, `todo/`, `rem/`,
+  `scheduler/` next to the files), the plugins' `plugins/` and the
+  trainers' `train/` (`specs/SPEC_PLUGINS.md`, SPEC_DECISION 2.13.0);
+  plus `AGENTS.md`, global there, the project's nearest one walking up
+  from the workspace to the repo root (2.11.8). `workers.json` is
+  retired (2.4.0): a present file is read only to say
+  `workers.json retired: the fleet is the resident model` once at
+  start, and its content is never interpreted. Nothing about it
+  registers a tool anymore — the scheduler registers on every path and
+  `delegate` follows the wiring (SPEC_WORKERS 4).
 - The models table out of code: `models.Defaults` becomes an embedded
   default `models.json` (go:embed); the user file merges over it row by
   row; `RIG_MODEL_*` env still wins for the active id (4). Amended by
@@ -92,10 +96,10 @@ config/               NEW leaf (stdlib + models, nothing else):
                       the refusal voice
   modelsfile.go       the models.json parse, the row-by-row overlay
                       over the embedded table
-  workers.go          the workers.json parse (12: the fleet; model
-                      required, slots default 1, reviewer optional),
-                      the id resolution over the merged table, the
-                      allow-default growth
+  workers.go          the retirement: the presence check and its one
+                      notice (2.4.0), and the default-allow growth that
+                      appends scheduler and delegate when the operator
+                      wrote no allow key
   agents.go           the AGENTS.md pair (global + project)
   theme.go            the theme.json read (raw; 10 owns the schema)
   settings.json       EMBED: the embedded settings; the 0.2.0 flag
@@ -143,27 +147,27 @@ func Load(dir, cwd string) (*Config, error)
 type Config struct {
 	Settings Settings
 	Models   models.Table // file rows over embedded rows, checked (4)
-	Workers  *Workers     // the fleet (12); nil when workers.json is
-	                   // absent; no workers, no worker tools
-	Agents   string       // global then project, "\n\n"-joined, empty
-	                   // segments skipped; "" when neither (6)
+	Agents   string       // the operator's file alone (6); the project's
+	                   // nearest AGENTS.md walks up from the workspace
+	                   // to the repo root and rides separately
+	                   // (ProjectAgents, 2.11.8), joined at the root
 	Theme    json.RawMessage // theme.json as written; nil when absent (7)
+	Notices  []string     // what start says once and then ignores:
+	                   // workers.json present, a retired models row
+	                   // key, defaultJobModel, an allow-named `plugins`
+	                   // (2.4.0, 2.8.2, 2.12.11)
 }
 
-// Workers: the worker fleet (12). Model is a row id of the merged
-// models table (required; the id must resolve there or start refuses,
-// naming the file and the missing id). Slots is how many delegates
-// may run at once per session (SPEC_DELEGATE 6), default 1.
-type Workers struct {
-	Model string
-	Slots int
-}
+// There is no Workers type. 2.4.0 retired workers.json, and with it
+// the fleet's shape: the fleet is the resident model, the switch is
+// settings `workers`, and what gates the pair is cmd/rig's fleetWiring
+// (SPEC_WORKERS 4), not a config type.
 
-// Settings: the existing knobs by their env names, lowerCamel
-// (RIG_BASE_URL -> baseUrl). defaultJobModel is cut (12): the
-// scheduler's default job model moved to workers.json's model; a
-// settings.json that still carries the key refuses at start naming
-// the move, its presence the refusal (no silent honoring).
+// Settings: the knobs by their env names, lowerCamel (RIG_BASE_URL ->
+// baseUrl), one field per known key (the table above is the list).
+// defaultJobModel has no field: the legacy key is read only to name
+// itself once and be ignored, held as an unexported string beside the
+// flag that says it was present.
 // WebFetchProxy and Trafilatura are presence-aware: their empty value
 // is a choice (direct egress, the stdlib pass); 0.2.0's documented
 // "set empty" env semantics, extended to the file layer (2, 5).
@@ -199,21 +203,35 @@ The embedded defaults (the move is exact; 0.2.0's values):
   "baseUrl": "http://127.0.0.1:8090/v1",
   "model": "local",
   "system": "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, start one before working on it, complete or fail it when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left.",
-  "allow": ["bash", "read", "write", "edit", "ls", "find", "grep", "todo", "rem", "scheduler", "python", "web"],
+  "allow": ["bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "decide", "plugin", "sessions"],
   "retries": 3,
+  "rounds": 0,
+  "resultCap": 65536,
+  "approve": "auto",
+  "sandbox": "jailed",
+  "sandboxBinds": [],
   "searxngUrl": "http://127.0.0.1:8888",
   "webFetchProxy": "http://127.0.0.1:8889",
   "swapUrl": "http://127.0.0.1:8090",
-  "defaultJobModel": "qwen3.8-workers"
+  "updateKey": "…"
 }
 ```
+The embedded file carries no `model` and no `defaultJobModel` (2.4.0
+cut the model default; a run naming no model refuses at start) and no
+worker row: the operator's file is the table (2.12.11).
 
 (`python` and `trafilatura` are absent: no default, as in 0.2.0.)
 
-Amended by 12: the embedded `allow` loses the two worker tools
-(`scheduler`, `delegate`; they register only when `workers.json` is
-present, and the default allow grows by them then), and
-`defaultJobModel` is cut (moved to `workers.json`'s `model`).
+Amended by 12 and then by 2.4.0 and 2.8.2: the embedded `allow` carries
+twelve names — `ls`, `find` and `grep` left with the fs tool, `view`
+and `decide` and `plugin` and `sessions` joined — and `scheduler` and
+`delegate` are appended by `appendWorkerTools` exactly when the
+operator wrote no `allow` key. `defaultJobModel` is cut: a settings
+file that still carries it says `defaultJobModel moved to model — the
+fleet is the resident model; delete the key` once at start, and the
+value is ignored (it is a notice, not the refusal this spec once
+promised: a key that nags and ignores is kinder than one that bricks a
+session over a rename).
 
 `config/models.json`:
 
@@ -232,8 +250,9 @@ SETUP's example row and the tests' own rows carry them.
 
 (No `role` / `effort`: the field defaults apply; `interactive`, the
 policy's `medium`.) Amended by 12: the `qwen3.8-workers` row is cut:
-the worker's model is the operator's (named by `workers.json`, defined
-by the operator's `models.json` row), not a row baked into the binary.
+the worker's model is the operator's — the resident model the swap
+reports, or the row the session named — not a row baked into the binary
+and not a name in a file nobody reads twice.
 
 ## decisions
 
@@ -496,7 +515,7 @@ env names**, lowerCamel of the env minus the `RIG_` prefix:
 | `baseUrl`       | `RIG_BASE_URL`      | `http://127.0.0.1:8090/v1`         |
 | `model`         | `RIG_MODEL`         | (none: no default; a run without one refuses at start, naming the ways to set it) |
 | `system`        | `RIG_SYSTEM`        | rig's default system prompt        |
-| `allow`         | `RIG_ALLOW`         | the 13-tool default list           |
+| `allow`         | `RIG_ALLOW`         | the embedded 12 names; `scheduler` and `delegate` join where the operator wrote no `allow` key at all (14), and `plugins` is dropped from an operator list with a notice (2.8.2) |
 | `retries`       | `RIG_RETRIES`       | `3`                                |
 | `python`        | `RIG_PYTHON`        | (none: the default interpreter)    |
 | `searxngUrl`    | `RIG_SEARXNG_URL`   | `http://127.0.0.1:8888`            |
@@ -504,11 +523,31 @@ env names**, lowerCamel of the env minus the `RIG_` prefix:
 | `trafilatura`   | `RIG_TRAFILATURA`   | (none: auto; presence key)        |
 | `swapUrl`       | `RIG_SWAP_URL`      | `http://127.0.0.1:8090`            |
 | `reviewBatch`   | —                   | `3` (2.9.4: rows per review fire, SPEC_DECISION; 2.11.0 lowered the default from 10: a bite is a glance at the queue mid-work, three at most; `0` leaves the reviewer off; a negative or non-integer refuses) |
+| `rounds`        | `RIG_ROUNDS`        | `0` = no cap (2.5.x, SPEC_HARDENING 9: the turn's tool-call cap; invalid refuses loudly) |
+| `resultCap`     | `RIG_RESULT_CAP`    | `65536` (the wall on every tool result, guard.Cap) |
+| `approve`       | —                   | `auto`; `manual` pauses every mutating call for the operator's y/n (SPEC_MODES) |
+| `sandbox`       | —                   | `jailed`; `landlock` or `off` (SPEC_SANDBOX 1, 6) |
+| `sandboxBinds`  | —                   | none; absolute paths, ro-bound unless suffixed `:rw` |
+| `plugins`       | —                   | the object; `plugins.max` caps the live plugin set, over-cap loads are skipped naming the cap |
+| `theme`         | —                   | the shipped preset name or `custom` (the TUI owns the vocabulary; `SetTheme` is the key's one writer) |
+| `decisionUrl`   | `RIG_DECISION_URL`  | none; a set URL proposes a risk row per bash call and joins `decide` to the menu (SPEC_DECISION) |
+| `decisionUnit`  | —                   | none; the systemd user unit whose one `Environment=` line names the served checkpoint — the only file a promotion rewrites (2.13.0) |
+| `trainPython`   | —                   | none; the `train/` zone's own interpreter (torch is two gigabytes and does not belong in the session kernel); a run without it refuses naming the key (2.13.0) |
+| `updateKey`     | `RIG_UPDATE_KEY`    | the embedded pinned release key (SPEC_BUILD 5) |
+| `workers`       | —                   | on; `false` turns the worker pair off (it replaced `workers.json`, 2.4.0) |
+| `defaultJobModel` | —                 | the one legacy key that stays *known* so an old file loads: named once at start, ignored, no field, no migration |
 
-Shapes: `allow` is a **JSON array of tool names** in the file (the env
-stays CSV; the 0.2.0 env surface is unchanged); the rest are strings
-or the integers `retries` and `reviewBatch`. `allow`'s array elements
-are strings; a non-string refuses (`allow[2]: …`).
+The table is `config.knownSettings`: a key outside it refuses at start
+naming itself and the known set — the file is a contract, not a
+filter.
+
+Shapes: `allow` and `sandboxBinds` are **JSON arrays** in the file (the
+env stays CSV for `allow`; the 0.2.0 env surface is unchanged);
+`retries`, `rounds`, `resultCap` and `reviewBatch` are integers;
+`workers` is a bool and `plugins` an object; the rest are strings.
+`webFetchProxy` and `trafilatura` are presence-aware — their empty
+value is a choice (direct egress, the stdlib text pass). `allow`'s
+array elements are strings; a non-string refuses (`allow[2]: …`).
 
 Amended (0.25.6): `model` carries no embedded value — a run that
 resolves no model refuses at start, naming `--model`, `RIG_MODEL`, and
@@ -660,7 +699,10 @@ byte-identically to 0.2.0.** Stated once, tested per entry mode:
   AGENTS.md, no guidelines participant), the model, the tools spec
   (including the scheduler description's `Default model:
   qwen3.8-workers`), the messages. A golden fixture pins the exact
-  bytes (`TestNoUserFilesIsByteIdenticalToV020/repl`).
+  bytes: `scripts/wire-check` renders this request at the merge-base and
+  at the head and posts the diff (2.12.3 moved the pins out of the suite;
+  the stored goldens and the `-update` flag are gone), and `TestWireDump`
+  keeps the render deterministic in-tree.
 - **`-p` one-shot**: the same, over the one-shot path (subtest
   `oneshot`); stdout is the assistant text only, as 0.2.0.
 - **`run-job`**: the worker's **argv** is 0.2.0's
@@ -905,12 +947,15 @@ case names one, the built binary for the e2e.
 - `TestMergeOverAnEmptyTableIsTheOperatorsTableVerbatim`,
   `TestMergeOfAnEmptyFileOverAnEmptyTableIsAnEmptyTable`: the shipped
   shape — an empty embedded table merged with the operator's file.
-- `TestModelsMergeViolationRefuses`, `TestMergeRowViolationNamesTheIdAndClause`:
-  a row that breaks `Reserve < Window`, from the file and from an
-  overlay: the refusal names the file, the id, the clause.
-- `TestAgentsGlobalThenProject`: global `G` + project `P` →
-  `"G\n\nP"`; `TestAgentsProjectOnly`, `TestAgentsGlobalOnly` (each
-  alone, no stray blank line).
+- `TestMergeRowViolationNamesTheIdAndTheClause` and
+  `TestMergeRowViolationOnANewRowNamesTheIdAndTheClause`: a row that
+  breaks `Reserve < Window`, from the file and from an overlay: the
+  refusal names the file, the id, the clause.
+- `TestAgentsIsTheOperatorsFileAlone`: `Config.Agents` is the rig home's
+  `AGENTS.md` and nothing else; the project's file is a separate read —
+  `TestProjectAgentsReadsTheWorkspacesOwnFile`,
+  `TestProjectAgentsWalksUpToTheRepoRootAndNoFurther` (2.11.8) — joined
+  at the root, where the system prompt is assembled, not in the leaf.
 - `TestAgentsUnreadableRefuses`: `chmod 000` (skipped when running
   root): the voice names the path; `TestAgentsDirectoryRefuses`; a
   directory named `AGENTS.md`: the `is a directory` refusal.
@@ -918,38 +963,28 @@ case names one, the built binary for the e2e.
   document round-trips, as written), `TestThemeMalformedRefuses` (the
   decoder's reason, the path).
 
-**workers (12):**
+**workers (retired 2.4.0):**
 
-- `TestWorkersAbsentIsNoWorkers`: no file: `Config.Workers` is nil,
-  the default allow is the 13 non-worker natives (the two worker tools
-  absent from the default allow-list).
-- `TestWorkersFileNamesTheFleet`: `{"model": "local"}`:
-  `Workers{Model: "local", Slots: 1}` (slots defaults to 1); the
-  default allow grows to the 15 natives (the two worker tools present).
-- `TestWorkersModelIsRequired`: `{}` and `{"slots": 1}` refuse
-  naming the missing `model`; `{"model": ""}` refuses the same.
-- `TestWorkersModelMustResolveInTheTable`: `{"model": "brain"}` with
-  no `models.json` row refuses loud, naming the file, the missing id,
-  and the table's known ids, with a `models.json` row for `brain` the
-  load succeeds and `Workers.Model` is `brain`.
-- `TestWorkersSlotsValidation`: `slots: 2` is kept; `slots: 0`,
-  `slots: -1`, and `slots: "two"` each refuse naming the value.
-- `TestWorkersUnknownKeyRefuses`: the voice names the unknown key
-  with the known list (`model`, `slots`).
-- `TestWorkersAllowGrowsOnlyOverTheDefault`: a `workers.json` plus
-  an operator `allow` (file): the operator's list stands as written
-  (no worker tools appended when the operator narrowed); the env
-  `RIG_ALLOW` and `-allow` layers stand likewise.
-- `TestDefaultJobModelMigratesOnceIntoWorkersJSON`: a
-  `settings.json` carrying `defaultJobModel` and no `workers.json`
-  mints the fleet file with that model once (the notice names the
-  mint), and the second start ignores the key with a notice;
-  `…DisagreeingWithTheFleetRefuses`, `…UnknownToTheTableRefuses`
-  (nothing minted), `…EmptyDefaultJobModelIsANotice`.
-- `TestEmbeddedDefaults` (amended): the embedded allow is the 17
-  non-worker natives, the embedded table carries no rows at all
-  (2.12.11: not even `local`), and the embedded settings carry no
-  `defaultJobModel` key.
+- `TestWorkersFileIsReadIgnoredAndNamedOnce`: a present
+  `workers.json` yields the one notice and nothing else.
+- `TestWorkersContentIsNeverInterpreted`: `{}`, `{"model": "brain"}`,
+  malformed JSON — the same one notice either way; the content is
+  never parsed, so it cannot refuse.
+- `TestWorkersRetirementJoinsTheOtherNotices`: the notice rides
+  `Config.Notices` beside the retired row key and the `allow`-named
+  `plugins`.
+- `TestSettingsWorkersIsATriState`: absent is on; `false` is the
+  switch the fleet reads; a non-bool refuses by name.
+- `TestAllowNamingPluginsIsDroppedAndNamedOnce` (2.8.2): the name
+  leaves the list and the notice says where it went.
+- `TestDefaultJobModelLegacyKeyIsNamedAndIgnored`: the key reads into
+  no field and says once where it moved, and
+  `TestDefaultJobModelUnknownToTheTableIsStillOnlyNamed` says the same
+  whether or not the named model resolves — it is a notice, never a
+  refusal, and nothing is minted (no code writes `workers.json`).
+- `TestDefaultJobModelStaysInTheKnownList`: the key remains in
+  `knownSettings`, so an old file loads and the unknown-key voice
+  still lists it.
 
 **models:**
 
@@ -975,10 +1010,11 @@ case names one, the built binary for the e2e.
 
 **cmd/rig (root + e2e, scratch homes, scripted provider):**
 
-- `TestNoUserFilesIsByteIdenticalToV020`: subtests `repl` /
-  `oneshot` / `runjob` against the golden request-body fixtures
-  (9): the exact bytes, the worker argv, the refusal voice for an
-  unknown model id. The fixture asserts the request carries the
+- `TestWireDump` (+ the wire job): the `repl` /
+  `oneshot` / `runjob` request bodies, rendered at the merge-base and at
+  the head and diffed by `scripts/wire-check` (the golden fixtures and the
+  `-update` flag went in 2.12.3): the exact bytes, the worker argv, the
+  refusal voice for an unknown model id. The fixture asserts the request carries the
   session section (its bytes are the run's cwd and home, so the
   compare strips the section first).
 - `TestPrecedenceFlagOverEnvOverFileOverEmbedded`: one key
@@ -1009,9 +1045,10 @@ case names one, the built binary for the e2e.
 - `TestRowEnvBeatsFileForActiveID`: a file row for the active id
   plus `RIG_MODEL_WINDOW`: the in-effect row (and the `/models` line)
   carries the env's window; the file row lists under its id (4).
-- `TestDefaultJobModelFromSettings`: `scheduler create` with no
-  model: the job row and the reply carry the file's
-  `defaultJobModel`; the tool description names it (5).
+- `TestCreateWithoutModelStoresTheUnnamedJob`: `scheduler create` with
+  no model stores the job *unnamed* — nothing is filled in from settings
+  at create time — and the model resolves at fire time to the resident
+  (`defaultJobModel` and its create-time copy are gone, 2.4.0).
 - `TestMalformedConfigRefusesBeforeStores`: a malformed
   `settings.json`: exit 1, the voice, and no state store created
   (the refusal is before any store, 3).
@@ -1082,10 +1119,10 @@ PR A carries this spec file only; the diffs below land with PR B.
   create form when the fleet is absent; the create door fills the
   fleet's model and the same refusal gates the POST (the view's
   refusal).
-- **SPEC_COMMANDS**: the `/scheduler` command refuses by name when the
-  fleet is absent (`scheduler: no workers configured (…)`); the
-  command is tool-backed, so the refusal is the tool's absence plus
-  the fleet's absence named.
+- **SPEC_COMMANDS**: `/scheduler` is tool-backed and the tool is always
+  registered, so the only refusal the command adds is the generic
+  no-tool voice. The fleet's presence no longer decides which tools
+  exist (2.4.0); `workers` in `settings.json` decides the worker pair.
 - **docs/SETUP.md**: the config files section (the four files, the
   locations, the precedence rule, the refusal voice, the AGENTS.md
   order and the worker semantics, `theme.json` reserved for 10); the

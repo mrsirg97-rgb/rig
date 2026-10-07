@@ -24,11 +24,16 @@ stdio; no third-party Go client.
 - No loop change: no new events, no middleware, no hooks. Kernel teardown
   until deliverable 7's hooks is one `Close()` call at the root.
 - No new dependencies. `go.mod` is unchanged.
-- No parallel tool execution (the loop stays sequential in v1): the kernel
+- No parallel tool execution (amended: the loop now runs a bounded
+  concurrent batch, SPEC_EVT 2a — `loop/batch.go`, `rig.DefaultParallel`
+  8 — and python is deliberately not in the admitted set: the root keeps
+  it a barrier beside the mutating calls, `cmd/rig/reap.go`). The kernel
   client is still safe under concurrent `Exec` (queue plus id routing),
   which pane's tests exercise directly.
-- No Go-side output cap beyond the host's: the wire protocol already
-  clips every stream.
+- No Go-side output cap beyond the host's (amended: superseded; every
+  tool result, python's included, passes `guard.Cap` before it reaches
+  the transcript — settings `resultCap`, 64 KiB default, SPEC_HARDENING
+  9). The host's 16000-char per-stream clip rides inside that wall.
 
 ## layout
 
@@ -121,10 +126,14 @@ default path and keeps it.
 - **Unwritable stdin fails fast.** A write to a dead kernel's pipe
   (EPIPE) returns `kernel is not writable: ...` immediately; the timeout
   is not waited out (pane's named case).
-- **Cancellation gives up the reply, not the kernel.** A cancelled ctx
-  drops the call's pending id and returns the context error; the cell may
-  still finish inside the kernel and state survives. The timeout is the
-  only deliberate restart trigger, plus deaths.
+- **Cancellation tears down the kernel it interrupts** (amended 0.23.1;
+  the original — give up the reply, keep the kernel, state survives — left
+  a busy cell holding the kernel: the poison). A cancelled ctx takes an
+  already-arrived reply; otherwise it drops the call's pending id and
+  restarts the kernel: group SIGKILL, all variables gone, the next call
+  starts on a fresh kernel (`TestInterruptTearsDownTheBusyKernel` pins
+  it). The deliberate restart triggers are the timeout and the interrupt,
+  plus deaths.
 - **Voices are pane's verbatim**, including the rounding: the timeout
   message rounds ms to seconds half-up (1500ms reads "2s") and says the
   kernel will be restarted on the next call with all variables gone.
