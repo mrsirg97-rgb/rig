@@ -417,10 +417,11 @@ fake `Swarm` seam.
   replaces it before it runs — the newest truth is the whole truth
   (SPEC_EVT 8).
 - `TestADelegatePutsNoDeadlineOnTheSpawnSoALongWorkerReturns`,
-  `TestAnInterruptedTurnCancelsTheWorkersSpawnContext`,
-  `TestAnInterruptedTurnKillsTheWorkersProcessTree` and
+  `TestTheTurnsContextDoesNotRuleTheWorkerButTheSessionsDoes`,
+  `TestTheIdleInterruptKillsTheWorkersProcessTree` and
   `TestDelegateSecondFanOutOnASingleSlotSendsAndWaits` (tool/delegate):
-  the delegate carries no clock (2.12.7) and the interrupt is the bound;
+  the delegate carries no clock (2.12.7), and since 2.14.0 the bound is
+  the session or the idle interrupt, never the turn;
   the byte observer (`Observe`) went to the room's heartbeat in 2.11.0.
   The remaining default paths (skip, nil observer,
   background context) are unchanged.

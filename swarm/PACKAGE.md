@@ -43,7 +43,11 @@ everything the supervisor says is a `broadcast` message.
   member (`DelegateInput.Member`): the child heartbeats on the fleet
   pipe and `Delegate` publishes each frame as the worker, so the
   supervisor's handler on the loop stamps the worker and emits a status
-  without reading a byte. No stream file is written: the run log is the
+  without reading a byte. Since 2.14.0 a frame may be a bounded
+  `core.ToolStart` rather than a beat: the handler records it as the
+  worker's last call (`Tool`/`ToolAt` on the row and on the snapshot),
+  which is what the band's call row shows — the name and one short
+  argument, never a body. No stream file is written: the run log is the
   worker's bytes.
 - `Opts.Delegate` is the spawn seam (default `sched.Delegate`): the
   tests drive the controller with a fake; the wiring passes nothing.

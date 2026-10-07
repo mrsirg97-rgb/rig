@@ -51,7 +51,7 @@ no quorum. Imports `core` and `evt` only.
 - `encode.go`: the JSON `Encoder` for a transport that crosses a
   process: the frame is origin, ok, kind, payload, and the kind names
   the `core` event (`notice`, `swarm_status`, `verdict`, `phase`,
-  `reasoning`); an event with no kind refuses to cross, an unknown kind
+  `reasoning`, `tool_start`); an event with no kind refuses to cross, an unknown kind
   refuses to land. A worker's `ReasoningDelta` crosses as itself; the
   member that minted the worker's voice is the one that names what it is
   thinking about.

@@ -282,9 +282,24 @@ the same idea and folded into `Notice` in 2.11.0. A worker's
 the worker's member, and the swarm reviewer and the decision bite
 settle from the room, never by scraping stdout. 2.11.7 named what the
 frontend member delivers: only what a frontend renders — `Notice`,
-`SwarmStatus` and `Phase` — so a worker's raw thinking never reads as
-the session's own; `Phase` reaches the room beside them, and the
-compaction policy and the reviewer are its two emitters.
+`SwarmStatus`, `Phase` and, since 2.14.0, `WorkerDone` — so a worker's raw
+thinking never reads as the session's own; `Phase` reaches the room beside
+them, and the compaction policy and the reviewer are its two emitters.
+
+2.14.0 (the delegate lets go) reopened the seam with three additions and no
+edit, each of them the thing a consumer would otherwise re-derive:
+`WorkerDone` — a delegated worker's return, deliberately *not* a `Snapshot`,
+because returns accumulate instead of overwriting and two of them must not
+collapse into one turn's input; `SwarmWorker.Tool` and `SwarmWorker.ToolAt`
+— the last call a running worker is in and when it arrived, so the band
+shows the batch's most recent call and ages it against the paint rather than
+against a clock the frontend would have to keep; and `ToolStart.BoundedCall`
+— the reader for a call that crossed a fleet transport, where the wire
+guarantees a name and one short argument and a body never crosses. The
+publisher of the bounded form is `frontend/oneshot` (the worker process, the
+only one that has the body); the role string on the worker rows is what
+tells the delegate's band from the swarm's, since a `SwarmStatus` carries no
+origin and a frontend never sees the sender.
 
 A `ToolCallEvent` is emitted for every accumulated call. A call whose args
 are invalid when the stream ends carries `Cut` set to the finish reason

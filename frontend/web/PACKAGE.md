@@ -24,6 +24,17 @@ the Apple meta tags, safe-area insets).
 
 ## What it includes
 
+- **The worker inbox** (`inbox.go`, 2.14.0): `core.WorkerDone` appends to
+  an inbox, publishes a `worker_done` frame the moment it lands (the feed
+  shows a return as it shows a notice), wakes `Input`, and drains at the
+  top of `Input` as `core.WorkerBlock`, the same text the other frontends
+  fold. The stop
+  button, with no turn to interrupt, calls `Options.StopWorkers` (the
+  root wires the delegate's `StopAll`): the interrupt gesture stops the
+  workers, and a session with no delegate has no hook and behaves as it
+  did.
+
+
 - **The chat** (`chat.go`, SPEC_SERVE 17): the frontend seam over HTTP.
   `Input` blocks on the prompt channel the way the CLI blocks on stdin;
   `POST /api/chat {text}` feeds it: a `/command` dispatches at once

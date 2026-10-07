@@ -12,6 +12,14 @@ seam (SPEC_HARDENING decision 4, SPEC_COMMANDS 2).
 
 ## What it includes
 
+- **The worker inbox** (`inbox.go`, 2.14.0): `core.WorkerDone` events
+  append to an inbox and wake `Input`; the inbox drains at the top of
+  `Input`, ahead of the steer slot, as one block in arrival order, and a
+  drain with nothing live starts a turn of its own. Each return prints
+  its head line (`WorkerDone.Head`) — the terminal sees what the model was
+  told; the worker's log holds the rest. The block is `core.WorkerBlock`,
+  the one text all three frontends fold, so what the model reads does not
+  depend on where it was sitting.
 - **Input**: the blocking pull: the steering slot delivered before
   blocking, the command dispatch consumed inside Input, blank lines as
   no-ops, EOF ending the REPL, a cancelled context surfacing its error.

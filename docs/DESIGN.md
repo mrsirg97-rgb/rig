@@ -75,8 +75,8 @@ kernel's `Concurrent` predicate admits runs beside its admitted
 neighbours, bounded by the kernel's `Parallel` (default 8); any other
 call is a barrier in call order, and results are emitted and appended in
 the order the model asked. The root admits the observations and the
-waits (`read`, `view`, `web`, `delegate`, `decide`, `cmd/rig`'s
-concurrent set); everything with effects, a store (`todo`, `rem`,
+waits (`read`, `view`, `web`, `decide`), and the hand-off
+(`delegate`, 2.14.0 — `cmd/rig`'s concurrent set); everything with effects, a store (`todo`, `rem`,
 `sessions`, `scheduler`), or the shared kernel (`python`, plugins)
 stays sequential.
 

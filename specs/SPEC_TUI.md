@@ -559,9 +559,34 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   the rule is four `·` cells (`....` under the ascii set), `+` stays
   `+`, `⧗` falls back to `~`, `✓`/`✕` are the tool rows' glyphs
   (`v`/`[x]` under ascii).
-- A delegate shows the worker row only: its snapshot carries the one
-  in-flight worker and zero queue counts, and the band is the rule plus
-  one row.
+- A delegate's band is two rows, and they are the *same two rows* for
+  ten workers as for one (2.14.0). Its snapshot stamps `delegate` as
+  the worker's role — the role string is the only thing that tells the
+  two publishers of `core.SwarmStatus` apart — and the band renders
+  from it, under the cache row and the status rows:
+
+      delegating · 3 workers · 1m12s
+      #2 edit tool/file/edit.go · 12s
+
+  the head counting the batch and the time since its first spawn (one
+  worker reads `1 worker`), the second row the most recent call across
+  all of them — the worker's number, the tool, the first argument line,
+  and that call's age — `—` until a worker has called. Nothing per
+  worker is listed: the band summarizes a batch the operator is not
+  watching worker by worker, and the tally that the swarm's rows carry
+  has always been the swarm's own. Two bounds are new and are the only
+  new numbers: the argument preview is cut at 80 characters, and the
+  band is two rows.
+- The band breathes while a batch runs, during a turn or between turns.
+  Between turns nothing else repaints, so a running delegate batch keeps
+  the frame ticker alive on its own; when the batch empties the ticker
+  stops and the rows go. The ages the rows show are computed at paint
+  from the snapshot's own stamps (`Heartbeat`, and the call's `ToolAt`),
+  so no new clock is added to render them.
+- A worker that returns is not a notice and not an interrupt: it folds
+  into the head of the next user turn (SPEC_DELEGATE 8), and what the
+  transcript shows at that boundary is that block — the head line per
+  worker, then the content the model was handed.
 - `core.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) is the
   decision-point notice SPEC_SWARM 7 names. Through 2.11.6 a notice
   committed one dim line in the transcript. Since 2.11.7 no notice
@@ -916,6 +941,14 @@ interrupt's). No steer is queued: stopping is not saying something.
 Esc precedence, outermost first, amended: a pager up closes the
 pager; else a menu open closes the menu (the input keeps its text);
 else Esc cancels the prompt whole, as before.
+
+Amended again (2.14.0, SPEC_DELEGATE 8): the interrupt rung gains a step
+below the turn. On an empty prompt with no turn live, Esc stops every
+running delegated worker — the gesture the operator reaches for when the
+thing still working is not the thing they interrupted — and falls back to
+clearing the prompt when the session has no delegate to stop. It is not
+a quit: a second Esc does nothing further, and the worker's own return
+still arrives, naming the interrupt as its exit.
 
 Command lines get completion while being typed, one machinery for the
 name and its arguments. The candidates are the known command names
