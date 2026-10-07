@@ -1,4 +1,83 @@
 # Changelog
+## [2.14.0]: the delegate lets go
+
+A delegated worker used to own the turn that spawned it: `Run` blocked on
+`spawn` for as long as the worker lived, so ten delegates in one turn cost
+ten waits, and the only way out was to interrupt — which killed the worker
+that was doing the work. The blocking was never the point of the tool; the
+answer was. So the tool lets go of the answer. The turn starts a worker and
+hears back one line — `delegate: worker #2 started · session <id> · log
+<path>` — and the worker's message comes back on a later turn, as the head
+of whatever the operator would have typed next. That shape is not new to the
+session: the steer slot is a line that waits for the boundary, and a return
+is the same mechanism with the session as its source. Every refusal still
+lands in the turn that asked — the seams, the recursion guard, the residency
+gate, the workspace rule — because a refusal is an answer.
+
+- **a return is an event, and the inbox is a queue** (`core`, `tool/delegate`):
+  `core.WorkerDone{N, Task, Content, Exit, Duration, Session, Log}` carries
+  the text the synchronous result always was, with `Head` and `WorkerBlock`
+  beside it so the block the model reads is one shape written once, not three
+  frontends agreeing by hand. It implements no `Snapshot`, so nothing
+  coalesces it: two workers that finish during one turn arrive as two blocks
+  in the order they finished. `DelegateStart` does everything
+  that can refuse and returns a `Delegation`; `Wait` collects the outcome
+  once the run log and the record are on disk; `Delegate` is the two of them,
+  so the swarm and the review fire keep the blocking path untouched.
+- **the next turn, in all three frontends** (`frontend/tui`, `frontend/cli`,
+  `frontend/web`): an inbox appends returns and wakes `Input`, which drains
+  it at the top of the loop — ahead of the steer slot, so the model reads the
+  returns first and then what the operator typed. A drain with no live turn
+  starts a turn of its own; a live turn is never interrupted. The dashboard
+  shows the same head line in its feed as it arrives, and the CLI prints it:
+  the terminal sees what the model was told.
+- **a worker belongs to the session, not the turn** (`tool/delegate`,
+  `cmd/rig`): the spawn's context derives from a root-supplied session
+  context, so the turn ending no longer kills the worker. The interrupt
+  gesture with no turn live — esc, the dashboard's stop button — reaches
+  `StopAll`, which cancels every running worker and, under the jail, its
+  process tree. The gesture is the bare esc on an empty prompt — the one with
+  nothing left to clear — and a session with no delegate wired keeps the
+  prompt-clearing it always had.
+  The CLI has no such gesture, named: SIGINT there ends the session, and the
+  workers end with it.
+- **the delegate's two rows** (`frontend/tui`, `swarm`, `core`): the band
+  distinguishes the two publishers of `core.SwarmStatus` by the one thing the
+  message carries, the role string (`delegate`), and renders `delegating · 3
+  workers · 1m12s` over the most recent call across the batch — `#2 edit
+  tool/file/edit.go · 12s`, `—` until a worker calls — the same two rows for
+  ten workers as for one, under the cache row. Between turns nothing else
+  repaints, so a running batch keeps the frame ticker alive; the ages are
+  computed at paint from stamps the snapshot already carries, and no new
+  clock joins the ones that exist.
+- **a call crosses the pipe; a body does not** (`broadcast`,
+  `frontend/oneshot`, `core`): the worker publishes each call as a `tool_start`
+  frame carrying its name and one short argument — the first line of `path`,
+  `command`, `pattern`, `query`, `url`, `task`, `id` or `name`, cut at 80
+  characters. `core.ToolStart.BoundedCall()` is the reader that knows the
+  difference, and is the reason `tool_start` is a kind and not a `Notice`
+  shaped like one. The bounding lives in the worker, the only process that
+  has the body: a 10 KB `write` crosses as its path.
+- **the pipe is the fleet's, not the verdict's** (`cmd/rig`): a delegated
+  worker has always had a fleet pipe whether or not its allow list carries
+  `verdict`, and the old gate withheld it — so a worker that could not rule
+  could not heartbeat or speak, and a silent worker looked hung. The gate now
+  decides the verdict tool alone.
+- **a piped session keeps its synchronous delegate** (`tool/delegate`,
+  `cmd/rig`): `rig -p` ends when its turn ends, so there is no next turn to
+  carry a return; `Opts.Await` keeps the tool waiting, which is what lets a
+  cron fire fan out and read the answers.
+
+Named, not changed: the recorder has no case for `WorkerDone`, so a return
+lives in neither the transcript nor the store — the worker's run log is where
+its result is kept, and `scheduler runs` names the path. `SwarmWorker.Tool`
+is bounded by the sender, not the reader: a caller that hands over a raw
+`ToolStart` gets its whole argument in the band, and only the oneshot
+publishes the bounded form. And the 2.12.7 clause "a worker lives until it
+exits or the turn is interrupted" is reversed on purpose, with the tests that
+pinned it; what survives is the no-clock rule — nothing waits longer because
+nothing waits at all.
+
 ## [2.13.1]: the summarizing phase gives the row back, and the docs catch up
 
 A reactive compaction runs inside the turn — the provider faults with a
