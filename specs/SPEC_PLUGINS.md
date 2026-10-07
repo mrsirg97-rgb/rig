@@ -3,9 +3,11 @@
 Python plugins as tools: one file under the rig home's `plugins/`
 directory, one tool per file, the name the filename stem. Discovery at
 startup through the shared python kernel; registration on the existing
-`Tool` seam; a loaded plugin is indistinguishable from a native tool
-on the wire. The home moves to `~/.rig` (SPEC_CONFIG 11) and the
-`plugins/` directory rides it.
+`Tool` seam; since 2.8.2 the wire carries one `plugin` door and never
+a plugin (decision 8's nest, SPEC_GROWTH 9): the plugin's name reaches
+the model as a value in the door's `name` enum, its description and
+schema only when the door is asked. The home moves to `~/.rig`
+(SPEC_CONFIG 11) and the `plugins/` directory rides it.
 
 The baseline is 0.3.0 (main at the diff-tool merge, the home amend
 included). The invariant: with no `plugins/` directory present, the
@@ -113,7 +115,7 @@ package plugins
 
 // Report is one plugin file's discovery outcome (2): the name (the
 // filename stem), the file, and; when loaded; the description and
-// schema the wire carries; when skipped; the reason (the voice).
+// schema the door serves; when skipped; the reason (the voice).
 type Report struct {
 	Name        string
 	File        string
@@ -130,32 +132,101 @@ type Kernel interface {
 	Run(ctx context.Context, code string, timeoutMs int) (pythontool.Reply, error)
 }
 
-// Discover imports every file through the kernel and reports each, in
-// file order. A kernel-level failure (start, timeout, a report that
-// is not the JSON list) is the error; a per-file failure is a skipped
-// report, never the error.
-func Discover(ctx context.Context, k Kernel, files []string) ([]Report, error)
+// Discover imports every file through the kernel under contract c
+// and reports each, in file order. A kernel-level failure (start,
+// timeout, a report that is not the JSON list) is the error; a
+// per-file failure is a skipped report, never the error.
+func Discover(ctx context.Context, k Kernel, files []string, c Contract) ([]Report, error)
+
+// DiscoverChecked is the discovery with 2's preflight: an invalid
+// name is a skipped report and a native collision refuses before
+// any file executes; the kernel read runs only on the eligible.
+func DiscoverChecked(ctx context.Context, k Kernel, files []string, natives map[string]bool, c Contract) ([]Report, error)
+
+// Check is the shared collision rule — the startup's and the
+// reload's one voice: a loaded report named like a native refuses.
+func Check(reports []Report, natives map[string]bool) error
+
+// Contract names what one file of a kernel-loaded zone must expose
+// (2.13.0): the kind (the registry name, the skip's voice) and the
+// attrs with their kinds. The two zone contracts: PluginContract
+// (DESCRIPTION str, SCHEMA dict, run callable) and TrainerContract
+// (train, evaluate callable).
+type Attr struct {
+	Name string
+	Kind string // "str", "dict", "callable"
+}
+
+type Contract struct {
+	Kind  string // "plugin", "trainer"
+	Attrs []Attr
+}
+
+var PluginContract = Contract{Kind: "plugin", Attrs: []Attr{
+	{Name: "DESCRIPTION", Kind: "str"}, {Name: "SCHEMA", Kind: "dict"}, {Name: "run", Kind: "callable"},
+}}
+
+var TrainerContract = Contract{Kind: "trainer", Attrs: []Attr{
+	{Name: "train", Kind: "callable"}, {Name: "evaluate", Kind: "callable"},
+}}
+
+// Zone lists one zone of one home directory (the pending and
+// disabled reads); List is the directory's top-level read: *.py,
+// filename order. An absent zone is no files, no error.
+func Zone(home, dir, zone string) ([]string, error)
+func List(home, dir string) ([]string, error)
+
+// PluginNameRe is the one filename rule, both zones.
+var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+// WritePending checks the name rule, the native collision, the
+// non-empty source, and the contract from the source text, and
+// writes the pending file — a symlinked path refused, the open
+// O_NOFOLLOW (8); created says new or update.
+func WritePending(home, dir string, natives map[string]bool, name, source string, c Contract) (path string, created bool, err error)
+
+// Move is a zone-to-zone rename of one stem (approve, disable,
+// enable): a symlinked source refuses before the move, the landed
+// destination is rechecked after the rename and rolls back.
+func Move(dir, name, from, to string) (src, dst string, err error)
+
+// Invoke calls any loaded file's method with the args splat from a
+// JSON array (the train runs); the plugin tool's run(args) is its
+// one-arg sibling. The printed JSON is the result.
+func Invoke(ctx context.Context, k Kernel, kind, name, fn string, timeoutMs int, args ...string) (json.RawMessage, error)
 
 // New is the per-plugin tool on the seam: the name is the stem, the
 // description and schema are the file's, the call rides the kernel.
-func New(name, description, file string, schema json.RawMessage, k Kernel) core.Tool
+// The table keeps the tool; the wire carries only its name, in the
+// door's enum (2.8.2).
+func New(name, description, file string, schema json.RawMessage, k Kernel) *Tool
 
-// Ecosystem is the plugins tool (8, amended): the one new primitive:
-// one mutating native over the ecosystem, an action enum; list (the
-// loaded and the skipped, through a root-wired listing seam), create
-// (writes a pending plugin, untrusted), delete (moves a loaded plugin
-// into plugins/disabled/; disable, not rm, reversible with /plugins
-// enable), reload (re-runs the discovery over the home's plugins/,
-// the same loud skips, the same collision refusal, removal free) and
-// hands the reports to the root's swap, which takes effect on the
-// next turn (never mid-turn). Name is "plugins"; the schema is the
-// action enum.
+// Live is the toolset's plugin read (middleware/toolset).
+type Live interface {
+	PluginNames() []string
+	Plugin(name string) (core.Tool, bool)
+}
+
+// NewDoor is the `plugin` door (SPEC_GROWTH 9, the ecosystem arms
+// folded in by 8 at 2.8.2): run and schema read the live table —
+// an unknown name re-runs the root's discovery once before
+// refusing; list, create, delete and reload ride the Ecosystem.
+func NewDoor(live Live, redo func(ctx context.Context) error, eco *Ecosystem) Plugin
+
+// Ecosystem is not a tool: it is the seam the door's ecosystem arms
+// ride, wired once at the root. list is a management read (the
+// root's RenderPlugins seam), create writes a pending plugin
+// (untrusted), delete moves a loaded plugin into
+// plugins/disabled/ (disable, not rm; reversible with /plugins
+// enable), reload re-runs the discovery over the home's plugins/
+// (the same loud skips, the same collision refusal, removal free)
+// and hands the reports to the root's swap, effective next turn
+// (never mid-turn). The home, the natives (the collision set: the
+// native tools, `plugin` among them), the swap and the listing are
+// private; the Kernel rides for the reload's cell.
 type Ecosystem struct {
-	Home    string            // the rig home (the listing is its top-level *.py)
-	Kernel  Kernel
-	Natives map[string]bool   // the collision set (the native tools, including plugin and plugins)
-	Swap    func(ctx context.Context, reports []Report) (string, error) // the root's rebuild
-	List    func() (string, error) // the root's listing seam (RenderPlugins)
+	Kernel Kernel
+	// home, natives, swap, list: constructor-wired
 }
 func NewEcosystem(home string, natives map[string]bool, k Kernel, swap func(ctx context.Context, reports []Report) (string, error), list func() (string, error)) *Ecosystem
 
@@ -181,6 +252,8 @@ type PluginInfo struct {
 //	Reload  func(ctx context.Context) (string, error) // the reload's
 //	                    // action (8): the /plugins reload verb's door
 //	                    // and the approve's tail; nil = a pre-8 root
+//	PluginsDir string // the plugins directory (the zone verbs:
+//	                    // pending, disabled, approve, enable, disable)
 ```
 
 The plugin file's contract (the kernel-side contract, stated once):
@@ -289,11 +362,15 @@ rig: plugins: discovery: <the kernel's reason>
 companion: the load is invisible when it is right); the skips are the
 loud ones; `/plugins` (4) is the listing surface.
 
-**The wire.** A loaded plugin is **indistinguishable from a native
-tool on the wire**: `name` is the stem, `description` is the file's
-`DESCRIPTION` verbatim, `schema` is the file's `SCHEMA` verbatim. The
-tools array is the native set (0.2.0's order) plus the plugins in
-file order, so with no plugins the bytes are 0.2.0's, pinned.
+**The wire.** AMENDED by decision 8's nest (2.8.2): the tools array
+carries the native set only — `middleware/toolset`'s `Carry` stamps
+`NativeSpecs()`, which skips every plugin. A plugin reaches the model
+through the one `plugin` door: its name rides the door's `name` enum
+(the enum is absent while the set is empty), and its `DESCRIPTION`
+and `SCHEMA` cross the wire verbatim only when the model asks
+(`plugin` `schema`) or calls (`plugin` `run`). With no plugins the
+tools array is the native bytes, pinned; the pin moves with the
+native set, as the earlier releases' did.
 
 ### 3. The execution: the shared kernel, named
 
@@ -440,8 +517,9 @@ plugin in `plugins/pending/` is not live and stays refused until the
 operator approves and reloads. A plugin whose file is deleted stops
 being admitted on the next reload. The refusal's voice names the tool
 and the allow-list; it teaches the shape; a live plugin, or a name
-for `allow`; until then. Plugins stay flat as real tools; nesting
-them under one tool is a later decision once the count grows.
+for `allow`; until then. AMENDED by decision 8's nest (2.8.2): the
+count grew, the plugins are nested under the one `plugin` door, and
+the door's own name is what `allow` carries.
 
 ### 8. The reload and the forge (AMENDED; GATED on SPEC_SANDBOX)
 
@@ -506,7 +584,7 @@ The costs, named:
   listed first, so innermost, first-listed is innermost; resolves a
   call against the table before the chain's participants bound its
   result, falling through to the loop's own exec for a name the
-  table does not carry. A swap (the `plugins`'s, the `/plugins
+  table does not carry. A swap (the door's `reload`, the `/plugins
   reload`'s, the approve's tail) is one atomic write to that table:
   the next turn's request carries the new list and the new tools
   execute, by construction; the models-switch's semantics, zero
@@ -599,10 +677,10 @@ a good plugin, a broken-import one, a missing-SCHEMA one):**
   (the override's settings win; the old home intact).
 - `TestPluginsDiscoveryRegistersAndSkips`: the fixture directory
   (good, broken-import, missing-SCHEMA): the startup prints exactly
-  the two skip lines (file and field named); the request's tools array
-  is the 14 natives plus the good plugin (its name, `DESCRIPTION`
-  verbatim, `SCHEMA` verbatim); the broken and missing ones are
-  absent from the wire.
+  the two skip lines (file and field named); the request's tools
+  array is the registered native set, whole (no plugin on the wire,
+  2.8.2); the good plugin's name rides the `plugin` door's `name`
+  enum, the broken and missing ones do not.
 - `TestPluginCollisionRefusesLoud`: a fixture directory with a good
   plugin named `bash`: exit non-zero, the refusal names the plugin's
   file and the native tool, and no state store is created (the refusal
@@ -649,30 +727,51 @@ a good plugin, a broken-import one, a missing-SCHEMA one):**
   executes after it (the next turn's exec), and a tool the swap
   dropped does not (the list rebuilds from the table; removal free).
 - `TestCarryStampsTheRequestPerCall`: the request's tools array is
-  the table's specs at call time: a Set changes the next call's
+  the table's native specs at call time: a Set changes the next call's
   array, and a call made before the Set keeps the list it was
   stamped with (next turn, never mid-turn).
+- `TestNativeSpecsExcludesPlugins`: the stamp skips every plugin
+  (2.8.2): the array is the natives; the plugin names ride the
+  door's enum, which `TestDoorSurfacesAreTheNativeContract` shows
+  following the table.
 
 plugins (the leaf, fake kernel; no python required):
 
-- `TestEcosystemSurfacesAreTheNativeContract`: Name is `plugins`,
-  the schema the action enum (list, create, delete, reload), the
-  description names the four verbs and the next-turn effect.
-- `TestReloadToolExecRediscoversAndHandsOff`: a canned report
+- `TestDoorSurfacesAreTheNativeContract`: Name is `plugin`, the
+  action enum run, schema, list, create, delete, reload, the `name`
+  enum the live set, following its swaps.
+- `TestDoorSchemaOmitsTheNameEnumWhenThereAreNoLivePlugins`: with
+  an empty set the name parameter carries no enum.
+- `TestDoorExecResolvesAndCalls`: `run` executes the table's plugin
+  with the args verbatim, `schema` replies the contract, an unknown
+  name refuses naming the live set.
+- `TestDoorCarriesTheEcosystemActions`: `list`, `create`, `reload`
+  through the door reach the ecosystem (create lands in pending,
+  reload reaches the swap).
+- `TestDoorRedisoversOnceOnUnknownName`: an unknown name re-runs
+  the root's discovery once before refusing; a known name skips
+  the redo.
+- `TestEcosystemReloadRediscoversAndHandsOff`: a canned report
   (one loaded, one skipped): the swap receives the reports in file
   order, the reply is the swap's verbatim, and the kernel's cell is
   the discovery's (the files embedded).
-- `TestReloadToolEmptyDirectoryNeverStartsTheKernel`: no
+- `TestEcosystemReloadEmptyDirectoryNeverStartsTheKernel`: no
   top-level file: zero kernel cells, the swap receives the empty
   report (the list rebuilds to the natives; removal free), the
   reply names the empty list.
-- `TestReloadToolCollisionRefusesBeforeTheSwap`: a loaded report
-  named like a native (the set includes `plugins` itself):
+- `TestEcosystemCollisionRefusesBeforeTheSwap`: a loaded report
+  named like a native (the set includes `plugin` itself):
   the refusal is the startup collision's voice, and the swap is
   never called.
-- `TestReloadToolKernelFailureIsTheError`: a non-OK reply: the
+- `TestEcosystemKernelFailureIsTheError`: a non-OK reply: the
   error carries the kernel's reason under the reload's prefix, and
   the swap is never called.
+- `TestWritePendingSharesTheForgeRule`, `TestEcosystemCreateWritesPending`,
+  `TestEcosystemDeleteMovesToDisabled`: the shared forge rule behind
+  both doors; delete is a move into `plugins/disabled/`, never an
+  unlink.
+- `TestWritePendingRefusesASymlinkTarget`, `TestMoveRefusesASymlinkPlugin`:
+  the hardening — `O_NOFOLLOW` writes, symlinked sources refused.
 - `TestListIsTopLevelPyOnly`: the listing rule: the pending zone,
   a subdirectory, and a non-.py file are not the listing's, and the
   order is filename order.
@@ -703,36 +802,39 @@ on a usable python as the plugin suite's):
 
 - `TestReloadTakesEffectNextTurnZeroLoopLines`: the seam's proof
   (the feature's gate): a turn over, the root's swap adds a tool,
-  and the next turn's request carries it (name, description,
-  schema) while the finished turn's request does not; the new tool
+  and the next turn's request carries its name in the door's enum
+  while the finished turn's request does not; the new tool
   executes on that next turn (the router's end) and the natives
   keep executing (the fall-through); loop/ and core/ stay
   byte-frozen against the branch's base.
 - `TestPluginsReloadToolRebuildsTheList`: the model calls
-  `plugins` reload: the reply is the reload's (the loud skips in
-  it), the next turn's wire carries the new plugin (its
-  DESCRIPTION and SCHEMA verbatim) and it executes (the round
-  trip); a second reload over a removed file rebuilds the list
-  down (removal free), and the wire follows.
+  `plugin` `reload`: the reply is the reload's (the loud skips in
+  it), and the next turn's wire carries the new plugin's name in
+  the door's enum (the skipped one absent); a second reload over a
+  removed file rebuilds the list down (removal free), and the
+  wire's enum follows.
 - `TestPluginsReloadCollisionRefusesAndKeepsTheList`: a loaded
   report named like a native: the tool error is the collision's
   voice, and the wire is the pre-reload list, whole.
 - `TestReloadE2ERegistersAForgedPluginNextTurn`: the real kernel
   (gated): the provider's first request lands a new file in
-  `plugins/` (the scripted clock), the model calls
-  `plugins` reload, the reply carries the loaded line, the next
-  turn's wire carries the plugin, and the model's call of it
-  round-trips through the shared namespace (the import is the
+  `plugins/` (the scripted clock), the model calls `plugin`
+  `reload`, the reply carries the loaded line, the next turn's
+  wire carries the name in the door's enum, and the model's call
+  of it (by name, resolved on the table) round-trips through the
+  shared namespace (the import is the
   reload's, the call is the next turn's).
 - `TestApproveReloadsPost8`: the pending zone's file: `/plugins
   approve` moves it, the reply carries the move plus the reload's
   line, and the next `/plugins` listing shows it loaded (the root's
   state swapped, the command's listing follows).
 - the no-plugins wire (the golden pin's companion): the native
-  set, `plugins` among them (17, in order), and the golden
-  fixtures regenerated in place (the directory is the 0.2.0 wire
-  baseline, the bytes the current native set; the pin moves with
-  the set, as the earlier releases' did).
+  set — the enabled entries of `tool/registry.json` in file order
+  (13, `plugin` among them; the conditional `decide` and `verdict`
+  when registered) — and the golden fixtures regenerated in place
+  (the directory is the 0.2.0 wire baseline, the bytes the current
+  native set; the pin moves with the set, as the earlier releases'
+  did; no plugin is ever in the array, 2.8.2).
 
 - `TestAllIsTheStandardSet`: the standard set is eight (the existing
   assertion, extended with `plugins`).
