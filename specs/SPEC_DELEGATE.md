@@ -271,7 +271,10 @@ A failed worker's return names its exit in the trailer; in the
 synchronous shape (decision 9) it is also a tool error:
 `delegate: the worker failed (exit N)`. There is no timeout voice: the
 tool has no clock (decision 1). The trailer always rides the return, so
-the operator has the session id and log path either way.
+the operator has the session id and log path either way. A worker that
+never ran — a spawn that faulted after acceptance — has no stdout to
+cap, and its return's content is the fault itself: the reason is the
+answer, and it is not dropped on the floor.
 
 The hand-back line — what the turn that delegated actually gets — is
 one line and never the answer:

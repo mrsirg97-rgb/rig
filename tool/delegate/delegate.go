@@ -192,7 +192,9 @@ type settled struct {
 // core.WorkerDone. The content is the same text the synchronous tool result
 // always was: the worker's stdout, capped, with the trailer naming its death.
 // The error is the runner's, the one the blocking shape used to return; a
-// handed-off worker's failure is its return's exit code, not an error here.
+// handed-off worker's failure is its return's exit code, not an error here —
+// and a worker that never ran carries the fault as its content, since there is
+// no stdout to cap.
 func (a *adapter) settle(member broadcast.Member, n int, task string, del sched.Delegation) (settled, error) {
 	res, err := del.Wait()
 	out := settled{
@@ -207,6 +209,9 @@ func (a *adapter) settle(member broadcast.Member, n int, task string, del sched.
 		}
 	} else {
 		out.Exit = -1
+		// A worker that never ran has no stdout to cap: the fault itself is
+		// its return's content, because a late failure is still an answer.
+		out.Content = err.Error()
 	}
 	a.end(member, n)
 	if a.member != nil {
@@ -260,8 +265,16 @@ func (a *adapter) begin(task string, stop context.CancelFunc) (broadcast.Member,
 
 func (a *adapter) end(member broadcast.Member, n int) {
 	a.mu.Lock()
+	stop := a.stops[n]
 	delete(a.stops, n)
 	a.mu.Unlock()
+	// The worker's life is over — end is reached only after Wait returned or
+	// before the spawn began — so cancelling releases the context the session
+	// would otherwise carry until it ends. Cancel is idempotent, and StopAll
+	// races nothing by reading a map the entry has already left.
+	if stop != nil {
+		stop()
+	}
 	if member == nil {
 		return
 	}

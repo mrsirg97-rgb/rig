@@ -267,6 +267,27 @@ func TestASpawnThatFaultsIsLoudAndWaitedAndQuietlyReturnedWhenHandedOff(t *testi
 	if done[0].Exit == 0 {
 		t.Fatalf("a worker that never ran is not a success: %+v", done[0])
 	}
+	if !strings.Contains(done[0].Content, "permission denied") {
+		t.Fatalf("the reason a worker never ran rides its return, not the floor:\n%q", done[0].Content)
+	}
+}
+
+func TestAWorkerThatReturnsOnItsOwnReleasesItsContext(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	release := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: release}
+	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+	if _, err := tool.Exec(context.Background(), runArgs("the sweep that ends")); err != nil {
+		t.Fatalf("hand off: %v", err)
+	}
+	waitUntil(t, "the worker spawn", func() bool { return spawn.count() == 1 })
+	close(release)
+	waitForReturn(t, fe, 1)
+	select {
+	case <-spawn.ctxOf(0).Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("a worker that returned on its own left its context registered on the session")
+	}
 }
 
 func TestWaitingADelegationThatNeverWasRefuses(t *testing.T) {
