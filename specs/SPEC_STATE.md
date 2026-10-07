@@ -680,15 +680,20 @@ type MemoryDomain interface {
 ```
 
 The tool adapter is the only hand-written surface the model sees, and it
-is pane's tool surface verbatim: `todo {create|claim|start|complete|fail|release|
-retry|move|prune|bind|read|note|accept|reject}` (amended 0.24.5: `release`
-is rig's own, the dead-claim door — pane has no session store to know an
-owner died; amended 1.3.9: `claim`, `note`, `accept`, `reject` and the
-review status are rig's own, the swarm surface — pane has no shared board;
+is the registry's surface, in `tool/registry.json` and nowhere else:
+`todo {create|claim|start|complete|fail|release|retry|move|prune|read|
+note|notes|accept|reject|finished}` (amended 0.24.5: `release` is rig's
+own, the dead-claim door — pane has no session store to know an owner
+died; amended 1.3.9: `claim`, `note`, `accept`, `reject` and the review
+status are rig's own, the swarm surface — pane has no shared board;
 `next` is not a verb: its semantics ride the render's next pointer,
-blocked-skipping),
-`rem {learn|recall|reflect|prune}`, `scheduler {create|
-update|list|pause|resume|remove|runs|repair}`, and `sessions {list|summary}` (rig's own,
+blocked-skipping; amended 2.12.0: `bind` is gone, and scope is a
+required parameter on every call; amended 2.12.4/2.12.8: `create` takes
+one task and echoes it),
+`rem {learn|recall|reflect|prune|index|pack}` (2.9.0's map and 2.10.0's
+pack-by-task), `scheduler {create|update|list|show|pause|resume|remove|
+runs|repair}` (2.12.10's `show` reads one job by id), and
+`sessions {list|summary}` (rig's own,
 not pane's: an introspection of the session store that migrates an older
 store on open, absent from the root's `mutatingNatives` and from the
 concurrent read set; it opens a store, like `todo`/`rem`/`scheduler`, so

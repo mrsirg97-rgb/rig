@@ -3,9 +3,9 @@
 The shared board (1.3.9) made the queue the place sessions talk about shared
 work; this spec adds the workers that drain it. The session stays the
 architect: it reads the queue, the notes and the review verdicts, and never
-a diff. `/swarm <n>` starts n drain workers; each one pulls the next task
-from the session's bound queue and runs it through the delegate spawn path
-(a sandboxed `rig -p` worker, the session's binding), then submits the
+a diff. `/swarm start <n>` starts n drain workers; each one pulls the next
+task from the queue at the session's scope and runs it through the delegate
+spawn path (a jailed `rig -p` worker, the job's cwd; SPEC_SANDBOX), then submits the
 result for review. The session supervises: the bare `/swarm` lists the
 workers (role, model, current task, last heartbeat from the run stream,
 tasks done/failed), and `/swarm stop` ends them.
@@ -85,7 +85,9 @@ caps, the Reap release, and the verdict protocol are unchanged.
 
 ### 1. The drain worker is supervisor-side; the task worker is one-shot
 
-`/swarm <n>` starts n drain-worker goroutines in the session's process.
+`/swarm start <n>` starts n drain-worker goroutines in the session's
+process; the bare count has never been the grammar (2.11.x moved the
+count behind the keyword so `swarm stop` and `swarm start` parse apart).
 Each drain worker owns one identity (a minted session id, stable for its
 life), and loops:
 
@@ -407,9 +409,13 @@ fake `Swarm` seam.
   (store/scheduler): the wait-policy, the observer, and the spawn context
   each pinned at the delegate seam; the default paths (skip, nil observer,
   background context) are unchanged.
-- The command's `TestSwarm...` cases: the parse (`/swarm 3`, `role=`,
-  `model=`), the bare list's exact lines, `/swarm stop`, the usage
-  refusals, and the no-fleet voice (`swarm: no workers configured (…)`).
+- The command's `TestSwarm…` cases: the parse (`swarm start 3`,
+  `role=`, `model=`, `budget=`), that the count rides the keyword
+  (`TestSwarmCountRidesStart`), the bare list's exact lines,
+  `swarm stop`, the usage refusals, and the no-seam pair
+  (`TestSwarmNoSeamListsEmptyAndStopRefuses`). There is no no-fleet
+  refusal in the command: the wiring refuses upstream with its own why
+  (SPEC_WORKERS 4).
 
 The suite is green on a box with no model loaded: every case is a fake
 spawn, a scripted busy fixture, or a real store in a temp dir.

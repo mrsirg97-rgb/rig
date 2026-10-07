@@ -62,7 +62,7 @@ shell, and the plugin forge.
 frontend/web/            NEW: the dashboard leaf
   web.go                 Options, Server, New, Handler, Serve, Close
   auth.go                the serve.token mint/read and the bearer+cookie gate
-  routes.go              the allow-list router and the view handlers
+  router.go              the allow-list router and the view handlers
   stores.go              cwd -> store path resolution and the open cache
   plugins.go             the loaded + pending listing, the DESCRIPTION read
   static.go              the go:embed of static/
@@ -84,10 +84,11 @@ store/
                          project; the dashboard's /api/todo?cwd= routes
                          resolve scope through the same law as the tool)
   rem/                   +FilePath (home -> the file)
-frontend/tui/
-  freeze_test.go         +frontend/web to the allow-list, with the round's
-                         comment
 specs/
+  FREEZE.txt             +frontend/web to the freeze gate's allow-list
+                         (since 2.12.3 the gate is `cmd/freeze` in CI; its
+                         first home was `frontend/tui/freeze_test.go`,
+                         where the entry carried the round's comment)
   SPEC_SERVE.md          this file
 README.md                three lines
 ```
@@ -111,7 +112,8 @@ phase reads exactly these verbs:
 - **Todo (the model's own text).** `todo.Read(ctx, db, proj, "dashboard")`
   and `todo.ReadAll` returned as-is and shown in a `<pre>`; the operator
   sees exactly what the model sees, stale footer included. The one write:
-  `todo.Create(ctx, db, proj, items, "dashboard")`, the reply verbatim.
+  `todo.Create(ctx, db, proj, item, "dashboard")` once per line (`Create`
+  takes one `CreateItem`), the last line's reply verbatim.
   `proj` resolves the selected `cwd` through the store's scope law
   (SPEC_STATE): a subdirectory and a second worktree read the repo's one
   queue, a non-repo workspace its own.
@@ -138,11 +140,11 @@ file.
 
 ## the one write
 
-A todo create: a form of one task per line. The handler trims blank lines,
-builds `[]todo.CreateItem` (text only; no dependsOn in phase 1), and calls
-`todo.Create(ctx, db, proj, items, "dashboard")` with `proj` resolving the
-selected cwd's scope. The reply string (the store's
-note and the queue, the store's own voice) is returned verbatim to the page.
+A todo create: a form of one task per line. The handler trims blank lines
+and calls `todo.Create(ctx, db, proj, item, "dashboard")` once per line
+(`Create` takes one `CreateItem`; text only; no dependsOn in phase 1), with
+`proj` resolving the selected cwd's scope. The page shows the last line's
+reply (the store's note and the queue, the store's own voice) verbatim.
 An empty form is a loud refusal (no create with zero tasks). No other route
 mutates anything in this phase; the write is the only `db.Tx` (not
 `TxReadOnly`) the dashboard opens.
@@ -197,17 +199,16 @@ todo/rem/scheduler/sessions views:
   history toggle for `ReadAll`; the create form (one task per line) and the
   verbatim reply.
 - **Scheduler.** The one list, grouped by directory (the selected cwd
-  first), drift notes included. The list renders even with no fleet:
-  jobs created before the fleet was removed keep firing (the row
-  carries its model, `run-job` needs no `workers.json`). With no
-  fleet, the view says the same refusal the `/scheduler` command
-  says, in place of the create form: `no workers configured
-  (~/.rig/workers.json names the model)`; the operator reads the
-  file's job (it names the model) and writes it, instead of a form
-  that could only mint jobs with no fleet to run them. The `GET
-  /api/scheduler` reply carries the fleet's model (`worker`, empty
-  when absent) so the view knows which half to render; the `POST`
-  create gate rides the same fact.
+  first), drift notes included, with the create form beside it always.
+  There is no fleet-shaped half to render: `workers.json` retired in
+  2.4.0, every job runs on the resident model, and the `GET
+  /api/scheduler` reply's `worker` field carries that one constant,
+  `"resident"`. The `POST` create has no fleet gate to ride — a job's
+  `run-job` command needs the swap the binary already points at and
+  nothing else. (Named, not changed: the shipped page still carries the
+  pre-2.4.0 branch that prints `no workers configured (~/.rig/
+  workers.json names the model)`, and the server can no longer make it
+  fire.)
 - **Memory.** The selected cwd's recent memories.
 - **Models.** Every row: id, window, max tokens, reserve, keep-recent,
   role, effort, and the effort list.
@@ -323,8 +324,10 @@ pure Go over the stores, the config, and the plugin files.
   the plugins listing, the embedded assets) plus its `PACKAGE.md`.
 - **`cmd/rig`**: the `serve` subcommand (one file) and its one registration
   line; the root's inline state/todo path formulas use the new helpers.
-- **`frontend/tui/freeze_test.go`**: `frontend/web` added to the allow-list
-  with the round's comment.
+- **The freeze gate**: `frontend/web` added to the allow-list; since
+  2.12.3 that list is `specs/FREEZE.txt`, enforced by `cmd/freeze` in CI,
+  and its first home was `frontend/tui/freeze_test.go` with the round's
+  comment.
 - **`README.md`**: three lines (the subcommand, the token, the one write).
 
 ## scope
