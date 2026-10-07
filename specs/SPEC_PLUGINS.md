@@ -698,12 +698,13 @@ a good plugin, a broken-import one, a missing-SCHEMA one):**
   `~/.rig` and the old `~/.config/rig`: the run takes the override's
   settings, discovers the override's plugins, and leaves both the
   default home and the old one untouched (the present-home edge, 6).
-- `TestNoPluginsDirectoryIsTheV020Wire`: the `golden_020` pin,
-  made explicit: a fixture run (no plugins directory) carries exactly
-  the 14 native tool names in the tools array, and the request body
-  is the 0.2.0 bytes (the existing
-  `TestNoUserFilesIsByteIdenticalToV020` subtests, extended with the
-  tools-array assertion).
+- `TestNoPluginsDirectoryIsTheV020Wire`: made explicit in-tree: a
+  fixture run with no plugins directory carries exactly the native
+  names in the tools array and no door of its own. The byte-for-byte
+  half of this claim left the test suite with the goldens (2.12.3):
+  `scripts/wire-check` renders the request bodies at the merge-base
+  and at the head and posts their diff, and `TestWireDump` keeps the
+  render deterministic.
 
 **command (the leaf, fakes at the Env seam):**
 
