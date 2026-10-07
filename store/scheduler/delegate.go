@@ -136,40 +136,80 @@ func delegateTimeout(t time.Duration) time.Duration {
 	return t
 }
 
+// Delegation is a worker that has been handed off: everything that could refuse
+// it (the seams, the recursion guard, the residency gate, the record, the jail)
+// already passed, and the process is running. Wait collects the outcome; it is
+// the only wait, and the delegate tool — which answers its turn immediately —
+// is simply the caller that does not call it until the worker is done.
+type Delegation struct {
+	ID      string
+	Session string
+	Log     string
+	Model   string
+	Note    string
+	done    chan delegateOutcome
+}
+
+type delegateOutcome struct {
+	res DelegateResult
+	err error
+}
+
+// Wait blocks until the worker exits and its run log and scheduler record are
+// on disk. Delegate is Start and Wait; there is no second path.
+func (d Delegation) Wait() (DelegateResult, error) {
+	if d.done == nil {
+		return DelegateResult{}, fmt.Errorf("delegate: nothing was delegated (wait on a delegation only after DelegateStart accepted it)")
+	}
+	out, ok := <-d.done
+	if !ok {
+		return DelegateResult{}, fmt.Errorf("delegate: the delegation was abandoned")
+	}
+	return out.res, out.err
+}
+
 func Delegate(in DelegateInput) (DelegateResult, error) {
+	d, err := DelegateStart(in)
+	if err != nil {
+		return DelegateResult{}, err
+	}
+	return d.Wait()
+}
+
+func DelegateStart(in DelegateInput) (Delegation, error) {
 	in = delegateInput(in)
 	if in.Fetch == nil || in.Spawn == nil {
-		return DelegateResult{}, fmt.Errorf("delegate: fetch and spawn seams are required")
+		return Delegation{}, fmt.Errorf("delegate: fetch and spawn seams are required")
 	}
 	if in.WorkerSession == "" {
-		return DelegateResult{}, fmt.Errorf("delegate: worker session is required")
+		return Delegation{}, fmt.Errorf("delegate: worker session is required")
 	}
 
 	if os.Getenv(DelegateEnv) != "" {
-		return DelegateResult{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
+		return Delegation{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
 
 	model, gateModel, err := resolveWorkerModel(in)
 	if err != nil {
-		return DelegateResult{}, fmt.Errorf("delegate: %w", err)
+		return Delegation{}, fmt.Errorf("delegate: %w", err)
 	}
 	in.Model = model
 	if !isRemoteRow(in) {
 		if err := gateOnce(in.Fetch, in.SwapURL, gateModel); err != nil {
-			return DelegateResult{}, fmt.Errorf("delegate: %w", err)
+			return Delegation{}, fmt.Errorf("delegate: %w", err)
 		}
 	}
 
 	id, err := adHocCreate(context.Background(), in.DB, in)
 	if err != nil {
-		return DelegateResult{}, fmt.Errorf("delegate: record: %w", err)
+		return Delegation{}, fmt.Errorf("delegate: record: %w", err)
 	}
 
 	workerCmd := in.WorkerCmd
 	if len(workerCmd) == 0 {
 		exe, err := os.Executable()
 		if err != nil {
-			return DelegateResult{}, fmt.Errorf("delegate: worker command: %w", err)
+			return Delegation{}, fmt.Errorf("delegate: worker command: %w", err)
 		}
 		workerCmd = []string{exe}
 	}
@@ -184,15 +224,24 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 
 	profile, err := SandboxProfile(in.Sandbox)
 	if err != nil {
-		return DelegateResult{}, fmt.Errorf("delegate: sandbox: %w", err)
+		return Delegation{}, fmt.Errorf("delegate: sandbox: %w", err)
 	}
 	var (
 		argv     []string
 		proxy    *SocketProxy
+		pipe     *fleetPipe
 		refuse   string
 		note     string
 		spawnEnv []string
 	)
+	release := func() {
+		if pipe != nil {
+			pipe.close()
+		}
+		if proxy != nil {
+			proxy.Close()
+		}
+	}
 	if profile == "off" {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = append(append([]string{}, workerCmd...),
@@ -207,47 +256,69 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 	} else {
 		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, prompt, allow, in.WorkerSession, DelegateEnv+"=1")
 		if err != nil {
-			return DelegateResult{}, fmt.Errorf("delegate: jail: %w", err)
+			release()
+			return Delegation{}, fmt.Errorf("delegate: jail: %w", err)
 		}
 		if refuse != "" {
-			return DelegateResult{}, fmt.Errorf("delegate: %s", refuse)
+			release()
+			return Delegation{}, fmt.Errorf("delegate: %s", refuse)
 		}
-		defer proxy.Close()
 	}
 
-	ctx := in.SpawnCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if limit := delegateTimeout(in.Timeout); limit > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, limit)
-		defer cancel()
+	base := in.SpawnCtx
+	if base == nil {
+		base = context.Background()
 	}
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
+	logName := strings.NewReplacer(":", "-", ".", "-").Replace(started.Format("2006-01-02T15:04:05.000Z")) + ".log"
+	logRel := filepath.Join("runs", id, logName)
 
-	spawnCtx := WithPrompt(ctx, prompt)
 	if in.Member != nil {
-		pipe, err := openFleet(ctx, in.Member.Id(), func(messages ...broadcast.Message) {
-			in.Member.Publish(ctx, func(error) {}, messages...)
+		pipe, err = openFleet(base, in.Member.Id(), func(messages ...broadcast.Message) {
+			in.Member.Publish(base, func(error) {}, messages...)
 		})
 		if err != nil {
-			return DelegateResult{}, fmt.Errorf("delegate: fleet: %w", err)
+			release()
+			return Delegation{}, fmt.Errorf("delegate: fleet: %w", err)
 		}
-		spawnCtx = WithPrompt(pipe.spawnCtx(), prompt)
 		spawnEnv = append(spawnEnv, pipe.env())
-		defer pipe.close()
 	}
-	res, err := in.Spawn(spawnCtx, argv, in.Cwd, spawnEnv, nil)
-	if err != nil {
-		return DelegateResult{}, fmt.Errorf("delegate: spawn: %w", err)
-	}
-	ended := in.Now().UTC()
-	durationMs := ended.Sub(started).Milliseconds()
 
-	logName := strings.NewReplacer(":", "-", ".", "-").Replace(in.Now().UTC().Format("2006-01-02T15:04:05.000Z")) + ".log"
-	logRel := filepath.Join("runs", id, logName)
+	done := make(chan delegateOutcome, 1)
+	go func() {
+		ctx := base
+		var cancel context.CancelFunc
+		if limit := delegateTimeout(in.Timeout); limit > 0 {
+			ctx, cancel = context.WithTimeout(base, limit)
+		}
+		if pipe != nil {
+			ctx = pipe.into(ctx)
+		}
+		res, err := in.Spawn(WithPrompt(ctx, prompt), argv, in.Cwd, spawnEnv, nil)
+		var outcome delegateOutcome
+		if err != nil {
+			outcome.err = fmt.Errorf("delegate: spawn: %w", err)
+		} else {
+			ended := in.Now().UTC()
+			outcome.res, outcome.err = finishDelegate(in, id, started, startedStr, ended, logRel, model, note, res, ctx)
+		}
+		if cancel != nil {
+			cancel()
+		}
+		release()
+		done <- outcome
+	}()
+
+	return Delegation{
+		ID: id, Session: in.WorkerSession, Log: logRel, Model: model, Note: note,
+		done: done,
+	}, nil
+}
+
+func finishDelegate(in DelegateInput, id string, started time.Time, startedStr string, ended time.Time, logRel, model, note string, res SpawnResult, ctx context.Context) (DelegateResult, error) {
+	durationMs := ended.Sub(started).Milliseconds()
+	logName := filepath.Base(logRel)
 	dir := filepath.Join(in.Home, "runs", id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: log dir: %w", err)

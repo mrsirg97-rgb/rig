@@ -48,7 +48,7 @@ func TestADelegatePutsNoDeadlineOnTheSpawnSoALongWorkerReturns(t *testing.T) {
 	}
 }
 
-func TestAnInterruptedTurnCancelsTheWorkersSpawnContext(t *testing.T) {
+func TestTheTurnsContextDoesNotRuleTheWorkerButTheSessionsDoes(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	seen := make(chan context.Context, 1)
 	spawn := func(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
@@ -56,30 +56,29 @@ func TestAnInterruptedTurnCancelsTheWorkersSpawnContext(t *testing.T) {
 		<-ctx.Done()
 		return sched.SpawnResult{Exit: -1}, nil
 	}
-	tool := h.newTool(t, fakeFetch(""), spawn)
+	sessionCtx, endSession := context.WithCancel(context.Background())
+	room, fe := newFleetRoom(t)
+	tool := h.newToolRoom(t, sessionCtx, false, room, fakeFetch(""), spawn)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() {
-		_, err := tool.Exec(ctx, runArgs("the long sweep"))
-		done <- err
-	}()
+	turnCtx, cancelTurn := context.WithCancel(context.Background())
+	if _, err := tool.Exec(turnCtx, runArgs("the long sweep")); err != nil {
+		t.Fatalf("hand off: %v", err)
+	}
 	workerCtx := <-seen
-	cancel()
+	cancelTurn()
+	select {
+	case <-workerCtx.Done():
+		t.Fatal("the turn ending is not what kills a worker: it is the session")
+	case <-time.After(100 * time.Millisecond):
+	}
 
+	endSession()
 	select {
 	case <-workerCtx.Done():
 	case <-time.After(5 * time.Second):
-		t.Fatal("the worker's spawn context must die with the turn")
+		t.Fatal("a worker lives until it exits or the session ends")
 	}
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("a worker killed with the turn is a failed delegate")
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the delegate must return when the turn is interrupted")
-	}
+	waitForReturn(t, fe, 1)
 }
 
 func TestDelegateSchemaCarriesNoClock(t *testing.T) {

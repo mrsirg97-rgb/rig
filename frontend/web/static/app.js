@@ -804,14 +804,32 @@ function onFrame(f) {
       case 'notice':
         feedLine('sys', G.active + ' ' + f.source + ': ' + f.text);
         break;
+      case 'worker_done': {
+        const d = feedLine('sys', G.active + ' ' + f.head);
+        d.title = f.log;
+        if (f.content) {
+          const body = el('div', 'dim', f.content);
+          chat.feed.appendChild(body);
+        }
+        break;
+      }
     }
   });
 }
 
 function paintSwarmBand(f) {
   if (!chat.swarmBand) return;
-  const n = (f.workers || []).length;
+  const rows = f.workers || [];
+  const n = rows.length;
   if (!n && !f.pending && !f.review) { chat.swarmBand.textContent = ''; return; }
+  if (rows.some((w) => w.role === 'delegate')) {
+    const running = rows.filter((w) => w.state === 'running');
+    const m = running.length || n;
+    const call = running.slice().sort((a, b) => (b.tool_at || '').localeCompare(a.tool_at || ''))[0];
+    chat.swarmBand.textContent = 'delegating ' + G.dot + ' ' + m + ' worker' + (m === 1 ? '' : 's') +
+      (call && call.tool ? ' ' + G.dot + ' ' + '#' + call.id + ' ' + call.tool : '');
+    return;
+  }
   chat.swarmBand.textContent = 'swarm ' + G.dot + ' ' + n + ' worker' + (n === 1 ? '' : 's') + ' ' + G.dot + ' ' + (f.pending || 0) + ' pending ' + G.dot + ' ' + (f.review || 0) + ' in review';
 }
 

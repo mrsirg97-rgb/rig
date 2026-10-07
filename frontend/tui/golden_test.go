@@ -7,6 +7,7 @@ import (
 	"flag"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -91,6 +92,7 @@ type scriptedSession struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	ticks  chan time.Time
+	tail   int
 }
 
 func newScriptedSession(t *testing.T, theme Theme, opts ...Option) *scriptedSession {
@@ -208,6 +210,28 @@ func goldenStream(t *testing.T, th Theme, width int) string {
 	if line := <-in2; line != "bye" {
 		s.t.Fatalf("the second prompt = %q, want bye", line)
 	}
+
+	// A delegated batch: the band shows its two rows between turns, with
+	// nothing else left to repaint them, and the return is the head of the
+	// next user turn. The stamps are hours old so the age cells read the
+	// same on every run.
+	stale := time.Now().Add(-3 * time.Hour)
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{{
+		ID: 1, Role: "delegate", Task: "sweep the floor", State: "running", Heartbeat: stale,
+	}}})
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{{
+		ID: 1, Role: "delegate", Task: "sweep the floor", State: "running", Heartbeat: stale,
+		Tool: "edit tool/file/edit.go", ToolAt: stale,
+	}}})
+	s.fe.Notify(core.WorkerDone{N: 1, Task: "sweep the floor", Content: "the floor is swept", Exit: 0, Duration: 3 * time.Hour, Session: "worker-1", Log: "runs/j1/worker-1.log"})
+	block, err := s.input()
+	if err != nil {
+		s.t.Fatalf("the returned worker: %v", err)
+	}
+	if !strings.HasPrefix(block, "delegate #1 returned · exit 0 · 3h0m0s · session worker-1") {
+		s.t.Fatalf("the return is the head of the turn: %q", block)
+	}
+
 	s.si.close()
 	line3, err3 := s.input()
 	if !errors.Is(err3, io.EOF) {

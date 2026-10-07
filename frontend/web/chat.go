@@ -40,12 +40,15 @@ type Status struct {
 type chat struct {
 	lines chan string
 	slot  chan string
+	wake  chan struct{}
 
 	mu          sync.Mutex
 	reading     bool
 	cancel      context.CancelFunc
 	turnCtx     context.Context
 	steeredLive bool
+
+	inbox []core.WorkerDone
 
 	commands map[string]core.Command
 	known    []string
@@ -60,16 +63,20 @@ type chat struct {
 	asks   map[string]chan bool
 	askSeq int64
 
+	stopWorkers func()
+
 	swarm core.SwarmStatus
 }
 
-func newChat(cmds []core.Command, env any) *chat {
+func newChat(cmds []core.Command, env any, stopWorkers func()) *chat {
 	c := &chat{
-		lines: make(chan string, 1),
-		slot:  make(chan string, 1),
-		subs:  map[chan []byte]struct{}{},
-		asks:  map[string]chan bool{},
-		env:   env,
+		lines:       make(chan string, 1),
+		slot:        make(chan string, 1),
+		wake:        make(chan struct{}, 1),
+		subs:        map[chan []byte]struct{}{},
+		asks:        map[string]chan bool{},
+		env:         env,
+		stopWorkers: stopWorkers,
 	}
 	if len(cmds) > 0 {
 		c.commands = make(map[string]core.Command, len(cmds))
@@ -172,6 +179,14 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
+		if block, ok := c.drainInbox(); ok {
+			c.mu.Lock()
+			c.steeredLive = false
+			c.turnCtx = ctx
+			c.mu.Unlock()
+			c.publish(map[string]any{"kind": "prompt", "text": block})
+			return block, nil
+		}
 		select {
 		case line := <-c.slot:
 			if strings.TrimSpace(line) == "" {
@@ -183,6 +198,7 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
+		case <-c.wake:
 		case line := <-c.lines:
 			if strings.TrimSpace(line) == "" {
 				continue
@@ -245,9 +261,14 @@ func (c *chat) Interrupt() bool {
 	wasLive := c.steeredLive
 	c.steeredLive = false
 	cancel := c.cancel
+	stop := c.stopWorkers
 	c.mu.Unlock()
 	if live && cancel != nil {
 		cancel()
+		return true
+	}
+	if !wasLive && stop != nil {
+		stop()
 		return true
 	}
 	return wasLive
@@ -337,6 +358,18 @@ func (c *chat) Notify(ev core.Event) {
 		c.publish(map[string]any{"kind": "swarm_status", "workers": swarmRows(e.Workers), "pending": e.Pending, "review": e.Review})
 	case core.Notice:
 		c.publish(map[string]any{"kind": "notice", "source": e.Source, "text": e.Text, "level": e.Level.String()})
+	case core.WorkerDone:
+		c.mu.Lock()
+		c.inbox = append(c.inbox, e)
+		c.mu.Unlock()
+		c.publish(map[string]any{
+			"kind": "worker_done", "head": e.Head(), "task": e.Task,
+			"exit": e.Exit, "session": e.Session, "log": e.Log, "content": capResult(e.Content),
+		})
+		select {
+		case c.wake <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -346,6 +379,7 @@ func swarmRows(ws []core.SwarmWorker) []map[string]any {
 		out = append(out, map[string]any{
 			"id": w.ID, "role": w.Role, "task": w.Task, "state": w.State,
 			"done": w.Done, "failed": w.Failed, "heartbeat": w.Heartbeat.UTC().Format(time.RFC3339),
+			"tool": w.Tool, "tool_at": w.ToolAt.UTC().Format(time.RFC3339),
 		})
 	}
 	return out

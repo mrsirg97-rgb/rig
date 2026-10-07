@@ -12,7 +12,7 @@ const (
 )
 
 func (t *tui) startFrameTickerLocked() {
-	if !(t.turnLive || t.compacting || t.noticing || t.aside != "") || t.tickStop != nil {
+	if !t.busyLocked() || t.tickStop != nil {
 		return
 	}
 	if t.ticker == nil && t.ticks == nil {
@@ -24,7 +24,7 @@ func (t *tui) startFrameTickerLocked() {
 }
 
 func (t *tui) stopFrameTickerLocked() {
-	if t.turnLive || t.compacting || t.noticing || t.aside != "" || t.tickStop == nil {
+	if t.busyLocked() || t.tickStop == nil {
 		return
 	}
 	close(t.tickStop)
@@ -55,7 +55,7 @@ func (t *tui) tickLoop() {
 			t.mu.Lock()
 			dirty := t.dirty
 			t.dirty = false
-			live := (t.turnLive || t.compacting || t.noticing || t.aside != "") && len(t.live.lines) > 0
+			live := t.busyLocked() && len(t.live.lines) > 0
 			if live && now.Sub(lastAnim) >= animPeriod {
 				lastAnim = now
 				t.frame++
@@ -68,6 +68,13 @@ func (t *tui) tickLoop() {
 			t.mu.Unlock()
 		}
 	}
+}
+
+// busyLocked is what the frame ticker breathes for: a turn, a compaction, a
+// notice, an aside — or a batch of delegated workers, which keeps running with
+// no turn at all and whose row must not freeze where the operator is looking.
+func (t *tui) busyLocked() bool {
+	return t.turnLive || t.compacting || t.noticing || t.aside != "" || bandRunning(t.swarm)
 }
 
 func (t *tui) winchLoop() {

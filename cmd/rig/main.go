@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -50,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.13.1"
+const Version = "2.14.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -287,10 +286,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	if fleet != nil && !slices.Contains(allowList, "verdict") {
-		fleet = nil
-	}
-	if fleet != nil {
+	fleet, verdictOn := fleetEnds(fleet, allowList)
+	if verdictOn {
 		native["verdict"] = true
 	}
 	pluginReports := make([]plugins.Report, 0)
@@ -468,13 +465,24 @@ func main() {
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
-	if fleet != nil {
+	if verdictOn {
 		r.tools["verdict"] = verdicttool.New(fleet)
 	}
 	r.listen()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
+	// A piped session answers one prompt and exits: there is no next turn to
+	// carry a delegated worker's return, so the delegate waits for it there.
+	piped := *prompt != ""
+	var del delegate.Delegate
+	var stopWorkers func()
 	if delegateOn {
-		r.tools["delegate"] = delegate.New(delegate.Opts{
+		del = delegate.New(delegate.Opts{
+			// The worker outlives the turn that started it, so it is not a child
+			// of the turn's context: it is a child of the session's.
+			Ctx: ctx,
+			// A piped session has no next turn to carry a return, so the
+			// delegate keeps its synchronous shape there.
+			Await:        piped,
 			DB:           scdb,
 			Home:         schedHome,
 			RigHome:      cfgDir,
@@ -490,6 +498,8 @@ func main() {
 			Models:       func() models.Table { return r.runtime },
 			Room:         r.room,
 		})
+		r.tools["delegate"] = del
+		stopWorkers = del.StopAll
 	}
 	if delegateOn {
 		r.swarm = swarm.New(swarm.Opts{
@@ -520,7 +530,7 @@ func main() {
 	if delegateOn {
 		todoWake = r.swarm.Wake
 	}
-	r.tools["todo"] = todoapi.New(tdb, todoapi.Mode(*prompt != ""), todoWake)
+	r.tools["todo"] = todoapi.New(tdb, todoapi.Mode(piped), todoWake)
 
 	for _, t := range pluginTools {
 		r.tools[t.Name()] = t
@@ -542,6 +552,7 @@ func main() {
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
+			StopWorkers: stopWorkers,
 		})
 		if werr != nil {
 			fmt.Fprintln(os.Stderr, "rig serve:", werr)
@@ -566,6 +577,7 @@ func main() {
 		fe = tui.New(os.Stdin, os.Stdout, th,
 			tui.WithStatus(tuiStatusIn(r, sdb)),
 			tui.WithCommands(command.All(), env),
+			tui.WithIdleInterrupt(stopWorkers),
 		)
 
 		if c, ok := fe.(interface{ Close() }); ok {

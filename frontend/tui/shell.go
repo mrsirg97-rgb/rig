@@ -102,6 +102,13 @@ type tui struct {
 
 	swarm core.SwarmStatus
 
+	bandKind   string
+	bandSpawns map[int]time.Time
+
+	inbox []core.WorkerDone
+
+	idleInterrupt func()
+
 	askText  string
 	askReply chan bool
 
@@ -169,6 +176,13 @@ func WithStatusTick(d time.Duration) Option {
 			t.statusTicks = t.statusTicker.C
 		}
 	}
+}
+
+// WithIdleInterrupt wires the interrupt gesture for the moment there is no turn
+// to interrupt: an esc with an empty line stops the running workers. A session
+// without a delegate passes nothing, and the gesture keeps clearing the line.
+func WithIdleInterrupt(stop func()) Option {
+	return func(t *tui) { t.idleInterrupt = stop }
 }
 
 func WithCommands(cmds []core.Command, env any) Option {
