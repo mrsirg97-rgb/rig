@@ -99,6 +99,20 @@ A command job's fire skips the busy probe and
   the jail: `sh -c` over the stored line with the process environment,
   in the job's cwd — the payload is the operator's own, the same trust
   the crontab line itself carries.
+- `delegate.go`: `Delegate` is `DelegateStart` and `Wait` (2.14.0,
+  SPEC_DELEGATE 8). Everything that can refuse a delegation — the seams,
+  the recursion marker, the residency gate, the ad-hoc record, the jail,
+  the fleet pipe — happens in `DelegateStart`, synchronously, so a
+  refusal is still an answer this turn; it returns a `Delegation`
+  carrying the run id, the worker's session, its model and its log path
+  (named at the start, not at the end, because the hand-back line names
+  it) and a channel. The goroutine owns the spawn, the run log, the
+  record, the pipe and the proxy, and the timeout context that only it
+  may cancel; `Wait` reads the outcome once the log and the record are
+  on disk. `Delegate` keeps the synchronous shape verbatim for the
+  swarm, the review fire and the piped delegate tool, so there is one
+  implementation of both.
+
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE, the model
   resolution and gate of SPEC_WORKERS): the model resolves at claim
   time (named, else the resident model resolved to its models-table
@@ -258,6 +272,8 @@ A command job's fire skips the busy probe and
   touches its stall watch instead, its origin 0 since it has no room.
   The parent closes its write end after the spawn and waits for the
   reader's end-of-file before returning, so no frame is lost behind the
-  result. The child side is `Fleet()`: with the env set it marks fd 3
+  result — including the `tool_start` frames a worker publishes for its
+  own calls (2.14.0), which is what lets a delegated worker's band row
+  name the call it is in. The child side is `Fleet()`: with the env set it marks fd 3
   close-on-exec, so no tool's subprocess inherits the pipe, and returns
   the transport the one-shot frontend speaks through.

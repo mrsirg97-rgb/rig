@@ -1,11 +1,12 @@
-# rig: the delegate (a native tool that spawns and waits)
+# rig: the delegate (a native tool that spawns and hands off)
 
 The interactive session sometimes needs a bounded sub-task done by a
 headless worker whose result is a message; a long compute, a sweep,
 a review against a foreign spec; without threading the whole turn
 through it and without scheduling anything. This spec adds one native
-tool, `delegate`, that spawns a worker on a task now, waits for it,
-and feeds the worker's last message back into the turn.
+tool, `delegate`, that spawns a worker on a task now and feeds the
+worker's last message back into the turn — on the turn after the one that
+asked, since 2.14.0.
 
 It is a one-shot over the existing runner (SPEC_SANDBOX's jail, the
 socket proxy, the busy rule), a recorded run in the one scheduler
@@ -17,6 +18,22 @@ delegate spawns, exactly as `run-job` spawns one.
 per-session flocks are retired — the worker model resolves at claim
 time (the resident model, else the session's default) and the gate is
 the live free-slot read; decision 6's slot bounds below are historical.
+
+**Amended in 2.14.0 (the delegate lets go)**: the tool no longer waits.
+`Run` starts the worker and answers in the same turn with one line — the
+worker's number, its session, its log — and the worker's message comes
+back later as `core.WorkerDone`, folded by every frontend into the head
+of the next turn's input. The turn is never interrupted by a return: the
+block waits for the boundary, and an inbox that filled while nothing was
+live is itself an input (decision 8). What does not move: every refusal
+still lands this turn, the record, the log, the jail, the residency gate
+and the no-nesting guard. What moves: "an interrupted turn ends the turn
+and kills the worker's process tree" — the worker is no longer a child of
+the turn's context but of the session's, so the turn ending is not what
+kills it (decision 8); the session ending is, and the interrupt gesture
+made with no live turn stops every running worker. A piped session
+(`rig -p`) has no next turn to carry a return, so there the delegate
+keeps its synchronous shape and waits, exactly as it did (decision 9).
 
 **Amended in 2.12.7 (a delegate has no clock)**: `timeoutMs` leaves the
 tool — the schema, the defaults and the timed-out voice with it. The
@@ -33,19 +50,18 @@ carries the rule and the evidence.
   a fire is grabbed under flock, first-wins, and the report lands in
   the log; the right shape for unattended scheduled work where
   nobody waits. The delegate is the interactive opposite: the turn
-  needs the answer back now, so it spawns its own private worker and
-  blocks. A pull-based queue would need standing worker processes and
+  needs an answer back, so it spawns its own private worker and hands it
+  off. A pull-based queue would need standing worker processes and
   a poll-and-await seam for a result the turn can get by spawning; it
   is the async non-goal of this phase, named.
 - **Not a scheduler.** No crontab line is written: nothing fires on a
   schedule. The run is recorded in the one scheduler store so
   `scheduler runs` and the dashboard show it beside cron runs, but
   nothing ever fires it.
-- **Not async, no nesting.** Fan-out is N delegate calls in one turn,
-  bounded by the fleet's `slots`: the calls run concurrently up to
-  the slot count, and extras wait for a slot rather than failing. A
-  worker cannot delegate (an env marker). Each is named with its
-  reason in BOUNDS.
+- **Async by hand-off; no nesting.** Fan-out is N delegate calls in one
+  turn: each starts its worker and answers at once, so the turn that
+  fans out ten costs one turn. A worker cannot delegate (an env
+  marker). Each is named with its reason in BOUNDS.
 
 ## goals
 
@@ -62,17 +78,21 @@ carries the rule and the evidence.
   tool result names that session id so the operator can
   `sessions resume <id>` it.
 - The result is the worker's last assistant message, capped the way
-  bash output is capped, plus one trailer line. A failed worker is a
-  tool error naming its exit; an interrupted turn ends the turn and
-  kills the worker's process tree.
+  bash output is capped, plus one trailer line — delivered on the turn
+  after it lands, not the turn that asked (2.14.0). The hand-back line
+  names the worker, its session and its log, so the operator can follow
+  it while it runs.
 
 ## non-goals
 
 - No standing worker pool, no queue, no assignment protocol: the
   grab-the-fire model is the cron runner's, and the interactive turn
   needs a synchronous result (see what it is not).
-- No async returns, no out-of-band results: the delegate blocks the
-  turn until the worker finishes or the turn is interrupted.
+- No polling, no timeout, no getter for a worker's result: the return
+  is pushed. There is no call that asks "is it done" — the done event
+  arrives on the room, or nothing arrives until it does.
+- No interrupting a live turn with a return: a worker that finishes
+  mid-turn waits for the turn boundary (decision 8).
 - No fan-out inside a call: one worker per call, no parallel
   sub-delegates (fan-out is N calls in one turn, bounded by the
   fleet's slots).
@@ -107,9 +127,10 @@ carries the rule and the evidence.
   fleet's model is a row of the operator's models table; there is no
   fallback baked into the binary.
 - The tool has no clock (2.12.7). `timeoutMs` is off the schema, the
-  seam takes no default, and the spawn context is the turn's context:
-  a worker lives until it exits or the turn is interrupted, and the
-  interrupt's process-group cancel takes the whole tree down with it
+  seam takes no default, and the spawn takes a caller-supplied context —
+  the turn's until 2.14.0, the session's since (decision 8): a worker
+  lives until it exits, the session ends, or the idle interrupt stops it,
+  and the cancel's process-group kill takes the whole tree down either way
   (decision 2). A timeout on a fan-out seam guesses how long the work
   should take, and under a shared slot the guess is always wrong for
   someone: a ten-way fan-out of test-pass reads on a one-slot model on
@@ -170,10 +191,12 @@ seam, reusing the exact pieces `run-job` uses:
   eviction from inside a turn. A busy-check failure (uncertain GPU
   state) fails closed the same way, naming the failed check.
 - **The spawn**: `RealSpawn` (`CommandContext`, Setpgid, the SIGKILL
-  process-group cancel). The context handed it is the turn's (2.12.7):
-  an interrupted turn kills the worker's process tree, and a caller
-  that gives the fire its own spend ceiling kills it the same way when
-  the ceiling expires. Nothing else kills it.
+  process-group cancel). The context handed it is the caller's: for an
+  interactive delegate that is the session's, so the worker's tree dies
+  with the session or the idle interrupt and not with the turn (2.14.0);
+  for the scheduler's own callers it is the fire's, and a caller that gives
+  the fire its own spend ceiling kills it the same way when the ceiling
+  expires. Nothing else kills it.
 
 The worker prompt is `task + ReportBack` (`ReportBack`, the runner's
 standing directive), exactly the prompt `run-job` builds. The worker
@@ -244,12 +267,19 @@ is that text, capped the way bash output is capped: the loud
 
     delegate: exit N · 123ms · session <id> · log <rel path>
 
-A failed worker is a tool error naming its exit:
-`delegate: the worker failed (exit N)`. A worker killed by an
-interrupt dies with the turn, its run records `canceled`, and the tool
-answers while the turn ends. There is no timeout voice: the tool has
-no clock (decision 1). The trailer still rides the
-error, so the operator always has the session id and log path.
+A failed worker's return names its exit in the trailer; in the
+synchronous shape (decision 9) it is also a tool error:
+`delegate: the worker failed (exit N)`. There is no timeout voice: the
+tool has no clock (decision 1). The trailer always rides the return, so
+the operator has the session id and log path either way. A worker that
+never ran — a spawn that faulted after acceptance — has no stdout to
+cap, and its return's content is the fault itself: the reason is the
+answer, and it is not dropped on the floor.
+
+The hand-back line — what the turn that delegated actually gets — is
+one line and never the answer:
+
+    delegate: worker #2 started · session <id> · log <rel path>
 
 ### 6. Bounds, named
 
@@ -317,9 +347,9 @@ error, so the operator always has the session id and log path.
   worker and writes stores). Manual mode asks, and the prompt shows
   the task's first line, not the raw args JSON; `approve.Prompt`
   special-cases `delegate` (decision 7).
-- No async, no nesting in this phase: each named with its reason
-  above. A queue, a pool, and nested delegates are later amendments,
-  not this.
+- No queue, no pool, no nesting: each named with its reason above.
+  Async returns arrived in 2.14.0 (decision 8) as a hand-off, not a
+  poll; a standing pool is still a later amendment, not this.
 
 ### 7. The approval prompt names the task
 
@@ -331,6 +361,55 @@ parses `call.Args` as `{task}` and renders `delegate · <first line>`
 the args do not parse. This is a named, small change to
 `approve.go`, its voice unchanged for every other tool.
 
+### 8. The return is the next turn's (2.14.0)
+
+The worker's outcome is published as `core.WorkerDone` on the delegate's
+room member, and each frontend keeps an inbox: returns append in arrival
+order and never overwrite one another (a `WorkerDone` is a story, not a
+`Snapshot` — that is why it does not implement `Snapshot`, and why two
+workers that finish during one turn arrive as two blocks in the order
+they finished). The drain is at the top of `Input`, ahead of the
+operator's text: the model reads the returns as a turn of its own, then
+what the operator typed.
+
+    delegate #2 returned · exit 0 · 4m12s · session <id>
+    <the worker's stdout, capped, and its trailer>
+
+An inbox that fills while no turn is live is itself an input: `Input`
+returns the block alone and the session starts a turn, exactly as the
+steer slot does (SPEC_TUI 3). A live turn is never interrupted — a
+return arriving mid-turn waits for `Input` to be asked again. Nothing
+polls, nothing waits, no clock: the wake is a signal, and `Input` was
+already the place a turn is made.
+
+The worker is a child of the *session's* context (the root passes it as
+`Opts.Ctx`), not the turn's, which is the other half of letting go: a
+worker outlives the turn that started it, and dies with the session.
+The interrupt gesture with no live turn (esc in the TUI, the dashboard's
+stop button) reaches the tool through a root-wired hook — the loop is
+untouched and the frontends know only "stop what is running". The CLI
+has no such gesture: there, SIGINT ends the session and the workers die
+with it.
+
+`store/scheduler` splits the same path rather than duplicating it:
+`DelegateStart` does everything that can refuse (seams, the recursion
+guard, the residency gate, the record, the jail, the fleet pipe) and
+returns a `Delegation` naming the run, its session and its log; `Wait`
+collects the outcome once the log and the run record are on disk.
+`Delegate` is `DelegateStart` and `Wait`, so the swarm and the review
+fire are untouched, and there is one implementation of both shapes.
+
+### 9. The piped session waits (2.14.0)
+
+A `rig -p` session ends when its turn ends: there is no next turn to
+carry a return, and an async delegate there would quietly kill its
+workers at exit and lose their answers. So the delegate keeps its
+synchronous shape in that one shape of session — `Opts.Await`, wired by
+the root when the frontend is a oneshot — and the tool result is the
+worker's message, as before. Cron fires are oneshots: a scheduled job
+can still fan out and wait. What the interactive session gains, the
+piped session does not lose.
+
 ## testing
 
 Named cases, failing first, in `tool/delegate` over a fake `Spawn`
@@ -339,7 +418,26 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
 - **The happy path**: a fake `Spawn` returns an exit-0 worker: the
   result is fed back (the worker's stdout capped, the trailer line's
   shape; exit, duration, session id, log path), the run is recorded
-  in the one scheduler store, and the session id is named.
+  in the one scheduler store, and the session id is named. In the
+  hand-off shape the same assertions hold of the *return*, and the tool
+  result is the one hand-back line.
+- **The hand-back arrives first**: a fake `Spawn` that blocks: `Run`
+  returns the one line while the worker is still running, and the turn
+  it named is not the turn that gets the answer.
+- **The turn's context does not rule the worker**: cancelling the turn's
+  context leaves the spawn's context alive; cancelling the session's
+  context ends it. (Reverses 2.12.7's interrupted-turn test.)
+- **The idle interrupt stops every running worker**: esc with no live
+  turn reaches the tool, and each worker's context dies with it; under
+  the jail, the worker's whole process tree dies with it.
+- **The inbox is a queue, not a slot**: two `WorkerDone` events during a
+  live turn arrive at the next `Input` as one block, in order, ahead of
+  the operator's text; one `WorkerDone` with no live turn makes `Input`
+  return that block alone (each frontend, and the TUI's golden stream).
+- **The pipe carries the call, not the body**: `tool_start` round-trips
+  the encoder and the pipe; a 10 KB `write` crosses as one line of at
+  most 80 characters and never carries its content, its `old` or its
+  `new`; a worker with no transport publishes nothing.
 - **The cwd refusal**: a `cwd` outside the session cwd or the rig
   home refuses by name.
 - **The busy refusal**: a held GPU refuses loudly naming the holder

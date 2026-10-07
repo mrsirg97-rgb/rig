@@ -364,7 +364,7 @@ func (r *root) deliver(ev core.Event) {
 		}
 	}()
 	switch ev.(type) {
-	case core.Notice, core.SwarmStatus, core.Phase:
+	case core.Notice, core.SwarmStatus, core.Phase, core.WorkerDone:
 	default:
 		return
 	}

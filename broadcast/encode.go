@@ -68,6 +68,7 @@ const (
 	kindVerdict     = "verdict"
 	kindPhase       = "phase"
 	kindReasoning   = "reasoning"
+	kindToolStart   = "tool_start"
 )
 
 func kindOf(ev core.Event) (string, bool) {
@@ -82,6 +83,8 @@ func kindOf(ev core.Event) (string, bool) {
 		return kindPhase, true
 	case core.ReasoningDelta:
 		return kindReasoning, true
+	case core.ToolStart:
+		return kindToolStart, true
 	}
 	return "", false
 }
@@ -102,6 +105,9 @@ func eventOf(kind string, payload json.RawMessage) (core.Event, error) {
 		return ev, json.Unmarshal(payload, &ev)
 	case kindReasoning:
 		var ev core.ReasoningDelta
+		return ev, json.Unmarshal(payload, &ev)
+	case kindToolStart:
+		var ev core.ToolStart
 		return ev, json.Unmarshal(payload, &ev)
 	}
 	return nil, fmt.Errorf("broadcast: unknown kind %q", kind)

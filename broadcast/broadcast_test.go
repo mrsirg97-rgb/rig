@@ -224,6 +224,31 @@ func TestASubscriberCancelHearsItAndStopsReceiving(t *testing.T) {
 	}
 }
 
+func TestTheEncoderCarriesToolStart(t *testing.T) {
+	enc := broadcast.NewJSONEncoder()
+	m := broadcast.NewMessage(9, true, core.ToolStart{Call: core.ToolCall{
+		ID: "call-1", Name: "edit", Args: json.RawMessage(`"tool/file/edit.go"`),
+	}})
+	raw, err := enc.Encode(m)
+	if err != nil {
+		t.Fatalf("a worker's tool call crosses: %v", err)
+	}
+	if !strings.Contains(string(raw), `\"kind\":\"tool_start\"`) && !strings.Contains(string(raw), `"kind":"tool_start"`) {
+		t.Fatalf("the frame names its kind: %s", raw)
+	}
+	back, err := enc.Decode(raw)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	ev, ok := back.Event().(core.ToolStart)
+	if !ok {
+		t.Fatalf("a tool_start decodes as a tool start, got %T", back.Event())
+	}
+	if ev.Call.Name != "edit" || ev.Call.ID != "call-1" || ev.BoundedCall() != "edit tool/file/edit.go" {
+		t.Fatalf("the call survives the trip: %+v", ev)
+	}
+}
+
 func TestTheEncoderRoundTripsTheCrossingKinds(t *testing.T) {
 	enc := broadcast.NewJSONEncoder()
 	for _, m := range []broadcast.Message{

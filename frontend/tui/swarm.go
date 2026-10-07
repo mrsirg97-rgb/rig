@@ -24,6 +24,80 @@ func RenderSwarmBand(t Theme, st core.SwarmStatus) string {
 	return swarmRule(t) + "\n" + strings.Join(rows, "\n")
 }
 
+// IsDelegateBand reports whether a snapshot came from a delegate rather than a
+// swarm. The two publishers share the snapshot's shape, so the role they stamp
+// is what tells them apart: a swarm's rows say what a worker is, a delegate's
+// rows say they are delegated.
+func IsDelegateBand(st core.SwarmStatus) bool {
+	for _, w := range st.Workers {
+		if w.Role == delegateRole {
+			return true
+		}
+	}
+	return false
+}
+
+const delegateRole = "delegate"
+
+// RenderDelegateBand is the two rows a batch of delegated workers leaves under
+// the status: how many are running and for how long, over the most recent call
+// across all of them. Two rows for ten workers as for one — the per-worker
+// story stays where it always was, and one row would have made the band grow
+// with the fan-out it exists to summarize.
+func RenderDelegateBand(t Theme, st core.SwarmStatus, since, now time.Time) string {
+	var ws []core.SwarmWorker
+	for _, w := range st.Workers {
+		if w.Role == delegateRole && w.State == "running" {
+			ws = append(ws, w)
+		}
+	}
+	if len(ws) == 0 || since.IsZero() {
+		return ""
+	}
+	sep := t.Paint(SlotDim, " "+t.Glyph(GlyphDot)+" ")
+	word := "workers"
+	if len(ws) == 1 {
+		word = "worker"
+	}
+	head := t.Paint(SlotDim, "delegating") + sep +
+		t.Paint(SlotText, fmt.Sprintf("%d %s", len(ws), word)) + sep +
+		t.Paint(SlotDim, swarmAge(now.Sub(since)))
+	return swarmRule(t) + "\n" + head + "\n" + t.Paint(SlotDim, swarmCallRow(ws, now))
+}
+
+func swarmCallRow(ws []core.SwarmWorker, now time.Time) string {
+	recent, found := swarmLatestCall(ws)
+	if !found {
+		return "—"
+	}
+	age := "—"
+	if !recent.ToolAt.IsZero() {
+		age = swarmAge(now.Sub(recent.ToolAt))
+	}
+	return fmt.Sprintf("#%d %s · %s", recent.ID, recent.Tool, age)
+}
+
+func swarmLatestCall(ws []core.SwarmWorker) (core.SwarmWorker, bool) {
+	var best core.SwarmWorker
+	found := false
+	for _, w := range ws {
+		if w.Tool == "" {
+			continue
+		}
+		if !found || w.ToolAt.After(best.ToolAt) {
+			best, found = w, true
+		}
+	}
+	return best, found
+}
+
+// bandRunning reports whether a snapshot has a batch in flight. Only a
+// delegate's rows drive a repaint on their own: a swarm's band has always been
+// painted by the events that move it.
+func bandRunning(st core.SwarmStatus) bool {
+	return IsDelegateBand(st) && swarmAnyRunning(st.Workers)
+}
+
 func swarmRule(t Theme) string {
 	return t.Paint(SlotDim, strings.Repeat(t.Glyph(GlyphDot), 4))
 }

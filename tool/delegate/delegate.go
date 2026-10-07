@@ -42,6 +42,8 @@ type Opts struct {
 	Spawn        sched.Spawn
 	Models       func() models.Table
 	Room         broadcast.Room
+	Ctx          context.Context
+	Await        bool
 }
 
 type workerState struct {
@@ -49,6 +51,8 @@ type workerState struct {
 	task      string
 	heartbeat time.Time
 	state     string
+	tool      string
+	toolAt    time.Time
 }
 
 type Delegate interface {
@@ -56,10 +60,12 @@ type Delegate interface {
 	Exec(ctx context.Context, args json.RawMessage) (string, error)
 
 	Run(ctx context.Context, task, workspace, model string) (string, error)
+
+	StopAll()
 }
 
 func New(o Opts) Delegate {
-	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}}
+	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}, stops: map[int]context.CancelFunc{}}
 	if o.Room != nil {
 		a.member = o.Room.Add(rig.MemberDelegate)
 		a.member.Subscribe(context.Background(), a.receive)
@@ -73,6 +79,7 @@ type adapter struct {
 	mu      sync.Mutex
 	seq     int64
 	workers map[int64]workerState
+	stops   map[int]context.CancelFunc
 	member  broadcast.Member
 }
 
@@ -90,13 +97,14 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	return a.Run(ctx, g.Task, g.Workspace, g.Model)
 }
 
+// Run hands the work off. Everything that could refuse it — an empty task, a
+// workspace outside the guard, a model that is not resident, a jail that will
+// not start — is still an error this turn; what moves to the next turn is the
+// answer. The worker runs under the session's context, not the turn's, so the
+// turn ending is not what kills it.
 func (a *adapter) Run(ctx context.Context, task, workspace, model string) (string, error) {
 	if strings.TrimSpace(task) == "" {
 		return "", errors.New("delegate: task is required")
-	}
-	member := a.begin(task)
-	if member != nil {
-		defer a.end(member)
 	}
 	session := "anon"
 	if s, ok := core.SessionFrom(ctx); ok && s != nil {
@@ -114,7 +122,9 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 		}
 	}
 
-	res, err := sched.Delegate(sched.DelegateInput{
+	workerCtx, stop := context.WithCancel(a.session())
+	member, n := a.begin(task, stop)
+	del, err := sched.DelegateStart(sched.DelegateInput{
 		DB:            a.DB,
 		Home:          a.Home,
 		Session:       session,
@@ -135,24 +145,92 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 		StateDir:      a.StateDir,
 		Allow:         a.Allow,
 		Member:        member,
-		SpawnCtx:      ctx,
+		SpawnCtx:      workerCtx,
 	})
 	if err != nil {
+		stop()
+		a.end(member, n)
 		return "", err
 	}
 
-	content := capOutput(res.Stdout)
-	trailer := fmt.Sprintf("delegate: exit %d · %dms · session %s · log %s",
-		res.Exit, res.Duration.Milliseconds(), res.SessionID, res.LogRel)
-	if res.Note != "" {
-		trailer += " · " + res.Note
+	if a.Await {
+		res, err := a.settle(member, n, task, del)
+		if err != nil {
+			return "", err
+		}
+		if res.Exit != 0 {
+			return res.Content, fmt.Errorf("delegate: the worker failed (exit %d)", res.Exit)
+		}
+		return res.Content, nil
 	}
-	content += "\n" + trailer
 
-	if res.Exit != 0 {
-		return content, fmt.Errorf("delegate: the worker failed (exit %d)", res.Exit)
+	go func() { _, _ = a.settle(member, n, task, del) }()
+
+	line := fmt.Sprintf("delegate: worker #%d started · session %s · log %s", n, del.Session, del.Log)
+	if del.Note != "" {
+		line += " · " + del.Note
 	}
-	return content, nil
+	return line, nil
+}
+
+func (a *adapter) session() context.Context {
+	if a.Ctx == nil {
+		return context.Background()
+	}
+	return a.Ctx
+}
+
+type settled struct {
+	Content  string
+	Exit     int
+	Duration time.Duration
+	Session  string
+	Log      string
+}
+
+// settle waits the worker out, clears its band row, and publishes the return as
+// core.WorkerDone. The content is the same text the synchronous tool result
+// always was: the worker's stdout, capped, with the trailer naming its death.
+// The error is the runner's, the one the blocking shape used to return; a
+// handed-off worker's failure is its return's exit code, not an error here —
+// and a worker that never ran carries the fault as its content, since there is
+// no stdout to cap.
+func (a *adapter) settle(member broadcast.Member, n int, task string, del sched.Delegation) (settled, error) {
+	res, err := del.Wait()
+	out := settled{
+		Exit: res.Exit, Duration: res.Duration,
+		Session: firstNonEmpty(res.SessionID, del.Session), Log: firstNonEmpty(res.LogRel, del.Log),
+	}
+	if err == nil {
+		out.Content = capOutput(res.Stdout) + "\n" + fmt.Sprintf("delegate: exit %d · %dms · session %s · log %s",
+			res.Exit, res.Duration.Milliseconds(), out.Session, out.Log)
+		if res.Note != "" {
+			out.Content += " · " + res.Note
+		}
+	} else {
+		out.Exit = -1
+		// A worker that never ran has no stdout to cap: the fault itself is
+		// its return's content, because a late failure is still an answer.
+		out.Content = err.Error()
+	}
+	a.end(member, n)
+	if a.member != nil {
+		done := core.WorkerDone{
+			N: n, Task: firstLine(task), Content: out.Content, Exit: out.Exit,
+			Duration: out.Duration, Session: out.Session, Log: out.Log,
+		}
+		a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, done))
+	}
+	return out, err
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func capOutput(s string) string {
@@ -168,20 +246,38 @@ func strictDecode(data json.RawMessage, out any) error {
 	return dec.Decode(out)
 }
 
-func (a *adapter) begin(task string) broadcast.Member {
+func (a *adapter) begin(task string, stop context.CancelFunc) (broadcast.Member, int) {
+	a.mu.Lock()
+	a.seq++
+	n := int(a.seq)
+	a.stops[n] = stop
+	a.mu.Unlock()
 	if a.member == nil {
-		return nil
+		return nil, n
 	}
 	member := a.Room.Mint()
 	a.mu.Lock()
-	a.seq++
-	a.workers[member.Id()] = workerState{n: int(a.seq), task: firstLine(task), heartbeat: time.Now(), state: "running"}
+	a.workers[member.Id()] = workerState{n: n, task: firstLine(task), heartbeat: time.Now(), state: "running"}
 	a.mu.Unlock()
 	a.emit()
-	return member
+	return member, n
 }
 
-func (a *adapter) end(member broadcast.Member) {
+func (a *adapter) end(member broadcast.Member, n int) {
+	a.mu.Lock()
+	stop := a.stops[n]
+	delete(a.stops, n)
+	a.mu.Unlock()
+	// The worker's life is over — end is reached only after Wait returned or
+	// before the spawn began — so cancelling releases the context the session
+	// would otherwise carry until it ends. Cancel is idempotent, and StopAll
+	// races nothing by reading a map the entry has already left.
+	if stop != nil {
+		stop()
+	}
+	if member == nil {
+		return
+	}
 	member.Leave()
 	a.mu.Lock()
 	delete(a.workers, member.Id())
@@ -189,23 +285,47 @@ func (a *adapter) end(member broadcast.Member) {
 	a.emit()
 }
 
+// StopAll ends every running worker. It is the idle interrupt: the gesture the
+// operator makes when there is no turn to interrupt and the workers are the
+// only thing still running.
+func (a *adapter) StopAll() {
+	a.mu.Lock()
+	stops := make([]context.CancelFunc, 0, len(a.stops))
+	for _, stop := range a.stops {
+		stops = append(stops, stop)
+	}
+	a.mu.Unlock()
+	for _, stop := range stops {
+		if stop != nil {
+			stop()
+		}
+	}
+}
+
 func (a *adapter) receive(err error, messages ...broadcast.Message) {
 	if err != nil {
 		return
 	}
-	beat := false
+	changed := false
 	a.mu.Lock()
 	for _, m := range messages {
 		w, ok := a.workers[m.Origin()]
-		if m.Event() != nil || !ok {
+		if !ok {
 			continue
 		}
-		w.heartbeat = time.Now()
+		switch ev := m.Event().(type) {
+		case nil:
+			w.heartbeat = time.Now()
+		case core.ToolStart:
+			w.heartbeat, w.tool, w.toolAt = time.Now(), ev.BoundedCall(), time.Now()
+		default:
+			continue
+		}
 		a.workers[m.Origin()] = w
-		beat = true
+		changed = true
 	}
 	a.mu.Unlock()
-	if beat {
+	if changed {
 		a.emit()
 	}
 }
@@ -218,7 +338,10 @@ func (a *adapter) snapshot() core.SwarmStatus {
 	a.mu.Lock()
 	ws := make([]core.SwarmWorker, 0, len(a.workers))
 	for _, w := range a.workers {
-		ws = append(ws, core.SwarmWorker{ID: w.n, Role: "worker", Task: w.task, Heartbeat: w.heartbeat, State: w.state})
+		ws = append(ws, core.SwarmWorker{
+			ID: w.n, Role: "delegate", Task: w.task, Heartbeat: w.heartbeat,
+			State: w.state, Tool: w.tool, ToolAt: w.toolAt,
+		})
 	}
 	a.mu.Unlock()
 	sort.Slice(ws, func(i, j int) bool { return ws[i].ID < ws[j].ID })

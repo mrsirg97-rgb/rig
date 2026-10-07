@@ -127,7 +127,7 @@ them with `--allow`:
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
 | `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
-| `delegate` | a headless worker for a bounded subtask; wired where a second request can run (a remote row, or a readable swap) |
+| `delegate` | a headless worker for a bounded subtask, handed off and returned on a later turn; wired where a second request can run (a remote row, or a readable swap) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |
 | `decide` | hand many items to a decision server against one typed question instead of reading them (on the menu only when `decisionUrl` is set) |
 | `verdict` | deliver the reviewer's one word on work a worker was asked to review (registered only in a fleet worker that holds the pipe) |
@@ -163,11 +163,14 @@ cost column (SPEC_HOSTED).
 
 ## subagents
 
-`delegate` runs a bounded sub-task on a headless worker and waits for its
-last message. In one turn you can fan out several delegates: they run in
-parallel and the turn blocks until each finishes or is interrupted; there
-is no free-slot refusal — a queued request waits at the server (the slot
-gate is gone, 2.6.0; one slot hosts the pair). A worker runs on the
+`delegate` runs a bounded sub-task on a headless worker and hands it off:
+the turn gets one line naming the worker, its session and its log, and the
+worker's last message comes back on a later turn — as the head of the next
+thing you'd have typed, in every frontend. Fan out ten delegates in one
+turn and the turn costs one; there is no free-slot refusal — a queued
+request waits at the server (the slot gate is gone, 2.6.0; one slot hosts
+the pair). Esc on an empty prompt with no turn running stops every worker;
+a worker dies with the session, not with the turn that spawned it. A worker runs on the
 resident model; a model you name asks for a
 swap only when nothing is resident, and a different resident model
 refuses, naming the holder (never an eviction from inside a turn).

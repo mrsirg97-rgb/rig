@@ -8,11 +8,13 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/models"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -101,13 +103,23 @@ func (e jsonErr) Error() string { return string(e) }
 func jsonError(s string) error { return jsonErr(s) }
 
 type fakeSpawn struct {
-	mu          sync.Mutex
-	calls       []fakeCall
-	result      sched.SpawnResult
-	err         error
-	record      func()
-	block       <-chan struct{}
-	deadlineSet bool
+	mu            sync.Mutex
+	calls         []fakeCall
+	result        sched.SpawnResult
+	err           error
+	record        func()
+	block         <-chan struct{}
+	deadlineSet   bool
+	diesOnContext bool
+}
+
+func waitBlockOrCancel(block <-chan struct{}, ctx context.Context) error {
+	select {
+	case <-block:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 type fakeCall struct {
@@ -131,6 +143,28 @@ func (f *fakeSpawn) hadDeadline() bool {
 	return f.deadlineSet
 }
 
+// ctxDies makes the fake end the way a killed process does when its context is
+// cancelled: it stops, and its exit is not zero.
+func (f *fakeSpawn) ctxDies(on bool) { f.diesOnContext = on }
+
+func (f *fakeSpawn) ctxOf(i int) context.Context {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls[i].Ctx
+}
+
+func (f *fakeSpawn) endedCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, c := range f.calls {
+		if !c.Ended.IsZero() {
+			n++
+		}
+	}
+	return n
+}
+
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	started := time.Now()
 	f.mu.Lock()
@@ -139,9 +173,17 @@ func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 	if _, ok := ctx.Deadline(); ok {
 		f.deadlineSet = true
 	}
+	dies := f.diesOnContext
 	f.mu.Unlock()
 	if f.block != nil {
-		<-f.block
+		if !dies {
+			<-f.block
+		} else if err := waitBlockOrCancel(f.block, ctx); err != nil {
+			f.mu.Lock()
+			f.calls[idx].Ended = time.Now()
+			f.mu.Unlock()
+			return sched.SpawnResult{Exit: -1, Signal: syscall.SIGKILL}, nil
+		}
 	}
 	f.mu.Lock()
 	f.calls[idx].Ended = time.Now()
@@ -197,9 +239,35 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	return &harness{home: home, rigHome: rigHome, db: db}
 }
 
+// newTool is the synchronous shape: a session with no next turn to carry a
+// return (a piped run) waits for its worker and gets its message as the tool
+// result. The async shape — the one an interactive session uses — is
+// asyncTool, and both share everything up to the spawn.
 func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) delegate.Delegate {
 	t.Helper()
+	return h.newToolCtx(t, context.Background(), true, fetch, spawn)
+}
+
+// asyncTool is a worker handed off: Run answers at once and the return is
+// published, so a test reads it off the room rather than off the result.
+func (h *harness) asyncTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) (delegate.Delegate, *recordFrontend) {
+	t.Helper()
+	room, fe := newFleetRoom(t)
+	tool := h.newToolRoom(t, context.Background(), false, room, fetch, spawn)
+	return tool, fe
+}
+
+func (h *harness) newToolCtx(t *testing.T, ctx context.Context, await bool, fetch sched.Fetch, spawn sched.Spawn) delegate.Delegate {
+	t.Helper()
+	return h.newToolRoom(t, ctx, await, nil, fetch, spawn)
+}
+
+func (h *harness) newToolRoom(t *testing.T, ctx context.Context, await bool, room broadcast.Room, fetch sched.Fetch, spawn sched.Spawn) delegate.Delegate {
+	t.Helper()
 	return delegate.New(delegate.Opts{
+		Ctx:          ctx,
+		Await:        await,
+		Room:         room,
 		DB:           h.db,
 		Home:         h.home,
 		RigHome:      h.rigHome,

@@ -96,6 +96,9 @@ func (o *OneShot) Notify(ev core.Event) {
 			io.WriteString(o.Err, "\nrig: "+e.Source+": "+e.Text+"\n")
 		}
 	case core.ToolStart:
+		if o.Fleet != nil {
+			o.Fleet.Send(context.Background(), func(error) {}, broadcast.NewMessage(o.Fleet.Id(), true, boundedStart(e)))
+		}
 		if o.Err != nil {
 			o.mu.Lock()
 			if o.toolNames == nil {

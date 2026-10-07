@@ -209,8 +209,22 @@ func (t *tui) Notify(ev core.Event) {
 	case core.SwarmStatus:
 		t.mu.Lock()
 		t.swarm = e
+		t.trackBandLocked(e)
+		if bandRunning(e) {
+			t.startFrameTickerLocked()
+		} else {
+			t.stopFrameTickerLocked()
+		}
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 		t.mu.Unlock()
+	case core.WorkerDone:
+		t.mu.Lock()
+		t.inbox = append(t.inbox, e)
+		t.mu.Unlock()
+		select {
+		case t.wake <- struct{}{}:
+		default:
+		}
 	default:
 
 	}
@@ -373,13 +387,65 @@ func (t *tui) statusLineLocked() string {
 		return ""
 	}
 	s := "\n" + st
-	if band := RenderSwarmBand(t.theme, t.swarm); band != "" {
-		s += "\n" + band
-	}
 	if rows := RenderStatusRows(t.theme, t.statusRows); rows != "" {
 		s += "\n" + rows
 	}
+	if band := t.bandLocked(time.Now()); band != "" {
+		s += "\n" + band
+	}
 	return s
+}
+
+func (t *tui) bandLocked(now time.Time) string {
+	if IsDelegateBand(t.swarm) {
+		return RenderDelegateBand(t.theme, t.swarm, t.bandSinceLocked(), now)
+	}
+	return RenderSwarmBand(t.theme, t.swarm)
+}
+
+// trackBandLocked remembers when each worker first appeared, which is the only
+// honest reading of "elapsed since this batch started" the snapshot can give:
+// it carries a heartbeat, and a heartbeat is refreshed by the next one.
+func (t *tui) trackBandLocked(st core.SwarmStatus) {
+	kind := "swarm"
+	if IsDelegateBand(st) {
+		kind = "delegate"
+	}
+	if kind != t.bandKind {
+		t.bandKind = kind
+		t.bandSpawns = nil
+	}
+	if kind != "delegate" {
+		return
+	}
+	seen := map[int]bool{}
+	for _, w := range st.Workers {
+		if w.State != "running" || w.Heartbeat.IsZero() {
+			continue
+		}
+		seen[w.ID] = true
+		if t.bandSpawns == nil {
+			t.bandSpawns = map[int]time.Time{}
+		}
+		if at, ok := t.bandSpawns[w.ID]; !ok || w.Heartbeat.Before(at) {
+			t.bandSpawns[w.ID] = w.Heartbeat
+		}
+	}
+	for id := range t.bandSpawns {
+		if !seen[id] {
+			delete(t.bandSpawns, id)
+		}
+	}
+}
+
+func (t *tui) bandSinceLocked() time.Time {
+	var since time.Time
+	for _, at := range t.bandSpawns {
+		if since.IsZero() || at.Before(since) {
+			since = at
+		}
+	}
+	return since
 }
 
 func (t *tui) recaptureStatusLocked(in StatusIn, fresh bool) {

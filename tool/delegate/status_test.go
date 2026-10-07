@@ -22,6 +22,39 @@ type recordFrontend struct {
 	events []core.Event
 }
 
+// returns is the inbox a frontend would fold: the workers that came back, in
+// the order they came back.
+func (r *recordFrontend) returns() []core.WorkerDone {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []core.WorkerDone
+	for _, ev := range r.events {
+		if d, ok := ev.(core.WorkerDone); ok {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+func newFleetRoom(t *testing.T) (broadcast.Room, *recordFrontend) {
+	t.Helper()
+	fe := &recordFrontend{}
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	t.Cleanup(engine.Stop)
+	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
+	})
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err == nil && m.Event() != nil {
+				fe.Notify(m.Event())
+			}
+		}
+	})
+	return room, fe
+}
+
 func (r *recordFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
 
 func (r *recordFrontend) Notify(ev core.Event) {
@@ -95,12 +128,13 @@ func TestDelegateEmitsSwarmStatus(t *testing.T) {
 		Spawn:        spawn.spawn,
 		Sandbox:      "off",
 		Room:         room,
+		Await:        true,
 	})
 	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"task":"sweep the floor"}`)); err != nil {
 		t.Fatalf("exec: %v", err)
 	}
-	if n := len(engine.Pending()); n != 4 {
-		t.Fatalf("before the loop runs: the claim and the exit are one pending frame per other member (the frontend, the minted worker), the thirty heartbeats one per listener (the frontend, the tool), got %d", n)
+	if n := len(engine.Pending()); n != 5 {
+		t.Fatalf("before the loop runs: the claim, the exit and the return are one pending frame per other member (the frontend, the minted worker), the thirty heartbeats one per listener (the frontend, the tool), got %d", n)
 	}
 	go engine.Start(context.Background())
 	defer engine.Stop()
@@ -179,7 +213,7 @@ func TestDelegateFramesRunningThenCleared(t *testing.T) {
 	}
 	first := st[0]
 	if len(first.Workers) != 1 || first.Workers[0].Task != "sweep the floor" ||
-		first.Workers[0].State != "running" || first.Workers[0].Role != "worker" {
+		first.Workers[0].State != "running" || first.Workers[0].Role != "delegate" {
 		t.Fatalf("the first status is not the running delegate: %+v", first)
 	}
 	last := st[len(st)-1]

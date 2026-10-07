@@ -4,7 +4,11 @@
 
 The one-shot worker tool (`specs/SPEC_DELEGATE.md`, the workers of
 `specs/SPEC_WORKERS.md`): spawn a headless worker on a task now, in a
-workspace, wait, and feed back its last message. The worker model
+workspace, and hand it off — the turn gets one line naming the worker,
+and the worker's message comes back on a later turn (2.14.0,
+SPEC_DELEGATE 8). A piped session has no later turn, so there the tool
+waits and answers with the message itself (`Opts.Await`,
+SPEC_DELEGATE 9). The worker model
 resolves at claim time — the named one, else the resident model, else
 the session's default — and the gate is the live free-slot read: a
 call with no free slot refuses (`no free slot; this turn holds the
@@ -28,12 +32,27 @@ nothing scheduled) and a resumable transcript in the state store.
   the output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
   marker) and the trailer line (exit, duration, session id, log path);
   the explicit worker session id threaded through the spawn.
+- `delegate.go`: the return is an event, not a wait (2.14.0). When the
+  worker ends, `settle` clears the band row, and publishes
+  `core.WorkerDone` (the worker's number, its task, its content — the
+  same text the synchronous result always was — its exit, duration,
+  session and log) on the tool's room member; the frontends fold it
+  into the next turn. `StopAll` is the idle interrupt: it cancels every
+  running worker's context (the set is keyed by the worker number, not
+  by the room member, so it works with no room at all — a session
+  without one simply never publishes a return).
+- `delegate.go`: `Opts.Ctx` is the session's context and the worker's
+  parent, `Opts.Await` is the piped session's shape, both wired by the
+  root. `Run` spawns under a context derived from the session's, never
+  the turn's, so ending the turn does not end the worker.
 - `delegate.go`: the tool has no clock (2.12.7, SPEC_DELEGATE 1). No
   `timeoutMs` on the schema, no default, no ceiling: `Timeout:
-  noTimeout` and `SpawnCtx: ctx` hand the worker the turn's context, so
-  it lives until it exits or the turn is interrupted and
-  `RealSpawn`'s process-group cancel takes the tree down. A failed
-  worker is the one error voice (`the worker failed (exit N)`); the
+  noTimeout` and `SpawnCtx:` the worker's own context (derived from
+  `Opts.Ctx`) hand the worker the session's life, not the turn's: it
+  lives until it exits, the session ends, or `StopAll` is called, and
+  `RealSpawn`'s process-group cancel takes the tree down either way. A
+  failed worker's exit rides its return (in the awaited shape it is the
+  one error voice, `the worker failed (exit N)`); the
   silence window is the runner's per-job `stall` setting, not this
   tool's, and a silent worker is shown (the swarm row's heartbeat age),
   never killed for it.
@@ -48,13 +67,17 @@ nothing scheduled) and a resumable transcript in the state store.
   snapshots on start, on the spawn's stream bytes (the same Observe),
   and on exit, one worker row, zero queue counts, throttled to a few
   per second with the exit's last frame always landing.
-- `delegate_test.go`, `turn_test.go`: the failing-first named cases
-  over a fake `Spawn` and `Fetch` (happy path, cwd refusal, busy
-  refusal, the fan-out overlap and the one-slot sequence,
-  no-recursion, the cap) and the no-clock cases (no deadline on the
-  spawn so a long worker returns, `timeoutMs` refuses as an unknown
-  field, an interrupted turn cancels the spawn context, and over the
-  real `RealSpawn` it kills the worker's whole process tree).
+- `delegate_test.go`, `turn_test.go`, `async_test.go`,
+  `status_test.go`: the failing-first named cases over a fake `Spawn`
+  and `Fetch` (happy path, cwd refusal, busy refusal, the fan-out
+  overlap and the one-slot sequence, no-recursion, the cap), the
+  no-clock cases (no deadline on the spawn so a long worker returns,
+  `timeoutMs` refuses as an unknown field) and the hand-off cases (the
+  one-line hand-back before the worker exits, the turn's context not
+  ruling the worker while the session's does, `StopAll` ending every
+  worker, a failed worker's return naming its exit, the snapshot
+  carrying each worker's last call), and over the real `RealSpawn` the
+  idle interrupt killing the worker's whole process tree.
 
 ## How it is consumed
 
@@ -72,8 +95,9 @@ nothing scheduled) and a resumable transcript in the state store.
   marker refuses by name. Fan-out beyond the fleet's slots is not
   refused and not polled: the send-and-wait gate (SPEC_WORKERS 2.6.0)
   lets the request queue at the server, and since 2.12.7 nothing on
-  the rig side bounds how long it may wait there — the turn's context
-  is the only thing that ends it.
+  the rig side bounds how long it may wait there; since 2.14.0 the
+  worker's own context is not the turn's, so what ends it is the
+  session, the worker's own exit, or `StopAll`.
 - The jailed worker's transcript lands at the operator's state-store
   path via `jailSpawn`'s sessions-dir bind (SPEC_DELEGATE 3); the
   parent mints its id and passes it as `-session-id`, so concurrent

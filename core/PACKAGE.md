@@ -14,7 +14,12 @@ type, an interface, or a context helper.
 - **Wire types**: `Message`, `ToolCall`, `ToolSpec`, `Request`, `Usage`,
   and the `Event` vocabulary (`TextDelta`, `ReasoningDelta`,
   `ToolCallEvent`, `Done`, `Fault`, `ToolStart`, `ToolResult`, `TurnEnd`,
-  `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, and
+  `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, `WorkerDone`
+  (2.14.0: a delegated worker's return — `N`, `Task`, `Content`, `Exit`,
+  `Duration`, `Session`, `Log` — with `Head` and `WorkerBlock` as its two
+  readers, so the text the model reads is one shape in every frontend; it is
+  deliberately **not** a `Snapshot`, because returns accumulate and two of
+  them must not collapse into one), and
   `Notice` — the 2.8.3 reopening: one event for a background notice, `Source`
   (2.11.0 folded `SwarmNotice` into it: the swarm is a source like any other;
   2.11.7 added `Level`, `LevelInfo` the zero value, `LevelSuccess`,
@@ -31,6 +36,12 @@ type, an interface, or a context helper.
   1.5.0's bytes): `Usage.Cost` (dollars, 0 when the endpoint reports none),
   `ReasoningDelta.Details` (the raw `reasoning_details` array chunk), and
   `Message.ReasoningDetails` (the full array, echoed back on later turns).
+- **The fleet's own readings** (2.14.0): `ToolStart.BoundedCall()` — a call
+  that crossed a fleet transport carries the tool's name and one short
+  argument in `Call.Args` as a JSON string, never a body, and this is the
+  reader that knows the difference; `SwarmWorker.Tool`/`ToolAt` — the last
+  call a running worker is in and when it arrived, so a band ages the call
+  against the paint instead of keeping a clock.
 - **State**: `Session` (transcript + `FileState` provenance), JSON
   save/load.
 - **Helpers**: `WithInterrupt`/`InterruptFrom` (turn cancel under a typed

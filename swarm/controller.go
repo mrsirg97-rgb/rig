@@ -54,6 +54,8 @@ type Worker struct {
 	Model     string
 	Task      string
 	Heartbeat time.Time
+	Tool      string
+	ToolAt    time.Time
 	Done      int
 	Failed    int
 	State     string
@@ -113,6 +115,8 @@ type worker struct {
 	architect string
 	task      string
 	heartbeat time.Time
+	tool      string
+	toolAt    time.Time
 	done      int
 	failed    int
 	state     string
@@ -157,6 +161,8 @@ func (c *Controller) receive(err error, messages ...broadcast.Message) {
 			switch ev := m.Event().(type) {
 			case nil:
 				w.heartbeat = time.Now()
+			case core.ToolStart:
+				w.heartbeat, w.tool, w.toolAt = time.Now(), ev.BoundedCall(), time.Now()
 			case core.Verdict:
 				w.verdict = &ev
 			}
@@ -172,6 +178,7 @@ func (c *Controller) refresh() {
 		out[i] = Worker{
 			ID: w.id, Role: w.role, Model: modelName(w.model), Task: w.task,
 			Heartbeat: w.heartbeat, Done: w.done, Failed: w.failed, State: w.state,
+			Tool: w.tool, ToolAt: w.toolAt,
 		}
 	}
 	c.view.Store(&out)
@@ -304,6 +311,7 @@ func (c *Controller) status() core.SwarmStatus {
 		workers[i] = core.SwarmWorker{
 			ID: w.ID, Role: w.Role, Task: w.Task,
 			Heartbeat: w.Heartbeat, Done: w.Done, Failed: w.Failed, State: w.State,
+			Tool: w.Tool, ToolAt: w.ToolAt,
 		}
 	}
 	counts, err := todostore.Counts(context.Background(), c.opts.TodoDB, c.proj)

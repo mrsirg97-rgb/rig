@@ -60,10 +60,22 @@ func (t *tui) onKey(k key, r rune) {
 		t.mu.Lock()
 		live := t.turnLive
 		cancel := t.cancel
+		stop := t.idleInterrupt
 		t.mu.Unlock()
-		if strings.TrimSpace(t.ed.text()) == "" && live {
-			if cancel != nil {
-				cancel()
+		if strings.TrimSpace(t.ed.text()) == "" {
+			switch {
+			case live:
+				if cancel != nil {
+					cancel()
+				}
+			case stop != nil:
+				stop()
+			default:
+				t.ed.apply(keyEsc, 0)
+				t.mu.Lock()
+				t.menuSyncLocked()
+				t.mu.Unlock()
+				t.paintInput()
 			}
 			return
 		}

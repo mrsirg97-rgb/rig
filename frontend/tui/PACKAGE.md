@@ -76,11 +76,28 @@ width); no core or loop line (decision 10).
   folds the latest `SwarmStatus` into one row per role below the status
   rows, behind a short dim rule (four cells), while a swarm runs — the
   densified counts (`+pending ✓done ✕failed`, the review clock for the
-  reviewer row) ride the theme's glyph switch, zero rows and no rule
-  when nothing runs, one row for a delegate; the swarm's decision lines
-  are `Notice`s with source `swarm` and breathe like every other
-  (SPEC_SWARM 7; `RenderSwarmNotice` left in 2.11.0, `RenderNotice` in
-  2.11.7).
+  reviewer row) ride the theme's glyph switch, zero rows and no rule when
+  nothing runs; the swarm's decision lines are `Notice`s with source
+  `swarm` and breathe like every other (SPEC_SWARM 7;
+  `RenderSwarmNotice` left in 2.11.0, `RenderNotice` in 2.11.7).
+- **The delegate band** (`swarm.go`, 2.14.0): a delegate's snapshot is
+  told apart by the role it stamps (`delegate`), since a `SwarmStatus`
+  carries no origin, and renders as the rule and exactly two rows under
+  the cache and status rows — `delegating · N worker(s) · <elapsed of
+  the batch>` over the most recent call across the batch (`#2 edit
+  tool/file/edit.go · 12s`, `—` until a worker calls). The batch's start
+  is the earliest first-sighting of a running worker's heartbeat (the
+  delegate stamps it at spawn), so the row breathes without a new field
+  and without a poll; the call's age is the snapshot's `ToolAt`.
+  `bandRunning` keeps the frame ticker alive while a batch runs, which
+  is what makes it breathe between turns — between turns nothing else
+  repaints.
+- **The worker inbox** (`worker.go`, 2.14.0): `core.WorkerDone` events
+  append to an inbox and wake `Input`; the inbox drains at the top of
+  `Input`, ahead of the steer slot, as one block in arrival order, and a
+  drain that happens with no live turn starts a turn of its own. A live
+  turn is never interrupted. The block is `core.WorkerBlock`, painted as
+  the turn's line because from there it is what the model was told.
 - **The tool and scheduler renderers** (`tools_render.go`): one renderer,
   both doors; the tool-result path and the command path commit
   byte-equal blocks minus the opening line (decision 6).

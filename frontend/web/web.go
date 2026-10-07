@@ -36,6 +36,11 @@ type Options struct {
 	Commands []core.Command
 	Env      any
 	Status   func(context.Context) Status
+
+	// StopWorkers ends every delegated worker. It is the interrupt gesture for
+	// the moment there is no turn to interrupt; a session without a delegate
+	// passes nothing and the stop button keeps answering only turns.
+	StopWorkers func()
 }
 
 type Server struct {
@@ -91,7 +96,7 @@ func New(opts Options) (*Server, error) {
 		root:      root,
 		stores:    newStoreCache(opts.Home, ct, runner),
 		static:    sub,
-		chat:      newChat(opts.Commands, opts.Env),
+		chat:      newChat(opts.Commands, opts.Env, opts.StopWorkers),
 		status:    opts.Status,
 	}, nil
 }

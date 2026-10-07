@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -29,6 +31,7 @@ var (
 	_ Event = Notice{}
 	_ Event = Verdict{}
 	_ Event = Phase{}
+	_ Event = WorkerDone{}
 )
 
 type TextDelta struct{ Text string }
@@ -79,6 +82,21 @@ type ToolStart struct{ Call ToolCall }
 
 func (ToolStart) event() {}
 
+// BoundedCall is what a tool start published over a fleet transport names: the
+// tool and the one short argument the sender let across. A published call
+// carries that argument in Call.Args as a JSON string, because a call's body
+// never crosses — and this is the reader that knows the difference.
+func (e ToolStart) BoundedCall() string {
+	var arg string
+	if len(e.Call.Args) > 0 {
+		json.Unmarshal(e.Call.Args, &arg)
+	}
+	if arg == "" {
+		return e.Call.Name
+	}
+	return e.Call.Name + " " + arg
+}
+
 type ToolResult struct {
 	ID       string
 	Content  string
@@ -126,6 +144,8 @@ type SwarmWorker struct {
 	Done      int
 	Failed    int
 	State     string
+	Tool      string    // the worker's last call, bounded; empty until it makes one
+	ToolAt    time.Time // when that call arrived; the age the band shows is this against the paint
 }
 
 type SwarmStatus struct {
@@ -191,4 +211,40 @@ type Request struct {
 	Tools           []ToolSpec
 	MaxTokens       int
 	ReasoningEffort string
+}
+
+// WorkerDone is a delegated worker's return (2.14.0, SPEC_DELEGATE 8). It
+// carries no Snapshot, so a frontend keeps every worker that comes back: the
+// inbox appends them and hands them to the next turn in the order they
+// arrived. Content is the same text the synchronous tool result always was —
+// the worker's capped stdout and its trailer line.
+type WorkerDone struct {
+	N        int
+	Task     string
+	Content  string
+	Exit     int
+	Duration time.Duration
+	Session  string
+	Log      string
+}
+
+func (WorkerDone) event() {}
+
+// Head is the line a return opens with — which worker, how it ended, how long
+// it ran, where its session lives — and the line every frontend shows as the
+// return lands.
+func (d WorkerDone) Head() string {
+	return "delegate #" + strconv.Itoa(d.N) + " returned · exit " + strconv.Itoa(d.Exit) +
+		" · " + d.Duration.Round(time.Second).String() + " · session " + d.Session
+}
+
+// WorkerBlock is the text a turn of returns is made of: each worker's head over
+// its content, in the order they arrived. One shape, because it is the text the
+// model reads, in whichever frontend it was sitting.
+func WorkerBlock(returns []WorkerDone) string {
+	blocks := make([]string, 0, len(returns))
+	for _, d := range returns {
+		blocks = append(blocks, d.Head()+"\n"+d.Content)
+	}
+	return strings.Join(blocks, "\n\n")
 }

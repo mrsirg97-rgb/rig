@@ -183,6 +183,9 @@ func (t *tui) Input(ctx context.Context) (string, error) {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
+		if block, ok := t.drainInbox(ctx); ok {
+			return block, nil
+		}
 		if line, ok := t.takeSlot(); ok {
 			if strings.TrimSpace(line) == "" {
 				continue

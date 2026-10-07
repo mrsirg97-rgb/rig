@@ -46,6 +46,14 @@ func (c *cli) Notify(ev core.Event) {
 		fmt.Fprintf(c.out, "\n[fault] %v\n", e.Err)
 	case core.Notice:
 		fmt.Fprintf(c.out, "rig: %s: %s\n", e.Source, e.Text)
+	case core.WorkerDone:
+		c.mu.Lock()
+		c.inbox = append(c.inbox, e)
+		c.mu.Unlock()
+		select {
+		case c.wake <- struct{}{}:
+		default:
+		}
 	case core.TurnEnd:
 
 		hit := 0

@@ -27,8 +27,9 @@ time. Time and money stay; counts go.
 the llama-server itself — the evidence is the queue on a one-slot
 box: a live session's turn holds the slot while it streams, and a
 delegate or a scheduled fire still runs the moment it is sent. Every
-spawn site sends and waits on the server's queue: the delegate, the
-fire, the swarm's task worker. The one read at dispatch refuses only
+spawn site sends and lets the server's queue wait: the delegate (since
+2.14.0 its worker waits there, not the turn), the fire, the swarm's task
+worker. The one read at dispatch refuses only
 a model that is not resident, naming the holder; `this turn holds
 the only one` is gone. The gate shapes collapse to one: nothing
 resident, another resident (refuse), own resident (send and wait).

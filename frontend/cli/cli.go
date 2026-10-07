@@ -18,10 +18,13 @@ type cli struct {
 
 	lines chan string
 	slot  chan string
+	wake  chan struct{}
 
 	mu      sync.Mutex
 	reading bool
 	cancel  context.CancelFunc
+
+	inbox []core.WorkerDone
 
 	turnCtx context.Context
 
@@ -62,6 +65,7 @@ func New(in io.Reader, out io.Writer, opts ...Option) core.Frontend {
 		out:   out,
 		lines: make(chan string, 1),
 		slot:  make(chan string, 1),
+		wake:  make(chan struct{}, 1),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -139,6 +143,13 @@ func (c *cli) Input(ctx context.Context) (string, error) {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
+		if block, ok := c.drainInbox(); ok {
+			c.mu.Lock()
+			c.steeredLive = false
+			c.turnCtx = ctx
+			c.mu.Unlock()
+			return block, nil
+		}
 		select {
 		case line := <-c.slot:
 			if strings.TrimSpace(line) == "" {
@@ -159,6 +170,7 @@ func (c *cli) Input(ctx context.Context) (string, error) {
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
+		case <-c.wake:
 		case line, ok := <-c.lines:
 			if !ok {
 				return "", io.EOF

@@ -12,13 +12,12 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
 )
 
-func TestAnInterruptedTurnKillsTheWorkersProcessTree(t *testing.T) {
+func TestTheIdleInterruptKillsTheWorkersProcessTree(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	dir := t.TempDir()
 	script := filepath.Join(dir, "worker.sh")
@@ -49,12 +48,9 @@ func TestAnInterruptedTurnKillsTheWorkersProcessTree(t *testing.T) {
 		Models: modelTable(t),
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() {
-		_, err := tool.Exec(ctx, runArgs("hold the tree until the turn dies"))
-		done <- err
-	}()
+	if _, err := tool.Exec(context.Background(), runArgs("hold the tree until the operator stops it")); err != nil {
+		t.Fatalf("hand off: %v", err)
+	}
 	<-spawned
 	waitUntil(t, "the worker and its child pids", func() bool {
 		_, err1 := os.Stat(pidFile)
@@ -67,13 +63,8 @@ func TestAnInterruptedTurnKillsTheWorkersProcessTree(t *testing.T) {
 		t.Fatalf("the worker's child %d must be alive before the interrupt: %v", child, err)
 	}
 
-	cancel()
+	tool.StopAll()
 
-	select {
-	case <-done:
-	case <-time.After(10 * time.Second):
-		t.Fatal("the delegate must return when the turn is interrupted")
-	}
 	waitUntil(t, "the death of the worker", func() bool { return processGone(worker) })
 	waitUntil(t, "the death of the worker's child", func() bool { return processGone(child) })
 }

@@ -126,8 +126,11 @@ is a loud line naming the known set, never silently a prompt.
   the board emptied or the swarm stopped), and the footer's status band
   carries the live counts below the status line, behind a short dim
   rule (`workers 2 · +3 ✓5 ✕1 · w2 t388 12s` / `reviewer 1 · ⧗1 ✓1 ✕0 ·
-  w3 t386 4m`) — one row per role while a swarm runs, one row for
-  an interactive delegate, none when nothing runs (1.5.4). The usage
+  w3 t386 4m`) — one row per role while a swarm runs, none when nothing
+  runs (1.5.4); a delegated batch takes two rows of its own while it runs,
+  the batch's count and elapsed over the most recent call of any of its
+  workers (`delegating · 3 workers · 1m12s` / `#2 edit tool/file/edit.go ·
+  12s`), and it keeps them breathing between turns (2.14.0). The usage
   line shows the session's dollars when the endpoint reported a cost
   (`up 214k down 18k · cache r 187k 87% · $1.23`, 1.5.0).
 - `/theme`: the interface theme (2.3.2): bare shows the active preset;
@@ -159,16 +162,26 @@ on the resident model (the session's default when nothing is
 resident), in a cwd under your session's or the rig home — wired
 wherever the worker tools are on and the swap is readable (one slot
 hosts it; the request queues at the server).
-Several delegate calls in one turn run in parallel; the turn blocks
-until each worker finishes. There is no timeout to set: a worker lives
-until it exits or you interrupt the turn, and the interrupt kills its
-process tree (waiting behind nine others in a slot is work, not a
-hang). A model that is not resident refuses by name, naming the holder
+Several delegate calls in one turn run in parallel, and none of them
+block the turn (2.14.0): each answers at once with
+`delegate: worker #2 started · session <id> · log <path>` and keeps
+working. When a worker finishes, its return arrives as the head of the
+next turn — `delegate #2 returned · exit 0 · 4m12s · session <id>` over
+its output — and if nothing was running, the return starts that turn by
+itself. Two returns that land during one turn come as one block, in the
+order they finished, before whatever you had typed. While a batch runs
+the status footer carries the band: `delegating · 3 workers · 1m12s` and
+the most recent call of any of them. There is no timeout to set: a
+worker lives until it exits or the session ends (waiting behind nine
+others in a slot is work, not a hang); esc on an empty prompt with no turn
+live stops every worker you have running, and in the dashboard the send
+button does the same while a batch is out. A model that is not resident refuses by name, naming the holder
 — never an eviction from inside a turn. The
-worker's last message comes back as the tool result, the run is
-recorded in the one scheduler store under an ad-hoc key, so
+run is recorded in the one scheduler store under an ad-hoc key, so
 `scheduler runs` shows it beside cron runs, and the worker's
-transcript is resumable with `sessions resume <id>`.
+transcript is resumable with `sessions resume <id>`. A piped session
+(`rig -p`) has no next turn to carry a return, so there the delegate
+still waits and answers with the worker's message.
 
 ## what you see
 

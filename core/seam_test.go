@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
@@ -119,5 +120,19 @@ func TestRequestCarriesMaxTokens(t *testing.T) {
 	}
 	if (core.Request{}).MaxTokens != 0 {
 		t.Fatal("an unset budget must be zero (the provider's default)")
+	}
+}
+func TestAReturnedWorkerNamesItselfAndBlocksInTheOrderTheyArrived(t *testing.T) {
+	first := core.WorkerDone{N: 1, Content: "one", Exit: 0, Duration: 62 * time.Second, Session: "s1"}
+	if got := first.Head(); got != "delegate #1 returned · exit 0 · 1m2s · session s1" {
+		t.Fatalf("head = %q", got)
+	}
+	second := core.WorkerDone{N: 2, Content: "two", Exit: 7, Duration: 3 * time.Hour, Session: "s2"}
+	want := "delegate #1 returned · exit 0 · 1m2s · session s1\none\n\ndelegate #2 returned · exit 7 · 3h0m0s · session s2\ntwo"
+	if got := core.WorkerBlock([]core.WorkerDone{first, second}); got != want {
+		t.Fatalf("block = %q", got)
+	}
+	if got := core.WorkerBlock(nil); got != "" {
+		t.Fatalf("no returns, no block: %q", got)
 	}
 }

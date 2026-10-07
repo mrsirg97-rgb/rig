@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -143,3 +144,27 @@ func TestSwarmAdapterRefusesWithTheWireReason(t *testing.T) {
 		t.Fatalf("an unwired swarm lists nothing, got %v", rows)
 	}
 }
+func TestADelegateWorkerKeepsItsPipeWithoutTheVerdict(t *testing.T) {
+	pipe := &countingTransport{}
+	got, verdict := fleetEnds(pipe, []string{"bash", "read"})
+	if got == nil {
+		t.Fatal("a worker with no verdict in its allow list still has the fleet to speak on: its heartbeats and its tool calls cross it")
+	}
+	if verdict {
+		t.Fatal("the verdict tool is the thing the allow list gates, not the pipe")
+	}
+	if _, verdict := fleetEnds(pipe, []string{"verdict"}); !verdict {
+		t.Fatal("a reviewer may rule")
+	}
+	if got, verdict := fleetEnds(nil, []string{"verdict"}); got != nil || verdict {
+		t.Fatal("no pipe from the parent, no fleet for the child")
+	}
+}
+
+type countingTransport struct{}
+
+func (countingTransport) Id() int64 { return 1 }
+func (countingTransport) Send(context.Context, func(error), ...broadcast.Message) {
+}
+func (countingTransport) Recv(context.Context, func(error, ...broadcast.Message)) {}
+func (countingTransport) Close()                                                  {}
