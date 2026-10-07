@@ -173,11 +173,14 @@ execution, as before. `ToolResult` keeps *i*'s own duration and appends
 order they finished. A nil predicate is the loop of
 0.11, byte-for-byte.
 
-The root's predicate is **narrower than "not mutating"**: the pure reads
-- `read`, `web`: and
-nothing else. `todo` and `rem` write SQLite (serialized transactions
-would collide inside one batch), `python` and every plugin share one
-kernel, `bash`/`write`/`edit`/`scheduler`/`delegate` have effects whose
+The root's predicate is **not "not mutating"**: it admits the
+observations and the waits - `read`, `view`, `web`, `decide`, and
+`delegate`, admitted with its fan-out in 1.2.0 (mutating to the
+approval gate; its workers are its own, and a worker's output returns
+as a tool result, non-mutating from the brain's side). Nothing else.
+`todo`, `rem` and `sessions` open SQLite stores (serialized
+transactions would collide inside one batch), `python` and every plugin
+share one kernel, `bash`/`write`/`edit`/`scheduler` have effects whose
 order the model chose. Rejected, named: reordering execution (a `bash`
 that ran, ran; only emission is ordered); `!isMutating` as the
 predicate (the approval gate's notion, not a concurrency-safety one);
@@ -190,8 +193,9 @@ keeps its maps under a mutex (the duplicates in one run may all execute
 and the bound strikes the re-issuance after, a named case); the file
 tool's `Session.Files` writes go through a package mutex (the session
 type stays frozen; the tool that writes it locks); `toolset` was already
-an RWMutex; `perm` is stateless; the approval gate only ever asks for
-barriers, so asks stay one at a time while reads run. The recorder and
+an RWMutex; `perm` is stateless; the approval gate asks only mutating
+calls, so reads never spend the operator's attention (the concurrent
+`delegate` fan-out is the one case an ask rides a wave). The recorder and
 every `Notify` stay on the loop goroutine.
 
 Not the engine. The batch needs an indexed wait (call order is known

@@ -21,17 +21,29 @@ seams, and the stores are yours.
   the `sqlx` transaction seam (`store.Open`), and the project scope
   identity (`store/scope`).
 
-## the five seams
+## the kernel surface
 
-`cmd/rig/main.go` reduces to five seams, wired once:
+`rig.New` takes nine options (`kernel.go`); the root wires seven of
+them once (the command set rides the frontend dispatchers, and
+`Parallel` stays at its default):
 
-| seam | what it is | root wiring |
+| option | what it is | root wiring |
 |---|---|---|
-| `Provider` | one turn, streamed | `openai.New(...)` / `openai.NewWithConfig(...)` |
-| `Tools` | the tool table | the map of `tool/*` adapters, plus `pluginTools` |
-| `Frontend` | input pull, event notify | `tui.New`, `cli.New`, or `oneshot.New` |
-| `Policy` | message assembly | `compact.New` (the per-model trigger) |
-| `Middleware` | the tool-exec chain | toolset, approve, paths, perm, guard |
+| `WithProvider` | one turn, streamed | `openai.New(...)` / `openai.NewWithConfig(...)` |
+| `WithTools` | the tool table | the map of `tool/*` adapters, plus `pluginTools` |
+| `WithFrontend` | input pull, event notify | `tui.New`, `cli.New`, or `oneshot.New` |
+| `WithPolicy` | message assembly | `compact.New` (the per-model trigger) |
+| `WithCommands` | the slash-command set | unwired at the root; commands dispatch at the frontend seam |
+| `WithMiddleware` | the tool-exec chain | toolset, approve, cutoff, perm, guard, paths; the graph tap inside, the decision links outside |
+| `WithConcurrent` | the batch's admit predicate | the concurrent natives: read, view, web, delegate, decide |
+| `WithParallel` | the in-flight bound | unset; `DefaultParallel` is 8 |
+| `WithEngine` | the event engine | the root's engine, the fleet room's queue |
+
+Beside the options the kernel names the queue's five priorities
+(`PriorityInput` 90, `PriorityStream` 50, `PriorityTool` 50,
+`PriorityFleet` 30, `PriorityReview` 10) and the room's four member
+ids (`MemberFrontend`, `MemberDelegate`, `MemberGraph`,
+`MemberDecision`).
 
 The loop never names a concrete tool, provider, policy, frontend, or
 middleware. One file plus one registration line extends it.
@@ -140,7 +152,7 @@ func main() {
 
 	http.HandleFunc("POST /job", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		reply, err := todo.Create(ctx, tdb, proj, []todo.CreateItem{{Text: "sum the file"}}, session)
+		reply, err := todo.Create(ctx, tdb, proj, todo.CreateItem{Text: "sum the file"}, session)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -176,15 +188,21 @@ service is one process and the worker cannot outlive it.
 
 ## what the lock freezes
 
-`core/` and `loop/` are the frozen surface. The freeze gate
-(`cmd/freeze`, the freeze job in `.github/workflows/ci.yml`) refuses a
-real change there unless the branch name carries `-refactor` and the PR
-names the reopening.
+`core/` and `loop/` are the frozen surface. The freeze gate is
+`specs/FREEZE.txt`, read by `cmd/freeze` in the freeze job of
+`.github/workflows/ci.yml`: every path a PR touches must match a line
+of the file, a real change to the frozen surface needs a
+`reopen <path> <version>` line, and a branch carrying `-refactor`
+skips the gate (the PR names the reopening).
 
-- **core/** is frozen at 1.5.0's bytes. The 1.5.0 hosted-mode reopening
-  (SPEC_HOSTED: `Usage.Cost`, `ReasoningDelta.Details`,
-  `Message.ReasoningDetails`) is closed; the next core change opens it
-  by name.
+- **core/** is frozen on the face `specs/FREEZE.txt` states: open to
+  pure addition only (SPEC_CORE), every modification behind a
+  `reopen <path> <version>` line in that file. The 1.5.0 hosted-mode
+  reopening (SPEC_HOSTED: `Usage.Cost`, `ReasoningDelta.Details`,
+  `Message.ReasoningDetails`) is closed. `core/provider.go` reopened
+  at 2.8.3 and has grown since: `Snapshot`, `Phase` and `Verdict`
+  ride the event vocabulary beside the wire events, so the frozen
+  bytes are no longer 1.5.0's.
 - **loop/** is open to pure addition, closed to modification, with named
   reopenings (the batch's concurrent reads, the panic recovery, the
   fed-back error line). Each has its own gate clause and re-freeze.
@@ -196,10 +214,14 @@ PR and in SPEC_CORE or SPEC_EVT.
 ## local vs hosted
 
 A model row says where it runs. Local: the row hits the swap at
-`RIG_SWAP_URL` and the model's GPU slot gates it. Hosted
+`RIG_SWAP_URL` and the resident-set gate admits it (SPEC_WORKERS: the
+fleet is the resident model; no slot is counted). Hosted
 (`remote: true` or `provider: "openrouter"`): the row's `baseUrl` and
 `apiKey` speak the OpenAI wire as-is, `Authorization: Bearer <key>`
 rides every request, 429 and 5xx retry with bounded backoff, and the
-worker skips the local swap and the busy probe entirely, bound instead
-by the row's `concurrency` tokens. `usage.cost` lands in the state
-store and sums into a swarm's `budget=` or a scheduled job's `budget`.
+worker skips the local swap and the busy probe entirely; the row's
+`concurrency` key is retired (the config names it once at start:
+`concurrency retired: the fleet is the resident model`), and the
+endpoint's own 429 retry is the backpressure. `usage.cost` lands in
+the state store and sums into a swarm's `budget=` or a scheduled
+job's `budget`.

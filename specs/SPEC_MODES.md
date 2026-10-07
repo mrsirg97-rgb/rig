@@ -200,8 +200,9 @@ The pieces, each holding a frozen surface untouched:
 - **The gate** is a `ToolMiddleware` (`middleware/approve`, the perm
   chain's precedent), wired at the root with three closures; the
   dial, the ask door, and the mutating predicate. Zero core lines,
-  zero loop lines. It lists after the router (first-listed is
-  innermost) so the allow-list and the provenance rule are consulted
+  zero loop lines. It lists before the permission links and runs
+  inside them (first-listed is innermost) so the allow-list and the
+  provenance rule are consulted
   first: the operator is only ever asked about a call that would
   actually run.
 - **The ask door** is the frontend's, offered as an optional
@@ -213,10 +214,12 @@ The pieces, each holding a frozen surface untouched:
   quits; every other key is swallowed while the question stands. The
   one-shot and the plain CLI offer no door.
 - **The mutating set**: the natives that change the world outside
-  rig's own stores; bash, write, edit, python, scheduler,
-  plugins, and every plugin (arbitrary python is mutating by
-  nature). The read set (read, ls, find, grep, the web pair) and the
-  store tools (todo, rem, diff) pass silently: manual is a gate, not
+  rig's own stores; bash, write, edit, python, scheduler, delegate,
+  the `plugin` door, and every non-native tool — `isMutating` is the
+  named set plus everything the natives are not, and arbitrary python
+  is mutating by nature. The read set (read, view, the one `web`
+  tool), the store tools (todo, rem, sessions) and the decide
+  hand-off pass silently: manual is a gate, not
   a turnstile.
 - **A denial teaches, never kills**: the declined call returns a
   model-visible refusal ("the operator declined bash; do not retry
