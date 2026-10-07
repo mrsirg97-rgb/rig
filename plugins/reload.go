@@ -27,9 +27,9 @@ func IsNameCollision(err error) bool {
 	return errors.As(err, &collision)
 }
 
-func Zone(home, zone string) ([]string, error) {
-	dir := filepath.Join(home, "plugins", zone)
-	entries, err := os.ReadDir(dir)
+func Zone(home, dir, zone string) ([]string, error) {
+	zoneDir := filepath.Join(home, dir, zone)
+	entries, err := os.ReadDir(zoneDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -39,15 +39,15 @@ func Zone(home, zone string) ([]string, error) {
 	var files []string
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".py") {
-			files = append(files, filepath.Join(dir, e.Name()))
+			files = append(files, filepath.Join(zoneDir, e.Name()))
 		}
 	}
 	return files, nil
 }
 
-func List(home string) ([]string, error) {
-	dir := filepath.Join(home, "plugins")
-	entries, err := os.ReadDir(dir)
+func List(home, dir string) ([]string, error) {
+	zoneDir := filepath.Join(home, dir)
+	entries, err := os.ReadDir(zoneDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -57,7 +57,7 @@ func List(home string) ([]string, error) {
 	var files []string
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".py") {
-			files = append(files, filepath.Join(dir, e.Name()))
+			files = append(files, filepath.Join(zoneDir, e.Name()))
 		}
 	}
 	return files, nil
@@ -112,7 +112,7 @@ func Move(dir, name, from, to string) (src, dst string, err error) {
 	return src, dst, nil
 }
 
-func WritePending(home string, natives map[string]bool, name, source string) (path string, created bool, err error) {
+func WritePending(home, dir string, natives map[string]bool, name, source string, c Contract) (path string, created bool, err error) {
 	if name == "" {
 		return "", false, fmt.Errorf("no name")
 	}
@@ -125,16 +125,14 @@ func WritePending(home string, natives map[string]bool, name, source string) (pa
 	if strings.TrimSpace(source) == "" {
 		return "", false, fmt.Errorf("the source is required")
 	}
-	for _, want := range []string{"DESCRIPTION", "SCHEMA", "def run("} {
-		if !strings.Contains(source, want) {
-			return "", false, fmt.Errorf("the plugin contract is a DESCRIPTION, a SCHEMA, and a run(args): missing %s", want)
-		}
+	if err := contractRefusal(c, source); err != nil {
+		return "", false, err
 	}
-	dir := filepath.Join(home, "plugins", "pending")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	zoneDir := filepath.Join(home, dir, "pending")
+	if err := os.MkdirAll(zoneDir, 0o755); err != nil {
 		return "", false, fmt.Errorf("the write: %v", err)
 	}
-	path = filepath.Join(dir, name+".py")
+	path = filepath.Join(zoneDir, name+".py")
 	if info, statErr := os.Lstat(path); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
 		return "", false, fmt.Errorf("the write: %s is a symlink", path)
 	} else if statErr != nil && !os.IsNotExist(statErr) {
@@ -174,7 +172,7 @@ func (e *Ecosystem) ListEcosystem(ctx context.Context) (string, error) {
 }
 
 func (e *Ecosystem) Create(ctx context.Context, name, source string) (string, error) {
-	path, created, err := WritePending(e.home, e.natives, name, source)
+	path, created, err := WritePending(e.home, "plugins", e.natives, name, source, PluginContract)
 	if err != nil {
 		return "", fmt.Errorf("plugin: create: %v", err)
 	}
@@ -194,13 +192,13 @@ func (e *Ecosystem) Delete(ctx context.Context, name string) (string, error) {
 }
 
 func (e *Ecosystem) Reload(ctx context.Context) (string, error) {
-	files, err := List(e.home)
+	files, err := List(e.home, "plugins")
 	if err != nil {
 		return "", fmt.Errorf("plugin: reload: %v", err)
 	}
 	reports := make([]Report, 0)
 	if len(files) > 0 {
-		reports, err = DiscoverChecked(ctx, e.Kernel, files, e.natives)
+		reports, err = DiscoverChecked(ctx, e.Kernel, files, e.natives, PluginContract)
 		if err != nil {
 			if IsNameCollision(err) {
 				return "", err

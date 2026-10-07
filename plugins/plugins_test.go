@@ -49,7 +49,7 @@ func TestDiscoverParsesTheKernelReport(t *testing.T) {
   {"name": "broken", "file": "/h/plugins/broken.py", "ok": false, "error": "NameError: name 'x' is not defined"}
 ]`
 	k := &fakeKernel{replies: []pythontool.Reply{okReply(report + "\n")}}
-	reports, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py", "/h/plugins/broken.py"})
+	reports, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py", "/h/plugins/broken.py"}, PluginContract)
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestDiscoverParsesTheKernelReport(t *testing.T) {
 
 func TestDiscoverCheckedPreflightsBeforeExecution(t *testing.T) {
 	k := &fakeKernel{}
-	_, err := DiscoverChecked(context.Background(), k, []string{"/h/plugins/bash.py"}, map[string]bool{"bash": true})
+	_, err := DiscoverChecked(context.Background(), k, []string{"/h/plugins/bash.py"}, map[string]bool{"bash": true}, PluginContract)
 	if err == nil || !strings.Contains(err.Error(), "name collision") {
 		t.Fatalf("a native collision must refuse before discovery: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestDiscoverCheckedPreflightsBeforeExecution(t *testing.T) {
 	}
 
 	k = &fakeKernel{}
-	reports, err := DiscoverChecked(context.Background(), k, []string{"/h/plugins/Bad-Name.py"}, nil)
+	reports, err := DiscoverChecked(context.Background(), k, []string{"/h/plugins/Bad-Name.py"}, nil, PluginContract)
 	if err != nil || len(reports) != 1 || !reports[0].Skipped || !strings.Contains(reports[0].Reason, "invalid plugin name") {
 		t.Fatalf("the invalid filename must become a skipped report: %+v, %v", reports, err)
 	}
@@ -92,21 +92,21 @@ func TestDiscoverCheckedPreflightsBeforeExecution(t *testing.T) {
 func TestDiscoverKernelFailureIsTheError(t *testing.T) {
 	t.Run("the kernel's reason rides the error", func(t *testing.T) {
 		k := &fakeKernel{replies: []pythontool.Reply{errReply("kernel exited (code 1)", "")}}
-		_, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py"})
+		_, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py"}, PluginContract)
 		if err == nil || !strings.Contains(err.Error(), "kernel exited (code 1)") {
 			t.Fatalf("the error must carry the kernel's reason, got %v", err)
 		}
 	})
 	t.Run("a non-JSON report names the shape", func(t *testing.T) {
 		k := &fakeKernel{replies: []pythontool.Reply{okReply("not a list")}}
-		_, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py"})
+		_, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py"}, PluginContract)
 		if err == nil || !strings.Contains(err.Error(), "not a JSON list") {
 			t.Fatalf("the error must name the shape, got %v", err)
 		}
 	})
 	t.Run("a transport error rides as-is", func(t *testing.T) {
 		k := &fakeKernel{errs: []error{context.DeadlineExceeded}}
-		_, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py"})
+		_, err := Discover(context.Background(), k, []string{"/h/plugins/echo.py"}, PluginContract)
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("the transport error must ride as-is, got %v", err)
 		}
@@ -115,7 +115,7 @@ func TestDiscoverKernelFailureIsTheError(t *testing.T) {
 
 func TestDiscoverCellCarriesTheFiles(t *testing.T) {
 	k := &fakeKernel{replies: []pythontool.Reply{okReply("[]")}}
-	_, err := Discover(context.Background(), k, []string{`/h/my dir/we'ird.py`, "/h/ok.py"})
+	_, err := Discover(context.Background(), k, []string{`/h/my dir/we'ird.py`, "/h/ok.py"}, PluginContract)
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
@@ -127,12 +127,14 @@ func TestDiscoverCellCarriesTheFiles(t *testing.T) {
 		`_rig_j.loads('["/h/my dir/we\'ird.py","/h/ok.py"]')`,
 		"importlib.util",
 		"spec_from_file_location",
-		`("DESCRIPTION", "SCHEMA", "run")`,
-		"DESCRIPTION must be a str",
-		"SCHEMA must be a dict",
-		"run must be callable",
+		`["DESCRIPTION","SCHEMA","run"]`,
+		`[["DESCRIPTION","str"],["SCHEMA","dict"],["run","callable"]]`,
+		`_f + " must be a " + _k`,
+		"not isinstance(_v, str)",
+		"not isinstance(_v, dict)",
+		"not callable(_v)",
 		"_rig_sys.modules[_rig_n] = _rig_m",
-		`set(globals().get("__rig_plugins__", {})) - set(_rig_next_plugins)`,
+		`set(globals().get("__rig_plugins__", {})) - set(_rig_next)`,
 		"__rig_plugins__",
 		`_rig_j.dumps(_rig_report)`,
 	} {

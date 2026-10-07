@@ -71,6 +71,16 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	} else if ok && v != "" {
 		s.DecisionURL = v
 	}
+	if v, ok, err := str("decisionUnit"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		s.DecisionUnit = v
+	}
+	if v, ok, err := str("trainPython"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		s.TrainPython = v
+	}
 	if raw, ok := keys["reviewBatch"]; ok {
 		v, err := jsonInt(raw)
 		if err != nil {

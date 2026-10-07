@@ -125,7 +125,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUrl, defaultJobModel, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, updateKey, webFetchProxy, workers)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUnit, decisionUrl, defaultJobModel, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workers)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -380,5 +380,21 @@ func TestReviewBatchRefusesByName(t *testing.T) {
 				t.Fatalf("the voice = %q, want %q", err, "config: "+p+": "+c.want)
 			}
 		})
+	}
+}
+
+func TestSettingsCarryTheTrainingKeys(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"trainPython": "/h/laya/.venv-train/bin/python", "decisionUnit": "/h/.config/systemd/user/laya.service"}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.TrainPython != "/h/laya/.venv-train/bin/python" {
+		t.Fatalf("trainPython = %q, want the interpreter", cfg.Settings.TrainPython)
+	}
+	if cfg.Settings.DecisionUnit != "/h/.config/systemd/user/laya.service" {
+		t.Fatalf("decisionUnit = %q, want the unit file", cfg.Settings.DecisionUnit)
+	}
+	fresh := load(t, t.TempDir(), t.TempDir())
+	if fresh.Settings.TrainPython != "" || fresh.Settings.DecisionUnit != "" {
+		t.Fatalf("a fresh home carries no training keys: %+v", fresh.Settings)
 	}
 }

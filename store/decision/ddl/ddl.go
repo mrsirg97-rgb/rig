@@ -33,5 +33,22 @@ func Statements() []string {
   "value" TEXT NOT NULL,
   PRIMARY KEY ("key")
 )`,
+		`CREATE TABLE IF NOT EXISTS "trainings" (
+  "id" INTEGER NOT NULL,
+  "candidate" TEXT NOT NULL,
+  "checkpoint" TEXT NOT NULL,
+  "constant" TEXT NOT NULL,
+  "held_rows" INTEGER NOT NULL,
+  "incumbent" TEXT,
+  "promoted" INTEGER NOT NULL,
+  "rows" INTEGER NOT NULL,
+  "run_dir" TEXT NOT NULL,
+  "scope" TEXT NOT NULL,
+  "skipped" INTEGER NOT NULL,
+  "train_rows" INTEGER NOT NULL,
+  "trainer" TEXT NOT NULL,
+  "ts" TEXT NOT NULL,
+  PRIMARY KEY ("id")
+)`,
 	}
 }

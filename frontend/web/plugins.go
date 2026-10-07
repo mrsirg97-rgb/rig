@@ -15,7 +15,7 @@ type Plugin struct {
 }
 
 func listPlugins(home string) (loaded, pending, disabled []Plugin, err error) {
-	files, err := plugins.List(home)
+	files, err := plugins.List(home, "plugins")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -23,7 +23,7 @@ func listPlugins(home string) (loaded, pending, disabled []Plugin, err error) {
 	for _, f := range files {
 		loaded = append(loaded, pluginRow(f, false))
 	}
-	pfiles, err := plugins.Zone(home, "pending")
+	pfiles, err := plugins.Zone(home, "plugins", "pending")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -31,7 +31,7 @@ func listPlugins(home string) (loaded, pending, disabled []Plugin, err error) {
 	for _, f := range pfiles {
 		pending = append(pending, pluginRow(f, true))
 	}
-	dfiles, err := plugins.Zone(home, "disabled")
+	dfiles, err := plugins.Zone(home, "plugins", "disabled")
 	if err != nil {
 		return nil, nil, nil, err
 	}

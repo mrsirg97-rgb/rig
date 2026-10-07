@@ -135,11 +135,11 @@ func TestWritePendingSharesTheForgeRule(t *testing.T) {
 	natives := map[string]bool{"bash": true}
 	src := "DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"
 	home := t.TempDir()
-	path, created, err := WritePending(home, natives, "echo", src)
+	path, created, err := WritePending(home, "plugins", natives, "echo", src, PluginContract)
 	if err != nil || !created || filepath.Base(path) != "echo.py" {
 		t.Fatalf("(path, created, err) = (%q, %v, %v), want the pending write", path, created, err)
 	}
-	_, created, err = WritePending(home, natives, "echo", src)
+	_, created, err = WritePending(home, "plugins", natives, "echo", src, PluginContract)
 	if err != nil || created {
 		t.Fatalf("a second write must report updated, got (created=%v, err=%v)", created, err)
 	}
@@ -155,7 +155,7 @@ func TestWritePendingSharesTheForgeRule(t *testing.T) {
 		{"echo", src, ""},
 	}
 	for _, c := range cases {
-		_, _, err := WritePending(t.TempDir(), natives, c.name, c.source)
+		_, _, err := WritePending(t.TempDir(), "plugins", natives, c.name, c.source, PluginContract)
 		if c.want == "" {
 			if err != nil {
 				t.Fatalf("WritePending(%q): %v", c.name, err)
@@ -182,7 +182,7 @@ func TestWritePendingRefusesASymlinkTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := "DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n"
-	if _, _, err := WritePending(home, nil, "echo", src); err == nil || !strings.Contains(err.Error(), "symlink") {
+	if _, _, err := WritePending(home, "plugins", nil, "echo", src, PluginContract); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("a pending symlink must refuse: %v", err)
 	}
 	data, err := os.ReadFile(target)
@@ -322,7 +322,7 @@ func TestListIsTopLevelPyOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	files, err := List(home)
+	files, err := List(home, "plugins")
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestListIsTopLevelPyOnly(t *testing.T) {
 	}
 
 	for _, h := range []string{t.TempDir(), emptyPluginsHome(t)} {
-		files, err := List(h)
+		files, err := List(h, "plugins")
 		if err != nil || files != nil {
 			t.Fatalf("(files, err) = (%v, %v), want the no-op (nil, nil)", files, err)
 		}
@@ -375,15 +375,15 @@ func TestZonesAreDirectoriesAndListSkipsThem(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	live, err := List(home)
+	live, err := List(home, "plugins")
 	if err != nil || len(live) != 1 || filepath.Base(live[0]) != "live.py" {
 		t.Fatalf("List = %v, %v; want live.py only", live, err)
 	}
-	off, err := Zone(home, "disabled")
+	off, err := Zone(home, "plugins", "disabled")
 	if err != nil || len(off) != 1 || filepath.Base(off[0]) != "off.py" {
 		t.Fatalf("Zone(disabled) = %v, %v", off, err)
 	}
-	none, err := Zone(home, "nope")
+	none, err := Zone(home, "plugins", "nope")
 	if err != nil || len(none) != 0 {
 		t.Fatalf("an absent zone is empty, not an error: %v, %v", none, err)
 	}

@@ -162,7 +162,7 @@ func TestADecideCallSortsAndRecords(t *testing.T) {
 }
 
 func TestADecideNameIsNativeToPlugins(t *testing.T) {
-	if _, err := plugins.DiscoverChecked(context.Background(), nil, []string{filepath.Join(t.TempDir(), "decide.py")}, map[string]bool{"decide": true}); err == nil {
+	if _, err := plugins.DiscoverChecked(context.Background(), nil, []string{filepath.Join(t.TempDir(), "decide.py")}, map[string]bool{"decide": true}, plugins.PluginContract); err == nil {
 		t.Fatal("a plugin named decide collides with the built-in")
 	}
 }

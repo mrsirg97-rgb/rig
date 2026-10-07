@@ -1,10 +1,13 @@
 // Hand-written metadata for the decision store: the containers
-// SPEC_DECISION fixes — decisions (the row per decision) and meta
-// (versions). Source of truth; domain and ddl are generated from it,
-// never typed by hand. Nullable columns are pointers. The question and
-// state columns are JSON text the store serializes and reads; confidence
-// is null for a rule decision, which does not estimate. Ids are minted
-// max+1 inside the caller's transaction.
+// SPEC_DECISION fixes — decisions (the row per decision), meta
+// (versions), and trainings (2.13.0: one row per training run). Source
+// of truth; domain and ddl are generated from it, never typed by hand.
+// Nullable columns are pointers. The question and state columns are
+// JSON text the store serializes and reads; confidence is null for a
+// rule decision, which does not estimate. Ids are minted max+1 inside
+// the caller's transaction. A training row's three report columns are
+// the held-out reports as JSON text; the incumbent's is null where no
+// unit was named, and the row lands only when the reports exist.
 package metadata
 
 import (
@@ -35,6 +38,24 @@ type Decision struct {
 	ReviewerAnswer *string  `alias:"name=reviewer_answer,nullable=true"`
 	Outcome        *string  `alias:"name=outcome,nullable=true"`
 	Ts             string   `alias:"name=ts,nullable=false"`
+}
+
+// table:"trainings"
+type Training struct {
+	ID         int64   `primary:"true" alias:"name=id,nullable=false"`
+	Scope      string  `alias:"name=scope,nullable=false"`
+	Trainer    string  `alias:"name=trainer,nullable=false"`
+	Rows       int64   `alias:"name=rows,nullable=false"`
+	Skipped    int64   `alias:"name=skipped,nullable=false"`
+	TrainRows  int64   `alias:"name=train_rows,nullable=false"`
+	HeldRows   int64   `alias:"name=held_rows,nullable=false"`
+	RunDir     string  `alias:"name=run_dir,nullable=false"`
+	Checkpoint string  `alias:"name=checkpoint,nullable=false"`
+	Constant   string  `alias:"name=constant,nullable=false"`
+	Incumbent  *string `alias:"name=incumbent,nullable=true"`
+	Candidate  string  `alias:"name=candidate,nullable=false"`
+	Promoted   bool    `alias:"name=promoted,nullable=false"`
+	Ts         string  `alias:"name=ts,nullable=false"`
 }
 
 // extra.sql — what the DDL camera cannot emit (SPEC_DECISION): the
