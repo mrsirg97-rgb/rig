@@ -254,23 +254,29 @@ existing leaves.
 
 **command (the leaf, fakes at the Env seam):**
 
-- `TestPluginsEnableDisableToggleTheFileAndReload`: the enable verb
+- `TestPluginsDisableAndEnableMoveTheFileAndReload`: the enable verb
   adds a name, the disable verb removes it, the file writes, the reload
   seam's reply rides through; a nil seam refuses with the no-seam voice.
 
 **cmd/rig (root + e2e):**
 
-- `TestDoorWireStampsNativesPlusTheDoor`: the request's tools array is
-  the natives plus `plugin` (no per-plugin schemas; `plugins` folded
-  into the door in 2.8.2);
-  the door's `name` enum carries the live plugin names.
-- `TestEnablementHidesAndCaps`: `settings.json` `plugins.enabled` drops
-  a plugin from the door's enum (not callable, loud unknown); `max` caps
-  the enum at the top names in file order; the python tool still imports
-  the enabled plugins (the shared namespace).
-- `TestDoorRoundTripsNextTurn`: a reload's swap adds a plugin; the next
-  turn's request carries it in the door's enum and `plugin` executes it;
-  the natives keep executing.
+- `TestNoPluginsDirectoryIsTheV020Wire` and
+  `TestDoorSchemaOmitsTheNameEnumWhenThereAreNoLivePlugins`: the request's
+  tools array is the natives plus the one `plugin` door — no per-plugin
+  entries, no per-plugin schemas, since 2.8.2 folded `plugins` behind the
+  door — and the door's own `name` enum carries the live plugin names,
+  omitted entirely when there are none (an empty `enum` is what
+  llama-server rejects).
+- `TestPluginsEnabledKeyIsRetired` and
+  `TestCapPluginsAppliesInFileOrderAndNamesTheReason`: there is no
+  `plugins.enabled` list to write — hide a plugin by moving it to the
+  disabled zone (`/plugins disable <name>`, `TestPluginsDisableAndEnableMoveTheFileAndReload`)
+  — and `plugins.max` caps the live set in file order, an over-cap load
+  skipped with the reason naming the cap.
+- `TestEcosystemReloadRediscoversAndHandsOff` and
+  `TestPluginCallRoundTripsArgsResult`: a reload's swap adds a plugin and
+  hands the new table to the live toolset, so the next turn's door enum
+  carries it and the call round-trips; the natives keep executing.
 
 The suite is green on a box with no model and no python: the leaf cases
 are fake-kernel, the e2e cases skip cleanly without the kernel gate, the

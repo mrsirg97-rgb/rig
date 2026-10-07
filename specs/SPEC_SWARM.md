@@ -348,15 +348,18 @@ fake `Swarm` seam.
 
 - `TestSwarmDrainsAThreeTaskQueueWithTwoWorkers`: three tasks, two drain
   workers, the fake spawn returns a clean exit per task: all three tasks
-  land in review, the spawn seam saw three calls (one brief per task),
-  and both workers exited (each after three empty claims).
+  land in review, the spawn seam saw three calls (one brief per task).
+  The workers stay idle on the queue afterwards: the empty-claim exit
+  left with 2.6.0's router, so an idle worker is waiting, not gone.
 - `TestSwarmReviewerRejectsAndAWorkerPicksItUp`: one task, a worker and a
   reviewer: the worker submits it, the reviewer's fake worker returns
-  `verdict: reject <reason>` (the task returns to pending with the reason
-  as a note), and the worker drains it again (in review, the rejection
-  picked up).
-- `TestSwarmReviewerAccepts`: the accept verdict lands the task done.
-- `TestSwarmDeadWorkerClaimReleasedAndRestartedOnce`: the fake spawn
+  verdict (2.11.0: the worker calls the `verdict` tool with the reason —
+  the `verdict:` stdout line and its parser are gone), the task returns
+  to pending with the reason as a note, and the worker drains it again.
+- `TestSwarmReviewerSecondDeathRejectsWithTheReason` and the store's own
+  `TestAcceptMovesReviewToDone`: the accept path lands the task done, and
+  a reviewer that dies twice rejects with the reason.
+- `TestSwarmDeadWorkerTaskReleasedAndHandedToAnother`: the fake spawn
   returns a dead worker on the first call for the task: the claim is
   released (the task is pending again, the release event on the log), the
   spawn seam is called a second time for the same task, and the task ends
@@ -364,50 +367,62 @@ fake `Swarm` seam.
 - `TestSwarmSecondDeathFailsTheTask`: two dead spawns: the task is failed
   (workers) or rejected with the reason (reviewers), and the retry was
   not a third spawn.
-- `TestSwarmExitsAfterThreeEmptyClaims`: an empty queue: no spawn, the
-  worker exits, and the `nothing to do` claims are the only store events.
-- `TestSwarmListsAndStops`: two workers, the fake spawn blocks and emits a
+- `TestSwarmEmptyQueueStopRepliesNoSwarm` and
+  `TestSwarmHandsOutOneTaskPerIdleWorker`: an empty queue spawns nothing
+  and says so; one task goes to one idle worker, never two.
+- `TestSwarmListsWorkersAndStops`: two workers, the fake spawn blocks and emits a
   heartbeat line: the list shows role, model, the current task, a recent
   heartbeat, and the counters; `Stop` cancels the spawns (the fake spawn's
   context ends), the workers stop, and the rows clear.
-- `TestSwarmBusyWaitsAtLlamaSwap`: the busy fixture reports another model
-  resident, then run: the swarm's spawn waits (the fetch is called more
-  than once) and runs once the GPU frees; a busy-check failure still fails
-  closed.
-- `TestSwarmReviewerModelDefault`: the configured `reviewer` model is the
-  reviewer's default, `model=` overrides it, and an unknown `model=` is
-  refused by name.
-- `TestSwarmStartRefusals`: a second start, a count outside 1..16, an
-  unknown role, and an unknown model each refuse by name.
-- `TestWorkerModeRefusesStartCompleteFailOnUnheld`: the worker-mode store
+- `TestSwarmSpawnsWhileEverySlotIsProcessing`,
+  `TestSwarmRemoteRowNeverConsultsTheSwap` and
+  `TestHolderRefusalReleasesAndStopsTheWorker`: there is no wait at the
+  gate (2.6.0) — a fire goes when the resident set allows it, a remote
+  row never reads the swap at all, and a refusal names the holder,
+  releases the claim and stops that worker rather than spinning.
+- `TestSwarmModelDefaultsToResidentAndOverrideWins`: the resident model
+  is the default on both roles, `model=` overrides it, and an unknown
+  `model=` is refused by name (there is no configured reviewer model to
+  fall back to — the file that carried one retired in 2.4.0).
+- `TestSwarmStartRefusalsByName` and `TestSwarmCountBounds`: a count
+  outside 1..`MaxWorkers`, an unknown role and an unknown model each
+  refuse by name; the command adds that the count rides `start`
+  (`TestSwarmCountRidesStart`).
+- `TestWorkerModeRefusesUnclaimedStartCompleteFail` and
+  `TestWorkerModeRefusesForeignStartCompleteFail`: the worker-mode store
   doors — `start`/`complete`/`fail` refuse a task the worker does not
-  hold (pending and foreign), the voice names no takeover, the
-  supervisor's claim is neither released nor failed, and the interactive
-  auto-start still lands solo.
+  hold, whether unclaimed or held by another — the voice names no
+  takeover, and the interactive auto-start still lands solo
+  (`TestSoloCompleteOnOwnPendingAutoStartsAndLandsDone`).
 - `TestSwarmReviewerNoVerdictCappedAtTwoRejectsThenFails`: a reviewer
   that never returns a verdict: the task is rejected twice, the third
   rejection fails it with the note — the no-verdict cycle cannot spin.
 - `TestSwarmRetriesAreKeyedByTaskAcrossWorkers`: a worker's death and a
   reviewer's death share the one retry budget — the reviewer's death is
   not retried, and the task fails with the note after the reject cap.
-- `TestTodoTaskRead`: `Task` returns the text and the notes in order with
-  their sessions; an unknown id uses the store's voice; the read is
-  read-only.
-- `TestTodoCounts`: `Counts` returns the pending and review counts from
-  the fold, read-only.
+- `TestTodoCountsFromTheFold` and `TestTodoCountsEmptyQueue`: the counts
+  the roster renders come from the fold, read-only, and an empty queue
+  counts zero rather than refusing; the notes door answers in the store's
+  own voice (`TestNotesOnAMissingTaskRefusesInTheStoreVoice`).
 - `TestSwarmNoticesTaskFailed` / `TestSwarmNoticesReviewerRejected` /
-  `TestSwarmNoticesWorkerDied` / `TestSwarmNoticesBoardEmptiedAndStop`:
-  each decision-worthy notice with the fake spawn — the failed task names
-  its note, the reject names its reason, the death names the restart or
-  the exit, the board and the stop name themselves; nothing else is
-  notified.
-- `TestSwarmStatusEmitsThrottled`: the controller notifies a
-  `SwarmStatus` on claim, stream bytes, complete, verdict, and exit — the
-  live updates throttle to a few per second, the exit's last frame always
-  lands, and the snapshot carries the roster and the fold counts.
-- `TestDelegateBusyWait` / `TestDelegateObserve` / `TestDelegateSpawnCtx`
-  (store/scheduler): the wait-policy, the observer, and the spawn context
-  each pinned at the delegate seam; the default paths (skip, nil observer,
+  `TestSwarmNoticesStop`: each decision-worthy notice with the fake
+  spawn — the failed task names its note, the reject names its reason,
+  the stop names itself; nothing else is notified, and every one of them
+  is a `core.Notice` with source `swarm` published to the room (2.11.0),
+  not a second event type.
+- `TestSwarmStatusFramesClaimHeartbeatAndFinish`: the controller
+  publishes a `SwarmStatus` on claim, heartbeat, complete, verdict and
+  exit. There is no throttle and no 250 ms clock: `SwarmStatus` is a
+  `core.Snapshot`, and the transport keeps one pending per sender and
+  replaces it before it runs — the newest truth is the whole truth
+  (SPEC_EVT 8).
+- `TestADelegatePutsNoDeadlineOnTheSpawnSoALongWorkerReturns`,
+  `TestAnInterruptedTurnCancelsTheWorkersSpawnContext`,
+  `TestAnInterruptedTurnKillsTheWorkersProcessTree` and
+  `TestDelegateSecondFanOutOnASingleSlotSendsAndWaits` (tool/delegate):
+  the delegate carries no clock (2.12.7) and the interrupt is the bound;
+  the byte observer (`Observe`) went to the room's heartbeat in 2.11.0.
+  The remaining default paths (skip, nil observer,
   background context) are unchanged.
 - The command's `TestSwarm…` cases: the parse (`swarm start 3`,
   `role=`, `model=`, `budget=`), that the count rides the keyword

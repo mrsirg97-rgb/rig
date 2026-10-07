@@ -987,7 +987,7 @@ crontab spool for the scheduler (the e2e's existing pattern).
 - `TestCompactNothingToDrop`: a single-message transcript:
   `compact: nothing to drop`; the transcript untouched; no event, no
   row. Same for an empty session.
-- `TestCompactSummaryInputDoesNotFit`: the loud refusal naming the
+- `TestPolicyCompactSummaryInputDoesNotFit` (`policy/compact`): the loud refusal naming the
   window and the estimate.
 - `TestCompactUsageRefusal`: `compact extra` → `compact: usage:
   compact`.
@@ -1066,8 +1066,11 @@ crontab spool for the scheduler (the e2e's existing pattern).
 - `TestModelsListMarksActive`: two rows, the exact lines in the list
   shape (the head's active id, the padded ids, window, max, reserve,
   keep, trigger), the active one `[~]`, the other `[ ]`.
-- `TestModelsSwitchUnknownNamesKnown`: `models: no row for "nope"
-  (known: local, qwen3.8-workers)`.
+- `TestModelsRefusalPassesThrough`: an unknown id answers
+  `models: no row for "nope" (known: …)` from the root's resolver and the
+  command passes the voice through verbatim — it owns no copy of the
+  known set (`TestNamedModelWithNoRowsRefusesBeforeAnyRequest` is the
+  same voice at start, before any store opens).
 - `TestModelsSwitchTakesEffectNextTurn`: two scripted providers:
   `models <id2>`; the next prompt reaches provider two (and only
   provider two); `ActiveModel` reports the new id; the new policy was

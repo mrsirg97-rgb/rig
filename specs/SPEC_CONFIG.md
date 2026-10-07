@@ -147,8 +147,10 @@ func Load(dir, cwd string) (*Config, error)
 type Config struct {
 	Settings Settings
 	Models   models.Table // file rows over embedded rows, checked (4)
-	Agents   string       // global then project, "\n\n"-joined, empty
-	                   // segments skipped; "" when neither (6)
+	Agents   string       // the operator's file alone (6); the project's
+	                   // nearest AGENTS.md walks up from the workspace
+	                   // to the repo root and rides separately
+	                   // (ProjectAgents, 2.11.8), joined at the root
 	Theme    json.RawMessage // theme.json as written; nil when absent (7)
 	Notices  []string     // what start says once and then ignores:
 	                   // workers.json present, a retired models row
@@ -697,7 +699,10 @@ byte-identically to 0.2.0.** Stated once, tested per entry mode:
   AGENTS.md, no guidelines participant), the model, the tools spec
   (including the scheduler description's `Default model:
   qwen3.8-workers`), the messages. A golden fixture pins the exact
-  bytes (`TestNoUserFilesIsByteIdenticalToV020/repl`).
+  bytes: `scripts/wire-check` renders this request at the merge-base and
+  at the head and posts the diff (2.12.3 moved the pins out of the suite;
+  the stored goldens and the `-update` flag are gone), and `TestWireDump`
+  keeps the render deterministic in-tree.
 - **`-p` one-shot**: the same, over the one-shot path (subtest
   `oneshot`); stdout is the assistant text only, as 0.2.0.
 - **`run-job`**: the worker's **argv** is 0.2.0's
@@ -942,12 +947,15 @@ case names one, the built binary for the e2e.
 - `TestMergeOverAnEmptyTableIsTheOperatorsTableVerbatim`,
   `TestMergeOfAnEmptyFileOverAnEmptyTableIsAnEmptyTable`: the shipped
   shape — an empty embedded table merged with the operator's file.
-- `TestModelsMergeViolationRefuses`, `TestMergeRowViolationNamesTheIdAndClause`:
-  a row that breaks `Reserve < Window`, from the file and from an
-  overlay: the refusal names the file, the id, the clause.
-- `TestAgentsGlobalThenProject`: global `G` + project `P` →
-  `"G\n\nP"`; `TestAgentsProjectOnly`, `TestAgentsGlobalOnly` (each
-  alone, no stray blank line).
+- `TestMergeRowViolationNamesTheIdAndTheClause` and
+  `TestMergeRowViolationOnANewRowNamesTheIdAndTheClause`: a row that
+  breaks `Reserve < Window`, from the file and from an overlay: the
+  refusal names the file, the id, the clause.
+- `TestAgentsIsTheOperatorsFileAlone`: `Config.Agents` is the rig home's
+  `AGENTS.md` and nothing else; the project's file is a separate read —
+  `TestProjectAgentsReadsTheWorkspacesOwnFile`,
+  `TestProjectAgentsWalksUpToTheRepoRootAndNoFurther` (2.11.8) — joined
+  at the root, where the system prompt is assembled, not in the leaf.
 - `TestAgentsUnreadableRefuses`: `chmod 000` (skipped when running
   root): the voice names the path; `TestAgentsDirectoryRefuses`; a
   directory named `AGENTS.md`: the `is a directory` refusal.
@@ -1002,10 +1010,11 @@ case names one, the built binary for the e2e.
 
 **cmd/rig (root + e2e, scratch homes, scripted provider):**
 
-- `TestNoUserFilesIsByteIdenticalToV020`: subtests `repl` /
-  `oneshot` / `runjob` against the golden request-body fixtures
-  (9): the exact bytes, the worker argv, the refusal voice for an
-  unknown model id. The fixture asserts the request carries the
+- `TestWireDump` (+ the wire job): the `repl` /
+  `oneshot` / `runjob` request bodies, rendered at the merge-base and at
+  the head and diffed by `scripts/wire-check` (the golden fixtures and the
+  `-update` flag went in 2.12.3): the exact bytes, the worker argv, the
+  refusal voice for an unknown model id. The fixture asserts the request carries the
   session section (its bytes are the run's cwd and home, so the
   compare strips the section first).
 - `TestPrecedenceFlagOverEnvOverFileOverEmbedded`: one key
@@ -1036,9 +1045,10 @@ case names one, the built binary for the e2e.
 - `TestRowEnvBeatsFileForActiveID`: a file row for the active id
   plus `RIG_MODEL_WINDOW`: the in-effect row (and the `/models` line)
   carries the env's window; the file row lists under its id (4).
-- `TestDefaultJobModelFromSettings`: `scheduler create` with no
-  model: the job row and the reply carry the file's
-  `defaultJobModel`; the tool description names it (5).
+- `TestCreateWithoutModelStoresTheUnnamedJob`: `scheduler create` with
+  no model stores the job *unnamed* — nothing is filled in from settings
+  at create time — and the model resolves at fire time to the resident
+  (`defaultJobModel` and its create-time copy are gone, 2.4.0).
 - `TestMalformedConfigRefusesBeforeStores`: a malformed
   `settings.json`: exit 1, the voice, and no state store created
   (the refusal is before any store, 3).
