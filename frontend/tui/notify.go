@@ -96,6 +96,7 @@ func (t *tui) Notify(ev core.Event) {
 
 		t.mu.Lock()
 		t.compacting = false
+		t.endPhaseLocked()
 		fault := RenderFault(t.theme, e.Err)
 		t.mu.Unlock()
 		t.flow("", "\n")
@@ -124,7 +125,7 @@ func (t *tui) Notify(ev core.Event) {
 
 		t.mu.Lock()
 		t.compacting = false
-		t.resetPhaseLocked()
+		t.endPhaseLocked()
 		if t.turnLive {
 			t.phase = "thinking"
 		}
