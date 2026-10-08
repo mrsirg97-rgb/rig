@@ -14,8 +14,8 @@ naming the rule — there is no cwd fallback and no session binding: the
 parameter is the binding, and a session that reads three repos names
 the scope each call means.
 
-`~` is expanded at the `middleware/paths` boundary. The `start` and
-`claim` echoes carry `· scope <path>` (or `· scope global`) on the
+`~` is expanded at the `middleware/paths` boundary. The `claim` echo
+carries `· scope <path>` (or `· scope global`) on the
 row's details, so the reply names where the work lives.
 
 ## What it includes
@@ -70,12 +70,13 @@ row's details, so the reply names where the work lives.
   auto-claim an unowned review task, so the parent's flow is read then
   accept/reject with no claim step; a foreign hold still refuses. Notes
   never need the hold.
-- Complete and start are idempotent at the state they ask for (2.1.7):
-  complete on a done task and start on a task already in progress by
-  this session (or unowned) reply with the echo a fresh call would give
-  — the row and the queue summary — no error, no event. A foreign start
-  of an owned task still refuses naming the claimer.
-- The Worker-mode board door is at the tool's seam: the six
+- Complete is idempotent at the state it asks for (2.1.7): complete on
+  a done task replies with the echo a fresh call would give — the row
+  and the queue summary — no error, no event. `start` is not a verb of
+  the tool since 2.14.8: the store writes the start event itself when
+  a pending task is completed or claimed, so the model's plan is create,
+  then complete or fail.
+- The Worker-mode board door is at the tool's seam: the five
   board-transition verbs refuse there, so the store's own arms (the
   swarm controller calls the store directly) stay as they are and the
   spawned worker records findings instead of moving the board.

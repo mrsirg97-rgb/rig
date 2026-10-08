@@ -35,7 +35,6 @@ func (t toolCmd) Sub() []Sub {
 			{Name: "read", Desc: "show the queue"},
 			{Name: "create", Desc: "add a task: create <text>"},
 			{Name: "claim", Desc: "take the next ready task; claim review takes the next one waiting for review"},
-			{Name: "start", Desc: "mark a task in progress: start <id>"},
 			{Name: "done", Desc: "submit a task for review: done <id>"},
 			{Name: "note", Desc: "attach a note to a task: note <id> <text>"},
 			{Name: "accept", Desc: "accept a reviewed task: accept <id>"},
@@ -94,13 +93,13 @@ func (t toolCmd) Run(ctx context.Context, args string, env any) (string, error) 
 
 func isTodoAction(w string) bool {
 	switch w {
-	case "read", "create", "claim", "start", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "notes", "accept", "reject", "finished", "list", "project":
+	case "read", "create", "claim", "complete", "done", "fail", "release", "retry", "move", "prune", "note", "notes", "accept", "reject", "finished", "list", "project":
 		return true
 	}
 	return false
 }
 
-const todoUsage = "todo read [id]|create <text…>|claim [review]|start|complete|fail|release|retry <id>|move <id> <pos>|note <id> <text…>|notes <id>|accept <id>|reject <id> <reason…>|list finished [n]|prune|project <path>|<path> <verb>"
+const todoUsage = "todo read [id]|create <text…>|claim [review]|complete|fail|release|retry <id>|move <id> <pos>|note <id> <text…>|notes <id>|accept <id>|reject <id> <reason…>|list finished [n]|prune|project <path>|<path> <verb>"
 
 func todoArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -160,7 +159,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 	case (fields[0] == "note" || fields[0] == "reject") && len(fields) >= 3:
 		m := map[string]any{"action": fields[0], "id": fields[1], "note": strings.TrimSpace(args[len(fields[0])+1+len(fields[1]):])}
 		return json.Marshal(m)
-	case (fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry") && len(fields) == 2:
+	case (fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry") && len(fields) == 2:
 		action := fields[0]
 		if action == "done" {
 			action = "complete"
@@ -200,7 +199,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return nil, fmt.Errorf("todo: %s takes no extra args (todo %s)", fields[0], fields[0])
 	case fields[0] == "note" || fields[0] == "reject":
 		return nil, fmt.Errorf("todo: %s takes an id and text (todo %s <id> <text…>)", fields[0], fields[0])
-	case fields[0] == "start" || fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry":
+	case fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry":
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":
 		return nil, errors.New("todo: move takes an id and a position (todo move <id> <pos>)")

@@ -266,7 +266,6 @@ function todoBodyEl(p, onVerb) {
     if (onVerb && (t.status === 'pending' || t.status === 'active' || t.status === 'failed')) {
       const acts = el('span', 'taskact');
       acts.appendChild(span('  ', 'dim'));
-      if (t.status === 'pending') acts.appendChild(button('start', null, () => onVerb('start', t.id)));
       if (t.status === 'failed') acts.appendChild(button('retry', null, () => onVerb('retry', t.id)));
       else acts.appendChild(button('done', null, () => onVerb('complete', t.id)));
       l.appendChild(acts);

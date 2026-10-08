@@ -1584,28 +1584,24 @@ func TestTodoStartAndComplete(t *testing.T) {
 		_ = json.Unmarshal(rec.Body.Bytes(), &body)
 		return body["text"]
 	}
-	rec := doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t1"}`), hdr())
+	if !strings.Contains(read(false), "t1 [ ]") {
+		t.Fatalf("before complete the read must show t1 pending: %q", read(false))
+	}
+	rec := doReq(t, h, "POST", "/api/todo/complete"+q, strings.NewReader(`{"id":"t1"}`), hdr())
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "t1") {
-		t.Fatalf("start: got %d %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(read(false), "t1 [~]") {
-		t.Fatalf("after start the read must show t1 active: %q", read(false))
-	}
-	rec = doReq(t, h, "POST", "/api/todo/complete"+q, strings.NewReader(`{"id":"t1"}`), hdr())
-	if rec.Code != http.StatusOK {
 		t.Fatalf("complete: got %d %s", rec.Code, rec.Body.String())
 	}
 	if !strings.Contains(read(true), "t1 [x]") {
 		t.Fatalf("after complete the history must show t1 done: %q", read(true))
 	}
 
-	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t99"}`), hdr()); rec.Code != http.StatusBadRequest {
+	if rec = doReq(t, h, "POST", "/api/todo/complete"+q, strings.NewReader(`{"id":"t99"}`), hdr()); rec.Code != http.StatusBadRequest {
 		t.Fatalf("unknown id: got %d, want 400", rec.Code)
 	}
-	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"../x"}`), hdr()); rec.Code != http.StatusBadRequest {
+	if rec = doReq(t, h, "POST", "/api/todo/complete"+q, strings.NewReader(`{"id":"../x"}`), hdr()); rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad id: got %d, want 400", rec.Code)
 	}
-	if rec = doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t1"}`), bearer(tok)); rec.Code != http.StatusForbidden {
+	if rec = doReq(t, h, "POST", "/api/todo/complete"+q, strings.NewReader(`{"id":"t1"}`), bearer(tok)); rec.Code != http.StatusForbidden {
 		t.Fatalf("no origin: got %d, want 403", rec.Code)
 	}
 	if rec = doReq(t, h, "GET", "/api/todo/complete"+q, nil, bearer(tok)); rec.Code != http.StatusMethodNotAllowed {
@@ -1631,11 +1627,11 @@ func TestTodoRetryFromTheDashboard(t *testing.T) {
 	q := "?cwd=" + testCWD
 	hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
 	hdr.Set("Content-Type", "application/json")
-	if rec := doReq(t, h, "POST", "/api/todo/start"+q, strings.NewReader(`{"id":"t1"}`), hdr); rec.Code != http.StatusOK {
-		t.Fatalf("start: %d %s", rec.Code, rec.Body.String())
-	}
 	db, err := srv.stores.todo(testCWD)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := todostore.Start(context.Background(), db, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, "t1", "dashboard", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := todostore.Fail(context.Background(), db, todostore.Project{Key: scope.Key(testCWD), Label: scope.Label(testCWD)}, "t1", "dashboard", false); err != nil {

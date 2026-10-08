@@ -65,15 +65,15 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 		t.Fatalf("the create reply is its own row over the summary the read shows:\ncreate:\n%s\nread:\n%s", created, read)
 	}
 
-	started, err := runCmd(t, "todo", "start t1", env)
+	done, err := runCmd(t, "todo", "done t1", env)
 	if err != nil {
-		t.Fatalf("start: %v", err)
+		t.Fatalf("done: %v", err)
 	}
-	if !strings.Contains(started, "'t1' started") || !strings.Contains(started, "t1 [~]") {
-		t.Fatalf("the start reply must show the state change verbatim:\n%s", started)
+	if !strings.Contains(done, "'t1' auto-started and completed") || !strings.Contains(done, "t1 [x]") {
+		t.Fatalf("the done reply must show the state change verbatim:\n%s", done)
 	}
 
-	_, err = runCmd(t, "todo", "start t9", env)
+	_, err = runCmd(t, "todo", "done t9", env)
 	if err == nil || !strings.Contains(err.Error(), "no task 't9'") {
 		t.Fatalf("the tool's no-task refusal must pass through verbatim, got %v", err)
 	}
@@ -83,8 +83,8 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 		t.Fatalf("a bare todo must be the tool's own 'action required', got %v", err)
 	}
 
-	_, err = runCmd(t, "todo", "start t1 extra", env)
-	if err == nil || err.Error() != "todo: start takes an id (todo start <id>)" {
+	_, err = runCmd(t, "todo", "done t1 extra", env)
+	if err == nil || err.Error() != "todo: done takes an id (todo done <id>)" {
 		t.Fatalf("extras must be the adapter's shape refusal naming the shape, got %v", err)
 	}
 }

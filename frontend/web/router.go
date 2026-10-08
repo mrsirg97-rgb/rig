@@ -101,8 +101,6 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleTodoRead(w, r)
 	case path == "/api/todo" && r.Method == "POST":
 		s.handleTodoCreate(w, r)
-	case path == "/api/todo/start":
-		s.handleTodoVerb(w, r, "start")
 	case path == "/api/todo/complete":
 		s.handleTodoVerb(w, r, "complete")
 	case path == "/api/todo/retry":

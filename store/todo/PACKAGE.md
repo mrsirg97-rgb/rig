@@ -79,7 +79,10 @@ drops done only, and the summary counts review rows (`· N in review`).
   the folder rig started in; a bare repo's common dir is the repo root
   itself, so the name is the root's own base. `Project.Dir` carries the
   scope word the project resolved from (the absolute directory, or
-  `global`), and the `start`/`claim` echoes ride it as `· scope <word>`.
+  `global`), and the `claim` echo rides it as `· scope <word>`. `Start`
+  is the store's own door since 2.14.8 — the event `Complete` writes
+  when it lands a pending task, and the fixture the tests reach for —
+  and no tool, command or page offers it.
   The store does not decide which project a call means; the caller
   resolves it (the tool holds the scope resolution).
 - `path.go`: `FilePath(home)`, the store's file: `<home>/todo/todo.sqlite`.

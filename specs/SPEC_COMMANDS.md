@@ -645,7 +645,7 @@ the user reads, and the tool's own refusals teach the protocol
 reply)`, `scheduler: pause requires 'id' (jN)`). One thing is added, not
 printed: 2.12.0's scope. Every `todo` line carries the session's
 workspace as its `scope` unless the line named a path first, so a bare
-`todo start t3` acts on this directory's queue and the adapter stays
+`todo done t3` acts on this directory's queue and the adapter stays
 the only place that guess is made.
 
 The arg syntax is named; `<tool> <action> [id] [n]`, token-shaped, and
@@ -733,8 +733,8 @@ scheduler repair [id]           re-derive a drifting job's crontab line
   verb's own argument, and the verb's own refusals still fire.
 - `todo prune` drops the queue's done rows (SPEC_STATE); it takes no
   args, and an idle prune says `nothing to prune` rather than pretending.
-- the int slot is parse-checked: `todo start t1 extra` →
-  `todo: start takes an id (todo start <id>)`; `scheduler runs j2 x` →
+- the int slot is parse-checked: `todo done t1 extra` →
+  `todo: done takes an id (todo done <id>)`; `scheduler runs j2 x` →
   `scheduler: "x": not an integer (scheduler runs <id> [n])`.
 - a bare `todo` / `scheduler` passes `{"action":""}` to the tool: the
   tool's own `action required` / `unknown action` voice. No new verbs:
@@ -747,7 +747,7 @@ scheduler repair [id]           re-derive a drifting job's crontab line
 
 The tools come from `Env.Tools`; the same instances the kernel
 executes (the root puts the live `todoTool` / `schedTool` in), so a
-`todo start t3` by the user and a `todo` call by the model act on the
+`todo done t3` by the user and a `todo` call by the model act on the
 same queue, same session attribution (the live session's id, or `anon`
 unthreaded; the tools' existing behavior), same store.
 
@@ -1095,10 +1095,11 @@ crontab spool for the scheduler (the e2e's existing pattern).
 **the tool-backed commands (real stores, `t.TempDir()`):**
 
 - `TestTodoCommandRoundTrip`: `todo create write the spec` (the reply
-  verbatim), `todo read` (the queue), `todo start t1` (the state
-  change, verbatim), `todo start t9` (the tool's `no task 't9'`,
-  verbatim), bare `todo` (the tool's `action required`), `todo start
-  t1 extra` (the adapter's shape refusal naming `todo start <id>`).
+  verbatim), `todo read` (the queue), `todo done t1` (the state
+  change, verbatim: the pending task auto-starts and lands), `todo done
+  t9` (the tool's `no task 't9'`, verbatim), bare `todo` (the tool's
+  `action required`), `todo done t1 extra` (the adapter's shape refusal
+  naming `todo done <id>`).
 - `TestTodoNewVerbsParse`: `todo claim`, `todo claim review`,
   `todo note t1 heads up`, `todo accept t1`, `todo reject t1 tests
   missing` — the line shapes map to the tool's args verbatim.
