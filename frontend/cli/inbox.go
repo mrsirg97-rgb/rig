@@ -6,9 +6,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-// drainInbox hands over every worker that returned since the last turn and
-// prints each one's head line, so the terminal shows what the model was just
-// told. The inbox is never latest-wins: what arrived first is read first.
 func (c *cli) drainInbox() (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

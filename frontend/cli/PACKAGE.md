@@ -19,7 +19,8 @@ seam (SPEC_HARDENING decision 4, SPEC_COMMANDS 2).
   its head line (`WorkerDone.Head`) — the terminal sees what the model was
   told; the worker's log holds the rest. The block is `core.WorkerBlock`,
   the one text all three frontends fold, so what the model reads does not
-  depend on where it was sitting.
+  depend on where it was sitting. The inbox is never latest-wins: what
+  arrived first is read first, the steer slot's opposite.
 - **Input**: the blocking pull: the steering slot delivered before
   blocking, the command dispatch consumed inside Input, blank lines as
   no-ops, EOF ending the REPL, a cancelled context surfacing its error.
