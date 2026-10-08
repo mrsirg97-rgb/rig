@@ -1,5 +1,12 @@
 # consolidation note
 
+**History, kept.** A dated snapshot: the consolidation read of one
+refactor pass, preserved as written — including the system prompt it
+quotes (the embedded prompt is no longer those words) and the findings
+later passes closed (the named mirror is gone; the packages left out of
+scope were spec'd since). Current truth is each package's `PACKAGE.md`
+and `specs/`.
+
 A point-in-time read: the result of the per-package refactor pass
 (rig-*-refactor branches) and the post-refactor review of this codebase.
 Each package now carries its own `PACKAGE.md`; the package spec and

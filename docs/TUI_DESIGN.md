@@ -136,7 +136,17 @@ the input line,
 Compacted commits the compact line and the status line's used takes the
 compact's Kept (no block reprint), Fault commits the fault line, unknown
 events are ignored. The activity label is the phase: thinking before and
-between tools, the tool name while one runs. The spinner is state (a frame
+between tools, the tool name while one runs. A `Phase` opens the
+indicator row and owns it: the phase's deltas buffer and the live region
+draws them as a preview — a rolling tail of at most ten screen rows, dim
+in the reasoning slot, headed by one dim `· n rows above ·` line once
+the tail scrolls; the end commits only its check line (for `summarizing`,
+the `⧉ compact` line after it), the preview gone with the phase's last
+frame, so a phase streams a peek, never a transcript. `WorkerDone`
+commits nothing: it lands in the inbox and wakes `Input`, which drains
+it ahead of the steer slot as the head of the next turn's user message;
+returns are not coalesced — two in one turn arrive in the order they
+finished. The spinner is state (a frame
 index), not time; a ticker goroutine advances it, and tests pin the frame.
 
 ## the status line and news seams
@@ -171,16 +181,19 @@ controller and the delegate tool emit `core.SwarmStatus` snapshots
 the footer below the status rows, behind a short dim rule, while a
 swarm runs (`workers <n> · +<pending> ✓<done> ✕<failed> · w<id> <task>
 <age>`, `reviewer <n> · ⧗<review> ✓<done> ✕<failed> · w<id> <task>
-<age>`), zero rows and no rule when nothing runs, one row for a
-delegate. No new colors: labels and markers dim, counts text, the
+<age>`), zero rows and no rule when nothing runs. A delegated batch —
+the publisher whose role string is `delegate` — takes two rows:
+`delegating · 3 workers · 1m12s` over the most recent call of any of
+them (`#2 edit tool/file/edit.go · 12s`, `—` until a worker calls), the
+same two rows for ten workers as for one, kept breathing between turns
+by the frame ticker the batch holds. No new colors: labels and markers dim, counts text, the
 check the success slot, the cross the fault slot; the glyph switch
 carries the ascii fallback (`....`, `~` for the review clock).
 The notices (`core.Notice`, source `swarm`) breathe once in the action indicator's row between turns, in their level's color, and commit nothing (2.11.7); before that they committed one dim line per decision in the
 transcript (SPEC_SWARM 7). Both are status-string extensions: the
 region's height-changing machinery covers them with no `live.go` line.
-There is no session-start news line: `WithNews` was cut with the rule
-that the frontend reads no store (SPEC_TUI), and a phase's own thinking
-is what fills the row now.
+There is no session-start news line: the frontend reads no store
+(SPEC_TUI), and a phase's own thinking is what fills the row now.
 
 ## theme
 
@@ -220,9 +233,14 @@ line: its newlines and tabs are literal text (a pasted Enter is `⏎` on
 the row, not a submit, and one paste never dispatches a queue of
 prompts), and every unrecognized control or CSI sequence is consumed and
 ignored. Esc, outermost first: a pager open closes the pager;
-else a menu open closes the menu (the input keeps its text); else Esc
-cancels the prompt whole (the reader names a lone Esc by the grace
-window, a sequence's bytes arriving in one burst).
+else a menu open closes the menu (the input keeps its text); else, on an
+empty prompt with a turn live, Esc interrupts the turn; else, the empty
+prompt with no turn live being the gesture with nothing left to clear,
+it stops every running delegated worker — the dashboard's stop button
+is the same gesture — and a session with no delegate wired keeps the
+prompt clear it always had. It is not a quit: the workers' own returns
+still arrive, naming the interrupt as their exit (the reader names a
+lone Esc by the grace window, a sequence's bytes arriving in one burst).
 
 ## the block formats
 
@@ -243,9 +261,9 @@ here.
 
 ## the theme tables
 
-Sixteen named slots, six shipped palettes, two glyph sets. Warm and
-cool are the dashboard's two looks on the same slots (warm is the
-default; `oled` is its legacy alias). The phosphor
+Sixteen named slots, five shipped palettes and the `oled` alias of
+warm, two glyph sets. Warm and cool are the dashboard's two looks on
+the same slots (warm is the default). The phosphor
 ramps (p1 green, p3 amber) are four brightnesses of one hue: text on the
 brightest, accent and success on the next, error, warn, and reasoning on
 the middle, dim and rule on the deepest, so the state hierarchy survives

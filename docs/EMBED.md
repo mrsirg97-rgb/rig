@@ -34,7 +34,7 @@ them once (the command set rides the frontend dispatchers, and
 | `WithFrontend` | input pull, event notify | `tui.New`, `cli.New`, or `oneshot.New` |
 | `WithPolicy` | message assembly | `compact.New` (the per-model trigger) |
 | `WithCommands` | the slash-command set | unwired at the root; commands dispatch at the frontend seam |
-| `WithMiddleware` | the tool-exec chain | toolset, approve, cutoff, perm, guard, paths; the graph tap inside, the decision links outside |
+| `WithMiddleware` | the tool-exec chain | toolset, approve, cutoff, perm, guard, paths; the graph tap inside, the decision links outside, the operator link on a delegated worker's wire only |
 | `WithConcurrent` | the batch's admit predicate | the concurrent natives: read, view, web, delegate, decide |
 | `WithParallel` | the in-flight bound | unset; `DefaultParallel` is 8 |
 | `WithEngine` | the event engine | the root's engine, the fleet room's queue |
@@ -118,17 +118,13 @@ func (stubProvider) Stream(ctx context.Context, req core.Request) (<-chan core.E
 	return ch, nil
 }
 
-func taskID(reply string) string { // the create reply carries the id in quotes
-	start := strings.Index(reply, "'")
-	if start < 0 {
-		return ""
+func taskID(reply string) string { // the create reply leads with `→ added tN`
+	line, _, _ := strings.Cut(reply, "\n")
+	if rest, ok := strings.CutPrefix(line, "→ added "); ok {
+		id, _, _ := strings.Cut(rest, " ")
+		return id
 	}
-	rest := reply[start+1:]
-	end := strings.Index(rest, "'")
-	if end < 0 {
-		return ""
-	}
-	return rest[:end]
+	return ""
 }
 
 func main() {
@@ -201,8 +197,9 @@ skips the gate (the PR names the reopening).
   reopening (SPEC_HOSTED: `Usage.Cost`, `ReasoningDelta.Details`,
   `Message.ReasoningDetails`) is closed. `core/provider.go` reopened
   at 2.8.3 and has grown since: `Snapshot`, `Phase` and `Verdict`
-  ride the event vocabulary beside the wire events, so the frozen
-  bytes are no longer 1.5.0's.
+  ride the event vocabulary beside the wire events; the frozen face
+  is what `specs/FREEZE.txt` states, not the frozen bytes of any
+  single release.
 - **loop/** is open to pure addition, closed to modification, with named
   reopenings (the batch's concurrent reads, the panic recovery, the
   fed-back error line). Each has its own gate clause and re-freeze.
@@ -219,9 +216,8 @@ fleet is the resident model; no slot is counted). Hosted
 (`remote: true` or `provider: "openrouter"`): the row's `baseUrl` and
 `apiKey` speak the OpenAI wire as-is, `Authorization: Bearer <key>`
 rides every request, 429 and 5xx retry with bounded backoff, and the
-worker skips the local swap and the busy probe entirely; the row's
-`concurrency` key is retired (the config names it once at start:
-`concurrency retired: the fleet is the resident model`), and the
+worker skips the local swap and the busy probe entirely (nothing
+counts slots), and the
 endpoint's own 429 retry is the backpressure. `usage.cost` lands in
 the state store and sums into a swarm's `budget=` or a scheduled
 job's `budget`.

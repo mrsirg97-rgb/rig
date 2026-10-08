@@ -1,4 +1,66 @@
 # Changelog
+## [2.14.3]: the docs say what rig is
+
+The audit of 2026-10-08: README and `docs/` described the engine, the
+pipeline, and the wire discipline in cells and table rows and stopped
+short of the sentences that own them — while a year of amendments left
+the retired gate, the retired clock, and the retired `concurrency`
+token still described as live, and the story grew four thousand words
+of its own history inside the reading set. This is a docs release: no
+Go moves but `Version`. What rig is now goes in prose, quoted from the
+spec that owns it, each fact with one home and the others pointing.
+
+- **the README leads with what is different** (`README.md`): four
+  short paragraphs in order — the engine (the event loop's sentence,
+  completions in call order, nothing locked but the queue, the room
+  below the turn), the decision pipeline (proposals an LLM reviews,
+  never actions; trained from rig's own rows; served only on a
+  measured win), words are the budget (the 15,000 aim, the 15,500
+  wall, the wire diff), and the worker rule (a worker does, the
+  session decides; the doing set; the return on the next turn) — each
+  naming its spec. The layout tree becomes ten names, one line each;
+  install, hosted mode, configuration, and the dashboard say one line
+  and point, and SETUP owns every knob.
+- **DESIGN gains the three sections** (`docs/DESIGN.md`): *the turn*
+  grows the engine prose beside the diagram, *the decision pipeline*
+  and *the fleet* are new; the middleware and policy lists carry
+  `operator` (the delegated worker's verb gate), the seam table fixes
+  `Stream(ctx, req Request)`, and the closed-world sentence names the
+  two discovery zones instead of denying discovery.
+- **the stale lines are fixed where they stand**: SETUP's workers
+  paragraph (no slot gate, no delegate clock) and dashboard section
+  (the live session, not stores with a few writes); EMBED's worked
+  example parses `added tN` and its kernel table carries the operator
+  link; USAGE names the `plugin` door and the `finished` verb;
+  TUI_DESIGN's event map gains the ten-row phase preview and
+  `WorkerDone`, the band gains the delegate's two rows, the key table
+  gains the esc ladder's stop rung, and the palette count says five
+  and an alias. SETUP's input section gains the esc gesture.
+  `site/index.html` matches the README: the documented install URL,
+  the async delegate (`started` one line, `returned` on the next
+  turn), the hosted row with its required numerics, the resident
+  fleet, the current refusal, `swarm start 2`, the real tool list;
+  the generated lines stay generated.
+- **duplicates collapse to one home** (`docs/`): SETUP's plugin and
+  training sections become pointers to PLUGINS.md; the retry bound and
+  the allow-list are explained once, in USAGE, and pointed at from
+  SETUP and DESIGN; hosted mode keeps its knobs in SETUP; USAGE's
+  `/swarm` bullet becomes a list. ROADMAP and CONSOLIDATION move under
+  `docs/history/` with a header naming them dated snapshots, and the
+  docs table names them history.
+- **the measured numbers were re-run, not retyped** (`README.md`):
+  45,941 lines of Go and 72,411 of tests, the swarm board at 650, the
+  loop pair at 409 (the same commands the pages workflow runs); the
+  store-derived rows keep their receipt. Word count of the working
+  docs (README + `docs/`, the new `docs/history/` archive excluded):
+  18,016 before, 16,876 after — and counting what the archive took
+  out of the read set (CONSOLIDATION), 19,147 down to 16,876.
+
+The docs-citation gate ran for this release: every `TestXxx` named in
+docs, specs, and the CHANGELOG exists in the suite; `scripts/wire-check`
+posts no drift (no registry word moved), and the freeze gate accepts
+the diff (`docs/` carries the history move).
+
 ## [2.14.2]: the cheap calls ask for the cheap effort
 
 A model row's `effort` field did two jobs: the live turn's default, and

@@ -1,5 +1,14 @@
 # rig: roadmap
 
+**History, kept.** This is the launch roadmap: the deliverables written
+before the code they commissioned, in execution order. It shipped — the
+runtime went feature-complete, the tags came, and the plan outlived its
+numbering (the list grew past its title, the reordering stops long
+before current, and what it describes moved since: the named file
+tools are gone, the fleet file is retired). Current truth is the
+README and `specs/`; this file stays as the project's starting plan,
+unedited below.
+
 Ten deliverables, in execution order (reordered 2026-08-16: the leaf ports
 run before the loop change, so the runtime hardening gets the slowest
 spec). Each is one feature, one PR stack, and one spec first: `specs/SPEC_{FEATURE}.md`, in the format of `specs/SPEC_CORE.md`
