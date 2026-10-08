@@ -23,16 +23,6 @@ type Rem interface {
 	Prune(ctx context.Context, scope string, in PruneInput) (string, error)
 }
 
-// A verb whose fields are a bag of options rather than an order takes
-// them as one input struct named for the verb, the store's CreateInput
-// shape. The scope stays on the verb itself: every verb carries it, and
-// an input with it left out must not read like a call. A field is a pointer where absent
-// and zero differ — Importance (absent is the default weight, zero is a
-// weight of nothing), K and OlderThanDays.
-
-// LearnInput is one memory: its content, its kind (an empty kind is
-// "fact"), its importance, the source to attribute it to (an empty
-// source attributes the session), and the ids it supersedes.
 type LearnInput struct {
 	Content    string
 	Kind       string
@@ -41,8 +31,6 @@ type LearnInput struct {
 	Supersedes []int64
 }
 
-// RecallInput is a search: the query (empty lists), a kind to filter to,
-// a K to cap the hits, and whether a superseded memory may answer.
 type RecallInput struct {
 	Query             string
 	Kind              string
@@ -50,17 +38,12 @@ type RecallInput struct {
 	IncludeSuperseded bool
 }
 
-// ReflectInput is a distilled finding: its content, its importance and
-// the source to attribute it to.
 type ReflectInput struct {
 	Content    string
 	Importance *float64
 	Source     string
 }
 
-// PruneInput is a cleanup: the verb (remove, reduce or consolidate), a
-// kind to narrow to, the ids to act on, the age to act from, and the
-// weight a reduce leaves behind.
 type PruneInput struct {
 	Verb          string
 	Kind          string
