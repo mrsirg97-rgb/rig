@@ -829,3 +829,33 @@ func TestAnInputEndsAnInFlightBiteAndItSettlesNothing(t *testing.T) {
 	}
 	mustEndInterrupted(t, f, phases, notices, db)
 }
+
+type returningFire struct {
+	started chan struct{}
+	ctx     context.Context
+}
+
+func (f *returningFire) fire(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
+	f.ctx = ctx
+	close(f.started)
+	speak(voice, "verdict: 1 approve")
+	return "dsv4", nil
+}
+
+func TestAFireThatReturnsOnItsOwnReleasesItsContext(t *testing.T) {
+	f := &returningFire{started: make(chan struct{})}
+	r, _, _, db := haltReviewer(t, f.fire)
+	r.Land()
+	r.Wake()
+	select {
+	case <-f.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bite never fired")
+	}
+	waitSettled(t, db, 0)
+	select {
+	case <-f.ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("a fire that returned on its own left its context registered on the session")
+	}
+}

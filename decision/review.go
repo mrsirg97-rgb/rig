@@ -178,9 +178,11 @@ func (r *Reviewer) bite() {
 	r.fireStop = stop
 	r.fireMu.Unlock()
 	go func() {
+		defer stop()
 		reviewer, err := r.speak(fireCtx, rows)
+		halted := fireCtx.Err() != nil
 		r.engine.Add(evt.Func(func(context.Context) {
-			if fireCtx.Err() != nil {
+			if err != nil && halted {
 				r.interrupted()
 				return
 			}

@@ -147,8 +147,9 @@ run (SPEC_EVT 8); the bite takes its rows on the loop, fires in a
 goroutine and posts the settle back at the same priority; the fire rides
 a context of its own, a child of the session's, and the operator's input
 ends it — the frontend wrap's `Input` return and the idle interrupt call
-`Halt` (2.14.4), an ended bite settles nothing, closes its phase naming
-`interrupted`, and leaves the rows pending for the next landing; before that a
+`Halt` (2.14.4), a fire the halt kills settles nothing, closes its phase
+naming `interrupted`, and leaves the rows pending for the next landing,
+the fire's context released when the bite ends, whatever the ending; before that a
 size-one channel on a goroutine of its own — no timer, no poll — and a turn end with
 nothing landed costs nothing.
 
@@ -387,7 +388,8 @@ subcommand.
   waits for the next landing; a landing marks the reviewer dirty and a
   turn end with none costs nothing; an in-flight bite ends when the
   operator's input lands or `Halt` is called, settling nothing, closing
-  its phase `interrupted`, the rows staying pending; a negative or non-integer batch
+  its phase `interrupted`, the rows staying pending; a fire that returns
+  on its own releases its context; a negative or non-integer batch
   refuses at start, naming the key; a no-tools run executes nothing,
   plugins included.
 - the delegate: three labels group correctly and an item whose top

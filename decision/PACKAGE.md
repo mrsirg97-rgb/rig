@@ -64,9 +64,11 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   the session's, and `Halt` ends it: the wrap's `Input` return (the
   operator's line) and the root's idle interrupt call it, so the bite
   in flight dies when the operator speaks instead of running headless
-  under the turn that took the slot. A bite whose fire context is dead
-  settles nothing, closes its phase naming `interrupted`, and leaves
-  the rows pending for the next landing. One bite is posted at a time.
+  under the turn that took the slot. A fire the halt kills — its
+  context dead and its return an error — settles nothing, closes its
+  phase naming `interrupted`, and leaves the rows pending for the next
+  landing; the fire's context is released when the bite ends, whatever
+  the ending. One bite is posted at a time.
   There is no `Run`
   goroutine; the engine and the context are constructor arguments. `Drain`
   is the same take-fire-settle done synchronously, for a caller that
