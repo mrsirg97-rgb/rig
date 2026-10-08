@@ -1,4 +1,35 @@
 # Changelog
+## [2.14.6]: the comments go home
+
+A hygiene release: no behavior moves, and the wire reads the same words
+it read yesterday. The one-comment rule had been drifting — thirteen
+packages carried 215 lines of it, doc comments on the broadcast seams,
+design notes in the TUI's frame ticker, the delegate's settle, the
+runner's hand-off. The sweep strips every one and lifts the lines that
+carried weight into the packages' PACKAGE.md files, where the English
+lives; the test names carry the invariants they explained.
+
+The exemptions hold: generated code keeps its headers, and the metadata
+packages keep their comments, because they are generation input whose
+doc comments the generator lifts. Everything else in the corpus is
+clean — the only `//` lines left in Go are compiler directives.
+
+Beside the strip, a quality pass that changes no refusal and no wire
+byte: dead helpers out (`assertSequential`, `endedCount`,
+`recordFrontend.Input` from the delegate package), duplicated shapes
+collapsed (the decision fixture's risk criteria, the status tests'
+fleet subscription, the TUI's pluralization and its scripted-input
+helpers), one dead nil-guard out of the loop transport, one inverted
+branch flattened in the runner's model resolution. The candidates that
+would have moved a refusal or an error voice were skipped and named in
+the PR.
+
+The frozen surface took a comment-only pass, which is all it ever
+takes: the gate compares comment-stripped trees, so a strip is a pure
+addition by its own arithmetic, and the branch carries `-refactor` —
+the escape hatch doing the one job it documented, named here in the
+PR. `make test`, `fmt-check` and the wire job are green.
+
 ## [2.14.5]: the docs read like a human wrote them
 
 A docs release: no Go moves but `Version`. The README was restructured —
