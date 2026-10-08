@@ -107,3 +107,45 @@ func TestDefPanicsOnAnUnknownName(t *testing.T) {
 	}()
 	tool.Def("no-such-tool")
 }
+
+func TestOperatorVerbsRideTheActionEnum(t *testing.T) {
+	var marked int
+	for _, n := range tool.AllNames() {
+		verbs := tool.Operator(n)
+		if len(verbs) == 0 {
+			continue
+		}
+		marked++
+		var schema struct {
+			Properties struct {
+				Action struct {
+					Enum []string `json:"enum"`
+				} `json:"action"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(tool.Def(n).Schema(), &schema); err != nil {
+			t.Fatalf("%q: schema: %v", n, err)
+		}
+		if len(schema.Properties.Action.Enum) == 0 {
+			t.Fatalf("%q marks operator verbs but its schema has no action enum", n)
+		}
+		enum := map[string]bool{}
+		for _, v := range schema.Properties.Action.Enum {
+			enum[v] = true
+		}
+		for _, v := range verbs {
+			if !enum[v] {
+				t.Fatalf("%q: operator verb %q is not in the action enum", n, v)
+			}
+		}
+	}
+	if marked == 0 {
+		t.Fatal("the registry marks no operator verbs")
+	}
+	if verbs := tool.Operator("rem"); len(verbs) != 0 {
+		t.Fatalf("rem is observation: it marks %v", verbs)
+	}
+	if verbs := tool.Operator("bash"); len(verbs) != 0 {
+		t.Fatalf("bash is the doing set: it marks %v", verbs)
+	}
+}

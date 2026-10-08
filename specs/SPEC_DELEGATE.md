@@ -337,12 +337,25 @@ one line and never the answer:
   cannot delegate (RIG_DELEGATE is set; no recursion)`. The
   allow-list omission below is the honest-path guard; the marker is
   the hard rule.
-- **The allow-list**: `delegate` is in the embedded allow default
-  (the operator's settings). The delegate spawn passes the operator's
-  resolved allow-list minus `delegate` as `-allow` to the worker, so
-  a worker's allow-list omits it; no recursion even before the
-  marker. The marker stays as defense in depth (a worker with a
-  custom allow-list that still admits `delegate` refuses by name).
+- **The allow-list, the doing set (2.14.1)**: a worker does, the
+  session decides. A delegate is a targeted task whose result is its
+  last message: the doing it needs is the shell, the files, the
+  computation and the network, and observation of memory — `bash read
+  write edit view python web rem`, one named constant in `tool/delegate`,
+  the only place the set is written. Todo creation is centralized in
+  the session and the board is the session's to judge, so `todo`,
+  `scheduler` and `plugin` are not the worker's to call; `rem` is, and
+  a worker may learn, recall, pack and prune memory, because clearing
+  a stale fact it just disproved is its job too. The delegate spawn
+  passes the session's resolved allow list intersected with the doing
+  set as `-allow`, in the session's order; `delegate` is out by the
+  same intersection, and an intersection that keeps nothing runs the
+  worker allow-none (`-allow none`) — never the embedded default,
+  which is what an absent flag would resolve to and would hand a
+  worker more than its session allows. The swarm's workers keep the
+  session's list (draining the board is their job, SPEC_SWARM) and
+  the review fire keeps its bare three. The marker stays as defense
+  in depth: a worker that still admits `delegate` refuses by name.
 - **The approval gate**: `delegate` counts as mutating (it spawns a
   worker and writes stores). Manual mode asks, and the prompt shows
   the task's first line, not the raw args JSON; `approve.Prompt`

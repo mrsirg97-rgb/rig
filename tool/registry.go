@@ -23,6 +23,7 @@ type entry struct {
 	W string          `json:"what"`
 	G string          `json:"guidelines"`
 	R string          `json:"reply"`
+	O []string        `json:"operator"`
 	S json.RawMessage `json:"schema"`
 }
 
@@ -101,6 +102,14 @@ func Names() []string {
 		}
 	}
 	return out
+}
+
+func Operator(name string) []string {
+	e, ok := defs[name]
+	if !ok {
+		return nil
+	}
+	return e.O
 }
 
 func AllNames() []string {

@@ -16,6 +16,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
+	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
@@ -24,6 +25,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/policy/compact"
 	effort "github.com/mrsirg97-rgb/rig/v2/policy/effort"
 	"github.com/mrsirg97-rgb/rig/v2/policy/empty"
+	"github.com/mrsirg97-rgb/rig/v2/policy/operator"
 	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
@@ -235,7 +237,17 @@ func (r *root) nativeTools() []core.Tool {
 		}
 		out = append(out, tool)
 	}
+	if r.headless() {
+		for i := range out {
+			out[i] = operator.Menu(out[i])
+		}
+	}
 	return out
+}
+
+func (r *root) headless() bool {
+	_, ok := r.fe.(*oneshot.OneShot)
+	return ok
 }
 
 func (r *root) buildPair() (core.Provider, core.ContextPolicy) {

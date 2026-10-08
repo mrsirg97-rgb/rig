@@ -12,6 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
+	"github.com/mrsirg97-rgb/rig/v2/policy/operator"
 	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
 )
 
@@ -34,6 +35,11 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		cutoff.Middleware(),
 		perm.Plugins(r.pluginsDir, r.drec),
 		perm.AllowlistWithDoor(r.allow, door, r.drec),
+	)
+	if r.headless() {
+		mw = append(mw, operator.Middleware())
+	}
+	mw = append(mw,
 		guard.Bound(r.retries, r.drec),
 		guard.Rounds(r.rounds, r.drec),
 		guard.Cap(resultCap),

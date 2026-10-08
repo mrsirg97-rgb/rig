@@ -143,7 +143,7 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 		SandboxBinds:  a.SandboxBinds,
 		RigHome:       a.RigHome,
 		StateDir:      a.StateDir,
-		Allow:         a.Allow,
+		Allow:         doingAllow(a.Allow),
 		Member:        member,
 		SpawnCtx:      workerCtx,
 	})

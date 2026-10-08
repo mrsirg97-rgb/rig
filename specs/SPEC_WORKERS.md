@@ -156,6 +156,44 @@ no flock): the endpoint's own 429 retry is their backpressure
 (SPEC_HOSTED). `core/` and `loop/` are byte-identical; the store
 schema is unchanged.
 
+### 7. The headless wire keeps the operator's verbs off the worker (2.14.1)
+
+A worker session is a `rig -p` process: the delegate's worker, a swarm
+drain worker, a scheduled fire. It runs with an allow list per tool
+name, and until 2.14.1 the verbs inside a tool were all the worker's:
+the menu offered `todo prune` beside `todo read`, `scheduler remove`
+beside `scheduler list`, `plugin delete` beside `plugin run`, and
+nothing but the tool's own switch stood between the verb and the
+store. The rule the versions since the swarm have been converging on
+is one sentence: **a worker does, the session decides.** The verbs
+that judge or delete shared state belong to the session that owns the
+state; the verbs that observe, create inside a task, or do the work
+belong to whoever is doing it.
+
+- **The registry marks them.** A tool's `registry.json` entry gains
+  `operator`: the verbs the session keeps. One list per tool, written
+  once — `todo` prune, accept, reject, move (the architect's, SPEC_SWARM's
+  rule, now enforced); `scheduler` remove; `plugin` delete. `rem` has no
+  key: memory is observation, and pruning a stale fact is a worker's job
+  too (SPEC_DELEGATE, the doing set).
+- **A headless menu does not offer them.** When the root wires a
+  headless frontend, the tool specs it sends drop the operator verbs
+  from the `action` enum and from the verb words in the description and
+  the schema. An interactive menu is byte-identical to the registry's
+  own words; the wire job's interactive artifacts do not move.
+- **A headless call cannot run them.** `policy/operator` is a middleware
+  in the headless wire only: a call whose tool and verb are in the
+  registry's operator list is refused before the tool runs, with one
+  named refusal — `todo prune: the session's verb — a worker does not
+  judge or delete the board; leave it for the session` — returned as the
+  tool result (a teaching refusal, never a fault). The tools' switches
+  are untouched: the worker-mode board gate (`tool/todo`) keeps its own
+  voice, and the middleware is the one layer that reads the registry.
+  The delegate's doing set (SPEC_DELEGATE 6) is the same rule at the
+  spawn: the swarm's workers keep today's list, scheduled jobs keep the
+  operator's job allow, and the middleware is what makes the swarm's
+  wider list honest.
+
 ## testing
 
 Failing first, against a fake `/slots` (the scripted fetch gains
@@ -184,6 +222,16 @@ Failing first, against a fake `/slots` (the scripted fetch gains
   `concurrency` is named once and ignored; the allow default always
   carries the worker tools; the `defaultJobModel` legacy key is named
   and ignored.
+- **The operator's verbs (2.14.1)**: a delegate spawn's `-allow` is the
+  intersection (a session allowing everything yields the eight; one
+  allowing only `bash,todo` yields `bash`; one allowing only
+  `delegate` runs allow-none); a swarm spawn's allow is unchanged and a
+  reviewer's still adds `verdict`; a headless root's `todo` menu lacks
+  prune, accept, reject and move and its description does not say them;
+  the interactive menu is unchanged byte for byte; the middleware
+  refuses each listed pair by name and passes every other verb, `rem
+  prune` included; a headless call to `todo prune` gets the refusal in
+  its tool result and the store is unchanged.
 
 ## scope
 

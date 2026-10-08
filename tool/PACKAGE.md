@@ -11,7 +11,15 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
 ## What it includes
 
 - `registry.json`: one entry per native tool: `name`, `enabled`, `what`,
-  `guidelines`, `reply`, `schema`. File order is menu order for the root.
+  `guidelines`, `reply`, `schema`, and (since 2.14.1, where it applies)
+  `operator` — the verbs the session keeps, off every headless menu and
+  refused on the headless wire (SPEC_WORKERS 7). One list per tool,
+  written once: `todo` prune, accept, reject, move; `scheduler` remove;
+  `plugin` delete. `rem` has no key: memory is observation. File order
+  is menu order for the root.
+- `Operator(name)`: the entry's operator verbs, nil where the registry
+  marks none; the one reader of the list (`policy/operator` is its
+  consumer).
 - `Definition`: the interface a tool embeds to satisfy three of
   `core.Tool`'s four methods: `Name()`, `Description()` (composed as
   `<what> guidelines: <guidelines> reply: <reply>`), `Schema()` (a copy of
