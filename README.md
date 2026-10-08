@@ -81,7 +81,7 @@ optional round cap limits calls per turn. A failed call executes once.
 One line, and the rest is `docs/SETUP.md`:
 
 ```sh
-curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh
+curl -fsSL https://tryrig.ai/install.sh | sh
 ```
 
 POSIX sh, no Go, no sudo, installs to `~/.local/bin`; the release

@@ -308,7 +308,7 @@
     <div class="band" aria-label="the footer of a running rig session"><span class="m">max</span> · default · auto
 up 214k down 18k · cache r 211k <span class="g">99%</span></div>
     <div class="install">
-      <code id="install-line"><span class="p">❯</span>curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</code>
+      <code id="install-line"><span class="p">❯</span>curl -fsSL https://tryrig.ai/install.sh | sh</code>
       <button type="button" id="copy-btn" aria-label="copy the install command">copy</button>
     </div>
     <div class="install-note">
@@ -390,7 +390,7 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
         <h2>Install it</h2>
         <p>One file lands in your path. Checksum-verified, and it <b>updates itself in place.</b></p>
       </div>
-      <pre>curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh
+      <pre>curl -fsSL https://tryrig.ai/install.sh | sh
 <span class="d">✓ rig {{RIG_VERSION}} installed to ~/.local/bin/rig</span>
 
 <span class="c"># later</span>
@@ -594,7 +594,7 @@ rig -update</pre>
 <script>
   (function () {
     var btn = document.getElementById('copy-btn'), line = document.getElementById('install-line');
-    var text = 'curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh';
+    var text = 'curl -fsSL https://tryrig.ai/install.sh | sh';
     btn.addEventListener('click', function () {
       function done() { btn.textContent = 'copied'; setTimeout(function () { btn.textContent = 'copy'; }, 1600); }
       function fallback() {
