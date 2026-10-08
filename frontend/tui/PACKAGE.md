@@ -88,10 +88,17 @@ width); no core or loop line (decision 10).
   tool/file/edit.go · 12s`, `—` until a worker calls). The batch's start
   is the earliest first-sighting of a running worker's heartbeat (the
   delegate stamps it at spawn), so the row breathes without a new field
-  and without a poll; the call's age is the snapshot's `ToolAt`.
-  `bandRunning` keeps the frame ticker alive while a batch runs, which
-  is what makes it breathe between turns — between turns nothing else
-  repaints.
+  and without a poll; the call's age is the snapshot's `ToolAt`. The
+  first sighting is the only honest reading of `elapsed since this
+  batch started` the snapshot can give — it carries a heartbeat, and a
+  heartbeat is refreshed by the next one. `bandRunning` keeps the frame
+  ticker alive while a batch runs, which is what makes it breathe
+  between turns — between turns nothing else repaints; only a
+  delegate's rows drive a repaint on their own, a swarm's band has
+  always been painted by the events that move it. The band is the same
+  two rows for ten workers as for one — the per-worker story stays
+  where it always was, and a row per worker would have made it grow
+  with the fan-out it exists to summarize.
 - **The worker inbox** (`worker.go`, 2.14.0): `core.WorkerDone` events
   append to an inbox and wake `Input`; the inbox drains at the top of
   `Input`, ahead of the steer slot, as one block in arrival order, and a
@@ -293,7 +300,11 @@ width); no core or loop line (decision 10).
   keeps its own 120 ms pace on top. The ticker exists only while a turn
   or a compaction can paint: it starts with `startTurnLocked` and with
   the `Compacting` event, and stops once the turn's final commit or the
-  compaction has drained (an idle TUI wakes nothing).
+  compaction has drained (an idle TUI wakes nothing). `busyLocked` is
+  what the ticker breathes for, and it is a turn, a compaction, a
+  notice, an aside, or a delegate batch — the batch keeps running with
+  no turn at all, and its row must not freeze where the operator is
+  looking.
 - The status tick is the idle complement (`WithStatusTick`): the status
   function is re-read every d on the Input loop while no turn streams
   and no compaction runs, and the region redraws only when the rows
@@ -321,7 +332,10 @@ width); no core or loop line (decision 10).
   paste retired the first-event gate's reason).
 - Esc's ladder: pager, then menu, then the prompt clear: and on an
   EMPTY prompt during a live turn, the interrupt (stopping is not saying
-  something).
+  something). With no turn to interrupt the gesture is the idle
+  interrupt (`WithIdleInterrupt`): an esc with an empty line stops the
+  running workers — a session without a delegate passes nothing, and
+  the gesture keeps clearing the line.
 - The completion menu is the operator's help: two or more candidates
   show the menu, one shows the ghost, Enter over navigation accepts the
   pick, without navigation the typed line dispatches.
@@ -334,3 +348,13 @@ width); no core or loop line (decision 10).
   context) is a no-op.
 - The status row is the region's last row: a wrapping usage row on a
   narrow terminal counts by its terminal rows, like every live row.
+- The golden stream stamps its delegate heartbeats hours old, so the
+  band's age cells read the same on every run.
+- The scripted session's helpers carry their seams: `inputWhile` feeds
+  a line to a reader that has not started yet (the TUI's reader belongs
+  to Input, so the keystroke has to follow the call, not precede it),
+  `inputAt` runs Input on the caller's context (a steer cancels the
+  turn it interrupts, and a test must not inherit that), and `since` is
+  what has been painted after the `tail` mark — the stream is
+  append-only, so "left the screen" only means anything about the
+  frames after the mark.

@@ -403,9 +403,6 @@ func (t *tui) bandLocked(now time.Time) string {
 	return RenderSwarmBand(t.theme, t.swarm)
 }
 
-// trackBandLocked remembers when each worker first appeared, which is the only
-// honest reading of "elapsed since this batch started" the snapshot can give:
-// it carries a heartbeat, and a heartbeat is refreshed by the next one.
 func (t *tui) trackBandLocked(st core.SwarmStatus) {
 	kind := "swarm"
 	if IsDelegateBand(st) {

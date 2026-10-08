@@ -70,9 +70,6 @@ func (t *tui) tickLoop() {
 	}
 }
 
-// busyLocked is what the frame ticker breathes for: a turn, a compaction, a
-// notice, an aside — or a batch of delegated workers, which keeps running with
-// no turn at all and whose row must not freeze where the operator is looking.
 func (t *tui) busyLocked() bool {
 	return t.turnLive || t.compacting || t.noticing || t.aside != "" || bandRunning(t.swarm)
 }
