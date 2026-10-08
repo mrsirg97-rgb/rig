@@ -236,8 +236,9 @@ ignored. Esc, outermost first: a pager open closes the pager;
 else a menu open closes the menu (the input keeps its text); else, on an
 empty prompt with a turn live, Esc interrupts the turn; else, the empty
 prompt with no turn live being the gesture with nothing left to clear,
-it stops every running delegated worker — the dashboard's stop button
-is the same gesture — and a session with no delegate wired keeps the
+it stops every running delegated worker and ends the reviewer's
+in-flight bite — the dashboard's stop button is the same gesture — and
+a session with neither keeps the
 prompt clear it always had. It is not a quit: the workers' own returns
 still arrive, naming the interrupt as their exit (the reader names a
 lone Esc by the grace window, a sequence's bytes arriving in one burst).

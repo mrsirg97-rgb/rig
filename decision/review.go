@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/mrsirg97-rgb/rig/v2"
@@ -52,6 +53,8 @@ type Reviewer struct {
 	self     broadcast.Member
 	verdicts map[int64]core.Verdict
 	speaking atomic.Int64
+	fireMu   sync.Mutex
+	fireStop context.CancelFunc
 }
 
 func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire Fire, batch int, row models.Model, room broadcast.Room, scope string) *Reviewer {
@@ -115,6 +118,11 @@ func (r *Reviewer) settled(n int, err error) {
 	r.phase(core.Phase{Done: true, Ok: true, Note: fmt.Sprintf("%d %s settled", n, plural(n, "row"))})
 }
 
+func (r *Reviewer) interrupted() {
+	r.speaking.Store(0)
+	r.phase(core.Phase{Done: true, Note: "interrupted"})
+}
+
 func plural(n int, word string) string {
 	if n == 1 {
 		return word
@@ -132,6 +140,15 @@ func (r *Reviewer) call(fn func()) {
 }
 
 func (r *Reviewer) Land() { r.dirty.Store(true) }
+
+func (r *Reviewer) Halt() {
+	r.fireMu.Lock()
+	stop := r.fireStop
+	r.fireMu.Unlock()
+	if stop != nil {
+		stop()
+	}
+}
 
 func (r *Reviewer) Wake() {
 	if !r.dirty.Load() {
@@ -156,9 +173,19 @@ func (r *Reviewer) bite() {
 	if len(rows) == 0 {
 		return
 	}
+	fireCtx, stop := context.WithCancel(r.ctx)
+	r.fireMu.Lock()
+	r.fireStop = stop
+	r.fireMu.Unlock()
 	go func() {
-		reviewer, err := r.speak(r.ctx, rows)
+		defer stop()
+		reviewer, err := r.speak(fireCtx, rows)
+		halted := fireCtx.Err() != nil
 		r.engine.Add(evt.Func(func(context.Context) {
+			if err != nil && halted {
+				r.interrupted()
+				return
+			}
 			if err != nil {
 				r.say("review: fire: %v", err)
 				r.settled(0, err)
@@ -178,7 +205,13 @@ type turnEndWake struct {
 	rev   *Reviewer
 }
 
-func (w turnEndWake) Input(ctx context.Context) (string, error) { return w.inner.Input(ctx) }
+func (w turnEndWake) Input(ctx context.Context) (string, error) {
+	line, err := w.inner.Input(ctx)
+	if err == nil {
+		w.rev.Halt()
+	}
+	return line, err
+}
 
 func (w turnEndWake) Notify(ev core.Event) {
 	w.inner.Notify(ev)

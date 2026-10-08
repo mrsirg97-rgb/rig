@@ -705,3 +705,157 @@ func TestABiteIsAReviewingPhaseWithItsThinking(t *testing.T) {
 		t.Fatalf("the settle closes the phase with the count: %+v", got[2])
 	}
 }
+
+type blockingFire struct {
+	started  chan struct{}
+	returned chan struct{}
+	ctx      context.Context
+}
+
+func (f *blockingFire) fire(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
+	f.ctx = ctx
+	close(f.started)
+	<-ctx.Done()
+	close(f.returned)
+	return "", ctx.Err()
+}
+
+type lineFrontend struct {
+	line string
+}
+
+func (f lineFrontend) Input(context.Context) (string, error) { return f.line, nil }
+func (lineFrontend) Notify(core.Event)                       {}
+
+func haltReviewer(t *testing.T, fire decision.Fire) (*decision.Reviewer, <-chan core.Phase, <-chan string, store.DB) {
+	t.Helper()
+	db := openReviewedStore(t, 1)
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	t.Cleanup(engine.Stop)
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
+	})
+	phases := make(chan core.Phase, 16)
+	notices := make(chan string, 16)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err != nil {
+				continue
+			}
+			switch ev := m.Event().(type) {
+			case core.Phase:
+				phases <- ev
+			case core.Notice:
+				notices <- ev.Source + ": " + ev.Text
+			}
+		}
+	})
+	r := decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, 10,
+		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room, "proj")
+	return r, phases, notices, db
+}
+
+func mustEndInterrupted(t *testing.T, f *blockingFire, phases <-chan core.Phase, notices <-chan string, db store.DB) {
+	t.Helper()
+	select {
+	case <-f.returned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the fire never ended")
+	}
+	if err := f.ctx.Err(); err == nil {
+		t.Fatal("the fire runs on a live context")
+	}
+	var closed core.Phase
+	deadline := time.After(5 * time.Second)
+	for !closed.Done {
+		select {
+		case p := <-phases:
+			if p.Done {
+				closed = p
+			}
+		case <-deadline:
+			t.Fatalf("the bite never closed its phase: %+v", closed)
+		}
+	}
+	if closed.Ok || closed.Note != "interrupted" {
+		t.Fatalf("the interrupted bite names its exit without a success glyph: %+v", closed)
+	}
+	select {
+	case n := <-notices:
+		t.Fatalf("an interrupted bite says nothing loud: %v", n)
+	case <-time.After(200 * time.Millisecond):
+	}
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM decisions WHERE status = 'pending'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("an interrupted bite settles nothing, pending = %d", n)
+	}
+}
+
+func TestHaltEndsAnInFlightBiteAndItSettlesNothing(t *testing.T) {
+	f := &blockingFire{started: make(chan struct{}), returned: make(chan struct{})}
+	r, phases, notices, db := haltReviewer(t, f.fire)
+	r.Land()
+	r.Wake()
+	select {
+	case <-f.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bite never fired")
+	}
+	r.Halt()
+	mustEndInterrupted(t, f, phases, notices, db)
+}
+
+func TestAnInputEndsAnInFlightBiteAndItSettlesNothing(t *testing.T) {
+	f := &blockingFire{started: make(chan struct{}), returned: make(chan struct{})}
+	r, phases, notices, db := haltReviewer(t, f.fire)
+	wrapped := decision.TurnEnds(lineFrontend{line: "next"}, r)
+	r.Land()
+	r.Wake()
+	select {
+	case <-f.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bite never fired")
+	}
+	line, err := wrapped.Input(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if line != "next" {
+		t.Fatalf("the wrapper hands the line through, got %q", line)
+	}
+	mustEndInterrupted(t, f, phases, notices, db)
+}
+
+type returningFire struct {
+	started chan struct{}
+	ctx     context.Context
+}
+
+func (f *returningFire) fire(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
+	f.ctx = ctx
+	close(f.started)
+	speak(voice, "verdict: 1 approve")
+	return "dsv4", nil
+}
+
+func TestAFireThatReturnsOnItsOwnReleasesItsContext(t *testing.T) {
+	f := &returningFire{started: make(chan struct{})}
+	r, _, _, db := haltReviewer(t, f.fire)
+	r.Land()
+	r.Wake()
+	select {
+	case <-f.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bite never fired")
+	}
+	waitSettled(t, db, 0)
+	select {
+	case <-f.ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("a fire that returned on its own left its context registered on the session")
+	}
+}
