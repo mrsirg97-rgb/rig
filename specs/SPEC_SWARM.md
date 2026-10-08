@@ -57,11 +57,11 @@ caps, the Reap release, and the verdict protocol are unchanged.
   read the board and the worker's stdout; the accept, the reject, the
   reorder and the prune were the architect's by convention. Since
   2.14.1 they are by rule: `todo` accept, reject, move and prune are the
-  registry's operator verbs (SPEC_WORKERS 7), off every headless menu
-  and refused on the headless wire before the tool runs — a drain
-  worker submits for review and notes findings; the session decides.
-  The swarm's worker allow list itself is unchanged: draining the board
-  is the workers' job, and the verbs they never see are the session's.
+  registry's operator verbs (SPEC_WORKERS 7), off a delegated worker's
+  menu and refused in its wire before the tool runs — a drain worker
+  submits for review and notes findings; the session decides. The
+  swarm's worker allow list itself is unchanged: draining the board is
+  the workers' job, and the verbs they never see are the session's.
 
 ## goals
 

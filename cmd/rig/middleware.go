@@ -36,7 +36,7 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		perm.Plugins(r.pluginsDir, r.drec),
 		perm.AllowlistWithDoor(r.allow, door, r.drec),
 	)
-	if r.headless() {
+	if r.delegated() {
 		mw = append(mw, operator.Middleware())
 	}
 	mw = append(mw,

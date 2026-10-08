@@ -553,11 +553,11 @@ The pieces:
   plugin into `plugins/disabled/`, reversible with `/plugins enable`,
   one `Move` shared with the `/plugins` command (never an unlink).
   Since 2.14.1 `delete` is the operator's verb (the registry's
-  `operator` key, SPEC_WORKERS 7): it is off every headless menu, and a
-  headless session's `delete` call is refused before the door runs —
-  disabling a live tool is the session's or the operator's judgment,
-  never a worker's. A worker still runs, contracts, lists, creates and
-  reloads.
+  `operator` key, SPEC_WORKERS 7): it is off a delegated worker's menu,
+  and a delegated worker's `delete` call is refused before the door
+  runs — disabling a live tool is the session's or the operator's
+  judgment, never a delegated worker's. A delegated worker still runs,
+  contracts, lists, creates and reloads.
 - **`/plugins reload`**, the operator's verb: the same re-discovery,
   the same next-turn registration, from the command door.
 - **`/plugins create <text>`**, a prompt template on the steer

@@ -12,8 +12,8 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
 
 - `registry.json`: one entry per native tool: `name`, `enabled`, `what`,
   `guidelines`, `reply`, `schema`, and (since 2.14.1, where it applies)
-  `operator` — the verbs the session keeps, off every headless menu and
-  refused on the headless wire (SPEC_WORKERS 7). One list per tool,
+  `operator` — the verbs the session keeps, off a delegated worker's
+  menu and refused in its wire (SPEC_WORKERS 7). One list per tool,
   written once: `todo` prune, accept, reject, move; `scheduler` remove;
   `plugin` delete. `rem` has no key: memory is observation. File order
   is menu order for the root.

@@ -354,8 +354,12 @@ one line and never the answer:
   which is what an absent flag would resolve to and would hand a
   worker more than its session allows. The swarm's workers keep the
   session's list (draining the board is their job, SPEC_SWARM) and
-  the review fire keeps its bare three. The marker stays as defense
-  in depth: a worker that still admits `delegate` refuses by name.
+  the review fire keeps its bare three. The marker is also the gate
+  for the operator's verbs (SPEC_WORKERS 7): a delegated worker's menu
+  drops them and its wire refuses them, while a scheduled fire — a
+  `rig -p` session of its own, no marker set — keeps todo's full verb
+  set. And the marker stays as the no-recursion rule: a worker that
+  still admits `delegate` refuses by name.
 - **The approval gate**: `delegate` counts as mutating (it spawns a
   worker and writes stores). Manual mode asks, and the prompt shows
   the task's first line, not the raw args JSON; `approve.Prompt`

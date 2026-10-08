@@ -45,9 +45,10 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   rm, reversible with `/plugins enable`, through `Move`), `reload`
   (re-discovery over the home's plugins/ and the hand-off to the root's
   swap). Since 2.14.1 `delete` is the registry's operator verb
-  (SPEC_WORKERS 7): a headless menu omits it and `policy/operator`
-  refuses it before the door runs — a worker runs, contracts, lists,
-  creates and reloads, and never disables a live tool.
+  (SPEC_WORKERS 7): a delegated worker's menu omits it and
+  `policy/operator` refuses it before the door runs — a delegated
+  worker runs, contracts, lists, creates and reloads, and never
+  disables a live tool.
 - `Move(dir, name, from, to)`: the one file-move shared with the
   `/plugins` disable/enable command: name-voice validation, src/dst
   refusals, the mkdir + rename; never an unlink.

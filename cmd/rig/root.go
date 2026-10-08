@@ -16,7 +16,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
@@ -237,7 +236,7 @@ func (r *root) nativeTools() []core.Tool {
 		}
 		out = append(out, tool)
 	}
-	if r.headless() {
+	if r.delegated() {
 		for i := range out {
 			out[i] = operator.Menu(out[i])
 		}
@@ -245,9 +244,8 @@ func (r *root) nativeTools() []core.Tool {
 	return out
 }
 
-func (r *root) headless() bool {
-	_, ok := r.fe.(*oneshot.OneShot)
-	return ok
+func (r *root) delegated() bool {
+	return os.Getenv(sched.DelegateEnv) != ""
 }
 
 func (r *root) buildPair() (core.Provider, core.ContextPolicy) {

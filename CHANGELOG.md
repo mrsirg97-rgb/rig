@@ -27,20 +27,23 @@ world: what it may hold, and what it may be told.
   `operator` — one list per tool, written once. `todo` prune, accept,
   reject and move (the architect's, SPEC_SWARM's rule now enforced);
   `scheduler` remove; `plugin` delete. `rem` has no key.
-- **a headless menu does not offer them** (`policy/operator`, `cmd/rig`):
-  when the root wires a headless frontend (a delegate's or swarm worker,
-  a scheduled fire), the tool specs it send drop the operator verbs from
-  the `action` enum and the verb words from the description and schema —
-  `scheduler`'s id field still says `pause/resume/runs/show`, only the
-  session's verb is gone. The interactive menu is byte-identical; the
-  wire job's interactive artifacts do not move.
-- **a headless call cannot run them** (`policy/operator`): a middleware
-  in the headless wire only refuses a call whose tool and verb are in
-  the registry's operator list, before the tool runs, with one named
-  refusal — `todo prune: the session's verb — a worker does not judge or
-  delete the board; leave it for the session` — returned as the tool
-  result, never a fault. The tools' switches are untouched; every other
-  verb passes, `rem prune` included.
+- **a delegated worker's menu does not offer them** (`policy/operator`,
+  `cmd/rig`): the gate is `RIG_DELEGATE` — the marker the delegate spawn
+  already sets on the delegate's and the swarm's workers — not the
+  frontend kind. A delegated worker's tool specs drop the operator verbs
+  from the `action` enum and the verb words from the description and
+  schema — `scheduler`'s id field still says `pause/resume/runs/show`,
+  only the session's verb is gone. A scheduled fire is a session of its
+  own, no marker set: it keeps todo's full verb set, because the hedge
+  optimizer prunes and accepts on the board it was given. The wire is
+  byte-identical everywhere the marker is absent.
+- **a delegated worker cannot run them** (`policy/operator`): a
+  middleware in the delegated worker's wire only refuses a call whose
+  tool and verb are in the registry's operator list, before the tool
+  runs, with one named refusal — `todo prune: the session's verb — a
+  worker does not judge or delete the board; leave it for the session`
+  — returned as the tool result, never a fault. The tools' switches are
+  untouched; every other verb passes, `rem prune` included.
 
 ## [2.14.0]: the delegate lets go
 

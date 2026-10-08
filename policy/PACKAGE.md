@@ -37,14 +37,15 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
   identical request, at most twice, then a fault with plain words; the
   discarded reasoning never reaches the frontend or the transcript.
 - `operator.Middleware` (2.14.1, SPEC_WORKERS 7): the operator verbs'
-  enforcement, wired on the headless wire only: a call whose tool and
+  enforcement, wired in a delegated worker's wire only (the root gates
+  on `RIG_DELEGATE`, the no-recursion marker): a call whose tool and
   verb are in the registry's `operator` list is refused before the tool
   runs, with one named refusal returned as the tool result — a worker
   does, the session decides.
-- `operator.Menu`: the headless menu's trim — the operator verbs leave
-  the `action` enum and the verb words leave the description and the
-  schema; a tool the registry marks nothing for is handed back whole,
-  and the interactive wire never wraps.
+- `operator.Menu`: a delegated worker's menu trim — the operator verbs
+  leave the `action` enum and the verb words leave the description and
+  the schema; a tool the registry marks nothing for is handed back
+  whole, and a session without the marker is never wrapped.
 
 ## How it is consumed
 

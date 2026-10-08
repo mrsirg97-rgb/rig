@@ -11,6 +11,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/store"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
 )
@@ -25,7 +26,7 @@ func todoStoreFor(t *testing.T) store.DB {
 	return db
 }
 
-func headlessRootWithTodo(t *testing.T) (*root, store.DB, string) {
+func rootWithTodo(t *testing.T) (*root, store.DB, string) {
 	t.Helper()
 	dir := t.TempDir()
 	r := testRoot(&oneshot.OneShot{Prompt: "work", Out: io.Discard, Err: io.Discard})
@@ -64,11 +65,15 @@ func doneTaskCount(t *testing.T, db store.DB, scope string) int {
 func seedDoneTask(t *testing.T, db store.DB, proj todostore.Project) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := todostore.Create(ctx, db, proj, todostore.CreateItem{Text: "board entry"}, "sess-headless"); err != nil {
+	if _, err := todostore.Create(ctx, db, proj, todostore.CreateItem{Text: "board entry"}, "sess-root"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := db.DB.Exec(`UPDATE tasks SET status = 'done' WHERE scope = ?`, proj.Key); err != nil {
-		t.Fatalf("done: %v", err)
+	var id string
+	if err := db.DB.QueryRow(`SELECT id FROM tasks WHERE scope = ?`, proj.Key).Scan(&id); err != nil {
+		t.Fatalf("seed id: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, proj, id, "sess-root", false); err != nil {
+		t.Fatalf("complete: %v", err)
 	}
 	if doneTaskCount(t, db, proj.Key) != 1 {
 		t.Fatal("the seed task is not done")
@@ -86,9 +91,8 @@ func liveSpec(t *testing.T, r *root, name string) core.Tool {
 	return nil
 }
 
-func TestAHeadlessRootsMenuDropsTheOperatorVerbs(t *testing.T) {
-	r, _, _ := headlessRootWithTodo(t)
-	wire(r)
+func todoActionEnum(t *testing.T, r *root) []string {
+	t.Helper()
 	var schema struct {
 		Properties struct {
 			Action struct {
@@ -99,10 +103,18 @@ func TestAHeadlessRootsMenuDropsTheOperatorVerbs(t *testing.T) {
 	if err := json.Unmarshal(liveSpec(t, r, "todo").Schema(), &schema); err != nil {
 		t.Fatal(err)
 	}
+	return schema.Properties.Action.Enum
+}
+
+func TestADelegatedWorkerSMenuDropsTheOperatorVerbs(t *testing.T) {
+	t.Setenv(sched.DelegateEnv, "1")
+	r, _, _ := rootWithTodo(t)
+	wire(r)
+	enum := todoActionEnum(t, r)
 	for _, verb := range []string{"prune", "accept", "reject", "move"} {
-		for _, v := range schema.Properties.Action.Enum {
+		for _, v := range enum {
 			if v == verb {
-				t.Fatalf("a headless menu offers %q: %v", verb, schema.Properties.Action.Enum)
+				t.Fatalf("a delegated worker's menu offers %q: %v", verb, enum)
 			}
 		}
 	}
@@ -110,12 +122,13 @@ func TestAHeadlessRootsMenuDropsTheOperatorVerbs(t *testing.T) {
 		strings.Contains(liveSpec(t, r, "todo").Description(), "accept") ||
 		strings.Contains(liveSpec(t, r, "todo").Description(), "reject") ||
 		strings.Contains(liveSpec(t, r, "todo").Description(), "move") {
-		t.Fatalf("a headless description says the operator's verbs: %s", liveSpec(t, r, "todo").Description())
+		t.Fatalf("a delegated worker's description says the operator's verbs: %s", liveSpec(t, r, "todo").Description())
 	}
 }
 
-func TestAHeadlessRootRefusesTodoPruneAndTheStoreIsUnchanged(t *testing.T) {
-	r, tdb, dir := headlessRootWithTodo(t)
+func TestADelegatedWorkerSPruneIsRefusedAndTheStoreIsUnchanged(t *testing.T) {
+	t.Setenv(sched.DelegateEnv, "1")
+	r, tdb, dir := rootWithTodo(t)
 	wire(r)
 	proj := todostore.ProjectOf(dir)
 	seedDoneTask(t, tdb, proj)
@@ -144,8 +157,9 @@ func TestAHeadlessRootRefusesTodoPruneAndTheStoreIsUnchanged(t *testing.T) {
 	}
 }
 
-func TestAHeadlessRootRefusesTheOtherOperatorPairs(t *testing.T) {
-	r, _, dir := headlessRootWithTodo(t)
+func TestADelegatedWorkerSRefusesTheOtherOperatorPairs(t *testing.T) {
+	t.Setenv(sched.DelegateEnv, "1")
+	r, _, dir := rootWithTodo(t)
 	wire(r)
 	exec := chainFor(t, r, func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
@@ -168,23 +182,32 @@ func TestAHeadlessRootRefusesTheOtherOperatorPairs(t *testing.T) {
 	}
 }
 
-func TestAnInteractiveRootKeepsEveryVerb(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	r.allow = []string{"todo", "bash", "scheduler"}
-	r.tools["todo"] = todoapi.New(todoStoreFor(t), todoapi.Interactive)
+func TestAHeadlessRunWithoutTheMarkerKeepsTheOperatorVerbs(t *testing.T) {
+	t.Setenv(sched.DelegateEnv, "")
+	r, tdb, dir := rootWithTodo(t)
 	wire(r)
-	spec := liveSpec(t, r, "todo")
-	if string(spec.Schema()) != string(todoapi.New(todoStoreFor(t), todoapi.Interactive).Schema()) {
-		t.Fatal("the interactive menu must carry the registry's words byte for byte")
+	enum := todoActionEnum(t, r)
+	for _, verb := range []string{"prune", "accept", "reject", "move"} {
+		found := false
+		for _, v := range enum {
+			if v == verb {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("a session of its own keeps %q on the menu: %v", verb, enum)
+		}
 	}
+	proj := todostore.ProjectOf(dir)
+	seedDoneTask(t, tdb, proj)
+
 	exec := chainFor(t, r, func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	})
-	content, err := exec(context.Background(), callOf(t, "todo", "prune", "."))
-	if err != nil {
-		t.Fatalf("an interactive session prunes its own board: %v", err)
+	if _, err := exec(context.Background(), callOf(t, "todo", "prune", dir)); err != nil {
+		t.Fatalf("a session of its own prunes its own board: %v", err)
 	}
-	if strings.Contains(content, "the session's verb") {
-		t.Fatalf("the operator's refusal must stay off the interactive wire: %q", content)
+	if doneTaskCount(t, tdb, proj.Key) != 0 {
+		t.Fatal("the prune must run: without the delegate marker the middleware is not wired")
 	}
 }
