@@ -397,4 +397,6 @@ that is harder than writing a lot, and it is the bar.
 - `specs/`: the specs, written and agreed before the code (SPEC_CORE
   first); the governing documents the `PACKAGE.md` files cite.
 - `docs/`: the architecture (`DESIGN.md`), setup, usage, the plugins
-  guide (`PLUGINS.md`), TUI design, and the consolidation notes.
+  guide (`PLUGINS.md`), TUI design, and the embed guide; `docs/history/`
+  keeps the dated notes (the launch roadmap, the consolidation read)
+  as written — never cite them as current.

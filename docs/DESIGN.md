@@ -18,6 +18,7 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
                   └─ seam: Tool ─► ToolMiddleware chain
                                    └─ toolset.Resolve → approve.Gate → cutoff
                                        → perm.Plugins → perm.Allowlist
+                                       → operator (delegated workers only)
                                        → guard.Bound → guard.Rounds → guard.Cap
                                        → paths (the ~ expansion)
                                        (first-listed = innermost)
@@ -36,7 +37,7 @@ The [core spec](../specs/SPEC_CORE.md) governs this document where they disagree
 
 | seam             | shape (abridged)                                        | role                                        | swapped where          |
 |------------------|---------------------------------------------------------|---------------------------------------------|------------------------|
-| `core.Provider`  | `Stream(ctx, messages) (EventStream, error)`            | model access; streaming events in           | `kernel.WithProvider`  |
+| `core.Provider`  | `Stream(ctx, req Request) (<-chan Event, error)`        | model access; streaming events in           | `kernel.WithProvider`  |
 | `core.Tool`      | `Name/Description/Schema/Exec(ctx, args)`               | capability; stdlib-agnostic                 | `kernel.WithTools`     |
 | `core.Frontend`  | `Input(ctx) (string, error)`; `Notify(Event)`           | human I/O and the event sink                | `kernel.WithFrontend`  |
 | `core.ContextPolicy` | `Assemble(ctx, session) (messages, error)`          | context construction per turn               | `kernel.WithPolicy`    |
@@ -54,6 +55,17 @@ the kernel interface and resolves seams at runtime. Swapping any dependency is a
 change at the composition root and nowhere else.
 
 ### the turn
+
+The turn runs on the `evt` engine (SPEC_EVT): one consumer, many
+producers, work arriving as closures ordered by priority then arrival.
+The consumer is the only thing that touches the session, which is what
+makes concurrency cheap: "Parallel tool calls are goroutines that *post
+their completion*; the loop applies completions in call order; nothing
+needs a lock except the queue." The kernel carries the named priorities
+(`PriorityInput` 90, `PriorityStream` 50, `PriorityTool` 50,
+`PriorityFleet` 30, `PriorityReview` 10); the loop reads them, the root
+assigns them. A step that waits on the world never blocks the consumer:
+it spawns and its completion posts back at the same priority.
 
 ```
  user message ─► Assemble (ContextPolicy) ─► Stream (Provider)
@@ -108,14 +120,16 @@ Turn-boundary semantics (the runtime's contract, enforced and tested):
 
 The root's chain `WithMiddleware([index.Middleware when a graph is
 wired], toolset.Resolve, approve.Gate, cutoff.Middleware, perm.Plugins,
-perm.AllowlistWithDoor, guard.Bound, guard.Rounds, guard.Cap,
+perm.AllowlistWithDoor, [operator.Middleware when the delegate marker
+is set], guard.Bound, guard.Rounds, guard.Cap,
 paths.Middleware, [decision.Site when proposals], [rem.Guide when
 decide])` composes **first-listed innermost**: execution reads the
 registration list in reverse, a call entering at the outermost link and
 unwinding inward (the bracketed links ride only their condition):
 
     (rem.Guide -> decision.Site ->) paths (the `~` expansion)
-    -> guard.Cap -> guard.Rounds -> guard.Bound -> perm.Allowlist
+    -> guard.Cap -> guard.Rounds -> guard.Bound
+    -> [operator] -> perm.Allowlist
     -> perm.Plugins -> cutoff -> approve.Gate -> toolset.Resolve
     -> [index.Middleware] -> the tool itself
 
@@ -126,36 +140,26 @@ path-shaped argument, the cutoff link (SPEC_HARDENING 10) refuses a
 provider-marked cut call before the operator is asked to approve it, and
 the resolve sits innermost of the policy links (the graph tap, when a
 graph is wired, sits inside it) so the live table's plugin tool executes
-under every bound.
+under every bound. The `operator` link (`policy/operator`, 2.14.1) rides
+only a delegated worker's wire: the tool is already allowed when it
+speaks, and what it refuses is the verb — the session's verbs (`todo`
+prune/accept/reject/move, `scheduler` remove, `plugin` delete, one list
+in the registry) come back as named refusals, never faults.
 
 ### guard semantics (`middleware/guard`)
 
-Per the spec, every tool call executes exactly once, always; the guard never
-retries silently. What `Bound` bounds is the *model's* re-issuance of a
-failing *tool*, aligned to pane's retry guard:
-
-- keyed by **tool name**, with the streak per args: the bound strikes
-  identical retries only, and a corrected call (args differing from the
-  last failed args) resets its own streak and always executes;
-- **cleared at the start of every turn** (the loop's `TurnStart` fan-out)
-  and on success: the bound tracks streaks within a turn, not history;
-- the limit-th consecutive failure of a tool carries a note: the error is
-  above, read it and change the call, or stop calling the tool; appended
-  to the model-visible result, replacing it only when the result is blank;
-- the next re-issuance is refused without executing, naming the bound.
-
-Beside the bound, the same package carries two more
-(`specs/SPEC_HARDENING.md` 9): `Rounds`, the per-turn cap on tool calls
-(`settings.json` `rounds`, default 0 = no cap; the alternation the
-bound's per-args streak does not cap, and a runaway batch), and `Cap`,
-the wall that bounds every tool result before the transcript
-(`settings.json` `resultCap`, default 64 KiB; an oversized result
-truncates to head and tail with the loud `[TRUNCATED]` marker naming
-the full size, and every tool's own cap stays).
-
-Denials are attributed (refusal string plus error) so they are countable; that
-attribution is what makes the spec's two sentences; refusal fed back to the
-model, repetition bounded; simultaneously true.
+The guard never retries; every tool call executes exactly once. What
+`Bound` bounds is the *model's* re-issuance of a failing *tool* — keyed
+by tool name, streaked per args, cleared at the turn's start and on
+success — and the full rule is `docs/USAGE.md`, its one home. Beside
+the bound the same package carries the two caps (`specs/SPEC_HARDENING.md`
+9): `Rounds`, the per-turn cap on tool calls (`rounds`, default 0 = no
+cap), and `Cap`, the wall (`resultCap`, default 64 KiB) that bounds
+every tool result before the transcript with the loud `[TRUNCATED]`
+marker naming the full size. Denials are attributed (refusal string plus
+error) so they are countable; that attribution is what makes the spec's
+two sentences — refusal fed back to the model, repetition bounded —
+simultaneously true.
 
 ### session and persistence
 
@@ -191,6 +195,74 @@ so `a.go` and `./a.go` are one key.
 | file read        | 1 MiB, naming the truncation; streamed — a huge file is never materialised |
 | every tool result | `resultCap` (default 64 KiB): head and tail with the loud `[TRUNCATED]` marker naming the full size, before the transcript |
 | a turn's calls   | `rounds` (default 0 = no cap): the n+1th call is refused without executing |
+
+## the decision pipeline
+
+`decision/` is a stdlib-only leaf beside `pathguard` (SPEC_DECISION).
+The rule that names the shape: **"an answer is a proposal an LLM
+reviews, never an action."** `Question` is typed — `choice`, `score`,
+`binary`; `Answer` carries the value, the confidence, and the decider;
+the gates hold a `Recorder` and record their `Final`s — site, state,
+question, answer, decider, scope, session — into one sqlite store under
+the rig home, scoped like todo. Recording never changes a decision and
+a store error never fails a call: the wired recorder swallows store
+errors (and says so in the room when the root gives it a voice).
+
+With `decisionUrl` set, an HTTP proposer starts proposing: every bash
+call gains a pending risk row, the `decide` tool joins the live table so
+the model hands its sorting over instead of reading, and the reviewer
+settles pending rows in batches (`reviewBatch`). The review's bite posts
+at `PriorityReview`, below the fleet: it starts only when nothing else
+is queued, so labels get the idle time and nothing waits on them
+(SPEC_EVT 8).
+
+The decision model trains from rig's own rows (SPEC_DECISION 2.13.0):
+`train/` is a discovery zone beside `plugins/`, one trainer one Python
+file with a checked contract (`train(rows_path, out_dir)`,
+`evaluate(checkpoint, rows_path)`), run headless through `trainPython` —
+never inside a turn. The run exports the settled rows (an approved row
+takes the proposer's answer, a denied row the reviewer's correction),
+splits 80/20 stratified, and scores candidate, incumbent, and the
+constant baseline on the same held-out rows. Promotion is a measured
+win: the candidate must beat the constant **and** the incumbent on every
+question — a tie is not a beat — and it lands as a printed command, the
+one `Environment=` line in the unit `decisionUnit` names; rig restarts no
+service it does not own.
+
+## the fleet
+
+`broadcast/` is the fleet's message seam (SPEC_SWARM): a `Room` of
+`Member`s over a `Transport`, exchanging `Message`s that carry origin,
+health, and a `core.Event`. The transport is the loop itself
+(`NewLoopTransport(id, engine, priority)`): a send posts one closure at
+the room's priority and acks on the post — the queue is the durability —
+and a second heartbeat before the first ran is not posted. `Say` is the
+one voice every background subsystem notices with; the kernel names the
+members (`MemberFrontend`, `MemberDelegate`, `MemberGraph`,
+`MemberDecision`), the swarm's supervisor registers as one.
+
+Because the room posts at `PriorityFleet` 30, below the turn's own
+events, "a worker's message runs in the gaps of a turn and never ahead
+of it" (SPEC_EVT 8). Starvation is the documented property: a busy
+session delays the fleet's chatter and loses nothing, since the stores
+hold the facts.
+
+Presence is display, not state: the swarm band under the TUI's status
+row carries the live counts per role (`workers 2 · +3 ✓5 ✕1 · w2 t388
+12s`, `reviewer 1 · ⧗1 ✓1 ✕0`), zero rows when nothing runs; a
+delegated batch takes two rows of its own — the batch count and elapsed
+over the most recent call of any of its workers (`delegating · 3
+workers · 1m12s` / `#2 edit tool/file/edit.go · 12s`) — both publishers
+riding throttled `core.SwarmStatus` snapshots (`frontend/tui`,
+`swarm`).
+
+The return is the turn's front door: `core.WorkerDone` carries the
+worker's message, exit, duration, session, and log; the frontend's inbox
+drains it at the prompt as the head of the next user message — returns
+first, then what the operator typed — and a drain with no live turn
+starts one. A worker belongs to the session, not the turn that spawned
+it; the interrupt gesture with no turn live (esc on an empty prompt, the
+dashboard's stop button) stops every running worker (`SPEC_DELEGATE` 8).
 
 ## extending
 
@@ -235,8 +307,12 @@ and the loop never names a concrete type.
   `mattn/go-runewidth` at `frontend/tui`, and `golang.org/x/crypto` at
   `cmd/rig`'s updater. Every other provider, tool, middleware and
   frontend is stdlib.
-- **Closed, typed seams.** Dependencies are compile-time explicit: nothing is
-  loaded, discovered, or reflected at runtime. Unknown at a seam is a loud
+- **Closed, typed seams.** The Go graph is compile-time explicit: no
+  reflection, and nothing loaded or discovered into the loop at runtime.
+  The two discovery zones that exist — `plugins/` and `train/` — are the
+  operator's files under the rig home, checked against a named contract
+  before any of their code runs, and the wire reaches them through the
+  one `plugin` door. Unknown at a seam is a loud
   error, never a guess.
 - **One process.** Modular monolith: cross-process only when demanded.
 - **Default-deny at the boundary.** Tools execute only through the registered

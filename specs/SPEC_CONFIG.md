@@ -1002,9 +1002,9 @@ case names one, the built binary for the e2e.
 
 **policy/compact:**
 
-- `TestSummaryEffortIsTheRow`: a row with `Effort: "low"`: the
-  summary request carries `low` (both wire shapes, the adapter test's
-  assertion); a row with `Effort: ""`: `medium` (the 0.2.0 bytes).
+- `TestSummaryEffortIsTheRowsLowest`: the summary request carries the
+  row's lowest `efforts` level (the operator's order is lowest first);
+  a row naming no `efforts` carries `""` — the server default rides.
 
 **command:**
 

@@ -308,7 +308,7 @@
     <div class="band" aria-label="the footer of a running rig session"><span class="m">max</span> · default · auto
 up 214k down 18k · cache r 211k <span class="g">99%</span></div>
     <div class="install">
-      <code id="install-line"><span class="p">❯</span>curl -fsSL https://tryrig.ai/install.sh | sh</code>
+      <code id="install-line"><span class="p">❯</span>curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh</code>
       <button type="button" id="copy-btn" aria-label="copy the install command">copy</button>
     </div>
     <div class="install-note">
@@ -368,7 +368,9 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
     <h2 id="teach-heading">The loop never retries. The refusal teaches.</h2>
     <p>A failed call runs once and the model is told why, <b>in words it can act on.</b> No hidden retry, no guessing. The rules of the board, the files, and the sandbox are not in the prompt; they arrive the moment they matter, which is why small models get good at rig fast.</p>
     <pre><span class="t-ember">●</span> <span class="t-ember">edit</span><span class="t-dim"> · </span>core/turn.go
-<span class="t-err">✗</span> <span class="t-dim">edit: core/turn.go was never read this session: read it first</span>
+<span class="t-err">✗</span> <span class="t-dim">edit: the file changed since the read:</span>
+<span class="t-err">  </span><span class="t-dim">-  maxRetries = 3</span>
+<span class="t-err">  </span><span class="t-dim">+  maxRetries = 0</span>
 <span class="t-ember">●</span> <span class="t-ember">read</span><span class="t-dim"> · </span>core/turn.go
 <span class="t-ember">●</span> <span class="t-ember">edit</span><span class="t-dim"> · </span>core/turn.go
 <span class="t-ok">✓</span> <span class="t-dim">core/turn.go · 214 bytes replaced</span>
@@ -388,7 +390,7 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
         <h2>Install it</h2>
         <p>One file lands in your path. Checksum-verified, and it <b>updates itself in place.</b></p>
       </div>
-      <pre>curl -fsSL https://tryrig.ai/install.sh | sh
+      <pre>curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh
 <span class="d">✓ rig {{RIG_VERSION}} installed to ~/.local/bin/rig</span>
 
 <span class="c"># later</span>
@@ -405,8 +407,7 @@ rig -update</pre>
       <pre>{
   <span class="k">"model"</span>: <span class="s">"local"</span>,
   <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,
-  <span class="k">"sandbox"</span>: <span class="s">"off"</span>,
-  <span class="k">"plugins"</span>: { <span class="k">"enabled"</span>: [] }
+  <span class="k">"sandbox"</span>: <span class="s">"off"</span>
 }</pre>
       <details class="more">
         <summary>models.json</summary>
@@ -428,6 +429,8 @@ rig -update</pre>
     <span class="k">"id"</span>: <span class="s">"sonnet"</span>,
     <span class="k">"window"</span>: <span class="d">200000</span>,
     <span class="k">"maxTokens"</span>: <span class="d">8192</span>,
+    <span class="k">"reserve"</span>: <span class="d">16384</span>,
+    <span class="k">"keepRecent"</span>: <span class="d">40000</span>,
     <span class="k">"provider"</span>: <span class="s">"openrouter"</span>,
     <span class="k">"baseUrl"</span>: <span class="s">"https://openrouter.ai/api/v1"</span>,
     <span class="k">"apiKey"</span>: <span class="s">"sk-or-…"</span>,
@@ -435,7 +438,7 @@ rig -update</pre>
   }
 ]
 <span class="c"># switch any time: /models sonnet</span></pre>
-      <p class="file">the fleet · background workers run on the resident model — the live slots your model server reports are the parallelism</p>
+      <p class="file">the fleet · background workers run on the resident model — a request the server cannot start yet queues at the server, and a model that is not resident refuses by name, naming the holder</p>
         </div>
       </details>
     </article>
@@ -466,7 +469,7 @@ rig -update</pre>
       <p class="num">4</p>
       <div>
         <h2>Run it in a repo</h2>
-        <p>The terminal opens. Ask for something real. <b>Tool calls run in parallel and results land in order,</b> so three reads cost one round trip and the transcript still reads top to bottom. Rig ships a carefully chosen, focused toolset: bash, read, write, edit, python, web, memory, todo, scheduler, workers. <b>Reading is one tool, on purpose:</b> every edit is checked against what the model actually read, and the shell does the listing and searching it already does well.</p>
+        <p>The terminal opens. Ask for something real. <b>Tool calls run in parallel and results land in order,</b> so three reads cost one round trip and the transcript still reads top to bottom. Rig ships a carefully chosen, focused toolset: bash, read, write, edit, view, python, web, todo, rem, scheduler, delegate, sessions, plugin. <b>Reading is one tool, on purpose:</b> every edit is checked against what the model actually read, and the shell does the listing and searching it already does well.</p>
       </div>
       <pre class="tui"><span class="t-dim">cd your-project &amp;&amp; rig</span>
 <span class="t-ember">❯</span><span class="t-text"> look around, run the tests, remember what you learn</span>
@@ -501,9 +504,12 @@ rig -update</pre>
       <pre class="tui"><span class="t-ember">❯</span><span class="t-text"> have a worker run the full test sweep while we keep going</span>
 
 <span class="t-ember">●</span> <span class="t-ember">delegate</span>
-<span class="t-dim">  w1 · running in a jail</span>
-<span class="t-dim">  214 tests pass; two flaky under -race, noted on t2</span>
-<span class="t-dim">delegate</span> <span class="t-ok">✓</span> <span class="t-dim">41.3s</span>
+<span class="t-dim">delegate: worker #1 started · session 7d41d9c · log runs/delegate/worker-1.log</span>
+<span class="t-dim">delegating · 1 worker · 0s   <span class="c">← the turn costs one line; keep typing</span></span>
+
+<span class="c"># the worker finishes; its return heads the next turn</span>
+<span class="t-ok">delegate #1 returned · exit 0 · 41s · session 7d41d9c</span>
+<span class="t-dim">214 tests pass; two flaky under -race, noted on t2</span>
 
 <span class="t-ember">/scheduler</span><span class="t-dim"> · </span><span class="t-text">create health &#34;check the fund&#34; 0 */2 * * *</span>
 <span class="t-ember">● scheduler</span>
@@ -542,8 +548,8 @@ rig -update</pre>
 <span class="t-dim">○</span> <span class="t-dim">t2</span> <span class="t-text">run the test sweep</span><span class="t-dim"> · requires t1</span>
 <span class="t-dim">○</span> <span class="t-dim">t3</span> <span class="t-text">record the durable facts</span><span class="t-dim"> · requires t2</span>
 
-<span class="t-ember">/swarm</span><span class="t-dim"> · </span><span class="t-text">2</span>
-<span class="t-dim">swarm: 2 workers on your-project&#39;s queue</span>
+<span class="t-ember">/swarm</span><span class="t-dim"> · </span><span class="t-text">start 2</span>
+<span class="t-dim">swarm: added 2 agents (role worker · model local)</span>
 <span class="t-dim">w1 claimed t1 · w2 waits for t1</span></pre>
     </article>
 
@@ -588,7 +594,7 @@ rig -update</pre>
 <script>
   (function () {
     var btn = document.getElementById('copy-btn'), line = document.getElementById('install-line');
-    var text = 'curl -fsSL https://tryrig.ai/install.sh | sh';
+    var text = 'curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh | sh';
     btn.addEventListener('click', function () {
       function done() { btn.textContent = 'copied'; setTimeout(function () { btn.textContent = 'copy'; }, 1600); }
       function fallback() {

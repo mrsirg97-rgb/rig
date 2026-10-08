@@ -70,8 +70,8 @@ is a loud line naming the known set, never silently a prompt.
   `pending` lists the model's authoring with each file's DESCRIPTION,
   `approve <name>` installs one (the operator's verb), `disabled`
   lists the disabled zone, `disable <name>` and `enable <name>` move
-  a plugin across it, `reload` re-registers from disk (the `plugins`
-  tool's command door), `create <text>` queues the authoring prompt.
+  a plugin across it, `reload` re-registers from disk (the `plugin`
+  door's own verb), `create <text>` queues the authoring prompt.
 - `/decision train <trainer>`: enqueue the decision model's training
   run off the turn — `<trainer>` is a trainer file's name (its filename
   stem, validated like a plugin name), and the command lands a one-shot
@@ -89,57 +89,43 @@ is a loud line naming the known set, never silently a prompt.
   it for review from a worker (`rig -p`), and `accept`/`reject` decide.
   `read` is the present — open work first, then related and recent
   finished, ten rows total with the hint naming what is hidden — and
-  `list finished <n>` lists the n most recent finished (default 10,
+  `finished <n>` lists the n most recent finished (default 10,
   cap 100); `read all:true` stays the operator's full-history read.
   Tasks carry two links, one each: `requires tN` (I wait for it) and
   `blocks tN` (it waits for me), gating claim and finish
   (`specs/SPEC_TODO_EDGES.md`).
 - `/rem project <path>`: a one-off read of another project's memories:
   the path resolves to a repo identity (worktrees share).
-- `/swarm`: the drain workers (1.4.0). Bare lists the supervisor's
-  workers (`2 workers · 1 running`, then `w1 [~] worker resident · task t3 ·
-  heartbeat 2s ago · done 1 failed 0`); `swarm start <count> [role=worker|reviewer] [model=<id>] [budget=<dollars>]`
-  starts that many workers (a budget stops the
-  controller's claims at the cap with a notice, the spend summed from
-  the recorded run costs); the reply is `swarm: added N agents (role X ·
-  model M)` whether the swarm was empty or running — one router on the
-  session's queue is the only reader of it, and it hands each ready
-  task to an idle worker on the events (a task created, completed, or
-  a worker finishing); each claims a task,
-  spawns a one-shot `rig -p` through the delegate path (jail, socket
-  proxy, recorded run), and finishes it itself: workers submit for
-  review, reviewers take the verdict the worker delivered with the
-  `verdict` tool and call `accept`/`reject`. A worker on a hosted row
-  skips the local swap and the gate entirely. The drain pair is wired
-  only where a second request can run — the session's model row is
-  remote, or the resident swap answers one live read (one slot hosts it;
-  a queued request waits at the server; `workers: false` turns it off;
-  the scheduler is
-  wired everywhere; `/swarm` names the reason when it refuses).
-  Against a running swarm a
-  start adds workers (the roles mix); `swarm stop` ends it and releases
-  the in-flight claims (`swarm: stopped N agents`; `specs/SPEC_SWARM.md`).
-  The task workers run
-  with no stall and no timeout on the spawn — the worker's own context
-  (the swarm's) is the only bound, so one lives until it exits or the
-  swarm stops; every abnormal end is recorded on the run (`canceled` or
-  `killed by signal N`), never only as a log marker. A dead
-  worker's claim
-  is released and the task retried once; a second death fails it (or
-  rejects it with the reason). No fleet configured refuses by name.
-  The TUI shows the swarm beside the session: the transcript gets one
-  line at each decision (a task failed with its note, a reviewer
-  rejected with the reason, a worker died and was restarted or exited,
-  the board emptied or the swarm stopped), and the footer's status band
-  carries the live counts below the status line, behind a short dim
-  rule (`workers 2 · +3 ✓5 ✕1 · w2 t388 12s` / `reviewer 1 · ⧗1 ✓1 ✕0 ·
-  w3 t386 4m`) — one row per role while a swarm runs, none when nothing
-  runs (1.5.4); a delegated batch takes two rows of its own while it runs,
-  the batch's count and elapsed over the most recent call of any of its
-  workers (`delegating · 3 workers · 1m12s` / `#2 edit tool/file/edit.go ·
-  12s`), and it keeps them breathing between turns (2.14.0). The usage
-  line shows the session's dollars when the endpoint reported a cost
-  (`up 214k down 18k · cache r 187k 87% · $1.23`, 1.5.0).
+- `/swarm`: the drain workers (`specs/SPEC_SWARM.md`).
+  - Bare lists them: `2 workers · 1 running`, then per worker `w1 [~]
+    worker resident · task t3 · heartbeat 2s ago · done 1 failed 0`.
+  - `swarm start <count> [role=worker|reviewer] [model=<id>]
+    [budget=<dollars>]` adds workers against an empty or running swarm
+    (the roles mix); the reply is `swarm: added N agents (role X ·
+    model M)`. A budget stops the controller's claims at the cap with
+    a notice, the spend summed from the recorded run costs.
+  - One router on the session's queue hands each ready task to an idle
+    worker on the events; each claims, spawns a one-shot `rig -p`
+    through the delegate path (jail, socket proxy, recorded run), and
+    submits for review; reviewers take the worker's `verdict` and call
+    `accept`/`reject`.
+  - A worker's only bound is the swarm's own context — no stall kill,
+    no timeout — and every abnormal end is recorded on the run; a dead
+    worker's claim is released and the task retried once, a second
+    death failing it or rejecting it with the reason.
+  - `swarm stop` ends it and releases the in-flight claims (`swarm:
+    stopped N agents`). Where no second request can run it refuses by
+    name (the pair is wired on a remote row, or where the resident
+    swap answers one live read — a queued request waits at the server;
+    `workers: false` turns it off; the scheduler is wired everywhere).
+  - The footer band carries the live counts per role while a swarm runs
+    (`workers 2 · +3 ✓5 ✕1 · w2 t388 12s` / `reviewer 1 · ⧗1 ✓1 ✕0 ·
+    w3 t386 4m`), none when nothing runs; the transcript gets one line
+    at each decision (a task failed with its note, a reviewer rejected
+    with the reason, a worker died, the board emptied, the swarm
+    stopped). The usage line ends with the session's dollars when the
+    endpoint reported a cost (`up 214k down 18k · cache r 187k 87% ·
+    $1.23`).
 - `/theme`: the interface theme (2.3.2): bare shows the active preset;
   `/theme warm|cool|custom` sets it — warm is the default palette,
   cool is the cool palette, and custom is `theme.json` in the rig
@@ -148,15 +134,12 @@ is a loud line naming the known set, never silently a prompt.
   TUI repaints immediately: new output in the new theme, committed
   scrollback keeps its bytes.
 
-**Hosted rows** (`specs/SPEC_HOSTED.md`): a row with `remote: true` or
-`provider: "<name>"` speaks the OpenAI wire at its `baseUrl`, the key
-riding `Authorization: Bearer <key>` (from the file or
-`RIG_MODEL_API_KEY`, never logged); 429 and 5xx retry with bounded
-backoff instead of faulting a turn (`retries`, default 3 for remote
-rows); `usage.cost` rides the endpoint's `usage.cost` into the state
-store's cost column and shows in the usage line. OpenRouter rows read
-and echo `reasoning` / `reasoning_details`; everything else keeps
-`reasoning_content`. Remote rows omit the llama-server-only fields.
+**Hosted rows** (`specs/SPEC_HOSTED.md`): a row that runs on a remote
+endpoint speaks the OpenAI wire as-is and keeps its own keys, retries,
+and cost accounting — every knob is `docs/SETUP.md`'s. For running it:
+a remote row's delegate and scheduled fire skip the local swap
+entirely, and `swarm start 2 budget=5` or a job's `budget` cap spend in
+dollars summed from the cost column.
 
 Context compacts automatically at the active model's own trigger (the
 models table); the `⧉` line reports it. The summary lands in the
