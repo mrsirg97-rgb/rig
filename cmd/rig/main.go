@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.14.3"
+const Version = "2.14.4"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -587,10 +587,21 @@ func main() {
 			fmt.Fprintln(os.Stderr, "rig:", terr)
 			os.Exit(1)
 		}
+		var idleStop func()
+		if stopWorkers != nil || decisionURL != "" {
+			idleStop = func() {
+				if stopWorkers != nil {
+					stopWorkers()
+				}
+				if rev := r.decRev; rev != nil {
+					rev.Halt()
+				}
+			}
+		}
 		fe = tui.New(os.Stdin, os.Stdout, th,
 			tui.WithStatus(tuiStatusIn(r, sdb)),
 			tui.WithCommands(command.All(), env),
-			tui.WithIdleInterrupt(stopWorkers),
+			tui.WithIdleInterrupt(idleStop),
 		)
 
 		if c, ok := fe.(interface{ Close() }); ok {

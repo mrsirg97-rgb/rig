@@ -1,4 +1,29 @@
 # Changelog
+## [2.14.4]: input ends the reviewer's fire
+
+The reviewer's bite ran at the lowest priority and fired in a goroutine
+whose context no gesture could reach: the operator's input closed the
+`reviewing` row on the screen while the fire's worker kept running
+headless behind it — spending its tokens, streaming its reasoning
+nowhere, and settling its rows after the operator had already moved on.
+The bite now ends when the operator speaks.
+
+- **the fire rides a context of its own** (`decision/review.go`): each
+  bite mints a child of the session's context for its fire, and
+  `Reviewer.Halt` cancels the one in flight. A bite whose fire context
+  is dead settles nothing, says nothing loud, closes its `reviewing`
+  phase naming `interrupted`, and leaves the rows pending for the next
+  landing — the rule a fire that answers nothing already kept.
+- **the gestures carry the halt** (`decision/review.go`,
+  `cmd/rig/main.go`): the frontend wrap's `Input` return is the
+  operator's line, and it halts the bite before the turn takes the
+  slot; Esc on an empty prompt with no turn live ends it beside the
+  delegate workers' stop, and a session with neither a fleet nor a
+  decision keeps the prompt clear it always had.
+- **named cases** (`decision/review_test.go`): the fire's context is
+  dead and the phase closes `interrupted` with nothing settled, by halt
+  and by input, each test red before its half of the wiring existed.
+
 ## [2.14.3]: the docs say what rig is
 
 The audit of 2026-10-08: README and `docs/` described the engine, the
