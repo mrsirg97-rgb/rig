@@ -212,12 +212,10 @@ PR and in SPEC_CORE or SPEC_EVT.
 
 A model row says where it runs. Local: the row hits the swap at
 `RIG_SWAP_URL` and the resident-set gate admits it (SPEC_WORKERS: the
-fleet is the resident model; no slot is counted). Hosted
-(`remote: true` or `provider: "openrouter"`): the row's `baseUrl` and
-`apiKey` speak the OpenAI wire as-is, `Authorization: Bearer <key>`
-rides every request, 429 and 5xx retry with bounded backoff, and the
-worker skips the local swap and the busy probe entirely (nothing
-counts slots), and the
-endpoint's own 429 retry is the backpressure. `usage.cost` lands in
-the state store and sums into a swarm's `budget=` or a scheduled
-job's `budget`.
+fleet is the resident model; no slot is counted). Hosted (`remote: true`
+or `provider: "openrouter"`): the row's `baseUrl` and `apiKey` speak the
+OpenAI wire as-is — `Authorization: Bearer <key>` rides every request,
+429 and 5xx retry with bounded backoff — and the worker skips the local
+swap and the busy probe entirely (nothing counts slots; the endpoint's
+own 429 retry is the backpressure). `usage.cost` lands in the state
+store and sums into a swarm's `budget=` or a scheduled job's `budget`.
