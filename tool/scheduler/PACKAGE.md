@@ -36,6 +36,10 @@ seams).
 
 ## Gotchas
 
+- `remove` is the operator's verb (2.14.1, SPEC_WORKERS 7): it rides the
+  registry entry's `operator` key, so a delegated worker's menu omits it
+  and `policy/operator` refuses it before the tool runs. The switch here
+  is untouched; a session without the delegate marker keeps every verb.
 - `create` carries a job name, a prompt or a command, and a cron: the
   store validates the cron it gets (the adapter parses, the store
   teaches). A create without a model stores the unnamed job — the fire

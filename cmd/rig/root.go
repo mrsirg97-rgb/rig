@@ -24,6 +24,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/policy/compact"
 	effort "github.com/mrsirg97-rgb/rig/v2/policy/effort"
 	"github.com/mrsirg97-rgb/rig/v2/policy/empty"
+	"github.com/mrsirg97-rgb/rig/v2/policy/operator"
 	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
@@ -235,7 +236,16 @@ func (r *root) nativeTools() []core.Tool {
 		}
 		out = append(out, tool)
 	}
+	if r.delegated() {
+		for i := range out {
+			out[i] = operator.Menu(out[i])
+		}
+	}
 	return out
+}
+
+func (r *root) delegated() bool {
+	return os.Getenv(sched.DelegateEnv) != ""
 }
 
 func (r *root) buildPair() (core.Provider, core.ContextPolicy) {

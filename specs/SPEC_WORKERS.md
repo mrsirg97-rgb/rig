@@ -156,6 +156,51 @@ no flock): the endpoint's own 429 retry is their backpressure
 (SPEC_HOSTED). `core/` and `loop/` are byte-identical; the store
 schema is unchanged.
 
+### 7. A delegated worker's wire keeps the operator's verbs off it (2.14.1)
+
+A worker session is a `rig -p` process: the delegate's worker, a swarm
+drain worker, a scheduled fire. It runs with an allow list per tool
+name, and until 2.14.1 the verbs inside a tool were all the worker's:
+the menu offered `todo prune` beside `todo read`, `scheduler remove`
+beside `scheduler list`, `plugin delete` beside `plugin run`, and
+nothing but the tool's own switch stood between the verb and the
+store. The rule the versions since the swarm have been converging on
+is one sentence: **a worker does, the session decides.** The verbs
+that judge or delete shared state belong to the session that owns the
+state; the verbs that observe, create inside a task, or do the work
+belong to whoever is doing it.
+
+- **The registry marks them.** A tool's `registry.json` entry gains
+  `operator`: the verbs the session keeps. One list per tool, written
+  once — `todo` prune, accept, reject, move (the architect's, SPEC_SWARM's
+  rule, now enforced); `scheduler` remove; `plugin` delete. `rem` has no
+  key: memory is observation, and pruning a stale fact is a worker's job
+  too (SPEC_DELEGATE, the doing set).
+- **The gate is the delegate marker, not the frontend.** A scheduled
+  fire is a `rig -p` session too, but it is the operator's own: it
+  answers to nobody's board but the one it was given, and the hedge
+  optimizer prunes and accepts on the queue it keeps. What marks a
+  *delegated* worker — a worker spawned by a session's delegate, the
+  swarm's drain workers beside it — is `RIG_DELEGATE`
+  (`sched.DelegateEnv`), the same marker the no-recursion guard reads.
+  The root gates on that marker: a delegated worker's menu drops the
+  operator verbs from the `action` enum and from the verb words in the
+  description and the schema, and a session without the marker — the
+  interactive frontends and every scheduled fire — sends the registry's
+  words byte for byte, so the wire job's artifacts do not move.
+- **A delegated worker cannot run them.** `policy/operator` is a
+  middleware in the delegated worker's wire only: a call whose tool and
+  verb are in the registry's operator list is refused before the tool
+  runs, with one named refusal — `todo prune: the session's verb — a
+  worker does not judge or delete the board; leave it for the session` —
+  returned as the tool result (a teaching refusal, never a fault). The
+  tools' switches are untouched: the worker-mode board gate
+  (`tool/todo`) keeps its own voice, and the middleware is the one layer
+  that reads the registry. The delegate's doing set (SPEC_DELEGATE 6) is
+  the same rule at the spawn — a delegate worker never holds the tools
+  at all — and the middleware is what makes the swarm's wider list
+  honest.
+
 ## testing
 
 Failing first, against a fake `/slots` (the scripted fetch gains
@@ -184,6 +229,17 @@ Failing first, against a fake `/slots` (the scripted fetch gains
   `concurrency` is named once and ignored; the allow default always
   carries the worker tools; the `defaultJobModel` legacy key is named
   and ignored.
+- **The operator's verbs (2.14.1)**: a delegate spawn's `-allow` is the
+  intersection (a session allowing everything yields the eight; one
+  allowing only `bash,todo` yields `bash`; one allowing only
+  `delegate` runs allow-none); a swarm spawn's allow is unchanged and a
+  reviewer's still adds `verdict`; a delegated worker's `todo` menu
+  lacks prune, accept, reject and move and its description does not say
+  them; a headless run without the marker keeps the four on the menu
+  and a `todo prune` runs through the middleware (the store changes);
+  the middleware refuses each listed pair by name and passes every
+  other verb, `rem prune` included; a delegated call to `todo prune`
+  gets the refusal in its tool result and the store is unchanged.
 
 ## scope
 

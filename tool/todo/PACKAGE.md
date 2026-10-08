@@ -79,6 +79,13 @@ row's details, so the reply names where the work lives.
   board-transition verbs refuse there, so the store's own arms (the
   swarm controller calls the store directly) stay as they are and the
   spawned worker records findings instead of moving the board.
+- The operator's verbs (2.14.1, SPEC_WORKERS 7) are the registry's:
+  `prune`, `accept`, `reject` and `move` ride the entry's `operator`
+  key, so a delegated worker's menu omits them and `policy/operator`
+  refuses them before the tool runs — the two the board door already
+  refused and the two (prune, move) that only the middleware stops. The
+  switch here is untouched; a session without the delegate marker —
+  interactive or a scheduled fire — keeps every verb.
 - The read contract is the lean one (SPEC_TODO_LEAN): read returns the
   present (open work first — failed included — then related and
   recent done, ten rows total, the hint naming what is hidden), read

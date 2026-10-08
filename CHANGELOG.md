@@ -1,4 +1,50 @@
 # Changelog
+## [2.14.1]: a worker does, the session decides
+
+A headless worker ran with the session's allow list, which is per tool
+name: as long as a tool was allowed, every verb inside it was the
+worker's. A delegate worker could `todo create` on the board the session
+plans, `scheduler remove` a job, `plugin delete` a live tool, prune the
+queue it was handed a slice of. The rule the fleet has been converging
+on since the swarm is one sentence — a worker does, the session decides
+— and this version writes it down in the two places a worker meets the
+world: what it may hold, and what it may be told.
+
+- **the delegate's doing set** (`tool/delegate`): the spawn passes the
+  session's allow list intersected with `bash read write edit view
+  python web rem` — one named constant, the only place the set is
+  written. Todo creation is centralized in the session and the board is
+  the session's to judge; observation is distributed, so `rem` rides
+  along and a worker may learn, recall, pack and prune memory — clearing
+  a stale fact it just disproved is its job too. An intersection that
+  keeps nothing runs the worker allow-none (`-allow none`), never the
+  embedded default an absent flag would have resolved to: a session
+  allowing only `delegate` used to spawn a worker holding everything.
+  The swarm's workers keep today's list (draining the board is their
+  job) and scheduled jobs keep the operator's job allow. The result's
+  trailer is unchanged.
+- **the registry marks the operator's verbs** (`tool`): an entry gains
+  `operator` — one list per tool, written once. `todo` prune, accept,
+  reject and move (the architect's, SPEC_SWARM's rule now enforced);
+  `scheduler` remove; `plugin` delete. `rem` has no key.
+- **a delegated worker's menu does not offer them** (`policy/operator`,
+  `cmd/rig`): the gate is `RIG_DELEGATE` — the marker the delegate spawn
+  already sets on the delegate's and the swarm's workers — not the
+  frontend kind. A delegated worker's tool specs drop the operator verbs
+  from the `action` enum and the verb words from the description and
+  schema — `scheduler`'s id field still says `pause/resume/runs/show`,
+  only the session's verb is gone. A scheduled fire is a session of its
+  own, no marker set: it keeps todo's full verb set, because the hedge
+  optimizer prunes and accepts on the board it was given. The wire is
+  byte-identical everywhere the marker is absent.
+- **a delegated worker cannot run them** (`policy/operator`): a
+  middleware in the delegated worker's wire only refuses a call whose
+  tool and verb are in the registry's operator list, before the tool
+  runs, with one named refusal — `todo prune: the session's verb — a
+  worker does not judge or delete the board; leave it for the session`
+  — returned as the tool result, never a fault. The tools' switches are
+  untouched; every other verb passes, `rem prune` included.
+
 ## [2.14.0]: the delegate lets go
 
 A delegated worker used to own the turn that spawned it: `Run` blocked on

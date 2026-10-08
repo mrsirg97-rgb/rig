@@ -41,6 +41,15 @@ nothing scheduled) and a resumable transcript in the state store.
   running worker's context (the set is keyed by the worker number, not
   by the room member, so it works with no room at all — a session
   without one simply never publishes a return).
+- `doing.go`: the doing set (2.14.1, SPEC_DELEGATE 6) — one named
+  constant, `bash read write edit view python web rem`, the only place
+  the set is written. `Run` passes the session's resolved allow list
+  intersected with it as the worker's `-allow`, in the session's order;
+  `delegate` is out by the same intersection, and an intersection that
+  keeps nothing runs the worker allow-none (`-allow none`), never the
+  embedded default an absent flag would resolve to. A worker does, the
+  session decides: todo, scheduler and plugin are not the worker's to
+  call, `rem` is.
 - `delegate.go`: `Opts.Ctx` is the session's context and the worker's
   parent, `Opts.Await` is the piped session's shape, both wired by the
   root. `Run` spawns under a context derived from the session's, never
@@ -86,7 +95,8 @@ nothing scheduled) and a resumable transcript in the state store.
   scheduler store, the scheduler home, the operator's rig home and
   state-store directory, the swap URL, `self` as the worker command,
   the fleet's model, the fleet's slots, the sandbox, and the
-  operator's allow-list (the worker's omits `delegate`).
+  operator's allow-list (the worker's is its intersection with the
+  doing set, `doing.go`).
 
 ## Gotchas
 
