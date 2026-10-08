@@ -53,6 +53,16 @@ func (effortCmd) Description() string {
 	return "the reasoning budget: bare shows the level and the choices, /effort <level> sets it for the next turn"
 }
 
+func CheckEffort(levels []string, level, model string) error {
+	if len(levels) == 0 {
+		return fmt.Errorf("effort: %s names no levels (models.json: \"efforts\")", model)
+	}
+	if !contains(levels, level) {
+		return fmt.Errorf("effort: %q is not a level for %s (available: %s)", level, model, strings.Join(levels, ", "))
+	}
+	return nil
+}
+
 func (effortCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	e, err := EnvOf(env)
 	if err != nil {
@@ -70,11 +80,8 @@ func (effortCmd) Run(ctx context.Context, args string, env any) (string, error) 
 		if e.ActiveModel == nil {
 			return "", errors.New("effort: no active-model seam (the root did not wire one)")
 		}
-		if len(levels) == 0 {
-			return "", fmt.Errorf("effort: %s names no levels (models.json: \"efforts\")", e.ActiveModel())
-		}
-		if !contains(levels, fields[0]) {
-			return "", fmt.Errorf("effort: %q is not a level for %s (available: %s)", fields[0], e.ActiveModel(), strings.Join(levels, ", "))
+		if err := CheckEffort(levels, fields[0], e.ActiveModel()); err != nil {
+			return "", err
 		}
 		if e.SetEffort == nil {
 			return "", errors.New("effort: no set seam (the root did not wire one)")

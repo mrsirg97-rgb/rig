@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.14.1"
+const Version = "2.14.2"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -79,6 +79,7 @@ func main() {
 	system := flag.String("system", "", "system prompt; precedence: flag > RIG_SYSTEM > settings.json system > the embedded default")
 	allow := flag.String("allow", "", "comma-separated allow-list of tool names; precedence: flag > RIG_ALLOW > settings.json allow > the embedded default")
 	retries := flag.Int("retries", 0, "repetition bound on identical failing calls (cleared on success); precedence: flag > RIG_RETRIES > settings.json retries > the embedded default")
+	effort := flag.String("effort", "", "reasoning effort level for the session's requests; precedence: flag > RIG_EFFORT > the model row")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
 	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows)")
 	sessionID := flag.String("session-id", "", "set the fresh session identity (worker use)")
@@ -237,6 +238,17 @@ func main() {
 	resultCapN := envInt("RIG_RESULT_CAP", cfg.Settings.ResultCap)
 
 	row := resolveModel(modelID, cfg.Models)
+
+	effortLevel := envOr("RIG_EFFORT", "")
+	if passed["effort"] {
+		effortLevel = *effort
+	}
+	if effortLevel != "" {
+		if err := command.CheckEffort(row.Efforts, effortLevel, row.ID); err != nil {
+			fmt.Fprintln(os.Stderr, "rig:", err)
+			os.Exit(1)
+		}
+	}
 
 	py := pythontool.New(cwd)
 	if python := envOr("RIG_PYTHON", cfg.Settings.Python); python != "" {
@@ -444,6 +456,7 @@ func main() {
 		rigHome:    cfgDir,
 		activeID:   modelID,
 		row:        row,
+		effort:     effortLevel,
 		runtime:    runtimeTable(cfg.Models, modelID, row),
 
 		approve:        firstNonEmpty(cfg.Settings.Approve, approve.Auto),

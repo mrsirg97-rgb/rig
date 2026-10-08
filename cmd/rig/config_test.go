@@ -232,6 +232,94 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 	}
 }
 
+func effortOf(t *testing.T, body []byte) string {
+	t.Helper()
+	var req struct {
+		Effort string `json:"reasoning_effort"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		t.Fatalf("unmarshal the captured body: %v", err)
+	}
+	return req.Effort
+}
+
+func TestEffortPrecedenceFlagOverEnvOverRow(t *testing.T) {
+	const rowWithEffort = `{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "effort": "xhigh", "efforts": ["low", "medium", "xhigh"]}`
+	cases := []struct {
+		name string
+		row  string
+		env  string
+		flag string
+		want string
+	}{
+		{"the row's effort is the live default", rowWithEffort, "", "", "xhigh"},
+		{"nothing names a level, the server default rides", "", "", "", ""},
+		{"the env beats the row", rowWithEffort, "low", "", "low"},
+		{"the flag beats the env and the row", rowWithEffort, "low", "medium", "medium"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := &bodySrv{}
+			srv := newBodySrv(t, s)
+			bin := buildBin(t, t.TempDir())
+			scratch := t.TempDir()
+			if c.row != "" {
+				writeModelRows(t, cfgDir(t, scratch), c.row)
+			}
+			args := []string{"-p", "hello", "-base-url", srv.URL + "/v1"}
+			if c.flag != "" {
+				args = append(args, "-effort", c.flag)
+			}
+			cmd := exec.Command(bin, args...)
+			cmd.Dir = t.TempDir()
+			env := rigEnv(t, scratch, "")
+			if c.env != "" {
+				env = append(env, "RIG_EFFORT="+c.env)
+			}
+			cmd.Env = env
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("the run must succeed: %v\n%s", err, out)
+			}
+			if got := effortOf(t, s.last()); got != c.want {
+				t.Fatalf("the request's effort = %q, want %q (%s wins)", got, c.want, c.name)
+			}
+		})
+	}
+}
+
+func TestEffortFlagRefusesAnUnknownLevelByName(t *testing.T) {
+	bin := buildBin(t, t.TempDir())
+	t.Run("a level outside the row's efforts", func(t *testing.T) {
+		home := t.TempDir()
+		cmd := exec.Command(bin, "-p", "hello", "-effort", "bogus")
+		cmd.Dir = t.TempDir()
+		cmd.Env = rigEnv(t, home, "")
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			t.Fatalf("an unknown level must refuse: %q", out)
+		}
+		for _, want := range []string{`"bogus"`, "not a level for local", "available: low, medium, xhigh"} {
+			if !strings.Contains(string(out), want) {
+				t.Fatalf("the refusal must name the level and the row's choices, missing %q: %q", want, out)
+			}
+		}
+	})
+	t.Run("a row without efforts", func(t *testing.T) {
+		home := t.TempDir()
+		writeModelRows(t, cfgDir(t, home), `{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive"}`)
+		cmd := exec.Command(bin, "-p", "hello", "-effort", "low")
+		cmd.Dir = t.TempDir()
+		cmd.Env = rigEnv(t, home, "")
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			t.Fatalf("a levelless row must refuse a level: %q", out)
+		}
+		if !strings.Contains(string(out), `local names no levels (models.json: "efforts")`) {
+			t.Fatalf("the refusal must name the row and the field: %q", out)
+		}
+	})
+}
+
 func TestFlagPresenceWins(t *testing.T) {
 	t.Run("an empty system flag is the choice", func(t *testing.T) {
 		s := &bodySrv{}

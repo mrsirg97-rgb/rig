@@ -41,6 +41,33 @@ func landlockRunOpts(h *harness, s sched.Spawn, abi int, abiErr error) sched.Run
 	}
 }
 
+func TestALandlockDelegateSpawnCarriesTheEffortAfterTheModel(t *testing.T) {
+	rigHome := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rigHome, "kernel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spawn := &landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.Sandbox = "landlock"
+		in.RigHome = rigHome
+		in.LandlockABI = func() (int, error) { return 4, nil }
+		in.Effort = "low"
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	argv := spawn.calls[0].Argv
+	for i, a := range argv {
+		if a == "-model" {
+			if argv[i+2] != "-effort" || argv[i+3] != "low" {
+				t.Fatalf("the landlock worker must ask for the effort right after the model, got %v", argv)
+			}
+			return
+		}
+	}
+	t.Fatalf("the landlock spawn names no model: %v", argv)
+}
+
 func envAt(env []string, key string) string {
 	prefix := key + "="
 	for _, kv := range env {
@@ -75,6 +102,11 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 	scratch := filepath.Join(cwd, ".rig-job")
 	if baseIdx < 0 || argv[baseIdx+1] != "unix:"+filepath.Join(cwd, ".rig-job.sock") {
 		t.Fatalf("the worker must dial the one socket, got %v", argv)
+	}
+	for _, a := range argv {
+		if a == "-effort" {
+			t.Fatalf("a scheduled job names no effort (the row's default rides), got %v", argv)
+		}
 	}
 	env := spawn.env
 	if len(env) != 7 {

@@ -109,7 +109,7 @@ type Model struct {
     Reserve    int // tokens held back for the response
     KeepRecent int // token budget for the kept tail
     Role       string // interactive | worker (SPEC_CONFIG 4); /models lists it
-    Effort     string // the summary call's reasoning effort (3); "" = medium
+    Effort     string // the live turn's default (the dial, else the row); the summary call asks Efforts[0], "" when the row names none (2.14.2)
 }
 func (m Model) Check() error // the row invariants, loud (decision 2)
 
@@ -320,9 +320,11 @@ messages: the model summarizes the block instead of continuing the
 conversation it quotes; a last "reply with only X" or a bare tool call
 stays inside the block (named test: the summary describes the request
 and the call, never X or a tool call). No tools, and the summary
-request carries the row's `Effort`; the 0.2.0 lower reasoning effort
-(`"medium"` is the field's default, `policy/compact` keeps the fallback
-line) where the provider supports it; it is the one call whose thinking
+request carries the row's lowest `efforts` level, `""` when the row
+names none (2.14.2: the cheap call asks for the cheap effort; through
+2.14.1 it carried the row's `Effort`, `"medium"` the fallback — one
+field, two jobs, and lowering it to make summaries cheap would have
+lowered the brain) where the provider supports it; it is the one call whose thinking
 nobody reads, and inheriting the model's max effort spends tokens the
 fold does not use (a provider that does not know the field ignores it). The effort goes over the
 wire in both shapes the server families read: top-level
@@ -792,9 +794,10 @@ in `t.TempDir()` where a case names it.
   bounded by one batch; a tail of the last message alone (single oversized
   last message); the older prefix is empty, the compact is skipped, the
   passthrough is returned.
-- `TestSummaryEffortIsTheRow`: a row with `Effort: "low"`: the summary
-  request carries `low` (both wire shapes, the adapter test's
-  assertion); a row with `Effort: ""`: `medium` (the 0.2.0 bytes)
+- `TestSummaryEffortIsTheRowsLowest`: a row with `efforts: [low, medium,
+  xhigh]` and `Effort: "xhigh"`: the summary request carries `low` (the
+  operator's order is lowest first; the field is unread here); a row
+  with no levels: `""`, the server default rides (2.14.2)
   (SPEC_CONFIG 4, 3).
 - `TestSummaryMaxTokensClamped`: the scripted provider captures the
   summary request: `MaxTokens == min(row.MaxTokens, Window - est(input))`

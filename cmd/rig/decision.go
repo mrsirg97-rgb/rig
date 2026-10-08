@@ -75,6 +75,7 @@ func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandb
 			Model:         "",
 			WorkerSession: core.NewSession().ID,
 			DefaultModel:  r.activeID,
+			Effort:        r.row.LowestEffort(),
 			Models:        func() models.Table { return r.runtime },
 			Fetch:         sched.RealFetch(0),
 			Spawn:         sched.RealSpawn,

@@ -165,6 +165,29 @@ func TestJailArgvRefusesAnEnvEntryWithoutAnEquals(t *testing.T) {
 	}
 }
 
+func TestJailArgvCarriesTheEffortAfterTheModel(t *testing.T) {
+	p := sched.JailProfile{
+		Bwrap:    "/usr/bin/bwrap",
+		Binary:   "/opt/rig/bin/rig",
+		BaseURL:  "unix:/ws/j/.rig-job.sock",
+		Model:    "qwen3.8-workers",
+		Effort:   "low",
+		Cwd:      "/ws/j",
+		SockPath: "/ws/j/.rig-job.sock",
+	}
+	argv, err := sched.JailArgv(p)
+	if err != nil {
+		t.Fatalf("JailArgv: %v", err)
+	}
+	for i, a := range argv {
+		if a == "-model" {
+			if argv[i+2] != "-effort" || argv[i+3] != "low" {
+				t.Fatalf("the jailed worker must ask for the effort right after the model, got %v", argv)
+			}
+		}
+	}
+}
+
 func TestJailArgvCarriesTheWorkerEnv(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",

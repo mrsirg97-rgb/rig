@@ -141,11 +141,7 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 const phaseSummarizing = "summarizing"
 
 func (p *policy) summarize(ctx context.Context, input []core.Message, maxTokens int) (string, core.Usage, string, error) {
-	effort := p.row.Effort
-	if effort == "" {
-		effort = "medium"
-	}
-	ch, err := p.provider.Stream(ctx, core.Request{Messages: input, MaxTokens: maxTokens, ReasoningEffort: effort})
+	ch, err := p.provider.Stream(ctx, core.Request{Messages: input, MaxTokens: maxTokens, ReasoningEffort: p.row.LowestEffort()})
 	if err != nil {
 		return "", core.Usage{}, "", fmt.Errorf("compact: summary call: %w", err)
 	}

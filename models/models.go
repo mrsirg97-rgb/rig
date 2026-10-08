@@ -36,6 +36,13 @@ type Model struct {
 	Retries      int
 }
 
+func (m Model) LowestEffort() string {
+	if len(m.Efforts) == 0 {
+		return ""
+	}
+	return m.Efforts[0]
+}
+
 func (m Model) Check() error {
 	if m.ID == "" {
 		return errors.New("models: row with an empty id")
