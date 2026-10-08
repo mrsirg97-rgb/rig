@@ -14,8 +14,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
-// waitForReturn reads the returns a frontend would fold, once n of them have
-// landed; the order they land in is the order the frontends are tested on.
 func waitForReturn(t *testing.T, fe *recordFrontend, n int) []core.WorkerDone {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
@@ -145,8 +143,6 @@ func TestTheIdleInterruptStopsEveryRunningWorker(t *testing.T) {
 			t.Fatalf("an interrupted worker returns a failure, not a success: %+v", d)
 		}
 	}
-	// With the batch gone the stop set is empty, and the gesture costs
-	// nothing: a worker that already returned is not stopped twice.
 	tool.StopAll()
 }
 

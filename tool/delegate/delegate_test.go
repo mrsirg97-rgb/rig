@@ -143,26 +143,12 @@ func (f *fakeSpawn) hadDeadline() bool {
 	return f.deadlineSet
 }
 
-// ctxDies makes the fake end the way a killed process does when its context is
-// cancelled: it stops, and its exit is not zero.
 func (f *fakeSpawn) ctxDies(on bool) { f.diesOnContext = on }
 
 func (f *fakeSpawn) ctxOf(i int) context.Context {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.calls[i].Ctx
-}
-
-func (f *fakeSpawn) endedCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	n := 0
-	for _, c := range f.calls {
-		if !c.Ended.IsZero() {
-			n++
-		}
-	}
-	return n
 }
 
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
@@ -209,16 +195,6 @@ func assertOverlap(t *testing.T, calls []fakeCall) {
 	}
 }
 
-func assertSequential(t *testing.T, calls []fakeCall) {
-	t.Helper()
-	calls = callsByStart(calls)
-	for i := 1; i < len(calls); i++ {
-		if calls[i].Started.Before(calls[i-1].Ended) {
-			t.Fatalf("spawn %d must not overlap spawn %d (started %v, previous ended %v)", i, i-1, calls[i].Started, calls[i-1].Ended)
-		}
-	}
-}
-
 type harness struct {
 	home    string
 	rigHome string
@@ -239,17 +215,11 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	return &harness{home: home, rigHome: rigHome, db: db}
 }
 
-// newTool is the synchronous shape: a session with no next turn to carry a
-// return (a piped run) waits for its worker and gets its message as the tool
-// result. The async shape — the one an interactive session uses — is
-// asyncTool, and both share everything up to the spawn.
 func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) delegate.Delegate {
 	t.Helper()
 	return h.newToolCtx(t, context.Background(), true, fetch, spawn)
 }
 
-// asyncTool is a worker handed off: Run answers at once and the return is
-// published, so a test reads it off the room rather than off the result.
 func (h *harness) asyncTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) (delegate.Delegate, *recordFrontend) {
 	t.Helper()
 	room, fe := newFleetRoom(t)
