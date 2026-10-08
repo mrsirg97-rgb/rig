@@ -30,6 +30,12 @@ addition by its own arithmetic, and the branch carries `-refactor` —
 the escape hatch doing the one job it documented, named here in the
 PR. `make test`, `fmt-check` and the wire job are green.
 
+The README's measured block rode along: 174 lines of Go and 100 of
+tests came off the tree — the strip, the dead helpers, the collapsed
+shapes — and the stores behind the cache line moved the live numbers
+as they always do between releases. The loop is still 409 and the
+swarm still 650; neither was touched.
+
 ## [2.14.5]: the docs read like a human wrote them
 
 A docs release: no Go moves but `Version`. The README was restructured —
