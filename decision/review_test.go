@@ -487,6 +487,7 @@ func TestALandingMarksDirtyAndTheTurnEndWakes(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("a landing marks the reviewer dirty; the turn end is the wake")
 	}
+	waitSettled(t, db, 0)
 }
 
 func TestATurnEndWithNoLandingCostsNothing(t *testing.T) {
