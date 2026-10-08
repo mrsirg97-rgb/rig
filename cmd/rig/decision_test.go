@@ -101,7 +101,7 @@ func (fakePluginTool) Exec(ctx context.Context, args json.RawMessage) (string, e
 
 func TestANoToolsRunExecutesNothingNotEvenPlugins(t *testing.T) {
 	r := testRoot(nullFrontend{})
-	r.allow = nil // the fire's worker: -allow none
+	r.allow = nil
 	r.pluginTools = []core.Tool{fakePluginTool{}}
 	k := wire(r)
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {

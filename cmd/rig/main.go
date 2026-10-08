@@ -483,18 +483,12 @@ func main() {
 	}
 	r.listen()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
-	// A piped session answers one prompt and exits: there is no next turn to
-	// carry a delegated worker's return, so the delegate waits for it there.
 	piped := *prompt != ""
 	var del delegate.Delegate
 	var stopWorkers func()
 	if delegateOn {
 		del = delegate.New(delegate.Opts{
-			// The worker outlives the turn that started it, so it is not a child
-			// of the turn's context: it is a child of the session's.
-			Ctx: ctx,
-			// A piped session has no next turn to carry a return, so the
-			// delegate keeps its synchronous shape there.
+			Ctx:          ctx,
 			Await:        piped,
 			DB:           scdb,
 			Home:         schedHome,

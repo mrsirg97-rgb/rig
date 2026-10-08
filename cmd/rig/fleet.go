@@ -8,10 +8,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
-// fleetEnds is the child's half of the fleet: a pipe exists because the parent
-// made one, not because the child may rule on a review. A delegated worker that
-// cannot speak a verdict still sends its heartbeats and its tool calls, and only
-// the verdict tool is gated by the allow list.
 func fleetEnds(pipe broadcast.Transport, allow []string) (broadcast.Transport, bool) {
 	if pipe == nil {
 		return nil, false
