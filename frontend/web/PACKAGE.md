@@ -32,7 +32,9 @@ the Apple meta tags, safe-area insets).
   button, with no turn to interrupt, calls `Options.StopWorkers` (the
   root wires the delegate's `StopAll`): the interrupt gesture stops the
   workers, and a session with no delegate has no hook and behaves as it
-  did.
+  did. The drain hands over what returned since the last turn in arrival
+  order — the feed already showed each return as it landed; this is the
+  turn it starts together.
 
 
 - **The chat** (`chat.go`, SPEC_SERVE 17): the frontend seam over HTTP.
