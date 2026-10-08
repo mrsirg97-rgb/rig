@@ -1,4 +1,31 @@
 # Changelog
+## [2.14.5]: the docs read like a human wrote them
+
+A docs release: no Go moves but `Version`. The README was restructured —
+install, first run, the in-session tour, and configuration now lead, with
+real `settings.json` and `models.json` examples carried over from the
+site — and *what's different* was rewritten in prose: the engine's single
+priority queue and why it needs no locks and no timers, the batching and
+broadcast that ride it, the decision sidecar with its data curation and
+built-in training pipeline, the byte-stable menu, and the workers and
+swarm behind their narrowed verb set.
+
+- **the measured block is computed, not typed**: `scripts/readme-measured`
+  renders it from the session stores (aggregates only, committed as
+  `docs/measured.json`) and from the tree; CI and the release job refuse
+  drift. Recomputed: 2,204 sessions, 45,845 turns, 98.8% of 5.0B prompt
+  tokens served from cache, and a new era row for 2.10.x — the fleet's
+  own traffic, named as the reason its cache ratio gives up points.
+- **`docs/DESIGN.md` and the reading set** (`SETUP`, `USAGE`, `PLUGINS`,
+  `EMBED`, `TUI_DESIGN`) got the same human/succinct pass; specs and the
+  per-package `PACKAGE.md` files are untouched.
+- **the GitHub page** leads with the concurrency model and the decision
+  pipeline, and its measured strip matches the README's.
+- **why rig, in one breath**: the README intro and the page's lede answer
+  why this harness and not another — a tree you can read before you
+  trust, refusals that name their rule instead of retrying blind, every
+  decision a row in a store you own, a session that follows you.
+
 ## [2.14.4]: input ends the reviewer's fire
 
 The reviewer's bite ran at the lowest priority and fired in a goroutine

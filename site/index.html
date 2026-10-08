@@ -319,26 +319,28 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
   </section>
 
   <section class="rating" aria-label="measured">
-    <div><span class="n">4.1<small>B</small></span><span class="l">prompt tokens served, 99% of them from cache — the prefix never changes a byte</span></div>
+    <div><span class="n">5.0<small>B</small></span><span class="l">prompt tokens served, 98.8% of them from cache — the prefix never changes a byte</span></div>
     <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the whole agent loop, batch included, stdlib only</span></div>
     <div><span class="n">{{RIG_COMMITS}}</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
   </section>
 
   <section class="sheet" aria-labelledby="trend-heading">
     <p class="eyebrow" id="trend-heading">the consolidation, measured</p>
-    <p class="sheet-intro">Every recorded turn since the first store, one SQL read of the state store. The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery: the turn got cheaper and never went back.</p>
+    <p class="sheet-intro">Every recorded turn since the first store — 2,204 sessions, 45,845 turns — one SQL read of the state store. The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery: the turn got cheaper and never went back. The last row is the fleet's own traffic: short-lived workers against caches that do not exist yet, so its ratio dips and the reason is on the row.</p>
     <div class="table" role="list">
       <div class="row" role="listitem"><span class="os">0.x</span><p class="what">14,006 turns · 1,499 new tokens a turn · 722 out · 98.65% cache</p></div>
       <div class="row" role="listitem"><span class="os">1.0–1.3</span><p class="what">7,440 turns · 933 new tokens a turn · 676 out · 99.13% cache</p></div>
       <div class="row" role="listitem"><span class="os">1.4–1.9</span><p class="what">10,045 turns · 962 new tokens a turn · 525 out · 99.26% cache</p></div>
-      <div class="row" role="listitem"><span class="os">2.x</span><p class="what">4,634 turns · 711 new tokens a turn · 438 out · 99.24% cache</p></div>
+      <div class="row" role="listitem"><span class="os">2.0–2.9</span><p class="what">7,360 turns · 906 new tokens a turn · 503 out · 99.09% cache</p></div>
+      <div class="row" role="listitem"><span class="os">2.10.x</span><p class="what">6,994 turns · 2,419 new tokens a turn · 590 out · 97.38% cache</p></div>
     </div>
   </section>
 
   <section class="lede">
     <p class="eyebrow">what it is</p>
     <p>rig turns the model on your desk into something that works. Point it at your repo and it reads the code, edits it, runs the tests, and remembers what it learned. <strong>One binary, one endpoint, one terminal.</strong></p>
-    <p>It is small enough to read before you trust it. The loop is a few hundred lines, and everything around it plugs in: tools, guardrails, schedules, workers. Tool calls run concurrently, sessions stay fast for hours because the prompt never wobbles, and the cache does the rest.</p>
+    <p>It is small enough to read before you trust it. The loop is a few hundred lines, and everything around it plugs in: tools, guardrails, schedules, workers. <strong>One priority queue runs the show</strong> — tool calls run side by side, land in the order the model asked, and nothing needs a lock. Sessions stay fast for hours because the prompt never wobbles, and the cache does the rest.</p>
+    <p>Another harness will run your model too. The difference is what happens when things go wrong: rig's refusals name their rule instead of retrying blind, every decision lands in a store you own, and the reviewer reads the code before it judges yours. <strong>Harnesses ask for trust. rig shows its work.</strong></p>
     <p>Close the laptop. <strong>Pick the session back up from your phone.</strong></p>
   </section>
 
@@ -361,6 +363,31 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
       <div class="row" role="listitem"><span class="os">modules</span><p class="what">One Python file is one tool, pending until you approve it.<span class="where">plugins/</span></p></div>
       <div class="row" role="listitem"><span class="os">shells</span><p class="what">The TUI, the piped CLI, the one-shot, the web dashboard: four frontends over one session.<span class="where">frontend/ · command/</span></p></div>
     </div>
+  </section>
+
+  <section class="sheet" aria-labelledby="queue-heading">
+    <p class="eyebrow" id="queue-heading">the concurrency model</p>
+    <p class="sheet-intro">Everything rig does arrives on <b>one queue</b>: your input, the model's stream, tool completions, worker messages. One consumer reads it, ordered by priority first and arrival second. Nothing races, so there is nothing to lock — and nothing sleeps on a timer, because the completion event <b>is</b> the wakeup.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">order</span><p class="what">A parallel tool call is a goroutine that posts its completion; completions are applied in call order. Three reads run beside each other and the transcript still reads top to bottom, as if nothing ran in parallel.<span class="where">loop/ · evt/</span></p></div>
+      <div class="row" role="listitem"><span class="os">batching</span><p class="what">Admitted calls — reads, views, fetches, delegates — run eight at a time beside each other. Anything with effects is a barrier between them. Concurrency for the model, order for the record.<span class="where">loop/batch.go</span></p></div>
+      <div class="row" role="listitem"><span class="os">broadcast</span><p class="what">Workers, reviewers, and notices post <em>below</em> the turn's own events, so a worker's message runs in the gaps of a turn and never ahead of it. A busy session delays the chatter and loses nothing: the stores hold the facts.<span class="where">broadcast/</span></p></div>
+      <div class="row" role="listitem"><span class="os">the swarm</span><p class="what">The queue orders by priority, not by source — so a fleet costs no extra machinery. <code>swarm start 2</code> puts drain workers and reviewers on the same loop, the same jail, and the same return path as you.<span class="where">swarm/</span></p></div>
+    </div>
+  </section>
+
+  <section class="teach" aria-labelledby="decision-heading">
+    <p class="eyebrow">the decision pipeline</p>
+    <h2 id="decision-heading">A small model does the sorting. The answers are proposals, never actions.</h2>
+    <p>Point rig at a decision server — one URL, a model running as a sidecar — and the big model <b>hands over its sorting</b>: one typed question over a thousand items instead of reading them through context. Every bash call grows a pending risk proposal, and a reviewer settles the rows in the idle gaps, at the lowest priority. Nothing ever waits on a label.</p>
+    <pre><span class="t-ember">❯</span><span class="t-text"> find the real failure in this deploy log</span>
+<span class="t-ember">●</span> <span class="t-ember">decide</span><span class="t-dim"> · </span><span class="t-text">choice · &quot;does this line hide a bug?&quot; · 1,200 items</span>
+<span class="t-ok">✓</span> <span class="t-dim">3 flagged — the 1,197 quiet lines never entered the context</span>
+<span class="t-dim">  #412 timeout while holding the lock · retry can double-apply</span>
+
+<span class="t-note">the reviewer's bite starts only when nothing else is queued:</span>
+<span class="t-ember">●</span> review <span class="t-dim">· 3 pending rows settled · idle time only</span></pre>
+    <p>Every question, answer, confidence, and verdict lands in one store — and that store is the training set. The pipeline is built in: rig exports the settled rows, scores a candidate trainer's checkpoint against the incumbent <b>and</b> the constant baseline on held-out data, and promotes only a measured win — beat both, on every question, or nothing moves. The sidecar model is rig's own, trained on rig's own traffic.</p>
   </section>
 
   <section class="teach" aria-labelledby="teach-heading">

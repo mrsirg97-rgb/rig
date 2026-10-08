@@ -19,6 +19,11 @@ jobs:
         run: go vet ./... && go test -race -p 2 ./...
       - name: fmt-check
         run: make fmt-check
+      # the README's measured block is computed, never typed: the tree
+      # numbers are re-read live and the store numbers come from the
+      # committed aggregates in docs/measured.json
+      - name: measured-check
+        run: python3 scripts/readme-measured check
       - name: shellcheck install.sh and scripts/wire-check
         run: shellcheck install.sh scripts/wire-check
 

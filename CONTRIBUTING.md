@@ -49,11 +49,13 @@ make fmt-check   # CI runs this; gofmt -l . must be empty
 shellcheck install.sh
 ```
 
-CI runs `go vet ./...`, `go test -race -p 2 ./...`, `make fmt-check`, and
-`shellcheck install.sh scripts/wire-check`, beside the freeze job
-(`go run ./cmd/freeze`) and the wire job (`scripts/wire-check`). The
-freeze gate refuses a diff that reaches outside `specs/FREEZE.txt`; add a
-new surface to that file in the same PR.
+CI runs `go vet ./...`, `go test -race -p 2 ./...`, `make fmt-check`,
+and `shellcheck install.sh scripts/wire-check`, beside the freeze job
+(`go run ./cmd/freeze`), the wire job (`scripts/wire-check`), and the
+measured gate (`scripts/readme-measured check`, which keeps the README's
+measured block equal to `docs/measured.json` plus the tree). The freeze
+gate refuses a diff that reaches outside `specs/FREEZE.txt`; add a new
+surface to that file in the same PR.
 
 ## versions and releases
 
