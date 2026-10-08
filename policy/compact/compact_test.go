@@ -334,8 +334,8 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 			t.Fatalf("message %d is the trap instruction as a live message — it must be a quoted line", i)
 		}
 	}
-	if reqs[0].ReasoningEffort != "medium" {
-		t.Fatalf("ReasoningEffort = %q, want medium (the one call whose thinking nobody reads)", reqs[0].ReasoningEffort)
+	if reqs[0].ReasoningEffort != "" {
+		t.Fatalf("ReasoningEffort = %q, want none (a row without levels asks for no effort)", reqs[0].ReasoningEffort)
 	}
 
 	if len(s.Messages) != 3 {
@@ -501,7 +501,7 @@ func TestCompactionWritesNothingToRem(t *testing.T) {
 	}
 }
 
-func TestSummaryEffortIsTheRow(t *testing.T) {
+func TestSummaryEffortIsTheRowsLowest(t *testing.T) {
 	compactFixture := func(row models.Model) (*scriptedProvider, *core.Session) {
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
@@ -511,9 +511,10 @@ func TestSummaryEffortIsTheRow(t *testing.T) {
 	}
 	base := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200, Role: models.RoleInteractive}
 
-	t.Run("the row's effort rides the summary call", func(t *testing.T) {
+	t.Run("the row's lowest level rides the summary call", func(t *testing.T) {
 		row := base
-		row.Effort = "low"
+		row.Efforts = []string{"low", "medium", "xhigh"}
+		row.Effort = "xhigh"
 		prov, s := compactFixture(row)
 		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 		if err != nil {
@@ -527,11 +528,12 @@ func TestSummaryEffortIsTheRow(t *testing.T) {
 			t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
 		}
 		if reqs[0].ReasoningEffort != "low" {
-			t.Fatalf("ReasoningEffort = %q, want the row's low", reqs[0].ReasoningEffort)
+			t.Fatalf("ReasoningEffort = %q, want the row's lowest low", reqs[0].ReasoningEffort)
 		}
 	})
-	t.Run("an empty field keeps the policy's medium", func(t *testing.T) {
+	t.Run("a row without levels sends none", func(t *testing.T) {
 		row := base
+		row.Effort = "xhigh"
 		prov, s := compactFixture(row)
 		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 		if err != nil {
@@ -544,8 +546,8 @@ func TestSummaryEffortIsTheRow(t *testing.T) {
 		if len(reqs) != 1 {
 			t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
 		}
-		if reqs[0].ReasoningEffort != "medium" {
-			t.Fatalf("ReasoningEffort = %q, want the field's default medium", reqs[0].ReasoningEffort)
+		if reqs[0].ReasoningEffort != "" {
+			t.Fatalf("ReasoningEffort = %q, want none (the server default rides)", reqs[0].ReasoningEffort)
 		}
 	})
 }

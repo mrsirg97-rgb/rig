@@ -200,7 +200,10 @@ second queue. The fire
 names no model: it resolves to the resident model's row as a scheduled
 fire does (2.5.3), with the session's active model as the fallback when
 nothing is resident; it never fires on the settings default while another
-model is resident (2.8.3).
+model is resident (2.8.3). And it thinks cheap: the spawn asks for the
+row's lowest `efforts` level as `-effort` (2.14.2), accepting or
+rejecting one row is a glance — through 2.14.1 the worker thought at the
+row's default, xhigh on the operator's Qwen row, to judge a row.
 
 Two fixes ride the fire (2.9.4). The headless worker (`-p`) ignores
 SIGPIPE, so a broken stderr costs the reasoning stream and never the

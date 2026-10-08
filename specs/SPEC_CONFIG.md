@@ -42,7 +42,9 @@ TDD.
   start the way a nameless run has since 0.25.6.
 - Rows gain two optional fields: `role` (`worker` | `interactive`,
   default `interactive`, shown by `/models`) and `effort` (the request
-  effort where a call sets one: the compaction summary's).
+  effort where a call sets one: the compaction summary's; since 2.14.2
+  the live turn's default only — the cheap calls ask for the row's
+  lowest `efforts` level instead).
 - The existing knobs by their env names, flat: `baseUrl`, `model`,
   `system`, `allow`, `retries`, `python`, `searxngUrl`,
   `webFetchProxy`, `trafilatura`, `swapUrl`; plus `defaultJobModel`,
@@ -190,8 +192,8 @@ type Settings struct {
 ```go
 	Role   string // models.RoleInteractive ("interactive", the default)
 	           // or models.RoleWorker ("worker"); the /models column
-	Effort string // the compaction summary call's request effort;
-	           // "" = the policy's "medium"
+	Effort string // the live turn's default (the dial, else the
+	           // row); the cheap calls ask Efforts[0] instead (2.14.2)
 ```
 
 The embedded defaults (the move is exact; 0.2.0's values):
@@ -429,17 +431,18 @@ refusal for a name nobody set, now reached by a row nobody wrote.
 | `reserve`  | int    | yes (new rows) | |
 | `keepRecent`| int   | yes (new rows) | |
 | `role`     | string | no       | `"worker"` or `"interactive"`; default `interactive`; shown by `/models` |
-| `effort`   | string | no       | the request effort where a call sets one: the compaction summary call's; default `""` = the policy's `medium` |
+| `effort`   | string | no       | the live turn's default request effort: the dial, else the row; the cheap calls (the compaction summary, the review fire) ask for the row's lowest `efforts` level instead (2.14.2) |
 | `vision`   | bool   | no       | the model takes image input; **presence-aware** (an explicit `false` descends onto an embedded row, unlike the zero-means-unset numbers). Default `false`. It gates the `view` tool (SPEC_VIEW) and the provider's image parts |
 
 `role` is display and fleet-identity in this PR: `/models` lists it
 (4's render); it is validated at parse (unknown value refuses, naming
-the allowed set) and stored on `models.Model`. `effort` is consumed by
-exactly one call: `policy/compact`'s summary call sets
-`ReasoningEffort` to the row's `Effort`, falling back to `"medium"`
-when empty; the 0.2.0 behavior, now the field's default. The policy
-keeps the fallback line so a row constructed without the default never
-loses it; providers that don't know the field ignore it, as today.
+the allowed set) and stored on `models.Model`. `effort` is the live
+turn's default and nothing else: `cmd/rig`'s `effortForWire` sends the
+dial, else the row (2.14.2 — the summary call and the review fire read
+`Efforts[0]` instead, `""` when the row names none, so lowering the
+summary's cost never lowers the brain). `efforts` lists the row's
+levels in the operator's order, lowest first; the cheap calls take the
+first. Providers that don't know the field ignore it, as today.
 
 **The merge, stated once.** The user file **merges over the embedded
 table row by row**, keyed by `id` (since 2.12.11 the embedded table is

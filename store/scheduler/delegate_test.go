@@ -224,6 +224,31 @@ func TestDelegateDefaultsAreUnchanged(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(in.Home, "runs")); err != nil {
 		t.Fatalf("the run record must still land: %v", err)
 	}
+	for i, a := range spawn.calls[0].Argv {
+		if a == "-effort" {
+			t.Fatalf("a default spawn names no effort, got %v", spawn.calls[0].Argv[i:])
+		}
+	}
+}
+
+func TestADelegateSpawnCarriesTheEffortItIsGiven(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.Effort = "low"
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	argv := spawn.calls[0].Argv
+	effortAt := -1
+	for i, a := range argv {
+		if a == "-effort" {
+			effortAt = i
+		}
+	}
+	if effortAt < 0 || argv[effortAt+1] != "low" {
+		t.Fatalf("the spawn must ask for the caller's effort, got %v", argv)
+	}
 }
 
 func TestABareFireWithNoAllowRunsAllowNoneAndNoReportBack(t *testing.T) {

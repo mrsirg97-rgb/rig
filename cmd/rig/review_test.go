@@ -156,6 +156,39 @@ func TestTheReviewFireNamesTheDeathAndTheRunLog(t *testing.T) {
 	}
 }
 
+func TestTheReviewFireAsksForTheRowsLowestEffort(t *testing.T) {
+	r := &root{
+		activeID: "ox-alpha",
+		cwd:      t.TempDir(),
+		row:      models.Model{ID: "ox-alpha", Efforts: []string{"low", "medium", "xhigh"}, Effort: "xhigh"},
+	}
+	var seen sched.DelegateInput
+	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
+		seen = in
+		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
+	}
+	fleet(r)
+	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
+	if _, err := fire(context.Background(), "review these", r.room.Mint()); err != nil {
+		t.Fatal(err)
+	}
+	if seen.Effort != "low" {
+		t.Fatalf("the fire asked for effort %q, want the row's lowest low (the row's own xhigh is the brain, not the reviewer's)", seen.Effort)
+	}
+
+	r2 := &root{activeID: "ox-alpha", cwd: t.TempDir(), row: models.Model{ID: "ox-alpha"}}
+	r2.delegate = r.delegate
+	fleet(r2)
+	fire2 := r2.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
+	seen = sched.DelegateInput{}
+	if _, err := fire2(context.Background(), "review these", r2.room.Mint()); err != nil {
+		t.Fatal(err)
+	}
+	if seen.Effort != "" {
+		t.Fatalf("a row without levels must pass no effort, got %q", seen.Effort)
+	}
+}
+
 func TestAHealthyReviewFireReturnsTheModel(t *testing.T) {
 	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
 	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {

@@ -24,6 +24,7 @@ type DelegateInput struct {
 	Cwd           string
 	Task          string
 	Model         string
+	Effort        string
 	WorkerSession string
 	Fetch         Fetch
 	Spawn         Spawn
@@ -249,12 +250,15 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 			"-session-id", in.WorkerSession,
 			"-base-url", in.SwapURL+"/v1",
 			"-model", in.Model)
+		if in.Effort != "" {
+			argv = append(argv, "-effort", in.Effort)
+		}
 		if allow != "" {
 			argv = append(argv, "-allow", allow)
 		}
 		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
 	} else {
-		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, prompt, allow, in.WorkerSession, DelegateEnv+"=1")
+		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, in.Effort, prompt, allow, in.WorkerSession, DelegateEnv+"=1")
 		if err != nil {
 			release()
 			return Delegation{}, fmt.Errorf("delegate: jail: %w", err)
@@ -369,6 +373,7 @@ func (in DelegateInput) toRunOpts() RunOpts {
 		SandboxBinds: in.SandboxBinds,
 		StateDir:     in.StateDir,
 		LandlockABI:  in.LandlockABI,
+		SwapURL:      in.SwapURL,
 	}
 }
 

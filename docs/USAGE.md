@@ -23,6 +23,13 @@ slot; starts fresh, and the session's id is the one to look up in the
 rig home; `$RIG_HOME` over `~/.rig`). `-p` one-shot and `--resume` refuse at construction: one-shot
 stays one-shot.
 
+The session's requests open at the model row's default effort. `-effort
+<level>` (flag over `$RIG_EFFORT` over the row) names the opening level,
+refused loud when the level is not in the row's `efforts` — the same
+check `/effort` applies; the row's `efforts` are the operator's order,
+lowest first. The review fire passes the row's lowest level to its
+worker, so judging a row is a glance, not a deep pass.
+
 ## commands
 
 Typed lines with a `/` prefix; the loop never sees them. An unknown command

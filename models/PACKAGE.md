@@ -10,8 +10,8 @@ command reads this same table.
 ## What it includes
 
 - `Model`: one row: `ID`, `Window`, `MaxTokens`, `Reserve`, `KeepRecent`,
-  `Role`, `Effort` (the compaction summary call's request effort; `""` =
-  the policy's "medium"), and the hosted run site (SPEC_HOSTED): `Remote`,
+  `Role`, `Effort` (the live turn's default level: the dial, else the
+  row), and the hosted run site (SPEC_HOSTED): `Remote`,
   `Provider` (a name implies remote), `BaseURL`, `APIKey` (never logged or
   rendered), `Concurrency` (default 1 for remote rows), `Reasoning`
   (`reasoning_content` default, `reasoning` for OpenRouter), `ProviderPin`
@@ -19,6 +19,9 @@ command reads this same table.
   rows).
 - `Table`: id -> row, built by `New` with every row checked.
 - `Check`: the row's invariants, loud, naming the id and fields.
+- `LowestEffort`: `Efforts[0]`, `""` when the row names none — the level
+  the cheap calls (the compaction summary, the review fire) ask for; the
+  operator's `efforts` order is lowest first.
 - `overlay` (unexported): applies `RIG_MODEL_*` env onto a row's fields.
 - `Resolve`: the root's row resolution at start, before any store opens.
 - `Role`: `interactive` / `worker` fleet identity.

@@ -269,7 +269,7 @@ func RunJob(key string, opts RunOpts) error {
 		} else {
 			var refuse string
 			var err error
-			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, model, prompt, "", workerSession)
+			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, model, "", prompt, "", workerSession)
 			if err != nil {
 				return fmt.Errorf("run-job: jail: %w", err)
 			}

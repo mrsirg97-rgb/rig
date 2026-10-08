@@ -1,4 +1,30 @@
 # Changelog
+## [2.14.2]: the cheap calls ask for the cheap effort
+
+A model row's `effort` field did two jobs: the live turn's default, and
+— until now — the effort of the calls nobody reads the thinking of: the
+compaction summary, and the review fire's worker. On a row dialed up
+for the brain (xhigh on the operator's Qwen row), every summary and
+every review thought at xhigh to fold a transcript or accept one row.
+The cheap calls now ask for the cheap effort, and the field keeps the
+one job it was named for.
+
+- **the summary** (`policy/compact`): `summarize` sends the row's
+  lowest `efforts` level — the operator's order is lowest first — and
+  `""` when the row names none, the server default riding as before.
+  The row's `effort` is unread there; lowering the summary's cost never
+  lowers the brain.
+- **the review fire** (`cmd/rig`): `rig -p` gains `-effort <level>`
+  (precedence flag > `RIG_EFFORT` > the row, refused loud by the
+  `effort` command's own check when the level is not in the row's
+  `efforts`), and the fire passes the row's lowest level to the worker
+  it spawns. Delegate workers and scheduled jobs pass nothing: the
+  row's default rides, unchanged.
+- **the delegate's spawn opts** (`store/scheduler`): `toRunOpts` never
+  carried the swap URL, so a jailed or landlock delegate spawn — the
+  default profile — refused at the socket proxy ("unsupported scheme")
+  since the delegate tool landed. It rides now; the fire's argv tests
+  cover the landlock path.
 ## [2.14.1]: a worker does, the session decides
 
 A headless worker ran with the session's allow list, which is per tool

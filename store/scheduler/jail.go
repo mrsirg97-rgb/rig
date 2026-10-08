@@ -14,6 +14,7 @@ type JailProfile struct {
 	Binary    string
 	BaseURL   string
 	Model     string
+	Effort    string
 	SessionID string
 	Cwd       string
 	KernelDir string
@@ -77,6 +78,9 @@ func JailArgv(p JailProfile) ([]string, error) {
 	if p.SessionID != "" {
 		argv = append(argv, "-session-id", p.SessionID)
 	}
+	if p.Effort != "" {
+		argv = append(argv, "-effort", p.Effort)
+	}
 	if p.Allow != "" {
 		argv = append(argv, "-allow", p.Allow)
 	}
@@ -128,7 +132,7 @@ func SocketRefusal(sock string, err error) string {
 
 const jailPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, string, error) {
+func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, effort, prompt, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, string, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil, PlatformRefusal(runtime.GOOS), nil
 	}
@@ -171,6 +175,7 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, prompt, allo
 		Binary:    workerCmd[0],
 		BaseURL:   "unix:" + sock,
 		Model:     model,
+		Effort:    effort,
 		SessionID: sessionID,
 		Cwd:       cwd,
 		KernelDir: kernelDir,
