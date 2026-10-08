@@ -21,6 +21,10 @@ swarm behind their narrowed verb set.
   per-package `PACKAGE.md` files are untouched.
 - **the GitHub page** leads with the concurrency model and the decision
   pipeline, and its measured strip matches the README's.
+- **why rig, in one breath**: the README intro and the page's lede answer
+  why this harness and not another — a tree you can read before you
+  trust, refusals that name their rule instead of retrying blind, every
+  decision a row in a store you own, a session that follows you.
 
 ## [2.14.4]: input ends the reviewer's fire
 
