@@ -15,11 +15,12 @@ func testClient() *http.Client {
 	return &http.Client{Transport: testenv.Transport()}
 }
 
-// layaChoiceReply is Laya's /v1/systemone payload in its full shape: the answers
-// are keyed by question id, each answer carries its type, its value, the
-// probabilities, the entropy confidence, and the action block; the envelope
-// carries the model and the usage and the routing a client ignores. The
-// decoder must take all of it.
+var riskCriteria = map[string]string{
+	"safe":      "reads or lists; nothing on disk changes",
+	"changes":   "writes only inside the workspace it named",
+	"dangerous": "reaches outside the workspace, deletes, or can destroy state",
+}
+
 const layaChoiceReply = `{
 	"model": "laya-rl-agent",
 	"answers": {
@@ -57,11 +58,7 @@ func TestTheClientSpeaksLayasWire(t *testing.T) {
 		t.Fatal(err)
 	}
 	risk := decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous")
-	risk.Description = map[string]string{
-		"safe":      "reads or lists; nothing on disk changes",
-		"changes":   "writes only inside the workspace it named",
-		"dangerous": "reaches outside the workspace, deletes, or can destroy state",
-	}
+	risk.Description = riskCriteria
 	answers, err := dec.Decide(context.Background(), `{"command":"ls"}`, []decision.Question{risk})
 	if err != nil {
 		t.Fatal(err)
@@ -85,12 +82,7 @@ func TestTheClientSpeaksLayasWire(t *testing.T) {
 	if q.Type != "choice" || q.Instructions != "What risk does this bash call carry?" {
 		t.Fatalf("the question speaks Laya's shape: %+v", q)
 	}
-	want := map[string]string{
-		"safe":      "reads or lists; nothing on disk changes",
-		"changes":   "writes only inside the workspace it named",
-		"dangerous": "reaches outside the workspace, deletes, or can destroy state",
-	}
-	if len(q.Criteria) != 3 || q.Criteria["safe"] != want["safe"] || q.Criteria["changes"] != want["changes"] || q.Criteria["dangerous"] != want["dangerous"] {
+	if len(q.Criteria) != 3 || q.Criteria["safe"] != riskCriteria["safe"] || q.Criteria["changes"] != riskCriteria["changes"] || q.Criteria["dangerous"] != riskCriteria["dangerous"] {
 		t.Fatalf("the choice describes each label on the wire: %+v", q.Criteria)
 	}
 }
