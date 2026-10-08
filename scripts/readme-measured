@@ -48,10 +48,12 @@ def read_stores(sessions_dir):
     """Aggregate the store: one pass, read-only, sums and counts only."""
     ver, rows = {}, []
     earliest = None
+    skipped = []
     for path in sorted(glob.glob(os.path.join(sessions_dir, "*.sqlite"))):
         try:
             con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-        except sqlite3.Error:
+        except sqlite3.Error as e:
+            skipped.append((path, str(e)))
             continue
         try:
             for sid, version, started in con.execute(
@@ -63,9 +65,16 @@ def read_stores(sessions_dir):
                 "SELECT m.session_id, u.prompt, u.completion, u.cache_read "
                 "FROM usage u JOIN messages m ON m.seq = u.message_seq"))
         except sqlite3.Error as e:
-            print(f"readme-measured: skipping {path}: {e}", file=sys.stderr)
+            skipped.append((path, str(e)))
         finally:
             con.close()
+    # partial aggregates are worse than none: they would be committed and
+    # the drift gate would then defend them
+    if skipped:
+        for path, err in skipped:
+            print(f"readme-measured: {path}: {err}", file=sys.stderr)
+        sys.exit("readme-measured: a store could not be read; fix or move "
+                 "the stores above, then rerun")
 
     agg = {label: [0, 0, 0, 0] for label in ERAS}  # turns, prompt, completion, cache
     turns = prompt = completion = cache_read = 0
@@ -138,6 +147,9 @@ def walk_tree(repo):
 
 
 def render(data, tree):
+    if not data["prompt"]:
+        sys.exit("readme-measured: the store data holds no prompt tokens; "
+                 "nothing to measure")
     prompt_b = f"{data['prompt'] / 1e9:.1f}"
     ratio = data["cache_read"] / data["prompt"] * 100
     lines = []
@@ -215,8 +227,14 @@ def main():
             json.dump(data, fh, indent=2)
             fh.write("\n")
     else:
-        with open(data_path) as fh:
-            data = json.load(fh)
+        try:
+            with open(data_path) as fh:
+                data = json.load(fh)
+        except FileNotFoundError:
+            sys.exit(f"readme-measured: {data_path} is missing; run "
+                     "scripts/readme-measured update first")
+        except json.JSONDecodeError as e:
+            sys.exit(f"readme-measured: {data_path} is not readable JSON: {e}")
 
     block = render(data, tree)
     if args.mode == "render":
