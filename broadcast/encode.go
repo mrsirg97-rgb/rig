@@ -7,12 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-/*
-Encoder
-
-	Encoder provides the means for a Transport that crosses a process boundary to serialize and deserialize the Room Messages.
-	the kind names the core event the payload is; a frame with no kind is a heartbeat.
-*/
 type Encoder interface {
 	Encode(message Message) ([]byte, error)
 	Decode(encoded []byte) (Message, error)

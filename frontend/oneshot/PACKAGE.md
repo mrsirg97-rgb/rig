@@ -28,7 +28,14 @@ prompt, the process's stdout is the response.
   `ToolCall.Args` as a JSON string. A body never crosses: `write`'s
   content and `edit`'s old/new are not in that list and are not read,
   which is why the bound is enforced here, at the only process that has
-  them. The bounding happens whether or not `Err` is set; the stderr
+  them. The 80 is SPEC_TUI 3a's band budget — the row carries the
+  worker's number, the tool's name, this argument and its age — and it
+  is not where a body gets truncated: a body is never in the list, the
+  bound is what a long path or command may cost. The keys run in the
+  order a reader would want them (the file, the command, the pattern,
+  then the rest), and a call whose work nothing here names crosses as
+  the empty string, the tool's name alone, never a guess at the body.
+  The bounding happens whether or not `Err` is set; the stderr
   line keeps its old gate. The reasoning
   deltas cross the same fleet as themselves (2.11.7), beside the stderr
   copy the run log keeps, so a parent that asked for the work can show

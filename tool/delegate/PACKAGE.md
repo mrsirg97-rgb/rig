@@ -37,10 +37,18 @@ nothing scheduled) and a resumable transcript in the state store.
   `core.WorkerDone` (the worker's number, its task, its content — the
   same text the synchronous result always was — its exit, duration,
   session and log) on the tool's room member; the frontends fold it
-  into the next turn. `StopAll` is the idle interrupt: it cancels every
+  into the next turn. The error out of `settle` is the runner's, the
+  one the blocking shape used to return; a handed-off worker's failure
+  is its return's exit code, not an error of the turn that handed it
+  off, and a worker that never ran has no stdout to cap — the fault
+  itself is its return's content, a late failure still being an
+  answer. `StopAll` is the idle interrupt: it cancels every
   running worker's context (the set is keyed by the worker number, not
   by the room member, so it works with no room at all — a session
-  without one simply never publishes a return).
+  without one simply never publishes a return). It is the gesture the
+  operator makes when there is no turn to interrupt and the workers
+  are the only thing still running, and it costs nothing on an empty
+  set — a worker that already returned is not stopped twice.
 - `doing.go`: the doing set (2.14.1, SPEC_DELEGATE 6) — one named
   constant, `bash read write edit view python web rem`, the only place
   the set is written. `Run` passes the session's resolved allow list
@@ -53,7 +61,15 @@ nothing scheduled) and a resumable transcript in the state store.
 - `delegate.go`: `Opts.Ctx` is the session's context and the worker's
   parent, `Opts.Await` is the piped session's shape, both wired by the
   root. `Run` spawns under a context derived from the session's, never
-  the turn's, so ending the turn does not end the worker.
+  the turn's, so ending the turn does not end the worker; everything
+  that could refuse the hand-off — the empty task, the workspace
+  outside the guard, a model that is not resident, a jail that will
+  not start — is still an error this turn, and what moves to the next
+  turn is the answer. `end` is reached only after Wait returned or
+  before the spawn began, so its cancel releases the context the
+  session would otherwise carry until it ends; cancel is idempotent,
+  and `StopAll` races nothing by reading a map the entry has already
+  left.
 - `delegate.go`: the tool has no clock (2.12.7, SPEC_DELEGATE 1). No
   `timeoutMs` on the schema, no default, no ceiling: `Timeout:
   noTimeout` and `SpawnCtx:` the worker's own context (derived from
@@ -86,7 +102,19 @@ nothing scheduled) and a resumable transcript in the state store.
   ruling the worker while the session's does, `StopAll` ending every
   worker, a failed worker's return naming its exit, the snapshot
   carrying each worker's last call), and over the real `RealSpawn` the
-  idle interrupt killing the worker's whole process tree.
+  idle interrupt killing the worker's whole process tree. Beside the
+  cases, the harness: `newTool` is the synchronous shape (a session
+  with no next turn to carry a return — a piped run — waits for its
+  worker and gets its message as the tool result), `asyncTool` the
+  handed-off one (`Run` answers at once and the return is published,
+  so a test reads it off the room rather than off the result), both
+  sharing everything up to the spawn; `waitForReturn` reads the
+  returns off the room once n of them have landed, and the order they
+  land in is the order the frontends are tested on; `returns` is the
+  inbox a frontend would fold — the workers that came back, in the
+  order they came back; `ctxDies` makes the fake end the way a killed
+  process does when its context is cancelled (it stops, and its exit
+  is not zero).
 
 ## How it is consumed
 

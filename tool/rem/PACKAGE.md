@@ -22,8 +22,13 @@ calls what).
   `Recall(ctx, scope, in RecallInput)`,
   `Reflect(ctx, scope, in ReflectInput)` and
   `Prune(ctx, scope, in PruneInput)` — a verb whose fields are a bag of
-  options rather than an order takes them as one input struct, the scope
-  staying on the verb because every verb carries it — each
+  options rather than an order takes them as one input struct named for the
+  verb, the store's `CreateInput` shape, the scope staying on the verb
+  because every verb carries it — an input with the scope left out must not
+  read like a call, and a field is a pointer where absent and zero differ
+  (`Importance`: absent is the default weight, zero a weight of nothing;
+  `K`; `OlderThanDays`; `PruneInput.Importance` is the weight a reduce
+  leaves behind) — each
   over the rem store's operations and the graph store's map operations,
   each carrying the required `scope`: the
   reserved word `global` or a directory path, resolved through
@@ -35,7 +40,8 @@ calls what).
   cwd fallback in the tool — and a path that is not a directory refuses
   by name, the same words todo's scope refuses: a typo must not mint a
   memory scope keyed by a path that is not there. A path recall searches that project first
-  and fills from global, as ever; a global learn, recall or prune is
+  and fills from global, as ever; an empty `RecallInput.Query` is the
+  list, the store's browse arm; a global learn, recall or prune is
   the global memory alone; `index` and `pack` refuse `global` by name
   (a map needs a directory). `pack` takes a
   `target`: a symbol (package-qualified or bare), a file path, or a task

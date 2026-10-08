@@ -6,12 +6,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-/*
-Member
-
-	Member is group user in a Room.
-	members on connect can subscribe to latest events, through callbacks, and publish new events to the room
-*/
 type Member interface {
 	Id() int64
 	Room() string

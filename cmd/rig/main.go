@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.14.5"
+const Version = "2.14.6"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -483,18 +483,12 @@ func main() {
 	}
 	r.listen()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
-	// A piped session answers one prompt and exits: there is no next turn to
-	// carry a delegated worker's return, so the delegate waits for it there.
 	piped := *prompt != ""
 	var del delegate.Delegate
 	var stopWorkers func()
 	if delegateOn {
 		del = delegate.New(delegate.Opts{
-			// The worker outlives the turn that started it, so it is not a child
-			// of the turn's context: it is a child of the session's.
-			Ctx: ctx,
-			// A piped session has no next turn to carry a return, so the
-			// delegate keeps its synchronous shape there.
+			Ctx:          ctx,
 			Await:        piped,
 			DB:           scdb,
 			Home:         schedHome,

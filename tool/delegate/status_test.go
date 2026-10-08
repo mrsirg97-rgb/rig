@@ -3,7 +3,6 @@ package delegate_test
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -22,8 +21,6 @@ type recordFrontend struct {
 	events []core.Event
 }
 
-// returns is the inbox a frontend would fold: the workers that came back, in
-// the order they came back.
 func (r *recordFrontend) returns() []core.WorkerDone {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -36,6 +33,17 @@ func (r *recordFrontend) returns() []core.WorkerDone {
 	return out
 }
 
+func foldFleet(t *testing.T, room broadcast.Room, fe *recordFrontend) {
+	t.Helper()
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err == nil && m.Event() != nil {
+				fe.Notify(m.Event())
+			}
+		}
+	})
+}
+
 func newFleetRoom(t *testing.T) (broadcast.Room, *recordFrontend) {
 	t.Helper()
 	fe := &recordFrontend{}
@@ -45,17 +53,9 @@ func newFleetRoom(t *testing.T) (broadcast.Room, *recordFrontend) {
 	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
 	})
-	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
-		for _, m := range messages {
-			if err == nil && m.Event() != nil {
-				fe.Notify(m.Event())
-			}
-		}
-	})
+	foldFleet(t, room, fe)
 	return room, fe
 }
-
-func (r *recordFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
 
 func (r *recordFrontend) Notify(ev core.Event) {
 	r.mu.Lock()
@@ -108,13 +108,7 @@ func TestDelegateEmitsSwarmStatus(t *testing.T) {
 	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
 	})
-	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
-		for _, m := range messages {
-			if err == nil && m.Event() != nil {
-				fe.Notify(m.Event())
-			}
-		}
-	})
+	foldFleet(t, room, fe)
 	spawn := &statusSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	tool := delegate.New(delegate.Opts{
 		DB:           h.db,
@@ -164,13 +158,7 @@ func TestDelegateFramesRunningThenCleared(t *testing.T) {
 	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
 	})
-	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
-		for _, m := range messages {
-			if err == nil && m.Event() != nil {
-				fe.Notify(m.Event())
-			}
-		}
-	})
+	foldFleet(t, room, fe)
 	spawn := &statusSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	spawn.until = func() bool {
 		for _, s := range fe.statuses() {

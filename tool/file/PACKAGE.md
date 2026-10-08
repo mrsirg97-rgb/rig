@@ -95,7 +95,9 @@ it acts on it.
   call, not the observation.
 - The drift check refuses when the file's hash or mtime differs from the
   recorded `FileState`; edit-after-external-change never silently
-  clobbers.
+  clobbers. The stale-observation fixture makes its second write itself
+  (`os.WriteFile`, no session call): a change no tool recorded is what
+  makes the observation stale.
 - One call is one change; the order of several changes to one file is
   the loop's, not the tool's. `edit` is a barrier in the batch
   (SPEC_EVT 2a), so same-turn calls land in call order and each records

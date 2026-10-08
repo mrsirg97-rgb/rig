@@ -156,8 +156,6 @@ func TestTheDelegateBandShowsDuringAndBetweenTurns(t *testing.T) {
 
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
-	// Between turns nothing else repaints, so the band has to drive the frame
-	// ticker itself or the row freezes where the operator is looking.
 	before := len(s.out.Bytes())
 	deadline := time.Now().Add(2 * time.Second)
 	for len(s.out.Bytes()) <= before && time.Now().Before(deadline) {
@@ -206,16 +204,12 @@ func TestTwoReturnsDuringATurnArriveAsOneBlockInOrder(t *testing.T) {
 	}
 }
 
-// inputWhile feeds a line to a reader that has not started yet: the TUI's reader
-// belongs to Input, so the keystroke has to follow the call, not precede it.
 func (s *scriptedSession) inputWhile(line string) string {
 	s.t.Helper()
 	go s.si.feed(line)
-	return s.mustInput()
+	return s.inputAt(s.ctx)
 }
 
-// inputAt runs Input on a context of the caller's: a steer cancels the turn it
-// interrupts, and a test must not inherit that.
 func (s *scriptedSession) inputAt(ctx context.Context) string {
 	s.t.Helper()
 	type res struct {
@@ -239,32 +233,6 @@ func (s *scriptedSession) inputAt(ctx context.Context) string {
 	}
 }
 
-func (s *scriptedSession) mustInput() string {
-	s.t.Helper()
-	type res struct {
-		line string
-		err  error
-	}
-	ch := make(chan res, 1)
-	go func() {
-		line, err := s.fe.Input(s.ctx)
-		ch <- res{line, err}
-	}()
-	select {
-	case r := <-ch:
-		if r.err != nil {
-			s.t.Fatalf("input: %v", r.err)
-		}
-		return r.line
-	case <-time.After(3 * time.Second):
-		s.t.Fatalf("input never came back; stream:\n%s", s.out.String())
-		return ""
-	}
-}
-
-// tail marks the length of the stream at a moment; since is what has been
-// painted since — the stream is append-only, so "left the screen" only means
-// anything about the frames after the mark.
 func (s *scriptedSession) since() string {
 	all := s.out.String()
 	if s.tail > len(all) {
@@ -287,12 +255,6 @@ func stripANSI(s string) string {
 	return out.String()
 }
 
-func wordFor(n int) string {
-	if n == 1 {
-		return "worker"
-	}
-	return "workers"
-}
 func TestEscOnAnEmptyPromptStopsTheWorkers(t *testing.T) {
 	th, _ := ResolveTheme("oled", nil, true)
 	stops := 0

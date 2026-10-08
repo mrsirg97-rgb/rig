@@ -23,7 +23,7 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 	}
 	door := r.pluginDoor()
 	if r.allow == nil {
-		door = nil // no tools: the fire's worker executes nothing, plugins included
+		door = nil
 	}
 	var mw []core.ToolMiddleware
 	if r.graph != nil {

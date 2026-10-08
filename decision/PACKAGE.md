@@ -31,7 +31,10 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   decider recorded is the configured name, else the URL's host. An
   answer whose confidence is not a probability, whose value or its
   mass is missing, or whose type is unknown drops; the reply body is
-  capped at 1 MiB.
+  capped at 1 MiB. The fixture pins Laya's reply in its full shape
+  (every answer's type, value, probabilities, entropy confidence and
+  action block, keyed by question id, beside the envelope's model,
+  usage and routing), so the decoder is proven against all of it.
 - `queue.go`: the proposal queue: `Propose` enqueues on a bounded channel
   (`QueueCap`), `Run` is the one goroutine that decides, writes through
   the `Sink`, and calls `land` on a landing — a landing marks the
@@ -164,6 +167,9 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   greater than the constant AND the incumbent on every question any of
   the three reports carries; a missing question is not a beat, an empty
   report promotes nothing). Pure; the orchestration is `cmd/rig`'s.
+  The live rationale fixtures pin every distinct correction text among
+  the denied rows with the label the export must read — the parse is
+  not allowed to learn a shape the store has not carried.
   A trainer whose stem names a package it imports must drop that key
   from `sys.modules` first: the discovery cell registers the file under
   its stem, and the shadow breaks the package's own submodule imports.

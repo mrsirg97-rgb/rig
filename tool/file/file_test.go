@@ -73,7 +73,7 @@ func TestReadNotesStaleObservation(t *testing.T) {
 	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if err := os.WriteFile(path, []byte("second"), 0o644); err != nil { // external change, no session call
+	if err := os.WriteFile(path, []byte("second"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	got, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path}))

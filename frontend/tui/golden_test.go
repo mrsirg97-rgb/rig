@@ -211,10 +211,6 @@ func goldenStream(t *testing.T, th Theme, width int) string {
 		s.t.Fatalf("the second prompt = %q, want bye", line)
 	}
 
-	// A delegated batch: the band shows its two rows between turns, with
-	// nothing else left to repaint them, and the return is the head of the
-	// next user turn. The stamps are hours old so the age cells read the
-	// same on every run.
 	stale := time.Now().Add(-3 * time.Hour)
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{{
 		ID: 1, Role: "delegate", Task: "sweep the floor", State: "running", Heartbeat: stale,

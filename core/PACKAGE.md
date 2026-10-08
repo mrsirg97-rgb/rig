@@ -17,9 +17,16 @@ type, an interface, or a context helper.
   `TestEvent`, `Compacted`, `Compacting`, `SwarmStatus`, `WorkerDone`
   (2.14.0: a delegated worker's return — `N`, `Task`, `Content`, `Exit`,
   `Duration`, `Session`, `Log` — with `Head` and `WorkerBlock` as its two
-  readers, so the text the model reads is one shape in every frontend; it is
+  readers: `Head` is the line a return opens with — which worker, how it
+  ended, how long it ran, where its session lives — the line every frontend
+  shows as the return lands, and `WorkerBlock` is the text a turn of returns
+  is made of, each worker's head over its content in the order they arrived,
+  so the text the model reads is one shape in every frontend; it is
   deliberately **not** a `Snapshot`, because returns accumulate and two of
-  them must not collapse into one), and
+  them must not collapse into one — the frontend keeps every worker that
+  comes back, the inbox appends them and hands them to the next turn in the
+  order they arrived, and `Content` is the same text the synchronous tool
+  result always was, the worker's capped stdout and its trailer line), and
   `Notice` — the 2.8.3 reopening: one event for a background notice, `Source`
   (2.11.0 folded `SwarmNotice` into it: the swarm is a source like any other;
   2.11.7 added `Level`, `LevelInfo` the zero value, `LevelSuccess`,
@@ -41,7 +48,8 @@ type, an interface, or a context helper.
   argument in `Call.Args` as a JSON string, never a body, and this is the
   reader that knows the difference; `SwarmWorker.Tool`/`ToolAt` — the last
   call a running worker is in and when it arrived, so a band ages the call
-  against the paint instead of keeping a clock.
+  against the paint instead of keeping a clock; `Tool` is empty until the
+  worker makes its first call.
 - **State**: `Session` (transcript + `FileState` provenance), JSON
   save/load.
 - **Helpers**: `WithInterrupt`/`InterruptFrom` (turn cancel under a typed

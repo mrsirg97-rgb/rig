@@ -90,7 +90,9 @@ sees core and models and nothing else.
   paths expands `~` before any gate validates an argument; cutoff
   refuses a truncated call before approval spends a prompt on it; the
   permission gates deny before approval asks and before the retry guard
-  counts a failure; Cap truncates every reply, refusals included.
+  counts a failure; Cap truncates every reply, refusals included. A nil
+  allow shuts the plugin door with the allowlist: the fire's worker
+  (`-allow none`) executes nothing, plugins included.
   `buildSystem` harvests guidelines from the same constructor, so the
   prompt can never name a chain the tools do not run. Swapping a seam is a
   change there and nowhere else. The compaction `AutoReflect` seam is
@@ -156,7 +158,12 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   the todo store's Reap staleness arm. The note names what was freed;
   an idle reap returns "".
 - The `-p`/`-resume` conflict is refused loud before any store is
-  opened (`ErrResumeWithPrompt`: one-shot stays one-shot).
+  opened (`ErrResumeWithPrompt`: one-shot stays one-shot). A piped
+  session answers one prompt and exits — there is no next turn to
+  carry a delegated worker's return — so the delegate keeps its
+  synchronous shape there (`Await` on the piped flag), while the worker
+  itself outlives the turn that started it: `Ctx` is the session's
+  context, never the turn's.
 - `-session-id` is the worker-only identity seam: delegate mints it before
   spawn, and a fresh one-shot records under it instead of discovering a
   concurrent worker's session after the fact. It cannot combine with
@@ -213,7 +220,11 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   happens once, at start, an unreadable swap fails closed, and nothing
   turns the pair on where the slots are not. The menu says nothing
   about what is absent; the swarm adapter carries the read's verdict
-  and `/swarm` names it when it refuses.
+  and `/swarm` names it when it refuses. `fleetEnds` is the child's
+  half of that pipe: a pipe exists because the parent made one, not
+  because the child may rule on a review — a delegated worker that
+  cannot speak a verdict still sends its heartbeats and its tool calls,
+  and only the verdict tool is gated by the allow list.
 - `registeredNativeNames` applies the model row's gates on top of that:
   view needs vision, and what is not offered is simply not in the
   table. `applyVision` is the whole of the

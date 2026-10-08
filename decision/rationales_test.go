@@ -1,9 +1,5 @@
 package decision_test
 
-// The reviewer rationale shapes in the live store's history (SPEC_DECISION,
-// training): every distinct correction text among the denied rows, with the
-// label the export must read. Pinned as fixtures; the parse is not allowed
-// to learn a shape the store has not carried.
 var liveRationales = []struct {
 	text  string
 	label string

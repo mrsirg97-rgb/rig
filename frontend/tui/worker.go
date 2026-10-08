@@ -7,8 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-// drainInbox hands the returned workers over as a turn. The block is painted as
-// the turn's own line, because from here on it is what the model was told.
 func (t *tui) drainInbox(ctx context.Context) (string, bool) {
 	t.mu.Lock()
 	if len(t.inbox) == 0 {

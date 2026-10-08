@@ -37,9 +37,6 @@ type Options struct {
 	Env      any
 	Status   func(context.Context) Status
 
-	// StopWorkers ends every delegated worker. It is the interrupt gesture for
-	// the moment there is no turn to interrupt; a session without a delegate
-	// passes nothing and the stop button keeps answering only turns.
 	StopWorkers func()
 }
 

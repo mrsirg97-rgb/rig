@@ -7,14 +7,6 @@ import (
 	"sync"
 )
 
-/*
-pipeTransport
-
-	pipeTransport crosses a process boundary: a send is one encoded frame per line on the writer, acked on the write,
-	and a receive reads frames off the reader on its own goroutine until the far end closes it or the context ends.
-	the parent holds the read end and publishes what arrives as the child's member; the child holds the write end
-	and is a voice on the wire, never a member of a room.
-*/
 type pipeTransport struct {
 	id  int64
 	rw  io.ReadWriter
