@@ -74,8 +74,6 @@ func (p *fleetPipe) spawnCtx() context.Context {
 	return WithFleet(p.ctx, p.id, p.w)
 }
 
-// into carries the fleet end onto a context the caller owns, so a worker that
-// outlives the call that started it can be bound to a context of its own.
 func (p *fleetPipe) into(ctx context.Context) context.Context {
 	return WithFleet(ctx, p.id, p.w)
 }

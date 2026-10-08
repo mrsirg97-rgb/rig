@@ -111,7 +111,12 @@ A command job's fire skips the busy probe and
   may cancel; `Wait` reads the outcome once the log and the record are
   on disk. `Delegate` keeps the synchronous shape verbatim for the
   swarm, the review fire and the piped delegate tool, so there is one
-  implementation of both.
+  implementation of both. A `Delegation` is the handed-off worker:
+  everything that could refuse it — the seams, the recursion marker,
+  the residency gate, the record, the jail — has already passed and the
+  process is running when it comes back; `Wait` is the only wait, and
+  the delegate tool, which answers its turn immediately, is just the
+  caller that does not call it until the worker is done.
 
 - `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE, the model
   resolution and gate of SPEC_WORKERS): the model resolves at claim
@@ -276,4 +281,7 @@ A command job's fire skips the busy probe and
   own calls (2.14.0), which is what lets a delegated worker's band row
   name the call it is in. The child side is `Fleet()`: with the env set it marks fd 3
   close-on-exec, so no tool's subprocess inherits the pipe, and returns
-  the transport the one-shot frontend speaks through.
+  the transport the one-shot frontend speaks through. `into` carries
+  the fleet end onto a context the caller owns, so a worker that
+  outlives the call that started it can be bound to a context of its
+  own.

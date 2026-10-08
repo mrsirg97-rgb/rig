@@ -101,11 +101,10 @@ func resolveWorkerModel(in DelegateInput) (string, string, error) {
 	row, canonical, err := resolveResidentModel(in.Fetch, in.SwapURL, table)
 	if err != nil {
 		var noRow noRowError
-		if !errors.As(err, &noRow) {
-			row, canonical = "", ""
-		} else {
+		if errors.As(err, &noRow) {
 			return "", "", err
 		}
+		row, canonical = "", ""
 	}
 	if row != "" {
 		return row, canonical, nil
@@ -137,11 +136,6 @@ func delegateTimeout(t time.Duration) time.Duration {
 	return t
 }
 
-// Delegation is a worker that has been handed off: everything that could refuse
-// it (the seams, the recursion guard, the residency gate, the record, the jail)
-// already passed, and the process is running. Wait collects the outcome; it is
-// the only wait, and the delegate tool — which answers its turn immediately —
-// is simply the caller that does not call it until the worker is done.
 type Delegation struct {
 	ID      string
 	Session string
@@ -156,8 +150,6 @@ type delegateOutcome struct {
 	err error
 }
 
-// Wait blocks until the worker exits and its run log and scheduler record are
-// on disk. Delegate is Start and Wait; there is no second path.
 func (d Delegation) Wait() (DelegateResult, error) {
 	if d.done == nil {
 		return DelegateResult{}, fmt.Errorf("delegate: nothing was delegated (wait on a delegation only after DelegateStart accepted it)")
