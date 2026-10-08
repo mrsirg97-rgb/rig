@@ -26,7 +26,12 @@ seams).
   tool consumes the opened `sched.DB` (the one `global.sqlite`),
   `sched.Crontab`, the runner command, and the fleet's model (the fire-time
   default the description names; the tool carries no worker default of its
-  own).
+  own). Create takes one job whole — the schedule (a five-field cron, or
+  `once` with `at`), the work (a prompt for a worker, or a command line
+  for no model) and the limits — and a zero value leaves each field to
+  the store's default; update takes the same fields as they change, the
+  job named by the id on the verb itself, as every other verb names its
+  job.
 
 ## How it is consumed
 

@@ -29,10 +29,6 @@ type Scheduler interface {
 	Repair(ctx context.Context, id string) (string, error)
 }
 
-// CreateInput is one job as create takes it: the schedule (a 5-field
-// cron, or "once" with At), the work (a Prompt for a worker, or a
-// Command line for no model), and the limits. A zero value leaves each
-// field to the store's default.
 type CreateInput struct {
 	Name      string
 	Prompt    string
@@ -45,8 +41,6 @@ type CreateInput struct {
 	Budget    float64
 }
 
-// UpdateInput is the same fields as they change; the job is named by id
-// on the verb itself, as every other verb names its job.
 type UpdateInput struct {
 	Name      string
 	Prompt    string
