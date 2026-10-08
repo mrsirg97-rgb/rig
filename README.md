@@ -4,35 +4,200 @@ A small operating system for agents. The kernel is a few hundred lines.
 
 rig assembles context, streams the model, executes tool calls, returns results, and repeats. The TUI, piped CLI, headless worker, and dashboard share the same session, task, memory, and scheduler stores.
 
+## install
+
+One line, and the rest is `docs/SETUP.md`:
+
+```sh
+curl -fsSL https://tryrig.ai/install.sh | sh
+```
+
+POSIX sh, no Go, no sudo, installs to `~/.local/bin`; the release
+binary, `go install`, `make install`, and `rig -update` are the other
+paths, all documented in `docs/SETUP.md`.
+
+### first run
+
+```sh
+./rig --base-url $ENDPOINT --model $NAME
+```
+
+rig needs an OpenAI-compatible SSE endpoint and a model ID, and a row
+for that model — the binary ships no model rows, so naming an ID the
+table doesn't know refuses at startup. The endpoint defaults to
+`http://127.0.0.1:8090/v1`; there is no model default, and a run
+without one refuses at start, naming the three ways to set it
+(`--model`, `RIG_MODEL`, the `model` key in `settings.json`). The TUI
+is the frontend when stdout is a terminal, the piped CLI otherwise.
+For scripts, run `rig -p "the task"`.
+
+#### in a session
+
+- **tools**: the menu below; results capped, refusals named.
+- **the queue**: `todo` is the project's present (worktrees share one board); `claim` takes the next unblocked task, `complete` lands it, tasks link with `requires`/`blocks`.
+- **memory**: `rem learn`/`recall`/`reflect`/`prune` at the project's scope.
+- **schedules**: `scheduler` puts a job on the crontab; a job is a one-shot `rig -p` in its own cwd, jailed by default.
+- **the swarm**: `swarm start 2` drains the queue (the count rides start, capped at 16; `budget=5` caps the spend): workers claim, run one-shot, and submit; reviewers accept or reject.
+- **resume**: `sessions` lists the vitals; `rig --resume <id>` replays a session from the state store in one read-only transaction.
+
+The semantics behind all of it: `docs/USAGE.md`.
+
+### configuration
+
+Configuration lives in `~/.rig/` (`$RIG_HOME` moves it); every file is optional, every key resolves flag > env > file > embedded default, and a malformed file fails startup naming the file and the field.
+
+**`settings.json`** — the knobs, flat, by their env names. These two
+are the ones a run needs; everything else keeps its default:
+
+```json
+{
+  "model": "local",
+  "baseUrl": "http://127.0.0.1:8090/v1"
+}
+```
+
+**`models.json`** — one row per model: its window, its budget, its
+dials. This file *is* the table, so every row carries its four numbers:
+
+```json
+[
+  {
+    "id": "local",
+    "window": 393216,
+    "maxTokens": 65536,
+    "reserve": 104858,
+    "keepRecent": 98304,
+    "role": "interactive",
+    "effort": "xhigh",
+    "efforts": ["low", "medium", "xhigh"],
+    "vision": true
+  },
+  {
+    "id": "sonnet",
+    "window": 200000,
+    "maxTokens": 8192,
+    "reserve": 16384,
+    "keepRecent": 40000,
+    "provider": "openrouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "apiKey": "sk-or-…",
+    "reasoning": "reasoning"
+  }
+]
+```
+
+A hosted endpoint (OpenRouter, DeepSeek, any remote OpenAI-compatible
+server) is a model row, not a new provider: `remote` or `provider`,
+`baseUrl`, `apiKey`, bounded 429/5xx retry, and cost accounting that
+feeds the TUI footer, the swarm's `budget=`, and a job's `budget`.
+Switch rows any time mid-session with `/models sonnet`.
+
 ## what's different
 
-**the engine.** One thread touches the session, always: the turn runs on an event loop — one consumer, many producers, work arriving as closures ordered by priority then arrival. "Parallel tool calls are goroutines that *post their completion*; the loop applies completions in call order; nothing needs a lock except the queue" (`specs/SPEC_EVT.md`). Three reads run beside each other and land in the order the model asked, as if nothing ran in parallel. The fleet shares the loop: the room posts below the turn's own events, "so a worker's message runs in the gaps of a turn and never ahead of it" (`specs/SPEC_EVT.md` 8). And the runtime names no concrete tool, provider, policy, frontend, or middleware: one file plus one registration line extends it.
+**the engine.** One thread touches the session, and it is the loop.
+Input, the model's stream, tool completions, and the fleet's messages
+all arrive as closures on a single queue, ordered by priority first and
+arrival second. Only the consumer touches the transcript, so there is
+nothing to lock — the queue is the one synchronization point, and
+nothing races. It removes time too: nothing polls, nothing sleeps on a
+timeout; a step that must wait on the world spawns a goroutine and
+posts its completion back, because the event *is* the wakeup.
 
-**the decision pipeline.** The gates record what they decide — the refusal, the skip, the approval — into one sqlite store of questions, answers, confidences, and verdicts. The rule that names the shape: "an answer is a proposal an LLM reviews, never an action" (`specs/SPEC_DECISION.md`). The decision model trains from those same rows: the settled rows go out, a candidate checkpoint comes back, and it serves only once it beats the constant baseline and the incumbent on every question — a tie is not a beat (`specs/SPEC_DECISION.md` 2.13.0).
+Order is guaranteed. A parallel tool call is a goroutine that posts its
+completion, and completions are applied in call order: three reads run
+beside each other and land in the order the model asked, exactly as if
+nothing ran in parallel. That is batching — admitted calls (reads,
+views, fetches, delegates) run beside each other eight at a time, and
+anything with an effects lands as a barrier between them. The model
+gets concurrency; the transcript keeps its order.
 
-**words are the budget.** Everything the model is told about its tools crosses the wire every turn. The whole menu — every description plus every schema — is pinned under 15,000 characters by a case in `cmd/rig`; the wire job fails past 15,500, the two numbers carried in the job's environment (`specs/SPEC_CORE.md`, `specs/SPEC_BUILD.md`). Nothing is goldened: `scripts/wire-check` renders the request bodies at the merge-base and at the head and posts their diff, so a byte that moves is reviewed, not trusted — the byte-stable prefix is why 99% of prompt tokens serve from cache.
+Broadcast rides the same queue. The fleet — delegate workers,
+reviewers, the swarm's notices — posts its messages at a priority below
+the turn's own events, so a worker's message runs in the gaps of a turn
+and never ahead of it. A busy session delays the chatter and loses
+nothing, because the stores hold the facts. And the runtime names no
+concrete tool, provider, policy, frontend, or middleware: one file plus
+one registration line extends it.
 
-**a worker does, the session decides.** "The verbs that judge or delete shared state belong to the session that owns the state" (`specs/SPEC_WORKERS.md`); the worker gets the doing set — `bash read write edit view python web rem` — and the operator's verbs (`todo` prune/accept/reject/move, `scheduler` remove, `plugin` delete) leave its menu and refuse at its gate (`specs/SPEC_DELEGATE.md`). The hand-off is async: the turn that delegates gets one line naming the worker, and the worker's last message arrives on the next turn — as the head of whatever you would have typed, in every frontend.
+**the decision pipeline.** Point rig at a small decision server and it
+runs as a sidecar over a queue of its own — no GPU negotiation, one
+URL. Three things happen: every bash call grows a pending question with
+a risk proposal, the `decide` tool joins the menu so the model hands
+over its sorting — classifying a thousand items by a typed question
+(choice, score, yes/no) instead of reading them through context — and a
+reviewer settles the pending rows in batches at the lowest priority, so
+labeling happens in idle time and nothing ever waits on it.
 
-The loop never retries: a failed call executes once and the model is told; denials are named refusals with reasons, results are capped with loud markers. State belongs to the repo: tasks, memory, and schedules carry the project's identity, shared by worktrees. Default deny at the boundary — allow-list, approval gate, pathguard, plugin provenance, worker jail; narrowing is the operator's act. Spec first: every behavior is one sentence in specs/ with a test that holds it there, and the core is frozen.
+The rule that makes it safe: an answer is a proposal an LLM reviews,
+never an action. And every question, answer, confidence, and verdict
+lands in one SQLite store beside the sessions — recording never changes
+a decision, and a store error never fails a call.
+
+That store is the training set. The pipeline is built in: a trainer is
+one Python file in the train zone, run headless, never inside a turn.
+rig exports the settled rows — an approved row keeps the proposer's
+answer, a denied row keeps the reviewer's correction — splits them
+80/20, and scores candidate, incumbent, and the constant baseline on
+the same held-out rows. Promotion is a measured win: the candidate must
+beat the baseline *and* the incumbent on every question — a tie is not
+a beat — and it lands as a rewritten line in the systemd unit, printed
+with the restart command, because rig restarts no service it does not
+own. The sidecar model is rig's own, trained on rig's own traffic.
+
+**words are the budget.** Everything the model is told about its tools
+crosses the wire every turn, so the system prompt and the tool schemas
+are lean, byte-stable, and carefully chosen. The whole menu aims under
+15,000 characters and the wire job fails the build past 15,500 —
+trimming is a decision, not a leak. Nothing is goldened: the wire job
+renders the request bodies at the merge-base and at the head and posts
+their diff, so a byte that moves is reviewed, not trusted. The
+byte-stable prefix is why 99 cents of every prompt dollar serve from
+cache.
+
+**a worker does, the session decides.** The verbs that judge or delete
+shared state belong to the session that owns the state. A delegated
+worker gets the doing set — `bash read write edit view python web rem`
+— and the session's own verbs (`todo` prune/accept/reject/move,
+`scheduler` remove, `plugin` delete) leave its menu and refuse at its
+gate; the swarm's workers inherit the same narrow set, and a reviewer
+adds one verb of its own, `verdict`. The hand-off is async: the turn
+that delegates gets one line naming the worker, and the worker's last
+message arrives on the next turn — as the head of whatever you would
+have typed, in every frontend. The same queue makes the swarm cheap:
+it orders by priority, not by source, so drain workers, reviewers, and
+your own input share the loop, the jail, and the return path.
+
+The loop never retries: a failed call executes once and the model is
+told; denials are named refusals with reasons, results are capped with
+loud markers. State belongs to the repo: tasks, memory, and schedules
+carry the project's identity, shared by worktrees. Default deny at the
+boundary — allow-list, approval gate, pathguard, plugin provenance,
+worker jail; narrowing is the operator's act. Spec first: every
+behavior is one sentence in specs/ with a test that holds it there, and
+the core is frozen.
 
 ## measured
 
-Each number names its mechanism.
+<!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
+Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-- **99.0% of 4.1B prompt tokens served from cache, over every recorded turn.** The fleet's stores hold 1,529 sessions and 36,125 turns, the earliest on 0.2.0, three days after v0.1.0. The ratio is `cache_read/prompt` from the usage table, the same arithmetic `sessions summary` uses (`TestSessionsSummaryCacheRatioFixture`); the prefix is byte-stable, so the provider's cache reuses it. The cost per turn is the curve:
+**98.8% of 5.0 billion prompt tokens served from cache**, across 2,204 sessions and 45,845 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
-|-------|--------|------|------|--------|
+|---------|--------|------|------|--------|
 | 0.x | 14,006 | 1,499 | 722 | 98.65% |
 | 1.0–1.3 | 7,440 | 933 | 676 | 99.13% |
 | 1.4–1.9 | 10,045 | 962 | 525 | 99.26% |
-| 2.x | 4,634 | 711 | 438 | 99.24% |
+| 2.0–2.9 | 7,360 | 906 | 503 | 99.09% |
+| 2.10.x | 6,994 | 2,419 | 590 | 97.38% |
 
-The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery; the kink is visible. One SQL read of the state store: the store is the receipt.
-- **7k byte-stable preamble.** The system prompt, the tool schemas, and the append-only transcript are a few thousand bytes, pinned by `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`, and `TestSystemPromptIsByteStableAcrossBuilds` (and the wire job's diff, which renders the request bodies at the merge-base and at the head), so a stray timestamp cannot silently kill the cache.
-- **650 lines for the swarm.** The supervisor board's non-test Go: claim, spawn, complete, verdict, reap, and the status throttle.
-- **45,941 lines of Go, 72,411 lines of tests.** Core and loop are stdlib-only; the one store dependency is pure-Go SQLite.
+The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery — the kink is visible. The 2.10.x row is the fleet's own traffic: swarm workers and delegates are short-lived sessions whose first turns cannot hit a cache that does not exist yet, and the models rotate; the interactive sessions of that era hold the ~98% line.
+
+**A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
+
+**409 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **650 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **45,985 lines of Go, 72,565 of tests.** The one store dependency is pure-Go SQLite.
+
+<!-- measured:end -->
 
 ## the os
 
@@ -73,50 +238,22 @@ them with `--allow`:
 | `verdict` | deliver the reviewer's one word on work a worker was asked to review (registered only in a fleet worker that holds the pipe) |
 | `plugin` | the door into your python plugins: run one, read its contract, or tend the ecosystem (list, create, delete, reload) |
 
-Every tool result is capped. Repeated identical failures are bounded. An
-optional round cap limits calls per turn. A failed call executes once.
-
-## install
-
-One line, and the rest is `docs/SETUP.md`:
-
-```sh
-curl -fsSL https://tryrig.ai/install.sh | sh
-```
-
-POSIX sh, no Go, no sudo, installs to `~/.local/bin`; the release
-binary, `go install`, `make install`, and `rig -update` are the other
-paths, all documented in `docs/SETUP.md`.
-
-## first run
-
-```sh
-./rig --base-url $ENDPOINT --model $NAME
-```
-
-rig needs an OpenAI-compatible SSE endpoint and a model ID. The endpoint defaults to `http://127.0.0.1:8090/v1`; there is no model default. a run without one refuses at start, naming the three ways to set it (`--model`, `RIG_MODEL`, the `model` key in `settings.json`). The TUI is the frontend when stdout is a terminal, the piped CLI otherwise. For scripts, run `./rig -p "the task"`.
-
-## in a session
-
-- **tools**: the menu above; results capped, refusals named.
-- **the queue**: `todo` is the project's present (worktrees share one board); `claim` takes the next unblocked task, `complete` lands it, tasks link with `requires`/`blocks`.
-- **memory**: `rem learn`/`recall`/`reflect`/`prune` at the project's scope.
-- **schedules**: `scheduler` puts a job on the crontab; a job is a one-shot `rig -p` in its own cwd, jailed by default.
-- **the swarm**: `swarm start 2` drains the queue (the count rides start, capped at 16; `budget=5` caps the spend): workers claim, run one-shot, and submit; reviewers accept or reject.
-- **resume**: `sessions` lists the vitals; `rig --resume <id>` replays a session from the state store in one read-only transaction.
-
-The semantics behind all of it: `docs/USAGE.md`.
-
-## configuration
-
-Configuration lives in `~/.rig/` (`$RIG_HOME` moves it); every file is optional, every key resolves flag > env > file > embedded default, and a malformed file fails startup naming the file and the field. `docs/SETUP.md` owns every knob: the files, the knob table, the sandbox, the model table, hosted rows, the dashboard. A hosted endpoint (OpenRouter, DeepSeek, any remote OpenAI-compatible server) is a model row, not a new provider: `remote`/`provider`, `baseUrl`, `apiKey`, bounded 429/5xx retry, cost accounting and `budget=` caps — one row in `models.json` (`docs/SETUP.md`, `specs/SPEC_HOSTED.md`).
+Every tool result is capped. Repeated identical failures are bounded.
+An optional round cap limits calls per turn. A failed call executes
+once. A delegated or swarm worker runs a narrower board: the doing set
+(`bash`, `read`, `write`, `edit`, `view`, `python`, `web`, `rem`) — the
+session's verbs (`todo` prune/accept/reject/move, `scheduler` remove,
+`plugin` `delete`) are off its menu and refused at its gate, and only a
+reviewer holds `verdict`.
 
 ## plugins
 
-A Python plugin is one file and one tool — `run` and `schema`, no build
-step; model-authored plugins land in the pending zone and the operator
-installs them. The contract, the zones, and the train zone:
-`docs/PLUGINS.md`.
+A Python plugin is one file and one tool — `DESCRIPTION`, `SCHEMA`, a
+`run` function, no build step. It is discovered at startup and reached
+through the one `plugin` door: `run`, `schema`, and the ecosystem verbs
+(`list`, `create`, `delete`, `reload`). A model-authored plugin lands
+in the pending zone and stays untrusted until the operator installs it.
+The contract, the zones, and the train zone: `docs/PLUGINS.md`.
 
 ## the dashboard
 

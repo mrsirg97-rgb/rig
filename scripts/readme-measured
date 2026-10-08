@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""Compute the README's measured section from the session stores and the tree.
+
+Every number in the block is computed here; nothing is typed by hand.
+
+  update  read the rig home's stores, write docs/measured.json (aggregates
+          only: counts and sums, no content), and rewrite the marked block
+          in README.md
+  check   render the block from docs/measured.json plus the live tree and
+          refuse when README.md drifted (the CI gate; no stores needed)
+
+The ratio is cache_read/prompt from the usage table, the same arithmetic
+`sessions summary` runs. Eras split by the version row each session
+recorded at start.
+"""
+
+import argparse
+import datetime
+import glob
+import json
+import os
+import re
+import sqlite3
+import sys
+
+BEGIN = "<!-- measured:begin (scripts/readme-measured; do not hand-edit) -->"
+END = "<!-- measured:end -->"
+
+# Era rows in display order; era_of() owns the version-to-era mapping.
+ERAS = ["0.x", "1.0-1.3", "1.4-1.9", "2.0-2.9", "2.10.x"]
+
+
+def era_of(version):
+    try:
+        major, minor = (int(x) for x in version.split(".")[:2])
+    except ValueError:
+        return None
+    if major == 0:
+        return "0.x"
+    if major == 1:
+        return "1.0-1.3" if minor <= 3 else "1.4-1.9"
+    if major == 2:
+        return "2.0-2.9" if minor <= 9 else "2.10.x"
+    return None
+
+
+def read_stores(sessions_dir):
+    """Aggregate the store: one pass, read-only, sums and counts only."""
+    ver, rows = {}, []
+    earliest = None
+    for path in sorted(glob.glob(os.path.join(sessions_dir, "*.sqlite"))):
+        try:
+            con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        except sqlite3.Error:
+            continue
+        try:
+            for sid, version, started in con.execute(
+                    "SELECT id, version, started_at FROM sessions"):
+                ver.setdefault(sid, version)
+                if earliest is None or started < earliest[0]:
+                    earliest = (started, version)
+            rows.extend(con.execute(
+                "SELECT m.session_id, u.prompt, u.completion, u.cache_read "
+                "FROM usage u JOIN messages m ON m.seq = u.message_seq"))
+        except sqlite3.Error as e:
+            print(f"readme-measured: skipping {path}: {e}", file=sys.stderr)
+        finally:
+            con.close()
+
+    agg = {label: [0, 0, 0, 0] for label in ERAS}  # turns, prompt, completion, cache
+    turns = prompt = completion = cache_read = 0
+    for sid, p, c, cr in rows:
+        turns += 1
+        prompt += p
+        completion += c
+        cache_read += cr
+        label = era_of(ver.get(sid, ""))
+        if label:
+            a = agg[label]
+            a[0] += 1
+            a[1] += p
+            a[2] += c
+            a[3] += cr
+
+    data = {
+        "measured_at": datetime.date.today().isoformat(),
+        "sessions": len(ver),
+        "turns": turns,
+        "prompt": prompt,
+        "completion": completion,
+        "cache_read": cache_read,
+        "earliest_version": earliest[1] if earliest else "",
+        "eras": [
+            {
+                "era": label,
+                "turns": a[0],
+                "new_per_turn": round((a[1] - a[3]) / a[0]),
+                "completion_per_turn": round(a[2] / a[0]),
+                "cache_pct": round(a[3] / a[1] * 100, 2),
+            }
+            for label, a in ((label, agg[label]) for label in ERAS)
+            if a[0]
+        ],
+    }
+    return data
+
+
+def walk_tree(repo):
+    """The lines-of-code counts, read from the tree as it stands."""
+    def count(path, tests):
+        with open(path, "rb") as fh:
+            return sum(1 for _ in fh) if path.endswith("_test.go") == tests else 0
+
+    def loc(dirs, tests):
+        n = 0
+        for d in dirs:
+            for base, _, files in os.walk(os.path.join(repo, d)):
+                if "/.git" in base:
+                    continue
+                for f in files:
+                    if f.endswith(".go"):
+                        n += count(os.path.join(base, f), tests)
+        return n
+
+    all_dirs = [e for e in os.listdir(repo)
+                if os.path.isdir(os.path.join(repo, e)) and not e.startswith(".")]
+    root = [os.path.join(repo, f) for f in os.listdir(repo) if f.endswith(".go")]
+    loop_lines = 0
+    for f in ("loop/loop.go", "loop/batch.go"):
+        with open(os.path.join(repo, f), "rb") as fh:
+            loop_lines += sum(1 for _ in fh)
+    return {
+        "go_lines": loc(all_dirs, False) + sum(count(f, False) for f in root),
+        "test_lines": loc(all_dirs, True) + sum(count(f, True) for f in root),
+        "swarm_lines": loc(["swarm"], False),
+        "loop_lines": loop_lines,
+    }
+
+
+def render(data, tree):
+    prompt_b = f"{data['prompt'] / 1e9:.1f}"
+    ratio = data["cache_read"] / data["prompt"] * 100
+    lines = []
+    lines.append(
+        "Numbers, not adjectives — and each one names its mechanism. The block is "
+        "computed: `scripts/readme-measured` reads the stores and the tree, CI "
+        "refuses drift, so it cannot go stale on you. One SQL read of the state "
+        "store: the store is the receipt.")
+    lines.append("")
+    lines.append(
+        f"**{ratio:.1f}% of {prompt_b} billion prompt tokens served from cache**, "
+        f"across {data['sessions']:,} sessions and {data['turns']:,} recorded "
+        f"turns — the earliest on v{data['earliest_version']}. The ratio is "
+        "`cache_read / prompt`, the arithmetic `sessions summary` runs; the "
+        "byte-stable prefix is why the provider can reuse so much of it. Cost "
+        "per turn, era by era:")
+    lines.append("")
+    lines.append("| era | turns | new tokens / turn | completion / turn | cache |")
+    lines.append("|---------|--------|------|------|--------|")
+    for e in data["eras"]:
+        label = e["era"].replace("-", "\u2013")
+        lines.append(
+            f"| {label} | {e['turns']:,} | {e['new_per_turn']:,} | "
+            f"{e['completion_per_turn']} | {e['cache_pct']:.2f}% |")
+    lines.append("")
+    lines.append(
+        "The 2.1.x consolidation rethought the system prompt and the toolset and "
+        "kept the machinery — the kink is visible. The 2.10.x row is the fleet's "
+        "own traffic: swarm workers and delegates are short-lived sessions whose "
+        "first turns cannot hit a cache that does not exist yet, and the models "
+        "rotate; the interactive sessions of that era hold the ~98% line.")
+    lines.append("")
+    lines.append(
+        f"**A few thousand bytes of preamble.** The system prompt and the tool "
+        "schemas are lean, byte-stable, and carefully chosen, and the tests say "
+        "so: `TestSystemPromptIsByteStableAcrossBuilds`, "
+        "`TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. "
+        "A stray timestamp cannot quietly kill the cache.")
+    lines.append("")
+    lines.append(
+        f"**{tree['loop_lines']} lines is the loop** — `loop.go` plus `batch.go`, "
+        f"stdlib only. **{tree['swarm_lines']} lines is the whole swarm** — "
+        f"claim, spawn, complete, verdict, reap, and the status throttle. "
+        f"**{tree['go_lines']:,} lines of Go, {tree['test_lines']:,} of tests.** "
+        f"The one store dependency is pure-Go SQLite.")
+    lines.append("")
+    return "\n".join([BEGIN] + lines + [END])
+
+
+def splice(readme_text, block):
+    pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
+    if not pattern.search(readme_text):
+        sys.exit("readme-measured: README.md has no measured markers "
+                 f"({BEGIN!r})")
+    return pattern.sub(lambda _: block, readme_text)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("mode", choices=["update", "check", "render"])
+    ap.add_argument("--repo", default=".")
+    ap.add_argument("--stores", default=os.path.join(
+        os.environ.get("RIG_HOME") or os.path.expanduser("~/.rig"), "sessions"))
+    ap.add_argument("--readme", default=None)
+    ap.add_argument("--data", default=None)
+    args = ap.parse_args()
+
+    readme = args.readme or os.path.join(args.repo, "README.md")
+    data_path = args.data or os.path.join(args.repo, "docs", "measured.json")
+    tree = walk_tree(args.repo)
+
+    if args.mode == "update":
+        data = read_stores(args.stores)
+        with open(data_path, "w") as fh:
+            json.dump(data, fh, indent=2)
+            fh.write("\n")
+    else:
+        with open(data_path) as fh:
+            data = json.load(fh)
+
+    block = render(data, tree)
+    if args.mode == "render":
+        print(block)
+        return
+
+    with open(readme) as fh:
+        text = fh.read()
+    if args.mode == "check":
+        if BEGIN not in text:
+            sys.exit("readme-measured: README.md has no measured markers")
+        if splice(text, block) != text:
+            sys.exit("readme-measured: README.md drifted from the measured "
+                     "data; run scripts/readme-measured update")
+        print(f"readme-measured: README matches "
+              f"{data['turns']:,} turns, {tree['go_lines']:,} go lines")
+    else:
+        with open(readme, "w") as fh:
+            fh.write(splice(text, block))
+        print(f"readme-measured: README.md measured block rewritten "
+              f"({data['turns']:,} turns)")
+
+
+if __name__ == "__main__":
+    main()

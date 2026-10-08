@@ -1,0 +1,46 @@
+{
+  "measured_at": "2026-10-08",
+  "sessions": 2204,
+  "turns": 45845,
+  "prompt": 5048642999,
+  "completion": 28239601,
+  "cache_read": 4987461420,
+  "earliest_version": "0.2.0",
+  "eras": [
+    {
+      "era": "0.x",
+      "turns": 14006,
+      "new_per_turn": 1499,
+      "completion_per_turn": 722,
+      "cache_pct": 98.65
+    },
+    {
+      "era": "1.0-1.3",
+      "turns": 7440,
+      "new_per_turn": 933,
+      "completion_per_turn": 676,
+      "cache_pct": 99.13
+    },
+    {
+      "era": "1.4-1.9",
+      "turns": 10045,
+      "new_per_turn": 962,
+      "completion_per_turn": 525,
+      "cache_pct": 99.26
+    },
+    {
+      "era": "2.0-2.9",
+      "turns": 7360,
+      "new_per_turn": 906,
+      "completion_per_turn": 503,
+      "cache_pct": 99.09
+    },
+    {
+      "era": "2.10.x",
+      "turns": 6994,
+      "new_per_turn": 2419,
+      "completion_per_turn": 590,
+      "cache_pct": 97.38
+    }
+  ]
+}

@@ -21,6 +21,9 @@ jobs:
 
       # The tag is asserted against the Version const before any asset is
       # built: a tag that does not equal "v" + the version refuses to ship.
+      - name: assert the measured block matches the tree
+        run: python3 scripts/readme-measured check
+
       - name: assert the tag matches the Version const
         id: assert
         run: |
