@@ -9,12 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
-/*
-Transport
-
-	Transport provides the abstraction for Members to communicate with each other in a room.
-	it defines the minimum contract necessary for send/receive and acknowledgements
-*/
 type Transport interface {
 	Id() int64
 	Send(ctx context.Context, callback func(ack error), messages ...Message)
@@ -22,15 +16,6 @@ type Transport interface {
 	Close()
 }
 
-/*
-loopTransport
-
-	loopTransport delivers through the event loop: a send is a closure posted at the transport's priority,
-	the ack is the post (the queue is the durability, an event stays until the consumer runs it),
-	and the receive is the callback the closure resolves to on the loop's goroutine.
-	a heartbeat, or a snapshot (core.Snapshot), is a state and not a story: one waits per sender,
-	and a later one before it ran replaces its value instead of posting again.
-*/
 type loopTransport struct {
 	id       int64
 	engine   evt.Engine
@@ -117,9 +102,7 @@ func (t *loopTransport) Recv(ctx context.Context, callback func(err error, messa
 	t.mu.Unlock()
 	context.AfterFunc(ctx, func() {
 		t.mu.Lock()
-		if t.recv != nil {
-			t.recv = nil
-		}
+		t.recv = nil
 		t.mu.Unlock()
 		callback(ctx.Err())
 	})

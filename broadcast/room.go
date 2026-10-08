@@ -9,16 +9,6 @@ import (
 	"sync"
 )
 
-/*
-Room
-
-	Rooms are groups of clients, represented as Member. This becomes the message passing abstraction.
-	adding a member will register it in the room and make it available to broadcast from other members.
-	each member can publish messages to the entire group or forward messages to individual users.
-	a broadcast fans out to every other member and collects one ack per member; the error names the members that did not take it.
-	the room is built with the transport its members speak through, so the room never names one.
-	a member that needs no name is minted: the room issues the id below every id it has ever seen, so a minted id never collides.
-*/
 type Room interface {
 	Id() string
 	Add(origin int64) Member

@@ -22,7 +22,9 @@ no quorum. Imports `core` and `evt` only.
   durability and an event stays until the consumer runs it; the receive
   is the callback the closure resolves to on the loop's goroutine; one
   heartbeat waits per member, a second one before the first ran is not
-  posted. A subscriber's context ending is reported to it once and ends
+  posted. A heartbeat, or a snapshot (`core.Snapshot`), is a state and
+  not a story: a later one replaces the waiting value instead of
+  posting again. A subscriber's context ending is reported to it once and ends
   the deliveries.
 - `member.go`: `Member`, a `Transport` placed in a `Room`: `Forward` to
   itself, `Publish` to the room, `Subscribe` to what arrives, `Leave`
@@ -37,6 +39,8 @@ no quorum. Imports `core` and `evt` only.
   through (`NewRoom(id, func(origin) Transport)`): `Add`, `Remove`,
   sorted `Members`, and `Broadcast`, a fan-out to every other member
   collecting one ack each; the error names the members that missed it.
+  A minted member takes the id below every id the room has ever seen,
+  so a minted id never collides.
   Safe for many goroutines; the loop is still the one consumer.
 - `pipe.go`: the pipe transport, `NewPipeTransport(id, rw, enc)`, for
   a member whose other end is another process: a send is one encoded
@@ -52,7 +56,8 @@ no quorum. Imports `core` and `evt` only.
   process: the frame is origin, ok, kind, payload, and the kind names
   the `core` event (`notice`, `swarm_status`, `verdict`, `phase`,
   `reasoning`, `tool_start`); an event with no kind refuses to cross, an unknown kind
-  refuses to land. A worker's `ReasoningDelta` crosses as itself; the
+  refuses to land; a frame with no kind is a heartbeat. A worker's
+  `ReasoningDelta` crosses as itself; the
   member that minted the worker's voice is the one that names what it is
   thinking about.
 

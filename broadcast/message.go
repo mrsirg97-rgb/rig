@@ -4,14 +4,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-/*
-Message
-
-	Message is the communication contract for Member.
-	it provides both the origin (the member), member health, and the event it carries
-	it can be utilized for both heartbeat protocol and message passing
-	a message carrying no event is a heartbeat
-*/
 type Message interface {
 	Origin() int64
 	Ok() bool
