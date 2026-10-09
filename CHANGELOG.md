@@ -1,4 +1,27 @@
 # Changelog
+## [2.14.10]: the report that came back as a short write
+
+A spec-audit worker ran nine and a half hours, wrote its fourteen-kilobyte
+report, exited 0 — and the session read `delegate: spawn: spawn: short
+write`, exit -1, 0s, and fired the group again. The spawn's output
+capture keeps the first and last 128 KB of a child's stream; a write
+that crossed the head's edge was trimmed to the room left and the
+capture returned the trimmed length. `os/exec` copies the pipe with
+`io.Copy`, which reads a short count as `io.ErrShortWrite`, stops
+copying, and fails the run: the child's next write meets a closed pipe,
+and whatever it printed after — the report — is gone. Every worker
+that talks past 128 KB hit it at the crossing write; long workers
+always do.
+
+- **the capture accepts every byte it is handed** (`store/scheduler`):
+  `capture.Write` returns the length it was given, keeping the head and
+  tail it always kept. A worker that talks past the cap is a result
+  again, its report in the tail.
+- **the delegate band's call row takes the warn color**
+  (`frontend/tui`): `#8 read specs/SPEC_HARDENING.md` paints like
+  `auto`, the ` · ` and the age stay dim, the `—` before a first call
+  stays dim; the text and its width do not move. The goldens move by
+  that row only.
 ## [2.14.9]: the cap on the fleet
 
 An audit fanned out eight delegates on one slot and ran nine hours. The

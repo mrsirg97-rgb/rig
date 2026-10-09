@@ -387,3 +387,26 @@ func TestABigReturnPaintsThePreviewBound(t *testing.T) {
 		t.Fatalf("the preview painted past its bound: %s", plain[len(plain)-3000:])
 	}
 }
+
+func TestTheCallRowPaintsTheCallWarnAndTheAgeDim(t *testing.T) {
+	th, _ := ResolveTheme("oled", nil, true)
+	if th.Paint(SlotWarn, "x") == th.Paint(SlotDim, "x") {
+		t.Fatal("the theme must tell warn from dim for this test to mean anything")
+	}
+	now := time.Now()
+	st := core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 8, Role: "delegate", Task: "a", State: "running", Heartbeat: now, Tool: "read specs/SPEC_HARDENING.md", ToolAt: now.Add(-12 * time.Second)},
+	}}
+	rows := strings.Split(RenderDelegateBand(th, st, now.Add(-time.Minute), now), "\n")
+	want := th.Paint(SlotWarn, "#8 read specs/SPEC_HARDENING.md") + th.Paint(SlotDim, " · 12s")
+	if rows[2] != want {
+		t.Fatalf("the call is warn, the separator and age dim:\n got %q\nwant %q", rows[2], want)
+	}
+	if stripANSI(rows[2]) != "#8 read specs/SPEC_HARDENING.md · 12s" {
+		t.Fatalf("the visible text does not move: %q", stripANSI(rows[2]))
+	}
+	idle := strings.Split(RenderDelegateBand(th, delegateSnapshot(""), now.Add(-time.Minute), now), "\n")
+	if idle[2] != th.Paint(SlotDim, "—") {
+		t.Fatalf("no call yet stays a dim dash: %q", idle[2])
+	}
+}

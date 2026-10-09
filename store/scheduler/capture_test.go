@@ -46,3 +46,14 @@ func TestCaptureNeverGrowsBeyondTheCap(t *testing.T) {
 		t.Fatalf("capture grew to %d bytes, want at most the cap plus the marker", len(c.String()))
 	}
 }
+
+func TestCaptureAcceptsEveryByteOfAWriteThatCrossesTheHead(t *testing.T) {
+	c := newCapture(64)
+	for _, n := range []int{20, 40, 40, 200} {
+		in := bytes.Repeat([]byte("y"), n)
+		got, err := c.Write(in)
+		if err != nil || got != n {
+			t.Fatalf("Write(%d bytes) = %d, %v; an io.Writer that keeps less still accepts all of it", n, got, err)
+		}
+	}
+}

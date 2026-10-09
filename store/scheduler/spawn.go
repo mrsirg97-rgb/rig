@@ -133,6 +133,7 @@ func newCapture(cap int) *capture {
 }
 
 func (c *capture) Write(p []byte) (int, error) {
+	n := len(p)
 	if c.observe != nil {
 		c.observe(p)
 	}
@@ -140,7 +141,7 @@ func (c *capture) Write(p []byte) (int, error) {
 		room := c.headCap - len(c.head)
 		if len(p) <= room {
 			c.head = append(c.head, p...)
-			return len(p), nil
+			return n, nil
 		}
 		c.head = append(c.head, p[:room]...)
 		p = p[room:]
@@ -161,7 +162,7 @@ func (c *capture) Write(p []byte) (int, error) {
 	if kept > 0 {
 		c.tail = append(c.tail, p[len(p)-kept:]...)
 	}
-	return len(p), nil
+	return n, nil
 }
 
 func (c *capture) String() string {

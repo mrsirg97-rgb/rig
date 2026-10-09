@@ -58,7 +58,7 @@ func RenderDelegateBand(t Theme, st core.SwarmStatus, since, now time.Time) stri
 		head += t.Paint(SlotText, fmt.Sprintf("%d queued", queued)) + sep
 	}
 	head += t.Paint(SlotDim, swarmAge(now.Sub(since)))
-	return swarmRule(t) + "\n" + head + "\n" + t.Paint(SlotDim, swarmCallRow(ws, now))
+	return swarmRule(t) + "\n" + head + "\n" + swarmCallRow(t, ws, now)
 }
 
 func wordFor(n int) string {
@@ -68,16 +68,16 @@ func wordFor(n int) string {
 	return "workers"
 }
 
-func swarmCallRow(ws []core.SwarmWorker, now time.Time) string {
+func swarmCallRow(t Theme, ws []core.SwarmWorker, now time.Time) string {
 	recent, found := swarmLatestCall(ws)
 	if !found {
-		return "—"
+		return t.Paint(SlotDim, "—")
 	}
 	age := "—"
 	if !recent.ToolAt.IsZero() {
 		age = swarmAge(now.Sub(recent.ToolAt))
 	}
-	return fmt.Sprintf("#%d %s · %s", recent.ID, recent.Tool, age)
+	return t.Paint(SlotWarn, fmt.Sprintf("#%d %s", recent.ID, recent.Tool)) + t.Paint(SlotDim, " · "+age)
 }
 
 func swarmLatestCall(ws []core.SwarmWorker) (core.SwarmWorker, bool) {

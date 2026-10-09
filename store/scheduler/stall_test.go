@@ -383,3 +383,13 @@ func TestRealSpawnHandsTheChildTheFleetPipeAsFdThree(t *testing.T) {
 		t.Fatal("the child's frame on fd 3 never arrived")
 	}
 }
+
+func TestRealSpawnKeepsTheResultOfAWorkerThatTalksPastTheCap(t *testing.T) {
+	res, err := sched.RealSpawn(context.Background(), []string{"sh", "-c", "head -c 100000 /dev/zero | tr '\\0' a; head -c 100000 /dev/zero | tr '\\0' b; printf 'the report'"}, t.TempDir(), os.Environ(), nil)
+	if err != nil {
+		t.Fatalf("a worker that exits 0 past the capture cap is a result, not a spawn failure: %v", err)
+	}
+	if res.Exit != 0 || !strings.HasSuffix(strings.TrimSpace(res.Stdout), "the report") {
+		t.Fatalf("exit %d; the tail keeps the report: %q", res.Exit, res.Stdout[len(res.Stdout)-120:])
+	}
+}
