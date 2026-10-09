@@ -104,10 +104,10 @@ func enumHas(t *testing.T, enum []string, want, gone []string) {
 func TestTheHeadlessMenuDropsTheOperatorVerbsFromTheEnum(t *testing.T) {
 	enum := actionEnum(t, Menu(todoFixture(t)))
 	enumHas(t, enum,
-		[]string{"create", "claim", "start", "complete", "fail", "release", "retry", "read", "note", "notes", "finished"},
+		[]string{"create", "claim", "complete", "fail", "release", "retry", "read", "note", "notes", "finished"},
 		[]string{"prune", "accept", "reject", "move"})
-	if len(enum) != 11 {
-		t.Fatalf("the todo enum kept %d verbs, want 11", len(enum))
+	if len(enum) != 10 {
+		t.Fatalf("the todo enum kept %d verbs, want 10", len(enum))
 	}
 	enumHas(t, actionEnum(t, Menu(schedulerFixture(t))),
 		[]string{"create", "update", "list", "show", "pause", "resume", "runs", "repair"},

@@ -38,8 +38,6 @@ func (a todo) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 		return a.Create(ctx, g.Scope, item)
 	case "claim":
 		return a.Claim(ctx, g.Scope, g.Status)
-	case "start":
-		return a.Start(ctx, g.Scope, g.ID)
 	case "complete":
 		return a.Complete(ctx, g.Scope, g.ID)
 	case "fail":

@@ -22,7 +22,6 @@ type Todo interface {
 
 	Create(ctx context.Context, scope string, item todostore.CreateItem) (string, error)
 	Claim(ctx context.Context, scope, status string) (string, error)
-	Start(ctx context.Context, scope, id string) (string, error)
 	Complete(ctx context.Context, scope, id string) (string, error)
 	Fail(ctx context.Context, scope, id string) (string, error)
 	Release(ctx context.Context, scope, id string) (string, error)

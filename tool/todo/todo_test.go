@@ -117,7 +117,7 @@ func TestCreateMalformedLinksFailLoudly(t *testing.T) {
 
 func TestStateVerbsRefuseIdAbsenceLoudly(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	for _, action := range []string{"start", "complete", "fail", "retry", "note", "notes", "accept", "reject"} {
+	for _, action := range []string{"complete", "fail", "retry", "note", "notes", "accept", "reject"} {
 		if _, err := exec(t, tool, context.Background(), map[string]any{"action": action}); err == nil {
 			t.Fatalf("%s without id succeeded", action)
 		} else if want := "action '" + action + "' requires id"; err.Error() != want {
@@ -150,11 +150,11 @@ func TestExecThreadsTheSession(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := rowIDs(t, reply)[0]
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
-		t.Fatalf("start: %v", err)
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
+		t.Fatalf("complete: %v", err)
 	}
 	sessions := rawEvents(t, db)
-	if len(sessions) != 2 || sessions[0] != sess.ID || sessions[1] != sess.ID {
+	if len(sessions) != 4 || sessions[0] != sess.ID || sessions[1] != sess.ID || sessions[2] != sess.ID || sessions[3] != sess.ID {
 		t.Errorf("sessions = %v; want the threaded id", sessions)
 	}
 }
@@ -167,11 +167,11 @@ func TestAnonymousExecutivesRecordAnon(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := rowIDs(t, reply)[0]
-	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "start", "id": id}); err != nil {
-		t.Fatalf("start: %v", err)
+	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "complete", "id": id}); err != nil {
+		t.Fatalf("complete: %v", err)
 	}
 	sessions := rawEvents(t, db)
-	if len(sessions) != 2 || sessions[0] != "anon" || sessions[1] != "anon" {
+	if len(sessions) != 4 || sessions[0] != "anon" || sessions[1] != "anon" || sessions[2] != "anon" || sessions[3] != "anon" {
 		t.Errorf("anonymous sessions = %v", sessions)
 	}
 }
@@ -339,8 +339,8 @@ func TestExecRefusalsSurfaceAsVoices(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := rowIDs(t, reply)[0]
-	if _, err := exec(t, tool, ctxA, map[string]any{"action": "start", "id": id}); err != nil {
-		t.Fatalf("start: %v", err)
+	if _, err := exec(t, tool, ctxA, map[string]any{"action": "claim"}); err != nil {
+		t.Fatalf("claim: %v", err)
 	}
 	if _, err := exec(t, tool, core.WithSession(context.Background(), sessB), map[string]any{"action": "complete", "id": id}); err == nil {
 		t.Fatal("foreign complete succeeded")
@@ -405,9 +405,6 @@ func TestCompleteTwiceIsIdempotentThroughTheTool(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := rowIDs(t, reply)[0]
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
-		t.Fatalf("start: %v", err)
-	}
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": id}); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
@@ -420,37 +417,6 @@ func TestCompleteTwiceIsIdempotentThroughTheTool(t *testing.T) {
 		t.Errorf("the tool reply must show the done row:\n%s", again)
 	}
 	if !strings.Contains(again, "0 open") {
-		t.Errorf("the tool reply must carry the queue summary:\n%s", again)
-	}
-	if got := len(rawEvents(t, db)); got != before {
-		t.Errorf("the no-op must write no event: %d -> %d", before, got)
-	}
-}
-
-func TestStartTwiceIsIdempotentThroughTheTool(t *testing.T) {
-	db := newDB(t)
-	tool := todoapi.New(db, todoapi.Interactive)
-	sess := core.NewSession()
-	ctx := core.WithSession(context.Background(), sess)
-	reply, err := createAll(t, tool, ctx, []map[string]any{
-		map[string]any{"text": "again"},
-	})
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	id := rowIDs(t, reply)[0]
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	before := len(rawEvents(t, db))
-	again, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id})
-	if err != nil {
-		t.Fatalf("start on an in-progress task must be a no-op success through the tool: %v", err)
-	}
-	if !strings.Contains(again, "[~] again") {
-		t.Errorf("the tool reply must show the in-progress row:\n%s", again)
-	}
-	if !strings.Contains(again, "1 open") {
 		t.Errorf("the tool reply must carry the queue summary:\n%s", again)
 	}
 	if got := len(rawEvents(t, db)); got != before {
@@ -504,7 +470,7 @@ func TestWorkerModeIsReadNoteOnly(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := rowIDs(t, reply)[0]
-	for _, action := range []string{"claim", "start", "complete", "fail", "accept", "reject"} {
+	for _, action := range []string{"claim", "complete", "fail", "accept", "reject"} {
 		args := map[string]any{"action": action}
 		if action != "claim" {
 			args["id"] = id
@@ -611,9 +577,6 @@ func TestReadAllTrueReturnsHistory(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	drop := rowIDs(t, reply)[1]
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": drop}); err != nil {
-		t.Fatalf("start: %v", err)
-	}
 	if _, err := exec(t, tool, ctx, map[string]any{"action": "complete", "id": drop}); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
@@ -691,24 +654,13 @@ func TestGlobalScopeLandsInTheGlobalQueue(t *testing.T) {
 	}
 }
 
-func TestStartAndClaimRepliesNameTheScope(t *testing.T) {
+func TestClaimRepliesNameTheScope(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	home := t.TempDir()
 	if _, err := exec(t, tool, ctx, map[string]any{
 		"action": "create", "scope": home, "text": "the work"}); err != nil {
-		t.Fatal(err)
-	}
-	started, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1", "scope": home})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(started, "\u00b7 scope "+home) {
-		t.Fatalf("the start reply must carry the scope on the row:\n%s", started)
-	}
-	if _, err := exec(t, tool, ctx, map[string]any{
-		"action": "create", "scope": home, "text": "the next"}); err != nil {
 		t.Fatal(err)
 	}
 	claimed, err := exec(t, tool, ctx, map[string]any{"action": "claim", "scope": home})
@@ -720,7 +672,7 @@ func TestStartAndClaimRepliesNameTheScope(t *testing.T) {
 	}
 }
 
-func TestStartReplyNamesTheGlobalScope(t *testing.T) {
+func TestClaimReplyNamesTheGlobalScope(t *testing.T) {
 	db := newDB(t)
 	tool := todoapi.New(db, todoapi.Interactive)
 	ctx := core.WithSession(context.Background(), core.NewSession())
@@ -728,12 +680,12 @@ func TestStartReplyNamesTheGlobalScope(t *testing.T) {
 		"action": "create", "scope": "global", "text": "the work"}); err != nil {
 		t.Fatal(err)
 	}
-	started, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": "t1", "scope": "global"})
+	claimed, err := exec(t, tool, ctx, map[string]any{"action": "claim", "scope": "global"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(started, "\u00b7 scope global") {
-		t.Fatalf("the global start reply must carry scope global:\n%s", started)
+	if !strings.Contains(claimed, "\u00b7 scope global") {
+		t.Fatalf("the global claim reply must carry scope global:\n%s", claimed)
 	}
 }
 

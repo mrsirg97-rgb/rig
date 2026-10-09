@@ -37,8 +37,8 @@ func TestReleaseRefusesAFreshForeignClaimThroughTheTool(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	id := taskIDText(t, created, "wire the guard")
-	if _, err := exec(t, tool, ctx, map[string]any{"action": "start", "id": id}); err != nil {
-		t.Fatalf("start: %v", err)
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "claim"}); err != nil {
+		t.Fatalf("claim: %v", err)
 	}
 	s := core.NewSession()
 	s.ID = "another-session"

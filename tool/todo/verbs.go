@@ -9,7 +9,7 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
-const workerBoardRefusal = "todo: the supervisor owns the board; a worker does not claim, start, complete, fail, accept, or reject its entries (findings go in note and rem)"
+const workerBoardRefusal = "todo: the supervisor owns the board; a worker does not claim, complete, fail, accept, or reject its entries (findings go in note and rem)"
 
 func sessionOf(ctx context.Context) string {
 	if s, ok := core.SessionFrom(ctx); ok && s != nil {
@@ -54,20 +54,6 @@ func (a todo) Claim(ctx context.Context, scope, status string) (string, error) {
 		return "", err
 	}
 	return todostore.Claim(ctx, a.db, p, sessionOf(ctx), status)
-}
-
-func (a todo) Start(ctx context.Context, scope, id string) (string, error) {
-	if err := a.board(); err != nil {
-		return "", err
-	}
-	p, err := resolve(scope)
-	if err != nil {
-		return "", err
-	}
-	if err := withID("start", id); err != nil {
-		return "", err
-	}
-	return todostore.Start(ctx, a.db, p, id, sessionOf(ctx), bool(a.mode))
 }
 
 func (a todo) Complete(ctx context.Context, scope, id string) (string, error) {

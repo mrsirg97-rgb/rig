@@ -403,7 +403,7 @@ fake `Swarm` seam.
   (`TestSwarmCountRidesStart`).
 - `TestWorkerModeRefusesUnclaimedStartCompleteFail` and
   `TestWorkerModeRefusesForeignStartCompleteFail`: the worker-mode store
-  doors — `start`/`complete`/`fail` refuse a task the worker does not
+  doors — `complete`/`fail` (and the store's `start`) refuse a task the worker does not
   hold, whether unclaimed or held by another — the voice names no
   takeover, and the interactive auto-start still lands solo
   (`TestSoloCompleteOnOwnPendingAutoStartsAndLandsDone`).

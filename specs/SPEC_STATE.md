@@ -451,7 +451,7 @@ decision).
   that project first and fills from global, as ever; a global write or
   read is the global memory alone; rem's `index`/`pack` refuse `global`
   by name (a map needs a directory). The label stays the resolved
-  path's base name (or `global`), and the `start`/`claim` echoes carry
+  path's base name (or `global`), and the `claim` echo carries
   `· scope <word>` on the row's details so the reply names where the
   work lives.
 - **Scope is a repo identity, not a cwd.** scope = the absolute git common
@@ -756,7 +756,7 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   `global` or a project directory path, resolved through `store/scope`
   (`~` expands at the `middleware/paths` boundary), with no cwd fallback in
   either tool and no session binding — the parameter is the binding. The
-  `start`/`claim` echoes carry `· scope <word>` on the row's details so
+  `claim` echo carries `· scope <word>` on the row's details so
   the reply names where the work lives, and the operator moves the session
   itself with `/project <path>` (SPEC_COMMANDS 4), which rides the `new`
   seam and carries that workspace's AGENTS.md. Chosen over inference

@@ -1,4 +1,29 @@
 # Changelog
+## [2.14.8]: todo loses start
+
+A task was created, started, and completed: three calls for two facts.
+`start` only flipped a row to `active` so the board could show it in
+progress, and nothing read that state — `complete` and `fail` already
+land a pending task, writing the start event themselves, and the
+swarm's `claim` already marks its holder. On a ten-task plan the brain
+spent ten round trips decorating the board.
+
+- **the tool loses `start`** (`tool/todo`, `tool/registry.json`): the
+  verbs are create, claim, complete, fail, release, retry, read, note,
+  notes, finished, and the session's prune, accept, reject, move. The
+  words say "create each task before the first edit, complete or fail
+  it when done"; the embedded system prompt says the same (`config`).
+  The headless menu shrinks with it.
+- **the command and the dashboard follow** (`command`, `frontend/web`):
+  `/todo start` is gone, `/todo done <id>` lands a pending task; the
+  dashboard's pending rows offer `done`, the `/api/todo/start` route
+  is gone.
+- **the store keeps the event** (`store/todo`): `start` stays in the
+  event log's vocabulary — history folds as before, `Complete` and
+  `Claim` still write it — and `Start` stays as the store's own door
+  (the fixtures reach for it); no tool, command or page offers it.
+- the wire moves by the removed words only (menu −40 chars); the
+  interactive menu's enum loses one value.
 ## [2.14.7]: the delegate, seen and heard
 
 The delegate's presence in the session had six ways of lying. The swarm
