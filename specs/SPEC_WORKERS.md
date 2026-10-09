@@ -157,6 +157,13 @@ cap is the operator's cache budget, not the server's `-np`: a
 llama-server prompt cache holds a few workers' prefixes, and a rotation
 wider than it re-reads every prompt from scratch.
 
+Since 2.14.11 settings `workerWindow` caps the window a worker sees: a
+process started with `RIG_DELEGATE` set takes its row with `Window`
+lowered to N and `Reserve`, `KeepRecent` and `MaxTokens` scaled by
+N/Window, so it compacts where a row of that size would. The session's
+row is untouched. It is the other half of the cache budget: entries
+grow with depth, so a shallower worker leaves room for more of them.
+
 ### 6. What stays
 
 Timeout, stall, budget, the ad-hoc run record, the log path, the

@@ -79,6 +79,18 @@ func (m Model) Check() error {
 	return nil
 }
 
+func (m Model) Capped(window int) Model {
+	if window <= 0 || window >= m.Window {
+		return m
+	}
+	scale := func(n int) int { return int(int64(n) * int64(window) / int64(m.Window)) }
+	m.Reserve = scale(m.Reserve)
+	m.KeepRecent = scale(m.KeepRecent)
+	m.MaxTokens = max(scale(m.MaxTokens), 1)
+	m.Window = window
+	return m
+}
+
 func normalize(m Model) Model {
 	if m.Provider != "" {
 		m.Remote = true

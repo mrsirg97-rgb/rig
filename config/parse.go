@@ -208,6 +208,16 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		}
 		s.MaxWorkers = v
 	}
+	if raw, ok := keys["workerWindow"]; ok {
+		v, err := jsonInt(raw)
+		if err != nil {
+			return Settings{}, fmt.Errorf("config: %s: workerWindow: %v", path, err)
+		}
+		if v < 0 {
+			return Settings{}, fmt.Errorf("config: %s: workerWindow: expected a non-negative number (0 = the row's window), got %d", path, v)
+		}
+		s.WorkerWindow = v
+	}
 	if raw, ok := keys["plugins"]; ok {
 		var obj map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &obj); err != nil {

@@ -356,3 +356,19 @@ func TestResolveEnvOverlaysHostedKeys(t *testing.T) {
 		t.Fatalf("hosted overlay = %+v", m)
 	}
 }
+
+func TestCappedScalesTheBudgetsWithTheWindow(t *testing.T) {
+	row := models.Model{ID: "huihui-alpha", Window: 393216, MaxTokens: 114688, Reserve: 114688, KeepRecent: 98304, Role: models.RoleInteractive}
+	got := row.Capped(131072)
+	if got.Window != 131072 || got.Reserve != 38229 || got.MaxTokens != 38229 || got.KeepRecent != 32768 {
+		t.Fatalf("capped = window %d reserve %d max %d keep %d, want 131072/38229/38229/32768", got.Window, got.Reserve, got.MaxTokens, got.KeepRecent)
+	}
+	if err := got.Check(); err != nil {
+		t.Fatalf("a capped row checks: %v", err)
+	}
+	for _, w := range []int{0, -1, 393216, 524288} {
+		if !reflect.DeepEqual(row.Capped(w), row) {
+			t.Fatalf("Capped(%d) changed the row; only a smaller positive window caps", w)
+		}
+	}
+}
