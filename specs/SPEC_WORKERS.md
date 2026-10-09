@@ -146,6 +146,17 @@ what is absent; `/swarm` names the reason when it refuses. The
 tool-menu budget is 15,000 characters (2.11.12), a guideline with a
 15,500 wall since 2.12.3.
 
+Since 2.14.9 settings `maxWorkers` bounds how many workers run at once,
+the session's delegates and its swarm together: one counter in the
+session process, held from spawn to exit. A delegate past the cap hands
+back `delegate: worker #n queued · N workers run at once (settings
+maxWorkers); it starts when one returns` and starts when a slot frees —
+the call never refuses for the cap, and a queued worker stopped before
+it starts returns its stop. A swarm worker waits before its spawn. The
+cap is the operator's cache budget, not the server's `-np`: a
+llama-server prompt cache holds a few workers' prefixes, and a rotation
+wider than it re-reads every prompt from scratch.
+
 ### 6. What stays
 
 Timeout, stall, budget, the ad-hoc run record, the log path, the

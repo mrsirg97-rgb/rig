@@ -1,4 +1,28 @@
 # Changelog
+## [2.14.9]: the cap on the fleet
+
+An audit fanned out eight delegates on one slot and ran nine hours. The
+model was not slow: each worker's cached prefix was 1.5–4.4 GB at depth,
+a 16 GB prompt cache holds five, and eight workers taking turns evicted
+each one just before its turn came back. Every turn re-read 74–113k
+tokens at ~565 tok/s — three minutes of prefill for half a minute of
+decode, and under two of the nine hours were generation.
+
+- **settings `maxWorkers`** (`config`): `0` (absent) is no cap; `N`
+  runs at most N workers at once, the session's delegates and its swarm
+  together, one counter held from spawn to exit (`store/scheduler`
+  `WorkerCap`). A negative or non-integer value refuses at start.
+- **a delegate past the cap queues** (`tool/delegate`): the call hands
+  back `delegate: worker #n queued · N workers run at once (settings
+  maxWorkers); it starts when one returns` and the worker starts when a
+  slot frees, returning like any other. It never refuses for the cap;
+  a queued worker stopped before it starts returns its stop and never
+  spawns. A piped (await) delegate waits on the turn's context.
+- **a swarm worker waits** (`swarm`): each drain worker holds the cap
+  around its spawn; `swarm start 8` under `maxWorkers: 3` runs three.
+- **the band counts the queue** (`frontend/tui`): `delegating · 3
+  workers · 5 queued · 2m`.
+- SPEC_WORKERS 5, SPEC_CONFIG and SETUP name the key.
 ## [2.14.8]: todo loses start
 
 A task was created, started, and completed: three calls for two facts.

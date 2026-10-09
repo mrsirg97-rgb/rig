@@ -200,6 +200,7 @@ type harness struct {
 	home    string
 	rigHome string
 	db      sched.DB
+	cap     sched.WorkerCap
 }
 
 func newHarness(t *testing.T, sessionCwd string) *harness {
@@ -250,6 +251,7 @@ func (h *harness) newToolRoom(t *testing.T, ctx context.Context, await bool, roo
 		Fetch:        fetch,
 		Spawn:        spawn,
 		Models:       modelTable(t),
+		Cap:          h.cap,
 	})
 }
 

@@ -244,6 +244,11 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newCappedHarness(t, nil)
+}
+
+func newCappedHarness(t *testing.T, workerCap sched.WorkerCap) *harness {
+	t.Helper()
 	h := &harness{}
 	h.engine = evt.NewEngine()
 	go h.engine.Start(context.Background())
@@ -286,6 +291,7 @@ func newHarness(t *testing.T) *harness {
 		Models:       func() models.Table { return modelRows(t) },
 		Engine:       h.engine,
 		Room:         h.room,
+		Cap:          workerCap,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	return h
@@ -551,6 +557,13 @@ func TestSwarmDrainsAThreeTaskQueueWithTwoWorkers(t *testing.T) {
 	h.start(t, swarm.StartOpts{Count: 2, Role: "worker"})
 	h.waitFor(t, "all three tasks in review", func() bool {
 		return h.status(t, "t1") == "review" && h.status(t, "t2") == "review" && h.status(t, "t3") == "review"
+	})
+	h.waitFor(t, "the third settled", func() bool {
+		done := 0
+		for _, r := range h.ctl.List() {
+			done += r.Done
+		}
+		return done == 3
 	})
 	if got := h.spawn.count(); got != 3 {
 		t.Fatalf("spawn calls = %d, want one per task (3)", got)
@@ -975,4 +988,18 @@ func TestStoppedWorkerIsOutBeforeTheRouterWakes(t *testing.T) {
 	if len(rows) != 1 || rows[0].State != swarm.StateExited {
 		t.Fatalf("worker rows = %+v, want the worker stopped", rows)
 	}
+}
+
+func TestSwarmWorkersPastTheCapWaitForAReturn(t *testing.T) {
+	h := newCappedHarness(t, sched.NewWorkerCap(2))
+	h.create(t, "one", "two", "three", "four")
+	h.spawn.block = make(chan struct{})
+	h.start(t, swarm.StartOpts{Count: 4, Role: "worker"})
+	h.waitFor(t, "two under the cap", func() bool { return h.spawn.count() == 2 })
+	time.Sleep(50 * time.Millisecond)
+	if got := h.spawn.count(); got != 2 {
+		t.Fatalf("spawn calls = %d, want two (maxWorkers 2 holds the other two)", got)
+	}
+	close(h.spawn.block)
+	h.waitFor(t, "the board drained", func() bool { return h.spawn.count() == 4 })
 }

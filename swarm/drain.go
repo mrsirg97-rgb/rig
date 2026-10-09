@@ -54,6 +54,10 @@ func (c *Controller) work(w *worker, id string) workResult {
 		c.loud(w, "w%d: task %s: %v", w.id, id, err)
 		return workResult{}
 	}
+	if err := c.opts.Cap.Hold(w.ctx); err != nil {
+		return workResult{holder: err}
+	}
+	defer c.opts.Cap.Free()
 	res, err := c.delegate(sched.DelegateInput{
 		DB:            c.opts.SchedDB,
 		Home:          c.opts.Home,

@@ -291,3 +291,74 @@ func TestWaitingADelegationThatNeverWasRefuses(t *testing.T) {
 		t.Fatal("a zero delegation has no worker to wait for, and says so")
 	}
 }
+
+func TestTheCapQueuesTheRestAndStartsEachAsOneReturns(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	h.cap = sched.NewWorkerCap(2)
+	release := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: release}
+	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+
+	var lines []string
+	for _, task := range []string{"one", "two", "three", "four"} {
+		out, err := tool.Exec(context.Background(), runArgs(task))
+		if err != nil {
+			t.Fatalf("a call over the cap queues, it does not fail: %v", err)
+		}
+		lines = append(lines, out)
+	}
+	if !strings.Contains(lines[1], "worker #2 started") {
+		t.Fatalf("the second fits under the cap: %q", lines[1])
+	}
+	for _, out := range lines[2:] {
+		if !strings.Contains(out, " queued · 2 workers run at once (settings maxWorkers)") {
+			t.Fatalf("a call over the cap says it queued and names the setting: %q", out)
+		}
+	}
+	waitUntil(t, "the first two", func() bool { return spawn.count() == 2 })
+	time.Sleep(50 * time.Millisecond)
+	if n := spawn.count(); n != 2 {
+		t.Fatalf("the cap holds: %d spawned while two run", n)
+	}
+	close(release)
+	done := waitForReturn(t, fe, 4)
+	if spawn.count() != 4 {
+		t.Fatalf("every queued worker ran: %d", spawn.count())
+	}
+	for _, d := range done {
+		if d.Exit != 0 {
+			t.Fatalf("a queued worker returns like any other: %+v", d)
+		}
+	}
+}
+
+func TestAQueuedWorkerStoppedBeforeItStartsReturnsAndNeverSpawns(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	h.cap = sched.NewWorkerCap(1)
+	release := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}, block: release}
+	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+	if _, err := tool.Exec(context.Background(), runArgs("runs")); err != nil {
+		t.Fatal(err)
+	}
+	out, err := tool.Exec(context.Background(), runArgs("waits"))
+	if err != nil || !strings.Contains(out, "worker #2 queued") {
+		t.Fatalf("the second queues: %q %v", out, err)
+	}
+	waitUntil(t, "the first", func() bool { return spawn.count() == 1 })
+	tool.StopAll()
+	close(release)
+	done := waitForReturn(t, fe, 2)
+	if spawn.count() != 1 {
+		t.Fatalf("a stopped queued worker never spawns: %d", spawn.count())
+	}
+	var stopped bool
+	for _, d := range done {
+		if d.N == 2 && d.Exit == -1 && strings.Contains(d.Content, "worker #2 stopped while queued") {
+			stopped = true
+		}
+	}
+	if !stopped {
+		t.Fatalf("the queued worker returns its stop: %+v", done)
+	}
+}

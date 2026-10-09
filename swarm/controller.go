@@ -81,6 +81,7 @@ type Opts struct {
 	Delegate     func(sched.DelegateInput) (sched.DelegateResult, error)
 	Engine       evt.Engine
 	Room         broadcast.Room
+	Cap          sched.WorkerCap
 }
 
 type Controller struct {

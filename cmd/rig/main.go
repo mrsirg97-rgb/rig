@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.14.8"
+const Version = "2.14.9"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -486,6 +486,7 @@ func main() {
 	piped := *prompt != ""
 	var del delegate.Delegate
 	var stopWorkers func()
+	workerCap := sched.NewWorkerCap(cfg.Settings.MaxWorkers)
 	if delegateOn {
 		del = delegate.New(delegate.Opts{
 			Ctx:          ctx,
@@ -504,6 +505,7 @@ func main() {
 			Spawn:        sched.RealSpawn,
 			Models:       func() models.Table { return r.runtime },
 			Room:         r.room,
+			Cap:          workerCap,
 		})
 		r.tools["delegate"] = del
 		stopWorkers = del.StopAll
@@ -530,6 +532,7 @@ func main() {
 			Models:       func() models.Table { return r.runtime },
 			Engine:       r.engine,
 			Room:         r.room,
+			Cap:          workerCap,
 		})
 	}
 	r.swarmWhy = swarmWhy
