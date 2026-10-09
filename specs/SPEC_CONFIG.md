@@ -538,6 +538,7 @@ env names**, lowerCamel of the env minus the `RIG_` prefix:
 | `trainPython`   | —                   | none; the `train/` zone's own interpreter (torch is two gigabytes and does not belong in the session kernel); a run without it refuses naming the key (2.13.0) |
 | `updateKey`     | `RIG_UPDATE_KEY`    | the embedded pinned release key (SPEC_BUILD 5) |
 | `workers`       | —                   | on; `false` turns the worker pair off (it replaced `workers.json`, 2.4.0) |
+| `maxWorkers`    | —                   | `0` = no cap (2.14.9: at most N workers run at once, `delegate` and the swarm together; past the cap a delegate is `queued` and a swarm worker waits; negative refuses) |
 | `defaultJobModel` | —                 | the one legacy key that stays *known* so an old file loads: named once at start, ignored, no field, no migration |
 
 The table is `config.knownSettings`: a key outside it refuses at start
@@ -546,7 +547,7 @@ filter.
 
 Shapes: `allow` and `sandboxBinds` are **JSON arrays** in the file (the
 env stays CSV for `allow`; the 0.2.0 env surface is unchanged);
-`retries`, `rounds`, `resultCap` and `reviewBatch` are integers;
+`retries`, `rounds`, `resultCap`, `reviewBatch` and `maxWorkers` are integers;
 `workers` is a bool and `plugins` an object; the rest are strings.
 `webFetchProxy` and `trafilatura` are presence-aware — their empty
 value is a choice (direct egress, the stdlib text pass). `allow`'s

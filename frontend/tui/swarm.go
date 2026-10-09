@@ -37,9 +37,14 @@ const delegateRole = "delegate"
 
 func RenderDelegateBand(t Theme, st core.SwarmStatus, since, now time.Time) string {
 	var ws []core.SwarmWorker
+	queued := 0
 	for _, w := range st.Workers {
-		if w.Role == delegateRole && w.State == "running" {
+		switch {
+		case w.Role != delegateRole:
+		case w.State == "running":
 			ws = append(ws, w)
+		case w.State == "queued":
+			queued++
 		}
 	}
 	if len(ws) == 0 || since.IsZero() {
@@ -48,8 +53,11 @@ func RenderDelegateBand(t Theme, st core.SwarmStatus, since, now time.Time) stri
 	sep := t.Paint(SlotDim, " "+t.Glyph(GlyphDot)+" ")
 	word := wordFor(len(ws))
 	head := t.Paint(SlotDim, "delegating") + sep +
-		t.Paint(SlotText, fmt.Sprintf("%d %s", len(ws), word)) + sep +
-		t.Paint(SlotDim, swarmAge(now.Sub(since)))
+		t.Paint(SlotText, fmt.Sprintf("%d %s", len(ws), word)) + sep
+	if queued > 0 {
+		head += t.Paint(SlotText, fmt.Sprintf("%d queued", queued)) + sep
+	}
+	head += t.Paint(SlotDim, swarmAge(now.Sub(since)))
 	return swarmRule(t) + "\n" + head + "\n" + t.Paint(SlotDim, swarmCallRow(ws, now))
 }
 

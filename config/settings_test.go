@@ -125,7 +125,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUnit, decisionUrl, defaultJobModel, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workers)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUnit, decisionUrl, defaultJobModel, maxWorkers, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workers)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -396,5 +396,23 @@ func TestSettingsCarryTheTrainingKeys(t *testing.T) {
 	fresh := load(t, t.TempDir(), t.TempDir())
 	if fresh.Settings.TrainPython != "" || fresh.Settings.DecisionUnit != "" {
 		t.Fatalf("a fresh home carries no training keys: %+v", fresh.Settings)
+	}
+}
+
+func TestMaxWorkersIsTheOperators(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	if cfg.Settings.MaxWorkers != 0 {
+		t.Fatalf("absent maxWorkers = %d, want 0 (no cap)", cfg.Settings.MaxWorkers)
+	}
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"maxWorkers": 3}`)
+	cfg = load(t, dir, t.TempDir())
+	if cfg.Settings.MaxWorkers != 3 {
+		t.Fatalf("maxWorkers = %d, want 3", cfg.Settings.MaxWorkers)
+	}
+	dir = t.TempDir()
+	write(t, dir, "settings.json", `{"maxWorkers": -1}`)
+	if _, err := config.Load(dir, t.TempDir()); err == nil || !strings.Contains(err.Error(), "maxWorkers: expected a non-negative number (0 = no cap), got -1") {
+		t.Fatalf("a negative cap refuses naming the key: %v", err)
 	}
 }

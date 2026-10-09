@@ -198,6 +198,16 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		}
 		s.Workers = &v
 	}
+	if raw, ok := keys["maxWorkers"]; ok {
+		v, err := jsonInt(raw)
+		if err != nil {
+			return Settings{}, fmt.Errorf("config: %s: maxWorkers: %v", path, err)
+		}
+		if v < 0 {
+			return Settings{}, fmt.Errorf("config: %s: maxWorkers: expected a non-negative number (0 = no cap), got %d", path, v)
+		}
+		s.MaxWorkers = v
+	}
 	if raw, ok := keys["plugins"]; ok {
 		var obj map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &obj); err != nil {
