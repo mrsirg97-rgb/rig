@@ -21,6 +21,7 @@ type Settings struct {
 	Trafilatura   *string
 	Workers       *bool
 	MaxWorkers    int
+	WorkerWindow  int
 	SwapURL       string
 	DecisionURL   string
 	DecisionUnit  string
@@ -41,7 +42,7 @@ type SettingsPlugins struct {
 	Max int
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUnit", "decisionUrl", "defaultJobModel", "maxWorkers", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workers"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUnit", "decisionUrl", "defaultJobModel", "maxWorkers", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workerWindow", "workers"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -157,6 +158,9 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.MaxWorkers != 0 {
 		out.MaxWorkers = file.MaxWorkers
+	}
+	if file.WorkerWindow != 0 {
+		out.WorkerWindow = file.WorkerWindow
 	}
 	return out
 }

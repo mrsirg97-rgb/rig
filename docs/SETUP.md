@@ -148,6 +148,7 @@ creating session's.
 | plugin cap    |                |                      | `plugins` (object) | no cap; `plugins.max` caps the live plugin set and an over-cap load is skipped naming the cap — the number is read at startup, so raising it takes a restart |
 | worker pair   |                |                      | `workers`         | on; `false` turns `delegate` and the swarm off |
 | worker cap    |                |                      | `maxWorkers`      | `0` = no cap; `N` runs at most N workers at once across `delegate` and the swarm — a delegate past the cap hands back `queued` and starts when one returns, a swarm worker waits for its turn; negative or non-integer refuses |
+| worker window |                |                      | `workerWindow`    | `0` = the row's window; `N` caps every worker's window at N tokens — reserve, keepRecent and maxTokens scale by the same ratio, so a worker compacts where a row of that size would; the session keeps its full window; negative or non-integer refuses |
 | model row     |                | `RIG_MODEL_WINDOW` (+ `_MAX_TOKENS`, `_RESERVE`, `_KEEP_RECENT`, `_RETRIES`; and `_BASE_URL`, `_API_KEY`, `_REASONING`, `_PROVIDER`, `_REMOTE`); `_CONCURRENCY` does not exist: it is ignored with no line at all | `models.json` | none: the table is the operator's file (`RIG_MODEL_WINDOW` alone still mints a row for the active id) |
 
 **On the worker sandbox** (`specs/SPEC_SANDBOX.md` 1, 5): `jailed` (the

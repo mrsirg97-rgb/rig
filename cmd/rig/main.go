@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.14.10"
+const Version = "2.14.11"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -238,6 +238,13 @@ func main() {
 	resultCapN := envInt("RIG_RESULT_CAP", cfg.Settings.ResultCap)
 
 	row := resolveModel(modelID, cfg.Models)
+	if os.Getenv(sched.DelegateEnv) != "" {
+		row = row.Capped(cfg.Settings.WorkerWindow)
+		if err := row.Check(); err != nil {
+			fmt.Fprintf(os.Stderr, "rig: settings workerWindow %d: %v\n", cfg.Settings.WorkerWindow, err)
+			os.Exit(1)
+		}
+	}
 
 	effortLevel := envOr("RIG_EFFORT", "")
 	if passed["effort"] {

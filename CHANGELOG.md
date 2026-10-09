@@ -1,4 +1,19 @@
 # Changelog
+## [2.14.11]: the worker window
+
+Three workers on one slot at 180k each hold prompt-cache entries of
+four and a half to five gigabytes; a 16 GB cache keeps three, and the
+fourth evicts one, which re-reads 120k tokens. The cap on how many run
+at once was half the budget; how deep each one runs is the other.
+
+- **`workerWindow` caps a worker's window** (`config`, `models`,
+  `cmd/rig`): settings `workerWindow: N` lowers the window of every
+  process started as a worker (`RIG_DELEGATE`) to N, scaling reserve,
+  keepRecent and maxTokens by the same ratio — huihui-alpha at 131072
+  compacts near 93k with a 38k reserve. The session keeps its row; `0`
+  or a value at or past the row's window leaves the row alone; negative
+  refuses at load.
+
 ## [2.14.10]: the report that came back as a short write
 
 A spec-audit worker ran nine and a half hours, wrote its fourteen-kilobyte
