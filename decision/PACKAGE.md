@@ -61,7 +61,12 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   wake, and a turn end with nothing landed costs nothing. Since 2.11.0
   the wake posts the bite on the kernel's engine at `rig.PriorityReview`,
   below the turn and the fleet, so it starts only when nothing else is
-  queued; the bite takes its rows on the loop, fires in a goroutine (the
+  queued; since 2.14.7 the wake also yields to running workers — the
+  reviewer keeps one fact per `SwarmStatus` publisher (the delegate's
+  rows, the swarm's), a status whose rows run defers the bite, and the
+  status that empties the last running row is the re-wake; `/review`
+  (`Drain`) is the operator's hand and fires regardless;
+  the bite takes its rows on the loop, fires in a goroutine (the
   loop never waits on the world), and the completion posts the settle
   at the same priority. The fire rides a context of its own, a child of
   the session's, and `Halt` ends it: the wrap's `Input` return (the

@@ -313,10 +313,14 @@ log and the bare `/swarm` are their audit).
   workers exited` (the natural drain after three empty claims), `swarm:
   /swarm exited — N workers stopped` (Stop).
 
-The controller also emits `core.SwarmStatus` snapshots on claim, stream
-bytes, complete, verdict, and exit, throttled to a few per second (the
-exit's last frame always lands); the delegate tool's Observe emits the
-same shape for an interactive delegate. The throttle owns the cadence:
+The controller also emits `core.SwarmStatus` snapshots on claim,
+heartbeat, tool call, verdict, and exit — and only then: `receive`
+publishes when a message from one of its own workers moved a field the
+snapshot carries, never for a message from another publisher (2.14.7).
+An idle controller says nothing, so a delegate's own frames can no
+longer be erased by the supervisor's empty echoes within the same
+tick; the delegate tool's Observe emits the same shape for an
+interactive delegate. The throttle owns the cadence:
 `Emit` takes the snapshot builder and invokes it only when a frame is
 due, so a streaming worker's per-chunk emits never fold the store (the
 `Counts` read runs at most four times a second, the forced frames
@@ -425,6 +429,10 @@ fake `Swarm` seam.
   `core.Snapshot`, and the transport keeps one pending per sender and
   replaces it before it runs — the newest truth is the whole truth
   (SPEC_EVT 8).
+- `TestAForeignMessageNeverPublishesTheSwarm` (2.14.7): a delegate
+  status and a foreign tool start arriving at an idle controller
+  produce no swarm publish; a heartbeat from its own worker still
+  does. The swarm speaks only about itself.
 - `TestADelegatePutsNoDeadlineOnTheSpawnSoALongWorkerReturns`,
   `TestTheTurnsContextDoesNotRuleTheWorkerButTheSessionsDoes`,
   `TestTheIdleInterruptKillsTheWorkersProcessTree` and

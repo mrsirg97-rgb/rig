@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -212,6 +213,74 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	}
 	if !strings.Contains(string(out), `no row for "nope"`) || !strings.Contains(string(out), "known: local") {
 		t.Fatalf("the refusal must name the id and the known ids: %q", out)
+	}
+}
+
+func requestTools(t *testing.T, body []byte) []string {
+	t.Helper()
+	var req struct {
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		t.Fatalf("the request body: %v", err)
+	}
+	names := make([]string, 0, len(req.Tools))
+	for _, tool := range req.Tools {
+		names = append(names, tool.Function.Name)
+	}
+	return names
+}
+
+func TestADelegatedWorkerOffersOnlyItsAllowList(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := buildBinAt(t, t.TempDir(), root)
+	cases := []struct {
+		allow string
+		want  []string
+	}{
+		{"bash,read,write,edit,view,rem,python,web", []string{"bash", "read", "write", "edit", "rem", "python", "web"}},
+		{"none", []string{}},
+	}
+	for _, tc := range cases {
+		s := &bodySrv{}
+		srv := newBodySrv(t, s)
+		scratch := t.TempDir()
+		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-allow", tc.allow)
+		cmd.Dir = t.TempDir()
+		cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL, sched.DelegateEnv+"=1")
+		if outp, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("the worker run must succeed: %v\n%s", err, outp)
+		}
+		if got := requestTools(t, s.last()); !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("allow %q: the worker's menu = %v, want %v", tc.allow, got, tc.want)
+		}
+	}
+}
+
+func TestAHeadlessRunWithoutTheMarkerKeepsTheMenu(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := buildBinAt(t, t.TempDir(), root)
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	scratch := t.TempDir()
+	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-allow", "bash,read")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
+	if outp, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the oneshot run must succeed: %v\n%s", err, outp)
+	}
+	if got := requestTools(t, s.last()); len(got) < 10 {
+		t.Fatalf("a headless run without the marker keeps the full menu, got %v", got)
 	}
 }
 

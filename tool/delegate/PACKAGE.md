@@ -51,7 +51,8 @@ nothing scheduled) and a resumable transcript in the state store.
   set — a worker that already returned is not stopped twice.
 - `doing.go`: the doing set (2.14.1, SPEC_DELEGATE 6) — one named
   constant, `bash read write edit view python web rem`, the only place
-  the set is written. `Run` passes the session's resolved allow list
+  the set is written; since 2.14.7 the registry's delegate words name
+  it, so the main agent writes tasks a worker can do. `Run` passes the session's resolved allow list
   intersected with it as the worker's `-allow`, in the session's order;
   `delegate` is out by the same intersection, and an intersection that
   keeps nothing runs the worker allow-none (`-allow none`), never the

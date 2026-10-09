@@ -258,7 +258,17 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 
 	effInner := effort.Decorator(inner, r.effortForWire)
 
-	return toolset.Carry(r.live, compact.Decorator(empty.Decorator(effInner), pol)), pol
+	return toolset.Carry(r.live, compact.Decorator(empty.Decorator(effInner), pol), r.menuAllow()...), pol
+}
+
+func (r *root) menuAllow() []string {
+	if !r.delegated() {
+		return nil
+	}
+	if r.allow == nil {
+		return []string{}
+	}
+	return r.allow
 }
 
 func (r *root) buildProvider() core.Provider {

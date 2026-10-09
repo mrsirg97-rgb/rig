@@ -117,16 +117,35 @@ func Resolve(t *Table) core.ToolMiddleware {
 	})
 }
 
-func Carry(t *Table, inner core.Provider) core.Provider {
-	return carrier{table: t, inner: inner}
+func Carry(t *Table, inner core.Provider, allow ...string) core.Provider {
+	return carrier{table: t, inner: inner, allow: allow}
 }
 
 type carrier struct {
 	table *Table
 	inner core.Provider
+	allow []string
 }
 
 func (c carrier) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
-	req.Tools = c.table.NativeSpecs()
+	req.Tools = c.menu()
 	return c.inner.Stream(ctx, req)
+}
+
+func (c carrier) menu() []core.ToolSpec {
+	specs := c.table.NativeSpecs()
+	if c.allow == nil {
+		return specs
+	}
+	keep := make(map[string]bool, len(c.allow))
+	for _, name := range c.allow {
+		keep[name] = true
+	}
+	out := make([]core.ToolSpec, 0, len(specs))
+	for _, spec := range specs {
+		if keep[spec.Name] {
+			out = append(out, spec)
+		}
+	}
+	return out
 }

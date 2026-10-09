@@ -56,6 +56,13 @@ func (t *tui) tickLoop() {
 			dirty := t.dirty
 			t.dirty = false
 			live := t.busyLocked() && len(t.live.lines) > 0
+			expired := false
+			if t.escArm > 0 && !now.Before(t.escAt) {
+				t.escArm = 0
+				t.escAt = time.Time{}
+				dirty = true
+				expired = true
+			}
 			if live && now.Sub(lastAnim) >= animPeriod {
 				lastAnim = now
 				t.frame++
@@ -65,13 +72,16 @@ func (t *tui) tickLoop() {
 			if live && dirty {
 				t.paintLiveLocked()
 			}
+			if expired {
+				t.stopFrameTickerLocked()
+			}
 			t.mu.Unlock()
 		}
 	}
 }
 
 func (t *tui) busyLocked() bool {
-	return t.turnLive || t.compacting || t.noticing || t.aside != "" || bandRunning(t.swarm)
+	return t.turnLive || t.compacting || t.noticing || t.aside != "" || t.bandsRunningLocked() || t.escArm > 0
 }
 
 func (t *tui) winchLoop() {

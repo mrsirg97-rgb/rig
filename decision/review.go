@@ -52,6 +52,7 @@ type Reviewer struct {
 	room     broadcast.Room
 	self     broadcast.Member
 	verdicts map[int64]core.Verdict
+	working  map[int64]core.SwarmStatus
 	speaking atomic.Int64
 	fireMu   sync.Mutex
 	fireStop context.CancelFunc
@@ -72,6 +73,7 @@ func NewReviewer(ctx context.Context, engine evt.Engine, reviews Reviews, fire F
 		room:     room,
 		self:     room.Add(rig.MemberDecision),
 		verdicts: map[int64]core.Verdict{},
+		working:  map[int64]core.SwarmStatus{},
 	}
 	r.self.Subscribe(ctx, r.receive)
 	return r
@@ -85,12 +87,33 @@ func (r *Reviewer) receive(err error, messages ...broadcast.Message) {
 		switch ev := m.Event().(type) {
 		case core.Verdict:
 			r.verdicts[ev.Row] = ev
+		case core.SwarmStatus:
+			if r.track(m.Origin(), ev) {
+				r.Wake()
+			}
 		case core.ReasoningDelta:
 			if m.Origin() == r.speaking.Load() {
 				r.phase(core.Phase{Name: phaseReviewing, Text: ev.Text})
 			}
 		}
 	}
+}
+
+func (r *Reviewer) track(origin int64, st core.SwarmStatus) bool {
+	was := r.workingNow()
+	r.working[origin] = st
+	return was && !r.workingNow()
+}
+
+func (r *Reviewer) workingNow() bool {
+	for _, st := range r.working {
+		for _, w := range st.Workers {
+			if w.State == "running" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 const phaseReviewing = "reviewing"
@@ -152,6 +175,9 @@ func (r *Reviewer) Halt() {
 
 func (r *Reviewer) Wake() {
 	if !r.dirty.Load() {
+		return
+	}
+	if r.workingNow() {
 		return
 	}
 	if r.posted.Swap(true) {

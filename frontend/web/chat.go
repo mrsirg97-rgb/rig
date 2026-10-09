@@ -65,7 +65,8 @@ type chat struct {
 
 	stopWorkers func()
 
-	swarm core.SwarmStatus
+	swarm    core.SwarmStatus
+	delegate core.SwarmStatus
 }
 
 func newChat(cmds []core.Command, env any, stopWorkers func()) *chat {
@@ -353,9 +354,14 @@ func (c *chat) Notify(ev core.Event) {
 		c.publish(map[string]any{"kind": "turn_end", "reason": string(e.Reason)})
 	case core.SwarmStatus:
 		c.hub.Lock()
-		c.swarm = e
+		c.trackSwarm(e)
+		frame := map[string]any{
+			"kind": "swarm_status", "workers": swarmRows(c.swarm.Workers),
+			"pending": c.swarm.Pending, "review": c.swarm.Review,
+			"delegate": swarmRows(c.delegate.Workers),
+		}
 		c.hub.Unlock()
-		c.publish(map[string]any{"kind": "swarm_status", "workers": swarmRows(e.Workers), "pending": e.Pending, "review": e.Review})
+		c.publish(frame)
 	case core.Notice:
 		c.publish(map[string]any{"kind": "notice", "source": e.Source, "text": e.Text, "level": e.Level.String()})
 	case core.WorkerDone:
@@ -364,13 +370,35 @@ func (c *chat) Notify(ev core.Event) {
 		c.mu.Unlock()
 		c.publish(map[string]any{
 			"kind": "worker_done", "head": e.Head(), "task": e.Task,
-			"exit": e.Exit, "session": e.Session, "log": e.Log, "content": capResult(e.Content),
+			"exit": e.Exit, "ms": e.Duration.Milliseconds(), "session": e.Session, "log": e.Log, "content": capResult(e.Content),
 		})
 		select {
 		case c.wake <- struct{}{}:
 		default:
 		}
 	}
+}
+
+func (c *chat) trackSwarm(st core.SwarmStatus) {
+	if len(st.Workers) == 0 {
+		c.swarm = st
+		c.delegate = st
+		return
+	}
+	if delegateStatus(st) {
+		c.delegate = st
+	} else {
+		c.swarm = st
+	}
+}
+
+func delegateStatus(st core.SwarmStatus) bool {
+	for _, w := range st.Workers {
+		if w.Role == "delegate" {
+			return true
+		}
+	}
+	return false
 }
 
 func swarmRows(ws []core.SwarmWorker) []map[string]any {
@@ -535,6 +563,10 @@ func (c *chat) seqNow() int64 {
 func (s *Server) handleSwarm(w http.ResponseWriter, r *http.Request) {
 	s.chat.hub.Lock()
 	st := s.chat.swarm
+	del := s.chat.delegate
 	s.chat.hub.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"workers": swarmRows(st.Workers), "pending": st.Pending, "review": st.Review})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"workers": swarmRows(st.Workers), "pending": st.Pending, "review": st.Review,
+		"delegate": swarmRows(del.Workers),
+	})
 }

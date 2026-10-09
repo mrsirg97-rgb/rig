@@ -186,6 +186,98 @@ func TestSwarmBandFooterGrowsUpdatesAndReturns(t *testing.T) {
 	}
 }
 
+func TestTheDelegateBandSurvivesTheSwarmDraining(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60), WithSize(sizeFixture(60, 20)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+
+	s.fe.Notify(core.SwarmStatus{
+		Workers: []core.SwarmWorker{
+			{ID: 2, Role: "worker", Task: "t388", Heartbeat: time.Now(), State: "running"},
+		},
+		Pending: 3,
+	})
+	s.await(th.Paint("dim", "····"))
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", Task: "t1", Heartbeat: time.Now(), State: "running"},
+	}})
+	s.await("delegating")
+
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 2, Role: "worker", State: "exited", Done: 1},
+	}})
+	joined := s.screenUntil(t, 60, 20, 3*time.Second, func(j string) bool {
+		return !strings.Contains(j, "workers 1")
+	}, "the swarm's drained status did not clear the swarm band")
+	if !strings.Contains(joined, "delegating") {
+		t.Fatalf("the swarm's drained status took the delegate band:\n%s", joined)
+	}
+
+	s.fe.Notify(core.SwarmStatus{})
+	s.screenUntil(t, 60, 20, 3*time.Second, func(j string) bool {
+		return !strings.Contains(j, "delegating")
+	}, "the empty status left the delegate band")
+}
+
+func TestTheSwarmAndTheDelegateBandsSitSideBySide(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60), WithSize(sizeFixture(60, 20)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+
+	s.fe.Notify(core.SwarmStatus{
+		Workers: []core.SwarmWorker{
+			{ID: 2, Role: "worker", Task: "t388", Heartbeat: time.Now(), State: "running"},
+		},
+		Pending: 3,
+	})
+	s.await(th.Paint("dim", "····"))
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", Task: "t1", Heartbeat: time.Now(), State: "running"},
+	}})
+	s.await("delegating")
+	rows := screenAt(t, s, 60, 20)
+	delegating := -1
+	workers := -1
+	for i, row := range rows {
+		plain := paintFree(row)
+		if delegating < 0 && strings.Contains(plain, "delegating") {
+			delegating = i
+		}
+		if workers < 0 && strings.Contains(plain, "workers 1") {
+			workers = i
+		}
+	}
+	if delegating < 0 || workers < 0 {
+		t.Fatalf("the bands did not both paint:\n%q", rows)
+	}
+	if delegating > workers {
+		t.Fatalf("the delegate band leads: %d > %d\n%q", delegating, workers, rows)
+	}
+}
+
+func (s *scriptedSession) screenUntil(t *testing.T, w, h int, within time.Duration, want func(string) bool, fail string) string {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for {
+		joined := paintFree(strings.Join(screenAt(t, s, w, h), "\n"))
+		if want(joined) {
+			return joined
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s:\n%s", fail, joined)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
 	th := oledTheme(t)
 	size := newMutable(50, 14)

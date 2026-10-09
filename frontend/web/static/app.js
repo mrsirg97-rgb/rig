@@ -805,12 +805,22 @@ function onFrame(f) {
         feedLine('sys', G.active + ' ' + f.source + ': ' + f.text);
         break;
       case 'worker_done': {
-        const d = feedLine('sys', G.active + ' ' + f.head);
-        d.title = f.log;
+        const tb = toolBlock('delegate', f.task || f.head);
+        tb.el.title = f.log;
         if (f.content) {
-          const body = el('div', 'dim', f.content);
-          chat.feed.appendChild(body);
+          const res = el('div', 'tool-res');
+          res.textContent = f.content;
+          if (f.content.split('\n').length > 6) res.classList.add('more');
+          res.addEventListener('click', () => { res.classList.toggle('open'); res.classList.remove('more'); });
+          tb.body.appendChild(res);
         }
+        tb.close.textContent = '';
+        tb.close.appendChild(span('delegate ', 'dim'));
+        tb.close.appendChild(span(f.exit ? G.fail : G.ok, f.exit ? 'err' : 'ok'));
+        tb.close.appendChild(span(' ' + (f.ms / 1000).toFixed(1) + 's', 'dim'));
+        if (f.exit) tb.close.appendChild(span(' ' + G.dot + ' exit ' + f.exit, 'err'));
+        if (f.session) tb.close.appendChild(span(' ' + G.dot + ' session ' + f.session.slice(0, 8), 'dim'));
+        chat.feed.appendChild(tb.el);
         break;
       }
     }
@@ -819,18 +829,19 @@ function onFrame(f) {
 
 function paintSwarmBand(f) {
   if (!chat.swarmBand) return;
+  const del = (f.delegate || []).filter((w) => w.state === 'running');
   const rows = f.workers || [];
-  const n = rows.length;
-  if (!n && !f.pending && !f.review) { chat.swarmBand.textContent = ''; return; }
-  if (rows.some((w) => w.role === 'delegate')) {
-    const running = rows.filter((w) => w.state === 'running');
-    const m = running.length || n;
-    const call = running.slice().sort((a, b) => (b.tool_at || '').localeCompare(a.tool_at || ''))[0];
-    chat.swarmBand.textContent = 'delegating ' + G.dot + ' ' + m + ' worker' + (m === 1 ? '' : 's') +
-      (call && call.tool ? ' ' + G.dot + ' ' + '#' + call.id + ' ' + call.tool : '');
-    return;
+  const lines = [];
+  if (del.length) {
+    const call = del.slice().sort((a, b) => (b.tool_at || '').localeCompare(a.tool_at || ''))[0];
+    lines.push('delegating ' + G.dot + ' ' + del.length + ' worker' + (del.length === 1 ? '' : 's') +
+      (call && call.tool ? ' ' + G.dot + ' ' + '#' + call.id + ' ' + call.tool : ''));
   }
-  chat.swarmBand.textContent = 'swarm ' + G.dot + ' ' + n + ' worker' + (n === 1 ? '' : 's') + ' ' + G.dot + ' ' + (f.pending || 0) + ' pending ' + G.dot + ' ' + (f.review || 0) + ' in review';
+  if (rows.some((w) => w.state === 'running')) {
+    const n = rows.length;
+    lines.push('swarm ' + G.dot + ' ' + n + ' worker' + (n === 1 ? '' : 's') + ' ' + G.dot + ' ' + (f.pending || 0) + ' pending ' + G.dot + ' ' + (f.review || 0) + ' in review');
+  }
+  chat.swarmBand.textContent = lines.join('\n');
 }
 
 function welcome() {

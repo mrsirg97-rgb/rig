@@ -208,9 +208,8 @@ func (t *tui) Notify(ev core.Event) {
 		}
 	case core.SwarmStatus:
 		t.mu.Lock()
-		t.swarm = e
-		t.trackBandLocked(e)
-		if bandRunning(e) {
+		t.trackStatusLocked(e)
+		if t.bandsRunningLocked() {
 			t.startFrameTickerLocked()
 		} else {
 			t.stopFrameTickerLocked()
@@ -310,7 +309,7 @@ type liveBlocks struct {
 func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap, previewCap int) ([]string, string, int, liveBlocks) {
 	var blocks liveBlocks
 	var lines []string
-	if t.turnLive || t.compacting || t.noticing || t.aside != "" {
+	if t.turnLive || t.compacting || t.noticing || t.aside != "" || t.escArm > 0 {
 
 		if pl, rows := t.pendingBlockLocked(pendCap); rows > 0 {
 			blocks.pendRows = rows
@@ -397,22 +396,37 @@ func (t *tui) statusLineLocked() string {
 }
 
 func (t *tui) bandLocked(now time.Time) string {
-	if IsDelegateBand(t.swarm) {
-		return RenderDelegateBand(t.theme, t.swarm, t.bandSinceLocked(), now)
+	band := RenderDelegateBand(t.theme, t.delegate, t.bandSinceLocked(), now)
+	if swarm := RenderSwarmBand(t.theme, t.swarm); swarm != "" {
+		if band != "" {
+			band += "\n"
+		}
+		band += swarm
 	}
-	return RenderSwarmBand(t.theme, t.swarm)
+	return band
+}
+
+func (t *tui) bandsRunningLocked() bool {
+	return bandRunning(t.delegate) || swarmAnyRunning(t.swarm.Workers)
+}
+
+func (t *tui) trackStatusLocked(st core.SwarmStatus) {
+	if len(st.Workers) == 0 {
+		t.swarm = st
+		t.delegate = st
+		t.bandSpawns = nil
+		return
+	}
+	if IsDelegateBand(st) {
+		t.delegate = st
+	} else {
+		t.swarm = st
+	}
+	t.trackBandLocked(st)
 }
 
 func (t *tui) trackBandLocked(st core.SwarmStatus) {
-	kind := "swarm"
-	if IsDelegateBand(st) {
-		kind = "delegate"
-	}
-	if kind != t.bandKind {
-		t.bandKind = kind
-		t.bandSpawns = nil
-	}
-	if kind != "delegate" {
+	if !IsDelegateBand(st) {
 		return
 	}
 	seen := map[int]bool{}
