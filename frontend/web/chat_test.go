@@ -275,6 +275,25 @@ func TestStatusAndSwarmRoutes(t *testing.T) {
 	}
 }
 
+func TestSwarmAndDelegateStatusesSitSideBySide(t *testing.T) {
+	srv, tok := newChatServer(t)
+	h := srv.Handler()
+	srv.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{{ID: 1, Role: "delegate", Task: "t1", State: "running"}}})
+	srv.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{{ID: 2, Role: "worker", Task: "t3", State: "running"}}, Pending: 2})
+	rec := doReq(t, h, "GET", "/api/swarm", nil, bearer(tok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"task":"t3"`) || !strings.Contains(rec.Body.String(), `"pending":2`) {
+		t.Fatalf("swarm: %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"delegate":[{"`) || !strings.Contains(rec.Body.String(), `"task":"t1"`) {
+		t.Fatalf("the delegate's rows are not their own: %s", rec.Body.String())
+	}
+	srv.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{{ID: 2, Role: "worker", State: "exited"}}})
+	rec = doReq(t, h, "GET", "/api/swarm", nil, bearer(tok))
+	if !strings.Contains(rec.Body.String(), `"delegate":[{"`) || !strings.Contains(rec.Body.String(), `"task":"t1"`) {
+		t.Fatalf("the swarm's drained status took the delegate's rows: %s", rec.Body.String())
+	}
+}
+
 func TestANoticePublishesOneFrameWithItsSource(t *testing.T) {
 	srv, tok := newChatServer(t)
 	ts := testenv.Server(t, srv.Handler())

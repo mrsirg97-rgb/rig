@@ -187,7 +187,12 @@ belong to whoever is doing it.
   operator verbs from the `action` enum and from the verb words in the
   description and the schema, and a session without the marker — the
   interactive frontends and every scheduled fire — sends the registry's
-  words byte for byte, so the wire job's artifacts do not move.
+  words byte for byte, so the wire job's artifacts do not move. Since
+  2.14.7 the marker narrows the whole table: a delegated worker's
+  `toolset.Carry` filters the wire's menu to exactly the names its
+  `-allow` resolves to (allow-none sends none), so the model never sees
+  a tool its execution path refuses; a headless run without the marker
+  keeps the full menu.
 - **A delegated worker cannot run them.** `policy/operator` is a
   middleware in the delegated worker's wire only: a call whose tool and
   verb are in the registry's operator list is refused before the tool

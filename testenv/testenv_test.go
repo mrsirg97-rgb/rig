@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
@@ -47,5 +48,14 @@ func TestTransportAllowsAServerHost(t *testing.T) {
 func TestIsolatePinsTheSwapToAClosedPort(t *testing.T) {
 	if got := os.Getenv("RIG_SWAP_URL"); got != testenv.ClosedSwapURL {
 		t.Fatalf("RIG_SWAP_URL = %q, want the closed port", got)
+	}
+}
+
+func TestIsolateUnsetsTheWorkerMarkers(t *testing.T) {
+	if got := os.Getenv(sched.DelegateEnv); got != "" {
+		t.Fatalf("the suite met %s=%q", sched.DelegateEnv, got)
+	}
+	if got := os.Getenv(sched.FleetEnv); got != "" {
+		t.Fatalf("the suite met %s=%q", sched.FleetEnv, got)
 	}
 }

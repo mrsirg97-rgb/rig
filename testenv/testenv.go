@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
 var OperatorHome = os.Getenv("HOME")
@@ -51,6 +53,8 @@ func isolate() {
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(testHome, ".config"))
 	os.Setenv("RIG_HOME", "")
 	os.Setenv("RIG_SWAP_URL", ClosedSwapURL)
+	os.Unsetenv(sched.DelegateEnv)
+	os.Unsetenv(sched.FleetEnv)
 	wallCrontab(testHome)
 	os.Setenv("GOPATH", gopath)
 	os.Setenv("GOMODCACHE", gomod)

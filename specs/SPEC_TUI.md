@@ -527,7 +527,7 @@ A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
 drop scrolled lines from scrollback, which trades away decision 1.
 
-### 3a. The swarm band and the transcript notice, amended 1.5.4
+### 3a. The swarm band and the transcript notice, amended 1.5.4, 2.14.7
 
 The status string is a newline-joined footer already; the swarm band is
 one row per role below the existing status rows while a swarm runs,
@@ -559,6 +559,13 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   the rule is four `·` cells (`....` under the ascii set), `+` stays
   `+`, `⧗` falls back to `~`, `✓`/`✕` are the tool rows' glyphs
   (`v`/`[x]` under ascii).
+- The two publishers keep their own slots (2.14.7): the TUI holds the
+  swarm's status and the delegate's status side by side, and a status
+  routes to its slot by role — `delegate` rows to the delegate's slot,
+  the rest to the swarm's, and a zero-row status is its publisher's
+  "nothing running" and clears both. Each band is present only while
+  its own slot has running rows; the delegate's band leads and the
+  swarm's rows follow it.
 - A delegate's band is two rows, and they are the *same two rows* for
   ten workers as for one (2.14.0). Its snapshot stamps `delegate` as
   the worker's role — the role string is the only thing that tells the
@@ -585,8 +592,15 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   so no new clock is added to render them.
 - A worker that returns is not a notice and not an interrupt: it folds
   into the head of the next user turn (SPEC_DELEGATE 8), and what the
-  transcript shows at that boundary is that block — the head line per
-  worker, then the content the model was handed.
+  transcript shows at that boundary is the tool block grammar again
+  (2.14.7): per worker a block whose head is the ember
+  `● delegate #9 · <the task's first line, cut at the width>`, whose
+  body is the bounded preview of the content, and whose close is
+  `delegate ✓ <duration> · session <id, cut to 8>` — the outcome
+  glyph by the exit, a failed worker closing with the fault glyph and
+  the exit; the turn's own row is then one line naming the batch
+  (`❯ delegate #9 returned`, `❯ delegate #9, #11, #12 returned` for a
+  batch), never the block painted as the prompt with newlines shown.
 - `core.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) is the
   decision-point notice SPEC_SWARM 7 names. Through 2.11.6 a notice
   committed one dim line in the transcript. Since 2.11.7 no notice

@@ -109,6 +109,58 @@ func RenderToolBlock(t Theme, width int, name string, args json.RawMessage, cont
 	return b.String()
 }
 
+func RenderReturnBlock(t Theme, width int, done core.WorkerDone) string {
+	var b strings.Builder
+	b.WriteString(t.Paint(SlotEmber, t.Glyph(GlyphDone)))
+	b.WriteString(" ")
+	b.WriteString(t.Paint(SlotEmber, "delegate #"+strconv.Itoa(done.N)))
+	if task := firstLineOf(done.Task); task != "" {
+		b.WriteString(t.Paint(SlotDim, " · "))
+		b.WriteString(t.Paint(SlotText, cutAt(task, width-WidthOf(t.Glyph(GlyphDone))-len("delegate #"+strconv.Itoa(done.N))-4)))
+	}
+	b.WriteString("\n")
+	if p := preview(t, width, done.Content); p != "" {
+		b.WriteString(p)
+		b.WriteString("\n")
+	}
+	outcome, slot := t.Glyph(GlyphOK), SlotSuccess
+	if done.Exit != 0 {
+		outcome, slot = t.Glyph(GlyphFail), SlotError
+	}
+	b.WriteString(t.Paint(SlotDim, "delegate"))
+	b.WriteString(" ")
+	b.WriteString(t.Paint(slot, outcome))
+	b.WriteString(" ")
+	b.WriteString(t.Paint(SlotDim, fmt.Sprintf("%.1fs", done.Duration.Seconds())))
+	if done.Exit != 0 {
+		b.WriteString(t.Paint(SlotDim, " · exit "+strconv.Itoa(done.Exit)))
+	}
+	b.WriteString(t.Paint(SlotDim, " · session "+cutAt(done.Session, 8)))
+	return b.String()
+}
+
+func firstLineOf(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
+}
+
+func cutAt(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	col := 0
+	for i, r := range s {
+		w := runeWidth(r)
+		if col+w > width {
+			return s[:i]
+		}
+		col += w
+	}
+	return s
+}
+
 func toolDetail(name string, args json.RawMessage, content string) string {
 	var v map[string]any
 	if err := json.Unmarshal(args, &v); err != nil {

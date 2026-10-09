@@ -3,6 +3,7 @@ package delegate_test
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -88,5 +89,13 @@ func TestADelegateSpawnThatKeepsNothingRunsAllowNone(t *testing.T) {
 		if got := allowArg(t, spawn.calls[0].Argv); got != sched.NoToolsAllow {
 			t.Fatalf("allow %v: the worker's allow = %q, want %q (a worker never holds more than its session)", allow, got, sched.NoToolsAllow)
 		}
+	}
+}
+
+func TestTheDelegateWordsNameTheDoingSet(t *testing.T) {
+	words := delegate.New(delegate.Opts{}).Description()
+	if !strings.Contains(words, "a worker holds only the doing set") ||
+		!strings.Contains(words, "bash, read, write, edit, view, python, web, rem") {
+		t.Fatalf("the delegate's words must name the doing set: %s", words)
 	}
 }

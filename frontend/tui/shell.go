@@ -100,12 +100,15 @@ type tui struct {
 	statusCost                        float64
 	statusRows                        []string
 
-	swarm core.SwarmStatus
+	swarm    core.SwarmStatus
+	delegate core.SwarmStatus
 
-	bandKind   string
 	bandSpawns map[int]time.Time
 
 	inbox []core.WorkerDone
+
+	escArm int
+	escAt  time.Time
 
 	idleInterrupt func()
 

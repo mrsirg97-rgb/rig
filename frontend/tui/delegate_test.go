@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -118,7 +119,7 @@ func TestTheInboxDrainsAloneWhenNoTurnIsLive(t *testing.T) {
 	if !strings.Contains(line, "the answer") {
 		t.Fatalf("the block carries the worker's content: %q", line)
 	}
-	s.await("delegate #2 returned · exit 0 · 4m12s · session abc")
+	s.await(th.Paint(SlotText, " delegate #2 returned"))
 	if _, ok := s.fe.drainInbox(context.Background()); ok {
 		t.Fatal("the inbox drained with the turn")
 	}
@@ -255,24 +256,134 @@ func stripANSI(s string) string {
 	return out.String()
 }
 
-func TestEscOnAnEmptyPromptStopsTheWorkers(t *testing.T) {
+func TestAnIdleEscWithNoWorkersClearsThePrompt(t *testing.T) {
 	th, _ := ResolveTheme("oled", nil, true)
 	stops := 0
 	s := newScriptedSession(t, th, WithWidth(90), WithIdleInterrupt(func() { stops++ }))
 
 	s.fe.onKey(keyEsc, 0)
-	if stops != 1 {
-		t.Fatalf("the bare esc on an empty prompt is the idle interrupt: %d stops", stops)
+	s.fe.onKey(keyEsc, 0)
+	if stops != 0 {
+		t.Fatalf("with no workers on the band, esc clears the prompt and stops nothing: %d stops", stops)
 	}
 
 	s.fe.ed.setText("text in the way")
 	s.fe.onKey(keyEsc, 0)
-	if stops != 1 {
+	if stops != 0 {
 		t.Fatal("esc with something typed clears the line; it does not stop the workers")
 	}
 	s.inputWhile("open a turn\n")
 	s.fe.onKey(keyEsc, 0)
-	if stops != 1 {
+	if stops != 0 {
 		t.Fatal("with a turn live, esc interrupts the turn; the workers are not what is running")
+	}
+}
+
+func TestAReturnCommitsAsABlockAndThePromptNamesIt(t *testing.T) {
+	th, _ := ResolveTheme("oled", nil, true)
+	s := newScriptedSession(t, th, WithWidth(90), WithSize(sizeFixture(90, 30)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.fe.Notify(core.WorkerDone{
+		N: 9, Task: "sweep the parsers", Content: "core/ matches\nthe listed locations",
+		Exit: 0, Duration: 4860 * time.Second, Session: "1a11cf58abcdef",
+	})
+	line := s.inputAt(context.Background())
+	if !strings.HasPrefix(line, "delegate #9 returned · exit 0 · 1h21m0s · session 1a11cf58abcdef") {
+		t.Fatalf("the model still reads the block: %q", line)
+	}
+	plain := stripANSI(s.out.String())
+	if !strings.Contains(plain, "delegate #9 · sweep the parsers") {
+		t.Fatalf("the block's head: %s", plain)
+	}
+	if !strings.Contains(plain, "core/ matches") || !strings.Contains(plain, "the listed locations") {
+		t.Fatalf("the block's preview: %s", plain)
+	}
+	if !strings.Contains(plain, "delegate ✓ 4860.0s · session 1a11cf58") {
+		t.Fatalf("the block's close: %s", plain)
+	}
+	if !strings.Contains(plain, "❯ delegate #9 returned") {
+		t.Fatalf("the prompt line: %s", plain)
+	}
+	if strings.Contains(plain, "⏎") {
+		t.Fatalf("the return painted the prompt row: %s", plain)
+	}
+}
+
+func TestAFailedReturnClosesWithTheFailGlyphAndTheExit(t *testing.T) {
+	th, _ := ResolveTheme("oled", nil, true)
+	s := newScriptedSession(t, th, WithWidth(90), WithSize(sizeFixture(90, 30)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.fe.Notify(core.WorkerDone{N: 2, Task: "t2", Content: "died", Exit: -1, Duration: 100 * time.Millisecond, Session: "s2"})
+	s.inputAt(context.Background())
+	plain := stripANSI(s.out.String())
+	if !strings.Contains(plain, "delegate ✕ 0.1s · exit -1 · session s2") {
+		t.Fatalf("the failed close: %s", plain)
+	}
+	if strings.Contains(plain, "✓") {
+		t.Fatalf("the failed worker closed with the success glyph: %s", plain)
+	}
+}
+
+func TestABatchOfThreePaintsThreeBlocksAndOnePromptLine(t *testing.T) {
+	th, _ := ResolveTheme("oled", nil, true)
+	s := newScriptedSession(t, th, WithWidth(90), WithSize(sizeFixture(90, 40)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.fe.Notify(core.WorkerDone{N: 9, Task: "t9", Content: "nine", Exit: 0, Duration: time.Second, Session: "s9"})
+	s.fe.Notify(core.WorkerDone{N: 11, Task: "t11", Content: "eleven", Exit: 0, Duration: time.Second, Session: "s11"})
+	s.fe.Notify(core.WorkerDone{N: 12, Task: "t12", Content: "twelve", Exit: 0, Duration: time.Second, Session: "s12"})
+	line := s.inputAt(context.Background())
+	if i9, i11, i12 := strings.Index(line, "delegate #9"), strings.Index(line, "delegate #11"), strings.Index(line, "delegate #12"); i9 > i11 || i11 > i12 {
+		t.Fatalf("the block keeps arrival order: %q", line)
+	}
+	plain := stripANSI(s.out.String())
+	for _, want := range []string{"delegate #9 · t9", "delegate #11 · t11", "delegate #12 · t12", "❯ delegate #9, #11, #12 returned"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("the batch did not paint %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestABigReturnPaintsThePreviewBound(t *testing.T) {
+	th, _ := ResolveTheme("oled", nil, true)
+	s := newScriptedSession(t, th, WithWidth(90), WithSize(sizeFixture(90, 40)),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	var b strings.Builder
+	for i := 0; i < 70000; i++ {
+		if i == 30000 {
+			b.WriteString("the middle row\n")
+		}
+		b.WriteString("row " + strconv.Itoa(i) + "\n")
+	}
+	s.fe.Notify(core.WorkerDone{N: 1, Task: "big", Content: b.String(), Exit: 0, Duration: time.Second, Session: "s1"})
+	s.inputAt(context.Background())
+	plain := stripANSI(s.out.String())
+	if !strings.Contains(plain, "lines hidden") {
+		t.Fatalf("the big return did not bound its preview:\n%s", plain)
+	}
+	if strings.Contains(plain, "the middle row") {
+		t.Fatalf("the preview kept the middle: %s", plain[len(plain)-3000:])
+	}
+	if strings.Count(plain, "\nrow ") > 8 {
+		t.Fatalf("the preview painted past its bound: %s", plain[len(plain)-3000:])
 	}
 }

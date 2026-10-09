@@ -153,6 +153,7 @@ func (c *Controller) receive(err error, messages ...broadcast.Message) {
 	if err != nil {
 		return
 	}
+	changed := false
 	for _, m := range messages {
 		for _, w := range c.workers {
 			if int64(w.id) != m.Origin() {
@@ -161,12 +162,18 @@ func (c *Controller) receive(err error, messages ...broadcast.Message) {
 			switch ev := m.Event().(type) {
 			case nil:
 				w.heartbeat = time.Now()
+				changed = true
 			case core.ToolStart:
 				w.heartbeat, w.tool, w.toolAt = time.Now(), ev.BoundedCall(), time.Now()
+				changed = true
 			case core.Verdict:
 				w.verdict = &ev
+				changed = true
 			}
 		}
+	}
+	if !changed {
+		return
 	}
 	c.refresh()
 	c.emit()

@@ -151,7 +151,15 @@ ends it — the frontend wrap's `Input` return and the idle interrupt call
 naming `interrupted`, and leaves the rows pending for the next landing,
 the fire's context released when the bite ends, whatever the ending; before that a
 size-one channel on a goroutine of its own — no timer, no poll — and a turn end with
-nothing landed costs nothing.
+nothing landed costs nothing. The wake also yields to running workers
+(2.14.7): the reviewer keeps one fact per `SwarmStatus` publisher in the
+room — the delegate's rows, the swarm's — a status whose rows run keeps
+the queue dirty and defers the bite, and the status that empties the
+last running row is the re-wake, so a bite lands while the board is
+idle and never fires mid-thought over rows that are still moving. The
+operator's hand is not gated: `/review` (`Drain`) fires with workers
+running, and the phase indicator reads nothing new — the workers are
+already on the band.
 
 The wake is the metronome, not the work. Run j31 woke at a turn end with
 264 pending bash rows and fired them all as one 177 KB prompt: the worker

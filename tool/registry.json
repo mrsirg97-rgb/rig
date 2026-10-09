@@ -392,7 +392,7 @@
     "name": "delegate",
     "enabled": true,
     "what": "fan out bounded sub-tasks to headless workers: starts a worker to run a task now and answers at once; its result comes back on a later turn.",
-    "guidelines": "the task should be bounded with a message-shaped result. use for long computations, broad research, or reviews, never a conversation. several delegate calls in one turn run as parallel fan-out. a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home. never wait for a worker: keep working, and the returns arrive as a turn of their own.",
+    "guidelines": "the task should be bounded with a message-shaped result. use for long computations, broad research, or reviews, never a conversation. several delegate calls in one turn run as parallel fan-out. a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home. a worker holds only the doing set (bash, read, write, edit, view, python, web, rem), so write the task to fit it. never wait for a worker: keep working, and the returns arrive as a turn of their own.",
     "reply": "one line naming the worker, its session and its log.",
     "schema": {
       "type": "object",

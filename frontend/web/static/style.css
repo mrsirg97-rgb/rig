@@ -263,7 +263,7 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 .complete button::before, .complete button::after { content: none; }
 .complete button:hover { color: var(--ember); }
 
-.swarm-band { color: var(--dim); }
+.swarm-band { color: var(--dim); white-space: pre; }
 .editor {
   position: relative;
   display: grid;

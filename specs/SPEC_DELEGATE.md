@@ -348,7 +348,9 @@ one line and never the answer:
   a worker may learn, recall, pack and prune memory, because clearing
   a stale fact it just disproved is its job too. The delegate spawn
   passes the session's resolved allow list intersected with the doing
-  set as `-allow`, in the session's order; `delegate` is out by the
+  set as `-allow`, in the session's order; since 2.14.7 the registry's
+  words name the doing set, so the main agent writes tasks a worker can
+  do; `delegate` is out by the
   same intersection, and an intersection that keeps nothing runs the
   worker allow-none (`-allow none`) — never the embedded default,
   which is what an absent flag would resolve to and would hand a
@@ -446,11 +448,19 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
   context ends it. (Reverses 2.12.7's interrupted-turn test.)
 - **The idle interrupt stops every running worker**: esc with no live
   turn reaches the tool, and each worker's context dies with it; under
-  the jail, the worker's whole process tree dies with it.
+  the jail, the worker's whole process tree dies with it. Since 2.14.7
+  it asks first: when workers run, the first Esc paints the arm line
+  (`esc again to stop 1 worker`) on the indicator row and stops
+  nothing; the second Esc calls `StopAll`. The arm clears on any other
+  keystroke and expires after two seconds; with no workers running,
+  Esc keeps clearing the prompt.
 - **The inbox is a queue, not a slot**: two `WorkerDone` events during a
   live turn arrive at the next `Input` as one block, in order, ahead of
   the operator's text; one `WorkerDone` with no live turn makes `Input`
   return that block alone (each frontend, and the TUI's golden stream).
+  Since 2.14.7 the transcript shows the tool block grammar at that
+  boundary (SPEC_TUI 3a) and the turn's own row is one line naming the
+  batch — the model's `WorkerBlock` is byte-identical.
 - **The pipe carries the call, not the body**: `tool_start` round-trips
   the encoder and the pipe; a 10 KB `write` crosses as one line of at
   most 80 characters and never carries its content, its `old` or its

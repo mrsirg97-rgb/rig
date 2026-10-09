@@ -860,3 +860,142 @@ func TestAFireThatReturnsOnItsOwnReleasesItsContext(t *testing.T) {
 		t.Fatal("a fire that returned on its own left its context registered on the session")
 	}
 }
+
+func reviewerRoom(db store.DB, fire decision.Fire, batch int) (*decision.Reviewer, broadcast.Room, evt.Engine) {
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
+	})
+	r := decision.NewReviewer(context.Background(), engine, storeReviews{db: db}, fire, batch,
+		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room, "proj")
+	return r, room, engine
+}
+
+func deliverStatus(t *testing.T, engine evt.Engine, room broadcast.Room, origin int64, st core.SwarmStatus) {
+	t.Helper()
+	room.Add(origin).Publish(context.Background(), func(error) {}, broadcast.NewMessage(origin, true, st))
+	done := make(chan struct{})
+	engine.Add(evt.Func(func(context.Context) { close(done) }), rig.PriorityFleet)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the room never delivered the status")
+	}
+}
+
+func wakeOnLoop(t *testing.T, engine evt.Engine, r *decision.Reviewer) {
+	t.Helper()
+	done := make(chan struct{})
+	engine.Add(evt.Func(func(context.Context) { r.Wake(); close(done) }), rig.PriorityFleet)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the wake never ran")
+	}
+}
+
+func hearNothing(t *testing.T, fired <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-fired:
+		t.Fatalf("%s fired the bite", what)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestABiteWaitsWhileADelegateWorks(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
+	r, room, engine := reviewerRoom(db, f.fire, 1<<30)
+
+	r.Land()
+	deliverStatus(t, engine, room, rig.MemberDelegate, core.SwarmStatus{
+		Workers: []core.SwarmWorker{{ID: 1, Role: "delegate", Task: "sweep", State: "running"}},
+	})
+	wakeOnLoop(t, engine, r)
+	hearNothing(t, f.fired, "a turn end under a running delegate")
+}
+
+func TestTheLastReturnWakesTheDeferredBiteOnce(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
+	r, room, engine := reviewerRoom(db, f.fire, 1<<30)
+
+	r.Land()
+	deliverStatus(t, engine, room, rig.MemberDelegate, core.SwarmStatus{
+		Workers: []core.SwarmWorker{{ID: 1, Role: "delegate", Task: "sweep", State: "running"}},
+	})
+	wakeOnLoop(t, engine, r)
+	hearNothing(t, f.fired, "the deferred bite")
+
+	deliverStatus(t, engine, room, rig.MemberDelegate, core.SwarmStatus{
+		Workers: []core.SwarmWorker{{ID: 1, Role: "delegate", Task: "sweep", State: "running", Tool: "read x.go"}},
+	})
+	hearNothing(t, f.fired, "a status that only moves a tool")
+
+	deliverStatus(t, engine, room, rig.MemberDelegate, core.SwarmStatus{})
+	waitFires(t, f.fired, 1)
+	waitSettled(t, db, 0)
+	hearNothing(t, f.fired, "the woken bite a second time")
+}
+
+func TestASwarmWorkerGatesTheBiteTheSameWay(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
+	r, room, engine := reviewerRoom(db, f.fire, 1<<30)
+
+	r.Land()
+	deliverStatus(t, engine, room, 0, core.SwarmStatus{
+		Workers: []core.SwarmWorker{{ID: 2, Role: "worker", Task: "t1", State: "running"}},
+	})
+	wakeOnLoop(t, engine, r)
+	hearNothing(t, f.fired, "a turn end under a running swarm worker")
+
+	deliverStatus(t, engine, room, 0, core.SwarmStatus{})
+	waitFires(t, f.fired, 1)
+	waitSettled(t, db, 0)
+}
+
+func TestABiteInFlightOutlivesAWorkerSpawning(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	fired := make(chan struct{}, 4)
+	release := make(chan struct{})
+	fire := decision.Fire(func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
+		fired <- struct{}{}
+		<-release
+		speak(voice, "verdict: 1 approve")
+		return "dsv4", nil
+	})
+	r, room, engine := reviewerRoom(db, fire, 1<<30)
+
+	r.Land()
+	wakeOnLoop(t, engine, r)
+	<-fired
+
+	deliverStatus(t, engine, room, rig.MemberDelegate, core.SwarmStatus{
+		Workers: []core.SwarmWorker{{ID: 1, Role: "delegate", State: "running"}},
+	})
+	wakeOnLoop(t, engine, r)
+	close(release)
+	waitSettled(t, db, 0)
+	hearNothing(t, fired, "the fire a second time")
+}
+
+func TestDrainFiresWithWorkersRunning(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	f := &fakeFire{stdouts: []string{"verdict: 1 approve"}, fired: make(chan struct{}, 4)}
+	r, room, engine := reviewerRoom(db, f.fire, 1<<30)
+
+	r.Land()
+	deliverStatus(t, engine, room, rig.MemberDelegate, core.SwarmStatus{
+		Workers: []core.SwarmWorker{{ID: 1, Role: "delegate", State: "running"}},
+	})
+	report, err := r.Drain(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(report, "fired 1 rows, settled 1") {
+		t.Fatalf("the operator's hand is not gated by the workers: %q", report)
+	}
+}

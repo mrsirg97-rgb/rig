@@ -2,9 +2,11 @@ package tui
 
 import (
 	"context"
-	"github.com/mrsirg97-rgb/rig/v2/command"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v2/command"
 )
 
 func (t *tui) dispatch(ctx context.Context, line string) {
@@ -152,6 +154,8 @@ func (t *tui) activityLineLocked() string {
 	case !t.turnLive && t.noticing && len(t.notices) > 0:
 		n := t.notices[0]
 		return t.theme.BreathPaint(noticeSlot(n.Level), t.noticeFrame, n.Source+": "+n.Text)
+	case !t.turnLive && t.escArm > 0:
+		return t.theme.Paint(SlotWarn, "esc again to stop "+strconv.Itoa(t.escArm)+" "+wordFor(t.escArm))
 	}
 	label := t.phase
 	if label == "" {

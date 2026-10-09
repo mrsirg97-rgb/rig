@@ -8,6 +8,8 @@ import (
 
 const escDelay = 30 * time.Millisecond
 
+const escArmWindow = 2 * time.Second
+
 func (t *tui) onKey(k key, r rune) {
 
 	t.mu.Lock()
@@ -33,6 +35,9 @@ func (t *tui) onKey(k key, r rune) {
 	}
 	if !t.fromPager && t.pagerKey(k, r) {
 		return
+	}
+	if k != keyEsc {
+		t.clearEsc()
 	}
 	switch k {
 	case keyPgUp:
@@ -61,6 +66,8 @@ func (t *tui) onKey(k key, r rune) {
 		live := t.turnLive
 		cancel := t.cancel
 		stop := t.idleInterrupt
+		armed := t.escArm
+		workers := t.idleWorkersLocked()
 		t.mu.Unlock()
 		if strings.TrimSpace(t.ed.text()) == "" {
 			switch {
@@ -68,8 +75,13 @@ func (t *tui) onKey(k key, r rune) {
 				if cancel != nil {
 					cancel()
 				}
-			case stop != nil:
-				stop()
+			case armed > 0:
+				if stop != nil {
+					stop()
+				}
+				t.clearEsc()
+			case stop != nil && workers > 0:
+				t.armEsc(workers)
 			default:
 				t.ed.apply(keyEsc, 0)
 				t.mu.Lock()
@@ -142,6 +154,38 @@ func (t *tui) onKey(k key, r rune) {
 		}
 		t.paintInput()
 	}
+}
+
+func (t *tui) idleWorkersLocked() int {
+	n := 0
+	for _, w := range t.delegate.Workers {
+		if w.State == "running" {
+			n++
+		}
+	}
+	return n
+}
+
+func (t *tui) armEsc(workers int) {
+	t.mu.Lock()
+	t.escArm = workers
+	t.escAt = time.Now().Add(escArmWindow)
+	t.startFrameTickerLocked()
+	t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+	t.mu.Unlock()
+}
+
+func (t *tui) clearEsc() {
+	t.mu.Lock()
+	if t.escArm == 0 {
+		t.mu.Unlock()
+		return
+	}
+	t.escArm = 0
+	t.escAt = time.Time{}
+	t.stopFrameTickerLocked()
+	t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+	t.mu.Unlock()
 }
 
 func (t *tui) menuSyncLocked() {

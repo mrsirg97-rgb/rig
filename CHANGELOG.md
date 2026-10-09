@@ -1,4 +1,51 @@
 # Changelog
+## [2.14.7]: the delegate, seen and heard
+
+The delegate's presence in the session had six ways of lying. The swarm
+spoke about other publishers: the controller's `receive` emitted a
+`SwarmStatus` for every message it saw, so a delegate running alone was
+erased within the tick — the supervisor's empty echoes overwrote the
+delegate's own frames in every frontend's latest-wins store. `receive`
+now emits only when one of its own workers moved a field the snapshot
+carries: an idle controller says nothing, and the TUI and the web chat
+hold the swarm's status and the delegate's status side by side, one
+status per publisher, no merging of rows.
+
+A worker's menu carried the full tool table though its hands hold only
+the doing set: the model could see every name and could be taught to
+call one its execution path refuses. For a delegated worker the carrier
+now narrows the wire's menu to exactly the names `-allow` resolves to
+(allow-none sends none); an interactive session and every non-delegated
+run stay byte-identical on the wire, and the registry's delegate words
+name the doing set so the main agent writes tasks a worker can do.
+
+Esc on an empty prompt was a hair trigger: with workers running, one
+keystroke stopped the batch. It asks twice now — the first Esc paints
+`esc again to stop 1 worker` on the indicator row and stops nothing,
+the second calls `StopAll`; any other keystroke clears the arm and it
+expires after two seconds. With no workers, Esc keeps clearing the
+prompt.
+
+The decision reviewer bit while workers ran: a turn ending under a
+running delegate fired a bite over rows that were still moving. The
+reviewer keeps one fact per `SwarmStatus` publisher; a status whose
+rows run defers the bite, and the status that empties the last running
+row is the re-wake. `/review` is the operator's hand and fires
+regardless; the halt rule (2.14.4) is untouched.
+
+And the drained return was painted as the prompt row: newlines shown as
+`⏎`, the head line twice. A return now commits as the tool block
+grammar — `● delegate #9 · <the task's first line>`, the bounded
+preview, `delegate ✓ <duration> · session <id cut to 8>` (the glyph by
+the exit, a failed worker closing with the fault glyph and its exit) —
+and the turn's own row is one line naming the batch. The model's
+`WorkerBlock` is byte-identical; the CLI prints the same head line it
+always did.
+
+testenv unsets `RIG_DELEGATE` and `RIG_FLEET` before the suite runs,
+with a self-exec test that starts the delegate's own tests inside a
+worker's environment.
+
 ## [2.14.6]: the comments go home
 
 A hygiene release: no behavior moves, and the wire reads the same words

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -635,5 +636,24 @@ func TestDelegateRunAndExecShareTheirChecks(t *testing.T) {
 	}
 	if spawn.count() != 0 {
 		t.Fatalf("a refused call spawns nothing, got %d", spawn.count())
+	}
+}
+
+func TestTheSuiteSurvivesAWorkerEnvironment(t *testing.T) {
+	const sentinel = "RIG_TEST_WORKER_ENV"
+	if os.Getenv(sentinel) == "1" {
+		if got := os.Getenv(sched.DelegateEnv) + os.Getenv(sched.FleetEnv); got != "" {
+			t.Fatalf("a suite inside a worker met the markers: %q %q", os.Getenv(sched.DelegateEnv), os.Getenv(sched.FleetEnv))
+		}
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(exe, "-test.run", "TestTheSuiteSurvivesAWorkerEnvironment|TestADelegateSpawnCarriesTheDoingSet")
+	cmd.Env = append(os.Environ(), sched.DelegateEnv+"=1", sched.FleetEnv+"=1", sentinel+"=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("a suite started inside a delegated worker did not pass:\n%s", out)
 	}
 }

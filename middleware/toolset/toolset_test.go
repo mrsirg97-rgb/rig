@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -230,5 +232,53 @@ func TestPluginLookupRefusesNatives(t *testing.T) {
 	tbl.Swap(tbl.List())
 	if _, ok := tbl.Plugin("forged"); ok {
 		t.Fatal("a dropped plugin must stop resolving")
+	}
+}
+
+type captureProvider struct {
+	mu      sync.Mutex
+	request core.Request
+}
+
+func (p *captureProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+	p.mu.Lock()
+	p.request = req
+	p.mu.Unlock()
+	ch := make(chan core.Event, 1)
+	ch <- core.Done{}
+	close(ch)
+	return ch, nil
+}
+
+func menuNames(p *captureProvider) []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]string, 0, len(p.request.Tools))
+	for _, spec := range p.request.Tools {
+		out = append(out, spec.Name)
+	}
+	return out
+}
+
+func TestTheMenuNarrowsToTheAllowList(t *testing.T) {
+	tbl := New(&stubTool{name: "bash"}, &stubTool{name: "todo"}, &stubTool{name: "rem"})
+	p := &captureProvider{}
+	ctx := context.Background()
+
+	Carry(tbl, p).Stream(ctx, core.Request{})
+	if got := menuNames(p); !reflect.DeepEqual(got, []string{"bash", "todo", "rem"}) {
+		t.Fatalf("a menu without an allow list is the table = %v", got)
+	}
+	Carry(tbl, p, "rem", "bash").Stream(ctx, core.Request{})
+	if got := menuNames(p); !reflect.DeepEqual(got, []string{"bash", "rem"}) {
+		t.Fatalf("the narrowed menu keeps the table's order = %v", got)
+	}
+	Carry(tbl, p, "plugin").Stream(ctx, core.Request{})
+	if got := menuNames(p); len(got) != 0 {
+		t.Fatalf("an allow list that keeps nothing narrows to no tools = %v", got)
+	}
+	Carry(tbl, p, []string{}...).Stream(ctx, core.Request{})
+	if got := menuNames(p); len(got) != 0 {
+		t.Fatalf("allow-none narrows to no tools = %v", got)
 	}
 }

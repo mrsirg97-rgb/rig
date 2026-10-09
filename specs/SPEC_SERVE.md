@@ -722,7 +722,8 @@ long turn. `Ask` publishes an `ask` frame and waits for `POST
 from the page; `POST /api/chat/interrupt` is the interrupt door. `GET
 /api/status` is the TUI's status band (mapped at the root) plus the
 live flag; `GET /api/swarm` is the last swarm status the loop
-published. The POST doors ride the write's walls; the stream and the
+published, held one status per publisher like the TUI's (2.14.7): the
+swarm's rows and the delegate's rows side by side, no merging. The POST doors ride the write's walls; the stream and the
 reads ride the token gate. The page is one session per process, as the
 terminal is: every open tab sees the same stream.
 
